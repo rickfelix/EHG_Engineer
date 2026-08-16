@@ -93,19 +93,31 @@ export async function validatePrePlanCritique(ctx) {
     return couldNotCheckVerdict([`PRD load threw (${err.message}) — COULD_NOT_CHECK, not absence`]);
   }
 
-  // Load architecture plan content (best effort — not required)
+  // Load architecture plan content (best effort — not required).
+  // FR-4 PT-8: archLoadStatus distinguishes a genuine "no arch plan" state ('not_found' — no
+  // arch_key configured, or PGRST116 zero-rows) from a transient read failure ('load_failed' —
+  // any other error, or a thrown exception). Both leave archContent='', but only 'ok' content_hash
+  // inputs should be treated as equivalent to each other; a flake must never hash the same as a
+  // real, examined absence, or a transient failure could force an unwanted cache miss / silently
+  // invalidate a fresh override binding for a reason unrelated to the actual PRD/arch content.
+  let archLoadStatus = 'not_found';
   try {
     const archKey = sd.metadata?.arch_key;
     if (archKey) {
-      const { data: arch } = await supabase
+      const { data: arch, error: archError } = await supabase
         .from('eva_architecture_plans')
         .select('content')
         .eq('plan_key', archKey)
         .single();
-      if (arch?.content) archContent = arch.content;
+      if (archError) {
+        archLoadStatus = archError.code === 'PGRST116' ? 'not_found' : 'load_failed';
+      } else if (arch?.content) {
+        archContent = arch.content;
+        archLoadStatus = 'ok';
+      }
     }
   } catch {
-    // Best-effort — proceed without arch content
+    archLoadStatus = 'load_failed';
   }
 
   // FR-2: invariant library — deterministic, runs even when the LLM half cannot.
@@ -120,8 +132,9 @@ export async function validatePrePlanCritique(ctx) {
       // buildCritiqueUserPrompt can apply section-aware budgets instead of one flat cut.
       prdContent: prdSections,
       archContent,
+      archLoadStatus, // FR-4 PT-8: folded into content_hash so a flake never hashes like absence
       sdContext: { sd_key: sd.sd_key, sd_id: sd.id, title: sd.title },
-    });
+    }, { supabase });
   } catch (err) {
     critique = { findings: [], overall_severity: COULD_NOT_CHECK, model_used: null, token_usage: null, fallback_reason: `Critique invocation error: ${err.message}`, truncated: null };
   }
@@ -193,6 +206,14 @@ export async function validatePrePlanCritique(ctx) {
     totalArch: critique.truncated.arch.charsTotal,
   } : undefined;
 
+  // FR-4 AC-5/PT-1: a cache hit STILL inserts a row (never a bare early-return), flagged
+  // cache-derived so scripts/critique-catch-rate-monitor.js's ratios stay computed over a
+  // complete, honest row set instead of going blind to hit runs.
+  const cacheMetadata = critique.cacheHit ? { cache_hit: true, cache_source_id: critique.cacheSourceId } : undefined;
+  const metadata = (truncatedMetadata || cacheMetadata)
+    ? { ...(truncatedMetadata ? { truncated: truncatedMetadata } : {}), ...cacheMetadata }
+    : undefined;
+
   // FR-4 (of the ORIGINAL SD-LEO-INFRA-SYSTEMATIZE-COMPLETENESS-CRITIC-001, a different, already-
   // shipped SD — not this SD's own FR-4): persist BEFORE deriving the verdict, on EVERY path that
   // has a PRD — including could_not_check. The old code returned from skip/fail paths before
@@ -204,12 +225,15 @@ export async function validatePrePlanCritique(ctx) {
     overall_severity: combined,
     model_used: critique.model_used,
     token_usage: critique.token_usage,
-    ...(truncatedMetadata ? { metadata: { truncated: truncatedMetadata } } : {}),
+    content_hash: critique.contentHash ?? null,
+    ...(metadata ? { metadata } : {}),
   }, warnings);
 
-  // FR-1: verdict. 'block' fails unless an audited override exists FOR THESE FINDINGS.
+  // FR-1: verdict. 'block' fails unless an audited override exists FOR THIS EXACT CONTENT
+  // (FR-4/FR-5 — content_hash REPLACES findingsFingerprint as the binding predicate; see
+  // findActiveOverride's own docstring for why).
   if (combined === 'block') {
-    const override = await findActiveOverride(supabase, sd.id, findingsFingerprint(findings));
+    const override = await findActiveOverride(supabase, sd.id, critique.contentHash);
     if (override) {
       const msg = `BLOCK downgraded by audited override: ${override.override_by} — "${override.override_reason}" (critique ${override.id}, ${override.created_at})`;
       console.log(`   ⚠️  ${msg}`);
@@ -303,21 +327,37 @@ export function findingsFingerprint(findings) {
 }
 
 /**
- * Audited escape hatch (FR-1): a blocking critique row for this SD carrying both
- * override_reason and override_by, within the lookback window, WHOSE FINDINGS MATCH the
- * current run's (by fingerprint). SECURITY MEDIUM-1 (evidence row e77d1c4b): without the
- * binding, one override auto-downgraded every subsequent block on the SD for 14 days —
- * including entirely new findings from later PRD edits. Binding to the findings set means
- * a changed finding set re-blocks and requires re-approval.
+ * Audited escape hatch. BINDING PREDICATE (FR-4/FR-5, testing-agent T1/T12 — resolves a real
+ * contradiction with the original TR-2, see TR-2's rewrite): content_hash REPLACES
+ * findingsFingerprint here — it does not AND with it. content-identity is a strictly stronger
+ * binding signal than "these specific findings recurred": a human override is realistically
+ * recorded minutes-to-days after a block (the scripts/critique-override.js timeline), well
+ * outside any single-call caching window, and the LLM's findings composition is non-deterministic
+ * even on byte-identical input — findingsFingerprint alone could never bind across that gap
+ * (SECURITY MEDIUM-1, evidence row e77d1c4b, is what closing this gap must not reopen: an
+ * override binds to WHAT WAS REVIEWED, never widening to excuse content it never saw). The
+ * content_hash filter is applied via .eq() before .limit(10), so it narrows the candidate set
+ * FIRST — FR-5's fix for the pre-existing burst-limit gap (SDs measured up to 17 critiques; a
+ * matching override could fall outside a bare .limit(10) purely on row count, independent of
+ * content).
+ *
+ * TR-5: a null/undefined currentContentHash returns null WITHOUT querying — never calls
+ * .eq('content_hash', null). This is deliberately more conservative than relying on Postgres's
+ * own NULL != NULL semantics (which already protects the other direction: a stored row with
+ * content_hash IS NULL can never match a real hash value, and needs no special-casing here) —
+ * an override should never bind to a could-not-check block whose content identity was never
+ * measured in the first place.
  */
-async function findActiveOverride(supabase, sdId, currentFingerprint) {
+async function findActiveOverride(supabase, sdId, currentContentHash) {
+  if (!currentContentHash) return null;
   try {
     const since = new Date(Date.now() - OVERRIDE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('plan_critiques')
-      .select('id, findings, override_reason, override_by, created_at')
+      .select('id, content_hash, override_reason, override_by, created_at')
       .eq('sd_id', sdId)
       .eq('overall_severity', 'block')
+      .eq('content_hash', currentContentHash)
       .not('override_reason', 'is', null)
       .not('override_by', 'is', null)
       .gte('created_at', since)
@@ -326,7 +366,7 @@ async function findActiveOverride(supabase, sdId, currentFingerprint) {
     if (error || !data || data.length === 0) return null;
     for (const row of data) {
       if (!String(row.override_reason).trim() || !String(row.override_by).trim()) continue;
-      if (findingsFingerprint(row.findings) === currentFingerprint) return row;
+      return row;
     }
     return null;
   } catch {

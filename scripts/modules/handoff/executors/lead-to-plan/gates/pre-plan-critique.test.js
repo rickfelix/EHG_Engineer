@@ -44,26 +44,25 @@ function makeSupabase({ prd = NEUTRAL_PRD, prdError = null, overrideRows = [], i
         };
       }
       if (table === 'plan_critiques') {
+        // TR-7: a self-chaining query builder (not a fixed-depth .eq().eq().not()... shape) so
+        // findActiveOverride's content_hash filter (a 3rd .eq(), added by FR-4/FR-5) — or any
+        // future filter — never breaks this mock's shape again. Fully argument-blind: it returns
+        // overrideRows regardless of what was filtered on, matching this file's existing
+        // discipline that content_hash-EQUALITY correctness itself belongs to the real-DB
+        // integration harness (TS-8/TS-9's own routing note), not this mocked unit suite.
+        const chain = {
+          eq: () => chain,
+          not: () => chain,
+          gte: () => chain,
+          order: () => chain,
+          limit: async () => ({ data: overrideRows, error: null }),
+        };
         return {
           insert: async (row) => {
             inserted.push(row);
             return { error: insertError };
           },
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                not: () => ({
-                  not: () => ({
-                    gte: () => ({
-                      order: () => ({
-                        limit: async () => ({ data: overrideRows, error: null }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
+          select: () => chain,
         };
       }
       if (table === 'eva_architecture_plans') {
@@ -112,39 +111,64 @@ describe('gate promotion (FR-1)', () => {
     expect(supabase._inserted[0].overall_severity).toBe('block');
   });
 
-  it('DOWNGRADES on an audited override bound to the SAME findings — passes with the override cited, findings still persisted', async () => {
+  it('DOWNGRADES on an audited override bound to the SAME content_hash — passes with the override cited, findings still persisted (FR-4/FR-5 binding predicate)', async () => {
     const blockFindings = [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }];
     critiquePlanProposal.mockResolvedValue({
       findings: blockFindings,
       overall_severity: 'block',
       model_used: 'test-model',
       token_usage: null,
+      contentHash: 'hash-abc123',
     });
     const supabase = makeSupabase({
-      overrideRows: [{ id: 'crit-1', findings: blockFindings, override_reason: 'AC covered by parent SD', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
+      overrideRows: [{ id: 'crit-1', content_hash: 'hash-abc123', override_reason: 'AC covered by parent SD', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
     });
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(true);
     expect(result.score).toBe(60);
     expect(result.warnings.join(' ')).toMatch(/audited override.*chairman/);
     expect(supabase._inserted).toHaveLength(1); // downgrade, not silence
+    expect(supabase._inserted[0].content_hash).toBe('hash-abc123'); // the block row also persists its own hash
   });
 
-  it('an override for DIFFERENT findings does NOT downgrade — the block stands (SECURITY MEDIUM-1 binding)', async () => {
+  // FR-4/FR-5, testing-agent T1/T12: content_hash REPLACES findingsFingerprint as the binding
+  // predicate — an override is scoped to WHAT WAS REVIEWED (content), not to a specific LLM
+  // call's non-deterministic findings composition. This test's mock is argument-blind (it cannot
+  // itself enforce that a real content_hash mismatch is filtered out in Postgres — that's the
+  // real-DB integration harness's job, TS-8/TS-9), so it asserts the CALLER-SIDE half of the
+  // contract instead: the gate calls findActiveOverride with the CURRENT run's own contentHash,
+  // never with a stale or borrowed value, and returns no rows when the mock reports none (a
+  // real content_hash filter would return none for a genuine mismatch).
+  it('an override with no matching content_hash does NOT downgrade — the block stands', async () => {
     critiquePlanProposal.mockResolvedValue({
       findings: [{ severity: 'block', category: 'contradiction', message: 'a NEW, different planning gap', location: 'PRD' }],
       overall_severity: 'block',
       model_used: 'test-model',
       token_usage: null,
+      contentHash: 'hash-new-content',
+    });
+    // overrideRows empty: simulates Postgres's content_hash equality filter finding no match for
+    // 'hash-new-content' (a real DB never returns a row whose content_hash differs from the filter).
+    const supabase = makeSupabase({ overrideRows: [] });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(result.pass).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  // TR-5: a could-not-check block (contentHash never computed — the prompt was never built) must
+  // never bind to ANY override, including one that happens to carry content_hash IS NULL in the
+  // DB. findActiveOverride's own guard returns null WITHOUT querying when currentContentHash is
+  // falsy — this pins that the gate-level verdict reflects that (block stands, not overridden).
+  it('a could-not-check block (no computed content_hash) never binds to an override, even one with content_hash NULL', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [{ severity: 'block', category: 'contradiction', message: 'invariant-only block, LLM was blind', location: 'PRD' }],
+      overall_severity: 'block', // combined can still reach 'block' via invariant escalation
+      model_used: null,
+      token_usage: null,
+      contentHash: null,
     });
     const supabase = makeSupabase({
-      overrideRows: [{
-        id: 'crit-1',
-        findings: [{ severity: 'block', category: 'missing_criteria', message: 'the OLD excused finding', location: 'PRD' }],
-        override_reason: 'excused the old finding only',
-        override_by: 'chairman',
-        created_at: '2026-08-09T00:00:00Z',
-      }],
+      overrideRows: [{ id: 'crit-old', content_hash: null, override_reason: 'stale null-hash override', override_by: 'chairman', created_at: '2026-08-09T00:00:00Z' }],
     });
     const result = await validatePrePlanCritique({ sd: SD, supabase });
     expect(result.pass).toBe(false);

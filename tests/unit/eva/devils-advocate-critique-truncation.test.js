@@ -166,3 +166,99 @@ describe('regression pin — unrelated kill/promotion path is untouched (FR-3 AC
     expect(prompt).not.toContain(serialized.substring(0, MAX_ANALYSIS_CHARS + 1));
   });
 });
+
+describe('computeContentHash (FR-4)', () => {
+  const { computeContentHash } = _internal;
+  const base = { prdText: 'prd content', archText: 'arch content', archLoadStatus: 'ok', model: 'gpt-5.4' };
+
+  it('is stable for identical inputs', () => {
+    expect(computeContentHash(base)).toBe(computeContentHash({ ...base }));
+  });
+
+  it('changes when prdText or archText changes', () => {
+    const h0 = computeContentHash(base);
+    expect(computeContentHash({ ...base, prdText: 'different prd' })).not.toBe(h0);
+    expect(computeContentHash({ ...base, archText: 'different arch' })).not.toBe(h0);
+  });
+
+  // T12: must hash adapter.defaultModel (the REQUESTED model), never response.model (the SERVED
+  // model) -- this test only exercises the input directly, but pins that ANY model-string change
+  // changes the hash, which is the property critiquePlanProposal relies on by passing
+  // adapter.defaultModel (known pre-call) and never response.model (known only post-call, and
+  // silently rotatable by the provider).
+  it('changes when the model changes, on otherwise byte-identical content', () => {
+    const h0 = computeContentHash(base);
+    expect(computeContentHash({ ...base, model: 'gpt-6.0' })).not.toBe(h0);
+  });
+
+  // PT-8: a transient arch-load failure must never hash identically to a genuine "no arch plan"
+  // absence, even though both leave archText='' -- archLoadStatus is a distinct hash input.
+  it('changes when archLoadStatus differs, even with byte-identical (empty) archText', () => {
+    const notFound = computeContentHash({ ...base, archText: '', archLoadStatus: 'not_found' });
+    const loadFailed = computeContentHash({ ...base, archText: '', archLoadStatus: 'load_failed' });
+    const ok = computeContentHash({ ...base, archText: '', archLoadStatus: 'ok' });
+    expect(notFound).not.toBe(loadFailed);
+    expect(notFound).not.toBe(ok);
+    expect(loadFailed).not.toBe(ok);
+  });
+});
+
+describe('critiquePlanProposal cache-hit path (FR-4 AC-5/PT-1/PT-9)', () => {
+  function makeCacheSupabase(hitRow) {
+    return {
+      from: (table) => {
+        if (table !== 'plan_critiques') throw new Error(`unexpected table ${table}`);
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                gte: () => ({
+                  order: () => ({
+                    limit: async () => ({ data: hitRow ? [hitRow] : [], error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      },
+    };
+  }
+
+  it('skips the LLM call on a cache hit and returns the cached findings/severity, flagged cacheHit', async () => {
+    const adapter = mockAdapter({ findings: [], overall_severity: 'pass' }); // would prove a real call happened, if reached
+    const hitRow = { id: 'cached-row-1', findings: [{ severity: 'warn', category: 'other' }], overall_severity: 'warn', model_used: 'gpt-5.4', token_usage: { total_tokens: 5 } };
+    const supabase = makeCacheSupabase(hitRow);
+    const result = await critiquePlanProposal(
+      { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: { sd_id: 'sd-1' } },
+      { adapter, supabase, logger: { warn: vi.fn(), error: vi.fn(), log: vi.fn() } }
+    );
+    expect(adapter.complete).not.toHaveBeenCalled();
+    expect(result.cacheHit).toBe(true);
+    expect(result.cacheSourceId).toBe('cached-row-1');
+    expect(result.overall_severity).toBe('warn');
+    expect(result.findings).toEqual(hitRow.findings);
+    expect(result.contentHash).toEqual(expect.any(String));
+  });
+
+  it('calls the LLM normally when no cache row matches (empty result)', async () => {
+    const adapter = mockAdapter({ findings: [], overall_severity: 'pass' });
+    const supabase = makeCacheSupabase(null);
+    const result = await critiquePlanProposal(
+      { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: { sd_id: 'sd-1' } },
+      { adapter, supabase, logger: { warn: vi.fn(), error: vi.fn(), log: vi.fn() } }
+    );
+    expect(adapter.complete).toHaveBeenCalledTimes(1);
+    expect(result.cacheHit).toBeUndefined();
+  });
+
+  it('calls the LLM normally when no supabase dep is provided (cache disabled, not an error)', async () => {
+    const adapter = mockAdapter({ findings: [], overall_severity: 'pass' });
+    const result = await critiquePlanProposal(
+      { prdContent: UNDER_BUDGET_PRD, archContent: 'short', sdContext: { sd_id: 'sd-1' } },
+      { adapter, logger: { warn: vi.fn(), error: vi.fn(), log: vi.fn() } }
+    );
+    expect(adapter.complete).toHaveBeenCalledTimes(1);
+    expect(result.contentHash).toEqual(expect.any(String)); // still computed even with the cache off
+  });
+});
