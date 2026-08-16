@@ -705,7 +705,7 @@ async function completeStuck100Sd(supabaseClient, sd, { orchestratorSdKeys, acce
         + ' — STUCK_100_NO_LFA_WITNESS (no accepted LEAD-FINAL-APPROVAL handoff found)',
     };
   }
-  const { error } = await supabaseClient
+  const { data: completedRows, error } = await supabaseClient
     .from('strategic_directives_v2')
     .update({
       status: 'completed',
@@ -714,9 +714,21 @@ async function completeStuck100Sd(supabaseClient, sd, { orchestratorSdKeys, acce
       is_working_on: false,
     })
     .eq('sd_key', sd.sd_key)
-    .select();
+    .select('sd_key');
 
   if (error) return { written: false, line: null, error };
+  // QF-20260727-363 (adversarial-review fix): an UPDATE matching zero rows is NOT an error in
+  // PostgREST -- `!error` alone never proved a write happened. Mirrors the sibling reset path's
+  // established `(resetRows || []).length > 0` check a few lines below, so a race between this
+  // function's snapshot and its turn in the caller's loop (e.g. the row was deleted or its
+  // sd_key changed) reports written:false instead of a false "completed" line and an over-counted
+  // applied total at the call site.
+  if ((completedRows || []).length === 0) {
+    return {
+      written: false,
+      line: 'QA: skipped STUCK_100 completion on ' + sd.sd_key + ' — update matched zero rows (raced?)',
+    };
+  }
   return {
     written: true,
     line: 'QA: completed ' + sd.sd_key + ' — was stuck at 100%/pending_approval with completion_date',
@@ -1696,12 +1708,18 @@ async function runQaFixtureScan(ctx) {
   let acceptedPlanToLeadSet = new Set();
   let acceptedLeadFinalSet = new Set();
   if (stuckApprovalIds.length > 0) {
-    const { data: handoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('sd_id, handoff_type, status, created_at')
-      .in('handoff_type', ['PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'])
-      .in('sd_id', stuckApprovalIds)
-      .order('created_at', { ascending: false });
+    // fapPaginate (not a raw read): adversarial review flagged this as the same silent-1000-row-cap
+    // class this module's own header incident (2026-07-19, gauge read 1000 vs true 1495) exists to
+    // close -- a stuck-approval spike could plausibly push handoff-row volume past the PostgREST cap.
+    let handoffs = [];
+    try {
+      handoffs = await fapPaginate(() => supabase
+        .from('sd_phase_handoffs')
+        .select('sd_id, handoff_type, status, created_at')
+        .in('handoff_type', ['PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'])
+        .in('sd_id', stuckApprovalIds)
+        .order('created_at', { ascending: false }));
+    } catch { handoffs = []; } // prior behavior: read error ignored
     ({ acceptedPlanToLeadSet, acceptedLeadFinalSet } = resolveAcceptedHandoffSets(stuckApproval, handoffs || []));
   }
 
@@ -1715,11 +1733,16 @@ async function runQaFixtureScan(ctx) {
   }
   let orchestratorChildRows = [];
   if (parentRefsToCheck.length > 0) {
-    const { data } = await supabase
-      .from('strategic_directives_v2')
-      .select('parent_sd_id')
-      .in('parent_sd_id', parentRefsToCheck);
-    orchestratorChildRows = data || [];
+    // fapPaginate: a stuck-approval row that is a heavily-fanned-out orchestrator parent could
+    // return enough children rows alone to approach the cap (same rationale as the handoffs read
+    // above -- found by adversarial review, not a bound this specific query is otherwise exempt from).
+    try {
+      orchestratorChildRows = await fapPaginate(() => supabase
+        .from('strategic_directives_v2')
+        .select('parent_sd_id')
+        .in('parent_sd_id', parentRefsToCheck)
+        .order('id', { ascending: true })); // FR-6-style tiebreaker: stable ordering across pages
+    } catch { orchestratorChildRows = []; } // prior behavior: read error ignored
   }
   const orchestratorSdKeys = resolveOrchestratorParentSdKeys(stuckApproval, orchestratorChildRows);
 
