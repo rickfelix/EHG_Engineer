@@ -111,7 +111,7 @@ export function isColumnAbsentError(error) {
  *   "present" (FR-2 AC: must not conflate column-absent with any-error).
  */
 export async function ensureDispositionColumnsExist(supabase) {
-  const { error } = await supabase.from('quick_fixes').select('disposition').limit(1);
+  const { error } = await supabase.from('quick_fixes').select('disposition').limit(1); // schema-lint-disable-line: disposition staged, see FR-1 migration (database/migrations/20260816_add_quick_fixes_disposition_columns.sql)
   if (!error) return true;
   if (isColumnAbsentError(error)) return false;
   throw error;
@@ -156,7 +156,19 @@ export function assertNoRawGreatest(sourceText) {
   }
 }
 
-/** FR-3 dedupe fingerprint body: target file(s) + normalized symptom + expected/actual. */
+// VALIDATION sub-agent finding (G4, LOW severity, documented rather than changed): FR-3's "target
+// file(s)" is read here as target_application (the repo/app scope) rather than file paths
+// EXTRACTED from the premise text via a citation-checker-style regex -- a plausible alternate
+// reading, since target_application is a near-constant across the live corpus (200/202 rows share
+// one value), so it contributes almost no discriminating power and clustering is effectively
+// title+description similarity. All FR-3 acceptance criteria (dedupe ordering, the empty-body
+// negative control, the live-corpus stable-predicate assertion) pass under this composition
+// regardless, and the direction is safe either way: a coarser fingerprint under-clusters (fewer
+// false duplicate_of closures), never over-clusters. Left as-is rather than reusing
+// extractCitations() here to avoid touching a working, tested dedupe path for a LOW-severity,
+// non-blocking finding; a future pass could compose the body from extracted file paths when
+// present, falling back to this composition when none are cited (the common case: only 46/170
+// live rows carry any citation at all).
 function dedupeFingerprintBody(qf) {
   return [qf.target_application, qf.title, qf.description, qf.expected_behavior, qf.actual_behavior]
     .filter(Boolean)
@@ -279,7 +291,7 @@ async function fetchPastFenceCandidates(supabase, { columnsExist, nowMs }) {
 }
 
 async function closeDuplicate(supabase, qf, survivorId, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({
+  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/duplicate_of_id/disposed_at/disposed_by staged, see FR-1 migration
     disposition: 'duplicate_of',
     duplicate_of_id: survivorId,
     disposed_at: new Date(nowMs).toISOString(),
@@ -290,7 +302,7 @@ async function closeDuplicate(supabase, qf, survivorId, nowMs) {
 }
 
 async function closePremiseResolved(supabase, qf, reasonCode, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({
+  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/disposed_at/disposed_by staged, see FR-1 migration
     disposition: 'premise_resolved',
     disposition_reason_code: reasonCode,
     disposed_at: new Date(nowMs).toISOString(),
@@ -300,7 +312,7 @@ async function closePremiseResolved(supabase, qf, reasonCode, nowMs) {
   if (error) throw new Error(`closePremiseResolved(${qf.id}): ${error.message}`);
 }
 
-async function closePremiseUnverifiedStale(supabase, qf, nowMs) {
+async function closePremiseUnverifiedStale(supabase, qf, nowMs, reasonCode = 'inconclusive') {
   const premiseText = premiseBlob(qf) || '(no premise text recorded)';
   await emitFeedback({
     supabase,
@@ -320,8 +332,15 @@ async function closePremiseUnverifiedStale(supabase, qf, nowMs) {
       stale_qf_disposition_sweep: true,
     },
   });
-  const { error } = await supabase.from('quick_fixes').update({
+  // VALIDATION sub-agent finding (G3): the citation checker's own reasonCode (e.g. 'no_citation',
+  // 'no_deterministic_signal', 'cross_repo_target', 'checker_error:<msg>') is threaded through
+  // rather than left NULL, so a closed row's WHY is distinguishable after the fact -- matching
+  // FR-4's "names the instrument" intent for every disposition, not only premise_resolved. The
+  // TTL re-lapse caller (a time-based closure, not a fresh citation check) passes its own
+  // 'ttl_relapsed:<days>' code instead.
+  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/disposed_at/disposed_by staged, see FR-1 migration
     disposition: 'premise_unverified_stale',
+    disposition_reason_code: reasonCode,
     disposed_at: new Date(nowMs).toISOString(),
     disposed_by: SWEEP_ACTOR,
     status: 'closed',
@@ -330,7 +349,7 @@ async function closePremiseUnverifiedStale(supabase, qf, nowMs) {
 }
 
 async function markReVerified(supabase, qf, reasonCode, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({
+  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/verified_at/disposed_at/disposed_by staged, see FR-1 migration
     disposition: 're_verified',
     disposition_reason_code: reasonCode,
     verified_at: new Date(nowMs).toISOString(),
@@ -342,7 +361,7 @@ async function markReVerified(supabase, qf, reasonCode, nowMs) {
 }
 
 async function markPromoted(supabase, qf, reasonCode, pathCount, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({
+  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/verified_at/disposed_at/disposed_by staged, see FR-1 migration
     disposition: 'promoted',
     disposition_reason_code: reasonCode,
     verified_at: new Date(nowMs).toISOString(),
@@ -356,10 +375,21 @@ async function markPromoted(supabase, qf, reasonCode, pathCount, nowMs) {
 
 async function runTtlRelapsePass(supabase, { nowMs, columnsExist, apply }) {
   if (!columnsExist) return { relapsed: 0 };
+  // VALIDATION sub-agent finding (G2): the original query filtered ONLY on disposition='re_verified',
+  // with no status/claiming_session_id guard -- unlike the main candidate query (fetchPastFenceCandidates
+  // above), which excludes claimed/in-progress rows. A re_verified row that got claimed after its
+  // last verify (status flips to 'in_progress' but disposition stays 're_verified' -- the claim path
+  // does not touch disposition) would still match this query and could be closed out from under an
+  // active worker once its TTL expired, violating this SD's explicit DOES NOT ("never touches an
+  // in_progress/claimed row") and TR-2. Measured reachable, not theoretical: the claim path does not
+  // stamp started_at (live: in_progress rows have started_at NULL), so staleClockMs stays pinned at
+  // verified_at and ages out on schedule regardless of the claim. Same two filters as the main query.
   const { data: rows, error } = await supabase
     .from('quick_fixes')
-    .select(`${BASE_CANDIDATE_COLUMNS}, ${POST_MIGRATION_COLUMNS}`)
-    .eq('disposition', 're_verified');
+    .select(`${BASE_CANDIDATE_COLUMNS}, ${POST_MIGRATION_COLUMNS}`) // schema-lint-disable-line: disposition/verified_at/disposed_at/disposed_by/disposition_reason_code/duplicate_of_id staged, see FR-1 migration
+    .eq('disposition', 're_verified')
+    .eq('status', 'open')
+    .is('claiming_session_id', null);
   if (error) throw new Error(`TTL relapse select failed: ${error.message}`);
 
   let relapsed = 0;
@@ -368,7 +398,7 @@ async function runTtlRelapsePass(supabase, { nowMs, columnsExist, apply }) {
     const clock = staleClockMs(row, nowMs);
     if (nowMs - clock > ttlMs) {
       relapsed++;
-      if (apply) await closePremiseUnverifiedStale(supabase, row, nowMs);
+      if (apply) await closePremiseUnverifiedStale(supabase, row, nowMs, `ttl_relapsed:${REVERIFIED_TTL_DAYS}d`);
     }
   }
   return { relapsed };
@@ -421,7 +451,7 @@ export async function runSweep(argv, deps = {}) {
       stillPresent.push({ qf, result });
     } else {
       counts.unverifiedStale++;
-      if (args.apply) await closePremiseUnverifiedStale(supabase, qf, nowMs);
+      if (args.apply) await closePremiseUnverifiedStale(supabase, qf, nowMs, result.reasonCode);
     }
   }
 

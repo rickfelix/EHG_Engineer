@@ -257,13 +257,14 @@ describe('TS-3: premise_unverified_stale preserves signal via a feedback row, no
     }
   });
 
-  it('closes disposition=premise_unverified_stale, status=closed on the quick_fixes row itself', async () => {
+  it('closes disposition=premise_unverified_stale, status=closed on the quick_fixes row itself, with the citation checker\'s own reason code (VALIDATION sub-agent finding G3 -- was NULL before)', async () => {
     const rows = [baseRow({ id: 'QF-INC-3', description: 'no citation at all here either' })];
     const supabase = makeSupabase({ rows, columnsExist: true });
     await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], { supabase, nowMs: NOW, seatCount: 3, repoRoot: FIXTURE_ROOT, runTest: runTestStub });
     const update = supabase._updates.find((u) => u.id === 'QF-INC-3');
     expect(update.vals.disposition).toBe('premise_unverified_stale');
     expect(update.vals.status).toBe('closed');
+    expect(update.vals.disposition_reason_code).toBe('no_deterministic_signal');
   });
 });
 
@@ -555,8 +556,46 @@ describe('accounting: every past-fence candidate is accounted for exactly once',
       + (result.counts.unverifiedStale - result.relapsedCount)
       + result.counts.reVerified + result.counts.promoted + result.counts.deferredOverSeatCount;
     expect(sum).toBe(result.candidateCount);
-    // And the relapsed row itself really did close as premise_unverified_stale.
+    // And the relapsed row itself really did close as premise_unverified_stale, with a reason
+    // code that distinguishes a TIME-based relapse from a fresh citation-check INCONCLUSIVE
+    // (VALIDATION sub-agent finding G3).
     const relapseUpdate = supabase._updates.find((u) => u.id === 'QF-STALE-REVER');
     expect(relapseUpdate.vals.disposition).toBe('premise_unverified_stale');
+    expect(relapseUpdate.vals.disposition_reason_code).toMatch(/^ttl_relapsed:/);
+  });
+
+  // VALIDATION sub-agent finding G2: the original TTL relapse query filtered ONLY on
+  // disposition='re_verified', with no status/claiming_session_id guard, unlike the main
+  // candidate query. A re_verified row that gets claimed after its last verify (status flips to
+  // 'in_progress', but the claim path never touches disposition) could be closed out from under
+  // an active worker once its TTL expired -- violating this SD's explicit DOES NOT and TR-2.
+  // Measured reachable in production: the claim path does not stamp started_at, so staleClockMs
+  // stays pinned at verified_at and ages out on schedule regardless of the claim.
+  it('NEVER relapses a re_verified row that has since been claimed (status=in_progress) -- the exact scope violation VALIDATION found', async () => {
+    const claimedReverified = baseRow({
+      id: 'QF-CLAIMED-REVER', status: 'in_progress', claiming_session_id: 'sess-active-worker',
+      disposition: 're_verified', verified_at: daysAgo(31), started_at: null, created_at: daysAgo(90),
+      description: 'covered by tests/failing.test.js',
+    });
+    const supabase = makeSupabase({ rows: [claimedReverified], columnsExist: true });
+    const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
+      supabase, nowMs: NOW, seatCount: 10, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
+    });
+    expect(result.relapsedCount).toBe(0);
+    expect(supabase._updates.find((u) => u.id === 'QF-CLAIMED-REVER')).toBeUndefined();
+  });
+
+  it('NEVER relapses a re_verified row whose status is no longer open (e.g. already closed some other way)', async () => {
+    const closedReverified = baseRow({
+      id: 'QF-CLOSED-REVER', status: 'closed', claiming_session_id: null,
+      disposition: 're_verified', verified_at: daysAgo(31), started_at: null, created_at: daysAgo(90),
+      description: 'covered by tests/failing.test.js',
+    });
+    const supabase = makeSupabase({ rows: [closedReverified], columnsExist: true });
+    const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
+      supabase, nowMs: NOW, seatCount: 10, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
+    });
+    expect(result.relapsedCount).toBe(0);
+    expect(supabase._updates.find((u) => u.id === 'QF-CLOSED-REVER')).toBeUndefined();
   });
 });
