@@ -18,7 +18,7 @@
  * NOT caught here — stated rather than papered over.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -968,6 +968,63 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
     );
     expect(src, 'and the citation check must actually be CALLED, not merely imported').toMatch(/await\s+verifyLegCitations\(/);
     expect(src, 'the legs array must call computeLeg2').toMatch(/await\s+computeLeg2\(/);
+  });
+});
+
+/**
+ * SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 — FR-3/TS-1/TS-2/TS-3: persistUnavailable, wired into
+ * scoreCapacityLeg's catch block. Best-effort and optional — see that function's own header
+ * comment for why a secondary sentinel failure must never be allowed to change what the caller
+ * sees, and why the legacy (no persistUnavailable) call shape must stay byte-identical.
+ */
+describe('SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 FR-3 — persistUnavailable, wired into the catch block', () => {
+  const gatherCapacity = async () => { throw new Error('belt query failed'); };
+  const okPersist = (captured) => async (row) => { captured.push(row); return { id: 'verdict-row-1' }; };
+
+  it('TS-1 — a forced gather failure, with persistUnavailable injected, writes exactly one sentinel row and still reports unavailable', async () => {
+    const sentinelCalls = [];
+    const persistVerdictCalls = [];
+    const leg = await scoreCapacityLeg({
+      gatherCapacity,
+      persistVerdict: okPersist(persistVerdictCalls),
+      persistUnavailable: async (row) => { sentinelCalls.push(row); return { id: 'sentinel-row-1' }; },
+      runId: 'drive-2026-08-16',
+    });
+
+    expect(sentinelCalls, 'exactly one sentinel write').toHaveLength(1);
+    expect(sentinelCalls[0]).toMatchObject({ run_id: 'drive-2026-08-16' });
+    expect(sentinelCalls[0].detail?.reason, 'the sentinel row must carry the real failure reason').toMatch(/belt query failed/);
+    expect(persistVerdictCalls, 'the normal-path writer must never be called on a gather failure').toHaveLength(0);
+    expect(leg.leg).toBe('leg4_capacity');
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
+    expect(leg.points, 'a sentinel write must never produce points').toBeUndefined();
+  });
+
+  it('TS-2 — persistUnavailable itself throwing does not propagate; scoreCapacityLeg still resolves with unavailable()', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const leg = await scoreCapacityLeg({
+        gatherCapacity,
+        persistVerdict: okPersist([]),
+        persistUnavailable: async () => { throw new Error('sentinel table not migrated yet'); },
+      });
+      expect(leg.unavailable.available).toBe(false);
+      expect(leg.unavailable.reason, 'the PRIMARY (gather) failure reason must survive the SECONDARY sentinel failure').toMatch(/belt query failed/);
+      expect(consoleErrorSpy, 'the secondary failure must be logged, not silently dropped').toHaveBeenCalled();
+      expect(consoleErrorSpy.mock.calls[0][0]).toMatch(/sentinel table not migrated yet/);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it('TS-3 — scoreCapacityLeg constructed WITHOUT persistUnavailable (legacy call shape) attempts no sentinel write of any kind', async () => {
+    // Byte-identical to every pre-existing test in the FR-3 block above (none of which pass
+    // persistUnavailable and all still pass unmodified) — named explicitly here rather than left
+    // implicit across other tests' incidental omission of the parameter.
+    const leg = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist([]) });
+    expect(leg.unavailable.available).toBe(false);
+    expect(leg.unavailable.reason).toMatch(/belt query failed/);
   });
 });
 

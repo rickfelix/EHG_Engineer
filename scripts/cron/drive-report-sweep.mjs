@@ -164,7 +164,7 @@ export function withinWindow(nowMs) {
  * denominator rather than scoring them zero. Letting the throw escape would take the ENTIRE drive
  * report down over one leg — strictly worse than today, where leg4 is simply unavailable.
  */
-export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, runId = null } = {}) {
+export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, persistUnavailable = null, runId = null } = {}) {
   try {
     const inputs = await gatherCapacity();
     const computeVerdict = () => computeBeltVerdict({
@@ -225,6 +225,22 @@ export async function scoreCapacityLeg({ gatherCapacity, persistVerdict, runId =
     // unapplied, the write throws PGRST205/42P01, and leg4 reports unavailable exactly as it does
     // today. That outcome is a PASS (FR-5/TS-7), not a regression — recorded here so a later reader
     // does not "fix" it.
+    //
+    // SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 (FR-3): a failure here previously left NO durable
+    // record at all -- a run that could not be measured was indistinguishable from a run that was
+    // never swept. persistUnavailable is OPTIONAL (unlike gatherCapacity/persistVerdict above,
+    // which throw if missing) so any existing caller/test that constructs scoreCapacityLeg without
+    // it keeps behaving byte-identically. When provided, the sentinel write is BEST-EFFORT: its own
+    // try/catch means a SECONDARY failure (e.g. the migration has not applied yet) can never block
+    // returning the PRIMARY unavailable() result below -- the report's house posture (degrade to
+    // unavailable, never crash) must survive even a broken sentinel path.
+    if (typeof persistUnavailable === 'function') {
+      try {
+        await persistUnavailable({ run_id: runId, detail: { source: 'drive-report-sweep', reason: err?.message || String(err) } });
+      } catch (sentinelErr) {
+        console.error(`[scoreCapacityLeg] sentinel persist failed (non-fatal, leg still reports unavailable): ${sentinelErr?.message || sentinelErr}`);
+      }
+    }
     return { leg: LEG4_ID, unavailable: unavailable(`scoreLeg4 could not be scored this run: ${err?.message || err}`) };
   }
 }
@@ -273,7 +289,7 @@ export async function computeLeg2({ readLeg2Cohort, nowMs }) {
  * "finishing" any of them — two are traps where the obvious wiring produces a confidently wrong
  * number rather than an incomplete one.
  */
-export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, capacityRunId = null, runGitLog, readLeg2Cohort, nowMs, resolveRows }) {
+export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, persistVerdict, persistUnavailable = null, capacityRunId = null, runGitLog, readLeg2Cohort, nowMs, resolveRows }) {
   // SD-LEO-INFRA-PERSIST-BELT-CAPACITY-001 (FR-3): leg4's two injections are REQUIRED here, not
   // defaulted to the real implementations. A default would make this function look wired while the
   // CLI passed nothing — which is precisely how `persist` went missing from runDriveReportSweep and
@@ -375,7 +391,7 @@ export function buildGather({ supabase, computePlanCheckStatus, gatherCapacity, 
       // SD-LEO-INFRA-DRIVE-SCORE-LEG2-001 (FR-2/FR-3/FR-5): the ranked-top-5 SNAPSHOT wiring —
       // see computeLeg2 above for the cohort-selection, window-anchor, and failure-isolation logic.
       await computeLeg2({ readLeg2Cohort, nowMs }),
-      await scoreCapacityLeg({ gatherCapacity, persistVerdict, runId: capacityRunId }),
+      await scoreCapacityLeg({ gatherCapacity, persistVerdict, persistUnavailable, runId: capacityRunId }),
     ];
 
     // SD-LEO-INFRA-DRIVE-SCORE-PER-001 (FR-3): resolve every cited row id against the table ITS OWN
@@ -482,7 +498,7 @@ if (isMainModule(import.meta.url)) {
   const { registerArmedMachinery } = await import('../../lib/machinery-class/armed-registration.js');
   // FR-3 / FR-2: leg4's two injections, resolved at the edge like every other real dependency.
   const { gatherCapacityInputs } = await import('../lib/capacity-inputs.mjs');
-  const { makeCapacityVerdictPersist } = await import('../lib/capacity-verdict-store.mjs');
+  const { makeCapacityVerdictPersist, makeCapacityVerdictUnavailablePersist } = await import('../lib/capacity-verdict-store.mjs');
 
   // BEFORE createClient, not after. This check sat below it and was unreachable dead code:
   // createClient(undefined, undefined) throws "supabaseUrl is required" first. Both orders fail
@@ -506,6 +522,9 @@ if (isMainModule(import.meta.url)) {
       computePlanCheckStatus,
       gatherCapacity: () => gatherCapacityInputs(supabase),
       persistVerdict: makeCapacityVerdictPersist(supabase),
+      // SD-LEO-FIX-BELT-CAPACITY-VERDICTS-001 (FR-3): sibling sentinel writer, called only from
+      // scoreCapacityLeg's catch block — see that function's own comment for why it is best-effort.
+      persistUnavailable: makeCapacityVerdictUnavailablePersist(supabase),
       // The SAME window key the report row is written under, so an auditor can join a verdict to
       // the report that cites it. Derived from cliNowMs, not a second clock read.
       capacityRunId: windowKey(cliNowMs),
