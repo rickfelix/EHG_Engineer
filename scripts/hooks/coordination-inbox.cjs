@@ -162,6 +162,13 @@ try {
 //     markDelivered instead of read_at where a poll needs to stop treating a row as brand-new
 //     without falsely implying it was processed (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001
 //     FR-2/FR-3 — see the DIRECTIVE_KINDS branch below).
+// QF-20260816-457: a session is idle iff it holds no SD claim. The prior version read
+// sessionData?.sd_id, a column never selected from claude_sessions (the real column is sd_key),
+// so isIdle was ~always true — busy claim-holding workers got the IDLE/claim banner on every poll.
+function resolveIsIdle(sessionData) {
+  return !sessionData?.sd_key;
+}
+
 // Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
 function classifyInboxMessage(msg, opts = {}) {
   const { twoWayOn = false, amAdam = false, amSolomon = false, isIdle = false } = opts;
@@ -616,7 +623,7 @@ async function main() {
       .select('sd_key, metadata')
       .eq('session_id', sessionId)
       .single();
-    isIdle = !sessionData?.sd_id; // NOTE: pre-existing bug — column is sd_key, so this is ~always true (flagged, out of scope)
+    isIdle = resolveIsIdle(sessionData);
     amAdam = sessionData?.metadata?.role === 'adam';
     amSolomon = sessionData?.metadata?.role === 'solomon'; // QF-20260709-800
   } catch { /* assume not idle / not adam / not solomon if query fails */ }
@@ -953,6 +960,8 @@ module.exports = {
   shouldSkipCoordinatorReply,
   // SD-LEO-FIX-FIX-COORDINATION-INBOX-001 — exposed for unit tests
   classifyInboxMessage,
+  // QF-20260816-457 — exposed for unit tests
+  resolveIsIdle,
   // SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-1 — exposed for unit tests
   mergePriorityExempt
 };
