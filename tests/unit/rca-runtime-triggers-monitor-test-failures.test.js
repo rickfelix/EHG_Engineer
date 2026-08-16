@@ -32,9 +32,13 @@ const { monitorTestFailures } = await import('../../lib/rca-runtime-triggers.js'
 /**
  * @param {object} opts
  * @param {{data:any[],error:any}} [opts.testResultsResult] - resolution for the test_results lookback query
- * @param {{data:any[],error:any}} [opts.testRunsResult] - resolution for the test_runs ordering query
+ * @param {{data:any[],error:any}} [opts.testRunsResult] - resolution for the test_runs ordering (thenable) query
+ * @param {{data:any,error:any}} [opts.currentRunResult] - resolution for the CURRENT run's sd_id lookup (.maybeSingle())
+ *   -- deliberately a SEPARATE fixture from testRunsResult (V-1/V-2 regression guard): the two
+ *   queries must resolve independently so a test can prove sd_id comes from the failing run's own
+ *   test_runs row, not from whichever prior run happened to pass.
  */
-function createMockSupabase({ testResultsResult, testRunsResult } = {}) {
+function createMockSupabase({ testResultsResult, testRunsResult, currentRunResult } = {}) {
   const mockChannel = {
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn((cb) => { if (cb) cb('SUBSCRIBED'); return mockChannel; }),
@@ -42,6 +46,7 @@ function createMockSupabase({ testResultsResult, testRunsResult } = {}) {
 
   const testResultsChain = createSupabaseChainMock({ result: testResultsResult ?? { data: [], error: null } });
   const testRunsChain = createSupabaseChainMock({ result: testRunsResult ?? { data: [], error: null } });
+  testRunsChain.maybeSingle = vi.fn(() => Promise.resolve(currentRunResult ?? { data: null, error: null }));
 
   const rcrChain = createSupabaseChainMock();
   rcrChain.maybeSingle = vi.fn(() => Promise.resolve({ data: null, error: null })); // dedup: no existing OPEN/IN_REVIEW RCR
@@ -103,9 +108,14 @@ describe('monitorTestFailures()', () => {
   });
 
   test('TS-1: prior run passed, current run fails -> triggers an RCR with trigger_tier=2', async () => {
+    // V-1/V-2 regression guard: the prior (passing) run and the CURRENT (failing) run are
+    // deliberately given DIFFERENT sd_id values. A test that used only one sd_id anywhere
+    // could not distinguish "sourced from the prior run" (the bug) from "sourced from the
+    // current run" (correct) -- this is exactly what let the original bug through.
     const mockSupabase = createMockSupabase({
       testResultsResult: { data: [{ status: 'passed', test_run_id: 'run-prior' }], error: null },
-      testRunsResult: { data: [{ id: 'run-prior', started_at: '2026-08-01T00:00:00Z', sd_id: 'SD-EXAMPLE-001' }], error: null },
+      testRunsResult: { data: [{ id: 'run-prior', started_at: '2026-08-01T00:00:00Z', sd_id: 'SD-PRIOR-WRONG-001' }], error: null },
+      currentRunResult: { data: { sd_id: 'SD-CURRENT-CORRECT-002' }, error: null },
     });
     const handler = await captureHandler(mockSupabase);
 
@@ -115,8 +125,8 @@ describe('monitorTestFailures()', () => {
     const payload = mockSupabase._rcrChain.insert.mock.calls[0][0];
     expect(payload.trigger_tier).toBe(2);
     expect(payload.trigger_source).toBe('TEST_FAILURE');
-    expect(payload.sd_id).toBe('SD-EXAMPLE-001');
-    expect(payload.failure_signature).toBe('test_regression:suite > does the thing:SD-EXAMPLE-001');
+    expect(payload.sd_id).toBe('SD-CURRENT-CORRECT-002');
+    expect(payload.failure_signature).toBe('test_regression:suite > does the thing:SD-CURRENT-CORRECT-002');
     expect(payload.evidence_refs.stack_trace).toBe(FAILING_ROW.error_stack);
     expect(payload.evidence_refs.screenshot_url).toBe(FAILING_ROW.failure_screenshot_path);
   });
