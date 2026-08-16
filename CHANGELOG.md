@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-16](#2026-08-16)
+  - [Infrastructure](#infrastructure)
 - [2026-08-15](#2026-08-15)
   - [Infrastructure](#infrastructure)
 - [2026-08-14](#2026-08-14)
@@ -115,6 +117,19 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-16
+
+### Infrastructure
+- **`/learn`-bundled retrospective-pattern fixes: seed-test evidence tiering, sub-agent evidence staleness detection, and PRD absence-claim linting** - PR #7074 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143)
+  - **What shipped**: a `/learn`-generated harness-fix SD bundling 4 of 5 auto-detected retrospective patterns, driven LEAD→PLAN→EXEC→VERIFY→LEAD-FINAL as one small-PR unit:
+    - `scripts/audit/control-seed-test.mjs` gained a shared two-tier `extractSeedTestEvidence()` helper (STRONG `AssertionError|expected .+ to ` regex preferred, WEAK `FAIL|Tests\s` fallback, raw-last-3-lines final fallback), replacing two divergent evidence-capture implementations — one regex-filtered, one a raw slice — that had drifted apart across `runSeedTestTrial()`'s two return sites.
+    - `lib/sub-agent-executor/results-storage.js` now stamps every sub-agent evidence row with `evaluated_commit_sha` (new `resolveEvaluatedCommitSha()`, a `git rev-parse HEAD` against the executing worktree, written *after* the caller-suppliable metadata spread so it can't be forged). `scripts/modules/handoff/gates/subagent-evidence-gate.js` gained `detectStaleEvidence()`, comparing each required sub-agent's stamped SHA against the SD's current worktree HEAD at EXEC-TO-PLAN and warning (non-blocking) when evidence predates the code it's meant to certify.
+    - `scripts/prd/quality-validator.js` gained a warn-only `scanAbsenceClaims()` check (`no other|the only|nowhere else|sole|only implementation` regex over `acceptance_criteria`) that surfaces unverified absence claims in PRD text without affecting score/pass.
+    - `leo_protocol_sections` id=297 (backs CLAUDE_EXEC.md's "Anti-Patterns from Retrospectives") gained a 6th entry documenting `safeRecursiveRm`'s discoverability gap.
+  - **Descoped**: the bundle's 5th detected pattern (PAT-LES-35fb9852cdeb, a Q8 deletion-audit pattern) was dropped at PLAN scoping and left for a separate follow-up rather than folded into this SD's 4 FRs.
+  - **Review caught 3 real defects before merge, plus one in CI**: TESTING (EXEC-TO-PLAN) found the original single-tier evidence filter could let vitest's own summary footer crowd out a real `AssertionError` — closed by the STRONG/WEAK split above. SECURITY (EXEC-TO-PLAN) found the SHA-resolution fallback order backwards: `repo_path` is canonicalized to the repo root by `toCanonicalRepoPath()`, so `repo_path || executed_from_cwd` would stamp the wrong SHA under the default worktree-scoped execution model — swapped to `executed_from_cwd || repo_path`. REGRESSION (VERIFY) caught that the FR-1 helper insertion shifted a line-pinned entry in `scripts/lint/shell-injection-argv-allowlist.json` (`:354`→`:378`), re-pinned with provenance. A deep-tier adversarial ship-gate pass separately caught both new `execFileSync('git', ['rev-parse','HEAD'])` calls missing the repo's `timeout` convention — added `timeout: 5000` to both. CI's `control-seed-test-lint` also caught a genuine pre-existing gap on the `control-seed-test` spec entry (`NO_OBSERVABILITY_PROOF` — missing the `observability_proof` field its `control-seed-test-lint` sibling already had), fixed alongside.
+  - **Verification**: full unit suite green (76 `subagent-evidence-gate` tests, 21 `prd-quality-validator` tests, 9 new `evaluated-commit-sha` tests, plus the pre-existing `control-seed-test-lint` suite); PLAN-TO-LEAD handoff passed at 98%; retrospective (id `1febbdb8-2439-4043-80c0-39fa143c6ea7`) published at quality_score=100.
 
 ## 2026-08-15
 
