@@ -84,7 +84,7 @@ export async function finalizeUserStories(supabase, prdId, sdId) {
   try {
     let query = supabase
       .from('user_stories')
-      .select('id, title, status, validation_status, e2e_test_path, e2e_test_status');
+      .select('id, title, status, validation_status, e2e_test_path, e2e_test_status, completed_by');
 
     if (prdId) {
       query = query.eq('prd_id', prdId);
@@ -110,14 +110,24 @@ export async function finalizeUserStories(supabase, prdId, sdId) {
     let updatedCount = 0;
     for (const story of stories) {
       if (story.status !== 'completed' || story.validation_status !== 'validated') {
+        const now = new Date().toISOString();
         const updates = {
           status: 'completed',
           validation_status: 'validated',
-          updated_at: new Date().toISOString()
+          updated_at: now
         };
 
         if (story.e2e_test_path && story.e2e_test_status !== 'passing') {
           updates.e2e_test_status = 'passing';
+        }
+
+        // Provenance stamp: only when this call is the one flipping status to
+        // completed for the first time -- never on a validation-only repair of an
+        // already-completed story (which would mislabel a genuine completion as
+        // machine-forced), and never overwriting an existing completed_by value.
+        if (story.status !== 'completed' && !story.completed_by) {
+          updates.completed_by = 'system:finalizeUserStories';
+          updates.completed_at = now;
         }
 
         const { error: updateError } = await supabase
