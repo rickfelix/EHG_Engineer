@@ -92,6 +92,14 @@ export async function executeAutoChain(supabase, params) {
     });
 
     if (!nextSD) {
+      // REGRESSION EXEC finding (SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001, PLAN_VERIFICATION):
+      // this substring match is coupled to queue-selector.js's exact reason-string wording --
+      // "unclaimed" contains "claimed", so the fenced-queue reason (queue-selector.js:91) maps
+      // here too, deliberately (EXIT_ALL_CLAIMED is the more conservative label for "candidates
+      // exist but are fenced," vs EXIT_EMPTY_QUEUE which would wrongly assert none exist). This
+      // mapping is a coincidence of wording pinned only by
+      // tests/unit/handoff/auto-chain-executor-exit-code.test.js -- reword either string and
+      // re-run that test before assuming the mapping is unaffected.
       const exitCode = selectReason.includes('claimed')
         ? EXIT_CODES.EXIT_ALL_CLAIMED
         : EXIT_CODES.EXIT_EMPTY_QUEUE;

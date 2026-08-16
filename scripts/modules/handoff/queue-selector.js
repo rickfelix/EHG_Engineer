@@ -85,6 +85,11 @@ export async function selectNextSD(supabase, options = {}) {
     );
 
     if (eligible.length === 0) {
+      // REGRESSION EXEC finding: "unclaimed" contains "claimed" as a substring, which
+      // auto-chain-executor.js:95's selectReason.includes('claimed') check relies on
+      // (deliberately, see the comment there) to route a fenced queue to EXIT_ALL_CLAIMED.
+      // If you reword this string, re-run
+      // tests/unit/handoff/auto-chain-executor-exit-code.test.js.
       return {
         sd: null,
         candidates: [],
