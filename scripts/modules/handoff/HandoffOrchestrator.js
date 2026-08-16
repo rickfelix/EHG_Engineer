@@ -948,10 +948,14 @@ export class HandoffOrchestrator {
           // lint): 'prd_id' is a phantom column (live 42703) — the PK is 'id'. The phantom
           // select errored into the catch below on EVERY poll, so PRD-creation verification
           // always timed out silently.
+          // QF-20260816-506: the spawn at line ~925 writes with idToUse (sd.id || sdId,
+          // resolved UUID form), but this poll queried by the outer sdId (sd_key form) —
+          // add-prd-to-database.js persists sd_id as the UUID, so a sd_key-keyed poll never
+          // matched and every detached-mode PRD generation burned the full 90s window.
           const { data } = await this.supabase
             .from('product_requirements_v2')
             .select('id')
-            .eq('sd_id', sdId)
+            .eq('sd_id', idToUse)
             .limit(1);
 
           if (data && data.length > 0) {
