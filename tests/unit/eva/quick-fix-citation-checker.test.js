@@ -30,6 +30,18 @@ describe('extractCitations', () => {
   });
 });
 
+describe('extractCitations — hardening against a flag-injection-shaped citation', () => {
+  it('a path prefixed with -- is never extracted as a secondary-signal path candidate', () => {
+    const { paths } = extractCitations('run --foo/bar.test.js now');
+    expect(paths).toEqual([]);
+  });
+
+  it('the same input strips the leading -- from any named-test extraction rather than including it', () => {
+    const { namedTest } = extractCitations('run --foo/bar.test.js now');
+    expect(namedTest).not.toMatch(/^-/);
+  });
+});
+
 describe('checkQuickFixCitation', () => {
   let tmpDir;
   beforeAll(() => {
