@@ -24,6 +24,7 @@
  * row per agent and (b) compares that row's verdict against an explicit policy.
  * Rollout is warn-first via SUBAGENT_VERDICT_MODE (see resolveSubagentVerdictMode).
  */
+import { execFileSync } from 'node:child_process';
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
 import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
 
@@ -264,6 +265,69 @@ function killSwitchActive() {
 }
 
 /**
+ * PAT-LES-83842538ee01 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-3.
+ *
+ * Kill-switch for the stale-evidence check, mirroring this file's own
+ * LEO_DISABLE_SUBAGENT_EVIDENCE_GATE convention and mechanism-claim-verifier.js's
+ * LEO_DISABLE_MECHANISM_VERIFIER_GATE — a NEW heuristic must ship with its own
+ * off-switch so a bad edge case can never wedge the fleet.
+ */
+function staleEvidenceCheckDisabled() {
+  const v = process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+  return v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
+}
+
+/**
+ * The commit the CURRENT PR is actually at. Resolved from sd.worktree_path — the SD's OWN
+ * worktree/branch, set at claim time (sd-start.js) — deliberately NOT via the generic
+ * target_application -> repo-root heuristic (BaseExecutor.determineTargetRepository): that
+ * resolves to the shared repo ROOT, not this SD's branch, which would compare evidence
+ * against the wrong ref entirely (worse than not checking).
+ *
+ * Never throws. No worktree_path, or a repo git cannot read, resolves to null — the caller
+ * treats null as "cannot determine freshness", not "stale" (same null-safety contract as
+ * resolveEvaluatedCommitSha in lib/sub-agent-executor/results-storage.js).
+ */
+function resolveCurrentHeadSha(sd) {
+  const repoPath = sd?.worktree_path;
+  if (!repoPath) return null;
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoPath, encoding: 'utf8' }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which required agents' latest evidence was evaluated against a commit the PR has since
+ * moved past. Advisory-only by design (never returned as `issues`) — see FR-3 in the PRD for
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143: a heavily-fenced, thrice-hardened gate gets a new
+ * class added on top, never a change to existing block/advisory logic.
+ *
+ * @returns {{stale: Array<{agent:string, evaluated_commit_sha:string, current_head_sha:string}>, warnings: string[]}}
+ */
+function detectStaleEvidence(latestByCode, required, sd, norm) {
+  const currentHeadSha = resolveCurrentHeadSha(sd);
+  if (!currentHeadSha) return { stale: [], warnings: [] };
+
+  const stale = [];
+  for (const r of required) {
+    const row = latestByCode.get(norm(r));
+    const evaluatedSha = row?.evaluated_commit_sha;
+    if (evaluatedSha && evaluatedSha !== currentHeadSha) {
+      stale.push({ agent: r, evaluated_commit_sha: evaluatedSha, current_head_sha: currentHeadSha });
+    }
+  }
+  return {
+    stale,
+    warnings: stale.map(s => `[ADVISORY] SUBAGENT_EVIDENCE_STALE: ${s.agent}'s latest evidence evaluated commit `
+      + `${s.evaluated_commit_sha.slice(0, 12)} but the PR has since advanced to ${s.current_head_sha.slice(0, 12)} `
+      + `— re-run ${s.agent} against the current HEAD before trusting this handoff. `
+      + 'Disable via LEO_DISABLE_STALE_EVIDENCE_CHECK=1 if this proves noisy.')
+  };
+}
+
+/**
  * Write a non-blocking audit_log row documenting the bypass.
  */
 async function writeKillSwitchAudit(db, sdUuid, handoffType) {
@@ -357,9 +421,12 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // Query evidence
   let rows;
   try {
+    // PAT-LES-83842538ee01 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-3: evaluated_commit_sha
+    // projected straight out of metadata (PostgREST `->>` operator) rather than selecting the
+    // whole JSONB blob, per TESTING sub-agent's efficiency finding during PLAN.
     const { data, error } = await db
       .from('sub_agent_execution_results')
-      .select('sub_agent_code, created_at, verdict')
+      .select('sub_agent_code, created_at, verdict, evaluated_commit_sha:metadata->>evaluated_commit_sha')
       .eq('sd_id', sdUuid)
       .gte('created_at', phaseStartedAt.toISOString());
     if (error) throw error;
@@ -512,13 +579,24 @@ export async function validateSubagentEvidence(ctx, supabase) {
 
     if (failing.length === 0) {
       console.log(`   ✅ All required sub-agents have fresh PASSING evidence (${required.length}/${required.length})`);
+
+      // PAT-LES-83842538ee01, FR-3: scoped STRICTLY to EXEC-TO-PLAN. At LEAD-TO-PLAN/PLAN-TO-EXEC
+      // a commit-SHA mismatch is the NORMAL state (no EXEC commits exist yet) -- checking there
+      // would manufacture false positives, not find real ones.
+      const staleResult = (handoffType === 'EXEC-TO-PLAN' && !staleEvidenceCheckDisabled())
+        ? detectStaleEvidence(latestByCode, required, ctx.sd, norm)
+        : { stale: [], warnings: [] };
+      if (staleResult.stale.length > 0) {
+        for (const w of staleResult.warnings) console.log(`   ⚠️  ${w}`);
+      }
+
       return {
         passed: true,
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: unknownWarnings,
-        details: verdictDetails
+        warnings: [...unknownWarnings, ...staleResult.warnings],
+        details: { ...verdictDetails, stale: staleResult.stale }
       };
     }
 
@@ -621,5 +699,8 @@ export const _internals = {
   resolveCurrentPhaseStartedAt,
   killSwitchActive,
   ACCEPT_VERDICTS,
-  REJECT_VERDICTS
+  REJECT_VERDICTS,
+  detectStaleEvidence,
+  resolveCurrentHeadSha,
+  staleEvidenceCheckDisabled
 };
