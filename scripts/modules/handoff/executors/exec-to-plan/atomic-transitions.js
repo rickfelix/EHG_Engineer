@@ -22,6 +22,112 @@ export function generateRequestId(sdId, sessionId) {
   return `${sdId}-${sessionId || 'unknown'}-${timestampBucket}`;
 }
 
+// Same format gate scripts/lib/sd-id-resolver.js's resolveSdInput() applies before
+// building an identical .or() filter string -- rejects commas/parens/periods that
+// could otherwise alter the intended PostgREST OR-clause.
+const SD_ID_OR_KEY_FORMAT = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|SD-[A-Z0-9-]+)$/i;
+
+/**
+ * Resolve a Strategic Directive identifier (id or sd_key) to its uuid_id column
+ * value -- the SAME column fn_atomic_exec_to_plan_transition resolves p_sd_id to
+ * internally (database/migrations/20260406_fix_exec_to_plan_sd_status.sql:39-43,
+ * `SELECT uuid_id INTO v_sd_uuid ... WHERE id = p_sd_id OR sd_key = p_sd_id`) and
+ * then matches against user_stories.sd_id. uuid_id is a separate column from the
+ * primary key id (kept in sync with uuid_internal_pk via its own trigger), so this
+ * must NOT be conflated with resolveSdInput()'s id field.
+ * Fails soft (returns null) so a resolution error never aborts the RPC transition.
+ * @param {Object} supabase
+ * @param {string} sdId
+ * @returns {Promise<string|null>}
+ */
+export async function resolveSdUuidId(supabase, sdId) {
+  if (typeof sdId !== 'string' || !SD_ID_OR_KEY_FORMAT.test(sdId)) return null;
+  try {
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('uuid_id')
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.log(`   ⚠️  Provenance stamp: could not resolve SD uuid_id (non-fatal): ${error.message}`);
+      return null;
+    }
+    return data?.uuid_id || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Capture the SD's in_progress stories before the RPC call -- the only status
+ * value fn_atomic_exec_to_plan_transition's own CASE actually promotes to
+ * completed. Fails soft (returns []) so a read error never aborts the transition.
+ * @param {Object} supabase
+ * @param {string|null} sdUuidId
+ * @returns {Promise<Array<{id: string, completed_by: string|null}>>}
+ */
+export async function captureInProgressStories(supabase, sdUuidId) {
+  if (!sdUuidId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('user_stories')
+      .select('id, completed_by')
+      .eq('sd_id', sdUuidId)
+      .eq('status', 'in_progress');
+    if (error) {
+      console.log(`   ⚠️  Provenance stamp: could not capture in_progress stories (non-fatal): ${error.message}`);
+      return [];
+    }
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Stamp provenance on exactly the stories the RPC actually promoted to
+ * completed, matching the same guard discipline as finalizeUserStories()/
+ * transitionUserStoriesToValidated(): only a genuine first-time completion is
+ * stamped, an existing completed_by is never overwritten. Pure no-op when
+ * beforeInProgress is empty (covers both "nothing to promote" and an
+ * idempotent-hit retry, where the original call already promoted everything).
+ * Fails soft -- a stamp failure never reverses or fails the already-successful
+ * RPC transition.
+ * @param {Object} supabase
+ * @param {Array<{id: string, completed_by: string|null}>} beforeInProgress
+ */
+export async function stampRpcPromotedStories(supabase, beforeInProgress) {
+  if (!beforeInProgress || beforeInProgress.length === 0) return;
+  try {
+    const ids = beforeInProgress.map((s) => s.id);
+    const { data: after, error: fetchError } = await supabase
+      .from('user_stories')
+      .select('id, status, completed_by')
+      .in('id', ids);
+
+    if (fetchError) {
+      console.log(`   ⚠️  Provenance stamp: could not re-fetch promoted stories (non-fatal): ${fetchError.message}`);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    for (const story of after || []) {
+      if (story.status === 'completed' && !story.completed_by) {
+        const { error: updateError } = await supabase
+          .from('user_stories')
+          .update({ completed_by: 'system:fn_atomic_exec_to_plan_transition', completed_at: now })
+          .eq('id', story.id);
+        if (updateError) {
+          console.log(`   ⚠️  Provenance stamp: failed to stamp story ${story.id} (non-fatal): ${updateError.message}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.log(`   ⚠️  Provenance stamp diff failed (non-fatal, transition already succeeded): ${err.message}`);
+  }
+}
+
 /**
  * Execute atomic EXEC-TO-PLAN state transition
  *
@@ -42,6 +148,13 @@ export async function executeAtomicExecToPlanTransition(supabase, sdId, prdId, o
   console.log(`   SD: ${sdId}`);
   console.log(`   PRD: ${prdId || '(none)'}`);
   console.log(`   Request ID: ${requestId}`);
+
+  // Provenance-stamp diff: capture in_progress stories before the RPC call so
+  // we can stamp exactly the rows it promotes afterward, without touching its
+  // SQL body. Resolved/captured before the try block's RPC call so a failure
+  // here (soft-failed to null/[] above) never affects the transition itself.
+  const sdUuidId = await resolveSdUuidId(supabase, sdId);
+  const beforeInProgress = await captureInProgressStories(supabase, sdUuidId);
 
   try {
     const { data, error } = await supabase.rpc('fn_atomic_exec_to_plan_transition', {
@@ -68,6 +181,13 @@ export async function executeAtomicExecToPlanTransition(supabase, sdId, prdId, o
         code: data.code
       };
     }
+
+    // Stamp provenance on whichever previously-in_progress stories the RPC
+    // just promoted to completed. Covers both the fresh-success path below and
+    // an idempotent-hit retry (beforeInProgress is naturally empty on a retry,
+    // since the original call already promoted everything -- this is then a
+    // pure no-op, requiring no special-casing of data.idempotent_hit).
+    await stampRpcPromotedStories(supabase, beforeInProgress);
 
     // Check for idempotent hit
     if (data.idempotent_hit) {
@@ -190,5 +310,8 @@ export default {
   executeAtomicExecToPlanTransition,
   isAtomicTransitionAvailable,
   executeLegacyTransitions,
-  generateRequestId
+  generateRequestId,
+  resolveSdUuidId,
+  captureInProgressStories,
+  stampRpcPromotedStories
 };

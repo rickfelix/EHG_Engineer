@@ -11,7 +11,10 @@ vi.mock('../../../../../scripts/modules/handoff/lib/retro-clobber-guard.js', () 
   isSafeToWriteRetro: vi.fn().mockResolvedValue({ safe: true, reason: 'no_retro', existingRetro: null }),
 }));
 
-import { satisfyOrchestratorTemplateRequirements } from '../../../../../scripts/modules/handoff/executors/plan-to-lead/state-transitions.js';
+import {
+  satisfyOrchestratorTemplateRequirements,
+  finalizeUserStories,
+} from '../../../../../scripts/modules/handoff/executors/plan-to-lead/state-transitions.js';
 
 describe('satisfyOrchestratorTemplateRequirements', () => {
   let mockDb;
@@ -370,5 +373,97 @@ describe('satisfyOrchestratorTemplateRequirements', () => {
     const result = await satisfyOrchestratorTemplateRequirements(mockDb, 'sd-123', 'Test SD');
     expect(result.satisfied).toBe(true);
     expect(result.created).toHaveLength(2);
+  });
+});
+
+// SD-LEO-INFRA-STORY-CASCADE-ADDITIVE-ONLY-001: finalizeUserStories() must stamp
+// completed_by/completed_at only on a genuine first-time completion, never on a
+// validation-only repair of an already-completed story, and never overwriting an
+// existing completed_by value.
+describe('finalizeUserStories', () => {
+  function makeStoriesMock(stories) {
+    const updateCalls = [];
+    const updateFn = vi.fn((updates) => {
+      updateCalls.push(updates);
+      return { eq: vi.fn().mockResolvedValue({ error: null }) };
+    });
+    const db = {
+      from: vi.fn((table) => {
+        if (table === 'user_stories') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: stories, error: null }),
+            }),
+            update: updateFn,
+          };
+        }
+        return {};
+      }),
+    };
+    return { db, updateCalls, updateFn };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('TS-1: stamps a fresh ready-status story on first completion', async () => {
+    const story = {
+      id: 's1',
+      title: 'Story 1',
+      status: 'ready',
+      validation_status: 'pending',
+      e2e_test_path: null,
+      e2e_test_status: null,
+      completed_by: null,
+    };
+    const { db, updateCalls } = makeStoriesMock([story]);
+
+    await finalizeUserStories(db, null, 'sd-1');
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0].status).toBe('completed');
+    expect(updateCalls[0].validation_status).toBe('validated');
+    expect(updateCalls[0].completed_by).toBe('system:finalizeUserStories');
+    expect(updateCalls[0].completed_at).toBeTruthy();
+  });
+
+  it('TS-2: does NOT stamp a story that is already completed and only needs validation_status repaired', async () => {
+    const story = {
+      id: 's2',
+      title: 'Story 2',
+      status: 'completed',
+      validation_status: 'pending',
+      e2e_test_path: null,
+      e2e_test_status: null,
+      completed_by: null,
+    };
+    const { db, updateCalls } = makeStoriesMock([story]);
+
+    await finalizeUserStories(db, null, 'sd-1');
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0].validation_status).toBe('validated');
+    expect(updateCalls[0].completed_by).toBeUndefined();
+    expect(updateCalls[0].completed_at).toBeUndefined();
+  });
+
+  it('TS-3: never overwrites an existing completed_by value', async () => {
+    const story = {
+      id: 's3',
+      title: 'Story 3',
+      status: 'ready',
+      validation_status: 'pending',
+      e2e_test_path: null,
+      e2e_test_status: null,
+      completed_by: 'Alpha (worker session e7c92ad8)',
+    };
+    const { db, updateCalls } = makeStoriesMock([story]);
+
+    await finalizeUserStories(db, null, 'sd-1');
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0].completed_by).toBeUndefined();
+    expect(updateCalls[0].completed_at).toBeUndefined();
   });
 });

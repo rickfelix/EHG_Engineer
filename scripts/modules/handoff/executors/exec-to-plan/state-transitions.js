@@ -23,7 +23,7 @@ export async function transitionUserStoriesToValidated(supabase, sdId) {
     // Get all user stories for this SD
     const { data: stories, error: fetchError } = await supabase
       .from('user_stories')
-      .select('id, title, e2e_test_path, status, validation_status')
+      .select('id, title, e2e_test_path, status, validation_status, completed_by')
       .eq('sd_id', sdId);
 
     if (fetchError) {
@@ -39,15 +39,29 @@ export async function transitionUserStoriesToValidated(supabase, sdId) {
     // Update each story
     let updatedCount = 0;
     for (const story of stories) {
+      // Idempotency guard (mirrors finalizeUserStories' sibling condition): skip a
+      // story that is already fully complete instead of needlessly rewriting it.
+      if (story.status === 'completed' && story.validation_status === 'validated') {
+        continue;
+      }
+
+      const now = new Date().toISOString();
       const updates = {
         status: 'completed',
         validation_status: 'validated',
-        updated_at: new Date().toISOString()
+        updated_at: now
       };
 
       // Only set e2e_test_status if test path exists
       if (story.e2e_test_path) {
         updates.e2e_test_status = 'passing';
+      }
+
+      // Provenance stamp: only on this story's first-ever completion, never
+      // overwriting an existing completed_by value.
+      if (story.status !== 'completed' && !story.completed_by) {
+        updates.completed_by = 'system:transitionUserStoriesToValidated';
+        updates.completed_at = now;
       }
 
       const { error: updateError } = await supabase
