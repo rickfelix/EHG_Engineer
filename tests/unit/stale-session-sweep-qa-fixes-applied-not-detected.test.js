@@ -98,7 +98,18 @@ describe('QF-20260727-363: QA FIXES reports applied repairs, never detections', 
   it('the guard the QF forbids weakening is untouched', () => {
     // The QF is explicit: the counter was wrong, isSweepResetAllowed was RIGHT. An SD with an
     // accepted PLAN-TO-LEAD handoff must not be reset out from under a pending LEAD-FINAL-APPROVAL.
-    expect(SRC).toMatch(/if \(!\(await isSweepResetAllowed\(sd\.sd_key, 'LEAD', 'pending_approval-reset'\)\)\) \{\s*\n\s*continue;/);
+    //
+    // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001 (FR-5) added an actions[] visibility line
+    // between the `{` and `continue;` (a refusal was previously visible only via a bare
+    // console.log inside isSweepResetAllowed, invisible to the sweep's own structured summary) --
+    // the REGEX WAS OVER-STRICT (required byte-adjacency), not the guard: the invariant this test
+    // protects is "a refusal still `continue`s, unconditionally, within this if-block", which
+    // still holds. Widened to allow additional statements between `{` and `continue;` while still
+    // requiring `continue;` to be the block's actual, unconditional exit.
+    const ifIdx = SRC.indexOf("if (!(await isSweepResetAllowed(sd.sd_key, 'LEAD', 'pending_approval-reset')))");
+    expect(ifIdx).toBeGreaterThan(-1);
+    const guardBlock = SRC.slice(ifIdx, ifIdx + 400);
+    expect(guardBlock).toMatch(/\{[^}]*continue;[^}]*\}/);
     expect(SRC).toContain('QA: skipped reset on ');
   });
 });
