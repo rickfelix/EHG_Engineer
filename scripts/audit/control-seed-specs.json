@@ -187,6 +187,10 @@
       "find": ": VERDICT.SILENT;",
       "replace": ": VERDICT.DETECTS;",
       "why": "runTrial can no longer return SILENT, so a blind gauge reads as detecting"
+    },
+    "observability_proof": {
+      "input": "runTrial's actual production input is a control-seed-specs.json entry (script path, rootFlag/cwdScope, fixtures) plus the real repo working tree it spawns the named control against; its output is that spawned child process's EXIT CODE and combined stdout+stderr, matched against each fixture's filename/detectTokens to classify BLOCKS/DETECTS/SILENT. runTrial is not called directly in CI -- it is invoked exclusively through control-seed-test-lint.mjs's evaluate(), which is what actually runs in .github/workflows/control-seed-test-lint.yml on every PR touching a control file.",
+      "seen": "Real positive observed in the deployment environment on 2026-08-08: runTrial's SILENT verdict path is the exact mechanism that BLOCKED PR #6875 in CI with 5 findings across 5 controls (NO_SEED_TEST x3, NO_KNOWN_LIMITATION x2) via control-seed-test-lint.mjs's live invocation of it -- not a fixture trial. runTrial has no independent CI entry point of its own; its production observability is inherited from, and identical to, the sibling control-seed-test-lint spec entry above, which invokes it directly."
     }
   },
   {

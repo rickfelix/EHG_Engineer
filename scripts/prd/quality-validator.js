@@ -18,6 +18,28 @@
 const PLACEHOLDER_RE = /\b(tbd|to be defined|to be determined|will be determined|placeholder|xxx|fixme)\b/i;
 const DEFAULT_PASS_THRESHOLD = 70;
 
+/**
+ * PAT-LES-e6ebbba78e2d (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-5: an acceptance
+ * criterion asserting an absence ("no other X exists") is as unverified as one asserting a
+ * presence, unless the PRD states HOW the absence was checked. Warn-only by design (see
+ * scanAbsenceClaims below) -- it must never affect scoreRequirementsDepth or block PRD save,
+ * only prompt the author to state a verification method.
+ *
+ * Phrase list refined against 7920 real acceptance_criteria strings in the live DB (TESTING
+ * sub-agent prospective review, evidence row 766d71cd-b6f1-432c-8529-c5055f495e7f):
+ *   - "no other" (15 real hits, low false-positive) -- kept.
+ *   - "only implementation" (4/4 hits were false positives, all "<word>-only implementation"
+ *     compounds like "a route-only implementation") -- anchored with a negative lookbehind so
+ *     a hyphenated qualifier no longer matches.
+ *   - "does not exist elsewhere" (0 real hits) -- dropped as dead weight.
+ *   - "the only" / "sole" / "nowhere else" -- the real recall gap TESTING found (52/12/1 real
+ *     hits respectively for phrasing this SD's original draft list missed entirely) -- added.
+ * Substring-redundancy audit: disjoint from PLACEHOLDER_RE; "the only" already covers "the
+ * only implementation", so the lookbehind-anchored alternative only earns its keep for
+ * non-"the"-preceded phrasing (e.g. "only implementation of X").
+ */
+const ABSENCE_CLAIM_RE = /\b(no other|the only|nowhere else)\b|\bsole\b|(?<![-\w])only\s+implementation\b/i;
+
 function coerceArray(value) {
   if (Array.isArray(value)) return value;
   if (!value) return [];
@@ -173,6 +195,31 @@ function scoreRiskAnalysis(prd) {
 }
 
 /**
+ * PAT-LES-e6ebbba78e2d, FR-5: warn-only scan of acceptance_criteria for unverified
+ * absence-claim phrasing. Deliberately NOT a score dimension -- see ABSENCE_CLAIM_RE's
+ * docblock. Pure, side-effect free; the caller decides whether/how to surface `warnings`.
+ *
+ * @param {Object} prd
+ * @returns {string[]} human-readable warnings, one per matched acceptance_criteria entry
+ */
+function scanAbsenceClaims(prd) {
+  const ac = coerceArray(prd.acceptance_criteria);
+  const warnings = [];
+  ac.forEach((item, idx) => {
+    const text = typeof item === 'string' ? item : (item && typeof item === 'object' ? JSON.stringify(item) : '');
+    const match = ABSENCE_CLAIM_RE.exec(text);
+    if (!match) return;
+    const snippet = text.length > 160 ? `${text.slice(0, 160)}...` : text;
+    warnings.push(
+      `ABSENCE_CLAIM_UNVERIFIED: acceptance_criteria[${idx}] contains "${match[0]}" — an unmeasured `
+      + '"there is no other X" is as unverified as an unmeasured "there is an X". State how this was '
+      + `checked (e.g. "grepped lib/**/*.js for X"), or soften the wording. Text: ${snippet}`
+    );
+  });
+  return warnings;
+}
+
+/**
  * Evaluate a PRD object against the 4-dimension rubric.
  * @param {Object} prd - PRD row from product_requirements_v2
  * @returns {{
@@ -200,7 +247,9 @@ function validatePRDQuality(prd, opts = {}) {
     score,
     passed: score >= threshold,
     threshold,
-    breakdown: dimensions
+    breakdown: dimensions,
+    // FR-5: warn-only, never folded into `score`/`passed` above.
+    warnings: scanAbsenceClaims(safePrd)
   };
 }
 
@@ -213,5 +262,7 @@ function resolveEnforcementMode() {
 export {
   validatePRDQuality,
   resolveEnforcementMode,
-  DEFAULT_PASS_THRESHOLD
+  DEFAULT_PASS_THRESHOLD,
+  scanAbsenceClaims,
+  ABSENCE_CLAIM_RE
 };
