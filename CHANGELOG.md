@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-16](#2026-08-16)
+  - [Infrastructure](#infrastructure)
 - [2026-08-15](#2026-08-15)
   - [Infrastructure](#infrastructure)
 - [2026-08-14](#2026-08-14)
@@ -115,6 +117,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-16
+
+### Infrastructure
+- **Drive-score leg1 widened to any commit subject on main — squash-merges had made 5 of 6 sampled completed items measure unlanded** - PR #7069 (SD-LEO-INFRA-DRIVE-SCORE-LEG1-ANY-SUBJECT-001)
+  - **What was broken**: `lib/drive-loop/score/leg1-landed-alocal.js`'s chairman-ratified landed-corpus rule (c8ad4998) scoped `git log` to merge-commit subjects only (`--merges`). This repo ships mostly by squash-merge, so 5 of 6 sampled completed Wave-1 items (`SD-LEO-INFRA-FLEET-VIEW-BADGES-001`, `SD-LEO-INFRA-LEO-APP-LAUNCHER-001`, `SD-LEO-INFRA-FLEET-WATCHDOG-001`, `SD-LEO-INFRA-FLEET-REGISTRY-MANIFEST-001`, `SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001`) measured as unlanded even though they're on main, each end-anchor-matching a squash-commit subject and zero merge-commit subjects (independently re-measured live). Chairman decision dc828e43 (answer "A") amends c8ad4998 to widen the corpus to every commit subject on main.
+  - **Fixed**: `landedLogArgs` (renamed from `mergeLogArgs`, kept as a back-compat alias — same function, new behavior, not a frozen pre-amendment copy) drops `--merges`; amendment provenance recorded on `leg1_landed` in the ratified-leg SSOT (`lib/drive-loop/score/drive-score-legs.js`).
+  - **Found and fixed along the way**: the widened corpus measures 1.18MB live, already over Node `spawnSync`'s unconfigured 1MB default `maxBuffer` — a risk the original SD's own SECURITY review (finding S5) explicitly measured and deferred as a non-issue only because the merge-only corpus was 29.5% of that budget; widening removed the headroom. Fixed with an explicit `LANDED_LOG_MAX_BUFFER_BYTES` (32MB) wired into `scripts/cron/drive-report-sweep.mjs`'s `runGitLog` call, plus a live buffer-safety canary test that re-measures the margin against real history on every CI run. That same canary then failed on its first CI run for an unrelated reason — `unit-tier.yml`'s PR checkout (`fetch-depth: 0`, no explicit ref) creates `origin/main` but no LOCAL branch literally named `main`, while `landedLogArgs()` deliberately hardcodes the literal ref `main` (always true in the real production cron, not guaranteed in every CI job) — fixed with a test-scoped `beforeAll` that creates a local `main` ref if one doesn't already resolve, without touching the production function's fixed-ref contract.
+  - **Review**: a deep-tier adversarial `/ship` review (2 rounds) found 2 WARNING + 1 INFO, all documentation gaps (no logic changes) — the back-compat alias's doc comment now explicitly states it is NOT a behavior-preserving shim, the false-positive-surface widening trade-off is disclosed in the function's own JSDoc (not only in a runtime citation string), and the `timeout: 30000` on the git-log call now cites a measured baseline (~610ms real call, ~49x headroom). Round 2 re-review: 0 findings, verdict PASS.
+  - **Verification**: 368/368 unit tests passing (including a 16/17=1.88-point fixture matching the SD's measured premise). Live-verified against real git history + the real 720h DB population, both before and after the buffer fix: pre-fix, the real production call silently threw (buffer overflow, would have degraded to `unavailable()` on every production run); post-fix, 13/14 landed, 1.86 points.
 
 ## 2026-08-15
 
