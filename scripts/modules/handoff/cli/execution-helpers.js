@@ -380,27 +380,12 @@ export async function displayExecutionResult(result, handoffType, sdId) {
 
     // SD-LEO-INFRA-HANDOFF-RESULT-SUMMARY-001: Machine-readable result summary
     // Emitted LAST so grep/tail can always find it regardless of output size
-    const passDisplayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 0;
-    console.log(`\nHANDOFF_RESULT=PASS SD=${sdId} SCORE=${passDisplayScore} PHASE=${handoffType.toUpperCase()}`);
-
-    // SD-AUTOPROCEED-SHIP-ENFORCEMENT-ORCH-001: Emit post-action directive for LEAD-FINAL-APPROVAL
-    // When auto-proceed is ON and commits exist on branch, emit HANDOFF_POST_ACTION=ship
-    // so Claude treats /ship as a deterministic obligation, not a context-dependent suggestion.
-    if (handoffType.toUpperCase() === 'LEAD-FINAL-APPROVAL') {
-      try {
-        const supabase = createSupabaseServiceClient();
-        const autoProceedResult = await resolveAutoProceed({ supabase, verbose: false });
-        if (autoProceedResult.enabled) {
-          const commitOutput = execSync('git log origin/main..HEAD --oneline 2>/dev/null || true', { encoding: 'utf-8' }).trim();
-          if (commitOutput.length > 0) {
-            console.log('\nHANDOFF_POST_ACTION=ship');
-          }
-        }
-      } catch (e) {
-        // Non-blocking: if post-action check fails, handoff still succeeded
-        console.debug(`[post-action] Could not resolve post-action: ${e.message}`);
-      }
-    }
+    //
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3): extracted to
+    // printHandoffResultLines() below, reused verbatim by cli-main.js's cascade
+    // reprint -- so the original SD's terminal lines can be safely re-emitted after a
+    // cascade attempt without duplicating (or drifting from) this call site's format.
+    await printHandoffResultLines(result, handoffType, sdId);
   } else {
     console.log('');
     console.log('❌ HANDOFF FAILED');
@@ -425,8 +410,80 @@ export async function displayExecutionResult(result, handoffType, sdId) {
     }
 
     // SD-LEO-INFRA-HANDOFF-RESULT-SUMMARY-001: Machine-readable result summary
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3): same extraction as the
+    // success branch above.
+    await printHandoffResultLines(result, handoffType, sdId);
+  }
+}
+
+/**
+ * Print the terminal, machine-readable lines for a handoff result: HANDOFF_RESULT=...
+ * always, and (success + LEAD-FINAL-APPROVAL + auto-proceed + pending commits)
+ * HANDOFF_POST_ACTION=ship after it, in that order.
+ *
+ * SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3): extracted from
+ * displayExecutionResult so it can be safely called a SECOND time by cli-main.js's
+ * cascade reprint (FR-3) without re-running that function's DB-WRITING side effects
+ * (reconcileSDStateAfterHandoff, hydrateAndOutputTasks) a second time for the same
+ * result. This function itself only READS (auto-proceed config, git log) -- safe to
+ * call repeatedly -- and both the original print call site and the reprint use this
+ * SAME function, so the two can never drift into different output formats.
+ *
+ * @param {Object} result - Execution result (same shape displayExecutionResult takes)
+ * @param {string} handoffType
+ * @param {string} sdId
+ */
+export async function printHandoffResultLines(result, handoffType, sdId) {
+  if (result.success) {
+    const passDisplayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 0;
+    console.log(`\nHANDOFF_RESULT=PASS SD=${sdId} SCORE=${passDisplayScore} PHASE=${handoffType.toUpperCase()}`);
+
+    // SD-AUTOPROCEED-SHIP-ENFORCEMENT-ORCH-001: Emit post-action directive for LEAD-FINAL-APPROVAL
+    // When auto-proceed is ON and commits exist on branch, emit HANDOFF_POST_ACTION=ship
+    // so Claude treats /ship as a deterministic obligation, not a context-dependent suggestion.
+    if (handoffType.toUpperCase() === 'LEAD-FINAL-APPROVAL') {
+      try {
+        const supabase = createSupabaseServiceClient();
+        const autoProceedResult = await resolveAutoProceed({ supabase, verbose: false });
+        if (autoProceedResult.enabled) {
+          const commitOutput = execSync('git log origin/main..HEAD --oneline 2>/dev/null || true', { encoding: 'utf-8' }).trim();
+          if (commitOutput.length > 0) {
+            console.log('\nHANDOFF_POST_ACTION=ship');
+          }
+        }
+      } catch (e) {
+        // Non-blocking: if post-action check fails, handoff still succeeded
+        console.debug(`[post-action] Could not resolve post-action: ${e.message}`);
+      }
+    }
+  } else {
     const failScore = result.normalizedScore ?? result.qualityScore ?? Math.round(((result.totalScore || 0) / (result.maxScore || 100)) * 100) ?? 0;
     const reasonCode = result.reasonCode || 'VALIDATION_FAILED';
     console.log(`\nHANDOFF_RESULT=FAIL SD=${sdId} SCORE=${failScore} PHASE=${handoffType.toUpperCase()} REASON=${reasonCode}`);
+  }
+}
+
+/**
+ * Run `body`, guaranteeing `reprintFn` runs afterward regardless of how `body` exits:
+ * normal completion, an early `return` inside `body` (JS `finally` semantics fire before
+ * the return actually completes), or a thrown exception.
+ *
+ * SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-3): extracted as its own function so
+ * the reprint GUARANTEE is unit-testable in isolation, by injecting a fake `body`/
+ * `reprintFn` -- neither needs to call the real handleExecuteCommand, which cannot be
+ * vi.mock'd from inside cli-main.js's own lexical scope (a same-module direct call).
+ * cli-main.js's chaining loop is the real `body`; its `parallelExecution` early return
+ * (a `return` statement inside the loop) is covered by the same finally guarantee as a
+ * thrown exception -- no special-casing needed.
+ *
+ * @param {() => Promise<any>} body
+ * @param {() => Promise<void>} reprintFn
+ * @returns {Promise<any>} whatever `body` returns
+ */
+export async function runWithGuaranteedReprint(body, reprintFn) {
+  try {
+    return await body();
+  } finally {
+    await reprintFn();
   }
 }

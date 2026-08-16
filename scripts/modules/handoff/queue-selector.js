@@ -9,6 +9,7 @@
  */
 
 import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
+import { classifyAllDispatchIneligibility, CLAIM_WRITE_FENCE_AXES } from '../../../lib/fleet/claim-eligibility.cjs';
 
 /**
  * Find the next workable SD from the queue, excluding claimed and completed SDs.
@@ -28,9 +29,22 @@ export async function selectNextSD(supabase, options = {}) {
     const claimedSdKeys = await getClaimedSdKeys(supabase);
 
     // 2. Build candidate query
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-1): metadata is selected so the
+    // authority-fence check below can actually see requires_human_action. sd_type is
+    // DELIBERATELY NOT selected/read for eligibility purposes here -- the general
+    // classifier's orchestratorParent axis (claim-eligibility.cjs:191-193) fires on
+    // sd_type==='orchestrator' and would wrongly refuse legitimate orchestrator-type
+    // candidates when orchestratorsOnly is set, which is precisely this function's own
+    // purpose in that mode (live-measured: 3/20 real candidates wrongly refused). Using
+    // CLAIM_WRITE_FENCE_AXES below avoids that axis by construction.
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- those two statuses are excluded only because this .in(...)
+    // list never selects them in the first place. Correct today, but widening this status
+    // filter would silently un-fence a coordinator/Adam deferral. If this list ever changes,
+    // re-check that deferred/terminal SDs stay excluded.
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, parent_sd_id, category, current_phase')
+      .select('id, sd_key, title, status, priority, parent_sd_id, category, current_phase, metadata')
       .in('status', ['draft', 'in_progress', 'planning', 'active'])
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
@@ -66,9 +80,34 @@ export async function selectNextSD(supabase, options = {}) {
       };
     }
 
+    // 4. FR-1: refuse any candidate the authority fence catches (requires_human_action,
+    // needs_coordinator_review, not_before_hold, lead_blocker_active,
+    // chairman_ratification_pending) -- classifyAllDispatchIneligibility over
+    // CLAIM_WRITE_FENCE_AXES, never the general classifier (see the select() comment above
+    // for why sd_type/orchestratorParent must stay out of this check).
+    const eligible = unclaimed.filter(
+      (sd) => !classifyAllDispatchIneligibility(sd).find((r) => CLAIM_WRITE_FENCE_AXES.has(r))
+    );
+
+    if (eligible.length === 0) {
+      // REGRESSION EXEC finding: "unclaimed" contains "claimed" as a substring, which
+      // auto-chain-executor.js:95's selectReason.includes('claimed') check relies on
+      // (deliberately, see the comment there) to route a fenced queue to EXIT_ALL_CLAIMED.
+      // If you reword this string, re-run
+      // tests/unit/handoff/auto-chain-executor-exit-code-live-selector.test.js -- it runs
+      // THIS function for real (unmocked) and would catch a reword here.
+      // auto-chain-executor-exit-code.test.js will NOT catch it (queue-selector.js is
+      // vi.mock'd wholesale there; that file only covers the OTHER side of this coupling).
+      return {
+        sd: null,
+        candidates: [],
+        reason: `All ${unclaimed.length} unclaimed candidate(s) are authority-fenced`
+      };
+    }
+
     return {
-      sd: unclaimed[0],
-      candidates: unclaimed,
+      sd: eligible[0],
+      candidates: eligible,
       reason: 'Next SD found'
     };
   } catch (err) {

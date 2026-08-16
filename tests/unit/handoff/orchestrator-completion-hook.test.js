@@ -285,7 +285,20 @@ describe('Orchestrator Completion Hook', () => {
     });
 
     // SD-LEO-ENH-AUTO-PROCEED-001-05: Orchestrator Chaining Tests
-    it('should return chainContinue when chaining enabled and orchestrator available', async () => {
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001: individually skipped (not the whole
+    // file) — this test was the sole reason the ENTIRE file was quarantined in
+    // tests/quarantine-manifest.json since 2026-06-11 (assertion-drift, linked_ref
+    // feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7, a generic 114-file re-pin backlog item,
+    // defer_only:true — never actively worked). That whole-file quarantine silently dropped
+    // this SD's own new TS-2/[STATIC] tests from real CI collection (found by
+    // testing-plan-cascade — the exact "test file in zero collected projects never runs,
+    // and the suite still says green" class this repo has hit before, commit 5a2be57d588).
+    // Confirmed via git-stash isolation this test fails identically against unmodified HEAD
+    // (pre-existing, unrelated to this SD) — see harness bug feedback 9fe2e252-03dc-4ae9-aa75-8c7f59fbabc3.
+    // Un-quarantining the file and skipping only this one test keeps the drift VISIBLE
+    // (reports skipped, not silently absent) while giving the other 24 tests in this file
+    // real CI coverage again.
+    it.skip('should return chainContinue when chaining enabled and orchestrator available', async () => {
       // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Configure session mock for chaining=true
       resolveOwnSession.mockResolvedValue({
         data: { session_id: 'test', metadata: { auto_proceed: true, chain_orchestrators: true } },
@@ -551,6 +564,92 @@ describe('Orchestrator Completion Hook', () => {
       const result = await findNextAvailableOrchestrator(mockSupabase);
       expect(result.orchestrator).toBe(null);
       expect(result.reason).toContain('Query error');
+    });
+
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-2/TS-2): authority-fence tests.
+    // Uses a universally-chainable, universally-thenable mock (every method the real
+    // code could call resolves correctly, including .range() for the paginated
+    // claimed-sessions query) so a missing chained method can never silently fail open
+    // and make the assertion vacuous (the exact TESTING sub-agent F7 finding).
+    describe('authority fence (FR-2)', () => {
+      function makeChainableQuery(terminalValue) {
+        const methods = ['select', 'in', 'is', 'neq', 'not', 'order', 'range', 'eq', 'limit'];
+        const chain = {};
+        for (const m of methods) chain[m] = vi.fn(() => chain);
+        chain.then = (resolve) => resolve(terminalValue);
+        return chain;
+      }
+      function mockSupabaseFor(candidates, claimedSessions = []) {
+        return {
+          from: vi.fn((table) => {
+            if (table === 'claude_sessions') return makeChainableQuery({ data: claimedSessions, error: null });
+            return makeChainableQuery({ data: candidates, error: null });
+          }),
+        };
+      }
+
+      const FENCED = { id: 'fenced-uuid', sd_key: 'SD-FENCED-001', title: 'Fenced', status: 'draft', priority: 5, parent_sd_id: null, metadata: { requires_human_action: true } };
+      const NORMAL = { id: 'normal-uuid', sd_key: 'SD-NORMAL-001', title: 'Normal', status: 'draft', priority: 3, parent_sd_id: null, metadata: {} };
+
+      it('TS-2 — a requires_human_action=TRUE top candidate is never returned; a lower-priority normal candidate is returned instead', async () => {
+        const mockSupabase = mockSupabaseFor([FENCED, NORMAL]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.sd_key).not.toBe('SD-FENCED-001');
+        expect(result.orchestrator?.sd_key).toBe('SD-NORMAL-001');
+      });
+
+      it('returns the documented no-candidate result when every unclaimed candidate is fenced', async () => {
+        const mockSupabase = mockSupabaseFor([FENCED]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator).toBeNull();
+        expect(result.reason).toMatch(/authority-fenced/);
+      });
+
+      it('composes correctly with the existing claimed-SD exclusion — additive, not a replacement', async () => {
+        const claimed = { id: 'claimed-uuid', sd_key: 'SD-CLAIMED-001', title: 'Claimed', status: 'draft', priority: 5, parent_sd_id: null, metadata: {} };
+        const mockSupabase = mockSupabaseFor([claimed, NORMAL], [{ sd_key: 'SD-CLAIMED-001', id: 'session-1' }]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.sd_key).toBe('SD-NORMAL-001');
+      });
+
+      it('TS-3 (findNextAvailableOrchestrator half) — regression pin: a normal candidate set selects the same candidate id as pre-fix', async () => {
+        const mockSupabase = mockSupabaseFor([NORMAL]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.id).toBe('normal-uuid');
+      });
+
+      // TESTING EXEC (T11): runtime fail-open regression pin, not just the [STATIC] select-string
+      // test below. findNextAvailableOrchestrator's real select() never returns sd_type
+      // (confirmed by the [STATIC] test), so this exact combination cannot occur from a real
+      // query today -- this fixture instead pins the CLASSIFIER-FORM choice itself, so a future
+      // select() widening would be caught here rather than relying solely on the select-string guard.
+      it('[FAIL-OPEN REGRESSION GUARD] a fenced candidate that is ALSO sd_type=orchestrator is still refused — catches a reversion to the first-match classifier', async () => {
+        const fencedOrchestrator = { id: 'fenced-orch-uuid', sd_key: 'SD-FENCED-ORCH-001', title: 'Fenced Orchestrator', status: 'draft', priority: 5, parent_sd_id: null, sd_type: 'orchestrator', metadata: { requires_human_action: true } };
+        const mockSupabase = mockSupabaseFor([fencedOrchestrator, NORMAL]);
+        const result = await findNextAvailableOrchestrator(mockSupabase);
+
+        expect(result.orchestrator?.sd_key).not.toBe('SD-FENCED-ORCH-001');
+        expect(result.orchestrator?.sd_key).toBe('SD-NORMAL-001');
+      });
+
+      it('[STATIC] never adds sd_type to the eligibility-relevant select — this function selects orchestrator-type rows by design (status/parent_sd_id filter), and the general classifier would refuse its own subject', () => {
+        // findNextAvailableOrchestrator has MULTIPLE .select(...) calls (the candidate query
+        // AND a separate claimed-sessions query) — a plain .match() takes whichever occurs
+        // FIRST in source order, which is not necessarily the eligibility-relevant one (it
+        // was the claimed-sessions select here, making the earlier version of this assertion
+        // pass or fail for the wrong reason). Scan every .select(...) call and assert on the
+        // one that actually selects metadata — the candidate query.
+        const src = findNextAvailableOrchestrator.toString();
+        const selectCalls = [...src.matchAll(/\.select\(\s*(['"`])([^'"`]*)\1/g)].map((m) => m[2]);
+        expect(selectCalls.length, 'findNextAvailableOrchestrator must have at least one literal .select(...) call').toBeGreaterThan(0);
+        const candidateSelect = selectCalls.find((cols) => cols.split(',').map((s) => s.trim()).includes('metadata'));
+        expect(candidateSelect, `expected one .select(...) call to include metadata; found: ${JSON.stringify(selectCalls)}`).toBeDefined();
+        expect(candidateSelect.split(',').map((s) => s.trim())).not.toContain('sd_type');
+      });
     });
   });
 
