@@ -190,6 +190,85 @@ describe('FR-1: born-claim via claim_sd', () => {
   });
 });
 
+describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
+  it('prefers expected/actual behavior over the free-form description when both are present', async () => {
+    h.cfg = {
+      qfRow: baseQfRow({
+        description: 'A long free-form incident narrative that is not the SD scope.',
+        expected_behavior: 'The gate surfaces a warning.',
+        actual_behavior: 'The gate is silent.',
+      }),
+    };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description).toBe('Expected: The gate surfaces a warning.\nActual: The gate is silent.');
+    expect(h.createSDArgs.description).not.toContain('incident narrative');
+  });
+
+  it('falls back to the free-form description when expected/actual are both empty', async () => {
+    h.cfg = { qfRow: baseQfRow({ description: 'Only a narrative here.', expected_behavior: null, actual_behavior: null }) };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description).toBe('Only a narrative here.');
+  });
+
+  it('falls back to the title when description and behavior fields are all empty', async () => {
+    h.cfg = { qfRow: baseQfRow({ title: 'Fallback title', description: null, expected_behavior: null, actual_behavior: null }) };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description).toBe('Fallback title');
+  });
+
+  it('truncates a description exceeding MAX_CONTENT_CHARS at the exact 8000-char boundary', async () => {
+    // Heterogeneous fixture (counter, not a repeated char) so an off-by-one cut point
+    // changes the final character and an exact toBe() can pin the boundary precisely --
+    // a homogeneous 'x'.repeat() fixture with startsWith()/toBeLessThan() only bounds the
+    // cut to the open interval [8000, len), so e.g. a slice(0, 12000) mutant survives it.
+    const long = Array.from({ length: 21693 }, (_, i) => i % 10).join('');
+    h.cfg = { qfRow: baseQfRow({ description: long, expected_behavior: null, actual_behavior: null }) };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description).toBe(`${long.slice(0, 8000)}\n\n[…truncated; full text in metadata.qf_origin_body]`);
+  });
+
+  it('truncates an oversized behavior summary too -- the cap is not bypassed on the preferred path', async () => {
+    // expected_behavior/actual_behavior are unconstrained free-text columns. If the
+    // truncation check were ever moved inside an early-return for the behaviorSummary
+    // branch, this is the exact regression that would silently reintroduce the unbounded-
+    // description defect QF-20260729-534 exists to close -- just via the preferred path
+    // instead of the description fallback.
+    const longExpected = 'e'.repeat(9000);
+    h.cfg = { qfRow: baseQfRow({ description: 'short', expected_behavior: longExpected, actual_behavior: null }) };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description.length).toBe(8000 + '\n\n[…truncated; full text in metadata.qf_origin_body]'.length);
+    expect(h.createSDArgs.description).toContain('…truncated; full text in metadata.qf_origin_body');
+    expect(h.createSDArgs.description.startsWith(`Expected: ${'e'.repeat(100)}`)).toBe(true);
+  });
+
+  it('does not truncate a description within the cap', async () => {
+    const short = 'y'.repeat(500);
+    h.cfg = { qfRow: baseQfRow({ description: short, expected_behavior: null, actual_behavior: null }) };
+    await createFromQF('QF-TEST-1');
+    expect(h.createSDArgs.description).toBe(short);
+  });
+
+  it('preserves the full, untruncated original in metadata.qf_origin_body regardless of length', async () => {
+    const long = 'z'.repeat(21693);
+    h.cfg = {
+      qfRow: baseQfRow({
+        description: long,
+        expected_behavior: 'short expected',
+        actual_behavior: 'short actual',
+      }),
+    };
+    await createFromQF('QF-TEST-1');
+    // description field used the short behavior summary (per the preference test above)...
+    expect(h.createSDArgs.description).toBe('Expected: short expected\nActual: short actual');
+    // ...but nothing from the long original narrative was discarded.
+    expect(h.createSDArgs.metadata.qf_origin_body).toEqual({
+      description: long,
+      expected_behavior: 'short expected',
+      actual_behavior: 'short actual',
+    });
+  });
+});
+
 describe('FR-3: resolveEscalatedBaseRef — local-ref base resolution', () => {
   it('TS-4: returns the local QF ref when seeded and the branch exists', async () => {
     const repo = createFixtureRepo();
