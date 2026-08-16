@@ -1049,7 +1049,7 @@ async function cmdStatus() {
   // Active corrective SDs
   const { data: correctives } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, status, progress')
+    .select('sd_key, title, status, progress_percentage')
     .not('vision_origin_score_id', 'is', null)
     .not('status', 'in', '("completed","cancelled")')
     .order('created_at', { ascending: false })
@@ -1058,7 +1058,7 @@ async function cmdStatus() {
   if (correctives?.length > 0) {
     console.log(`\n  Active Corrective SDs (${correctives.length}):`);
     for (const sd of correctives) {
-      console.log(`    ${sd.sd_key} [${sd.status}] ${sd.progress || 0}% \u2014 ${sd.title?.substring(0, 55)}`);
+      console.log(`    ${sd.sd_key} [${sd.status}] ${sd.progress_percentage || 0}% \u2014 ${sd.title?.substring(0, 55)}`);
     }
   }
 

@@ -82,7 +82,7 @@ describe('dispatcher.js — buildRelatedSDsPrefix()', () => {
   it('composes prefix from sds only', async () => {
     const { buildRelatedSDsPrefix } = await import('../../../scripts/eva-support/_internal/dispatcher.js');
     const prefix = buildRelatedSDsPrefix({
-      sds: [{ sd_key: 'SD-FOO-001', status: 'draft', progress: 0 }],
+      sds: [{ sd_key: 'SD-FOO-001', status: 'draft', progress_percentage: 0 }],
       blockers: [],
     });
     expect(prefix).toContain('Related SDs:');
@@ -102,7 +102,7 @@ describe('dispatcher.js — buildRelatedSDsPrefix()', () => {
   it('de-duplicates an SD that appears in both sds and blockers (sds wins)', async () => {
     const { buildRelatedSDsPrefix } = await import('../../../scripts/eva-support/_internal/dispatcher.js');
     const prefix = buildRelatedSDsPrefix({
-      sds: [{ sd_key: 'SD-DUPE', status: 'in_progress', progress: 50 }],
+      sds: [{ sd_key: 'SD-DUPE', status: 'in_progress', progress_percentage: 50 }],
       blockers: [{ sd_key: 'SD-DUPE', blocker_reason: 'should be deduped' }],
     });
     const occurrences = (prefix.match(/SD-DUPE/g) || []).length;
@@ -154,7 +154,7 @@ describe('dispatcher.js — dispatch() middleware behavior', () => {
     vi.doMock('../../../lib/eva-support/sd-reader.js', () => ({
       getActiveSDs: async () => ({
         flag_enabled: true,
-        sds: [{ sd_key: 'SD-MATCH-001', status: 'draft', current_phase: 'LEAD', priority: 'high', progress: 25, target_application: 'EHG_Engineer', title: 'demo' }],
+        sds: [{ sd_key: 'SD-MATCH-001', status: 'draft', current_phase: 'LEAD', priority: 'high', progress_percentage: 25, target_application: 'EHG_Engineer', title: 'demo' }],
         audit_row_id: null,
       }),
     }));

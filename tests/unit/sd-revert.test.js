@@ -24,11 +24,11 @@ describe('lib/sd/revert.js — static-pin (single-UPDATE shape)', () => {
     expect(updateMatches).toBe(1);
   });
 
-  it('references all 4 atomic columns (status, current_phase, progress, metadata) inside revertSD', () => {
+  it('references all 4 atomic columns (status, current_phase, progress_percentage, metadata) inside revertSD', () => {
     const body = sliceFunctionBody(REVERT_SRC, 'revertSD');
     expect(body).toContain('status:');
     expect(body).toContain('current_phase:');
-    expect(body).toContain('progress:');
+    expect(body).toContain('progress_percentage:');
     expect(body).toContain('metadata:');
   });
 
@@ -84,8 +84,8 @@ describe('lib/sd/revert.js — runtime behaviour', () => {
     };
   }
 
-  it('writes status/current_phase/progress/metadata atomically (single supabase.update call)', async () => {
-    const existing = { id: 'sd-test-1', metadata: { foo: 'bar' }, status: 'completed', current_phase: 'COMPLETED', progress: 100 };
+  it('writes status/current_phase/progress_percentage/metadata atomically (single supabase.update call)', async () => {
+    const existing = { id: 'sd-test-1', metadata: { foo: 'bar' }, status: 'completed', current_phase: 'COMPLETED', progress_percentage: 100 };
     const supabase = buildMock(existing);
 
     const res = await revertSD('sd-test-1', 'test', { supabase });
@@ -94,7 +94,7 @@ describe('lib/sd/revert.js — runtime behaviour', () => {
     expect(res.was_idempotent).toBe(false);
     expect(res.payload.status).toBe('draft');
     expect(res.payload.current_phase).toBe('LEAD');
-    expect(res.payload.progress).toBe(0);
+    expect(res.payload.progress_percentage).toBe(0);
     expect(res.payload.metadata.foo).toBe('bar');
     expect(res.payload.metadata.reverted_reason).toBe('test');
     expect(res.payload.metadata.reverted_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -107,7 +107,7 @@ describe('lib/sd/revert.js — runtime behaviour', () => {
       metadata: { reverted_at: '2026-04-28T12:02:44.918Z', reverted_reason: 'first' },
       status: 'draft',
       current_phase: 'LEAD',
-      progress: 0,
+      progress_percentage: 0,
     };
     const supabase = buildMock(existing);
 
@@ -119,7 +119,7 @@ describe('lib/sd/revert.js — runtime behaviour', () => {
   });
 
   it('dry_run returns planned payload without invoking update', async () => {
-    const existing = { id: 'sd-test-3', metadata: {}, status: 'completed', current_phase: 'COMPLETED', progress: 100 };
+    const existing = { id: 'sd-test-3', metadata: {}, status: 'completed', current_phase: 'COMPLETED', progress_percentage: 100 };
     const updateSpy = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }));
     const supabase = {
       from: vi.fn(() => ({
@@ -136,7 +136,7 @@ describe('lib/sd/revert.js — runtime behaviour', () => {
   });
 
   it('throws bracket-tokenized [SD_REVERT_FAILED] on update error', async () => {
-    const existing = { id: 'sd-test-4', metadata: {}, status: 'completed', current_phase: 'COMPLETED', progress: 100 };
+    const existing = { id: 'sd-test-4', metadata: {}, status: 'completed', current_phase: 'COMPLETED', progress_percentage: 100 };
     const supabase = buildMock(existing, { message: 'permission denied' });
 
     await expect(revertSD('sd-test-4', 'fail', { supabase })).rejects.toThrow(/\[SD_REVERT_FAILED\]/);
@@ -157,7 +157,7 @@ describe('lib/sd/revert.js — runtime behaviour', () => {
   });
 
   it('preserve_metadata option merges extra fields into metadata', async () => {
-    const existing = { id: 'sd-test-5', metadata: { foo: 'bar' }, status: 'completed', current_phase: 'COMPLETED', progress: 100 };
+    const existing = { id: 'sd-test-5', metadata: { foo: 'bar' }, status: 'completed', current_phase: 'COMPLETED', progress_percentage: 100 };
     const supabase = buildMock(existing);
 
     const res = await revertSD('sd-test-5', 'with-preserve', { supabase, preserve_metadata: { audit_token: 'X-123' } });

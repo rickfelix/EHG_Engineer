@@ -20,6 +20,8 @@ import { isTerminalChildStatus } from '../../../lib/orchestrator/child-terminal-
 // gated helper the sd-next reaper uses, so a PARKED /loop worker on a CHILD SD (armed silence, PID dead
 // between ticks) is NOT reaped/phase-reset while its window is live. Reuses the ONE shared predicate.
 import { autoReleaseStaleDeadClaim } from '../sd-next/claim-analysis.js';
+// SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6): authority-fence check for child candidates
+import { classifyAllDispatchIneligibility, CLAIM_WRITE_FENCE_AXES } from '../../../lib/fleet/claim-eligibility.cjs';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -49,6 +51,9 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // SD-LEO-ENH-AUTO-PROCEED-001-10: Also fetch metadata to check for blockers
     // SD-LEO-ENH-AUTO-PROCEED-001-11: Fetch all candidates for urgency-based sorting
     // FIX: 2026-02-05 - Added sd_type for SD-type-aware workflow continuation
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- excluded only because this .in(...) list never selects those
+    // statuses. If this list ever changes, re-check deferred/terminal children stay excluded.
     let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, governance_metadata, dependencies, updated_at, progress_percentage, sd_type, claiming_session_id')
@@ -112,9 +117,22 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       return true;
     });
 
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6): refuse any candidate the
+    // authority fence catches (requires_human_action, needs_coordinator_review,
+    // not_before_hold, lead_blocker_active, chairman_ratification_pending). Uses
+    // classifyAllDispatchIneligibility + CLAIM_WRITE_FENCE_AXES, NEVER the general
+    // classifier -- this function's own select() already includes sd_type (line 54,
+    // pre-existing, unrelated to this fix), and the general classifier's
+    // orchestratorParent axis reads exactly that field, so a naive general-classifier
+    // check here would risk the identical wrong-refusal class fixed in queue-selector.js
+    // and orchestrator-completion-hook.js for the SAME reason.
+    const authorityCleared = cadenceCleared.filter(
+      (child) => !classifyAllDispatchIneligibility(child).find((r) => CLAIM_WRITE_FENCE_AXES.has(r))
+    );
+
     // SD-LEO-ENH-AUTO-PROCEED-001-11: Sort by urgency (band > score > enqueue_time)
     // Map candidates to include urgency data for sorting
-    const withUrgency = cadenceCleared.map(child => ({
+    const withUrgency = authorityCleared.map(child => ({
       ...child,
       urgency_score: child.metadata?.urgency_score ?? 0.5,
       urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),
@@ -289,6 +307,9 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
     const { runnable } = computeRunnableSet(dag, completedIds, failedIds, runningIds);
 
     // Filter to only children that are in workable status (draft or active)
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- excluded only because this list never includes those
+    // statuses. If this list ever changes, re-check deferred/terminal children stay excluded.
     const workableStatuses = ['draft', 'active'];
     const readyCandidates = runnable
       .map(id => allChildren.find(c => c.id === id))
@@ -308,8 +329,22 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
       return true;
     });
 
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-6 follow-up, SECURITY EXEC S2):
+    // getReadyChildren is a FOURTH cascade picker -- reached from cli-main.js's parallel-team
+    // check (=== PARALLEL TEAM CHECK ===, gated on ORCH_PARALLEL_CHILDREN_ENABLED) BEFORE
+    // getNextReadyChild's own authority fence is ever reached, and its 'parallel' result
+    // returns early, skipping getNextReadyChild entirely for that iteration. It already
+    // selected metadata (line 261, pre-existing) but never consulted it. Same fix, same
+    // reasoning as getNextReadyChild above: classifyAllDispatchIneligibility + the narrow
+    // CLAIM_WRITE_FENCE_AXES set, never the general classifier (this function's own select()
+    // also includes sd_type, pre-existing, for DAG construction -- safe for the same reason:
+    // CLAIM_WRITE_FENCE_AXES excludes orchestrator_parent regardless of what's selected).
+    const authorityCleared = cadenceCleared.filter(
+      (child) => !classifyAllDispatchIneligibility(child).find((r) => CLAIM_WRITE_FENCE_AXES.has(r))
+    );
+
     // Apply urgency sorting (same as getNextReadyChild)
-    const withUrgency = cadenceCleared.map(child => ({
+    const withUrgency = authorityCleared.map(child => ({
       ...child,
       urgency_score: child.metadata?.urgency_score ?? 0.5,
       urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),

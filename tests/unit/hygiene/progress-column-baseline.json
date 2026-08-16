@@ -1,0 +1,267 @@
+{
+  "generated_note": "Frozen allowlist for SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 FR-7 ratchet guard. Regenerate via: node scripts/lint/progress-column-lint.mjs --write-baseline tests/unit/hygiene/progress-column-baseline.json. Must only shrink over time (see tests/unit/hygiene/no-bare-progress-column.test.js).",
+  "table": "strategic_directives_v2",
+  "dead_column": "progress",
+  "count": 37,
+  "sites": [
+    {
+      "file": "lib/eva/adapters/real-data-adapter.js",
+      "line": 91,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, sd_type, progress, completion_date"
+    },
+    {
+      "file": "lib/eva/bridge/verification-sd-generator.js",
+      "line": 87,
+      "rule": "B",
+      "method": "insert",
+      "snippet": "insert({ progress: ... })"
+    },
+    {
+      "file": "lib/eva/chairman-governance-panels.js",
+      "line": 39,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, sd_type, priority, venture_id, current_phase, progress"
+    },
+    {
+      "file": "lib/eva/chairman-governance-panels.js",
+      "line": 173,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, status, current_phase, progress, created_at, completion_date"
+    },
+    {
+      "file": "lib/eva/event-bus/handlers/sd-completed.js",
+      "line": 90,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, sd_type, progress"
+    },
+    {
+      "file": "lib/eva/friday-data-aggregator.js",
+      "line": 51,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, current_phase, progress"
+    },
+    {
+      "file": "lib/eva/quality-findings/sd-generator.js",
+      "line": 632,
+      "rule": "B",
+      "method": "insert",
+      "snippet": "insert({ progress: ... })"
+    },
+    {
+      "file": "lib/eva/rpc/get-s20-sd-progress.js",
+      "line": 41,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, current_phase, progress, parent_sd_id, created_at"
+    },
+    {
+      "file": "lib/eva/s20-pause-controller.js",
+      "line": 221,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, current_phase, progress"
+    },
+    {
+      "file": "lib/eva/s20-pause-controller.js",
+      "line": 341,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, current_phase, progress, parent_sd_id"
+    },
+    {
+      "file": "lib/eva/venture-context-manager.js",
+      "line": 191,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, sd_type, priority, current_phase, progress"
+    },
+    {
+      "file": "lib/eva/vision-governance-service.js",
+      "line": 124,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, progress, vision_origin_score_id"
+    },
+    {
+      "file": "lib/strategy/sd-proposal-generator.js",
+      "line": 196,
+      "rule": "B",
+      "method": "insert",
+      "snippet": "insert({ progress: ... })"
+    },
+    {
+      "file": "lib/sub-agents/validation.js",
+      "line": 390,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, title, status, priority, progress, current_phase, scope, category, target_application, sd_type"
+    },
+    {
+      "file": "lib/utils/dependency-chain-validator.js",
+      "line": 40,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, dependency_chain, dependencies, parent_sd_id, status, progress"
+    },
+    {
+      "file": "lib/utils/dependency-chain-validator.js",
+      "line": 72,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, progress"
+    },
+    {
+      "file": "lib/utils/dependency-chain-validator.js",
+      "line": 159,
+      "rule": "A",
+      "method": "select",
+      "snippet": "status, progress"
+    },
+    {
+      "file": "lib/utils/dependency-chain-validator.js",
+      "line": 171,
+      "rule": "C",
+      "method": "property-read",
+      "snippet": "dep.progress"
+    },
+    {
+      "file": "lib/utils/dependency-chain-validator.js",
+      "line": 177,
+      "rule": "C",
+      "method": "property-read",
+      "snippet": "dep.progress"
+    },
+    {
+      "file": "lib/utils/orchestrator-child-completion.js",
+      "line": 82,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, sd_type, status, progress"
+    },
+    {
+      "file": "lib/utils/orchestrator-child-completion.js",
+      "line": 178,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, status, progress"
+    },
+    {
+      "file": "lib/utils/orchestrator-child-completion.js",
+      "line": 215,
+      "rule": "B",
+      "method": "update",
+      "snippet": "update({ progress: ... })"
+    },
+    {
+      "file": "scripts/handoff-export.cjs",
+      "line": 89,
+      "rule": "A",
+      "method": "lt",
+      "snippet": "lt('progress', ...)"
+    },
+    {
+      "file": "scripts/handoff-export.cjs",
+      "line": 89,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, priority, current_phase, progress, description"
+    },
+    {
+      "file": "scripts/handoff-export.cjs",
+      "line": 108,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, priority, current_phase, progress, description"
+    },
+    {
+      "file": "scripts/hooks/session-init.cjs",
+      "line": 80,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, sd_type, status, current_phase, progress"
+    },
+    {
+      "file": "scripts/hooks/session-init.cjs",
+      "line": 102,
+      "rule": "C",
+      "method": "property-read",
+      "snippet": "sd.progress"
+    },
+    {
+      "file": "scripts/hooks/session-init.cjs",
+      "line": 156,
+      "rule": "C",
+      "method": "property-read",
+      "snippet": "sd.progress"
+    },
+    {
+      "file": "scripts/leo-orchestrator-enforced.js",
+      "line": 171,
+      "rule": "B",
+      "method": "update",
+      "snippet": "update({ progress: ... })"
+    },
+    {
+      "file": "scripts/modules/child-progression-gate.js",
+      "line": 84,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, completion_date, progress"
+    },
+    {
+      "file": "scripts/modules/handoff/blocker-resolution.js",
+      "line": 77,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, status, progress"
+    },
+    {
+      "file": "scripts/modules/handoff/blocker-resolution.js",
+      "line": 166,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, sd_key, title, status, progress, current_phase, parent_sd_id, dependencies, metadata"
+    },
+    {
+      "file": "scripts/modules/handoff/blocker-resolution.js",
+      "line": 178,
+      "rule": "C",
+      "method": "property-read",
+      "snippet": "blockerSD.progress"
+    },
+    {
+      "file": "scripts/modules/handoff/orchestrator-completion-guardian.js",
+      "line": 127,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, title, status, progress"
+    },
+    {
+      "file": "scripts/modules/qa/dependency-checker.js",
+      "line": 43,
+      "rule": "A",
+      "method": "select",
+      "snippet": "id, title, progress, status, metadata"
+    },
+    {
+      "file": "scripts/sd-query.js",
+      "line": 109,
+      "rule": "A",
+      "method": "select",
+      "snippet": "sd_key, title, status, current_phase, progress, sd_type, priority, created_at, completion_date"
+    },
+    {
+      "file": "templates/execute-phase/phase-utils.js",
+      "line": 84,
+      "rule": "B",
+      "method": "update",
+      "snippet": "update({ progress: ... })"
+    }
+  ]
+}

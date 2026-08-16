@@ -30,6 +30,10 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 // table -- an un-paginated read here would silently leave stale VGAP- patterns
 // unresolved past the PostgREST 1000-row cap.
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: reuse the canonical rubric classifier and
+// score normalizer instead of duck-typing dim.score directly (a bare-number rubric like
+// eva-5dim-v1 was silently mislabeled "malformed" by that duck-typing).
+import { identifyRubric, dimScoreOf, LATENCY_KEYS } from '../../lib/handoff/threshold-resolver.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -83,7 +87,7 @@ function buildIssueSummary(dimName, score, reasoning) {
  * @param {Object} [options]
  * @param {boolean} [options.dryRun=false] - Skip DB writes
  * @param {number} [options.lookbackDays=30] - Days of history to scan
- * @returns {Promise<{synced: number, skipped: number, errors: number}>}
+ * @returns {Promise<{synced: number, skipped: number, errors: number, resolved: number, excluded: number, unscored: number}>}
  */
 export async function syncVisionScoresToPatterns(supabase, options = {}) {
   const { dryRun = false, lookbackDays = DEFAULT_LOOKBACK_DAYS } = options;
@@ -104,12 +108,14 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
   }
 
   if (!scores || scores.length === 0) {
-    return { synced: 0, skipped: 0, errors: 0 };
+    return { synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0 };
   }
 
   let synced = 0;
   let skipped = 0;
   let errors = 0;
+  let excluded = 0;
+  let unscored = 0;
 
   // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: Resolve SD types for dimension exemption checks
   const sdTypeMap = {};
@@ -130,18 +136,57 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
   const dimAggregates = {};
 
   for (const scoreRecord of scores) {
-    if (!scoreRecord.dimension_scores || typeof scoreRecord.dimension_scores !== 'object') continue;
+    // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: a missing/non-object/empty
+    // dimension_scores previously `continue`d with zero counter impact -- invisible to
+    // every field on the return object. Tally all three shapes as `unscored` so /learn
+    // can report them as inconclusive rather than silently absent (ship-review finding:
+    // an earlier version of this fix only caught the empty-object case, leaving
+    // null/non-object rows undercounted despite the CLI label claiming otherwise).
+    if (!scoreRecord.dimension_scores || typeof scoreRecord.dimension_scores !== 'object') {
+      unscored++;
+      continue;
+    }
+
+    const dimEntries = Object.entries(scoreRecord.dimension_scores);
+    if (dimEntries.length === 0) {
+      unscored++;
+      continue;
+    }
 
     const visionKey = scoreRecord.rubric_snapshot?.vision_key || 'unknown';
     const archKey = scoreRecord.rubric_snapshot?.arch_key || 'unknown';
 
-    for (const [dimId, dim] of Object.entries(scoreRecord.dimension_scores)) {
-      // SD-LEARN-FIX-ADDRESS-VGAP-A05EVENTBUSINT-001: Guard against malformed dimensions
-      // Some dimension_scores entries have undefined/NaN scores (e.g., key "A05_event_bus_integration"
-      // with {name: undefined, score: undefined}). Skip these to prevent garbage patterns.
-      if (dim.score == null || typeof dim.score !== 'number' || isNaN(dim.score)) {
-        console.warn(`  ⚠️  Skipping malformed dimension "${dimId}": score=${dim.score}, name=${dim.name}`);
+    // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: classify the whole record once so a
+    // registered non-VGAP rubric (e.g. eva-5dim-v1's 4-12 sub-scores) is excluded from the 0-100
+    // SCORE_THRESHOLD comparison below WITHOUT being mislabeled as malformed and WITHOUT being
+    // removed from dimAggregates loop entry for anything that already passes today -- removing a
+    // still-valid dimension from dimAggregates would falsely trigger the auto-resolve cascade
+    // further down (a currently-active pattern would read as "improved" when it never was).
+    // EXACT_RUBRICS is an exhaustive sorted-key-set match, so an eva-5dim-v1-classified row can
+    // never mix in another (comparable) key -- that exhaustiveness is what makes whole-row
+    // exclusion safe here. latency-3dim rows do NOT get whole-row exclusion (they can legitimately
+    // mix a duration key with otherwise-comparable ones) -- see the per-key LATENCY_KEYS check below.
+    const rubric = identifyRubric(scoreRecord.dimension_scores);
+    const rowExcluded = rubric === 'eva-5dim-v1';
+
+    for (const [dimId, dim] of dimEntries) {
+      // SD-LEARN-FIX-ADDRESS-VGAP-A05EVENTBUSINT-001 / SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-
+      // CLASSIFY-001: dimScoreOf reads both bare-number values (e.g. eva-5dim-v1's
+      // {feasibility: 7}) and rich {score, name} objects; !Number.isFinite catches
+      // null/undefined/NaN/Infinity/-Infinity in one predicate.
+      const dimScore = dimScoreOf(dim);
+      if (dimScore === null || !Number.isFinite(dimScore)) {
+        console.warn(`  ⚠️  Skipping malformed dimension "${dimId}": score=${dimScore}, name=${dim?.name}`);
         skipped++;
+        continue;
+      }
+
+      // Non-comparable scale: whole-row (eva-5dim-v1) or per-key (a duration mixed into an
+      // otherwise-comparable latency-3dim row). Excluded from the threshold comparison and
+      // tallied separately from `skipped` -- this dimension WAS read correctly, it just isn't
+      // on a scale SCORE_THRESHOLD=60 was calibrated for.
+      if (rowExcluded || LATENCY_KEYS.has(dimId)) {
+        excluded++;
         continue;
       }
 
@@ -156,7 +201,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
         }
       }
 
-      if (dim.score >= SCORE_THRESHOLD) {
+      if (dimScore >= SCORE_THRESHOLD) {
         skipped++;
         continue; // Only process low-scoring dimensions (AC-005)
       }
@@ -179,7 +224,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
         };
       }
 
-      dimAggregates[patternId].scores.push(dim.score);
+      dimAggregates[patternId].scores.push(dimScore);
       if (scoreRecord.sd_id) dimAggregates[patternId].sdIds.push(scoreRecord.sd_id);
     }
   }
@@ -334,7 +379,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
     }
   }
 
-  return { synced, skipped, errors, resolved };
+  return { synced, skipped, errors, resolved, excluded, unscored };
 }
 
 // ============================================================================
@@ -355,10 +400,12 @@ if (isMainModule(import.meta.url)) {
   console.log('');
 
   syncVisionScoresToPatterns(supabase, { dryRun, lookbackDays })
-    .then(({ synced, skipped, errors, resolved }) => {
+    .then(({ synced, skipped, errors, resolved, excluded, unscored }) => {
       console.log('\n✅ Sync complete');
       console.log(`   Synced:    ${synced} dimension patterns`);
-      console.log(`   Skipped:   ${skipped} high-scoring dimensions`);
+      console.log(`   Skipped:   ${skipped} dimensions (malformed, exempt, or high-scoring)`);
+      console.log(`   Excluded:  ${excluded || 0} dimensions (non-comparable rubric/duration scale)`);
+      console.log(`   Unscored:  ${unscored || 0} records with no dimension data`);
       console.log(`   Resolved:  ${resolved || 0} patterns (feedback loop)`);
       console.log(`   Errors:    ${errors}`);
       if (dryRun) console.log('\n   [DRY RUN] No DB writes made');

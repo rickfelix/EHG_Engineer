@@ -196,4 +196,283 @@ describe('syncVisionScoresToPatterns', () => {
     expect(result.synced).toBe(1);
     expect(result.skipped).toBe(3);
   });
+
+  // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001 -------------------------------------
+
+  it('TS-2: eva-5dim-v1 row is excluded from the threshold comparison (whole-row), not synced, not counted as malformed -- includes a value >= 60 to prove exclusion is not merely coincident with an already-low score', async () => {
+    const scores = [{
+      id: 'eva-ts2',
+      sd_id: 'SD-EVA-TS2',
+      total_score: 40,
+      dimension_scores: {
+        feasibility: 7,
+        impact: 8,
+        innovation: 6,
+        strategic_alignment: 5,
+        sustainability: 65, // deliberately >= SCORE_THRESHOLD (60)
+      },
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.excluded).toBe(5);
+    expect(result.synced).toBe(0);
+    expect(result.skipped).toBe(0);
+  });
+
+  it('TS-3: latency-3dim row excludes only the elapsed_ms key (per-key), while a mixed comparable key still syncs normally', async () => {
+    const scores = [{
+      id: 'lat-ts3',
+      sd_id: 'SD-LAT-TS3',
+      total_score: 45,
+      dimension_scores: {
+        elapsed_ms: 5000,
+        smoke_tests_pass: { name: 'smoke tests pass', score: 30 },
+      },
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.excluded).toBe(1); // elapsed_ms only
+    expect(result.synced).toBe(1); // smoke_tests_pass, below threshold
+    expect(result.skipped).toBe(0);
+  });
+
+  it('a null dimension_scores (not an empty object) is also tallied as unscored -- ship-review finding: the pre-existing top-level guard silently continued with zero counter impact before this fix', async () => {
+    const scores = [{
+      id: 'null-scores', sd_id: 'SD-NULL-SCORES', total_score: 20,
+      dimension_scores: null,
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.unscored).toBe(1);
+    expect(result.synced).toBe(0);
+    expect(result.skipped).toBe(0);
+  });
+
+  it('TS-4: an empty dimension_scores object is tallied as unscored, not silently ignored', async () => {
+    const scores = [{
+      id: 'empty-ts4',
+      sd_id: 'SD-EMPTY-TS4',
+      total_score: 20,
+      dimension_scores: {},
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.unscored).toBe(1);
+    expect(result.synced).toBe(0);
+    expect(result.skipped).toBe(0);
+    expect(result.excluded).toBe(0);
+  });
+
+  // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001 (FR-1 AC5): a LITERAL NULL dimension
+  // VALUE (not {score: null} -- the pre-existing null test covers that and never reaches
+  // this path) crashed the pre-fix code at `dim.score` with a TypeError. dimScoreOf is
+  // null-safe and the warn line uses dim?.name; this test is what stops either regressing.
+  it('does not crash on a literal null dimension value (pre-existing crash fixed by this SD)', async () => {
+    const scores = [{
+      id: 'nullval', sd_id: 'SD-NULLVAL', total_score: 40,
+      dimension_scores: { V01: null, V02: { name: 'ok', score: 30 } },
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.skipped).toBe(1); // the null value, caught as malformed
+    expect(result.synced).toBe(1);  // the sibling still processes normally
+  });
+
+  // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001 (FR-1 AC4): Infinity/-Infinity are
+  // `typeof 'number'` and survive a bare typeof check -- only Number.isFinite rejects them.
+  // excluded===0 additionally pins that they are MALFORMED, never mistaken for exclusions.
+  it('catches Infinity and -Infinity as malformed, not as valid or excluded values', async () => {
+    const scores = [{
+      id: 'inf', sd_id: 'SD-INF', total_score: 40,
+      dimension_scores: { V01: Infinity, V02: -Infinity, V03: { name: 'ok', score: 30 } },
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.skipped).toBe(2);
+    expect(result.synced).toBe(1);
+    expect(result.excluded).toBe(0);
+  });
+
+  it('TS-9: a NaN-valued dimension inside an otherwise-valid eva-5dim-v1 row is caught as malformed BEFORE the exclusion check -- malformed wins, resolving a genuine ordering ambiguity', async () => {
+    const scores = [{
+      id: 'eva-ts9',
+      sd_id: 'SD-EVA-TS9',
+      total_score: 30,
+      dimension_scores: {
+        feasibility: 7,
+        impact: NaN,
+        innovation: 6,
+        strategic_alignment: 5,
+        sustainability: 4,
+      },
+      rubric_snapshot: {},
+    }];
+
+    const supabase = createMockSupabase(scores);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result.skipped).toBe(1); // the NaN dim
+    expect(result.excluded).toBe(4); // the four valid-but-non-comparable dims
+    expect(result.synced).toBe(0);
+  });
+
+  it('return shape always carries excluded/unscored, including the empty-scores early-return path (guards the CLI summary destructure, TS-10)', async () => {
+    const supabase = createMockSupabase([]); // zero eva_vision_scores rows in window
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
+
+    expect(result).toEqual({ synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0 });
+  });
+});
+
+describe('syncVisionScoresToPatterns auto-resolve cascade safety (TS-6, FR-5)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * A pattern_id-aware mock, distinct from createMockSupabase above: the shared
+   * fallback treats every issue_patterns query identically (returns the full seeded
+   * array regardless of filter), which made an earlier draft of this test vacuous --
+   * a seeded pattern satisfied ANY pattern_id lookup and the auto-resolve branch
+   * (vision-to-patterns.js:307-329) never actually executed. This mock distinguishes
+   * the per-pattern upsert lookup (.eq('pattern_id', X), no .ilike) from the
+   * auto-resolve scan (.ilike('pattern_id','VGAP-%').in('status',[...])) by tracking
+   * which chain methods were invoked.
+   */
+  function createAutoResolveMockSupabase(scoreRecords, seededActivePatterns) {
+    const updateCalls = [];
+    const insertCalls = [];
+
+    return {
+      from: vi.fn((table) => {
+        if (table === 'eva_vision_scores') return makeBuilder(scoreRecords);
+        if (table === 'issue_patterns') {
+          let usedIlike = false;
+          let eqPatternId = null;
+          const builder = {};
+          builder.select = vi.fn(() => builder);
+          builder.eq = vi.fn((col, val) => {
+            if (col === 'pattern_id') eqPatternId = val;
+            return builder;
+          });
+          builder.ilike = vi.fn(() => { usedIlike = true; return builder; });
+          builder.in = vi.fn(() => builder);
+          builder.order = vi.fn(() => builder);
+          builder.limit = vi.fn(() => builder);
+          builder.range = vi.fn(() => builder);
+          builder.update = vi.fn((payload) => ({
+            eq: vi.fn((col, val) => {
+              updateCalls.push({ id: val, payload });
+              return Promise.resolve({ error: null });
+            }),
+          }));
+          builder.insert = vi.fn((payload) => {
+            insertCalls.push(payload);
+            return Promise.resolve({ error: null });
+          });
+          builder.then = (onFulfilled, onRejected) => {
+            const data = usedIlike
+              ? seededActivePatterns // auto-resolve scan: sees the full active set
+              : seededActivePatterns.filter((p) => p.pattern_id === eqPatternId); // specific lookup
+            return Promise.resolve({ data, error: null }).then(onFulfilled, onRejected);
+          };
+          return builder;
+        }
+        return makeBuilder([]);
+      }),
+      _updateCalls: updateCalls,
+      _insertCalls: insertCalls,
+    };
+  }
+
+  it('TS-6: reclassification/exclusion under the corrected logic never falsely auto-resolves a still-valid active pattern (negative control), while a genuinely-absent dimension still gets auto-resolved (positive control)', async () => {
+    // Mixed-rubric fixture. The PRE-FIX key set this sync produces is a hard-coded
+    // literal derived from buildPatternId's known transform, not computed by calling
+    // the function under test -- computing it here would make the assertion
+    // tautological (PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001).
+    const scoreRecords = [
+      {
+        id: 'vav-ts6', sd_id: 'SD-VAV-TS6', total_score: 50,
+        dimension_scores: {
+          A01: { name: 'vision dim 1', score: 30 },
+          A02: { score: 90 }, A03: { score: 90 }, A04: { score: 90 }, A05: { score: 90 },
+          A06: { score: 90 }, A07: { score: 90 }, A08: { score: 90 },
+          V01: { score: 90 }, V02: { score: 90 }, V03: { score: 90 },
+        },
+        rubric_snapshot: {},
+      },
+      {
+        id: 'heal-ts6', sd_id: 'SD-HEAL-TS6', total_score: 40,
+        dimension_scores: {
+          capabilities_present: { score: 90 },
+          key_changes_delivered: { score: 90 },
+          smoke_tests_pass: { score: 90 },
+          success_criteria_met: { score: 30 }, // -> VGAP-successcriteri (negative control target)
+          success_metrics_achieved: { score: 90 },
+        },
+        rubric_snapshot: {},
+      },
+      {
+        id: 'lat-ts6', sd_id: 'SD-LAT-TS6', total_score: 45,
+        dimension_scores: {
+          elapsed_ms: 5000, // excluded per-key
+          semantic: { name: 'semantic', score: 25 }, // -> VGAP-semantic, still synced
+        },
+        rubric_snapshot: {},
+      },
+      {
+        id: 'eva-ts6', sd_id: 'SD-EVA-TS6', total_score: 36,
+        dimension_scores: {
+          feasibility: 7, impact: 8, innovation: 6, strategic_alignment: 5, sustainability: 4,
+        }, // whole-row excluded -- none of VGAP-feasibility/impact/etc. should exist in dimAggregates
+        rubric_snapshot: {},
+      },
+    ];
+
+    const seededActivePatterns = [
+      // Negative control: this dimension IS present (and still low) in the sync above --
+      // must NOT be auto-resolved.
+      { id: 'p-negative', pattern_id: 'VGAP-successcriteri', status: 'active', metadata: {} },
+      // Positive control: this dimension is genuinely ABSENT from the sync above (no
+      // scoreRecord references it) -- MUST be auto-resolved, proving the mechanism
+      // itself still functions and this test is not vacuously passing.
+      { id: 'p-positive', pattern_id: 'VGAP-obsolete', status: 'active', metadata: {} },
+    ];
+
+    const supabase = createAutoResolveMockSupabase(scoreRecords, seededActivePatterns);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
+
+    // Positive control: genuinely absent from this sync -> auto-resolved (proves the
+    // mechanism at vision-to-patterns.js:307-329 still fires, so this test is not vacuous).
+    expect(result.resolved).toBe(1);
+    const resolveCalls = supabase._updateCalls.filter((c) => c.payload.status === 'resolved');
+    expect(resolveCalls).toHaveLength(1);
+    expect(resolveCalls[0].id).toBe('p-positive');
+
+    // Negative control: still present (and still low) in this sync -> may receive the
+    // NORMAL upsert-refresh update (severity/occurrence_count), but NEVER one carrying
+    // status:'resolved' -- the property the corrected FR-2 design must preserve.
+    const negativeControlResolveCalls = supabase._updateCalls.filter(
+      (c) => c.id === 'p-negative' && c.payload.status === 'resolved'
+    );
+    expect(negativeControlResolveCalls).toHaveLength(0);
+  });
 });

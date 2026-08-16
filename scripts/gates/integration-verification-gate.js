@@ -3,7 +3,7 @@
  * SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B
  *
  * Runs at orchestrator EXEC-COMPLETE boundary. Verifies:
- * 1. All children are completed (status + progress)
+ * 1. All children are completed (status + progress_percentage)
  * 2. Deliverables cross-reference correctly between children
  * 3. Capabilities have consumers (no orphans)
  *
@@ -55,7 +55,7 @@ async function verifyChildrenCompleted(parentId, parentSdKey, supabase) {
 
   const { data: children, error: childErr } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, status, progress, current_phase')
+    .select('sd_key, title, status, progress_percentage, current_phase')
     .eq('parent_sd_id', parentId);
 
   if (childErr || !children || children.length === 0) {
@@ -70,8 +70,8 @@ async function verifyChildrenCompleted(parentId, parentSdKey, supabase) {
       warnings.push(`Child ${child.sd_key} status is '${child.status}' (expected 'completed')`);
       allComplete = false;
     }
-    if (child.progress !== 100) {
-      warnings.push(`Child ${child.sd_key} progress is ${child.progress}% (expected 100%)`);
+    if (child.progress_percentage !== 100) {
+      warnings.push(`Child ${child.sd_key} progress is ${child.progress_percentage}% (expected 100%)`);
       allComplete = false;
     }
   }

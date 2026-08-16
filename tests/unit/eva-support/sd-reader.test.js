@@ -40,7 +40,7 @@ describe('sd-reader.js — static source invariants', () => {
       'current_phase',
       'target_application',
       'priority',
-      'progress',
+      'progress_percentage',
     ]);
   });
 
@@ -91,7 +91,7 @@ describe('sd-reader.js — runtime behavior', () => {
     mockSupabaseClient = {
       from: vi.fn((tableName) => {
         supabaseFromCalls.push(tableName);
-        return buildChain({ data: [{ sd_key: 'SD-DEMO-001', title: 'demo', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'high', progress: 0 }], error: null });
+        return buildChain({ data: [{ sd_key: 'SD-DEMO-001', title: 'demo', status: 'draft', current_phase: 'LEAD', target_application: 'EHG_Engineer', priority: 'high', progress_percentage: 0 }], error: null });
       }),
     };
 

@@ -25,6 +25,8 @@ import { executeAutoChain, EXIT_CODES } from './auto-chain-executor.js';
 import { verifyIntegration, formatGateResult } from '../../gates/integration-verification-gate.js';
 // SD-LEO-INFRA-WIRE-CHECK-GATE-001: canonical main ref resolver
 import { getMainRef } from './shared-git-context.js';
+// SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-2): authority-fence check for cascade candidates
+import { classifyAllDispatchIneligibility, CLAIM_WRITE_FENCE_AXES } from '../../../lib/fleet/claim-eligibility.cjs';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -172,9 +174,18 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
       console.debug('[OrchestratorCompletionHook] claim query suppressed:', e?.message || e);
     }
 
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-2): metadata selected so the
+    // authority-fence check below can see requires_human_action. sd_type deliberately
+    // NOT selected/read for eligibility here -- this function's whole purpose is finding
+    // top-level (implicitly orchestrator-shaped) SDs, and the general classifier's
+    // orchestratorParent axis would refuse its own legitimate subject. See queue-selector.js's
+    // selectNextSD for the same reasoning and the live-measured evidence.
+    // ADVERSARIAL SHIP REVIEW (INFO, not fixed here): CLAIM_WRITE_FENCE_AXES does not include
+    // sd_deferred/sd_terminal -- excluded only because this .in(...) list never selects those
+    // statuses. If this list ever changes, re-check deferred/terminal SDs stay excluded.
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, parent_sd_id')
+      .select('id, sd_key, title, status, priority, parent_sd_id, metadata')
       .in('status', ['draft', 'in_progress', 'planning', 'active'])
       .is('parent_sd_id', null) // Only top-level SDs (orchestrators)
       .order('priority', { ascending: false })
@@ -202,7 +213,19 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
       return { orchestrator: null, reason: `All ${data.length} candidate(s) are claimed by other sessions` };
     }
 
-    return { orchestrator: unclaimed[0], reason: 'Next orchestrator found' };
+    // SD-LEO-INFRA-LEAD-FINAL-CASCADE-ISOLATION-001 (FR-2): additive to the claimed-SD
+    // filter above, not a replacement -- refuse any candidate the authority fence catches
+    // (requires_human_action, needs_coordinator_review, not_before_hold, lead_blocker_active,
+    // chairman_ratification_pending). Never the general classifier -- see the select()
+    // comment above for why sd_type must stay out of this check.
+    const eligible = unclaimed.filter(
+      (sd) => !classifyAllDispatchIneligibility(sd).find((r) => CLAIM_WRITE_FENCE_AXES.has(r))
+    );
+    if (eligible.length === 0) {
+      return { orchestrator: null, reason: `All ${unclaimed.length} unclaimed candidate(s) are authority-fenced` };
+    }
+
+    return { orchestrator: eligible[0], reason: 'Next orchestrator found' };
   } catch (err) {
     console.warn(`   ⚠️  findNextOrchestrator exception: ${err.message}`);
     return { orchestrator: null, reason: `Exception: ${err.message}` };
