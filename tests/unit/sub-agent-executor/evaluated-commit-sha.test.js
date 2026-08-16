@@ -107,6 +107,30 @@ describe('storeSubAgentResults stamps metadata.evaluated_commit_sha (FR-2 wiring
     expect(capture.inserted.metadata.evaluated_commit_sha).toMatch(/^[0-9a-f]{40}$/);
   });
 
+  it('SECURITY finding, row 28b7921b: prefers executed_from_cwd over repo_path -- repo_path is canonicalized to the repo ROOT (worktree segment stripped by resolve-repo.js toCanonicalRepoPath), so preferring it would stamp the wrong SHA for any worktree-scoped SD', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      // repo_path deliberately points somewhere with NO git repo, to prove it is not consulted
+      // first when executed_from_cwd is present and valid.
+      metadata: { repo_path: 'C:/definitely/not/a/git/repo/xyz123', executed_from_cwd: process.cwd() },
+    });
+    const expected = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    expect(capture.inserted.metadata.evaluated_commit_sha).toBe(expected);
+  });
+
+  it('falls back to repo_path when executed_from_cwd is absent', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      metadata: { repo_path: process.cwd() },
+    });
+    const expected = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    expect(capture.inserted.metadata.evaluated_commit_sha).toBe(expected);
+  });
+
   it('stamps null (never throws) when no repo_path/executed_from_cwd is present', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
     await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
