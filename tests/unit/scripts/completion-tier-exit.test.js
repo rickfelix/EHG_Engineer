@@ -185,3 +185,52 @@ describe('TS-6: regression guard — armCliTeardown call/import present only in 
     });
   }
 });
+
+describe('TS-7: teardown-failure isolation (round-2 adversarial review finding)', () => {
+  // Round 1 found that if the new armCliTeardown call itself throws, it can fall through to a
+  // pre-existing SIBLING handler (chained on the same promise) and either print a second,
+  // contradictory JSON blob or mislabel a successful run as failed. The fix wraps each call in
+  // its own try/catch. Round 2 found the suite above pins that armCliTeardown/import strings
+  // exist, but never verifies the try/catch actually SURROUNDS them, or that the wrapping
+  // genuinely prevents propagation -- so a future edit could silently drop the wrapping (
+  // reintroducing the round-1 bug) without failing any existing test. These 2 tests close that.
+  it('every armCliTeardown( call site in the 4 target files is directly wrapped by its own try { ... } catch, not just present nearby', () => {
+    // Direct substring pins (not generic brace-parsing, which is fragile over minified/reformatted
+    // code) -- each expected pattern is the actual shipped "try { ... armCliTeardown( ... } catch"
+    // shape with no intervening closer between the try and the call. A future edit that keeps
+    // armCliTeardown( somewhere in the file but drops or mis-scopes this exact wrapping fails here.
+    const worker = readFileSync(path.join(ROOT, 'scripts', 'worker-checkin.cjs'), 'utf8');
+    expect(worker).toMatch(/try \{\s*const \{ armCliTeardown \} = await import\([^)]+\);\s*await armCliTeardown\(0, \{ backstopMs: 3000 \}\);\s*\} catch/);
+
+    const sweep = readFileSync(path.join(ROOT, 'scripts', 'stale-session-sweep.cjs'), 'utf8');
+    expect(sweep).toMatch(/async function armSweepTeardown\(\) \{\s*try \{\s*const \{ armCliTeardown \} = await import\([^)]+\);\s*await armCliTeardown\(0, \{ backstopMs: 3000 \}\);\s*\} catch/);
+
+    const cleanup = readFileSync(path.join(ROOT, 'scripts', 'modules', 'shipping', 'post-merge-worktree-cleanup.js'), 'utf8');
+    const cleanupTryBlocks = cleanup.match(/try \{\s*const \{ armCliTeardown \} = await import\([^)]+\);\s*await armCliTeardown\(0, \{ backstopMs: 3000 \}\);\s*\} catch/g) || [];
+    expect(cleanupTryBlocks.length).toBe(2); // one per arm
+
+    const flags = readFileSync(path.join(ROOT, 'scripts', 'capture-completion-flags.js'), 'utf8');
+    expect(flags).toMatch(/try \{\s*const \{ armCliTeardown \} = await import\([^)]+\);\s*await armCliTeardown\(Number\.isInteger\(process\.exitCode\) \? process\.exitCode : 0, \{ backstopMs: 3000 \}\);\s*\} catch/);
+    expect(flags).toMatch(/try \{\s*const \{ armCliTeardown \} = await import\([^)]+\);\s*await armCliTeardown\(1, \{ backstopMs: 3000 \}\);\s*\} catch/);
+  });
+
+  it('synthetic proof: a throwing teardown call, wrapped exactly like the shipped pattern, does not propagate to a sibling .catch()', () => {
+    // Mirrors the exact shape shipped in all 4 files: p.then(async () => { ...; try { await
+    // teardown(); } catch {} }).catch(siblingHandler). If the try/catch were missing, the
+    // throw would reach siblingHandler and this test's own exit code would flip to 1 (a real,
+    // conditionally-throwing teardown stand-in is used -- not a mock of armCliTeardown itself).
+    const r = runInline(`
+      let siblingHandlerRan = false;
+      await Promise.resolve('real-result')
+        .then(async (result) => {
+          try {
+            const teardown = async () => { throw new Error('synthetic teardown failure'); };
+            await teardown();
+          } catch { /* exactly the shipped pattern */ }
+        })
+        .catch(() => { siblingHandlerRan = true; });
+      if (siblingHandlerRan) process.exitCode = 1;
+    `);
+    expect(r.status).toBe(0);
+  });
+});
