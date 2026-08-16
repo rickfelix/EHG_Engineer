@@ -106,6 +106,68 @@ describe('resolveAcceptedHandoffSets — dual-keyed LEAD-FINAL-APPROVAL witness 
   });
 });
 
+describe('resolveOrchestratorParentSdKeys — [adversarial-review fix] both axes verified live, not just via completeStuck100Sd fixtures', () => {
+  // Adversarial review of this SD's first draft found BOTH claimed axes broken: axis 1
+  // (sd_type classifier) was fed rows that never selected sd_type, so it was permanently dead;
+  // axis 2 (children lookup) only matched parent_sd_id by UUID, missing the sd_key-string form
+  // that lib/fleet/claim-eligibility.cjs's parentLeadPending already proves is a live pattern.
+  // These tests drive the REAL resolver (not hand-constructed orchestratorSdKeys Sets), so a
+  // regression on either axis fails here, not silently in production.
+
+  it('axis 1: a row with sd_type=orchestrator is detected even with zero child rows', () => {
+    const candidates = [{ id: 'uuid-orch-1', sd_key: 'SD-ORCH-TYPED-001', sd_type: 'orchestrator' }];
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, []);
+    expect(result.has('SD-ORCH-TYPED-001')).toBe(true);
+  });
+
+  it('axis 1 is inert (not a crash) when sd_type is absent — proves the caller-select dependency, not a false positive', () => {
+    const candidates = [{ id: 'uuid-leaf-1', sd_key: 'SD-LEAF-NO-TYPE-001' }];
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, []);
+    expect(result.has('SD-LEAF-NO-TYPE-001')).toBe(false);
+  });
+
+  it('axis 2: a child row whose parent_sd_id holds the parent UUID is detected', () => {
+    const candidates = [{ id: 'uuid-parent-2', sd_key: 'SD-PARENT-UUID-LINKED-001' }];
+    const childRows = [{ parent_sd_id: 'uuid-parent-2' }];
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, childRows);
+    expect(result.has('SD-PARENT-UUID-LINKED-001')).toBe(true);
+  });
+
+  it('[the real bug adversarial review found] axis 2: a child row whose parent_sd_id holds the parent sd_key STRING (not the UUID) is still detected', () => {
+    const candidates = [{ id: 'uuid-parent-3', sd_key: 'SD-PARENT-STRING-LINKED-001' }];
+    const childRows = [{ parent_sd_id: 'SD-PARENT-STRING-LINKED-001' }];
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, childRows);
+    expect(result.has('SD-PARENT-STRING-LINKED-001')).toBe(true);
+  });
+
+  it('a child row whose parent_sd_id matches no candidate (id or sd_key) is silently ignored, not mis-attributed', () => {
+    const candidates = [{ id: 'uuid-parent-4', sd_key: 'SD-PARENT-004' }];
+    const childRows = [{ parent_sd_id: 'some-unrelated-parent-ref' }];
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, childRows);
+    expect(result.size).toBe(0);
+  });
+
+  it('a leaf SD with neither sd_type=orchestrator nor any matching child row is NOT flagged', () => {
+    const candidates = [{ id: 'uuid-leaf-5', sd_key: 'SD-LEAF-005', sd_type: 'feature' }];
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, []);
+    expect(result.has('SD-LEAF-005')).toBe(false);
+  });
+
+  it('both axes can independently contribute across a mixed candidate batch', () => {
+    const candidates = [
+      { id: 'uuid-a', sd_key: 'SD-TYPED-ORCH', sd_type: 'orchestrator' },
+      { id: 'uuid-b', sd_key: 'SD-LINKED-ORCH' },
+      { id: 'uuid-c', sd_key: 'SD-PLAIN-LEAF', sd_type: 'feature' },
+    ];
+    const childRows = [{ parent_sd_id: 'SD-LINKED-ORCH' }]; // string-keyed, axis 2 only
+    const result = sweep.resolveOrchestratorParentSdKeys(candidates, childRows);
+    expect(result.has('SD-TYPED-ORCH')).toBe(true);
+    expect(result.has('SD-LINKED-ORCH')).toBe(true);
+    expect(result.has('SD-PLAIN-LEAF')).toBe(false);
+    expect(result.size).toBe(2);
+  });
+});
+
 describe('completeStuck100Sd — orchestrator-parent fence', () => {
   it('an orchestrator-parent SD (per orchestratorSdKeys) is NOT completed, and a named line is returned', async () => {
     const { from, calls } = makeFakeSupabase();

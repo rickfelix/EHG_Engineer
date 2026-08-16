@@ -630,6 +630,45 @@ function resolveAcceptedHandoffSets(candidateSds, handoffRows) {
 }
 
 /**
+ * SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001 (adversarial-review fix): PURE resolver for
+ * the orchestrator-parent fence's two axes. TWO independent axes, because sd_type can be wrong
+ * or missing but a real child row cannot lie:
+ *   1. The SHARED classifier's orchestrator_parent verdict (classifyAllDispatchIneligibility,
+ *      lib/fleet/claim-eligibility.cjs) -- requires candidateSds rows to carry `sd_type` (the
+ *      caller's query must select it; a row missing sd_type silently never matches this axis,
+ *      which is exactly the bug adversarial review found in the original version of this fence:
+ *      the feeding query never selected sd_type, making this axis permanently dead).
+ *   2. A live children lookup keyed on parent_sd_id, DUAL-KEYED the same way
+ *      resolveAcceptedHandoffSets dual-keys sd_id: lib/fleet/claim-eligibility.cjs's
+ *      parentLeadPending queries parent_sd_id via `.or(id.eq...,sd_key.eq...)` with the comment
+ *      "parent_sd_id references the parent id (== sd_key here)" -- proving this codebase already
+ *      treats parent_sd_id as holding EITHER the parent's uuid OR its sd_key string. A UUID-only
+ *      match silently misses any child linked via the sd_key-string form, leaving that parent
+ *      invisible to both axes (the second half of the same adversarial-review finding).
+ *
+ * @param {Array<{id?: string, sd_key?: string, sd_type?: string}>} candidateSds
+ * @param {Array<{parent_sd_id: string}>} childRows -- rows from a query already scoped to
+ *   parent_sd_id IN (the union of candidateSds' ids and sd_keys); caller does the I/O, this
+ *   function only resolves.
+ * @returns {Set<string>} sd_keys of candidateSds identified as orchestrator parents
+ */
+function resolveOrchestratorParentSdKeys(candidateSds, childRows) {
+  const orchestratorSdKeys = new Set(
+    candidateSds.filter(sd => classifyAllDispatchIneligibility(sd).includes('orchestrator_parent')).map(sd => sd.sd_key),
+  );
+  const parentRefToSdKey = new Map();
+  for (const sd of candidateSds) {
+    if (sd.id) parentRefToSdKey.set(sd.id, sd.sd_key);
+    if (sd.sd_key) parentRefToSdKey.set(sd.sd_key, sd.sd_key);
+  }
+  for (const row of (childRows || [])) {
+    const logicalKey = parentRefToSdKey.get(row.parent_sd_id);
+    if (logicalKey) orchestratorSdKeys.add(logicalKey);
+  }
+  return orchestratorSdKeys;
+}
+
+/**
  * SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: the SOLE site in this file that may write
  * status='completed' from the STUCK_100 stale-approval branch (any pending_approval row at
  * 100% progress with a completion_date set). Previously a raw, unfenced UPDATE with no
@@ -1618,7 +1657,10 @@ async function runQaFixtureScan(ctx) {
   try {
     allPendingApproval = await fapPaginate(() => supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, status, current_phase, progress_percentage, completion_date')
+      // sd_type: SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001 -- the orchestrator-parent fence
+      // below needs it. Without it, classifyAllDispatchIneligibility's orchestratorParent axis
+      // reads row.sd_type as always-undefined and can never fire (found by adversarial review).
+      .select('id, sd_key, sd_type, status, current_phase, progress_percentage, completion_date')
       .eq('status', 'pending_approval')
       // FR-3: never QA-reset ephemeral SD-TEST-* fixtures.
       .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE)
@@ -1664,25 +1706,22 @@ async function runQaFixtureScan(ctx) {
   }
 
   // SD-LEO-INFRA-STUCK100-COMPLETED-WRITE-FENCE-001: orchestrator-parent detection for the
-  // STUCK_100 completion fence below. TWO independent axes, because sd_type can be wrong or
-  // missing but a real child row cannot lie: (1) the SHARED classifier's orchestrator_parent
-  // verdict (lib/fleet/claim-eligibility.cjs -- one representation, not a hand-rolled
-  // `sd_type === 'orchestrator'` check re-derived here); (2) a live children lookup
-  // (parent_sd_id), defense-in-depth against an untyped/mistyped parent row.
-  const orchestratorSdKeys = new Set(
-    stuckApproval.filter(sd => classifyAllDispatchIneligibility(sd).includes('orchestrator_parent')).map(sd => sd.sd_key),
-  );
-  const parentIdsToCheck = stuckApproval.map(sd => sd.id).filter(Boolean);
-  if (parentIdsToCheck.length > 0) {
-    const { data: childRows } = await supabase
+  // STUCK_100 completion fence below. Query I/O stays here; the two-axis resolution logic is
+  // the pure, independently-tested resolveOrchestratorParentSdKeys (mirrors resolveAcceptedHandoffSets).
+  const parentRefsToCheck = [];
+  for (const sd of stuckApproval) {
+    if (sd.id) parentRefsToCheck.push(sd.id);
+    if (sd.sd_key) parentRefsToCheck.push(sd.sd_key);
+  }
+  let orchestratorChildRows = [];
+  if (parentRefsToCheck.length > 0) {
+    const { data } = await supabase
       .from('strategic_directives_v2')
       .select('parent_sd_id')
-      .in('parent_sd_id', parentIdsToCheck);
-    const parentIdsWithChildren = new Set((childRows || []).map(r => r.parent_sd_id).filter(Boolean));
-    for (const sd of stuckApproval) {
-      if (sd.id && parentIdsWithChildren.has(sd.id)) orchestratorSdKeys.add(sd.sd_key);
-    }
+      .in('parent_sd_id', parentRefsToCheck);
+    orchestratorChildRows = data || [];
   }
+  const orchestratorSdKeys = resolveOrchestratorParentSdKeys(stuckApproval, orchestratorChildRows);
 
   for (const sd of stuckApproval) {
     // QF-20260423-909: Skip reset if the LATEST PLAN-TO-LEAD handoff is accepted — SD is
@@ -4316,6 +4355,7 @@ module.exports.isSweepResetAllowed = isSweepResetAllowed;
 // without running the whole sweep.
 module.exports.completeStuck100Sd = completeStuck100Sd;
 module.exports.resolveAcceptedHandoffSets = resolveAcceptedHandoffSets;
+module.exports.resolveOrchestratorParentSdKeys = resolveOrchestratorParentSdKeys;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.filterDormantByPidLiveness = filterDormantByPidLiveness; // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
