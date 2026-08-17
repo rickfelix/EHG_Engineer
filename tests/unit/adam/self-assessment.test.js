@@ -38,6 +38,54 @@ describe('scoreDimensions', () => {
   });
 });
 
+describe('D1_proactive_sourcing — consumption discriminator (QF-20260817-735)', () => {
+  // Root cause: belt_depth alone is SD-lane-only and a point-in-time STOCK reading, so it cannot
+  // tell starvation apart from healthy flow (fast sourcing + fast consumption keeping depth
+  // shallow) -- it scored D1=2 on the highest-sourcing overnight window on record because
+  // depth=1 was consumption, not starvation. These are the QF's own stated acceptance fixtures.
+  it('depth=1 + 9 window-sourced QFs + 20 completions -> D1 >= 4 (healthy flow, not starvation)', () => {
+    const { dimensions } = core.scoreDimensions({ belt_depth: 1, qf_sourced_window: 9, window_completions: 20 });
+    expect(dimensions.D1_proactive_sourcing).toBeGreaterThanOrEqual(4);
+  });
+
+  it('depth=1 + 0 sourced + 0 completions -> D1 low (genuine starvation, unchanged from depth-only)', () => {
+    const { dimensions } = core.scoreDimensions({ belt_depth: 1, qf_sourced_window: 0, window_completions: 0 });
+    expect(dimensions.D1_proactive_sourcing).toBe(2); // same as depth-only: d>=1 -> 2
+  });
+
+  it('a low depth with ONLY sourcing (no completions yet) does not get the flow boost', () => {
+    // Sourced but not yet consumed is not evidence of healthy THROUGHPUT -- both sides of the
+    // discriminator must be present and non-zero, or the override must not fire.
+    const { provenance, dimensions } = core.scoreDimensions({ belt_depth: 1, qf_sourced_window: 9, window_completions: 0 });
+    expect(dimensions.D1_proactive_sourcing).toBe(2);
+    expect(provenance.D1_proactive_sourcing.basis).toBe('unclaimed workable SD count');
+  });
+
+  it('a low depth with ONLY completions (nothing newly sourced) does not get the flow boost', () => {
+    const { dimensions } = core.scoreDimensions({ belt_depth: 1, qf_sourced_window: 0, window_completions: 20 });
+    expect(dimensions.D1_proactive_sourcing).toBe(2);
+  });
+
+  it('missing discriminator signals fall through to the original depth-only score (backward compatible)', () => {
+    // No qf_sourced_window / window_completions at all -- the pre-QF-735 signal shape.
+    const { dimensions, provenance } = core.scoreDimensions({ belt_depth: 6 });
+    expect(dimensions.D1_proactive_sourcing).toBe(4); // unchanged: d>=5 -> 4
+    expect(provenance.D1_proactive_sourcing.signal).toBe('belt_depth=6');
+  });
+
+  it('the discriminator never LOWERS a score the depth-only reading already earned', () => {
+    // A deep, healthy belt (already 5/5) plus modest flow signals must not regress.
+    const { dimensions } = core.scoreDimensions({ belt_depth: 8, qf_sourced_window: 1, window_completions: 1 });
+    expect(dimensions.D1_proactive_sourcing).toBe(5);
+  });
+
+  it('the flow-discriminated signal string names all three inputs', () => {
+    const { provenance } = core.scoreDimensions({ belt_depth: 1, qf_sourced_window: 9, window_completions: 20 });
+    expect(provenance.D1_proactive_sourcing.signal).toBe('belt_depth=1, qf_sourced_window=9, window_completions=20');
+    expect(provenance.D1_proactive_sourcing.basis).toMatch(/healthy flow vs starvation/);
+  });
+});
+
 describe('classifyBelowThreshold', () => {
   it('marks only dimensions scoring <=2 and excludes inconclusive (absent) dims', () => {
     const below = core.classifyBelowThreshold({ D6_close_loops_ack: 2, D1_proactive_sourcing: 4, D8_interface_clarity: 1 });
