@@ -65,7 +65,7 @@ import { isLiveCountableWorker } from './live-countable-worker.mjs';
 // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — a standalone
 // module (FR-7) so it has a real test seam, imported here (forecaster side) and independently
 // by scripts/adam-coordinator-health.mjs (KPI-1 side). Never re-derives belt/claim logic itself.
-import { classifyEngagementBuckets, engagementGaugeOn, ENGAGEMENT_LIVE_WINDOW_MS } from './engagement-buckets.mjs';
+import { classifyEngagementBuckets, engagementGaugeOn, unmeasuredEngagement, ENGAGEMENT_LIVE_WINDOW_MS } from './engagement-buckets.mjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -447,7 +447,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
         now,
         isClaimed: (s) => !!claimsBySession[s.session_id] || qfClaimedSessionIds.has(s.session_id),
       })
-    : { unmeasured: true, reason: 'ENGAGEMENT_GAUGE_ENABLED=false' };
+    : unmeasuredEngagement('ENGAGEMENT_GAUGE_ENABLED=false');
 
   return {
     idleNow, freeingSoon, building, stalled,

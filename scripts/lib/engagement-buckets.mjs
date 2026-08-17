@@ -34,8 +34,6 @@ import { isFixtureSession } from '../../lib/fleet/session-predicates.mjs';
 
 // Lazy + memoised CJS interop, mirroring lib/fleet/genuine-worker.mjs's own pattern for the
 // same underlying module — a top-level require would defeat fail-open on a load failure.
-let _stuckSeat;
-const loadStuckSeat = () => (_stuckSeat ??= createRequire(import.meta.url)('../../lib/fleet/stuck-seat-predicate.cjs'));
 let _detectors;
 const loadDetectors = () => (_detectors ??= createRequire(import.meta.url)('../../lib/coordinator/detectors.cjs'));
 
@@ -192,6 +190,18 @@ import { isKnownWedged as _isKnownWedged } from '../../lib/fleet/genuine-worker.
  * load-bearing fields from persisting. Per-session failures are already caught inside
  * classifySessionBucket and degrade to UNKNOWN individually.
  *
+ * UNMEASURED ALWAYS MEANS NULL COUNTS, NEVER ZERO COUNTS (deep-tier ship-review, round 5). Every
+ * unmeasured path in this module and its two callers (capacity-inputs.mjs, adam-coordinator-health.mjs
+ * both have their own engagementGaugeOn()===false / outer-catch fallback objects) now shares this
+ * exact shape. Before this fix, this function's own catch returned explicit `0`s alongside
+ * unmeasured:true, while the callers' gauge-disabled fallback returned no count keys at all —
+ * so `engagement.engaged ?? null` silently normalized ONE fail-soft path to null but let the OTHER
+ * persist a real `0`, indistinguishable from "genuinely zero engaged workers" for any consumer that
+ * reads the count without checking unmeasured first. This is the exact unavailable-vs-zero collapse
+ * capacity-inputs.mjs's own QF-20260816-435 comment already names for a different field — reintroduced
+ * here for this one. null is the correct value precisely because it cannot be mistaken for a
+ * measurement; `unmeasured` remains the authoritative flag for callers that DO check it.
+ *
  * @param {Array<object>} sessions - RAW session rows (not pre-filtered by any other predicate)
  * @param {object} opts
  * @param {string} opts.coordinatorId
@@ -199,7 +209,7 @@ import { isKnownWedged as _isKnownWedged } from '../../lib/fleet/genuine-worker.
  * @param {number} [opts.now]
  * @param {number} [opts.cutMinutes]
  * @param {number} [opts.graceMs]
- * @returns {{engaged:number, tail:number, zombie:number, idle:number, unknown:number, population:number, populationExtent:string, unmeasured?:true, labels?:Array<{session_id:string, bucket:string}>}}
+ * @returns {{engaged:number|null, tail:number|null, zombie:number|null, idle:number|null, unknown:number|null, population:number|null, populationExtent:string, unmeasured?:true, error?:string, labels?:Array<{session_id:string, bucket:string}>}}
  */
 export function classifyEngagementBuckets(sessions, opts = {}) {
   try {
@@ -230,9 +240,20 @@ export function classifyEngagementBuckets(sessions, opts = {}) {
     };
   } catch (error) {
     return {
-      engaged: 0, tail: 0, zombie: 0, idle: 0, unknown: 0,
-      population: 0, populationExtent: ENGAGEMENT_POPULATION_EXTENT,
+      engaged: null, tail: null, zombie: null, idle: null, unknown: null, population: null,
+      populationExtent: ENGAGEMENT_POPULATION_EXTENT,
       unmeasured: true, error: error?.message || String(error),
     };
   }
+}
+
+/** Shared unmeasured shape for callers gating on engagementGaugeOn()===false or their own outer catch — never `0`s (see classifyEngagementBuckets' own catch docstring above for why). */
+export function unmeasuredEngagement(reasonOrError) {
+  const isError = reasonOrError instanceof Error;
+  return {
+    engaged: null, tail: null, zombie: null, idle: null, unknown: null, population: null,
+    populationExtent: ENGAGEMENT_POPULATION_EXTENT,
+    unmeasured: true,
+    ...(isError ? { error: reasonOrError.message || String(reasonOrError) } : { reason: reasonOrError }),
+  };
 }

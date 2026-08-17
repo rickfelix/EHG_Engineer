@@ -668,9 +668,13 @@ describe('SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: engagement gauge wiring (TS-5
     expect(reading.utilization).toBeDefined();
     expect(reading.integrity.integrity_ok).toBe(true);
     expect(inserted.some((i) => i.t === 'codebase_health_snapshots')).toBe(true);
-    // The new field alone degrades:
+    // The new field alone degrades — with null counts, never zeros (deep-tier ship-review round 5:
+    // a bare 0 here would be indistinguishable from "genuinely zero engaged workers" for any reader
+    // of this field that doesn't check `unmeasured` first).
     expect(reading.engagement.unmeasured).toBe(true);
     expect(typeof reading.engagement.error).toBe('string');
+    expect(reading.engagement.engaged).toBeNull();
+    expect(reading.engagement.population).toBeNull();
     spy.mockRestore();
   });
 });

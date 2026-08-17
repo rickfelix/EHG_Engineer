@@ -45,7 +45,7 @@ import { registerOversightLoop } from '../lib/oversight/coordinator-health-recom
 // both integration points). Computed as its own try/caught reading.engagement key in runProbe
 // below, never inside computeUtilization itself — classifyBreach only ever receives
 // {utilization, planAdherence, integrity}, so it structurally cannot see this new field.
-import { classifyEngagementBuckets, engagementGaugeOn } from './lib/engagement-buckets.mjs';
+import { classifyEngagementBuckets, engagementGaugeOn, unmeasuredEngagement } from './lib/engagement-buckets.mjs';
 
 export const DIMENSION = 'adam_coordinator_health';
 export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
@@ -521,9 +521,9 @@ export async function runProbe(supabase, opts = {}) {
           now: opts.nowMs ?? Date.now(),
           isClaimed: (s) => !!s.sd_key,
         })
-      : { unmeasured: true, reason: 'ENGAGEMENT_GAUGE_ENABLED=false' };
+      : unmeasuredEngagement('ENGAGEMENT_GAUGE_ENABLED=false');
   } catch (error) {
-    engagement = { unmeasured: true, error: error?.message || String(error) };
+    engagement = unmeasuredEngagement(error);
   }
   const planAdherence = await computePlanAdherence(supabase);
   // QF-20260805-181: injectable seam mirrors claimableLeavesFn/gitGrep/makePgClient in this file.

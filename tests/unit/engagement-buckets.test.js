@@ -14,6 +14,7 @@ import {
   classifySessionBucket,
   isEngagementBasePopulationMember,
   engagementGaugeOn,
+  unmeasuredEngagement,
   ENGAGEMENT_POPULATION_EXTENT,
   ENGAGEMENT_LIVE_WINDOW_MS,
 } from '../../scripts/lib/engagement-buckets.mjs';
@@ -283,12 +284,20 @@ describe('classifyEngagementBuckets — population accounting and the closed TR-
     expect(result.population).toBe(0);
   });
 
-  it('never throws on a genuinely malformed sessions argument — degrades to an unmeasured result (FR-4)', () => {
+  it('never throws on a genuinely malformed sessions argument — degrades to an unmeasured result (FR-4) with NULL counts, never zeros', () => {
     // A non-nullish value with no .filter method (unlike null/undefined, which the || [] guard
     // already handles) exercises the outer try/catch's true purpose.
+    //
+    // Deep-tier ship-review (round 5): before this fix, this catch returned explicit `0`s alongside
+    // unmeasured:true, while the gauge-disabled fallback in both callers returned no count keys at
+    // all — so a consumer reading `engagement.engaged` directly (not gating on `unmeasured` first)
+    // saw a real "0 engaged" for ONE fail-soft path and undefined/null for the other. null cannot be
+    // mistaken for a measurement; this pins that every count field is null on this path, matching
+    // unmeasuredEngagement()'s shape exactly.
     const result = classifyEngagementBuckets(42, { coordinatorId: 'coord', now: NOW, isClaimed: () => true });
     expect(result.unmeasured).toBe(true);
     expect(typeof result.error).toBe('string');
+    expect(result).toMatchObject({ engaged: null, tail: null, zombie: null, idle: null, unknown: null, population: null });
   });
 
   it('never throws when isClaimed itself throws on every session', () => {
@@ -317,5 +326,28 @@ describe('engagementGaugeOn — the FR-6 rollout flag (default ON, disableable)'
     expect(engagementGaugeOn()).toBe(false);
     if (prev === undefined) delete process.env.ENGAGEMENT_GAUGE_ENABLED;
     else process.env.ENGAGEMENT_GAUGE_ENABLED = prev;
+  });
+});
+
+describe('unmeasuredEngagement — the single shared shape both capacity-inputs.mjs and adam-coordinator-health.mjs delegate to for their own fail-soft fallbacks (deep-tier ship-review, round 5)', () => {
+  it('every count field is null, never 0 or undefined — 0 would read as a real measurement, undefined would be silently dropped by JSON persistence', () => {
+    const result = unmeasuredEngagement('some reason');
+    expect(result).toMatchObject({
+      engaged: null, tail: null, zombie: null, idle: null, unknown: null, population: null,
+      unmeasured: true,
+    });
+    expect(result.populationExtent).toBe(ENGAGEMENT_POPULATION_EXTENT);
+  });
+
+  it('a string argument is carried as `reason`, never `error`', () => {
+    const result = unmeasuredEngagement('ENGAGEMENT_GAUGE_ENABLED=false');
+    expect(result.reason).toBe('ENGAGEMENT_GAUGE_ENABLED=false');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('an Error argument is carried as `error` (its message), never `reason`', () => {
+    const result = unmeasuredEngagement(new Error('boom'));
+    expect(result.error).toBe('boom');
+    expect(result.reason).toBeUndefined();
   });
 });
