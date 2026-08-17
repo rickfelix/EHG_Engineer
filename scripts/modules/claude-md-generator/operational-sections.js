@@ -201,10 +201,16 @@ function generateRecentLessonsSection(retrospectives) {
  */
 function extractExistingLessonsBlock(fileContent) {
   if (typeof fileContent !== 'string') return null;
-  const HEADING = '## Recent Lessons (Last 30 Days)';
-  const start = fileContent.indexOf(HEADING);
-  if (start === -1) return null;
-  const nextHeadingIdx = fileContent.indexOf('\n## ', start + HEADING.length);
+  // Adversarial review (PR #7181): anchor to an actual line start, not an unanchored
+  // substring search — several sections rendered ABOVE this one (Known Friction Points,
+  // Hot Patterns, Proposals, the raw leo_protocol_sections content itself) are free text
+  // sourced from a live DB table anyone can edit, so an indexOf() with no anchor could
+  // latch onto this exact heading text quoted mid-sentence in unrelated content and slice
+  // the wrong span.
+  const headingMatch = /^## Recent Lessons \(Last 30 Days\)/m.exec(fileContent);
+  if (!headingMatch) return null;
+  const start = headingMatch.index;
+  const nextHeadingIdx = fileContent.indexOf('\n## ', start + headingMatch[0].length);
   const end = nextHeadingIdx === -1 ? fileContent.length : nextHeadingIdx;
   return fileContent.slice(start, end).trimEnd();
 }

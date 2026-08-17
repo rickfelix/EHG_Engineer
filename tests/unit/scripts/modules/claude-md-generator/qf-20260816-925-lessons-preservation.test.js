@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 
 const { generateCore } = await import('../../../../../scripts/modules/claude-md-generator/file-generators.js');
 const { extractExistingLessonsBlock, generateRecentLessonsSection } = await import('../../../../../scripts/modules/claude-md-generator/operational-sections.js');
+const { CLAUDEMDGeneratorV3 } = await import('../../../../../scripts/modules/claude-md-generator/index.js');
 
 function makeData(overrides = {}) {
   return {
@@ -72,6 +73,27 @@ LEAD: ...
     expect(block).toContain('Only Retro');
     expect(block.endsWith('Details.')).toBe(true); // trimEnd() removes trailing newline
   });
+
+  // Adversarial review (PR #7181): the heading text can appear mid-sentence inside a DB-sourced
+  // free-text section rendered EARLIER in the file (Known Friction Points, Hot Patterns,
+  // Proposals, or a raw leo_protocol_sections row) — an unanchored substring match would latch
+  // onto that instead of the real heading and slice the wrong span.
+  it('does NOT match the heading text when it appears mid-line, not starting a line', () => {
+    const fileContent = `## Known Friction Points
+
+Someone quoted the fix title: see "## Recent Lessons (Last 30 Days)" churn bug for details.
+
+## Recent Lessons (Last 30 Days)
+
+### 1. Real Retro
+Real details.
+
+## Agent Responsibilities
+`;
+    const block = extractExistingLessonsBlock(fileContent);
+    expect(block).toContain('Real Retro');
+    expect(block).not.toContain('churn bug for details');
+  });
 });
 
 describe('generateCore — QF-20260816-925 override wiring', () => {
@@ -119,5 +141,52 @@ describe('generateCore — QF-20260816-925 override wiring', () => {
     const data = makeData({ recentRetrospectives: retros });
     const output = generateCore(data, fileMapping);
     expect(extractExistingLessonsBlock(output)).toBe(rendered.trimEnd());
+  });
+
+  // Adversarial review (PR #7181): the "*Includes: ... + Lessons (N)*" footer must count
+  // what's ACTUALLY rendered (the override, when present), not the live recentRetrospectives
+  // array — otherwise the footer contradicts a preserved block that shows a different count.
+  it('the footer Lessons(N) count reflects the OVERRIDE entry count, not the live retrospectives array length', () => {
+    const preservedBlock = '## Recent Lessons (Last 30 Days)\n\n### 1. Only One Preserved\nDetails.';
+    const data = makeData({
+      recentLessonsOverride: preservedBlock,
+      // Live array has 3 entries — must NOT leak into the footer count.
+      recentRetrospectives: [
+        { id: 'r1', sd_id: 'A', title: 'A' }, { id: 'r2', sd_id: 'B', title: 'B' }, { id: 'r3', sd_id: 'C', title: 'C' },
+      ],
+    });
+    const output = generateCore(data, fileMapping);
+    expect(output).toContain('Lessons (1)');
+    expect(output).not.toContain('Lessons (3)');
+  });
+});
+
+describe('CLAUDEMDGeneratorV3.computeDbSnapshotHash — QF-20260816-925 override wiring', () => {
+  it('stays IDENTICAL across two calls with the same override but a DIFFERENT live retrospectives array (fixes the digest-file/manifest churn the override alone left open)', () => {
+    const gen = new CLAUDEMDGeneratorV3({}, '/tmp/unused', '/tmp/unused.json', {});
+    const preservedBlock = '## Recent Lessons (Last 30 Days)\n\n### 1. Preserved\nDetails.';
+    const baseData = { protocol: { id: 'p1', version: '4.4.1', sections: [] }, subAgents: [], hotPatterns: [] };
+
+    const hashA = gen.computeDbSnapshotHash({
+      ...baseData,
+      recentLessonsOverride: preservedBlock,
+      recentRetrospectives: [{ id: 'r1', sd_id: 'A' }],
+    });
+    const hashB = gen.computeDbSnapshotHash({
+      ...baseData,
+      recentLessonsOverride: preservedBlock,
+      // Different live data — as would happen a few minutes later under fleet concurrency.
+      recentRetrospectives: [{ id: 'r2', sd_id: 'B' }, { id: 'r3', sd_id: 'C' }],
+    });
+    expect(hashA).toBe(hashB);
+  });
+
+  it('DOES change when the override itself changes (a real --refresh-lessons snapshot)', () => {
+    const gen = new CLAUDEMDGeneratorV3({}, '/tmp/unused', '/tmp/unused.json', {});
+    const baseData = { protocol: { id: 'p1', version: '4.4.1', sections: [] }, subAgents: [], hotPatterns: [] };
+
+    const hashA = gen.computeDbSnapshotHash({ ...baseData, recentLessonsOverride: '## Recent Lessons (Last 30 Days)\n\nOld.' });
+    const hashB = gen.computeDbSnapshotHash({ ...baseData, recentLessonsOverride: '## Recent Lessons (Last 30 Days)\n\nNew.' });
+    expect(hashA).not.toBe(hashB);
   });
 });

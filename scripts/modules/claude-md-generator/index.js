@@ -138,7 +138,14 @@ class CLAUDEMDGeneratorV3 {
       sectionCount: data.protocol?.sections?.length,
       subAgentCount: data.subAgents?.length,
       hotPatternsHash: this.computeHash(JSON.stringify(data.hotPatterns || [])),
-      retrospectivesHash: this.computeHash(JSON.stringify(data.recentRetrospectives || []))
+      // Adversarial review (PR #7181): hash whatever will ACTUALLY be rendered (the frozen
+      // override, when loadData() populated one) rather than the always-fresh live array —
+      // otherwise db_snapshot_hash keeps changing on routine retrospectives-table churn even
+      // though the rendered content didn't, and that propagates into every *_DIGEST.md's
+      // embedded `db_snapshot_hash` comment plus the git-tracked manifest, none of which are
+      // covered by VOLATILE_LINE_RE / stripManifestVolatile — the same churn this fix exists
+      // to stop, just relocated to 9 other tracked files.
+      retrospectivesHash: this.computeHash(data.recentLessonsOverride ?? JSON.stringify(data.recentRetrospectives || []))
     });
     return this.computeHash(snapshot);
   }

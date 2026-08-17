@@ -293,6 +293,12 @@ function generateCore(data, fileMapping) {
   // QF-20260816-925: prefer a caller-supplied override (the existing on-disk block, when
   // the caller wants it preserved) over a fresh live-table snapshot.
   const recentLessonsSection = data.recentLessonsOverride ?? generateRecentLessonsSection(recentRetrospectives);
+  // Adversarial review (PR #7181): the footer below must count whatever is ACTUALLY
+  // rendered above, not the always-fresh recentRetrospectives array — otherwise the footer
+  // both contradicts a frozen/preserved block and, since it isn't in VOLATILE_LINE_RE,
+  // keeps forcing a rewrite on every routine retrospectives-table change (the exact churn
+  // this fix exists to stop, just relocated to one line).
+  const lessonsCount = (recentLessonsSection.match(/^### \d+\./gm) || []).length;
   const gateHealthSection = generateGateHealthSection(gateHealth);
   const proposalsSection = generateProposalsSection(pendingProposals);
 
@@ -339,7 +345,7 @@ ${subAgentSection}
 
 *Generated from database: ${today}*
 *Protocol Version: ${protocol.version}*
-*Includes: Proposals (${pendingProposals?.length || 0}) + Hot Patterns (${hotPatterns?.length || 0}) + Lessons (${recentRetrospectives?.length || 0})*
+*Includes: Proposals (${pendingProposals?.length || 0}) + Hot Patterns (${hotPatterns?.length || 0}) + Lessons (${lessonsCount})*
 *Load this file first in all sessions*
 `;
 }
