@@ -53,7 +53,18 @@ if (OFFSET_MS !== null) {
   // already applied to this file's credential-fence guard for the identical reason.
   process.stdout.write(`[clock-skew] TEST_CLOCK_OFFSET_MS active: +${OFFSET_MS}ms -> effective test date ${effectiveDate}\n`);
   fs.mkdirSync(path.dirname(LEDGER_PATH), { recursive: true });
-  fs.writeFileSync(LEDGER_PATH, ''); // fresh ledger for this run; appended to per-test below
+  // FOLLOW-UP FIX (post-merge, full-tier verification): this module-load block runs once per
+  // TEST FILE (setupFiles re-evaluates per file), not once per run. At full-tier scale (3200+
+  // files, multiple concurrent `pool: forks` workers), an unconditional writeFileSync used to
+  // truncate this SHARED ledger path every time ANY file's setup loaded -- racing with, and
+  // silently discarding, every OTHER file's already-appended entries from the SAME run. `wx`
+  // (exclusive create) makes exactly one file/worker win the reset; every later file sees
+  // EEXIST and skips straight to appending. A real fs error (e.g. permissions) still throws.
+  try {
+    fs.writeFileSync(LEDGER_PATH, '', { flag: 'wx' });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+  }
 }
 
 beforeEach((ctx) => {
