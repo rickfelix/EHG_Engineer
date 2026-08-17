@@ -87,9 +87,17 @@ beforeAll(async () => {
   });
   await client.connect();
   await client.query(STUB_SCHEMA);
-  // Applying the migration also runs its own DO $verify$ block (generic-actor rejection,
-  // judge<>producer rejection, absence-of-boolean-columns, trigger/constraint existence) — a
-  // migration-apply failure here IS a test failure, propagated as a rejected promise.
+  // ADVERSARIAL REVIEW FIX (PR1 deep-tier review): the migration's own DO $verify$ block gates
+  // its generic-actor-rejection and judge<>producer behavioural proofs on `SELECT id INTO v_id
+  // FROM public.ventures LIMIT 1; IF v_id IS NOT NULL THEN ...` — with an empty ventures table
+  // (the original state here), v_id was NULL and BOTH proofs silently no-op on every CI run,
+  // giving zero executed coverage of the SD's headline anti-rubber-stamp controls. Seed one
+  // venture row BEFORE applying the migration so those proofs actually execute.
+  await client.query("INSERT INTO public.ventures (name) VALUES ('DDL verify-block seed venture')");
+  // Applying the migration also runs its own DO $verify$ block (TRUNCATE rejection,
+  // generic-actor rejection, judge<>producer rejection, absence-of-boolean-columns,
+  // trigger/constraint existence) — a migration-apply failure here IS a test failure,
+  // propagated as a rejected promise.
   await client.query(MIGRATION_SQL);
 }, 60_000);
 
@@ -98,6 +106,20 @@ afterAll(async () => {
 });
 
 describe('venture_gate_attestations DDL (SD-FDBK-FIX-VENTURE-CRACK-GATE-001 TS-6)', () => {
+  it('rejects a TRUNCATE (the statement-level guard, not covered by the row-level UPDATE/DELETE freeze triggers)', async () => {
+    await expect(client.query('TRUNCATE public.venture_gate_attestations')).rejects.toThrow(/append-only/);
+  });
+
+  it('rejects attested_by="system" independently of the migration\'s own internal verify-block proof', async () => {
+    const ventureId = await makeVenture();
+    await expect(insertRow(VALID_ROW(ventureId, { attested_by: 'system' }))).rejects.toThrow(/check/i);
+  });
+
+  it('rejects a case/whitespace-varied self-judged row (attested_by ~= produced_by) independently of the migration\'s own internal verify-block proof', async () => {
+    const ventureId = await makeVenture();
+    await expect(insertRow(VALID_ROW(ventureId, { attested_by: 'Stage-17-Blueprint-Review ', produced_by: 'stage-17-blueprint-review' }))).rejects.toThrow(/check/i);
+  });
+
   it('accepts a well-formed PASS attestation', async () => {
     const ventureId = await makeVenture();
     const { rows } = await insertRow(VALID_ROW(ventureId));

@@ -132,11 +132,20 @@ BEGIN
       'ORDER BY COALESCE(n.promoted_at, n.created_at) DESC NULLS LAST LIMIT 1'
       INTO v_nur_raw USING p_venture_id;
 
+    -- ADVERSARIAL REVIEW FIX (PR1 deep-tier review): the metadata-read branch above accepts
+    -- both an object shape ({verdict:...}) and a bare string shape (since 0 live rows exist in
+    -- either destination, neither writer's actual shape is proven). The nursery branch originally
+    -- only unpacked 'object', so a bare-string verdict here silently fell through to
+    -- PBN_NOT_SCORED instead of resolving — directly contradicting this function's own
+    -- documented invariant that PBN_SOURCE_UNAVAILABLE/a real verdict is never folded into
+    -- PBN_NOT_SCORED. Mirror the same object/string tolerance applied to the metadata branch.
     IF v_nur_raw IS NOT NULL AND jsonb_typeof(v_nur_raw) = 'object' THEN
       v_nur_verdict := v_nur_raw ->> 'verdict';
-      IF v_nur_verdict IS NOT NULL AND v_nur_verdict NOT IN ('PASS','REJECT','TRIM') THEN
-        v_nur_verdict := NULL;   -- CHECK-constrained upstream; treat any surprise as absent, not as a verdict
-      END IF;
+    ELSIF v_nur_raw IS NOT NULL AND jsonb_typeof(v_nur_raw) = 'string' THEN
+      v_nur_verdict := v_nur_raw #>> '{}';
+    END IF;
+    IF v_nur_verdict IS NOT NULL AND v_nur_verdict NOT IN ('PASS','REJECT','TRIM') THEN
+      v_nur_verdict := NULL;   -- CHECK-constrained upstream; treat any surprise as absent, not as a verdict
     END IF;
   END IF;
 

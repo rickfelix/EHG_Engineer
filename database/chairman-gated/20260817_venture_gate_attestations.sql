@@ -242,10 +242,16 @@ CREATE TABLE IF NOT EXISTS public.venture_gate_attestations (
   -- 'structural' is a strong claim, so it costs something to make: the row must carry an external
   -- verification reference. Otherwise every writer tags itself 'structural' and the honesty tag
   -- measures nothing. (A gate is only as honest as the data it trusts.)
+  --
+  -- ADVERSARIAL REVIEW FIX (PR1 deep-tier review): the original form only rejected an absent key
+  -- or a literal JSON null, so {}/false/0/"" all satisfied it (non-null jsonb_typeof, not equal
+  -- to 'null'::jsonb) while carrying zero actual evidence. Requiring the value be a JSON OBJECT
+  -- with at least one key makes an empty/scalar placeholder unrecordable, mirroring the shape
+  -- discipline vga_citation_resolvable_shape already applies a few constraints up.
   CONSTRAINT vga_structural_requires_external_verification CHECK (
     enforcement_strength <> 'structural'
-    OR (jsonb_typeof(findings -> 'external_verification') IS NOT NULL
-        AND findings -> 'external_verification' <> 'null'::jsonb)
+    OR (jsonb_typeof(findings -> 'external_verification') = 'object'
+        AND findings -> 'external_verification' <> '{}'::jsonb)
   )
 );
 
@@ -299,6 +305,26 @@ DROP TRIGGER IF EXISTS venture_gate_attestations_no_delete_trg ON public.venture
 CREATE TRIGGER venture_gate_attestations_no_delete_trg
   BEFORE DELETE ON public.venture_gate_attestations
   FOR EACH ROW EXECUTE FUNCTION public.venture_gate_attestations_no_delete();
+
+-- ADVERSARIAL REVIEW FIX (PR1 deep-tier review): row-level triggers do NOT fire for TRUNCATE —
+-- only a statement-level trigger can intercept it. service_role bypasses RLS (rolbypassrls=TRUE,
+-- measured) and is granted ALL below (including TRUNCATE), which is the migration's own stated
+-- threat model, so without this guard the entire attestation history is one TRUNCATE away from
+-- silent, un-audited erasure — the same "delete-and-reinsert" bypass class the DELETE trigger
+-- exists to close, via a statement type that trigger cannot see.
+CREATE OR REPLACE FUNCTION public.venture_gate_attestations_no_truncate()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $notrunc$
+BEGIN
+  RAISE EXCEPTION 'venture_gate_attestations is append-only: TRUNCATE is not permitted. It would erase the entire attestation history with no row-level trigger able to observe it.';
+END
+$notrunc$;
+
+DROP TRIGGER IF EXISTS venture_gate_attestations_no_truncate_trg ON public.venture_gate_attestations;
+CREATE TRIGGER venture_gate_attestations_no_truncate_trg
+  BEFORE TRUNCATE ON public.venture_gate_attestations
+  FOR EACH STATEMENT EXECUTE FUNCTION public.venture_gate_attestations_no_truncate();
 
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- POSTURE. MEASURED, not assumed: pg_default_acl shows public-schema tables are created with
@@ -397,7 +423,7 @@ COMMENT ON COLUMN public.venture_gate_attestations.computed_at IS
 -- table already exists in another shape, every CHECK above silently does NOT land and this file
 -- still reports success. This block aborts the deploy instead.
 --
--- THE LAST TWO CHECKS ARE BEHAVIOURAL, NOT EXISTENTIAL, and that is the point. Asserting that a
+-- THE FINAL THREE CHECKS ARE BEHAVIOURAL, NOT EXISTENTIAL, and that is the point. Asserting that a
 -- constraint EXISTS proves only that a name is present in pg_constraint; it does not prove the
 -- predicate rejects anything. These attempt real INSERTs that MUST fail. Each runs inside the DO
 -- block's implicit subtransaction, so nothing survives whether it passes or fails — and the table
@@ -408,6 +434,7 @@ DO $verify$
 DECLARE
   bad_col text;
   v_id    uuid;
+  truncate_was_blocked boolean := false;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
@@ -458,10 +485,28 @@ BEGIN
     RAISE EXCEPTION 'venture_gate_attestations: the append-only DELETE guard did not land — delete-and-reinsert bypasses the update freeze completely';
   END IF;
 
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public.venture_gate_attestations'::regclass
+                 AND tgname='venture_gate_attestations_no_truncate_trg' AND NOT tgisinternal) THEN
+    RAISE EXCEPTION 'venture_gate_attestations: the append-only TRUNCATE guard did not land — row-level UPDATE/DELETE triggers do not fire for TRUNCATE, so the whole table would be one TRUNCATE away from silent erasure';
+  END IF;
+
   IF EXISTS (SELECT 1 FROM information_schema.role_table_grants
              WHERE table_schema='public' AND table_name='venture_gate_attestations'
                AND grantee IN ('anon','authenticated','PUBLIC')) THEN
     RAISE EXCEPTION 'venture_gate_attestations: a non-service grant is present — this table gates whether a venture may face strangers and must not be reachable by anon or authenticated (pg_default_acl grants anon arwdDxtm on new public tables, so this REVOKE is load-bearing)';
+  END IF;
+
+  -- ── BEHAVIOURAL PROOF 0: TRUNCATE is actually rejected (needs no existing row) ────────────────
+  -- A boolean flag, not exception-message pattern matching, distinguishes "the trigger correctly
+  -- raised" from "some other error occurred" — message-substring matching is a fragile way to
+  -- tell those apart and this is the one guard in this file that specifically must not be.
+  BEGIN
+    EXECUTE 'TRUNCATE public.venture_gate_attestations';
+  EXCEPTION
+    WHEN raise_exception THEN truncate_was_blocked := true;
+  END;
+  IF NOT truncate_was_blocked THEN
+    RAISE EXCEPTION 'venture_gate_attestations: GUARD DID NOT FIRE — TRUNCATE succeeded. The append-only guarantee is decorative; refusing to deploy.';
   END IF;
 
   -- ── BEHAVIOURAL PROOF 1: the generic-actor guard actually rejects ────────────────────────────
