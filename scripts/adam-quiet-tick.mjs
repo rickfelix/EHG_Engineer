@@ -355,7 +355,14 @@ export async function surfaceInboxItems(sb) {
           // QF-20260816-532: classify only rows targeting a LIVE session — a row addressed to a
           // retired seat can never breach meaningfully (nobody polls a dead session_id), so it
           // only ever padded this gauge. Reported separately so the real floor stays visible.
-          const { liveRows, phantomRows } = partitionByLiveness(backlogRows, liveIds);
+          //
+          // ADVERSARIAL REVIEW FINDING (PR #7169): an empty liveIds means no Adam session is
+          // currently active at all — nothing to partition AGAINST. Falling back to the full row
+          // set here preserves this module's pre-existing "no live Adam is the WORST case, never
+          // an exemption" invariant instead of silently reporting a clean gauge while Adam is dark.
+          const { liveRows, phantomRows } = liveIds.length
+            ? partitionByLiveness(backlogRows, liveIds)
+            : { liveRows: backlogRows, phantomRows: [] };
           const verdict = classifyBacklog(liveRows, Date.now());
           backlogCount = verdict.rawBacklogCount;
           backlogBreachingCount = verdict.breachingCount;

@@ -269,6 +269,19 @@ describe('QF-20260816-532 — a row addressed to a retired seat is reported as p
     expect(ids.sort()).toEqual(['adam-live', 'adam-retired-1', 'adam-retired-2'].sort());
     expect(liveIds).toEqual(['adam-live']);
   });
+
+  it('ADVERSARIAL FINDING (PR #7169): zero currently-live Adam sessions must NOT silently zero the backlog — the module has no liveness gate BY DESIGN (no live Adam is the WORST case, not an exemption)', async () => {
+    // Every historical id exists (history is real), but none is status='active' right now —
+    // e.g. the live seat was JUST swept to 'released' before a successor registered. A real,
+    // aging, unread row must still surface as backlog, not vanish into phantomCount.
+    const staleRow = { id: 'stale-1', target_session: 'adam-just-died', sender_type: 'coordinator', payload: { kind: 'adam_advisory' }, created_at: ago(300 * MIN), read_at: null, acknowledged_at: null };
+    const sb = fakeSupabase([staleRow], { adamIds: ['adam-just-died'], liveIds: [] });
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.breaching).toBe(true);
+    expect(r.breachingCount).toBe(1);
+    expect(r.rawBacklogCount).toBe(1);
+    expect(r.phantomCount).toBe(0);
+  });
 });
 
 describe('FR-2 — bounded ceiling and evidence floor', () => {
