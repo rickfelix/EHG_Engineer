@@ -1,13 +1,15 @@
 /**
- * SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-A FR-1/FR-2/FR-4 — provisioning readiness report.
+ * SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-A FR-1/FR-2/FR-3/FR-4 — provisioning readiness report.
  * See lib/venture-provisioning/exec-boundary-readiness.js header for why a report,
- * not three separate feature builds.
+ * not four separate feature builds.
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
   checkDeploymentHealth,
   extractAssetUrls,
   assessDistributionReadiness,
+  assessPaymentAccountReadiness,
+  provisionPaymentAccountSetup,
   assessAnalyticsReadiness,
   buildProvisioningReadinessReport,
   recordProvisioningReadiness,
@@ -134,6 +136,57 @@ describe('assessAnalyticsReadiness', () => {
   });
 });
 
+describe('provisionPaymentAccountSetup', () => {
+  it('returns ok:false reason:no_stripe_key_configured when no key is present — never attempts the guard', async () => {
+    const getStripeForVenture = vi.fn();
+    const r = await provisionPaymentAccountSetup({ ventureId: 'v1' }, { env: {}, getStripeForVenture });
+    expect(r).toEqual({ ok: false, reason: 'no_stripe_key_configured' });
+    expect(getStripeForVenture).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a guard refusal (e.g. a live key in a fleet context) as a clean reason, never throws', async () => {
+    const getStripeForVenture = vi.fn().mockRejectedValue(new Error('Refusing sk_live_ key in CI/fleet/automated context — TEST mode only'));
+    const r = await provisionPaymentAccountSetup({ ventureId: 'v1' }, { env: { STRIPE_SECRET_KEY: 'sk_live_x' }, getStripeForVenture });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('guard_refused');
+    expect(r.reason).toContain('TEST mode only');
+  });
+
+  it('creates a Connect Express account via the sanctioned guard and reports its onboarding state, never charges_enabled by default', async () => {
+    const stripeAccountsCreate = vi.fn().mockResolvedValue({ id: 'acct_123', charges_enabled: false, details_submitted: false });
+    const stripe = { accounts: { create: stripeAccountsCreate } };
+    const getStripeForVenture = vi.fn().mockResolvedValue(stripe);
+
+    const r = await provisionPaymentAccountSetup(
+      { ventureId: 'v1', ventureName: 'AltifyAI' },
+      { env: { STRIPE_SECRET_KEY: 'sk_test_x' }, getStripeForVenture, supabase: 'fake-supabase' }
+    );
+
+    expect(r).toEqual({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
+    expect(stripeAccountsCreate).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'express',
+      metadata: { venture_id: 'v1', venture_name: 'AltifyAI' },
+    }));
+    expect(getStripeForVenture).toHaveBeenCalledWith(expect.objectContaining({ ventureId: 'v1', supabase: 'fake-supabase' }));
+  });
+});
+
+describe('assessPaymentAccountReadiness', () => {
+  it('reports provisioned:true and no decision-point when the account was actually created', () => {
+    const r = assessPaymentAccountReadiness({ ok: true, accountId: 'acct_123' });
+    expect(r).toEqual({ paymentAccountProvisioned: true, decisionPoint: null });
+  });
+
+  it('reports provisioned:false with an FR-3 decision-point naming the missing test key — the honest current-state outcome', () => {
+    const r = assessPaymentAccountReadiness({ ok: false, reason: 'no_stripe_key_configured' });
+    expect(r.paymentAccountProvisioned).toBe(false);
+    expect(r.decisionPoint.fr).toBe('FR-3');
+    expect(r.decisionPoint.kind).toBe('payment_account');
+    expect(r.decisionPoint.status).toBe('blocked_no_test_key');
+    expect(r.decisionPoint.note).toContain('no_stripe_key_configured');
+  });
+});
+
 describe('buildProvisioningReadinessReport (orchestration, injected deps)', () => {
   function fakeSupabase({ channelArtifact = null, sinkExists = {} } = {}) {
     return {
@@ -152,23 +205,44 @@ describe('buildProvisioningReadinessReport (orchestration, injected deps)', () =
     };
   }
 
-  it('assembles deploy + distribution + analytics into one report with a decisionPoints array', async () => {
+  it('assembles deploy + distribution + payment + analytics into one report with a decisionPoints array', async () => {
     const supabase = fakeSupabase({ channelArtifact: null, sinkExists: {} });
     const fetchImpl = vi.fn((url) => {
       if (url.endsWith('.js')) return Promise.resolve({ ok: true, status: 200 });
       return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('<script src="/a.js"></script>') });
     });
     const provisionOrganicChannel = vi.fn().mockResolvedValue({ ok: false, reason: 'no_distribution_channel_config' });
+    const provisionPaymentAccountSetupFake = vi.fn().mockResolvedValue({ ok: false, reason: 'no_stripe_key_configured' });
 
     const report = await buildProvisioningReadinessReport(
       { supabase, ventureId: 'v1', deploymentUrl: 'https://altifyai.example.workers.dev' },
-      { fetchImpl, provisionOrganicChannel, now: () => '2026-08-17T18:00:00Z' }
+      { fetchImpl, provisionOrganicChannel, provisionPaymentAccountSetup: provisionPaymentAccountSetupFake, now: () => '2026-08-17T18:00:00Z' }
     );
 
     expect(report.ventureId).toBe('v1');
     expect(report.deploy.reachable).toBe(true);
     expect(report.distribution.organicChannelProvisioned).toBe(false);
+    expect(report.payment.paymentAccountProvisioned).toBe(false);
     expect(report.analytics.analyticsSinkExists).toBe(false);
+    expect(report.decisionPoints).toHaveLength(3);
+    expect(report.decisionPoints.map((d) => d.kind)).toEqual(['distribution_channel', 'payment_account', 'analytics_wiring']);
+  });
+
+  it('omits the FR-3 decision-point when the payment account was actually provisioned', async () => {
+    const supabase = fakeSupabase({ channelArtifact: null, sinkExists: {} });
+    const fetchImpl = vi.fn((url) => {
+      if (url.endsWith('.js')) return Promise.resolve({ ok: true, status: 200 });
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('<script src="/a.js"></script>') });
+    });
+    const provisionOrganicChannel = vi.fn().mockResolvedValue({ ok: false, reason: 'no_distribution_channel_config' });
+    const provisionPaymentAccountSetupFake = vi.fn().mockResolvedValue({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
+
+    const report = await buildProvisioningReadinessReport(
+      { supabase, ventureId: 'v1', deploymentUrl: 'https://altifyai.example.workers.dev' },
+      { fetchImpl, provisionOrganicChannel, provisionPaymentAccountSetup: provisionPaymentAccountSetupFake, now: () => '2026-08-17T18:00:00Z' }
+    );
+
+    expect(report.payment.paymentAccountProvisioned).toBe(true);
     expect(report.decisionPoints).toHaveLength(2);
     expect(report.decisionPoints.map((d) => d.kind)).toEqual(['distribution_channel', 'analytics_wiring']);
   });
