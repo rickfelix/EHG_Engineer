@@ -25,6 +25,13 @@ import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
 import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdog.js';
+// SD-LEO-FIX-QUIET-HOURS-GATE-001: relocated from a local definition here to a shared lib/
+// module so presence-reply-window.js can consult the SAME discriminator (single source of
+// truth). Imported here (creating the local binding the call site below still needs) AND
+// re-exported below (external consumers, e.g. tests/unit/qf590-sms-watchdog-not-chairman.test.js,
+// import both names FROM this file) -- a bare `export {...} from '...'` alone would NOT create a
+// local binding and would throw ReferenceError at the call site (verified empirically).
+import { WATCHDOG_BODY_PREFIX, isWatchdogBody } from '../lib/comms/adam-outbound/watchdog-detector.js';
 // SD-LEO-INFRA-ADAM-INBOUND-BACKLOG-WATCHDOG-001 FR-3: the tick's backlog COUNT comes from the
 // same shared selector the watchdog uses, so the two agree BY CONSTRUCTION rather than by
 // numeric reconciliation (criterion 3 is a RECURRENCE of the lane-002 close that claimed
@@ -456,15 +463,11 @@ export async function surfaceInboxItems(sb) {
 // labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
 // all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
 const SMS_INBOUND_CAP = 50;
-// QF-20260810-590: the automated "are you still there?" watchdog is NOT the chairman (witnessed
-// 2026-08-11 01:58Z: it fired the full CHAIRMAN SMS CHANNEL DUTY reply path during quiet hours,
-// burning the presence window diagnosing a bot message). EXACT-PREFIX match on the canonical
-// body, deliberately narrow — an ambiguous/non-matching body must default to the existing hard
-// interrupt (fail-toward-chairman), never the reverse.
-export const WATCHDOG_BODY_PREFIX = "I haven't received any text messages from you in over an hour.";
-export function isWatchdogBody(body) {
-  return typeof body === 'string' && body.startsWith(WATCHDOG_BODY_PREFIX);
-}
+// QF-20260810-590 provenance now lives in lib/comms/adam-outbound/watchdog-detector.js
+// (SD-LEO-FIX-QUIET-HOURS-GATE-001 relocation). Re-exported here so external consumers that
+// import from this file's own path (e.g. tests/unit/qf590-sms-watchdog-not-chairman.test.js)
+// are unaffected by the relocation.
+export { WATCHDOG_BODY_PREFIX, isWatchdogBody };
 // QF-20260719-825 (layer 2): oversight-staleness backstop. Even with the durable loop
 // entries + the GHA cron (QF-20260719-196), a lost cron must not go unnoticed for days
 // again (coordinator-health evidence was 70.4h stale; the self-score 16 days). Reads the
