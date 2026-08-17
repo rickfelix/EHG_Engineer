@@ -76,6 +76,44 @@ async function gatherSignals(sb) {
     }
   })();
 
+  // D1 consumption discriminator (QF-20260817-735): belt_depth above is SD-lane-only and a
+  // point-in-time stock reading, so it cannot distinguish starvation from healthy flow (fast
+  // sourcing + fast consumption keeping depth shallow) -- same one-lane-blindness class
+  // SD-LEO-INFRA-GATE-SIDE-BELT-001 fixed for the producer-side gates via belt-depth.cjs's
+  // countBeltDepth. qf_sourced_window is QFs CREATED in the window regardless of current status
+  // -- a QF claimed/completed within the window is the STRONGEST evidence of successful
+  // sourcing, not weaker, matching this dimension's own name (a rate, not a stock). This is a
+  // proxy for Adam's sourcing activity (quick_fixes carries no per-row authorship column to
+  // filter on directly), not a literal author trace.
+  const D1_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const d1WindowSinceIso = new Date(Date.now() - D1_WINDOW_MS).toISOString();
+  signals.qf_sourced_window = await safeCount(() => sb
+    .from('quick_fixes')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', d1WindowSinceIso));
+
+  // window_completions: QF + SD completions in the same window -- the consumption side of the
+  // discriminator. null only when BOTH sub-counts are unmeasurable (fail-soft: a genuinely zero
+  // window and an unmeasurable one both flow through as "no discriminator signal", falling back
+  // to the depth-only D1 reading rather than fabricating a 0).
+  signals.window_completions = await (async () => {
+    const qfCompleted = await safeCount(() => sb
+      .from('quick_fixes')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'completed')
+      .gte('completed_at', d1WindowSinceIso));
+    const sdCompleted = await safeCount(() => sb
+      .from('strategic_directives_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'completed')
+      .gte('completion_date', d1WindowSinceIso));
+    // EITHER sub-count failing makes the whole reading unmeasurable -- silently substituting 0
+    // for a failed side would under-report completions, the exact "healthy-looking number for
+    // an unmeasurable one" shape belt-depth.cjs's own fail-loud contracts exist to refuse.
+    if (qfCompleted == null || sdCompleted == null) return null;
+    return qfCompleted + sdCompleted;
+  })();
+
   // D2: Adam-role sessions holding a non-null sd_key (should be 0 — Adam never claims).
   // NOTE: claude_sessions has no `callsign` column (role lives only in metadata.role) — this
   // query used to select it and threw on every call (verified against the live schema; fixed
