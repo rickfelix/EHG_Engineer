@@ -276,6 +276,27 @@ function mergePriorityExempt(priorityRows, oldestBatch) {
   return [...(priorityRows || []), ...rest];
 }
 
+// FIX HALF 2 (QF-20260815-659, coordinator ask a1bbafe4 — root cause of the reply-starvation
+// class): coordinator_reply rows are unconditionally skip:true for a non-Adam session under
+// two-way (classifyInboxMessage's :190 branch) and this hook therefore never marks/drains
+// them — once one lands inside the oldest-5 window it occupies that slot FOREVER, starving
+// newer, genuinely actionable directives from ever being FETCHED at all (not just displayed).
+// Cited specimens: ruling 2b62ad1b sat 105m and ebd8245e sat 57m behind exactly 3 unread
+// coordinator_reply rows; the coordinator hand-closed 11 aged replies as a workaround.
+// Exported + pure so the exclusion condition stays testable without a DB mock, mirroring
+// PRIORITY_EXEMPT_DIRECTIVE_KINDS's role on the opposite (addition) side of the same
+// two-query pattern.
+//
+// KNOWN LIMITATION: mirrors classifyInboxMessage's :190 condition exactly (twoWayOn &&
+// !amAdam) — amSolomon is deliberately NOT checked here, because today's classify order
+// skips coordinator_reply for a Solomon session too (the :212 amSolomon carve-out sits
+// after the :190 check and is never reached for that row). Excluding it from the fetch
+// faithfully mirrors CURRENT behavior; whether Solomon should see its own coordinator_reply
+// rows is a separate, unverified question out of scope for this QF.
+function oldestBatchExcludedKinds({ twoWayOn, amAdam }) {
+  return (twoWayOn && !amAdam) ? ['coordinator_reply'] : [];
+}
+
 function shouldCheck(sessionId) {
   const file = getThrottleFile(sessionId);
   if (!file) return true;
@@ -630,11 +651,19 @@ async function main() {
 
   // Read unread coordination messages for this session
   const SELECT_COLS = 'id, message_type, subject, body, payload, sender_type, sender_session, created_at';
-  const { data: oldestBatch, error: tableErr } = await supabase
+  // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: resolve the two-way flag once (reused below by the
+  // messages loop too — see the `twoWayOn` re-use at the loop, no second declaration there).
+  const twoWayOn = process.env.COORDINATOR_TWOWAY_V2 === 'on';
+  let oldestBatchQuery = supabase
     .from('session_coordination')
     .select(SELECT_COLS)
     .eq('target_session', sessionId)
-    .is('read_at', null)
+    .is('read_at', null);
+  // QF-20260815-659 FIX HALF 2: never let a permanently-skipped kind occupy an oldest-5 slot.
+  for (const kind of oldestBatchExcludedKinds({ twoWayOn, amAdam })) {
+    oldestBatchQuery = oldestBatchQuery.or(`payload->>kind.neq.${kind},payload->>kind.is.null`);
+  }
+  const { data: oldestBatch, error: tableErr } = await oldestBatchQuery
     .order('created_at', { ascending: true })
     .limit(5);
 
@@ -678,8 +707,7 @@ async function main() {
   }
 
   if (!tableErr && messages && messages.length > 0) {
-    // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: resolve the two-way flag once for the pure classifier.
-    const twoWayOn = process.env.COORDINATOR_TWOWAY_V2 === 'on';
+    // twoWayOn resolved once, above the oldest-batch query (QF-20260815-659) — reused here.
     // Output each message
     for (const msg of messages) {
       // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: single pure decision replaces the three inline
@@ -963,5 +991,7 @@ module.exports = {
   // QF-20260816-457 — exposed for unit tests
   resolveIsIdle,
   // SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-1 — exposed for unit tests
-  mergePriorityExempt
+  mergePriorityExempt,
+  // QF-20260815-659 FIX HALF 2 — exposed for unit tests
+  oldestBatchExcludedKinds
 };
