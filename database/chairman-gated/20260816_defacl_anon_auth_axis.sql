@@ -5,8 +5,10 @@
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE except at the named ceremony.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- AWAITING CHAIRMAN REVIEW — no @approved-by stamp exists for this file yet, deliberately (house
--- convention: never write an approval stamp until an approval actually happened). Anchored to
--- ceremony N+1 per this SD's metadata.migration_plan (anchor #6 in that list).
+-- convention: never write an approval stamp until an approval actually happened). Re-staged for
+-- ceremony N+2 (QF-20260817-193) after ceremony N+1 (2026-08-17 ~11:0xZ) MEASURED this file
+-- unapplyable as originally staged and rolled back cleanly with nothing applied -- see the
+-- REWORK section below for what changed and why.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- THE MECHANISM THIS CLOSES — FUTURE-SCOPED ONLY (measured live 2026-08-16, LEAD phase, see
@@ -43,14 +45,42 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- `ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ...` with no FOR ROLE clause only affects
 -- defaults for the role RUNNING this statement (the chairman's own connection role at apply
--- time) — it does NOT retroactively change postgres/supabase_admin's own default-ACL rows, and a
--- per-schema-only ADP is additive-only (cannot subtract an existing role-scoped grant). This is
--- the exact trap that caused SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001's original FR-4 to fail
--- identically across three independent fix attempts before being descoped. Both target roles are
--- named explicitly below with their own FOR ROLE clause.
+-- time) — it does NOT retroactively change postgres's own default-ACL rows, and a per-schema-only
+-- ADP is additive-only (cannot subtract an existing role-scoped grant). This is the exact trap
+-- that caused SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001's original FR-4 to fail identically across
+-- three independent fix attempts before being descoped. The target role is named explicitly below
+-- with its own FOR ROLE clause, not left to the bare per-schema form.
 --
 -- Does NOT touch: service_role grants (unaffected — service_role keeps its default EXECUTE);
 -- any function body; any already-existing function's grants (see the separate migration above).
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- REWORK (QF-20260817-193): postgres-only, not postgres+supabase_admin as originally staged
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- Ceremony N+1 (2026-08-17 ~11:0xZ, chairman verbal HOLD on this file) MEASURED the original
+-- two-role version unapplyable: applying as the standard apply identity failed
+-- MIGRATION_APPLY_PROD_FAIL_DDL_ERROR "permission denied to change default privileges" on the
+-- `FOR ROLE supabase_admin` clause. Live-confirmed at that ceremony: current_user=postgres,
+-- pg_has_role(postgres, 'supabase_admin', 'MEMBER')=false. ALTER DEFAULT PRIVILEGES FOR ROLE X
+-- requires the applying session to BE X or hold membership in X (same rule PostgreSQL applies to
+-- SET ROLE) — supabase_admin is a Supabase platform-reserved role no customer credential,
+-- including this project's own `postgres` superuser, is a member of. That clause is therefore
+-- unapplyable from any identity this house's ceremony process can ever hold, not a one-off
+-- permission gap to route around.
+--
+-- Scoped to `FOR ROLE postgres` only. This still closes the actual growth vector this SD exists
+-- for: every function this house's own migrations create is authored as `postgres` (this file's
+-- own apply identity, and every other chairman-gated migration's), so postgres's default-ACL row
+-- is what determines whether OUR future CREATE FUNCTIONs inherit anon/authenticated EXECUTE by
+-- default. supabase_admin's own default-ACL row (quoted above, still live and still granting
+-- anon/authenticated EXECUTE to anything IT creates) is a genuine, disclosed residual gap, not a
+-- silently-dropped one -- it governs Supabase-platform-managed function creation this house's own
+-- migrations never perform, and is out of scope for a per-project chairman-gated migration by
+-- construction (fixing it, if ever needed, would require a Supabase-platform-level change, not a
+-- database/chairman-gated/ file). The paired acceptance script keeps supabase_admin as an explicit
+-- expected-UNCHANGED fixture case rather than removing all mention of it, so a future regression
+-- that silently re-adds this clause (or one that silently narrows the guard's own coverage) does
+-- not go unnoticed either way.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- REVOKE ... FROM PUBLIC IS ALSO A NO-OP TODAY — KEPT FOR HYGIENE, NOT RESTORED BY THE DOWN FILE
@@ -73,9 +103,6 @@ BEGIN;
 SET LOCAL lock_timeout = '5s';
 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, PUBLIC;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
   REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, PUBLIC;
 
 -- No PostgREST schema-cache reload needed: default-ACL rows are not part of the exposed API
