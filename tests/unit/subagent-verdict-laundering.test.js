@@ -61,6 +61,16 @@ describe('the gate can finally SEE rejecting verdicts (FR-2)', () => {
     expect(mapVerdict('UNKNOWN')).toBe('BLOCKED');
     expectBlocking(mapVerdict('UNKNOWN'));
   });
+
+  it('QF-20260815-658: ESCALATE becomes BLOCKED, not ERROR — the agent asked for a human, it did not crash', () => {
+    // BEFORE: no ESCALATE entry, so it fell through the whole prefix-family scan (ESCALATE
+    // matches no REJECTING/ACCEPTING token) to the truly-unrecognised fallback and returned
+    // 'ERROR' — consuming the tripwire this file documents as reserved for crashes/unclassifiable
+    // values (specimen: security-agent row 6bcfa2b9, self-corrected to FAIL).
+    expect(mapVerdict('ESCALATE')).toBe('BLOCKED');
+    expect(mapVerdict('ESCALATE')).not.toBe('ERROR');
+    expectBlocking(mapVerdict('ESCALATE'));
+  });
 });
 
 describe('the unmodelled fallback no longer means "accepted" (FR-1)', () => {
