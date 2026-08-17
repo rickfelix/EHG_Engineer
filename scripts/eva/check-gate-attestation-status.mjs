@@ -13,7 +13,6 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateCrackGateStatus } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
-import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 // FR-9's documented promotion criterion (mirrors bind-criterion-checker.js's MIN_ROWS/
 // MIN_SPAN_HOURS shape) — see docs/reference/venture-gate-attestations-guide.md for the
@@ -45,39 +44,52 @@ async function reportSingleVenture(supabase, ventureId, asJson) {
   return verdict.overall === 'MEETS_CRITERION' ? 0 : 1;
 }
 
-/** Fetches all observe-only rows this SD's two enforcement layers have written. */
-async function fetchObserveOnlyRows(supabase) {
-  try {
-    const rows = await fetchAllPaginated(() => supabase.from('system_events').select('payload, created_at').eq('event_type', 'VENTURE_CRACK_GATE_OBSERVE_ONLY').order('created_at', { ascending: false }));
-    return { rows, sourceUnavailable: false };
-  } catch (err) {
-    if (isMissingRelationError(err)) return { rows: null, sourceUnavailable: true };
-    throw new Error(`system_events read failed: ${err.message}`);
+/**
+ * Fetches the MOST RECENT N observe-only rows (a sliding window), not the entire unbounded
+ * history. ADVERSARIAL REVIEW FIX (PR2 deep-tier review): the original version fetched every
+ * row ever written and required zero would_block across all of it, which is a "clean forever"
+ * bar, not "N consecutive recent clean cycles" — since 151/152 ventures legitimately start
+ * PBN_NOT_SCORED, the very first sweep cycle writes many would_block=true rows, and those rows
+ * would never age out under an unbounded read, so the criterion could never clear even after
+ * every underlying gap is fixed and new cycles are genuinely clean.
+ */
+async function fetchRecentObserveOnlyRows(supabase, limit) {
+  const { data, error } = await supabase
+    .from('system_events')
+    .select('payload, created_at')
+    .eq('event_type', 'VENTURE_CRACK_GATE_OBSERVE_ONLY')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    if (isMissingRelationError(error)) return { rows: null, sourceUnavailable: true };
+    throw new Error(`system_events read failed: ${error.message}`);
   }
+  return { rows: data || [], sourceUnavailable: false };
 }
 
 async function reportFleetSummary(supabase, asJson) {
-  const { rows, sourceUnavailable } = await fetchObserveOnlyRows(supabase);
+  const { rows, sourceUnavailable } = await fetchRecentObserveOnlyRows(supabase, PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES);
   if (sourceUnavailable) {
     if (asJson) console.log(JSON.stringify({ status: 'SOURCE_UNAVAILABLE' }, null, 2));
     else console.log('Cannot determine: system_events is unreadable.');
     return 2;
   }
 
-  const wouldBlockRows = rows.filter((r) => r.payload?.would_block === true);
-  const cleanRun = wouldBlockRows.length === 0 && rows.length >= PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES;
+  // rows is already limited to PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES by the query itself.
+  const wouldBlockInWindow = rows.filter((r) => r.payload?.would_block === true);
+  const cleanRun = wouldBlockInWindow.length === 0 && rows.length >= PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES;
 
   const summary = {
-    total_observations: rows.length,
-    would_block_count: wouldBlockRows.length,
-    promotion_criterion: `${PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES}+ observations, zero would_block`,
+    observations_in_window: rows.length,
+    would_block_in_window: wouldBlockInWindow.length,
+    promotion_criterion: `most recent ${PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES} observation(s), zero would_block — a sliding window, not the all-time total (old failures age out as new clean observations arrive)`,
     promotion_ready: cleanRun,
   };
 
   if (asJson) console.log(JSON.stringify(summary, null, 2));
   else {
-    console.log(`Total observe-only rows: ${summary.total_observations}`);
-    console.log(`Would-block rows: ${summary.would_block_count}`);
+    console.log(`Observations in window: ${summary.observations_in_window}`);
+    console.log(`Would-block in window: ${summary.would_block_in_window}`);
     console.log(`Promotion criterion: ${summary.promotion_criterion}`);
     console.log(`Promotion ready: ${summary.promotion_ready}`);
   }

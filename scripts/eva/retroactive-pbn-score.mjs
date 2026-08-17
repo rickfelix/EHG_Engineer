@@ -24,15 +24,19 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { scorePbnBuckets } from '../../lib/eva/stage-zero/pbn-scoring.js';
 import { buildPbnVerdict } from '../../lib/eva/stage-zero/pbn-gate.js';
+import { parseFlags } from '../../lib/eva/lifecycle/cli-flag-parser.js';
 
+// ADVERSARIAL REVIEW FIX (PR2 deep-tier review): the original version hand-rolled
+// `argv[++i]` here — the exact "a flag value can itself be another flag" bug class
+// lib/eva/lifecycle/cli-flag-parser.js (this same SD, PR1) exists specifically to eliminate,
+// reintroduced unused-but-untested in this script. Reuse the shared parser instead.
 export function parseArgs(argv) {
   const args = { ventureId: null, dryRun: false, help: false };
-  for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--venture-id') { args.ventureId = argv[++i]; }
-    else if (a === '--dry-run') args.dryRun = true;
-    else if (a === '--help' || a === '-h') args.help = true;
-  }
+  const { values, error } = parseFlags(argv, ['--venture-id']);
+  if (error) { args.help = true; args.parseError = error; return args; }
+  args.ventureId = values['--venture-id'] || null;
+  args.dryRun = argv.includes('--dry-run');
+  args.help = argv.includes('--help') || argv.includes('-h');
   return args;
 }
 
@@ -91,6 +95,10 @@ export async function retroactivelyScoreVenture(supabase, ventureId, deps = {}) 
 
 export async function main(argv = process.argv, deps = {}) {
   const args = parseArgs(argv);
+  if (args.parseError) {
+    console.error(`FLAG ERROR: ${args.parseError}`);
+    return { exitCode: 1 };
+  }
   if (args.help || !args.ventureId) {
     console.log('retroactive-pbn-score --venture-id <uuid> [--dry-run]');
     return { exitCode: args.help ? 0 : 1 };

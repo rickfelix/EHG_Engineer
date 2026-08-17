@@ -96,6 +96,16 @@ describe('checkPublishAuthorization crack-gate precondition (FR-5)', () => {
     expect(result).toHaveProperty('allowed');
     expect(result.reason).toMatch(/AUTONOMY_APPROVAL_REQUIRED/);
   });
+
+  it('a NON-Error (nullish) rejection from inside the crack-gate check still does not throw out (the exact gap a PR2 deep-tier review found: unguarded err.message would TypeError on this)', async () => {
+    const supabase = makeTrackingSupabase({ autonomyState: null });
+    // Force evaluateCrackGateStatus's own internals to reject with `undefined` by making the
+    // rpc call itself reject with a nullish value rather than resolving {error}.
+    supabase.rpc = vi.fn(() => Promise.reject(undefined));
+    const result = await checkPublishAuthorization({ supabase, ventureId: VENTURE_ID, channelType: 'x', contentId: 'c-1' });
+    expect(result).toHaveProperty('allowed');
+    expect(result.reason).toMatch(/AUTONOMY_APPROVAL_REQUIRED/);
+  });
 });
 
 describe('evaluateGraduation crack-gate precondition (FR-5)', () => {

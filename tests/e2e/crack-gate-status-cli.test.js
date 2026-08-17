@@ -54,19 +54,19 @@ describe('check-gate-attestation-status.mjs single-venture mode', () => {
 });
 
 describe('check-gate-attestation-status.mjs --fleet-summary mode', () => {
-  /** fetchAllPaginated applies .range() itself on a fresh query builder each call. */
-  function makePaginatedSupabase(rows) {
-    let called = false;
+  /**
+   * The CLI reads the most recent PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES rows via a single
+   * .order().limit(N) query (a sliding window) — NOT the paginated fetch-everything shape this
+   * mock originally simulated. `rows` should already be ordered newest-first, matching what a
+   * real .order('created_at', {ascending:false}).limit(N) query returns.
+   */
+  function makeWindowedSupabase(rows) {
     return {
       from: vi.fn(() => ({
         select: () => ({
           eq: () => ({
             order: () => ({
-              range: () => {
-                if (called) return Promise.resolve({ data: [], error: null }); // second page: short/empty, ends the loop
-                called = true;
-                return Promise.resolve({ data: rows, error: null });
-              },
+              limit: (n) => Promise.resolve({ data: rows.slice(0, n), error: null }),
             }),
           }),
         }),
@@ -75,7 +75,7 @@ describe('check-gate-attestation-status.mjs --fleet-summary mode', () => {
   }
 
   it('reports promotion_ready=false when fewer than the minimum consecutive clean cycles exist', async () => {
-    const supabase = makePaginatedSupabase([{ payload: { would_block: false } }]);
+    const supabase = makeWindowedSupabase([{ payload: { would_block: false } }]);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const result = await main(['node', 's', '--fleet-summary'], { supabase });
     expect(result.exitCode).toBe(1);
@@ -84,22 +84,37 @@ describe('check-gate-attestation-status.mjs --fleet-summary mode', () => {
 
   it('reports promotion_ready=true once the minimum clean-cycle count is met with zero would_block rows', async () => {
     const rows = Array.from({ length: PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES }, () => ({ payload: { would_block: false } }));
-    const supabase = makePaginatedSupabase(rows);
+    const supabase = makeWindowedSupabase(rows);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const result = await main(['node', 's', '--fleet-summary'], { supabase });
     expect(result.exitCode).toBe(0);
     logSpy.mockRestore();
   });
 
-  it('a single would_block row keeps promotion_ready=false even with enough total rows', async () => {
+  it('a would_block row INSIDE the recent window keeps promotion_ready=false even with enough total rows', async () => {
     const rows = [
-      { payload: { would_block: true } },
+      { payload: { would_block: true } }, // most recent (newest-first) — inside the window
       ...Array.from({ length: PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES - 1 }, () => ({ payload: { would_block: false } })),
     ];
-    const supabase = makePaginatedSupabase(rows);
+    const supabase = makeWindowedSupabase(rows);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const result = await main(['node', 's', '--fleet-summary'], { supabase });
     expect(result.exitCode).toBe(1);
+    logSpy.mockRestore();
+  });
+
+  it('ADVERSARIAL REVIEW FIX (PR2): a would_block row OUTSIDE the recent window (aged out by newer clean cycles) no longer blocks promotion_ready forever', async () => {
+    // Newest-first: N clean rows, THEN one old would_block row beyond the window boundary.
+    // The old bug read unbounded history and would have failed this case indefinitely; the
+    // fixed sliding-window read must only look at the first PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES.
+    const rows = [
+      ...Array.from({ length: PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES }, () => ({ payload: { would_block: false } })),
+      { payload: { would_block: true } }, // old failure, now outside the window
+    ];
+    const supabase = makeWindowedSupabase(rows);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await main(['node', 's', '--fleet-summary'], { supabase });
+    expect(result.exitCode).toBe(0);
     logSpy.mockRestore();
   });
 

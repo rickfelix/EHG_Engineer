@@ -28,6 +28,12 @@ describe('parseArgs', () => {
   it('parses --venture-id and --dry-run', () => {
     expect(parseArgs(['node', 's', '--venture-id', ALTIFYAI_ID, '--dry-run'])).toEqual({ ventureId: ALTIFYAI_ID, dryRun: true, help: false });
   });
+
+  it('ADVERSARIAL REVIEW FIX (PR2): rejects a flag value that looks like another flag, via the shared cli-flag-parser rather than a hand-rolled argv[++i]', () => {
+    const result = parseArgs(['node', 's', '--venture-id', '--dry-run']);
+    expect(result.parseError).toMatch(/requires a value/);
+    expect(result.ventureId).toBeNull();
+  });
 });
 
 describe('buildBriefFromVenture', () => {
