@@ -107,8 +107,11 @@ async function gatherSignals(sb) {
       .select('id', { count: 'exact', head: true })
       .eq('status', 'completed')
       .gte('completion_date', d1WindowSinceIso));
-    if (qfCompleted == null && sdCompleted == null) return null;
-    return (qfCompleted || 0) + (sdCompleted || 0);
+    // EITHER sub-count failing makes the whole reading unmeasurable -- silently substituting 0
+    // for a failed side would under-report completions, the exact "healthy-looking number for
+    // an unmeasurable one" shape belt-depth.cjs's own fail-loud contracts exist to refuse.
+    if (qfCompleted == null || sdCompleted == null) return null;
+    return qfCompleted + sdCompleted;
   })();
 
   // D2: Adam-role sessions holding a non-null sd_key (should be 0 — Adam never claims).
