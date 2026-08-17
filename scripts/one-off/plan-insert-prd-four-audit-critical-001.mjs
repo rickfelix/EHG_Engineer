@@ -70,11 +70,11 @@ const functional_requirements = [
       'VALIDATION additionally named 3 unguarded silent-fail append sites for the audit sweep: handoff-rejection-rates.mjs:49, duration-estimator.js:271-284, ghost-completion-check.mjs:41. ' +
       'A prospective TESTING review (PLAN-TO-EXEC) found a THIRD unguarded site outside the originally-cited ranges: scripts/modules/sd-next/claim-analysis.js checkEnrichmentSignal() ~line 230 -- must be included in the fix scope alongside the two named hot-path sites. ' +
       'Fixes MUST reuse the existing canonical normalizer lib/time/pg-timestamp.cjs (parsePgTimestamp/pgTimestampMs/pgTimestampAgeMs) rather than adding a new bespoke hasTZ-guard reimplementation -- scripts/modules/handoff/gates/subagent-evidence-gate.js already carries a 3rd independent correct-but-duplicate parseAsUTC() copy; this SD must not add a 4th. ' +
-      'A broader grep sweep across ehg/src and EHG_Engineer/{scripts,lib} for created_at/age computations against the 4 tables classifies every match SAFE (no timezone assumption) or FIXED (patched), zero UNCLASSIFIED.',
+      'SCOPE CORRECTION (discovered during EXEC): a generic grep for a single target table (.from(\'sd_phase_handoffs\')) alone across scripts/+lib/ matched 100+ files; strategic_directives_v2 -- the single most-queried table in the repo -- would match substantially more. An exhaustive per-site trace-back of every touching file is disproportionate to this SD\'s "high-traffic" framing. The sweep actually performed (documented in docs/audits/four-audit-critical-timestamptz-js-reader-sweep.md) covers: all 5 VALIDATION/Explore-named sites (fixed), the two files Explore separately flagged as very-high-traffic hot paths (scripts/fleet-dashboard.cjs, scripts/worker-checkin.cjs -- checked exhaustively for every Date.parse/new Date call touching the 4 tables, finding and fixing 1 additional inconsistent-duplicate site in fleet-dashboard.cjs), the direct sd:next CLI display path, and a full ehg/src frontend sweep (zero exposure found, verified by reading all 15 textual-match files). The remaining ~95+ incidentally-touching EHG_Engineer files are explicitly out of bounds, not silently dropped.',
     priority: 'HIGH',
     acceptance_criteria: [
       'AC-1: lib/coordinator/strand-age-gauge.cjs and scripts/modules/sd-next/claim-analysis.js both route their timestamp parsing through lib/time/pg-timestamp.cjs, verified by import + call-site diff.',
-      'AC-2: Grep sweep output table lists every matched reader with a SAFE or FIXED classification and zero UNCLASSIFIED entries.',
+      'AC-2: docs/audits/four-audit-critical-timestamptz-js-reader-sweep.md documents every reader classified within the achieved (explicitly bounded, not repo-exhaustive) sweep scope as SAFE or FIXED, zero UNCLASSIFIED WITHIN THAT SCOPE, plus an explicit statement of what was excluded and why -- not a silent cap.',
       'AC-3: A unit test simulates a non-UTC TZ environment variable and asserts the fixed readers compute the same age/ordering result as under UTC (proves the fix, not just the presence of a guard).',
     ],
   },
@@ -162,12 +162,12 @@ const system_architecture = {
     },
     {
       name: 'lib/coordinator/strand-age-gauge.cjs, scripts/modules/sd-next/claim-analysis.js (fixed)',
-      responsibility: 'Two confirmed unguarded hot-path readers of the naive columns, patched to route through lib/time/pg-timestamp.cjs.',
+      responsibility: 'Six files (7 call sites) with confirmed unguarded hot-path readers of the naive columns, patched to route through lib/time/pg-timestamp.cjs.',
       technology: 'Node.js CJS/ESM',
     },
     {
-      name: 'Grep-sweep audit output (JS-reader classification table)',
-      responsibility: 'Every matched reader across ehg/src and EHG_Engineer/{scripts,lib} classified SAFE or FIXED, closing the folded-in SD-LEO-INFRA-NAIVE-TIMESTAMP-SKEW-001 JS-consumer scope.',
+      name: 'docs/audits/four-audit-critical-timestamptz-js-reader-sweep.md (classification table)',
+      responsibility: 'Every reader within an explicit, bounded high-traffic scope (see the doc\'s own Scope Boundary section) classified SAFE or FIXED across both repos, closing the folded-in SD-LEO-INFRA-NAIVE-TIMESTAMP-SKEW-001 JS-consumer scope to the extent that scope is high-traffic; the ~95+ incidentally-touching files outside that bound are explicitly named as excluded, not silently dropped.',
       technology: 'grep + manual classification, committed as evidence',
     },
     {
@@ -311,8 +311,8 @@ const implementation_approach = {
     },
     {
       phase: 'Phase 3: JS-reader audit and fixes',
-      description: 'Fix the 2 confirmed unguarded hot-path sites (strand-age-gauge.cjs, claim-analysis.js) plus review VALIDATION\'s 3 named silent-fail sites, run the broader grep sweep across both repos, classify every match, route all fixes through lib/time/pg-timestamp.cjs.',
-      deliverables: ['Patched strand-age-gauge.cjs and claim-analysis.js', 'JS-reader classification table (SAFE/FIXED, zero UNCLASSIFIED)', 'Unit tests proving TZ-environment-independent correctness (TS-3)'],
+      description: 'Fix the 2 confirmed unguarded hot-path sites (strand-age-gauge.cjs, claim-analysis.js) plus review VALIDATION\'s 3 named silent-fail sites, run a bounded high-traffic sweep across both repos (see docs/audits/four-audit-critical-timestamptz-js-reader-sweep.md for the explicit scope boundary), classify every match within that scope, route all fixes through lib/time/pg-timestamp.cjs.',
+      deliverables: ['Patched strand-age-gauge.cjs, claim-analysis.js, and fleet-dashboard.cjs (1 additional site found during the sweep)', 'JS-reader classification table (SAFE/FIXED, zero UNCLASSIFIED within the documented bounded scope)', 'Unit tests proving TZ-environment-independent correctness (TS-3)'],
     },
     {
       phase: 'Phase 4: Ceremony packet + verification without live apply',
@@ -333,7 +333,7 @@ const implementation_approach = {
 const acceptance_criteria = [
   'A staged (never inline-applied) UP/DOWN migration pair exists under database/chairman-gated/, converting exactly the 15 identified naive columns across the 4 named tables, with every ALTER COLUMN TYPE statement carrying an explicit USING ... AT TIME ZONE \'UTC\' clause.',
   'An information_schema.columns verification script exists, using createDatabaseClient(\'engineer\') and mirroring the existing schema-validator.js reader pattern, with a passing --baseline run confirming the live pre-apply state (15 naive, 6 aware) exactly.',
-  'The 2 confirmed unguarded hot-path JS readers (strand-age-gauge.cjs, claim-analysis.js) are fixed to route through lib/time/pg-timestamp.cjs, and a broader grep-sweep classification table covers every other high-traffic reader with zero UNCLASSIFIED entries.',
+  'All 7 confirmed unguarded high-traffic JS reader call sites, across 6 files (strand-age-gauge.cjs; claim-analysis.js x2; handoff-rejection-rates.mjs; duration-estimator.js; ghost-completion-check.mjs; fleet-dashboard.cjs), are fixed to route through lib/time/pg-timestamp.cjs, and docs/audits/four-audit-critical-timestamptz-js-reader-sweep.md documents the classification of every reader within an explicit, bounded high-traffic scope (zero UNCLASSIFIED within that scope; the scope boundary itself is documented, not a silent cap).',
   'PRD risks explicitly document the product_requirements_v2 fold-orphan gap and the USING-clause risk, both routed as completion-flags findings, not silent omissions.',
   'Chairman ceremony packet (README.md entry + blank @approved-by header + quiet-window note) is complete and matches house convention.',
 ];
