@@ -25,7 +25,7 @@ import { fileURLToPath } from 'url';
 // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
 import { formatDemandDecision, BELT_DEPTH_GATED_PRODUCERS } from '../lib/governance/demand-gate.js';
-import { readLastDemandDecision } from '../lib/governance/demand-gate-emit.js';
+import { readLastDemandDecision, readLastProductionOutcome } from '../lib/governance/demand-gate-emit.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -554,7 +554,17 @@ export function renderSourcingStateLines({ flags = [], wave = null, backlog = nu
   const entries = Array.isArray(demand) ? demand : [demand];
   for (const e of entries) {
     const isBareDecision = e && typeof e.decision === 'string';
-    lines.push('  ' + formatDemandDecision(isBareDecision ? e : (e && e.decision) || null, e && e.engine));
+    const decisionObj = isBareDecision ? e : (e && e.decision) || null;
+    lines.push('  ' + formatDemandDecision(decisionObj, e && e.engine));
+    // QF-20260817-340: pair the verdict with what it actually produced. Print unconditionally when a
+    // sourced decision minted nothing — that combination is the exact silent-no-op this closes.
+    const o = e && e.outcome;
+    if (decisionObj && decisionObj.decision === 'sourced' && o && Number(o.promoted) === 0) {
+      const reasons = o.byReason && typeof o.byReason === 'object'
+        ? Object.entries(o.byReason).map(([k, v]) => `${k}:${v}`).join(', ') || '(no candidates)'
+        : '(no candidates)';
+      lines.push(`    ⚠️  sourced but promoted=0 — valid=${o.validCount ?? '?'}/${o.total ?? '?'} staged; ${reasons}`);
+    }
   }
   // Roadmap-SSOT unpromoted items
   if (wave) {
@@ -640,7 +650,14 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
   // returns null only for "nothing ever recorded", which renders as NEVER RAN <engine>.
   const demand = [];
   for (const engine of BELT_DEPTH_GATED_PRODUCERS) {
-    demand.push({ engine, decision: await readLastDemandDecision(client, engine) });
+    demand.push({
+      engine,
+      decision: await readLastDemandDecision(client, engine),
+      // QF-20260817-340: the verdict alone cannot say whether anything downstream actually minted —
+      // a SOURCED decision over a 100%-undistilled corpus mints zero every run and reads healthy
+      // here without this. null = never recorded (pre-QF run, or nothing sourced yet).
+      outcome: await readLastProductionOutcome(client, engine),
+    });
   }
   // FR-5: the DB arm states — the gate that actually governs the producers, as opposed to the env
   // flags above. Fail-open (null) so an unreadable row degrades to an explicit "could not read"

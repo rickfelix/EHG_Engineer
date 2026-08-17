@@ -24,7 +24,7 @@ import { selectRefillBatch, promoteStagedCandidate, isDistilledOnly } from '../.
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
-import { measureDemand, recordDemandDecision, resolveDemandFloor } from '../../lib/governance/demand-gate-emit.js';
+import { measureDemand, recordDemandDecision, resolveDemandFloor, recordProductionOutcome } from '../../lib/governance/demand-gate-emit.js';
 import { formatDemandDecision } from '../../lib/governance/demand-gate.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the staged-candidate read feeds
 // the promotion loop (a capped read silently drops promotable candidates with no error); the
@@ -251,6 +251,14 @@ async function main() {
     results.push(await promoteStagedCandidate(supabase, item, { apply, reserveState }));
   }
   const promoted = results.filter((r) => r.promoted).length;
+
+  // QF-20260817-340: the demand decision (recorded above, before selection ran) says whether we
+  // WANTED to produce; this second event says what actually happened. A sourced decision that mints
+  // zero (e.g. every staged candidate is undistilled) must never be indistinguishable, in the audit
+  // trail, from a healthy run — that ambiguity is exactly what read as "silent no-op" here.
+  await recordProductionOutcome(supabase, demand, {
+    validCount: sel.validCount, total: sel.total, selected: sel.batch.length, promoted, byReason: sel.byReason,
+  });
 
   if (json) {
     console.log(JSON.stringify({

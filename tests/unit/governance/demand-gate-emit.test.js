@@ -17,6 +17,7 @@ import { renderSourcingStateLines } from '../../../scripts/adam-startup-check.mj
 import {
   measureDemand, recordDemandDecision, readLastDemandDecision, resolveDemandFloor,
   DEFAULT_DEMAND_FLOOR, DEMAND_GATE_EVENT,
+  recordProductionOutcome, readLastProductionOutcome, DEMAND_GATE_PRODUCTION_OUTCOME_EVENT,
 } from '../../../lib/governance/demand-gate-emit.js';
 import { decideDemand, normalizeGaugeReading } from '../../../lib/governance/demand-gate.js';
 
@@ -216,5 +217,71 @@ describe('record/read round trip against a fake client', () => {
     const d = await readLastDemandDecision(corrupt, 'e');
     expect(d.decision).toBe('unmeasurable');
     expect(d.reason).toContain('unreadable');
+  });
+});
+
+describe('QF-20260817-340 — a SOURCED verdict that mints nothing must not read as healthy', () => {
+  const fakeDb = (store = { rows: [], calls: [] }) => ({
+    from(table) {
+      const q = { table, filters: {}, order: null, limitN: null };
+      store.calls.push(q);
+      return {
+        insert: (r) => ({ select: async () => { store.rows.push({ table, ...r }); return { data: [{ id: 'x' }], error: null }; } }),
+        select() { return this; },
+        eq(col, val) { q.filters[col] = val; return this; },
+        order(col, opts) { q.order = { col, ascending: opts && opts.ascending }; return this; },
+        async limit(n) {
+          const matched = store.rows
+            .filter((r) => r.table === q.table)
+            .filter((r) => q.filters.event_type === undefined || r.event_type === q.filters.event_type)
+            .filter((r) => q.filters.entity_id === undefined || r.entity_id === q.filters.entity_id);
+          return { data: matched.slice(0, n).map((r) => ({ metadata: r.metadata })), error: null };
+        },
+      };
+    },
+  });
+
+  it('records the outcome under its own event type, distinct from the decision', async () => {
+    const db = fakeDb();
+    expect(await recordProductionOutcome(db, sourced, { validCount: 0, total: 511, selected: 0, promoted: 0, byReason: { UNDISPOSITIONED_OR_NON_BUILD: 511 } })).toBe(true);
+    const back = await readLastProductionOutcome(db, 'refill-auto-promote');
+    expect(back.promoted).toBe(0);
+    expect(back.byReason.UNDISPOSITIONED_OR_NON_BUILD).toBe(511);
+    expect(back.decision).toBe('sourced'); // decision fields are spread into the outcome row
+  });
+
+  it('a sourced-but-zero-mint outcome is severity=warning, not info', async () => {
+    const store = { rows: [], calls: [] };
+    const db = fakeDb(store);
+    await recordProductionOutcome(db, sourced, { validCount: 0, total: 5, selected: 0, promoted: 0, byReason: {} });
+    expect(store.rows[0].event_type).toBe(DEMAND_GATE_PRODUCTION_OUTCOME_EVENT);
+    expect(store.rows[0].severity).toBe('warning');
+  });
+
+  it('a sourced verdict that DID mint is severity=info', async () => {
+    const store = { rows: [], calls: [] };
+    const db = fakeDb(store);
+    await recordProductionOutcome(db, sourced, { validCount: 2, total: 5, selected: 2, promoted: 2, byReason: {} });
+    expect(store.rows[0].severity).toBe('info');
+  });
+
+  it('no outcome ever recorded reads as null, not a synthetic zero', async () => {
+    expect(await readLastProductionOutcome(fakeDb(), 'refill-auto-promote')).toBeNull();
+  });
+
+  it('the badge prints the sourced-but-zero-mint warning line when the outcome is wired in', () => {
+    const out = render([{ engine: 'refill-auto-promote', decision: sourced, outcome: { validCount: 0, total: 511, promoted: 0, byReason: { UNDISPOSITIONED_OR_NON_BUILD: 511 } } }]);
+    expect(out).toContain('sourced but promoted=0');
+    expect(out).toContain('UNDISPOSITIONED_OR_NON_BUILD:511');
+  });
+
+  it('the badge stays unchanged when no outcome is recorded (pre-QF shape, backward compatible)', () => {
+    const out = render([{ engine: 'refill-auto-promote', decision: sourced }]);
+    expect(out).not.toContain('promoted=0');
+  });
+
+  it('the badge does not warn when the outcome shows a real mint', () => {
+    const out = render([{ engine: 'refill-auto-promote', decision: sourced, outcome: { validCount: 2, total: 2, promoted: 2, byReason: {} } }]);
+    expect(out).not.toContain('sourced but promoted=0');
   });
 });
