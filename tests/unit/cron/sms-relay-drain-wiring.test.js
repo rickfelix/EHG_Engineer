@@ -38,6 +38,25 @@ describe('SMS relay-drain machinery names its dispatcher', () => {
     );
     expect(src, 'runner no longer calls drainSmsRelayStaging').toMatch(/drainSmsRelayStaging\s*\(/);
   });
+
+  it('QF-20260815-850: the runner stamps standard_loop:sms-relay-drain on every successful tick — the compensating control the recurring-tick exemption depends on', () => {
+    const src = fs.readFileSync(RUNNER, 'utf8');
+    expect(src, 'runner no longer references lib/periodic-liveness/stamp-last-fired.js').toMatch(
+      /import\(\s*['"][./]*\.\.\/lib\/periodic-liveness\/stamp-last-fired\.js['"]\s*\)/,
+    );
+    expect(src, 'runner no longer calls stampLastFired').toMatch(/stampLastFired\s*\(/);
+    expect(src, "runner uses a different process_key than the registered 'standard_loop:sms-relay-drain' row")
+      .toMatch(/stampLastFired\(\s*getSupabase\(\)\s*,\s*['"]standard_loop:sms-relay-drain['"]\s*\)/);
+  });
+
+  it('the recurring-tick exemption reason no longer carries the pre-fix CAVEAT (compensating control now wired)', () => {
+    const exemptionsPath = path.join(repoRoot, 'scripts', 'hooks', 'recurring-tick-exemptions.json');
+    const exemptions = JSON.parse(fs.readFileSync(exemptionsPath, 'utf8'));
+    const entry = exemptions.exempt_scripts.find((e) => e.script === 'sms-relay-drain.cjs');
+    expect(entry, 'sms-relay-drain.cjs exemption entry missing').toBeTruthy();
+    expect(entry.reason).not.toMatch(/CAVEAT/);
+    expect(entry.reason).not.toMatch(/never leaves UNVERIFIED/);
+  });
 });
 
 describe('sms-relay-drain FR-2 enable gate', () => {
