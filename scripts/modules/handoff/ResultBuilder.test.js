@@ -45,3 +45,39 @@ describe('ResultBuilder.gateFailure issue rendering (QF-20260605-024)', () => {
     expect(result.details.issues[0]).toEqual({ message: 'm', code: 'c' });
   });
 });
+
+/**
+ * Regression tests for QF-20260815-200 (ULTRAREVIEW A1 bug_007).
+ *
+ * Both gateFailure's issue-mapping and systemError's message extraction fall back to
+ * JSON.stringify for an object with no .message/.code -- JSON.stringify itself throws on a
+ * circular object graph, so the LAST-RESORT error builder threw instead of returning a
+ * structured error response. String() never throws and is the safe fallback.
+ */
+describe('ResultBuilder circular-value fallback (QF-20260815-200)', () => {
+  function circularValue() {
+    const o = {};
+    o.self = o;
+    return o;
+  }
+
+  it('gateFailure: a circular issue object does not throw and renders via String() instead of JSON.stringify', () => {
+    expect(() => ResultBuilder.gateFailure('GATE_CIRC', { issues: [circularValue()] })).not.toThrow();
+    const result = ResultBuilder.gateFailure('GATE_CIRC', { issues: [circularValue()] });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('[object Object]');
+  });
+
+  it('systemError: a circular thrown value does not throw and returns a structured error response', () => {
+    expect(() => ResultBuilder.systemError(circularValue())).not.toThrow();
+    const result = ResultBuilder.systemError(circularValue());
+    expect(result.success).toBe(false);
+    expect(result.systemError).toBe(true);
+    expect(result.message).toBe('[object Object]');
+  });
+
+  it('systemError: a non-circular plain object still serializes via JSON.stringify (unchanged behavior)', () => {
+    const result = ResultBuilder.systemError({ foo: 'bar' });
+    expect(result.message).toBe('{"foo":"bar"}');
+  });
+});
