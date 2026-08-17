@@ -18,38 +18,43 @@
  */
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-connection.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
 const VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
 const ARTIFACT_TYPE = 'launch_deployment_runbook';
 
-async function main() {
-  const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
-
+/**
+ * Core correction logic, injectable supabase client for testability.
+ * @param {{ supabase: object, ventureId?: string, artifactType?: string, now?: () => string }} params
+ * @returns {Promise<{ ok: boolean, artifactId?: string, reason?: string }>}
+ */
+export async function correctHealthStatus({ supabase, ventureId = VENTURE_ID, artifactType = ARTIFACT_TYPE, now = () => new Date().toISOString() }) {
   const { data: vRows, error: vErr } = await supabase
     .from('ventures')
     .update({ health_status: 'warning' })
-    .eq('id', VENTURE_ID)
+    .eq('id', ventureId)
     .select('id, health_status');
-  console.log('ventures correction:', JSON.stringify({ vRows, vErr }));
-  if (vErr || !vRows?.length) { console.error('ventures correction FAILED'); process.exit(1); }
+  if (vErr || !vRows?.length) {
+    return { ok: false, reason: `ventures correction failed: ${vErr?.message || 'zero rows matched'}` };
+  }
 
   const { data: artifact, error: readErr } = await supabase
     .from('venture_artifacts')
     .select('id, artifact_data')
-    .eq('venture_id', VENTURE_ID)
-    .eq('artifact_type', ARTIFACT_TYPE)
+    .eq('venture_id', ventureId)
+    .eq('artifact_type', artifactType)
     .eq('is_current', true)
     .single();
-  if (readErr) { console.error('artifact read error:', JSON.stringify(readErr)); process.exit(1); }
-  const ARTIFACT_ID = artifact.id;
-  console.log('correcting current artifact:', ARTIFACT_ID);
+  if (readErr) {
+    return { ok: false, reason: `artifact read failed: ${readErr.message}` };
+  }
 
   const correctedData = {
     ...artifact.artifact_data,
     health_status_correction: {
-      corrected_at: new Date().toISOString(),
+      corrected_at: now(),
       corrected_by: 'SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-A worker, per coordinator directive 1201fa34',
       from: 'healthy',
       to: 'warning',
@@ -61,12 +66,20 @@ async function main() {
   const { data: updated, error: updErr } = await supabase
     .from('venture_artifacts')
     .update({ artifact_data: correctedData })
-    .eq('id', ARTIFACT_ID)
+    .eq('id', artifact.id)
     .select('id');
-  console.log('artifact annotation:', JSON.stringify({ updated, updErr }));
-  if (updErr || !updated?.length) { console.error('artifact annotation FAILED'); process.exit(1); }
+  if (updErr || !updated?.length) {
+    return { ok: false, reason: `artifact annotation failed: ${updErr?.message || 'zero rows matched'}` };
+  }
 
-  console.log('DONE');
+  return { ok: true, artifactId: artifact.id };
 }
 
-main().catch((err) => { console.error('Fatal error:', err.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  (async () => {
+    const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
+    const result = await correctHealthStatus({ supabase });
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result.ok ? 0 : 1);
+  })().catch((err) => { console.error('Fatal error:', err.message); process.exit(1); });
+}
