@@ -155,6 +155,22 @@ describe('orchestrator', () => {
   }
 
   /**
+   * Helper: create a chain for the QF-20260816-214 true-count query
+   * (select('id', {count:'exact',head:true}).gte(...).lte(...).in(...))
+   */
+  function selectCountChain({ count = 0, error = null } = {}) {
+    return {
+      select: vi.fn().mockReturnValue({
+        gte: vi.fn().mockReturnValue({
+          lte: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ count, error })
+          })
+        })
+      })
+    };
+  }
+
+  /**
    * Helper: create a chain for ventures by stage query
    */
   function selectVenturesChain({ data = [], error = null } = {}) {
@@ -478,6 +494,42 @@ describe('orchestrator', () => {
       expect(result.notificationId).toBe('digest-001');
       expect(result.status).toBe('sent');
       expect(sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('QF-20260816-214: does NOT fire the true-count query when under the 50-cap (event_count === true_count, no extra round trip)', async () => {
+      const digestChain = insertChain({ data: { id: 'digest-under-cap' } });
+      configureFromSequence([
+        selectIdempotencyChain({ data: [] }),
+        selectEventsChain({
+          data: [{ event_type: 'test', event_data: {}, created_at: '2026-02-13T10:00:00Z' }]
+        }),
+        digestChain,
+        updateChain()
+      ]);
+
+      await sendDailyDigest(mockSupabase, baseParams);
+      expect(digestChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ email_metadata: expect.objectContaining({ event_count: 1, true_count: 1 }) })
+      );
+    });
+
+    it('QF-20260816-214: hitting the 50-cap fires the true-count query and records the TRUE total (not the capped 50) in email_metadata', async () => {
+      const fiftyEvents = Array.from({ length: 50 }, (_, i) => ({
+        event_type: 'test', event_data: {}, created_at: `2026-02-13T${String(10 + (i % 10)).padStart(2, '0')}:00:00Z`
+      }));
+      const digestChain = insertChain({ data: { id: 'digest-at-cap' } });
+      configureFromSequence([
+        selectIdempotencyChain({ data: [] }),
+        selectEventsChain({ data: fiftyEvents }),
+        selectCountChain({ count: 75 }),
+        digestChain,
+        updateChain()
+      ]);
+
+      await sendDailyDigest(mockSupabase, baseParams);
+      expect(digestChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ email_metadata: expect.objectContaining({ event_count: 50, true_count: 75 }) })
+      );
     });
 
     it('returns failed when email send fails', async () => {

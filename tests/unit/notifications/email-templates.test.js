@@ -142,6 +142,27 @@ describe('email-templates', () => {
       expect(result.html).toContain('3 events in the last 24 hours');
     });
 
+    it('QF-20260816-214: trueCount > events.length renders the TRUE total (not the capped rendered count) plus an "and N more" note', () => {
+      const result = dailyDigestTemplate({ ...baseData, trueCount: 75 });
+      expect(result.subject).toBe('[Daily Digest] 2026-02-13 - 75 portfolio events');
+      expect(result.html).toContain('75 events in the last 24 hours');
+      expect(result.html).toContain('showing 3, 72 more not shown');
+      expect(result.text).toContain('75 events');
+      expect(result.text).toContain('showing 3, 72 more not shown');
+    });
+
+    it('QF-20260816-214: trueCount === events.length (no truncation) renders no "and N more" note', () => {
+      const result = dailyDigestTemplate({ ...baseData, trueCount: baseData.events.length });
+      expect(result.html).not.toContain('more not shown');
+      expect(result.text).not.toContain('more not shown');
+    });
+
+    it('QF-20260816-214: omitting trueCount falls back to events.length (back-compat, pre-fix callers unaffected)', () => {
+      const result = dailyDigestTemplate(baseData);
+      expect(result.subject).toBe('[Daily Digest] 2026-02-13 - 3 portfolio events');
+      expect(result.html).not.toContain('more not shown');
+    });
+
     it('groups events by type in html', () => {
       const result = dailyDigestTemplate(baseData);
       // stage_completion appears as "Stage Completion"
