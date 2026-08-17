@@ -253,6 +253,28 @@ describe('reconcileOutboundSms (FR-3)', () => {
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('failed');
   });
 
+  it('QF-20260816-312: a row that transitions to delivered between select and the at-cap alert-update is NOT clobbered back to failed', async () => {
+    // The alert seam fires (and is awaited) BEFORE the at-cap update -- the exact window a real
+    // concurrent Twilio delivery callback could land in. Simulating the race by mutating the row
+    // from inside the alert callback, then asserting the SAME .in('status', fromStatuses) guard
+    // the re-arm branch already carries stops the update from matching the now-delivered row.
+    const row = owedRow({ status: 'undelivered', attempts: 3, delivered_at: null });
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [row] });
+    const provider = okProvider();
+    const alert = vi.fn(async () => {
+      Object.assign(sb._tables.sms_outbound_obligations[0], { status: 'delivered', delivered_at: agoAt(1 * MIN) });
+    });
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, alert });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(summary.alerted).toBe(1); // the bucket still increments -- alerted, not silently dropped
+    // BEFORE the fix: this update carried no status guard and matched .eq('id', ...) alone, so it
+    // clobbered the row straight back to 'failed' with an ALERTED: prefix -- losing delivered_at
+    // and permanently skipping it via the ALERTED short-circuit thereafter.
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('delivered');
+    expect(sb._tables.sms_outbound_obligations[0].delivered_at).not.toBeNull();
+    expect(sb._tables.sms_outbound_obligations[0].last_error || '').not.toMatch(/^ALERTED:/);
+  });
+
   it('TS-10: fail-soft — the worker is inert when the owed table is absent (STAGED)', async () => {
     const sb = makeFakeSupabase({ missingTables: ['sms_outbound_obligations'] });
     const provider = okProvider();
