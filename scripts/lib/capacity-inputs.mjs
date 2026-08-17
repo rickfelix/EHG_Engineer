@@ -62,6 +62,10 @@ import { countAutoStartableQuickFixes } from '../../lib/fleet/belt-depth.cjs';
 // module already fetches — never a second SD-table read or per-child parent fetch.
 import { claimableDbFreeReason, blockerKeysFor } from './claimable-leaves.mjs';
 import { isLiveCountableWorker } from './live-countable-worker.mjs';
+// SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — a standalone
+// module (FR-7) so it has a real test seam, imported here (forecaster side) and independently
+// by scripts/adam-coordinator-health.mjs (KPI-1 side). Never re-derives belt/claim logic itself.
+import { classifyEngagementBuckets, engagementGaugeOn } from './engagement-buckets.mjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -183,7 +187,7 @@ export async function computePhaseMinsFromActuals(supabase) {
  */
 export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
-  const [sessions, sds, openQfCountRaw] = await Promise.all([
+  const [sessions, sds, openQfCountRaw, qfClaimedRows] = await Promise.all([
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
     // table and this read feeds worker-count/capacity math directly (filtered + iterated
     // below) — paginate to completion.
@@ -207,7 +211,11 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
       // SD-LEO-INFRA-STALLED-POSTCOMPLETION-TAIL-FP-001: + released_reason,released_at so detectStalledLoop
       // excludes a worker running its post-completion tail (else the per-session stalled mark over-escalates
       // a fleet-down false alarm to the operator). Replicate the detector input-column contract.
-      .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status, released_reason, released_at')
+      // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: + last_tool_at — MEASURED absent from this select
+      // during PLAN-phase review (two independent sub-agents), which would have made the engagement
+      // gauge's ZOMBIE bucket permanently unmeasurable (isKnownWedged/classifySeat return UNKNOWN for
+      // every row without it — the exact fail-open trap FREEZE_TERM_COLUMNS documents by name).
+      .select('session_id, terminal_id, sd_key, heartbeat_at, process_alive_at, loop_state, expected_silence_until, metadata, status, released_reason, released_at, last_tool_at')
       .gte('heartbeat_at', liveCutoff)
       .order('session_id', { ascending: true })), // unique tiebreaker: stable page boundaries (FR-6)
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: strategic_directives_v2 is a
@@ -247,6 +255,23 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     // behaviour at the call site where a reader can see it, instead of weakening the shared gauge for
     // every other consumer.
     countAutoStartableQuickFixes(sb).catch(() => null),
+    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (TR-3): a SEPARATE, additive lookup for the
+    // engagement gauge's ENGAGED signal only — never folded into claimsBySession below, which
+    // feeds the forecaster's own building/idleNow/stalled counts and DEFICIT/TIGHT/SURPLUS
+    // verdict. The original joint spec's numerator is claims from BOTH strategic_directives_v2
+    // AND quick_fixes; this satisfies that without changing any existing belt/verdict input.
+    // try/catch (not just .catch()) because a synchronous throw from the builder itself (e.g. a
+    // stubbed client in a test, or a client library that throws before returning a promise) would
+    // otherwise never reach a chained .catch() — this fetch is advisory-only for the gauge, so any
+    // failure mode degrades to "no QF claims known" rather than aborting the whole derivation.
+    (async () => {
+      try {
+        const { data } = await sb.from('quick_fixes').select('claiming_session_id').not('claiming_session_id', 'is', null);
+        return data || [];
+      } catch {
+        return [];
+      }
+    })(),
   ]);
   const openQfCountRendered = renderCount(openQfCountRaw);
   const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
@@ -378,6 +403,21 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
       });
     }
   }
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-1/FR-4): classify the RAW session set (not
+  // `workers`, which is already isLiveCountableWorker-narrowed and would starve TAIL/ZOMBIE —
+  // TR-1's single-base-population requirement). isClaimed checks BOTH SD claims (claimsBySession,
+  // already derived above from the authoritative claiming_session_id) and QF claims (the separate
+  // additive lookup above) — never the claude_sessions.sd_key mirror. classifyEngagementBuckets
+  // never throws (FR-4); engagementGaugeOn() is the FR-6 rollback lever.
+  const qfClaimedSessionIds = new Set((qfClaimedRows || []).map((r) => r.claiming_session_id));
+  const engagement = engagementGaugeOn()
+    ? classifyEngagementBuckets(sessions || [], {
+        coordinatorId,
+        now,
+        isClaimed: (s) => !!claimsBySession[s.session_id] || qfClaimedSessionIds.has(s.session_id),
+      })
+    : { unmeasured: true, reason: 'ENGAGEMENT_GAUGE_ENABLED=false' };
+
   return {
     idleNow, freeingSoon, building, stalled,
     claimableCount: claimable.length, openQfCount,
@@ -391,5 +431,6 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     rawUnclaimed,
     dispatchableCount: claimable.length,
     now,
+    engagement,
   };
 }

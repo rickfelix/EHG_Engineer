@@ -40,6 +40,12 @@ import {
   FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS,
 } from '../lib/oversight/coordinator-health-sharpenings.mjs';
 import { registerOversightLoop } from '../lib/oversight/coordinator-health-recompute.mjs';
+// SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — the SAME
+// standalone module scripts/lib/capacity-inputs.mjs imports (TR-1: identical base population on
+// both integration points). Computed as its own try/caught reading.engagement key in runProbe
+// below, never inside computeUtilization itself — classifyBreach only ever receives
+// {utilization, planAdherence, integrity}, so it structurally cannot see this new field.
+import { classifyEngagementBuckets, engagementGaugeOn } from './lib/engagement-buckets.mjs';
 
 export const DIMENSION = 'adam_coordinator_health';
 export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
@@ -89,6 +95,13 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
     // QF-20260725-879: the UNFILTERED draft+unclaimed head-count, kept alongside the filtered
     // depth so the S4 raw-SQL cross-check can compare like with like (see its use below).
     raw_unclaimed_drafts: rawUnclaimedDrafts,
+    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the RAW session rows + resolved coordinatorId this
+    // query already computed, so runProbe's engagement-gauge step (TR-1: same base population as
+    // the forecaster side) reuses this exact snapshot instead of issuing a second claude_sessions
+    // read or re-deriving the coordinator. Not consumed by classifyBreach (which receives only
+    // utilization/planAdherence/integrity) — additive, no existing field touched.
+    _rows: rows,
+    _coordinatorId: coordinatorId,
   };
 }
 
@@ -480,6 +493,24 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
 
 export async function runProbe(supabase, opts = {}) {
   const utilization = await computeUtilization(supabase, opts);
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-5): own try/catch, mirroring computeFailLoudIntegrity's
+  // pattern rather than the unguarded computeUtilization call above — a defect here must never blank
+  // KPI-0/1/2/3 persistence for the whole probe run. Reuses utilization._rows (TR-1: same base
+  // population as the forecaster side) rather than a second claude_sessions read. isClaimed mirrors
+  // this KPI's own documented current-claim signal (!!s.sd_key, see computeUtilization's docblock) —
+  // classifyBreach below is unaffected: it destructures {utilization, planAdherence, integrity} only.
+  let engagement;
+  try {
+    engagement = engagementGaugeOn()
+      ? classifyEngagementBuckets(utilization._rows || [], {
+          coordinatorId: utilization._coordinatorId ?? null,
+          now: opts.nowMs ?? Date.now(),
+          isClaimed: (s) => !!s.sd_key,
+        })
+      : { unmeasured: true, reason: 'ENGAGEMENT_GAUGE_ENABLED=false' };
+  } catch (error) {
+    engagement = { unmeasured: true, error: error?.message || String(error) };
+  }
   const planAdherence = await computePlanAdherence(supabase);
   // QF-20260805-181: injectable seam mirrors claimableLeavesFn/gitGrep/makePgClient in this file.
   const livenessFn = opts.coordinatorLivenessFn || computeCoordinatorLiveness;
@@ -548,6 +579,10 @@ export async function runProbe(supabase, opts = {}) {
     dispatch_reasons: { ...(sharp.dispatchReasons || {}), band: sharp.bandVerdict },
     recompute,
     breach,
+    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-5): top-level, namespaced, additive. classifyBreach
+    // (above) was already called with only {utilization, planAdherence, integrity} — it cannot see
+    // this key even in a future refactor unless someone explicitly widens that call.
+    engagement,
   };
   await persistReading(supabase, reading);
   // S5: idempotent registration keeps the oversight loop's registry row (and
