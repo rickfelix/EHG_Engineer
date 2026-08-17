@@ -33,10 +33,15 @@ vi.mock('../../../lib/notifications/email-templates.js', () => ({
     html: '<h1>Summary</h1>',
     text: 'Summary',
     subject: '[Weekly Summary] 2026-02-10 - 2026-02-16'
+  })),
+  visionScoreTemplate: vi.fn(() => ({
+    html: '<h1>Vision Score</h1>',
+    text: 'Vision Score',
+    subject: '[EVA Vision Score] SD-TEST-001: 85%'
   }))
 }));
 
-import { sendImmediateNotification, sendDailyDigest, sendWeeklySummary } from '../../../lib/notifications/orchestrator.js';
+import { sendImmediateNotification, sendDailyDigest, sendWeeklySummary, sendVisionScoreNotification } from '../../../lib/notifications/orchestrator.js';
 import { sendEmail } from '../../../lib/notifications/resend-adapter.js';
 import { checkRateLimit } from '../../../lib/notifications/rate-limiter.js';
 
@@ -474,6 +479,103 @@ describe('orchestrator', () => {
 
       await expect(sendWeeklySummary(mockSupabase, baseParams))
         .rejects.toThrow('Failed to create weekly summary notification');
+    });
+  });
+
+  describe('sendVisionScoreNotification', () => {
+    const baseParams = {
+      sdKey: 'SD-TEST-001',
+      sdTitle: 'Test SD',
+      totalScore: 85,
+      dimensionScores: {},
+      scoreId: 'score-001',
+      recipientEmail: 'chairman@ehg.ai',
+      chairmanUserId: 'user-001'
+    };
+
+    it('includes chairman_user_id in the chairman_notifications insert payload', async () => {
+      const notifChain = insertChain({ data: { id: 'vision-001' } });
+      configureFromSequence([notifChain, updateChain()]);
+
+      const result = await sendVisionScoreNotification(mockSupabase, baseParams);
+
+      expect(result.notificationId).toBe('vision-001');
+      expect(result.status).toBe('sent');
+      expect(notifChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ chairman_user_id: 'user-001' })
+      );
+    });
+
+    it('falls back to CHAIRMAN_USER_ID env var when chairmanUserId is not passed', async () => {
+      const prevUserId = process.env.CHAIRMAN_USER_ID;
+      process.env.CHAIRMAN_USER_ID = 'env-user-002';
+      try {
+        const notifChain = insertChain({ data: { id: 'vision-002' } });
+        configureFromSequence([notifChain, updateChain()]);
+
+        const { chairmanUserId: _omit, ...paramsWithoutChairman } = baseParams;
+        await sendVisionScoreNotification(mockSupabase, paramsWithoutChairman);
+
+        expect(notifChain.insert).toHaveBeenCalledWith(
+          expect.objectContaining({ chairman_user_id: 'env-user-002' })
+        );
+      } finally {
+        process.env.CHAIRMAN_USER_ID = prevUserId;
+      }
+    });
+  });
+
+  describe('chairman_user_id parity across all four send* functions', () => {
+    it('every send* function includes chairman_user_id in its chairman_notifications insert', async () => {
+      const immediateChain = insertChain({ data: { id: 'p-immediate' } });
+      configureFromSequence([immediateChain, selectSingleChain({ data: null }), updateChain()]);
+      await sendImmediateNotification(mockSupabase, {
+        decisionId: 'dec-001', decisionTitle: 'T', ventureName: 'V', priority: 'critical',
+        chairmanUserId: 'parity-user', recipientEmail: 'chairman@ehg.ai'
+      });
+      expect(immediateChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ chairman_user_id: 'parity-user' })
+      );
+
+      const digestChain = insertChain({ data: { id: 'p-digest' } });
+      configureFromSequence([
+        selectIdempotencyChain({ data: [] }),
+        selectEventsChain({ data: [{ event_type: 'test', event_data: {}, created_at: '2026-02-13T10:00:00Z' }] }),
+        digestChain,
+        updateChain()
+      ]);
+      await sendDailyDigest(mockSupabase, {
+        chairmanUserId: 'parity-user', recipientEmail: 'chairman@ehg.ai', timezone: 'UTC', sendDate: '2026-02-13'
+      });
+      expect(digestChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ chairman_user_id: 'parity-user' })
+      );
+
+      const summaryChain = insertChain({ data: { id: 'p-summary' } });
+      configureFromSequence([
+        selectIdempotencyChain({ data: [] }),
+        selectVenturesChain({ data: [] }),
+        selectDecisionsChain({ data: [] }),
+        summaryChain,
+        updateChain()
+      ]);
+      await sendWeeklySummary(mockSupabase, {
+        chairmanUserId: 'parity-user', recipientEmail: 'chairman@ehg.ai', timezone: 'UTC',
+        weekStart: '2026-02-10', weekEnd: '2026-02-16'
+      });
+      expect(summaryChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ chairman_user_id: 'parity-user' })
+      );
+
+      const visionChain = insertChain({ data: { id: 'p-vision' } });
+      configureFromSequence([visionChain, updateChain()]);
+      await sendVisionScoreNotification(mockSupabase, {
+        sdKey: 'SD-TEST-001', sdTitle: 'T', totalScore: 85, dimensionScores: {}, scoreId: 'score-001',
+        recipientEmail: 'chairman@ehg.ai', chairmanUserId: 'parity-user'
+      });
+      expect(visionChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ chairman_user_id: 'parity-user' })
+      );
     });
   });
 });
