@@ -2,7 +2,7 @@
   "generated_note": "Frozen allowlist for SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 FR-7 ratchet guard. Regenerate via: node scripts/lint/progress-column-lint.mjs --write-baseline tests/unit/hygiene/progress-column-baseline.json. Must only shrink over time (see tests/unit/hygiene/no-bare-progress-column.test.js).",
   "table": "strategic_directives_v2",
   "dead_column": "progress",
-  "count": 37,
+  "count": 46,
   "sites": [
     {
       "file": "lib/eva/adapters/real-data-adapter.js",
@@ -87,6 +87,27 @@
       "rule": "A",
       "method": "select",
       "snippet": "sd_key, title, status, progress, vision_origin_score_id"
+    },
+    {
+      "file": "lib/sd-park.js",
+      "line": 77,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "lib/sd-park.js",
+      "line": 90,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "lib/sd-park.js",
+      "line": 135,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
     },
     {
       "file": "lib/strategy/sd-proposal-generator.js",
@@ -255,6 +276,48 @@
       "rule": "A",
       "method": "select",
       "snippet": "sd_key, title, status, current_phase, progress, sd_type, priority, created_at, completion_date"
+    },
+    {
+      "file": "scripts/validate-capability-lifecycle-trigger.mjs",
+      "line": 81,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "scripts/validate-capability-lifecycle-trigger.mjs",
+      "line": 112,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "scripts/validate-trigger-guard-pack.mjs",
+      "line": 103,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "scripts/validate-trigger-guard-pack.mjs",
+      "line": 115,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "scripts/validate-trigger-guard-pack.mjs",
+      "line": 141,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
+    },
+    {
+      "file": "scripts/validate-trigger-guard-pack.mjs",
+      "line": 169,
+      "rule": "D",
+      "method": "query",
+      "snippet": "raw SQL query text"
     },
     {
       "file": "templates/execute-phase/phase-utils.js",
