@@ -2,6 +2,14 @@
 // database/chairman-gated/20260816_defacl_anon_auth_axis.sql
 // (SD-LEO-SEC-DEFACL-ANON-AUTH-AXIS-001, FR-4).
 //
+// ── REWORK (QF-20260817-193, re-staged for ceremony N+2) ──────────────────────────────────────
+// Ceremony N+1 measured the paired UP/DOWN files' original `FOR ROLE supabase_admin` clause
+// unapplyable (permission denied — supabase_admin is Supabase-platform-reserved, no customer
+// credential is a member of it; see the UP file's own REWORK section). Both files now touch
+// postgres only. This script's TARGET_ROLES narrowed to match, but still queries and asserts on
+// supabase_admin's row explicitly (see fetchDefaclRows() and supabaseAdminAclUnchanged() below) —
+// as an expected-UNCHANGED case, not a dropped one — so the guard cannot go blind to it.
+//
 // ── RUN IT TWICE. THE BASELINE IS NOT OPTIONAL. ───────────────────────────────────────────────
 //   node <this file> --baseline    BEFORE the apply. Writes .artifacts/defacl-anon-auth-axis-
 //                                  baseline.json (AXIS-1 defacl rows, AXIS-2 manifest compliance
@@ -87,9 +95,19 @@ async function q(sql_text) {
   return data?.[0]?.result ?? data;
 }
 
-const TARGET_ROLES = ['postgres', 'supabase_admin'];
+// REWORK (QF-20260817-193): postgres only. The paired UP migration no longer touches
+// supabase_admin's default-ACL (unapplyable from any credential this house's ceremony process
+// can hold — see the UP file's own REWORK section). TARGET_ROLES now drives axis1Compliant's
+// pass/fail scope for ONLY the role this migration actually changes.
+const TARGET_ROLES = ['postgres'];
 
-/** AXIS-1: read pg_default_acl directly for both target roles, schema public, objtype='f'. */
+/** AXIS-1: read pg_default_acl for BOTH postgres and supabase_admin, schema public, objtype='f'
+ *  — deliberately still both, even though TARGET_ROLES narrowed to postgres-only above. This
+ *  script must not go blind to supabase_admin just because this migration no longer touches it:
+ *  fetchDefaclRows() stays two-role so supabaseAdminAclUnchanged() below has real baseline/verify
+ *  data to compare, catching a future regression (e.g. someone silently re-adding the unapplyable
+ *  FOR ROLE supabase_admin clause and it somehow applying) that a postgres-only query could not
+ *  see at all. */
 async function fetchDefaclRows() {
   const rows = await q(`
     select r.rolname as creator_role, d.defaclacl::text as raw_acl
@@ -128,6 +146,20 @@ export function axis1Compliant(rowsByRole) {
     if (/\bauthenticated=/.test(raw)) failures.push(`${role}: pg_default_acl still names authenticated explicitly (${raw})`);
   }
   return failures;
+}
+
+/** REWORK (QF-20260817-193): explicit expected-UNCHANGED check for supabase_admin, PURE —
+ *  testable via --self-test. This migration deliberately does not touch supabase_admin's
+ *  default-ACL, so its raw_acl at verify time must be byte-identical to baseline — not merely
+ *  "not asserted on" (which is what dropping it from TARGET_ROLES alone would silently produce).
+ *  A future edit that reintroduces `FOR ROLE supabase_admin` and somehow gets applied (e.g. a
+ *  ceremony running under a different, more-privileged identity) would change this value and be
+ *  caught here, even though TARGET_ROLES no longer drives a pass/fail check on it directly. */
+export function supabaseAdminAclUnchanged(baselineRows, verifyRows) {
+  const before = baselineRows.find((r) => r.creator_role === 'supabase_admin')?.raw_acl ?? null;
+  const after = verifyRows.find((r) => r.creator_role === 'supabase_admin')?.raw_acl ?? null;
+  if (before === after) return null;
+  return `SCOPE_CREEP: supabase_admin's pg_default_acl changed from ${JSON.stringify(before)} to ${JSON.stringify(after)} — this migration does not touch supabase_admin (unapplyable from any credential this ceremony process can hold); investigate before treating this as progress or an unrelated coincidence.`;
 }
 
 /** AXIS-2: re-run the completeness/compliance check against the (now-extended) manifest,
@@ -228,16 +260,19 @@ async function runVerify() {
   const { failures: axis2Failures } = await axis2Check();
   const publicExecCount = await fetchPublicExecCount();
   const scopeGuardFailure = scopeGuardUnchanged(baseline.public_exec_count, publicExecCount);
+  const supabaseAdminFailure = supabaseAdminAclUnchanged(baseline.defacl_rows, defaclRows);
 
   console.log('\n--- VERIFY (post-apply) ---');
-  console.log(`AXIS-1 (default-ACL, future functions): ${axis1Failures.length === 0 ? 'PASS' : 'FAIL'}`);
+  console.log(`AXIS-1 (default-ACL, future functions, postgres only): ${axis1Failures.length === 0 ? 'PASS' : 'FAIL'}`);
   axis1Failures.forEach((f) => console.log(`  - ${f}`));
   console.log(`AXIS-2 (existing-surface completeness): ${axis2Failures.length === 0 ? 'PASS' : 'FAIL'}`);
   axis2Failures.forEach((f) => console.log(`  - ${f}`));
   console.log(`SCOPE GUARD (public_exec_count unchanged, baseline=${baseline.public_exec_count}, now=${publicExecCount}): ${scopeGuardFailure ? 'FAIL' : 'PASS'}`);
   if (scopeGuardFailure) console.log(`  - ${scopeGuardFailure}`);
+  console.log(`SUPABASE_ADMIN UNCHANGED (out-of-scope role, must not drift): ${supabaseAdminFailure ? 'FAIL' : 'PASS'}`);
+  if (supabaseAdminFailure) console.log(`  - ${supabaseAdminFailure}`);
 
-  const anyFail = axis1Failures.length > 0 || axis2Failures.length > 0 || !!scopeGuardFailure;
+  const anyFail = axis1Failures.length > 0 || axis2Failures.length > 0 || !!scopeGuardFailure || !!supabaseAdminFailure;
   console.log(`\n=== VERIFY RESULT: ${anyFail ? 'FAIL' : 'PASS'} ===`);
   if (anyFail) process.exitCode = 1;
 }
@@ -246,21 +281,41 @@ function runSelfTest() {
   console.log('\n--- SELF-TEST (fixture-only, zero DB dependency) ---');
   let ok = true;
 
-  // AXIS-1 logic: pre-apply fixture (by-name grants present) must fail; post-apply fixture must pass.
+  // AXIS-1 logic: pre-apply fixture (by-name grants present) must fail for postgres; post-apply
+  // fixture must pass. supabase_admin's row is DELIBERATELY still present in both fixtures (QF-
+  // 20260817-193: "keep supabase_admin rows in fixtures ONLY as explicit expected-UNCHANGED
+  // cases") -- it must NOT contribute to axis1Compliant's failure count either way now that
+  // TARGET_ROLES is postgres-only, proving the narrowing actually took effect rather than being
+  // silently ignored by a stale ARRAY reference elsewhere.
   const preApplyFixture = [
     { creator_role: 'postgres', raw_acl: '{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}' },
     { creator_role: 'supabase_admin', raw_acl: '{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}' },
   ];
   const postApplyFixture = [
     { creator_role: 'postgres', raw_acl: '{postgres=X/postgres,service_role=X/postgres}' },
-    { creator_role: 'supabase_admin', raw_acl: '{postgres=X/supabase_admin,service_role=X/supabase_admin}' },
+    { creator_role: 'supabase_admin', raw_acl: '{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}' },
   ];
   const preFailures = axis1Compliant(preApplyFixture);
   const postFailures = axis1Compliant(postApplyFixture);
-  // 2 roles x 2 grantees (anon, authenticated) each still named pre-apply = 4 expected failures.
-  const axis1Ok = preFailures.length === 4 && postFailures.length === 0;
-  console.log(`AXIS-1 fixture logic: ${axis1Ok ? 'PASS' : 'FAIL'} (pre-apply correctly flagged ${preFailures.length}/4, post-apply correctly clean: ${postFailures.length === 0})`);
+  // TARGET_ROLES=['postgres'] only: 1 role x 2 grantees (anon, authenticated) still named
+  // pre-apply = 2 expected failures. supabase_admin's row is present in both fixtures but
+  // contributes 0 either way -- it is asserted separately by supabaseAdminAclUnchanged below.
+  const axis1Ok = preFailures.length === 2 && postFailures.length === 0;
+  console.log(`AXIS-1 fixture logic: ${axis1Ok ? 'PASS' : 'FAIL'} (pre-apply correctly flagged ${preFailures.length}/2 for postgres, supabase_admin correctly not scored, post-apply correctly clean: ${postFailures.length === 0})`);
   ok = ok && axis1Ok;
+
+  // REWORK (QF-20260817-193): supabase_admin's row must be asserted UNCHANGED, not merely
+  // unscored. postApplyFixture above keeps supabase_admin identical to preApplyFixture (this
+  // migration never touches it) -- that must PASS. A fixture where it drifted must FAIL.
+  const supabaseAdminUnchangedOk = supabaseAdminAclUnchanged(preApplyFixture, postApplyFixture) === null;
+  const supabaseAdminDriftedFixture = [
+    { creator_role: 'postgres', raw_acl: '{postgres=X/postgres,service_role=X/postgres}' },
+    { creator_role: 'supabase_admin', raw_acl: '{postgres=X/supabase_admin,service_role=X/supabase_admin}' }, // anon/authenticated dropped -- should never happen, must be caught
+  ];
+  const supabaseAdminDriftCaught = supabaseAdminAclUnchanged(preApplyFixture, supabaseAdminDriftedFixture) !== null;
+  const supabaseAdminOk = supabaseAdminUnchangedOk && supabaseAdminDriftCaught;
+  console.log(`SUPABASE_ADMIN unchanged-assertion fixture logic: ${supabaseAdminOk ? 'PASS' : 'FAIL'} (unchanged correctly passes: ${supabaseAdminUnchangedOk}, drift correctly caught: ${supabaseAdminDriftCaught})`);
+  ok = ok && supabaseAdminOk;
 
   // TS-4 (FR-3): hash must differ pre-UP vs post-UP, and match pre-UP vs post-DOWN (the correctly
   // corrected DOWN fixture, i.e. GRANT anon/authenticated only, no PUBLIC).
