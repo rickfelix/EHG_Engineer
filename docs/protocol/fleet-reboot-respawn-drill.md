@@ -18,7 +18,7 @@ session, the reboot-respawn runner reads the **frozen desired manifest**, relaun
 
 | Piece | File |
 |---|---|
-| Desired-manifest table (chairman-gated DDL, **NOT applied**) | `database/migrations/20260720_fleet_desired_slots_STAGED.sql` (+ `_DOWN`) |
+| Desired-manifest table (**applied**, 4 enabled rows: Canary-pilot + the SD-LEO-INFRA-FLEET-CANNOT-SELF-001 singleton roster below) | `database/migrations/20260720_fleet_desired_slots_STAGED.sql` (+ `_DOWN`) |
 | Reader / writer / capture / roster translator | `lib/fleet/desired-slots-store.js` (`loadDesiredSlots`, `upsertDesiredSlot`, `captureResumeUuid`, `slotsToRoster`) |
 | `resume_uuid` capture at SessionStart | `scripts/hooks/capture-session-id.cjs` (`metadata.resume_uuid := session_id`) |
 | `--resume` spawn path | `lib/fleet/spawn-control.js` `buildLiveSpawnInvocation({..., resumeUuid})` |
@@ -28,18 +28,42 @@ session, the reboot-respawn runner reads the **frozen desired manifest**, relaun
 
 ## ⚠️ Preconditions (all mandatory)
 
-1. **Desired manifest exists.** Either apply the chairman-gated migration and seed
-   `fleet_desired_slots`, or supply a fixture manifest. Each slot that should reattach needs a
-   `resume_uuid` (populated automatically at SessionStart, or via `captureResumeUuid`). With the table
-   unapplied, `loadDesiredSlots` fail-softs to `[]` and the runner respawns nothing (loud stderr canary).
+1. **Desired manifest exists.** `fleet_desired_slots` is applied and, as of
+   SD-LEO-INFRA-FLEET-CANNOT-SELF-001, carries the singleton governance roster (chairman decision
+   f9ab8709-7c22-4f08-9be1-ffe5a6de1b3c — singletons only, workers remain operator-started):
+   `Canary-pilot` (`worker`/`canary`), `Adam` (`adam`/`host-default`), `Coordinator`
+   (`coordinator`/`host-default`), `Solomon` (`solomon`/`host-default`). Each slot that should reattach
+   needs a `resume_uuid` (populated automatically at SessionStart, or via `captureResumeUuid`). **Every
+   row must carry an explicit `account_profile`** — a real profile name or the literal `'host-default'`
+   sentinel (meaning "deliberately no `CLAUDE_CONFIG_DIR` isolation, use the host's default login"). A
+   row missing `account_profile` entirely, or one whose value fails to resolve, is now **skipped** (not
+   silently spawned un-isolated) — see the FR-1/FR-3 note below.
 2. **Canary account only for the full run.** The FULL live-execution runs on Child B's dedicated canary
    account/profile — never against a live-fleet session. (Solomon-owned.)
 3. **Live flag scoped to this shell only.** `FLEET_SPAWN_CONTROL_LIVE=true` for the drill shell; it is
    default-OFF everywhere else and must never be set in a live-fleet session.
 4. **Desktop for `wt.exe`.** The scheduled task defaults to `/SC ONSTART`, which runs in **session 0 with
-   no desktop** — `wt.exe` may fail to open a visible tab. Prefer `--onlogon` (a logged-in desktop is
-   available) where acceptable; otherwise document/accept the headless session-0 constraint and validate
-   the wt.exe invocation on the real host before relying on it.
+   no desktop** — `wt.exe` may fail to open a visible tab. Prefer `--onlogon --ru <user>` (a logged-in
+   desktop is available, and the task runs as an actual interactive user rather than SYSTEM); the setup
+   script adds `/IT` automatically for a non-SYSTEM `/RU` so the task can run without a stored password.
+   **Registering the task with `/RL HIGHEST` requires an ELEVATED (Administrator) calling shell** —
+   confirmed via a direct `IsInRole(Administrator)` check; a non-elevated `schtasks /Create` for this
+   task fails with `ERROR: Access is denied.` Run the registration command from an elevated
+   PowerShell/terminal.
+
+### FR-1 / FR-3 (SD-LEO-INFRA-FLEET-CANNOT-SELF-001) — the runner's per-slot behavior changed
+
+The per-slot loop in `lib/fleet/reboot-respawn-runner.js` no longer degrades a bad/absent
+`account_profile` to a silent, un-isolated spawn (the prior fail-soft policy). It now **skips** that one
+slot (logs why, `outcome: 'skipped_no_account_profile'` or `'skipped_profile_resolve_failed'` in the
+emitted `fleet_verb_respawn` event), while every other slot in the same run still gets attempted. A
+narrow, boot-window-gated (15 min, `os.uptime()`) dedup guard also skips the `coordinator` slot
+specifically (`outcome: 'skipped_coordinator_already_live'`) when a live coordinator already resolves
+**outside** that window — this is to stop a false trigger (e.g. an operator manually running
+`schtasks /Run` to validate the task) from displacing a live coordinator, while never suppressing a
+genuine post-reboot restore (any resolver uncertainty/timeout fails **toward** attempting the spawn).
+Adam and Solomon are unaffected by the dedup guard — they already have their own singleton guards
+elsewhere. See PR #7168 for the full design rationale and ship-review-fixed edge cases.
 
 ## In-session NON-mocked simulated-reboot drill (deliverable now, pre-canary)
 
@@ -72,13 +96,20 @@ against the **real** seams.
 
 ## Registering the reboot trigger
 
+**Run from an ELEVATED (Administrator) shell** — `schtasks /Create` with `/RL HIGHEST` refuses
+non-elevated callers with `ERROR: Access is denied.`, regardless of which flags below are used.
+
 ```pwsh
-node scripts/setup-reboot-respawn-task.mjs --onlogon           # register (INERT wrapper by default)
-node scripts/setup-reboot-respawn-task.mjs --onlogon --live    # wrapper sets FLEET_SPAWN_CONTROL_LIVE=true
+node scripts/setup-reboot-respawn-task.mjs --onlogon --live --ru <your-username>  # recommended: visible, interactive, no stored password
+node scripts/setup-reboot-respawn-task.mjs --onlogon           # register (INERT wrapper, SYSTEM run-as, no desktop for wt.exe)
 node scripts/setup-reboot-respawn-task.mjs --dry-run           # print wrapper + schtasks argv, mutate nothing
 node scripts/setup-reboot-respawn-task.mjs --status            # query
 node scripts/setup-reboot-respawn-task.mjs --remove            # delete
 ```
+
+`--ru <user>` (non-SYSTEM) now automatically adds `/IT` (interactive token) to the `schtasks` argv, so
+the task runs only while that user is logged on and needs no stored `/RP` password
+(SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-4).
 
 ## Full canary live-execution (DEFERRED → Solomon)
 
