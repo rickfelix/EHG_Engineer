@@ -31,6 +31,27 @@ tags: [tiered-orchestration, door-routing, dispatch, economics, model-tier, fabl
 > "content-tier (Fable-use doctrine)" section further down **remains live** — `door_class` and
 > `model_recommendation` were always two different, independent axes (see the comparison table
 > in that section), and only the former was retired.
+>
+> **Governance record (coordinator directive 011b5962, replying to signal 2e9c41ae):** between
+> the tag's original 2026-07-12 expiry and this retirement, the coordinator (recused as both
+> tag owner and owner of the gauge it trips) re-anchored the same REVISIT-IF tag on
+> 2026-07-31 from a calendar date to a condition, per Adam's ratification, but that edit was
+> never committed -- it sat uncommitted in the shared primary worktree until this SD's
+> investigation surfaced it. Captured here verbatim before that root copy is discarded, since
+> this SD's RETIRE decision makes the tag itself moot (the file is deleted) but the governance
+> reasoning behind the 07-31 re-date is worth preserving as record: *"REVISIT-IF(condition=S20-26
+> run GO or Wave-1B closure, whichever comes first) owner=coordinator
+> provenance=SD-LEO-INFRA-TIERED-ORCHESTRATION-FABLE-001 note=the 2026-07-08 cutover NEVER
+> HAPPENED: DOOR_ROUTING_ENABLED is unset, so both consumers (dispatch.cjs:669,
+> door-routing-ledger.cjs:40) still early-return and dispatch is byte-identical to
+> pre-cutover. Re-dated 2026-07-31 on a CONDITION not a calendar (Adam ratification;
+> coordinator recused as both tag owner and owner of the gauge it trips) because a calendar
+> re-date just re-arms the same trip. Those two moments are when a tiered-orchestration
+> consumer either materializes or provably does not. If NO consumer exists then, removal goes
+> to the belt as a small SD rather than this shim surviving by inertia."* Both of those
+> named trigger moments (S20-26 run GO, Wave-1B closure) are now moot by a different route
+> than either one firing: the chairman's RETIRE decision (9ce56d34) resolved the underlying
+> question directly, so the condition never needed to be observed.
 
 **Operating model (chairman sprint item 5 + 2026-07-05 2:35 PM amendment):** after
 the Tuesday pricing cutover, Fable 5 runs as the high-level orchestrator on API
