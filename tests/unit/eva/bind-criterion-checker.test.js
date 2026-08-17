@@ -86,6 +86,19 @@ describe('evaluateExitGateCriterion (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-1)', 
     expect(resultCustom.verdict).toBe('NOT_MET');
     expect(resultCustom.reason).toBe('flagship_veto');
   });
+
+  it('adversarial-review regression: a MarketLens row with would_satisfy=null/undefined vetoes, same as false -- ambiguous is never CLEAN', () => {
+    const nullRows = [...makeRows(29, { spanHours: 60 }), rowAt(30, { venture_id: MARKETLENS_ID, would_satisfy: null })];
+    const nullResult = evaluateExitGateCriterion(nullRows);
+    expect(nullResult.marketlens_status).toBe('FALSE_REJECT');
+    expect(nullResult.verdict).toBe('NOT_MET');
+    expect(nullResult.reason).toBe('flagship_veto');
+
+    const undefinedRows = [...makeRows(29, { spanHours: 60 }), rowAt(30, { venture_id: MARKETLENS_ID, would_satisfy: undefined })];
+    const undefinedResult = evaluateExitGateCriterion(undefinedRows);
+    expect(undefinedResult.marketlens_status).toBe('FALSE_REJECT');
+    expect(undefinedResult.verdict).toBe('NOT_MET');
+  });
 });
 
 describe('evaluateVentureStackCriterion (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-5)', () => {
@@ -158,7 +171,11 @@ describe('groupRowsByGateString (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-2)', () =
 });
 
 describe('checker module is provably read-only (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-6, TS-7)', () => {
-  it('contains zero .update(/.insert(/.delete( calls against a Supabase client', () => {
+  // Adversarial review: the CLI report renderer (scripts/eva/check-bind-criteria.mjs) ships in
+  // a follow-up PR (see this SD's PR split for the 400-LOC guideline) and is NOT present on this
+  // branch's ancestor commits -- a test here referencing it would fail on any fresh clone/CI run
+  // of this commit alone. Its own read-only guard lives with it in the follow-up PR.
+  it('contains zero .update(/.insert(/.upsert(/.delete( calls against a Supabase client', () => {
     const modulePath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       '../../../lib/eva/lifecycle/bind-criterion-checker.js'
@@ -166,17 +183,7 @@ describe('checker module is provably read-only (SD-LEO-INFRA-BIND-OBSERVE-ONLY-0
     const source = readFileSync(modulePath, 'utf8');
     expect(source).not.toMatch(/\.update\s*\(/);
     expect(source).not.toMatch(/\.insert\s*\(/);
-    expect(source).not.toMatch(/\.delete\s*\(/);
-  });
-
-  it('the CLI report renderer also contains zero write calls', () => {
-    const cliPath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../../../scripts/eva/check-bind-criteria.mjs'
-    );
-    const source = readFileSync(cliPath, 'utf8');
-    expect(source).not.toMatch(/\.update\s*\(/);
-    expect(source).not.toMatch(/\.insert\s*\(/);
+    expect(source).not.toMatch(/\.upsert\s*\(/);
     expect(source).not.toMatch(/\.delete\s*\(/);
   });
 });
