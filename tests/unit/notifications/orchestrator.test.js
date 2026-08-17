@@ -399,6 +399,28 @@ describe('orchestrator', () => {
         const tokyoResult = await sendImmediateNotification(mockSupabase, baseParams);
         expect(tokyoResult.status).toBe('sent'); // 14:00 JST is outside the 22:00-07:00 window
       });
+
+      // Adversarial review (PR #7180): an invalid stored timezone must warn (distinguishable
+      // from "never configured") while still failing safe to the ET default, not throw.
+      it('an invalid stored timezone warns and falls back to America/New_York (fails safe, not silently)', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-16T09:00:00.000Z')); // 04:00 EST (winter, UTC-5)
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-006' } }),
+          selectSingleChain({
+            data: { preference_value: JSON.stringify({ enabled: true, timezone: 'Not/AZone' }) }
+          }),
+          updateChain()
+        ]);
+
+        const result = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(result.status).toBe('deferred'); // falls back to ET default, still 04:00 -> quiet
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Not/AZone'));
+
+        warnSpy.mockRestore();
+      });
     });
   });
 
