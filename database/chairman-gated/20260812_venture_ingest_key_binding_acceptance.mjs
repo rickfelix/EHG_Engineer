@@ -108,11 +108,14 @@ async function setup() {
     const { data, error: provErr } = await svc.rpc('fn_provision_venture_ingest_key', { p_venture_id: ventureA.id });
     if (provErr) throw new Error(`provisioning failed in verify mode — the migration may not actually be applied: ${provErr.message}`);
     secretA = data;
-    // Ship-review finding (TOCTOU): a pre-mint snapshot can be stale if a concurrent process
-    // provisions the SAME venture between the check above and this RPC call. rotated_at is
-    // race-free -- fn_provision_venture_ingest_key's INSERT always sets it NULL; only the ON
-    // CONFLICT DO UPDATE branch sets it to now(), so IS NULL post-mint means OUR call's INSERT is
-    // what created the row, whoever else may also be racing.
+    // rotated_at IS NULL post-mint means OUR call's INSERT created the row (fn_provision_venture_
+    // ingest_key's INSERT always sets it NULL; only the ON CONFLICT DO UPDATE branch sets it to
+    // now()). This READ is race-free at the moment it runs, but runVerify()'s ~10 RPC round-trips
+    // happen between here and teardown()'s delete -- a concurrent provision of the SAME venture in
+    // that window would rotate it again without changing this stale mintedFresh snapshot. The
+    // actual protection against destroying a concurrently-owned row is the .is('rotated_at', null)
+    // clause ON THE DELETE ITSELF (ship-review round 2) -- that WHERE clause is evaluated atomically
+    // by the DELETE statement, so it re-checks reality at the moment of deletion, not here.
     const { data: postMint, error: postMintErr } = await svc.from('venture_ingest_keys').select('rotated_at').eq('venture_id', ventureA.id).maybeSingle();
     if (postMintErr) throw new Error(`post-mint verification failed: ${postMintErr.message}`);
     mintedFresh = postMint?.rotated_at == null;
@@ -127,11 +130,19 @@ async function teardown() {
   }
   if (secretA !== null && ventureA) {
     if (mintedFresh) {
-      const { error } = await svc.from('venture_ingest_keys').delete().eq('venture_id', ventureA.id);
+      // .is('rotated_at', null) makes this DELETE itself the atomic, race-free guard (ship-review
+      // round 2): if a concurrent process rotated this venture's key between the post-mint check
+      // above and now, rotated_at is no longer NULL and this WHERE clause matches zero rows --
+      // deleting nothing rather than destroying a row that process now owns.
+      const { error, count } = await svc.from('venture_ingest_keys').delete({ count: 'exact' }).eq('venture_id', ventureA.id).is('rotated_at', null);
       if (error) console.error(`CLEANUP WARNING: failed to delete provisioned test secret: ${error.message}`);
+      else if (count === 0) console.warn(`WARNING: skipped deleting venture ${ventureA.id}'s ingest key -- it was rotated by another process between mint and teardown (race window), so it is no longer safe to remove.`);
       else console.log('cleaned up: provisioned test secret deleted');
     } else {
-      console.warn(`WARNING: venture ${ventureA.id}'s ingest secret was ROTATED (not deleted -- it pre-existed this run under ACCEPT_ROTATE_LIVE_VENTURE_ID). Any live caller using the OLD secret for this venture is now broken with zero grace window (migration HIGH-3) and will need re-provisioning out of band.`);
+      const cause = process.env.ACCEPT_ROTATE_LIVE_VENTURE_ID
+        ? `it pre-existed this run under ACCEPT_ROTATE_LIVE_VENTURE_ID`
+        : `it was concurrently provisioned by another process during this run (TOCTOU) -- not caused by an env override`;
+      console.warn(`WARNING: venture ${ventureA.id}'s ingest secret was ROTATED (not deleted -- ${cause}). Any live caller using the OLD secret for this venture is now broken with zero grace window (migration HIGH-3) and will need re-provisioning out of band.`);
     }
   }
 }
