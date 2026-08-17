@@ -288,6 +288,10 @@ If you see CRLF warnings:
 git config --global core.autocrlf true
 ```
 
+**Repo-level `.gitattributes` pins** (separate from the local `core.autocrlf` setting above): this repo pins specific file types to `eol=lf` in `.gitattributes` at the repo root -- CLAUDE*.md, `*.js`/`*.mjs`/`*.cjs`, `*.sql`, and as of SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001, 15 additional text extensions (yml, yaml, mmd, ps1, partial, csv, patch, txt, intoto, gitkeep, map, tsx, example, css, template) plus `binary` marks on 5 binary extensions (png, webm, pptx, docx, gz). These pins are checked out LF regardless of `core.autocrlf`, so `git status` staying clean after a fresh checkout is expected, not a sign your local config is wrong.
+
+If `git status` shows a pinned file as modified with a zero-content diff right after checkout, that file's blob is stored CRLF/mixed in the index while the pin declares `eol=lf` -- a pre-existing debt class tracked by `tests/static-guards/eol-crlf-ratchet.test.js` (crlf-only) and `tests/static-guards/eol-mixed-crlf-ratchet.test.js` (crlf+mixed). Do not fix this by removing the attribute; see those test files' own docblocks for the renormalize path. To re-measure the repo's current per-extension crlf/mixed exposure, run `node scripts/audits/gitattributes-eol-census.mjs` (regenerates `docs/audits/SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001-census.md`).
+
 ### Python Virtual Environment (Agent Platform)
 
 For the agent-platform component:
