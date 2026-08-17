@@ -20,6 +20,15 @@ const UNDER_BUDGET_PRD = {
   risks: [],
 };
 
+// QF-20260816-546: pre-plan-critique.js:72 SELECTs system_architecture/implementation_approach
+// from product_requirements_v2, but the prdSections object previously omitted both entirely (0
+// chars, not merely truncated) -- the critique never saw architecture or approach content at all.
+const FULL_PRD = {
+  ...UNDER_BUDGET_PRD,
+  system_architecture: { summary: 'microservice split', components: ['api', 'worker'] },
+  implementation_approach: { summary: 'phased rollout', steps: ['a', 'b'] },
+};
+
 describe('buildBudgetedPrdText (FR-2)', () => {
   it('does not truncate a PRD whose sections are all under budget', () => {
     const result = buildBudgetedPrdText(UNDER_BUDGET_PRD);
@@ -69,6 +78,40 @@ describe('buildBudgetedPrdText (FR-2)', () => {
     expect(JSON.stringify(bigAcceptanceCriteria).length).toBeGreaterThan(SECTION_BUDGETS.acceptance_criteria);
     expect(result.truncated).toBe(false);
     expect(result.text).toContain(bigAcceptanceCriteria[79]); // the LAST criterion survived uncut
+  });
+
+  // QF-20260816-546: every SELECTed PRD column must reach the budgeted text. Confirms both the
+  // fast path (under budget, this test) and the fallback path (over budget, next test) below.
+  it('includes system_architecture and implementation_approach in the fast (under-budget) path', () => {
+    const result = buildBudgetedPrdText(FULL_PRD);
+    expect(result.truncated).toBe(false);
+    expect(result.text).toContain('SYSTEM_ARCHITECTURE:');
+    expect(result.text).toContain('microservice split');
+    expect(result.text).toContain('IMPLEMENTATION_APPROACH:');
+    expect(result.text).toContain('phased rollout');
+  });
+
+  it('budgets (not omits) system_architecture and implementation_approach in the fallback (over-budget) path', () => {
+    const bigFrs = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
+    const result = buildBudgetedPrdText({ ...FULL_PRD, functional_requirements: bigFrs });
+    expect(result.truncated).toBe(true);
+    expect(result.text).toContain('SYSTEM_ARCHITECTURE:');
+    expect(result.text).toContain('microservice split'); // small enough to survive its fixed budget uncut
+    expect(result.text).toContain('IMPLEMENTATION_APPROACH:');
+    expect(result.text).toContain('phased rollout');
+  });
+
+  it('a system_architecture that overflows its fixed budget is truncated, not dropped', () => {
+    // A distinctive PREFIX marker (not a repeated character that could coincidentally appear in
+    // an unrelated section, e.g. bigFrs's own 'x'-repeat descriptions below) proves the surviving
+    // text genuinely came from THIS section's budgeted prefix, not a false-positive collision.
+    const hugeArchitecture = { head: 'UNIQUE_HEAD_MARKER_BEFORE_THE_CUT', summary: 'z'.repeat(SECTION_BUDGETS.system_architecture + 2000), tail: 'UNIQUE_TAIL_MARKER_PAST_THE_CUT' };
+    const bigFrs = Array.from({ length: 500 }, (_, i) => ({ id: `FR-${i + 1}`, description: 'x'.repeat(200) }));
+    const result = buildBudgetedPrdText({ ...FULL_PRD, system_architecture: hugeArchitecture, functional_requirements: bigFrs });
+    expect(result.truncated).toBe(true);
+    expect(result.text).toContain('SYSTEM_ARCHITECTURE:');
+    expect(result.text).toContain('UNIQUE_HEAD_MARKER_BEFORE_THE_CUT'); // truncated prefix survived, section was not omitted
+    expect(result.text).not.toContain('UNIQUE_TAIL_MARKER_PAST_THE_CUT'); // tail, past the budget, was cut
   });
 });
 

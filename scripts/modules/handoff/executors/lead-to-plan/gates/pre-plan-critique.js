@@ -85,6 +85,11 @@ export async function validatePrePlanCritique(ctx) {
       acceptance_criteria: prd.acceptance_criteria,
       test_scenarios: prd.test_scenarios,
       risks: prd.risks,
+      // QF-20260816-546: these two were already SELECTed above but omitted here, so the
+      // critique never saw architecture or approach content at all (sibling of the shipped
+      // truncation fix, not covered by that SD's scope).
+      system_architecture: prd.system_architecture,
+      implementation_approach: prd.implementation_approach,
     };
     // Flat string kept for runInvariantChecks (unchanged, out of this SD's scope) — the
     // structured prdSections object below is what enables FR-2 section-aware budgeting.
