@@ -172,6 +172,36 @@ describe('reboot-respawn-runner coordinator dedup guard (FR-3) — TS-5, TS-6, T
     expect(spawnFn).toHaveBeenCalledTimes(2);
   });
 
+  // SHIP-REVIEW FIXES (adversarial review, PR #7168, findings F1 and F3).
+  it('F1: a coordinatorResolverFn that HANGS (never resolves/rejects) times out and fails toward attempting the spawn, never toward an indefinite stall', async () => {
+    const neverResolves = vi.fn(() => new Promise(() => {})); // deliberately never settles
+    const spawnFn = vi.fn(() => ({ pid: 1 }));
+    const res = await runRebootRespawn({
+      supabase: {}, loadFn: async () => [coordSlot], spawnFn, logFn: async () => ({ ok: true }),
+      live: true, sleepFn: vi.fn(), uptimeFn: () => 30 * 60,
+      coordinatorResolverFn: neverResolves,
+      coordinatorResolverTimeoutMs: 20, // short bound so the test itself doesn't hang
+    });
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    expect(res.results[0]).toMatchObject({ spawned: true, skip_reason: null });
+  });
+
+  it('F3: a non-numeric uptimeFn() (NaN) is treated as WITHIN the boot window (always attempt), not as a reason to engage the dedup guard', async () => {
+    const coordinatorResolverFn = vi.fn(async () => 'some-other-live-session-id');
+    const { res, spawnFn } = await runWith({ slots: [coordSlot], uptimeSeconds: NaN, coordinatorResolverFn });
+    expect(coordinatorResolverFn).not.toHaveBeenCalled(); // never consulted -- NaN reads as "in window"
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    expect(res.results[0]).toMatchObject({ spawned: true, skip_reason: null });
+  });
+
+  it('F3: an undefined uptimeFn() return value is likewise treated as WITHIN the boot window', async () => {
+    const coordinatorResolverFn = vi.fn(async () => 'some-other-live-session-id');
+    const { res, spawnFn } = await runWith({ slots: [coordSlot], uptimeSeconds: undefined, coordinatorResolverFn });
+    expect(coordinatorResolverFn).not.toHaveBeenCalled();
+    expect(spawnFn).toHaveBeenCalledTimes(1);
+    expect(res.results[0].spawned).toBe(true);
+  });
+
   it('uses getActiveCoordinatorId as the DEFAULT resolver when none is injected (production wiring)', async () => {
     // Confirms the lazy CJS import wiring resolves without throwing when the module loads, using
     // the real default -- a supabase stub with no matching rows resolves to null (no live
