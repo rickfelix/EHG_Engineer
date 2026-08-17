@@ -80,9 +80,42 @@ describe('isEngagementBasePopulationMember — the single dedicated base-populat
   });
 });
 
-describe('classifySessionBucket — precedence and the two corrected defects', () => {
-  it('ENGAGED takes precedence over everything when isClaimed is true', () => {
+describe('classifySessionBucket — precedence and the three corrected defects', () => {
+  it('ENGAGED takes precedence over TAIL when isClaimed is true, for a LIVE session', () => {
     const s = session({ released_reason: 'completed', released_at: new Date(NOW - 60_000).toISOString() });
+    expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ENGAGED');
+  });
+
+  it('CORRECTED DEFECT #3 (deep-tier ship-review, round 4): a claimed session with a DEAD heartbeat is never ENGAGED — isClaimed alone is not "working now"', () => {
+    // Before the fix, isClaimed short-circuited ahead of the liveness check, so a session that
+    // crashed without ever releasing its claim (sd_key still set) read as "actively engaged"
+    // forever, regardless of how stale heartbeat_at was. Liveness now gates ENGAGED exactly like
+    // every other live-path bucket; a claimed-but-dead, non-wedged session falls to EXCLUDED.
+    const s = session({
+      heartbeat_at: new Date(NOW - 10 * 24 * 60 * 60_000).toISOString(), // 10 days stale
+      last_tool_at: new Date(NOW - 10 * 24 * 60 * 60_000).toISOString(),
+      loop_state: null, // not a confirmed wedge shape either — genuinely just dead
+      sd_key: 'SD-SOME-ORPHANED-CLAIM-001',
+    });
+    expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('EXCLUDED');
+  });
+
+  it('a claimed session with a dead heartbeat that IS a confirmed wedge classifies ZOMBIE, not ENGAGED — more actionable for an orphaned claim', () => {
+    const s = session({
+      heartbeat_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      loop_state: 'active', // isKnownWedged: active + tool-silent past the cut point = wedged
+      sd_key: 'SD-SOME-ORPHANED-CLAIM-002',
+    });
+    expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ZOMBIE');
+  });
+
+  it('a claimed, LIVE session with an old last_tool_at (e.g. a cross-repo claimant working elsewhere) is still ENGAGED — the fix only gates on heartbeat liveness, not tool-call recency', () => {
+    const s = session({
+      heartbeat_at: new Date(NOW - 30_000).toISOString(), // fresh — session process is alive
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(), // stale — working in another repo
+      sd_key: 'SD-CROSS-REPO-CLAIM-001',
+    });
     expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ENGAGED');
   });
 
@@ -136,8 +169,15 @@ describe('classifySessionBucket — precedence and the two corrected defects', (
     expect(classifySessionBucket(s, { isClaimed: () => false, nowMs: NOW })).toBe('IDLE');
   });
 
-  it('never throws on a malformed session (fail-soft to UNKNOWN)', () => {
-    expect(classifySessionBucket({}, { isClaimed: () => { throw new Error('boom'); }, nowMs: NOW })).toBe('UNKNOWN');
+  it('a genuinely malformed session with no heartbeat_at fails soft to EXCLUDED, never throws — liveness is checked before isClaimed is ever called', () => {
+    // {} has no heartbeat_at, so isLive is false and the not-live branch returns before isClaimed
+    // runs at all (isClaimed is now gated behind liveness — see the ENGAGED-liveness fix above).
+    expect(classifySessionBucket({}, { isClaimed: () => { throw new Error('boom'); }, nowMs: NOW })).toBe('EXCLUDED');
+  });
+
+  it('never throws when isClaimed itself throws on a LIVE session (fail-soft to UNKNOWN) — exercises the outer catch', () => {
+    const s = session(); // fresh heartbeat_at by default — reaches the isClaimed() call
+    expect(classifySessionBucket(s, { isClaimed: () => { throw new Error('boom'); }, nowMs: NOW })).toBe('UNKNOWN');
   });
 });
 

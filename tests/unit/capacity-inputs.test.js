@@ -119,12 +119,34 @@ describe('SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 TS-9: select-list contract for
     // production — the exact fail-open trap genuine-worker.mjs's FREEZE_TERM_COLUMNS documents by
     // name. A behavioral test cannot pin this (the fake client is select-column-blind by design);
     // this asserts the literal query text instead, the same way a schema-contract test would.
+    //
+    // Deep-tier ship-review (round 4) measured that a lazy, non-global regex here matches only the
+    // FIRST `.from('claude_sessions')...select()` call in the file (the belt/`sessions` read) — not
+    // the SECOND one (`engagementSessions`, `.gte('heartbeat_at', engagementLiveCutoff)`), which is
+    // the actual argument classifyEngagementBuckets() is called with (see the read-failure/gap test
+    // below, and capacity-inputs.mjs's own `engagementSessions || []` call site). A regression that
+    // dropped last_tool_at from ONLY the engagementSessions select passed this test unchanged before
+    // this fix — verified by temporarily stripping it from just that select and re-running, which
+    // stayed green. matchAll + a `.gte()` cutoff-variable tag disambiguates the two occurrences so
+    // each is pinned by name, not by position.
     const src = readFileSync(fileURLToPath(new URL('../../scripts/lib/capacity-inputs.mjs', import.meta.url)), 'utf8');
-    const selectMatch = src.match(/\.from\('claude_sessions'\)[\s\S]*?\.select\('([^']+)'\)/);
-    expect(selectMatch, 'claude_sessions select() call not found in capacity-inputs.mjs').toBeTruthy();
-    const columns = selectMatch[1].split(',').map((c) => c.trim());
-    expect(columns).toContain('last_tool_at');
-    expect(columns).toContain('loop_state'); // the pairing isKnownWedged requires — both or neither is blind
+    const selectRe = /\.from\('claude_sessions'\)[\s\S]*?\.select\('([^']+)'\)[\s\S]*?\.gte\('heartbeat_at',\s*(\w+)\)/g;
+    const matches = [...src.matchAll(selectRe)];
+    const byCutoff = Object.fromEntries(
+      matches.map((m) => [m[2], m[1].split(',').map((c) => c.trim())])
+    );
+
+    expect(byCutoff.liveCutoff, 'belt-depth claude_sessions select (liveCutoff) not found').toBeTruthy();
+    expect(byCutoff.engagementLiveCutoff, 'engagement claude_sessions select (engagementLiveCutoff) not found — this is the one classifyEngagementBuckets actually consumes').toBeTruthy();
+
+    // The one the engagement classifier actually reads — this is the guard the docstring promises.
+    expect(byCutoff.engagementLiveCutoff).toContain('last_tool_at');
+    expect(byCutoff.engagementLiveCutoff).toContain('loop_state'); // the pairing isKnownWedged requires — both or neither is blind
+
+    // Defense in depth: the belt-depth select also documents last_tool_at (added the same round,
+    // per its inline comment) even though engagementSessions is the one currently wired to the
+    // classifier — pin it too so a regression here is not silently invisible either.
+    expect(byCutoff.liveCutoff).toContain('last_tool_at');
   });
 
   it('classifyEngagementBuckets over gatherCapacityInputs\' OWN returned rows yields a non-UNKNOWN ZOMBIE verdict for a genuinely stale session (closes the fail-open gap end to end)', async () => {

@@ -115,14 +115,22 @@ export function isEngagementBasePopulationMember(session, coordinatorId) {
  * NULL/missing last_tool_at yields UNKNOWN, never ZOMBIE (FR-2) — the pipeline cannot
  * distinguish "genuinely dead" from "this select never fetched the column" without it.
  *
- * HEARTBEAT-LIVENESS IS APPLIED HERE, NOT AS A PRE-FILTER (EXEC-phase TESTING re-review, DEF-2
- * round 2). A blanket heartbeat cutoff ahead of bucket classification silently dropped hard-wedged
- * sessions (heartbeat itself gone stale, not just tool-silent) from the census entirely — exactly
- * the class of starvation FR-1 was written to eliminate, just relocated from
- * isDispatchableFleetMember's quarantine gate to this new liveness gate. Fix: a session that fails
- * the liveness check is EXCLUDED unless isKnownWedged says otherwise, in which case it is ZOMBIE —
- * isKnownWedged has its OWN staleness authority (last_tool_at + loop_state), independent of
- * heartbeat_at, and is the correct arbiter for "is this session dead," not a bare heartbeat age.
+ * HEARTBEAT-LIVENESS IS CHECKED FIRST, AHEAD OF isClaimed (deep-tier ship-review finding,
+ * round 4). The original ordering let ENGAGED short-circuit on isClaimed alone, so a session
+ * that crashed without ever releasing its claim (sd_key still set, heartbeat dead for days)
+ * classified as "actively engaged" forever — the module's own spec says ENGAGED means "holds a
+ * claim / working now," but only the "holds a claim" half was ever checked. A claimed-but-dead
+ * session now falls through to the same not-live branch as everything else: EXCLUDED, unless
+ * isKnownWedged confirms it, in which case ZOMBIE — which is the more actionable classification
+ * for an orphaned claim anyway (an operator needs to know it's dead, not that it's "engaged").
+ * A live, currently-claimed session is unaffected: isLive is checked once and both paths (claimed
+ * or not) share it, so cross-repo claimants (fresh heartbeat, 0 local commits) still read ENGAGED.
+ *
+ * The not-live branch keeps its own DEF-2-round-2 exemption: a blanket heartbeat cutoff ahead of
+ * bucket classification silently dropped hard-wedged sessions (heartbeat itself gone stale, not
+ * just tool-silent) from the census entirely — exactly the class of starvation FR-1 was written
+ * to eliminate. isKnownWedged has its OWN staleness authority (last_tool_at + loop_state),
+ * independent of heartbeat_at, and is the correct arbiter for "is this session dead."
  *
  * @param {object} session
  * @param {(session: object) => boolean} isClaimed - injected claim signal (TR-3: each caller
@@ -136,6 +144,19 @@ export function isEngagementBasePopulationMember(session, coordinatorId) {
  */
 export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), cutMinutes, graceMs, liveWindowMs = ENGAGEMENT_LIVE_WINDOW_MS } = {}) {
   try {
+    // isKnownWedged pairs the last_tool_at cut-point check with loop_state (genuine-worker.mjs) —
+    // raw classifySeat() alone ignores loop_state and misclassifies most legitimately-parked
+    // 'awaiting_tick' sessions as ZOMBIE (FR-2). Computed once, used both as the EXCLUDED-vs-ZOMBIE
+    // exemption below and as the live-path ZOMBIE check.
+    const isKnownWedged = _isKnownWedged;
+    const wedged = session.last_tool_at != null && isKnownWedged(session, nowMs, cutMinutes);
+
+    const hbMs = session.heartbeat_at ? Date.parse(session.heartbeat_at) : NaN;
+    const isLive = Number.isFinite(hbMs) && nowMs - hbMs < liveWindowMs;
+
+    if (!isLive) return wedged ? 'ZOMBIE' : 'EXCLUDED';
+
+    // From here, isLive === true — ENGAGED and TAIL both require a live session underneath them.
     if (isClaimed && isClaimed(session)) return 'ENGAGED';
 
     const { isCompletionRelease, DEFAULT_COMPLETION_GRACE_MS } = loadDetectors();
@@ -145,18 +166,6 @@ export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), 
       if (Number.isFinite(releasedAtMs) && nowMs - releasedAtMs <= effectiveGraceMs) return 'TAIL';
     }
 
-    // isKnownWedged pairs the last_tool_at cut-point check with loop_state (genuine-worker.mjs) —
-    // raw classifySeat() alone ignores loop_state and misclassifies most legitimately-parked
-    // 'awaiting_tick' sessions as ZOMBIE (FR-2). Computed once, used both as the EXCLUDED-vs-ZOMBIE
-    // exemption below and as the live-path ZOMBIE check.
-    const { isKnownWedged } = requireGenuineWorker();
-    const wedged = session.last_tool_at != null && isKnownWedged(session, nowMs, cutMinutes);
-
-    const hbMs = session.heartbeat_at ? Date.parse(session.heartbeat_at) : NaN;
-    const isLive = Number.isFinite(hbMs) && nowMs - hbMs < liveWindowMs;
-
-    if (!isLive) return wedged ? 'ZOMBIE' : 'EXCLUDED';
-
     if (session.last_tool_at == null) return 'UNKNOWN';
     if (wedged) return 'ZOMBIE';
     return 'IDLE';
@@ -165,14 +174,14 @@ export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), 
   }
 }
 
-// isKnownWedged is genuinely ESM (lib/fleet/genuine-worker.mjs), so a normal static import is
-// used rather than the CJS createRequire path above; wrapped in a function only so a resolution
-// failure at import time cannot take this whole module down before engagementGaugeOn() is even
-// checked (matches this file's own fail-soft posture end to end).
+// isKnownWedged is genuinely ESM (lib/fleet/genuine-worker.mjs), unlike stuck-seat-predicate.cjs
+// and detectors.cjs above — no CJS interop shim is needed, so this is a plain static import
+// rather than the lazy createRequire pattern those two use. (A wrapper function here would NOT
+// defer resolution the way the CJS lazy-loaders do — static imports are hoisted and resolved
+// before any module code runs, regardless of where in the file, or behind what function, the
+// binding is referenced. Fail-soft for THIS dependency comes from the try/catch in
+// classifySessionBucket, not from import timing.)
 import { isKnownWedged as _isKnownWedged } from '../../lib/fleet/genuine-worker.mjs';
-function requireGenuineWorker() {
-  return { isKnownWedged: _isKnownWedged };
-}
 
 /**
  * Classify a full session set into bucket counts (FR-1). Filters to the base population first
