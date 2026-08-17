@@ -909,7 +909,7 @@ async function main() {
     try {
       const guard = await runChairmanGatedDecisionRowGuard(sb);
       if (guard.hits > 0) {
-        console.log(`QUIET_TICK_CHAIRMAN_GATED_UNSURFACED=${guard.hits} recorded=${guard.recorded} backfilled=${guard.backfilled} errors=${guard.errors.length}`);
+        console.log(`QUIET_TICK_CHAIRMAN_GATED_UNSURFACED=${guard.hits} recorded=${guard.recorded} backfilled=${guard.backfilled} suppressed=${guard.suppressed} errors=${guard.errors.length}`);
       }
       for (const e of guard.errors) {
         console.error(`QUIET_TICK_CHAIRMAN_GATED_STAMP_ERROR=adam sd_key=${e.sd_key} error="${e.error}"`);
