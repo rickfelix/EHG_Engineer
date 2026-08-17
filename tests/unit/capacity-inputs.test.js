@@ -34,7 +34,7 @@ import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
  * fetches rows and runs isAutoStartableQF over them in JS, so quick_fixes now needs the SAME
  * row-capable builder claude_sessions/strategic_directives_v2 already use, not a narrower one).
  */
-function fakeClient({ sessions = [], sds = [], qfCount = 0 } = {}) {
+function fakeClient({ sessions = [], sds = [], qfCount = 0, qfs: qfsOverride } = {}) {
   const table = (rows) => {
     const b = {
       _rows: rows,
@@ -70,11 +70,15 @@ function fakeClient({ sessions = [], sds = [], qfCount = 0 } = {}) {
     owner: null,
     release_condition: null,
   }));
+  // QF-20260817-849: an explicit `qfs` override array (real rows, e.g. carrying
+  // claiming_session_id) takes precedence over the auto-generated `qfCount` rows above, which
+  // never set claiming_session_id.
+  const qfRows = qfsOverride !== undefined ? qfsOverride : qfs;
   return {
     from(name) {
       if (name === 'claude_sessions') return table(sessions);
       if (name === 'strategic_directives_v2') return table(sds);
-      if (name === 'quick_fixes') return table(qfs);
+      if (name === 'quick_fixes') return table(qfRows);
       return table([]);
     },
   };
@@ -163,6 +167,38 @@ describe('SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 TS-9: select-list contract for
     // pins the query contract that makes it true in production.
     expect(out.engagement.unmeasured).not.toBe(true);
     expect(out.engagement.zombie).toBe(1);
+  });
+
+  // QF-20260817-849: the Solomon concurrence amendment for SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001
+  // required the dual-surface isClaimed predicate (SD claims OR QF claims) to be proven live over
+  // gatherCapacityInputs' own real path — not just over classifyEngagementBuckets in isolation
+  // (already covered by tests/unit/engagement-buckets.test.js, which only exercises SD-shaped
+  // claims). This is that missing fixture-free assertion, plus its negative control.
+  it('a session holding ONLY a quick_fixes claim (no SD claim) classifies ENGAGED', async () => {
+    const sess = liveSession({ session_id: 'qf-only-claimant-1' });
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [sess],
+      sds: [], // deliberately empty — proves the QF surface alone is sufficient, not a co-claim
+      qfs: [{ id: 'qf-live-1', claiming_session_id: sess.session_id }],
+    }), { now: Date.now() });
+
+    expect(out.engagement.unmeasured).not.toBe(true);
+    expect(out.engagement.engaged).toBe(1);
+    // The QF claim must NOT leak into the SD-only belt-depth building/idle counts (TR-3: additive,
+    // never folded into claimsBySession) — this worker still reads idle from the belt's own view.
+    expect(out.building).toBe(0);
+  });
+
+  it('[negative control] the SAME session with NO claim on either surface does NOT classify ENGAGED', async () => {
+    const sess = liveSession({ session_id: 'qf-only-claimant-1' });
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [sess],
+      sds: [],
+      qfs: [], // no quick_fixes row references this session at all
+    }), { now: Date.now() });
+
+    expect(out.engagement.unmeasured).not.toBe(true);
+    expect(out.engagement.engaged).toBe(0);
   });
 });
 
