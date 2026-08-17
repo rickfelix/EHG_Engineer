@@ -30,7 +30,7 @@ const makeSender = () => ({ send: vi.fn(async () => ({ sid: 'SM-test' })) });
 const silentConsole = { warn: vi.fn(), error: vi.fn(), log: vi.fn() };
 
 /** Minimal fake supabase covering exactly what stageDecisionSmsNotification + handleInboundSmsReply need. */
-function makeFakeSupabase(seed = {}, { forceInsertError = null } = {}) {
+function makeFakeSupabase(seed = {}, { forceInsertError = null, forceUpdateError = null } = {}) {
   const tables = {
     chairman_notifications: [...(seed.chairman_notifications || [])],
     chairman_decisions: [...(seed.chairman_decisions || [])],
@@ -83,6 +83,10 @@ function makeFakeSupabase(seed = {}, { forceInsertError = null } = {}) {
           return;
         }
         if (ctx.mode === 'update') {
+          if (forceUpdateError && forceUpdateError.table === table) {
+            resolve({ data: null, error: { message: forceUpdateError.message || 'forced update error' } });
+            return;
+          }
           const rows = applyFilters(tables[table], ctx.filters);
           rows.forEach((r) => Object.assign(r, ctx.vals));
           resolve({ data: ctx.returnSelect ? rows.map((r) => ({ id: r.id })) : null, error: null });
@@ -118,9 +122,11 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       expect(sender.send).toHaveBeenCalledTimes(1);
       expect(sb._tables.chairman_notifications).toHaveLength(1);
       const row = sb._tables.chairman_notifications[0];
+      // status is asserted separately by TS-7 (staged queued, then transitioned to sent on
+      // confirmed dispatch, QF-20260815-065) -- this assertion is about identity/staging fields.
       expect(row).toMatchObject({
         channel: 'sms', decision_id: 'dec-env-1', chairman_user_id: 'u-env',
-        recipient_email: 'chairman@env.example', recipient_phone: '+15550001111', status: 'queued',
+        recipient_email: 'chairman@env.example', recipient_phone: '+15550001111',
       });
       expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeTruthy();
       // The dispatched message carries the SAME resolved phone staging used (TR-5).
@@ -177,14 +183,20 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(supabaseSpy).not.toHaveBeenCalled();
   });
 
-  it('TS-7: the gate always stages with status=queued (async-obligation shape), never a synchronous post-send shape', async () => {
+  it('TS-7 (superseded by QF-20260815-065): staging inserts status=queued BEFORE dispatch, then a confirmed send transitions the row to sent with the real SID', async () => {
+    // Pre-QF-20260815-065 this test asserted the row STAYED queued/null forever after a
+    // confirmed successful send -- that was the bug (the Twilio webhook can only heal a row
+    // by matching provider_message_id, which never left null). staging itself is unchanged
+    // (still inserts queued, since dispatch hasn't happened yet at staging time); what changed
+    // is that a CONFIRMED success now transitions the row before sendChairmanSMS returns.
     const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-7', status: 'pending', brief_data: {} }] });
     const sender = makeSender();
-    await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-7' }), DAYTIME, { sender, console: silentConsole, supabase: sb });
+    const res = await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-7' }), DAYTIME, { sender, console: silentConsole, supabase: sb });
+    expect(res.sent).toBe(true);
     const row = sb._tables.chairman_notifications[0];
-    expect(row.status).toBe('queued');
-    expect(row.provider_message_id).toBeNull();
-    expect(row.sent_at).toBeNull();
+    expect(row.status).toBe('sent');
+    expect(row.provider_message_id).toBe('SM-test');
+    expect(row.sent_at).not.toBeNull();
   });
 
   it('TS-8: a message the classifier does NOT resolve to decision never stages, regardless of decisionId', async () => {
@@ -252,5 +264,18 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(res.transportFailed).toBe(true);
     expect(res.reason).toContain('sender_threw');
     expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeNull();
+  });
+
+  it('TS-12 (QF-20260815-065): a failed status-update after a CONFIRMED successful send stays sent:true — audit-trail bookkeeping never downgrades a real success', async () => {
+    const sb = makeFakeSupabase(
+      { chairman_decisions: [{ id: 'dec-12', status: 'pending', brief_data: {} }] },
+      { forceUpdateError: { table: 'chairman_notifications', message: 'status update boom' } },
+    );
+    const sender = makeSender();
+    const res = await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-12' }), DAYTIME, { sender, console: silentConsole, supabase: sb });
+    expect(res.sent).toBe(true);
+    expect(silentConsole.error).toHaveBeenCalledWith(expect.stringContaining('notification status update failed'));
+    // The row is left exactly as staging left it (queued) -- the update genuinely failed, not silently no-op'd.
+    expect(sb._tables.chairman_notifications[0].status).toBe('queued');
   });
 });

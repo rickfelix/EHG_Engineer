@@ -14,6 +14,7 @@ import {
   sendChairmanSmsQuestion,
   stageDecisionSmsNotification,
   handleInboundSmsReply,
+  updateNotificationStatus,
 } from '../../../lib/chairman/sms-bridge.js';
 
 function makeFakeSupabase(seed = {}, { forceInsertError = null, forceUpdateError = null } = {}) {
@@ -246,5 +247,34 @@ describe('TS-4: sendChairmanSmsQuestion regression pin — both branches keep th
     expect(row.sent_at).toBeNull();
     // The chairman_decisions row must NOT receive a reply token for a send that never went out.
     expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeUndefined();
+  });
+});
+
+describe('updateNotificationStatus (QF-20260815-065): heals the Adam-outbound gate\'s stuck-queued row', () => {
+  it('TS-1: transitions the row to sent with the confirmed provider_message_id and sentAt', async () => {
+    const sb = makeFakeSupabase({
+      chairman_notifications: [{ id: 'notif-1', status: 'queued', provider_message_id: null, sent_at: null }],
+    });
+    const sentAt = new Date().toISOString();
+    await updateNotificationStatus(sb, { notificationId: 'notif-1', providerMessageId: 'SID-CONFIRMED', sentAt });
+    const row = sb._tables.chairman_notifications[0];
+    expect(row.status).toBe('sent');
+    expect(row.provider_message_id).toBe('SID-CONFIRMED');
+    expect(row.sent_at).toBe(sentAt);
+  });
+
+  it('TS-2: an injected chairman_notifications update error throws', async () => {
+    const sb = makeFakeSupabase(
+      { chairman_notifications: [{ id: 'notif-1', status: 'queued' }] },
+      { forceUpdateError: { table: 'chairman_notifications', message: 'update boom' } },
+    );
+    await expect(updateNotificationStatus(sb, { notificationId: 'notif-1', providerMessageId: 'SID-1', sentAt: new Date().toISOString() }))
+      .rejects.toThrow(/update boom/);
+  });
+
+  it('TS-3: a notificationId matching zero rows throws notification_not_found (mirrors updateChairmanDecisionSmsFields\'s decision_not_found contract)', async () => {
+    const sb = makeFakeSupabase({ chairman_notifications: [] });
+    await expect(updateNotificationStatus(sb, { notificationId: 'notif-missing', providerMessageId: 'SID-1', sentAt: new Date().toISOString() }))
+      .rejects.toThrow(/notification_not_found/);
   });
 });
