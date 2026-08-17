@@ -264,6 +264,58 @@ columns) was in scope for the folded-in `SD-LEO-INFRA-NAIVE-TIMESTAMP-SKEW-001` 
 the fold — neither SD covers it; a follow-up SD is recommended. See this SD's PRD FR-6 and the
 completion-flags capture at LEAD-FINAL-APPROVAL.
 
+## Applying `20260817_fdbk_internal_feedback_rpc.sql`
+
+```
+node scripts/apply-migration.js "database/chairman-gated/20260817_fdbk_internal_feedback_rpc.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-FDBK-FIX-FEEDBACKWIDGET-PURPOSE-BUILT-001.) Adds two new, additive-only functions: a SECURITY
+DEFINER RPC `fn_submit_internal_feedback` (identity via `auth.uid()`, `authenticated`-only grant, no
+`anon` grant) and a `user_id`-scoped rate-limit helper `check_internal_feedback_rate_limit`. Gives
+signed-in `ehg/src/components/quality/FeedbackWidget.tsx` users a working submit path at every
+severity — today `public.feedback` has zero permissive INSERT policy reachable by `anon` or
+`authenticated` (only `service_role`), so every FeedbackWidget submission is unconditionally
+rejected, at every severity, masking exactly the most urgent (critical/high) feedback.
+
+**No new RLS policy, no edit to `anon_feedback_ingress_bounds`.** A `SECURITY DEFINER` function
+bypasses table RLS entirely for its own internal write (the same mechanism the already-shipped
+`fn_submit_venture_user_feedback` relies on) — this migration is independent of, and does not touch
+or depend on, the separate zero-permissive-grant remediation tracked elsewhere (Remedy A/B: see
+`20260815_venture_user_feedback_ownership_rpc.sql` / `20260817_restore_feedback_permissive_insert.sql`
+above).
+
+**Severity is deliberately NOT clamped.** Unlike `anon_feedback_ingress_bounds`'s exclusion of
+critical/high (a bound designed for an *anonymous* caller), this RPC's caller identity is real and
+non-forgeable (`auth.uid()`), so the abuse control is a `user_id`-scoped rate limit (20/hour) plus a
+global per-hour ceiling (200/hour, mirroring `anon_feedback_ingress_bounds`'s own `manual_feedback`
+cap) — not a severity clamp, which would reproduce the exact defect this migration fixes. See the
+migration file's own header for the full reasoning and the PRD's TR-2 for the sub-agent review trail.
+
+**⚠️ DEPLOYMENT ORDERING.** Apply this migration BEFORE deploying the paired frontend change
+(`FeedbackWidget.tsx` / `feedbackDataAccess.ts`, ehg repo) — the frontend calls the RPC
+unconditionally, no feature flag. If the RPC is missing, the frontend fails loudly (42883), no worse
+than today's standing defect (42501); no feature flag is used deliberately (see the PRD's TR-6). To
+roll back: revert the frontend PR FIRST, then apply the DOWN migration — reverse of the forward
+order.
+
+**Proof sequence — run before ceremony, safe to re-run any time (ROLLBACK-guarded, never touches
+live data):**
+
+```
+node database/chairman-gated/20260817_fdbk_internal_feedback_rpc_dry_run.mjs
+```
+
+Creates both functions inside a transaction, exercises every success/error path (severity
+critical/high/medium/low, invalid type/severity, empty title, `auth.uid()` NULL, per-user rate-limit
+trip, cross-user isolation, global-ceiling trip, and the exact `{ok, id}` response-shape contract),
+and always `ROLLBACK`s. The migration's own `DO $verify$` block additionally asserts the EXECUTE
+grant posture (`authenticated` can call it, `anon` cannot) at apply time — a lesson carried forward
+from this SD family's own completion retro: a verify block that only re-checks catalog *shape*
+(function exists) can pass while every real call still 42501s, because EXECUTE grants were never
+asserted.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
