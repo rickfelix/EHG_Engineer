@@ -106,6 +106,9 @@ async function main() {
     claimableCount, openQfCount, claimable, rows, workers, maskedIds,
     // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001 (FR-3): the named extent + raw-vs-dispatchable split.
     beltExtent, rawUnclaimed, dispatchableCount,
+    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the four-bucket engagement gauge — computed inside
+    // gatherCapacityInputs (fail-soft, FR-4), merged into detail below.
+    engagement,
   } = inputs;
 
   // THE LADDER IS NO LONGER SPELLED HERE. computeBeltVerdict owns it, and drive-report-sweep.mjs
@@ -287,6 +290,18 @@ async function main() {
         belt_extent: beltExtent,
         dispatchable_count: dispatchableCount,
         raw_unclaimed: rawUnclaimed,
+        // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-4): additive, namespaced, and already
+        // fail-soft from gatherCapacityInputs — `engagement` degrades to {unmeasured:true} on
+        // any internal fault or when ENGAGEMENT_GAUGE_ENABLED=false, never throws, and can never
+        // block the belt_depth/demand_soon/deficit/verdict fields above from persisting.
+        engagement_engaged: engagement.engaged ?? null,
+        engagement_tail: engagement.tail ?? null,
+        engagement_zombie: engagement.zombie ?? null,
+        engagement_idle: engagement.idle ?? null,
+        engagement_unknown: engagement.unknown ?? null,
+        engagement_population: engagement.population ?? null,
+        engagement_population_extent: engagement.populationExtent ?? null,
+        engagement_unmeasured: engagement.unmeasured === true,
       },
     });
   } catch (err) {

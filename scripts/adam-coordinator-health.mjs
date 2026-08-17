@@ -40,6 +40,12 @@ import {
   FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS,
 } from '../lib/oversight/coordinator-health-sharpenings.mjs';
 import { registerOversightLoop } from '../lib/oversight/coordinator-health-recompute.mjs';
+// SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — the SAME
+// standalone module scripts/lib/capacity-inputs.mjs imports (TR-1: identical base population on
+// both integration points). Computed as its own try/caught reading.engagement key in runProbe
+// below, never inside computeUtilization itself — classifyBreach only ever receives
+// {utilization, planAdherence, integrity}, so it structurally cannot see this new field.
+import { classifyEngagementBuckets, engagementGaugeOn, unmeasuredEngagement } from './lib/engagement-buckets.mjs';
 
 export const DIMENSION = 'adam_coordinator_health';
 export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
@@ -51,7 +57,7 @@ export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
  * (SD.target_application != EHG_Engineer) legitimately shows commits_since_claim=0 here but
  * still has sd_key set, so it is correctly counted as claimed, never idle.
  */
-export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) {
+export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRows } = {}) {
   // QF-20260720-161: claude_sessions accumulates historical rows (12,973 live-verified,
   // well past PostgREST's 1000-row default page cap). An unordered select('*') silently
   // returned an arbitrary/oldest-leaning 1000-row slice containing ZERO status='active'
@@ -80,6 +86,17 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
   // from the shared gauge, which applies the same claim gate the dispatcher uses. Cap protection
   // is preserved inside that helper via fetchAllPaginated.
   const { dispatchable: backlogSize, raw: rawUnclaimedDrafts } = await countDispatchableBacklog(supabase);
+
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — SECURITY-EXEC re-review (residual on evidence row
+  // 0962b994): a producer-side "private" field on the return object (_rows/_coordinatorId) is a
+  // leak waiting for a THIRD caller to forget to strip it — main()'s --dry-run branch already
+  // logged the whole reading, carriers included, to stdout (2.1MB, no DB write, but still the same
+  // defect class). A callback never becomes part of any object a future caller might spread, log,
+  // or persist whole — it structurally cannot leak through a path nobody thought to audit.
+  // Optional and fire-and-forget: runProbe is the only caller that passes it today.
+  if (typeof onRawRows === 'function') {
+    try { onRawRows(rows, coordinatorId); } catch { /* the callback's own failure is its caller's problem, never this KPI's */ }
+  }
 
   return {
     live_workers: live.length,
@@ -479,7 +496,35 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
 }
 
 export async function runProbe(supabase, opts = {}) {
-  const utilization = await computeUtilization(supabase, opts);
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — SECURITY-EXEC re-review: the raw session snapshot
+  // computeUtilization already fetched is handed over via a CALLBACK, never as a field on the
+  // returned object (an earlier draft leaked _rows/_coordinatorId into every persisted KPI
+  // snapshot, the advisory body, AND main()'s --dry-run stdout dump — three separate leak sites
+  // for one "private" field, because nothing structurally prevented a new caller from spreading
+  // the whole object). `utilization` below is the plain, always-safe return value.
+  let rawSessionsForEngagement = [];
+  let coordinatorIdForEngagement = null;
+  const utilization = await computeUtilization(supabase, {
+    ...opts,
+    onRawRows: (rows, coordinatorId) => { rawSessionsForEngagement = rows; coordinatorIdForEngagement = coordinatorId; },
+  });
+  // Own try/catch, mirroring computeFailLoudIntegrity's pattern rather than the unguarded
+  // computeUtilization call above — a defect here must never blank KPI-0/1/2/3 persistence for the
+  // whole probe run. isClaimed mirrors this KPI's own documented current-claim signal (!!s.sd_key,
+  // see computeUtilization's docblock) — classifyBreach below is unaffected: it destructures
+  // {utilization, planAdherence, integrity}, and `utilization` here never carried the raw rows.
+  let engagement;
+  try {
+    engagement = engagementGaugeOn()
+      ? classifyEngagementBuckets(rawSessionsForEngagement, {
+          coordinatorId: coordinatorIdForEngagement,
+          now: opts.nowMs ?? Date.now(),
+          isClaimed: (s) => !!s.sd_key,
+        })
+      : unmeasuredEngagement('ENGAGEMENT_GAUGE_ENABLED=false');
+  } catch (error) {
+    engagement = unmeasuredEngagement(error);
+  }
   const planAdherence = await computePlanAdherence(supabase);
   // QF-20260805-181: injectable seam mirrors claimableLeavesFn/gitGrep/makePgClient in this file.
   const livenessFn = opts.coordinatorLivenessFn || computeCoordinatorLiveness;
@@ -548,6 +593,10 @@ export async function runProbe(supabase, opts = {}) {
     dispatch_reasons: { ...(sharp.dispatchReasons || {}), band: sharp.bandVerdict },
     recompute,
     breach,
+    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-5): top-level, namespaced, additive. classifyBreach
+    // (above) was already called with only {utilization, planAdherence, integrity} — it cannot see
+    // this key even in a future refactor unless someone explicitly widens that call.
+    engagement,
   };
   await persistReading(supabase, reading);
   // S5: idempotent registration keeps the oversight loop's registry row (and

@@ -619,3 +619,62 @@ describe('runProbe integration (TS-1..TS-5 wired end-to-end)', () => {
     expect(inserted.some((i) => i.t === 'session_coordination')).toBe(true);
   });
 });
+
+describe('SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: engagement gauge wiring (TS-5, TS-6)', () => {
+  const pgDisabled = async () => { throw new Error('pg-disabled-in-unit'); };
+
+  it('reading.engagement is populated on a normal run, additive to the pre-existing utilization fields', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    const supabase = makeFakeSupabase(
+      { claude_sessions: [liveCoordinatorRow(), { session_id: 'w1', sd_key: 'SD-X', status: 'active', heartbeat_at: minutesAgo(0), last_tool_at: minutesAgo(1), metadata: {} }], strategic_directives_v2: [], codebase_health_snapshots: [] },
+    );
+    const reading = await runProbe(supabase, { makePgClient: pgDisabled });
+    expect(reading.engagement).toBeDefined();
+    expect(reading.engagement.unmeasured).not.toBe(true);
+    expect(reading.engagement.engaged + reading.engagement.tail + reading.engagement.zombie + reading.engagement.idle + reading.engagement.unknown)
+      .toBe(reading.engagement.population);
+    // additive: pre-existing utilization fields are untouched by the new key's presence
+    expect(reading.utilization.live_workers).toBeGreaterThanOrEqual(1);
+  });
+
+  it('TS-6 REGRESSION PIN: classifyBreach output is unchanged whether or not reading.engagement disagrees with utilization.idle', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    // A session with sd_key set (utilization counts it "claimed", not idle) but NOT a genuine
+    // engagement claim signal disagreement is enough here — the point is classifyBreach must
+    // read ONLY utilization.idle/dispatchable_backlog_size, never reading.engagement, structurally
+    // (its call signature is {utilization, planAdherence, integrity} — engagement is not passed).
+    const supabase = makeFakeSupabase(
+      { claude_sessions: [liveCoordinatorRow()], strategic_directives_v2: [], codebase_health_snapshots: [] },
+    );
+    const before = await runProbe(supabase, { makePgClient: pgDisabled });
+    // Re-run classifyBreach directly against the SAME utilization/planAdherence/integrity, proving
+    // its verdict cannot be a function of reading.engagement (which it never receives at all).
+    const pinned = classifyBreach({ utilization: before.utilization, planAdherence: before.plan_adherence, integrity: before.integrity });
+    expect(pinned.breach).toBe(before.breach.idleWithBacklog || before.breach.integrityBreach);
+    expect(pinned.idleWithBacklog).toBe(before.breach.idleWithBacklog);
+  });
+
+  it('TS-5 FAULT INJECTION: a throwing engagement classifier never blocks KPI-0/1/2/3 persistence', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    const engagementModule = await import('../../../scripts/lib/engagement-buckets.mjs');
+    const spy = vi.spyOn(engagementModule, 'classifyEngagementBuckets').mockImplementation(() => { throw new Error('engagement computation exploded'); });
+    const inserted = [];
+    const supabase = makeFakeSupabase(
+      { claude_sessions: [liveCoordinatorRow()], strategic_directives_v2: [], codebase_health_snapshots: [] },
+      { onInsert: (t, r) => inserted.push({ t, r }) },
+    );
+    const reading = await runProbe(supabase, { makePgClient: pgDisabled });
+    // The pre-existing, load-bearing fields persisted exactly as they would without this SD:
+    expect(reading.utilization).toBeDefined();
+    expect(reading.integrity.integrity_ok).toBe(true);
+    expect(inserted.some((i) => i.t === 'codebase_health_snapshots')).toBe(true);
+    // The new field alone degrades — with null counts, never zeros (deep-tier ship-review round 5:
+    // a bare 0 here would be indistinguishable from "genuinely zero engaged workers" for any reader
+    // of this field that doesn't check `unmeasured` first).
+    expect(reading.engagement.unmeasured).toBe(true);
+    expect(typeof reading.engagement.error).toBe('string');
+    expect(reading.engagement.engaged).toBeNull();
+    expect(reading.engagement.population).toBeNull();
+    spy.mockRestore();
+  });
+});
