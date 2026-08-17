@@ -195,6 +195,17 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   // uncapped read for any session with heartbeat 5-15min old — measured live during EXEC-phase
   // TESTING re-review. A SEPARATE fetch (not a widened liveCutoff on the query above) so the
   // existing belt-depth/workers/claimsBySession derivation is untouched — additive only.
+  //
+  // KNOWN, DISCLOSED GAP (DEF-6, non-blocking — EXEC-phase TESTING round-3 re-review): this .gte()
+  // still drops a HARD-wedged session (heartbeat itself stale, not just tool-silent) before
+  // classifySessionBucket's isKnownWedged exemption (engagement-buckets.mjs) ever gets to run —
+  // the SQL filter and the in-memory exemption are two different layers, and only the in-memory
+  // one knows about the exemption. KPI-1's side (adam-coordinator-health.mjs, select('*') with no
+  // age cutoff) is UNAFFECTED and sees these sessions correctly. Left open deliberately: this is
+  // an advisory-only gauge (FR-6 kill switch, drives no actuation), the forecaster errs toward
+  // UNDER-counting ZOMBIE (optimistic, not a suppressed alarm), and the chairman-facing KPI-1 path
+  // — the one actually surfaced — is correct. Tracked as a completion-flag follow-up rather than
+  // fixed here to avoid a 4th adversarial-review round chasing a narrower edge of an edge case.
   const engagementLiveCutoff = new Date(Date.now() - ENGAGEMENT_LIVE_WINDOW_MS).toISOString();
   const [sessions, sds, openQfCountRaw, qfClaimedRows, engagementSessions] = await Promise.all([
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
