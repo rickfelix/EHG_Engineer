@@ -81,16 +81,18 @@ function printHumanReadable(report) {
     console.log(`\n  ${report.malformed_row_count} malformed EXIT_GATE_OBSERVE_ONLY row(s) excluded (missing stage_number/gate_string)`);
   }
 
-  if (!report.config_cross_check.ok) {
-    if (report.config_cross_check.error) {
-      console.log(`\n  ⚠️  Could not cross-check live venture_stages config: ${report.config_cross_check.error}`);
-    } else {
-      if (report.config_cross_check.missing_from_checker.length > 0) {
-        console.log(`\n  ⚠️  Live config declares observe-only strings this checker does NOT know about: ${report.config_cross_check.missing_from_checker.join(', ')}`);
-      }
-      if (report.config_cross_check.extra_in_checker.length > 0) {
-        console.log(`  ⚠️  This checker tracks strings no longer in the live observe-only config: ${report.config_cross_check.extra_in_checker.join(', ')}`);
-      }
+  // Adversarial-review fix: crossCheckCandidateGateStrings returns ok=true even in its own
+  // catch branch (fail-open by design, per its own doc comment) -- so `error` and `!ok` are NOT
+  // mutually exclusive with `ok`, and gating the error print behind `!ok` made it unreachable.
+  // Check error independently.
+  if (report.config_cross_check.error) {
+    console.log(`\n  ⚠️  Could not cross-check live venture_stages config: ${report.config_cross_check.error}`);
+  } else if (!report.config_cross_check.ok) {
+    if (report.config_cross_check.missing_from_checker.length > 0) {
+      console.log(`\n  ⚠️  Live config declares observe-only strings this checker does NOT know about: ${report.config_cross_check.missing_from_checker.join(', ')}`);
+    }
+    if (report.config_cross_check.extra_in_checker.length > 0) {
+      console.log(`  ⚠️  This checker tracks strings no longer in the live observe-only config: ${report.config_cross_check.extra_in_checker.join(', ')}`);
     }
   }
 

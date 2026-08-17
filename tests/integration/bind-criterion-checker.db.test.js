@@ -22,10 +22,18 @@ const supabase = HAS_REAL_DB
   : null;
 
 describeDb('bind-criterion-checker against live system_events (TS-6, TS-8)', () => {
-  itDb('TS-6: VENTURE_STACK evaluator on the live table returns NOT_MET without throwing or NaN', async () => {
+  // Adversarial-review fix: this used to hardcode verdict='NOT_MET'. That is today's live
+  // state, but NOT_MET-forever is the opposite of what this tool is FOR -- once VENTURE_STACK
+  // observation data naturally accumulates past the criterion (the tool's own purpose), this
+  // assertion would start failing as a false CI "regression" with no code defect involved.
+  // Assert the verdict is a valid member of the enum instead, matching TS-8's own pattern below.
+  itDb('TS-6: VENTURE_STACK evaluator on the live table returns a valid verdict without throwing or NaN', async () => {
     const rows = await fetchVentureStackObserveRows(supabase);
     const result = evaluateVentureStackCriterion(rows);
-    expect(result.verdict).toBe('NOT_MET');
+    expect(['MEETS_CRITERION', 'NOT_MET']).toContain(result.verdict);
+    if (result.verdict === 'NOT_MET') {
+      expect(['insufficient_rows', 'insufficient_span']).toContain(result.reason);
+    }
     expect(typeof result.row_count).toBe('number');
     expect(Number.isNaN(result.span_hours)).toBe(false);
     if (result.false_positive_proxy_rate !== null) {
@@ -52,14 +60,22 @@ describeDb('bind-criterion-checker against live system_events (TS-6, TS-8)', () 
     }
   });
 
-  itDb('fetchExitGateObserveRows only queries rows filtered by event_type at the DB layer', async () => {
+  // Adversarial-review fix: the prior version of this test only checked returned-row SHAPE,
+  // which is guaranteed by fetchExitGateObserveRows's own mapper regardless of whether the
+  // event_type filter is actually applied -- it would pass unchanged even with the .eq() call
+  // deleted. This version proves the filter is real: an independent, ground-truth exact count
+  // for the SAME event_type must match what the function returns. Since system_events holds
+  // 141k+ rows across all event types combined, an accidentally-removed filter would return a
+  // count wildly larger than this independent count, failing loudly.
+  itDb('fetchExitGateObserveRows genuinely filters by event_type at the DB layer (not a post-fetch JS filter)', async () => {
+    const { count: groundTruthCount, error } = await supabase
+      .from('system_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_type', 'EXIT_GATE_OBSERVE_ONLY');
+    expect(error).toBeNull();
+
     const rows = await fetchExitGateObserveRows(supabase);
-    // Every returned row must have come from an EXIT_GATE_OBSERVE_ONLY event -- verified
-    // indirectly: none of these rows should carry a VENTURE_STACK-only field shape.
-    for (const row of rows) {
-      expect('venture_id' in row).toBe(true);
-      expect('gate_string' in row).toBe(true);
-    }
+    expect(rows.length).toBe(groundTruthCount);
   });
 });
 
