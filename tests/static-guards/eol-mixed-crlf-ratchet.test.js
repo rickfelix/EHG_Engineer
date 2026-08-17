@@ -86,6 +86,22 @@ describe('eol=lf-managed renormalization-dirty class (crlf+mixed) is frozen (R1,
     ).toEqual([]);
   });
 
+  it('every baseline entry is still a LIVE violation (no swap-in-a-vacated-slot)', () => {
+    // Round-2 ship-review finding (PR #7186): the size pin alone stops the baseline from
+    // GROWING, but not from being rewritten at constant size -- if a baseline entry is ever
+    // remediated without shrinking both the fixture and EXPECTED_BASELINE_SIZE together, a slot
+    // opens, and substituting a new offender's path for the stale one would pass the size check
+    // (still 4) and the NO-NEW-MEMBER check (the new path is "known" because it's now listed) at
+    // once. Asserting every baseline entry is still a genuine current violation closes that.
+    const stale = [...baseline()].filter((f) => !currentViolationPaths().includes(f));
+    expect(
+      stale,
+      'These baseline entries are no longer live eol=lf-managed/dirty violations -- remove them '
+      + 'from tests/fixtures/eol-mixed-crlf-baseline.txt AND lower EXPECTED_BASELINE_SIZE together '
+      + '(never replace a remediated entry with a different path at the same baseline size).'
+    ).toEqual([]);
+  });
+
   it('the class only ever SHRINKS -- the baseline cannot be padded to admit an offender', () => {
     expect(currentViolationPaths().length).toBeLessThanOrEqual(baseline().size);
   });
