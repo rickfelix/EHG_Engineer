@@ -5,13 +5,15 @@
 // database/migrations/20251211_fix_progress_trigger_rls_access.sql:334-356). The column is not
 // dropped (no DDL in this SD's scope), so it still silently accepts reads and writes. This is a
 // RATCHET guard, not a zero-tolerance one: a fresh census at authoring time found 37 pre-existing
-// bare-`progress` sites outside this SD's own repointed files (frozen in
-// tests/unit/hygiene/progress-column-baseline.json). The guard blocks any NEW site beyond that
+// bare-`progress` sites outside this SD's own repointed files, plus 9 more added by RULE D
+// below (QF-20260816-067) once raw pg client SQL text came into scope — 46 total, frozen in
+// tests/unit/hygiene/progress-column-baseline.json. The guard blocks any NEW site beyond that
 // baseline; the baseline may only shrink over time as future SDs clean up the remainder.
 //
-// Three AST-scoped rule shapes, all requiring the call chain to also contain
+// Rules A-C are AST-scoped, requiring the call chain to also contain
 // .from('strategic_directives_v2') (single-chain, syntactic — same precedent as
-// lib/static-analysis/consumer-index.js, no deep taint tracking):
+// lib/static-analysis/consumer-index.js, no deep taint tracking). RULE D is text-scoped, for
+// call shapes that have no .from() chain at all:
 //   RULE A (readers) — a PostgREST query-builder method (.select/.order/.eq/.neq/.gt/.gte/.lt/
 //           .lte/.is/.in/.filter/.like/.ilike/.contains) whose column-name string argument is
 //           EXACTLY "progress" (.select splits its comma-separated argument first; the rest
@@ -23,6 +25,12 @@
 //           SAME-SCOPE variable directly (and only ever, see reassignment note below)
 //           initialized from a chain containing .from('strategic_directives_v2') (e.g.
 //           `const { data: sd } = await supabase.from(...).select(...); ...sd.progress`).
+//   RULE D (raw SQL, readers+writers combined) — a raw pg-style `.query(sqlText, ...)` call
+//           (QF-20260816-067: lib/sd-park.js gates an SD status transition on
+//           Number(sd.progress)>=100 sourced from exactly this shape, invisible to A/B/C since
+//           there is no .from() chain at all) whose fully-static string/template-literal
+//           argument (no ${} interpolation) contains a SQL keyword immediately before the table
+//           name (FROM/UPDATE/INTO/JOIN) AND a "progress" token at a word boundary.
 //
 // KNOWN LIMITATIONS (measured via adversarial review, not guessed):
 //   - RULE C only resolves a single-hop direct declarator-init binding, and only when the
@@ -54,6 +62,12 @@
 //   - RULE A's column-list split does not parse PostgREST `alias:column` select syntax
 //     (`.select('foo:progress')`), and neither RULE B nor RULE C recognizes computed/bracket
 //     property access (`row['progress']`, `update({ ['progress']: 0 })`).
+//   - RULE D matches ANY `.query(...)` call by method name alone (no way to distinguish a pg
+//     Client/Pool from an unrelated same-named method without type information), so it trusts
+//     the SQL text itself as the signal; a dynamically-built SQL string (containing `${}`) is
+//     out of reach for the same single-hop reason RULE C stops at one hop, and a query that
+//     references the table without FROM/UPDATE/INTO/JOIN immediately before it (e.g. a bare
+//     table name inside a CTE body) is not anchored and will not match.
 // COMPENSATING CONTROL for the files this SD actually touched: every repointed read/write site
 // was verified by direct grep + Read against its own select/update clause during EXEC (never
 // repointed blind), and the pinned regression tests (tests/unit/eva-support/sd-reader.test.js,
@@ -79,6 +93,28 @@ const SINGLE_COLUMN_FILTER_METHODS = new Set(['order', 'eq', 'neq', 'gt', 'gte',
 
 // Write methods whose object-literal argument RULE B inspects for a `progress` key.
 const WRITE_METHODS = new Set(['update', 'insert', 'upsert']);
+
+// RULE D (raw SQL, readers+writers combined) — a raw pg-style `.query(sqlText, ...)` call
+// (method name `query`; no chain shape distinguishes a pg Client/Pool from any other
+// `.query()`-named method, so this trusts the SQL TEXT itself as the signal, same as trusting
+// a literal string argument elsewhere in this file) whose fully-static string/template-literal
+// argument (no ${} interpolation -- a dynamically built SQL string is out of reach for the same
+// single-hop, no-deep-taint-tracking reason RULE C stops at one hop) references the target
+// table via a SQL keyword immediately before it (FROM/UPDATE/INTO/JOIN -- anchors on TABLE
+// USAGE, not an incidental substring elsewhere in the string) AND contains a "progress" token
+// at a word boundary (not progress_percentage/progress_pct -- same exact-token discipline as
+// RULE A/B's DEAD_COLUMN check).
+const SQL_TABLE_RE = new RegExp(`\\b(?:from|update|into|join)\\s+${TABLE}\\b`, 'i');
+const SQL_PROGRESS_RE = new RegExp(`\\b${DEAD_COLUMN}\\b`, 'i');
+
+/** Fully-static SQL text from a `.query()` call's first argument, or null if dynamic/unsupported. */
+function extractStaticSqlText(node) {
+  if (node.type === 'StringLiteral') return node.value;
+  if (node.type === 'TemplateLiteral' && node.expressions.length === 0) {
+    return node.quasis.map((q) => q.value.cooked ?? q.value.raw).join('');
+  }
+  return null;
+}
 
 export const SELF_PATHS = new Set([
   'scripts/lint/progress-column-lint.mjs',
@@ -189,6 +225,14 @@ export function scanSource(content, filePath) {
               findings.push({ line: node.loc?.start?.line ?? 0, rule: 'B', method: methodName, snippet: `${methodName}({ ${DEAD_COLUMN}: ... })` });
             }
           }
+        }
+      } else if (methodName === 'query') {
+        const arg = node.arguments[0];
+        if (!arg) return;
+        const sql = extractStaticSqlText(arg);
+        if (sql == null) return;
+        if (SQL_TABLE_RE.test(sql) && SQL_PROGRESS_RE.test(sql)) {
+          findings.push({ line: node.loc?.start?.line ?? 0, rule: 'D', method: 'query', snippet: 'raw SQL query text' });
         }
       }
     },

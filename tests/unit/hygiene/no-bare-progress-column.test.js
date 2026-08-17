@@ -217,6 +217,64 @@ describe('RULE C — same-scope property-read (partial coverage, documented limi
   });
 });
 
+describe('RULE D — raw pg client SQL text (QF-20260816-067)', () => {
+  // A raw pg `client.query(sqlText, ...)` call has no .from() chain at all -- RULE A/B/C
+  // structurally cannot see it, which is exactly what made lib/sd-park.js:42,60 (the
+  // downstream Number(sd.progress) reads) invisible despite gating an SD status transition.
+  it('flags a raw SELECT string referencing the table and a bare "progress" column', () => {
+    const src = "client.query('SELECT sd_key, progress FROM strategic_directives_v2 WHERE sd_key=$1', [k]);";
+    const findings = scanSource(src, 'f.js');
+    expect(findings).toEqual([{ line: 1, rule: 'D', method: 'query', snippet: 'raw SQL query text' }]);
+  });
+
+  it('flags a raw UPDATE template literal (no interpolation) setting progress', () => {
+    const src = `
+      async function run(client, k) {
+        await client.query(
+          \`UPDATE strategic_directives_v2 SET progress = COALESCE($2, progress) WHERE sd_key=$1\`,
+          [k, null]
+        );
+      }
+    `;
+    const findings = scanSource(src, 'f.js');
+    expect(findings.some((f) => f.rule === 'D' && f.method === 'query')).toBe(true);
+  });
+
+  it('does NOT flag progress_percentage in raw SQL (exact-token match, not substring)', () => {
+    const src = "client.query('SELECT progress_percentage FROM strategic_directives_v2 WHERE sd_key=$1', [k]);";
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+
+  it('does NOT flag a raw query against an unrelated table', () => {
+    const src = "client.query('UPDATE other_table SET progress = 100 WHERE id=$1', [k]);";
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+
+  it('does NOT flag "progress" appearing without a FROM/UPDATE/INTO/JOIN anchor immediately before the table', () => {
+    // The table name must be the direct object of a table-introducing keyword -- an incidental
+    // co-occurrence (e.g. a comment-like aside) elsewhere in the string must not match.
+    const src = "client.query('SELECT id FROM other_table WHERE note = $1', ['strategic_directives_v2 progress']);";
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+
+  it('does NOT flag a dynamically-interpolated template literal (documented single-hop limitation)', () => {
+    // Same no-deep-taint-tracking precedent as RULE C: a SQL string built with ${} is out of
+    // reach for single-file, single-hop static analysis.
+    const src = 'client.query(`UPDATE strategic_directives_v2 SET progress = ${p} WHERE sd_key=$1`, [k]);';
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+
+  it('does NOT flag a same-shaped call whose method is not named "query"', () => {
+    const src = "client.execute('UPDATE strategic_directives_v2 SET progress = 100 WHERE sd_key=$1', [k]);";
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+
+  it('does NOT flag a raw query on the table that never mentions progress', () => {
+    const src = "client.query('SELECT sd_key, status FROM strategic_directives_v2 WHERE sd_key=$1', [k]);";
+    expect(scanSource(src, 'f.js')).toEqual([]);
+  });
+});
+
 describe('self-path and exclude-prefix handling', () => {
   it('SELF_PATHS contains exactly this guard file and its own test', () => {
     expect(SELF_PATHS).toEqual(new Set([
