@@ -35,9 +35,14 @@
 // Mints and then deletes a venture_ingest_keys row for one real venture (chosen dynamically, the
 // first active venture returned). If that venture's secret was ALREADY provisioned by legitimate
 // prior use (a live caller migrated per FR-5 Phase 3), this script's fn_provision_venture_ingest_
-// key call ROTATES it — invalidating whatever secret that live caller was holding. Do not run
-// --verify against a venture already in live caller use once FR-5 Phase 3 has actually happened;
-// this acceptance script is written for the Phase 1 window where no caller has migrated yet.
+// key call would ROTATE it — invalidating whatever secret that live caller was holding.
+//
+// QF-20260816-207 hardening: --verify now REFUSES to mint against a venture that already has a
+// venture_ingest_keys row, UNLESS ACCEPT_ROTATE_LIVE_VENTURE_ID=<that venture's id> is explicitly
+// set — the env var both pins the target and is the operator's affirmative consent that this WILL
+// rotate a real caller's secret. teardown() only DELETEs the row when this run's own INSERT (not
+// an UPDATE-on-conflict, checked post-mint via rotated_at IS NULL — race-free, unlike a pre-mint
+// snapshot) created it, so an override run rotates but never deletes a pre-existing row.
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
@@ -58,7 +63,7 @@ const results = [];
 const record = (name, pass, detail) => { results.push({ name, pass, detail }); console.log(`  [${pass ? 'PASS' : 'FAIL'}] ${name}${detail ? ' — ' + detail : ''}`); };
 
 const createdFeedbackIds = [];
-let ventureA = null, ventureB = null, secretA = null;
+let ventureA = null, ventureB = null, secretA = null, mintedFresh = false;
 
 async function readback(id) {
   const { data, error } = await svc.from('feedback').select('*').eq('id', id).maybeSingle();
@@ -70,13 +75,51 @@ async function setup() {
   const { data: ventures, error } = await svc.from('ventures').select('id, name').is('deleted_at', null).limit(2);
   if (error || !ventures || ventures.length < 2) throw new Error('need at least 2 live ventures to run this acceptance script');
   [ventureA, ventureB] = ventures;
+
+  // QF-20260816-207 (A3 ultrareview #7095 bug_018, hardened per ship-review round 1): "any live
+  // venture" is unstable and, once a real caller has migrated per FR-5 Phase 3, may already hold a
+  // legitimate secret -- minting would ROTATE it. ACCEPT_ROTATE_LIVE_VENTURE_ID both pins the
+  // target and is the operator's unambiguous, single-purpose consent to override the refusal below
+  // -- deliberately NOT named VENTURE_ID, which scripts/monitor-venture-run.cjs already reads for
+  // an unrelated purpose; an ambient VENTURE_ID in the operator's shell/.env must not silently
+  // disable this guard.
+  const ventureIdOverride = process.env.ACCEPT_ROTATE_LIVE_VENTURE_ID || null;
+  if (ventureIdOverride && ventureIdOverride !== ventureA.id) {
+    const { data: overrideVenture, error: ovErr } = await svc.from('ventures').select('id, name').eq('id', ventureIdOverride).is('deleted_at', null).maybeSingle();
+    if (ovErr || !overrideVenture) throw new Error(`ACCEPT_ROTATE_LIVE_VENTURE_ID ${ventureIdOverride} is not a live venture: ${ovErr?.message || 'not found'}`);
+    ventureA = overrideVenture;
+    // Ship-review finding: without this, an override that happens to equal the auto-picked
+    // ventureB collapses A===B, silently voiding the cross-venture spoof assertions below and
+    // leaking orphan feedback rows neither TS branch's cleanup tracks.
+    if (ventureB.id === ventureA.id) {
+      const { data: replacementB, error: repErr } = await svc.from('ventures').select('id, name').is('deleted_at', null).neq('id', ventureA.id).limit(1).maybeSingle();
+      if (repErr || !replacementB) throw new Error('need a second live venture distinct from ACCEPT_ROTATE_LIVE_VENTURE_ID to run the cross-venture spoof tests');
+      ventureB = replacementB;
+    }
+  }
   console.log(`using ventures: A=${ventureA.id} (${ventureA.name}), B=${ventureB.id} (${ventureB.name})`);
 
   if (MODE === 'verify') {
+    const { data: existingKey, error: keyCheckErr } = await svc.from('venture_ingest_keys').select('venture_id').eq('venture_id', ventureA.id).maybeSingle();
+    if (keyCheckErr) throw new Error(`pre-mint safety check failed: ${keyCheckErr.message}`);
+    if (existingKey && !ventureIdOverride) {
+      throw new Error(`REFUSING to mint: venture ${ventureA.id} already has a provisioned venture_ingest_keys row -- this script would ROTATE that real secret. Set ACCEPT_ROTATE_LIVE_VENTURE_ID=${ventureA.id} to explicitly confirm and override.`);
+    }
     const { data, error: provErr } = await svc.rpc('fn_provision_venture_ingest_key', { p_venture_id: ventureA.id });
     if (provErr) throw new Error(`provisioning failed in verify mode — the migration may not actually be applied: ${provErr.message}`);
     secretA = data;
-    console.log(`provisioned secret for venture A (length ${secretA?.length})`);
+    // rotated_at IS NULL post-mint means OUR call's INSERT created the row (fn_provision_venture_
+    // ingest_key's INSERT always sets it NULL; only the ON CONFLICT DO UPDATE branch sets it to
+    // now()). This READ is race-free at the moment it runs, but runVerify()'s ~10 RPC round-trips
+    // happen between here and teardown()'s delete -- a concurrent provision of the SAME venture in
+    // that window would rotate it again without changing this stale mintedFresh snapshot. The
+    // actual protection against destroying a concurrently-owned row is the .is('rotated_at', null)
+    // clause ON THE DELETE ITSELF (ship-review round 2) -- that WHERE clause is evaluated atomically
+    // by the DELETE statement, so it re-checks reality at the moment of deletion, not here.
+    const { data: postMint, error: postMintErr } = await svc.from('venture_ingest_keys').select('rotated_at').eq('venture_id', ventureA.id).maybeSingle();
+    if (postMintErr) throw new Error(`post-mint verification failed: ${postMintErr.message}`);
+    mintedFresh = postMint?.rotated_at == null;
+    console.log(`provisioned secret for venture A (length ${secretA?.length}, mintedFresh=${mintedFresh})`);
   }
 }
 
@@ -86,9 +129,21 @@ async function teardown() {
     if (error) console.error(`CLEANUP WARNING: failed to delete probe feedback rows: ${error.message}`);
   }
   if (secretA !== null && ventureA) {
-    const { error } = await svc.from('venture_ingest_keys').delete().eq('venture_id', ventureA.id);
-    if (error) console.error(`CLEANUP WARNING: failed to delete provisioned test secret: ${error.message}`);
-    else console.log('cleaned up: provisioned test secret deleted');
+    if (mintedFresh) {
+      // .is('rotated_at', null) makes this DELETE itself the atomic, race-free guard (ship-review
+      // round 2): if a concurrent process rotated this venture's key between the post-mint check
+      // above and now, rotated_at is no longer NULL and this WHERE clause matches zero rows --
+      // deleting nothing rather than destroying a row that process now owns.
+      const { error, count } = await svc.from('venture_ingest_keys').delete({ count: 'exact' }).eq('venture_id', ventureA.id).is('rotated_at', null);
+      if (error) console.error(`CLEANUP WARNING: failed to delete provisioned test secret: ${error.message}`);
+      else if (count === 0) console.warn(`WARNING: skipped deleting venture ${ventureA.id}'s ingest key -- it was rotated by another process between mint and teardown (race window), so it is no longer safe to remove.`);
+      else console.log('cleaned up: provisioned test secret deleted');
+    } else {
+      const cause = process.env.ACCEPT_ROTATE_LIVE_VENTURE_ID
+        ? `it pre-existed this run under ACCEPT_ROTATE_LIVE_VENTURE_ID`
+        : `it was concurrently provisioned by another process during this run (TOCTOU) -- not caused by an env override`;
+      console.warn(`WARNING: venture ${ventureA.id}'s ingest secret was ROTATED (not deleted -- ${cause}). Any live caller using the OLD secret for this venture is now broken with zero grace window (migration HIGH-3) and will need re-provisioning out of band.`);
+    }
   }
 }
 
