@@ -9,6 +9,50 @@ tags: [tiered-orchestration, door-routing, dispatch, economics, model-tier, fabl
 
 # Tiered Orchestration — One-Way/Two-Way Door Routing
 
+> **RETIRED 2026-08-16 (SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001).** The `door_class`
+> classifier/stamper/dispatch-gate/ledger subsystem described in "Components" 1-4, "The
+> same-evidence invariant", "Cutover & rollback", and "Deferred" below was never activated
+> (`DOOR_ROUTING_ENABLED` was never true in any real environment, and `door-classifier.mjs`/
+> `door-stamper.mjs` had no wired, ongoing production caller in the committed codebase --
+> git history shows exactly 2 commits ever touching either file, both from the original
+> build, no third commit ever adding a caller. **Correction, SECURITY review finding SEC-C1:**
+> 5 completed SDs (the `SD-ARCH-HOTSPOT-*` family) do carry `metadata.door_class`, stamped
+> in a single ~1-second window on 2026-07-09 by `stamped_by:'coordinator-cutover-2026-07-09'`
+> -- output byte-shaped exactly like `stampDoorClass()`'s return value, almost certainly a
+> one-time ad-hoc/manual invocation (a backfill tied to introducing the `door_class` concept)
+> rather than evidence of a live, ongoing dispatch-time invocation path. "Zero production
+> callers ever" overstated this; the accurate claim is zero wired/automated callers, one
+> historical manual exception, zero non-terminal carriers today. The chairman decided RETIRE (SMS
+> dc87e7a0, decision row 9ce56d34); `lib/fleet/door-constants.cjs`, `door-classifier.mjs`,
+> `door-stamper.mjs`, `door-routing-ledger.cjs`, and the `fable-allocation-report` reporting
+> script (formerly under `scripts/`) are all deleted, along with
+> `assertDoorRoutingAllowed` in `lib/coordinator/dispatch.cjs`. Sections below
+> describing them are kept as historical record, not as current architecture. The separate
+> "content-tier (Fable-use doctrine)" section further down **remains live** — `door_class` and
+> `model_recommendation` were always two different, independent axes (see the comparison table
+> in that section), and only the former was retired.
+>
+> **Governance record (coordinator directive 011b5962, replying to signal 2e9c41ae):** between
+> the tag's original 2026-07-12 expiry and this retirement, the coordinator (recused as both
+> tag owner and owner of the gauge it trips) re-anchored the same REVISIT-IF tag on
+> 2026-07-31 from a calendar date to a condition, per Adam's ratification, but that edit was
+> never committed -- it sat uncommitted in the shared primary worktree until this SD's
+> investigation surfaced it. Captured here verbatim before that root copy is discarded, since
+> this SD's RETIRE decision makes the tag itself moot (the file is deleted) but the governance
+> reasoning behind the 07-31 re-date is worth preserving as record: *"REVISIT-IF(condition=S20-26
+> run GO or Wave-1B closure, whichever comes first) owner=coordinator
+> provenance=SD-LEO-INFRA-TIERED-ORCHESTRATION-FABLE-001 note=the 2026-07-08 cutover NEVER
+> HAPPENED: DOOR_ROUTING_ENABLED is unset, so both consumers (dispatch.cjs:669,
+> door-routing-ledger.cjs:40) still early-return and dispatch is byte-identical to
+> pre-cutover. Re-dated 2026-07-31 on a CONDITION not a calendar (Adam ratification;
+> coordinator recused as both tag owner and owner of the gauge it trips) because a calendar
+> re-date just re-arms the same trip. Those two moments are when a tiered-orchestration
+> consumer either materializes or provably does not. If NO consumer exists then, removal goes
+> to the belt as a small SD rather than this shim surviving by inertia."* Both of those
+> named trigger moments (S20-26 run GO, Wave-1B closure) are now moot by a different route
+> than either one firing: the chairman's RETIRE decision (9ce56d34) resolved the underlying
+> question directly, so the condition never needed to be observed.
+
 **Operating model (chairman sprint item 5 + 2026-07-05 2:35 PM amendment):** after
 the Tuesday pricing cutover, Fable 5 runs as the high-level orchestrator on API
 pricing. **ONE-WAY doors** (irreversible work) stay Fable-exclusive; **TWO-WAY
@@ -21,7 +65,7 @@ the pure classifier **is** the mapping — there are no hand-kept workflow table
 | Axis | Where it lives | What this SD does with it |
 |---|---|---|
 | **Fleet-session axis** | worker `metadata.model/effort` → `tier_rank` via `lib/fleet/tier-ladder.cjs` | **This is the delegation axis.** `delegate_model` names which Max-plan session tier builds a two-way item. |
-| **LLM-client axis** | `lib/llm/client-factory.js` (in-process API calls; registered ollama seam) | Untouched. Its ollama seam is the natural hook when the deferred **local third tier** returns — extend `DELEGATE_TIERS` in `lib/fleet/door-constants.cjs`; no rubric or gate change. |
+| **LLM-client axis** | `lib/llm/client-factory.js` (in-process API calls; registered ollama seam) | Untouched. **(2026-08-16, SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001)** the deferred-local-third-tier hook this row named (`DELEGATE_TIERS` in `lib/fleet/door-constants.cjs`) was retired along with the rest of the two_way-door delegation gate — see the retirement banner above. A revived local/ollama tier would need a new delegate-tier registry, not an extension of the deleted one. |
 
 ## Components
 
@@ -80,8 +124,8 @@ question than `door_class` does. **Do not conflate the two axes:**
 
 | Axis | Question it answers | Classifier | Fail bias |
 |---|---|---|---|
-| `door_class` (above) | *Who is authorized to execute this?* (reversibility/execution-authority) | `lib/fleet/door-classifier.mjs` | fails **closed** toward `one_way` |
-| `model_recommendation` (this section) | *Does this work item's content warrant Fable's judgment at all?* (R1-R5 doctrine) | `lib/fleet/model-recommendation.cjs` | fails **open** toward `sonnet` |
+| `door_class` (above, **retired**) | *Who is authorized to execute this?* (reversibility/execution-authority) | ~~`lib/fleet/door-classifier.mjs`~~ deleted | failed **closed** toward `one_way` |
+| `model_recommendation` (this section, **live**) | *Does this work item's content warrant Fable's judgment at all?* (R1-R5 doctrine) | `lib/fleet/model-recommendation.cjs` | fails **open** toward `sonnet` |
 
 ### Components
 
@@ -89,10 +133,13 @@ question than `door_class` does. **Do not conflate the two axes:**
    → `{tier, criterion, reason}`. Pure, no I/O. Scores title/description/scope/
    key_changes text against 5 keyword-list rules (R1 compounding-constraint/
    architecture, R2 negative-space/pre-mortem, R3 taste/UX-judgment, R4
-   cross-subsystem coupling ≥3, R5 reversal-stakes). A `door_class.door ===
-   'one_way'` stamp on the item is treated as an automatic R5 (reversal-stakes)
-   shortcut. Defaults to `sonnet` when nothing matches — the doctrine's own
-   standing rule ("Default: Sonnet. Escalate to Fable IFF R1-R5").
+   cross-subsystem coupling ≥3, R5 reversal-stakes keyword match). Defaults to
+   `sonnet` when nothing matches — the doctrine's own standing rule ("Default:
+   Sonnet. Escalate to Fable IFF R1-R5"). **(2026-08-16, SD-LEO-INFRA-DOOR-ROUTING-
+   INERT-DECIDE-001)** previously also carried a `door_class.door === 'one_way'`
+   → automatic-R5 shortcut, composing with the now-retired `door_class` axis;
+   removed alongside that axis's retirement — R5 is reached only via its
+   keyword match now.
 2. **Stamper** — `stampModelRecommendation` in `lib/coordinator/dispatch.cjs`,
    wired into `insertCoordinationRow` immediately after the existing
    `stampEffortRecommendation` call (the same single dispatch choke point as
@@ -107,20 +154,21 @@ question than `door_class` does. **Do not conflate the two axes:**
    never blocks dispatch).
 4. **Audit trail** — a fire-and-forget, FIFO-capped-at-20 append to
    `strategic_directives_v2.metadata.model_tier_decisions[]` on every dispatch.
-5. **Economics** — the same `door_routing_ledger` table gains two additive,
-   nullable columns, `r_criterion` (which R1-R5 rule fired) and
-   `funnel_position` (`selection`|`design`|`detailing`, phase-derived via
-   `funnelPositionForPhase()` in `lib/fleet/door-routing-ledger.cjs` — LEAD→
-   selection, PLAN→design, else→detailing), added by
-   `database/migrations/20260707_door_routing_ledger_fable_criterion_funnel.sql`
-   (additive-only, idempotent; applied at the same door-routing cutover as the
-   base table). `scripts/fable-allocation-report.mjs` aggregates ledger rows by
-   both dimensions, turning the doctrine's own observed bias ("we over-allocate
-   Fable to detailing, under-allocate to selection/pre-mortems") into a
-   measured, trending number instead of folklore.
+5. **Economics (retired 2026-08-16, SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001)** —
+   this doctrine previously piggybacked on the `door_routing_ledger` table (two
+   additive columns, `r_criterion`/`funnel_position`, added by
+   `database/migrations/20260707_door_routing_ledger_fable_criterion_funnel.sql`)
+   via `lib/fleet/door-routing-ledger.cjs` and a `fable-allocation-report` reporting
+   script formerly under `scripts/`.
+   Because that piggyback only ever fired when the target SD already carried a
+   classified `door_class.door` (the ledger's `door` column is `NOT NULL`) — and
+   `door_class` was never populated in production — this economics leg never
+   wrote a single row. It was deleted alongside `door_class`'s retirement; the
+   `door_routing_ledger` table itself (2 already-applied, immutable migrations,
+   0 rows) is left in place as a separate, deferred decision, not dropped by
+   that SD. The doctrine's own observed-bias question ("do we over-allocate
+   Fable to detailing, under-allocate to selection/pre-mortems?") remains
+   unmeasured pending a replacement instrumentation path.
 
-Like `door_class`, everything here is inert until the target SD already carries
-data the stamps depend on — the ledger write specifically requires a classified
-`door_class.door` (the ledger's `door` column is `NOT NULL`), so an SD with no
-door classification yet simply has no ledger row written; the dispatch stamp
-itself is unconditional and always fires.
+The dispatch stamp (items 1-4 above) is unconditional and always fires —
+independent of `door_class`, which was never a dependency of this axis.
