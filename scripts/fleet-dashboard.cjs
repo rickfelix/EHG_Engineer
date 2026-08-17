@@ -1685,7 +1685,7 @@ async function printChairmanGatedQfs() {
   console.log('CHAIRMAN-GATED QFS (excluded from worker lane until released)');
   console.log('─'.repeat(72));
   for (const qf of gated) {
-    const ageDays = Math.floor((Date.now() - Date.parse(qf.created_at)) / 86_400_000);
+    const ageDays = Math.floor(pgTimestampAgeMs(qf.created_at) / 86_400_000);
     console.log('  ' + pad(qf.id, 20) + pad(qf.status, 12) + pad(ageDays + 'd', 6) + (qf.title || '').substring(0, 34));
     console.log('    condition: ' + String(qf.release_condition).replace(/\n/g, ' ').substring(0, 100));
   }

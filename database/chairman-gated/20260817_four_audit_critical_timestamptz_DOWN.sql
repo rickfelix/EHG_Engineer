@@ -1,0 +1,454 @@
+-- ROLLBACK for 20260817_four_audit_critical_timestamptz.sql
+-- SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- FIRST OF ITS KIND: no existing chairman-gated migration performs a column-type revert (PLAN
+-- Explore finding). This file originates its own ALTER COLUMN ... TYPE timestamp without time zone
+-- reversal logic rather than copying a template that does not exist yet in this repo.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+--
+-- WHY THIS FILE ALSO CARRIES A USING CLAUSE ON EVERY STATEMENT (prospective TESTING sub-agent
+-- finding, PLAN-TO-EXEC review): `ALTER COLUMN ... TYPE timestamp without time zone` with no USING
+-- clause renders each value's LOCAL wall-clock time via the applying session's TimeZone GUC, which
+-- is equally capable of corrupting data as an unpinned forward conversion. Every statement below
+-- pins the reversal explicitly: `USING (<col> AT TIME ZONE 'UTC')`, which converts the stored
+-- instant to a naive value representing its UTC wall-clock reading — the exact inverse of the UP
+-- file's `<col> AT TIME ZONE 'UTC'` (naive-as-UTC -> instant) conversion, byte-for-byte reversible
+-- for any value that has not been re-written since the UP file applied.
+--
+-- SAME DEPENDENT-VIEW ENVELOPE AS THE UP FILE (DATABASE sub-agent review, evidence 8c3ed611): this
+-- file has the identical dependent-view defect as the UP file — 10 of the 15 columns being
+-- reverted are referenced by the same 11 views/matviews recreated by the UP file. Drop, revert,
+-- recreate, in the same shape.
+--
+-- Does NOT touch the 6 already-aware sibling columns on these same tables, or product_requirements_v2
+-- (out of scope for both directions — see the UP file's header).
+
+BEGIN;
+
+SET LOCAL lock_timeout = '5s';
+
+-- STEP 1: Drop dependent views/matviews (recreated by the UP file; must be dropped again before
+-- reverting the column types beneath them).
+DROP VIEW IF EXISTS governance.v_governance_overview;
+DROP VIEW IF EXISTS governance.v_phase_handoff_status;
+DROP VIEW IF EXISTS public.legacy_handoff_executions_view;
+DROP MATERIALIZED VIEW IF EXISTS public.mv_operations_dashboard;
+DROP MATERIALIZED VIEW IF EXISTS public.mv_sd_summary;
+DROP VIEW IF EXISTS public.strategic_directives_backlog;
+DROP VIEW IF EXISTS public.v_active_sessions;
+DROP VIEW IF EXISTS public.v_blocked_handoffs_pending;
+DROP VIEW IF EXISTS public.v_sd_alignment_warnings;
+DROP VIEW IF EXISTS public.v_sd_completion_integrity;
+DROP VIEW IF EXISTS public.v_sds_needing_business_evaluation;
+
+-- STEP 2: Revert the 15 column conversions, collapsed to 4 multi-clause ALTER TABLE statements.
+ALTER TABLE quick_fixes
+  ALTER COLUMN completed_at TYPE timestamp USING (completed_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN created_at TYPE timestamp USING (created_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN started_at TYPE timestamp USING (started_at AT TIME ZONE 'UTC');
+
+ALTER TABLE sd_phase_handoffs
+  ALTER COLUMN accepted_at TYPE timestamp USING (accepted_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN created_at TYPE timestamp USING (created_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN rejected_at TYPE timestamp USING (rejected_at AT TIME ZONE 'UTC');
+
+ALTER TABLE strategic_directives_v2
+  ALTER COLUMN approval_date TYPE timestamp USING (approval_date AT TIME ZONE 'UTC'),
+  ALTER COLUMN archived_at TYPE timestamp USING (archived_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN created_at TYPE timestamp USING (created_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN effective_date TYPE timestamp USING (effective_date AT TIME ZONE 'UTC'),
+  ALTER COLUMN expiry_date TYPE timestamp USING (expiry_date AT TIME ZONE 'UTC'),
+  ALTER COLUMN updated_at TYPE timestamp USING (updated_at AT TIME ZONE 'UTC');
+
+ALTER TABLE user_stories
+  ALTER COLUMN completed_at TYPE timestamp USING (completed_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN created_at TYPE timestamp USING (created_at AT TIME ZONE 'UTC'),
+  ALTER COLUMN updated_at TYPE timestamp USING (updated_at AT TIME ZONE 'UTC');
+
+-- STEP 3: Recreate dependent views/matviews — identical definitions/grants to the UP file's STEP 3
+-- (the view definitions themselves reference the columns by name only, not by type, so they are
+-- unchanged by the column type reverting).
+
+CREATE VIEW governance.v_governance_overview AS
+ SELECT sd.id AS sd_id,
+    sd.sd_key,
+    sd.title AS sd_title,
+    sd.status AS sd_status,
+    sd.priority,
+    sd.current_phase,
+    sd.progress_percentage,
+    sd.category,
+    prd.id AS prd_id,
+    prd.title AS prd_title,
+    prd.status AS prd_status,
+    prd.version AS prd_version,
+    sd.created_at AS sd_created,
+    sd.updated_at AS sd_updated
+   FROM strategic_directives_v2 sd
+     LEFT JOIN product_requirements_v2 prd ON prd.sd_id::text = sd.id::text;
+GRANT SELECT ON governance.v_governance_overview TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON governance.v_governance_overview TO authenticated;
+GRANT ALL ON governance.v_governance_overview TO service_role;
+
+CREATE VIEW governance.v_phase_handoff_status AS
+ SELECT sd.id AS sd_id,
+    sd.sd_key,
+    sd.title AS sd_title,
+    sd.current_phase,
+    h.from_phase,
+    h.to_phase,
+    h.handoff_type,
+    h.status AS handoff_status,
+    h.validation_score,
+    h.validation_passed,
+    h.created_at AS handoff_created,
+    h.accepted_at AS handoff_accepted
+   FROM strategic_directives_v2 sd
+     LEFT JOIN sd_phase_handoffs h ON h.sd_id::text = sd.id::text
+  ORDER BY sd.sd_key, h.created_at;
+GRANT SELECT ON governance.v_phase_handoff_status TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON governance.v_phase_handoff_status TO authenticated;
+GRANT ALL ON governance.v_phase_handoff_status TO service_role;
+
+CREATE VIEW public.legacy_handoff_executions_view AS
+ SELECT sd_phase_handoffs.id,
+    sd_phase_handoffs.sd_id,
+    sd_phase_handoffs.handoff_type,
+    sd_phase_handoffs.from_phase AS from_agent,
+    sd_phase_handoffs.to_phase AS to_agent,
+    sd_phase_handoffs.status,
+    sd_phase_handoffs.created_at,
+    sd_phase_handoffs.accepted_at,
+    sd_phase_handoffs.metadata ->> 'migrated_from'::text AS migration_status,
+        CASE
+            WHEN (sd_phase_handoffs.metadata ->> 'migrated_from'::text) = 'leo_handoff_executions'::text THEN 'Migrated to sd_phase_handoffs'::text
+            ELSE 'Legacy record'::text
+        END AS record_status
+   FROM sd_phase_handoffs
+  WHERE (sd_phase_handoffs.metadata ->> 'migrated_from'::text) = 'leo_handoff_executions'::text
+UNION ALL
+ SELECT leo_handoff_executions.id,
+    leo_handoff_executions.sd_id,
+    leo_handoff_executions.handoff_type,
+    leo_handoff_executions.from_agent,
+    leo_handoff_executions.to_agent,
+    leo_handoff_executions.status,
+    leo_handoff_executions.created_at,
+    leo_handoff_executions.accepted_at,
+    'Not migrated'::text AS migration_status,
+    'Legacy only - see leo_handoff_executions table'::text AS record_status
+   FROM leo_handoff_executions
+  WHERE NOT (leo_handoff_executions.id IN ( SELECT sd_phase_handoffs.id
+           FROM sd_phase_handoffs));
+GRANT ALL ON public.legacy_handoff_executions_view TO anon, authenticated, service_role;
+
+CREATE MATERIALIZED VIEW public.mv_operations_dashboard AS
+ SELECT date_trunc('minute'::text, now()) - (EXTRACT(second FROM now())::integer % 30)::double precision * '00:00:01'::interval AS time_bucket,
+    count(DISTINCT sd.id) FILTER (WHERE sd.status::text = 'in_progress'::text) AS active_sds,
+    count(DISTINCT sd.id) FILTER (WHERE sd.status::text = 'blocked'::text) AS blocked_sds,
+    COALESCE(avg(sd.progress) FILTER (WHERE sd.status::text = 'in_progress'::text), 0::numeric) AS avg_progress,
+    1250 AS avg_page_load_ms,
+    145 AS avg_memory_mb,
+    count(*) FILTER (WHERE oa.severity::text = 'critical'::text AND oa.performed_at > (now() - '01:00:00'::interval)) AS critical_security_events,
+    count(*) FILTER (WHERE oa.module::text = 'security'::text AND oa.performed_at > (now() - '01:00:00'::interval)) AS recent_security_checks,
+    94 AS data_quality_score,
+    count(*) FILTER (WHERE oa.performed_at > (now() - '00:05:00'::interval)) AS recent_activity_count,
+        CASE
+            WHEN count(*) FILTER (WHERE oa.severity::text = 'critical'::text AND oa.performed_at > (now() - '01:00:00'::interval)) > 0 THEN 'critical'::text
+            WHEN count(*) FILTER (WHERE oa.severity::text = 'error'::text AND oa.performed_at > (now() - '01:00:00'::interval)) > 5 THEN 'warning'::text
+            ELSE 'healthy'::text
+        END AS system_health_status,
+    now() AS last_updated
+   FROM operations_audit_log oa
+     CROSS JOIN ( SELECT strategic_directives_v2.id,
+            strategic_directives_v2.title,
+            strategic_directives_v2.version,
+            strategic_directives_v2.status,
+            strategic_directives_v2.category,
+            strategic_directives_v2.priority,
+            strategic_directives_v2.description,
+            strategic_directives_v2.strategic_intent,
+            strategic_directives_v2.rationale,
+            strategic_directives_v2.scope,
+            strategic_directives_v2.key_changes,
+            strategic_directives_v2.strategic_objectives,
+            strategic_directives_v2.success_criteria,
+            strategic_directives_v2.key_principles,
+            strategic_directives_v2.implementation_guidelines,
+            strategic_directives_v2.dependencies,
+            strategic_directives_v2.risks,
+            strategic_directives_v2.success_metrics,
+            strategic_directives_v2.stakeholders,
+            strategic_directives_v2.approved_by,
+            strategic_directives_v2.approval_date,
+            strategic_directives_v2.effective_date,
+            strategic_directives_v2.expiry_date,
+            strategic_directives_v2.review_schedule,
+            strategic_directives_v2.created_at,
+            strategic_directives_v2.updated_at,
+            strategic_directives_v2.created_by,
+            strategic_directives_v2.updated_by,
+            strategic_directives_v2.metadata,
+            strategic_directives_v2.h_count,
+            strategic_directives_v2.m_count,
+            strategic_directives_v2.l_count,
+            strategic_directives_v2.future_count,
+            strategic_directives_v2.must_have_count,
+            strategic_directives_v2.wish_list_count,
+            strategic_directives_v2.must_have_pct,
+            strategic_directives_v2.rolled_triage,
+            strategic_directives_v2.readiness,
+            strategic_directives_v2.must_have_density,
+            strategic_directives_v2.new_module_pct,
+            strategic_directives_v2.import_run_id,
+            strategic_directives_v2.present_in_latest_import,
+            strategic_directives_v2.sequence_rank,
+            strategic_directives_v2.sd_key,
+            strategic_directives_v2.parent_sd_id,
+            strategic_directives_v2.is_active,
+            strategic_directives_v2.archived_at,
+            strategic_directives_v2.archived_by,
+            strategic_directives_v2.governance_metadata,
+            strategic_directives_v2.target_application,
+            strategic_directives_v2.progress,
+            strategic_directives_v2.completion_date,
+            strategic_directives_v2.current_phase,
+            strategic_directives_v2.phase_progress,
+            strategic_directives_v2.is_working_on,
+            strategic_directives_v2.uuid_id
+           FROM strategic_directives_v2
+          WHERE strategic_directives_v2.status::text <> 'archived'::text) sd
+  GROUP BY (date_trunc('minute'::text, now()) - (EXTRACT(second FROM now())::integer % 30)::double precision * '00:00:01'::interval);
+
+CREATE MATERIALIZED VIEW public.mv_sd_summary AS
+ SELECT s.id,
+    s.sd_key,
+    s.title,
+    s.status,
+    s.priority,
+    s.version,
+    count(DISTINCT p.id) AS prd_count,
+    count(DISTINCT us.id) AS story_count,
+    max(p.updated_at) AS last_prd_update,
+    max(us.updated_at) AS last_story_update
+   FROM strategic_directives_v2 s
+     LEFT JOIN product_requirements_v2 p ON s.id::text = p.sd_id::text OR s.id::text = p.directive_id::text
+     LEFT JOIN user_stories us ON us.sd_id::text = s.id::text
+  GROUP BY s.id, s.sd_key, s.title, s.status, s.priority, s.version;
+
+CREATE VIEW public.strategic_directives_backlog AS
+ SELECT id AS sd_id,
+    sequence_rank,
+    title AS sd_title,
+    category AS page_category,
+    NULL::text AS page_title,
+    ( SELECT count(*) AS count
+           FROM sd_backlog_map m
+          WHERE m.sd_id::text = v2.id::text) AS total_items,
+    h_count,
+    m_count,
+    l_count,
+    future_count,
+    must_have_count,
+    wish_list_count,
+    must_have_pct,
+    rolled_triage,
+    readiness,
+    must_have_density,
+    new_module_pct,
+    metadata AS extras,
+    import_run_id,
+    present_in_latest_import,
+    created_at,
+    updated_at
+   FROM strategic_directives_v2 v2
+  WHERE import_run_id IS NOT NULL;
+GRANT ALL ON public.strategic_directives_backlog TO anon, authenticated, service_role;
+
+CREATE VIEW public.v_active_sessions AS
+ SELECT _v.id,
+    _v.session_id,
+    _v.sd_id,
+    _v.sd_key,
+    _v.sd_title,
+    _v.qf_id,
+    _v.qf_title,
+    _v.qf_status,
+    _v.track,
+    _v.tty,
+    _v.pid,
+    _v.hostname,
+    _v.codebase,
+    _v.current_branch,
+    _v.machine_id,
+    _v.terminal_id,
+    _v.terminal_identity,
+    _v.claimed_at,
+    _v.heartbeat_at,
+    _v.status,
+    _v.released_reason,
+    _v.released_at,
+    _v.stale_reason,
+    _v.stale_at,
+    _v.metadata,
+    _v.created_at,
+    _v.heartbeat_age_seconds,
+    _v.heartbeat_age_minutes,
+    _v.seconds_until_stale,
+    _v.computed_status,
+    _v.claim_duration_minutes,
+    _v.heartbeat_age_human,
+    _v.is_virtual,
+    _v.parent_session_id,
+    _cs.loop_state,
+    _cs.is_alive,
+    _cs.has_uncommitted_changes,
+    _cs.process_alive_at,
+    _cs.updated_at,
+    _cs.expected_silence_until,
+    _cs.pid_validated_at
+   FROM ( SELECT cs.id,
+            cs.session_id,
+            cs.sd_key AS sd_id,
+            cs.sd_key,
+            COALESCE(sd.title, qf.title::character varying) AS sd_title,
+            qf_active.id AS qf_id,
+            qf_active.title AS qf_title,
+            qf_active.status AS qf_status,
+            cs.track,
+            cs.tty,
+            cs.pid,
+            cs.hostname,
+            cs.codebase,
+            cs.current_branch,
+            cs.machine_id,
+            cs.terminal_id,
+            cs.terminal_identity,
+            cs.claimed_at,
+            cs.heartbeat_at,
+            cs.status,
+            cs.released_reason,
+            cs.released_at,
+            cs.stale_reason,
+            cs.stale_at,
+            cs.metadata,
+            cs.created_at,
+            EXTRACT(epoch FROM now() - cs.heartbeat_at) AS heartbeat_age_seconds,
+            EXTRACT(epoch FROM now() - cs.heartbeat_at) / 60.0 AS heartbeat_age_minutes,
+            GREATEST(0::numeric, 600.0 - EXTRACT(epoch FROM now() - cs.heartbeat_at)) AS seconds_until_stale,
+                CASE
+                    WHEN cs.status = 'released'::text THEN 'released'::text
+                    WHEN cs.status = 'stale'::text THEN 'stale'::text
+                    WHEN EXTRACT(epoch FROM now() - cs.heartbeat_at) > 600::numeric THEN 'stale'::text
+                    WHEN cs.sd_key IS NULL AND qf_active.id IS NULL THEN 'idle'::text
+                    ELSE 'active'::text
+                END AS computed_status,
+                CASE
+                    WHEN cs.claimed_at IS NOT NULL THEN EXTRACT(epoch FROM now() - cs.claimed_at) / 60.0
+                    ELSE NULL::numeric
+                END AS claim_duration_minutes,
+                CASE
+                    WHEN EXTRACT(epoch FROM now() - cs.heartbeat_at) < 60::numeric THEN EXTRACT(epoch FROM now() - cs.heartbeat_at)::integer || 's ago'::text
+                    WHEN EXTRACT(epoch FROM now() - cs.heartbeat_at) < 3600::numeric THEN (EXTRACT(epoch FROM now() - cs.heartbeat_at) / 60.0)::integer || 'm ago'::text
+                    ELSE (EXTRACT(epoch FROM now() - cs.heartbeat_at) / 3600.0)::integer || 'h ago'::text
+                END AS heartbeat_age_human,
+            cs.is_virtual,
+            cs.parent_session_id
+           FROM claude_sessions cs
+             LEFT JOIN strategic_directives_v2 sd ON cs.sd_key = sd.sd_key
+             LEFT JOIN quick_fixes qf ON cs.sd_key = qf.id
+             LEFT JOIN LATERAL ( SELECT q.id,
+                    q.title,
+                    q.status
+                   FROM quick_fixes q
+                  WHERE q.claiming_session_id = cs.session_id AND (q.status = ANY (ARRAY['open'::text, 'in_progress'::text]))
+                  ORDER BY (q.status = 'in_progress'::text) DESC, q.created_at, q.id
+                 LIMIT 1) qf_active ON true
+          WHERE cs.status <> 'released'::text
+          ORDER BY cs.track, cs.claimed_at DESC) _v
+     LEFT JOIN claude_sessions _cs ON _cs.session_id = _v.session_id;
+GRANT ALL ON public.v_active_sessions TO anon, authenticated, service_role;
+
+CREATE VIEW public.v_blocked_handoffs_pending AS
+ SELECT h.id,
+    h.sd_id,
+    h.handoff_type,
+    (h.from_phase::text || ' → '::text) || h.to_phase::text AS transition,
+    h.validation_score,
+    h.rejection_reason,
+    h.created_at,
+    EXTRACT(epoch FROM now() - h.created_at::timestamp with time zone) / 3600::numeric AS hours_blocked,
+    h.metadata ->> 'remediation_hints'::text AS hints,
+    sd.title AS sd_title,
+    sd.status AS sd_status
+   FROM sd_phase_handoffs h
+     LEFT JOIN strategic_directives_v2 sd ON sd.id::text = h.sd_id::text
+  WHERE h.status::text = 'blocked'::text
+  ORDER BY h.created_at DESC;
+GRANT ALL ON public.v_blocked_handoffs_pending TO anon, authenticated, service_role;
+
+CREATE VIEW public.v_sd_alignment_warnings AS
+ SELECT sd.id,
+    sd.sd_key,
+    sd.title,
+    sd.status,
+    sd.created_at,
+    sd.priority,
+        CASE
+            WHEN sd.status::text = ANY (ARRAY['draft'::character varying, 'lead_review'::character varying]::text[]) THEN 'warning'::text
+            WHEN sd.status::text = ANY (ARRAY['plan_active'::character varying, 'exec_active'::character varying, 'active'::character varying, 'in_progress'::character varying]::text[]) THEN 'critical'::text
+            ELSE 'info'::text
+        END AS severity,
+    'SD has no Key Result alignment'::text AS message
+   FROM strategic_directives_v2 sd
+     LEFT JOIN sd_key_result_alignment ska ON sd.id::text = ska.sd_id::text
+  WHERE sd.is_active = true AND (sd.status::text <> ALL (ARRAY['completed'::character varying, 'cancelled'::character varying, 'deferred'::character varying]::text[])) AND ska.id IS NULL
+  ORDER BY (
+        CASE
+            WHEN sd.status::text = ANY (ARRAY['plan_active'::character varying, 'exec_active'::character varying, 'active'::character varying, 'in_progress'::character varying]::text[]) THEN 1
+            WHEN sd.status::text = ANY (ARRAY['draft'::character varying, 'lead_review'::character varying]::text[]) THEN 2
+            ELSE 3
+        END), sd.created_at DESC;
+GRANT ALL ON public.v_sd_alignment_warnings TO anon, authenticated, service_role;
+
+CREATE VIEW public.v_sd_completion_integrity AS
+ SELECT id,
+    sd_key,
+    uuid_id,
+    status,
+    current_phase,
+    sd_type,
+    updated_at,
+    created_at,
+    status::text = 'completed'::text AND (COALESCE(sd_type, ''::character varying)::text <> ALL (ARRAY['orchestrator'::character varying, 'documentation'::character varying, 'docs'::character varying]::text[])) AND NOT (EXISTS ( SELECT 1
+           FROM sd_phase_handoffs sph
+          WHERE sph.sd_id::text = sd.id::text AND (sph.handoff_type::text = ANY (ARRAY['LEAD-FINAL-APPROVAL'::character varying, 'BYPASS-COMPLETION'::character varying]::text[])) AND sph.status::text = 'accepted'::text)) AS is_ghost_completed,
+    ( SELECT count(*)::integer AS count
+           FROM sd_phase_handoffs sph
+          WHERE sph.sd_id::text = sd.id::text AND sph.handoff_type::text = 'LEAD-FINAL-APPROVAL'::text AND sph.status::text = 'rejected'::text) AS lfa_rejected_count,
+    ( SELECT max(sph.created_at) AS max
+           FROM sd_phase_handoffs sph
+          WHERE sph.sd_id::text = sd.id::text AND sph.handoff_type::text = 'LEAD-FINAL-APPROVAL'::text) AS lfa_last_attempted_at
+   FROM strategic_directives_v2 sd;
+GRANT ALL ON public.v_sd_completion_integrity TO anon, authenticated, service_role;
+
+CREATE VIEW public.v_sds_needing_business_evaluation AS
+ SELECT sd.id,
+    sd.title,
+    sd.priority,
+    sd.created_at,
+    sd.description,
+        CASE
+            WHEN be.id IS NULL THEN true
+            ELSE false
+        END AS needs_evaluation
+   FROM strategic_directives_v2 sd
+     LEFT JOIN sd_business_evaluations be ON sd.id::text = be.sd_id
+  WHERE sd.status::text = 'pending_business_evaluation'::text OR sd.status::text = 'draft'::text AND be.id IS NULL
+  ORDER BY sd.priority DESC, sd.created_at;
+GRANT ALL ON public.v_sds_needing_business_evaluation TO anon, authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';
+
+COMMIT;

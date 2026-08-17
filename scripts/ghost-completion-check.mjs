@@ -20,6 +20,11 @@ import { createClient } from '@supabase/supabase-js';
 // informational "legacy" backlog count below would silently under-report once ghost-completed
 // rows exceed the cap. warnIfCapTruncated flags that possibility without changing exit-code logic.
 import { warnIfCapTruncated } from '../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 FR-3: v_sd_completion_integrity.updated_at sources from
+// strategic_directives_v2.updated_at (naive today, in scope for this SD's migration). The prior
+// `${r.updated_at}Z`.replace('ZZ','Z') trick only handles an already-present literal 'Z', not a
+// +HH:MM/+HHMM numeric offset -- pgTimestampMs()'s hasTZ guard recognizes both forms.
+import { pgTimestampMs } from '../lib/time/pg-timestamp.cjs';
 
 const sinceIdx = process.argv.indexOf('--since');
 const WATERMARK = sinceIdx > -1 ? process.argv[sinceIdx + 1] : '2026-06-12T22:00:00Z';
@@ -38,7 +43,7 @@ const { data, error } = await db
 if (error) { console.error('[check-ghosts] query failed:', error.message); process.exit(2); }
 
 const rows = warnIfCapTruncated(data, 'v_sd_completion_integrity (ghost-completed)');
-const fresh = rows.filter((r) => new Date(`${r.updated_at}Z`.replace('ZZ', 'Z')) > new Date(WATERMARK));
+const fresh = rows.filter((r) => pgTimestampMs(r.updated_at) > new Date(WATERMARK).getTime());
 const legacy = rows.length - fresh.length;
 
 console.log(`[check-ghosts] legacy (pre-${WATERMARK}, no-source backlog): ${legacy}`);

@@ -11,6 +11,10 @@ import os from 'os';
 import { isSameConversation } from '../../../lib/claim-guard.mjs';
 import { isProcessRunning } from '../../../lib/heartbeat-manager.mjs';
 import { getStaleThresholdSeconds } from '../../../lib/claim/stale-threshold.js';
+// SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 FR-3: strategic_directives_v2.updated_at and
+// sd_phase_handoffs.created_at are tz-naive columns; raw `new Date(naiveString)` parses as
+// LOCAL time and shifts age by the host's UTC offset. Route through the canonical normalizer.
+import { pgTimestampMs, pgTimestampAgeMs } from '../../../lib/time/pg-timestamp.cjs';
 // SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001 (3rd/last reaper seam): the ONE shared armed-silence
 // predicate — same import claim-guard.mjs uses; do NOT duplicate. Parity with claim_sd (CLAIM-RPC-HONOR-001)
 // + the peer-release seams (CLAIM-SILENCE-CONSUME-VERIFY-001) + the stale-session-sweep (already honors it).
@@ -153,9 +157,8 @@ export async function hasActiveWorkEvidence(supabase, sdId, sd, recencyMinutes =
 
   // 2. SD updated_at is recent — someone touched this SD recently
   if (sd.updated_at) {
-    const updatedAt = new Date(sd.updated_at);
-    const ageMinutes = (Date.now() - updatedAt.getTime()) / 60000;
-    if (ageMinutes < recencyMinutes) {
+    const ageMinutes = pgTimestampAgeMs(sd.updated_at) / 60000;
+    if (Number.isFinite(ageMinutes) && ageMinutes < recencyMinutes) {
       reasons.push(`updated ${Math.round(ageMinutes)}m ago`);
     }
   }
@@ -169,8 +172,8 @@ export async function hasActiveWorkEvidence(supabase, sdId, sd, recencyMinutes =
     .limit(1);
 
   if (handoffs && handoffs.length > 0) {
-    const handoffAge = (Date.now() - new Date(handoffs[0].created_at).getTime()) / 60000;
-    if (handoffAge < recencyMinutes) {
+    const handoffAge = pgTimestampAgeMs(handoffs[0].created_at) / 60000;
+    if (Number.isFinite(handoffAge) && handoffAge < recencyMinutes) {
       reasons.push(`handoff ${handoffs[0].from_phase}→${handoffs[0].to_phase} ${Math.round(handoffAge)}m ago`);
     }
   }
@@ -225,11 +228,11 @@ export function checkEnrichmentSignal({ sd, activeSessions, recencyMinutes } = {
     return { inProgress: false, sessionId: null, ageMin: null, reason: 'no_enrichment' };
   }
 
-  const updatedAt = new Date(sd.updated_at);
-  if (Number.isNaN(updatedAt.getTime())) {
+  const updatedMs = pgTimestampMs(sd.updated_at);
+  if (!Number.isFinite(updatedMs)) {
     return { inProgress: false, sessionId: null, ageMin: null, reason: 'invalid_updated_at' };
   }
-  const ageMin = (Date.now() - updatedAt.getTime()) / 60_000;
+  const ageMin = (Date.now() - updatedMs) / 60_000;
   if (ageMin > windowMin) {
     return { inProgress: false, sessionId: sd.updated_by, ageMin: Math.round(ageMin), reason: 'window_expired' };
   }

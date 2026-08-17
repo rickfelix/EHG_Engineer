@@ -194,6 +194,76 @@ the other 25 of the 28 live anon-EXEC functions were already triaged and staged 
 `20260816_close_remaining_secdef_execute_exposure.sql`; duplicating that authoring would create a
 second staged file touching the same functions, which this SD deliberately avoids.
 
+## Applying `20260817_four_audit_critical_timestamptz.sql`
+
+```
+node scripts/apply-migration.js "database/chairman-gated/20260817_four_audit_critical_timestamptz.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001.) `ALTER COLUMN TYPE timestamp -> timestamptz` for 15
+columns across 4 audit-critical, high-write-frequency tables (`quick_fixes`, `sd_phase_handoffs`,
+`strategic_directives_v2`, `user_stories`). Fixes the JS local-timezone misparse of tz-naive
+timestamps at the root (every existing and future reader is corrected at once) rather than
+requiring per-reader compensation.
+
+**⚠️ QUIESCE WINDOW REQUIRED.** `ALTER COLUMN TYPE` on a populated column is a full TABLE REWRITE
+under ACCESS EXCLUSIVE lock, not a metadata-only change, and all 4 target tables are among the
+highest-write-frequency tables in this schema (continuously written by the live fleet). Under the
+lock, a concurrent writer does NOT queue — it gets an immediate 55P03 lock-not-available error (a
+5s `lock_timeout` is set). The chairman/coordinator MUST schedule this apply during a
+coordinator-declared quiesce window (fleet writers paused, not merely "quiet") — do not apply
+during normal fleet operating hours.
+
+**Every `ALTER COLUMN TYPE` statement in both the UP and DOWN file carries an explicit
+`USING <col> AT TIME ZONE 'UTC'` clause — this is not optional.** Without it, PostgreSQL
+interprets each stored naive value via the *applying session's* `TimeZone` GUC rather than the
+value's true UTC meaning; since every value stored today is genuinely UTC, an unpinned apply from
+a non-UTC session would permanently and irreversibly shift every historical timestamp — silently
+recreating, at the row level, the exact defect class this migration exists to fix.
+
+**⚠️ DEPENDENT VIEWS/MATVIEWS.** 10 of the 15 target columns are referenced by 11 dependent
+view/matview objects (7 in `public`, 2 in `governance`, 2 materialized views) — a DATABASE
+sub-agent review (evidence 8c3ed611) found the migration would otherwise abort at ceremony time
+with SQLSTATE 0A000 ("cannot alter type of a column used by a view or rule"). Both the UP and
+DOWN file now DROP all 11 objects before the column changes and CREATE them again (identical
+definitions + grants, captured live) immediately after — this is already built into both files,
+not a manual ceremony step.
+
+**Run the proof sequence — the USING-clause semantics AND the full drop/recreate envelope are
+proven live, not merely grepped for:**
+
+```
+node database/chairman-gated/20260817_four_audit_critical_timestamptz_using_clause_proof.mjs   # BEFORE apply (safe to re-run any time — TEMP-table, ROLLBACK-guarded, never touches a real table)
+node database/chairman-gated/20260817_four_audit_critical_timestamptz_dry_run.mjs               # BEFORE apply (safe to re-run any time — runs the REAL UP+DOWN bodies end-to-end against production inside one transaction that always ROLLBACKs; catches drift in the 11 dependent-object definitions/grants before the real ceremony)
+node database/chairman-gated/20260817_four_audit_critical_timestamptz_verify.mjs --baseline    # BEFORE apply (captures the live pre-apply state)
+# ... chairman applies the UP file, during a scheduled quiesce window ...
+node database/chairman-gated/20260817_four_audit_critical_timestamptz_verify.mjs --verify      # AFTER apply
+# if a rollback is ever needed, after applying the DOWN file:
+node database/chairman-gated/20260817_four_audit_critical_timestamptz_verify.mjs --baseline    # AFTER DOWN (re-run baseline; naive/aware split should match the original pre-apply capture)
+```
+
+The `_using_clause_proof.mjs` script runs the *actual* `ALTER COLUMN TYPE` mechanics — both
+directions, with and without the `USING` clause — against a session-scoped `TEMP TABLE` inside a
+transaction that always `ROLLBACK`s, under a pinned non-UTC session `TimeZone`. A prospective
+TESTING sub-agent review (PLAN-TO-EXEC) found that a text-presence grep for the clause "cannot see
+a column-binding error and never measures the result" — this proof measures the actual converted
+value instead, plus a negative control confirming the clause is load-bearing (the result differs
+without it).
+
+The `_verify.mjs` script reads `information_schema.columns` over the pooler via
+`createDatabaseClient('engineer')` (mirroring `scripts/db-validate/schema-validator.js`'s existing
+reader — `pg_catalog`/`information_schema` is not reliably exposed through PostgREST), asserting
+all 15 target columns plus a 6-column negative control of already-aware sibling columns on the
+same 4 tables (`sd_phase_handoffs.resolved_at`, `strategic_directives_v2.{completion_date,
+embedding_generated_at,quality_checked_at}`, `quick_fixes.not_before`,
+`user_stories.e2e_test_last_run`) — a change in the negative control signals scope creep.
+
+**Out of scope, documented not silently absorbed:** `product_requirements_v2` (7 naive timestamp
+columns) was in scope for the folded-in `SD-LEO-INFRA-NAIVE-TIMESTAMP-SKEW-001` but is orphaned by
+the fold — neither SD covers it; a follow-up SD is recommended. See this SD's PRD FR-6 and the
+completion-flags capture at LEAD-FINAL-APPROVAL.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert

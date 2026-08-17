@@ -476,3 +476,7 @@ scripts/harness/.spine-verify-first-runs/
 # committed evidence file for this SD (.artifacts/defacl-full-census.json, a one-shot LEAD/EXEC
 # measurement) stays tracked; only the re-runnable operational artifact is ignored.
 .artifacts/defacl-anon-auth-axis-baseline.json
+
+# SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001: same pattern — --baseline mode's regenerable snapshot,
+# re-written fresh each run, read back by --verify. Narrow entry, not the whole directory.
+.artifacts/four-audit-critical-timestamptz-baseline.json

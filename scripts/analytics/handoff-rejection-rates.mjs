@@ -13,6 +13,11 @@ import { createClient } from '@supabase/supabase-js';
 // sd_type='unknown', corrupting the per-SD-type breakdown.
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 FR-3: sd_phase_handoffs.created_at is naive today, so the
+// prior unconditional `+ 'Z'` happened to be correct -- but once this SD's migration applies,
+// PostgREST returns an already-designated value and blindly appending 'Z' would double-convert
+// it. pgTimestampMs()'s hasTZ guard checks for an existing designator before appending.
+import { pgTimestampMs } from '../../lib/time/pg-timestamp.cjs';
 
 const JSON_MODE = process.argv.includes('--json');
 const PAGE_SIZE = 1000;
@@ -46,7 +51,7 @@ function rate(stats) {
 export function computeTransitionStats(rows, { sinceMs = null } = {}) {
   const byType = {};
   for (const h of rows) {
-    if (sinceMs !== null && Date.parse(h.created_at + 'Z') < sinceMs) continue;
+    if (sinceMs !== null && pgTimestampMs(h.created_at) < sinceMs) continue;
     (byType[h.handoff_type] ??= { total: 0, rejected: 0 }).total++;
     if (h.status === 'rejected') byType[h.handoff_type].rejected++;
   }
