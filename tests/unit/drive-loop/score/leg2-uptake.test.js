@@ -6,7 +6,9 @@
  * malformed row could manufacture a passing score.
  */
 
-import { describe, it, expect } from 'vitest';
+import {
+  describe, it, expect, vi,
+} from 'vitest';
 import {
   scoreLeg2, claimedWithin, CLAIM_WINDOW_MS, LEG_POINTS, UPTAKE_THRESHOLD,
 } from '../../../../lib/drive-loop/score/leg2-uptake.js';
@@ -94,6 +96,18 @@ describe('leg2 — uptake of the ranked top 5', () => {
 
   it('refuses an implicit clock rather than defaulting to Date.now()', () => {
     expect(() => scoreLeg2({ rankedTop5: five(0) })).toThrow(/nowMs must be provided/);
+  });
+
+  it('[QF-20260816-166] claimGrain runs exactly ONE pass per SD, not one for grains and one for claimed', () => {
+    // Each SD below has exactly one claim_history entry, so claimGrain makes exactly one
+    // Date.parse call per invocation. If grains and claimed were still computed via two
+    // independent rankedTop5 passes (map + filter), this would be 2*N, not N.
+    const parseSpy = vi.spyOn(Date, 'parse');
+    const rows = five(0, 0, 0);
+    parseSpy.mockClear();
+    scoreLeg2({ rankedTop5: rows, nowMs: NOW });
+    expect(parseSpy).toHaveBeenCalledTimes(rows.length);
+    parseSpy.mockRestore();
   });
 });
 
