@@ -13,6 +13,11 @@
  */
 
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 FR-3: the prior `.endsWith('Z')` guard below only
+// recognizes the literal 'Z' suffix, not a +HH:MM/+HHMM numeric offset (the form PostgREST
+// commonly returns for timestamptz columns) -- an already-aware value in that form would still
+// get 'Z' appended, corrupting it. pgTimestampMs()'s hasTZ guard recognizes both forms.
+import { pgTimestampMs } from '../../lib/time/pg-timestamp.cjs';
 
 // Configurable: gaps longer than this between handoffs are considered idle time
 const IDLE_GAP_THRESHOLD_MINUTES = 30;
@@ -269,17 +274,12 @@ async function getElapsedTime(supabase, sd) {
   let source = 'created_at';
 
   if (handoffs && handoffs.length > 0) {
-    // Ensure UTC parsing by appending Z if not present
-    const timestamp = handoffs[0].created_at.endsWith('Z')
-      ? handoffs[0].created_at
-      : handoffs[0].created_at + 'Z';
-    startedAt = new Date(timestamp);
+    const ms = pgTimestampMs(handoffs[0].created_at);
+    startedAt = Number.isFinite(ms) ? new Date(ms) : null;
     source = 'first_handoff';
   } else if (sd.created_at) {
-    const timestamp = sd.created_at.endsWith('Z')
-      ? sd.created_at
-      : sd.created_at + 'Z';
-    startedAt = new Date(timestamp);
+    const ms = pgTimestampMs(sd.created_at);
+    startedAt = Number.isFinite(ms) ? new Date(ms) : null;
     source = 'created_at';
   }
 
