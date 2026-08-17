@@ -189,6 +189,27 @@ function generateRecentLessonsSection(retrospectives) {
 }
 
 /**
+ * QF-20260816-925: pull the CURRENT "## Recent Lessons (Last 30 Days)" block verbatim out of
+ * an already-rendered CLAUDE_CORE.md, so a regeneration triggered by an unrelated section
+ * edit can reuse it instead of re-snapshotting the live `retrospectives` table — which
+ * churns this section under fleet concurrency independent of any real content change (many
+ * parallel sessions each regenerating at a slightly different moment each see a different
+ * "last 30 days" set).
+ * @param {string} fileContent - existing CLAUDE_CORE.md content
+ * @returns {string|null} the block (heading through the line before the next `## `), or null
+ *   if the heading is absent (nothing to preserve — falls through to a fresh snapshot)
+ */
+function extractExistingLessonsBlock(fileContent) {
+  if (typeof fileContent !== 'string') return null;
+  const HEADING = '## Recent Lessons (Last 30 Days)';
+  const start = fileContent.indexOf(HEADING);
+  if (start === -1) return null;
+  const nextHeadingIdx = fileContent.indexOf('\n## ', start + HEADING.length);
+  const end = nextHeadingIdx === -1 ? fileContent.length : nextHeadingIdx;
+  return fileContent.slice(start, end).trimEnd();
+}
+
+/**
  * Generate Gate Health section for CLAUDE_CORE.md
  * @param {Array} gateHealth - List of gate health metrics
  * @returns {string} Formatted markdown
@@ -364,6 +385,7 @@ export {
   generateHotPatternsSection,
   generateKnownFrictionPointsSection,
   generateRecentLessonsSection,
+  extractExistingLessonsBlock,
   generateGateHealthSection,
   generateProposalsSection,
   generateAutonomousDirectivesSection

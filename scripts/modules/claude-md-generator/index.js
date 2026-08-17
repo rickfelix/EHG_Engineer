@@ -48,6 +48,9 @@ import {
   assertSharedSectionsNotCopied
 } from './file-generators.js';
 
+// QF-20260816-925
+import { extractExistingLessonsBlock } from './operational-sections.js';
+
 import {
   generateRouterDigest,
   generateCoreDigest,
@@ -89,6 +92,9 @@ class CLAUDEMDGeneratorV3 {
     this.options = {
       generateDigest: options.generateDigest !== false, // Default: true
       tokenBudget: options.tokenBudget || 25000,
+      // QF-20260816-925: default false — preserve the existing on-disk Recent Lessons block
+      // instead of re-snapshotting the live retrospectives table on every regeneration.
+      refreshLessons: options.refreshLessons === true,
       ...options
     };
     this.manifest = {
@@ -214,6 +220,22 @@ class CLAUDEMDGeneratorV3 {
   }
 
   /**
+   * QF-20260816-925: read CLAUDE_CORE.md's CURRENT on-disk Recent Lessons block. Fail-open
+   * (any missing file / read error / absent heading returns null) — falling through to a
+   * fresh snapshot is always safe; silently freezing on a read error would not be.
+   * @returns {string|null}
+   */
+  loadExistingLessonsOverride() {
+    try {
+      const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
+      if (!fs.existsSync(filePath)) return null;
+      return extractExistingLessonsBlock(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): load every DB input + init the
    * manifest header (generated_at / git_commit / db_snapshot_hash) and the digest metadata.
    * Extracted from generate() so renderAll() (the drift check) consumes IDENTICAL inputs
@@ -257,6 +279,16 @@ class CLAUDEMDGeneratorV3 {
       autonomousDirectives,
       visionGapInsights
     };
+
+    // QF-20260816-925: by default, reuse whatever Recent Lessons block is already on disk
+    // instead of re-snapshotting the live retrospectives table — an unrelated section edit
+    // (or simply a different fleet worker regenerating a few minutes later) would otherwise
+    // churn this section on every run. --refresh-lessons (the daily cron refresh) opts back
+    // into a fresh snapshot. Fail-open to a fresh snapshot on any read problem or first run.
+    if (!this.options.refreshLessons) {
+      const override = this.loadExistingLessonsOverride();
+      if (override) data.recentLessonsOverride = override;
+    }
 
     // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 (FR-4): refuse to render when a section shared by
     // two output files has been COPIED into another section instead of included from its one

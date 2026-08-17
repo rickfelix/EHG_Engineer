@@ -290,7 +290,9 @@ function generateCore(data, fileMapping) {
   const hotPatternsSection = generateHotPatternsSection(hotPatterns);
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b
   const knownFrictionSection = generateKnownFrictionPointsSection(knownFrictionPoints);
-  const recentLessonsSection = generateRecentLessonsSection(recentRetrospectives);
+  // QF-20260816-925: prefer a caller-supplied override (the existing on-disk block, when
+  // the caller wants it preserved) over a fresh live-table snapshot.
+  const recentLessonsSection = data.recentLessonsOverride ?? generateRecentLessonsSection(recentRetrospectives);
   const gateHealthSection = generateGateHealthSection(gateHealth);
   const proposalsSection = generateProposalsSection(pendingProposals);
 
