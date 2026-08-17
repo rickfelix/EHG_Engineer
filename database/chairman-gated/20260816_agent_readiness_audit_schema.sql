@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman verbal "approve file 1", ceremony N+1 sitting 2026-08-17 ~10:5xZ, Adam scribe 08049808)
 -- ============================ STAGED. NOT APPLIED. ============================
 -- CHAIRMAN-GATED per coordinator ruling (signal 6555f927, 2026-08-16T14:03:52Z): apply-token
 -- issuance for a live prod-DB write was correctly denied by the permission classifier at EXEC
