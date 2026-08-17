@@ -8,6 +8,13 @@
  * is in flight to fix it). Per coordinator directive 1201fa34, correcting to
  * 'warning' and annotating the persisted artifact so a reader does not
  * conclude the product is functional.
+ *
+ * Looks up the CURRENT is_current=true launch_deployment_runbook row dynamically
+ * rather than a hardcoded artifact ID -- a hardcoded ID goes stale the next time
+ * recordProvisioningReadiness() runs and supersedes it (this bit once already:
+ * the first version of this script hardcoded 89dd383a, which was superseded
+ * before this correction's own carry-forward fix landed in exec-boundary-readiness.js,
+ * silently reapplying to a row nothing read anymore).
  */
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-connection.js';
@@ -15,7 +22,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-connection.js';
 dotenv.config();
 
 const VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
-const ARTIFACT_ID = '89dd383a-5163-4b57-8514-40929bdbd907';
+const ARTIFACT_TYPE = 'launch_deployment_runbook';
 
 async function main() {
   const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
@@ -30,10 +37,14 @@ async function main() {
 
   const { data: artifact, error: readErr } = await supabase
     .from('venture_artifacts')
-    .select('artifact_data')
-    .eq('id', ARTIFACT_ID)
+    .select('id, artifact_data')
+    .eq('venture_id', VENTURE_ID)
+    .eq('artifact_type', ARTIFACT_TYPE)
+    .eq('is_current', true)
     .single();
   if (readErr) { console.error('artifact read error:', JSON.stringify(readErr)); process.exit(1); }
+  const ARTIFACT_ID = artifact.id;
+  console.log('correcting current artifact:', ARTIFACT_ID);
 
   const correctedData = {
     ...artifact.artifact_data,

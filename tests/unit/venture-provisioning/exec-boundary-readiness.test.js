@@ -270,12 +270,15 @@ describe('recordProvisioningReadiness', () => {
   //   - supersede-before-insert: exactly {is_current: false} — no .select() chained
   //   - 23505 fallback: the full replacement row (is_current: true + other fields) — chained
   //     with .select().single(), same as insert()
+  // venture_artifacts.select() is the NEW prior-artifact lookup (health_status_correction
+  // carry-forward) — .select('artifact_data').eq().eq().eq().maybeSingle()
   function fakeSupabase({
     currentLifecycleStage = 19,
     updateError = null,
     updateRows = [{ id: 'v1' }],
     insertResult = { data: { id: 'artifact-1' }, error: null },
     updateFallbackResult = { data: { id: 'artifact-1-updated' }, error: null },
+    priorArtifactData = null,
   } = {}) {
     const calls = [];
     const supabase = {
@@ -296,6 +299,13 @@ describe('recordProvisioningReadiness', () => {
         }
         if (table === 'venture_artifacts') {
           return {
+            select: () => {
+              const chain = {
+                eq: () => chain,
+                maybeSingle: () => Promise.resolve({ data: priorArtifactData ? { artifact_data: priorArtifactData } : null, error: null }),
+              };
+              return chain;
+            },
             update: (payload) => {
               calls.push({ table, op: 'update', payload });
               const isSupersede = payload.is_current === false;
@@ -395,5 +405,40 @@ describe('recordProvisioningReadiness', () => {
     const result = await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
     expect(result.ventureUpdated).toBe(false);
     expect(result.ventureUpdateError).toBe('connection reset');
+  });
+
+  // Regression guard for a real incident this session: toVentureHealthStatus() is an
+  // asset-existence check blind to functional defects (e.g. a broken auth config visible
+  // only client-side). A one-off script corrected ventures.health_status healthy->warning
+  // and annotated the artifact with health_status_correction -- but the NEXT unrelated
+  // re-run (refreshing FR-3) silently clobbered it back to 'healthy', since nothing read
+  // the annotation. This is the fix: the correction must survive every future re-run.
+  it('uses a prior health_status_correction instead of the naive check, and carries it forward into the new artifact row', async () => {
+    const correction = { from: 'healthy', to: 'warning', reason: 'known auth defect, asset check cannot see it', known_defect_ref: 'SD-LEO-FIX-ALTIFYAI-LIVE-SITE-001' };
+    const { supabase, calls } = fakeSupabase({ priorArtifactData: { some: 'prior-report-field', health_status_correction: correction } });
+
+    // Naive check would say 'healthy' (reachable+verified) -- the correction must win.
+    const result = await recordProvisioningReadiness({
+      supabase, ventureId: 'v1',
+      report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } },
+    });
+
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('warning');
+
+    const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(insertCall.payload.artifact_data.health_status_correction).toEqual(correction);
+    expect(result.ventureUpdated).toBe(true);
+  });
+
+  it('uses the naive health_status when no prior correction exists — does not fabricate one', async () => {
+    const { supabase, calls } = fakeSupabase({ priorArtifactData: null });
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('healthy');
+
+    const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(insertCall.payload.artifact_data.health_status_correction).toBeUndefined();
   });
 });
