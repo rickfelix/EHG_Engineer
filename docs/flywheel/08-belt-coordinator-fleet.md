@@ -1,10 +1,10 @@
 ---
 category: documentation
 status: draft
-version: 0.1.0
+version: 0.2.0
 author: docmon-agent (Information Architecture Lead)
-last_updated: 2026-06-20
-tags: [flywheel, belt, coordinator, fleet, dispatch, capacity]
+last_updated: 2026-08-17
+tags: [flywheel, belt, coordinator, fleet, dispatch, capacity, engagement]
 ---
 
 # Link 8 — Belt → Coordinator → Fleet
@@ -26,9 +26,11 @@ coordinator's prime KPI: **an idle worker while sourceable work exists is a fail
 
 - **Code:** `lib/coordinator/*` (`dispatch.cjs` fail-closed, `resolve.cjs`, `signal-router.cjs`),
   `scripts/coordinator-audit.mjs`, `scripts/coordinator-startup-check.mjs`,
-  `scripts/stale-session-sweep.cjs`, `scripts/fleet-dashboard.cjs`, `scripts/worker-checkin.cjs`.
+  `scripts/stale-session-sweep.cjs`, `scripts/fleet-dashboard.cjs`, `scripts/worker-checkin.cjs`,
+  `scripts/lib/engagement-buckets.mjs` (worker-engagement bucket classifier, standalone).
 - **Tables:** `claude_sessions` (liveness: `heartbeat_at`, `loop_state`, `sd_key`, `metadata`),
-  `session_coordination` (the message bus), `strategic_directives_v2` (claim fields).
+  `session_coordination` (the message bus), `strategic_directives_v2` (claim fields),
+  `belt_capacity_verdicts` (`.detail.engagement_*` — the persisted engagement bucket counts).
 - **Docs:** `docs/protocol/README.md`, `docs/protocol/fleet-coordinator-and-worker-behavior.md`,
   `docs/protocol/fleet-worker-loop-directive.md`, `docs/reference/fleet-coordination.md`,
   `.claude/commands/coordinator.md`, `.claude/commands/checkin.md`.
@@ -60,6 +62,27 @@ hand-asking Adam, checks the **sourcing engine state first** (engine flags + unp
 items exist, the forecaster nudges *activate/distill* rather than asking a human to hand-mine. The
 needle-movement rank (link 11) and the build forecast (link 12) also feed the coordinator's backlog
 ordering.
+
+### Worker-engagement ratio gauge (SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001)
+
+Chairman commission: "how many active workers we have versus the total number of workers — supply
+versus demand." A dedicated classifier (`scripts/lib/engagement-buckets.mjs`, standalone by design
+— it is imported independently by both integration points below rather than either one wrapping
+the other) buckets every live `claude_sessions` row into exactly one of **ENGAGED** (holds a claim,
+heartbeat live), **TAIL** (released with a completion reason, inside the existing 10-minute grace
+window), **ZOMBIE** (heartbeat live but tool-silent past the calibrated cut point, or a confirmed
+wedge), or **IDLE** (live, dispatchable, unclaimed) — plus **UNKNOWN**/**EXCLUDED** for genuinely
+ambiguous or out-of-population rows. Liveness gates every bucket, including ENGAGED, so a session
+that crashed without releasing its claim reads as excluded/zombie rather than "engaged" forever.
+
+Wired additively into the two existing consumers rather than a new third one: the capacity
+forecaster persists the four counts into `belt_capacity_verdicts.detail`
+(`scripts/coordinator-capacity-forecast.mjs`), and the KPI-1 health probe surfaces them alongside
+the pre-existing utilization fields (`scripts/adam-coordinator-health.mjs`). Both call sites are
+fail-soft by construction — a computation fault degrades to an explicit `{unmeasured:true, ...}`
+result (never `0`s, which would be indistinguishable from a real zero-count reading) and never
+blocks the load-bearing belt-depth/KPI-0..3 fields either call site already persisted before this
+gauge existed. Ships behind `ENGAGEMENT_GAUGE_ENABLED` (default ON) as the rollback lever.
 
 ## Existing documentation
 
