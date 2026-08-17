@@ -111,7 +111,11 @@ describe('TS-1: fixture SD fenced to chairman with no chairman_decisions row', (
     expect(envelope.decisionType).toBe('session_question');
     expect(envelope.blocking).toBe(true);
     expect(envelope.raisedBy).toBe('adam');
-    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-FENCED-001', { chairman_decision_id: 'dec-1' });
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-FENCED-001', {
+      chairman_decision_id: 'dec-1',
+      gated_guard_last_escalated_at: NOW.toISOString(),
+      gated_guard_suppressed_count: 0,
+    });
   });
 });
 
@@ -341,7 +345,11 @@ describe('TS-11: a stale chairman_decision_id (pointing to a resolved row) does 
 
     expect(result.hits).toBe(1);
     expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
-    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-REFENCE-001', { chairman_decision_id: 'dec-new' });
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-REFENCE-001', {
+      chairman_decision_id: 'dec-new',
+      gated_guard_last_escalated_at: NOW.toISOString(),
+      gated_guard_suppressed_count: 0,
+    });
   });
 });
 
@@ -416,6 +424,71 @@ describe('QF-20260816-118 regression: a DECIDED row keeps excluding within the r
     expect(result.hits).toBe(0);
     expect(recordPendingDecisionMock).not.toHaveBeenCalled();
     expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-CONTENT-DECIDED-001', { chairman_decision_id: 'dec-content', chairman_decision_at: decidedAt });
+  });
+});
+
+describe('QF-20260816-510: defensive per-SD escalation throttle bounds repeat emails to at most one per window', () => {
+  it('3 guard cycles inside the 4h throttle window -> 1 real escalation, 2 suppressed and counted', async () => {
+    let sd = sdRow({ sd_key: 'SD-THROTTLE-001' });
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-throttle', escalated: true });
+
+    // Cycle 1: no covering row yet (defensive scenario — this test never gives the guard a
+    // covering row, isolating the throttle from QF-118's row-reuse dedup) -> genuine hit.
+    let result = await runChairmanGatedDecisionRowGuard(
+      makeFakeSupabase({ sds: [sd], decisions: [] }), { now: NOW },
+    );
+    expect(result.hits).toBe(1);
+    expect(result.recorded).toBe(1);
+    expect(result.suppressed).toBe(0);
+    expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
+    expect(recordPendingDecisionMock.mock.calls[0][1].context.suppressed_since_last_escalation).toBe(0);
+
+    // Simulate what the real mergeMetadataKeys call durably wrote, so cycle 2 reads it back.
+    sd = { ...sd, metadata: { ...sd.metadata, gated_guard_last_escalated_at: NOW.toISOString(), gated_guard_suppressed_count: 0 } };
+
+    // Cycle 2, 1h later (inside the window): suppressed, no second email.
+    result = await runChairmanGatedDecisionRowGuard(
+      makeFakeSupabase({ sds: [sd], decisions: [] }), { now: new Date(NOW.getTime() + 60 * 60 * 1000) },
+    );
+    expect(result.suppressed).toBe(1);
+    expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1); // still just cycle 1
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-THROTTLE-001', { gated_guard_suppressed_count: 1 });
+
+    sd = { ...sd, metadata: { ...sd.metadata, gated_guard_suppressed_count: 1 } };
+
+    // Cycle 3, 2h later (still inside the window): suppressed again, count durably advances.
+    result = await runChairmanGatedDecisionRowGuard(
+      makeFakeSupabase({ sds: [sd], decisions: [] }), { now: new Date(NOW.getTime() + 2 * 60 * 60 * 1000) },
+    );
+    expect(result.suppressed).toBe(1);
+    expect(recordPendingDecisionMock).toHaveBeenCalledTimes(1);
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-THROTTLE-001', { gated_guard_suppressed_count: 2 });
+  });
+
+  it('a cycle after the throttle window passes escalates again, noting the suppressed count', async () => {
+    const sd = sdRow({
+      sd_key: 'SD-THROTTLE-002',
+      metadata: {
+        requires_human_action: true, human_decider: 'chairman',
+        gated_guard_last_escalated_at: NOW.toISOString(),
+        gated_guard_suppressed_count: 2,
+      },
+    });
+    recordPendingDecisionMock.mockResolvedValue({ recorded: true, id: 'dec-throttle-2', escalated: true });
+    const afterWindow = new Date(NOW.getTime() + 5 * 60 * 60 * 1000); // 5h later, past the 4h default
+
+    const result = await runChairmanGatedDecisionRowGuard(
+      makeFakeSupabase({ sds: [sd], decisions: [] }), { now: afterWindow },
+    );
+
+    expect(result.suppressed).toBe(0);
+    expect(result.recorded).toBe(1);
+    expect(recordPendingDecisionMock.mock.calls[0][1].context.suppressed_since_last_escalation).toBe(2);
+    expect(mergeMetadataKeysMock).toHaveBeenCalledWith('SD-THROTTLE-002', {
+      chairman_decision_id: 'dec-throttle-2',
+      gated_guard_last_escalated_at: afterWindow.toISOString(),
+      gated_guard_suppressed_count: 0,
+    });
   });
 });
 
