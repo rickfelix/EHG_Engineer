@@ -61,4 +61,16 @@ describe('SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: leo-create-sd.js --from-feedback S
     expect(code).toMatch(/fbForceLivenessIdx/);
     expect(code).toMatch(/forceLiveness:\s*fbForceLivenessIdx/);
   });
+
+  // QF-20260817-550: --target-repos was parsed for --from-plan/--child/--from-roadmap-item but
+  // never wired through --from-feedback -- silently swallowed, no error/warning. Same static-pin
+  // shape as the --force-liveness assertion above: the CLI-side argv parse (this file) AND the
+  // adapter-side destructure+spread (feedback.js, both concatenated into PINNED) must both be
+  // present, or a future edit could re-drop either half without a subprocess-level test noticing.
+  it('--target-repos override is wired through --from-feedback argv parsing (QF-20260817-550)', () => {
+    expect(code).toMatch(/fbTargetReposIdx/);
+    expect(code).toMatch(/targetRepos:\s*fbTargetReposIdx/);
+    expect(code).toMatch(/targetRepos\s*=\s*null.*=\s*options/s);
+    expect(code).toMatch(/target_repos:\s*targetRepos/);
+  });
 });

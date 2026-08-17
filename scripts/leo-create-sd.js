@@ -179,9 +179,10 @@ Flags:
                         Example: --target-repos EHG,EHG_Engineer
                         Pairs with computeReposForSD() at lead-final-approval/gates.js
                         (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in: direct LEO,
-                        --from-plan, --child, AND --from-roadmap-item (the latter also sets
-                        the promoted SD's target_application to the PRIMARY repo so product
-                        roadmap items route to rickfelix/ehg — SD-LEO-INFRA-PRODUCT-PROMOTION-TARGET-REPO-001).
+                        --from-plan, --child, --from-feedback (QF-20260817-550), AND
+                        --from-roadmap-item (the latter also sets the promoted SD's
+                        target_application to the PRIMARY repo so product roadmap items
+                        route to rickfelix/ehg — SD-LEO-INFRA-PRODUCT-PROMOTION-TARGET-REPO-001).
   --dry-run          (--from-proposal / --proposal-b64 / --proposal-stdin) Validate + report
                      would-create SDs; ZERO database writes.
   --proposal-b64 <b64>  File-free DB-direct sourcing: base64-encoded proposal JSON ingested via
@@ -257,14 +258,19 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const fbTypeIdx = args.indexOf('--type');
       const fbTitleIdx = args.indexOf('--title');
       const fbForceLivenessIdx = args.indexOf('--force-liveness');
+      // QF-20260817-550: --target-repos was parsed for --from-plan/--from-roadmap-item/--child
+      // (target-repos.js:31) but never wired here, so it was silently swallowed on the feedback
+      // route — governed cross-repo metadata never landed, with no error/warning.
+      const fbTargetReposIdx = args.indexOf('--target-repos');
       const fbFlagValuePositions = new Set(
         [fbTypeIdx !== -1 ? fbTypeIdx + 1 : -1,
          fbTitleIdx !== -1 ? fbTitleIdx + 1 : -1,
-         fbForceLivenessIdx !== -1 ? fbForceLivenessIdx + 1 : -1].filter(i => i > 0)
+         fbForceLivenessIdx !== -1 ? fbForceLivenessIdx + 1 : -1,
+         fbTargetReposIdx !== -1 ? fbTargetReposIdx + 1 : -1].filter(i => i > 0)
       );
       // QF-20260509-LEO-CREATE-FLAGS: include review flags so they're not
       // mistaken for the feedback ID positional. Closes 8a640d32 sibling parity.
-      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--force-liveness']);
+      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--force-liveness', '--target-repos']);
       const feedbackId = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !fbFlagValuePositions.has(i) && !fbKnownFlags.has(arg)
       ) || args[1];
@@ -274,6 +280,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
         forceLiveness: fbForceLivenessIdx !== -1 ? args[fbForceLivenessIdx + 1] : null,
+        targetRepos: fbTargetReposIdx !== -1 ? parseTargetReposArg(args[fbTargetReposIdx + 1]) : null,
       });
       exitFromResult(fbRes);
     } else if (args[0] === '--from-roadmap-item') {
