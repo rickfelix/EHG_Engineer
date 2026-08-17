@@ -8,6 +8,21 @@
 
 import { getRemediation as getMappedRemediation } from './rejection-subagent-mapping.js';
 
+/**
+ * Serialize a non-Error/non-string throwable for display. QF-20260815-200: JSON.stringify
+ * itself throws on a circular object graph -- the LAST-RESORT fallback in these error builders
+ * must never itself throw. String() never throws, so it is the safe fallback.
+ * @param {*} value
+ * @returns {string}
+ */
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export class ResultBuilder {
   /**
    * Create a success response
@@ -51,7 +66,7 @@ export class ResultBuilder {
     // QF-20260605-024: gateResult.issues may be objects ({ code, message, ... }); map each to a
     // readable string so the joined failure message is not "[object Object]" (PAT-HF-PLANTOEXEC-82e31435).
     const issues = (gateResult.issues || []).map((i) =>
-      typeof i === 'string' ? i : ((i && i.message) || (i && i.code) || JSON.stringify(i))
+      typeof i === 'string' ? i : ((i && i.message) || (i && i.code) || safeStringify(i))
     );
     return this.rejected(
       `${gateName}_FAILED`,
@@ -83,7 +98,7 @@ export class ResultBuilder {
     // mapping above (QF-20260605-024): prefer .message, then .code, then a serialized fallback.
     const rawMessage = isErrorInstance
       ? error.message
-      : (typeof error === 'string' ? error : ((error && error.message) || (error && error.code) || JSON.stringify(error)));
+      : (typeof error === 'string' ? error : ((error && error.message) || (error && error.code) || safeStringify(error)));
     const errorClass = isErrorInstance ? (error.constructor?.name || 'Error') : 'Unknown';
     const errorName = isErrorInstance ? error.name : null;
     const stack = isErrorInstance && error.stack
