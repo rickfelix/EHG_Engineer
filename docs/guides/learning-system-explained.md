@@ -348,6 +348,19 @@ This updates:
 - `avg_resolution_time_minutes` (updated average)
 - `last_seen_sd_id`
 
+**Quarantine guard** (SD-LEO-INFRA-CLOCK-SKEW-CI-SWEEP-001, FR-4): pass an optional
+`target_test_paths` array naming the test(s) a solution's fix targets. If any of those
+paths are present in `tests/quarantine-manifest.json`, the occurrence is recorded as
+NOT successful regardless of the `was_successful` argument — a quarantined test's
+outcome can no longer inflate a solution's `success_rate` while it's known-flaky.
+`scripts/auto-extract-patterns-from-retro.js`'s live caller sources this from the
+retrospective's `affected_components`/`related_files` fields. Omitting the field (the
+default) never blocks a recording — absence of test-path data is not evidence the test
+is fine.
+
+`getSolution()` (FR-5) will not recommend a solution whose `success_rate` is 0 or
+unset — `recommended_solution` comes back `null` instead of a 0%-proven pick.
+
 ### 3. **Creating New Patterns**
 ```javascript
 await kb.createPattern({
