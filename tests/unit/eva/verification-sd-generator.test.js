@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { isValidSdType } from '../../../lib/sd-type-enum.js';
 
 const mockInsert = vi.fn().mockResolvedValue({ error: null });
 const mockFrom = vi.fn(() => ({
@@ -60,7 +61,7 @@ describe('Verification SD Generator', () => {
     const qaSD = insertCalls[0][0];
     expect(qaSD.scope).toContain('abc1234def5678');
     expect(qaSD.title).toContain('abc1234');
-    expect(qaSD.sd_type).toBe('fix');
+    expect(qaSD.sd_type).toBe('bugfix');
     expect(qaSD.status).toBe('draft');
     expect(qaSD.venture_id).toBe(ventureId);
   });
@@ -121,5 +122,20 @@ describe('Verification SD Generator', () => {
     const secSD = mockInsert.mock.calls[1][0];
     expect(qaSD.priority).toBe('high');
     expect(secSD.priority).toBe('high');
+  });
+
+  // QF-20260817-079: both template sd_type literals drifted to the phantom key 'fix' (canonical
+  // is 'bugfix') -- the same phantom-key class the A2 ultrareview QF fixed for vision-to-patterns.js
+  // / threshold-resolver.js. Asserting CANONICAL SET MEMBERSHIP, not a hardcoded expected string,
+  // so a future edit that reintroduces a phantom key (or a new template entry that never gets
+  // updated) fails this test even if nobody remembers to update a literal 'bugfix' assertion here.
+  it('every generated SD carries a canonical sd_type (drift-proof against phantom keys)', async () => {
+    await createVerificationSDs(ventureId, syncData);
+
+    const insertCalls = mockInsert.mock.calls;
+    expect(insertCalls.length).toBe(2);
+    for (const [payload] of insertCalls) {
+      expect(isValidSdType(payload.sd_type), `sd_type "${payload.sd_type}" for ${payload.sd_key} is not in CANONICAL_SD_TYPES`).toBe(true);
+    }
   });
 });
