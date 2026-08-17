@@ -187,7 +187,15 @@ function classifyInboxMessage(msg, opts = {}) {
   // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-4: an ADAM session must NOT skip — it falls
   // through to the :105 carve-out below (surfaces, read_at left NULL) so a reply arriving after
   // a sync await times out is recovered by adam-advisory.cjs's durable `replies` reader.
-  if (twoWayOn && isInfo && p.kind === 'coordinator_reply' && !amAdam) return { skip: true };
+  // QF-20260815-659 FIX HALF 1: EXCEPT when payload.reply_to is set — that means this reply
+  // is correlated to a signal THIS worker itself sent, which is by definition wanted now, not
+  // a passive broadcast to defer to the next /checkin. Verified safe to drain immediately:
+  // awaitCoordinatorReply() (worker-signal.cjs) never filters on read_at, so an in-flight
+  // synchronous awaiter for this exact row is unaffected either way.
+  if (twoWayOn && isInfo && p.kind === 'coordinator_reply' && !amAdam) {
+    if (p.reply_to) return { skip: false, markRead: true, markAck: true };
+    return { skip: true };
+  }
   // Adam session: NEVER auto-drain ANY inbound row — surface-not-drain, unconditionally.
   // QF-20260610-623 dropped the isInfo gate but kept a sender_type ALLOWLIST
   // (orchestrator|coordinator), so sender_type=chairman directives (a live, exercised value —
@@ -687,7 +695,37 @@ async function main() {
       priorityRows = pr || [];
     } catch { /* fail-open: priority fetch failure falls back to oldest-batch-only behavior */ }
   }
-  const messages = mergePriorityExempt(priorityRows, oldestBatch || []);
+
+  // FIX HALF 1 (QF-20260815-659): a coordinator_reply correlated to THIS worker's OWN prior
+  // signal (payload.reply_to set — the field coordinator-side reply tooling already stamps
+  // with the origin signal's row id, confirmed live on ruling 7239abbd/reply_to=601c4379) is,
+  // by definition, wanted now — replies to something the worker asked are not a passive
+  // broadcast. Surface it like a priority-exempt directive instead of waiting for the
+  // oldest-5 window (starved by :190's blanket skip) or the next /checkin. A SEPARATE query
+  // from priorityRows above because the condition is a JSONB not-null check on a specific
+  // kind, not a kind-membership check. Gated on !amAdam to mirror :190's own skip condition
+  // exactly (an Adam session never hits that skip, so this fetch would be a no-op there).
+  // Read_at/acknowledged_at ARE safe to stamp early here: verified awaitCoordinatorReply()
+  // (worker-signal.cjs) matches purely on target_session+reply_to/correlation_id+kind, never
+  // on read_at, and /checkin's own coordinator_messages[] drain (worker-checkin.cjs:544)
+  // already tolerates read_at being pre-set by another consumer (branches straight to
+  // stamping acknowledged_at instead of erroring or re-blocking).
+  let replyToSignalRows = [];
+  if (!tableErr && twoWayOn && !amAdam) {
+    try {
+      const { data: rs } = await supabase
+        .from('session_coordination')
+        .select(SELECT_COLS)
+        .eq('target_session', sessionId)
+        .is('read_at', null)
+        .eq('payload->>kind', 'coordinator_reply')
+        .not('payload->>reply_to', 'is', null)
+        .order('created_at', { ascending: true })
+        .limit(5);
+      replyToSignalRows = rs || [];
+    } catch { /* fail-open: falls back to oldest-batch-only behavior (today's behavior) */ }
+  }
+  const messages = mergePriorityExempt([...priorityRows, ...replyToSignalRows], oldestBatch || []);
 
   let emittedDirective = false;
 

@@ -114,3 +114,46 @@ describe('oldestBatchExcludedKinds (QF-20260815-659 FIX HALF 2: reply-starvation
     expect(wouldFetch.map((r) => r.id)).toEqual(['ruling-1', 'ruling-2']);
   });
 });
+
+describe('classifyInboxMessage: coordinator_reply with payload.reply_to (QF-20260815-659 FIX HALF 1)', () => {
+  it('a coordinator_reply correlated to the worker\'s own signal (reply_to set) surfaces now, drained on display', () => {
+    const msg = { message_type: 'INFO', payload: { kind: 'coordinator_reply', reply_to: 'signal-abc-123' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: true, amAdam: false });
+    expect(v).toEqual({ skip: false, markRead: true, markAck: true });
+  });
+
+  it('a bare coordinator_reply (no reply_to — a passive broadcast) is UNCHANGED: still skip:true', () => {
+    const msg = { message_type: 'INFO', payload: { kind: 'coordinator_reply' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: true, amAdam: false });
+    expect(v).toEqual({ skip: true });
+  });
+
+  it('a coordinator_reply with reply_to is UNAFFECTED when two-way is off (falls through to the existing COACHING/INFO branch, same as before this fix)', () => {
+    const msg = { message_type: 'INFO', payload: { kind: 'coordinator_reply', reply_to: 'signal-abc-123' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: false, amAdam: false });
+    expect(v).toEqual({ skip: false, markRead: true, markAck: false });
+  });
+
+  it('an Adam session is unaffected by reply_to either way — its own carve-out already surfaces everything', () => {
+    const withReplyTo = classifyInboxMessage(
+      { message_type: 'INFO', payload: { kind: 'coordinator_reply', reply_to: 'signal-abc-123' } },
+      { twoWayOn: true, amAdam: true }
+    );
+    const withoutReplyTo = classifyInboxMessage(
+      { message_type: 'INFO', payload: { kind: 'coordinator_reply' } },
+      { twoWayOn: true, amAdam: true }
+    );
+    expect(withReplyTo).toEqual({ skip: false, markRead: false, markAck: false });
+    expect(withoutReplyTo).toEqual({ skip: false, markRead: false, markAck: false });
+  });
+
+  it('the exact live specimen shape (ruling 7239abbd, kind=coordinator_directive with reply_to) is untouched by this branch — DIRECTIVE_KINDS handling still applies first', () => {
+    // Regression guard: reply_to appearing on a NON-coordinator_reply kind (e.g. a directive)
+    // must not be intercepted by the :190 branch at all — DIRECTIVE_KINDS classification (a
+    // separate, pre-existing branch) still owns it.
+    const msg = { message_type: 'INFO', payload: { kind: 'coordinator_directive', reply_to: 'signal-abc-123' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: true, amAdam: false });
+    expect(v.markDelivered).toBe(true);
+    expect(v.skip).toBe(false);
+  });
+});
