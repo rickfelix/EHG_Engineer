@@ -15,15 +15,22 @@ import {
   isEngagementBasePopulationMember,
   engagementGaugeOn,
   ENGAGEMENT_POPULATION_EXTENT,
+  ENGAGEMENT_LIVE_WINDOW_MS,
 } from '../../scripts/lib/engagement-buckets.mjs';
 
 const NOW = 1_700_000_000_000; // fixed clock
 
+// heartbeat_at defaults FRESH — classifyEngagementBuckets applies its own liveness window
+// (ENGAGEMENT_LIVE_WINDOW_MS) ahead of isEngagementBasePopulationMember; tests exercising
+// classifyEngagementBuckets need a live default unless specifically testing staleness.
+// classifySessionBucket/isEngagementBasePopulationMember are called directly in several tests
+// below (bypassing that gate entirely), so heartbeat_at is irrelevant there — harmless either way.
 const session = (over = {}) => ({
   session_id: 'sess-default',
   metadata: {},
   status: 'idle',
   loop_state: null,
+  heartbeat_at: new Date(NOW - 30_000).toISOString(),
   last_tool_at: new Date(NOW - 60_000).toISOString(),
   released_reason: null,
   released_at: null,
@@ -153,22 +160,43 @@ describe('classifyEngagementBuckets — population accounting and the closed TR-
     expect(result.populationExtent).toBe(ENGAGEMENT_POPULATION_EXTENT);
   });
 
-  it('CLOSES THE MEASURED 29% GAP (TR-1/TS-10): identical population + isClaimed inputs from two independent "call sites" (simulating the forecaster side and the KPI-1 side) agree exactly, with zero drift', () => {
+  it('LIVENESS WINDOW (TR-1/DEF-2 fix): a stale-heartbeat session is excluded from the population entirely, not counted in any bucket', () => {
     const sessions = [
-      session({ session_id: 'a', sd_key: 'SD-X' }),
-      session({ session_id: 'b', metadata: { quarantined_at: new Date().toISOString() }, loop_state: 'active', last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString() }),
-      session({ session_id: 'c' }),
+      session({ session_id: 'fresh', sd_key: 'SD-X' }),
+      session({ session_id: 'stale', heartbeat_at: new Date(NOW - ENGAGEMENT_LIVE_WINDOW_MS - 60_000).toISOString() }),
     ];
-    // "forecaster side" — claim signal derived from a claimsBySession-style map
+    const result = classifyEngagementBuckets(sessions, { coordinatorId: 'coord', now: NOW, isClaimed: (s) => !!s.sd_key });
+    expect(result.population).toBe(1); // 'stale' excluded entirely — not IDLE, not UNKNOWN, not counted anywhere
+    expect(result.engaged).toBe(1);
+  });
+
+  it('a session with no heartbeat_at at all is excluded (fails toward "not live", not "member")', () => {
+    const sessions = [session({ session_id: 'a', sd_key: 'SD-X' }), session({ session_id: 'no-hb', heartbeat_at: null })];
+    const result = classifyEngagementBuckets(sessions, { coordinatorId: 'coord', now: NOW, isClaimed: () => false });
+    expect(result.population).toBe(1);
+  });
+
+  it('CLOSES THE MEASURED 29% GAP (TR-1/TS-10, DEF-2/DEF-3 fix): two callers feeding DIFFERENT raw row sets — one heartbeat-filtered like the forecaster\'s own query, one unfiltered like KPI-1\'s select(\'*\') — agree exactly once the classifier\'s own liveness window applies', () => {
+    const liveA = session({ session_id: 'a', sd_key: 'SD-X' });
+    const liveB = session({ session_id: 'b', metadata: { quarantined_at: new Date().toISOString() }, loop_state: 'active', last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString() });
+    const liveC = session({ session_id: 'c' });
+    // A row that a NARROWER host query (the forecaster's own .gte('heartbeat_at', ...)) would never
+    // even fetch, but that KPI-1's unbounded select('*').limit(1000) genuinely would hand the
+    // classifier — this is the exact shape of the measured 29-row disagreement.
+    const staleD = session({ session_id: 'd', heartbeat_at: new Date(NOW - 3 * 60 * 60_000).toISOString() });
+
+    // "forecaster side" — its own query already excludes staleD; claim signal from a
+    // claimsBySession-style map.
     const claimsBySession = { a: [{ sd_key: 'SD-X' }] };
-    const forecasterSide = classifyEngagementBuckets(sessions, {
+    const forecasterSide = classifyEngagementBuckets([liveA, liveB, liveC], {
       coordinatorId: 'coord', now: NOW, isClaimed: (s) => !!claimsBySession[s.session_id],
     });
-    // "KPI-1 side" — claim signal derived from !!s.sd_key directly
-    const kpi1Side = classifyEngagementBuckets(sessions, {
+    // "KPI-1 side" — its own query hands the classifier the SAME live rows PLUS the stale one its
+    // unbounded select doesn't filter out; claim signal from !!s.sd_key directly.
+    const kpi1Side = classifyEngagementBuckets([liveA, liveB, liveC, staleD], {
       coordinatorId: 'coord', now: NOW, isClaimed: (s) => !!s.sd_key,
     });
-    expect(kpi1Side.population).toBe(forecasterSide.population);
+    expect(kpi1Side.population).toBe(forecasterSide.population); // staleD did NOT inflate KPI-1's count
     expect(kpi1Side).toMatchObject({
       engaged: forecasterSide.engaged, tail: forecasterSide.tail,
       zombie: forecasterSide.zombie, idle: forecasterSide.idle, unknown: forecasterSide.unknown,

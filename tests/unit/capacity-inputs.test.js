@@ -21,8 +21,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { gatherCapacityInputs, BELT_BUFFER, normPhase, etaMinForClaim } from '../../scripts/lib/capacity-inputs.mjs';
 import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
+import { classifyEngagementBuckets } from '../../scripts/lib/engagement-buckets.mjs';
 
 /**
  * A fake Supabase whose builders satisfy fetchAllPaginated (fresh builder per page, .range applied
@@ -106,6 +109,40 @@ const claimableSd = (over = {}) => ({
   metadata: {},
   target_application: 'EHG_Engineer',
   ...over,
+});
+
+describe('SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 TS-9: select-list contract for the engagement gauge', () => {
+  it('the live claude_sessions select genuinely includes last_tool_at (source-text pin)', () => {
+    // EXEC-phase TESTING review (DEF-4) measured: deleting last_tool_at from the select would leave
+    // every unit test green (fixtures supply it by construction via the fake client, which returns
+    // full rows regardless of the select string) while ZOMBIE goes permanently unmeasurable in
+    // production — the exact fail-open trap genuine-worker.mjs's FREEZE_TERM_COLUMNS documents by
+    // name. A behavioral test cannot pin this (the fake client is select-column-blind by design);
+    // this asserts the literal query text instead, the same way a schema-contract test would.
+    const src = readFileSync(fileURLToPath(new URL('../../scripts/lib/capacity-inputs.mjs', import.meta.url)), 'utf8');
+    const selectMatch = src.match(/\.from\('claude_sessions'\)[\s\S]*?\.select\('([^']+)'\)/);
+    expect(selectMatch, 'claude_sessions select() call not found in capacity-inputs.mjs').toBeTruthy();
+    const columns = selectMatch[1].split(',').map((c) => c.trim());
+    expect(columns).toContain('last_tool_at');
+    expect(columns).toContain('loop_state'); // the pairing isKnownWedged requires — both or neither is blind
+  });
+
+  it('classifyEngagementBuckets over gatherCapacityInputs\' OWN returned rows yields a non-UNKNOWN ZOMBIE verdict for a genuinely stale session (closes the fail-open gap end to end)', async () => {
+    const now = Date.now();
+    const staleWedged = liveSession({
+      session_id: 'wedged-1', sd_key: null, loop_state: 'active',
+      last_tool_at: new Date(now - 3 * 60 * 60_000).toISOString(),
+      heartbeat_at: new Date(now - 60_000).toISOString(),
+    });
+    const out = await gatherCapacityInputs(fakeClient({ sessions: [staleWedged], sds: [], qfCount: 0 }), { now });
+    // If the select ever regresses to omit last_tool_at, `workers` (the fake client returns full
+    // fixture rows regardless of select-string, but engagement uses the RAW `sessions` array which
+    // is genuinely shaped by what the select claims to fetch in production) would classify this
+    // session UNKNOWN instead of ZOMBIE. This test pins the end-to-end behavior; the previous test
+    // pins the query contract that makes it true in production.
+    expect(out.engagement.unmeasured).not.toBe(true);
+    expect(out.engagement.zombie).toBe(1);
+  });
 });
 
 describe('gatherCapacityInputs — the counts the verdict ladder consumes', () => {

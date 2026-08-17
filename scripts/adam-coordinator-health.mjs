@@ -492,18 +492,27 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
 }
 
 export async function runProbe(supabase, opts = {}) {
-  const utilization = await computeUtilization(supabase, opts);
-  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-5): own try/catch, mirroring computeFailLoudIntegrity's
-  // pattern rather than the unguarded computeUtilization call above — a defect here must never blank
-  // KPI-0/1/2/3 persistence for the whole probe run. Reuses utilization._rows (TR-1: same base
-  // population as the forecaster side) rather than a second claude_sessions read. isClaimed mirrors
-  // this KPI's own documented current-claim signal (!!s.sd_key, see computeUtilization's docblock) —
-  // classifyBreach below is unaffected: it destructures {utilization, planAdherence, integrity} only.
+  const utilizationRaw = await computeUtilization(supabase, opts);
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — TESTING-EXEC review (DEF-1) caught a real data leak:
+  // computeUtilization's _rows/_coordinatorId carriers (up to 1000 full claude_sessions rows) were
+  // reaching this destructured `utilization` binding and, through it, reading.utilization ->
+  // persistReading's findings:[reading] insert AND the advisory body — persisting/emailing every
+  // session's full metadata on every probe run (measured 657x payload growth). Strip the carriers
+  // HERE, once, before `utilization` is used for ANYTHING else below (classifyBreach, reading,
+  // advisories) — only the local engagement computation may see the raw rows.
+  const { _rows: _engagementRows, _coordinatorId: _engagementCoordinatorId, ...utilization } = utilizationRaw;
+  // Own try/catch, mirroring computeFailLoudIntegrity's pattern rather than the unguarded
+  // computeUtilization call above — a defect here must never blank KPI-0/1/2/3 persistence for the
+  // whole probe run. Reuses the stripped-out raw rows (TR-1: same base population as the forecaster
+  // side) rather than a second claude_sessions read. isClaimed mirrors this KPI's own documented
+  // current-claim signal (!!s.sd_key, see computeUtilization's docblock) — classifyBreach below is
+  // unaffected: it destructures {utilization, planAdherence, integrity}, and `utilization` here is
+  // already the carrier-free object.
   let engagement;
   try {
     engagement = engagementGaugeOn()
-      ? classifyEngagementBuckets(utilization._rows || [], {
-          coordinatorId: utilization._coordinatorId ?? null,
+      ? classifyEngagementBuckets(_engagementRows || [], {
+          coordinatorId: _engagementCoordinatorId ?? null,
           now: opts.nowMs ?? Date.now(),
           isClaimed: (s) => !!s.sd_key,
         })

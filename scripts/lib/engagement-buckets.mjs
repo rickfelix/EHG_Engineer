@@ -43,13 +43,37 @@ const loadDetectors = () => (_detectors ??= createRequire(import.meta.url)('../.
 export const ENGAGEMENT_POPULATION_EXTENT = 'engagement-base';
 
 /**
+ * The heartbeat-liveness window this classifier applies UNIFORMLY, regardless of what recency
+ * window (if any) the caller's own host query happened to apply for its own purposes.
+ *
+ * TR-1 CORRECTION (SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001, EXEC-phase TESTING review, DEF-2):
+ * a shared EXCLUSION predicate alone does not guarantee a shared POPULATION — the forecaster's
+ * session read applies a 5-minute heartbeat cutoff (capacity-inputs.mjs HEARTBEAT_LIVE_MS) while
+ * KPI-1's read applies none at all (select('*').order(heartbeat_at desc).limit(1000), unbounded
+ * age). Measured: a 31-row fixture spanning 0-580min of heartbeat age produced forecaster
+ * population=1 vs KPI-1 population=30 — the exact disagreement TR-1 exists to close, relocated
+ * from the predicate layer to the query layer. Fixed by applying ONE liveness window HERE, inside
+ * the classifier itself, so the result is identical no matter how stale a row either caller's own
+ * query happens to hand it. 15 minutes matches lib/fleet/genuine-worker.mjs's liveFleetWorkers
+ * default windowMs — the established fleet-wide "is this session live" convention — rather than
+ * either host query's own narrower/absent window.
+ */
+export const ENGAGEMENT_LIVE_WINDOW_MS = 15 * 60 * 1000;
+
+/**
  * Rollout flag (FR-6). Defaults ON (unlike LEO_MASKED_STALL_DETECT, which defaults OFF) — the
  * gauge is additive/observational, not an escalation trigger, so it ships live from merge with
- * this flag as the rollback lever, not an opt-in gate.
+ * this flag as the rollback lever, not an opt-in gate. Defensively wrapped (DEF-5, uniformity
+ * audit): a process.env read essentially never throws, but every other predicate in this file
+ * fails toward a safe default on error, and this one should too rather than being the exception.
  */
 export function engagementGaugeOn() {
-  const v = process.env.ENGAGEMENT_GAUGE_ENABLED;
-  return v !== 'false' && v !== '0';
+  try {
+    const v = process.env.ENGAGEMENT_GAUGE_ENABLED;
+    return v !== 'false' && v !== '0';
+  } catch {
+    return true; // fail toward the documented default
+  }
 }
 
 /**
@@ -153,8 +177,18 @@ function requireGenuineWorker() {
  */
 export function classifyEngagementBuckets(sessions, opts = {}) {
   try {
-    const { coordinatorId, isClaimed, now = Date.now(), cutMinutes, graceMs, includeLabels = false } = opts;
-    const base = (sessions || []).filter((s) => isEngagementBasePopulationMember(s, coordinatorId));
+    const {
+      coordinatorId, isClaimed, now = Date.now(), cutMinutes, graceMs, includeLabels = false,
+      liveWindowMs = ENGAGEMENT_LIVE_WINDOW_MS,
+    } = opts;
+    // TR-1 fix (DEF-2): the SAME liveness window applies regardless of what recency filter (if
+    // any) the caller's own host query already applied — see ENGAGEMENT_LIVE_WINDOW_MS above.
+    const isLive = (s) => {
+      if (!s?.heartbeat_at) return false;
+      const hbMs = Date.parse(s.heartbeat_at);
+      return Number.isFinite(hbMs) && now - hbMs < liveWindowMs;
+    };
+    const base = (sessions || []).filter((s) => isLive(s) && isEngagementBasePopulationMember(s, coordinatorId));
     const counts = { engaged: 0, tail: 0, zombie: 0, idle: 0, unknown: 0 };
     const labels = includeLabels ? [] : undefined;
     for (const s of base) {
