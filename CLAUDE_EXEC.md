@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4c02b1e901b8b55f -->
+<!-- file_content_hash: d45cac28d0ad22a2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-08-16 12:09:32 PM
+**Generated**: 2026-08-16 5:04:34 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -1140,7 +1140,7 @@ git push origin feature/SD-YYYY-XXX
 gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
 
 # 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
+node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch
 
 # OR local merge fallback
 git checkout main
@@ -1185,7 +1185,7 @@ After creating a PR, enable auto-merge to allow Claude to continue to the next S
 ```bash
 # Create PR and enable auto-merge in one step
 gh pr create --title "feat(SD-XXX): title" --body "..." --base main
-gh pr merge --auto --squash --delete-branch
+gh pr merge --auto --squash --delete-branch  # gh-merge-guard-exempt: --auto is unsupported by gh-merge-safe.mjs (Category D, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
 ```
 
 **Benefits**:
@@ -1205,7 +1205,7 @@ gh pr merge --auto --squash --delete-branch
 git add . && git commit -m "feat(SD-XXX): description"
 git push origin feat/SD-XXX-branch
 gh pr create --title "feat(SD-XXX): title" --body "## Summary..."  --base main
-gh pr merge --auto --squash --delete-branch
+gh pr merge --auto --squash --delete-branch  # gh-merge-guard-exempt: --auto is unsupported by gh-merge-safe.mjs (Category D, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
 # Claude immediately continues to next SD
 ```
 

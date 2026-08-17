@@ -1092,7 +1092,7 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
           ? (console.log(`   ⚠️  --force-complete --skip-ci-wait: auto-confirm merge WITHOUT waiting for CI (reason="${flags.reason}")`), 'yes')
           : (console.log(`   ⚠️  --force-complete: auto-confirm merge, but will wait for CI to complete first (reason="${flags.reason}")`), 'yes'))
       : flags.nonInteractive
-        ? (console.log('   ℹ️  --non-interactive: skipping direct merge (use `gh pr merge --auto` / CI, or re-run with --force-complete).'), 'no')
+        ? (console.log('   ℹ️  --non-interactive: skipping direct merge (use `gh pr merge --auto` / CI, or re-run with --force-complete).'), 'no') // gh-merge-guard-exempt: mentions the --auto flow (Category D, gh-merge-safe.mjs has no --auto support), not the bare command this guard targets
         : await prompt('   Merge to main now? (yes/no): ');
 
     if (shouldMerge.toLowerCase().startsWith('y')) {
@@ -1187,11 +1187,19 @@ async function checkPRStatus(testDir, prUrl) {
 
 /**
  * Display manual merge instructions
+ *
+ * SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 FR-1: a bare `gh pr merge --delete-branch` merges
+ * server-side, then fails locally in a worktree ("main is already used by worktree") even though
+ * the merge already landed -- teaching the false conclusion that the merge failed. Name
+ * scripts/gh-merge-safe.mjs instead, with a real PR# (extractPRNumber is already exported from
+ * this same module) since gh-merge-safe.mjs requires a numeric positional and cannot infer it
+ * from the current branch the way bare `gh pr merge` can.
  */
 function displayManualMergeInstructions(prUrl) {
   console.log('\n   ⚠️  Not merged. Remember to merge to main when ready:');
-  if (prUrl) {
-    console.log('      gh pr merge --merge --delete-branch');
+  const prNumber = extractPRNumber(prUrl);
+  if (prNumber) {
+    console.log(`      node scripts/gh-merge-safe.mjs ${prNumber} --merge --delete-branch`);
   } else {
     console.log('      git checkout main && git merge --no-ff <branch> && git push origin main');
   }

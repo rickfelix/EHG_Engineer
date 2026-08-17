@@ -683,9 +683,9 @@ export function generateFinalPlan(sdContext) {
 
 ## Commands
 \`\`\`bash
-gh pr merge --merge --delete-branch   # Merge
-git checkout main && git pull         # Sync
-npm run sd:status                     # Verify
+node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch   # Merge
+git checkout main && git pull                                  # Sync
+npm run sd:status                                               # Verify
 \`\`\``;
 }
 

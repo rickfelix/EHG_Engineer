@@ -744,7 +744,7 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
               '',
               'REMEDIATION: Run /ship to merge open PRs before running LEAD-FINAL-APPROVAL.',
               'Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL',
-              ...openPRs.map(pr => `  → gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`)
+              ...openPRs.map(pr => `  → gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`) // gh-merge-guard-exempt: FR-1B -- gh-merge-safe.mjs has no --repo support; dropping it here would risk merging the wrong PR in the wrong repo (Category E, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
             ],
             warnings: [],
             details: { openPRs: openPRs.map(pr => ({ number: pr.number, repo: pr.repo, url: pr.url })) }
@@ -870,7 +870,7 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
               '',
               'REMEDIATION: Run /ship to create PRs and merge branches before running LEAD-FINAL-APPROVAL.',
               'Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL',
-              ...verified.map(b => `  → cd to ${b.repo} repo, then: git push -u origin ${b.branch} && gh pr create && gh pr merge --merge --delete-branch`),
+              ...verified.map(b => `  → cd to ${b.repo} repo, then: git push -u origin ${b.branch} && gh pr create && gh pr merge --merge --delete-branch`), // gh-merge-guard-exempt: FR-1B -- cross-repo chained command, gh-merge-safe.mjs has no --repo support (Category E, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
               ...(unverified.length > 0 ? ['', 'For UNVERIFIED branches: resolve the comparison error (gh auth, network, repo path) and re-run, OR --bypass-validation with documented reason if the branch is known-merged.'] : [])
             ],
             warnings: [],

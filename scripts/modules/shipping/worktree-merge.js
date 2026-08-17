@@ -69,7 +69,7 @@ async function main() {
 
   // Step 1: Merge via gh API (works regardless of local state)
   console.log('   🔀 Merging PR on GitHub...');
-  run(`gh pr merge ${prNumber} --merge`);
+  run(`gh pr merge ${prNumber} --merge`); // gh-merge-guard-exempt: live execution site, fix deferred to harness_backlog 664e5f12 (out of this SD's FR scope)
   console.log('   ✅ PR merged');
   await observeWorktreeMerge(prNumber);
 

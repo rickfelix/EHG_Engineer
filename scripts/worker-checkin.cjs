@@ -1088,7 +1088,12 @@ async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
           sd: sd.sd_key,
           ...(softHolds.length ? { soft_holds: softHolds } : {}),
           ...(skipped.length ? { skipped_fenced: skipped } : {}),
-          message: `Recovered stranded SD ${sd.sd_key} (was pending_approval/LEAD_FINAL with claim cleared — one handoff from shipped). Re-attach + finish: node scripts/sd-start.js ${sd.sd_key}, then node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key}. If PR_MERGE_VERIFICATION blocks, merge the PR first (gh pr merge), then re-run.`
+          // SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 FR-1: a bare `gh pr merge` fails locally in a
+          // worktree ("main is already used by worktree") even after the merge already landed on
+          // GitHub -- name scripts/gh-merge-safe.mjs instead. No specific PR# is available at this
+          // point (this message covers whichever PR is currently open for the SD), so <PR#> is a
+          // literal placeholder the reader fills in, same convention as this SD's doc-site fixes.
+          message: `Recovered stranded SD ${sd.sd_key} (was pending_approval/LEAD_FINAL with claim cleared — one handoff from shipped). Re-attach + finish: node scripts/sd-start.js ${sd.sd_key}, then node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key}. If PR_MERGE_VERIFICATION blocks, merge the PR first via node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch, then re-run.`
             // FR-2: soft holds go in the MESSAGE, not only in a field. The gate the incident needed
             // was readable by humans and invisible to the machine; a field a caller may or may not
             // print reproduces that. This is what a worker actually sees.

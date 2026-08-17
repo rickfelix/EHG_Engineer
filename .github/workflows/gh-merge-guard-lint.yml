@@ -1,0 +1,87 @@
+# gh-merge-guard lint — SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 (FR-5).
+#
+# `gh pr merge --delete-branch` merges server-side, then runs a local checkout/branch-delete that
+# fails in a git worktree ("main is already used by worktree"), exiting non-zero AFTER the merge
+# already landed. scripts/gh-merge-safe.mjs avoids this. This guard stops a bare, un-repointed
+# `gh pr merge` instruction from being reintroduced into the specific worker-facing/documentation
+# sites this SD wired -- it is deliberately scoped to that fixed file set (scripts/lint/
+# gh-merge-guard-lint.mjs's SCAN_FILES), not a repo-wide sweep (harness_backlog e31829f5 tracks
+# widening it as a separate, future effort).
+#
+# BLOCKING FROM DAY ONE, mirroring scanner-convention-lint.yml's precedent: this guard lands at
+# zero violations (every known site fixed or pragma'd as part of this same SD), so there is no
+# large pre-existing surface to soak against — an advisory landing would let the very regression
+# this guard exists to catch merge silently green.
+#
+# Escape (always available, one line, MANDATORY reason):
+#   // gh-merge-guard-exempt: <reason>            (js/cjs/mjs)
+#   <!-- gh-merge-guard-exempt: <reason> -->      (md)
+name: gh-merge-guard Lint
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - '.claude/commands/checkin.md'
+      - '.claude/commands/ship.md'
+      - 'docs/reference/error-code-catalog.md'
+      - 'docs/reference/error-codes.md'
+      - 'docs/reference/ship-command-guide.md'
+      - 'docs/03_protocols_and_standards/quick-fix-protocol.md'
+      - 'docs/01_architecture/learning-capture-architecture.md'
+      - 'docs/01_architecture/worktree-first-isolation-integration.md'
+      - 'CLAUDE_EXEC.md'
+      - 'scripts/modules/handoff/executors/lead-final-approval/gates.js'
+      - 'scripts/modules/complete-quick-fix/git-operations.js'
+      - 'scripts/worker-checkin.cjs'
+      - 'scripts/modules/handoff/rejection-subagent-mapping.js'
+      - 'scripts/modules/plan-mode/intelligent-plan-templates.js'
+      - 'scripts/modules/plan-mode/plan-templates.js'
+      - 'scripts/modules/shipping/MultiRepoCoordinator.js'
+      - 'scripts/modules/shipping/ShippingPreflightVerifier.js'
+      - 'scripts/modules/shipping/worktree-merge.js'
+      - 'lib/ship/auto-merge.mjs'
+      - 'lib/exec-context-guard.mjs'
+      - 'scripts/handoff.js'
+      - 'scripts/modules/shipping/post-merge-worktree-cleanup.js'
+      - 'scripts/lint/gh-merge-guard-lint.mjs'
+      - '.github/workflows/gh-merge-guard-lint.yml'
+
+concurrency:
+  group: gh-merge-guard-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gh-merge-guard-lint:
+    name: gh-merge-guard-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run gh-merge-guard lint
+        run: |
+          set +e
+          node scripts/lint/gh-merge-guard-lint.mjs | tee lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "## gh-merge-guard Lint"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+            echo ""
+            echo "A bare, un-repointed \`gh pr merge\` at a wired site must name scripts/gh-merge-safe.mjs,"
+            echo "or carry a reasoned exemption:"
+            echo ""
+            echo '```'
+            echo "gh-merge-guard-exempt: <why this site cannot be repointed>"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code

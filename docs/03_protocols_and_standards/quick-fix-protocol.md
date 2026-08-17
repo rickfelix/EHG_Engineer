@@ -329,7 +329,7 @@ If compliance score <90:
 ### Step 10: Merge to Main (MANDATORY)
 After completion, the fix MUST be merged to main:
 - Verify CI/CD passes on the PR
-- Merge via `gh pr merge --merge --delete-branch` (preferred)
+- Merge via `node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch` (preferred)
 - Or local merge: `git checkout main && git merge --no-ff <branch> && git push`
 - Delete the feature branch after merge
 - Confirm with `git log --oneline -5` on main

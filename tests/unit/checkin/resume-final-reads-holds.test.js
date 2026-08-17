@@ -139,6 +139,21 @@ describe('FR-1 negative control — the fix teaches the chain to LOOK, it does n
   });
 });
 
+describe('SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 FR-1 — recovery text names the safe-merge script', () => {
+  // This site's prior text was bare `gh pr merge --delete-branch`, which merges server-side then
+  // fails locally in a worktree -- teaching a false "merge failed" conclusion (the Bravo incident,
+  // feedback f9dc1a98 / PR #7026). Given its non-standard shape (no PR# available at this point,
+  // unlike every other FR-1/FR-2 site), TS-6 calls for a dedicated test rather than a generic sweep.
+  it('directs PR_MERGE_VERIFICATION recovery to gh-merge-safe.mjs, not a bare gh pr merge', async () => {
+    const claimed = [];
+    const sb = fakeSb({ stranded: [row('SD-PLAIN-006')], claimed });
+    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    expect(r?.action).toBe('resume_final');
+    expect(r.message).toMatch(/node scripts\/gh-merge-safe\.mjs <PR#> --merge --delete-branch/);
+    expect(r.message).not.toMatch(/gh pr merge/);
+  });
+});
+
 describe('FR-2 — a soft hold does not refuse, but it is never INVISIBLE', () => {
   it('adopts the row AND surfaces the hold note in the message text', async () => {
     // The exact metadata shape written to the incident row, so this pins the real case.

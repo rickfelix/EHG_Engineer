@@ -390,5 +390,26 @@
       "input": "git ls-files output (tracked .js/.mjs/.cjs/.ts/.tsx paths, filtered by PATH_EXCLUDE_PREFIXES) with each file's source TEXT AST-parsed via @babel/parser -- RULE A/B/C all require the same call or binding chain to also contain .from('strategic_directives_v2'); consumes no DB columns and no environment variables.",
       "seen": "Live scan against this repo's real tracked tree at HEAD (session 642532a6-bd77-485d-9717-aa034628319c, 2026-08-16): 4621 files scanned, 37 real pre-existing bare-progress-column sites found across 20 files by exact file+line+rule (frozen into tests/unit/hygiene/progress-column-baseline.json) -- a genuine positive in the deployment tree, not a fixture. Every file this SD itself repointed (sd-reader.js, sd-blocker-surface.js, dispatcher.js, revert.js, integration-verification-gate.js, complete-children.mjs, heal-command.mjs, vision-heal.js, generate-retrospective.js, generate-comprehensive-retrospective.js, get-working-on-sd.js, leo-resume.js, audit-runner.js, efficient-database-queries.js) was independently confirmed to score ZERO findings against the same live scan."
     }
+  },
+  {
+    "name": "gh-merge-guard-lint",
+    "script": "scripts/lint/gh-merge-guard-lint.mjs",
+    "rootFlag": "--root",
+    "extraArgs": [],
+    "note": "SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 FR-5. --root was added specifically so this control could be seed-tested -- the default invocation (no flags) always scans the real repo's fixed SCAN_FILES list, which is not itself fixture-aimable; --root re-roots where those relative paths resolve without changing default behavior.",
+    "fixtures": [
+      {
+        "path": "scripts/worker-checkin.cjs",
+        "content": "// seeded-gh-merge-guard-defect: minimal synthetic content for the control-seed-test trial\nconsole.log(\"gh pr merge --merge --delete-branch\");\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-gh-merge-guard-defect",
+      "worker-checkin.cjs"
+    ],
+    "observability_proof": {
+      "input": "The raw text content of the 21 files named in the SCAN_FILES const (scripts/lint/gh-merge-guard-lint.mjs), read via fs.readFileSync relative to repo root (or --root when overridden). Comment-stripped for .js/.cjs/.mjs files via a local line-count-preserving stripper before regex matching; .md files scanned raw. Consumes no DB columns and no environment variables.",
+      "seen": "Real positive observed repeatedly during this SD's own EXEC phase (2026-08-16, before FR-1/FR-2/FR-3/FR-4 landed): local invocation against the real (non-fixture) repo tree reported 42 genuine bare `gh pr merge` sites across the 21 SCAN_FILES files, independently confirmed via git show/grep against each flagged file:line, then driven to 0 as each site was fixed or pragma'd across commits 9b1b4585153..3a8d05caf7f. gh-merge-guard-lint also ran and passed (0 violations, exit 0) in this PR's own CI (workflow run visible on PR #7146) -- a live enforcement run, not a fixture trial."
+    }
   }
 ]

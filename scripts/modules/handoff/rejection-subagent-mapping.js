@@ -103,7 +103,7 @@ const REJECTION_MAP = {
         location: `product_requirements_v2 WHERE id='PRD-${ctx.sdId}'`,
         frequency: 'Gate failure on PLAN-TO-EXEC attempt',
         priorAttempts: 'PRD was generated but contains generic text (TBD, placeholder, generic statements)',
-        desiredOutcome: `Replace all boilerplate with SD-specific content. Forbidden patterns: "TBD", "To be defined", "Will be determined". Every requirement must be specific and measurable.`
+        desiredOutcome: 'Replace all boilerplate with SD-specific content. Forbidden patterns: "TBD", "To be defined", "Will be determined". Every requirement must be specific and measurable.'
       });
       return `PRD has boilerplate content (score: ${score}%). Replace with specific requirements.` +
         taskInvocation('general-purpose', brief);
@@ -125,7 +125,7 @@ const REJECTION_MAP = {
         location: `user_stories table WHERE sd_id='${ctx.sdId}', PRD: PRD-${ctx.sdId}`,
         frequency: 'Blocking on first PLAN-TO-EXEC attempt',
         priorAttempts: 'None — user stories have not been generated',
-        desiredOutcome: `Generate 5-8 user stories from the PRD acceptance criteria. Each story: {story_key, title, user_role, user_want, user_benefit, acceptance_criteria (Given/When/Then), priority, story_points}. Insert into user_stories table. Set status to "ready".`
+        desiredOutcome: 'Generate 5-8 user stories from the PRD acceptance criteria. Each story: {story_key, title, user_role, user_want, user_benefit, acceptance_criteria (Given/When/Then), priority, story_points}. Insert into user_stories table. Set status to "ready".'
       });
       return 'User stories are MANDATORY before EXEC phase.' +
         taskInvocation('general-purpose', brief);
@@ -194,7 +194,7 @@ const REJECTION_MAP = {
         location: `user_stories WHERE sd_id='${ctx.sdId}', acceptance_criteria and implementation_context fields`,
         frequency: 'Gate failure on PLAN-TO-EXEC attempt',
         priorAttempts: 'Design sub-agent flagged workflow issues in user stories',
-        desiredOutcome: `Fix workflow issues: dead ends, circular flows, missing error recovery. Update user story acceptance_criteria and implementation_context. Target UX score >= 6.0/10.`
+        desiredOutcome: 'Fix workflow issues: dead ends, circular flows, missing error recovery. Update user story acceptance_criteria and implementation_context. Target UX score >= 6.0/10.'
       });
       return `Workflow validation failed (${issues.length} issues). Fix user story workflows.` +
         taskInvocation('design-agent', brief);
@@ -230,7 +230,7 @@ const REJECTION_MAP = {
         location: 'product_requirements_v2, user_stories tables',
         frequency: 'Blocking PLAN-TO-EXEC handoff',
         priorAttempts: 'No design/database analysis has been run for this SD',
-        desiredOutcome: `Complete design analysis: component architecture, data flow, integration points. Then run database-agent for schema analysis.`
+        desiredOutcome: 'Complete design analysis: component architecture, data flow, integration points. Then run database-agent for schema analysis.'
       });
       return 'Execute DESIGN and DATABASE sub-agents before EXEC.' +
         taskInvocation('design-agent', brief);
@@ -246,7 +246,7 @@ const REJECTION_MAP = {
         location: 'sd_phase_handoffs.metadata.gate2_validation',
         frequency: 'Blocking EXEC-TO-PLAN handoff',
         priorAttempts: 'Implementation exists but fidelity check failed',
-        desiredOutcome: `Validate implementation against PRD. Check: unit tests passing, no stubbed code, correct directory, all FIXME/TODO resolved.`
+        desiredOutcome: 'Validate implementation against PRD. Check: unit tests passing, no stubbed code, correct directory, all FIXME/TODO resolved.'
       });
       return 'Gate 2 implementation fidelity failed. Review PRD alignment.' +
         taskInvocation('validation-agent', brief);
@@ -326,7 +326,7 @@ const REJECTION_MAP = {
         location: 'Target application directory, PRD system_architecture field',
         frequency: 'Blocking PLAN-TO-EXEC — prevents 30-52 hour rework',
         priorAttempts: 'PRD created but may reference wrong framework patterns',
-        desiredOutcome: `Verify detected framework matches PRD implementation approach. Common fixes: Vite SPA → Supabase client (not API routes), Next.js → app/api/, Remix → loader/action.`
+        desiredOutcome: 'Verify detected framework matches PRD implementation approach. Common fixes: Vite SPA → Supabase client (not API routes), Next.js → app/api/, Remix → loader/action.'
       });
       return 'Architecture mismatch detected. Verify framework alignment.' +
         taskInvocation('validation-agent', brief);
@@ -409,7 +409,7 @@ const REJECTION_MAP = {
     promptFn: (ctx) => {
       const brief = fivePointBrief({
         symptom: `BMAD EXEC-TO-PLAN validation failed for ${ctx.sdId}. Test plans incomplete or E2E coverage insufficient.`,
-        location: `Test files, playwright-report/, coverage/ directories`,
+        location: 'Test files, playwright-report/, coverage/ directories',
         frequency: 'Blocking EXEC-TO-PLAN handoff',
         priorAttempts: 'Implementation complete but test coverage insufficient',
         desiredOutcome: 'Complete test plans and achieve 100% E2E test coverage for all user stories.'
@@ -461,7 +461,7 @@ const REJECTION_MAP = {
     promptFn: (ctx) => {
       const brief = fivePointBrief({
         symptom: `E2E test coverage incomplete for ${ctx.sdId}. Not all user stories have corresponding tests.`,
-        location: `user_stories and story_test_mappings tables`,
+        location: 'user_stories and story_test_mappings tables',
         frequency: 'Blocking handoff',
         priorAttempts: 'Some tests exist but coverage is not 100%',
         desiredOutcome: 'Write E2E tests for uncovered user stories. Each story must have at least one passing E2E test.'
@@ -586,7 +586,7 @@ const REJECTION_MAP = {
         location: `retrospectives table WHERE sd_id='${ctx.sdId}'`,
         frequency: 'Blocking PLAN-TO-LEAD handoff — common with auto-generated retrospectives',
         priorAttempts: 'Retrospective exists but quality is too low. Key learnings need SD-specific context instead of just gate metrics.',
-        desiredOutcome: `Replace metric-only learnings with SD-specific insights. Include: (1) What was implemented and why (reference SD title/description), (2) What files were changed and their purpose, (3) Specific implementation challenges encountered, (4) Concrete action items referencing the SD. Example good learning: "Implemented claim guard by adding p_reason parameter to release_sd RPC calls in lib/claim-guard.mjs to fix PostgREST function overload ambiguity."`
+        desiredOutcome: 'Replace metric-only learnings with SD-specific insights. Include: (1) What was implemented and why (reference SD title/description), (2) What files were changed and their purpose, (3) Specific implementation challenges encountered, (4) Concrete action items referencing the SD. Example good learning: "Implemented claim guard by adding p_reason parameter to release_sd RPC calls in lib/claim-guard.mjs to fix PostgREST function overload ambiguity."'
       });
       return 'Retrospective needs SD-specific insights, not metric-only learnings.' +
         taskInvocation('retro-agent', brief);
@@ -602,7 +602,7 @@ const REJECTION_MAP = {
         location: 'GitHub PRs, feature branches for rickfelix/ehg and rickfelix/EHG_Engineer',
         frequency: 'Blocking final approval — this is the #1 cause of LEAD-FINAL-APPROVAL failure',
         priorAttempts: 'Code is on feature branch but not merged. Run /ship BEFORE LEAD-FINAL-APPROVAL.',
-        desiredOutcome: `Run /ship to commit, create PR, and merge all changes for ${ctx.sdId}. Required order: EXEC → /ship → LEAD-FINAL-APPROVAL. For each open PR: gh pr merge <number> --merge --delete-branch`
+        desiredOutcome: `Run /ship to commit, create PR, and merge all changes for ${ctx.sdId}. Required order: EXEC → /ship → LEAD-FINAL-APPROVAL. For each open PR: node scripts/gh-merge-safe.mjs <number> --merge --delete-branch`
       });
       return 'Run /ship BEFORE LEAD-FINAL-APPROVAL. All code must be merged to main first.' +
         taskInvocation('github-agent', brief);
@@ -616,7 +616,7 @@ const REJECTION_MAP = {
   'SD_NOT_FOUND': {
     subagentType: null,
     category: 'infrastructure',
-    promptFn: (ctx) => `SD not found in strategic_directives_v2. Create using: node scripts/leo-create-sd.js`
+    promptFn: (ctx) => 'SD not found in strategic_directives_v2. Create using: node scripts/leo-create-sd.js'
   },
 
   'PRD_NOT_FOUND': {
@@ -644,7 +644,7 @@ const REJECTION_MAP = {
   'DELIVERABLES_INCOMPLETE': {
     subagentType: null,
     category: 'workflow',
-    promptFn: (ctx) => `Not all deliverables completed. Query: SELECT * FROM sd_scope_deliverables WHERE sd_id = '<UUID>' AND completion_status != 'completed'`
+    promptFn: (ctx) => 'Not all deliverables completed. Query: SELECT * FROM sd_scope_deliverables WHERE sd_id = \'<UUID>\' AND completion_status != \'completed\''
   },
 
   'FIDELITY_DATA_MISSING': {
@@ -674,7 +674,7 @@ const REJECTION_MAP = {
         location: `user_stories table WHERE sd_id='${ctx.sdId}'`,
         frequency: 'Blocking PLAN-TO-LEAD handoff',
         priorAttempts: 'Stories were never created for this SD',
-        desiredOutcome: `Generate user stories from PRD acceptance criteria. Insert into user_stories table with status "ready".`
+        desiredOutcome: 'Generate user stories from PRD acceptance criteria. Insert into user_stories table with status "ready".'
       });
       return 'User stories must exist for this SD type.' +
         taskInvocation('general-purpose', brief);

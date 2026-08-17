@@ -263,7 +263,7 @@ try {
 
 ### Orphaned-Worktree Recovery (SD-FDBK-INFRA-WORKTREE-AUTO-REMOVED-001)
 
-When `gh pr merge --delete-branch` deletes `feat/<SD-KEY>` while its worktree is still active (e.g. a PR auto-merges between PLAN-TO-LEAD and LEAD-FINAL-APPROVAL), git deregisters the worktree: the directory remains on disk but drops out of `git worktree list`. Two layers now handle this:
+When `gh pr merge --delete-branch` deletes `feat/<SD-KEY>` while its worktree is still active (e.g. a PR auto-merges between PLAN-TO-LEAD and LEAD-FINAL-APPROVAL), git deregisters the worktree: the directory remains on disk but drops out of `git worktree list`. Two layers now handle this: <!-- gh-merge-guard-exempt: describes the branch-delete side effect this recovery mechanism handles, not an instruction to run the bare command -->
 
 **FR-1 — handoff re-exec recovery (`scripts/handoff.js`).** Running any handoff from an orphaned-worktree cwd previously crashed with `ERR_MODULE_NOT_FOUND` (the dangling `node_modules` junction breaks bare-import resolution) and the in-body `STALE_CWD` guard could only `exit(1)`. handoff.js now runs a builtin-only preflight (`lib/handoff-reexec.mjs` `planHandoffReexec`) *before* its heavy imports — which are now dynamic — and, on detecting an orphaned cwd, **re-executes the main repo's `scripts/handoff.js` from the main root** via `spawnSync`. `process.chdir()` cannot fix this (ESM resolves the static-import graph, including `node_modules`, before any module-body statement runs), so re-exec is required. An `LEO_HANDOFF_REEXEC` env sentinel is the loop-guard; recovery only fires for a verified main repo root, otherwise the original loud failure is preserved.
 

@@ -506,12 +506,12 @@ supabase.from('claude_sessions')
 **If AUTO-PROCEED is ACTIVE:**
 - Skip AskUserQuestion
 - Output status: `🤖 AUTO-PROCEED: Auto-merging PR #X...`
-- Run the hardened auto-merge sequence below — do NOT bare-call `gh pr merge`.
+- Run the hardened auto-merge sequence below — do NOT bare-call `gh pr merge`. <!-- gh-merge-guard-exempt: this line is the warning against the bare command, not the instruction itself -->
 - Continue to Step 6.3 automatically on success; HARD-FAIL `/ship` on failure.
 
 **Hardened auto-merge sequence (SD-LEO-INFRA-SHIP-AUTO-MERGE-001):**
 
-The bare `gh pr merge <PR#> --merge --delete-branch` call silently failed for months — three independent layers blocked it (draft PRs, branch-protection `enforce_admins`, no exit-code check). The hardened sequence lives in `lib/ship/auto-merge.mjs` so it is unit-testable; invoke it from /ship Step 6 like this:
+The bare `gh pr merge <PR#> --merge --delete-branch` call silently failed for months — three independent layers blocked it (draft PRs, branch-protection `enforce_admins`, no exit-code check). The hardened sequence lives in `lib/ship/auto-merge.mjs` so it is unit-testable; invoke it from /ship Step 6 like this: <!-- gh-merge-guard-exempt: historical explanation of why the bare command was replaced, not an instruction to run it -->
 
 ```bash
 node -e "
@@ -547,7 +547,7 @@ KNOWN RESIDUAL LIMITATION (tracked, not silent): `branch` narrows the collision 
 If the call exits non-zero, `/ship` MUST hard-fail and skip Step 6.3 / Step 6.5 / `/learn` / next-SD selection. Do NOT rescue the exit code.
 
 **What the module does (each step closes one of the three failure modes):**
-- `detectDraftState` (`gh pr view --json isDraft`) → `gh pr ready` if draft. LEO PRs are conventionally drafts (waiting for LEAD-FINAL); `gh pr merge` returns "this pull request is in draft state" without this step.
+- `detectDraftState` (`gh pr view --json isDraft`) → `gh pr ready` if draft. LEO PRs are conventionally drafts (waiting for LEAD-FINAL); `gh pr merge` returns "this pull request is in draft state" without this step. <!-- gh-merge-guard-exempt: describes gh's own error message, not an instruction -->
 - `detectEnforceAdmins` (`gh api branches/main/protection`) → conditional `--admin`. The flag is gated on actual branch-protection state, not hardcoded, so privileges are not elevated unnecessarily on repos without `enforce_admins`.
 - Exit-code check on the merge — old behavior silently proceeded on merge failure, marking SDs `completed` while PRs sat orphaned. This is the load-bearing fix.
 - Race recovery: `gh pr view --json state` once on non-zero exit; if `state == MERGED`, treat as success (concurrent-merge race) without re-introducing silent failures.
@@ -558,12 +558,12 @@ If the call exits non-zero, `/ship` MUST hard-fail and skip Step 6.3 / Step 6.5 
 ```
 Question: "PR created successfully! Do you want to merge it now?"
 Options:
-- "Yes, merge now" - Run `gh pr merge <PR#> --merge --delete-branch` and confirm completion
+- "Yes, merge now" - Run `node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch` and confirm completion
 - "No, I'll review first" - End the ship command, user will merge manually later
 ```
 
 **If user chooses "Yes, merge now":**
-1. Run `gh pr merge <PR#> --merge --delete-branch`
+1. Run `node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch`
 2. Run `git checkout main && git pull` to sync local
 3. Confirm: "✅ PR #X merged and branch deleted. You're on main with latest changes."
 
@@ -642,7 +642,7 @@ For non-QF merges, no output appears — Step 6.5 follows directly.
 This step runs automatically via PostToolUse hook - no manual action required.
 
 **How it works:**
-1. **Detects merge success**: Hook monitors `gh pr merge` commands
+1. **Detects merge success**: Hook monitors `gh pr merge` commands <!-- gh-merge-guard-exempt: describes existing PostToolUse hook detection, not an instruction to run the bare command -->
 2. **Checks SD/QF status**: Queries database to determine if this is SD/QF work
    - Checks `v_active_sessions` for active SD claim
    - Checks `claude_sessions` for recently released SDs
@@ -744,7 +744,7 @@ if [ "${STEP_6_3_RAN_QF_CLOSURE:-false}" = "false" ] && [ "${LEO_AUTOHANDOFF_ENA
     # SD-LEO-INFRA-POST-MERGE-AUTO-001 FR-1: pass --merged-branch so the orchestrator
     # can derive an active session_id from claude_sessions when CLAUDE_SESSION_ID env
     # is missing. $BRANCH is the original branch name (string), preserved even after
-    # `gh pr merge --delete-branch` removed the local ref.
+    # `gh pr merge --delete-branch` removed the local ref. <!-- gh-merge-guard-exempt: historical note explaining $BRANCH preservation, not an instruction -->
     node scripts/post-merge-handoff-orchestrator.js --sd-key="$SD_KEY" --merged-branch="$BRANCH"
     if [ $? -eq 0 ]; then
       export STEP_6_5_RAN_AUTOHANDOFF=true
@@ -929,7 +929,7 @@ gh pr create --title "feat: add notification system" --body "## Summary
 # Step 6: ASK USER: "PR created successfully! Do you want to merge it now?"
 # User chooses: "Yes, merge now"
 
-gh pr merge 123 --merge --delete-branch
+node scripts/gh-merge-safe.mjs 123 --merge --delete-branch
 git checkout main && git pull
 # Output: ✅ PR #123 merged and branch deleted.
 ```

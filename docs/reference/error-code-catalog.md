@@ -78,7 +78,7 @@ These codes are returned when a phase handoff fails validation. Each rejection i
 |------|---------|-------------|--------------|-----|
 | `BRANCH_ENFORCEMENT_FAILED` | PLAN-TO-EXEC | No feature branch exists for this SD | Working on `main` branch directly | Create branch: `git checkout -b feat/<SD-ID>-short-description` |
 | `GIT_COMMIT_VERIFICATION_FAILED` | PLAN-TO-LEAD | Uncommitted changes exist | Implementation code not committed | Run `git add`, `git commit`, `git push`. |
-| `PR_MERGE_VERIFICATION` | LEAD-FINAL-APPROVAL | Unmerged PRs exist for this SD | Feature branch not merged to `main` | Run `/ship` BEFORE LEAD-FINAL-APPROVAL. For each open PR: `gh pr merge <number> --merge --delete-branch`. |
+| `PR_MERGE_VERIFICATION` | LEAD-FINAL-APPROVAL | Unmerged PRs exist for this SD | Feature branch not merged to `main` | Run `/ship` BEFORE LEAD-FINAL-APPROVAL. For each open PR: `node scripts/gh-merge-safe.mjs <number> --merge --delete-branch`. |
 
 ### 1.7 Retrospective / Learning Codes
 

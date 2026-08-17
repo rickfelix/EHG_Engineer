@@ -76,7 +76,7 @@ Emitted during LEAD final approval verification.
 | `USER_STORIES_COMPLETE` | Not all user stories have status `completed` | Blocking | Update remaining user stories to `completed` status. |
 | `RETROSPECTIVE_EXISTS` | No quality retrospective found for completed SD | Blocking | Generate retrospective with quality score >= 60%. Include SD-specific learnings. Run sub-agent: `retro-agent`. |
 | `RETROSPECTIVE_QUALITY_GATE` | Retrospective contains boilerplate or insufficient quality | Blocking | Replace metric-only learnings with SD-specific insights referencing actual files and implementation decisions. |
-| `PR_MERGE_VERIFICATION` | Unmerged code on feature branches | Blocking | Run `/ship` before LEAD-FINAL-APPROVAL. All PRs must be merged to main. `gh pr merge <number> --merge --delete-branch`. |
+| `PR_MERGE_VERIFICATION` | Unmerged code on feature branches | Blocking | Run `/ship` before LEAD-FINAL-APPROVAL. All PRs must be merged to main: `node scripts/gh-merge-safe.mjs <number> --merge --delete-branch` (not a bare `gh pr merge --delete-branch` — that merges server-side, then fails the local checkout/branch-delete inside a git worktree, exiting non-zero *after* the merge already landed and reading as a false failure; gh-merge-safe.mjs avoids the local checkout entirely). | <!-- gh-merge-guard-exempt: FR-4 WHY clause names the bare command it warns against, not an instruction to run it -->
 | `DELIVERABLES_INCOMPLETE` | Not all deliverables completed | Blocking | Complete all entries in `sd_scope_deliverables`. |
 
 ---
