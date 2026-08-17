@@ -13,7 +13,16 @@ tags: [tiered-orchestration, door-routing, dispatch, economics, model-tier, fabl
 > classifier/stamper/dispatch-gate/ledger subsystem described in "Components" 1-4, "The
 > same-evidence invariant", "Cutover & rollback", and "Deferred" below was never activated
 > (`DOOR_ROUTING_ENABLED` was never true in any real environment, and `door-classifier.mjs`/
-> `door-stamper.mjs` had zero production callers ever). The chairman decided RETIRE (SMS
+> `door-stamper.mjs` had no wired, ongoing production caller in the committed codebase --
+> git history shows exactly 2 commits ever touching either file, both from the original
+> build, no third commit ever adding a caller. **Correction, SECURITY review finding SEC-C1:**
+> 5 completed SDs (the `SD-ARCH-HOTSPOT-*` family) do carry `metadata.door_class`, stamped
+> in a single ~1-second window on 2026-07-09 by `stamped_by:'coordinator-cutover-2026-07-09'`
+> -- output byte-shaped exactly like `stampDoorClass()`'s return value, almost certainly a
+> one-time ad-hoc/manual invocation (a backfill tied to introducing the `door_class` concept)
+> rather than evidence of a live, ongoing dispatch-time invocation path. "Zero production
+> callers ever" overstated this; the accurate claim is zero wired/automated callers, one
+> historical manual exception, zero non-terminal carriers today. The chairman decided RETIRE (SMS
 > dc87e7a0, decision row 9ce56d34); `lib/fleet/door-constants.cjs`, `door-classifier.mjs`,
 > `door-stamper.mjs`, `door-routing-ledger.cjs`, and the `fable-allocation-report` reporting
 > script (formerly under `scripts/`) are all deleted, along with
