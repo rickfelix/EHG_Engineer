@@ -91,12 +91,17 @@ describe('CANARY MUST NEVER RECEIVE THE WORKER DIRECTIVE — all three prompt-de
     const { runRebootRespawn } = await import('../../../lib/fleet/reboot-respawn-runner.js');
     const seen = [];
     await runRebootRespawn({
-      loadFn: async () => ([{ name: 'Canary-pilot', role: 'worker' }, { name: 'Charlie', role: 'worker' }]),
+      // SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: account_profile is irrelevant to this test's
+      // subject (prompt selection) -- defaulted so neither slot is skipped for lacking one.
+      loadFn: async () => ([{ name: 'Canary-pilot', role: 'worker', account_profile: 'canary' }, { name: 'Charlie', role: 'worker', account_profile: 'host-default' }]),
       rosterFn: (s) => s.map((x) => x.name),
       buildInvocationFn: ({ callsign, startupPrompt }) => {
         seen.push({ callsign, startupPrompt });
         return { program: 'wt.exe', args: [], env: {}, sessionId: 'sid' };
       },
+      // Stubbed so 'canary' resolves regardless of FLEET_ACCOUNT_PROFILES_DIR in the test env --
+      // this test's subject is prompt selection, not profile resolution.
+      resolveProfileDirFn: () => 'C:\\fake\\profile',
       live: false, log: () => {}, logFn: () => {},
     });
     const canary = seen.find((s) => s.callsign === 'Canary-pilot');

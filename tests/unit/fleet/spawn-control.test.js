@@ -183,6 +183,11 @@ describe('module surface (TS-10: exactly seven named verbs, no more)', () => {
     // loosened to accommodate them.
     const helperNames = ['roleOf', 'isSingletonRole', 'resolveProfileDir', 'isLiveEnabled', 'buildLiveSpawnInvocation',
       'SESSION_BIND_MAX_ATTEMPTS', 'SESSION_BIND_DELAY_MS',
+      // HOST_DEFAULT_PROFILE (SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1) — a VALUE, same class as
+      // CANARY_PROFILE below: the literal resolveProfileDir now recognises as "deliberately no
+      // isolation," exported so callers (fleet_desired_slots seed data, reboot-respawn-runner,
+      // tests) can reference the sentinel by name instead of hand-typing the string.
+      'HOST_DEFAULT_PROFILE',
       'CANARY_PROFILE', 'CANARY_CALLSIGN_PREFIX', 'retirePredecessorProcess',
       'isWorktreeExemptPath', 'assertSpawnSourceNotExempt',
       // resolveSpawnSourceDir is a HELPER by the same test: an operator never invokes it, and it

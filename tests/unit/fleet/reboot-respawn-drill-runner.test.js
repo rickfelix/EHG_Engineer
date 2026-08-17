@@ -8,9 +8,12 @@
 import { describe, it, expect } from 'vitest';
 import { runRebootRespawnDrill, printLiveExecutionPrecondition } from '../../../lib/fleet/reboot-respawn-drill-runner.js';
 
+// SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: account_profile:null is now SKIPPED, not silently
+// un-isolated -- 'host-default' is the explicit sentinel for a normal, spawning slot with no
+// isolation, which is what this drill-mechanism file's fixtures actually need.
 const SLOTS = [
-  { name: 'Worker-1', role: 'worker', account_profile: null, resume_uuid: 'u-1' },
-  { name: 'Worker-2', role: 'worker', account_profile: null, resume_uuid: 'u-2' },
+  { name: 'Worker-1', role: 'worker', account_profile: 'host-default', resume_uuid: 'u-1' },
+  { name: 'Worker-2', role: 'worker', account_profile: 'host-default', resume_uuid: 'u-2' },
 ];
 
 /** logFn records events into a shared array; queryEventsFn reads them back — real emit->read path. */

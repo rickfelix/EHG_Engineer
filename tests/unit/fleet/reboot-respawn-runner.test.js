@@ -8,9 +8,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { runRebootRespawn } from '../../../lib/fleet/reboot-respawn-runner.js';
 import { resolveClaudeCmd, resolveRepoRoot } from '../../../lib/fleet/build-session-launch.cjs';
 
+// SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: account_profile:null used to fall through to a silent
+// no-isolation spawn; it now means SKIP (see reboot-respawn-skip-and-coordinator-dedup.test.js).
+// These fixtures use 'host-default' -- the explicit, deliberate sentinel -- so every test in THIS
+// file that is not specifically about profile resolution keeps exercising a normal, spawning slot.
 const SLOTS = [
-  { name: 'Worker-1', role: 'worker', account_profile: null, resume_uuid: 'u-1' },
-  { name: 'Worker-2', role: 'worker', account_profile: null, resume_uuid: null }, // no token -> back-compat path
+  { name: 'Worker-1', role: 'worker', account_profile: 'host-default', resume_uuid: 'u-1' },
+  { name: 'Worker-2', role: 'worker', account_profile: 'host-default', resume_uuid: null }, // no token -> back-compat path
 ];
 
 /**
@@ -65,8 +69,8 @@ describe('runRebootRespawn dry-run (FR-5) — default INERT', () => {
   it('builds a supervisor-shaped roster from the slots', async () => {
     const res = await runRebootRespawn({ supabase: {}, loadFn: async () => SLOTS, logFn: async () => ({ ok: true }), live: false });
     expect(res.roster).toEqual([
-      { role: 'worker', callsign: 'Worker-1', accountProfile: null, resume_uuid: 'u-1' },
-      { role: 'worker', callsign: 'Worker-2', accountProfile: null, resume_uuid: null },
+      { role: 'worker', callsign: 'Worker-1', accountProfile: 'host-default', resume_uuid: 'u-1' },
+      { role: 'worker', callsign: 'Worker-2', accountProfile: 'host-default', resume_uuid: null },
     ]);
   });
 });
@@ -101,7 +105,7 @@ describe('runRebootRespawn live (FR-5)', () => {
   // drill runner — so modelling the insert here matches production rather than papering over it.
   const canaryMarkerOk = () => ({ from: () => ({ insert: async () => ({ error: null }) }) });
 
-  it('resolves account_profile into CLAUDE_CONFIG_DIR via the injected resolver, and is fail-soft if it throws', async () => {
+  it('resolves account_profile into CLAUDE_CONFIG_DIR via the injected resolver', async () => {
     const okResolver = (name) => `C:\\profiles\\${name}`;
     const spawnCalls = [];
     const spawnFn = (program, args, env) => { spawnCalls.push(env); return { pid: 1 }; };
@@ -111,16 +115,21 @@ describe('runRebootRespawn live (FR-5)', () => {
     });
     expect(spawnCalls[0].CLAUDE_CONFIG_DIR).toBe('C:\\profiles\\canary');
     expect(res.results[0].spawned).toBe(true);
+  });
 
-    // Throwing resolver -> profileDir null, slot still respawns (fail-soft), no CLAUDE_CONFIG_DIR.
+  // SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1/FR-3: CHANGED from fail-soft (profileDir null, slot
+  // still respawned un-isolated) to fail-loud-but-locally-scoped (this ONE slot is skipped; every
+  // other slot in the same run still gets attempted -- see TS-12 in
+  // reboot-respawn-skip-and-coordinator-dedup.test.js for the multi-slot proof of that isolation).
+  it('SKIPS the slot (never spawns un-isolated) when the profile resolver throws', async () => {
     const spawnCalls2 = [];
     const res2 = await runRebootRespawn({
       supabase: {}, loadFn: async () => [{ name: 'Canary-1', role: 'worker', account_profile: 'bad', resume_uuid: 'u-c' }],
       spawnFn: (p, a, e) => { spawnCalls2.push(e); return { pid: 1 }; },
       logFn: async () => ({ ok: true }), live: true, resolveProfileDirFn: () => { throw new Error('bad profile'); }, sleepFn: vi.fn(),
     });
-    expect(spawnCalls2[0]).not.toHaveProperty('CLAUDE_CONFIG_DIR');
-    expect(res2.results[0].spawned).toBe(true);
+    expect(spawnCalls2).toHaveLength(0);
+    expect(res2.results[0]).toMatchObject({ spawned: false, invocation: null, skip_reason: 'profile_resolve_failed' });
   });
 });
 

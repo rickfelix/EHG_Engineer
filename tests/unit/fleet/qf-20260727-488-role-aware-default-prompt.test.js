@@ -81,7 +81,12 @@ describe('reboot-respawn-runner — defaultStartupPrompt is role-aware (QF-20260
   const runFor = async (slots) => {
     const seen = [];
     await runRebootRespawn({
-      loadFn: async () => slots,
+      // SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: this suite's subject is PROMPT selection, not
+      // account_profile presence -- these fixtures deliberately omit account_profile (irrelevant
+      // to prompt selection, which keys on callsign namespace and role, never on account_profile),
+      // so default it here rather than in every fixture; the real resolver would now correctly
+      // SKIP an unset one, starving every test below of a built invocation to inspect.
+      loadFn: async () => slots.map((s) => ({ account_profile: 'host-default', ...s })),
       rosterFn: (s) => s.map((x) => x.name),
       buildInvocationFn: ({ callsign, role, startupPrompt }) => {
         seen.push({ callsign, role, startupPrompt });

@@ -32,6 +32,11 @@ function harness(slots) {
         seen.push({ callsign, startupPrompt });
         return { program: 'wt.exe', args: [], env: {}, sessionId: 'sid' };
       },
+      // SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: this file's subject is PROMPT resolution, not
+      // profile resolution -- stubbed so a slot is never skipped for an unrelated reason (e.g. a
+      // test env with no FLEET_ACCOUNT_PROFILES_DIR configured, which the real resolver would
+      // now correctly treat as a resolve failure and skip the slot for).
+      resolveProfileDirFn: () => 'C:\\fake\\profile',
       live: false,
       log: () => {},
       logFn: () => {},
@@ -39,9 +44,13 @@ function harness(slots) {
   };
 }
 
+// SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: Charlie now carries an explicit account_profile
+// ('host-default') -- an absent one is no longer a benign default here, it means SKIP (see
+// reboot-respawn-skip-and-coordinator-dedup.test.js), which would starve this file's actual
+// subject (per-slot PROMPT resolution) of a built invocation to inspect at all.
 const MIXED = [
   { name: 'Canary-pilot', role: 'worker', account_profile: 'canary' },
-  { name: 'Charlie', role: 'worker' },
+  { name: 'Charlie', role: 'worker', account_profile: 'host-default' },
 ];
 
 describe('FR-3a — per-slot prompt resolution in reboot-respawn-runner', () => {
@@ -75,7 +84,7 @@ describe('FR-3a — per-slot prompt resolution in reboot-respawn-runner', () => 
   });
 
   it('an UNIDENTIFIABLE slot gets no prompt rather than defaulting to the worker directive', async () => {
-    const h = harness([{ name: '', role: 'worker' }]);
+    const h = harness([{ name: '', role: 'worker', account_profile: 'host-default' }]);
     await runRebootRespawn(h.opts);
     expect(h.seen[0].startupPrompt).toBeNull();
     expect(h.seen[0].startupPrompt).not.toBe(FLEET_WORKER_STARTUP_PROMPT);
