@@ -191,8 +191,16 @@ const MUTATION_OPERATOR_RE = /[;&|`]|>>?|\$\(|<\(/;
 // lone alternative among the three (-X / --method / -f,-F) that didn't accept `=` — `gh api
 // ... -X=PUT` (verified against the real gh CLI: `-X=GET` behaves identically to `-X GET`)
 // slipped through. `-X[=\s]*` normalizes it to match its siblings' `=`-tolerance.
+//
+// QF-20260816-687: `find` alone allowlists the VERB, but find's own primaries can mutate the
+// filesystem without ever emitting a shell metacharacter MUTATION_OPERATOR_RE would catch —
+// `find . -delete` and `find . -exec rm -f {} +` (the `+` terminator batches invocations with
+// no per-match `;`, unlike `\;`) both slip through with zero chained/redirect operators.
+// Scoped the same way the gh-api exclusion above is: a full-string negative lookahead for the
+// destructive primaries (-delete, -exec[dir], -ok[dir]) rather than dropping `find` outright,
+// so the common read-only case (`find . -name x`) keeps its exemption.
 const READ_ONLY_LEADING_RE =
-  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?![\s\S]*(?:(?:^|\s)-X[=\s]*['"]?(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
+  /^(?:git\s+(?:status|log|diff|show|branch|rev-parse|describe|remote(?:\s+-v)?|config\s+--get|cat-file|ls-files|for-each-ref)\b|ls|ll|pwd|cat|head|tail|grep|rg|find(?![\s\S]*-(?:delete|execdir|exec|okdir|ok)\b)|wc|stat|echo|whoami|date|env|printenv|which|type|node\s+--version|npm\s+(?:run\s+)?(?:ls|list|view|outdated)\b|gh\s+(?:run\s+(?:list|view|watch)|pr\s+(?:list|view|diff|checks|status)|workflow\s+(?:list|view)|issue\s+(?:list|view))\b|gh\s+api\b(?![\s\S]*(?:(?:^|\s)-X[=\s]*['"]?(?:POST|PUT|PATCH|DELETE)\b|--method[=\s]+['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)-[fF](?:\s|=)|--field\b|--raw-field\b|--input\b)))/i;
 
 /**
  * Structurally classify a Bash command as provably read-only / non-mutating.
