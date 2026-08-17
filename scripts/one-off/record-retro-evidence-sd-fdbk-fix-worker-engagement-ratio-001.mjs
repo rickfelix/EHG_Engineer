@@ -22,11 +22,20 @@ async function main() {
   );
 
   const { data: ver, error: verErr } = await s.from('retrospectives')
-    .select('id, retro_type, retrospective_type, status, quality_score, created_at')
+    .select('id, sd_id, retro_type, retrospective_type, status, quality_score, created_at')
     .eq('id', RETRO_ID)
     .single();
   if (verErr) {
     console.error('Verify failed:', verErr.message);
+    process.exit(1);
+  }
+  // Cross-validate the hardcoded constants against each other rather than trusting three
+  // independent literals in sync (deep-tier ship-review, PR #7215): a future copy-paste of
+  // this template that updates SD_KEY/RETRO_ID but misses SD_UUID (or vice versa) would
+  // otherwise silently attach RETRO evidence -- and this retro's summary/quality_score -- to
+  // the wrong SD, with nothing to catch it.
+  if (ver.sd_id !== SD_UUID) {
+    console.error(`Retrospective ${RETRO_ID} belongs to sd_id=${ver.sd_id}, not the expected SD_UUID=${SD_UUID} — refusing to attach evidence to the wrong SD.`);
     process.exit(1);
   }
   console.log('Verified retrospective:', JSON.stringify(ver, null, 2));
