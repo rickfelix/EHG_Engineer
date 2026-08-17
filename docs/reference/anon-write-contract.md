@@ -7,7 +7,7 @@
 **Last Updated**: 2026-08-17
 **Tags**: rls, postgres, anon, feedback, ingress
 
-## 2026-08-17 update: the RPC path is ALSO non-functional, plus 3 more affected callers
+## 2026-08-17 update: the RPC path is ALSO non-functional, plus 4 more affected callers
 
 **This section corrects and extends "Read this first" below rather than replacing it — that
 section's facts (both drops, the `ehg` precondition miss) are still accurate.** Filed as
@@ -31,7 +31,7 @@ precondition for every venture, not only the ones still on the raw INSERT path.*
 `ehg/.env.example`, absent from real deployed `.env` files — a second, independent blocker for
 `ehg` specifically even once keys exist.
 
-**3 more affected callers, beyond the `ehg`/`feedbackDataAccess.ts` gap already documented:**
+**4 more affected callers, beyond the `ehg`/`feedbackDataAccess.ts` gap already documented:**
 - `ehg/src/components/error-capture/ErrorCaptureProvider.tsx:92` — a global error boundary,
   raw `.insert()`, runs for both anon and authenticated visitors. Independent non-RLS bug:
   inserts `created_by`/`source_url`, neither of which is a real column on `public.feedback`
@@ -44,9 +44,20 @@ precondition for every venture, not only the ones still on the raw INSERT path.*
   `source_type` (fixed separately, QF-20260817-434, 2026-08-17 — the column bug remains).
   Structurally **cannot** use the RPC even once keys are provisioned: it never sets `venture_id`
   (it isn't a venture-scoped submission) and `authenticated` does not hold EXECUTE on
-  `fn_submit_venture_user_feedback`. Needs a fourth mechanism this contract does not yet define
-  — an `auth.uid()`-bound authenticated path — tracked as SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001
-  FR-4, not yet designed.
+  `fn_submit_venture_user_feedback`. The same missing-`venture_id` gap also rules out Remedy B's
+  restored policy at ANY role scope (its `WITH CHECK` requires `venture_id IS NOT NULL`) — an
+  earlier draft of that migration widened `TO authenticated` on the mistaken theory that role
+  scope alone would admit this caller; corrected during EXEC-TO-PLAN (TESTING/SECURITY sub-agent
+  evidence 731d79a4 / 241fb047, confirmed by reading this exact payload directly). Needs a fourth
+  mechanism, designed below (see "FR-4 design" section) — an `auth.uid()`-bound authenticated
+  path — tracked as SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001 FR-4; not yet implemented as code.
+- `apexniche-ai/src/ui/api/feedbackClient.ts:121` — a raw `fetch()` POST to `/rest/v1/feedback`
+  using the anon key (functionally identical to a PostgREST `.insert()`). Unlike the two `ehg`
+  callers above, this one DOES set both `venture_id` and `feedback_type` correctly (verified by
+  direct read) — a genuine candidate beneficiary of Remedy B's anon-scoped restore, or of the RPC
+  path once keys are provisioned. Has its own independent, non-RLS schema bug: omits the NOT-NULL
+  `type` column (distinct from `feedback_type`, which it does set) — tracked under this SD's FR-6,
+  not fixed by this SD's own work.
 - `marketlens/src/services/feedback.js:36` (and its byte-identical fixture copy,
   `marketlens-fixtures/src/services/feedback.js:36`) — a **sixth writer**, previously
   unenumerated by this contract or any SD in this family. `forwardToVentureChannel()` is
@@ -74,15 +85,23 @@ should be read alongside, not overridden by:**
 `database/chairman-gated/20260817_restore_feedback_permissive_insert.sql` (+ `_DOWN.sql` +
 `_acceptance.mjs`) stages — NOT applies — a permissive INSERT policy restore, presented to the
 chairman explicitly as reverting part of `SD-LEO-FIX-CLOSE-ANON-VENTURE-001`'s protection, scoped
-`TO anon, authenticated` (wider than the historical `anon`-only shape, because `FeedbackWidget.tsx`
-runs as `authenticated`), and re-pinning `anon_feedback_ingress_bounds`'s role scope explicitly
-rather than relying on its current accidental `TO PUBLIC` drift. This does not contradict "do not
-widen anon's SELECT surface" above — that guidance is about the SELECT policy specifically, which
-this file does not touch — but it is a live counter-option to this contract's general "use the RPC,
-not a restored policy" philosophy, offered because the RPC path (per the finding above) is not
-currently functional for anyone regardless of which philosophy wins. The coordinator has designated
-completing the RPC cutover (+ key provisioning) as the primary remedy; this migration exists so the
-alternative is equally decision-ready, not because it is recommended over the primary.
+`TO anon` only — byte-identical to the historical shape, including its two supporting `EXECUTE`
+grants — and re-pinning `anon_feedback_ingress_bounds`'s role scope explicitly rather than relying
+on its current accidental `TO PUBLIC` drift. (An earlier draft widened this `TO authenticated`,
+reasoning `FeedbackWidget.tsx` runs as `authenticated`; corrected during EXEC-TO-PLAN once that
+caller's payload was confirmed — by direct read, independently by two sub-agents — to set neither
+`venture_id` nor `feedback_type`, so it cannot satisfy this policy's `WITH CHECK` at any role scope.
+`apexniche-ai/src/ui/api/feedbackClient.ts:121`, the one caller confirmed to set both fields
+correctly, calls as `anon`. No caller identified in this SD needs `authenticated` under this
+predicate, so the widening — which would also have meant granting the two supporting functions'
+`EXECUTE` to `authenticated`, beyond any historical baseline — was removed rather than kept and
+re-justified.) This does not contradict "do not widen anon's SELECT surface" above — that guidance
+is about the SELECT policy specifically, which this file does not touch — but it is a live
+counter-option to this contract's general "use the RPC, not a restored policy" philosophy, offered
+because the RPC path (per the finding above) is not currently functional for anyone regardless of
+which philosophy wins. The coordinator has designated completing the RPC cutover (+ key
+provisioning) as the primary remedy; this migration exists so the alternative is equally
+decision-ready, not because it is recommended over the primary.
 
 ## Read this first
 
@@ -243,6 +262,28 @@ overloaded later). Not yet implemented — this is the decision-ready design; EX
 remedy authors the actual `CREATE FUNCTION` migration once the chairman confirms this is the
 direction (it is compatible with either Remedy A or Remedy B being chosen for the other 3 callers,
 since it does not touch `anon_feedback_ingress_bounds` or any venture-scoped policy at all).
+
+**Open gaps in this design, flagged by SECURITY sub-agent review (evidence
+241fb047-1b4a-4795-b73b-8fa4c8ab2778) — close before implementation, not before this decision
+package:**
+- **`p_severity` as drafted contradicts the design's own stated discipline.** The signature above
+  takes `p_severity` as a caller-supplied parameter with no described server-side clamp — but the
+  paragraph above justifies this design by citing `fn_submit_venture_user_feedback`'s discipline of
+  *never* accepting severity/category as trusted parameters. As drafted, an authenticated caller
+  could set `p_severity='critical'`, which `feedback_severity_check` permits with no column
+  default preventing it. Before implementation, either drop `p_severity` as a parameter (hardcode a
+  safe default for this internal-feedback path) or clamp it server-side to exclude
+  `critical`/`high` — mirroring the bound `anon_feedback_ingress_bounds` already applies to the
+  RLS-gated paths.
+- **This path structurally bypasses `anon_feedback_ingress_bounds` entirely, at any severity.** A
+  `SECURITY DEFINER` function that writes directly to the table never evaluates that table's RLS
+  policies for its own internal write — the same structural class of gap `record_venture_error()`
+  already has (pre-existing, out of scope, gap G1). Fixing the identity half of that failure mode
+  (this design does, via `auth.uid()`) does not fix the structural half; both need independent
+  server-side constraints inside the new function body, not inherited from RLS.
+- **No rate limit is specified.** `check_feedback_rate_limit(venture_id)` cannot be reused as-is
+  (this design has no `venture_id` by construction); a `user_id`-scoped equivalent needs designing
+  before implementation, not assumed to already exist.
 
 ## FR-2/FR-3 provisioning runbook (SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, Remedy A blocking work)
 

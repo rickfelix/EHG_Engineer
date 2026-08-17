@@ -17,8 +17,8 @@
 -- database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql (SD-LEO-FIX-CLOSE-ANON-
 -- VENTURE-001) deliberately dropped venture_user_insert_feedback so that EVERY direct-insert caller
 -- would be forced onto the ownership-bound RPC (fn_submit_venture_user_feedback), closing an
--- existence-only (not ownership) venture_id spoofing vector. This file re-opens a DIRECT anon/
--- authenticated INSERT path. It does NOT undo the RPC (fn_submit_venture_user_feedback and its
+-- existence-only (not ownership) venture_id spoofing vector. This file re-opens a DIRECT anon
+-- INSERT path. It does NOT undo the RPC (fn_submit_venture_user_feedback and its
 -- grants are left fully intact -- both mechanisms would coexist if this is applied), but it DOES
 -- restore the exact class of exposure that migration closed, narrowed only by the predicate below.
 -- The chairman brief must present this explicitly as "revert this specific protection, yes/no" --
@@ -28,39 +28,49 @@
 -- file either way, present under the RPC path too, tracked separately (advisory 9d3ddfce).
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- WHY TO anon, authenticated (NOT anon-only, unlike the policy this replaces)
+-- WHY TO anon ONLY -- EXEC-PHASE CORRECTION, this file originally scoped TO anon, authenticated
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- The ORIGINAL venture_user_insert_feedback (database/migrations/20260401_venture_user_feedback_
 -- channel.sql, re-created verbatim as TO anon in database/chairman-gated/20260815_..._DOWN.sql) was
--- anon-only. Re-applying that exact scope would NOT fix the live incident this SD investigates:
--- ehg/src/components/quality/FeedbackWidget.tsx gates on `if (!user) return null;` and its Supabase
--- client therefore runs its insert as the `authenticated` role, never `anon` (independently
--- confirmed live by two sub-agents this session -- security-feedback-insert's catalog read and
--- explore-feedback-insert's live pg_policies query both found zero permissive INSERT policy
--- reaches authenticated either). Scoping this new policy TO anon, authenticated is a DELIBERATE,
--- documented widening beyond the historical shape, made because the SD's own originating incident
--- (FeedbackWidget.tsx) cannot be fixed by an anon-only restore. This widening is exactly why the
--- role-scope pin below (on anon_feedback_ingress_bounds) is load-bearing, not optional -- see next
--- section.
+-- anon-only. An earlier draft of this file widened TO anon, authenticated on the theory that
+-- ehg/src/components/quality/FeedbackWidget.tsx -- which runs as `authenticated`, gated on
+-- `if (!user) return null;` -- needed that scope to be admitted. Fresh EXEC-TO-PLAN TESTING and
+-- SECURITY sub-agent evidence (rows 731d79a4-5498-4bd7-8628-427dbc31d3dc and
+-- 241fb047-1b4a-4795-b73b-8fa4c8ab2778) independently disproved that theory by reading
+-- FeedbackWidget.tsx's actual insert payload directly: it sets neither `venture_id` nor
+-- `feedback_type` (confirmed at ehg/src/components/quality/FeedbackWidget.tsx:78-90), so it fails
+-- this policy's WITH CHECK (`venture_id IS NOT NULL AND feedback_type LIKE 'user_%'`) at ANY role
+-- scope -- widening to authenticated could not have fixed it. FeedbackWidget.tsx's own structural
+-- gap (no venture_id, by design -- it is not a venture-scoped submission) is already correctly
+-- identified in docs/reference/anon-write-contract.md's FR-4 design section, which proposes a
+-- separate, purpose-built mechanism for exactly this caller. No OTHER identified caller needs
+-- `authenticated` under this specific predicate either: apexniche-ai/src/ui/api/feedbackClient.ts:121
+-- (the one caller confirmed to set both venture_id and feedback_type correctly) calls as `anon`, not
+-- `authenticated`. Scope is therefore restored to the historical anon-only shape exactly -- not
+-- because widening was found to be unsafe in itself, but because it had no demonstrated
+-- beneficiary while carrying real, avoidable added exposure (see the grant-scope note in step 1b
+-- below). If a real authenticated caller with a genuine venture_id + feedback_type is later
+-- identified, widen this policy's TO clause and the step-1b grants together, in one change, with
+-- that caller named -- do not restore `authenticated` speculatively.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- THE BOUNDING POLICY HAS ALREADY DRIFTED -- THIS FILE MUST NOT RELY ON ITS CURRENT ACCIDENTAL SCOPE
+-- THE BOUNDING POLICY HAS ALREADY DRIFTED -- RE-PINNED HERE AS HYGIENE, NOT AS THIS FILE'S OWN
+-- LOAD-BEARING SAFETY ARGUMENT (unlike an earlier draft, this policy is anon-only, and anon is
+-- bounded by anon_feedback_ingress_bounds under EITHER its originally-specified TO anon scope or
+-- its current live TO PUBLIC scope -- the re-pin below does not change what this specific policy
+-- is bounded by)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- anon_feedback_ingress_bounds (RESTRICTIVE) is LIVE as TO PUBLIC (polroles={0}), not TO anon as its
 -- originating migration (database/migrations/20260802_bound_anon_feedback_ingress.sql) specifies --
 -- database/chairman-gated/20260804_ingress_bound_definer_basis.sql's DROP+CREATE silently omitted
--- the TO clause and defaulted to PUBLIC (finding: security-feedback-insert sub-agent, this SD).
--- TO PUBLIC happens to already cover `authenticated`, which is WHY this file's TO anon,authenticated
--- widening is bounded by severity/category/rate TODAY -- but only by accident. If anon_feedback_
--- ingress_bounds's role scope is ever "corrected" back to TO anon (a plausible, superficially-
--- reasonable future edit by someone who has not read this file), this new permissive policy would
--- become COMPLETELY UNBOUNDED for authenticated callers -- full chairman-decision-queue forgery
--- (severity critical/high, category=chairman_decision_deferred) for any signed-up user. Step 2 below
--- re-asserts anon_feedback_ingress_bounds's TO PUBLIC scope EXPLICITLY, in this same transaction, so
--- this file's safety argument does not depend on an unrelated policy's scope never drifting again
--- silently. If a future chairman decision deliberately narrows anon_feedback_ingress_bounds to
--- TO anon only, this policy's own TO clause must be revisited in the SAME change -- flagged here so
--- that dependency is not rediscovered by an outage the way this SD's own root cause was.
+-- the TO clause and defaulted to PUBLIC (finding: security-feedback-insert sub-agent, this SD). Step
+-- 2 below re-asserts anon_feedback_ingress_bounds's TO PUBLIC scope EXPLICITLY, in this same
+-- transaction, converting a documented accidental drift into an asserted invariant while this
+-- migration is already touching this table's RLS configuration (also satisfies this SD's PRD FR-5
+-- acceptance criterion "explicitly re-pins anon_feedback_ingress_bounds's TO clause"). This also
+-- forecloses a future re-widening of THIS policy to include authenticated from silently inheriting
+-- an unbounded gap the way an earlier draft of this very file almost did -- if `authenticated` is
+-- ever added back to the policy above, re-verify this section's assumption still holds.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- WHY feedback_type LIKE 'user_%' IS NON-NEGOTIABLE (regression test dependency, not house style)
@@ -110,13 +120,13 @@ SET LOCAL search_path = public, pg_catalog;
 -- 1. Restore a scoped permissive INSERT policy. Idempotent (re-running must not fail on an
 --    existing policy of this name).
 -- ============================================================
-DROP POLICY IF EXISTS venture_user_insert_feedback_authenticated_restore ON public.feedback;
+DROP POLICY IF EXISTS venture_user_insert_feedback_restore ON public.feedback;
 
-CREATE POLICY venture_user_insert_feedback_authenticated_restore
+CREATE POLICY venture_user_insert_feedback_restore
     ON public.feedback
     AS PERMISSIVE
     FOR INSERT
-    TO anon, authenticated
+    TO anon
     WITH CHECK (
         feedback_type LIKE 'user_%'
         AND venture_id IS NOT NULL
@@ -124,14 +134,44 @@ CREATE POLICY venture_user_insert_feedback_authenticated_restore
         AND (NOT check_feedback_rate_limit(venture_id))
     );
 
-COMMENT ON POLICY venture_user_insert_feedback_authenticated_restore ON public.feedback IS
+COMMENT ON POLICY venture_user_insert_feedback_restore ON public.feedback IS
 'SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001 Remedy B (staged alternative to completing the RPC
 cutover). Reverts part of SD-LEO-FIX-CLOSE-ANON-VENTURE-001''s protection -- see this file''s own
-header before applying. Scoped TO anon,authenticated (widened beyond the historical anon-only
-shape) because FeedbackWidget.tsx runs as authenticated. Bounded by feedback_type LIKE ''user_%''
+header before applying. Scoped TO anon only, byte-identical to the historical shape (an earlier
+draft widened TO authenticated for FeedbackWidget.tsx; corrected during EXEC-TO-PLAN once its
+payload was confirmed to lack venture_id/feedback_type, so it cannot satisfy this policy at any
+role scope -- see FR-4 for its actual mechanism). Bounded by feedback_type LIKE ''user_%''
 (excludes venture_error rows, preserving tests/integration/venture-error-aggregation.db.test.js
 TS-5) and by anon_feedback_ingress_bounds (RESTRICTIVE, re-pinned to TO PUBLIC in the same
 migration, step 2 below) for severity/category/rate.';
+
+-- ============================================================
+-- 1b. Restore the EXECUTE grants this policy's WITH CHECK requires. RLS predicates evaluate as the
+--     QUERYING role (not the function owner), even for a SECURITY DEFINER function -- so anon needs
+--     direct EXECUTE on both, independent of what either function's own body is allowed to do
+--     internally. database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql REVOKEd
+--     both (lines 359-360) specifically because, at that time, the one policy needing them
+--     (venture_user_insert_feedback) was being dropped in the same transaction ("MEDIUM-1", closing
+--     an orphaned unauthenticated existence/rate-limit oracle). Restoring the policy without
+--     restoring these grants leaves it silently inert: the DO $verify$ block below would still
+--     PASS (it only reads catalog shape) while every real INSERT attempt fails 42501 -- caught by
+--     TESTING sub-agent evidence 731d79a4-5498-4bd7-8628-427dbc31d3dc (static function-privilege
+--     read) and independently by SECURITY sub-agent evidence 241fb047-1b4a-4795-b73b-8fa4c8ab2778
+--     (live end-to-end INSERT attempt on a temp table, actually hit 42501).
+--
+--     Scoped to anon ONLY, matching this migration's own policy scope above -- this re-opens the
+--     SAME narrow oracle exposure MEDIUM-1 closed, at the SAME historical risk level (not a new
+--     one: this exact grant existed for anon from this policy's original creation until
+--     20260815 revoked it as newly-orphaned). Deliberately NOT granting to authenticated: no
+--     caller identified in this SD needs it (see the header section above), and doing so would be
+--     a widening beyond the historical baseline with no offsetting benefit (SECURITY finding).
+--     Deliberately NOT restoring check_feedback_rate_limit's historical anon+authenticated grant
+--     in full either (20260815's own _DOWN.sql grants it to both) -- that broader historical grant
+--     served some other authenticated-facing caller unrelated to this policy; this migration
+--     restores only what THIS policy needs, not everything 20260815 touched.
+-- ============================================================
+GRANT EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO anon;
 
 -- ============================================================
 -- 2. Re-pin anon_feedback_ingress_bounds's role scope EXPLICITLY, so this policy's safety argument
@@ -153,24 +193,25 @@ DECLARE
   v_bounds_cmd            TEXT;
   v_bounds_to_public      BOOLEAN;
 BEGIN
-  -- (a) The new policy must exist, PERMISSIVE, FOR INSERT, and scoped to EXACTLY {anon, authenticated}
-  --     -- not TO PUBLIC (which would also cover service_role's own dedicated policy redundantly and
-  --     widen intent beyond what this file documents), and not narrower than authenticated (which
-  --     would silently fail to fix FeedbackWidget.tsx, the SD's own originating incident).
+  -- (a) The new policy must exist, PERMISSIVE, FOR INSERT, and scoped to EXACTLY {anon} -- not TO
+  --     PUBLIC (which would also cover service_role's own dedicated policy redundantly and widen
+  --     intent beyond what this file documents), and NOT including authenticated (this policy is
+  --     deliberately anon-only -- see the header's EXEC-phase correction; a stray authenticated
+  --     grant here would silently reopen the exact widening that correction removed).
   IF (
     SELECT count(*)
     FROM pg_policy p
     JOIN pg_class c ON c.oid = p.polrelid
     WHERE c.relname = 'feedback' AND c.relnamespace = 'public'::regnamespace
-      AND p.polname = 'venture_user_insert_feedback_authenticated_restore'
+      AND p.polname = 'venture_user_insert_feedback_restore'
       AND p.polpermissive
       AND p.polcmd = 'a'
       AND NOT (0 = ANY(p.polroles))  -- must NOT be TO PUBLIC
       AND EXISTS (SELECT 1 FROM pg_roles r WHERE r.oid = ANY(p.polroles) AND r.rolname = 'anon')
-      AND EXISTS (SELECT 1 FROM pg_roles r WHERE r.oid = ANY(p.polroles) AND r.rolname = 'authenticated')
-      AND (SELECT count(*) FROM unnest(p.polroles)) = 2  -- exactly these two, nothing extra
+      AND NOT EXISTS (SELECT 1 FROM pg_roles r WHERE r.oid = ANY(p.polroles) AND r.rolname = 'authenticated')
+      AND (SELECT count(*) FROM unnest(p.polroles)) = 1  -- exactly this one role, nothing extra
   ) <> 1 THEN
-    RAISE EXCEPTION 'VERIFY FAILED: venture_user_insert_feedback_authenticated_restore is missing, not PERMISSIVE/INSERT, or not scoped to exactly {anon, authenticated}';
+    RAISE EXCEPTION 'VERIFY FAILED: venture_user_insert_feedback_restore is missing, not PERMISSIVE/INSERT, or not scoped to exactly {anon}';
   END IF;
 
   -- (b) The WITH CHECK text must be exactly the documented predicate -- catches a typo or a
@@ -179,16 +220,36 @@ BEGIN
   SELECT pg_get_expr(polwithcheck, polrelid) INTO v_new_policy_with_check
   FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
   WHERE c.relname = 'feedback' AND c.relnamespace = 'public'::regnamespace
-    AND p.polname = 'venture_user_insert_feedback_authenticated_restore';
+    AND p.polname = 'venture_user_insert_feedback_restore';
 
   IF v_new_policy_with_check IS DISTINCT FROM
      '(((feedback_type)::text ~~ ''user_%''::text) AND (venture_id IS NOT NULL) AND venture_exists_and_active(venture_id) AND (NOT check_feedback_rate_limit(venture_id)))' THEN
-    RAISE EXCEPTION 'VERIFY FAILED: venture_user_insert_feedback_authenticated_restore WITH CHECK text changed unexpectedly: %', v_new_policy_with_check;
+    RAISE EXCEPTION 'VERIFY FAILED: venture_user_insert_feedback_restore WITH CHECK text changed unexpectedly: %', v_new_policy_with_check;
+  END IF;
+
+  -- (e) TESTING/SECURITY sub-agent finding (evidence 731d79a4 / 241fb047): a policy-shape-only
+  --     verify cannot see whether the querying role can actually EXECUTE the two functions this
+  --     WITH CHECK calls -- a policy can be catalog-perfect and still 42501 on every real insert.
+  --     anon must hold EXECUTE on both (step 1b); authenticated must NOT (this policy never grants
+  --     it access, so it must not gain the function-call oracle either -- defense in depth, mirrors
+  --     20260815's own TR-2/TR-3 negative-assertion style at lines 402-404).
+  IF has_function_privilege('anon', 'public.venture_exists_and_active(uuid)', 'EXECUTE') IS NOT TRUE THEN
+    RAISE EXCEPTION 'VERIFY FAILED: anon lacks EXECUTE on venture_exists_and_active -- this policy''s WITH CHECK would 42501 on every real anon insert';
+  END IF;
+  IF has_function_privilege('anon', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') IS NOT TRUE THEN
+    RAISE EXCEPTION 'VERIFY FAILED: anon lacks EXECUTE on check_feedback_rate_limit -- this policy''s WITH CHECK would 42501 on every real anon insert';
+  END IF;
+  IF has_function_privilege('authenticated', 'public.venture_exists_and_active(uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: authenticated holds EXECUTE on venture_exists_and_active or check_feedback_rate_limit -- this policy is anon-only by design, authenticated should not gain this oracle';
   END IF;
 
   -- (c) anon_feedback_ingress_bounds must remain RESTRICTIVE, apply to INSERT, and be scoped
-  --     TO PUBLIC (the pin from step 2 must have taken effect -- this is the load-bearing check
-  --     this whole file's safety argument depends on).
+  --     TO PUBLIC (the pin from step 2 must have taken effect). Not this file's own load-bearing
+  --     safety argument (this policy is anon-only, and anon is bounded whether
+  --     anon_feedback_ingress_bounds is TO PUBLIC or TO anon) -- this assertion instead guards the
+  --     hygiene fix step 2 performs, and defends against a FUTURE re-widening of the policy above
+  --     to include authenticated silently inheriting an unbounded gap.
   SELECT p.polpermissive, p.polcmd, (0 = ANY(p.polroles))
     INTO v_bounds_permissive, v_bounds_cmd, v_bounds_to_public
   FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
@@ -196,7 +257,7 @@ BEGIN
     AND p.polname = 'anon_feedback_ingress_bounds';
 
   IF v_bounds_permissive IS DISTINCT FROM false OR v_bounds_cmd IS DISTINCT FROM 'a' OR v_bounds_to_public IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'VERIFY FAILED: anon_feedback_ingress_bounds is missing, no longer RESTRICTIVE, no longer applies to INSERT, or is not scoped TO PUBLIC (permissive=%, cmd=%, to_public=%) -- this new policy would be UNBOUNDED for authenticated callers if this assertion fails', v_bounds_permissive, v_bounds_cmd, v_bounds_to_public;
+    RAISE EXCEPTION 'VERIFY FAILED: anon_feedback_ingress_bounds is missing, no longer RESTRICTIVE, no longer applies to INSERT, or is not scoped TO PUBLIC (permissive=%, cmd=%, to_public=%) -- step 2''s re-pin did not take effect', v_bounds_permissive, v_bounds_cmd, v_bounds_to_public;
   END IF;
 
   -- (d) RLS must remain enabled on public.feedback (defense in depth, independent of the
@@ -224,12 +285,16 @@ COMMIT;
 -- refused, never that the write did.
 --
 --   CONTROL (anon)          feedback_type='user_bug', legal venture_id, severity=medium -> LANDS
---   CONTROL (authenticated) same, as an authenticated session                            -> LANDS
+--   CONTROL (authenticated) same, as an authenticated session                            -> ABSENT
+--                            (policy is anon-only by design -- see header's EXEC-phase correction;
+--                             this is a deliberate negative control, not an oversight)
 --   AC-1  feedback_type='venture_error' (TS-5 shape)                                     -> ABSENT
 --   AC-2  severity='critical' or 'high'                                                  -> ABSENT
 --   AC-3  category='chairman_decision_deferred', severity='low'                          -> ABSENT
 --   AC-4  venture_id NULL or a nonexistent/inactive venture                              -> ABSENT
 --   AC-5  exceed the per-venture rate limit                                              -> ABSENT
+--         (relies on check_feedback_rate_limit's own pre-existing, unmodified behavior --
+--          not independently live-probed by this SD's acceptance script; see its header)
 --   AC-6  a service-role insert of category='chairman_decision_deferred' still SUCCEEDS
 --         (service_role carries rolbypassrls=true, unaffected by any of the above)
 --
@@ -237,7 +302,9 @@ COMMIT;
 -- ROLLBACK (manual, if needed -- see the paired _DOWN.sql for the executable version):
 -- ============================================================
 -- BEGIN;
--- DROP POLICY IF EXISTS venture_user_insert_feedback_authenticated_restore ON public.feedback;
+-- REVOKE EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) FROM anon;
+-- REVOKE EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) FROM anon;
+-- DROP POLICY IF EXISTS venture_user_insert_feedback_restore ON public.feedback;
 -- -- anon_feedback_ingress_bounds's TO PUBLIC scope is left as-is (rolling back the new policy does
 -- -- not require reverting that pin -- TO PUBLIC was already the live state before this file ran).
 -- NOTIFY pgrst, 'reload schema';

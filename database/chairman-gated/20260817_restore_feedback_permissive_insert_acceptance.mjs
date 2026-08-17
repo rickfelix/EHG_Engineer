@@ -9,16 +9,20 @@
 //                                  (proof the defect this migration fixes is genuinely present).
 //   node <this file> --verify      AFTER  the apply. CONTROL must LAND; every AC-* must be ABSENT.
 //
-// ── KNOWN SCOPE LIMITATION, STATED EXPLICITLY RATHER THAN SILENTLY OMITTED ──────────────────────
-// This script only exercises the ANON leg of the new policy (TO anon, authenticated). Probing the
-// AUTHENTICATED leg genuinely (a real Supabase Auth session, not `SET LOCAL ROLE`, which per this
-// repo's own established gotcha proves EXECUTE grants only -- postgres bypasses RLS and role GUCs
-// are not re-applied, producing a false green) requires test user credentials this script does not
-// have wired. The authenticated-role SHAPE is instead verified structurally by the migration's own
-// in-transaction DO $verify$ block (check (a): polroles contains exactly {anon, authenticated}) --
-// that is a real, load-bearing check, just not a live behavioral probe. Before relying on this
-// acceptance script alone as proof FeedbackWidget.tsx (an authenticated caller) actually works,
-// also run a real authenticated-session probe manually or extend this script with test credentials.
+// ── KNOWN SCOPE LIMITATIONS, STATED EXPLICITLY RATHER THAN SILENTLY OMITTED ─────────────────────
+// The migration's policy is anon-only (TO anon) -- an EXEC-phase correction; an earlier draft was
+// TO anon, authenticated, but FeedbackWidget.tsx (the caller that draft was widened for) sets
+// neither venture_id nor feedback_type, so it cannot satisfy this policy's WITH CHECK at any role
+// scope regardless. There is therefore no authenticated leg for this script to probe -- the
+// migration's own DO $verify$ block instead asserts NEGATIVELY that authenticated does NOT hold
+// EXECUTE on either function this policy's WITH CHECK depends on (check (e)), which this script
+// does not duplicate.
+//
+// AC-5 (the per-venture rate limit) is NOT live-probed here -- tripping it for real means exceeding
+// check_feedback_rate_limit's live threshold (up to 250 requests/hour depending on source_type),
+// which is slow and writes real load against a function this migration does not modify. This
+// script relies on check_feedback_rate_limit's own pre-existing, unmodified behavior instead of
+// re-proving it.
 //
 // ── BLAST RADIUS ──────────────────────────────────────────────────────────────────────────────
 // Inserts and deletes tagged probe rows in public.feedback for one real, dynamically-chosen active
@@ -48,20 +52,33 @@ let venture = null;
 
 async function rawInsertProbe(name, overrides = {}) {
   const title = `${TAG} ${name}`;
-  await anon.from('feedback').insert({
+  // Capture (never discard) the anon insert's own reported error. A missing EXECUTE grant on a
+  // WITH CHECK function and a correctly-bounded rejection both produce `landed: false` on their
+  // own -- without the error text, they're indistinguishable from this script's own output, which
+  // is exactly the gap that let an earlier draft of the paired migration ship silently inert
+  // (TESTING sub-agent finding, evidence 731d79a4-5498-4bd7-8628-427dbc31d3dc). A genuine RLS
+  // WITH CHECK rejection reports 42501 with no further detail; a missing-EXECUTE failure also
+  // reports 42501 but names the function in its message -- logged here so a future regression is
+  // diagnosable from this script's own output instead of requiring a fresh investigation.
+  const { error: insertError } = await anon.from('feedback').insert({
     venture_id: venture.id, feedback_type: 'user_bug', type: 'issue',
     source_type: 'manual_feedback', source_application: 'sd-fdbk-fix-critical-probe',
     title, severity: 'medium', status: 'new',
     ...overrides,
   });
+  if (insertError) console.log(`    (anon insert reported: ${insertError.code || '?'} ${insertError.message})`);
   const { data, error } = await svc.from('feedback').select('id').eq('title', title);
   if (error) throw new Error(`raw-insert-probe readback failed: ${error.message}`);
   if (data?.[0]?.id) createdFeedbackIds.push(data[0].id);
-  return { landed: (data?.length || 0) > 0 };
+  return { landed: (data?.length || 0) > 0, insertError };
 }
 
 async function setup() {
-  const { data: ventures, error } = await svc.from('ventures').select('id, name').is('deleted_at', null).limit(1);
+  // .order('id') -- a baseline run and a later verify run must probe the SAME venture, or a
+  // passing verify could just mean the second venture behaves differently, not that the fix
+  // works (TESTING sub-agent finding, evidence 731d79a4). limit(1) with no ORDER BY has no
+  // guaranteed stable result across two separate connections/runs.
+  const { data: ventures, error } = await svc.from('ventures').select('id, name').is('deleted_at', null).order('id').limit(1);
   if (error || !ventures || ventures.length < 1) throw new Error('need at least 1 live venture to run this acceptance script');
   [venture] = ventures;
   console.log(`using venture: ${venture.id} (${venture.name})`);
@@ -103,8 +120,15 @@ async function runVerify() {
   const ac4a = await rawInsertProbe('ac4a-null-venture', { venture_id: null });
   record('AC-4a: venture_id=NULL is ABSENT', !ac4a.landed);
 
+  // Known non-discriminating probe (TESTING sub-agent finding, evidence 731d79a4): the FK on
+  // feedback.venture_id refuses a nonexistent UUID on its own, so this passes whether or not
+  // venture_exists_and_active's own predicate is reached at all. It does NOT distinguish "the
+  // policy correctly refused this" from "the FK refused this before the policy was even
+  // evaluated." A genuinely discriminating case (a real, soft-deleted venture -- passes the FK,
+  // should fail venture_exists_and_active specifically) is not probed here; left as a known gap
+  // rather than adding a soft-deleted-venture fixture to keep this script's own footprint minimal.
   const ac4b = await rawInsertProbe('ac4b-fake-venture', { venture_id: '00000000-0000-4000-8000-000000000000' });
-  record('AC-4b: a nonexistent venture_id is ABSENT', !ac4b.landed);
+  record('AC-4b: a nonexistent venture_id is ABSENT (non-discriminating -- see comment above)', !ac4b.landed);
 
   // AC-6: service_role bypasses RLS entirely (rolbypassrls=true) -- confirm this policy change
   // did not somehow affect that, since it would be a much larger, unrelated failure.
