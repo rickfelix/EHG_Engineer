@@ -1,9 +1,9 @@
 ---
 category: reference
 status: draft
-version: 1.1.0
+version: 1.5.0
 author: Rick Felix
-last_updated: 2026-07-01
+last_updated: 2026-08-16
 tags: [reference, auto-generated]
 ---
 # Infrastructure Hardening Patterns
@@ -878,6 +878,59 @@ before deployment; a regression test for the newline case was added to the test 
 
 ---
 
+## Pattern: A ratchet guard's own comparison logic needs the same adversarial rigor as what it protects (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001)
+
+**Symptom**: A repo-wide "freeze existing debt, block only new debt" ratchet guard (a scanner + a frozen
+baseline + a "live findings ⊆ baseline" subset check) shipped with a mutation/red-green meta-test that
+only proved the underlying SCANNER could return a non-empty result on synthetic input — never that the
+SUBSET COMPARISON deciding pass/fail could actually detect a new violation. In the guard's normal passing
+state, live findings equal the baseline exactly, so the "any new finding?" filter is trivially empty
+regardless of whether the comparison logic is even correct — a broken comparison and a correct one are
+indistinguishable by that meta-test alone.
+
+**Root cause**: two separate defects, both independent of the guard's core scan logic, both caught only
+by adversarial review (not by the guard's own test suite as originally written):
+1. **Dedup-key collision**: the baseline's dedup key (`file:line:rule`) was not unique — Babel reports a
+   chained call expression's line as the start of the WHOLE fluent chain, so two genuinely different
+   violations on the same table/rule (e.g. `.lt('progress', ...)` and `.select('...progress...')` both
+   starting on the same source line) collided onto one baseline slot. A future, genuinely new violation
+   landing on an already-baselined line would have silently passed the "no new site" check instead of
+   failing it. Verified against the live, already-committed baseline: 37 recorded sites, only 36 unique
+   `file:line:rule` keys.
+2. **Untested comparison**: even after fixing (1), the comparison itself (`findings.filter(f =>
+   !baselineKeys.has(key(f)))`) was inlined directly in the "live vs. real baseline" test — there was no
+   way to exercise it with synthetic before/after data, only with the live repo tree, where it always
+   either passes (nothing changed) or the test itself is what's supposed to catch a break.
+
+**Fix**: extract the comparison into a pure, named function (`findNewViolations(liveFindings,
+baselineSites)` + a `ratchetKey(site)` helper covering ALL discriminating fields — file, line, rule,
+*and* method) decoupled from git/filesystem state, then write dedicated synthetic red/green tests against
+it directly: exact match → `[]`; a finding on a never-baselined file/line → flagged; two different
+violations sharing one file+line (the exact collision shape) → both tracked independently, a third new
+one on that same line still flagged; a shrunk baseline (future cleanup) → still passes. The live-tree test
+now calls this same extracted function instead of duplicating the filter inline, so a future edit to the
+comparison logic is caught by the fast synthetic tests, not only by however the live tree happens to look
+on any given CI run.
+
+### PR-review checklist line
+
+> When a PR adds a ratchet/allowlist guard (freeze existing findings, block only new ones), verify the
+> ACTUAL comparison function that decides pass/fail is unit-tested against synthetic before/after data —
+> not just the underlying scanner. In the guard's normal passing state, "live == baseline" is trivially
+> true regardless of whether the comparison is even correct; a broken dedup key or comparison bug is
+> invisible until a real regression silently passes through it. Also verify the dedup key includes every
+> field that can vary independently on the same source line — a parser (or any AST-based scanner) that
+> reports a *chained* call's location as the chain's start, not each individual call's own line, will
+> collide two different violations onto one key unless the key also includes something that
+> distinguishes them (here: the method name).
+
+### Files Modified/Created
+`scripts/lint/progress-column-lint.mjs` (new), `tests/unit/hygiene/no-bare-progress-column.test.js`
+(new), `tests/unit/hygiene/progress-column-baseline.json` (new), `scripts/audit/control-seed-specs.json`
+(registered a seeded-defect trial for the new guard)
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -895,3 +948,4 @@ before deployment; a regression test for the newline case was added to the test 
 | 1.2.0 | 2026-07-01 | Added Count-delta-vs-identity-diff gate class-guard pattern from SD-LEO-INFRA-COUNT-VS-IDENTITY-GATE-CLASSGUARD-001 |
 | 1.3.0 | 2026-07-02 | Added isMainModule raw-pattern class-guard from SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B |
 | 1.4.0 | 2026-07-02 | Added sub-agent evidence control-character corruption pattern from SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001 |
+| 1.5.0 | 2026-08-16 | Added ratchet-guard comparison-logic testability pattern from SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 |
