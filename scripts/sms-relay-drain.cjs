@@ -85,6 +85,19 @@ async function main() {
 
 if (require.main === module) {
   main()
+    .then(async () => {
+      // QF-20260815-850: stamp on every successful tick, including the pre-cutover no-op and
+      // --dry-run paths -- the tick still ran to completion, which is the proof-of-life this
+      // registry row exists to record. Mirrors coordinator-relay-drain.cjs's identical pattern
+      // (SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 FR-3). Non-fatal: a stamp failure must never
+      // turn an otherwise-successful drain tick into a red run.
+      try {
+        const { stampLastFired } = await import('../lib/periodic-liveness/stamp-last-fired.js');
+        await stampLastFired(getSupabase(), 'standard_loop:sms-relay-drain');
+      } catch (err) {
+        console.error(`[sms-relay-drain] stampLastFired failed (non-fatal): ${err.message}`);
+      }
+    })
     .then(() => process.exit(0))
     .catch((e) => {
       // main() is already fail-soft; guard the shell too so a transient never reds the host.
