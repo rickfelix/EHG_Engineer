@@ -107,10 +107,22 @@ export function isEngagementBasePopulationMember(session, coordinatorId) {
 }
 
 /**
- * Classify one session into ENGAGED / TAIL / ZOMBIE / IDLE / UNKNOWN.
- * Precedence: ENGAGED > TAIL > ZOMBIE > IDLE (mutually exclusive by construction).
+ * Classify one session into ENGAGED / TAIL / ZOMBIE / IDLE / UNKNOWN / EXCLUDED.
+ * Precedence: ENGAGED > TAIL > ZOMBIE > IDLE (mutually exclusive by construction). EXCLUDED means
+ * "not part of the base population at all" (heartbeat too stale AND not a confirmed wedge) — the
+ * caller must drop these from both the bucket counts and the population total.
+ *
  * NULL/missing last_tool_at yields UNKNOWN, never ZOMBIE (FR-2) — the pipeline cannot
  * distinguish "genuinely dead" from "this select never fetched the column" without it.
+ *
+ * HEARTBEAT-LIVENESS IS APPLIED HERE, NOT AS A PRE-FILTER (EXEC-phase TESTING re-review, DEF-2
+ * round 2). A blanket heartbeat cutoff ahead of bucket classification silently dropped hard-wedged
+ * sessions (heartbeat itself gone stale, not just tool-silent) from the census entirely — exactly
+ * the class of starvation FR-1 was written to eliminate, just relocated from
+ * isDispatchableFleetMember's quarantine gate to this new liveness gate. Fix: a session that fails
+ * the liveness check is EXCLUDED unless isKnownWedged says otherwise, in which case it is ZOMBIE —
+ * isKnownWedged has its OWN staleness authority (last_tool_at + loop_state), independent of
+ * heartbeat_at, and is the correct arbiter for "is this session dead," not a bare heartbeat age.
  *
  * @param {object} session
  * @param {(session: object) => boolean} isClaimed - injected claim signal (TR-3: each caller
@@ -119,9 +131,10 @@ export function isEngagementBasePopulationMember(session, coordinatorId) {
  * @param {number} nowMs
  * @param {number} [cutMinutes] - forwarded to isKnownWedged; omit to use its own calibrated default
  * @param {number} [graceMs] - forwarded to the TAIL window; omit to use detectors.cjs's shipped default
- * @returns {'ENGAGED'|'TAIL'|'ZOMBIE'|'IDLE'|'UNKNOWN'}
+ * @param {number} [liveWindowMs] - forwarded to the heartbeat-liveness check; omit for ENGAGEMENT_LIVE_WINDOW_MS
+ * @returns {'ENGAGED'|'TAIL'|'ZOMBIE'|'IDLE'|'UNKNOWN'|'EXCLUDED'}
  */
-export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), cutMinutes, graceMs } = {}) {
+export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), cutMinutes, graceMs, liveWindowMs = ENGAGEMENT_LIVE_WINDOW_MS } = {}) {
   try {
     if (isClaimed && isClaimed(session)) return 'ENGAGED';
 
@@ -132,16 +145,20 @@ export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), 
       if (Number.isFinite(releasedAtMs) && nowMs - releasedAtMs <= effectiveGraceMs) return 'TAIL';
     }
 
-    if (session.last_tool_at == null) return 'UNKNOWN';
-
     // isKnownWedged pairs the last_tool_at cut-point check with loop_state (genuine-worker.mjs) —
     // raw classifySeat() alone ignores loop_state and misclassifies most legitimately-parked
-    // 'awaiting_tick' sessions as ZOMBIE (FR-2). Both HEALTHY and UNKNOWN verdicts from the
-    // underlying predicate return false here — the explicit last_tool_at==null check above is
-    // what actually distinguishes UNKNOWN from HEALTHY for this classifier's own UNKNOWN bucket.
+    // 'awaiting_tick' sessions as ZOMBIE (FR-2). Computed once, used both as the EXCLUDED-vs-ZOMBIE
+    // exemption below and as the live-path ZOMBIE check.
     const { isKnownWedged } = requireGenuineWorker();
-    if (isKnownWedged(session, nowMs, cutMinutes)) return 'ZOMBIE';
+    const wedged = session.last_tool_at != null && isKnownWedged(session, nowMs, cutMinutes);
 
+    const hbMs = session.heartbeat_at ? Date.parse(session.heartbeat_at) : NaN;
+    const isLive = Number.isFinite(hbMs) && nowMs - hbMs < liveWindowMs;
+
+    if (!isLive) return wedged ? 'ZOMBIE' : 'EXCLUDED';
+
+    if (session.last_tool_at == null) return 'UNKNOWN';
+    if (wedged) return 'ZOMBIE';
     return 'IDLE';
   } catch {
     return 'UNKNOWN'; // per-session fail-soft — one malformed row must never abort the batch
@@ -181,24 +198,24 @@ export function classifyEngagementBuckets(sessions, opts = {}) {
       coordinatorId, isClaimed, now = Date.now(), cutMinutes, graceMs, includeLabels = false,
       liveWindowMs = ENGAGEMENT_LIVE_WINDOW_MS,
     } = opts;
-    // TR-1 fix (DEF-2): the SAME liveness window applies regardless of what recency filter (if
-    // any) the caller's own host query already applied — see ENGAGEMENT_LIVE_WINDOW_MS above.
-    const isLive = (s) => {
-      if (!s?.heartbeat_at) return false;
-      const hbMs = Date.parse(s.heartbeat_at);
-      return Number.isFinite(hbMs) && now - hbMs < liveWindowMs;
-    };
-    const base = (sessions || []).filter((s) => isLive(s) && isEngagementBasePopulationMember(s, coordinatorId));
+    // Identity-level filtering only (role/non_fleet/is_coordinator/fixture) — liveness is decided
+    // per-session INSIDE classifySessionBucket (DEF-2 round 2), which exempts confirmed wedges
+    // from the heartbeat gate. A single pre-filter here would drop them before that exemption
+    // could ever run.
+    const candidates = (sessions || []).filter((s) => isEngagementBasePopulationMember(s, coordinatorId));
     const counts = { engaged: 0, tail: 0, zombie: 0, idle: 0, unknown: 0 };
     const labels = includeLabels ? [] : undefined;
-    for (const s of base) {
-      const bucket = classifySessionBucket(s, { isClaimed, nowMs: now, cutMinutes, graceMs });
+    let population = 0;
+    for (const s of candidates) {
+      const bucket = classifySessionBucket(s, { isClaimed, nowMs: now, cutMinutes, graceMs, liveWindowMs });
+      if (bucket === 'EXCLUDED') continue; // not part of the census at all — not even UNKNOWN
+      population++;
       counts[bucket.toLowerCase()] += 1;
       if (labels) labels.push({ session_id: s.session_id, bucket });
     }
     return {
       ...counts,
-      population: base.length,
+      population,
       populationExtent: ENGAGEMENT_POPULATION_EXTENT,
       ...(labels ? { labels } : {}),
     };

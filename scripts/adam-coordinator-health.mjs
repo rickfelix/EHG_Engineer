@@ -57,7 +57,7 @@ export const IN_FLIGHT_STATUSES = ['in_progress', 'active', 'pending_approval'];
  * (SD.target_application != EHG_Engineer) legitimately shows commits_since_claim=0 here but
  * still has sd_key set, so it is correctly counted as claimed, never idle.
  */
-export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) {
+export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRows } = {}) {
   // QF-20260720-161: claude_sessions accumulates historical rows (12,973 live-verified,
   // well past PostgREST's 1000-row default page cap). An unordered select('*') silently
   // returned an arbitrary/oldest-leaning 1000-row slice containing ZERO status='active'
@@ -87,6 +87,17 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
   // is preserved inside that helper via fetchAllPaginated.
   const { dispatchable: backlogSize, raw: rawUnclaimedDrafts } = await countDispatchableBacklog(supabase);
 
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — SECURITY-EXEC re-review (residual on evidence row
+  // 0962b994): a producer-side "private" field on the return object (_rows/_coordinatorId) is a
+  // leak waiting for a THIRD caller to forget to strip it — main()'s --dry-run branch already
+  // logged the whole reading, carriers included, to stdout (2.1MB, no DB write, but still the same
+  // defect class). A callback never becomes part of any object a future caller might spread, log,
+  // or persist whole — it structurally cannot leak through a path nobody thought to audit.
+  // Optional and fire-and-forget: runProbe is the only caller that passes it today.
+  if (typeof onRawRows === 'function') {
+    try { onRawRows(rows, coordinatorId); } catch { /* the callback's own failure is its caller's problem, never this KPI's */ }
+  }
+
   return {
     live_workers: live.length,
     claimed: claimed.length,
@@ -95,13 +106,6 @@ export async function computeUtilization(supabase, { nowMs = Date.now() } = {}) 
     // QF-20260725-879: the UNFILTERED draft+unclaimed head-count, kept alongside the filtered
     // depth so the S4 raw-SQL cross-check can compare like with like (see its use below).
     raw_unclaimed_drafts: rawUnclaimedDrafts,
-    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the RAW session rows + resolved coordinatorId this
-    // query already computed, so runProbe's engagement-gauge step (TR-1: same base population as
-    // the forecaster side) reuses this exact snapshot instead of issuing a second claude_sessions
-    // read or re-deriving the coordinator. Not consumed by classifyBreach (which receives only
-    // utilization/planAdherence/integrity) — additive, no existing field touched.
-    _rows: rows,
-    _coordinatorId: coordinatorId,
   };
 }
 
@@ -492,27 +496,28 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
 }
 
 export async function runProbe(supabase, opts = {}) {
-  const utilizationRaw = await computeUtilization(supabase, opts);
-  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — TESTING-EXEC review (DEF-1) caught a real data leak:
-  // computeUtilization's _rows/_coordinatorId carriers (up to 1000 full claude_sessions rows) were
-  // reaching this destructured `utilization` binding and, through it, reading.utilization ->
-  // persistReading's findings:[reading] insert AND the advisory body — persisting/emailing every
-  // session's full metadata on every probe run (measured 657x payload growth). Strip the carriers
-  // HERE, once, before `utilization` is used for ANYTHING else below (classifyBreach, reading,
-  // advisories) — only the local engagement computation may see the raw rows.
-  const { _rows: _engagementRows, _coordinatorId: _engagementCoordinatorId, ...utilization } = utilizationRaw;
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — SECURITY-EXEC re-review: the raw session snapshot
+  // computeUtilization already fetched is handed over via a CALLBACK, never as a field on the
+  // returned object (an earlier draft leaked _rows/_coordinatorId into every persisted KPI
+  // snapshot, the advisory body, AND main()'s --dry-run stdout dump — three separate leak sites
+  // for one "private" field, because nothing structurally prevented a new caller from spreading
+  // the whole object). `utilization` below is the plain, always-safe return value.
+  let rawSessionsForEngagement = [];
+  let coordinatorIdForEngagement = null;
+  const utilization = await computeUtilization(supabase, {
+    ...opts,
+    onRawRows: (rows, coordinatorId) => { rawSessionsForEngagement = rows; coordinatorIdForEngagement = coordinatorId; },
+  });
   // Own try/catch, mirroring computeFailLoudIntegrity's pattern rather than the unguarded
   // computeUtilization call above — a defect here must never blank KPI-0/1/2/3 persistence for the
-  // whole probe run. Reuses the stripped-out raw rows (TR-1: same base population as the forecaster
-  // side) rather than a second claude_sessions read. isClaimed mirrors this KPI's own documented
-  // current-claim signal (!!s.sd_key, see computeUtilization's docblock) — classifyBreach below is
-  // unaffected: it destructures {utilization, planAdherence, integrity}, and `utilization` here is
-  // already the carrier-free object.
+  // whole probe run. isClaimed mirrors this KPI's own documented current-claim signal (!!s.sd_key,
+  // see computeUtilization's docblock) — classifyBreach below is unaffected: it destructures
+  // {utilization, planAdherence, integrity}, and `utilization` here never carried the raw rows.
   let engagement;
   try {
     engagement = engagementGaugeOn()
-      ? classifyEngagementBuckets(_engagementRows || [], {
-          coordinatorId: _engagementCoordinatorId ?? null,
+      ? classifyEngagementBuckets(rawSessionsForEngagement, {
+          coordinatorId: coordinatorIdForEngagement,
           now: opts.nowMs ?? Date.now(),
           isClaimed: (s) => !!s.sd_key,
         })

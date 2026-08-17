@@ -65,7 +65,7 @@ import { isLiveCountableWorker } from './live-countable-worker.mjs';
 // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — a standalone
 // module (FR-7) so it has a real test seam, imported here (forecaster side) and independently
 // by scripts/adam-coordinator-health.mjs (KPI-1 side). Never re-derives belt/claim logic itself.
-import { classifyEngagementBuckets, engagementGaugeOn } from './engagement-buckets.mjs';
+import { classifyEngagementBuckets, engagementGaugeOn, ENGAGEMENT_LIVE_WINDOW_MS } from './engagement-buckets.mjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -187,7 +187,16 @@ export async function computePhaseMinsFromActuals(supabase) {
  */
 export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
-  const [sessions, sds, openQfCountRaw, qfClaimedRows] = await Promise.all([
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (TR-1, DEF-2 round 2): a WIDER, dedicated cutoff for
+  // the engagement gauge specifically. HEARTBEAT_LIVE_MS (5min) is this forecaster's own
+  // belt-depth-freshness need, narrower than ENGAGEMENT_LIVE_WINDOW_MS (15min, the fleet-wide
+  // liveFleetWorkers convention the gauge is calibrated against). Reusing the narrower `sessions`
+  // fetch above for engagement would make the forecaster-side population disagree with KPI-1's
+  // uncapped read for any session with heartbeat 5-15min old — measured live during EXEC-phase
+  // TESTING re-review. A SEPARATE fetch (not a widened liveCutoff on the query above) so the
+  // existing belt-depth/workers/claimsBySession derivation is untouched — additive only.
+  const engagementLiveCutoff = new Date(Date.now() - ENGAGEMENT_LIVE_WINDOW_MS).toISOString();
+  const [sessions, sds, openQfCountRaw, qfClaimedRows, engagementSessions] = await Promise.all([
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
     // table and this read feeds worker-count/capacity math directly (filtered + iterated
     // below) — paginate to completion.
@@ -272,6 +281,15 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
         return [];
       }
     })(),
+    // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (TR-1, DEF-2 round 2): the wider, dedicated fetch
+    // for the engagement gauge — see engagementLiveCutoff comment above. Advisory-only: a failure
+    // here degrades to an empty set (gauge reports {unmeasured:true} via classifyEngagementBuckets'
+    // own fail-soft), never aborts the belt-depth derivation this function exists for.
+    fetchAllPaginated(() => sb.from('claude_sessions')
+      .select('session_id, heartbeat_at, loop_state, metadata, status, released_reason, released_at, last_tool_at, sd_key')
+      .gte('heartbeat_at', engagementLiveCutoff)
+      .order('session_id', { ascending: true }))
+      .catch(() => []),
   ]);
   const openQfCountRendered = renderCount(openQfCountRaw);
   const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
@@ -403,15 +421,17 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
       });
     }
   }
-  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-1/FR-4): classify the RAW session set (not
-  // `workers`, which is already isLiveCountableWorker-narrowed and would starve TAIL/ZOMBIE —
-  // TR-1's single-base-population requirement). isClaimed checks BOTH SD claims (claimsBySession,
-  // already derived above from the authoritative claiming_session_id) and QF claims (the separate
-  // additive lookup above) — never the claude_sessions.sd_key mirror. classifyEngagementBuckets
-  // never throws (FR-4); engagementGaugeOn() is the FR-6 rollback lever.
+  // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-1/FR-4): classify the DEDICATED wider fetch
+  // (engagementSessions), NOT `sessions` (HEARTBEAT_LIVE_MS-narrowed for belt-depth freshness,
+  // 5min < the gauge's own 15min ENGAGEMENT_LIVE_WINDOW_MS — DEF-2 round 2) and NOT `workers`
+  // (isLiveCountableWorker-narrowed, which would starve TAIL/ZOMBIE — TR-1's original finding).
+  // isClaimed checks BOTH SD claims (claimsBySession, already derived above from the authoritative
+  // claiming_session_id) and QF claims (the separate additive lookup above) — never the
+  // claude_sessions.sd_key mirror. classifyEngagementBuckets never throws (FR-4); engagementGaugeOn()
+  // is the FR-6 rollback lever.
   const qfClaimedSessionIds = new Set((qfClaimedRows || []).map((r) => r.claiming_session_id));
   const engagement = engagementGaugeOn()
-    ? classifyEngagementBuckets(sessions || [], {
+    ? classifyEngagementBuckets(engagementSessions || [], {
         coordinatorId,
         now,
         isClaimed: (s) => !!claimsBySession[s.session_id] || qfClaimedSessionIds.has(s.session_id),

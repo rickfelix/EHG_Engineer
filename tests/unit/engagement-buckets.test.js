@@ -176,6 +176,35 @@ describe('classifyEngagementBuckets — population accounting and the closed TR-
     expect(result.population).toBe(1);
   });
 
+  it('WEDGE EXEMPTION (round-2 fix): a HARD-wedged session — heartbeat itself stale, not just tool-silent — still classifies ZOMBIE, not EXCLUDED', () => {
+    // Round-1 EXEC-phase TESTING review measured this as a real regression: the liveness filter,
+    // applied as a blanket pre-filter, silently dropped exactly this case from the census — the
+    // same class of starvation FR-1 was written to eliminate, relocated to a new mechanism.
+    // isKnownWedged has its own staleness authority (last_tool_at/loop_state) independent of
+    // heartbeat_at and must be checked BEFORE a session is excluded on heartbeat age alone.
+    const hardWedged = session({
+      session_id: 'hard-wedge',
+      heartbeat_at: new Date(NOW - 20 * 60_000).toISOString(), // 20min stale — past ENGAGEMENT_LIVE_WINDOW_MS (15min)
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(), // 3h tool-silent
+    });
+    const result = classifyEngagementBuckets([hardWedged], { coordinatorId: 'coord', now: NOW, isClaimed: () => false });
+    expect(result.population).toBe(1);
+    expect(result.zombie).toBe(1);
+  });
+
+  it('a genuinely stale, NOT-wedged session (heartbeat AND last_tool_at both stale, but loop_state does not indicate active/awaiting_tick) is EXCLUDED, not ZOMBIE', () => {
+    const trulyGone = session({
+      session_id: 'gone',
+      heartbeat_at: new Date(NOW - 20 * 60_000).toISOString(),
+      loop_state: null, // isKnownWedged requires 'active' or 'awaiting_tick' — neither, so never wedged
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+    });
+    const result = classifyEngagementBuckets([trulyGone], { coordinatorId: 'coord', now: NOW, isClaimed: () => false });
+    expect(result.population).toBe(0); // excluded from the census entirely
+    expect(result.zombie).toBe(0);
+  });
+
   it('CLOSES THE MEASURED 29% GAP (TR-1/TS-10, DEF-2/DEF-3 fix): two callers feeding DIFFERENT raw row sets — one heartbeat-filtered like the forecaster\'s own query, one unfiltered like KPI-1\'s select(\'*\') — agree exactly once the classifier\'s own liveness window applies', () => {
     const liveA = session({ session_id: 'a', sd_key: 'SD-X' });
     const liveB = session({ session_id: 'b', metadata: { quarantined_at: new Date().toISOString() }, loop_state: 'active', last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString() });
