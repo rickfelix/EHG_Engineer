@@ -63,6 +63,38 @@ export function parseCollectArgs(argv) {
   );
 }
 
+// QF-20260817-186: this used to have no ceiling at all, so a hung DB query or a
+// supabase client keep-alive handle inside the dynamic import below (which opens a
+// DB connection at module load — see collectEvidence()) or inside orchestrate()
+// itself hung the caller forever with zero output and no evidence row. Default
+// mirrors the existing per-sub-agent ceiling used elsewhere (scripts/modules/prd/
+// subagent-phases.js executeSubAgent(..., {timeout: 120000})) — this call can run
+// several sub-agents in parallel, so it gets the same ceiling as one of them, not a
+// tighter one that would false-fail a legitimately slower multi-agent phase.
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+/** Pure — unit-tested. */
+export function getCollectTimeoutMs(env = process.env) {
+  const parsed = Number(env.SUBAGENT_COLLECT_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+}
+
+/** Races `promise` against a named timer. Pure — unit-tested. */
+export function withTimeout(promise, ms, label) {
+  let timer;
+  const timedOut = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`TIMEOUT: ${label} did not complete within ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timedOut]).finally(() => clearTimeout(timer));
+}
+
+async function collectEvidence(phase, sd, handoffType) {
+  // Lazy-import the orchestrator AFTER arg validation (it opens a DB connection at module load) —
+  // inside the timeout race so a hang during that module-load DB connection is also caught.
+  const { orchestrate } = await import('./orchestrate-phase-subagents.js');
+  return orchestrate(phase, sd, handoffType ? { handoffType } : {});
+}
+
 async function main() {
   let parsed;
   try {
@@ -78,12 +110,10 @@ async function main() {
     console.log(`Gate blocking set: [${getRequiredSubAgents(handoffType).join(', ')}]`);
   }
 
-  // Lazy-import the orchestrator AFTER arg validation (it opens a DB connection at module load).
-  const { orchestrate } = await import('./orchestrate-phase-subagents.js');
-
+  const timeoutMs = getCollectTimeoutMs();
   const start = Date.now();
   try {
-    const result = await orchestrate(phase, sd, handoffType ? { handoffType } : {});
+    const result = await withTimeout(collectEvidence(phase, sd, handoffType), timeoutMs, `collect-subagent-evidence(${sd}, ${phase})`);
     const totalMs = Date.now() - start;
     console.log(`SUBAGENT_COLLECT_MS=${totalMs} AGENTS=${result.total_agents ?? 0} PARALLEL=true`);
     process.exit(result.can_proceed ? 0 : 1);
