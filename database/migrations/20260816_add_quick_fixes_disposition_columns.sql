@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman verbal "approve disposition file", window-packet sitting item 2, 2026-08-17 ~20:1xZ, Adam scribe 08049808)
 -- Migration: Add disposition columns to quick_fixes table
 -- Purpose: Structured, machine-readable disposition surface for
 --          scripts/coordinator-stale-qf-disposition-sweep.mjs, which periodically
