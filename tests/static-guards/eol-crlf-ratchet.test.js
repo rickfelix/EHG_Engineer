@@ -94,6 +94,13 @@ function currentClass() {
 const baseline = () =>
   new Set(fs.readFileSync(BASELINE, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean));
 
+// QF-20260817-770: pinned OUTSIDE the editable fixture, on purpose. Update ONLY when the class
+// genuinely shrinks (a coordinator-called renormalize lands and tests/fixtures/eol-crlf-baseline.txt
+// gets smaller for real) -- never to admit a new offender. See the shrink-only assertion below for
+// why comparing the fixture against itself (or against a live count that moves with it) cannot
+// catch a padding edit.
+const EXPECTED_MAX_BASELINE_SIZE = 1;
+
 describe('CRLF-stored / LF-declared class is frozen (QF-20260804-647)', () => {
   it('the measurement finds files to inspect (guard is not vacuous)', () => {
     // If ls-files ever stops reporting i/crlf — a git version change, a different platform — every
@@ -145,9 +152,18 @@ describe('CRLF-stored / LF-declared class is frozen (QF-20260804-647)', () => {
   });
 
   it('the class only ever SHRINKS — the baseline cannot be padded to admit an offender', () => {
-    // Without this, the cheap way past the previous assertion is to append the new file to the
-    // baseline. Pinning the size makes that visible as a growth rather than a bookkeeping edit.
-    expect(currentClass().offenders.length).toBeLessThanOrEqual(baseline().size);
+    // Without this, the cheap way past the previous assertion is to append the new file's name to
+    // the baseline -- that also defeats "no NEW member has joined the class" (line ~120), since the
+    // offender is now "already" in the baseline. offenders ⊆ baseline() is already guaranteed by
+    // that assertion, so comparing offenders.length against baseline().size here added NOTHING:
+    // both numbers are read from the same editable fixture and move together, so padding the
+    // fixture raised the bound and this passed as bookkeeping instead of failing as growth --
+    // the exact loophole this test's own name and comment claimed to close.
+    //
+    // Pinned instead against a LITERAL in THIS file (EXPECTED_MAX_BASELINE_SIZE), which a padding
+    // edit to the text fixture cannot move: growing baseline.txt now requires also editing this
+    // test (a reviewed code change), not a text file, to still pass.
+    expect(baseline().size).toBeLessThanOrEqual(EXPECTED_MAX_BASELINE_SIZE);
   });
 
   it('CONTROL: the detector recognises a synthetic offender (it can fail)', () => {
