@@ -90,7 +90,7 @@ AS $function$
     AND created_at > now() - interval '1 hour';
 $function$;
 
-REVOKE ALL ON FUNCTION public.check_internal_feedback_rate_limit(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.check_internal_feedback_rate_limit(uuid) FROM PUBLIC, anon, authenticated;
 -- No external EXECUTE grant: only fn_submit_internal_feedback (below) calls this, and — like
 -- check_feedback_rate_limit's identical precedent — a SECURITY DEFINER function's internal calls
 -- run as the function OWNER, who always implicitly holds EXECUTE on its own objects regardless of
@@ -201,7 +201,7 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 -- No anon grant — this caller is never anonymous by construction (FeedbackWidget.tsx already gates
 -- on `if (!user) return null`).
