@@ -50,6 +50,14 @@ Before the real run: a **dry calibration** — deliberately disable one ops loop
 
 **Also added**: `assertClean()` (§H6 residue assertion) gained an additive journal-evidence-present check — a missing/empty journal at teardown time is now itself a `RESIDUE` finding, alongside the existing DB-residue-absence checks.
 
+## H12 — kill_gate_mode is resolved, not stamped (measured, 2026-08-17, SD-LEO-INFRA-S20-26-SIMULATED-RUN-001)
+
+The first documented-defaults run over the full S20-26 span (`run --run-id s2026-hotel-0817 --create-fixture`) confirmed `kill_gate_mode=standard` resolves correctly (`chairman_settings` has zero live rows, so `get_chairman_settings()` falls through venture → company → the `'standard'` system default), but the harness's own journal **does not stamp that value as text anywhere** — grepped the full 50-entry finalized journal directly; no fence_assertion, observation, or lifecycle entry mentions `kill_gate_mode`. A consumer reading the journal alone cannot tell which mode a run executed under.
+
+**Not fixed here** (out of that SD's scope — no harness code changes): the workaround was a companion, run-scoped verification script (`scripts/harness/verify-s20-run.mjs`) that independently resolves `kill_gate_mode` via `get_chairman_settings()` for the fixture venture and durably records it as a separate `system_events` row (`event_type='harness_run_verification'`), addressable by the same `run_id`. Any future harness change that wants this natively in the journal itself should have `runArc()` capture the resolved `kill_gate_mode` at run start (alongside the H5.1 spawn-env fence_assertion) rather than relying on a downstream consumer to re-resolve it.
+
+Also observed on that run: `containmentSweep` (called mid-`runArc()`, before any teardown) reports `RESIDUE` findings for the fixture's **own** `venture_id` on every fresh run that doesn't also invoke `s20-fixture.mjs teardown` — this is expected (the fixture's rows are the run's own live evidence, not leftover junk from a prior run) and should not be read as `O10` failing due to a real defect; `O10`'s `residue_clean` check will always be `false` for a run that intentionally skips teardown to preserve evidence for post-run grading.
+
 ---
 
 *Propose-only. Build: Bravo/Charlie/Alpha against H1–H4+H6–H9 immediately; H5 completes on the coordinator's enumeration; run Saturday; observations → cluster-2 ledger → Solomon adjudication → unified delta.*
