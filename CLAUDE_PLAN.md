@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8d5cdc5b31dc2a03 -->
+<!-- file_content_hash: 717232de9abdd96a -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-08-16 8:26:48 PM
+**Generated**: 2026-08-17 4:01:30 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -755,9 +755,6 @@ When creating EXEC → PLAN handoff, include:
 
 ## Testing Tier Strategy (Updated)
 
-
-## Testing Requirements - Dual Test Execution (SD-ARCH-EHG-007 Updated)
-
 **Philosophy**: Comprehensive testing = Unit tests (logic) + E2E tests (user experience)
 
 ### Architecture Context
@@ -1390,6 +1387,6 @@ For every keyword-list FR expansion, include in acceptance_criteria: "Substring-
 
 ---
 
-*Generated from database: 2026-08-16*
+*Generated from database: 2026-08-17*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
