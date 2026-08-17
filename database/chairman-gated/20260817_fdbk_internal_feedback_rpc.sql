@@ -1,4 +1,5 @@
--- @approved-by:
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman verbal "I agree with your recommendation" [rec=approve], mini-sitting 2026-08-17 ~15:2xZ, Adam scribe 08049808)
 -- SD-FDBK-FIX-FEEDBACKWIDGET-PURPOSE-BUILT-001 — FR-4 fourth mechanism: a purpose-built,
 -- authenticated, identity-bound RPC for ehg/src/components/quality/FeedbackWidget.tsx.
 --
