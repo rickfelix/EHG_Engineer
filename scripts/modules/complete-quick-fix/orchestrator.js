@@ -441,7 +441,7 @@ export async function completeQuickFix(qfId, options = {}) {
   // (fetchPRMetadata / gh via EXTERNAL_STEP_TIMEOUT_MS) and fail-closed: any failure or an
   // unverified witness falls through to the normal pipeline and never false-completes.
   try {
-    const probeWitness = verifyQFMergeWitness({ qfId, prUrl: options.prUrl || qf.pr_url, testDir });
+    const probeWitness = verifyQFMergeWitness({ qfId, prUrl: options.prUrl || qf.pr_url, branchName: options.branchName, testDir });
     if (probeWitness.verified) {
       const mergeSha = probeWitness.mergeSha || qf.commit_sha || null;
       // QF-20260725-691: the witness proves the PR merged, not that scope was satisfied. Without
@@ -890,7 +890,7 @@ export async function completeQuickFix(qfId, options = {}) {
   // qf/<QF-ID> branch has a MERGED PR reachable from origin/main. Self-derives pr_url from the
   // QF's own branch (never a foreign/most-recent merged PR — closes the #5290 mis-attribution).
   // Fail-closed. --force-complete stays the audited escape hatch (records the unverified witness).
-  const mergeWitness = verifyQFMergeWitness({ qfId, prUrl: finalPrUrl, testDir });
+  const mergeWitness = verifyQFMergeWitness({ qfId, prUrl: finalPrUrl, branchName, testDir });
   if (!mergeWitness.verified) {
     if (!options.forceComplete) {
       console.error(`\n❌ [QF_MERGE_UNVERIFIED] Refusing to mark ${qfId} completed: ${mergeWitness.reason}`);

@@ -83,65 +83,93 @@ export function isReachableFromMain(sha, testDir) {
 
 /**
  * Verify a QF's completion is backed by a MERGED-to-main PR on the QF's OWN
- * branch. A passed-in prUrl is trusted ONLY when it is the QF's own branch;
- * otherwise (absent / foreign) the PR is self-derived from qf/<QF-ID>.
+ * branch. A passed-in prUrl is trusted ONLY when its head branch is one of the
+ * QF's own candidates OR matches an explicitly-supplied branchName (an operator
+ * attribution of THIS QF's real branch, e.g. a superseded qf/<ID>-v2 — see
+ * QF-20260815-086); otherwise (absent / foreign / unattributed) the PR is
+ * self-derived from qf/<QF-ID>. This never loosens trust for a bare/DB-sourced
+ * prUrl alone — only an explicit branchName widens what is trusted.
  *
- * @param {{qfId:string, prUrl?:string, testDir:string}} args
+ * @param {{qfId:string, prUrl?:string, branchName?:string, testDir:string}} args
  * @returns {{verified:boolean, code:string|null, reason:string, expectedBranch:string,
- *            prUrl?:string, headBranch?:string, state?:string, mergeSha?:string}}
+ *            prUrl?:string, headBranch?:string, state?:string, mergeSha?:string, source?:string}}
  */
-export function verifyQFMergeWitness({ qfId, prUrl, testDir }) {
+export function verifyQFMergeWitness({ qfId, prUrl, branchName, testDir }) {
   const expectedBranch = ownBranchFor(qfId);
   const candidates = ownBranchCandidatesFor(qfId);
+  const trustedBranches = branchName ? [...candidates, branchName] : candidates;
   const fail = (reason, extra = {}) => ({ verified: false, code: QF_MERGE_UNVERIFIED, reason, expectedBranch, ...extra });
 
-  // 1. Resolve the PR to verify — trust a supplied prUrl ONLY if it is one of the QF's own candidate branches.
+  // 1. Resolve the PR to verify — trust a supplied prUrl ONLY if its head branch is trusted.
   let meta = null;
   let resolvedUrl = null;
+  let source = null;
   if (prUrl) {
     const n = extractPRNumber(prUrl);
     if (n) {
       try {
         const m = fetchPRMetadata(n, testDir);
-        if (m && candidates.includes(m.headRefName)) {
+        if (m && trustedBranches.includes(m.headRefName)) {
           meta = m;
           resolvedUrl = m.url || prUrl;
+          source = candidates.includes(m.headRefName) ? 'pr-url' : 'pr-url+branch-name';
         }
       } catch {
         /* supplied pr_url unresolvable — fall through to self-derive from the own branch */
       }
     }
   }
+  // 2. An explicit --branch-name outside the canonical set, with no usable prUrl: look it up directly.
+  if (!meta && branchName && !candidates.includes(branchName)) {
+    try {
+      const out = execSync(
+        `gh pr list --head "${branchName}" --state all --json url,number,state,headRefName,mergeCommit --limit 1`,
+        { cwd: testDir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: EXTERNAL_STEP_TIMEOUT_MS }
+      );
+      const prs = JSON.parse(out || '[]');
+      const own = Array.isArray(prs) ? prs.find((p) => p && p.headRefName === branchName) : null;
+      if (own) {
+        meta = own;
+        resolvedUrl = own.url;
+        source = 'branch-name';
+      }
+    } catch {
+      /* unresolvable — fall through to derive */
+    }
+  }
+  // 3. Neither resolved — self-derive from the QF's own canonical candidate branches.
   if (!meta) {
     const own = deriveOwnPr(qfId, testDir);
     if (own && candidates.includes(own.headRefName)) {
       meta = own;
       resolvedUrl = own.url;
+      source = 'derived';
     }
   }
   if (!meta) {
-    return fail(`no PR found whose head branch is one of [${candidates.join(', ')}] (branch not pushed / PR not opened, or the supplied pr_url points at a foreign PR — mis-attribution)`);
+    return fail(`no PR found whose head branch is one of [${trustedBranches.join(', ')}] (branch not pushed / PR not opened, or the supplied pr_url points at a foreign PR — mis-attribution)`);
   }
 
-  // 2. The PR must be MERGED.
+  // 4. The PR must be MERGED.
   if (meta.state !== 'MERGED') {
-    return fail(`PR ${resolvedUrl} (head ${meta.headRefName}) state=${meta.state}, not MERGED — the change has not landed`, { prUrl: resolvedUrl, headBranch: meta.headRefName, state: meta.state });
+    return fail(`PR ${resolvedUrl} (head ${meta.headRefName}) state=${meta.state}, not MERGED — the change has not landed`, { prUrl: resolvedUrl, headBranch: meta.headRefName, state: meta.state, source });
   }
 
-  // 3. The merge commit must be reachable from origin/main.
+  // 5. The merge commit must be reachable from origin/main.
   const mergeSha = meta.mergeCommit && meta.mergeCommit.oid ? meta.mergeCommit.oid : null;
   if (!isReachableFromMain(mergeSha, testDir)) {
-    return fail(`merge commit ${mergeSha || '(none)'} for PR ${resolvedUrl} is not reachable from origin/main`, { prUrl: resolvedUrl, headBranch: meta.headRefName, state: meta.state, mergeSha });
+    return fail(`merge commit ${mergeSha || '(none)'} for PR ${resolvedUrl} is not reachable from origin/main`, { prUrl: resolvedUrl, headBranch: meta.headRefName, state: meta.state, mergeSha, source });
   }
 
   return {
     verified: true,
     code: null,
-    reason: `QF own branch ${expectedBranch} PR is MERGED and reachable from origin/main`,
+    reason: `QF branch ${meta.headRefName} PR is MERGED and reachable from origin/main (source: ${source})`,
     prUrl: resolvedUrl,
     headBranch: meta.headRefName,
     state: meta.state,
     mergeSha,
-    expectedBranch
+    expectedBranch,
+    source
   };
 }

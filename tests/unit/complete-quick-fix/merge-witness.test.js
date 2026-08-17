@@ -237,3 +237,51 @@ describe('QF-20260701-989 regression (the exact false-completion shape)', () => 
     expect(w.code).toBe(QF_MERGE_UNVERIFIED);
   });
 });
+
+describe('QF-20260815-086: explicit --branch-name/--pr-url override the canonical-only derivation', () => {
+  it('-v2 case: superseded branch qf/<ID>-v2 with a MERGED PR + matching --branch-name → verified via that PR, not the closed original', () => {
+    const v2Branch = 'qf/QF-20260815-288-v2';
+    const v2Url = 'https://github.com/rickfelix/EHG_Engineer/pull/7049';
+    // The supplied pr_url resolves to the -v2 PR (MERGED); a separate `gh pr list` for the
+    // canonical qf/<ID> would find the CLOSED original — deriveOwnPr must never be reached.
+    mockExec({ prView: { state: 'MERGED', headRefName: v2Branch, mergeCommit: { oid: REACHABLE_SHA }, url: v2Url } });
+    const w = verifyQFMergeWitness({
+      qfId: 'QF-20260815-288', prUrl: v2Url, branchName: v2Branch, testDir: TEST_DIR,
+    });
+    expect(w.verified).toBe(true);
+    expect(w.prUrl).toBe(v2Url);
+    expect(w.headBranch).toBe(v2Branch);
+    expect(w.source).toBe('pr-url+branch-name');
+  });
+
+  it('-v2 case, branch-name only (no usable prUrl): looks up the named branch directly and verifies it', () => {
+    const v2Branch = 'qf/QF-20260815-288-v2';
+    const v2Pr = { state: 'MERGED', headRefName: v2Branch, mergeCommit: { oid: REACHABLE_SHA }, url: 'https://github.com/rickfelix/EHG_Engineer/pull/7049' };
+    mockExec({ prList: [v2Pr] }); // `gh pr list --head qf/QF-20260815-288-v2`
+    const w = verifyQFMergeWitness({ qfId: 'QF-20260815-288', prUrl: undefined, branchName: v2Branch, testDir: TEST_DIR });
+    expect(w.verified).toBe(true);
+    expect(w.prUrl).toBe(v2Pr.url);
+    expect(w.source).toBe('branch-name');
+  });
+
+  it('default case (no --branch-name supplied): behavior is unchanged — canonical-only derivation still applies', () => {
+    const own = OWN('QF-I-001', { url: 'https://github.com/rickfelix/EHG_Engineer/pull/6800' });
+    mockExec({ prList: [own], reachable: true });
+    const w = verifyQFMergeWitness({ qfId: 'QF-I-001', prUrl: undefined, branchName: undefined, testDir: TEST_DIR });
+    expect(w.verified).toBe(true);
+    expect(w.source).toBe('derived');
+    expect(w.prUrl).toBe(own.url);
+  });
+
+  it('an unrelated --branch-name does not widen trust for a still-foreign pr_url (no mis-attribution)', () => {
+    mockExec({
+      prView: { state: 'MERGED', headRefName: 'feat/some-other-sd', mergeCommit: { oid: REACHABLE_SHA }, url: 'https://github.com/rickfelix/EHG_Engineer/pull/5290' },
+      prList: [], // neither the canonical candidates nor the supplied branchName have a PR
+    });
+    const w = verifyQFMergeWitness({
+      qfId: 'QF-J-001', prUrl: 'https://github.com/rickfelix/EHG_Engineer/pull/5290', branchName: 'qf/QF-J-001-v2', testDir: TEST_DIR,
+    });
+    expect(w.verified).toBe(false);
+    expect(w.code).toBe(QF_MERGE_UNVERIFIED);
+  });
+});
