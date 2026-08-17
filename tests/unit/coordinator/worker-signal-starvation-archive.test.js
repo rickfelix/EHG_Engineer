@@ -127,7 +127,10 @@ describe('FR-2: the cap must not silently discard the oldest signals', () => {
     expect(assertNonBinding(10, 10, 5000)).toBeNull();
     const note = assertNonBinding(4000, 1000, 5000);
     expect(note).toMatch(/TRUNCATED/);
-    expect(note).toMatch(/OLDEST/);
+    // QF-20260815-711: both queries now order oldest-first, so a bound cap discards the
+    // NEWEST rows — the message text was updated to match (was "OLDEST ... discarded",
+    // which described the pre-fix descending-order behavior and is no longer true).
+    expect(note).toMatch(/NEWEST/);
     expect(note).toMatch(/FLOOR, not a measurement/);
   });
 });

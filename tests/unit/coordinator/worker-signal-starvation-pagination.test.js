@@ -102,11 +102,62 @@ describe('reportWorkerSignalStarvation — end-to-end past the clamp (QF-2026081
     expect(r.starved).toBeGreaterThan(PAGE_SIZE);
   });
 
-  it('orders the archive query (row_timestamp desc) — an unordered fetch returns an arbitrary subset on repeat calls', () => {
+  it('orders the archive query (row_timestamp asc, QF-20260815-711) — an unordered fetch returns an arbitrary subset on repeat calls', () => {
     const db = makeClampingDb(5);
     return reportWorkerSignalStarvation(db, { now: NOW, log: () => {}, env: {} }).then(() => {
       expect(db.orderCalls.archive).toBeGreaterThan(0);
     });
+  });
+});
+
+/**
+ * QF-20260815-711 — a real DB sorts before applying LIMIT; makeClampingDb above does not (it
+ * serves rows in raw offset order regardless of the requested direction), so it cannot
+ * distinguish "the cap discarded the newest" from "the cap discarded the oldest". This fake
+ * actually respects .order({ascending}) by sorting a population before slicing, so a beyond-cap
+ * fetch proves WHICH rows survive.
+ */
+function makeOrderedDb(totalRows) {
+  const ageForIndex = (i) => totalRows - i; // index 0 = oldest (largest age), last index = newest
+  return {
+    from(table) {
+      if (table === 'retention_archive') {
+        const empty = { select: () => empty, eq: () => empty, gte: () => empty, order: () => empty,
+          range: () => Promise.resolve({ data: [], error: null }) };
+        return empty;
+      }
+      let ascending = true;
+      const api = {
+        select() { return api; },
+        eq() { return api; },
+        gte() { return api; },
+        order(_field, opts) {
+          ascending = !opts || opts.ascending !== false;
+          return api;
+        },
+        range(from, to) {
+          const indices = Array.from({ length: totalRows }, (_, i) => i);
+          const ordered = ascending ? indices : indices.slice().reverse();
+          const page = ordered.slice(from, to + 1).map((i) => signal('s-' + i, ageForIndex(i)));
+          return Promise.resolve({ data: page, error: null });
+        },
+      };
+      return api;
+    },
+  };
+}
+
+describe('reportWorkerSignalStarvation — a beyond-cap population reports the OLDEST (QF-20260815-711)', () => {
+  it('the reported oldest age reflects the TRUE oldest signal in the window, not just the oldest among the newest MAX_SIGNALS', async () => {
+    const totalRows = MAX_SIGNALS + 50; // exceeds the cap, so the query must choose which 50 to drop
+    const db = makeOrderedDb(totalRows);
+    const r = await reportWorkerSignalStarvation(db, { now: NOW, log: () => {}, env: {} });
+
+    expect(r.measured).toBe(true);
+    // Under the pre-fix descending order, the cap keeps the 5000 NEWEST rows (ages 1..5000) and
+    // silently drops the 50 oldest (ages 5001..5050) — oldestMin could never exceed 5000. Ascending
+    // order keeps the 5000 OLDEST (ages 51..5050), so the true oldest (age ~5050) survives.
+    expect(r.oldestMin).toBeGreaterThan(MAX_SIGNALS);
   });
 });
 
@@ -124,5 +175,13 @@ describe('assertNonBinding — fires on a PAGE_SIZE-exact total, not just MAX_SI
 
   it('does not false-positive on an ordinary count that is not a page-size coincidence', () => {
     expect(assertNonBinding(10, 10, MAX_SIGNALS)).toBeNull();
+  });
+
+  // QF-20260815-711: both queries now order oldest-first, so a bound cap discards the NEWEST
+  // rows, not the oldest — the warning text must say so, not the pre-fix (now false) claim.
+  it('the truncation message reflects the fixed (oldest-preserved) semantics, not the stale pre-fix claim', () => {
+    const note = assertNonBinding(MAX_SIGNALS, 0, MAX_SIGNALS);
+    expect(note).toMatch(/NEWEST/);
+    expect(note).not.toMatch(/OLDEST signals in the window were discarded/);
   });
 });
