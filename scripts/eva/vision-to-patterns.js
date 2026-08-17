@@ -47,9 +47,13 @@ const DEFAULT_LOOKBACK_DAYS = 30;
 // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: SD-type-aware dimension exemptions
 // Dimensions that naturally score low for certain SD types and should not create VGAP patterns.
 // Key: SD type, Value: Set of dimension ID prefixes to exempt (e.g., 'V09' for strategic_governance_cascade)
-const SD_TYPE_EXEMPT_DIMENSIONS = {
+export const SD_TYPE_EXEMPT_DIMENSIONS = {
   infrastructure: new Set(['V09']),
-  fix:            new Set(['V09']),
+  // QF-20260816-696: was 'fix' -- not in lib/sd-type-enum.js's canonical sd_type list (the
+  // real value is 'bugfix'), so this exemption never matched and bugfix SDs spawned false
+  // VGAP-V09 rows. SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 already documents 'fix' as a phantom
+  // value causing UPDATE failures elsewhere; this was a second, un-retrofitted instance.
+  bugfix:         new Set(['V09']),
   documentation:  new Set(['V09']),
 };
 
