@@ -13,27 +13,46 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolvePresenceReplyWindow, PRESENCE_WINDOW_MINUTES } from '../../../../lib/comms/adam-outbound/presence-reply-window.js';
 import { sendChairmanSMS } from '../../../../lib/comms/adam-outbound/chairman-sms-gate/index.js';
 import { lint } from '../../../../lib/comms/adam-outbound/rubric-engine/lint.js';
+import { WATCHDOG_BODY_PREFIX } from '../../../../lib/comms/adam-outbound/watchdog-detector.js';
 
 const NOW = Date.parse('2026-08-10T03:25:00Z'); // 23:25 ET on 2026-08-09 (inside 22:00-06:00)
 
-/** A supabase mock whose query builder APPLIES the received_at >= gte filter. */
+/**
+ * A supabase mock whose query builder APPLIES the received_at >= gte filter AND actually sorts
+ * by the order() column/direction, matching real Supabase behavior.
+ *
+ * SD-LEO-FIX-QUIET-HOURS-GATE-001 (TESTING finding B2, 2026-08-17): order() was previously a
+ * no-op that discarded both arguments, so limit() resolved rows in FIXTURE ARRAY ORDER, not
+ * received_at order -- a mixed-row test could pass green with zero code changes if the fixture
+ * happened to be built in a favorable order. Confirmed empirically before this fix.
+ */
 function makeStagingMock(rows, { error = null } = {}) {
-  const calls = { gte: null, table: null };
+  const calls = { gte: null, table: null, order: null };
   const builder = (table) => {
     calls.table = table;
-    const state = { gteCol: null, gteVal: null };
+    const state = { gteCol: null, gteVal: null, orderCol: null, orderAsc: true };
     const chain = {
       select: () => chain,
       gte: (col, val) => { state.gteCol = col; state.gteVal = val; calls.gte = { col, val }; return chain; },
-      order: () => chain,
-      limit: () => Promise.resolve(
-        error
-          ? { data: null, error }
-          : {
-            data: rows.filter((r) => !state.gteVal || r.received_at >= state.gteVal),
-            error: null,
-          },
-      ),
+      order: (col, opts = {}) => {
+        state.orderCol = col;
+        state.orderAsc = opts.ascending !== false;
+        calls.order = { col, ascending: state.orderAsc };
+        return chain;
+      },
+      limit: () => {
+        if (error) return Promise.resolve({ data: null, error });
+        let filtered = rows.filter((r) => !state.gteVal || r.received_at >= state.gteVal);
+        if (state.orderCol) {
+          filtered = [...filtered].sort((a, b) => {
+            const av = a[state.orderCol];
+            const bv = b[state.orderCol];
+            const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+            return state.orderAsc ? cmp : -cmp;
+          });
+        }
+        return Promise.resolve({ data: filtered, error: null });
+      },
     };
     return chain;
   };
@@ -101,6 +120,72 @@ describe('resolvePresenceReplyWindow()', () => {
     const res = await resolvePresenceReplyWindow('not-a-clock', { supabase: makeStagingMock([]) });
     expect(res.allowed).toBe(false);
     expect(res.reason).toBe('invalid_now');
+  });
+});
+
+describe('resolvePresenceReplyWindow() — watchdog discrimination (SD-LEO-FIX-QUIET-HOURS-GATE-001)', () => {
+  const savedPhone = process.env.CHAIRMAN_PHONE;
+  beforeEach(() => { process.env.CHAIRMAN_PHONE = '5551234567'; });
+  afterEach(() => {
+    if (savedPhone === undefined) delete process.env.CHAIRMAN_PHONE;
+    else process.env.CHAIRMAN_PHONE = savedPhone;
+  });
+
+  it('QH-TS-1: a watchdog-template inbound, alone in the window, must not grant', async () => {
+    const sb = makeStagingMock([
+      { id: 'watchdog-1', from_phone: '5551234567', body_raw: `${WATCHDOG_BODY_PREFIX} are you still there?`, received_at: minutesAgo(5) },
+    ]);
+    const res = await resolvePresenceReplyWindow(NOW, { supabase: sb });
+    expect(res.allowed).toBe(false);
+  });
+
+  it('QH-TS-2: a genuine, distinct chairman text, alone in the window, still grants', async () => {
+    const sb = makeStagingMock([
+      { id: 'genuine-1', from_phone: '5551234567', body_raw: 'Please fix the asymmetry', received_at: minutesAgo(5) },
+    ]);
+    const res = await resolvePresenceReplyWindow(NOW, { supabase: sb });
+    expect(res.allowed).toBe(true);
+    expect(res.grantRowId).toBe('genuine-1');
+  });
+
+  it("QH-TS-3: the chairman's own REPEATED short decision replies still grant (regression) -- repeated bodies, not distinct single-occurrence bodies", async () => {
+    const rows = [];
+    for (let i = 0; i < 6; i++) rows.push({ id: `a-${i}`, from_phone: '5551234567', body_raw: 'A', received_at: minutesAgo(1 + i) });
+    for (let i = 0; i < 4; i++) rows.push({ id: `yes-${i}`, from_phone: '5551234567', body_raw: 'Yes', received_at: minutesAgo(1 + i) });
+    // thumbs-up-medium-dark-skin-tone: short (4 bytes), included per the live-measured corpus
+    for (let i = 0; i < 7; i++) rows.push({ id: `thumb-${i}`, from_phone: '5551234567', body_raw: '👍🏿', received_at: minutesAgo(1 + i) });
+    const sb = makeStagingMock(rows);
+    const res = await resolvePresenceReplyWindow(NOW, { supabase: sb });
+    expect(res.allowed).toBe(true);
+  });
+
+  it('QH-TS-3b: a differential invariant -- the verdict is unchanged as a fixed non-watchdog body repeats N=1,2,5,10,25 times', async () => {
+    for (const n of [1, 2, 5, 10, 25]) {
+      const rows = Array.from({ length: n }, (_, i) => ({
+        id: `rep-${n}-${i}`, from_phone: '5551234567', body_raw: 'Approved', received_at: minutesAgo(1 + i),
+      }));
+      const res = await resolvePresenceReplyWindow(NOW, { supabase: makeStagingMock(rows) });
+      expect(res.allowed).toBe(true);
+    }
+  });
+
+  it('QH-TS-4: a watchdog row AND a genuine distinct row both in-window, watchdog more recent -- the genuine row must still be found', async () => {
+    const sb = makeStagingMock([
+      { id: 'watchdog-recent', from_phone: '5551234567', body_raw: `${WATCHDOG_BODY_PREFIX} are you still there?`, received_at: minutesAgo(2) },
+      { id: 'genuine-older', from_phone: '5551234567', body_raw: 'Go with your recommended option', received_at: minutesAgo(8) },
+    ]);
+    const res = await resolvePresenceReplyWindow(NOW, { supabase: sb });
+    expect(res.allowed).toBe(true);
+    expect(res.grantRowId).toBe('genuine-older');
+  });
+
+  it('QH-TS-5: no qualifying (non-watchdog) row in-window refuses, same as the pre-existing no-match path', async () => {
+    const sb = makeStagingMock([
+      { id: 'watchdog-only', from_phone: '5551234567', body_raw: `${WATCHDOG_BODY_PREFIX} are you still there?`, received_at: minutesAgo(3) },
+    ]);
+    const res = await resolvePresenceReplyWindow(NOW, { supabase: sb });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toBe('no_recent_chairman_inbound');
   });
 });
 
