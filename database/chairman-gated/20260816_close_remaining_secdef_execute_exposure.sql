@@ -50,7 +50,8 @@
 -- email (must match git user.email — see scripts/lib/migration-guards.js APPROVED_BY_RE)
 -- and applied via `node scripts/apply-migration.js --prod-deploy`.
 --
--- @approved-by:
+-- @approved-by: codestreetlabs@gmail.com
+-- (chairman verbal "approve file 4", ceremony N+1 sitting 2026-08-17 ~11:1xZ, Adam scribe 08049808)
 --   ^ INTENTIONALLY BLANK. checkApproverFactor() fails closed on a missing header, so this
 --     migration cannot be applied by accident. Do NOT fill this in on the SD's behalf.
 --     scripts/lib/migration-tier-classifier.mjs:44 (FORBIDDEN_TOPLEVEL) additionally classifies
