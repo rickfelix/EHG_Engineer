@@ -1,5 +1,4 @@
--- @approved-by: codestreetlabs@gmail.com
--- (chairman verbal "approve file 3", ceremony N+1 sitting 2026-08-17 ~11:0xZ, Adam scribe 08049808)
+-- @approved-by:
 -- SD-LEO-SEC-DEFACL-ANON-AUTH-AXIS-001 — per-role default-ACL REVOKE, schema public, functions.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
