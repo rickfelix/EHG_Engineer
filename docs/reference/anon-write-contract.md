@@ -2,10 +2,123 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.3.0
-**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1
-**Last Updated**: 2026-08-16
+**Version**: 1.4.0
+**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001
+**Last Updated**: 2026-08-17
 **Tags**: rls, postgres, anon, feedback, ingress
+
+## 2026-08-17 update: the RPC path is ALSO non-functional, plus 4 more affected callers
+
+**This section corrects and extends "Read this first" below rather than replacing it — that
+section's facts (both drops, the `ehg` precondition miss) are still accurate.** Filed as
+SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001 (a decision package, not yet applied), discovered
+incidentally while shipping an unrelated fix and independently verified by 4 sub-agent passes.
+
+**"E1" is `SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1`** (answering the open question a ceremony
+runbook left as a bare label) — the sprint that shipped `altifyai/lib/feedback/submit.js`'s
+RPC cutover. Its code precondition was met; per this doc's own note below, its key-provisioning
+gap was correctly treated as inert because altifyai had no live deployment yet.
+
+**New, decision-changing fact: `public.venture_ingest_keys` has ZERO ROWS for every venture,
+not only altifyai.** `_verify_venture_ingest_secret()` therefore returns `false` unconditionally,
+so `fn_submit_venture_user_feedback` fails closed (`28000`) for **every** caller — including
+`ehg`'s `feedbackDataAccess.ts`, which meets the code precondition described above but is
+*operationally* non-functional in production for a completely different reason than the RLS gap.
+Cutting a caller over to the RPC is necessary but not sufficient; **key provisioning
+(`fn_provision_venture_ingest_key`, service_role-only) is an independent, currently-unmet
+precondition for every venture, not only the ones still on the raw INSERT path.**
+`VITE_FEEDBACK_INGEST_SECRET` (the client-side credential) is also present only in
+`ehg/.env.example`, absent from real deployed `.env` files — a second, independent blocker for
+`ehg` specifically even once keys exist.
+
+**4 more affected callers, beyond the `ehg`/`feedbackDataAccess.ts` gap already documented:**
+- `ehg/src/components/error-capture/ErrorCaptureProvider.tsx:92` — a global error boundary,
+  raw `.insert()`, runs for both anon and authenticated visitors. Independent non-RLS bug:
+  inserts `created_by`/`source_url`, neither of which is a real column on `public.feedback`
+  (the real identity column is `user_id`).
+- `ehg/src/components/quality/FeedbackWidget.tsx:78` — the internal quality-feedback FAB. Runs
+  as `authenticated` (gated `if (!user) return null;`), not `anon` — relevant because
+  `select_feedback_policy`/`anon_feedback_ingress_bounds`'s current live scope was reasoned about
+  in anon-only terms in earlier investigation; `authenticated` is equally blocked. Same
+  non-existent-column bug as above (`created_by` — the real column is `user_id`), plus previously
+  omitted the NOT-NULL `source_type` (fixed separately, QF-20260817-434, 2026-08-17 — the column
+  bug remains). Two more non-RLS bugs, confirmed live against the current `origin/main` payload
+  (adversarial ship-gate review, PR #7199, so not affected by this SD's own stale local `ehg`
+  checkout): `source_url` is ALSO not a real column (same class as `created_by`, previously
+  unflagged for this specific caller); and `status: "open"` is not in `feedback_status_check`'s
+  allowed set (`new`/`triaged`/`in_progress`/`resolved`/`wont_fix`/`duplicate`/`invalid`/
+  `backlog`/`shipped`), so the insert would 23514 even after every other bug here is fixed. None of
+  this affects Remedy B's migration (FR-4's drafted RPC signature takes no `status` parameter and
+  would set it server-side) — it belongs in this SD's FR-6/FR-1 caller census, not the RLS fix.
+  Structurally **cannot** use the RPC even once keys are provisioned: it never sets `venture_id`
+  (it isn't a venture-scoped submission) and `authenticated` does not hold EXECUTE on
+  `fn_submit_venture_user_feedback`. The same missing-`venture_id` gap also rules out Remedy B's
+  restored policy at ANY role scope (its `WITH CHECK` requires `venture_id IS NOT NULL`) — an
+  earlier draft of that migration widened `TO authenticated` on the mistaken theory that role
+  scope alone would admit this caller; corrected during EXEC-TO-PLAN (TESTING/SECURITY sub-agent
+  evidence 731d79a4 / 241fb047, confirmed by reading this exact payload directly). Needs a fourth
+  mechanism, designed below (see "FR-4 design" section) — an `auth.uid()`-bound authenticated
+  path — tracked as SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001 FR-4; not yet implemented as code.
+- `apexniche-ai/src/ui/api/feedbackClient.ts:121` — a raw `fetch()` POST to `/rest/v1/feedback`
+  using the anon key (functionally identical to a PostgREST `.insert()`). Unlike the two `ehg`
+  callers above, this one DOES set both `venture_id` and `feedback_type` correctly (verified by
+  direct read) — a genuine candidate beneficiary of Remedy B's anon-scoped restore, or of the RPC
+  path once keys are provisioned. Has its own independent, non-RLS schema bug: omits the NOT-NULL
+  `type` column (distinct from `feedback_type`, which it does set) — tracked under this SD's FR-6,
+  not fixed by this SD's own work.
+- `marketlens/src/services/feedback.js:36` (and its byte-identical fixture copy,
+  `marketlens-fixtures/src/services/feedback.js:36`) — a **sixth writer**, previously
+  unenumerated by this contract or any SD in this family. `forwardToVentureChannel()` is
+  fire-and-forget with swallowed errors, so marketlens's own local store still reports success to
+  its caller — the failure is invisible to marketlens users, but every forward to
+  EHG_Engineer's venture-wide feedback aggregation silently `401`s. Blocked solely by the RLS
+  gap (no independent schema bug, unlike the two `ehg` callers above).
+- Not a caller, but a **defect multiplier**: `EHG_Engineer/lib/eva/config/venture-default-capabilities.js:37`
+  is the venture-factory template — it instructs every newly-generated venture to write code
+  against the now-dropped `venture_user_insert_feedback` policy. Every future venture inherits
+  this contract's stale guidance by construction until the template is corrected.
+
+**Correction to "Related: a rate limit that cannot bind" below: that section is now stale/resolved.**
+The inline-subquery rate limit it describes was superseded by
+`database/chairman-gated/20260803_bound_anon_ingress_source_type_qualifier_STAGED.sql` and
+`database/chairman-gated/20260804_ingress_bound_definer_basis.sql` — the live `WITH CHECK` today
+calls `fn_anon_ingress_prior_hour_count(source_type)`, a `SECURITY DEFINER` function, so the
+count no longer runs as the inserting role and is no longer coupled to the telegram-only SELECT
+policy. Independently confirmed 3 times this SD (security-feedback-insert sub-agent, live catalog
+read; two prior artifacts, `.artifacts/sec-write-evidence.mjs` and this SD's own investigation).
+Left in place below for history; do not action it.
+
+**A staged, decision-ready alternative now exists that this contract's "What not to do" section
+should be read alongside, not overridden by:**
+`database/chairman-gated/20260817_restore_feedback_permissive_insert.sql` (+ `_DOWN.sql` +
+`_acceptance.mjs`) stages — NOT applies — a permissive INSERT policy restore, presented to the
+chairman explicitly as reverting **two** parts of `SD-LEO-FIX-CLOSE-ANON-VENTURE-001`'s protection,
+not one: (1) the policy itself, restoring an anon-reachable INSERT path, and (2) anon's direct
+`EXECUTE` on `venture_exists_and_active`/`check_feedback_rate_limit`, which that SD's own migration
+revoked as a named "MEDIUM-1" finding (an unauthenticated existence/rate-limit oracle) — restoring
+(1) without (2) leaves the policy inert (TESTING sub-agent finding, evidence
+731d79a4-5498-4bd7-8628-427dbc31d3dc), so applying this file necessarily means both. Scoped `TO
+anon` only — byte-identical to the historical policy shape and role scope, and it restores anon's
+`EXECUTE` on both supporting functions (without them the policy would be inert), though NOT
+identical to the full historical grant picture: `check_feedback_rate_limit` had also historically
+been granted to `authenticated` for some other, unrelated caller, which this migration deliberately
+does not restore (adversarial ship-gate review, PR #7199, corrected an earlier overclaim here) — and
+re-pinning `anon_feedback_ingress_bounds`'s role scope explicitly rather than relying on its current
+accidental `TO PUBLIC` drift. (An earlier draft widened this `TO authenticated`,
+reasoning `FeedbackWidget.tsx` runs as `authenticated`; corrected during EXEC-TO-PLAN once that
+caller's payload was confirmed — by direct read, independently by two sub-agents — to set neither
+`venture_id` nor `feedback_type`, so it cannot satisfy this policy's `WITH CHECK` at any role scope.
+`apexniche-ai/src/ui/api/feedbackClient.ts:121`, the one caller confirmed to set both fields
+correctly, calls as `anon`. No caller identified in this SD needs `authenticated` under this
+predicate, so the widening — which would also have meant granting the two supporting functions'
+`EXECUTE` to `authenticated`, beyond any historical baseline — was removed rather than kept and
+re-justified.) This does not contradict "do not widen anon's SELECT surface" above — that guidance
+is about the SELECT policy specifically, which this file does not touch — but it is a live
+counter-option to this contract's general "use the RPC, not a restored policy" philosophy, offered
+because the RPC path (per the finding above) is not currently functional for anyone regardless of
+which philosophy wins. The coordinator has designated completing the RPC cutover (+ key
+provisioning) as the primary remedy; this migration exists so the alternative is equally
+decision-ready, not because it is recommended over the primary.
 
 ## Read this first
 
@@ -140,6 +253,135 @@ That is deliberate: a discovery step that quietly probes the one table it can an
 pass reads exactly like a class that is covered. `marketing_attribution` is among the unprobed; its
 only live writer (`ehg/src/integrations/marketing/landingDataAccess.ts:85`) uses the bare form, so it
 carries the same latent trap and is a good candidate for the next builder.
+
+## FR-4 design: a fourth mechanism for FeedbackWidget.tsx (SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001)
+
+`FeedbackWidget.tsx` fits neither existing pattern: it is not venture-scoped (no `venture_id`, not
+a candidate for `fn_submit_venture_user_feedback`) and it is not anonymous (it renders only for a
+signed-in Supabase Auth user, `if (!user) return null;`, so the client already holds a verified
+JWT). Using the venture RPC's shared-secret pattern here would be solving an authentication problem
+this caller does not have with a mechanism designed for one it does not have either.
+
+**Proposed design**: a new `SECURITY DEFINER` RPC, `fn_submit_internal_feedback(p_title text,
+p_description text, p_type text, p_severity text)`, `TO authenticated` only (no anon grant — this
+caller is never anonymous by construction), that reads the caller's identity via the built-in
+`auth.uid()` inside the function body rather than trusting a client-supplied value — the same
+"never accept as a parameter what the caller could forge" discipline `fn_submit_venture_user_feedback`
+already uses for `severity`/`category`. No external secret is needed: Supabase Auth's own JWT
+verification (already enforced before the function body ever runs) **is** the authentication,
+which is a strictly stronger guarantee than a client-bundled shared secret and avoids FR-2/FR-3's
+public-bundle-secret residual risk entirely for this specific caller. Server-side, the function
+sets `source_application='EHG'`, `source_type='manual_feedback'`, `user_id=auth.uid()`,
+`feedback_type` derived from `p_type` (mirroring `FeedbackWidget.tsx`'s own existing
+`calculatePriority` mapping), and — critically — never accepts `venture_id` as a parameter at all
+(this caller has none; a NULL/absent parameter, not a client-suppliable NULL that could be
+overloaded later). Not yet implemented — this is the decision-ready design; EXEC on the chosen
+remedy authors the actual `CREATE FUNCTION` migration once the chairman confirms this is the
+direction (it is compatible with either Remedy A or Remedy B being chosen for the other 3 callers,
+since it does not touch `anon_feedback_ingress_bounds` or any venture-scoped policy at all).
+
+**Open gaps in this design, flagged by SECURITY sub-agent review (evidence
+241fb047-1b4a-4795-b73b-8fa4c8ab2778) — close before implementation, not before this decision
+package:**
+- **`p_severity` as drafted contradicts the design's own stated discipline.** The signature above
+  takes `p_severity` as a caller-supplied parameter with no described server-side clamp — but the
+  paragraph above justifies this design by citing `fn_submit_venture_user_feedback`'s discipline of
+  *never* accepting severity/category as trusted parameters. As drafted, an authenticated caller
+  could set `p_severity='critical'`, which `feedback_severity_check` permits with no column
+  default preventing it. Before implementation, either drop `p_severity` as a parameter (hardcode a
+  safe default for this internal-feedback path) or clamp it server-side to exclude
+  `critical`/`high` — mirroring the bound `anon_feedback_ingress_bounds` already applies to the
+  RLS-gated paths.
+- **This path structurally bypasses `anon_feedback_ingress_bounds` entirely, at any severity.** A
+  `SECURITY DEFINER` function that writes directly to the table never evaluates that table's RLS
+  policies for its own internal write — the same structural class of gap `record_venture_error()`
+  already has (pre-existing, out of scope, gap G1). Fixing the identity half of that failure mode
+  (this design does, via `auth.uid()`) does not fix the structural half; both need independent
+  server-side constraints inside the new function body, not inherited from RLS.
+- **No rate limit is specified.** `check_feedback_rate_limit(venture_id)` cannot be reused as-is
+  (this design has no `venture_id` by construction); a `user_id`-scoped equivalent needs designing
+  before implementation, not assumed to already exist.
+
+## FR-2/FR-3 provisioning runbook (SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, Remedy A blocking work)
+
+Documentation only — no key material or secret is written by this SD's own authoring work. Numbered,
+exact-keystrokes steps for the chairman/operator who actually runs this.
+
+**Function signature** (live, confirmed 2026-08-17): `fn_provision_venture_ingest_key(p_venture_id uuid) RETURNS text`
+— `service_role`-only (correct; not anon/authenticated-executable). Returns the **raw secret once**;
+only its SHA-256 hash is stored in `venture_ingest_keys`. Re-calling it for the same venture
+**rotates** the key (the old secret stops working immediately) — do not run it speculatively.
+
+### Step A — Provision a key for one venture (repeat per venture that has a live caller)
+
+1. Identify the venture's UUID: `SELECT id, name FROM ventures WHERE name = '<venture name>';`
+2. Confirm no key already exists (avoid an accidental rotation that breaks a working deployment):
+   `SELECT venture_id, created_at, rotated_at FROM venture_ingest_keys WHERE venture_id = '<uuid>';`
+   — if a row exists and the venture has a live deployment already depending on it, STOP; do not
+   re-run step 3 without coordinating the rotation with whoever holds the current secret.
+3. Using a `service_role`-authenticated client (never `anon`/`authenticated`), call:
+   `SELECT fn_provision_venture_ingest_key('<uuid>');`
+4. **Copy the returned value immediately** — it is shown exactly once and cannot be retrieved
+   again (only re-rotated, which invalidates it).
+5. Hand the secret to whoever deploys Step B below for that venture, over a channel that is not
+   this repository (never commit it, never paste it into a chat log this session can read back).
+
+### Step B — Deploy the secret to the calling application (per venture, exact keystrokes)
+
+For `ehg` specifically (the caller confirmed broken in production, per "2026-08-17 update" above):
+
+1. Open the deployment's environment configuration for the **production** environment (not
+   `.env.example`, which is a committed template, not a real deployed value).
+2. Add: `VITE_FEEDBACK_INGEST_SECRET=<the value from Step A.4>`
+3. Redeploy `ehg` so the new build picks up the env var (a Vite client var is baked in at build
+   time, not read at runtime — restarting the process alone is not sufficient).
+4. Verify: submit a real feedback item through the app, then confirm via a `service_role` query
+   that the row landed in `public.feedback` (not just that the client reported no error —
+   see "Why the error message misleads" above for why a client-reported success is not sufficient
+   evidence on its own).
+
+For `altifyai`: per "2026-08-17 update" above, this venture has no live deployment yet — Step A/B
+should be run when that deployment actually goes live, not speculatively ahead of it (the ceremony
+runbook's own "when E1 ships its widget" note already established this timing; E1's *code* has
+shipped, its *deployment* is the actual trigger condition, confirm which has happened before
+provisioning).
+
+### Residual risk, disclosed not hidden
+
+`VITE_FEEDBACK_INGEST_SECRET` ships inside a public browser bundle — no client-held credential
+stays secret from whoever loads the page. This narrows cross-venture forgery (any venture, using
+one shared exposure) to per-venture forgery (only the venture whose secret was extracted) — a real
+reduction, not elimination. Full ownership closure requires a server-side secret holder, which none
+of `ehg`/`apexniche-ai`/`marketlens` currently have (all are client-only SPAs).
+
+## FR-7 drift guard design (SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001)
+
+`scripts/anon-write-contract-probe.mjs` (see [Enforcement](#enforcement) above) already detects
+one half of this incident's failure class: a table with a permissive anon INSERT policy and no
+covering SELECT. It does **not** detect the half that actually caused this incident — a table
+that had a working permissive INSERT policy and now has **none** (the G4 policy-count-goes-to-zero
+case), nor the RPC-side failure mode found 2026-08-17 — a `SECURITY DEFINER` write path whose
+authorization table (`venture_ingest_keys`) is empty. Neither of the two prior chairman-gated
+migrations' own in-transaction `DO $verify$` blocks catch this either: each only asserts its own
+narrow post-condition at apply time, not an ongoing invariant, and neither checks the other's
+dependency.
+
+**Design for a two-sided extension** (not yet implemented — this SD's deliverable is the design,
+per its decision-package scope):
+1. **Policy-count guard**: for any table this probe already knows how to write to (today, just
+   `public.feedback`), assert at least one permissive INSERT policy remains reachable by
+   `anon` or `authenticated` — paired with the probe's *existing* check (a bounded legitimate
+   insert must still succeed), so the guard is two-sided: it fails on zero-policies-remain AND on
+   a legitimate-insert-wrongly-refused, never only one direction.
+2. **RPC-authorization guard**: for each `SECURITY DEFINER` write RPC this probe knows about
+   (`fn_submit_venture_user_feedback`, `fn_submit_venture_feedback`, `fn_submit_venture_error`),
+   assert `venture_ingest_keys` has at least one row for every venture with a live, deployed
+   caller of that RPC (cross-referencing a caller census, not just counting rows generically —
+   a nonzero row count for the wrong venture would false-pass this exact incident's altifyai case).
+3. Run on the same CI/schedule cadence as the existing probe; both checks are read-only
+   (COMMIT-never-issued, matching the existing probe's own safety guarantee) except the
+   legitimate-insert-succeeds leg of (1), which needs a real, cleaned-up write the way
+   `20260817_restore_feedback_permissive_insert_acceptance.mjs`'s own probes do.
 
 ## Related: a rate limit that cannot bind
 
