@@ -23,13 +23,20 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
   const selectErrorObj = selectError == null ? null
     : (typeof selectError === 'string' ? { message: selectError } : selectError);
   const upserts = []; const updates = [];
+  // QF-20260816-245: exposes the LAST select-mode query built against sms_outbound_obligations
+  // (not/order/limit args) so a test can assert the fix is actually wired, without needing this
+  // shared mock to implement real WHERE-clause filtering for every table.
+  let lastObligationsQuery = null;
   function chain(table) {
-    const state = { op: 'select', payload: null };
+    const state = { op: 'select', payload: null, notFilters: [], orderCol: null, orderOpts: null, limitN: null };
     const c = {
       select: () => c,
       update: (p) => { state.op = 'update'; state.payload = p; return c; },
       upsert: (p) => { state.op = 'upsert'; state.payload = p; return finishThenable(); },
-      eq: () => c, in: () => c, is: () => c, gte: () => c, order: () => c, limit: () => c,
+      eq: () => c, in: () => c, is: () => c, gte: () => c,
+      not: (col, op, val) => { state.notFilters.push([col, op, val]); return c; },
+      order: (col, opts) => { state.orderCol = col; state.orderOpts = opts; return c; },
+      limit: (n) => { state.limitN = n; return c; },
       // SD-LEO-INFRA-STAMP-ARMING-TIME-001: registerArmedMachinery now READS the existing row
       // before upserting, so armed_at is written once and then AGES instead of being reset on
       // every in-window tick. data:null models "no prior row" (first registration); registryError
@@ -48,6 +55,9 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
         return { data: [], error: null };
       }
       if (table === 'sms_outbound_obligations') {
+        if (state.op === 'select') {
+          lastObligationsQuery = { notFilters: state.notFilters, orderCol: state.orderCol, orderOpts: state.orderOpts, limitN: state.limitN };
+        }
         if (selectErrorObj && state.op === 'select') return { data: null, error: selectErrorObj };
         if (state.op === 'update') { updates.push({ table, payload: state.payload }); return { data: [], error: null }; }
         return { data: obligations, error: null };
@@ -57,7 +67,7 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
     }
     return c;
   }
-  return { supabase: { from: chain }, upserts, updates };
+  return { supabase: { from: chain }, upserts, updates, get lastObligationsQuery() { return lastObligationsQuery; } };
 }
 
 const quiet = { warn: vi.fn(), log: vi.fn(), error: vi.fn() };
@@ -202,6 +212,29 @@ describe('FR-3 / TS-3: carrier-filter email-fallback escalation', () => {
     const res = await escalateCarrierFiltered(m.supabase, { sendEmail, logger: quiet });
     expect(res.escalated).toBe(0);
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260816-245: the scan query excludes already-escalated rows at the DB level and orders oldest-first — so batchLimit is never wasted on rows that can never be re-escalated', async () => {
+    const m = makeMock({ obligations: [] });
+    await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(), logger: quiet, batchLimit: 25 });
+    const q = m.lastObligationsQuery;
+    expect(q.notFilters).toContainEqual(['last_error', 'ilike', `${EMAIL_ESCALATED_PREFIX.trim()}%`]);
+    expect(q.orderCol).toBe('created_at');
+    expect(q.orderOpts).toEqual({ ascending: true });
+    expect(q.limitN).toBe(25);
+  });
+
+  it('QF-20260816-245: scanned counts every row the batch examined, not just the carrier-filtered subset — "scanned:0" must mean the batch was truly empty', async () => {
+    // A mixed batch: one carrier-filtered (escalates), one legitimately-failed-for-another-reason
+    // (never carrier-filtered). Before the fix, scanned only incremented for the FIRST row —
+    // the second row's examination was invisible to the diagnostic counter.
+    const m = makeMock({ obligations: [
+      { id: 'ob-cf', last_error: 'Twilio 30007', status: 'undelivered', body: 'x' },
+      { id: 'ob-other', last_error: 'provider timeout', status: 'failed' },
+    ] });
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: quiet });
+    expect(res.escalated).toBe(1);
+    expect(res.scanned).toBe(2); // both rows examined, even though only one was carrier-filtered
   });
 
   it('fail-soft: absent owed-state table (PGRST205) => empty result, no warning', async () => {
