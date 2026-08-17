@@ -41,8 +41,18 @@
 -- WHY TO anon ONLY -- EXEC-PHASE CORRECTION, this file originally scoped TO anon, authenticated
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- The ORIGINAL venture_user_insert_feedback (database/migrations/20260401_venture_user_feedback_
--- channel.sql, re-created verbatim as TO anon in database/chairman-gated/20260815_..._DOWN.sql) was
--- anon-only. An earlier draft of this file widened TO anon, authenticated on the theory that
+-- channel.sql established it TO anon; re-created verbatim as TO anon in database/chairman-gated/
+-- 20260815_..._DOWN.sql) was anon-only. Provenance correction (adversarial ship-gate review, PR
+-- #7199): the specific WITH CHECK text this file restores -- venture_exists_and_active(venture_id)
+-- -- is NOT 20260401's original form (an inline EXISTS subquery); it comes from
+-- database/migrations/20260704f_fix_venture_user_feedback_ventures_visibility.sql, which superseded
+-- 20260401's predicate before 20260815 dropped the policy. The substantive claim (this file's
+-- WITH CHECK text is byte-identical to what was actually live at drop-time) is independently
+-- confirmed correct -- the expected string at line 246 below matches
+-- database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql:159 character-for-
+-- character -- only the ancestor migration for the FORM of the predicate was cited imprecisely
+-- (the anon-only ROLE SCOPE claim above is still correctly attributed to 20260401, which
+-- 20260704f did not change). An earlier draft of this file widened TO anon, authenticated on the theory that
 -- ehg/src/components/quality/FeedbackWidget.tsx -- which runs as `authenticated`, gated on
 -- `if (!user) return null;` -- needed that scope to be admitted. Fresh EXEC-TO-PLAN TESTING and
 -- SECURITY sub-agent evidence (rows 731d79a4-5498-4bd7-8628-427dbc31d3dc and
@@ -250,18 +260,39 @@ BEGIN
   -- (e) TESTING/SECURITY sub-agent finding (evidence 731d79a4 / 241fb047): a policy-shape-only
   --     verify cannot see whether the querying role can actually EXECUTE the two functions this
   --     WITH CHECK calls -- a policy can be catalog-perfect and still 42501 on every real insert.
-  --     anon must hold EXECUTE on both (step 1b); authenticated must NOT (this policy never grants
-  --     it access, so it must not gain the function-call oracle either -- defense in depth, mirrors
-  --     20260815's own TR-2/TR-3 negative-assertion style at lines 402-404).
+  --     anon must hold EXECUTE on both (step 1b).
   IF has_function_privilege('anon', 'public.venture_exists_and_active(uuid)', 'EXECUTE') IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: anon lacks EXECUTE on venture_exists_and_active -- this policy''s WITH CHECK would 42501 on every real anon insert';
   END IF;
   IF has_function_privilege('anon', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: anon lacks EXECUTE on check_feedback_rate_limit -- this policy''s WITH CHECK would 42501 on every real anon insert';
   END IF;
-  IF has_function_privilege('authenticated', 'public.venture_exists_and_active(uuid)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.check_feedback_rate_limit(uuid)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'VERIFY FAILED: authenticated holds EXECUTE on venture_exists_and_active or check_feedback_rate_limit -- this policy is anon-only by design, authenticated should not gain this oracle';
+  -- Negative authenticated assertion, SCOPED TO venture_exists_and_active ONLY (adversarial ship-gate
+  -- review, PR #7199: an earlier draft also asserted authenticated lacks EXECUTE on
+  -- check_feedback_rate_limit -- but step 1b's own comment above already acknowledges that
+  -- function's historical anon+authenticated grant "served some other authenticated-facing caller
+  -- unrelated to this policy" and deliberately does not touch it. A migration-wide assertion that
+  -- authenticated must never hold that grant would abort THIS policy's apply for a reason that has
+  -- nothing to do with this policy's own safety -- self-contradicting the acknowledgment two
+  -- sections above. venture_exists_and_active has no such known legitimate other caller, so only it
+  -- is asserted here (this policy never grants authenticated access, so it must not gain even this
+  -- narrower function-call oracle -- defense in depth, mirrors 20260815's own TR-2/TR-3
+  -- negative-assertion style at lines 402-404).
+  IF has_function_privilege('authenticated', 'public.venture_exists_and_active(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'VERIFY FAILED: authenticated holds EXECUTE on venture_exists_and_active -- this policy is anon-only by design, authenticated should not gain this oracle';
+  END IF;
+
+  -- (f) Adversarial ship-gate review finding, PR #7199: checks (e) above assert the FUNCTION-level
+  --     EXECUTE grants this WITH CHECK depends on, but not the TABLE-level INSERT grant every RLS
+  --     policy also depends on -- Postgres checks the table-level GRANT before RLS policies are even
+  --     evaluated, so a revoked table-level INSERT would make this policy catalog-perfect and still
+  --     42501 on every real insert, the same failure class checks (e) exist to close, just one layer
+  --     up. Both sibling migrations that touch this table's anon INSERT path already assert this
+  --     explicitly (database/chairman-gated/20260813_revoke_telegram_bot_insert_feedback.sql:143,
+  --     database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql:377) -- this file
+  --     had omitted the equivalent check until now.
+  IF has_table_privilege('anon', 'public.feedback', 'INSERT') IS NOT TRUE THEN
+    RAISE EXCEPTION 'VERIFY FAILED: anon lacks table-level INSERT on public.feedback -- this policy would never even be reached, regardless of its own WITH CHECK';
   END IF;
 
   -- (c) anon_feedback_ingress_bounds must remain RESTRICTIVE, apply to INSERT, and be scoped
@@ -322,8 +353,8 @@ COMMIT;
 -- ROLLBACK (manual, if needed -- see the paired _DOWN.sql for the executable version):
 -- ============================================================
 -- BEGIN;
--- REVOKE EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) FROM anon;
--- REVOKE EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) FROM anon;
+-- REVOKE EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) FROM PUBLIC, anon;
+-- REVOKE EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) FROM PUBLIC, anon;
 -- DROP POLICY IF EXISTS venture_user_insert_feedback_restore ON public.feedback;
 -- -- anon_feedback_ingress_bounds's TO PUBLIC scope is left as-is (rolling back the new policy does
 -- -- not require reverting that pin -- TO PUBLIC was already the live state before this file ran).

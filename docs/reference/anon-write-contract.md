@@ -40,8 +40,16 @@ precondition for every venture, not only the ones still on the raw INSERT path.*
   as `authenticated` (gated `if (!user) return null;`), not `anon` — relevant because
   `select_feedback_policy`/`anon_feedback_ingress_bounds`'s current live scope was reasoned about
   in anon-only terms in earlier investigation; `authenticated` is equally blocked. Same
-  non-existent-column bug as above (`created_by`), plus previously omitted the NOT-NULL
-  `source_type` (fixed separately, QF-20260817-434, 2026-08-17 — the column bug remains).
+  non-existent-column bug as above (`created_by` — the real column is `user_id`), plus previously
+  omitted the NOT-NULL `source_type` (fixed separately, QF-20260817-434, 2026-08-17 — the column
+  bug remains). Two more non-RLS bugs, confirmed live against the current `origin/main` payload
+  (adversarial ship-gate review, PR #7199, so not affected by this SD's own stale local `ehg`
+  checkout): `source_url` is ALSO not a real column (same class as `created_by`, previously
+  unflagged for this specific caller); and `status: "open"` is not in `feedback_status_check`'s
+  allowed set (`new`/`triaged`/`in_progress`/`resolved`/`wont_fix`/`duplicate`/`invalid`/
+  `backlog`/`shipped`), so the insert would 23514 even after every other bug here is fixed. None of
+  this affects Remedy B's migration (FR-4's drafted RPC signature takes no `status` parameter and
+  would set it server-side) — it belongs in this SD's FR-6/FR-1 caller census, not the RLS fix.
   Structurally **cannot** use the RPC even once keys are provisioned: it never sets `venture_id`
   (it isn't a venture-scoped submission) and `authenticated` does not hold EXECUTE on
   `fn_submit_venture_user_feedback`. The same missing-`venture_id` gap also rules out Remedy B's
@@ -90,9 +98,13 @@ not one: (1) the policy itself, restoring an anon-reachable INSERT path, and (2)
 revoked as a named "MEDIUM-1" finding (an unauthenticated existence/rate-limit oracle) — restoring
 (1) without (2) leaves the policy inert (TESTING sub-agent finding, evidence
 731d79a4-5498-4bd7-8628-427dbc31d3dc), so applying this file necessarily means both. Scoped `TO
-anon` only — byte-identical to the historical shape, including its two supporting `EXECUTE`
-grants — and re-pinning `anon_feedback_ingress_bounds`'s role scope explicitly rather than relying
-on its current accidental `TO PUBLIC` drift. (An earlier draft widened this `TO authenticated`,
+anon` only — byte-identical to the historical policy shape and role scope, and it restores anon's
+`EXECUTE` on both supporting functions (without them the policy would be inert), though NOT
+identical to the full historical grant picture: `check_feedback_rate_limit` had also historically
+been granted to `authenticated` for some other, unrelated caller, which this migration deliberately
+does not restore (adversarial ship-gate review, PR #7199, corrected an earlier overclaim here) — and
+re-pinning `anon_feedback_ingress_bounds`'s role scope explicitly rather than relying on its current
+accidental `TO PUBLIC` drift. (An earlier draft widened this `TO authenticated`,
 reasoning `FeedbackWidget.tsx` runs as `authenticated`; corrected during EXEC-TO-PLAN once that
 caller's payload was confirmed — by direct read, independently by two sub-agents — to set neither
 `venture_id` nor `feedback_type`, so it cannot satisfy this policy's `WITH CHECK` at any role scope.

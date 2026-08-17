@@ -17,8 +17,13 @@ BEGIN;
 -- Same bounded-wait rationale as the UP file: DROP POLICY takes ACCESS EXCLUSIVE on public.feedback.
 SET LOCAL lock_timeout = '5s';
 
-REVOKE EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) FROM anon;
+-- REVOKEs name PUBLIC explicitly alongside anon (adversarial ship-gate review, PR #7199, citing this
+-- repo's own documented rule in database/chairman-gated/20260816_close_remaining_secdef_execute_
+-- exposure.sql:110-111: anon/authenticated INHERIT PUBLIC's grant, so a REVOKE naming only anon is a
+-- NO-OP for any function that also carries a PUBLIC grant. Today PUBLIC holds neither grant (20260815
+-- already stripped it from both), so this is defense-in-depth, not a correction of a live gap.
+REVOKE EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) FROM PUBLIC, anon;
 DROP POLICY IF EXISTS venture_user_insert_feedback_restore ON public.feedback;
 
 DO $verify$

@@ -81,9 +81,30 @@ async function setup() {
   // passing verify could just mean the second venture behaves differently, not that the fix
   // works (TESTING sub-agent finding, evidence 731d79a4). limit(1) with no ORDER BY has no
   // guaranteed stable result across two separate connections/runs.
-  const { data: ventures, error } = await svc.from('ventures').select('id, name').is('deleted_at', null).order('id').limit(1);
-  if (error || !ventures || ventures.length < 1) throw new Error('need at least 1 live venture to run this acceptance script');
-  [venture] = ventures;
+  //
+  // Selecting on deleted_at IS NULL alone is a SUBSET of what the policy's WITH CHECK actually
+  // evaluates: venture_exists_and_active() also requires
+  // COALESCE(metadata->>'telemetry_ingestion_enabled','true') <> 'false'. If the first venture by
+  // id happens to carry that flag false, CONTROL fails for the wrong reason and --baseline can
+  // report a false PASS ("CONTROL is ABSENT pre-apply, proves the defect is real" when it's really
+  // absent because of this unrelated predicate) -- defeating this script's own "the baseline is not
+  // optional" guarantee. Not hypothetical: e2e fixture ventures in this table are exactly the kind
+  // of row that can carry that flag, and an unfiltered .order('id').limit(1) can select one
+  // (adversarial ship-gate review, PR #7199). Fix: verify each id-ordered candidate against the
+  // REAL predicate via the RPC itself, rather than re-deriving its logic here in JS (avoids drift
+  // if the function's predicate ever changes).
+  const { data: candidates, error } = await svc.from('ventures').select('id, name').is('deleted_at', null).order('id').limit(20);
+  if (error || !candidates || candidates.length < 1) throw new Error('need at least 1 live venture to run this acceptance script');
+
+  for (const candidate of candidates) {
+    const { data: isActive, error: rpcError } = await svc.rpc('venture_exists_and_active', { p_venture_id: candidate.id });
+    if (rpcError) throw new Error(`venture_exists_and_active RPC failed for ${candidate.id}: ${rpcError.message}`);
+    if (isActive) {
+      venture = candidate;
+      break;
+    }
+  }
+  if (!venture) throw new Error(`none of the first ${candidates.length} ventures (by id) satisfy venture_exists_and_active -- cannot pick a stable CONTROL subject`);
   console.log(`using venture: ${venture.id} (${venture.name})`);
 }
 
