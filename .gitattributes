@@ -38,3 +38,56 @@ CLAUDE.md text eol=lf
 # This pin only helps repos that have it. Tooling that hashes a migration for approval should
 # still read the blob (git show <rev>:<path>) rather than the worktree.
 *.sql text eol=lf
+
+# SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001 — Phase 1 extension of eol=lf pinning to text-file
+# types that were, prior to this SD, entirely unmanaged and vulnerable to the same
+# core.autocrlf=true silent-CRLF-rewrite class the pins above already fix for .js/.md/.sql.
+# Each of these 15 extensions was independently re-measured at EXEC time (not just LEAD-phase)
+# via `git ls-files --eol` and confirmed 0 crlf / 0 mixed repo-wide — see
+# docs/audits/SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001-census.md for the full per-extension
+# receipt. Extensions carrying existing crlf/mixed debt (.md, .ts, .json, .sh, .html,
+# .gitignore, .toml) are deliberately EXCLUDED — adding eol=lf over an already-CRLF/mixed
+# blob makes that file permanently, irreducibly dirty (git status shows modified with zero
+# content change; restore/checkout -- cannot clean it). Do NOT add those extensions here
+# without first driving their crlf/mixed count to 0.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.mmd text eol=lf
+*.ps1 text eol=lf
+*.partial text eol=lf
+*.csv text eol=lf
+*.patch text eol=lf
+*.txt text eol=lf
+*.intoto text eol=lf
+*.gitkeep text eol=lf
+*.map text eol=lf
+*.tsx text eol=lf
+*.example text eol=lf
+*.css text eol=lf
+*.template text eol=lf
+
+# SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001 — mark genuinely binary extensions `binary`
+# (= -text -diff) as a defensive pin (these already carry no eol/text attribute today; this is
+# not a fix for a live problem). NOTE (ship-review finding, PR #7186): attribute resolution is
+# last-match-wins, so this protection holds only against rules ABOVE this point in the file, not
+# against a future rule appended AFTER it — exactly how this SD's own NUL-byte escapes below
+# override the broad *.js pin above them. A future `*.png text eol=lf`-shaped rule appended below
+# this block would still coerce these extensions. Keep new broad text/eol rules ABOVE this block,
+# or add a matching binary/-text re-pin after them if that is ever unavoidable.
+*.png binary
+*.webm binary
+*.pptx binary
+*.docx binary
+*.gz binary
+
+# SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001 — these 2 paths contain literal NUL bytes (by
+# design — test/production fixtures for NUL-byte handling) and were already picking up
+# `text eol=lf` from the broad *.js pin above (line 26), exposing them to a forced
+# --renormalize rewrite of binary content on any future renormalization pass. Escaping with
+# a bare `binary`/`-text` mark is NOT sufficient — that clears `text` but measurably leaves
+# `eol=lf` residual (git ls-files --eol still reports it), which still trips both
+# tests/static-guards/eol-crlf-ratchet.test.js and scripts/lint/eol-renormalization-lint.mjs.
+# The only escape form measured to fully clear both attributes is `-text eol=` (empty value).
+# Ordered last (after the broad *.js pin) so last-match-wins precedence applies.
+lib/income/first-revenue-rollup-aggregator.js -text eol=
+tests/unit/solomon-advisory-no-literal-nul.test.js -text eol=
