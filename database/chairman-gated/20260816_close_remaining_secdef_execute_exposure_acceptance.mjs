@@ -91,7 +91,6 @@ const BUCKET_B = [
   ['upsert_operator_cash_burn', 'App-called.'],
 ];
 const BUCKET_C = [
-  ['check_feedback_rate_limit', 'Referenced by an anon-facing RLS policy.'],
   ['fn_advance_pipeline_stage', 'No internal caller found — treated as external-integration-shaped, not revoked on absence of evidence.'],
   ['fn_is_chairman', 'Referenced by an anon-facing RLS policy (29 policies total).'],
   ['fn_relay_insert_sms_candidate', 'Anon-only grant, zero internal callers — the Twilio inbound SMS webhook.'],
@@ -99,11 +98,19 @@ const BUCKET_C = [
   ['lhe_pending_migration_applied', 'No internal caller found — treated as external-integration-shaped.'],
   ['record_venture_error', 'No internal caller found — treated as external-integration-shaped.'],
   ['set_session_working_context', 'No internal caller found — treated as external-integration-shaped.'],
-  ['venture_exists_and_active', 'Referenced by an anon-facing RLS policy (feedback.venture_user_insert_feedback).'],
   ['is_chairman_role', 'REVERSAL 2 — see header: moved here from Bucket B during PLAN.'],
   ['fn_anon_ingress_prior_hour_count', 'Backs the anon ingress rate-limit bound — IS the anon-facing control, not a gap.'],
 ];
-const ALL_NAMES = [...BUCKET_A, ...BUCKET_B, ...BUCKET_C].map(([n]) => n);
+// QF-20260817-127: these 2 were Bucket C (anon=true, unchanged-by-this-migration) at PLAN time,
+// but 20260815_venture_user_feedback_ownership_rpc.sql — applied at the 2026-08-16 ceremony,
+// AFTER this migration's baseline was pinned — REVOKEd their anon grant as its own MEDIUM-1
+// finding (unauthenticated existence/rate-limit oracle). Chairman A-ruling 2026-08-17: Remedy B
+// (re-granting anon) is unapplied, so the revokes stay. Expectation updated to match reality.
+const BUCKET_C_REVOKED_20260815 = [
+  ['check_feedback_rate_limit', 'Was Bucket C; REVOKEd anon by 20260815 MEDIUM-1 (rate-limit oracle) — now anon=false.'],
+  ['venture_exists_and_active', 'Was Bucket C; REVOKEd anon by 20260815 MEDIUM-1 (existence oracle) — now anon=false.'],
+];
+const ALL_NAMES = [...BUCKET_A, ...BUCKET_B, ...BUCKET_C, ...BUCKET_C_REVOKED_20260815].map(([n]) => n);
 
 async function queryGrantState() {
   const sql = `SELECT p.proname, 'public.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS full_sig, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec, has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec, has_function_privilege('public', p.oid, 'EXECUTE') AS public_exec FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = ANY(ARRAY[${ALL_NAMES.map((n) => `'${n}'`).join(',')}])`;
@@ -176,7 +183,8 @@ function assertBucket(title, entries, byName, expect) {
       console.log('\n--- BASELINE: current declared/effective exposure (before chairman applies) ---');
       printBucket('BUCKET A (6) — will be fully locked to service_role', BUCKET_A, byName);
       printBucket('BUCKET B (10) — anon will be revoked, authenticated explicitly preserved', BUCKET_B, byName);
-      printBucket('BUCKET C (11) — untouched by this migration, shown for reference', BUCKET_C, byName);
+      printBucket('BUCKET C (9) — untouched by this migration, shown for reference', BUCKET_C, byName);
+      printBucket('BUCKET C — REVOKEd anon by a later migration (20260815 MEDIUM-1), not by this one', BUCKET_C_REVOKED_20260815, byName);
       console.log('\n=== BASELINE RESULT: no assertions in this mode — re-run with --verify after the chairman applies ===');
       return;
     }
@@ -186,6 +194,7 @@ function assertBucket(title, entries, byName, expect) {
       ...assertBucket('Bucket A: anon=false, authenticated=false, public=false', BUCKET_A, byName, { anon: false, auth: false, public: false }),
       ...assertBucket('Bucket B: anon=false, public=false, authenticated=true', BUCKET_B, byName, { anon: false, auth: true, public: false }),
       ...assertBucket('Bucket C: unchanged — still anon=true', BUCKET_C, byName, { anon: true }),
+      ...assertBucket('Bucket C (revoked subset): anon=false per 20260815 MEDIUM-1 + chairman A-ruling 2026-08-17', BUCKET_C_REVOKED_20260815, byName, { anon: false }),
     ];
     console.log(`\n=== VERIFY RESULT: ${allFailures.length === 0 ? 'PASS' : `FAIL (${allFailures.length} violation(s))`} ===`);
     if (allFailures.length) process.exitCode = 1;
