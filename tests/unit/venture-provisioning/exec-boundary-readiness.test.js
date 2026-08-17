@@ -163,18 +163,41 @@ describe('provisionPaymentAccountSetup', () => {
     );
 
     expect(r).toEqual({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
-    expect(stripeAccountsCreate).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'express',
-      metadata: { venture_id: 'v1', venture_name: 'AltifyAI' },
-    }));
+    expect(stripeAccountsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'express', metadata: { venture_id: 'v1', venture_name: 'AltifyAI' } }),
+      { idempotencyKey: 'venture-payment-account-setup-v1' }
+    );
     expect(getStripeForVenture).toHaveBeenCalledWith(expect.objectContaining({ ventureId: 'v1', supabase: 'fake-supabase' }));
+  });
+
+  it('uses a deterministic per-venture idempotency key so a re-run returns the same Stripe account instead of creating a duplicate', async () => {
+    const stripeAccountsCreate = vi.fn().mockResolvedValue({ id: 'acct_123', charges_enabled: false, details_submitted: false });
+    const getStripeForVenture = vi.fn().mockResolvedValue({ accounts: { create: stripeAccountsCreate } });
+
+    await provisionPaymentAccountSetup({ ventureId: 'v-idem' }, { env: { STRIPE_SECRET_KEY: 'sk_test_x' }, getStripeForVenture });
+    await provisionPaymentAccountSetup({ ventureId: 'v-idem' }, { env: { STRIPE_SECRET_KEY: 'sk_test_x' }, getStripeForVenture });
+
+    const [, firstOpts] = stripeAccountsCreate.mock.calls[0];
+    const [, secondOpts] = stripeAccountsCreate.mock.calls[1];
+    expect(firstOpts.idempotencyKey).toBe(secondOpts.idempotencyKey);
+  });
+
+  it('never throws on a Stripe API error — returns a clean {ok:false} result matching the rest of this module\'s contract', async () => {
+    const stripeAccountsCreate = vi.fn().mockRejectedValue(new Error('Stripe API unreachable'));
+    const getStripeForVenture = vi.fn().mockResolvedValue({ accounts: { create: stripeAccountsCreate } });
+
+    const r = await provisionPaymentAccountSetup({ ventureId: 'v1' }, { env: { STRIPE_SECRET_KEY: 'sk_test_x' }, getStripeForVenture });
+
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('stripe_error');
+    expect(r.reason).toContain('Stripe API unreachable');
   });
 });
 
 describe('assessPaymentAccountReadiness', () => {
-  it('reports provisioned:true and no decision-point when the account was actually created', () => {
-    const r = assessPaymentAccountReadiness({ ok: true, accountId: 'acct_123' });
-    expect(r).toEqual({ paymentAccountProvisioned: true, decisionPoint: null });
+  it('reports provisioned:true with the account details and no decision-point when the account was actually created', () => {
+    const r = assessPaymentAccountReadiness({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
+    expect(r).toEqual({ paymentAccountProvisioned: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false, decisionPoint: null });
   });
 
   it('reports provisioned:false with an FR-3 decision-point naming the missing test key — the honest current-state outcome', () => {
@@ -245,6 +268,32 @@ describe('buildProvisioningReadinessReport (orchestration, injected deps)', () =
     expect(report.payment.paymentAccountProvisioned).toBe(true);
     expect(report.decisionPoints).toHaveLength(2);
     expect(report.decisionPoints.map((d) => d.kind)).toEqual(['distribution_channel', 'analytics_wiring']);
+  });
+
+  // Regression guard for security-agent finding SEC-002: a --dry-run "preview" run must
+  // never call the side-effecting provisioning functions -- they insert rows / create real
+  // Stripe resources. Previously only the CLI's final persist step was gated by dryRun; this
+  // module itself always ran provisionOrganicChannel/provisionPaymentAccountSetup regardless.
+  it('with dryRun:true, never calls provisionOrganicChannel or provisionPaymentAccountSetup — a preview run makes zero side-effecting calls', async () => {
+    const supabase = fakeSupabase({ channelArtifact: null, sinkExists: {} });
+    const fetchImpl = vi.fn((url) => {
+      if (url.endsWith('.js')) return Promise.resolve({ ok: true, status: 200 });
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('<script src="/a.js"></script>') });
+    });
+    const provisionOrganicChannel = vi.fn();
+    const provisionPaymentAccountSetupFake = vi.fn();
+
+    const report = await buildProvisioningReadinessReport(
+      { supabase, ventureId: 'v1', deploymentUrl: 'https://altifyai.example.workers.dev' },
+      { fetchImpl, provisionOrganicChannel, provisionPaymentAccountSetup: provisionPaymentAccountSetupFake, dryRun: true, now: () => '2026-08-17T18:00:00Z' }
+    );
+
+    expect(provisionOrganicChannel).not.toHaveBeenCalled();
+    expect(provisionPaymentAccountSetupFake).not.toHaveBeenCalled();
+    expect(report.distribution.organicChannelProvisioned).toBe(false);
+    expect(report.payment.paymentAccountProvisioned).toBe(false);
+    expect(report.distribution.decisionPoint.note).toContain('dry_run_not_attempted');
+    expect(report.payment.decisionPoint.note).toContain('dry_run_not_attempted');
   });
 });
 

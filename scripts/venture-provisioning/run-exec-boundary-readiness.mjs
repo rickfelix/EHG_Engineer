@@ -51,7 +51,10 @@ export async function main(argv, deps = {}) {
   }
 
   const supabase = await getClient('engineer', { verbose: false });
-  const report = await buildReport({ supabase, ventureId, deploymentUrl });
+  // dryRun is threaded into buildReport's deps so the FR-2/FR-3 side-effecting provisioning
+  // calls are skipped entirely, not just the final persist step (security-agent finding
+  // SEC-002: --dry-run previously still ran provisionOrganicChannel/provisionPaymentAccountSetup).
+  const report = await buildReport({ supabase, ventureId, deploymentUrl }, { dryRun });
 
   log(JSON.stringify(report, null, 2));
 

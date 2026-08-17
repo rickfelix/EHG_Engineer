@@ -35,7 +35,7 @@ describe('main (CLI orchestration, injected deps)', () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Usage:'));
   });
 
-  it('in --dry-run mode, builds the report but never calls recordProvisioningReadiness', async () => {
+  it('in --dry-run mode, builds the report but never calls recordProvisioningReadiness, and passes dryRun through so side-effecting FR-2/FR-3 provisioning is skipped too', async () => {
     const log = vi.fn();
     const buildProvisioningReadinessReport = vi.fn().mockResolvedValue({ deploy: { reachable: true } });
     const recordProvisioningReadiness = vi.fn();
@@ -47,7 +47,10 @@ describe('main (CLI orchestration, injected deps)', () => {
     );
 
     expect(code).toBe(0);
-    expect(buildProvisioningReadinessReport).toHaveBeenCalledWith({ supabase: 'fake-supabase', ventureId: 'v1', deploymentUrl: 'https://x' });
+    // security-agent finding SEC-002: --dry-run must reach buildProvisioningReadinessReport's
+    // OWN dryRun-skip logic (not just gate the final persist step), or a preview run against a
+    // venture with no existing state would silently create real distribution/payment resources.
+    expect(buildProvisioningReadinessReport).toHaveBeenCalledWith({ supabase: 'fake-supabase', ventureId: 'v1', deploymentUrl: 'https://x' }, { dryRun: true });
     expect(recordProvisioningReadiness).not.toHaveBeenCalled();
   });
 
