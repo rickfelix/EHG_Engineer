@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-17](#2026-08-17)
+  - [Infrastructure](#infrastructure)
 - [2026-08-16](#2026-08-16)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -118,6 +120,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-17
+
+### Infrastructure
+- **Never-activated door-routing dispatch gate retired in full, on the chairman's decision** - PR #7155 (SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001)
+  - **What shipped**: the `door_class` dispatch-authorization subsystem built under SD-LEO-INFRA-TIERED-ORCHESTRATION-FABLE-001 — `assertDoorRoutingAllowed` (`lib/coordinator/dispatch.cjs`), `lib/fleet/door-constants.cjs`, `door-classifier.mjs`, `door-stamper.mjs`, `door-routing-ledger.cjs`, and `scripts/fable-allocation-report.mjs` — is deleted in full. `DOOR_ROUTING_ENABLED` was never true in any real environment, and the classifier/stamper had no wired, ongoing caller in the committed codebase (git history: 2 commits total, neither ever adding one). Chairman decided RETIRE (SMS `dc87e7a0`, decision row `9ce56d34`).
+  - **The single highest-risk boundary in this SD**: `metadata.door_class` (the dead subsystem, object form) is textually similar to but functionally unrelated to `metadata.door_class_note` (a separate, LIVE claim-eligibility governance hold, QF-20260705-585, one of only 4 authorization-class predicates in the whole dispatch system) — confirmed independently three times (an Explore census, a VALIDATION sub-agent pass, and an unrelated peer session's own sweep, all converging on the same boundary before any code was touched). `lib/fleet/claim-eligibility.cjs` ships with zero diff; only the `'door_class'` entry (not `'door_class_note'`) was removed from `lib/sd/amend-sd.js`'s `PROTECTED_METADATA_KEYS`.
+  - **A PRD contradiction caught before EXEC wrote code**: PLAN-phase TESTING review proved, by actually applying the proposed deletion and running the suite, that removing the model-recommendation `door_class` R5 shortcut would break a test the PRD had separately claimed would stay untouched — fixed in the PRD before implementation. The same file also has two unrelated mechanisms both labeled "R5" (a dead `door_class` shortcut and a live `R5_KEYWORDS`/reversal-stakes check); only the dead one was removed.
+  - **A genuine harness bug found in `/ship`'s own review gate**: `checkCriticalFindings()` (`lib/ship/review-gate.js`) is not diff-polarity-aware — it flagged CRIT-004 `schema_corruption` on a **removed** comment line inside a wholly-deleted file (`door-classifier.mjs`, describing "drop table" as example risky phrasing for the classifier's own detection logic, not real SQL). Verified against the exact unified diff per two coordinator rulings; bypass approved citing both rulings, documented on the PR and logged to `ship_review_findings`. Fix path captured to harness backlog.
+  - **Explicitly deferred, not silently resolved**: the live, empty `door_routing_ledger` DB table (2 already-applied migrations, 0 rows, zero dependent DB objects) is left in place — dropping it is a separate decision for the coordinator/chairman, not decided by this SD.
+  - **Verification**: full dispatch.cjs + claim-eligibility.cjs + model-recommendation.cjs suites 93/93 (was 122/9 pre-change across 9 files, 3 whole files intentionally deleted); independently re-measured at 736/736 across the full 66-file module surface; `npm run test:unit` 3212/3231 (4 pre-existing, unrelated failures confirmed via `git diff --stat`); `expired-premise-tags` gauge 1→0; 6 independent LEO sub-agent review rounds across the lifecycle (Explore, VALIDATION×2, TESTING×3, SECURITY, REGRESSION); retrospective (id `98d72f91`) published at quality_score=94.
 
 ## 2026-08-16
 
