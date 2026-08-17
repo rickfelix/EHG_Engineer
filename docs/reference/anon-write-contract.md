@@ -2,8 +2,8 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.4.0
-**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001
+**Version**: 1.5.0
+**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, QF-20260817-752
 **Last Updated**: 2026-08-17
 **Tags**: rls, postgres, anon, feedback, ingress
 
@@ -312,6 +312,23 @@ exact-keystrokes steps for the chairman/operator who actually runs this.
 only its SHA-256 hash is stored in `venture_ingest_keys`. Re-calling it for the same venture
 **rotates** the key (the old secret stops working immediately) — do not run it speculatively.
 
+### Step 0 — Machine-checked green light (QF-20260817-752, run before every Step A)
+
+`scripts/venture-ingest-provisioning-probe.mjs` is a read-only probe (never calls
+`fn_provision_venture_ingest_key` — see its own header) that reports, per venture: whether a
+live caller exists, whether the venture is actually deployed (code-shipped alone is not
+sufficient — see the `altifyai` note above), and whether a `venture_ingest_keys` row already
+exists (a nonzero result here means Step A.3 would ROTATE, not provision fresh — treat that as
+a hard stop, not a nudge).
+
+```bash
+node scripts/venture-ingest-provisioning-probe.mjs                  # all known ventures
+node scripts/venture-ingest-provisioning-probe.mjs --venture <uuid> # one venture
+```
+
+Exit 0 only when every listed venture is ready; a nonzero exit names the specific blocker(s).
+Do not proceed to Step A for a venture the probe does not report `READY`.
+
 ### Step A — Provision a key for one venture (repeat per venture that has a live caller)
 
 1. Identify the venture's UUID: `SELECT id, name FROM ventures WHERE name = '<venture name>';`
@@ -338,7 +355,12 @@ For `ehg` specifically (the caller confirmed broken in production, per "2026-08-
 4. Verify: submit a real feedback item through the app, then confirm via a `service_role` query
    that the row landed in `public.feedback` (not just that the client reported no error —
    see "Why the error message misleads" above for why a client-reported success is not sufficient
-   evidence on its own).
+   evidence on its own). Use the probe's verification mode (QF-20260817-752) rather than a
+   one-off query:
+   ```bash
+   node scripts/venture-ingest-provisioning-probe.mjs --verify-submission <uuid> --since <ISO timestamp of the submission attempt>
+   ```
+   Exit 0 and `landed:true` means a real row landed at/after that timestamp; exit 1 means it did not.
 
 For `altifyai`: per "2026-08-17 update" above, this venture has no live deployment yet — Step A/B
 should be run when that deployment actually goes live, not speculatively ahead of it (the ceremony
