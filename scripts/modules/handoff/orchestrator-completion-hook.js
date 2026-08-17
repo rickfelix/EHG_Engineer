@@ -104,7 +104,7 @@ export async function recordHookEvent(supabase, orchestratorId, correlationId, d
   try {
     const { error } = await supabase
       .from('system_events')
-      .insert(toSystemEventRow(orchestratorId, 'ORCHESTRATOR_COMPLETION_HOOK', {
+      .insert(toSystemEventRow(orchestratorId, 'ORCHESTRATOR_COMPLETION_HOOK', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
         correlation_id: correlationId,
         auto_proceed: details.autoProceed || false,
         learn_invoked: details.learnInvoked || false,
@@ -140,7 +140,7 @@ export async function invokeLearnSkill(supabase, orchestratorId, correlationId) 
     // Record the /learn invocation attempt
     await supabase
       .from('system_events')
-      .insert(toSystemEventRow(orchestratorId, 'LEARN_SKILL_INVOKED', {
+      .insert(toSystemEventRow(orchestratorId, 'LEARN_SKILL_INVOKED', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
         correlation_id: correlationId,
         trigger: 'orchestrator_completion_hook',
         timestamp: new Date().toISOString()
@@ -349,7 +349,7 @@ export async function generateSessionSummary(supabase, orchestratorId, correlati
     // Record summary generation event
     await supabase
       .from('system_events')
-      .insert(toSystemEventRow(orchestratorId, 'SESSION_SUMMARY_GENERATED', {
+      .insert(toSystemEventRow(orchestratorId, 'SESSION_SUMMARY_GENERATED', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
         correlation_id: correlationId,
         session_id: sessionId,
         overall_status: result.json.overall_status,
@@ -775,7 +775,7 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
   console.log(`   🩺 Heal spawned for orchestrator ${sdKey} (PID: ${child.pid})`);
 
   // Emit system event for observability
-  await supabase.from('system_events').insert(toSystemEventRow(orchestratorId, 'PARENT_HEAL_REQUESTED', {
+  await supabase.from('system_events').insert(toSystemEventRow(orchestratorId, 'PARENT_HEAL_REQUESTED', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
     sd_key: sdKey,
     title: orchestratorTitle,
     correlation_id: correlationId,
@@ -1236,7 +1236,7 @@ export async function emitChainingTelemetry(supabase, orchestratorId, nextOrches
   try {
     const { error } = await supabase
       .from('system_events')
-      .insert(toSystemEventRow(orchestratorId, 'ORCHESTRATOR_CHAINING_DECISION', {
+      .insert(toSystemEventRow(orchestratorId, 'ORCHESTRATOR_CHAINING_DECISION', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
         correlation_id: correlationId,
         decision,
         next_orchestrator_id: nextOrchestratorId,
