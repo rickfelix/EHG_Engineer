@@ -28,6 +28,9 @@ describe('buildRebootSchtasksArgs (FR-6)', () => {
     expect(args[args.indexOf('/RU') + 1]).toBe('SYSTEM');
     // /F for idempotent re-register
     expect(args).toContain('/F');
+    // SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-4: SYSTEM has no interactive desktop for /IT to attach
+    // to -- default behavior must stay unchanged.
+    expect(args).not.toContain('/IT');
   });
 
   it('supports the /SC ONLOGON variant (desktop available for wt.exe)', () => {
@@ -39,6 +42,20 @@ describe('buildRebootSchtasksArgs (FR-6)', () => {
     const args = buildRebootSchtasksArgs({ wrapperPath: 'w.cmd', runAs: 'FLEET', extraArgs: ['/DELAY', '0000:30'] });
     expect(args[args.indexOf('/RU') + 1]).toBe('FLEET');
     expect(args).toContain('/DELAY');
+  });
+
+  // SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-4: without /IT, `schtasks /Create /RU <user>` with no /RP
+  // either prompts for a password interactively (hangs a non-interactive caller) or creates a task
+  // that can never run without one stored -- either way defeating --ru's actual purpose (a visible,
+  // interactive tab at logon with no stored credential).
+  it('adds /IT for a non-SYSTEM /RU (interactive token — no password required)', () => {
+    const args = buildRebootSchtasksArgs({ wrapperPath: 'w.cmd', runAs: 'rickf' });
+    expect(args).toContain('/IT');
+  });
+
+  it('is case-insensitive when detecting the SYSTEM account (never adds /IT for it)', () => {
+    const args = buildRebootSchtasksArgs({ wrapperPath: 'w.cmd', runAs: 'system' });
+    expect(args).not.toContain('/IT');
   });
 
   it('throws on an unsupported schedule (never silently mis-registers)', () => {

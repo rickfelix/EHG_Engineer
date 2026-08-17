@@ -13,7 +13,10 @@
 import { describe, it, expect } from 'vitest';
 import { runRebootRespawn } from '../../../lib/fleet/reboot-respawn-runner.js';
 
-const SLOT = { name: 'slot-1', role: 'worker', callsign: 'Test-1', resume_uuid: null };
+// SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: this suite's subject is OUTCOME DERIVATION
+// (live/dry_run/respawn_unbound/respawn_unattempted), not profile resolution -- account_profile
+// is set so the slot is never skipped for an unrelated reason (an absent one now means skip).
+const SLOT = { name: 'slot-1', role: 'worker', callsign: 'Test-1', resume_uuid: null, account_profile: 'host-default' };
 
 function harness({ live, spawnFn }) {
   const emitted = [];

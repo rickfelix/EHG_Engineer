@@ -8,9 +8,12 @@
 import { describe, it, expect } from 'vitest';
 import { runRebootRespawnDrill, printLiveExecutionPrecondition } from '../../../lib/fleet/reboot-respawn-drill-runner.js';
 
+// SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-1: account_profile:null is now SKIPPED, not silently
+// un-isolated -- 'host-default' is the explicit sentinel for a normal, spawning slot with no
+// isolation, which is what this drill-mechanism file's fixtures actually need.
 const SLOTS = [
-  { name: 'Worker-1', role: 'worker', account_profile: null, resume_uuid: 'u-1' },
-  { name: 'Worker-2', role: 'worker', account_profile: null, resume_uuid: 'u-2' },
+  { name: 'Worker-1', role: 'worker', account_profile: 'host-default', resume_uuid: 'u-1' },
+  { name: 'Worker-2', role: 'worker', account_profile: 'host-default', resume_uuid: 'u-2' },
 ];
 
 /** logFn records events into a shared array; queryEventsFn reads them back — real emit->read path. */
@@ -32,6 +35,27 @@ describe('runRebootRespawnDrill (FR-7)', () => {
     expect(checks.map((c) => c.name)).toEqual(['manifest_loaded', 'roster_built', 'per_slot_resume_relaunch', 'respawn_events_present', 'respawn_bind_audited']);
     expect(pass).toBe(true);
     expect(checks.every((c) => c.pass)).toBe(true);
+  });
+
+  // SHIP-REVIEW FIX (adversarial review, PR #7168, finding F7): a skipped slot (invocation:null,
+  // argv=[]) used to pass per_slot_resume_relaunch VACUOUSLY for a no-resume-token slot
+  // (![].includes('--resume') is true), so the check's own detail string falsely claimed "all N
+  // slot(s) relaunched with the correct --resume token" for a slot that was never relaunched at all.
+  describe('SD-LEO-INFRA-FLEET-CANNOT-SELF-001 ship-review F7: a skipped slot must not read as a successful relaunch', () => {
+    it('per_slot_resume_relaunch FAILS (not vacuously passes) when a slot is skipped for lacking account_profile', async () => {
+      const { logFn, queryEventsFn } = makeEventSeams();
+      const slots = [
+        { name: 'Broken', role: 'worker', resume_uuid: null }, // no account_profile -> skipped
+        SLOTS[0],
+      ];
+      const { checks, pass } = await runRebootRespawnDrill({
+        supabase: {}, loadFn: async () => slots, spawnFn: () => ({ pid: 1 }), logFn, queryEventsFn, live: false,
+      });
+      const resumeCheck = checks.find((c) => c.name === 'per_slot_resume_relaunch');
+      expect(resumeCheck.pass).toBe(false);
+      expect(resumeCheck.detail).not.toMatch(/all \d+ slot\(s\) relaunched/);
+      expect(pass).toBe(false);
+    });
   });
 
   // QF-20260725-790: the false pass that made every other defect in the 2026-07-26T00:15Z CP3

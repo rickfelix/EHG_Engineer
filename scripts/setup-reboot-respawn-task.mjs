@@ -65,6 +65,15 @@ export function buildRebootWrapperScript({ repoRoot, runnerRelPath = RUNNER_REL_
  * Build the `schtasks /Create` argv (PURE, no embedded quoting — execFileSync quotes spaced args).
  * Reboot trigger via /SC ONSTART (default) or /SC ONLOGON, run-level /RL HIGHEST, run-as /RU <user>
  * (default SYSTEM), and /F so re-running is idempotent. The /TR target is the wrapper batch.
+ *
+ * SD-LEO-INFRA-FLEET-CANNOT-SELF-001 FR-4 — /IT (interactive token) is added whenever a non-SYSTEM
+ * /RU is set. Without it, `schtasks /Create /RU <user>` with no /RP (password) either prompts for a
+ * password interactively (hangs a non-interactive caller like execFileSync) or creates a task that
+ * can never actually run without one stored — either way defeating the whole point of --ru: a
+ * VISIBLE, interactive wt.exe tab on the user's own desktop at logon. Per Microsoft's schtasks docs,
+ * /IT explicitly eliminates the password requirement for a task scoped to "run only when the user is
+ * logged on" — which /SC ONLOGON already is. Left off for SYSTEM (the default): SYSTEM has no
+ * interactive desktop session for /IT to attach to, and the existing SYSTEM behavior is unchanged.
  */
 export function buildRebootSchtasksArgs({ taskName = TASK_NAME, wrapperPath, schedule = DEFAULT_SCHEDULE, runAs = DEFAULT_RUN_AS, extraArgs = [] } = {}) {
   if (!wrapperPath) throw new Error('buildRebootSchtasksArgs: wrapperPath required');
@@ -73,7 +82,10 @@ export function buildRebootSchtasksArgs({ taskName = TASK_NAME, wrapperPath, sch
     throw new Error(`buildRebootSchtasksArgs: schedule must be ONSTART or ONLOGON, got ${schedule}`);
   }
   const args = ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', sc, '/RL', 'HIGHEST', '/F'];
-  if (runAs) args.push('/RU', runAs);
+  if (runAs) {
+    args.push('/RU', runAs);
+    if (String(runAs).toUpperCase() !== 'SYSTEM') args.push('/IT');
+  }
   return [...args, ...extraArgs];
 }
 

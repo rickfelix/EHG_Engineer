@@ -352,7 +352,7 @@ describe('FR-4 wiring in spawn() — ordering, refusal, and the blast-radius con
       const res = await runRebootRespawn({
         supabase: sb, logFn: async () => ({ ok: true }), live: true, sleepFn: vi.fn(),
         resolveProfileDirFn: (n) => `C:\\profiles\\${n}`,
-        loadFn: async () => [canarySlot, { name: 'Bravo', role: 'worker', resume_uuid: 'u-b' }],
+        loadFn: async () => [canarySlot, { name: 'Bravo', role: 'worker', account_profile: 'host-default', resume_uuid: 'u-b' }],
         spawnFn,
       });
       expect(res.results[0].spawned, 'the canary slot must be refused').toBe(false);
