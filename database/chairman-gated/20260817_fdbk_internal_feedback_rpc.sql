@@ -21,6 +21,16 @@
 -- exclusion) understated the defect — the RESTRICTIVE anon_feedback_ingress_bounds policy is moot
 -- with no permissive grant left for it to narrow.
 --
+-- SCOPE PRECISION (TESTING sub-agent finding, prospective PLAN-TO-EXEC review, evidence 25be9f6e):
+-- the missing permissive INSERT policy is not the FIRST error the old payload would actually hit.
+-- The old FeedbackWidget.tsx insert also sent `source_url` and `created_by`, NEITHER a real column
+-- on public.feedback (PostgREST 42703, evaluated before RLS), and `status: "open"`, which violates
+-- feedback_status_check (allowed: new/triaged/in_progress/resolved/wont_fix/duplicate/invalid/
+-- backlog/shipped, 23514). All three are independent defects PostgREST/Postgres would raise before
+-- the policy gap is ever reached. This migration + the paired frontend change close all three (the
+-- RPC sets user_id/status server-side and never references source_url) — restoring a permissive
+-- INSERT policy ALONE, without also fixing the payload, would NOT have fixed the widget.
+--
 -- Rather than editing anon_feedback_ingress_bounds or restoring an anon/authenticated-scoped
 -- permissive INSERT policy (a separate, larger, independently chairman-gated decision — see
 -- 20260815_venture_user_feedback_ownership_rpc.sql / 20260817_restore_feedback_permissive_insert.sql,
@@ -87,11 +97,19 @@ REVOKE ALL ON FUNCTION public.check_internal_feedback_rate_limit(uuid) FROM PUBL
 -- this REVOKE.
 
 -- ── fn_submit_internal_feedback ───────────────────────────────────────────────────────────────
+-- p_page_url (TESTING sub-agent finding, prospective PLAN-TO-EXEC review, evidence 25be9f6e):
+-- FeedbackWidget.tsx renders "Page: {window.location.pathname}" implying page-context capture, but
+-- neither the old payload (source_url — not a real column, 42703) nor this RPC's first draft
+-- (no parameter at all) actually persisted it, despite public.feedback having a real page_url
+-- column (varchar(500)). Adding it now, while the 4-arg signature is not yet live, is the cheap
+-- moment — adding it post-merge would need a new overload or a signature change plus a PostgREST
+-- schema-cache reload.
 CREATE OR REPLACE FUNCTION public.fn_submit_internal_feedback(
   p_title TEXT,
   p_description TEXT,
   p_type TEXT,
-  p_severity TEXT
+  p_severity TEXT,
+  p_page_url TEXT DEFAULT NULL
 )
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -130,18 +148,26 @@ BEGIN
 
   -- Per-user rate limit — direct truthy check (matches fn_submit_venture_user_feedback's polarity
   -- convention for this idiom; contrast an ownership/existence check, which uses IS NOT TRUE).
+  -- Distinct message text from the global ceiling below (TESTING finding, evidence 25be9f6e): the
+  -- two bounds previously raised byte-identical text, making it impossible for an operator -- or a
+  -- test -- to tell which one actually fired.
   IF public.check_internal_feedback_rate_limit(v_user_id) THEN
-    RAISE EXCEPTION 'fn_submit_internal_feedback: rate limited' USING ERRCODE = '53400';
+    RAISE EXCEPTION 'fn_submit_internal_feedback: rate limited (per-user)' USING ERRCODE = '53400';
   END IF;
 
   -- Global per-hour ceiling (defense in depth — see header). Scoped to source_type='manual_feedback'
   -- specifically so an unrelated writer of a different source_type cannot exhaust this ceiling.
+  -- Coupling note (TESTING finding, evidence 25be9f6e): this counts EVERY manual_feedback row,
+  -- including automated intake sharing this source_type (harness-bug logger, todoist/youtube/
+  -- claude_code intake) -- a spike there could lock out real widget users. Accepted at measured 5x
+  -- headroom (peak 42/hr vs this 200/hr cap over a 90-day window); revisit the threshold, not the
+  -- coupling, if automated volume grows materially.
   SELECT count(*) INTO v_global_count
   FROM public.feedback
   WHERE source_type = 'manual_feedback'
     AND created_at > now() - interval '1 hour';
   IF v_global_count >= 200 THEN
-    RAISE EXCEPTION 'fn_submit_internal_feedback: rate limited' USING ERRCODE = '53400';
+    RAISE EXCEPTION 'fn_submit_internal_feedback: rate limited (global)' USING ERRCODE = '53400';
   END IF;
 
   -- type (coarse issue/enhancement classifier) is a separate column+constraint from feedback_type
@@ -163,10 +189,11 @@ BEGIN
   -- doc). source_application/source_type/status/user_id are never client-suppliable.
   INSERT INTO public.feedback (
     type, feedback_type, source_type, source_application, title, description, severity, priority,
-    status, user_id
+    status, user_id, page_url
   ) VALUES (
     v_type, v_feedback_type, 'manual_feedback', 'EHG', left(p_title, 255),
-    left(coalesce(p_description, ''), 2000), v_severity, v_priority, 'new', v_user_id
+    left(coalesce(p_description, ''), 2000), v_severity, v_priority, 'new', v_user_id,
+    left(p_page_url, 500)
   )
   RETURNING id INTO v_new_id;
 
@@ -174,8 +201,8 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 -- No anon grant — this caller is never anonymous by construction (FeedbackWidget.tsx already gates
 -- on `if (!user) return null`).
 
@@ -190,17 +217,17 @@ GRANT EXECUTE ON FUNCTION public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, T
 -- ============================================================
 DO $verify$
 BEGIN
-  IF has_function_privilege('authenticated', 'public.fn_submit_internal_feedback(text,text,text,text)', 'EXECUTE') IS NOT TRUE THEN
+  IF has_function_privilege('authenticated', 'public.fn_submit_internal_feedback(text,text,text,text,text)', 'EXECUTE') IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_submit_internal_feedback is NOT authenticated-callable -- the fix would be unreachable';
   END IF;
-  IF has_function_privilege('anon', 'public.fn_submit_internal_feedback(text,text,text,text)', 'EXECUTE') THEN
+  IF has_function_privilege('anon', 'public.fn_submit_internal_feedback(text,text,text,text,text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_submit_internal_feedback is callable by anon -- should be authenticated only (anon would inherit a residual PUBLIC grant too, so this also covers that case)';
   END IF;
   IF has_function_privilege('anon', 'public.check_internal_feedback_rate_limit(uuid)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.check_internal_feedback_rate_limit(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'VERIFY FAILED: check_internal_feedback_rate_limit is directly callable by anon or authenticated -- should have no external grant';
   END IF;
-  IF (SELECT prosecdef FROM pg_proc WHERE oid = 'public.fn_submit_internal_feedback(text,text,text,text)'::regprocedure) IS NOT TRUE THEN
+  IF (SELECT prosecdef FROM pg_proc WHERE oid = 'public.fn_submit_internal_feedback(text,text,text,text,text)'::regprocedure) IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_submit_internal_feedback is not SECURITY DEFINER';
   END IF;
 END

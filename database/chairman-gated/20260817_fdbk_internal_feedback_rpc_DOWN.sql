@@ -15,7 +15,7 @@ BEGIN;
 
 SET LOCAL lock_timeout = '5s';
 
-DROP FUNCTION IF EXISTS public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.fn_submit_internal_feedback(TEXT, TEXT, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS public.check_internal_feedback_rate_limit(uuid);
 
 NOTIFY pgrst, 'reload schema';
