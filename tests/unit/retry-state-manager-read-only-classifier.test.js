@@ -37,8 +37,37 @@ describe('isReadOnlyCommand — find destructive primaries (QF-20260816-687)', (
     expect(isReadOnlyCommand('find . -ok rm {} \\;')).toBe(false);
   });
 
+  // Adversarial review (PR #7185): the \; form above contains a literal semicolon, so it's
+  // rejected by the PRE-EXISTING MUTATION_OPERATOR_RE check before ever reaching the new
+  // lookahead — it doesn't actually prove the `-ok` alternative in the lookahead itself works.
+  // This metacharacter-free form (a valid regex-classifier input regardless of whether real
+  // GNU find accepts `-ok ... {} +` in practice) reaches and exercises the lookahead directly.
+  it('find . -ok rm {} + → NOT read-only, via the lookahead itself (no semicolon to pre-empt it)', () => {
+    expect(isReadOnlyCommand('find . -ok rm {} +')).toBe(false);
+  });
+
   it('find . -okdir rm {} + → NOT read-only', () => {
     expect(isReadOnlyCommand('find . -okdir rm {} +')).toBe(false);
+  });
+
+  // Adversarial review (PR #7185): -delete/-exec[dir]/-ok[dir] alone still missed find's -f*
+  // WRITE primaries — -fprint/-fprint0/-fls write to a named file argument, and -fprintf
+  // additionally accepts a caller-controlled format string — all with zero shell
+  // metacharacters, the exact same bypass class this QF exists to close.
+  it('find / -fprintf /home/user/.bashrc "%p\\n" → NOT read-only (writes an arbitrary file with a caller-controlled format string)', () => {
+    expect(isReadOnlyCommand('find / -fprintf /home/user/.bashrc "%p\\n"')).toBe(false);
+  });
+
+  it('find . -fprint out.txt → NOT read-only (writes to a named file)', () => {
+    expect(isReadOnlyCommand('find . -fprint out.txt')).toBe(false);
+  });
+
+  it('find . -fprint0 out.txt → NOT read-only', () => {
+    expect(isReadOnlyCommand('find . -fprint0 out.txt')).toBe(false);
+  });
+
+  it('find . -fls out.txt → NOT read-only', () => {
+    expect(isReadOnlyCommand('find . -fls out.txt')).toBe(false);
   });
 
   it('find . -name x → STILL read-only (the exact QF acceptance case — common usage unaffected)', () => {
