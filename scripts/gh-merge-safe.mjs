@@ -17,6 +17,7 @@
 
 import { execSync, spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { isEmptyCheckRollup } from '../lib/gh/check-rollup.mjs';
 
 function sh(cmd) {
   return execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -75,6 +76,7 @@ function main() {
       merge: { type: 'boolean', default: false },
       rebase: { type: 'boolean', default: false },
       'delete-branch': { type: 'boolean', default: false },
+      'allow-no-checks': { type: 'boolean', default: false },
     },
     allowPositionals: true,
   });
@@ -92,7 +94,7 @@ function main() {
   // Detect already-merged PRs up front to be idempotent. gh pr view does not expose
   // baseRepository, so resolve owner/name via gh repo view (works because the wrapper
   // already requires being inside the repo's working tree).
-  const preview = JSON.parse(sh(`gh pr view ${prNumber} --json state,mergeCommit,headRefName`));
+  const preview = JSON.parse(sh(`gh pr view ${prNumber} --json state,mergeCommit,headRefName,statusCheckRollup`));
   const repoInfo = JSON.parse(sh(`gh repo view --json owner,name`));
   const owner = repoInfo.owner.login;
   const repo = repoInfo.name;
@@ -101,6 +103,24 @@ function main() {
     const sha = preview.mergeCommit?.oid || 'unknown';
     console.log(`PR #${prNumber} already merged: ${sha}`);
     process.exit(0);
+  }
+
+  // QF-20260816-043: a follow-up PR pushed to a branch whose base commit was already
+  // squash-merged registers ZERO GitHub check-suites — no CI ever ran, but every
+  // wait-for-CI gate reads "nothing pending" as vacuously green. Refuse before merging
+  // unless the operator explicitly overrides (audited). Non-empty rollups (including
+  // pending/failed entries) are unaffected — this only catches the zero-checks case.
+  if (isEmptyCheckRollup(preview.statusCheckRollup)) {
+    if (!values['allow-no-checks']) {
+      console.error(
+        `EMPTY_CHECK_ROLLUP: PR #${prNumber} has zero registered check-suites — no CI has run ` +
+        `(likely a follow-up PR from a branch whose base commit was already merged). Re-push from ` +
+        `a fresh branch off current main so checks register, or pass --allow-no-checks to merge ` +
+        `anyway (audited).`,
+      );
+      process.exit(1);
+    }
+    console.log(`⚠️  --allow-no-checks: merging PR #${prNumber} with zero registered check-suites.`);
   }
 
   const apiPath = `repos/${owner}/${repo}/pulls/${prNumber}/merge`;

@@ -48,4 +48,9 @@ describe('gh-merge-safe arg parsing', () => {
     const { exitCode } = runScript('999999999', { PATH: '' });
     expect(exitCode).not.toBe(2);
   });
+
+  it('accepts --allow-no-checks (QF-20260816-043) without breaking arg parsing', () => {
+    const { exitCode } = runScript('999999999 --allow-no-checks', { PATH: '' });
+    expect(exitCode).not.toBe(2);
+  });
 });
