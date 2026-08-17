@@ -44,6 +44,15 @@ const currentViolationPaths = () => evaluate(gitEolLines()).violations.map((v) =
 const baseline = () =>
   new Set(fs.readFileSync(BASELINE, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean));
 
+// Ship-review finding (adversarial security-agent pass, PR #7186): comparing
+// currentViolationPaths().length <= baseline().size alone is defeatable -- padding
+// tests/fixtures/eol-mixed-crlf-baseline.txt with a new offender's path grows the RHS too, so
+// both "NO NEW member" and "only ever SHRINKS" pass vacuously. Proven live: with an honest
+// 4-entry baseline a 5th offender fails both; with the baseline padded to 5, both pass. Pinning
+// the baseline's OWN size to a literal closes that hole -- a padding edit now fails THIS
+// assertion instead of silently satisfying the other two.
+const EXPECTED_BASELINE_SIZE = 4;
+
 describe('eol=lf-managed renormalization-dirty class (crlf+mixed) is frozen (R1, SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001)', () => {
   it('the measurement finds files to inspect (guard is not vacuous)', () => {
     // If ls-files --eol or evaluate()'s parsing ever silently breaks, every assertion below would
@@ -56,8 +65,17 @@ describe('eol=lf-managed renormalization-dirty class (crlf+mixed) is frozen (R1,
     expect(fs.existsSync(BASELINE)).toBe(true);
   });
 
+  it('the baseline SIZE is pinned (padding the fixture to admit an offender fails HERE)', () => {
+    // Without this, the NO-NEW-MEMBER and SHRINKS-ONLY checks below can both be defeated by
+    // simply adding a new offender's path to the baseline file -- that grows baseline().size in
+    // lockstep with the offender count, so neither check ever fires. A padding edit to the
+    // fixture now trips this assertion instead of sailing through silently.
+    expect(baseline().size).toBe(EXPECTED_BASELINE_SIZE);
+  });
+
   it('NO NEW member has joined the class', () => {
-    const added = currentViolationPaths().filter((f) => !baseline().has(f));
+    const known = baseline();
+    const added = currentViolationPaths().filter((f) => !known.has(f));
     expect(
       added,
       'These files are eol=lf-managed (via some .gitattributes rule) but stored crlf or mixed in '

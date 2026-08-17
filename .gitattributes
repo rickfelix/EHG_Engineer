@@ -67,8 +67,13 @@ CLAUDE.md text eol=lf
 *.template text eol=lf
 
 # SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001 — mark genuinely binary extensions `binary`
-# (= -text -diff) so no future broad text/eol rule can ever coerce them. These already carry
-# no eol/text attribute today; this is a defensive pin, not a fix for a live problem.
+# (= -text -diff) as a defensive pin (these already carry no eol/text attribute today; this is
+# not a fix for a live problem). NOTE (ship-review finding, PR #7186): attribute resolution is
+# last-match-wins, so this protection holds only against rules ABOVE this point in the file, not
+# against a future rule appended AFTER it — exactly how this SD's own NUL-byte escapes below
+# override the broad *.js pin above them. A future `*.png text eol=lf`-shaped rule appended below
+# this block would still coerce these extensions. Keep new broad text/eol rules ABOVE this block,
+# or add a matching binary/-text re-pin after them if that is ever unavoidable.
 *.png binary
 *.webm binary
 *.pptx binary
