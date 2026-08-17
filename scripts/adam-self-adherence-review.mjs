@@ -52,6 +52,10 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     signalsInWindow: null,
     adamAuthoredBuildsInWindow: null,
     adamChairmanDecisionQuestionsInWindow: null,
+    // QF-20260816-532: the FULL adam_advisory corpus (any addressee), kept separate from the
+    // chairman-filtered fact above so probeDispatchBoundary (which needs every advisory Adam
+    // sent, not just chairman-addressed ones) is unaffected by narrowing decision_rubric's input.
+    adamAdvisoryCorpusInWindow: null,
     adamMachineRaisedNoiseInWindow: null,
     pmBoardSnapshot: null,
     pmBoardPriorSnapshot: null,
@@ -188,6 +192,13 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   // as over-asks. HONEST: a real empty window is an honest [] (probe PASS — nothing to flag); ONLY a
   // thrown query error leaves the fact null -> 'unknown'. We read payload.body (the canonical Adam
   // message field) for each row.
+  //
+  // QF-20260816-532: payload.kind='adam_advisory' is Adam's GENERIC outward advisory lane, not a
+  // chairman-only one — adam-advisory.cjs defaults payload.addressee to 'coordinator', and live
+  // measurement found 118/123 rows (7d) and 0/0 all-time addressee='chairman'. Without this filter,
+  // decision_rubric was scanning ordinary [ADAM->COORD] reporting traffic as chairman over-asks.
+  // Filtered to the addressee the duty is actually about; the FULL corpus is kept separately below
+  // for probeDispatchBoundary, which needs every advisory regardless of recipient.
   try {
     // FR-6 batch 9: session_coordination is a growing table with no cap here; paginate.
     const data = await fetchAllPaginated(() => supabase
@@ -197,21 +208,29 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       .eq('sender_type', 'adam')
       .eq('payload->>kind', 'adam_advisory')
       .order('id', { ascending: true })); // unique tiebreaker (FR-6)
-    facts.adamChairmanDecisionQuestionsInWindow = data.map((r) => ({
+    facts.adamAdvisoryCorpusInWindow = data;
+    const chairmanAddressed = data.filter((r) => {
+      const addressee = r && r.payload && r.payload.addressee;
+      const role = typeof addressee === 'string' ? addressee : (addressee && addressee.role);
+      return role === 'chairman';
+    });
+    facts.adamChairmanDecisionQuestionsInWindow = chairmanAddressed.map((r) => ({
       body: r && r.payload ? (r.payload.body ?? r.payload.message ?? r.payload.subject ?? '') : '',
       created_at: r ? r.created_at : null,
     }));
   } catch { /* leave null -> unknown */ }
 
-  // FR-1 (dispatch_boundary, D2) — resolve the advisory corpus body from the SAME in-window Adam
-  // advisory set resolved just above (session_coordination sender_type='adam', kind='adam_advisory').
-  // The pure probe scans for fleet-lifecycle/dispatch language; joining the window's advisory bodies
-  // makes it a real-window check — FAIL if ANY advisory crossed into the coordinator's capacity lane,
-  // PASS if none. Reuses the already-fetched corpus (no extra query). Null ONLY when that fetch itself
-  // failed (advisory set unresolved) -> probe 'unknown'; an empty-but-resolved corpus is '' -> PASS.
-  if (Array.isArray(facts.adamChairmanDecisionQuestionsInWindow)) {
-    facts.advisoryBody = facts.adamChairmanDecisionQuestionsInWindow
-      .map((q) => (q && q.body ? String(q.body) : ''))
+  // FR-1 (dispatch_boundary, D2) — resolve the advisory corpus body from the FULL in-window Adam
+  // advisory set (adamAdvisoryCorpusInWindow, every addressee — NOT the chairman-filtered fact
+  // above; QF-20260816-532 narrowed that one specifically for decision_rubric, and this probe's
+  // duty is unrelated to who the advisory was addressed to). The pure probe scans for
+  // fleet-lifecycle/dispatch language; joining the window's advisory bodies makes it a real-window
+  // check — FAIL if ANY advisory crossed into the coordinator's capacity lane, PASS if none. Reuses
+  // the already-fetched corpus (no extra query). Null ONLY when that fetch itself failed (advisory
+  // set unresolved) -> probe 'unknown'; an empty-but-resolved corpus is '' -> PASS.
+  if (Array.isArray(facts.adamAdvisoryCorpusInWindow)) {
+    facts.advisoryBody = facts.adamAdvisoryCorpusInWindow
+      .map((r) => (r && r.payload && r.payload.body ? String(r.payload.body) : ''))
       .join('\n');
   }
 

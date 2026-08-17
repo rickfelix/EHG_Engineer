@@ -36,6 +36,10 @@ function makeSupabase(spec) {
       eq() { return builder; },
       in() { return builder; },
       not() { return builder; },
+      // QF-20260816-532: adamMachineRaisedNoiseInWindow's chairman_decisions query chains
+      // .or(...) — missing here left every consumer of that fact silently unresolved (null),
+      // which pinned probeDecisionRubric's verdict to 'unknown' in every test in this file.
+      or() { return builder; },
       // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: the sourcedInWindow QF lane switched from a
       // head-count to `.select('id, title').limit(1000)` so it can filter fixture-titled QFs.
       limit() { return builder; },
@@ -372,6 +376,55 @@ describe('FR-1: belt_starvation + dispatch_boundary resolve from LIVE claim tabl
     });
     const facts = await resolveFacts(sb, { windowDays: 1 });
     expect(runAdherenceProbes(facts).find((b) => b.probe === 'dispatch_boundary').verdict).toBe('pass');
+  });
+
+  // QF-20260816-532: decision_rubric previously scanned EVERY adam_advisory row regardless of
+  // recipient. Live-measured: adam-advisory.cjs defaults payload.addressee to 'coordinator'
+  // (118/123 rows, 7d) and 0 rows have EVER carried addressee='chairman' — so ordinary
+  // [ADAM->COORD] reporting traffic was being read as chairman over-asks.
+  const GENUINE_OVER_ASK = 'Worker Delta finished its in-flight SD. I recommend we defer the stale fleet_retro P3 items to the backlog — should I proceed?';
+
+  it('decision_rubric: an advisory send does NOT trip the rubric probe when addressed to the coordinator, even with over-ask-shaped text', async () => {
+    const sb = makeSupabase({
+      session_coordination: ROWS([
+        { payload: { kind: 'adam_advisory', addressee: 'coordinator', body: GENUINE_OVER_ASK }, created_at: 't1' },
+      ]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.adamChairmanDecisionQuestionsInWindow).toEqual([]);
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'decision_rubric').verdict).toBe('pass');
+  });
+
+  it('decision_rubric: the SAME over-ask text DOES trip the probe when addressed to the chairman', async () => {
+    const sb = makeSupabase({
+      session_coordination: ROWS([
+        { payload: { kind: 'adam_advisory', addressee: 'chairman', body: GENUINE_OVER_ASK }, created_at: 't1' },
+      ]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.adamChairmanDecisionQuestionsInWindow).toHaveLength(1);
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'decision_rubric').verdict).toBe('fail');
+  });
+
+  it('decision_rubric: also recognizes the object-shaped addressee ({role, sessionId})', async () => {
+    const sb = makeSupabase({
+      session_coordination: ROWS([
+        { payload: { kind: 'adam_advisory', addressee: { role: 'chairman', sessionId: 'sess-1' }, body: GENUINE_OVER_ASK }, created_at: 't1' },
+      ]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.adamChairmanDecisionQuestionsInWindow).toHaveLength(1);
+  });
+
+  it('dispatch_boundary still sees coordinator-addressed advisories — narrowing decision_rubric must not blind it', async () => {
+    const sb = makeSupabase({
+      session_coordination: ROWS([
+        { payload: { kind: 'adam_advisory', addressee: 'coordinator', body: 'We should spin up a worker to cover the gap.' }, created_at: 't1' },
+      ]),
+    });
+    const facts = await resolveFacts(sb, { windowDays: 1 });
+    expect(facts.advisoryBody).toContain('spin up a worker');
+    expect(runAdherenceProbes(facts).find((b) => b.probe === 'dispatch_boundary').verdict).toBe('fail');
   });
 });
 
