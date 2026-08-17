@@ -929,6 +929,17 @@ LEFT JOIN rca_learning_records lr ON lr.rcr_id = rcr.id;
 - Check `lib/rca-runtime-triggers.js` is imported in application startup
 - Manually trigger if needed: `node scripts/root-cause-agent.js trigger`
 
+**History (SD-LEO-INFRA-REGRESSION-DETECTION-SILENT-001, 2026-08)**: the T2 regression
+monitor and the T2 handoff-rejection monitor share one write path
+(`triggerRCAOrThrow` in `lib/rca-runtime-triggers.js`). Between the RLS hardening in
+QF-20260726-175 and this SD's fix, that path used an anon Supabase client against a
+`root_cause_reports` table whose INSERT/UPDATE/DELETE policy is service-role only —
+every write silently failed (42501), fail-soft-swallowed, so neither monitor ever
+produced an RCR even though their trigger conditions were being met. The fix switched
+the shared write path to a service-role client. If RCRs for either trigger type
+resumed appearing after this SD merged, that is the expected, intended effect of the
+fix restoring both monitors at once — not a new bug.
+
 ### Issue: Gate Blocking Despite Verified CAPA
 
 **Symptoms**: Handoff rejected with RCA_GATE_BLOCKED, but CAPA shows verified_at timestamp
