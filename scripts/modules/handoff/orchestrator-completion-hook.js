@@ -38,6 +38,34 @@ export function generateIdempotencyKey(orchestratorId) {
 }
 
 /**
+ * QF-20260816-161: every system_events writer in this file used to insert a shape
+ * (entity_type/entity_id/severity/created_by) that does not exist on the live table --
+ * every insert failed with PGRST204, so the whole telemetry surface was silently dead.
+ * Live schema (verified via a direct select probe before writing this fix): id,
+ * event_type, correlation_id, idempotency_key, agent_id, agent_type, token_cost,
+ * budget_remaining, predicted_outcome, actual_outcome, calibration_delta, venture_id,
+ * stage_id, payload, created_at, resolved_at, parent_event_id, actor_type, actor_role,
+ * prd_id, sd_id, directive_context, details. This maps the old generic entity pointer
+ * to the real, purpose-built sd_id column (orchestratorId is always a strategic
+ * directive), folds severity into details (no top-level column for it), and uses the
+ * real agent_type column in place of created_by.
+ * @param {string} orchestratorId
+ * @param {string} eventType
+ * @param {object} details
+ * @param {string} [severity]
+ * @returns {object} a row shaped to the live system_events schema
+ */
+function toSystemEventRow(orchestratorId, eventType, details, severity = 'info') {
+  return {
+    event_type: eventType,
+    sd_id: orchestratorId,
+    correlation_id: details?.correlation_id || null,
+    agent_type: 'ORCHESTRATOR_COMPLETION_HOOK',
+    details: { ...details, severity },
+  };
+}
+
+/**
  * Check if hook has already fired for this orchestrator (idempotency check)
  * @param {object} supabase - Supabase client
  * @param {string} orchestratorId - Orchestrator SD ID
@@ -49,7 +77,7 @@ export async function hasHookFired(supabase, orchestratorId) {
       .from('system_events')
       .select('id')
       .eq('event_type', 'ORCHESTRATOR_COMPLETION_HOOK')
-      .eq('entity_id', orchestratorId)
+      .eq('sd_id', orchestratorId)
       .limit(1);
 
     if (error) {
@@ -76,22 +104,15 @@ export async function recordHookEvent(supabase, orchestratorId, correlationId, d
   try {
     const { error } = await supabase
       .from('system_events')
-      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
-        event_type: 'ORCHESTRATOR_COMPLETION_HOOK',
-        entity_type: 'strategic_directive',
-        entity_id: orchestratorId,
-        details: {
-          correlation_id: correlationId,
-          auto_proceed: details.autoProceed || false,
-          learn_invoked: details.learnInvoked || false,
-          queue_displayed: details.queueDisplayed || false,
-          child_count: details.childCount || 0,
-          timestamp: new Date().toISOString(),
-          ...details
-        },
-        severity: 'info',
-        created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
-      });
+      .insert(toSystemEventRow(orchestratorId, 'ORCHESTRATOR_COMPLETION_HOOK', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
+        correlation_id: correlationId,
+        auto_proceed: details.autoProceed || false,
+        learn_invoked: details.learnInvoked || false,
+        queue_displayed: details.queueDisplayed || false,
+        child_count: details.childCount || 0,
+        timestamp: new Date().toISOString(),
+        ...details
+      }));
 
     if (error) {
       console.warn(`   ⚠️  Could not record hook event: ${error.message}`);
@@ -119,18 +140,11 @@ export async function invokeLearnSkill(supabase, orchestratorId, correlationId) 
     // Record the /learn invocation attempt
     await supabase
       .from('system_events')
-      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
-        event_type: 'LEARN_SKILL_INVOKED',
-        entity_type: 'strategic_directive',
-        entity_id: orchestratorId,
-        details: {
-          correlation_id: correlationId,
-          trigger: 'orchestrator_completion_hook',
-          timestamp: new Date().toISOString()
-        },
-        severity: 'info',
-        created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
-      });
+      .insert(toSystemEventRow(orchestratorId, 'LEARN_SKILL_INVOKED', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
+        correlation_id: correlationId,
+        trigger: 'orchestrator_completion_hook',
+        timestamp: new Date().toISOString()
+      }));
 
     // Note: The actual /learn skill execution happens in the CLI context
     // Here we signal that /learn should be invoked
@@ -300,19 +314,22 @@ export async function generateSessionSummary(supabase, orchestratorId, correlati
       }
     }
 
-    // Fetch any issues/failures for this orchestrator's session
-    const { data: issues, error: issueError } = await supabase
+    // Fetch any issues/failures for this orchestrator's session. severity lives inside
+    // the details JSONB column (no top-level column for it, per QF-20260816-161), so the
+    // error/warning filter is applied client-side after fetching this sd_id's rows.
+    const { data: recentEvents, error: issueError } = await supabase
       .from('system_events')
       .select('*')
-      .eq('entity_id', orchestratorId)
-      .in('severity', ['error', 'warning'])
+      .eq('sd_id', orchestratorId)
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(200);
+
+    const issues = recentEvents?.filter((row) => ['error', 'warning'].includes(row.details?.severity)).slice(0, 50);
 
     if (!issueError && issues) {
       for (const issue of issues) {
         collector.recordIssue(
-          issue.severity?.toUpperCase() === 'ERROR' ? 'ERROR' : 'WARN',
+          issue.details?.severity?.toUpperCase() === 'ERROR' ? 'ERROR' : 'WARN',
           issue.event_type || 'SYSTEM_EVENT',
           issue.details?.message || issue.event_type,
           {
@@ -332,24 +349,17 @@ export async function generateSessionSummary(supabase, orchestratorId, correlati
     // Record summary generation event
     await supabase
       .from('system_events')
-      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
-        event_type: 'SESSION_SUMMARY_GENERATED',
-        entity_type: 'strategic_directive',
-        entity_id: orchestratorId,
-        details: {
-          correlation_id: correlationId,
-          session_id: sessionId,
-          overall_status: result.json.overall_status,
-          total_sds: result.json.total_sds,
-          issues_count: result.json.issues.length,
-          generation_time_ms: result.generation_time_ms,
-          degraded: result.degraded,
-          schema_version: result.json.schema_version,
-          timestamp: new Date().toISOString()
-        },
-        severity: 'info',
-        created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
-      })
+      .insert(toSystemEventRow(orchestratorId, 'SESSION_SUMMARY_GENERATED', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
+        correlation_id: correlationId,
+        session_id: sessionId,
+        overall_status: result.json.overall_status,
+        total_sds: result.json.total_sds,
+        issues_count: result.json.issues.length,
+        generation_time_ms: result.generation_time_ms,
+        degraded: result.degraded,
+        schema_version: result.json.schema_version,
+        timestamp: new Date().toISOString()
+      }))
       .catch(err => console.warn(`   ⚠️  Could not record summary event: ${err.message}`));
 
     return result;
@@ -765,20 +775,13 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
   console.log(`   🩺 Heal spawned for orchestrator ${sdKey} (PID: ${child.pid})`);
 
   // Emit system event for observability
-  await supabase.from('system_events').insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
-    event_type: 'PARENT_HEAL_REQUESTED',
-    entity_type: 'strategic_directive',
-    entity_id: orchestratorId,
-    details: {
-      sd_key: sdKey,
-      title: orchestratorTitle,
-      correlation_id: correlationId,
-      heal_pid: child.pid,
-      timestamp: new Date().toISOString()
-    },
-    severity: 'info',
-    created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
-  });
+  await supabase.from('system_events').insert(toSystemEventRow(orchestratorId, 'PARENT_HEAL_REQUESTED', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
+    sd_key: sdKey,
+    title: orchestratorTitle,
+    correlation_id: correlationId,
+    heal_pid: child.pid,
+    timestamp: new Date().toISOString()
+  }));
 
   hookDetails.parentHeal = { status: 'spawned', sdKey, pid: child.pid };
 }
@@ -1233,20 +1236,13 @@ export async function emitChainingTelemetry(supabase, orchestratorId, nextOrches
   try {
     const { error } = await supabase
       .from('system_events')
-      .insert({ // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
-        event_type: 'ORCHESTRATOR_CHAINING_DECISION',
-        entity_type: 'strategic_directive',
-        entity_id: orchestratorId,
-        details: {
-          correlation_id: correlationId,
-          decision,
-          next_orchestrator_id: nextOrchestratorId,
-          timestamp: new Date().toISOString(),
-          telemetry_version: '1.0.0'
-        },
-        severity: decision === 'stop_on_error' ? 'warning' : 'info',
-        created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
-      });
+      .insert(toSystemEventRow(orchestratorId, 'ORCHESTRATOR_CHAINING_DECISION', { // schema-lint-disable-line -- keys nest inside the real `details` jsonb column, not top-level system_events columns
+        correlation_id: correlationId,
+        decision,
+        next_orchestrator_id: nextOrchestratorId,
+        timestamp: new Date().toISOString(),
+        telemetry_version: '1.0.0'
+      }, decision === 'stop_on_error' ? 'warning' : 'info'));
 
     if (error) {
       console.warn(`   ⚠️  Chaining telemetry error: ${error.message}`);

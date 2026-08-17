@@ -29,6 +29,110 @@ import {
   emitChainingTelemetry
 } from '../../../scripts/modules/handoff/orchestrator-completion-hook.js';
 
+// QF-20260816-161: every system_events writer in this file used a shape (entity_type/
+// entity_id/severity/created_by) that doesn't exist on the live table, so every insert
+// silently failed with PGRST204 -- a mock that accepts any payload shape (like the ones
+// used elsewhere in this file) can't catch that class of bug at all. This repo's own
+// vitest tiering deliberately blocks unit-tier tests from touching the real DB (see
+// vitest.config.js's DB_TIER_BLOCKED guard) and the db-tier itself refuses this project's
+// ref since it isn't an allowlisted non-production target -- so a genuine live round-trip
+// isn't runnable here. Instead, this fake enforces the REAL column allowlist (verified via
+// a direct `select *` probe against the live table before writing this fix) and rejects,
+// PGRST204-style, any insert carrying a column outside it -- a regression back to
+// entity_type/entity_id/severity/created_by fails this test for the same reason it would
+// fail against the real table.
+const SYSTEM_EVENTS_REAL_COLUMNS = new Set([
+  'id', 'event_type', 'correlation_id', 'idempotency_key', 'agent_id', 'agent_type',
+  'token_cost', 'budget_remaining', 'predicted_outcome', 'actual_outcome',
+  'calibration_delta', 'venture_id', 'stage_id', 'payload', 'created_at', 'resolved_at',
+  'parent_event_id', 'actor_type', 'actor_role', 'prd_id', 'sd_id', 'directive_context',
+  'details',
+]);
+
+function makeSchemaEnforcingSystemEventsTable() {
+  const rows = [];
+  return {
+    rows,
+    from(table) {
+      if (table !== 'system_events') throw new Error(`unexpected table: ${table}`);
+      return {
+        insert: (payload) => {
+          const unknownCols = Object.keys(payload).filter((k) => !SYSTEM_EVENTS_REAL_COLUMNS.has(k));
+          if (unknownCols.length > 0) {
+            return Promise.resolve({
+              error: { code: 'PGRST204', message: `Could not find the '${unknownCols[0]}' column of 'system_events' in the schema cache` },
+            });
+          }
+          rows.push({ id: `row-${rows.length}`, created_at: new Date().toISOString(), ...payload });
+          return Promise.resolve({ error: null });
+        },
+        select: () => ({
+          eq: (col, val) => ({
+            eq: (col2, val2) => ({
+              single: () => {
+                const row = rows.find((r) => r[col] === val && r[col2] === val2);
+                return Promise.resolve(row ? { data: row, error: null } : { data: null, error: { message: 'not found' } });
+              },
+            }),
+          }),
+        }),
+      };
+    },
+  };
+}
+
+describe('QF-20260816-161: system_events insert-and-readback (schema-enforcing fake)', () => {
+  it('recordHookEvent writes a row using only real columns, readable back with sd_id/correlation_id/agent_type/details.severity intact', async () => {
+    const fakeDb = makeSchemaEnforcingSystemEventsTable();
+    const ok = await recordHookEvent(fakeDb, 'SD-ROUNDTRIP-001', 'corr-roundtrip-1', { childCount: 3 });
+    expect(ok).toBe(true);
+
+    const { data, error } = await fakeDb
+      .from('system_events')
+      .select('*')
+      .eq('sd_id', 'SD-ROUNDTRIP-001')
+      .eq('event_type', 'ORCHESTRATOR_COMPLETION_HOOK')
+      .single();
+
+    expect(error).toBeNull();
+    expect(data.sd_id).toBe('SD-ROUNDTRIP-001');
+    expect(data.correlation_id).toBe('corr-roundtrip-1');
+    expect(data.agent_type).toBe('ORCHESTRATOR_COMPLETION_HOOK');
+    expect(data.details.severity).toBe('info');
+    expect(data.details.child_count).toBe(3);
+  });
+
+  it('emitChainingTelemetry writes a row using only real columns, readable back with the decision-derived severity', async () => {
+    const fakeDb = makeSchemaEnforcingSystemEventsTable();
+    const ok = await emitChainingTelemetry(fakeDb, 'SD-ROUNDTRIP-002', null, 'stop_on_error', 'corr-roundtrip-2');
+    expect(ok).toBe(true);
+
+    const { data, error } = await fakeDb
+      .from('system_events')
+      .select('*')
+      .eq('sd_id', 'SD-ROUNDTRIP-002')
+      .eq('event_type', 'ORCHESTRATOR_CHAINING_DECISION')
+      .single();
+
+    expect(error).toBeNull();
+    expect(data.sd_id).toBe('SD-ROUNDTRIP-002');
+    expect(data.details.severity).toBe('warning');
+    expect(data.details.decision).toBe('stop_on_error');
+  });
+
+  it('rejects (PGRST204-style) an insert using the OLD broken shape, proving the fake is not vacuous', async () => {
+    const fakeDb = makeSchemaEnforcingSystemEventsTable();
+    const { error } = await fakeDb.from('system_events').insert({
+      event_type: 'ORCHESTRATOR_COMPLETION_HOOK',
+      entity_type: 'strategic_directive',
+      entity_id: 'SD-OLD-SHAPE',
+      severity: 'info',
+      created_by: 'ORCHESTRATOR_COMPLETION_HOOK',
+    });
+    expect(error?.code).toBe('PGRST204');
+  });
+});
+
 describe('Orchestrator Completion Hook', () => {
   describe('generateIdempotencyKey', () => {
     it('should generate correlation keys containing orchestrator ID and timestamp', () => {
@@ -676,9 +780,10 @@ describe('Orchestrator Completion Hook', () => {
 
       expect(result).toBe(true);
       expect(insertedData.event_type).toBe('ORCHESTRATOR_CHAINING_DECISION');
+      expect(insertedData.sd_id).toBe('SD-ORCH-001');
       expect(insertedData.details.decision).toBe('chain');
       expect(insertedData.details.next_orchestrator_id).toBe('SD-NEXT-001');
-      expect(insertedData.severity).toBe('info');
+      expect(insertedData.details.severity).toBe('info');
     });
 
     it('should emit pause_disabled decision with info severity', async () => {
@@ -702,7 +807,7 @@ describe('Orchestrator Completion Hook', () => {
 
       expect(insertedData.details.decision).toBe('pause_disabled');
       expect(insertedData.details.next_orchestrator_id).toBe(null);
-      expect(insertedData.severity).toBe('info');
+      expect(insertedData.details.severity).toBe('info');
     });
 
     it('should emit stop_on_error decision with warning severity', async () => {
@@ -725,7 +830,7 @@ describe('Orchestrator Completion Hook', () => {
       );
 
       expect(insertedData.details.decision).toBe('stop_on_error');
-      expect(insertedData.severity).toBe('warning');
+      expect(insertedData.details.severity).toBe('warning');
     });
 
     it('should return false on database error', async () => {
