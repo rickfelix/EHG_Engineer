@@ -44,7 +44,7 @@ the pure classifier **is** the mapping — there are no hand-kept workflow table
 | Axis | Where it lives | What this SD does with it |
 |---|---|---|
 | **Fleet-session axis** | worker `metadata.model/effort` → `tier_rank` via `lib/fleet/tier-ladder.cjs` | **This is the delegation axis.** `delegate_model` names which Max-plan session tier builds a two-way item. |
-| **LLM-client axis** | `lib/llm/client-factory.js` (in-process API calls; registered ollama seam) | Untouched. Its ollama seam is the natural hook when the deferred **local third tier** returns — extend `DELEGATE_TIERS` in `lib/fleet/door-constants.cjs`; no rubric or gate change. |
+| **LLM-client axis** | `lib/llm/client-factory.js` (in-process API calls; registered ollama seam) | Untouched. **(2026-08-16, SD-LEO-INFRA-DOOR-ROUTING-INERT-DECIDE-001)** the deferred-local-third-tier hook this row named (`DELEGATE_TIERS` in `lib/fleet/door-constants.cjs`) was retired along with the rest of the two_way-door delegation gate — see the retirement banner above. A revived local/ollama tier would need a new delegate-tier registry, not an extension of the deleted one. |
 
 ## Components
 
