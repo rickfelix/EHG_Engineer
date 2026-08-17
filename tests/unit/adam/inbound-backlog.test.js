@@ -15,7 +15,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   UNREAD_BREACH_MS, UNACKED_BREACH_MS, EVIDENCE_FLOOR_MS,
-  isExcludedKind, partitionUndrained, isBreaching, classifyBacklog, fetchInboundBacklog
+  isExcludedKind, partitionUndrained, isBreaching, classifyBacklog, fetchInboundBacklog,
+  partitionByLiveness
 } from '../../../lib/adam/inbound-backlog.js';
 
 const NOW = Date.parse('2026-07-25T12:00:00.000Z');
@@ -264,5 +265,32 @@ describe('TS-10 / TS-11 — pagination and all-historical-adam-id scoping (IO se
     expect(error).toMatch(/transient DB failure/);
     // A caller seeing error!=null must exit with the INFRA code (1), never the BREACH code (2).
     expect(classifyBacklog(rows, NOW).breaching).toBe(false);
+  });
+});
+
+describe('QF-20260816-532 — partitionByLiveness: a row addressed to a retired seat is a phantom, not backlog', () => {
+  it('a seeded dead-seat row is NOT counted in the live partition', () => {
+    const liveRow = row({ id: 'r-live', target_session: 'adam-live' });
+    const deadRow = row({ id: 'r-dead', target_session: 'adam-retired-1' });
+    const { liveRows, phantomRows } = partitionByLiveness([liveRow, deadRow], ['adam-live']);
+    expect(liveRows.map((r) => r.id)).toEqual(['r-live']);
+    expect(phantomRows.map((r) => r.id)).toEqual(['r-dead']);
+  });
+
+  it('classifyBacklog on the live partition alone reports the real (non-phantom-padded) count', () => {
+    const liveRow = row({ id: 'r-live', target_session: 'adam-live' });
+    // 3 phantom rows, seeded old/unread so they WOULD breach if wrongly included.
+    const deadRows = [1, 2, 3].map((i) => row({
+      id: 'r-dead-' + i, target_session: 'adam-retired-1', created_at: ago(120 * MIN),
+    }));
+    const { liveRows } = partitionByLiveness([liveRow, ...deadRows], ['adam-live']);
+    const verdict = classifyBacklog(liveRows, NOW);
+    expect(verdict.rawBacklogCount).toBe(1);
+  });
+
+  it('an empty live-session list treats every row as phantom (no crash, no false liveness)', () => {
+    const { liveRows, phantomRows } = partitionByLiveness([row({ id: 'r-1' })], []);
+    expect(liveRows).toEqual([]);
+    expect(phantomRows.length).toBe(1);
   });
 });

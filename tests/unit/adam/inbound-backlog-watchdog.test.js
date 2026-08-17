@@ -57,9 +57,19 @@ function replayFixtures() {
   ];
 }
 
-/** Fake supabase: records every table touched so "zero session_coordination writes" is provable. */
-function fakeSupabase(backlogRows, { adamIds = ['adam-1'], sessionError = null } = {}) {
+/**
+ * Fake supabase: records every table touched so "zero session_coordination writes" is provable.
+ *
+ * QF-20260816-532: resolveAdamSessionIds now also selects `status` (to derive liveIds). ALL
+ * adamIds are stamped status='active' here by default — none of the pre-existing tests in this
+ * file are about liveness partitioning, so their fixtures represent "sessions relevant to the
+ * test" and must stay live, matching pre-fix behavior. Pass `liveIds` to mark a SUBSET live (the
+ * rest get status='released') for tests that specifically exercise the phantom partition.
+ */
+function fakeSupabase(backlogRows, { adamIds = ['adam-1'], sessionError = null, liveIds = null } = {}) {
   const writes = [];
+  const live = new Set(liveIds || adamIds);
+  const sessionRow = (id) => ({ session_id: id, status: live.has(id) ? 'active' : 'released' });
   const client = {
     writes,
     from(table) {
@@ -76,7 +86,7 @@ function fakeSupabase(backlogRows, { adamIds = ['adam-1'], sessionError = null }
           if (table === 'claude_sessions') {
             return Promise.resolve(sessionError
               ? { data: null, error: { message: sessionError } }
-              : { data: adamIds.slice(from, to + 1).map((id) => ({ session_id: id })), error: null });
+              : { data: adamIds.slice(from, to + 1).map(sessionRow), error: null });
           }
           return Promise.resolve({ data: backlogRows.slice(from, to + 1), error: null });
         },
@@ -86,7 +96,7 @@ function fakeSupabase(backlogRows, { adamIds = ['adam-1'], sessionError = null }
           if (table === 'claude_sessions') {
             return Promise.resolve(sessionError
               ? { data: null, error: { message: sessionError } }
-              : { data: adamIds.map((id) => ({ session_id: id })), error: null }).then(res);
+              : { data: adamIds.map(sessionRow), error: null }).then(res);
           }
           return Promise.resolve({ data: [], error: null }).then(res);
         },
@@ -218,6 +228,62 @@ describe('FR-2 / TS-15 — the distinct undrained_kind_in_lane signal', () => {
   });
 });
 
+describe('QF-20260816-532 — a row addressed to a retired seat is reported as phantom, not real backlog', () => {
+  it('a seeded dead-seat row does not inflate breachingCount/rawBacklogCount, and IS counted as phantom', async () => {
+    const liveRow = { id: 'live-1', target_session: 'adam-live', sender_type: 'coordinator', payload: { kind: 'adam_advisory' }, created_at: ago(90 * MIN), read_at: null, acknowledged_at: null };
+    // Old, unread, unacked — would breach if wrongly folded into the live verdict.
+    const phantomRow = { id: 'dead-1', target_session: 'adam-retired-1', sender_type: 'coordinator', payload: { kind: 'adam_advisory' }, created_at: ago(300 * MIN), read_at: null, acknowledged_at: null };
+    const sb = fakeSupabase([liveRow, phantomRow], { adamIds: ['adam-live', 'adam-retired-1'], liveIds: ['adam-live'] });
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.rawBacklogCount).toBe(1);
+    expect(r.breachingCount).toBe(1);
+    expect(r.phantomCount).toBe(1);
+  });
+
+  it('a genuinely drained live inbox reports zero backlog even with a large phantom floor', async () => {
+    // Live row already acknowledged (drained); several old, never-acked phantom rows.
+    const liveRow = { id: 'live-1', target_session: 'adam-live', sender_type: 'coordinator', payload: { kind: 'adam_advisory' }, created_at: ago(90 * MIN), read_at: ago(80 * MIN), acknowledged_at: ago(70 * MIN) };
+    const phantoms = [1, 2, 3].map((i) => ({ id: 'dead-' + i, target_session: 'adam-retired-1', sender_type: 'coordinator', payload: { kind: 'adam_advisory' }, created_at: ago(500 * MIN), read_at: null, acknowledged_at: null }));
+    const sb = fakeSupabase([liveRow, ...phantoms], { adamIds: ['adam-live', 'adam-retired-1'], liveIds: ['adam-live'] });
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.breaching).toBe(false);
+    expect(r.breachingCount).toBe(0);
+    expect(r.phantomCount).toBe(3);
+  });
+
+  it('undrainedKinds still alarms on a kind that ONLY appears on a phantom-targeted row', async () => {
+    // The liveness partition must not blind the SEPARATE drain-set-registration signal.
+    const phantomUndrained = { id: 'dead-undrained', target_session: 'adam-retired-1', sender_type: 'coordinator', payload: { kind: '__synthetic_undrained_kind__' }, created_at: ago(300 * MIN), read_at: null, acknowledged_at: null };
+    const sb = fakeSupabase([phantomUndrained], { adamIds: ['adam-live', 'adam-retired-1'], liveIds: ['adam-live'] });
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.undrainedKinds).toContain('__synthetic_undrained_kind__');
+    const undrainedCalls = emitFeedbackMock.mock.calls.filter((c) => c[0].metadata.scope === SCOPE_UNDRAINED);
+    expect(undrainedCalls).toHaveLength(1);
+  });
+
+  it('resolveAdamSessionIds returns liveIds as the status=active subset of ids', async () => {
+    const { resolveAdamSessionIds } = await import('../../../lib/adam/inbound-backlog-watchdog.js');
+    const sb = fakeSupabase([], { adamIds: ['adam-live', 'adam-retired-1', 'adam-retired-2'], liveIds: ['adam-live'] });
+    const { ids, liveIds, error } = await resolveAdamSessionIds(sb);
+    expect(error).toBeNull();
+    expect(ids.sort()).toEqual(['adam-live', 'adam-retired-1', 'adam-retired-2'].sort());
+    expect(liveIds).toEqual(['adam-live']);
+  });
+
+  it('ADVERSARIAL FINDING (PR #7169): zero currently-live Adam sessions must NOT silently zero the backlog — the module has no liveness gate BY DESIGN (no live Adam is the WORST case, not an exemption)', async () => {
+    // Every historical id exists (history is real), but none is status='active' right now —
+    // e.g. the live seat was JUST swept to 'released' before a successor registered. A real,
+    // aging, unread row must still surface as backlog, not vanish into phantomCount.
+    const staleRow = { id: 'stale-1', target_session: 'adam-just-died', sender_type: 'coordinator', payload: { kind: 'adam_advisory' }, created_at: ago(300 * MIN), read_at: null, acknowledged_at: null };
+    const sb = fakeSupabase([staleRow], { adamIds: ['adam-just-died'], liveIds: [] });
+    const r = await runInboundBacklogWatchdog(sb, { now: NOW });
+    expect(r.breaching).toBe(true);
+    expect(r.breachingCount).toBe(1);
+    expect(r.rawBacklogCount).toBe(1);
+    expect(r.phantomCount).toBe(0);
+  });
+});
+
 describe('FR-2 — bounded ceiling and evidence floor', () => {
   // Honest labelling (testing-agent 37246c3a): `scopes` is built from at most 2 constants, so
   // this bound holds structurally and the assertion cannot fail today. It is an INVARIANT
@@ -283,7 +349,10 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
 
     // One fake serving both consumers: .range() => the paginated backlog selector, a direct await
     // => the tick's display query, .or() => the correlation window.
-    const ADAM_IDS = [{ session_id: 'adam-1' }, { session_id: 'adam-retired' }];
+    // QF-20260816-532: status='active' on both — this test is fixture-nominal on liveness (per
+    // the comment above), it exercises the display-query-divergence axes, not the phantom
+    // partition (TS-11 in inbound-backlog.test.js already pins the retired-id-scoping axis).
+    const ADAM_IDS = [{ session_id: 'adam-1', status: 'active' }, { session_id: 'adam-retired', status: 'active' }];
     const parityFake = { from: (table) => {
       const st = { or: false, op: 'select', roleQuery: false };
       const c = {
@@ -314,6 +383,8 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
     // same false evidence it was closed on the first time.
     expect(tick.backlogCount).toBe(watchdog.rawBacklogCount);
     expect(tick.backlogBreachingCount).toBe(watchdog.breachingCount);
+    // QF-20260816-532: the phantom count must also agree BY CONSTRUCTION, same as the other two.
+    expect(tick.backlogPhantomCount).toBe(watchdog.phantomCount);
     // ...and it is genuinely NOT the display list's number — proving the axes bite.
     expect(tick.backlogCount).toBe(corpus.length);
     expect(tick.backlogCount).not.toBe(displayRows.length);
@@ -356,7 +427,7 @@ describe('FR-3 / TS-3 — tick count equals watchdog count BY CONSTRUCTION', () 
         st.op === 'update' ? { data: [], error: null }
           // Env-independent: serve resolveAdamSessionId's AWAITED role=adam fallback, which is
           // the path taken whenever CLAUDE_SESSION_ID is unset (i.e. in CI).
-          : st.roleQuery ? { data: [{ session_id: 'adam-1' }], error: null }
+          : st.roleQuery ? { data: [{ session_id: 'adam-1', status: 'active' }], error: null }
           : st.or ? { data: [...seeded, ...ancestors], error: null }
           : { data: seeded, error: null }).then(res),
     }; return c; } };

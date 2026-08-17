@@ -29,7 +29,7 @@ import { runOutboundSilenceWatchdog } from '../lib/adam/outbound-silence-watchdo
 // same shared selector the watchdog uses, so the two agree BY CONSTRUCTION rather than by
 // numeric reconciliation (criterion 3 is a RECURRENCE of the lane-002 close that claimed
 // unified consumption semantics and did not achieve it).
-import { fetchInboundBacklog, classifyBacklog } from '../lib/adam/inbound-backlog.js';
+import { fetchInboundBacklog, classifyBacklog, partitionByLiveness } from '../lib/adam/inbound-backlog.js';
 import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
@@ -346,14 +346,27 @@ export async function surfaceInboxItems(sb) {
     // any selector error leaves backlogCount null and the tick still prints its item list.
     let backlogCount = null;
     let backlogBreachingCount = null;
+    let backlogPhantomCount = null;
     try {
-      const { ids } = await resolveAdamSessionIds(sb);
+      const { ids, liveIds } = await resolveAdamSessionIds(sb);
       if (ids && ids.length) {
         const { rows: backlogRows, error: backlogError } = await fetchInboundBacklog(sb, ids);
         if (!backlogError) {
-          const verdict = classifyBacklog(backlogRows, Date.now());
+          // QF-20260816-532: classify only rows targeting a LIVE session — a row addressed to a
+          // retired seat can never breach meaningfully (nobody polls a dead session_id), so it
+          // only ever padded this gauge. Reported separately so the real floor stays visible.
+          //
+          // ADVERSARIAL REVIEW FINDING (PR #7169): an empty liveIds means no Adam session is
+          // currently active at all — nothing to partition AGAINST. Falling back to the full row
+          // set here preserves this module's pre-existing "no live Adam is the WORST case, never
+          // an exemption" invariant instead of silently reporting a clean gauge while Adam is dark.
+          const { liveRows, phantomRows } = liveIds.length
+            ? partitionByLiveness(backlogRows, liveIds)
+            : { liveRows: backlogRows, phantomRows: [] };
+          const verdict = classifyBacklog(liveRows, Date.now());
           backlogCount = verdict.rawBacklogCount;
           backlogBreachingCount = verdict.breachingCount;
+          backlogPhantomCount = phantomRows.length;
         }
       }
     } catch { /* fail-soft — the count is advisory; the item list below is the hard signal */ }
@@ -411,7 +424,7 @@ export async function surfaceInboxItems(sb) {
     // higher ceiling) -- NOT "the raw window happened to contain 50 rows," which previously gave
     // a false CAP signal even when every one of those 50 rows was mechanical noise (eligible:[]).
     const capHit = eligible.length > INBOX_DISPLAY_CAP || (rows || []).length === INBOX_RAW_FETCH_LIMIT;
-    if (eligible.length === 0) return { items: [], directives: 0, capHit, backlogCount, backlogBreachingCount };
+    if (eligible.length === 0) return { items: [], directives: 0, capHit, backlogCount, backlogBreachingCount, backlogPhantomCount };
 
     const surfaced = eligible.slice(0, INBOX_DISPLAY_CAP);
     const items = surfaced.map((r) => {
@@ -428,7 +441,7 @@ export async function surfaceInboxItems(sb) {
     for (const r of surfaced.filter((x) => !isDirectiveRow(x) && !(x.payload && x.payload.tick_surfaced_at))) {
       await sb.from('session_coordination').update({ payload: { ...(r.payload || {}), tick_surfaced_at: seenAt } }).eq('id', r.id);
     }
-    return { items, directives: items.filter((i) => i.isDirective).length, capHit, backlogCount, backlogBreachingCount };
+    return { items, directives: items.filter((i) => i.isDirective).length, capHit, backlogCount, backlogBreachingCount, backlogPhantomCount };
   } catch (e) {
     return { items: [], directives: 0, error: e && e.message };
   }
@@ -814,6 +827,7 @@ async function main() {
     // incident invisible, so the real one has to reach the operator, not just be computed.
     inboxBacklog: inboxSurface.backlogCount,
     inboxBacklogBreaching: inboxSurface.backlogBreachingCount,
+    inboxBacklogPhantom: inboxSurface.backlogPhantomCount,
     smsInbound: smsInbound.count,
     smsParked: smsParked.count,
     outboundSilence,
@@ -842,7 +856,7 @@ async function main() {
       // The suppression-free backlog, printed alongside the display count. During the witnessed
       // incident `inbox=` read 1-5 while 21 rows sat unacked; this is the number that would have
       // shown the truth. `?` when the selector failed, never a healthy-looking 0.
-      `backlog=${inboxSurface.backlogCount ?? '?'}(breach:${inboxSurface.backlogBreachingCount ?? '?'}) ` +
+      `backlog=${inboxSurface.backlogCount ?? '?'}(breach:${inboxSurface.backlogBreachingCount ?? '?'},phantom:${inboxSurface.backlogPhantomCount ?? '?'}) ` +
       `sms=${smsInbound.count} ` +
       `smsParked=${smsParked.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
