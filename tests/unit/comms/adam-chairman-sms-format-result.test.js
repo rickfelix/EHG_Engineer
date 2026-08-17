@@ -12,10 +12,41 @@ import { describe, it, expect } from 'vitest';
 import { formatSendResult } from '../../../scripts/adam-chairman-sms.mjs';
 
 describe('formatSendResult()', () => {
-  it("QH-TS-6a: reason==='blocked' produces explicit DROPPED/no-retry language", () => {
-    const label = formatSendResult({ sent: false, held: true, reason: 'blocked', verdict: 'blocked' });
+  it("QH-TS-6a: reason==='blocked' with a quiet_hours blockedReason produces the quiet-hours-specific DROPPED/no-retry language", () => {
+    const label = formatSendResult({
+      sent: false, held: true, reason: 'blocked', verdict: 'blocked',
+      blockedReasons: ['quiet_hours: within 22:00-06:00 ET quiet window'],
+    });
     expect(label).toMatch(/DROPPED/);
     expect(label).toMatch(/NOT.*retried/i);
+    expect(label).toMatch(/quiet hours/i);
+  });
+
+  it("QH-TS-6g: reason==='blocked' via rate_cap (NOT quiet_hours) does not claim quiet hours caused it", () => {
+    const label = formatSendResult({
+      sent: false, held: true, reason: 'blocked', verdict: 'blocked',
+      blockedReasons: ['rate_cap: rate cap reached (3/3)'],
+    });
+    expect(label).toMatch(/DROPPED/);
+    expect(label).not.toMatch(/quiet hours/i);
+    expect(label).toMatch(/rate_cap/);
+  });
+
+  it("QH-TS-6h: reason==='blocked' via no_secrets does not tell the operator to just re-send (that would re-send the secret)", () => {
+    const label = formatSendResult({
+      sent: false, held: true, reason: 'blocked', verdict: 'blocked',
+      blockedReasons: ['no_secrets: secret(s) detected: PROVIDER_KEY'],
+    });
+    expect(label).toMatch(/DROPPED/);
+    expect(label).not.toMatch(/quiet hours/i);
+    expect(label).not.toMatch(/re-send after the quiet window/i);
+    expect(label).toMatch(/no_secrets/);
+  });
+
+  it("QH-TS-6i: reason==='blocked' with no blockedReasons array (defensive) falls back to a generic, non-quiet-hours-specific message", () => {
+    const label = formatSendResult({ sent: false, held: true, reason: 'blocked', verdict: 'blocked' });
+    expect(label).toMatch(/DROPPED/);
+    expect(label).not.toMatch(/quiet hours/i);
   });
 
   it("QH-TS-6b: reason==='over_ask_held' does NOT produce DROPPED/no-retry language", () => {

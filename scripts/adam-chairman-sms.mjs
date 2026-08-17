@@ -10,20 +10,35 @@ import { resolveQuietHoursContext } from '../lib/comms/adam-outbound/quiet-hours
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
- * SD-LEO-FIX-QUIET-HOURS-GATE-001 (FR-5/FR-6): a genuinely-held quiet-hours-blocked send
+ * SD-LEO-FIX-QUIET-HOURS-GATE-001 (FR-5/FR-6): a genuinely-held rubric-blocked send
  * (reason==='blocked') has no queue and no retry -- "held" reads like deferral but means the
  * message was never sent and never will be. sendChairmanSMS also returns held:true from three
  * OTHER, semantically different sites (over_ask_held, gate_unavailable, gate_unavailable_status)
  * that are NOT genuinely dropped -- a blanket "held -> DROPPED" label would misinform an
- * operator on those. Pure and exported so it is directly unit-testable without spawning the CLI
- * (the existing subprocess test only exercises --dry-run, which returns before this is reached).
- * @param {{sent?:boolean, held?:boolean, reason?:string}} result - sendChairmanSMS's return value
+ * operator on those.
+ *
+ * EXEC-phase TESTING finding (2026-08-17): reason==='blocked' is set whenever ANY of the
+ * rubric-engine's 9 blocking lint checks fails (chairman-sms-gate/index.js:325-326), not only
+ * quiet_hours -- rate_cap, no_secrets, and length are equally capable of producing it. The
+ * original quiet-hours-specific remediation text ("re-send after the quiet window") was WRONG
+ * for those three, and actively harmful for no_secrets (instructing a re-send of a
+ * secret-bearing body). The wording is now conditional on blockedReasons actually naming
+ * quiet_hours; any other blocking reason gets a generic DROPPED message naming the real cause.
+ * Pure and exported so it is directly unit-testable without spawning the CLI (the existing
+ * subprocess test only exercises --dry-run, which returns before this is reached).
+ * @param {{sent?:boolean, held?:boolean, reason?:string, blockedReasons?:string[]}} result - sendChairmanSMS's return value
  * @returns {string|null} a human-facing line to print, or null for a successful/non-held send
  */
 export function formatSendResult(result) {
   if (!result || result.sent) return null;
   if (result.held && result.reason === 'blocked') {
-    return '[adam-chairman-sms] DROPPED — quiet hours blocked this send. The message was NOT queued and will NOT be retried. Re-send after the quiet window, or use --reply-to-inbound only when replying to a genuine chairman inbound.';
+    const reasons = Array.isArray(result.blockedReasons) ? result.blockedReasons : [];
+    const isQuietHours = reasons.some((r) => typeof r === 'string' && r.startsWith('quiet_hours'));
+    if (isQuietHours) {
+      return '[adam-chairman-sms] DROPPED — quiet hours blocked this send. The message was NOT queued and will NOT be retried. Re-send after the quiet window, or use --reply-to-inbound only when replying to a genuine chairman inbound.';
+    }
+    const cause = reasons.length ? reasons.join('; ') : 'rubric check failed';
+    return `[adam-chairman-sms] DROPPED — the send rubric blocked this message (${cause}). The message was NOT queued and will NOT be retried; resolve the flagged condition before resending.`;
   }
   if (result.held) {
     return `[adam-chairman-sms] HELD (${result.reason || 'unknown'}) — not a quiet-hours drop; see the gate's own reason for what to do next.`;
