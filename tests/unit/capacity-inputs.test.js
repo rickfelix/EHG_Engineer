@@ -25,7 +25,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { gatherCapacityInputs, BELT_BUFFER, normPhase, etaMinForClaim } from '../../scripts/lib/capacity-inputs.mjs';
 import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
-import { classifyEngagementBuckets } from '../../scripts/lib/engagement-buckets.mjs';
 
 /**
  * A fake Supabase whose builders satisfy fetchAllPaginated (fresh builder per page, .range applied
