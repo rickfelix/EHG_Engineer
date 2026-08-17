@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+/**
+ * Retroactive PBN scorer — SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-6.
+ *
+ * Scores a venture that predates the PBN gate (nursery -> Stage-0 only) and writes the
+ * resulting verdict into ventures.metadata.stage_zero.pbn_verdict via a nested jsonb_set,
+ * never a shallow spread of the top-level metadata object — a real deployed venture's
+ * metadata carries other load-bearing content (chairman_approval, pause_provenance,
+ * awaiting_chairman_decision, ...) that a shallow write would destroy.
+ *
+ * UUID-ONLY BY DESIGN: this repo's live data has two ventures literally named "MarketLens",
+ * so there is deliberately no name-based lookup path — --venture-id is required and is
+ * matched against ventures.id, never ventures.name.
+ *
+ * Operational note: this script is a deliverable of SD-FDBK-FIX-VENTURE-CRACK-GATE-001, but
+ * running it against a real production venture is a business decision (does this venture's
+ * idea actually pass PBN scoring?) that belongs to a human, not an automatic EXEC-phase side
+ * effect. This SD ships the script, tested; it does not invoke it against real ventures.
+ *
+ * Usage:
+ *   node scripts/eva/retroactive-pbn-score.mjs --venture-id <uuid> [--dry-run]
+ */
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import { scorePbnBuckets } from '../../lib/eva/stage-zero/pbn-scoring.js';
+import { buildPbnVerdict } from '../../lib/eva/stage-zero/pbn-gate.js';
+
+export function parseArgs(argv) {
+  const args = { ventureId: null, dryRun: false, help: false };
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--venture-id') { args.ventureId = argv[++i]; }
+    else if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--help' || a === '-h') args.help = true;
+  }
+  return args;
+}
+
+/** Builds a pbn-scoring.js-shaped brief from a live venture row's existing fields/metadata. */
+export function buildBriefFromVenture(venture) {
+  return {
+    name: venture.name,
+    problem_statement: venture.description || null,
+    solution: venture.metadata?.stage_zero?.solution || null,
+    target_market: venture.metadata?.stage_zero?.target_market || null,
+    thesis: venture.metadata?.thesis || null,
+  };
+}
+
+/**
+ * Fetches the venture (by UUID, never by name), scores it, and writes the verdict via a
+ * nested jsonb_set RPC so pre-existing metadata.stage_zero keys are never touched.
+ * @param {object} supabase
+ * @param {string} ventureId
+ * @param {object} [deps] - deps.scorePbnBuckets / deps.buildPbnVerdict for test injection
+ */
+export async function retroactivelyScoreVenture(supabase, ventureId, deps = {}) {
+  if (typeof ventureId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ventureId)) {
+    throw new Error('retroactivelyScoreVenture requires a UUID --venture-id; name-based lookup is deliberately not supported (two live ventures share the name "MarketLens")');
+  }
+
+  const { data: venture, error: fetchError } = await supabase
+    .from('ventures')
+    .select('id, name, description, metadata')
+    .eq('id', ventureId)
+    .maybeSingle();
+  if (fetchError) throw new Error(`ventures fetch failed: ${fetchError.message}`);
+  if (!venture) throw new Error(`no venture found for id ${ventureId}`);
+
+  const existingVerdict = venture.metadata?.stage_zero?.pbn_verdict;
+  if (existingVerdict) {
+    return { skipped: true, reason: 'pbn_verdict_already_present', ventureId, existingVerdict };
+  }
+
+  const brief = buildBriefFromVenture(venture);
+  const buckets = await (deps.scorePbnBuckets || scorePbnBuckets)(brief);
+  const pbnVerdict = (deps.buildPbnVerdict || buildPbnVerdict)(buckets, { sourceRef: { retroactive: true, scored_at: new Date().toISOString() } });
+
+  // Narrow, single-purpose RPC (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql),
+  // not a JS spread: a two-level JS spread of `metadata` is a read-modify-write that is also
+  // lost-update racy against any concurrent writer; jsonb_set inside the function is atomic and
+  // touches only metadata->stage_zero->pbn_verdict, never a sibling key.
+  const { error: writeError } = await supabase.rpc('set_venture_pbn_verdict_stage_zero', {
+    p_venture_id: ventureId,
+    p_pbn_verdict: pbnVerdict,
+  });
+  if (writeError) throw new Error(`retroactive pbn_verdict write failed: ${writeError.message}`);
+
+  return { skipped: false, ventureId, verdict: pbnVerdict.verdict, buckets };
+}
+
+export async function main(argv = process.argv, deps = {}) {
+  const args = parseArgs(argv);
+  if (args.help || !args.ventureId) {
+    console.log('retroactive-pbn-score --venture-id <uuid> [--dry-run]');
+    return { exitCode: args.help ? 0 : 1 };
+  }
+
+  const supabase = deps.supabase || createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+
+  if (args.dryRun) {
+    const { data: venture, error } = await supabase.from('ventures').select('id, name, description, metadata').eq('id', args.ventureId).maybeSingle();
+    if (error || !venture) { console.error('dry-run fetch failed:', error?.message || 'not found'); return { exitCode: 1 }; }
+    console.log('DRY RUN — would score:', JSON.stringify(buildBriefFromVenture(venture), null, 2));
+    return { exitCode: 0 };
+  }
+
+  try {
+    const result = await retroactivelyScoreVenture(supabase, args.ventureId, deps);
+    console.log(JSON.stringify(result, null, 2));
+    return { exitCode: 0, result };
+  } catch (err) {
+    console.error('ERROR:', err.message);
+    return { exitCode: 1 };
+  }
+}
+
+const isMain = !!process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href;
+if (isMain) {
+  main().then(({ exitCode }) => process.exit(exitCode));
+}
