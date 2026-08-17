@@ -366,7 +366,7 @@ I'm performing 5-Whys analysis to identify the true root cause:
 
 | Trigger Condition | Monitored Channel | Example |
 |-------------------|-------------------|---------|
-| Test regression (was passing within 24h) | `test_failures` INSERT + `playwright_test_scenarios` | Login test passed 12h ago, now failing |
+| Test regression (was passing in an earlier run) | `test_results` INSERT (status=failed) + run-relative self-join via `test_runs` | Login test passed in run N-1, now failing in run N |
 | Handoff rejected 2nd time (same type) | `sd_phase_handoffs` UPDATE (status=rejected) | EXEC→PLAN rejected twice for same SD |
 | Sub-agent verdict = FAIL with confidence ≥80 | `sub_agent_execution_results` INSERT | DATABASE agent fails with 85% confidence |
 
@@ -913,7 +913,7 @@ LEFT JOIN rca_learning_records lr ON lr.rcr_id = rcr.id;
 
 2. Verify trigger conditions met:
    - T1 quality: Score actually dropped below 70?
-   - T2 regression: Test was passing within 24h?
+   - T2 regression: Test was passing in the most recent earlier run (run-relative, not a time window)?
    - T2 handoff: 2nd rejection for same handoff type?
 
 3. Check for duplicate suppression:
