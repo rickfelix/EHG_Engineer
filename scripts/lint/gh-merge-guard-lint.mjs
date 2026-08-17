@@ -86,6 +86,10 @@ export function stripCommentsPreservingLines(text) {
  * regression prevention FOR THOSE, not a general-purpose repo-wide "gh pr merge" census (that
  * would be its own, separately-scoped SD). Grow this list only alongside a PRD update, the same
  * way any other scope-locked file set changes.
+ *
+ * KNOWN LIMITATION: this scanner only checks the fixed SCAN_FILES list -- a bare `gh pr merge`
+ * introduced at a NEW site outside that list is invisible to it until SCAN_FILES is updated.
+ * harness_backlog e31829f5 tracks the broader, repo-wide sweep this deliberately is not.
  */
 export const SCAN_FILES = [
   '.claude/commands/checkin.md',
@@ -161,7 +165,13 @@ export function findViolations({ root = repoRoot, files = SCAN_FILES, readFile }
 }
 
 if (isMainModule(import.meta.url)) {
-  const violations = findViolations();
+  // --root <dir>: scan SCAN_FILES' relative paths under <dir> instead of the real repo root.
+  // Exists so this control is SEED-TESTABLE (control-seed-test-lint requires a scoping
+  // mechanism) without changing default behavior -- omitting the flag scans the real repo
+  // exactly as before.
+  const rootIdx = process.argv.indexOf('--root');
+  const rootOverride = rootIdx !== -1 ? process.argv[rootIdx + 1] : undefined;
+  const violations = findViolations(rootOverride ? { root: rootOverride } : {});
   for (const v of violations) {
     console.error(`[gh-merge-guard-lint] ${v.file}:${v.line}: bare "gh pr merge" -- repoint to scripts/gh-merge-safe.mjs, or add "gh-merge-guard-exempt: <reason>" if this line genuinely cannot (explanatory prose, execution site tracked elsewhere, or a gh-merge-safe.mjs limitation like --repo/--auto).`);
     console.error(`  ${v.text}`);

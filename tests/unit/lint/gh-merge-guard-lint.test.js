@@ -34,6 +34,27 @@ describe('stripCommentsPreservingLines', () => {
   });
 });
 
+describe('findViolations({root}) — seed-testability (control-seed-test-lint)', () => {
+  // control-seed-test-lint (SD-FDBK-INFRA-CONTROL-MERGE-WITHOUT-001) requires every new
+  // scripts/lint/ control to be aimable at a fixture. findViolations() already accepted a
+  // `root` option; this pins that a `root` override actually re-resolves SCAN_FILES'
+  // relative paths, which is what makes `--root` a genuine scoping mechanism and not a
+  // no-op flag that would report UNENFORCEABLE.
+  it('resolves SCAN_FILES entries under an overridden root instead of the real repo', () => {
+    const fakeRoot = '/does-not-exist-on-disk';
+    const violations = findViolations({
+      root: fakeRoot,
+      files: ['scripts/worker-checkin.cjs'],
+      readFile: (p) => {
+        expect(p.replace(/\\/g, '/')).toBe(`${fakeRoot}/scripts/worker-checkin.cjs`);
+        return 'console.log("gh pr merge --merge --delete-branch");\n';
+      },
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations[0].file).toBe('scripts/worker-checkin.cjs');
+  });
+});
+
 describe('findFileViolations — positive control (TS-3)', () => {
   it('flags a new bare gh pr merge instruction with no pragma', () => {
     const v = findFileViolations('scripts/synthetic-example.js', 'run(`gh pr merge ${n} --merge --delete-branch`);\n');
