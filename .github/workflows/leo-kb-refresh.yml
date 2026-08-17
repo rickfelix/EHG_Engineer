@@ -66,7 +66,10 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "🔄 Regenerating CLAUDE files..."
-          node scripts/generate-claude-md-from-db.js
+          # QF-20260816-925: this is the one scheduled place that should actually refresh the
+          # live-retrospectives-derived Recent Lessons section; ad-hoc regenerations elsewhere
+          # (e.g. a worker responding to "stale protocol detected") preserve it by default.
+          node scripts/generate-claude-md-from-db.js --refresh-lessons
 
           echo "🔍 Verifying regeneration..."
           node scripts/check-leo-version.js

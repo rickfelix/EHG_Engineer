@@ -11,7 +11,7 @@ import crypto from 'crypto';
 import { createRequire } from 'node:module';
 
 import { CLAUDEMDGeneratorV3, KNOWN_GENERATED_FILES, verifyFileContentHash } from '../../scripts/modules/claude-md-generator/index.js';
-import { parseOnlyFlag, detectConflictedState } from '../../scripts/generate-claude-md-from-db.js';
+import { parseOnlyFlag, parseRefreshLessonsFlag, detectConflictedState } from '../../scripts/generate-claude-md-from-db.js';
 
 const require = createRequire(import.meta.url);
 const { evaluatePublicationInvariants } = require('../../scripts/protocol-publication-audit.cjs');
@@ -122,6 +122,15 @@ describe('FR-4: --only scoped regeneration', () => {
     expect(() => parseOnlyFlag(['node', 'gen.js', '--only'])).toThrow(/--only requires a value/);
   });
 
+  // QF-20260816-925
+  it('parseRefreshLessonsFlag: absent => false (preserve on-disk lessons block)', () => {
+    expect(parseRefreshLessonsFlag(['node', 'gen.js'])).toBe(false);
+  });
+
+  it('parseRefreshLessonsFlag: present => true', () => {
+    expect(parseRefreshLessonsFlag(['node', 'gen.js', '--refresh-lessons'])).toBe(true);
+  });
+
   it('generateFile skips files outside options.only (no write, no manifest entry)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pubpipe-'));
     try {
@@ -167,6 +176,47 @@ describe('FR-4: --only scoped regeneration', () => {
     // notice it went missing.
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_MANUAL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_PLAN_MANUAL.md');
+  });
+});
+
+describe('QF-20260816-925: loadExistingLessonsOverride (fail-open, preserves on-disk lessons)', () => {
+  it('no CLAUDE_CORE.md on disk yet => null (fails open to a fresh snapshot)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-override-'));
+    try {
+      const gen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), {});
+      expect(gen.loadExistingLessonsOverride()).toBeNull();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('CLAUDE_CORE.md exists with a lessons block => extracts it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-override-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'CLAUDE_CORE.md'),
+        '## Recent Lessons (Last 30 Days)\n\n### 1. On-Disk Retro\nDetails.\n\n## Agent Responsibilities\n');
+      const gen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), {});
+      const override = gen.loadExistingLessonsOverride();
+      expect(override).toContain('On-Disk Retro');
+      expect(override).not.toContain('Agent Responsibilities');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('CLAUDE_CORE.md exists but has no lessons heading yet => null (nothing to preserve)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-override-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'CLAUDE_CORE.md'), '## Agent Responsibilities\n');
+      const gen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), {});
+      expect(gen.loadExistingLessonsOverride()).toBeNull();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('constructor: options.refreshLessons defaults to false, an explicit true is preserved', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-override-'));
+    try {
+      const defaultGen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), {});
+      expect(defaultGen.options.refreshLessons).toBe(false);
+      const refreshGen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), { refreshLessons: true });
+      expect(refreshGen.options.refreshLessons).toBe(true);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
 
