@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8fc4b18e9dd439dd -->
+<!-- file_content_hash: fbd5a48e77b620cf -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_PLAN_MANUAL.md — PLAN Manual (reference companion)
 
-**Generated**: 2026-08-16 8:26:48 PM
+**Generated**: 2026-08-17 4:17:22 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form PLAN reference — gate scoring tables, PRD and presentation templates, parent/child decomposition, refactor-brief guide, Explore-before-validation, runtime-audit protocol
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every PLAN phase entry
@@ -1074,6 +1074,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-08-16*
+*Generated from database: 2026-08-17*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=workflow, handoff_quality_gates, parent_child_plan, plan_refactor_brief_guide, parent_child_validation, plan_verify_explore, prd_template_scaffold, governance_kr_linkage_plan, plan_presentation_template, cascade_invalidation_plan). Do not hand-edit — edit the DB section and regenerate.*

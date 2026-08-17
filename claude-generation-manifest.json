@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-16T23:53:13.511Z",
-  "git_commit": "01c21cd1",
-  "db_snapshot_hash": "c5e0e9c69de3e20a",
+  "generated_at": "2026-08-17T08:17:22.422Z",
+  "git_commit": "da2f543f",
+  "db_snapshot_hash": "aedadee082b7a7a8",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -9,171 +9,171 @@
       "bytes": 19703,
       "estimated_tokens": 4891,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 94085,
-      "bytes": 94670,
-      "estimated_tokens": 23522,
-      "content_hash": "1afb999ef86d931e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_CORE.md"
+      "chars": 94084,
+      "bytes": 94669,
+      "estimated_tokens": 23521,
+      "content_hash": "6dc1dd644f401317",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 58425,
       "bytes": 58621,
       "estimated_tokens": 14607,
-      "content_hash": "f6545eed8564bb74",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_LEAD.md"
+      "content_hash": "94b9a2c79e9d7021",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
       "chars": 8818,
       "bytes": 8862,
       "estimated_tokens": 2205,
-      "content_hash": "8217f0e7462c52cc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_LEAD_MANUAL.md"
+      "content_hash": "bd4cf2ba1ab9fda7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 54928,
-      "bytes": 55185,
-      "estimated_tokens": 13732,
-      "content_hash": "8d5cdc5b31dc2a03",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_PLAN.md"
+      "chars": 54854,
+      "bytes": 55111,
+      "estimated_tokens": 13714,
+      "content_hash": "717232de9abdd96a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
       "chars": 38353,
       "bytes": 38460,
       "estimated_tokens": 9589,
-      "content_hash": "8fc4b18e9dd439dd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_PLAN_MANUAL.md"
+      "content_hash": "fbd5a48e77b620cf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 92809,
       "bytes": 93243,
       "estimated_tokens": 23203,
-      "content_hash": "d45cac28d0ad22a2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_EXEC.md"
+      "content_hash": "6cd7cbcf1860280b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
       "chars": 48444,
       "bytes": 48974,
       "estimated_tokens": 12111,
-      "content_hash": "fb9335ffaaf908e9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_ADAM.md"
+      "content_hash": "56173e8c11a02e54",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
       "chars": 15698,
       "bytes": 15842,
       "estimated_tokens": 3925,
-      "content_hash": "7e17b4da1a72f526",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_ADAM_MANUAL.md"
+      "content_hash": "ef54c295d84a65f8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
       "chars": 6924,
       "bytes": 6988,
       "estimated_tokens": 1731,
-      "content_hash": "3b7033af88daa0a9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_ADAM_PROVENANCE.md"
+      "content_hash": "c954ee9d24a0f849",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
       "chars": 26376,
       "bytes": 26580,
       "estimated_tokens": 6594,
-      "content_hash": "79c7380b191bc95a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_COORDINATOR.md"
+      "content_hash": "5eb5fe1edac57cdb",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
       "chars": 61308,
       "bytes": 61853,
       "estimated_tokens": 15327,
-      "content_hash": "c9d4172856d8d983",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_SOLOMON.md"
+      "content_hash": "3790921c6fc71d68",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
       "chars": 11227,
       "bytes": 11324,
       "estimated_tokens": 2807,
-      "content_hash": "9006ddf1fcc0a31b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_SOLOMON_MANUAL.md"
+      "content_hash": "d9866bd724912597",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "bytes": 9653,
       "estimated_tokens": 2403,
-      "content_hash": "5d0b2f965b1ffc55",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_DIGEST.md"
+      "content_hash": "4e7b7bc1408ca477",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 13747,
       "bytes": 13861,
       "estimated_tokens": 3437,
-      "content_hash": "409c53ab09aeaf68",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "46ec1cb46e6d1e7b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5551,
       "bytes": 5571,
       "estimated_tokens": 1388,
-      "content_hash": "e5f08857f00d3c33",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "5c1f0556f4b097df",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8541,
       "bytes": 8581,
       "estimated_tokens": 2136,
-      "content_hash": "3fd866968626500a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "491085f760ed32b0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10964,
       "bytes": 11046,
       "estimated_tokens": 2741,
-      "content_hash": "8dd55e134463113c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "4eae0ff443121aec",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 17736,
       "bytes": 18068,
       "estimated_tokens": 4434,
-      "content_hash": "225cd48b4a90de85",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "904e2c222e88d3af",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 6091,
       "bytes": 6161,
       "estimated_tokens": 1523,
-      "content_hash": "80032f2db4905982",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "7d21c047483fa3c0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 3969,
       "bytes": 4011,
       "estimated_tokens": 993,
-      "content_hash": "6fa7138f932b1006",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "a3af841079bc8618",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "db109e9449a985af",
+    "global": "06346b339117295e",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -230,7 +230,7 @@
       "256": "aee0db021da60e56",
       "257": "f72613a96f171e1c",
       "258": "0c2e7546195bf5b4",
-      "259": "146327422ab6adc9",
+      "259": "9b862aae7b82de3c",
       "262": "c8f9dd74bec589b1",
       "263": "87494b8d3831ebb4",
       "264": "47834c25c1940b74",
