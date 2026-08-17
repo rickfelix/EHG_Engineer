@@ -5,8 +5,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  isSmsQuietHour, smsQuietWindowReleaseIso, etLocalHour, et6amIso, etDateStr, etPrior545Iso,
-  isValidCanonicalZone,
+  isSmsQuietHour, smsQuietWindowReleaseIso, etLocalHour, etLocalMinute, et6amIso, etDateStr,
+  etPrior545Iso, isValidCanonicalZone,
 } from '../../../lib/time/chairman-et-wall-clock.js';
 
 describe('isSmsQuietHour — 10PM-6AM ET boundary', () => {
@@ -68,6 +68,14 @@ describe('FR-4 — zone parameter threading', () => {
   it('etLocalHour threads the zone', () => {
     expect(etLocalHour(now)).toBe(5);                       // 05:45 EDT
     expect(etLocalHour(now, 'America/Jamaica')).toBe(4);     // 04:45 Jamaica
+  });
+
+  // QF-20260816-091: etLocalMinute mirrors etLocalHour so callers (e.g. notifications
+  // orchestrator's quiet-hours check) can derive a zone-local HH:MM without a second,
+  // ad-hoc Intl.DateTimeFormat call.
+  it('etLocalMinute threads the zone', () => {
+    expect(etLocalMinute(now)).toBe(45);                    // 05:45 EDT
+    expect(etLocalMinute(now, 'America/Jamaica')).toBe(45); // 04:45 Jamaica (same :45, different hour)
   });
 
   it('etDateStr threads the zone (calendar date can differ near a day boundary)', () => {

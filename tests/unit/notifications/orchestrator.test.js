@@ -7,7 +7,7 @@
  *        idempotency, error handling
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the dependencies before importing orchestrator
 vi.mock('../../../lib/notifications/resend-adapter.js', () => ({
@@ -61,6 +61,10 @@ describe('orchestrator', () => {
     mockSupabase = {
       from: vi.fn(() => mockFromChain)
     };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   /**
@@ -304,6 +308,119 @@ describe('orchestrator', () => {
 
       const result = await sendImmediateNotification(mockSupabase, baseParams);
       expect(result.status).toBe('sent');
+    });
+
+    // QF-20260816-091: isInQuietHours compared the chairman's quiet_hours preference against
+    // the SERVER-local wall clock (new Date().getHours()) instead of the chairman's own zone,
+    // silently shifting the enforced window by the container's UTC offset.
+    describe('QF-20260816-091 — quiet hours are chairman-zone-aware, not server-local', () => {
+      it('02:00Z (21:00 ET, before the 22:00-07:00 window) is NOT quiet — sends immediately', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-16T02:00:00.000Z')); // 21:00 EST (winter, UTC-5)
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-001' } }),
+          selectSingleChain({
+            data: {
+              preference_value: JSON.stringify({ enabled: true, timezone: 'America/New_York' })
+            }
+          }),
+          updateChain()
+        ]);
+
+        const result = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(result.status).toBe('sent');
+        expect(sendEmail).toHaveBeenCalledTimes(1);
+      });
+
+      it('09:00Z (04:00 ET, inside the 22:00-07:00 window) IS quiet — defers', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-16T09:00:00.000Z')); // 04:00 EST (winter, UTC-5)
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-002' } }),
+          selectSingleChain({
+            data: {
+              preference_value: JSON.stringify({ enabled: true, timezone: 'America/New_York' })
+            }
+          }),
+          updateChain()
+        ]);
+
+        const result = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(result.status).toBe('deferred');
+        expect(sendEmail).not.toHaveBeenCalled();
+      });
+
+      it('no explicit timezone falls back to America/New_York (same 04:00 ET quiet verdict as an explicit tz)', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-16T09:00:00.000Z')); // 04:00 EST (winter, UTC-5)
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-003' } }),
+          selectSingleChain({
+            data: {
+              preference_value: JSON.stringify({ enabled: true }) // no timezone field
+            }
+          }),
+          updateChain()
+        ]);
+
+        const result = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(result.status).toBe('deferred');
+      });
+
+      // Host-TZ-independent proof that the verdict actually depends on prefs.timezone (not
+      // just coincidentally correct on a dev box whose own local TZ happens to be ET): the
+      // pre-fix code ignores prefs.timezone entirely and derives both verdicts from the SAME
+      // server-local reading of `now`, so it cannot produce different verdicts for these two
+      // configs at the same instant, however the test host's own local TZ is set.
+      it('the SAME instant yields different verdicts for a New York vs a Tokyo chairman (proves the zone is actually read)', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-16T05:00:00.000Z')); // 00:00 EST / 14:00 JST
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-004' } }),
+          selectSingleChain({
+            data: { preference_value: JSON.stringify({ enabled: true, timezone: 'America/New_York' }) }
+          }),
+          updateChain()
+        ]);
+        const nyResult = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(nyResult.status).toBe('deferred'); // 00:00 ET is inside the 22:00-07:00 window
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-005' } }),
+          selectSingleChain({
+            data: { preference_value: JSON.stringify({ enabled: true, timezone: 'Asia/Tokyo' }) }
+          }),
+          updateChain()
+        ]);
+        const tokyoResult = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(tokyoResult.status).toBe('sent'); // 14:00 JST is outside the 22:00-07:00 window
+      });
+
+      // Adversarial review (PR #7180): an invalid stored timezone must warn (distinguishable
+      // from "never configured") while still failing safe to the ET default, not throw.
+      it('an invalid stored timezone warns and falls back to America/New_York (fails safe, not silently)', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-16T09:00:00.000Z')); // 04:00 EST (winter, UTC-5)
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        configureFromSequence([
+          insertChain({ data: { id: 'notif-tz-006' } }),
+          selectSingleChain({
+            data: { preference_value: JSON.stringify({ enabled: true, timezone: 'Not/AZone' }) }
+          }),
+          updateChain()
+        ]);
+
+        const result = await sendImmediateNotification(mockSupabase, baseParams);
+        expect(result.status).toBe('deferred'); // falls back to ET default, still 04:00 -> quiet
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Not/AZone'));
+
+        warnSpy.mockRestore();
+      });
     });
   });
 
