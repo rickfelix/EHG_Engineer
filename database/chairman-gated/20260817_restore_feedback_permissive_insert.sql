@@ -12,7 +12,7 @@
 -- directives ee1428c3 / 1a579946 / 6d709e3b; it is NOT a recommendation to apply it over Remedy A.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- THIS IS NOT A NEUTRAL RESTORE. IT REVERTS PART OF A ~1-DAY-OLD CHAIRMAN-RATIFIED DECISION.
+-- THIS IS NOT A NEUTRAL RESTORE. IT REVERTS TWO PARTS OF A ~1-DAY-OLD CHAIRMAN-RATIFIED DECISION.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql (SD-LEO-FIX-CLOSE-ANON-
 -- VENTURE-001) deliberately dropped venture_user_insert_feedback so that EVERY direct-insert caller
@@ -21,11 +21,21 @@
 -- INSERT path. It does NOT undo the RPC (fn_submit_venture_user_feedback and its
 -- grants are left fully intact -- both mechanisms would coexist if this is applied), but it DOES
 -- restore the exact class of exposure that migration closed, narrowed only by the predicate below.
--- The chairman brief must present this explicitly as "revert this specific protection, yes/no" --
--- not as a generic bug fix. Its own header (line 41-47) already documents the residual gap this
--- file would reopen: an anon caller can still attribute a user_%-type row to any real, active
--- venture_id it can guess or discover (existence-only check, not ownership) -- unchanged by this
--- file either way, present under the RPC path too, tracked separately (advisory 9d3ddfce).
+--
+-- REVERT #1 (the policy): restores an anon-reachable INSERT path onto public.feedback.
+-- REVERT #2 (step 1b below, TESTING/SECURITY sub-agent finding, evidence 731d79a4-5498-4bd7-8628-
+-- 427dbc31d3dc / 241fb047-1b4a-4795-b73b-8fa4c8ab2778): also restores anon's direct EXECUTE on
+-- venture_exists_and_active(uuid) and check_feedback_rate_limit(uuid) -- 20260815 REVOKEd these as
+-- its own named "MEDIUM-1" finding, an unauthenticated existence/rate-limit oracle. Without REVERT
+-- #2 the policy from REVERT #1 is inert (every insert 42501s), so applying this file necessarily
+-- means both -- the chairman brief must present BOTH as named reverts, not fold #2 silently into #1
+-- as an implementation detail.
+--
+-- The chairman brief must present this explicitly as "revert these two specific protections,
+-- yes/no" -- not as a generic bug fix. Its own header (line 41-47) already documents the residual
+-- gap this file would reopen: an anon caller can still attribute a user_%-type row to any real,
+-- active venture_id it can guess or discover (existence-only check, not ownership) -- unchanged by
+-- this file either way, present under the RPC path too, tracked separately (advisory 9d3ddfce).
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- WHY TO anon ONLY -- EXEC-PHASE CORRECTION, this file originally scoped TO anon, authenticated
@@ -169,6 +179,16 @@ migration, step 2 below) for severity/category/rate.';
 --     in full either (20260815's own _DOWN.sql grants it to both) -- that broader historical grant
 --     served some other authenticated-facing caller unrelated to this policy; this migration
 --     restores only what THIS policy needs, not everything 20260815 touched.
+--
+--     ORDER-COUPLING WARNING (SECURITY sub-agent finding, evidence 71204b61-e78f-4231-8c9e-
+--     89fa6f3728bd, live-verified against 5 grant-state scenarios): this file's verify check (e)
+--     below will ABORT (safely, fail-closed, no partial apply -- never fail-open) if
+--     20260815_venture_user_feedback_ownership_rpc_DOWN.sql has ALREADY been applied first (that
+--     DOWN grants check_feedback_rate_limit TO anon, authenticated, which check (e)'s negative
+--     authenticated assertion correctly rejects). If this file is ever applied out of the order
+--     this SD's own decision package assumes, the abort message will say "authenticated holds
+--     EXECUTE" without explaining WHY -- read this comment if that happens; it is not a bug in
+--     this file, it is this file correctly refusing to compound onto an unexpected prior state.
 -- ============================================================
 GRANT EXECUTE ON FUNCTION public.venture_exists_and_active(uuid) TO anon;
 GRANT EXECUTE ON FUNCTION public.check_feedback_rate_limit(uuid) TO anon;

@@ -84,8 +84,13 @@ Left in place below for history; do not action it.
 should be read alongside, not overridden by:**
 `database/chairman-gated/20260817_restore_feedback_permissive_insert.sql` (+ `_DOWN.sql` +
 `_acceptance.mjs`) stages — NOT applies — a permissive INSERT policy restore, presented to the
-chairman explicitly as reverting part of `SD-LEO-FIX-CLOSE-ANON-VENTURE-001`'s protection, scoped
-`TO anon` only — byte-identical to the historical shape, including its two supporting `EXECUTE`
+chairman explicitly as reverting **two** parts of `SD-LEO-FIX-CLOSE-ANON-VENTURE-001`'s protection,
+not one: (1) the policy itself, restoring an anon-reachable INSERT path, and (2) anon's direct
+`EXECUTE` on `venture_exists_and_active`/`check_feedback_rate_limit`, which that SD's own migration
+revoked as a named "MEDIUM-1" finding (an unauthenticated existence/rate-limit oracle) — restoring
+(1) without (2) leaves the policy inert (TESTING sub-agent finding, evidence
+731d79a4-5498-4bd7-8628-427dbc31d3dc), so applying this file necessarily means both. Scoped `TO
+anon` only — byte-identical to the historical shape, including its two supporting `EXECUTE`
 grants — and re-pinning `anon_feedback_ingress_bounds`'s role scope explicitly rather than relying
 on its current accidental `TO PUBLIC` drift. (An earlier draft widened this `TO authenticated`,
 reasoning `FeedbackWidget.tsx` runs as `authenticated`; corrected during EXEC-TO-PLAN once that

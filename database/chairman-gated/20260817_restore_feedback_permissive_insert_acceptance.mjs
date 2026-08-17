@@ -19,10 +19,13 @@
 // does not duplicate.
 //
 // AC-5 (the per-venture rate limit) is NOT live-probed here -- tripping it for real means exceeding
-// check_feedback_rate_limit's live threshold (up to 250 requests/hour depending on source_type),
-// which is slow and writes real load against a function this migration does not modify. This
-// script relies on check_feedback_rate_limit's own pre-existing, unmodified behavior instead of
-// re-proving it.
+// check_feedback_rate_limit's live threshold (a flat count(*) >= 50 per venture per hour, scoped to
+// feedback_type LIKE 'user_%' -- confirmed via pg_get_functiondef; this is a DIFFERENT function and
+// threshold from anon_feedback_ingress_bounds's fn_anon_ingress_prior_hour_count, which is tiered
+// 250/200/50 by source_type -- SECURITY sub-agent finding, evidence 71204b61-e78f-4231-8c9e-89fa6f3728bd,
+// an earlier draft of this comment misattributed the tiered thresholds to this function), which is
+// slow and writes real load against a function this migration does not modify. This script relies
+// on check_feedback_rate_limit's own pre-existing, unmodified behavior instead of re-proving it.
 //
 // ── BLAST RADIUS ──────────────────────────────────────────────────────────────────────────────
 // Inserts and deletes tagged probe rows in public.feedback for one real, dynamically-chosen active
