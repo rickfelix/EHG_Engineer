@@ -17,16 +17,41 @@ import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.j
 import { withObserveOnlyWitness } from '../../../../lib/eva/observe-gate-witness.js';
 
 import { execSync } from 'child_process';
-// PROJECT_ROOT prefers `git rev-parse --show-toplevel` (worktree-aware) over
+// SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-6): resolveGateRepoContext resolves the
+// SD's real repo per-SD (venture-aware); this legacy computation is kept as the FALLBACK
+// for when resolution is unavailable/fails, preserving the pre-fix worktree-aware
+// behavior (feedback e58d53d6) as a safety net rather than a regression.
+import { resolveGateRepoContext } from '../../../../lib/repo-paths.js';
+// LEGACY_PROJECT_ROOT prefers `git rev-parse --show-toplevel` (worktree-aware) over
 // the CLAUDE_PROJECT_DIR env var (always points at the MAIN repo, even when
 // running from a worktree). Without this priority, scope-completion-gate
 // looks for SD deliverables at main-repo paths and reports them missing
 // when the SD's branch added them inside the worktree.
 // Closes feedback row e58d53d6.
-const PROJECT_ROOT = (() => {
+const LEGACY_PROJECT_ROOT = (() => {
   try { return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim(); }
   catch { return process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer'; }
 })();
+
+/**
+ * SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-6): resolve the per-SD project root via
+ * the canonical gate-side resolver, so a venture SD's deliverables are checked against
+ * ITS real repo instead of always EHG_Engineer's worktree. Falls back to
+ * LEGACY_PROJECT_ROOT (this worktree's own root) when resolution fails or is
+ * unavailable — a soft-degrade, not a hard failure, matching this gate's advisory
+ * (non-blocking) posture.
+ *
+ * @param {Object} sd - SD row (needs target_application + metadata for resolution)
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<string>}
+ */
+async function resolveProjectRoot(sd, supabase) {
+  try {
+    const repoCtx = await resolveGateRepoContext(sd, supabase);
+    if (repoCtx.resolved && repoCtx.repoPath) return repoCtx.repoPath;
+  } catch { /* fall through to legacy default */ }
+  return LEGACY_PROJECT_ROOT;
+}
 
 /**
  * Extract deliverable items from architecture plan content.
@@ -102,13 +127,15 @@ function extractDeliverables(content) {
  * Check if a deliverable exists in the codebase.
  *
  * @param {{name: string, type: string, checkPattern: string}} deliverable
+ * @param {string} [projectRoot] - defaults to LEGACY_PROJECT_ROOT for callers that
+ *   haven't resolved a per-SD root (e.g. existing direct callers/tests)
  * @returns {{status: 'found'|'missing'|'ambiguous', evidence: string}}
  */
-function checkDeliverable(deliverable) {
+function checkDeliverable(deliverable, projectRoot = LEGACY_PROJECT_ROOT) {
   const { type, checkPattern } = deliverable;
 
   if (type === 'file') {
-    const fullPath = path.join(PROJECT_ROOT, checkPattern);
+    const fullPath = path.join(projectRoot, checkPattern);
     if (fs.existsSync(fullPath)) {
       return { status: 'found', evidence: `File exists: ${checkPattern}` };
     }
@@ -130,10 +157,10 @@ function checkDeliverable(deliverable) {
   if (type === 'function') {
     // Grep for the function name in JS/TS files
     try {
-      const grepDirs = ['lib', 'scripts/modules'].map(d => path.join(PROJECT_ROOT, d));
+      const grepDirs = ['lib', 'scripts/modules'].map(d => path.join(projectRoot, d));
       for (const dir of grepDirs) {
         if (!fs.existsSync(dir)) continue;
-        const found = grepRecursive(dir, checkPattern);
+        const found = grepRecursive(dir, checkPattern, projectRoot);
         if (found) {
           return { status: 'found', evidence: `Function "${checkPattern}" found in ${found}` };
         }
@@ -144,9 +171,9 @@ function checkDeliverable(deliverable) {
 
   if (type === 'table') {
     // Check migration files for CREATE TABLE
-    const migrationsDir = path.join(PROJECT_ROOT, 'database', 'migrations');
+    const migrationsDir = path.join(projectRoot, 'database', 'migrations');
     if (fs.existsSync(migrationsDir)) {
-      const found = grepRecursive(migrationsDir, checkPattern);
+      const found = grepRecursive(migrationsDir, checkPattern, projectRoot);
       if (found) {
         return { status: 'found', evidence: `Table "${checkPattern}" referenced in ${found}` };
       }
@@ -155,9 +182,9 @@ function checkDeliverable(deliverable) {
   }
 
   if (type === 'column') {
-    const migrationsDir = path.join(PROJECT_ROOT, 'database', 'migrations');
+    const migrationsDir = path.join(projectRoot, 'database', 'migrations');
     if (fs.existsSync(migrationsDir)) {
-      const found = grepRecursive(migrationsDir, checkPattern);
+      const found = grepRecursive(migrationsDir, checkPattern, projectRoot);
       if (found) {
         return { status: 'found', evidence: `Column "${checkPattern}" referenced in ${found}` };
       }
@@ -172,20 +199,21 @@ function checkDeliverable(deliverable) {
  * Simple recursive grep — find first file containing pattern.
  * @param {string} dir
  * @param {string} pattern
+ * @param {string} [projectRoot] - defaults to LEGACY_PROJECT_ROOT (see checkDeliverable)
  * @returns {string|null} Relative file path or null
  */
-function grepRecursive(dir, pattern) {
+function grepRecursive(dir, pattern, projectRoot = LEGACY_PROJECT_ROOT) {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-        const result = grepRecursive(fullPath, pattern);
+        const result = grepRecursive(fullPath, pattern, projectRoot);
         if (result) return result;
       } else if (entry.isFile() && /\.(js|mjs|cjs|ts|sql)$/.test(entry.name)) {
         const content = fs.readFileSync(fullPath, 'utf8');
         if (content.includes(pattern)) {
-          return path.relative(PROJECT_ROOT, fullPath);
+          return path.relative(projectRoot, fullPath);
         }
       }
     }
@@ -287,9 +315,12 @@ export async function validateScopeCompletion(sdKey) {
   // 1. Get the SD's arch_key + scope_slice from metadata
   //    `id` added for SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-3 — parent-orchestrator
   //    detection needs the UUID to query children via parent_sd_id.
+  //    `target_application` added for SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-6) —
+  //    without it, resolveProjectRoot can never tell this is a venture SD and always
+  //    falls back to LEGACY_PROJECT_ROOT (EHG_Engineer's own worktree).
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
-    .select('id, metadata, scope_slice, parent_sd_id')
+    .select('id, metadata, scope_slice, parent_sd_id, target_application')
     .eq('sd_key', sdKey)
     .single();
 
@@ -389,9 +420,11 @@ export async function validateScopeCompletion(sdKey) {
     return { pass: true, score: 100, issues: [], warnings: ['No deliverables extracted from architecture plan'], checklist: [] };
   }
 
-  // 4. Check each deliverable
+  // 4. Check each deliverable — resolved against THIS SD's real repo (FR-6), not always
+  // EHG_Engineer's own worktree.
+  const projectRoot = await resolveProjectRoot(sd, supabase);
   const checklist = deliverables.map(d => {
-    const result = checkDeliverable(d);
+    const result = checkDeliverable(d, projectRoot);
     const icon = result.status === 'found' ? '✅' : result.status === 'ambiguous' ? '⚠️' : '❌';
     console.log(`   ${icon} ${d.name}: ${result.status} — ${result.evidence}`);
     return { ...d, ...result };
@@ -450,4 +483,4 @@ export function createScopeCompletionGate() {
   });
 }
 
-export { extractDeliverables, checkDeliverable, grepRecursive, filterBySlice, globToRegExp, isInheritedWithoutSlice };
+export { extractDeliverables, checkDeliverable, grepRecursive, filterBySlice, globToRegExp, isInheritedWithoutSlice, resolveProjectRoot, LEGACY_PROJECT_ROOT };

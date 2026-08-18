@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   deriveOutcomeFlow, classifyDispatchReason, deriveDispatchReasons, evaluateReasonBand,
   lacksHoldReason, hasStaleUnreviewedHold, sampleFalseCompletions, classifyFailureClasses,
@@ -179,13 +179,48 @@ describe('S2 FALSE_COMPLETION sampler', () => {
     expect(r.false_completions).toEqual(['SD-GHOST-001']);
     expect(r.samples.find((s) => s.sd_key === 'SD-UNKNOWN-001').unverifiable).toBe(true);
   });
-  it('cross-repo SDs are unverifiable from this checkout, never false completions', () => {
+  // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): INTENTIONAL REWRITE, justified.
+  // Pre-fix, ANY SD whose target_application named a venture blanket-defaulted to
+  // 'unverifiable' WITHOUT ever calling gitGrep — measured at 1105/4524 completed SDs
+  // (24.4% of the fleet). That was the actual bug this SD exists to fix: a resolvable
+  // venture repo is now genuinely PROBED, not silently waved through as unverifiable.
+  // sampleFalseCompletions itself stays synchronous (TR-2); repo resolution is the async
+  // caller's job (computeSharpenings), simulated here via a pre-attached _repoResolution —
+  // exactly the shape computeSharpenings produces via resolveGateRepoContext.
+  it('a resolved cross-repo SD is genuinely probed via its real repo, not blanket-unverifiable', () => {
     const r = sampleFalseCompletions(
-      [{ sd_key: 'SD-VENTURE-001', target_application: 'apexniche-ai', metadata: {} }],
-      () => false
+      [{ sd_key: 'SD-VENTURE-001', target_application: 'apexniche-ai', metadata: {}, _repoResolution: { resolved: true, repoPath: '/ventures/apexniche-ai' } }],
+      (sdKey, repoPath) => (sdKey === 'SD-VENTURE-001' && repoPath === '/ventures/apexniche-ai' ? true : false),
+    );
+    expect(r.false_completions).toEqual([]);
+    expect(r.samples[0].unverifiable).toBe(false);
+    expect(r.samples[0].verified).toBe(true);
+  });
+
+  it('a resolved cross-repo SD with genuinely no matching commit is a real false_completion (the intentional tightening)', () => {
+    const r = sampleFalseCompletions(
+      [{ sd_key: 'SD-VENTURE-002', target_application: 'apexniche-ai', metadata: {}, _repoResolution: { resolved: true, repoPath: '/ventures/apexniche-ai' } }],
+      () => false,
+    );
+    expect(r.false_completions).toEqual(['SD-VENTURE-002']);
+    expect(r.samples[0].unverifiable).toBe(false);
+  });
+
+  it('an UNRESOLVABLE cross-repo SD (resolution attempted, resolved:false) stays unverifiable, never false_completion', () => {
+    const r = sampleFalseCompletions(
+      [{ sd_key: 'SD-VENTURE-003', target_application: 'zzz-nonexistent-venture', metadata: {}, _repoResolution: { resolved: false, repoPath: null } }],
+      () => false,
     );
     expect(r.false_completions).toEqual([]);
     expect(r.samples[0].unverifiable).toBe(true);
+  });
+
+  it('a row with no _repoResolution attached at all (direct/legacy caller) falls straight through to gitGrep(sdKey) — byte-identical to pre-fix', () => {
+    const gitGrep = vi.fn(() => true);
+    const r = sampleFalseCompletions([{ sd_key: 'SD-LEGACY-001', target_application: 'apexniche-ai', metadata: {} }], gitGrep);
+    expect(gitGrep).toHaveBeenCalledWith('SD-LEGACY-001');
+    expect(gitGrep.mock.calls[0]).toHaveLength(1);
+    expect(r.samples[0].verified).toBe(true);
   });
 });
 
