@@ -64,6 +64,17 @@ try {
   await client.query(extractBody(upSql));
   log.push('Migration index + functions created inside test transaction');
 
+  // FR-1 AC4 (VALIDATION sub-agent finding): the migration's own verify block asserts
+  // has_function_privilege('anon', ..., 'EXECUTE') IS TRUE, but that predicate is also TRUE when
+  // PUBLIC holds EXECUTE (PUBLIC grants are inherited by every role) -- so it cannot by itself
+  // distinguish "granted to anon specifically" from "granted to the world". This assertion closes
+  // that gap with the negative form (matches the pattern already used for check_error_capture_storm
+  // in the migration's own verify block): PUBLIC must NOT hold EXECUTE on fn_submit_error_capture.
+  const publicGrant = await client.query(
+    `SELECT has_function_privilege('public', 'public.fn_submit_error_capture(text,text,text,text,jsonb)', 'EXECUTE') AS granted`
+  );
+  assert(publicGrant.rows[0].granted === false, `FR-1 AC4: PUBLIC does NOT hold EXECUTE on fn_submit_error_capture (got ${publicGrant.rows[0].granted})`);
+
   const authedUser = '00000000-0000-0000-0000-0000000000ee';
 
   // TS-1a (anon): basic submit succeeds, server-computed fields correct, severity NOT clamped
@@ -82,7 +93,8 @@ try {
     assert(typeof payload.id === 'string', 'TS-1a response.id is a string');
     newRowId = payload.id;
     const row = await client.query(
-      `SELECT status, source_type, feedback_type, user_id, venture_id, page_url, severity, error_hash, occurrence_count, metadata, category
+      `SELECT status, source_type, feedback_type, user_id, venture_id, page_url, severity, error_hash, occurrence_count, metadata, category,
+              created_at, extract(epoch from (now() - created_at)) AS age_seconds
        FROM public.feedback WHERE id = $1::uuid`,
       [newRowId]
     );
@@ -95,6 +107,11 @@ try {
     assert(f.severity === 'medium', `TS-1a severity=medium unclamped (got ${f.severity})`);
     assert(f.occurrence_count === 1, `TS-1a occurrence_count=1 on first insert (got ${f.occurrence_count})`);
     assert(typeof f.error_hash === 'string' && f.error_hash.length === 64, `TS-1a error_hash is server-computed 64-hex (got ${f.error_hash})`);
+    // FR-1 AC1 (VALIDATION sub-agent finding): created_at is server-computed and fresh, regardless
+    // of any attempted client override (this RPC has no p_created_at parameter at all -- TS-6's own
+    // point -- but this assertion is the one that actually reads the value, not just relies on the
+    // signature lacking the param).
+    assert(Number(f.age_seconds) < 60, `TS-1a created_at is fresh, within the last minute (got age_seconds=${f.age_seconds})`);
     // TS-7: category/promote_payload injection surface -- must be stripped/never set
     assert(f.category === null || f.category === undefined, `TS-7 category never set from client input (got ${JSON.stringify(f.category)})`);
     assert(f.metadata.promote_payload === undefined, `TS-7 metadata.promote_payload stripped, not persisted (got ${JSON.stringify(f.metadata)})`);
@@ -246,7 +263,20 @@ try {
   // a silent drop" guarantee, actually exercised. Runs LAST: its 51 seed rows persist forward (see
   // note on TS-lifetime-dedup above) and would trip the ceiling for any test that ran after it.
   r = await withSavepoint(client, 'TS-storm', async () => {
-    for (let i = 0; i < 49; i++) {
+    // Seed count is DYNAMIC relative to the current distinct-fingerprint count, not assumed-zero --
+    // every earlier test in this script (TS-1a/1b/1c/TS-2/TS-isolation/TS-lifetime-dedup) already
+    // contributed its own distinct fingerprints that persist forward (RELEASE, not ROLLBACK, on
+    // success), so "seed exactly 49 more" landed the real count well past 50 before this block even
+    // started (live-caught: before49 was already true). Query the real baseline first.
+    const baseline = await client.query(
+      `SELECT count(DISTINCT error_hash) AS n FROM public.feedback
+       WHERE source_type = 'error_capture' AND feedback_type = 'sentry_error' AND venture_id IS NULL
+         AND error_hash <> $1 AND created_at > now() - interval '1 hour'`,
+      ['0'.repeat(64)]
+    );
+    const already = Number(baseline.rows[0].n);
+    const toReach49 = Math.max(0, 49 - already);
+    for (let i = 0; i < toReach49; i++) {
       await client.query(
         `INSERT INTO public.feedback (
            type, feedback_type, source_type, source_application, title, description, severity,
@@ -255,7 +285,7 @@ try {
            'issue', 'sentry_error', 'error_capture', 'EHG', 'storm-seed', 'storm-seed', 'low', 'new',
            NULL, $1, 1, now(), now(), '{}'
          )`,
-        [`aa${String(i).padStart(2, '0')}`.padEnd(64, '0')]
+        [`aa${String(i).padStart(4, '0')}`.padEnd(64, '0')]
       );
     }
     const before49 = await client.query(`SELECT public.check_error_capture_storm() AS tripped`);
@@ -267,7 +297,7 @@ try {
          'issue', 'sentry_error', 'error_capture', 'EHG', 'storm-seed', 'storm-seed', 'low', 'new',
          NULL, $1, 1, now(), now(), '{}'
        )`,
-      ['bb'.padEnd(64, '0')] // 50th distinct fingerprint
+      ['bb'.padEnd(64, '0')] // the fingerprint that crosses the threshold
     );
     const at50 = await client.query(`SELECT public.check_error_capture_storm() AS tripped`);
     const tripped = await client.query(
@@ -286,6 +316,11 @@ try {
   // very INSERT this branch exists to make observable -- live-reproduced with the original design).
   assert(r.ok, `TS-storm: the 51st distinct fingerprint call succeeds at the SQL level, not a thrown 22001/53400 (got ${r.ok ? 'success' : r.code + ' ' + r.message})`);
   if (r.ok) {
+    // FR-2 (VALIDATION sub-agent finding): before49/at50 were fetched but never asserted -- the
+    // threshold could have been anywhere from ~7 to 50 and this block would still have passed.
+    // These two lines are the actual proof the ceiling flips at EXACTLY 50, not just "eventually".
+    assert(r.result.before49.rows[0].tripped === false, `FR-2: check_error_capture_storm() is false at 49 distinct fingerprints (got ${r.result.before49.rows[0].tripped})`);
+    assert(r.result.at50.rows[0].tripped === true, `FR-2: check_error_capture_storm() is true at exactly 50 distinct fingerprints (got ${r.result.at50.rows[0].tripped})`);
     const payload = r.result.tripped.rows[0].result;
     assert(payload.ok === false, `TS-storm: response payload reports ok:false (got ${JSON.stringify(payload)})`);
     assert(payload.rate_limited === true, `TS-storm: response payload reports rate_limited:true (got ${JSON.stringify(payload)})`);
