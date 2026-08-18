@@ -1,0 +1,78 @@
+name: EHG App Auth Smoke Test
+
+# SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-7 (class g): makes the authenticated-login harness
+# (tests/e2e/ehg-app/auth.setup.spec.ts) fire automatically instead of manual-only -- closing the
+# gap where only the chairman manually caught a real-session 401.
+#
+# WHY A SCHEDULED WORKFLOW, NOT AN IN-PROCESS VENTURE-STAGE HOOK: this test verifies the EHG app's
+# OWN admin/chairman login, which has no relationship to any specific venture or venture pipeline
+# stage_number -- there is no "stage-exit" event to bind to. No stage-analysis step in this repo
+# spawns a browser-automation subprocess (grep-verified), and doing so synchronously inside a
+# stage's execution path would risk that stage on Playwright/browser availability it has never
+# depended on before. This repo's OWN established pattern for "make a manual Playwright check
+# automatic" is a scheduled/workflow_dispatch GH Actions workflow (see e2e-human-like.yml) -- this
+# file follows that precedent for the same category of check (a login-health smoke test, not a
+# per-venture check).
+#
+# EXTERNAL DEPENDENCY, NAMED NOT HIDDEN: BASE_URL/TEST_USER_EMAIL/TEST_USER_PASSWORD must be
+# configured as repository secrets pointing at a real, reachable EHG app instance for this to
+# exercise the actual login path. Until configured, scheduled runs SKIP CLEANLY (auth.setup.spec.ts's
+# own graceful degradation, verified this session) rather than fail or fabricate a pass -- this is
+# the same "wire it now, safely inert pending an external/human step" shape as this SD's FR-1, FR-9,
+# and FR-10.
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, off-the-hour to avoid GH Actions' documented top-of-hour congestion
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Base URL of the EHG app to test (overrides the BASE_URL secret for this run)'
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: '22'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  auth-smoke:
+    name: Authenticated Login Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run auth smoke test
+        run: npx playwright test tests/e2e/ehg-app/auth.setup.spec.ts --project=chromium
+        env:
+          BASE_URL: ${{ inputs.target_url || secrets.EHG_APP_BASE_URL }}
+          TEST_USER_EMAIL: ${{ secrets.EHG_APP_TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.EHG_APP_TEST_USER_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CI: true
+
+      - name: Upload results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ehg-app-auth-smoke-results
+          path: test-results/
