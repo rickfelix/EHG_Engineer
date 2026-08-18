@@ -43,6 +43,7 @@ import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-cla
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 import { evaluateCrackGateStatus, recordCrackGateObservation, hasUnavailableSource } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
 import { retroactivelyScoreVenture } from '../eva/retroactive-pbn-score.mjs';
+import { emitVentureUserFeedback } from '../../lib/eva/bridge/venture-user-feedback-emitter.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/venture-ops-actuals-cron.yml';
@@ -252,6 +253,7 @@ export async function main(argv = process.argv, deps = {}) {
     let checked = 0;
     let wouldBlock = 0;
     let sourceUnavailable = 0;
+    let feedbackEmitted = 0;
     const sourceUnavailableReasons = new Set();
     const errors = [];
     if (!args.dryRun) {
@@ -270,13 +272,26 @@ export async function main(argv = process.argv, deps = {}) {
           if (unavailable.unavailable) {
             sourceUnavailable++;
             for (const r of unavailable.reasons) sourceUnavailableReasons.add(r);
+            // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-9 (class i): durable, trackable feedback
+            // capture for a source-unavailable finding, alongside the existing loud log line.
+            // ingestSecret is always null today -- no venture has one provisioned (QF-20260817-982
+            // still open) -- so this always resolves to a clean, honest "blocked" result rather
+            // than a fabricated success; never throws, never affects checked/wouldBlock above.
+            const fb = await (deps.emitVentureUserFeedback || emitVentureUserFeedback)(supabase, {
+              ventureId: v.id,
+              ingestSecret: null,
+              feedbackType: 'user_other',
+              title: `Crack-gate data source unavailable for venture ${v.id}`,
+              description: `evaluateCrackGateStatus found an unavailable data source: ${unavailable.reasons.join('; ')}`,
+            });
+            if (fb.submitted) feedbackEmitted++;
           }
         } catch (err) { errors.push(`${v.id}: ${err.message}`); }
       }
       try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
       catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[3].key} (non-fatal): ${err.message}`); }
     }
-    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, source_unavailable: sourceUnavailable, errors };
+    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, source_unavailable: sourceUnavailable, feedback_emitted: feedbackEmitted, errors };
     if (!args.dryRun && ventures.length > 0 && checked === 0) {
       logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[3].key} checked 0 of ${ventures.length} venture(s) — investigate before trusting future silent passes.`);
     }

@@ -284,6 +284,31 @@ describe('venture-ops-actuals-sweep Job 4: crack-gate sweep (SD-FDBK-FIX-VENTURE
 
     expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/NC-7 ESCALATION.*venture-crack-gate-sweep/));
   });
+
+  it('SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-9: a source-unavailable finding emits venture-user feedback with ingestSecret:null (no venture has one provisioned) and never touches checked/wouldBlock', async () => {
+    const evaluateCrackGateStatus = vi.fn().mockResolvedValue({
+      overall: 'NOT_MET',
+      missing: [{ check: 'stage17_judgment' }],
+      stage17_judgment: { verdict: 'ATTESTATION_SOURCE_UNAVAILABLE', reason: 'attestations_table_not_yet_applied' },
+    });
+    const recordCrackGateObservation = vi.fn().mockResolvedValue(undefined);
+    const emitVentureUserFeedback = vi.fn().mockResolvedValue({ submitted: false, reason: 'no_ingest_secret_provisioned (blocked on QF-20260817-982)' });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      evaluateCrackGateStatus,
+      recordCrackGateObservation,
+      emitVentureUserFeedback,
+    });
+
+    expect(emitVentureUserFeedback).toHaveBeenCalledTimes(2); // once per venture (v1, v2)
+    expect(emitVentureUserFeedback).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      ventureId: expect.any(String), ingestSecret: null, feedbackType: 'user_other',
+    }));
+    expect(result.summary.jobs['venture-crack-gate-sweep'].feedback_emitted).toBe(0); // never provisioned -> never submitted
+    expect(result.summary.jobs['venture-crack-gate-sweep'].checked).toBe(2);
+  });
 });
 
 describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1)', () => {
