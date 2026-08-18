@@ -225,10 +225,11 @@ BEGIN
   -- INSERT would roll the INSERT back too (live-reproduced: watermark row count stayed 0 after a
   -- real trip, with the original RAISE EXCEPTION version). The whole point of this branch is that
   -- the watermark write must survive even though the caller's specific submission is rejected --
-  -- which requires the overall statement to succeed. This is a genuine divergence from this SD's
-  -- own SEQUENCING note further up (which still describes the now-superseded RAISE EXCEPTION
-  -- design) and from fn_submit_internal_feedback's rate-limit convention (RAISE EXCEPTION is still
-  -- correct THERE because that function writes nothing on its rejected path).
+  -- which requires the overall statement to succeed. This diverges from fn_submit_internal_
+  -- feedback's rate-limit convention (RAISE EXCEPTION is still correct THERE, because that
+  -- function writes nothing on its rejected path) -- not from anything in this file's own
+  -- SEQUENCING note above, which only concerns apply-before-verification ordering, not this
+  -- design choice.
   IF public.check_error_capture_storm() THEN
     -- Upsert the watermark row itself so the ceiling's own activity is observable, never a silent
     -- drop (matches record_venture_error's doctrine).
