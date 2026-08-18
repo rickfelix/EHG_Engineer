@@ -110,6 +110,24 @@
 -- DEFINER anon-callable RPC on a monitored table, not unique to this file. Not blocking this SD —
 -- this function's own test suite (SD PRD TS-1/TS-2/TS-6/TS-7) is this SD's audit, independent of
 -- that monitor's current blind spot.
+--
+-- TWO MORE DISCLOSED, ACCEPTED RESIDUALS (confirmation-review finding, post-PLAN-TO-LEAD, after the
+-- storm-vs-dedup reorder below was fixed):
+-- (a) No per-caller rate limit exists anywhere in this function -- the 50-distinct-fingerprint/hour
+--     ceiling is the ONLY volume defense. Once dedup is correctly checked before the ceiling (see
+--     below), any caller who can reproduce an EXISTING fingerprint's exact message+stack_trace can
+--     call this RPC unboundedly to repeatedly bump occurrence_count/last_seen on that one row -- this
+--     is the same unbounded-repeat-call property every dedup-and-aggregate counter has (including
+--     record_venture_error's own identical design), not a new hole this file introduces. Accepted
+--     because a genuine per-caller/per-IP limiter is separate infrastructure this RPC family does not
+--     have anywhere yet, not a gap specific to this file.
+-- (b) The storm ceiling itself remains a real, unauthenticated DoS against NEW-fingerprint capture:
+--     ~50 distinct fake messages/hour (~1 every 72s) keeps the ceiling tripped indefinitely, so real,
+--     never-before-seen errors that hour are not individually recorded (the watermark row still makes
+--     this OBSERVABLE, per the doctrine above -- it is not a silent drop). This is inherent to any
+--     fixed-ceiling volume control, already present in record_venture_error's own identical ceiling
+--     design, and NOT newly introduced by the reorder below -- the reorder only closes the narrower
+--     sub-case where the ceiling also blocked already-tracked fingerprints.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -137,7 +155,7 @@ CREATE OR REPLACE FUNCTION public.check_error_capture_storm()
  RETURNS boolean
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'public', 'pg_catalog'
+ SET search_path TO 'public'
 AS $function$
   SELECT count(DISTINCT error_hash) >= 50
   FROM public.feedback
@@ -239,7 +257,11 @@ BEGIN
   -- every real, recurring error app-wide -- indefinitely sustainable by the same attacker submitting
   -- one fresh fingerprint roughly every ~72 seconds to keep the trailing-hour count above the
   -- ceiling. Checking dedup first means the ceiling can only ever suppress genuinely NEW
-  -- fingerprints, never already-tracked ones -- closing that DoS class entirely, not just narrowing it.
+  -- fingerprints, never already-tracked ones -- closing THAT sub-case entirely (an attacker can no
+  -- longer freeze aggregation of already-known, recurring errors app-wide). It does NOT close the
+  -- ceiling's own broader, disclosed residual: suppression of genuinely NEW fingerprints during a
+  -- trip is inherent to any fixed-ceiling volume control and remains -- see the two new disclosed
+  -- residuals in this file's header.
   UPDATE public.feedback
   SET occurrence_count = occurrence_count + 1, last_seen = now(), updated_at = now()
   WHERE source_type = 'error_capture'
@@ -361,9 +383,10 @@ COMMIT;
 -- ROLLBACK (manual, if needed -- see the paired _DOWN.sql for the executable version):
 -- ============================================================
 -- BEGIN;
--- REVOKE EXECUTE ON FUNCTION public.fn_submit_error_capture(TEXT, TEXT, TEXT, TEXT, JSONB) FROM anon, authenticated;
 -- DROP FUNCTION IF EXISTS public.fn_submit_error_capture(TEXT, TEXT, TEXT, TEXT, JSONB);
 -- DROP FUNCTION IF EXISTS public.check_error_capture_storm();
--- DROP INDEX IF EXISTS idx_feedback_error_capture_hash;
+-- DROP INDEX IF EXISTS public.idx_feedback_error_capture_hash;
 -- NOTIFY pgrst, 'reload schema';
 -- COMMIT;
+-- (matches the executable _DOWN.sql exactly -- no standalone REVOKE, index schema-qualified;
+-- see that file's comments for why.)
