@@ -40,16 +40,28 @@ describe('GitCommitVerifier.checkMergedPR', () => {
     expect(execFile).not.toHaveBeenCalled();
   });
 
-  it('returns merged:true with the PR number when the branch is gone from origin but gh reports a merged PR', async () => {
+  it('returns merged:true with the PR number when the branch is gone from origin but gh reports a merged PR into main', async () => {
     vi.spyOn(verifier, 'gitCommand').mockResolvedValue({ success: true, stdout: '', stderr: '' });
     execFile.mockImplementation((cmd, args, opts, cb) => {
-      cb(null, { stdout: JSON.stringify([{ number: 7254, mergedAt: '2026-08-18T18:00:00Z' }]), stderr: '' });
+      cb(null, { stdout: JSON.stringify([{ number: 7254, mergedAt: '2026-08-18T18:00:00Z', baseRefName: 'main' }]), stderr: '' });
     });
 
     const result = await verifier.checkMergedPR('feat/SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001');
 
     expect(result.merged).toBe(true);
     expect(result.prNumber).toBe(7254);
+  });
+
+  it('returns merged:false when gh reports a merged PR but into a branch other than main (not evidence the work reached the trunk)', async () => {
+    vi.spyOn(verifier, 'gitCommand').mockResolvedValue({ success: true, stdout: '', stderr: '' });
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      cb(null, { stdout: JSON.stringify([{ number: 8001, mergedAt: '2026-08-18T18:00:00Z', baseRefName: 'feat/some-other-stacked-branch' }]), stderr: '' });
+    });
+
+    const result = await verifier.checkMergedPR('feat/stacked-on-top');
+
+    expect(result.merged).toBe(false);
+    expect(result.prNumber).toBe(null);
   });
 
   it('returns merged:false when the branch is gone from origin AND gh reports no merged PR (true negative -- never pushed at all)', async () => {
@@ -98,6 +110,34 @@ describe('GitCommitVerifier.verify — merged-branch shortcut overrides checks 3
     expect(results.verdict).toBe('PASS');
     expect(results.blockers).toEqual([]);
     expect(results.mergedPR).toEqual({ merged: true, prNumber: 9999, mergedAt: '2026-08-18T18:00:00Z' });
+  });
+
+  it('a merged PR does NOT clear a genuine "unpushed commits" failure -- only the missing-branch signature is overridden, so lost work still blocks', async () => {
+    const v = new GitCommitVerifier('SD-TEST-GATE5-MERGE');
+    vi.spyOn(v, 'checkCleanWorkingDirectory').mockResolvedValue(true);
+    vi.spyOn(v, 'checkCommitsExist').mockResolvedValue(true);
+    // check3 fails via the OTHER failure mode: real commits ahead of the tracked remote branch
+    // (e.g. more work committed locally AFTER the PR that merged) -- not a missing tracking ref.
+    vi.spyOn(v, 'checkAllCommitsPushed').mockImplementation(async () => {
+      v.results.currentBranch = 'feat/SD-TEST-GATE5-MERGE';
+      v.results.blockers.push('2 unpushed commit(s) on branch "feat/SD-TEST-GATE5-MERGE"');
+      return false;
+    });
+    vi.spyOn(v, 'checkRemoteBranchExists').mockImplementation(async () => {
+      v.results.blockers.push('Branch "feat/SD-TEST-GATE5-MERGE" does not exist on remote');
+      return false;
+    });
+    vi.spyOn(v, 'checkBranchMatchesSD').mockResolvedValue(true);
+    vi.spyOn(v, 'checkMergedPR').mockResolvedValue({ merged: true, prNumber: 9999, mergedAt: '2026-08-18T18:00:00Z' });
+
+    const results = await v.verify();
+
+    // check4's specific blocker (branch gone from remote) is legitimately explained by the merge...
+    expect(results.blockers).not.toContain('Branch "feat/SD-TEST-GATE5-MERGE" does not exist on remote');
+    // ...but check3's unpushed-commits blocker is a DIFFERENT failure the merge does not explain,
+    // and must survive -- the overall verdict must still FAIL, never silently PASS with lost work.
+    expect(results.blockers).toContain('2 unpushed commit(s) on branch "feat/SD-TEST-GATE5-MERGE"');
+    expect(results.verdict).toBe('FAIL');
   });
 
   it('a genuinely unmerged, unpushed branch still FAILs (no false green from the shortcut)', async () => {
