@@ -435,9 +435,16 @@ export async function classifyFrDelivery(supabase, {
   const compliantRowIds = complianceError
     ? new Set()
     : new Set((complianceRows || []).filter((r) => r?.compliance_status === 'compliant').map((r) => r.id));
-  const trustworthyTestingRows = safeTestingRows.map((row) => (
-    compliantRowIds.has(row?.id) ? row : { ...row, metadata: { ...(row?.metadata || {}), repo_path: undefined } }
-  ));
+  const trustworthyTestingRows = safeTestingRows.map((row) => {
+    // Defense in depth (SECURITY finding, round 4 follow-up): compliance_status='compliant'
+    // requires an EXACT TEXT-COERCED match against applications.local_path, which in practice
+    // excludes non-string JSONB values -- but path.join() throws TypeError on anything that
+    // isn't a string, and ONE poisoned row must never abort classification for the whole SD.
+    // Require typeof === 'string' independently of what the view computed, so this can never
+    // depend on the view's correctness for a crash-safety property.
+    const trusted = compliantRowIds.has(row?.id) && typeof row?.metadata?.repo_path === 'string';
+    return trusted ? row : { ...row, metadata: { ...(row?.metadata || {}), repo_path: undefined } };
+  });
 
   const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
   const {

@@ -226,4 +226,32 @@ describe('SECURITY finding (round 4): metadata.repo_path is trusted ONLY when in
     expect(c.frs[0].status).toBe('delivered');
     expect(c.frs[0].delivery_basis).toBe('testing_evidence');
   });
+
+  // SECURITY finding B (round 4 follow-up): a non-string repo_path (a number, object, array, or
+  // boolean) previously threw TypeError out of path.join, aborting classification for the WHOLE
+  // SD -- one poisoned row taking down every other FR's verdict alongside it. Defense in depth:
+  // typeof === 'string' is required independently of what the compliance view computed, so this
+  // can never depend on the view's own correctness for a crash-safety property. Three good rows
+  // plus one poisoned one, matching how SECURITY demonstrated the collateral damage.
+  it("SECURITY finding B: a non-string metadata.repo_path never reaches path.join — no row's classification is aborted by it", async () => {
+    const nonStringValues = [123, {}, [], true];
+    for (const badRepoPath of nonStringValues) {
+      const rows = [
+        { id: 'row-good-1', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } },
+        // FAKE_FILE (not REAL_FILE): if the poisoned repo_path were somehow used, path.join would
+        // throw before existence is even checked; if it's correctly stripped and falls back to
+        // cwd, FAKE_FILE still won't resolve there either -- making "does not promote" a clean,
+        // unambiguous assertion regardless of which fallback path is taken.
+        { id: 'row-poisoned', phase: 'EXEC', metadata: { repo_path: badRepoPath, fr_coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: FAKE_FILE }] } },
+      ];
+      // Even if a corrupted compliance row somehow marked the poisoned row "compliant", the
+      // typeof guard must still hold — that's the whole point of defense in depth.
+      const c = await classifyFrDelivery(
+        stub({ testingRows: rows, complianceRows: [{ id: 'row-good-1', compliance_status: 'compliant' }, { id: 'row-poisoned', compliance_status: 'compliant' }] }),
+        { sdId: 'sd-round4-poisoned', functionalRequirements: [{ id: 'FR-1' }, { id: 'FR-2' }] },
+      );
+      expect(c.frs.find((f) => f.id === 'FR-1').status).toBe('delivered'); // unaffected by its sibling's poisoned row -- no throw took down the whole gate
+      expect(c.frs.find((f) => f.id === 'FR-2').delivery_basis).not.toBe('testing_evidence'); // poisoned repo_path never trusted, cwd fallback correctly rejects the nonexistent FAKE_FILE too
+    }
+  });
 });
