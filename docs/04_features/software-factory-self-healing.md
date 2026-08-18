@@ -51,7 +51,7 @@ Venture App (Sentry SDK)
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | `sentry-poller.js` | `lib/factory/` | Polls Sentry REST API per venture with rate limit handling |
-| `content-sanitizer.js` | `lib/factory/` | Prompt injection defense — strips control chars, truncates, XML-wraps |
+| `content-sanitizer.js` | `lib/factory/` | Prompt injection defense — strips control chars, truncates, XML-wraps. Untrusted-origin classification: see [untrusted-origin-allowlist.md](../reference/untrusted-origin-allowlist.md) |
 | `feedback-writer.js` | `lib/factory/` | Writes to feedback table with SHA-256 error_hash dedup |
 | `guardrails.js` | `lib/factory/` | Enforces 10 CRO guardrails (rate limits, kill switch, etc.) |
 | `daily-digest.js` | `lib/factory/` | Chairman portfolio health summary |
