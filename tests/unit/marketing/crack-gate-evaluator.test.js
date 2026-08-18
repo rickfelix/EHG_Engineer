@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { evaluateCrackGateStatus, fetchPbnStatus, fetchLatestAttestation, recordCrackGateObservation } from '../../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { evaluateCrackGateStatus, fetchPbnStatus, fetchLatestAttestation, recordCrackGateObservation, hasUnavailableSource } from '../../../lib/eva/lifecycle/crack-gate-evaluator.js';
 
 const VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
 
@@ -182,5 +182,47 @@ describe('source pin (TS-9): evaluator module only, never an uncommitted sibling
     expect(typeof mod.evaluateCrackGateStatus).toBe('function');
     expect(typeof mod.fetchPbnStatus).toBe('function');
     expect(typeof mod.fetchLatestAttestation).toBe('function');
+  });
+});
+
+// SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-8 (class h): distinguishes "the underlying DB objects
+// don't exist" from "genuinely not scored/attested yet" -- the exact distinction whose absence
+// let the sibling SD's backstop read as shipped while being DB-inert for weeks.
+describe('hasUnavailableSource', () => {
+  it('reports unavailable:false when every check has a real status/verdict (scored or genuinely not-yet-scored)', () => {
+    expect(hasUnavailableSource({
+      pbn: { status: 'PBN_SCORED', verdict: 'PASS' },
+      stage17_judgment: { verdict: 'PASS' },
+      chairman_site_review: { verdict: 'NO_DATA' }, // not-yet-attested is a real, distinct status -- not unavailable
+    })).toEqual({ unavailable: false, reasons: [] });
+  });
+
+  it('reports unavailable:true with a pbn: reason when the PBN RPC source is unavailable', () => {
+    const result = hasUnavailableSource({
+      pbn: { status: 'PBN_SOURCE_UNAVAILABLE', reason: 'rpc_error:relation does not exist' },
+      stage17_judgment: { verdict: 'PASS' },
+      chairman_site_review: { verdict: 'NO_DATA' },
+    });
+    expect(result.unavailable).toBe(true);
+    expect(result.reasons).toEqual(['pbn:rpc_error:relation does not exist']);
+  });
+
+  it('reports both attestation reasons when the attestations table is unapplied (the actual failure mode found this session)', () => {
+    const result = hasUnavailableSource({
+      pbn: { status: 'PBN_SCORED', verdict: 'PASS' },
+      stage17_judgment: { verdict: 'ATTESTATION_SOURCE_UNAVAILABLE', reason: 'attestations_table_not_yet_applied' },
+      chairman_site_review: { verdict: 'ATTESTATION_SOURCE_UNAVAILABLE', reason: 'attestations_table_not_yet_applied' },
+    });
+    expect(result.unavailable).toBe(true);
+    expect(result.reasons).toEqual([
+      'stage17_judgment:attestations_table_not_yet_applied',
+      'chairman_site_review:attestations_table_not_yet_applied',
+    ]);
+  });
+
+  it('handles a null/undefined verdict without throwing', () => {
+    expect(hasUnavailableSource(null)).toEqual({ unavailable: false, reasons: [] });
+    expect(hasUnavailableSource(undefined)).toEqual({ unavailable: false, reasons: [] });
+    expect(hasUnavailableSource({})).toEqual({ unavailable: false, reasons: [] });
   });
 });

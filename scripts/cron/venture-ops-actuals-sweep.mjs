@@ -41,7 +41,7 @@ import { runVentureUptimeProbe } from '../../lib/ops/venture-uptime-probe.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
-import { evaluateCrackGateStatus, recordCrackGateObservation } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { evaluateCrackGateStatus, recordCrackGateObservation, hasUnavailableSource } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/venture-ops-actuals-cron.yml';
@@ -223,6 +223,8 @@ export async function main(argv = process.argv, deps = {}) {
     const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[3], logger);
     let checked = 0;
     let wouldBlock = 0;
+    let sourceUnavailable = 0;
+    const sourceUnavailableReasons = new Set();
     const errors = [];
     if (!args.dryRun) {
       for (const v of ventures) {
@@ -231,14 +233,27 @@ export async function main(argv = process.argv, deps = {}) {
           await (deps.recordCrackGateObservation || recordCrackGateObservation)(supabase, v.id, verdict, 'sweep');
           checked++;
           if (verdict.overall !== 'MEETS_CRITERION') wouldBlock++;
+          // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-8 (class h): a source-unavailable verdict
+          // still counts as "checked" above and would_block=true above -- both look identical
+          // to a genuinely-not-scored-yet venture unless this is tracked separately and surfaced
+          // loudly. This is the exact failure mode that let the choke-gate backstop read as
+          // shipped while being DB-inert for weeks.
+          const unavailable = hasUnavailableSource(verdict);
+          if (unavailable.unavailable) {
+            sourceUnavailable++;
+            for (const r of unavailable.reasons) sourceUnavailableReasons.add(r);
+          }
         } catch (err) { errors.push(`${v.id}: ${err.message}`); }
       }
       try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
       catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[3].key} (non-fatal): ${err.message}`); }
     }
-    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, errors };
+    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, source_unavailable: sourceUnavailable, errors };
     if (!args.dryRun && ventures.length > 0 && checked === 0) {
       logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[3].key} checked 0 of ${ventures.length} venture(s) — investigate before trusting future silent passes.`);
+    }
+    if (sourceUnavailable > 0) {
+      logger.error?.(`[ops-actuals-sweep] FR-8 ESCALATION: ${JOBS[3].key} found ${sourceUnavailable}/${checked} venture(s) with an UNAVAILABLE crack-gate data source (not "unscored" -- the underlying DB objects don't exist or an RPC errored, so this measured NOTHING): ${[...sourceUnavailableReasons].join('; ')}. would_block=true for these ventures is meaningless until the source is restored.`);
     }
     if (wouldBlock > 0) {
       logger.warn?.(`[ops-actuals-sweep] ${wouldBlock} venture(s) would be blocked by the no-crack gate (observe-only, not yet enforcing).`);
