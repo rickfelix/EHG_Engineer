@@ -173,4 +173,32 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names('+ const sql = `${prefix} UPDATE accounts SET x=1`;')).toContain('sql_injection');
     expect(names('+ const sql = `${prefix} DROP TABLE sessions`;')).toContain('sql_injection');
   });
+
+  // QF-20260818-651 -- diff-polarity awareness. Every CRIT pattern is a presence
+  // detector; scanning REMOVED or unchanged CONTEXT lines is a category error (a
+  // line being deleted, or left untouched, cannot introduce a NEW vulnerability).
+  // 5th+ confirmed occurrence: PR #7030 (CRIT-003 on a CONTEXT line), PR #7155
+  // (CRIT-004 on a REMOVED line), PR #7244 (CRIT-006 on a REMOVED line, the
+  // triggering instance -- a deleted comment mentioning SUPABASE_SERVICE_ROLE_KEY
+  // incidentally contained the identifier createSupabaseServiceClient, matching
+  // CRIT-006's `service_role_key.*(?:client|browser|frontend)` pattern).
+  it('does NOT flag a REMOVED line matching a CRIT pattern (the PR #7244 shape)', () => {
+    expect(names(
+      "- 'SUPABASE_SERVICE_ROLE_KEY, used via createSupabaseServiceClient helper.',"
+    )).not.toContain('permission_escalation');
+  });
+  it('does NOT flag an unchanged CONTEXT line matching a CRIT pattern (the PR #7030 shape)', () => {
+    expect(names(
+      '  const disableAuthForTesting = true; // disable rls checks locally'
+    )).not.toContain('auth_bypass');
+  });
+  it('STILL flags the identical construct when it is an ADDED line', () => {
+    expect(names(
+      '+ const disableAuthForTesting = true; // disable rls checks locally'
+    )).toContain('auth_bypass');
+  });
+  it('STILL flags a genuine ADDED CRIT-006 permission-escalation shape', () => {
+    expect(names('+ await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });'))
+      .toContain('permission_escalation');
+  });
 });
