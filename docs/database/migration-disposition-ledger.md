@@ -1,9 +1,9 @@
 ---
 category: database
 status: approved
-version: 1.1.0
+version: 1.2.0
 author: rickfelix
-last_updated: 2026-08-11
+last_updated: 2026-08-18
 tags: [database, migrations, ci, governance]
 ---
 
@@ -202,3 +202,36 @@ Two things about that workflow are load-bearing and easy to break:
   `tests/integration/migration-apply-state-ledger-wiring.test.js` exists to prove it against
   the real CLI. It runs from the drift-guard workflow because `tests/integration/` is routed to
   vitest's opt-in `db` project, which no other workflow executes.
+
+## Loud detection is not the same as an actionable ticket (SD-FDBK-ENH-AUTO-APPLY-MIGRATION-001)
+
+The gate above has been correctly failing (`::error`, non-zero exit) on every push to `main` and
+its daily cron for as long as a RECENT gap exists — but until this SD, that verdict only ever
+reached CI logs. Nothing turned a newly-detected RECENT gap into a ticket, so the undispositioned
+backlog only ever grew (145 of 149 known gap files were undispositioned at authoring time).
+
+Two new, non-blocking steps close that loop without changing the gate's own pass/fail contract:
+
+- **`scripts/migration-gap-notify.mjs`** (wired into `migration-deploy-drift-guard.yml` as a new
+  `if: always()` step, after the strict check) diffs the current RECENT gap set against a
+  baseline persisted in `audit_log` (`event_type='MIGRATION_RECENT_GAP_BASELINE'` — GitHub Actions
+  runners are ephemeral per run, so this cannot live in the workspace) and files one `feedback`
+  row per **newly**-detected gap, deduplicated by filename (`scripts/lib/migration-gap-baseline.mjs`
+  `diffNewGaps`). A gap that is still open and already has a ticket is never re-flagged.
+- **`scripts/migration-gap-summary.mjs`** (`npm run migration:gap:summary`) reports the current
+  RECENT-undispositioned gap count on demand — the same visibility class as `CEREMONY_PENDING`
+  above, but for the ordinary auto (non-chairman-gated) path, without a `--json` parse of your
+  own.
+
+Both scripts shell out to `node scripts/verify-migration-apply-state.mjs --json` and reuse the
+same dotenvx-banner-stripping convention noted above (slice from the first line that is exactly
+`{`) — do not parse that subprocess's stdout directly.
+
+**A note on false absence-probes** (the finding that prompted this SD): do not conclude an RPC is
+"not applied" from a bare `supabase.rpc(name, {})` call returning `PGRST202`. PostgREST returns
+the *identical* "no matches found" message for a genuine absence and for a signature mismatch
+against an existing function with required named args. This SD's own sourcing signal, and this
+worker's own re-check, both made that mistake; a direct `pg_proc` query
+(`SELECT proname, pg_get_function_identity_arguments(oid) FROM pg_proc WHERE proname = '<name>'`)
+— or this file's own verifier, which is pg-introspection-based, not RPC-probe-based — is the
+authoritative check.
