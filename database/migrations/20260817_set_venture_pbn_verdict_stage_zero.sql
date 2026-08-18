@@ -1,5 +1,10 @@
 -- Migration: set_venture_pbn_verdict_stage_zero(uuid, jsonb) — narrow, safe retroactive PBN write.
 -- SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-6.
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman VERBAL "yes on the delegated apply" 2026-08-18 ~10:2xZ at-terminal sitting (this file
+--   is auto-path by design per its own header, but the auto-apply runner silently skipped it —
+--   SD-FDBK-ENH-AUTO-APPLY-MIGRATION-001 tracks that defect; this is the manual bridge apply,
+--   Adam-scribed under the ratified chairman-verbal ceremony).
 --
 -- Not chairman-gated: this is a plain FUNCTION with no RLS policy or trigger attached (unlike
 -- the two companion migrations in database/chairman-gated/), so it is additive-only in the
