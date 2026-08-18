@@ -197,6 +197,14 @@ export function isExecPhaseOrLater(phase) {
  * Any deviation (wrong type, missing field, unrecognized status) is treated as absent, never
  * partially trusted — fr_coverage already exists as an uncoordinated ad-hoc metadata key in
  * numerous unrelated one-off scripts using several mutually-incompatible shapes.
+ *
+ * test_ref IS ONLY SHAPE-CHECKED, NEVER VERIFIED. Any non-empty string promotes to delivered —
+ * this module never confirms it names a real file, a real test, or a passing run. The TESTING
+ * sub-agent both writes fr_coverage and is the thing being trusted, so this signal's honesty
+ * rests entirely on an unaudited self-report, same trust level TESTING evidence already carries
+ * elsewhere in the pipeline. Zero blast radius today (no production writer exists yet, see
+ * pin-fr-delivery-baseline.mjs), but the moment a writer ships, this is the weak link: consider
+ * verifying test_ref resolves to something real before trusting it at scale.
  */
 function isWellFormedCoverageEntry(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
@@ -250,6 +258,7 @@ export function resolveTestingEvidenceCoverage(rows, frs) {
   const matchedTestingCoverage = [];
   const unmatchedFrCoverageIds = [];
   const unrecognizedPhaseRows = [];
+  const rejectedPhaseRows = [];
   let testingEvidenceRowsSeen = 0;
 
   for (const row of rows) {
@@ -258,7 +267,14 @@ export function resolveTestingEvidenceCoverage(rows, frs) {
       unrecognizedPhaseRows.push({ sub_agent_result_id: row?.id ?? null, phase: row?.phase ?? null });
       continue; // fails closed, same as 'rejected' — tracked separately for visibility only
     }
-    if (bucket !== 'admitted') continue;
+    if (bucket === 'rejected') {
+      // A misconfigured writer firing at a known pre-EXEC phase would otherwise be
+      // byte-identical to no TESTING evidence existing at all — this keeps "the writer fired
+      // at the wrong phase" distinguishable from "the writer never fired", the same
+      // distinction unrecognizedPhaseRows exists to make for the unrecognized bucket.
+      rejectedPhaseRows.push({ sub_agent_result_id: row?.id ?? null, phase: row?.phase ?? null });
+      continue;
+    }
     testingEvidenceRowsSeen += 1;
 
     const coverage = row?.metadata?.fr_coverage;
@@ -280,7 +296,9 @@ export function resolveTestingEvidenceCoverage(rows, frs) {
     }
   }
 
-  return { matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, testingEvidenceRowsSeen };
+  return {
+    matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
+  };
 }
 
 /**
@@ -323,7 +341,7 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
 
   const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
   const {
-    matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, testingEvidenceRowsSeen,
+    matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
   } = resolveTestingEvidenceCoverage(safeTestingRows, frs);
 
   // PASS 1 — resolve the positive signals per FR without deciding the negative case yet. The
@@ -349,6 +367,15 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
     }
 
     const descope = deliveredBy ? null : descopeFor(sdMetadata, id, requesterSessionId);
+
+    // An approver-gated descope is ALSO a human-reviewed record, same tier as a story — it must
+    // not be silently overwritten by an agent's self-reported fr_coverage entry. The conflict is
+    // recorded (never dropped) even though descope wins below; scoring is unaffected either way
+    // (delivered and descoped both count as satisfied in projectGateResult).
+    if (descope && testingDelivered) {
+      conflictingSignals.push({ fr_id: id, descoped_by: descope.approved_by, testing_evidence_says: 'delivered' });
+    }
+
     resolved.push({ id, desc, deliveredBy, descope, testingDelivered, testingUndelivered });
   }
 
@@ -377,14 +404,18 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
     if (deliveredBy) {
       return { id, description: desc, status: 'delivered', delivery_basis: 'story', evidence: `Validated story ${deliveredBy.id} references ${id}` };
     }
+    if (descope) {
+      // Checked before testingDelivered: descope is an approver-gated human record, same
+      // precedence tier as a validated story. A matched fr_coverage entry never silently
+      // overwrites it — see the conflictingSignals push above, which still records the
+      // disagreement when both exist.
+      return { id, description: desc, status: 'descoped', evidence: `Descoped by ${descope.approved_by}${descope.reason ? `: ${descope.reason}` : ''}` };
+    }
     if (testingDelivered) {
       return {
         id, description: desc, status: 'delivered', delivery_basis: 'testing_evidence',
         evidence: `TESTING evidence (sub_agent_execution_results ${testingDelivered.sub_agent_result_id}) references ${id} with test_ref ${testingDelivered.test_ref}`,
       };
-    }
-    if (descope) {
-      return { id, description: desc, status: 'descoped', evidence: `Descoped by ${descope.approved_by}${descope.reason ? `: ${descope.reason}` : ''}` };
     }
     if (unmeasurable) {
       return {
@@ -400,8 +431,13 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
         evidence: `TESTING evidence (sub_agent_execution_results ${testingUndelivered.sub_agent_result_id}) explicitly marks ${id} undelivered with test_ref ${testingUndelivered.test_ref}`,
       };
     }
+    // Reachable only when unmeasurable===false and hasWorkProduct===true, which forces
+    // conventionInUse===true -- i.e. some OTHER (sibling) FR of this SD really is referenced,
+    // either by a story or by a matched testing-evidence entry. Signal-agnostic on purpose: an
+    // earlier draft always said "sibling FRs... ARE referenced" as if by a story specifically,
+    // which was false whenever the only work product was testing evidence with zero stories.
     const why = hasWorkProduct
-      ? 'No validated story references this FR id and no approver-gated descope, while sibling FRs of this SD ARE referenced'
+      ? 'No validated story references this FR id, no admitted TESTING evidence matches it, and no approver-gated descope exists — yet this SD demonstrably uses the FR-reference convention (a sibling FR is referenced by a validated story or a matched testing-evidence entry)'
       : 'No validated story exists for this SD and no admitted TESTING evidence matched any FR — nothing was built or validated against this FR';
     return { id, description: desc, status: 'undelivered', evidence: why };
   });
@@ -424,6 +460,7 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
     testing_evidence_rows_seen: testingEvidenceRowsSeen,
     unmatched_fr_coverage_ids: unmatchedFrCoverageIds,
     unrecognized_phase_rows: unrecognizedPhaseRows,
+    rejected_phase_rows: rejectedPhaseRows,
     conflicting_signals: conflictingSignals,
   };
 }

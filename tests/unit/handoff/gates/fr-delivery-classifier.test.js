@@ -455,6 +455,34 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
     expect(r.unrecognizedPhaseRows).toEqual([{ sub_agent_result_id: 'r1', phase: 'PLAN_PRD' }]);
     expect(r.testingEvidenceRowsSeen).toBe(0);
   });
+
+  // F5: a KNOWN pre-EXEC (rejected-bucket) row is now diagnosed too, distinct from
+  // unrecognized -- otherwise "the writer fired at the wrong phase" was byte-identical to
+  // "the writer never fired at all".
+  it('a rejected-phase (known pre-EXEC) row is diagnosed separately too, not just silently skipped', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'LEAD', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
+    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    expect(r.matchedTestingCoverage).toEqual([]);
+    expect(r.rejectedPhaseRows).toEqual([{ sub_agent_result_id: 'r1', phase: 'LEAD' }]);
+    expect(r.testingEvidenceRowsSeen).toBe(0);
+  });
+
+  // F2 (closes: unrecognized status values were never tested, only unrecognized SHAPES).
+  it('F2: an fr_coverage entry with an unrecognized status value (not delivered/undelivered) is rejected, not partially trusted', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'partial', test_ref: 'x' }] })];
+    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+  });
+
+  // F3 (closes: TS-N1's malformed fixture always failed on fr_id first, so test_ref's own
+  // non-empty-string requirement was never independently exercised).
+  it('F3: a well-formed fr_id/status entry with an empty test_ref is rejected', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: '' }] })];
+    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+  });
+  it('F3b: a well-formed fr_id/status entry with test_ref entirely missing is rejected', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered' }] })];
+    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+  });
 });
 
 describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', () => {
@@ -507,6 +535,7 @@ describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', 
     expect(c.has_work_product).toBe(false);
     expect(c.frs.find((f) => f.id === 'FR-2').status).toBe('undelivered');
     expect(c.testing_evidence_rows_seen).toBe(0);
+    expect(c.rejected_phase_rows).toEqual([{ sub_agent_result_id: 'r1', phase: 'LEAD' }]); // F5: visible, not silently dropped
   });
 
   it('TS-6: a LEAD-phase risk-flagging prose mention (no fr_coverage) does not change delivery status, present vs absent', async () => {
@@ -602,6 +631,35 @@ describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', 
     expect(c.undelivered).toBe(3);
   });
 
+  it('F1 (HIGH, closes: regex was proven non-load-bearing for deliveredBy but NOT for conventionInUse): Fixture C + a prose-only FR mention does not flip unverifiable to undelivered', async () => {
+    // Fixture C: one validated story that references NO FR (hasWorkProduct=true via the story,
+    // conventionInUse=false) -- the ONLY shape where conventionInUse's value is actually
+    // observable in the output (in a hasWorkProduct=false fixture like TS-6/TS-6b, unmeasurable
+    // is false regardless of conventionInUse, so a conventionInUse-only mutation is invisible
+    // there — confirmed by an adversarial mutation sweep that survived all 65 pre-existing tests).
+    const stories = [{ id: 's1', title: 'unrelated work', status: 'completed' }];
+    const rows = [{ id: 'r1', phase: 'EXEC', detailed_analysis: 'Note: this may relate to FR-2', metadata: {} }]; // prose only, no fr_coverage
+    const c = await classifyFrDelivery(stubWithTesting({ stories, testingRows: rows }), { sdId: 'sd-f1', functionalRequirements: FRS3 });
+    expect(c.regex_fr_mentions.length).toBeGreaterThan(0); // the mention IS captured (diagnostic)...
+    expect(c.convention_in_use).toBe(false);                // ...but never promotes conventionInUse
+    expect(c.unverifiable).toBe(3);                          // stays unverifiable, not undelivered
+    expect(c.undelivered).toBe(0);
+    expect(c.delivered).toBe(0);
+  });
+
+  it('F7 (closes: a matched testingDelivered entry silently overwrote an approver-gated descope): descope wins, the disagreement is still recorded', async () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), {
+      sdId: 'sd-f7',
+      functionalRequirements: [{ id: 'FR-1' }],
+      sdMetadata: { descoped_frs: [{ fr_id: 'FR-1', approved_by: 'chairman', reason: 'deferred' }] },
+    });
+    expect(c.frs[0].status).toBe('descoped');
+    expect(c.descoped).toBe(1);
+    expect(c.delivered).toBe(0);
+    expect(c.conflicting_signals).toEqual([{ fr_id: 'FR-1', descoped_by: 'chairman', testing_evidence_says: 'delivered' }]);
+  });
+
   it('TS-R2 (closes R2): an unrecognized-phase row (PLAN_PRD) does not promote and is separately diagnosed', async () => {
     const frs = [{ id: 'FR-1' }];
     const rows = [testingRow({ id: 'r1', phase: 'PLAN_PRD', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
@@ -621,7 +679,7 @@ describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', 
 describe('TS-10: consuming gates tolerate the extended classification shape', () => {
   it('a classification with all new fields present but empty produces byte-identical scoring/warnings to the pre-extension shape', () => {
     const base = { frs: [{ id: 'FR-002', description: 'b', status: 'undelivered' }, { id: 'FR-001', description: 'a', status: 'delivered' }], total: 2, delivered: 1, descoped: 0, undelivered: 1, unverifiable: 0 };
-    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], conflicting_signals: [], unrecognized_phase_rows: [] };
+    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [] };
     const rBase = projectGateResult(base, { enforced: true });
     const rExtended = projectGateResult(extended, { enforced: true });
     expect(rExtended.passed).toBe(rBase.passed);
