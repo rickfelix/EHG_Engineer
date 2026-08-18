@@ -31,12 +31,26 @@ const fixturePath = path.resolve(__dirname, '../../../fixtures/venture-stages-ga
 const fixtureStages = JSON.parse(readFileSync(fixturePath, 'utf-8'));
 
 describe('computeGateConformance (pure, DB-free, unit tier — TS-1/TS-2/TS-7)', () => {
-  it('TS-1: reports the exact unresolvable-binding count and affected stage/string pairs for the committed fixture', () => {
+  it('TS-1: reports 0 unresolvable binding strings for the committed fixture (post QF-20260818-010 demotion)', () => {
     const report = computeGateConformance(fixtureStages);
-    // Snapshot at fixture-capture time (post-FR-1): 5 unresolvable of 21 binding strings.
-    expect(report.unresolvableCount).toBe(5);
-    expect(report.totalBindingCount).toBe(21);
-    const affected = report.unresolvableBinding.map((e) => `S${e.stage}: ${e.gateString}`).sort();
+    // QF-20260818-010: the 5 previously-unresolvable binding strings (S1/S2/S3) were demoted to
+    // gates.exit_observe (see exit-gate-verifiers.js's NON-BINDING DISPOSITION comment and
+    // database/migrations/20260818_demote_s1s2s3_unresolvable_binding_gates_to_observe.sql) —
+    // totalBindingCount drops from 21 to 16, all of which now resolve.
+    expect(report.unresolvableCount).toBe(0);
+    expect(report.unresolvableBinding).toEqual([]);
+    expect(report.totalBindingCount).toBe(16);
+  });
+
+  // TESTING finding N4: FR-3's own lane (gates.exit_observe) was previously asserted only in
+  // the describeDb()-gated (CI-skipped) suite -- this unit-tier assertion closes that CI gap.
+  it('N4: reports the 5 demoted (still-unresolvable-by-design) observe gate strings for the committed fixture', () => {
+    const report = computeGateConformance(fixtureStages);
+    // QF-20260818-010: these 5 have no real backing implementation to verify against (see
+    // exit-gate-verifiers.js's NON-BINDING DISPOSITION comment) — demoted from binding (where
+    // they would fail-CLOSE and permanently lock out stage advancement) to observe (fail-LOUD,
+    // never blocking). unresolvableObserve is EXPECTED non-empty for exactly these 5.
+    const affected = report.unresolvableObserve.map((e) => `S${e.stage}: ${e.gateString}`).sort();
     expect(affected).toEqual([
       'S1: Category assigned',
       'S2: Contrarian review done',
@@ -44,14 +58,7 @@ describe('computeGateConformance (pure, DB-free, unit tier — TS-1/TS-2/TS-7)',
       'S2: Top-5 risks identified',
       'S3: Validation score >= 6',
     ]);
-  });
-
-  // TESTING finding N4: FR-3's own lane (gates.exit_observe) was previously asserted only in
-  // the describeDb()-gated (CI-skipped) suite -- this unit-tier assertion closes that CI gap.
-  it('N4: reports 0 unresolvable observe (exit_observe) gate strings for the committed fixture', () => {
-    const report = computeGateConformance(fixtureStages);
-    expect(report.unresolvableObserve).toEqual([]);
-    expect(report.totalObserveCount).toBe(5);
+    expect(report.totalObserveCount).toBe(10);
   });
 
   it('TS-2: reports 0 unresolvable when every binding string resolves (synthetic all-resolved fixture)', () => {

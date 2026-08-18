@@ -6,7 +6,9 @@
       "gates": {
         "exit": [
           "Title validated (3-120 chars)",
-          "Description validated (20-2000 chars)",
+          "Description validated (20-2000 chars)"
+        ],
+        "exit_observe": [
           "Category assigned"
         ]
       }
@@ -17,13 +19,14 @@
     "stage_name": "AI Review",
     "metadata": {
       "gates": {
-        "exit": [
+        "exit": [],
+        "entry": [
+          "Idea document complete"
+        ],
+        "exit_observe": [
           "Multi-model pass complete",
           "Contrarian review done",
           "Top-5 risks identified"
-        ],
-        "entry": [
-          "Idea document complete"
         ]
       }
     }
@@ -34,11 +37,13 @@
     "metadata": {
       "gates": {
         "exit": [
-          "Validation score >= 6",
           "Chairman decision: advance/revise/reject"
         ],
         "entry": [
           "AI critique complete"
+        ],
+        "exit_observe": [
+          "Validation score >= 6"
         ]
       }
     }
