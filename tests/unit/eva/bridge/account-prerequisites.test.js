@@ -26,6 +26,29 @@ describe('buildAccountPrerequisiteChecklist (pure)', () => {
     expect(missing.sort()).toEqual(['cloudflare_deploy_target', 'sentry_monitoring', 'stripe_billing']);
   });
 
+  // Independent post-ship sweep (R1): applications.venture_id is nullable and, measured live
+  // 2026-08-18, ~47% unpopulated (7 of 15 rows) -- a null lookup result is genuinely ambiguous,
+  // not a confirmed absence.
+  it('stripe_billing reports present:null (not confirmed-false) when no applications row was found via the venture_id FK at all', () => {
+    const checklist = buildAccountPrerequisiteChecklist({ applicationRowFound: false, stripeBillingProductId: null });
+    const stripe = checklist.find((c) => c.account === 'stripe_billing');
+    expect(stripe.present).toBeNull();
+    expect(stripe.detail).toMatch(/no applications row found via venture_id/);
+  });
+
+  it('stripe_billing reports present:false (confirmed) only when a real applications row was found with billing_product_id genuinely unset', () => {
+    const checklist = buildAccountPrerequisiteChecklist({ applicationRowFound: true, stripeBillingProductId: null });
+    const stripe = checklist.find((c) => c.account === 'stripe_billing');
+    expect(stripe.present).toBe(false);
+    expect(stripe.detail).toBe('applications.metadata.billing_product_id not set');
+  });
+
+  it('stripe_billing reports present:true when a real applications row has billing_product_id set', () => {
+    const checklist = buildAccountPrerequisiteChecklist({ applicationRowFound: true, stripeBillingProductId: 'prod_1' });
+    const stripe = checklist.find((c) => c.account === 'stripe_billing');
+    expect(stripe.present).toBe(true);
+  });
+
   it('flags the AltifyAI placeholder database_id specifically, not just "missing"', () => {
     const checklist = buildAccountPrerequisiteChecklist({
       wranglerD1DatabaseId: '00000000-0000-0000-0000-000000000000',
@@ -94,6 +117,7 @@ describe('resolveAccountPrerequisiteIndicators (I/O)', () => {
     const indicators = await resolveAccountPrerequisiteIndicators(supabase, 'venture-1', null);
     expect(indicators).toEqual({
       stripeBillingProductId: 'prod_1',
+      applicationRowFound: true,
       cloudflareConnectionProvider: 'd1',
       sentryDsn: 'https://key@sentry.io/1',
       wranglerD1DatabaseId: null,
@@ -106,6 +130,7 @@ describe('resolveAccountPrerequisiteIndicators (I/O)', () => {
     const indicators = await resolveAccountPrerequisiteIndicators(supabase, 'venture-1', null);
     expect(indicators).toEqual({
       stripeBillingProductId: null,
+      applicationRowFound: false,
       cloudflareConnectionProvider: null,
       sentryDsn: null,
       wranglerD1DatabaseId: null,

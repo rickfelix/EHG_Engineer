@@ -114,6 +114,13 @@ jobs:
               console.log('::error::Auth smoke test genuinely FAILED (' + s.unexpected + ' unexpected result(s)) -- see the Playwright step output above.');
               process.exit(1);
             }
+            // Independent sweep finding (val-fr79, low priority but cheap to close): with
+            // retries:2 on CI, a run that fails then passes on retry lands here as flaky>0,
+            // expected:0, unexpected:0 -- correctly green (it DID eventually pass), but a flaky
+            // LOGIN smoke test is itself a signal worth surfacing rather than silently absorbing.
+            if ((s.flaky || 0) > 0) {
+              console.log('::warning::Auth smoke test passed only after ' + s.flaky + ' retry -- login succeeded, but flakiness in an auth check is worth investigating, not just absorbing.');
+            }
             console.log('Auth smoke test genuinely ran and passed (' + (s.expected || 0) + ' expected result(s)).');
           "
 
