@@ -1,22 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { resolveCanonicalAppName, normalizeAppName, clearCache } from '../../lib/repo-paths.js';
+import { createSupabaseChainMock } from '../helpers/supabase-chain-mock.js';
 
-// Minimal stub mirroring the supabase chain used by resolveCanonicalAppName:
-//   supabase.from('applications').select('name, status').eq('status','active') -> { data, error }
+// SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C: this file was quarantined because the
+// old hand-rolled stub only chained .select().eq(), and resolveCanonicalAppName's
+// real query is .select(...).eq('status','active').is('deleted_at', null) — the
+// stub's .eq() returned a plain resolved-Promise object with no .is() method, so
+// the real call threw, was swallowed by the source's catch block, and silently
+// fell through to the registry fallback. resolveCanonicalAppName's own logic is
+// unchanged by this SD (see census disclosure); only the broken test mock is fixed
+// here, using the same shared chain-safe mock as tests/unit/repo-paths-db-first.test.js.
 function stubSupabase(rows, { error = null } = {}) {
-  return {
-    from() {
-      return {
-        select() {
-          return {
-            eq() {
-              return Promise.resolve({ data: rows, error });
-            },
-          };
-        },
-      };
-    },
-  };
+  const chain = createSupabaseChainMock({ result: { data: rows, error } });
+  return { from: chain.from };
 }
 
 describe('SD-LEO-INFRA-VENTURE-REPO-AWARE-001 — resolveCanonicalAppName', () => {

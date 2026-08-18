@@ -21,31 +21,34 @@ import {
 } from '../../lib/repo-paths.js';
 import { computeReposForSD } from '../../scripts/modules/handoff/executors/lead-final-approval/gates.js';
 
-// Mirror tests/unit/repo-paths-db-first.test.js — from().select().eq().is() returning
-// rows (the real chain lib/repo-paths.js:166-169 uses: .eq('status','active').is('deleted_at',null)),
-// with a `from` spy to assert the platform path never queries the DB.
+// Mirror tests/unit/repo-paths-db-first.test.js — from().select() resolving directly to
+// {data, error}, with a `from` spy to assert the platform path never queries the DB.
 //
 // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001: this mock previously stopped at .eq(), which
-// returned a Promise directly. The real code calls .is() on that Promise, throwing a
+// returned a Promise directly. The real code called .is() on that Promise, throwing a
 // TypeError that repo-paths.js's own try/catch (a correct fail-soft-to-registry guard)
 // silently swallowed -- so the venture-DB-first test below fell through to the registry
 // (a miss for "TestVenture") instead of exercising the real DB-hit path it was written to
-// pin. Fixed by completing the chain. Each stage rejects if called with unexpected args or
-// re-invoked, so a FUTURE chain change breaks loudly here instead of silently degrading.
+// pin. Fixed at the time by completing the .eq().is() chain.
+//
+// SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C (FR-2): the real query this mock pins changed
+// again -- resolveRepoPathDbFirstDetailed no longer filters server-side via .eq()/.is()
+// (that made a tombstoned row indistinguishable from a never-existed row before the
+// registry-fallback branch could tell them apart). It now does a bare
+// .select('name, local_path, status, deleted_at') and evaluates status/deleted_at
+// client-side. This mock's .eq()/.is() chain was STILL the old shape, so it silently
+// broke the same way the 2026-XX incident above describes: select() returned {eq}, a
+// non-thenable object, so `await` resolved it to itself, `data` came back undefined,
+// and both DB-HIT tests below silently fell through to the registry fallback instead of
+// exercising the real DB-hit path. Fixed by pinning the new bare-select shape. Each stage
+// still rejects on an unexpected argument, so a FUTURE chain change breaks loudly here.
 function mockSupabase(rows, { throwOnQuery = false } = {}) {
-  const is = vi.fn((column, value) => {
-    if (column !== 'deleted_at' || value !== null) {
-      throw new Error(`mock chain drift: .is(${JSON.stringify(column)}, ${JSON.stringify(value)}) does not match the expected .is('deleted_at', null) -- update mockSupabase to match lib/repo-paths.js's real query chain`);
+  const select = vi.fn((columns) => {
+    if (columns !== 'name, local_path, status, deleted_at') {
+      throw new Error(`mock chain drift: .select(${JSON.stringify(columns)}) does not match the expected .select('name, local_path, status, deleted_at') -- update mockSupabase to match lib/repo-paths.js's real query`);
     }
     return throwOnQuery ? Promise.reject(new Error('db down')) : Promise.resolve({ data: rows, error: null });
   });
-  const eq = vi.fn((column, value) => {
-    if (column !== 'status' || value !== 'active') {
-      throw new Error(`mock chain drift: .eq(${JSON.stringify(column)}, ${JSON.stringify(value)}) does not match the expected .eq('status', 'active') -- update mockSupabase to match lib/repo-paths.js's real query chain`);
-    }
-    return { is };
-  });
-  const select = vi.fn(() => ({ eq }));
   const from = vi.fn(() => ({ select }));
   return { client: { from }, spies: { from } };
 }

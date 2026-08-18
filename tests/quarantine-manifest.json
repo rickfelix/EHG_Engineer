@@ -1007,22 +1007,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/registry-aware-target-application.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected 'crongenius' to be 'CronGenius' // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/repo-paths-db-first.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected 'C:\\Users\\rickf\\Projects\\_EHG\\commitcr…' to be 'D:\\db-authoritative\\commitcraft-ai' // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/repo-paths.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engi…' to be 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engi…' // Object.is equality",

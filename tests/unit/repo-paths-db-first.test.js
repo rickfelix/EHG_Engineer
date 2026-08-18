@@ -9,18 +9,30 @@
  * Also asserts: the FR-6 platform invariant (null/EHG_Engineer never consult the DB),
  * normalizeAppName matching across name forms, and that DB errors degrade to the
  * registry fallback rather than returning null (which would mis-route to EHG_Engineer).
+ *
+ * SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C: this file was quarantined after
+ * .is('deleted_at', null) was added to the real query (the mock below stopped
+ * at .select(), had no chain support, and threw — silently swallowed by the
+ * source's catch block, reproducing this SD's exact bug inside the test's own
+ * broken fixture). Un-quarantined here using the shared, chain-safe
+ * createSupabaseChainMock() instead of a hand-rolled mock, and extended with
+ * coverage for the tombstone-refusal behavior this SD adds.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import path from 'path';
-import { resolveRepoPathDbFirst, resolveRepoPath, ENGINEER_ROOT } from '../../lib/repo-paths.js';
+import { resolveRepoPathDbFirst, resolveRepoPathDbFirstDetailed, resolveRepoPath, ENGINEER_ROOT } from '../../lib/repo-paths.js';
+import { createSupabaseChainMock } from '../helpers/supabase-chain-mock.js';
 
 function mockSupabase(rows, { throwOnQuery = false } = {}) {
-  const eq = vi.fn(() =>
-    throwOnQuery ? Promise.reject(new Error('db down')) : Promise.resolve({ data: rows, error: null }),
-  );
-  const select = vi.fn(() => ({ eq }));
-  const from = vi.fn(() => ({ select }));
-  return { client: { from }, spies: { from, select, eq } };
+  const chain = createSupabaseChainMock({
+    result: throwOnQuery ? undefined : { data: rows, error: null },
+  });
+  if (throwOnQuery) {
+    // Override select() itself to reject — the source's try/catch must degrade
+    // to the registry fallback rather than throwing or returning a bare null.
+    chain.select = () => Promise.reject(new Error('db down'));
+  }
+  return { client: { from: chain.from }, spies: { from: chain.from } };
 }
 
 describe('FR-6 platform invariant holds in resolveRepoPathDbFirst', () => {
@@ -73,5 +85,59 @@ describe('FR-2: registry fallback (DB miss / NULL / error / no client)', () => {
   it('DB query throws → degrades to registry fallback, never throws or returns a bare null mis-route', async () => {
     const { client } = mockSupabase(null, { throwOnQuery: true });
     expect(await resolveRepoPathDbFirst('ehg', client)).toBe(resolveRepoPath('ehg'));
+  });
+});
+
+describe('FR-2/FR-3: a DB-tombstoned application is refused, never silently re-admitted via registry.json (SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C)', () => {
+  it('status=inactive + deleted_at set → path:null, source:db, reason:tombstoned — the exact live MarketLens shape', async () => {
+    const { client, spies } = mockSupabase([
+      { name: 'MarketLens', local_path: '/some/stale/registry/mirror/path', status: 'inactive', deleted_at: '2026-07-08T00:00:00Z' },
+    ]);
+    const result = await resolveRepoPathDbFirstDetailed('MarketLens', client);
+    expect(result).toEqual({ path: null, source: 'db', reason: 'tombstoned' });
+    // The tombstone branch must short-circuit before ever touching the registry
+    // resolver for this app -- there is nothing to spy on resolveRepoPath here,
+    // but the returned path proves the stale registry local_path was never used.
+    expect(spies.from).toHaveBeenCalled();
+  });
+
+  it('status=inactive with deleted_at NULL (the other exclusion axis) is also refused, not just deleted_at', async () => {
+    const { client } = mockSupabase([{ name: 'CanvasAI', local_path: '/x', status: 'inactive', deleted_at: null }]);
+    const result = await resolveRepoPathDbFirstDetailed('CanvasAI', client);
+    expect(result.path).toBeNull();
+    expect(result.reason).toBe('tombstoned');
+  });
+
+  it('the byte-identical resolveRepoPathDbFirst wrapper also returns null for a tombstoned app', async () => {
+    const { client } = mockSupabase([
+      { name: 'MarketLens', local_path: '/stale/marketlens', status: 'inactive', deleted_at: '2026-07-08T00:00:00Z' },
+    ]);
+    expect(await resolveRepoPathDbFirst('MarketLens', client)).toBeNull();
+  });
+
+  it('source-pin: an ACTIVE row for the same app name is NOT refused (only tombstoned rows are)', async () => {
+    const { client } = mockSupabase([{ name: 'MarketLens', local_path: '/live/marketlens', status: 'active', deleted_at: null }]);
+    const result = await resolveRepoPathDbFirstDetailed('MarketLens', client);
+    expect(result).toEqual({ path: path.resolve('/live/marketlens'), source: 'db', reason: 'active' });
+  });
+
+  it('negative control: an app absent from the DB entirely (never tombstoned) still falls through to registry', async () => {
+    const { client } = mockSupabase([]);
+    const result = await resolveRepoPathDbFirstDetailed('CronGenius', client);
+    expect(result.source).toBe('registry');
+    expect(result.reason).toBe('fallback');
+  });
+});
+
+describe('source provenance is accurate on resolveRepoPathDbFirstDetailed', () => {
+  it('no supabase client at all → source:registry, reason:no-client', async () => {
+    const result = await resolveRepoPathDbFirstDetailed('ehg');
+    expect(result.source).toBe('registry');
+    expect(result.reason).toBe('no-client');
+  });
+
+  it('platform passthrough (EHG_Engineer) → source:db, reason:platform', async () => {
+    const result = await resolveRepoPathDbFirstDetailed('EHG_Engineer');
+    expect(result).toEqual({ path: ENGINEER_ROOT, source: 'db', reason: 'platform' });
   });
 });

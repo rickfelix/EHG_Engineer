@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
-import { resolveRepoPathDbFirst } from '../../lib/repo-paths.js';
+import { resolveRepoPathDbFirst, resolveRepoPathDbFirstDetailed } from '../../lib/repo-paths.js';
 import { HAS_REAL_DB } from '../helpers/db-available.js';
 
 /**
@@ -68,10 +68,14 @@ describe.skipIf(!LIVE)('applications soft-delete reconciliation (live DB)', () =
       .eq('normalized_name', SENTINEL.toLowerCase());
     expect(upErr).toBeNull();
 
-    // AC-4: resolver no longer returns the tombstoned app (falls through to registry fallback,
-    // which has no such name -> resolveRepoPath returns null for an unknown app).
-    const hiddenPath = await resolveRepoPathDbFirst(SENTINEL, supabase);
-    expect(hiddenPath).not.toBe('/tmp/zzz-softdel-1');
+    // AC-4: resolver no longer returns the tombstoned app. Strengthened past a weak
+    // .not.toBe(sentinel) (SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C: that assertion
+    // passed even if the resolver returned a WRONG live path -- the exact MarketLens
+    // defect class) to assert on reason:'tombstoned' specifically, which only the
+    // DB-tombstone-detection branch produces.
+    const hiddenDetailed = await resolveRepoPathDbFirstDetailed(SENTINEL, supabase);
+    expect(hiddenDetailed.path).toBeNull();
+    expect(hiddenDetailed.reason).toBe('tombstoned');
 
     // AC-2: the retired name can be reused by a NEW live row (partial unique index allows it).
     const { data: reused, error: reuseErr } = await supabase
