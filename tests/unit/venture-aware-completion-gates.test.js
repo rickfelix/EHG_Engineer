@@ -223,4 +223,22 @@ describe('isQfFallbackEligible (shared predicate, G2/G3)', () => {
     expect(isQfFallbackEligible('EHG_Engineer', undefined)).toBe(false);
     expect(isQfFallbackEligible('EHG_Engineer', '')).toBe(false);
   });
+
+  // Symmetric with G3 above, but on the OTHER argument -- found in testing-agent's
+  // follow-up verification pass (evidence ce10a1bd) after the target-application.js gate
+  // was switched to call this function directly with sd.target_application as currentTarget.
+  it('G3-symmetric: a non-string truthy currentTarget does not throw, returns false', () => {
+    expect(() => isQfFallbackEligible(12345, 'altifyai')).not.toThrow();
+    expect(isQfFallbackEligible(12345, 'altifyai')).toBe(false);
+    expect(() => isQfFallbackEligible(true, 'altifyai')).not.toThrow();
+    expect(isQfFallbackEligible(true, 'altifyai')).toBe(false);
+    expect(() => isQfFallbackEligible({}, 'altifyai')).not.toThrow();
+    expect(isQfFallbackEligible([], 'altifyai')).toBe(false);
+  });
+
+  it('null/undefined/empty-string currentTarget → still eligible (falsy platform-default reads as correctable)', () => {
+    expect(isQfFallbackEligible(null, 'altifyai')).toBe(true);
+    expect(isQfFallbackEligible(undefined, 'altifyai')).toBe(true);
+    expect(isQfFallbackEligible('', 'altifyai')).toBe(true);
+  });
 });
