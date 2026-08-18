@@ -12,6 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   parseArgs, routeDecision, effectivePriority, sortPending, priorityRank,
+  partitionQueue, isTerminalRecord, isCorrectiveFinding,
 } from '../../lib/chairman/decision-queue.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -213,5 +214,57 @@ describe('routing — each decision_type maps to exactly one writer', () => {
     const out = await routeDecision({ decisionType: 'mystery', id: 'z', decision: 'approve' }, w);
     expect(out.error).toMatch(/unknown decision_type/);
     expect(writeCount(w)).toBe(0);
+  });
+});
+
+// QF-20260818-249: 29 of 31 live "pending" rows were phantoms — 14 captured-decision RECORDS
+// and 14 automated /heal corrective findings — drowning the 2 genuinely pending decisions.
+describe('QF-20260818-249 queue partitioning (records/correctives get their own lane)', () => {
+  const capture = { decision_type: 'flag_review', details: { category: 'chairman_decision_capture' } };
+  const ruling = { decision_type: 'flag_review', details: { category: 'chairman_ruling_capture' } };
+  const g2evidence = { decision_type: 'flag_review', details: { category: 'g2_apply_evidence' } };
+  const corrective = { decision_type: 'flag_review', details: { category: 'corrective_finding' } };
+  const realFlag = { decision_type: 'flag_review', details: { category: 'security' } };
+  const chairmanApproval = { decision_type: 'chairman_approval', details: {} };
+
+  it('isTerminalRecord is true only for capture/ruling/evidence flag_review categories', () => {
+    expect(isTerminalRecord(capture)).toBe(true);
+    expect(isTerminalRecord(ruling)).toBe(true);
+    expect(isTerminalRecord(g2evidence)).toBe(true);
+    expect(isTerminalRecord(corrective)).toBe(false);
+    expect(isTerminalRecord(realFlag)).toBe(false);
+    expect(isTerminalRecord(chairmanApproval)).toBe(false);
+  });
+
+  it('isCorrectiveFinding is true only for the corrective_finding category', () => {
+    expect(isCorrectiveFinding(corrective)).toBe(true);
+    expect(isCorrectiveFinding(capture)).toBe(false);
+    expect(isCorrectiveFinding(realFlag)).toBe(false);
+  });
+
+  it('partitionQueue separates records and correctives from genuinely-pending rows', () => {
+    const out = partitionQueue([capture, ruling, g2evidence, corrective, realFlag, chairmanApproval]);
+    expect(out.records).toEqual([capture, ruling, g2evidence]);
+    expect(out.correctives).toEqual([corrective]);
+    expect(out.pending).toEqual([realFlag, chairmanApproval]);
+  });
+
+  it('partitionQueue on an empty/undefined input never throws', () => {
+    expect(partitionQueue([])).toEqual({ pending: [], records: [], correctives: [] });
+    expect(partitionQueue(undefined)).toEqual({ pending: [], records: [], correctives: [] });
+  });
+
+  it('measured live shape: 15 records + 14 correctives + 2 pending nets to 31, matching the QF report', () => {
+    const rows = [
+      ...Array(13).fill(capture), ...Array(1).fill(ruling), ...Array(1).fill(g2evidence),
+      ...Array(14).fill(corrective),
+      { decision_type: 'flag_review', details: { category: 'testing' } },
+      { decision_type: 'flag_review', details: { category: 'security' } },
+    ];
+    expect(rows.length).toBe(31);
+    const out = partitionQueue(rows);
+    expect(out.records.length).toBe(15);
+    expect(out.correctives.length).toBe(14);
+    expect(out.pending.length).toBe(2);
   });
 });

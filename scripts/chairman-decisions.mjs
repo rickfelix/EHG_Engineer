@@ -12,6 +12,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import {
   parseArgs, routeDecision, sortPending, effectivePriority, formatAge, renderPendingLine, USAGE,
+  partitionQueue,
 } from '../lib/chairman/decision-queue.mjs';
 import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY, DISPOSITION_SELECT } from '../lib/chairman/decision-disposition.mjs';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
@@ -35,9 +36,36 @@ if (parsed.command === 'list') {
     console.error('LIST_ERR ' + error.message);
     await armCliTeardown(1); // graceful drain — never process.exit() after a query (UV abort class)
   } else {
+    // FR-c (QF-20260818-249): chairman_unified_decisions excludes rows whose
+    // details->>source_decision_type = 'session_question' (they never reach this view), so a
+    // real pending session_question is otherwise invisible to this CLI. Fetch them separately and
+    // fold in under decision_type='chairman_approval' — the same flattening chairman_all_decision_
+    // signals applies to every chairman_decisions row — so `decide` routes them exactly as it would
+    // if the view had not excluded them. Fail-soft: a read error here must not blank the real queue.
+    let sessionQuestions = [];
+    const { data: sq, error: sqErr } = await db.from('chairman_decisions')
+      .select('id,decision_type,summary,recommendation,blocking,created_at')
+      .eq('decision_type', 'session_question').eq('status', 'pending');
+    if (sqErr) {
+      console.error('[chairman-decisions] session_question read failed, rendering without it: ' + sqErr.message);
+    } else {
+      sessionQuestions = (sq || []).map((r) => ({
+        id: r.id, decision_type: 'chairman_approval', title: 'session_question: ' + (r.summary || '(no summary)'),
+        priority: r.blocking ? 'critical' : 'medium', status: 'pending', blocking: !!r.blocking,
+        created_at: r.created_at, recommendation: r.recommendation,
+        details: { source_decision_type: 'session_question' },
+      }));
+    }
+
+    // FR-a/FR-b (QF-20260818-249): 29 of 31 live rows were phantoms drowning the 2 genuine pending
+    // decisions — 14 flag_review rows are captured RECORDS of decisions already given verbally
+    // (chairman_decision_capture / chairman_ruling_capture / g2_apply_evidence categories), and 14
+    // more are automated /heal vision-gap or architecture-gap corrective findings, not chairman
+    // asks. Both get their own lane instead of rendering as pending.
+    const { pending, records, correctives } = partitionQueue([...(data || []), ...sessionQuestions]);
     // Sort client-side with the same semantics as the view (also covers a
     // pre-migration view that lacks blocking/effective_priority columns).
-    const rows = sortPending(data || []);
+    const rows = sortPending(pending);
     // FR-6: read the dispositions the queue has never read. Measured live, SEVEN of seven rows
     // carry a deferral — several twice — every one within ~1.3 days. (An early estimate said five
     // of seven; the measurement superseded it.) Ageing them from created_at is what makes a
@@ -90,6 +118,10 @@ if (parsed.command === 'list') {
       if (!rows.length) console.log('No pending chairman decisions.');
       for (const r of rows) console.log(renderPendingLine(r, { dispositions }));
       console.log('\n' + rows.length + ' pending. Decide: node scripts/chairman-decisions.mjs decide <decision_type:id> <approve|reject|defer> --rationale "..."');
+      // FR-a/FR-b (QF-20260818-249): own lane, not silently dropped — a chairman who wants to see
+      // WHY the count changed can still find them, without them drowning the real pending items.
+      if (records.length) console.log(records.length + ' captured decision record(s) hidden (already decided — verbal/ruling capture or G2 apply evidence).');
+      if (correctives.length) console.log(correctives.length + ' vision/architecture-gap corrective finding(s) hidden — see /heal status.');
     }
     await armCliTeardown(0);
   }
