@@ -166,10 +166,20 @@ export async function autoCompleteDeliverablesForSD(supabase, sdId) {
   try {
     const { autoCompleteDeliverables, checkDeliverablesNeedCompletion } = await import('../../auto-complete-deliverables.js');
 
-    const needsCompletion = await checkDeliverablesNeedCompletion(sdId, supabase);
-    if (needsCompletion.needs_completion) {
-      const completeResult = await autoCompleteDeliverables(sdId, supabase);
-      console.log(`   ✅ Auto-completed ${completeResult.completed_count || 0} deliverables`);
+    // checkDeliverablesNeedCompletion(sdId) / autoCompleteDeliverables(sdId, options) build their
+    // own internal supabase client and never accept one as an argument -- this call previously
+    // read needsCompletion.needs_completion (the real property is `needed`) and passed the
+    // supabase client itself as autoCompleteDeliverables' options arg. Since `needs_completion`
+    // never existed on the return value, the if-branch was ALWAYS unreachable: every SD's
+    // EXEC-TO-PLAN handoff silently no-op'd this step and logged a false "already complete"
+    // message, regardless of how many required deliverables were actually still pending --
+    // discovered live via SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001's PLAN-TO-LEAD SCOPE_AUDIT gate
+    // (67% coverage, 2 required deliverables stuck 'pending'); confirmed systemic, not an
+    // isolated case, against >=13 other SDs with the same two boilerplate rows stuck pending.
+    const needsCompletion = await checkDeliverablesNeedCompletion(sdId);
+    if (needsCompletion.needed) {
+      const completeResult = await autoCompleteDeliverables(sdId, { verifiedBy: 'EXEC' });
+      console.log(`   ✅ Auto-completed ${completeResult.completed?.length || 0} deliverables`);
       return completeResult;
     } else {
       console.log('   ℹ️  Deliverables already complete or verified by database trigger');
