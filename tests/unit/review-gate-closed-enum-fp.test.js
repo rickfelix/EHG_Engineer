@@ -211,8 +211,14 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
   // positive is noisy; a fail-open says PASS on a real hit). Confirmed by rca-agent
   // independently re-diagnosing QF-651's own fix. Coordinator ruling 9933a4cb:
   // "combined-diff polarity-column semantics + --cc fixture + consumer audit".
+  //
+  // Real combined-diff file headers are `diff --cc <path>` (a SINGLE path, no
+  // a/ b/ pair) -- NOT `diff --git a/... b/...` (VALIDATION finding, evidence
+  // aca26942, confirmed against real `git show --cc` output on a real 2-parent
+  // merge fixture). Using the wrong header shape here would test a diff format
+  // git never actually emits.
   const ccDiffFor = (path, hunkLines) =>
-    `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@@ -1,3 -1,3 +1,4 @@@\n${hunkLines}`;
+    `diff --cc ${path}\nindex 1111111,2222222..3333333\n--- a/${path}\n+++ b/${path}\n@@@ -1,3 -1,3 +1,4 @@@\n${hunkLines}`;
 
   it('FLAGS a line added relative to only ONE merge parent (the fail-open shape, 2-parent width)', () => {
     // Column 1 (parent 1): ' ' unchanged. Column 2 (parent 2): '+' new relative to
@@ -244,7 +250,8 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     // sets the path to src/query.js (not a test path); confirm CRIT-002 still fires
     // on the genuine payload line that follows the spoof attempt.
     const spoofed = [
-      'diff --git a/src/query.js b/src/query.js',
+      'diff --cc src/query.js',
+      'index 1111111,2222222..3333333',
       '--- a/src/query.js',
       '+++ b/src/query.js',
       '@@@ -1,2 -1,2 +1,3 @@@',
@@ -252,5 +259,43 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
       '++const q = base + "SELECT * FROM users";',
     ].join('\n');
     expect(names(spoofed)).toContain('sql_injection');
+  });
+
+  // FIX-2 regression tests (VALIDATION finding, evidence aca26942, real-git-fixture-
+  // proven): the SD's own first pass introduced a genuine multi-file segment-collapse
+  // regression, and left the width>=2 "+++"-prefixed-content case fail-open.
+
+  it('REGRESSION GUARD: a multi-file combined diff keeps each file in its own segment (test-exemption does not leak across files)', () => {
+    // File 1 (test-exempt path) comes FIRST; file 2 (non-test, carries a genuine
+    // CRIT-004 payload) comes SECOND. Pre-FIX-2: unrecognized 'diff --cc' boundaries
+    // meant inHunk never reset after file 1's hunk, so file 2's own '+++ b/' header
+    // was suppressed (still "in a hunk") and the whole diff collapsed onto file 1's
+    // test-exempt path -- silently exempting file 2's real payload.
+    const multiFile = [
+      'diff --cc a.test.js',
+      'index 1111111,2222222..3333333',
+      '--- a/a.test.js',
+      '+++ b/a.test.js',
+      '@@@ -1,1 -1,1 +1,2 @@@',
+      '++const ok = true;',
+      'diff --cc src/danger.js',
+      'index 4444444,5555555..6666666',
+      '--- a/src/danger.js',
+      '+++ b/src/danger.js',
+      '@@@ -1,1 -1,1 +1,2 @@@',
+      '++await run("DROP TABLE users");',
+    ].join('\n');
+    expect(names(multiFile)).toContain('schema_corruption');
+  });
+
+  it('REGRESSION GUARD: FLAGS a line added relative to ALL parents whose content starts with "+" (width-3, was fail-open)', () => {
+    // 3-parent (octopus) merge, width 3. Polarity '+++' (added relative to every
+    // parent) immediately followed by content that ALSO starts with '+' -- the raw
+    // line reads '++++ ...'. Pre-FIX-2: the blanket `startsWith('+++')` guard in
+    // addedLinesOnly matched the first 3 characters of ANY qualifying line and
+    // dropped it outright, regardless of width, silently discarding a genuine
+    // width-3 finding.
+    const octopus = 'diff --cc db.js\nindex 1,2,3..4\n--- a/db.js\n+++ b/db.js\n@@@@ -1,1 -1,1 -1,1 +1,2 @@@@\n+++await run("DROP TABLE users");';
+    expect(names(octopus)).toContain('schema_corruption');
   });
 });
