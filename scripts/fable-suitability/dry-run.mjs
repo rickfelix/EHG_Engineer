@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /**
- * dry-run.mjs — INERT-BUT-REACHABLE Fable-suitability entrypoint.
+ * dry-run.mjs — PARKED Fable-suitability entrypoint (QF-20260727-923).
  * SD-LEO-INFRA-FABLE-SUITABILITY-MAP-001-C (FR-4).
+ *
+ * PARKED, not live: CLAUDE_SOLOMON.md P1a (leo_protocol_sections id=611) parked the Mode-B
+ * preemption-ladder rung this entrypoint feeds — fable_suitability_map held exactly one
+ * self-referential row (this script's own default --dir), and readModeBCandidates has zero
+ * production callers. The contract was amended rather than the scorer promoted; see P1a for
+ * the full reasoning and the named unpark trigger. This file is kept, not deleted, so a re-run
+ * remains possible if Mode-B is ever unparked.
  *
  * Proves the whole path is REACHABLE (RISK R3 anti dark-ship): it ACTUALLY scans a real slice of the
  * live codebase, derives regions, runs child B's scorers, attempts to persist via child A's writer,
