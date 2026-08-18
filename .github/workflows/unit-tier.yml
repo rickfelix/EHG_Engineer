@@ -51,6 +51,30 @@ jobs:
       - name: Run unit project (manifest exclusions applied)
         run: npx vitest run --project unit
 
+      - name: DB-tier CI visibility (informational only, never gates the build)
+        # QF-20260818-041: no workflow anywhere ever invoked `--project db` -- the 125
+        # .db.test.js files had zero CI presence, visible only by reading source or running
+        # locally. Its runtime gate (tests/helpers/db-tier-gate.js) correctly skips every
+        # test when undesignated (no VITEST_DB_ALLOW_REF set here, by design -- never set it
+        # in this step). continue-on-error: true so a first-ever run surfacing a pre-existing
+        # collection bug in one of the 125 never-before-run files cannot suddenly block every
+        # unrelated PR; this step exists purely to put the skip count where a reviewer can see it.
+        if: always()
+        continue-on-error: true
+        run: |
+          npx vitest run --project db 2>&1 | tee db-tier-run.log || true
+          {
+            echo '### DB-tier test visibility (informational, not gating)'
+            echo ''
+            echo '```'
+            grep -E '(Test Files|Tests) .*(passed|skipped|failed)' db-tier-run.log || echo '(no summary line found)'
+            echo '```'
+            echo ''
+            echo 'All db-tier tests are gated until a designated non-production Supabase target'
+            echo 'exists -- intentional, see `tests/helpers/db-target.js`. This step never fails'
+            echo 'the build; it only makes the skip count visible.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run session-tick node:test suite (SD-LEO-INFRA-FIX-WINDOWS-SESSION-001)
         # These files use node:test/node:assert directly (not vitest globals) and were
         # never wired into any CI step before this SD — vitest's --project unit does not
