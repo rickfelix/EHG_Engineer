@@ -459,6 +459,16 @@ export async function classifyFrDelivery(supabase, {
         .filter((r) => typeof r?.expected_repo_path === 'string' && r.expected_repo_path.trim() !== '')
         .map((r) => [r.id, r.expected_repo_path]),
     );
+  // SECURITY finding (round 5 follow-up): failing closed here means every entry falls back to
+  // unresolved, same as if the writer had produced nothing valid -- an outage on this query was
+  // indistinguishable from "nothing was built or validated against this FR", a specific claim
+  // the gate did not actually measure. This module's own header names exactly that class of bug
+  // as the defect it was repaired to remove. Surfaced as a diagnostic rather than folded into the
+  // delivered/undelivered/unverifiable decision itself -- that would require redesigning
+  // hasWorkProduct/conventionInUse around a THIRD axis (did every instrument even run), which is
+  // a larger, independently-reviewable change; this keeps the failure visible without touching
+  // the classification state machine under review here.
+  const complianceLookupFailed = complianceError != null;
 
   const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
   const {
@@ -584,6 +594,7 @@ export async function classifyFrDelivery(supabase, {
     unrecognized_phase_rows: unrecognizedPhaseRows,
     rejected_phase_rows: rejectedPhaseRows,
     conflicting_signals: conflictingSignals,
+    compliance_lookup_failed: complianceLookupFailed,
   };
 }
 
@@ -630,6 +641,17 @@ export function projectGateResult(classification, {
 
   const issues = [];
   const warnings = [];
+
+  if (classification.compliance_lookup_failed) {
+    // Never silent: a broken instrument reporting a specific claim it did not measure is the
+    // exact defect this module's own header names. This does not change UNDELIVERED verdicts
+    // computed below (a redesign of hasWorkProduct/conventionInUse around instrument health is
+    // a larger, separately-reviewable change) -- it makes the outage visible so an UNDELIVERED
+    // "nothing was built or validated" claim can be read in its true context: the compliance
+    // lookup that would have let testing_evidence promote real work product failed, not that no
+    // work product exists.
+    warnings.push(`${gateName}: the repo-compliance lookup for testing_evidence failed — any UNDELIVERED verdict below may reflect a broken instrument, not confirmed absence.`);
+  }
 
   if (undelivered > 0) {
     const line = `${gateName}: ${undelivered}/${total} FR(s) UNDELIVERED — this SD does use the FR-reference convention (sibling FRs are referenced), so these are genuinely missing`;

@@ -772,13 +772,30 @@ describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', 
 describe('TS-10: consuming gates tolerate the extended classification shape', () => {
   it('a classification with all new fields present but empty produces byte-identical scoring/warnings to the pre-extension shape', () => {
     const base = { frs: [{ id: 'FR-002', description: 'b', status: 'undelivered' }, { id: 'FR-001', description: 'a', status: 'delivered' }], total: 2, delivered: 1, descoped: 0, undelivered: 1, unverifiable: 0 };
-    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], unresolved_test_refs: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [] };
+    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], unresolved_test_refs: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [], compliance_lookup_failed: false };
     const rBase = projectGateResult(base, { enforced: true });
     const rExtended = projectGateResult(extended, { enforced: true });
     expect(rExtended.passed).toBe(rBase.passed);
     expect(rExtended.score).toBe(rBase.score);
     expect(rExtended.issues).toEqual(rBase.issues);
     expect(rExtended.warnings).toEqual(rBase.warnings);
+  });
+
+  // SECURITY LOW finding (round 5 follow-up): a failed repo-compliance lookup silently degraded
+  // to "the writer produced nothing valid", producing an UNDELIVERED verdict that stated a claim
+  // ("nothing was built or validated") the gate never actually measured -- this module's own
+  // header names exactly that class of bug as the defect it was repaired to remove.
+  it('compliance_lookup_failed=true is NEVER silent, in either enforcement mode', () => {
+    const base = { frs: [], total: 2, delivered: 0, descoped: 0, undelivered: 2, unverifiable: 0, compliance_lookup_failed: true };
+    for (const enforced of [true, false]) {
+      const r = projectGateResult(base, { enforced });
+      expect(r.warnings.join(' ')).toMatch(/repo-compliance lookup.*failed/i);
+    }
+  });
+  it('compliance_lookup_failed=false produces no such warning', () => {
+    const base = { frs: [], total: 2, delivered: 2, descoped: 0, undelivered: 0, unverifiable: 0, compliance_lookup_failed: false };
+    const r = projectGateResult(base, { enforced: true });
+    expect(r.warnings.join(' ')).not.toMatch(/repo-compliance lookup/i);
   });
 });
 

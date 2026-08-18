@@ -213,6 +213,16 @@ describe('SECURITY finding (round 5): the root is resolved EXCLUSIVELY from expe
       { sdId: 'sd-round5-error', functionalRequirements: [{ id: 'FR-1' }] },
     );
     expect(c.frs[0].status).not.toBe('delivered');
+    // SECURITY LOW finding (round 5 follow-up): failing closed made an instrument outage
+    // indistinguishable from "nothing was built" -- surfaced as a diagnostic so a downstream
+    // UNDELIVERED verdict can be read in its true context rather than as confirmed absence.
+    expect(c.compliance_lookup_failed).toBe(true);
+  });
+
+  it('classifyFrDelivery level: a SUCCESSFUL compliance lookup reports compliance_lookup_failed=false', async () => {
+    const rows = [testingRow({ id: 'row-ok', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] })];
+    const c = await classifyFrDelivery(stub({ testingRows: rows }), { sdId: 'sd-round5-ok', functionalRequirements: [{ id: 'FR-1' }] });
+    expect(c.compliance_lookup_failed).toBe(false);
   });
 
   // Structurally eliminated, not just defended-in-depth: expectedRepoRoots can only ever contain
