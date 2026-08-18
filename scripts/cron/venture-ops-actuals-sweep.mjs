@@ -56,6 +56,17 @@ const JOBS = [
   { key: 'venture-pbn-auto-score-sweep', owner: 'venture-pbn-auto-score-sweep' },
 ];
 
+// Job 5 (adversarial review finding, /ship Deep-tier gate): retroactivelyScoreVenture's
+// already-scored check (scripts/eva/retroactive-pbn-score.mjs) is a cheap pre-LLM read,
+// but a genuine scoring pass calls the LLM (scorePbnBuckets) per venture. Uncapped, one
+// cycle iterating the full unscored backlog risks the driving workflow's timeout killing
+// the run mid-loop -- and since fetchAllVentureIds returns a stable order, the SAME early
+// ventures would be re-attempted every cycle while later ones are never reached. Capping
+// only the SCORED count (not attempted/checked) bounds LLM cost per cycle while still
+// making forward progress: already-scored ventures stay cheap skips in later cycles, so
+// the cursor effectively advances past them each run.
+const MAX_SCORED_PER_CYCLE = 20;
+
 /** True when a Supabase/PostgREST error means "the RPC does not exist yet" (PGRST202/42883). */
 function isMissingFunctionError(error) {
   if (!error) return false;
@@ -311,10 +322,12 @@ export async function main(argv = process.argv, deps = {}) {
     let scoringErrors = 0;
     let functionMissing = 0;
     let attempted = 0;
+    let capReached = false;
     const errors = [];
     const allVentures = args.dryRun ? [] : await fetchAllVentureIds(supabase);
     if (!args.dryRun) {
       for (const v of allVentures) {
+        if (scored >= MAX_SCORED_PER_CYCLE) { capReached = true; break; }
         attempted++;
         try {
           const result = await (deps.retroactivelyScoreVenture || retroactivelyScoreVenture)(supabase, v.id);
@@ -343,12 +356,16 @@ export async function main(argv = process.argv, deps = {}) {
       already_scored: alreadyScored,
       scoring_errors: scoringErrors,
       function_missing: functionMissing,
+      cap_reached: capReached,
       errors,
     };
     if (functionMissing > 0) {
       logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found (confirmed on venture ${attempted} of ${allVentures.length}, remaining ventures skipped this cycle -- a schema-level fact, not per-venture) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
     } else if (!args.dryRun && allVentures.length > 0 && scored === 0 && alreadyScored === 0 && scoringErrors === 0) {
       logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[4].key} scored 0, skipped 0, and had 0 scoring errors across ${allVentures.length} venture(s) with zero function_missing -- investigate before trusting future silent passes.`);
+    }
+    if (capReached) {
+      logger.log?.(`[ops-actuals-sweep] ${JOBS[4].key}: reached MAX_SCORED_PER_CYCLE=${MAX_SCORED_PER_CYCLE} with ${allVentures.length - attempted} venture(s) not yet visited this cycle -- bounded by design, remainder will be picked up on subsequent cycles as already-scored ventures become cheap skips.`);
     }
     if (scoringErrors > 0) {
       logger.warn?.(`[ops-actuals-sweep] ${JOBS[4].key}: ${scoringErrors} venture(s) had a genuine scoring failure this cycle (LLM/network error) -- verdict NOT written (never a fabricated REJECT), will retry next cycle.`);

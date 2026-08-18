@@ -82,12 +82,17 @@ setup('authenticate', async ({ page }) => {
     page.waitForSelector(ERROR_SELECTOR, { timeout: 15000, state: 'visible' }),
   ]);
 
-  const errorElement = page.locator(ERROR_SELECTOR).first();
-  if (await errorElement.count() > 0) {
-    const errorText = await errorElement.textContent().catch(() => null);
-    throw new Error(`[auth.setup] Authentication failed: ${errorText || '(error element present, no text)'}`);
-  }
+  // Only inspect ERROR_SELECTOR when the URL-left-/login race branch did NOT win --
+  // the broad selector (.destructive, [class*="toast"]) can otherwise false-match an
+  // unrelated success toast or a11y live-region on the post-login landing page and
+  // report "Authentication failed" on a genuinely successful sign-in (adversarial
+  // review finding, /ship Deep-tier gate).
   if (page.url().includes('/login')) {
+    const errorElement = page.locator(ERROR_SELECTOR).first();
+    if (await errorElement.count() > 0) {
+      const errorText = await errorElement.textContent().catch(() => null);
+      throw new Error(`[auth.setup] Authentication failed: ${errorText || '(error element present, no text)'}`);
+    }
     throw new Error('[auth.setup] Authentication failed — still on /login after sign-in with no error element visible. Verify TEST_USER_EMAIL/TEST_USER_PASSWORD are correct.');
   }
 

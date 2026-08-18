@@ -419,6 +419,22 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
     expect(deps.runVentureUptimeProbe).toHaveBeenCalledTimes(1);
   });
 
+  it('adversarial review finding (/ship Deep-tier gate): caps LLM-scoring calls per cycle so an unbounded backlog cannot exceed the driving workflow timeout', async () => {
+    const bigPortfolio = Array.from({ length: 25 }, (_, i) => ({ id: `v${String(i).padStart(3, '0')}` }));
+    const retroactivelyScoreVenture = vi.fn().mockResolvedValue({ skipped: false, verdict: 'PASS' });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase({ ventures: bigPortfolio }),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+    });
+
+    expect(retroactivelyScoreVenture).toHaveBeenCalledTimes(20); // MAX_SCORED_PER_CYCLE, not 25
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
+      expect.objectContaining({ attempted: 25, checked: 20, scored: 20, cap_reached: true }),
+    );
+  });
+
   it('--dry-run performs zero retroactivelyScoreVenture calls', async () => {
     const retroactivelyScoreVenture = vi.fn();
 

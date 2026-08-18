@@ -90,4 +90,25 @@ describe('resolveAccountPrerequisiteIndicators (I/O)', () => {
       wranglerD1DatabaseId: null,
     });
   });
+
+  it('adversarial review finding (/ship Deep-tier gate): joins applications by the venture_id FK, never by free-text venture name -- scripts/eva/retroactive-pbn-score.mjs documents two live ventures sharing the name "MarketLens", so a name-based join could silently attribute one venture\'s billing_product_id to the other', async () => {
+    const eqSpy = vi.fn(() => ({ maybeSingle: async () => ({ data: { metadata: { billing_product_id: 'prod_correct' } }, error: null }) }));
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'ventures') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: 'MarketLens', metadata: {}, stack_descriptor: {} }, error: null }) }) }) };
+        }
+        if (table === 'applications') {
+          return { select: () => ({ eq: eqSpy }) };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    };
+
+    const indicators = await resolveAccountPrerequisiteIndicators(supabase, 'venture-correct-id', null);
+
+    expect(eqSpy).toHaveBeenCalledWith('venture_id', 'venture-correct-id');
+    expect(eqSpy).not.toHaveBeenCalledWith('name', expect.anything());
+    expect(indicators.stripeBillingProductId).toBe('prod_correct');
+  });
 });
