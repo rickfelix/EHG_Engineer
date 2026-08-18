@@ -201,4 +201,144 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names('+ await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });'))
       .toContain('permission_escalation');
   });
+
+  // QF-20260818-024 -- combined-diff (--cc) polarity-column width. QF-20260818-651's
+  // width-1 rule (`startsWith('+')`) FAILED OPEN on combined-diff format (git's
+  // default for `git show <merge-sha>` on a 2+-parent merge): a line added relative
+  // to only ONE parent renders with a leading SPACE before the '+' (e.g. ' +code'
+  // for a 2-parent merge), so `startsWith('+')` was false and a genuine finding was
+  // silently dropped -- worse in kind than the false positives QF-651 fixed (a false
+  // positive is noisy; a fail-open says PASS on a real hit). Confirmed by rca-agent
+  // independently re-diagnosing QF-651's own fix. Coordinator ruling 9933a4cb:
+  // "combined-diff polarity-column semantics + --cc fixture + consumer audit".
+  //
+  // Real combined-diff file headers are `diff --cc <path>` (a SINGLE path, no
+  // a/ b/ pair) -- NOT `diff --git a/... b/...` (VALIDATION finding, evidence
+  // aca26942, confirmed against real `git show --cc` output on a real 2-parent
+  // merge fixture). Using the wrong header shape here would test a diff format
+  // git never actually emits.
+  const ccDiffFor = (path, hunkLines) =>
+    `diff --cc ${path}\nindex 1111111,2222222..3333333\n--- a/${path}\n+++ b/${path}\n@@@ -1,3 -1,3 +1,4 @@@\n${hunkLines}`;
+
+  it('FLAGS a line added relative to only ONE merge parent (the fail-open shape, 2-parent width)', () => {
+    // Column 1 (parent 1): ' ' unchanged. Column 2 (parent 2): '+' new relative to
+    // parent 2. Pre-fix: startsWith('+') is false (leading char is a space) -> dropped.
+    expect(names(ccDiffFor('config.js', ' +await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });')))
+      .toContain('permission_escalation');
+  });
+
+  it('FLAGS a line added relative to BOTH merge parents (brand-new, width-2 "++")', () => {
+    expect(names(ccDiffFor('config.js', '++await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });')))
+      .toContain('permission_escalation');
+  });
+
+  it('does NOT flag a combined-diff line that is pure CONTEXT in both parents ("  ")', () => {
+    expect(names(ccDiffFor('config.js', '  const disableAuthForTesting = true; // disable rls checks locally')))
+      .not.toContain('auth_bypass');
+  });
+
+  it('does NOT flag a combined-diff line REMOVED relative to a parent ("- ")', () => {
+    expect(names(ccDiffFor('config.js', "- 'SUPABASE_SERVICE_ROLE_KEY, used via createSupabaseServiceClient helper.',")))
+      .not.toContain('permission_escalation');
+  });
+
+  it('sets inHunk on a combined-diff header, closing the sibling +++-spoof gap for the whole file', () => {
+    // Without inHunk recognizing '@@@', a subsequent in-hunk raw line that reads
+    // '+++ b/tests/x' (2-wide polarity '++' immediately followed by content starting
+    // '+ b/tests/x') would be honored as a real path header (leaking the test-fixture
+    // exemption onto the rest of a genuinely non-test file). The REAL header above
+    // sets the path to src/query.js (not a test path); confirm CRIT-002 still fires
+    // on the genuine payload line that follows the spoof attempt.
+    const spoofed = [
+      'diff --cc src/query.js',
+      'index 1111111,2222222..3333333',
+      '--- a/src/query.js',
+      '+++ b/src/query.js',
+      '@@@ -1,2 -1,2 +1,3 @@@',
+      '+++ b/tests/spoof.test.js',
+      '++const q = base + "SELECT * FROM users";',
+    ].join('\n');
+    expect(names(spoofed)).toContain('sql_injection');
+  });
+
+  // FIX-2 regression tests (VALIDATION finding, evidence aca26942, real-git-fixture-
+  // proven): the SD's own first pass introduced a genuine multi-file segment-collapse
+  // regression, and left the width>=2 "+++"-prefixed-content case fail-open.
+
+  it('REGRESSION GUARD: a multi-file combined diff keeps each file in its own segment (test-exemption does not leak across files)', () => {
+    // File 1 (test-exempt path) comes FIRST; file 2 (non-test, carries a genuine
+    // CRIT-004 payload) comes SECOND. Pre-FIX-2: unrecognized 'diff --cc' boundaries
+    // meant inHunk never reset after file 1's hunk, so file 2's own '+++ b/' header
+    // was suppressed (still "in a hunk") and the whole diff collapsed onto file 1's
+    // test-exempt path -- silently exempting file 2's real payload.
+    const multiFile = [
+      'diff --cc a.test.js',
+      'index 1111111,2222222..3333333',
+      '--- a/a.test.js',
+      '+++ b/a.test.js',
+      '@@@ -1,1 -1,1 +1,2 @@@',
+      '++const ok = true;',
+      'diff --cc src/danger.js',
+      'index 4444444,5555555..6666666',
+      '--- a/src/danger.js',
+      '+++ b/src/danger.js',
+      '@@@ -1,1 -1,1 +1,2 @@@',
+      '++await run("DROP TABLE users");',
+    ].join('\n');
+    expect(names(multiFile)).toContain('schema_corruption');
+  });
+
+  it('REGRESSION GUARD: FLAGS a line added relative to ALL parents (width-3, polarity "+++"), was fail-open', () => {
+    // 3-parent (octopus) merge, width 3. Polarity '+++' (added relative to every
+    // parent), content 'await run(...)'. Pre-FIX-2: the blanket `startsWith('+++')`
+    // guard in addedLinesOnly matched the first 3 characters of ANY qualifying line
+    // and dropped it outright, regardless of width, silently discarding a genuine
+    // width-3 finding. (TESTING finding F-5, evidence 4ef59b24: this fixture's raw
+    // text is '+++await...' -- polarity '+++' + content starting 'a', NOT content
+    // starting '+' as an earlier version of this comment described. Still validly
+    // source-pins the width-3 '+++'-guard regression; see the next test for the
+    // genuine content-starts-with-'+' case.)
+    const octopus = 'diff --cc db.js\nindex 1,2,3..4\n--- a/db.js\n+++ b/db.js\n@@@@ -1,1 -1,1 -1,1 +1,2 @@@@\n+++await run("DROP TABLE users");';
+    expect(names(octopus)).toContain('schema_corruption');
+  });
+
+  it('REGRESSION GUARD: FLAGS a line added relative to ALL parents whose CONTENT ALSO starts with "+" (width-3, raw line "++++...")', () => {
+    // Genuine content-starts-with-'+' case: polarity '+++' immediately followed by
+    // content that itself begins with '+', so the raw line reads '++++ "DROP TABLE
+    // users"' (4 literal '+' characters). This is the shape the guard removal in
+    // FIX-2 was actually about -- content, not the polarity prefix, starting '+'.
+    const octopus = 'diff --cc db.js\nindex 1,2,3..4\n--- a/db.js\n+++ b/db.js\n@@@@ -1,1 -1,1 -1,1 +1,2 @@@@\n++++ "DROP TABLE users"';
+    expect(names(octopus)).toContain('schema_corruption');
+  });
+
+  it('REGRESSION GUARD (TESTING finding F-2, evidence 4ef59b24): CRLF-terminated combined-diff headers do not corrupt a later-hunk\'s width bleeding onto an earlier width-1 payload', () => {
+    // A CRLF trailing '\r' on 'diff --cc'/'+++ b/'/'diff --git' header lines defeated
+    // the original '(.+)$' capture (JS '.' excludes '\r', unflagged '$' requires true
+    // end-of-string). A missed boundary collapsed both files into ONE segment; since a
+    // segment's width is read once at flush time (the LAST hunk header seen), file 2's
+    // '@@@' (width 2) retroactively applied to file 1's already-pushed width-1 payload,
+    // slicing 2 chars off its front instead of 1 -- 'DROP TABLE users;' (width 1: 'D'
+    // is the first content char) becomes 'ROP TABLE users;' (width 2 wrongly applied),
+    // and the substring 'DROP' -- required by the CRIT-004 pattern -- is gone entirely.
+    // Non-test paths used deliberately (an earlier draft of this test accidentally used
+    // a '*.test.js' filename, which is genuinely CRIT-004-exempt regardless of this bug
+    // and would have passed for the wrong reason). Fixed via '[^\\r\\n]+' (no trailing
+    // '$') in all three boundary-header regexes, which correctly separates the two
+    // files into their own segments so no cross-file width bleed can occur.
+    const crlf = [
+      'diff --cc lib/a.js\r',
+      'index 1111111,2222222..3333333\r',
+      '--- a/lib/a.js\r',
+      '+++ b/lib/a.js\r',
+      '@@ -1,1 +1,2 @@\r',
+      '+DROP TABLE users;\r',
+      'diff --cc lib/b.js\r',
+      'index 4444444,5555555..6666666\r',
+      '--- a/lib/b.js\r',
+      '+++ b/lib/b.js\r',
+      '@@@ -1,1 -1,1 +1,2 @@@\r',
+      '++const ok = true;\r',
+    ].join('\n');
+    expect(names(crlf)).toContain('schema_corruption');
+  });
 });
