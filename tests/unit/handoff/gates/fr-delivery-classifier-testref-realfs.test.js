@@ -207,7 +207,12 @@ describe('SECURITY finding (round 5): the root is resolved EXCLUSIVELY from expe
   });
 
   it('classifyFrDelivery level: a compliance-query error fails CLOSED — nothing is trusted, not accidentally trusted', async () => {
-    const rows = [testingRow({ id: 'row-err', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] })];
+    // E6 (TESTING mutation sweep, round 6): the row MUST carry a metadata.repo_path that would
+    // actually resolve REAL_FILE if a fail-open mutation built its map from the writer's own
+    // unverified claim instead of an empty Map -- otherwise there is nothing to fall back TO
+    // either way, and this assertion can't tell fail-closed from fail-open apart (same shape as
+    // round 3's tautological :LINE-strip test, killed by a mutant that survived all tests).
+    const rows = [{ id: 'row-err', phase: 'EXEC', metadata: { repo_path: process.cwd(), fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }];
     const c = await classifyFrDelivery(
       stub({ testingRows: rows, complianceError: { message: 'connection reset' } }),
       { sdId: 'sd-round5-error', functionalRequirements: [{ id: 'FR-1' }] },
