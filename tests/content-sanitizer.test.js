@@ -9,7 +9,7 @@
  * to vitest here so this suite is actually collected and run in CI, not just green in isolation.
  */
 import { describe, it, expect } from 'vitest';
-import { sanitize, sanitizeUserText, isUntrustedOrigin, MAX_MESSAGE_LENGTH, MAX_USER_TEXT_LENGTH } from '../lib/factory/content-sanitizer.js';
+import { sanitize, sanitizeUserText, isUntrustedOrigin, MAX_MESSAGE_LENGTH, MAX_USER_TEXT_LENGTH, PUBLIC_ORIGIN_SOURCE_TYPES } from '../lib/factory/content-sanitizer.js';
 
 describe('content-sanitizer', () => {
   describe('sanitize() — backward compatibility with error-sanitizer', () => {
@@ -174,31 +174,32 @@ describe('content-sanitizer', () => {
     // remaining trusted values + 'error_capture' + 'venture_worker' + 'telegram' + 'user_feedback'
     // (all four tested separately as untrusted) = all 13 live feedback_source_type_check enum
     // values accounted for (verified directly against the live pg_constraint definition, not
-    // assumed from a prior count).
+    // assumed from a prior count). Declared once here and reused by the accounting test below
+    // (adversarial /ship review finding, PR #7254: a second, independently-declared copy of this
+    // array cannot detect drift in the first one -- the exact defect class this file is about,
+    // reimplemented as a false-assurance test).
+    const trustedTypes = [
+      'manual_feedback', 'auto_capture', 'uat_failure',
+      'uncaught_exception', 'unhandled_rejection', 'manual_capture',
+      'todoist_intake', 'youtube_intake', 'claude_code_intake',
+    ];
+
     it('treats every other CHECK-constrained source_type value as trusted', () => {
-      const trustedTypes = [
-        'manual_feedback', 'auto_capture', 'uat_failure',
-        'uncaught_exception', 'unhandled_rejection', 'manual_capture',
-        'todoist_intake', 'youtube_intake', 'claude_code_intake',
-      ];
       for (const source_type of trustedTypes) {
         expect(isUntrustedOrigin({ source_type }), `expected ${source_type} to be trusted`).toBe(false);
       }
     });
 
-    // TESTING finding G1 (SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001, evidence 5afcbbe9): an executable
-    // accounting assertion, not just a prose comment -- a prose tally is exactly what let
-    // 'venture_worker' silently drift out of sync for the sibling SD. This test fails loudly the
-    // next time PUBLIC_ORIGIN_SOURCE_TYPES gains or loses an entry without trustedTypes (or the
-    // live enum itself) being updated to match, closing the defect class this whole file is about.
-    it('trustedTypes plus the four named untrusted assertions account for all 13 live enum values', () => {
-      const untrustedCount = 4; // user_feedback, error_capture, venture_worker, telegram
-      const trustedTypes = [
-        'manual_feedback', 'auto_capture', 'uat_failure',
-        'uncaught_exception', 'unhandled_rejection', 'manual_capture',
-        'todoist_intake', 'youtube_intake', 'claude_code_intake',
-      ];
-      expect(trustedTypes.length + untrustedCount).toBe(13);
+    // TESTING finding G1, corrected by adversarial /ship review (mutation-proved the original
+    // version was a constant-fold tautology -- both operands were literals declared in the test's
+    // own scope, never read PUBLIC_ORIGIN_SOURCE_TYPES, and stayed green after both a 5th Set
+    // entry was added AND after re-declaring a second, independent trustedTypes copy that drifted
+    // from the real one above). This version reads the REAL exported Set and the SAME trustedTypes
+    // array the preceding test iterates -- mutation-reverified: fails on a 5th PUBLIC_ORIGIN_
+    // SOURCE_TYPES entry (14 != 13) and on 'telegram' being removed from the Set (13 != 12, since
+    // trustedTypes.length is unchanged by that mutation but the Set's size is).
+    it('trustedTypes plus PUBLIC_ORIGIN_SOURCE_TYPES account for all 13 live enum values', () => {
+      expect(trustedTypes.length + PUBLIC_ORIGIN_SOURCE_TYPES.size).toBe(13);
     });
   });
 });
