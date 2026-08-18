@@ -61,7 +61,12 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run auth smoke test
-        run: npx playwright test tests/e2e/ehg-app/auth.setup.spec.ts --project=chromium
+        # --trace=off overrides playwright.config.js's trace:'on' (SECURITY finding: a trace
+        # records full request/response bodies -- the sign-in POST carries TEST_USER_PASSWORD and
+        # the auth response carries session tokens. Uploading that trace on failure would leak
+        # both into a GitHub artifact downloadable by anyone with repo read access. This login
+        # smoke test's own pass/fail + console/step output is sufficient signal without a trace.
+        run: npx playwright test tests/e2e/ehg-app/auth.setup.spec.ts --project=chromium --trace=off
         env:
           BASE_URL: ${{ inputs.target_url || secrets.EHG_APP_BASE_URL }}
           TEST_USER_EMAIL: ${{ secrets.EHG_APP_TEST_USER_EMAIL }}

@@ -308,32 +308,50 @@ export async function main(argv = process.argv, deps = {}) {
     const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[4], logger);
     let scored = 0;
     let alreadyScored = 0;
+    let scoringErrors = 0;
     let functionMissing = 0;
+    let attempted = 0;
     const errors = [];
     const allVentures = args.dryRun ? [] : await fetchAllVentureIds(supabase);
     if (!args.dryRun) {
       for (const v of allVentures) {
+        attempted++;
         try {
           const result = await (deps.retroactivelyScoreVenture || retroactivelyScoreVenture)(supabase, v.id);
-          if (result.skipped) alreadyScored++;
+          if (result.skipped && result.reason === 'scoring_error') scoringErrors++;
+          else if (result.skipped) alreadyScored++;
           else scored++;
         } catch (err) {
           // A missing RPC (migration not yet applied -- see the deployment-sequencing note in
-          // docs/reference/venture-gate-attestations-guide.md) is a distinct, expected-for-now
-          // state, not a per-venture failure -- surfaced in aggregate, not spammed 152x into
-          // the errors array.
-          if (isMissingFunctionError({ message: err.message })) functionMissing++;
-          else errors.push(`${v.id}: ${err.message}`);
+          // docs/reference/venture-gate-attestations-guide.md) is a SCHEMA-LEVEL fact, not a
+          // per-venture one: it is either missing for every venture or none. SECURITY finding
+          // (EXEC-TO-PLAN review, F3): confirming it once and then continuing anyway burned a
+          // real LLM completion (inside retroactivelyScoreVenture, BEFORE the RPC write is even
+          // attempted) per venture per cron cycle for no benefit -- ~114 discarded completions/
+          // cycle at today's portfolio size. Stop the loop on the FIRST confirmation instead.
+          if (isMissingFunctionError({ message: err.message })) { functionMissing++; break; }
+          errors.push(`${v.id}: ${err.message}`);
         }
       }
       try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
       catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[4].key} (non-fatal): ${err.message}`); }
     }
-    summary.jobs[JOBS[4].key] = { attempted: allVentures.length, scored, already_scored: alreadyScored, function_missing: functionMissing, errors };
+    summary.jobs[JOBS[4].key] = {
+      attempted: allVentures.length,
+      checked: attempted,
+      scored,
+      already_scored: alreadyScored,
+      scoring_errors: scoringErrors,
+      function_missing: functionMissing,
+      errors,
+    };
     if (functionMissing > 0) {
-      logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found for ${functionMissing}/${allVentures.length} venture(s) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
-    } else if (!args.dryRun && allVentures.length > 0 && scored === 0 && alreadyScored === 0) {
-      logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[4].key} scored 0 and skipped 0 across ${allVentures.length} venture(s) with zero function_missing -- investigate before trusting future silent passes.`);
+      logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found (confirmed on venture 1 of ${allVentures.length}, remaining ventures skipped this cycle -- a schema-level fact, not per-venture) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
+    } else if (!args.dryRun && allVentures.length > 0 && scored === 0 && alreadyScored === 0 && scoringErrors === 0) {
+      logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[4].key} scored 0, skipped 0, and had 0 scoring errors across ${allVentures.length} venture(s) with zero function_missing -- investigate before trusting future silent passes.`);
+    }
+    if (scoringErrors > 0) {
+      logger.warn?.(`[ops-actuals-sweep] ${JOBS[4].key}: ${scoringErrors} venture(s) had a genuine scoring failure this cycle (LLM/network error) -- verdict NOT written (never a fabricated REJECT), will retry next cycle.`);
     }
   }
 

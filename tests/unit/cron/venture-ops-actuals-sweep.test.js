@@ -358,7 +358,7 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
     expect(result.summary.jobs['venture-pbn-auto-score-sweep'].already_scored).toBe(1);
   });
 
-  it('a missing RPC (migration not yet applied) is counted as function_missing, not a per-venture error, and does not flip exitCode', async () => {
+  it('SECURITY F3: a missing RPC (migration not yet applied) stops the loop after the FIRST confirmation -- a schema-level fact, not per-venture, so the remaining ventures are never attempted (and never burn an LLM call)', async () => {
     const errorLog = vi.fn();
     const retroactivelyScoreVenture = vi.fn().mockRejectedValue(
       new Error('retroactive pbn_verdict write failed: Could not find the function public.set_venture_pbn_verdict_stage_zero(p_pbn_verdict, p_venture_id) in the schema cache'),
@@ -371,11 +371,28 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
       logger: { log() {}, warn() {}, error: errorLog },
     });
 
+    expect(retroactivelyScoreVenture).toHaveBeenCalledTimes(1); // NOT 2 -- stops after the first confirmation
     expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
-      expect.objectContaining({ scored: 0, already_scored: 0, function_missing: 2, errors: [] }),
+      expect.objectContaining({ scored: 0, already_scored: 0, scoring_errors: 0, function_missing: 1, errors: [] }),
     );
     expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/set_venture_pbn_verdict_stage_zero RPC not found/));
     expect(result.exitCode).toBe(0); // function_missing is a known, expected-for-now state -- not a failure
+  });
+
+  it('SECURITY F2: a scoring_error skip is counted separately from already_scored (never conflated -- one means "nothing to do", the other means "the write was withheld to avoid a fabricated verdict")', async () => {
+    const retroactivelyScoreVenture = vi.fn()
+      .mockResolvedValueOnce({ skipped: true, reason: 'scoring_error', ventureId: 'v1', detail: 'LLM timeout' })
+      .mockResolvedValueOnce({ skipped: true, reason: 'pbn_verdict_already_present' });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+    });
+
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
+      expect.objectContaining({ scored: 0, already_scored: 1, scoring_errors: 1, function_missing: 0 }),
+    );
   });
 
   it('a genuine per-venture scoring error (not a missing-function shape) is isolated and surfaces in summary.jobs errors, flipping exitCode', async () => {
