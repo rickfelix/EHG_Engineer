@@ -11,7 +11,8 @@ import { createClient } from '@supabase/supabase-js';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { classifyFrDelivery } from '../modules/handoff/gates/fr-delivery-classifier.js';
+import { classifyFrDelivery, isWellFormedCoverageEntry } from '../modules/handoff/gates/fr-delivery-classifier.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -40,17 +41,23 @@ async function main() {
   // (not scoped to the 30 pinned SDs) -- every sub_agent_execution_results row carrying an
   // fr_coverage key, any sub_agent_code, checked for >=1 array entry satisfying the strict
   // {fr_id, status, test_ref} shape this SD's schema check requires.
-  const { data: fcRows, error: fcError } = await supabase
-    .from('sub_agent_execution_results')
-    .select('id, metadata')
-    .not('metadata->fr_coverage', 'is', null);
-  if (fcError) throw new Error(`Failed to measure pre-existing fr_coverage rows: ${fcError.message}`);
-  const isStrictSchemaEntry = (e) => e && typeof e === 'object'
-    && typeof e.fr_id === 'string' && e.fr_id.trim() !== ''
-    && (e.status === 'delivered' || e.status === 'undelivered')
-    && typeof e.test_ref === 'string' && e.test_ref.trim() !== '';
+  //
+  // F1 (VALIDATION, fix-review of the above): an unranged select silently truncates at
+  // PostgREST's 1000-row cap. Today's population (98) is far below it, but this SD ships the
+  // READER for a population the deferred follow-up SD's WRITER is meant to grow -- exactly the
+  // report this artifact exists to keep honest once that happens. fetchAllPaginated() range-pages
+  // until a short page, so the count stays real past the cap instead of silently reading as it.
+  const fcRows = await fetchAllPaginated(
+    () => supabase.from('sub_agent_execution_results').select('id, metadata').not('metadata->fr_coverage', 'is', null),
+  );
+  // F2 (VALIDATION, fix-review of the above): the strict-schema predicate was hand-copied here
+  // rather than imported, a second representation of isWellFormedCoverageEntry() that VALIDATION
+  // proved diverges on one input (a bare Array carrying fr_id/status/test_ref as own-properties --
+  // unreachable through real JSONB today, but a real single-representation violation regardless).
+  // Importing the real predicate means tightening it in the classifier is what this report measures
+  // too, rather than a copy someone has to remember to update in lockstep.
   const rowsPassingStrictSchema = fcRows.filter(
-    (r) => Array.isArray(r.metadata?.fr_coverage) && r.metadata.fr_coverage.some(isStrictSchemaEntry),
+    (r) => Array.isArray(r.metadata?.fr_coverage) && r.metadata.fr_coverage.some(isWellFormedCoverageEntry),
   ).length;
 
   const results = [];

@@ -204,8 +204,15 @@ export function isExecPhaseOrLater(phase) {
  * deliberately separate arms, same split e2e-path-guard.js itself uses (existence is decidable;
  * anything about a passing RUN is not verified here or there — no attempt is made to re-execute
  * the referenced test, only to confirm it exists).
+ *
+ * Exported (VALIDATION sub-agent, PLAN-VERIFY F2): a one-off measurement script had hand-copied
+ * this predicate rather than importing it, creating a second representation that silently
+ * diverged on one case (a bare Array with fr_id/status/test_ref own-properties: the copy's loose
+ * `typeof === 'object'` check accepted it, this function's Array.isArray guard above rejects it).
+ * Unreachable through real JSONB today, but exporting the real predicate is the fix that keeps it
+ * unreachable permanently rather than by accident.
  */
-function isWellFormedCoverageEntry(entry) {
+export function isWellFormedCoverageEntry(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
   if (typeof entry.fr_id !== 'string' || entry.fr_id.trim() === '') return false;
   if (entry.status !== 'delivered' && entry.status !== 'undelivered') return false;
