@@ -324,7 +324,7 @@ try {
     const payload = r.result.tripped.rows[0].result;
     assert(payload.ok === false, `TS-storm: response payload reports ok:false (got ${JSON.stringify(payload)})`);
     assert(payload.rate_limited === true, `TS-storm: response payload reports rate_limited:true (got ${JSON.stringify(payload)})`);
-    assert(r.result.watermark.rows.length === 1, `TS-storm: exactly one watermark row exists at the 64-char sentinel hash (got ${r.result.watermark.rows.length}) -- proves the watermark INSERT survives the same statement (S1 fix)`);
+    assert(r.result.watermark.rows.length === 1, `TS-storm: exactly one watermark row exists at the 64-char sentinel hash (got ${r.result.watermark.rows.length}) -- proves the watermark write survives the same statement (S1 fix)`);
   }
 
   console.log(JSON.stringify({ pass: allPass, log }, null, 2));
