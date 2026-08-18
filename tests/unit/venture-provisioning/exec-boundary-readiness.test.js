@@ -14,6 +14,8 @@ import {
   buildProvisioningReadinessReport,
   recordProvisioningReadiness,
   toVentureHealthStatus,
+  inferDeploymentTarget,
+  resolveHealthStatus,
 } from '../../../lib/venture-provisioning/exec-boundary-readiness.js';
 
 describe('extractAssetUrls', () => {
@@ -318,6 +320,43 @@ describe('toVentureHealthStatus', () => {
   });
 });
 
+// Regression guard for an adversarial-review finding: the prior version hardcoded
+// 'cloudflare_workers' (wrong value AND wrong spelling -- the canonical enum in
+// lib/venture-deploy/stack-descriptor.js is hyphenated) for every venture.
+describe('inferDeploymentTarget', () => {
+  it('infers cloudflare-workers from a .workers.dev hostname — the real AltifyAI shape', () => {
+    expect(inferDeploymentTarget('https://altifyai.rickfelix2000.workers.dev')).toBe('cloudflare-workers');
+  });
+  it('infers cloudflare-pages from a .pages.dev hostname', () => {
+    expect(inferDeploymentTarget('https://some-venture.pages.dev')).toBe('cloudflare-pages');
+  });
+  it('returns null (never a guess) for an unrecognized hostname shape', () => {
+    expect(inferDeploymentTarget('https://custom-domain.example.com')).toBeNull();
+  });
+  it('returns null for a missing or malformed URL, never throws', () => {
+    expect(inferDeploymentTarget(null)).toBeNull();
+    expect(inferDeploymentTarget('not a url')).toBeNull();
+  });
+});
+
+// Regression guard for an adversarial-review finding: a correction must never silently
+// understate a fresher, more severe naive reading (e.g. a known partial defect papering
+// over a later full outage).
+describe('resolveHealthStatus', () => {
+  it('uses the naive reading when no correction exists', () => {
+    expect(resolveHealthStatus(undefined, 'healthy')).toBe('healthy');
+  });
+  it('prefers the correction when it is equally or more severe than the naive reading — the whole point of a correction', () => {
+    expect(resolveHealthStatus('warning', 'healthy')).toBe('warning');
+    expect(resolveHealthStatus('critical', 'warning')).toBe('critical');
+    expect(resolveHealthStatus('warning', 'warning')).toBe('warning');
+  });
+  it('does NOT let a stale correction understate a fresher, MORE severe naive reading — the outage-masking case', () => {
+    expect(resolveHealthStatus('warning', 'critical')).toBe('critical');
+    expect(resolveHealthStatus('healthy', 'critical')).toBe('critical');
+  });
+});
+
 describe('recordProvisioningReadiness', () => {
   // ventures is queried TWICE: .update().eq().select() for the deploy-state write (the
   // .select() lets us detect a zero-rows-matched update — see the dedicated test below),
@@ -402,6 +441,22 @@ describe('recordProvisioningReadiness', () => {
     expect(ventureUpdate.payload.health_status).toBe('critical');
   });
 
+  // Regression guard for an adversarial-review finding: deployment_target must never be a
+  // blind hardcoded guess -- included only when the URL shape confidently identifies it.
+  it('includes deployment_target in the ventures UPDATE when the URL is a recognized .workers.dev host', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://altifyai.example.workers.dev', reachable: true, assetsVerified: true } } });
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.deployment_target).toBe('cloudflare-workers');
+  });
+
+  it('omits deployment_target entirely (never a guess) when the URL shape is unrecognized', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://custom-domain.example.com', reachable: true, assetsVerified: true } } });
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.deployment_target).toBeUndefined();
+  });
+
   it('reports health_status warning when reachable but assets are NOT verified — this is the shell-only-200 case the coordinator required guarding against, never optimistically healthy', async () => {
     const { supabase, calls } = fakeSupabase();
     await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: false } } });
@@ -448,6 +503,26 @@ describe('recordProvisioningReadiness', () => {
     expect(result.insertError).toBeNull();
   });
 
+  // Regression guard for an adversarial-review finding: idx_unique_current_artifact is a
+  // PARTIAL index (WHERE is_current=true) -- without an is_current filter, the fallback's
+  // WHERE clause would match every historical row for this stage too, and setting
+  // is_current:true on more than one matched row would re-collide with the same index it's
+  // trying to recover from.
+  it('scopes the 23505 fallback UPDATE to is_current:true — never touches historical rows', async () => {
+    const { supabase, calls } = fakeSupabase({
+      insertResult: { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "idx_unique_current_artifact"' } },
+      updateFallbackResult: { data: { id: 'artifact-1-updated' }, error: null },
+    });
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+
+    const fallbackUpdateIdx = calls.findIndex((c) => c.table === 'venture_artifacts' && c.op === 'update' && c.payload.is_current === true);
+    expect(fallbackUpdateIdx).toBeGreaterThanOrEqual(0);
+    const filtersAfterFallback = calls.slice(fallbackUpdateIdx + 1).filter((c) => c.op === 'eq');
+    const isCurrentFilter = filtersAfterFallback.find((c) => c.col === 'is_current');
+    expect(isCurrentFilter).toBeDefined();
+    expect(isCurrentFilter.val).toBe(true);
+  });
+
   // The "UPDATE-0=SUCCESS" trap: supabase-js resolves {data:null, error:null} even when an
   // .update().eq() matches zero rows. Without .select() + a row-returned assertion, a
   // stale/missing ventureId would silently report ventureUpdated:true.
@@ -487,6 +562,22 @@ describe('recordProvisioningReadiness', () => {
     const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
     expect(insertCall.payload.artifact_data.health_status_correction).toEqual(correction);
     expect(result.ventureUpdated).toBe(true);
+  });
+
+  // Wiring-level regression guard (the pure resolveHealthStatus() unit tests already prove
+  // the logic; this proves recordProvisioningReadiness() actually calls it correctly) for the
+  // adversarial-review finding: a stale correction must not mask a fresh, more severe outage.
+  it('does NOT let a prior warning-level correction mask a fresh critical (fully unreachable) reading', async () => {
+    const correction = { from: 'healthy', to: 'warning', reason: 'known auth defect' };
+    const { supabase, calls } = fakeSupabase({ priorArtifactData: { health_status_correction: correction } });
+
+    await recordProvisioningReadiness({
+      supabase, ventureId: 'v1',
+      report: { deploy: { url: 'https://x', reachable: false, assetsVerified: false } },
+    });
+
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('critical');
   });
 
   it('uses the naive health_status when no prior correction exists — does not fabricate one', async () => {
