@@ -1,13 +1,22 @@
 // Tests for SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001 — the EXEC-TO-PLAN FR delivery gate
 // and its registration in BOTH the orchestrator-child and normal gate sets.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// SECURITY finding 2: fr-delivery-classifier.js now disk-verifies test_ref via specFileExists().
+// Mocked so the placeholder test_ref values below ('x', 'tests/x.test.js:1') keep resolving —
+// this file is testing gate-wiring behavior, not the existence check itself (which has its own
+// dedicated tests in fr-delivery-classifier.test.js).
+vi.mock('../../../../lib/stories/e2e-path-guard.js', () => ({
+  specFileExists: () => true,
+}));
+
 import { createFrDeliveryTraceabilityGate } from '../../../../scripts/modules/handoff/gates/fr-delivery-traceability-gate.js';
 
 // supabase stub: no children, FRs from PRD (keyed on directive_id == PRD_KEY to catch the
 // UUID-vs-sd_key lookup bug), stories from user_stories.
 const PRD_KEY = 'SD-FR-001'; // the sd_key; PRD.directive_id stores this, NOT the UUID
-function stub({ children = [], frs = [], stories = [], childrenQueryError = null } = {}) {
+function stub({ children = [], frs = [], stories = [], childrenQueryError = null, testingRows = [] } = {}) {
   return {
     from(table) {
       const state = { filters: {} };
@@ -34,6 +43,23 @@ function stub({ children = [], frs = [], stories = [], childrenQueryError = null
         then(res) {
           if (table === 'strategic_directives_v2') return Promise.resolve({ data: children, error: null }).then(res);
           if (table === 'user_stories') return Promise.resolve({ data: stories, error: null }).then(res);
+          // SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001: previously this fell through to the
+          // catch-all [] below for sub_agent_execution_results too, so the new testing_evidence
+          // signal was never exercised through the REAL gate validator -- only through
+          // classifyFrDelivery() called directly in the classifier's own unit tests. TS-10's
+          // byte-identical projectGateResult() check proved the shape is tolerated; it never
+          // proved the wire from a DB row to a gate verdict is actually connected.
+          if (table === 'sub_agent_execution_results') return Promise.resolve({ data: testingRows, error: null }).then(res);
+          // Round 5: the classifier's root now comes exclusively from
+          // v_sub_agent_repo_compliance.expected_repo_path, never row.metadata.repo_path. Every
+          // testingRows id resolves to process.cwd() by default -- this file is testing gate
+          // WIRING (does a real DB row reach a real gate verdict), not root-resolution itself
+          // (which has its own dedicated tests in fr-delivery-classifier-testref-realfs.test.js)
+          // -- specFileExists is already mocked to always-true above, so the exact root value
+          // doesn't matter here, only that canResolve is true so that mock is actually reached.
+          if (table === 'v_sub_agent_repo_compliance') {
+            return Promise.resolve({ data: testingRows.map((r) => ({ id: r.id, expected_repo_path: process.cwd() })), error: null }).then(res);
+          }
           return Promise.resolve({ data: [], error: null }).then(res);
         },
       };
@@ -113,6 +139,48 @@ describe('FR-3: createFrDeliveryTraceabilityGate', () => {
       const r = await g.validator(makeCtx({ is_parent: true }));
       expect(r.passed).toBe(true);
       expect(r.warnings.join(' ')).toMatch(/delegated to children/i);
+    });
+  });
+
+  // SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001 F8: end-to-end proof that testing_evidence
+  // reaches an actual gate verdict, not just classifyFrDelivery() in isolation.
+  describe('testing_evidence second signal reaches the real gate validator', () => {
+    it('a zero-story SD with a valid EXEC-phase fr_coverage entry PASSES via testing_evidence -- not just warn-only-on-undelivered', async () => {
+      const g = createFrDeliveryTraceabilityGate(stub({
+        frs: [{ id: 'FR-001' }],
+        stories: [],
+        testingRows: [{ id: 'row-1', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-001', status: 'delivered', test_ref: 'tests/x.test.js:1' }] } } ],
+      }));
+      const r = await g.validator(makeCtx());
+      expect(r.passed).toBe(true);
+      expect(r.score).toBe(100);
+      expect(r.details.frs[0].delivery_basis).toBe('testing_evidence');
+    });
+
+    it('ON: a zero-story SD with NO fr_coverage still hard-fails (the second signal does not weaken enforcement when absent)', async () => {
+      const prev = process.env.LEO_FR_TRACEABILITY_ENFORCE;
+      process.env.LEO_FR_TRACEABILITY_ENFORCE = '1';
+      try {
+        const g = createFrDeliveryTraceabilityGate(stub({
+          frs: [{ id: 'FR-001' }],
+          stories: [],
+          testingRows: [{ id: 'row-1', phase: 'EXEC', metadata: {} }],
+        }));
+        const r = await g.validator(makeCtx());
+        expect(r.passed).toBe(false);
+        expect(r.details.testing_evidence_rows_seen).toBe(1);
+      } finally { if (prev === undefined) delete process.env.LEO_FR_TRACEABILITY_ENFORCE; else process.env.LEO_FR_TRACEABILITY_ENFORCE = prev; }
+    });
+
+    it('a LEAD-phase fr_coverage entry does not promote through the real gate (phase filter survives the full wire)', async () => {
+      const g = createFrDeliveryTraceabilityGate(stub({
+        frs: [{ id: 'FR-001' }],
+        stories: [],
+        testingRows: [{ id: 'row-1', phase: 'LEAD', metadata: { fr_coverage: [{ fr_id: 'FR-001', status: 'delivered', test_ref: 'x' }] } }],
+      }));
+      const r = await g.validator(makeCtx());
+      expect(r.details.frs[0].delivery_basis).not.toBe('testing_evidence');
+      expect(r.details.testing_evidence_rows_seen).toBe(0);
     });
   });
 });
