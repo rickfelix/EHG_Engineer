@@ -106,6 +106,16 @@ describe('crack-gate-evaluator (SD-FDBK-FIX-VENTURE-CRACK-GATE-001)', () => {
       expect(result.missing).toEqual([]);
     });
 
+    it('F1 fix (post-merge TESTING mutation finding): PBN_SCORED but verdict=REJECT -> overall=NOT_MET, pbn named in missing[]. Without the pbn.verdict===PASS conjunct in evaluateCrackGateStatus, this case would wrongly read as satisfied since status alone is PBN_SCORED', async () => {
+      const supabase = makeSupabase({
+        pbnRow: { status: 'PBN_SCORED', verdict: 'REJECT', source: 'ventures_metadata', reason: 'metadata_authoritative', degraded: false },
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') }, chairman_site_review: { row: PASS_ROW('chairman_site_review') } },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.overall).toBe('NOT_MET');
+      expect(result.missing.map((m) => m.check)).toContain('pbn');
+    });
+
     it('TS-2/PBN_CONFLICT: overall=NOT_MET, fail-closed, never picks a side', async () => {
       const supabase = makeSupabase({
         pbnRow: { status: 'PBN_CONFLICT', verdict: null, source: 'both', reason: 'metadata=PASS;nursery=REJECT', degraded: false },

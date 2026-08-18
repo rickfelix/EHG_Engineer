@@ -225,6 +225,20 @@ BEGIN
     RAISE EXCEPTION 'venture_pbn_status did not land';
   END IF;
 
+  -- ADVERSARIAL REVIEW FIX (post-merge SECURITY pass): the sibling migrations in this SD
+  -- (20260817_venture_gate_attestations.sql's REVOKE/GRANT pair and
+  -- 20260817_set_venture_pbn_verdict_stage_zero.sql's verify block) both assert their own
+  -- grants live in the verify block, not just declare REVOKE/GRANT statements earlier in the
+  -- file. This function was the one migration in the set that skipped that self-check — a
+  -- silent grant drift (e.g. a future edit re-adding a PUBLIC grant) would have shipped clean.
+  IF EXISTS (
+    SELECT 1 FROM information_schema.role_routine_grants
+    WHERE routine_schema = 'public' AND routine_name = 'venture_pbn_status'
+      AND grantee IN ('anon', 'authenticated', 'PUBLIC')
+  ) THEN
+    RAISE EXCEPTION 'venture_pbn_status: a non-service grant is present — this function reads venture metadata and must not be anon/authenticated-executable';
+  END IF;
+
   -- BEHAVIOURAL: a random uuid must resolve to the infra branch, not to "not scored". If these
   -- two ever collapse, the gate reports healthy pre-gate ventures while infrastructure is broken.
   SELECT * INTO r FROM public.venture_pbn_status('00000000-0000-0000-0000-000000000000'::uuid);

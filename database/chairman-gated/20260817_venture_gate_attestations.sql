@@ -360,7 +360,12 @@ GRANT USAGE, SELECT ON SEQUENCE public.venture_gate_attestations_id_seq TO servi
 -- columns). Writing the list out does not prevent the freeze — nothing does — but it makes the
 -- frozen set legible in the diff instead of invisible.
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
-CREATE OR REPLACE VIEW public.v_venture_gate_attestations_latest AS
+-- ADVERSARIAL REVIEW FIX (post-merge SECURITY pass): explicit security_invoker=on rather than
+-- relying solely on the platform-wide event trigger that retrofits it — a defense-in-depth
+-- declaration so this view's access-control posture is legible from the file itself, not only
+-- from infrastructure applied elsewhere.
+CREATE OR REPLACE VIEW public.v_venture_gate_attestations_latest
+WITH (security_invoker = on) AS
 SELECT DISTINCT ON (a.venture_id, a.check_type)
   a.id,
   a.venture_id,
