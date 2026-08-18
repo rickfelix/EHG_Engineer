@@ -151,8 +151,14 @@ describe('recordCrackGateObservation (shared by sweep + publish-gate layers)', (
 
     await recordCrackGateObservation(supabase, VENTURE_ID, { overall: 'NOT_MET', missing: [{ check: 'pbn' }, { check: 'stage17_judgment' }] }, 'publish_gate');
 
+    // ADVERSARIAL REVIEW FIX (live /heal smoke test): system_events' own auto-idempotency-key
+    // trigger keys off the TOP-LEVEL venture_id column, not anything inside payload — omitting
+    // it collapses every crack-gate row to the same key regardless of venture, causing real
+    // 23505 unique-constraint collisions whenever two ventures land in the same wall-clock
+    // second within one sweep cycle (reproduced live against the real DB before this fix).
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({
       event_type: 'VENTURE_CRACK_GATE_OBSERVE_ONLY',
+      venture_id: VENTURE_ID,
       payload: expect.objectContaining({ venture_id: VENTURE_ID, would_block: true, missing: ['pbn', 'stage17_judgment'], source: 'publish_gate' }),
     }));
   });
