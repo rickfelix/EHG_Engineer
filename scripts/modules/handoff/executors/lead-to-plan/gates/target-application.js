@@ -11,7 +11,7 @@
  * route to EHG without manual --venture intervention.
  */
 
-import { isVentureRepo } from '../../../../../../lib/repo-paths.js';
+import { isQfFallbackEligible } from '../../../../../../lib/repo-paths.js';
 
 // Path-prefix substrings that vote toward each application. Matches are
 // case-sensitive substring checks against `key_changes[].change` strings.
@@ -145,8 +145,17 @@ export async function validateTargetApplication(sd, supabase) {
   // worse than doing nothing for the front-end-venture population this exists to serve.
   if (sd?.metadata?.target_application_explicit !== true) {
     const qfTargetApp = sd?.metadata?.qf_target_application;
-    // typeof guard: isVentureRepo() throws on a non-string truthy value.
-    if (typeof qfTargetApp === 'string' && isVentureRepo(qfTargetApp) && qfTargetApp !== sd.target_application) {
+    // Shares isQfFallbackEligible with resolveGateRepoContext (repo-paths.js) --
+    // one representation, not two (an inlined near-duplicate here previously read
+    // `qfTargetApp !== sd.target_application`, which diverges from the shared
+    // predicate's `!isVentureRepo(current)` guard on one input class: a
+    // target_application already resolved to a DIFFERENT venture than the QF's.
+    // testing-agent evidence ce10a1bd measured that divergence would silently
+    // revert an already-correct different-venture target_application back to the
+    // QF's original venture. isQfFallbackEligible only ever corrects a
+    // platform-default target_application; it never touches one already on any
+    // venture, same or different.
+    if (isQfFallbackEligible(sd.target_application, qfTargetApp)) {
       console.log(`\n   ℹ️  metadata.qf_target_application ('${qfTargetApp}') differs from target_application ('${sd.target_application || '(not set)'}') -- correcting before scope-vocabulary inference (backfill path).`);
       const { error } = await supabase
         .from('strategic_directives_v2')

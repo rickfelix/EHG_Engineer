@@ -226,6 +226,25 @@ describe('FR-2 metadata.qf_target_application re-derivation (SD-LEO-INFRA-CLOSE-
     expect(res.pass).toBe(true);
     expect(sb._updates).toHaveLength(0);
   });
+
+  // testing-agent evidence ce10a1bd (follow-up verification pass): an earlier version of
+  // this check inlined `qfTargetApp !== sd.target_application` instead of calling
+  // isQfFallbackEligible, which diverges from the shared predicate on exactly this input --
+  // target_application already resolved to a DIFFERENT venture than the QF's origin. That
+  // inline predicate would have fired here and silently reverted 'marketlens' back to
+  // 'altifyai'. isQfFallbackEligible's !isVentureRepo(current) guard means it never touches
+  // a target_application already on any venture, same or different -- only a platform default.
+  it('current target already resolved to a DIFFERENT venture than the QF origin -- no-op, never reverted', async () => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-7', target_application: 'marketlens',
+      metadata: { qf_target_application: 'altifyai' },
+      title: 'x', scope: 'small fix',
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(0);
+  });
 });
 
 describe('witness replay (TS-7)', () => {
