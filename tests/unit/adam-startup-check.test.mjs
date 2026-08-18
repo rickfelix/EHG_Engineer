@@ -45,6 +45,20 @@ test('ADAM_LOOPS has the 15 expected tick loops with the expected keys', () => {
   });
 });
 
+// QF-20260818-063: the live hourly-heartbeat cron was hardened (coordinator ruling e1b923a2)
+// to query sms_outbound_obligations for the measured elapsed gap as its REQUIRED FIRST STEP,
+// closing the 08-18 69-min lapse (a session relying on its own recall of when it last sent,
+// rather than the real DB state, missed a send after a restart). That hardening lived only in
+// the live session cron -- every future Adam session re-arms from THIS spec text, which lacked
+// it, so the fix would silently un-apply on the next restart. Durable fix: the spec text itself.
+test('QF-20260818-063: heartbeat-sms prompt makes the measured-cadence query (sms_outbound_obligations) the REQUIRED FIRST STEP, not session recall', () => {
+  const heartbeat = ADAM_LOOPS.find((l) => l.key === 'heartbeat-sms');
+  assert.ok(heartbeat, 'heartbeat-sms loop exists');
+  assert.match(heartbeat.prompt, /REQUIRED FIRST STEP/);
+  assert.match(heartbeat.prompt, /sms_outbound_obligations/);
+  assert.match(heartbeat.prompt, /session recall/i);
+});
+
 // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the consumer-side invariant for the loop
 // registry — every DURABLE contract-named duty in CLAUDE_ADAM.md must exist in ADAM_LOOPS, or
 // it silently dies every Adam session (the belt-countdown failure mode).
