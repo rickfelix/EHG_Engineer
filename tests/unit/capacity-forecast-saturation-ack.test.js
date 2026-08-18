@@ -3,7 +3,7 @@
 // saturation). A deficit fingerprint + shouldPingAdam suppress the duplicate ping until a
 // supply-change signal (fingerprint change). These pin the two pure helpers.
 import { describe, it, expect } from 'vitest';
-import { deficitFingerprint, shouldPingAdam } from '../../scripts/coordinator-capacity-forecast.mjs';
+import { deficitFingerprint, shouldPingAdam, formatClaimableNow } from '../../scripts/coordinator-capacity-forecast.mjs';
 
 const state = { verdict: 'DEFICIT', beltDepth: 0, deficit: 2, claimable: [{ sd_key: 'SD-A' }, { sd_key: 'SD-B' }] };
 
@@ -52,5 +52,31 @@ describe('shouldPingAdam (SD-REFILL-00G39SZT)', () => {
 
   it('a legacy stamp without a fingerprint is treated as changed -> ping (one re-stamp)', () => {
     expect(shouldPingAdam({ cd: { at: 1 }, sinceMin: 45, cooldownMin: 30, currentFp: fp }).ping).toBe(true);
+  });
+});
+
+// QF-20260818-381: "Claimable now: NONE" must distinguish a genuinely empty belt from items that
+// exist but sit above every live worker's tier rung (Adam's measured USAGE-PANEL/min_tier_rank=2 diagnostic).
+describe('formatClaimableNow (QF-20260818-381)', () => {
+  it('lists the sd_keys when claimable is non-empty, regardless of aboveTop', () => {
+    expect(formatClaimableNow([{ sd_key: 'SD-A' }, { sd_key: 'SD-B' }], 3)).toBe('SD-A, SD-B');
+  });
+
+  it('strips the SD-LEO-INFRA- prefix (existing join behavior, unchanged)', () => {
+    expect(formatClaimableNow([{ sd_key: 'SD-LEO-INFRA-FOO-001' }])).toBe('FOO-001');
+  });
+
+  it('empty claimable + no tier-fenced items -> plain NONE (genuinely empty belt)', () => {
+    expect(formatClaimableNow([], 0)).toBe('NONE');
+    expect(formatClaimableNow([])).toBe('NONE');
+  });
+
+  it('empty claimable + tier-fenced items -> distinguishes the two, does not read as an empty belt', () => {
+    expect(formatClaimableNow([], 2)).toBe("0 claimable; 2 tier-fenced (above every live worker's rung)");
+  });
+
+  it('handles a missing/undefined claimable array the same as empty', () => {
+    expect(formatClaimableNow(undefined, 1)).toBe("0 claimable; 1 tier-fenced (above every live worker's rung)");
+    expect(formatClaimableNow(undefined, 0)).toBe('NONE');
   });
 });

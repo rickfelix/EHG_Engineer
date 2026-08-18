@@ -59,7 +59,7 @@ Each row is cited by its verbatim `gate_key`. Denominator = **34**.
 | `ACCEPTANCE_CRITERIA_TRACE` | MEASURE | N/A | N/A | Traces acceptance criteria to delivery. Internal traceability/measurement. |
 | `CONST_015_BYPASS_RUBRIC` | GOVERN, MANAGE | ~ | N/A | Validates bypass reasons against a rubric before a gate override is allowed — governs human/agent override of controls (Art.14 partial). **DRIFT: see the CONST-015 note below — this is a gate-only construct with no `protocol_constitution` row.** |
 | `DECOMPOSITION_CHECK` | GOVERN, MAP | N/A | N/A | Enforces `CONST-014` decomposition. Scope governance + work mapping. |
-| `FR_DELIVERY_VERIFICATION` | MEASURE, MANAGE | ✓ | N/A | Enforces `CONST-012` FR-delivery evidence before human final approval (Art.14). |
+| `FR_DELIVERY_VERIFICATION` | MEASURE, MANAGE | ✓ | N/A | Enforces `CONST-012` FR-delivery evidence before human final approval (Art.14). Dual-signal since SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001 (validated story reference OR structured TESTING-evidence `fr_coverage`) — see `docs/reference/fr-delivery-classifier.md`. |
 | `GATE1_DESIGN_DATABASE` | MAP, MEASURE | N/A | N/A | Design/database-planning gate. Context mapping + verification. |
 | `GATE5_GIT_COMMIT_ENFORCEMENT` | GOVERN, MANAGE | N/A | N/A | Enforces commit provenance/traceability. Change control. |
 | `GATE6_BRANCH_ENFORCEMENT` | GOVERN | N/A | N/A | Enforces branch discipline. Change control. |
