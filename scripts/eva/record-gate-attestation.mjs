@@ -21,6 +21,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { parseFlags } from '../../lib/eva/lifecycle/cli-flag-parser.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const KNOWN_FLAGS = ['--venture', '--type', '--verdict', '--citation', '--actor', '--producer', '--subject-ref', '--path-to-pass', '--content-hash', '--findings'];
 const REQUIRED = ['--venture', '--type', '--verdict', '--citation', '--actor', '--producer', '--subject-ref', '--path-to-pass'];
@@ -91,7 +92,6 @@ export async function main(argv = process.argv, deps = {}) {
   return { exitCode: 0, id: data.id };
 }
 
-const isMain = !!process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href;
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().then(({ exitCode }) => process.exit(exitCode));
 }

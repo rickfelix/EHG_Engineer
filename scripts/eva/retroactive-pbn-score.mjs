@@ -25,6 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 import { scorePbnBuckets } from '../../lib/eva/stage-zero/pbn-scoring.js';
 import { buildPbnVerdict } from '../../lib/eva/stage-zero/pbn-gate.js';
 import { parseFlags } from '../../lib/eva/lifecycle/cli-flag-parser.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // ADVERSARIAL REVIEW FIX (PR2 deep-tier review): the original version hand-rolled
 // `argv[++i]` here — the exact "a flag value can itself be another flag" bug class
@@ -126,7 +127,6 @@ export async function main(argv = process.argv, deps = {}) {
   }
 }
 
-const isMain = !!process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href;
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().then(({ exitCode }) => process.exit(exitCode));
 }
