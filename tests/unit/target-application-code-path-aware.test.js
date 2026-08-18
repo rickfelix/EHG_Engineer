@@ -132,6 +132,121 @@ describe('creation-time crosscheck — code-path mismatch (TS-6)', () => {
   });
 });
 
+describe('FR-2 metadata.qf_target_application re-derivation (SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-B)', () => {
+  // Reachability matrix: the same fixed SD (target_application='EHG_Engineer',
+  // metadata.qf_target_application='altifyai') crossed with 4 prose shapes that
+  // testing-agent's mutation testing (evidence c636ba21) proved would bypass an
+  // end-placed check via unrelated early-return branches -- one of which
+  // (react+ui-component+src/components/) actively WRITES target_application to a
+  // wrong platform value pre-fix. See the M2 regression test below for that specific case.
+  const PROSE_SHAPES = [
+    { label: 'terse / no vocabulary', title: 'x', scope: 'small fix' },
+    { label: 'react + frontend', title: 'x', scope: 'react frontend work' },
+    { label: 'react + ui component + src/components/', title: 'x', scope: 'react ui component work in src/components/Foo.tsx' },
+    { label: 'api endpoint + database table', title: 'x', scope: 'api endpoint touching a database table' },
+  ];
+
+  it.each(PROSE_SHAPES)('correction fires before prose-vocabulary inference: $label', async ({ title, scope }) => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-1', target_application: 'EHG_Engineer',
+      metadata: { qf_target_application: 'altifyai' },
+      title, scope,
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(1);
+    expect(sb._updates[0].target_application).toBe('altifyai');
+  });
+
+  // Excludes the 'react + ui component + src/components/' shape: that prose shape
+  // independently triggers the PRE-EXISTING, unrelated path-corroborated correction
+  // mechanism (covered by this file's own 'TS-3 (negative control)' test above) regardless
+  // of what qf_target_application holds -- proving FR-2 stays out of the way there requires
+  // a different assertion, not "zero updates" (see the M2 test below, which uses this exact
+  // shape WITH venture metadata to prove FR-2 intercepts it FIRST when it should).
+  const PLATFORM_SAFE_PROSE_SHAPES = PROSE_SHAPES.filter(s => s.label !== 'react + ui component + src/components/');
+
+  it.each(PLATFORM_SAFE_PROSE_SHAPES)('no false-positive correction for platform-shaped metadata: $label', async ({ title, scope }) => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-2', target_application: 'EHG_Engineer',
+      metadata: { qf_target_application: 'EHG_Engineer' },
+      title, scope,
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(0);
+  });
+
+  it('M2 regression: a venture-QF SD is never actively mis-routed to EHG by an unrelated prose-vocabulary branch', async () => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-3', target_application: 'EHG_Engineer',
+      metadata: { qf_target_application: 'altifyai' },
+      title: 'x', scope: 'react ui component work in src/components/Foo.tsx',
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(1);
+    expect(sb._updates[0].target_application).toBe('altifyai');
+    expect(sb._updates[0].target_application).not.toBe('EHG');
+  });
+
+  it('explicit-flag guard still respected under the new first-position placement', async () => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-4', target_application: 'EHG_Engineer',
+      metadata: { qf_target_application: 'altifyai', target_application_explicit: true },
+      title: 'x', scope: 'small fix',
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(0);
+  });
+
+  it('typeof guard (G3): a non-string qf_target_application does not throw and does not correct', async () => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-5', target_application: 'EHG_Engineer',
+      metadata: { qf_target_application: 12345 },
+      title: 'x', scope: 'small fix',
+    };
+    await expect(gateValidate(sd, sb)).resolves.toMatchObject({ pass: true });
+    expect(sb._updates).toHaveLength(0);
+  });
+
+  it('no metadata.qf_target_application key present -- no-op, falls through to existing logic unchanged', async () => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-6', target_application: 'EHG_Engineer', metadata: {},
+      title: 'x', scope: 'small fix',
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(0);
+  });
+
+  // testing-agent evidence ce10a1bd (follow-up verification pass): an earlier version of
+  // this check inlined `qfTargetApp !== sd.target_application` instead of calling
+  // isQfFallbackEligible, which diverges from the shared predicate on exactly this input --
+  // target_application already resolved to a DIFFERENT venture than the QF's origin. That
+  // inline predicate would have fired here and silently reverted 'marketlens' back to
+  // 'altifyai'. isQfFallbackEligible's !isVentureRepo(current) guard means it never touches
+  // a target_application already on any venture, same or different -- only a platform default.
+  it('current target already resolved to a DIFFERENT venture than the QF origin -- no-op, never reverted', async () => {
+    const sb = makeFakeSupabase();
+    const sd = {
+      id: 'sd-qf-7', target_application: 'marketlens',
+      metadata: { qf_target_application: 'altifyai' },
+      title: 'x', scope: 'small fix',
+    };
+    const res = await gateValidate(sd, sb);
+    expect(res.pass).toBe(true);
+    expect(sb._updates).toHaveLength(0);
+  });
+});
+
 describe('witness replay (TS-7)', () => {
   it('SD-ACTIVATE-style scope (marketing vocab + lib/eva paths) is preserved as EHG_Engineer', async () => {
     const sb = makeFakeSupabase();

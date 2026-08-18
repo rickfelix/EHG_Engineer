@@ -16,6 +16,7 @@ import {
   resolveRepoPath,
   resolveGitHubRepo,
   isVentureRepo,
+  isQfFallbackEligible,
   ENGINEER_ROOT,
 } from '../../lib/repo-paths.js';
 import { computeReposForSD } from '../../scripts/modules/handoff/executors/lead-final-approval/gates.js';
@@ -184,5 +185,60 @@ describe('FR-2 resolveGateRepoContext: INCOMPLETE_SD_ROW shape guard (property p
     expect(ctx.reason).toBeUndefined();
     expect(ctx.repoPath).toBe(ENGINEER_ROOT);
     expect(spies.from).not.toHaveBeenCalled();
+  });
+});
+
+// SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-B (G2/G3): isQfFallbackEligible extracted from
+// resolveGateRepoContext's inline predicate into a shared, exported helper also consumed
+// by the LEAD-TO-PLAN TARGET_APPLICATION_VALIDATION gate's FR-2 re-derivation check --
+// one representation, not two independently-maintained copies. The `resolveGateRepoContext`
+// suites above (unchanged) are this refactor's own regression coverage: they still pass
+// unmodified, proving the extraction preserved resolveGateRepoContext's observable behavior.
+describe('isQfFallbackEligible (shared predicate, G2/G3)', () => {
+  it('venture qf_target_application + platform current target → eligible', () => {
+    expect(isQfFallbackEligible('EHG_Engineer', 'altifyai')).toBe(true);
+  });
+
+  it('platform qf_target_application (the real 35/38-and-36/39 shape) → not eligible', () => {
+    expect(isQfFallbackEligible('EHG_Engineer', 'EHG_Engineer')).toBe(false);
+  });
+
+  it('current target already equals the venture qf_target_application → not eligible (no-op, already correct)', () => {
+    expect(isQfFallbackEligible('altifyai', 'altifyai')).toBe(false);
+  });
+
+  it('current target is already a DIFFERENT venture → not eligible (never overrides a resolved venture)', () => {
+    expect(isQfFallbackEligible('some-other-venture', 'altifyai')).toBe(false);
+  });
+
+  it('G3: a non-string truthy qf_target_application does not throw, returns false', () => {
+    expect(() => isQfFallbackEligible('EHG_Engineer', 12345)).not.toThrow();
+    expect(isQfFallbackEligible('EHG_Engineer', 12345)).toBe(false);
+    expect(() => isQfFallbackEligible('EHG_Engineer', {})).not.toThrow();
+    expect(isQfFallbackEligible('EHG_Engineer', [])).toBe(false);
+  });
+
+  it('null/undefined/empty-string qf_target_application → not eligible, no throw', () => {
+    expect(isQfFallbackEligible('EHG_Engineer', null)).toBe(false);
+    expect(isQfFallbackEligible('EHG_Engineer', undefined)).toBe(false);
+    expect(isQfFallbackEligible('EHG_Engineer', '')).toBe(false);
+  });
+
+  // Symmetric with G3 above, but on the OTHER argument -- found in testing-agent's
+  // follow-up verification pass (evidence ce10a1bd) after the target-application.js gate
+  // was switched to call this function directly with sd.target_application as currentTarget.
+  it('G3-symmetric: a non-string truthy currentTarget does not throw, returns false', () => {
+    expect(() => isQfFallbackEligible(12345, 'altifyai')).not.toThrow();
+    expect(isQfFallbackEligible(12345, 'altifyai')).toBe(false);
+    expect(() => isQfFallbackEligible(true, 'altifyai')).not.toThrow();
+    expect(isQfFallbackEligible(true, 'altifyai')).toBe(false);
+    expect(() => isQfFallbackEligible({}, 'altifyai')).not.toThrow();
+    expect(isQfFallbackEligible([], 'altifyai')).toBe(false);
+  });
+
+  it('null/undefined/empty-string currentTarget → still eligible (falsy platform-default reads as correctable)', () => {
+    expect(isQfFallbackEligible(null, 'altifyai')).toBe(true);
+    expect(isQfFallbackEligible(undefined, 'altifyai')).toBe(true);
+    expect(isQfFallbackEligible('', 'altifyai')).toBe(true);
   });
 });
