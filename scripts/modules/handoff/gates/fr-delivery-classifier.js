@@ -226,6 +226,20 @@ function frIdsMatch(a, b) {
  * sub-agent already has an analogous self-reported field (e2e_test_path) verified there, built
  * after measuring a 46.1% fabrication rate on that field. Existence only, same as its source:
  * this does not confirm the file is a real test, or that it ever passed — only that it exists.
+ *
+ * THIS IS A FABRICATION GUARD, NOT AN ANTI-FORGERY CONTROL (confirmed across 3 rounds of
+ * independent SECURITY review). It takes an accidental/hallucinated test_ref from free to
+ * impossible — the problem e2e-path-guard.js was built to close, and the problem this signal
+ * exists to close too. As of round 5 (see resolveTestingEvidenceCoverage's expectedRepoRoots)
+ * the ROOT can no longer be forged — it comes exclusively from this SD's registered
+ * applications.local_path, never from anything the TESTING sub-agent writes. A writer can
+ * therefore no longer satisfy this check by naming an arbitrary host file (repo_path='C:/',
+ * test_ref='Windows/win.ini' is impossible now); it can only name a file that genuinely exists
+ * within the CORRECT repo. That is still not proof the named file is a real test for THIS FR,
+ * or that it passed — a writer can still name any real, unrelated file within the right repo.
+ * Never cite this signal as resisting a compromised TESTING agent's DELIVERY CLAIM in general —
+ * a compromised agent can already assert delivered outright without naming a file at all; this
+ * check only closes the narrower "the referenced file doesn't exist" failure mode.
  */
 function testRefResolvesToRealFile(testRef, { repoRoot = process.cwd(), existsSync } = {}) {
   if (typeof testRef !== 'string') return false;
@@ -287,17 +301,24 @@ const MAX_DIAGNOSTIC_ENTRIES = 50;
  * promoting set, so "the writer never fired" stays distinguishable from "the writer fired but
  * nothing was valid".
  *
- * @param {Array} rows — a row's metadata.repo_path (if present) is trusted as-is here. The
- *   CALLER (classifyFrDelivery) is responsible for stripping it from any row whose compliance
- *   has not been independently verified — see the SECURITY finding comment there — so by the
- *   time a row reaches this function, a present repo_path has already been vetted.
+ * @param {Array} rows — row.metadata.repo_path is NEVER read here (SECURITY finding, round 5:
+ *   it is writer-controlled, so even gating it on "compliant" left the remaining ~24% of
+ *   non-compliant rows falling back to cwd, reopening the exact cross-repo false-promote this
+ *   exists to prevent, and it went stale the moment a worktree source was cleaned up). The
+ *   trusted root instead comes exclusively from expectedRepoRoots (below) — an
+ *   infrastructure-controlled value the writer cannot influence at all.
  * @param {Array} frs
  * @param {{repoRoot?: string, existsSync?: Function}} [fsDeps] — injectable for tests. If
- *   fsDeps.repoRoot is explicitly set it is used for EVERY row (test determinism); otherwise
- *   each row's own (already-vetted) metadata.repo_path is preferred, falling back to the real
- *   cwd only when a row has neither.
+ *   fsDeps.repoRoot is explicitly set it is used for EVERY row (test determinism).
+ * @param {Map<string, string>} [expectedRepoRoots] — row id -> this SD's registered
+ *   applications.local_path (v_sub_agent_repo_compliance.expected_repo_path, CLAUDE.md prologue
+ *   #11's SUB_AGENT_REPO_RESOLUTION contract), used when fsDeps.repoRoot is not explicitly set.
+ *   A row with NEITHER an fsDeps override NOR a map entry (an unregistered/unknown_application
+ *   SD, ~0.7% measured) has no root this classifier can trust — every entry on that row is
+ *   treated as unresolved WITHOUT ever calling the filesystem, deliberately not falling back to
+ *   cwd (that fallback is exactly how the writer-controlled-root class re-opens).
  */
-export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
+export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}, expectedRepoRoots = new Map()) {
   const matchedTestingCoverage = [];
   const unmatchedFrCoverageIds = [];
   const unresolvedTestRefs = [];
@@ -324,19 +345,17 @@ export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
     const coverage = row?.metadata?.fr_coverage;
     if (!Array.isArray(coverage)) continue; // wrong type entirely (incl. bare scalar strings) — absent, not iterated
 
-    // SECURITY finding (2nd EXEC-phase round): repoRoot must be resolved PER-ROW, not defaulted
-    // globally to this harness's own cwd. Measured: 16% of TESTING rows carry metadata.repo_path
-    // pointing OUTSIDE EHG_Engineer (other venture repos). Defaulting to cwd for those checks the
-    // WRONG filesystem entirely — a coincidentally-named file in THIS repo (e.g. README.md) would
-    // falsely promote a cross-repo SD's test_ref, and an honest cross-repo ref would falsely fail
-    // to resolve. metadata.repo_path is the SAME field CLAUDE.md prologue #11's
-    // SUB_AGENT_REPO_RESOLUTION contract already trusts (applySubAgentRepoVerdict), already on
-    // this fetched row (no extra query). An explicit fsDeps.repoRoot (tests) always wins over the
-    // row's own metadata; otherwise prefer metadata.repo_path, falling back to cwd only when
-    // absent (24/400 measured rows lack it).
-    const rowFsDeps = fsDeps.repoRoot !== undefined
-      ? fsDeps
-      : { ...fsDeps, repoRoot: row?.metadata?.repo_path || undefined };
+    // SECURITY finding (round 5, closing rounds 2-4's remaining gap): the root comes ONLY from
+    // an explicit test override or the infrastructure-controlled expectedRepoRoots map — never
+    // from the row's own metadata.repo_path, which a writer with fr_coverage write access can
+    // always influence (directly, or by the field simply going stale once a worktree source is
+    // cleaned up). No override and no map entry means no trustworthy root exists for this row;
+    // canResolve short-circuits every entry on it to unresolved before testRefResolvesToRealFile
+    // is ever called, so there is no path back to a cwd default.
+    const hasOverride = fsDeps.repoRoot !== undefined;
+    const rowRepoRoot = hasOverride ? fsDeps.repoRoot : expectedRepoRoots.get(row?.id);
+    const canResolve = hasOverride || rowRepoRoot != null;
+    const rowFsDeps = { ...fsDeps, repoRoot: rowRepoRoot };
 
     for (const entry of coverage) {
       if (!isWellFormedCoverageEntry(entry)) continue;
@@ -350,7 +369,7 @@ export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
       // (user_stories.e2e_test_path) disk-verified at lib/stories/e2e-path-guard.js, built
       // after measuring 641/1390 rows (46.1%) claiming a passing status for a file that does
       // not exist. Reusing that exact primitive rather than trusting test_ref as-is.
-      if (!testRefResolvesToRealFile(entry.test_ref, rowFsDeps)) {
+      if (!canResolve || !testRefResolvesToRealFile(entry.test_ref, rowFsDeps)) {
         if (unresolvedTestRefs.length < MAX_DIAGNOSTIC_ENTRIES) {
           unresolvedTestRefs.push({ fr_id: frIdOf(frs[matchIndex], matchIndex), test_ref: entry.test_ref, sub_agent_result_id: row?.id ?? null });
         }
@@ -413,43 +432,38 @@ export async function classifyFrDelivery(supabase, {
     .eq('sub_agent_code', 'TESTING');
   const safeTestingRows = testingError ? [] : (testingRows || []);
 
-  // SECURITY finding (4th EXEC-phase round): metadata.repo_path is WRITER-CONTROLLED — the same
-  // TESTING sub-agent chooses both it and test_ref, so trusting it raw as the existence-check
-  // root hands that agent control of BOTH halves of the guard (repoRoot was previously always
-  // process.cwd(), a value no writer could influence — that was the only thing constraining the
-  // guard at all: specFileExists('C:/', 'Windows/win.ini') === true, since its own traversal
-  // guard only ever covers the relative path, never the root). It also goes stale: a worktree
-  // path resolves today and stops resolving the moment that worktree is cleaned up, making the
-  // SAME row's classification change with wall-clock time — exactly what this module exists to
-  // prevent. Only trust repo_path when the CANONICAL compliance judgment already confirms it —
-  // v_sub_agent_repo_compliance (CLAUDE.md prologue #11 / SUB_AGENT_REPO_RESOLUTION gate) compares
-  // metadata->>repo_path to this SD's registered applications.local_path by EXACT string equality;
-  // reusing that verdict rather than re-deriving it means this can never disagree with the gate
-  // that already polices the same field. A query error fails closed (nothing trusted, same as the
-  // testingError pattern above) rather than accidentally trusting an unverified path.
+  // SECURITY finding (round 5, the converged design after rounds 2-4 each closed part of the
+  // gap): metadata.repo_path is WRITER-CONTROLLED — the same TESTING sub-agent chooses both it
+  // and test_ref, so trusting it (even conditionally, "when compliant") still fell back to cwd
+  // for the ~24% of rows that weren't — reopening the exact cross-repo false-promote for that
+  // slice, and inheriting metadata.repo_path's staleness (a worktree-sourced path resolves today
+  // and stops resolving once that worktree is cleaned up). v_sub_agent_repo_compliance already
+  // exposes expected_repo_path — this SD's registered applications.local_path, resolved via
+  // target_application, INFRASTRUCTURE-CONTROLLED and never influenced by what any sub-agent
+  // writes. It is populated for the large majority even of non-compliant rows (the "legacy"
+  // bucket included), so using it directly is simultaneously simpler than gating on compliance
+  // AND strictly stronger: the writer's own repo_path claim is never consulted at all. A row
+  // with no known application (unregistered target_application, small single-digit-percent
+  // minority) gets no map entry and is correctly treated as unresolved rather than defaulting to
+  // cwd — see the canResolve short-circuit in resolveTestingEvidenceCoverage. A query error
+  // fails closed (empty map, nothing trusted), same as the testingError pattern above.
   const { data: complianceRows, error: complianceError } = await supabase
     .from('v_sub_agent_repo_compliance')
-    .select('id, compliance_status')
+    .select('id, expected_repo_path')
     .eq('sd_id', sdId)
     .eq('sub_agent_code', 'TESTING');
-  const compliantRowIds = complianceError
-    ? new Set()
-    : new Set((complianceRows || []).filter((r) => r?.compliance_status === 'compliant').map((r) => r.id));
-  const trustworthyTestingRows = safeTestingRows.map((row) => {
-    // Defense in depth (SECURITY finding, round 4 follow-up): compliance_status='compliant'
-    // requires an EXACT TEXT-COERCED match against applications.local_path, which in practice
-    // excludes non-string JSONB values -- but path.join() throws TypeError on anything that
-    // isn't a string, and ONE poisoned row must never abort classification for the whole SD.
-    // Require typeof === 'string' independently of what the view computed, so this can never
-    // depend on the view's correctness for a crash-safety property.
-    const trusted = compliantRowIds.has(row?.id) && typeof row?.metadata?.repo_path === 'string';
-    return trusted ? row : { ...row, metadata: { ...(row?.metadata || {}), repo_path: undefined } };
-  });
+  const expectedRepoRoots = complianceError
+    ? new Map()
+    : new Map(
+      (complianceRows || [])
+        .filter((r) => typeof r?.expected_repo_path === 'string' && r.expected_repo_path.trim() !== '')
+        .map((r) => [r.id, r.expected_repo_path]),
+    );
 
   const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
   const {
     matchedTestingCoverage, unmatchedFrCoverageIds, unresolvedTestRefs, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
-  } = resolveTestingEvidenceCoverage(trustworthyTestingRows, frs, fsDeps);
+  } = resolveTestingEvidenceCoverage(safeTestingRows, frs, fsDeps, expectedRepoRoots);
 
   // PASS 1 — resolve the positive signals per FR without deciding the negative case yet. The
   // negative case (undelivered vs unverifiable) cannot be decided per-FR: it depends on whether

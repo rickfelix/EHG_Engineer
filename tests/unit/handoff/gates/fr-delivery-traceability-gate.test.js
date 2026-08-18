@@ -50,6 +50,16 @@ function stub({ children = [], frs = [], stories = [], childrenQueryError = null
           // byte-identical projectGateResult() check proved the shape is tolerated; it never
           // proved the wire from a DB row to a gate verdict is actually connected.
           if (table === 'sub_agent_execution_results') return Promise.resolve({ data: testingRows, error: null }).then(res);
+          // Round 5: the classifier's root now comes exclusively from
+          // v_sub_agent_repo_compliance.expected_repo_path, never row.metadata.repo_path. Every
+          // testingRows id resolves to process.cwd() by default -- this file is testing gate
+          // WIRING (does a real DB row reach a real gate verdict), not root-resolution itself
+          // (which has its own dedicated tests in fr-delivery-classifier-testref-realfs.test.js)
+          // -- specFileExists is already mocked to always-true above, so the exact root value
+          // doesn't matter here, only that canResolve is true so that mock is actually reached.
+          if (table === 'v_sub_agent_repo_compliance') {
+            return Promise.resolve({ data: testingRows.map((r) => ({ id: r.id, expected_repo_path: process.cwd() })), error: null }).then(res);
+          }
           return Promise.resolve({ data: [], error: null }).then(res);
         },
       };

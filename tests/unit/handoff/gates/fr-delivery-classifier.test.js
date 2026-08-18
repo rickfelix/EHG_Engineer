@@ -353,7 +353,16 @@ describe('frIdOf', () => {
 // Extended stub: also serves sub_agent_execution_results (TESTING rows), a table the plain
 // stub() above always answers with []. Kept separate so every pre-existing test above (asserted
 // against stub()'s exact shape) stays untouched.
-function stubWithTesting({ stories = [], testingRows = [], testingError = null } = {}) {
+// SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001 round 5: resolveTestingEvidenceCoverage now sources
+// its existence-check root exclusively from v_sub_agent_repo_compliance.expected_repo_path
+// (infrastructure-controlled, never metadata.repo_path). Every testingRows id gets an
+// expected_repo_path of process.cwd() by default -- reproducing the pre-round-5 "same-repo SD"
+// default so none of the ~35 tests below that don't care about cross-repo behavior need to
+// change. Override complianceRows/complianceError to test something else (see the dedicated
+// round-5 describe block, and fr-delivery-classifier-testref-realfs.test.js for the full
+// cross-repo/unregistered-application coverage).
+function stubWithTesting({ stories = [], testingRows = [], testingError = null, complianceRows = null, complianceError = null } = {}) {
+  const effectiveComplianceRows = complianceRows ?? testingRows.map((r) => ({ id: r.id, expected_repo_path: process.cwd() }));
   return {
     from(table) {
       const chain = {
@@ -364,6 +373,9 @@ function stubWithTesting({ stories = [], testingRows = [], testingError = null }
           if (table === 'user_stories') return Promise.resolve({ data: stories, error: null }).then(res);
           if (table === 'sub_agent_execution_results') {
             return Promise.resolve(testingError ? { data: null, error: testingError } : { data: testingRows, error: null }).then(res);
+          }
+          if (table === 'v_sub_agent_repo_compliance') {
+            return Promise.resolve(complianceError ? { data: null, error: complianceError } : { data: effectiveComplianceRows, error: null }).then(res);
           }
           return Promise.resolve({ data: [], error: null }).then(res);
         },
@@ -378,6 +390,13 @@ function testingRow({ id, phase, coverage = [], ...text }) {
 }
 
 const FRS3 = [{ id: 'FR-1' }, { id: 'FR-2' }, { id: 'FR-3' }];
+
+// Round 5: resolveTestingEvidenceCoverage's root now comes ONLY from an explicit fsDeps.repoRoot
+// override or the expectedRepoRoots map — direct calls below (bypassing classifyFrDelivery's own
+// query, and stubWithTesting's auto-populated default) need this override so canResolve stays
+// true and they keep exercising the mocked specFileExists's own logic, not the root-resolution
+// short-circuit (which has its own dedicated tests).
+const CWD_FS_DEPS = { repoRoot: process.cwd() };
 
 describe('FR-3/TR-2/TR-6: classifyPhaseBucket / isExecPhaseOrLater — measured, normalized allow-list', () => {
   const admitted = ['EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL', 'COMPLETED', 'PLAN_VERIFY', 'PLAN_VERIFICATION', 'EXEC_IMPLEMENTATION', 'EXEC_COMPLETE', 'orchestrated'];
@@ -443,17 +462,17 @@ describe('FR-1: extractRegexFrMentions — report-only, phase-unfiltered, exclud
 describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized match, unmatched diagnostics', () => {
   it('AC-1: a schema-valid, matched entry on an admitted phase promotes', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/foo.test.js:42' }] })];
-    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
     expect(r.matchedTestingCoverage).toEqual([{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/foo.test.js:42', sub_agent_result_id: 'r1' }]);
     expect(r.testingEvidenceRowsSeen).toBe(1);
   });
   it('AC-2: fr_id matching is normalized (case-insensitive)', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'fr-2', status: 'delivered', test_ref: 'x' }] })];
-    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toHaveLength(1);
+    expect(resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toHaveLength(1);
   });
   it('AC-3: an unmatched fr_id is recorded, not silently dropped, and does not promote', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-99', status: 'delivered', test_ref: 'x' }] })];
-    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
     expect(r.matchedTestingCoverage).toEqual([]);
     expect(r.unmatchedFrCoverageIds).toEqual(['FR-99']);
   });
@@ -467,13 +486,13 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
     ];
     for (const coverage of shapes) {
       const rows = [{ id: 'r1', phase: 'EXEC', metadata: { fr_coverage: coverage } }];
-      expect(() => resolveTestingEvidenceCoverage(rows, FRS3)).not.toThrow();
-      expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+      expect(() => resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS)).not.toThrow();
+      expect(resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toEqual([]);
     }
   });
   it('an unrecognized-phase row is diagnosed separately and does not count toward testingEvidenceRowsSeen', () => {
     const rows = [testingRow({ id: 'r1', phase: 'PLAN_PRD', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
-    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
     expect(r.matchedTestingCoverage).toEqual([]);
     expect(r.unrecognizedPhaseRows).toEqual([{ sub_agent_result_id: 'r1', phase: 'PLAN_PRD' }]);
     expect(r.testingEvidenceRowsSeen).toBe(0);
@@ -484,7 +503,7 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
   // "the writer never fired at all".
   it('a rejected-phase (known pre-EXEC) row is diagnosed separately too, not just silently skipped', () => {
     const rows = [testingRow({ id: 'r1', phase: 'LEAD', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
-    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
     expect(r.matchedTestingCoverage).toEqual([]);
     expect(r.rejectedPhaseRows).toEqual([{ sub_agent_result_id: 'r1', phase: 'LEAD' }]);
     expect(r.testingEvidenceRowsSeen).toBe(0);
@@ -493,18 +512,18 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
   // F2 (closes: unrecognized status values were never tested, only unrecognized SHAPES).
   it('F2: an fr_coverage entry with an unrecognized status value (not delivered/undelivered) is rejected, not partially trusted', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'partial', test_ref: 'x' }] })];
-    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+    expect(resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toEqual([]);
   });
 
   // F3 (closes: TS-N1's malformed fixture always failed on fr_id first, so test_ref's own
   // non-empty-string requirement was never independently exercised).
   it('F3: a well-formed fr_id/status entry with an empty test_ref is rejected', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: '' }] })];
-    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+    expect(resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toEqual([]);
   });
   it('F3b: a well-formed fr_id/status entry with test_ref entirely missing is rejected', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered' }] })];
-    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+    expect(resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toEqual([]);
   });
 
   // SECURITY finding 2: schema-valid, fr_id-matched entries whose test_ref does not resolve to
@@ -512,19 +531,19 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
   describe('SECURITY finding 2: test_ref is disk-verified, not merely shape-checked', () => {
     it('a schema-valid, matched entry whose test_ref does not resolve is rejected and diagnosed, not silently dropped', () => {
       const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/does-not-exist-anywhere.test.js:9' }] })];
-      const r = resolveTestingEvidenceCoverage(rows, FRS3);
+      const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
       expect(r.matchedTestingCoverage).toEqual([]);
       expect(r.unresolvedTestRefs).toEqual([{ fr_id: 'FR-2', test_ref: 'tests/does-not-exist-anywhere.test.js:9', sub_agent_result_id: 'r1' }]);
     });
     it('a resolvable test_ref (the mock treats anything without "does-not-exist" as real) promotes', () => {
       const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/genuinely/somewhere.test.js:1' }] })];
-      expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toHaveLength(1);
+      expect(resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toHaveLength(1);
     });
     it('a :LINE and a :LINE:COL suffix are both stripped before the existence check (same file, either suffix form)', () => {
       const withLine = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/x.test.js:42' }] })];
       const withLineCol = [testingRow({ id: 'r2', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/x.test.js:42:7' }] })];
-      expect(resolveTestingEvidenceCoverage(withLine, FRS3).matchedTestingCoverage).toHaveLength(1);
-      expect(resolveTestingEvidenceCoverage(withLineCol, FRS3).matchedTestingCoverage).toHaveLength(1);
+      expect(resolveTestingEvidenceCoverage(withLine, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toHaveLength(1);
+      expect(resolveTestingEvidenceCoverage(withLineCol, FRS3, CWD_FS_DEPS).matchedTestingCoverage).toHaveLength(1);
     });
     it('classifyFrDelivery level: an unresolved test_ref does not count as work product or promote the convention', async () => {
       const stories = [{ id: 's1', title: 'unrelated work', status: 'completed' }]; // Fixture C setup
@@ -541,7 +560,7 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
   it('SECURITY finding 3: unmatchedFrCoverageIds/unresolvedTestRefs are capped, not unbounded', () => {
     const manyUnmatched = Array.from({ length: 200 }, (_, i) => ({ fr_id: `FR-UNMATCHED-${i}`, status: 'delivered', test_ref: 'x' }));
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: manyUnmatched })];
-    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
     expect(r.unmatchedFrCoverageIds.length).toBeLessThanOrEqual(50);
     expect(r.unmatchedFrCoverageIds.length).toBeGreaterThan(0);
   });
@@ -552,7 +571,7 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
   it('S6: unresolvedTestRefs is ALSO capped independently, not just unmatchedFrCoverageIds', () => {
     const manyUnresolved = Array.from({ length: 200 }, (_, i) => ({ fr_id: 'FR-1', status: 'delivered', test_ref: `tests/does-not-exist-${i}.test.js` }));
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: manyUnresolved })];
-    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    const r = resolveTestingEvidenceCoverage(rows, FRS3, CWD_FS_DEPS);
     expect(r.unresolvedTestRefs.length).toBeLessThanOrEqual(50);
     expect(r.unresolvedTestRefs.length).toBeGreaterThan(0);
     expect(r.unmatchedFrCoverageIds).toEqual([]); // FR-1 is matched -- these all take the resolved-check branch, not the unmatched one

@@ -20,11 +20,22 @@ import { classifyFrDelivery, resolveTestingEvidenceCoverage } from '../../../../
 const REAL_FILE = 'scripts/modules/handoff/gates/fr-delivery-classifier.js';
 const FAKE_FILE = 'tests/genuinely-does-not-exist-xyz123abc.test.js';
 
+// Round 5's root comes ONLY from an explicit fsDeps.repoRoot override or the expectedRepoRoots
+// map (never row.metadata.repo_path, which is no longer read at all). Direct
+// resolveTestingEvidenceCoverage() calls that don't care about root-resolution itself use this
+// so canResolve stays true and they keep exercising specFileExists's own behavior.
+const CWD_FS_DEPS = { repoRoot: process.cwd() };
+
 function testingRow({ id, phase, coverage }) {
   return { id, phase, metadata: { fr_coverage: coverage } };
 }
 
-function stub({ stories = [], testingRows = [], complianceRows = [], complianceError = null } = {}) {
+// complianceRows defaults to "every testingRows id resolves to process.cwd()" (the common
+// same-repo case), matching fr-delivery-classifier.test.js's stubWithTesting default — so
+// classifyFrDelivery-level tests that aren't specifically about cross-repo resolution don't need
+// to configure it explicitly. Tests that ARE about root resolution pass an explicit override.
+function stub({ stories = [], testingRows = [], complianceRows = null, complianceError = null } = {}) {
+  const effectiveComplianceRows = complianceRows ?? testingRows.map((r) => ({ id: r.id, expected_repo_path: process.cwd() }));
   return {
     from(table) {
       const chain = {
@@ -35,7 +46,7 @@ function stub({ stories = [], testingRows = [], complianceRows = [], complianceE
           if (table === 'user_stories') return Promise.resolve({ data: stories, error: null }).then(res);
           if (table === 'sub_agent_execution_results') return Promise.resolve({ data: testingRows, error: null }).then(res);
           if (table === 'v_sub_agent_repo_compliance') {
-            return Promise.resolve(complianceError ? { data: null, error: complianceError } : { data: complianceRows, error: null }).then(res);
+            return Promise.resolve(complianceError ? { data: null, error: complianceError } : { data: effectiveComplianceRows, error: null }).then(res);
           }
           return Promise.resolve({ data: [], error: null }).then(res);
         },
@@ -46,16 +57,16 @@ function stub({ stories = [], testingRows = [], complianceRows = [], complianceE
 }
 
 describe('SECURITY finding 2: the real specFileExists() is genuinely reachable, not just the mock', () => {
-  it('resolveTestingEvidenceCoverage level: a test_ref naming a real repo file, no fsDeps override (production default path), promotes', () => {
+  it('resolveTestingEvidenceCoverage level: a test_ref naming a real repo file promotes against the real disk', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: `${REAL_FILE}:1` }] })];
-    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], CWD_FS_DEPS);
     expect(r.matchedTestingCoverage).toEqual([{ fr_id: 'FR-1', status: 'delivered', test_ref: `${REAL_FILE}:1`, sub_agent_result_id: 'r1' }]);
     expect(r.unresolvedTestRefs).toEqual([]);
   });
 
   it('resolveTestingEvidenceCoverage level: a test_ref naming a genuinely nonexistent file is rejected against the REAL disk, not a mock', () => {
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: FAKE_FILE }] })];
-    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], CWD_FS_DEPS);
     expect(r.matchedTestingCoverage).toEqual([]);
     expect(r.unresolvedTestRefs).toEqual([{ fr_id: 'FR-1', test_ref: FAKE_FILE, sub_agent_result_id: 'r1' }]);
   });
@@ -83,7 +94,7 @@ describe('SECURITY finding 2: the real specFileExists() is genuinely reachable, 
     const attempts = ['../../../etc/passwd', '/etc/passwd', 'C:/Windows/win.ini', 'tests/../../../etc/passwd', '..\\..\\Windows\\win.ini'];
     for (const attempt of attempts) {
       const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: attempt }] })];
-      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], CWD_FS_DEPS);
       expect(r.matchedTestingCoverage).toEqual([]);
     }
   });
@@ -99,36 +110,46 @@ describe('SECURITY finding 2: the real specFileExists() is genuinely reachable, 
   });
 });
 
-// SECURITY finding (2nd EXEC-phase round): repoRoot previously defaulted globally to
-// process.cwd() (this harness's own repo). Measured: 16% of TESTING rows carry
-// metadata.repo_path pointing at a DIFFERENT repo entirely. Defaulting to cwd for those checks
-// the wrong filesystem -- these tests use REAL temp directories (not mocks) to prove the fix.
-describe('SECURITY finding (round 3): per-row repoRoot resolved from metadata.repo_path, not a global cwd default', () => {
+// SECURITY finding, round 5 (the converged design after rounds 2-4 each closed part of the gap,
+// and a 2nd re-verification of round 4 measured the remaining ~24% non-compliant-row exposure
+// live): the root now comes EXCLUSIVELY from v_sub_agent_repo_compliance.expected_repo_path
+// (this SD's registered applications.local_path) or an explicit fsDeps override — NEVER from
+// row.metadata.repo_path, which is not read for this purpose at all anymore. This closes the
+// writer-controlled-root class entirely (not just for the "compliant" subset), the staleness
+// class (a registered app path doesn't go stale the way a worktree path can), AND structurally
+// eliminates the non-string-crash class (the map can only ever contain validated strings — see
+// the typeof filter around this query in classifyFrDelivery). These tests use real temp
+// directories (not mocks) to prove the mechanism, matching every prior round's methodology.
+describe('SECURITY finding (round 5): the root is resolved EXCLUSIVELY from expectedRepoRoots, row.metadata.repo_path is never read', () => {
   function makeOtherRepo(prefix) {
     const root = mkdtempSync(join(tmpdir(), prefix));
     mkdirSync(join(root, 'sub'));
     return root;
   }
 
-  it('a row with metadata.repo_path resolves test_ref relative to THAT repo, not process.cwd()', () => {
-    const otherRepoRoot = makeOtherRepo('fr-delivery-other-repo-');
+  it('a row with a known expectedRepoRoots entry resolves test_ref relative to THAT repo, not process.cwd()', () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-round5-known-');
     try {
       writeFileSync(join(otherRepoRoot, 'sub', 'marker.js'), '// exists only in the other repo\n');
-      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] } }];
-      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
-      expect(r.matchedTestingCoverage).toHaveLength(1); // resolves against otherRepoRoot, not process.cwd()
+      const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] })];
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], {}, new Map([['r1', otherRepoRoot]]));
+      expect(r.matchedTestingCoverage).toHaveLength(1);
     } finally {
       rmSync(otherRepoRoot, { recursive: true, force: true });
     }
   });
 
-  it('THE SPECIFIC VULNERABILITY: a ref naming a file that exists in this harness repo but not in the row\'s own repo is rejected, not falsely promoted', () => {
-    const otherRepoRoot = makeOtherRepo('fr-delivery-other-repo-empty-'); // no such file written here
+  it('THE VULNERABILITY THIS FULLY CLOSES: row.metadata.repo_path is not read at all — a row CLAIMING a root via metadata is ignored entirely, whether or not that claim happens to be true', () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-round5-ignored-claim-');
     try {
-      // REAL_FILE genuinely exists at process.cwd() (this repo) — pre-fix, this promoted for
-      // EVERY row regardless of which repo it actually belonged to.
-      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }];
-      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+      writeFileSync(join(otherRepoRoot, 'sub', 'marker.js'), '// this row METADATA claims this root, but that claim is never consulted\n');
+      // The row's own metadata.repo_path points at otherRepoRoot (where the file genuinely
+      // exists) — pre-round-5, a "compliant" verdict would have trusted this metadata field
+      // directly. Round 5 never reads row.metadata.repo_path for root resolution at all: with NO
+      // expectedRepoRoots entry for this row's id, resolution must fail regardless of what the
+      // row's own metadata claims.
+      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] } }];
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], {}, new Map()); // no entry for 'r1'
       expect(r.matchedTestingCoverage).toEqual([]);
       expect(r.unresolvedTestRefs).toHaveLength(1);
     } finally {
@@ -136,48 +157,37 @@ describe('SECURITY finding (round 3): per-row repoRoot resolved from metadata.re
     }
   });
 
-  it('a row lacking metadata.repo_path falls back to process.cwd() (the pre-fix default, still correct for same-repo SDs)', () => {
-    const rows = [{ id: 'r1', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }]; // no repo_path
-    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
-    expect(r.matchedTestingCoverage).toHaveLength(1);
+  it('a row with NO expectedRepoRoots entry and no fsDeps override is UNRESOLVED — it does NOT fall back to cwd (that fallback is exactly how the writer-controlled-root class re-opened in round 3)', () => {
+    // REAL_FILE genuinely exists at process.cwd() — if this fell back to cwd, it would promote,
+    // silently reproducing the exact cross-repo false-promote this whole mechanism exists to
+    // close for any SD whose target_application isn't registered.
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] })];
+    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], {}, new Map());
+    expect(r.matchedTestingCoverage).toEqual([]);
+    expect(r.unresolvedTestRefs).toEqual([{ fr_id: 'FR-1', test_ref: REAL_FILE, sub_agent_result_id: 'r1' }]);
   });
 
-  it('an explicit fsDeps.repoRoot override still wins over a row\'s own metadata.repo_path (test determinism preserved)', () => {
-    const otherRepoRoot = makeOtherRepo('fr-delivery-other-repo-override-');
+  it('an explicit fsDeps.repoRoot override still wins over expectedRepoRoots (test determinism preserved)', () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-round5-override-');
     try {
-      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }];
-      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], { repoRoot: process.cwd() });
-      expect(r.matchedTestingCoverage).toHaveLength(1); // explicit override wins, resolves against cwd despite metadata pointing elsewhere
+      const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] })];
+      // expectedRepoRoots says otherRepoRoot (which does NOT have REAL_FILE); the explicit
+      // override says cwd (which DOES) — the override must win.
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], { repoRoot: process.cwd() }, new Map([['r1', otherRepoRoot]]));
+      expect(r.matchedTestingCoverage).toHaveLength(1);
     } finally {
       rmSync(otherRepoRoot, { recursive: true, force: true });
     }
   });
-});
 
-// SECURITY finding (4th EXEC-phase round, via exec-testing-fr-delivery): metadata.repo_path is
-// writer-controlled and was being trusted raw as the existence-check root -- handing the SAME
-// agent that chooses test_ref control of the traversal root too (specFileExists('C:/',
-// 'Windows/win.ini') === true; its own guard only ever covers the relative path), and going
-// stale the moment a worktree source is cleaned up. Now gated on v_sub_agent_repo_compliance
-// (CLAUDE.md prologue #11's SUB_AGENT_REPO_RESOLUTION contract) at the classifyFrDelivery level,
-// tested here with the ACTUAL classifyFrDelivery entry point (resolveTestingEvidenceCoverage
-// itself is intentionally unaware of compliance — see its docblock — so these tests exercise the
-// orchestration layer where the gating actually lives).
-describe('SECURITY finding (round 4): metadata.repo_path is trusted ONLY when independently verified compliant', () => {
-  function makeOtherRepo(prefix) {
-    const root = mkdtempSync(join(tmpdir(), prefix));
-    mkdirSync(join(root, 'sub'));
-    return root;
-  }
-
-  it('a COMPLIANT row\'s metadata.repo_path is trusted (test_ref resolves against the row\'s own repo)', async () => {
-    const otherRepoRoot = makeOtherRepo('fr-delivery-round4-compliant-');
+  it('classifyFrDelivery level: a row whose SD resolves to a known application root promotes against that repo, end to end', async () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-round5-e2e-known-');
     try {
       writeFileSync(join(otherRepoRoot, 'sub', 'marker.js'), '// only in the other repo\n');
-      const rows = [{ id: 'row-compliant', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] } }];
+      const rows = [testingRow({ id: 'row-known', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] })];
       const c = await classifyFrDelivery(
-        stub({ testingRows: rows, complianceRows: [{ id: 'row-compliant', compliance_status: 'compliant' }] }),
-        { sdId: 'sd-round4-compliant', functionalRequirements: [{ id: 'FR-1' }] },
+        stub({ testingRows: rows, complianceRows: [{ id: 'row-known', expected_repo_path: otherRepoRoot }] }),
+        { sdId: 'sd-round5-known', functionalRequirements: [{ id: 'FR-1' }] },
       );
       expect(c.frs[0].status).toBe('delivered');
       expect(c.frs[0].delivery_basis).toBe('testing_evidence');
@@ -186,72 +196,48 @@ describe('SECURITY finding (round 4): metadata.repo_path is trusted ONLY when in
     }
   });
 
-  it('THE VULNERABILITY THIS CLOSES: an UNVERIFIED (non-compliant) metadata.repo_path is ignored, not trusted — a forged root pointing at a directory with an unrelated real file does NOT promote', async () => {
-    // otherRepoRoot genuinely contains sub/marker.js — if repo_path were trusted unconditionally
-    // (pre-fix behavior), this would promote purely because the writer chose a root where SOME
-    // file happens to exist, regardless of whether it's a real test for this SD's own work.
-    const otherRepoRoot = makeOtherRepo('fr-delivery-round4-noncompliant-');
-    try {
-      writeFileSync(join(otherRepoRoot, 'sub', 'marker.js'), '// a real file, but this repo_path is NOT verified compliant\n');
-      const rows = [{ id: 'row-violation', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] } }];
-      const c = await classifyFrDelivery(
-        stub({ testingRows: rows, complianceRows: [{ id: 'row-violation', compliance_status: 'violation' }] }),
-        { sdId: 'sd-round4-violation', functionalRequirements: [{ id: 'FR-1' }] },
-      );
-      expect(c.frs[0].status).not.toBe('delivered'); // repo_path stripped, falls back to cwd, which does not have sub/marker.js
-      expect(c.unresolved_test_refs).toEqual([{ fr_id: 'FR-1', test_ref: 'sub/marker.js', sub_agent_result_id: 'row-violation' }]);
-    } finally {
-      rmSync(otherRepoRoot, { recursive: true, force: true });
-    }
+  it('classifyFrDelivery level: a row whose SD has no known application (expected_repo_path null, e.g. unknown_application) does NOT fall back to cwd', async () => {
+    const rows = [testingRow({ id: 'row-unknown', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] })];
+    const c = await classifyFrDelivery(
+      stub({ testingRows: rows, complianceRows: [{ id: 'row-unknown', expected_repo_path: null }] }),
+      { sdId: 'sd-round5-unknown', functionalRequirements: [{ id: 'FR-1' }] },
+    );
+    expect(c.frs[0].status).not.toBe('delivered');
+    expect(c.unresolved_test_refs).toEqual([{ fr_id: 'FR-1', test_ref: REAL_FILE, sub_agent_result_id: 'row-unknown' }]);
   });
 
-  it('a compliance-query error fails CLOSED — no repo_path is trusted, not accidentally trusted', async () => {
-    const otherRepoRoot = makeOtherRepo('fr-delivery-round4-error-');
-    try {
-      writeFileSync(join(otherRepoRoot, 'sub', 'marker.js'), '// exists, but the compliance query itself errored\n');
-      const rows = [{ id: 'row-err', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] } }];
-      const c = await classifyFrDelivery(
-        stub({ testingRows: rows, complianceError: { message: 'connection reset' } }),
-        { sdId: 'sd-round4-error', functionalRequirements: [{ id: 'FR-1' }] },
-      );
-      expect(c.frs[0].status).not.toBe('delivered');
-    } finally {
-      rmSync(otherRepoRoot, { recursive: true, force: true });
-    }
+  it('classifyFrDelivery level: a compliance-query error fails CLOSED — nothing is trusted, not accidentally trusted', async () => {
+    const rows = [testingRow({ id: 'row-err', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] })];
+    const c = await classifyFrDelivery(
+      stub({ testingRows: rows, complianceError: { message: 'connection reset' } }),
+      { sdId: 'sd-round5-error', functionalRequirements: [{ id: 'FR-1' }] },
+    );
+    expect(c.frs[0].status).not.toBe('delivered');
   });
 
-  it('a row with NO metadata.repo_path at all is unaffected by compliance gating (nothing to strip, falls back to cwd as before)', async () => {
-    const rows = [{ id: 'row-nopath', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }];
-    const c = await classifyFrDelivery(stub({ testingRows: rows }), { sdId: 'sd-round4-nopath', functionalRequirements: [{ id: 'FR-1' }] });
-    expect(c.frs[0].status).toBe('delivered');
-    expect(c.frs[0].delivery_basis).toBe('testing_evidence');
-  });
-
-  // SECURITY finding B (round 4 follow-up): a non-string repo_path (a number, object, array, or
-  // boolean) previously threw TypeError out of path.join, aborting classification for the WHOLE
-  // SD -- one poisoned row taking down every other FR's verdict alongside it. Defense in depth:
-  // typeof === 'string' is required independently of what the compliance view computed, so this
-  // can never depend on the view's own correctness for a crash-safety property. Three good rows
-  // plus one poisoned one, matching how SECURITY demonstrated the collateral damage.
-  it("SECURITY finding B: a non-string metadata.repo_path never reaches path.join — no row's classification is aborted by it", async () => {
+  // Structurally eliminated, not just defended-in-depth: expectedRepoRoots can only ever contain
+  // typeof==='string' values (filtered in classifyFrDelivery when the map is built), so a
+  // non-string expected_repo_path from a corrupted view result is excluded from the map entirely
+  // -- it can never reach path.join(), and it can never silently fall back to cwd either.
+  it('SECURITY finding B (structurally eliminated in round 5): a non-string expected_repo_path is excluded from the map, never reaches path.join, and never falls back to cwd', async () => {
     const nonStringValues = [123, {}, [], true];
-    for (const badRepoPath of nonStringValues) {
+    for (const badExpectedPath of nonStringValues) {
       const rows = [
-        { id: 'row-good-1', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } },
-        // FAKE_FILE (not REAL_FILE): if the poisoned repo_path were somehow used, path.join would
-        // throw before existence is even checked; if it's correctly stripped and falls back to
-        // cwd, FAKE_FILE still won't resolve there either -- making "does not promote" a clean,
-        // unambiguous assertion regardless of which fallback path is taken.
-        { id: 'row-poisoned', phase: 'EXEC', metadata: { repo_path: badRepoPath, fr_coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: FAKE_FILE }] } },
+        testingRow({ id: 'row-good-1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] }),
+        testingRow({ id: 'row-poisoned', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: FAKE_FILE }] }),
       ];
-      // Even if a corrupted compliance row somehow marked the poisoned row "compliant", the
-      // typeof guard must still hold — that's the whole point of defense in depth.
       const c = await classifyFrDelivery(
-        stub({ testingRows: rows, complianceRows: [{ id: 'row-good-1', compliance_status: 'compliant' }, { id: 'row-poisoned', compliance_status: 'compliant' }] }),
-        { sdId: 'sd-round4-poisoned', functionalRequirements: [{ id: 'FR-1' }, { id: 'FR-2' }] },
+        stub({
+          testingRows: rows,
+          complianceRows: [
+            { id: 'row-good-1', expected_repo_path: process.cwd() },
+            { id: 'row-poisoned', expected_repo_path: badExpectedPath },
+          ],
+        }),
+        { sdId: 'sd-round5-poisoned', functionalRequirements: [{ id: 'FR-1' }, { id: 'FR-2' }] },
       );
-      expect(c.frs.find((f) => f.id === 'FR-1').status).toBe('delivered'); // unaffected by its sibling's poisoned row -- no throw took down the whole gate
-      expect(c.frs.find((f) => f.id === 'FR-2').delivery_basis).not.toBe('testing_evidence'); // poisoned repo_path never trusted, cwd fallback correctly rejects the nonexistent FAKE_FILE too
+      expect(c.frs.find((f) => f.id === 'FR-1').status).toBe('delivered'); // unaffected by its sibling's poisoned entry -- no throw took down the whole gate
+      expect(c.frs.find((f) => f.id === 'FR-2').delivery_basis).not.toBe('testing_evidence'); // excluded from the map -> unresolved, never a cwd fallback either
     }
   });
 });
