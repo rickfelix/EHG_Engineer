@@ -4,14 +4,11 @@
 --   Chairman VERBAL approval by SMS 2026-08-18 14:27:15Z: "A" (= yes, apply now) in reply to the
 --   oracle-cleared decision packet sent 13:50:22Z (A/B/no-reply-HELD frame; staging row 7a2afebb).
 --   Adam-scribed under the ratified chairman-verbal ceremony; stamped by the applier identity per
---   checkApproverFactor. The @delegated-by marker below is retained as the audit trail of the
---   FIRST attempt: the delegated path correctly REFUSED this file on scope (chairman-only
---   UPDATE class), which is what produced this chairman decision.
--- @delegated-by: adam
---   Delegated apply per SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 (completed, verified) at
---   coordinator request ad7e734b 2026-08-18 ~13:5xZ (Golf-7 correctly refused to self-stamp;
---   coordinator correctly declined to bypass the approver gate). Governed data-row change,
---   idempotent, read in full by the applier before apply; Golf-7 verifies post-apply.
+--   checkApproverFactor. Audit trail of the FIRST attempt (marker removed because it is the
+--   literal ROUTING token that forces the delegated path): a delegated-by-adam apply was tried
+--   per SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 at coordinator request ad7e734b and the
+--   scope guard correctly REFUSED (chairman-only UPDATE class; branch history commit 18e8eee9645
+--   preserves the marker form) — that refusal is what produced this chairman decision.
 --
 -- computeGateConformance() (lib/eva/lifecycle/gate-conformance.js) reads binding 16/21 live:
 -- 5 gates.exit strings on stages 1/2/3 resolve to no verifier in exit-gate-verifiers.js
