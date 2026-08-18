@@ -122,6 +122,25 @@ population. Documented here so a future reader of the code doesn't have to re-de
   sweep cycles. Both are pre-existing design questions outside this SD's scope; a future SD should
   resolve them before ever flipping either layer from observe-only to enforcing.
 
+## The producer-agnostic contract (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-2)
+
+`fetchLatestAttestation()` / `evaluateCrackGateStatus()` (`lib/eva/lifecycle/crack-gate-evaluator.js`)
+read a `venture_gate_attestations` row by `(venture_id, check_type)` only — they never branch on
+`attested_by`/`produced_by`. This is the named verdict contract: any row that satisfies the
+table's own schema/CHECK constraints is honored identically regardless of producer. Today the
+only `stage17_judgment` producer is a human via `record-gate-attestation.mjs` (above); when APA
+Child E ships its automated producer, it satisfies the identical contract with zero change to the
+read path. `tests/unit/marketing/crack-gate-evaluator.test.js`'s "FR-2 producer-agnostic contract"
+block proves this against two differently-attributed row shapes (human vs. a hypothetical
+APA-E-shaped machine actor).
+
+FR-2 also enriched Stage-17's own pre-existing `eva_stage_gate_results` row (via
+`recordGateResult()`'s `criteria` param, in `stage-17-blueprint-review.js`) with structured
+judgment evidence (thresholds applied, gap counts, wireframe-gating flag) — this stays entirely
+within Stage-17's own audit trail and does **not** write to `venture_gate_attestations`. FR-2
+deliberately does not add an automated attestation write from Stage-17's own scoring pass: see
+"Explicitly out of scope" below.
+
 ## Explicitly out of scope
 
 - **The APA-E automated Stage-17 judgment engine itself** — a separate, unbuilt draft SD

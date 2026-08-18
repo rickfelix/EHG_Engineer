@@ -144,6 +144,50 @@ describe('crack-gate-evaluator (SD-FDBK-FIX-VENTURE-CRACK-GATE-001)', () => {
   });
 });
 
+// SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-2 (class b): proves the "named verdict contract"
+// acceptance criterion -- fetchLatestAttestation()/evaluateCrackGateStatus() must read a
+// stage17_judgment row identically regardless of who/what produced it, so a future APA Child E
+// automated producer can start writing rows with zero change to this read path.
+describe('FR-2 producer-agnostic contract: attested_by/produced_by identity never changes how a row is read', () => {
+  const HUMAN_ROW = {
+    verdict: 'PASS', attested_by: 'rick@example.com', produced_by: 'manual-review',
+    subject_ref: 'probe://stage17_judgment', citation: 'https://example.com/review', path_to_pass: 'n/a', computed_at: '2026-08-18T00:00:00.000Z',
+  };
+  // Shaped like a hypothetical future APA Child E automated producer -- a specific, identified
+  // machine actor (not a generic 'system'/'bot' the table's own denylist would reject), distinct
+  // from produced_by, mirroring the vga_attested_by_is_identified precedent for 'testing_agent'.
+  const AUTOMATED_ROW = {
+    verdict: 'PASS', attested_by: 'apa_e_stage17_judge', produced_by: 'venture_build_pipeline',
+    subject_ref: 'probe://stage17_judgment', citation: 'kind:apa_e_run-9f2a1c', path_to_pass: 'n/a', computed_at: '2026-08-18T00:00:00.000Z',
+  };
+
+  it('a human-attested PASS row and a hypothetical automated-producer PASS row resolve to the identical verdict', async () => {
+    const humanSupabase = makeSupabase({ attestations: { stage17_judgment: { row: HUMAN_ROW } } });
+    const automatedSupabase = makeSupabase({ attestations: { stage17_judgment: { row: AUTOMATED_ROW } } });
+
+    const humanResult = await fetchLatestAttestation(humanSupabase, VENTURE_ID, 'stage17_judgment');
+    const automatedResult = await fetchLatestAttestation(automatedSupabase, VENTURE_ID, 'stage17_judgment');
+
+    expect(humanResult.verdict).toBe('PASS');
+    expect(automatedResult.verdict).toBe('PASS');
+    expect(humanResult.verdict).toBe(automatedResult.verdict);
+  });
+
+  it('evaluateCrackGateStatus treats both producer shapes as satisfying the stage17_judgment leg identically', async () => {
+    const pbnRow = { status: 'PBN_SCORED', verdict: 'PASS', source: 'ventures_metadata', reason: 'metadata_authoritative', degraded: false };
+
+    const humanSupabase = makeSupabase({ pbnRow, attestations: { stage17_judgment: { row: HUMAN_ROW }, chairman_site_review: { row: PASS_ROW('chairman_site_review') } } });
+    const automatedSupabase = makeSupabase({ pbnRow, attestations: { stage17_judgment: { row: AUTOMATED_ROW }, chairman_site_review: { row: PASS_ROW('chairman_site_review') } } });
+
+    const humanVerdict = await evaluateCrackGateStatus(humanSupabase, VENTURE_ID);
+    const automatedVerdict = await evaluateCrackGateStatus(automatedSupabase, VENTURE_ID);
+
+    expect(humanVerdict.overall).toBe('MEETS_CRITERION');
+    expect(automatedVerdict.overall).toBe('MEETS_CRITERION');
+    expect(humanVerdict.missing).toEqual(automatedVerdict.missing);
+  });
+});
+
 describe('recordCrackGateObservation (shared by sweep + publish-gate layers)', () => {
   it('writes a system_events row with the documented payload shape and given source', async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
