@@ -160,20 +160,30 @@ describe('evaluateGraduation crack-gate precondition (FR-5)', () => {
 });
 
 describe('SD-LEO-INFRA-ARM-BINDING-EXIT-001 FR-5/TS-7: this file and lib/eva/lifecycle/crack-gate-evaluator.js stay diff-empty', () => {
-  it('TS-7(a): git diff origin/main -- lib/marketing/autonomy-gate.js lib/eva/lifecycle/crack-gate-evaluator.js is empty', () => {
+  it('TS-7(a): this branch\'s own commits never touched lib/marketing/autonomy-gate.js or lib/eva/lifecycle/crack-gate-evaluator.js', () => {
     // TS-7(b) (behavioral identity) is proven by this file's OWN pre-existing tests above
     // (and autonomy-gate.test.js) passing unchanged -- neither file is touched by this SD, so
     // an unmodified file passing its unmodified tests IS the "before === after" comparison.
+    //
+    // ADVERSARIAL REVIEW FIX: diffing directly against `origin/main` measures "does the
+    // current tree match whatever origin/main is RIGHT NOW" -- in a repo with many concurrent
+    // sessions, origin/main can gain unrelated commits to these two files after this branch
+    // diverged, which would spuriously fail this test on pure upstream drift, not a real
+    // regression. Diffing against the MERGE-BASE instead measures what it actually needs to:
+    // did THIS branch's own commits touch these files -- stable regardless of what lands on
+    // main afterward.
+    const cwd = fileURLToPath(new URL('../../..', import.meta.url));
     let diff;
     try {
+      const mergeBase = execSync('git merge-base HEAD origin/main', { encoding: 'utf8', cwd }).trim();
       diff = execSync(
-        'git diff origin/main -- lib/marketing/autonomy-gate.js lib/eva/lifecycle/crack-gate-evaluator.js',
-        { encoding: 'utf8', cwd: fileURLToPath(new URL('../../..', import.meta.url)) }
+        `git diff ${mergeBase} -- lib/marketing/autonomy-gate.js lib/eva/lifecycle/crack-gate-evaluator.js`,
+        { encoding: 'utf8', cwd }
       );
     } catch (e) {
       // origin/main may be unreachable in some sandboxed CI checkouts (shallow clone, no
       // fetch) -- skip rather than false-fail on an environment limitation unrelated to FR-5.
-      if (/unknown revision|ambiguous argument/i.test(e.message)) return;
+      if (/unknown revision|ambiguous argument|fatal:/i.test(e.message)) return;
       throw e;
     }
     expect(diff.trim()).toBe('');

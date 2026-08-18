@@ -87,9 +87,16 @@ async function reportFleetSummary(supabase, asJson) {
 
   // SD-LEO-INFRA-ARM-BINDING-EXIT-001 FR-1/FR-2/FR-3/FR-4: additive evidence-sufficiency
   // check over the TRUE unbounded observation history. Never replaces observations_in_window/
-  // promotion_ready above -- the exit code below remains governed exclusively by cleanRun.
-  const allRows = await fetchAllCrackGateObserveRows(supabase);
-  const substrateSignals = await fetchCrackGateSubstrateSignals(supabase);
+  // promotion_ready above -- cleanRun's own true/false is untouched by this block. ADVERSARIAL
+  // REVIEW FIX: on the SUCCESS path this fully determines the exit code (0/1), but a failure in
+  // either fetch below still throws, same as the existing window fetch's own error path -- main()'s
+  // catch converts that to exit 2 ("could not determine"), same contract as before, one more
+  // source that can trigger it. Not a regression: TS-8 asserts exactly this (clean 5-row window +
+  // failing substrate read -> exit 2, not exit 0).
+  const [allRows, substrateSignals] = await Promise.all([
+    fetchAllCrackGateObserveRows(supabase),
+    fetchCrackGateSubstrateSignals(supabase),
+  ]);
   const criterion = evaluateCrackGateCriterion(allRows, substrateSignals);
 
   const summary = {
