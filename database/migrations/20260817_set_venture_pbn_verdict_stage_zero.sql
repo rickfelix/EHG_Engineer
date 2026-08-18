@@ -1,5 +1,10 @@
 -- Migration: set_venture_pbn_verdict_stage_zero(uuid, jsonb) — narrow, safe retroactive PBN write.
 -- SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-6.
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman VERBAL "yes on the delegated apply" 2026-08-18 ~10:2xZ at-terminal sitting (this file
+--   is auto-path by design per its own header, but the auto-apply runner silently skipped it —
+--   SD-FDBK-ENH-AUTO-APPLY-MIGRATION-001 tracks that defect; this is the manual bridge apply,
+--   Adam-scribed under the ratified chairman-verbal ceremony).
 --
 -- Not chairman-gated: this is a plain FUNCTION with no RLS policy or trigger attached (unlike
 -- the two companion migrations in database/chairman-gated/), so it is additive-only in the
@@ -172,9 +177,14 @@ BEGIN
   -- refused, never silently overwritten. Seeded and cleaned up entirely inside this migration's
   -- own transaction (BEGIN at the top of this file / COMMIT at the bottom) — nothing persists
   -- past COMMIT either way, so this is safe against a live database.
-  INSERT INTO public.ventures (name, metadata)
+  -- CEREMONY FIX 2026-08-18 (apply-time, Adam-scribed, disclosed in readback): live ventures
+  -- carries a NOT NULL problem_statement with no default (measured via pooler), which this
+  -- probe INSERT did not supply — first apply attempt failed 23502 and rolled back. Fixture
+  -- scaffolding only; the function definition above is byte-identical to the merged file.
+  INSERT INTO public.ventures (name, problem_statement, metadata)
   VALUES (
     'SD-FDBK-FIX-VENTURE-CRACK-GATE-001 verify-block throwaway venture (already scored)',
+    'verify-block throwaway — never persists past this transaction',
     jsonb_build_object('stage_zero', jsonb_build_object('pbn_verdict', jsonb_build_object('verdict', 'PASS')))
   )
   RETURNING id INTO v_test_id;
@@ -200,9 +210,10 @@ BEGIN
   -- error, wherever stage_zero did not already exist. This proof exists specifically so that bug
   -- class cannot recur unnoticed — BEHAVIOURAL 1 above never exercises it, since its fixture
   -- already has a stage_zero key at INSERT time.
-  INSERT INTO public.ventures (name, metadata)
+  INSERT INTO public.ventures (name, problem_statement, metadata)
   VALUES (
     'SD-FDBK-FIX-VENTURE-CRACK-GATE-001 verify-block throwaway venture (no stage_zero key)',
+    'verify-block throwaway — never persists past this transaction',
     jsonb_build_object('unrelated_key', 'should_survive')
   )
   RETURNING id INTO v_test_id2;

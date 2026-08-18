@@ -4,9 +4,37 @@ import { analyzeStage24GoLive } from '../../../lib/eva/stage-templates/analysis-
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
-function buildSupabase({ ventureRow, appRow, telemetryRow, tokenBudgetRow, chairmanDecisionRow, previewRow, guardrailUpsertError } = {}) {
+function buildSupabase({ ventureRow, appRow, telemetryRow, tokenBudgetRow, chairmanDecisionRow, previewRow, guardrailUpsertError, pbnStatusRow, stage17Row, chairmanReviewRow, crackGateInsertError } = {}) {
   return {
+    // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-4: evaluateCrackGateStatus() reads this RPC.
+    // Safe default (no row) -> fetchPbnStatus() returns PBN_SOURCE_UNAVAILABLE, fail-closed,
+    // consistent with the "safe defaults so pre-existing tests are unaffected" convention below.
+    rpc: async (name) => {
+      if (name === 'venture_pbn_status') return { data: pbnStatusRow || null, error: null };
+      throw new Error(`unexpected rpc: ${name}`);
+    },
     from: (table) => {
+      // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-4: evaluateCrackGateStatus()'s two
+      // fetchLatestAttestation() calls (stage17_judgment, chairman_site_review) both hit this
+      // view. Distinguished by the second .eq('check_type', ...) call -- track call count per
+      // table so the two checks can return different rows without a shared table dispatcher
+      // collapsing them.
+      if (table === 'v_venture_gate_attestations_latest') {
+        let checkType;
+        const chain = {
+          eq: (col, val) => { if (col === 'check_type') checkType = val; return chain; },
+          order: () => chain,
+          limit: () => chain,
+          maybeSingle: async () => {
+            const row = checkType === 'stage17_judgment' ? stage17Row : checkType === 'chairman_site_review' ? chairmanReviewRow : null;
+            return { data: row || null, error: null };
+          },
+        };
+        return { select: () => chain };
+      }
+      if (table === 'system_events') {
+        return { insert: async () => ({ error: crackGateInsertError || null }) };
+      }
       if (table === 'ventures') {
         const chain = { eq: () => chain, maybeSingle: async () => ({ data: ventureRow || null, error: null }) };
         return { select: () => chain };
@@ -307,6 +335,74 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
       expect(result.launch_status).toBe('launched');
       expect(result.promote_status).toBe('planned'); // plan-mode: no deps.execute passed -- this SD never bypasses the 001-A chairman gate
       expect(insertedRow).toMatchObject({ venture_id: 'venture-1', sha: 'abc1234', status: 'planned' });
+    });
+  });
+
+  // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-4 (class d): the crack-gate observation lands at
+  // this file's promote() call site -- the confirmed sole production deploy chokepoint.
+  // OBSERVE-ONLY per TR-2: must never block the launch, in either direction (gate met or not).
+  describe('SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-4 crack-gate observation (shadow-mode)', () => {
+    function liveVerifiedParams(supabase) {
+      return {
+        stage23Data: { verdict: 'PASS' },
+        stage22Data: { channels: [] },
+        ventureName: 'TestVenture',
+        logger: silentLogger,
+        launchedAt: '2026-07-03T00:00:00.000Z',
+        supabase,
+        ventureId: 'venture-1',
+      };
+    }
+
+    it('gate NOT met (no PBN/attestation rows): launch still proceeds, observation recorded with would_block:true', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      const supabase = buildSupabase({
+        ventureRow: { launch_mode: 'live' },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+        // pbnStatusRow/stage17Row/chairmanReviewRow all omitted -> all three checks fail closed.
+      });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched'); // observe-only: never blocks
+      expect(result.crack_gate_observation).toEqual({ would_block: true, missing: ['pbn', 'stage17_judgment', 'chairman_site_review'] });
+      expect(result.crack_gate_observe_error).toBeUndefined();
+    });
+
+    it('gate fully met: launch proceeds, observation recorded with would_block:false', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      const supabase = buildSupabase({
+        ventureRow: { launch_mode: 'live' },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+        pbnStatusRow: { status: 'PBN_SCORED', verdict: 'PASS', source: 'test', reason: '', degraded: false },
+        stage17Row: { verdict: 'PASS', attested_by: 'tester' },
+        chairmanReviewRow: { verdict: 'PASS', attested_by: 'tester' },
+      });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched');
+      expect(result.crack_gate_observation).toEqual({ would_block: false, missing: [] });
+    });
+
+    it('evaluator/writer throws (e.g. attestations table not yet applied): launch still proceeds, error surfaced not swallowed (fail-soft, matches the guardrails-error pattern)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      const supabase = buildSupabase({
+        ventureRow: { launch_mode: 'live' },
+        appRow: { id: 'app-1', deployment_url: 'https://example.com', metadata: { billing_product_id: 'prod_123' }, metrics_cadence_hours: null },
+        telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
+        crackGateInsertError: { message: 'system_events unavailable' },
+      });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched'); // never blocked by an observation-write failure
+      expect(result.crack_gate_observe_error).toBe('system_events insert failed: system_events unavailable');
+      expect(result.crack_gate_observation).toBeUndefined();
+    });
+
+    it('simulated-mode launch NEVER invokes the crack-gate check (no result.crack_gate_observation)', async () => {
+      const supabase = buildSupabase({ ventureRow: { launch_mode: 'simulated' } });
+      const result = await analyzeStage24GoLive(liveVerifiedParams(supabase));
+      expect(result.launch_status).toBe('launched');
+      expect(result.crack_gate_observation).toBeUndefined();
+      expect(result.crack_gate_observe_error).toBeUndefined();
     });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { evaluateCrackGateStatus, fetchPbnStatus, fetchLatestAttestation, recordCrackGateObservation } from '../../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { evaluateCrackGateStatus, fetchPbnStatus, fetchLatestAttestation, recordCrackGateObservation, hasUnavailableSource } from '../../../lib/eva/lifecycle/crack-gate-evaluator.js';
 
 const VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
 
@@ -144,6 +144,50 @@ describe('crack-gate-evaluator (SD-FDBK-FIX-VENTURE-CRACK-GATE-001)', () => {
   });
 });
 
+// SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-2 (class b): proves the "named verdict contract"
+// acceptance criterion -- fetchLatestAttestation()/evaluateCrackGateStatus() must read a
+// stage17_judgment row identically regardless of who/what produced it, so a future APA Child E
+// automated producer can start writing rows with zero change to this read path.
+describe('FR-2 producer-agnostic contract: attested_by/produced_by identity never changes how a row is read', () => {
+  const HUMAN_ROW = {
+    verdict: 'PASS', attested_by: 'rick@example.com', produced_by: 'manual-review',
+    subject_ref: 'probe://stage17_judgment', citation: 'https://example.com/review', path_to_pass: 'n/a', computed_at: '2026-08-18T00:00:00.000Z',
+  };
+  // Shaped like a hypothetical future APA Child E automated producer -- a specific, identified
+  // machine actor (not a generic 'system'/'bot' the table's own denylist would reject), distinct
+  // from produced_by, mirroring the vga_attested_by_is_identified precedent for 'testing_agent'.
+  const AUTOMATED_ROW = {
+    verdict: 'PASS', attested_by: 'apa_e_stage17_judge', produced_by: 'venture_build_pipeline',
+    subject_ref: 'probe://stage17_judgment', citation: 'kind:apa_e_run-9f2a1c', path_to_pass: 'n/a', computed_at: '2026-08-18T00:00:00.000Z',
+  };
+
+  it('a human-attested PASS row and a hypothetical automated-producer PASS row resolve to the identical verdict', async () => {
+    const humanSupabase = makeSupabase({ attestations: { stage17_judgment: { row: HUMAN_ROW } } });
+    const automatedSupabase = makeSupabase({ attestations: { stage17_judgment: { row: AUTOMATED_ROW } } });
+
+    const humanResult = await fetchLatestAttestation(humanSupabase, VENTURE_ID, 'stage17_judgment');
+    const automatedResult = await fetchLatestAttestation(automatedSupabase, VENTURE_ID, 'stage17_judgment');
+
+    expect(humanResult.verdict).toBe('PASS');
+    expect(automatedResult.verdict).toBe('PASS');
+    expect(humanResult.verdict).toBe(automatedResult.verdict);
+  });
+
+  it('evaluateCrackGateStatus treats both producer shapes as satisfying the stage17_judgment leg identically', async () => {
+    const pbnRow = { status: 'PBN_SCORED', verdict: 'PASS', source: 'ventures_metadata', reason: 'metadata_authoritative', degraded: false };
+
+    const humanSupabase = makeSupabase({ pbnRow, attestations: { stage17_judgment: { row: HUMAN_ROW }, chairman_site_review: { row: PASS_ROW('chairman_site_review') } } });
+    const automatedSupabase = makeSupabase({ pbnRow, attestations: { stage17_judgment: { row: AUTOMATED_ROW }, chairman_site_review: { row: PASS_ROW('chairman_site_review') } } });
+
+    const humanVerdict = await evaluateCrackGateStatus(humanSupabase, VENTURE_ID);
+    const automatedVerdict = await evaluateCrackGateStatus(automatedSupabase, VENTURE_ID);
+
+    expect(humanVerdict.overall).toBe('MEETS_CRITERION');
+    expect(automatedVerdict.overall).toBe('MEETS_CRITERION');
+    expect(humanVerdict.missing).toEqual(automatedVerdict.missing);
+  });
+});
+
 describe('recordCrackGateObservation (shared by sweep + publish-gate layers)', () => {
   it('writes a system_events row with the documented payload shape and given source', async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
@@ -182,5 +226,47 @@ describe('source pin (TS-9): evaluator module only, never an uncommitted sibling
     expect(typeof mod.evaluateCrackGateStatus).toBe('function');
     expect(typeof mod.fetchPbnStatus).toBe('function');
     expect(typeof mod.fetchLatestAttestation).toBe('function');
+  });
+});
+
+// SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-8 (class h): distinguishes "the underlying DB objects
+// don't exist" from "genuinely not scored/attested yet" -- the exact distinction whose absence
+// let the sibling SD's backstop read as shipped while being DB-inert for weeks.
+describe('hasUnavailableSource', () => {
+  it('reports unavailable:false when every check has a real status/verdict (scored or genuinely not-yet-scored)', () => {
+    expect(hasUnavailableSource({
+      pbn: { status: 'PBN_SCORED', verdict: 'PASS' },
+      stage17_judgment: { verdict: 'PASS' },
+      chairman_site_review: { verdict: 'NO_DATA' }, // not-yet-attested is a real, distinct status -- not unavailable
+    })).toEqual({ unavailable: false, reasons: [] });
+  });
+
+  it('reports unavailable:true with a pbn: reason when the PBN RPC source is unavailable', () => {
+    const result = hasUnavailableSource({
+      pbn: { status: 'PBN_SOURCE_UNAVAILABLE', reason: 'rpc_error:relation does not exist' },
+      stage17_judgment: { verdict: 'PASS' },
+      chairman_site_review: { verdict: 'NO_DATA' },
+    });
+    expect(result.unavailable).toBe(true);
+    expect(result.reasons).toEqual(['pbn:rpc_error:relation does not exist']);
+  });
+
+  it('reports both attestation reasons when the attestations table is unapplied (the actual failure mode found this session)', () => {
+    const result = hasUnavailableSource({
+      pbn: { status: 'PBN_SCORED', verdict: 'PASS' },
+      stage17_judgment: { verdict: 'ATTESTATION_SOURCE_UNAVAILABLE', reason: 'attestations_table_not_yet_applied' },
+      chairman_site_review: { verdict: 'ATTESTATION_SOURCE_UNAVAILABLE', reason: 'attestations_table_not_yet_applied' },
+    });
+    expect(result.unavailable).toBe(true);
+    expect(result.reasons).toEqual([
+      'stage17_judgment:attestations_table_not_yet_applied',
+      'chairman_site_review:attestations_table_not_yet_applied',
+    ]);
+  });
+
+  it('handles a null/undefined verdict without throwing', () => {
+    expect(hasUnavailableSource(null)).toEqual({ unavailable: false, reasons: [] });
+    expect(hasUnavailableSource(undefined)).toEqual({ unavailable: false, reasons: [] });
+    expect(hasUnavailableSource({})).toEqual({ unavailable: false, reasons: [] });
   });
 });

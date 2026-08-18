@@ -92,4 +92,53 @@ describe('retroactivelyScoreVenture', () => {
     const buildPbnVerdict = vi.fn().mockReturnValue({ verdict: 'REJECT' });
     await expect(retroactivelyScoreVenture(supabase, ALTIFYAI_ID, { scorePbnBuckets, buildPbnVerdict })).rejects.toThrow('permission denied');
   });
+
+  it('independent sweep finding: preserves the RPC error .code on the re-thrown error, so a caller\'s isMissingFunctionError(err) can still detect a PGRST202/42883 shape', async () => {
+    const venture = { id: ALTIFYAI_ID, name: 'AltifyAI', description: 'd', metadata: {} };
+    const supabase = makeSupabase({ venture, rpcError: { message: 'Could not find the function public.set_venture_pbn_verdict_stage_zero in the schema cache', code: 'PGRST202' } });
+    const scorePbnBuckets = vi.fn().mockResolvedValue({ proven: {}, better: {}, new: {} });
+    const buildPbnVerdict = vi.fn().mockReturnValue({ verdict: 'REJECT' });
+    try {
+      await retroactivelyScoreVenture(supabase, ALTIFYAI_ID, { scorePbnBuckets, buildPbnVerdict });
+      throw new Error('expected retroactivelyScoreVenture to throw');
+    } catch (err) {
+      expect(err.code).toBe('PGRST202');
+    }
+  });
+
+  // SECURITY finding (EXEC-TO-PLAN review, F1): the persisted verdict must be sanitized -- never
+  // the raw buildPbnVerdict() output -- reopening the exact canary-content-leak class
+  // SD-LEO-FEAT-PROVEN-BETTER-NEW-001's SECURITY F1 already fixed once for the primary write path.
+  it('SECURITY F1: sanitizes the verdict (strips a chairman-identity-shaped string from a free-text field) before writing it via the RPC', async () => {
+    const venture = { id: ALTIFYAI_ID, name: 'AltifyAI', description: 'd', metadata: {} };
+    const supabase = makeSupabase({ venture });
+    const scorePbnBuckets = vi.fn().mockResolvedValue({ proven: {}, better: {}, new: {} });
+    const buildPbnVerdict = vi.fn().mockReturnValue({
+      verdict: 'PASS',
+      proven: { mechanic: 'contact rick@example.com for details', citations: [] },
+      better: { hypothesis: 'h', friction_point: 'f', citations: [] },
+      new: { wedge: 'w' },
+    });
+
+    await retroactivelyScoreVenture(supabase, ALTIFYAI_ID, { scorePbnBuckets, buildPbnVerdict });
+
+    expect(supabase.rpcCalls[0].p_pbn_verdict.proven.mechanic).not.toContain('rick@example.com');
+  });
+
+  // SECURITY finding (EXEC-TO-PLAN review, F2): a genuine scoring failure must never become a
+  // permanent, uncorrectable REJECT verdict -- set_venture_pbn_verdict_stage_zero's own
+  // already-scored guard means a written REJECT could never be overwritten by a later successful
+  // re-score. Automated across the whole portfolio (FR-1's Job 5), a silent write-through here
+  // would permanently and silently REJECT every venture scored during an LLM outage window.
+  it('SECURITY F2: a scoring_error skips the write entirely (never persists a fabricated REJECT), and is distinguishable from a genuine already-scored skip', async () => {
+    const venture = { id: ALTIFYAI_ID, name: 'AltifyAI', description: 'd', metadata: {} };
+    const supabase = makeSupabase({ venture });
+    const scorePbnBuckets = vi.fn().mockResolvedValue({ proven: {}, better: {}, new: {}, scoring_error: 'LLM timeout' });
+    const buildPbnVerdict = vi.fn().mockReturnValue({ verdict: 'REJECT', scoring_error: 'LLM timeout', proven: {}, better: {}, new: {} });
+
+    const result = await retroactivelyScoreVenture(supabase, ALTIFYAI_ID, { scorePbnBuckets, buildPbnVerdict });
+
+    expect(result).toEqual({ skipped: true, reason: 'scoring_error', ventureId: ALTIFYAI_ID, detail: 'LLM timeout' });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
 });

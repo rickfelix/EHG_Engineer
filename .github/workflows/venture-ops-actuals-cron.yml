@@ -31,6 +31,14 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1 (Job 5, venture-pbn-auto-score-sweep):
+      # scorePbnBuckets ultimately constructs a GoogleAdapter, which reads
+      # GOOGLE_AI_API_KEY || GEMINI_API_KEY (lib/sub-agents/vetting/provider-adapters.js).
+      # Without this, every scoring attempt failed with scoring_error (no credential),
+      # writing zero verdicts every cycle while still exiting green (independent sweep
+      # finding). Reuses the same repo secret already provisioned for 7 other workflows
+      # (e.g. e2e-human-like.yml, semantic-indexer-cron.yml) -- no new secret created.
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
       - name: Checkout

@@ -12,10 +12,10 @@
  * so there is deliberately no name-based lookup path — --venture-id is required and is
  * matched against ventures.id, never ventures.name.
  *
- * Operational note: this script is a deliverable of SD-FDBK-FIX-VENTURE-CRACK-GATE-001, but
- * running it against a real production venture is a business decision (does this venture's
- * idea actually pass PBN scoring?) that belongs to a human, not an automatic EXEC-phase side
- * effect. This SD ships the script, tested; it does not invoke it against real ventures.
+ * Operational note: originally shipped manual-only (a human decides which venture to score).
+ * SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1 now ALSO calls retroactivelyScoreVenture()
+ * automatically, once per venture per cron cycle, from scripts/cron/venture-ops-actuals-sweep.mjs
+ * Job 5 -- the CLI below remains available for a one-off targeted run.
  *
  * Usage:
  *   node scripts/eva/retroactive-pbn-score.mjs --venture-id <uuid> [--dry-run]
@@ -24,6 +24,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { scorePbnBuckets } from '../../lib/eva/stage-zero/pbn-scoring.js';
 import { buildPbnVerdict } from '../../lib/eva/stage-zero/pbn-gate.js';
+import { sanitizePbnVerdictForPersistence } from '../../lib/eva/stage-zero/pbn-integration.js';
 import { parseFlags } from '../../lib/eva/lifecycle/cli-flag-parser.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
@@ -79,7 +80,26 @@ export async function retroactivelyScoreVenture(supabase, ventureId, deps = {}) 
 
   const brief = buildBriefFromVenture(venture);
   const buckets = await (deps.scorePbnBuckets || scorePbnBuckets)(brief);
-  const pbnVerdict = (deps.buildPbnVerdict || buildPbnVerdict)(buckets, { sourceRef: { retroactive: true, scored_at: new Date().toISOString() } });
+  const rawVerdict = (deps.buildPbnVerdict || buildPbnVerdict)(buckets, { sourceRef: { retroactive: true, scored_at: new Date().toISOString() } });
+  // SECURITY finding (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 EXEC-TO-PLAN review): the canonical
+  // sanctioned write path (runPbnGate, lib/eva/stage-zero/pbn-integration.js) always sanitizes
+  // before persisting -- this script built the verdict directly from buildPbnVerdict and skipped
+  // that step, reopening the exact canary-content-leak class (chairman-identity-shaped strings,
+  // internal identifiers) SD-LEO-FEAT-PROVEN-BETTER-NEW-001's own SECURITY F1 already fixed once
+  // for the primary write path. Applied here too, not just referenced.
+  const pbnVerdict = (deps.sanitizePbnVerdictForPersistence || sanitizePbnVerdictForPersistence)(rawVerdict);
+
+  // SECURITY finding: a transient scoring failure (LLM timeout/error) previously still wrote a
+  // real, permanent REJECT verdict (all-uncoverable buckets) -- and set_venture_pbn_verdict_stage_zero's
+  // own already-scored guard means that verdict could NEVER be corrected by a later, successful
+  // re-score. Manually, a human saw scoring_error in the printed JSON and could investigate;
+  // automated across the whole portfolio (FR-1's Job 5), this would silently and permanently
+  // REJECT every venture scored during an outage window with no operator visibility and no
+  // correction path. Skip the write entirely on a genuine scoring failure -- NO_DATA (unscored)
+  // is honest; a fabricated REJECT is not, and a future retry can still succeed.
+  if (pbnVerdict.scoring_error) {
+    return { skipped: true, reason: 'scoring_error', ventureId, detail: pbnVerdict.scoring_error };
+  }
 
   // Narrow, single-purpose RPC (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql),
   // not a JS spread: a two-level JS spread of `metadata` is a read-modify-write that is also
@@ -89,7 +109,15 @@ export async function retroactivelyScoreVenture(supabase, ventureId, deps = {}) 
     p_venture_id: ventureId,
     p_pbn_verdict: pbnVerdict,
   });
-  if (writeError) throw new Error(`retroactive pbn_verdict write failed: ${writeError.message}`);
+  if (writeError) {
+    // Preserve .code (e.g. PostgREST PGRST202 for a not-yet-applied migration) on the
+    // re-thrown error -- adversarial review finding (/ship Deep-tier gate): a bare `new
+    // Error(message)` here silently drops it, leaving every caller's missing-function
+    // detection dependent on a message-substring regex alone.
+    const err = new Error(`retroactive pbn_verdict write failed: ${writeError.message}`);
+    err.code = writeError.code;
+    throw err;
+  }
 
   return { skipped: false, ventureId, verdict: pbnVerdict.verdict, buckets };
 }

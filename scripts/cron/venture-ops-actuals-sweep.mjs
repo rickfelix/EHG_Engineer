@@ -41,7 +41,9 @@ import { runVentureUptimeProbe } from '../../lib/ops/venture-uptime-probe.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
-import { evaluateCrackGateStatus, recordCrackGateObservation } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { evaluateCrackGateStatus, recordCrackGateObservation, hasUnavailableSource } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { retroactivelyScoreVenture } from '../eva/retroactive-pbn-score.mjs';
+import { emitVentureUserFeedback } from '../../lib/eva/bridge/venture-user-feedback-emitter.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/venture-ops-actuals-cron.yml';
@@ -51,7 +53,27 @@ const JOBS = [
   { key: 'ops-revenue-metrics-collector', owner: 'ops-revenue-metrics-collector' },
   { key: 'venture-uptime-probe', owner: 'venture-uptime-probe' },
   { key: 'venture-crack-gate-sweep', owner: 'venture-crack-gate-sweep' },
+  { key: 'venture-pbn-auto-score-sweep', owner: 'venture-pbn-auto-score-sweep' },
 ];
+
+// Job 5 (adversarial review finding, /ship Deep-tier gate): retroactivelyScoreVenture's
+// already-scored check (scripts/eva/retroactive-pbn-score.mjs) is a cheap pre-LLM read,
+// but a genuine scoring pass calls the LLM (scorePbnBuckets) per venture. Uncapped, one
+// cycle iterating the full unscored backlog risks the driving workflow's timeout killing
+// the run mid-loop -- and since fetchAllVentureIds returns a stable order, the SAME early
+// ventures would be re-attempted every cycle while later ones are never reached. Capping
+// only the SCORED count (not attempted/checked) bounds LLM cost per cycle while still
+// making forward progress: already-scored ventures stay cheap skips in later cycles, so
+// the cursor effectively advances past them each run.
+const MAX_SCORED_PER_CYCLE = 20;
+
+/** True when a Supabase/PostgREST error means "the RPC does not exist yet" (PGRST202/42883). */
+function isMissingFunctionError(error) {
+  if (!error) return false;
+  const code = error.code || '';
+  const message = String(error.message || '');
+  return code === 'PGRST202' || code === '42883' || /schema cache/i.test(message);
+}
 
 /**
  * SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-4: the detective/primary layer of the no-crack gate.
@@ -120,6 +142,24 @@ async function fetchLiveDeploymentVentures(supabase) {
       .select('id, deployment_url')
       .not('deployment_url', 'is', null)
       .neq('deployment_url', '')
+      .order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`ventures query failed: ${err.message}`);
+  }
+}
+
+/**
+ * SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1 (class a): PBN scoring applies to the WHOLE
+ * portfolio, not just deployed ventures -- it is a Stage-0/thesis-level check that must happen
+ * long before a venture has a deployment_url. Deliberately a SEPARATE, broader query from
+ * fetchLiveDeploymentVentures above (measured live: 152 ventures total vs. 3 with a
+ * deployment_url) rather than reusing that narrower set.
+ */
+async function fetchAllVentureIds(supabase) {
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id')
       .order('id', { ascending: true }));
   } catch (err) {
     throw new Error(`ventures query failed: ${err.message}`);
@@ -223,6 +263,9 @@ export async function main(argv = process.argv, deps = {}) {
     const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[3], logger);
     let checked = 0;
     let wouldBlock = 0;
+    let sourceUnavailable = 0;
+    let feedbackEmitted = 0;
+    const sourceUnavailableReasons = new Set();
     const errors = [];
     if (!args.dryRun) {
       for (const v of ventures) {
@@ -231,17 +274,118 @@ export async function main(argv = process.argv, deps = {}) {
           await (deps.recordCrackGateObservation || recordCrackGateObservation)(supabase, v.id, verdict, 'sweep');
           checked++;
           if (verdict.overall !== 'MEETS_CRITERION') wouldBlock++;
+          // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-8 (class h): a source-unavailable verdict
+          // still counts as "checked" above and would_block=true above -- both look identical
+          // to a genuinely-not-scored-yet venture unless this is tracked separately and surfaced
+          // loudly. This is the exact failure mode that let the choke-gate backstop read as
+          // shipped while being DB-inert for weeks.
+          const unavailable = hasUnavailableSource(verdict);
+          if (unavailable.unavailable) {
+            sourceUnavailable++;
+            for (const r of unavailable.reasons) sourceUnavailableReasons.add(r);
+            // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-9 (class i): durable, trackable feedback
+            // capture for a source-unavailable finding, alongside the existing loud log line.
+            // ingestSecret is always null today -- no venture has one provisioned (QF-20260817-982
+            // still open) -- so this always resolves to a clean, honest "blocked" result rather
+            // than a fabricated success; never throws, never affects checked/wouldBlock above.
+            const fb = await (deps.emitVentureUserFeedback || emitVentureUserFeedback)(supabase, {
+              ventureId: v.id,
+              ingestSecret: null,
+              feedbackType: 'user_other',
+              title: `Crack-gate data source unavailable for venture ${v.id}`,
+              description: `evaluateCrackGateStatus found an unavailable data source: ${unavailable.reasons.join('; ')}`,
+            });
+            if (fb.submitted) feedbackEmitted++;
+          }
         } catch (err) { errors.push(`${v.id}: ${err.message}`); }
       }
       try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
       catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[3].key} (non-fatal): ${err.message}`); }
     }
-    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, errors };
+    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, source_unavailable: sourceUnavailable, feedback_emitted: feedbackEmitted, errors };
     if (!args.dryRun && ventures.length > 0 && checked === 0) {
       logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[3].key} checked 0 of ${ventures.length} venture(s) — investigate before trusting future silent passes.`);
     }
+    if (sourceUnavailable > 0) {
+      logger.error?.(`[ops-actuals-sweep] FR-8 ESCALATION: ${JOBS[3].key} found ${sourceUnavailable}/${checked} venture(s) with an UNAVAILABLE crack-gate data source (not "unscored" -- the underlying DB objects don't exist or an RPC errored, so this measured NOTHING): ${[...sourceUnavailableReasons].join('; ')}. would_block=true for these ventures is meaningless until the source is restored.`);
+    }
     if (wouldBlock > 0) {
       logger.warn?.(`[ops-actuals-sweep] ${wouldBlock} venture(s) would be blocked by the no-crack gate (observe-only, not yet enforcing).`);
+    }
+  }
+
+  // Job 5: PBN auto-score sweep (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1)
+  {
+    const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[4], logger);
+    let scored = 0;
+    let alreadyScored = 0;
+    let scoringErrors = 0;
+    let functionMissing = 0;
+    let attempted = 0;
+    let capReached = false;
+    const errors = [];
+    const allVentures = args.dryRun ? [] : await fetchAllVentureIds(supabase);
+    if (!args.dryRun) {
+      for (const v of allVentures) {
+        if (scored >= MAX_SCORED_PER_CYCLE) { capReached = true; break; }
+        attempted++;
+        try {
+          const result = await (deps.retroactivelyScoreVenture || retroactivelyScoreVenture)(supabase, v.id);
+          if (result.skipped && result.reason === 'scoring_error') scoringErrors++;
+          else if (result.skipped) alreadyScored++;
+          else scored++;
+        } catch (err) {
+          // A missing RPC (migration not yet applied -- see the deployment-sequencing note in
+          // docs/reference/venture-gate-attestations-guide.md) is a SCHEMA-LEVEL fact, not a
+          // per-venture one: it is either missing for every venture or none. SECURITY finding
+          // (EXEC-TO-PLAN review, F3): confirming it once and then continuing anyway burned a
+          // real LLM completion (inside retroactivelyScoreVenture, BEFORE the RPC write is even
+          // attempted) per venture per cron cycle for no benefit -- ~114 discarded completions/
+          // cycle at today's portfolio size. Stop the loop on the FIRST confirmation instead.
+          // Pass .code through (adversarial review finding, /ship Deep-tier gate): building a
+          // message-only object here made isMissingFunctionError's code==='PGRST202'/'42883'
+          // branches structurally dead at this call site, leaving detection dependent solely on
+          // a /schema cache/i message-regex match -- silently missing a raw 42883 ("function ...
+          // does not exist") shape, whose message doesn't contain that phrase.
+          if (isMissingFunctionError({ message: err.message, code: err.code })) { functionMissing++; break; }
+          errors.push(`${v.id}: ${err.message}`);
+        }
+      }
+      try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
+      catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[4].key} (non-fatal): ${err.message}`); }
+    }
+    summary.jobs[JOBS[4].key] = {
+      attempted: allVentures.length,
+      checked: attempted,
+      scored,
+      already_scored: alreadyScored,
+      scoring_errors: scoringErrors,
+      function_missing: functionMissing,
+      cap_reached: capReached,
+      errors,
+    };
+    if (functionMissing > 0) {
+      logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found (confirmed on venture ${attempted} of ${allVentures.length}, remaining ventures skipped this cycle -- a schema-level fact, not per-venture) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
+    } else if (!args.dryRun && allVentures.length > 0 && scored === 0 && alreadyScored === 0 && scoringErrors === 0) {
+      logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[4].key} scored 0, skipped 0, and had 0 scoring errors across ${allVentures.length} venture(s) with zero function_missing -- investigate before trusting future silent passes.`);
+    }
+    if (capReached) {
+      logger.log?.(`[ops-actuals-sweep] ${JOBS[4].key}: reached MAX_SCORED_PER_CYCLE=${MAX_SCORED_PER_CYCLE} with ${allVentures.length - attempted} venture(s) not yet visited this cycle -- bounded by design, remainder will be picked up on subsequent cycles as already-scored ventures become cheap skips.`);
+    }
+    if (scoringErrors > 0) {
+      logger.warn?.(`[ops-actuals-sweep] ${JOBS[4].key}: ${scoringErrors} venture(s) had a genuine scoring failure this cycle (LLM/network error) -- verdict NOT written (never a fabricated REJECT), will retry next cycle.`);
+    }
+    // Independent sweep finding: EVERY attempted venture failing with scoring_error (not a
+    // few isolated ones) is the systemic signature of a broken scorer -- e.g. the cron
+    // workflow's env missing an LLM credential entirely -- not normal per-venture noise.
+    // scoring_error alone only warns (by design: isolated transient failures must stay
+    // retryable, not fail the job), but this job exists BECAUSE of this SD's own "fail loud,
+    // never silently green" mandate (FR-8) -- a 100%-failure cycle must flip exitCode, not
+    // just log a line nobody is reading.
+    if (!args.dryRun && attempted > 0 && functionMissing === 0 && scored === 0 && alreadyScored === 0 && scoringErrors === attempted) {
+      const msg = `${JOBS[4].key}: ALL ${attempted} attempted venture(s) failed with scoring_error this cycle -- a systemic scorer failure (e.g. missing/invalid LLM credential in this workflow's env, or a total provider outage), not isolated noise. Zero verdicts written.`;
+      logger.error?.(`[ops-actuals-sweep] SYSTEMIC ESCALATION: ${msg}`);
+      errors.push(msg); // same array reference already assigned to summary.jobs[...].errors above
     }
   }
 

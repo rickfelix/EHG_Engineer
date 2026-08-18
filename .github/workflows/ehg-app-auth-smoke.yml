@@ -1,0 +1,138 @@
+name: EHG App Auth Smoke Test
+
+# SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-7 (class g): makes the authenticated-login harness
+# (tests/e2e/ehg-app/auth.setup.spec.ts) fire automatically instead of manual-only -- closing the
+# gap where only the chairman manually caught a real-session 401.
+#
+# WHY A SCHEDULED WORKFLOW, NOT AN IN-PROCESS VENTURE-STAGE HOOK: this test verifies the EHG app's
+# OWN admin/chairman login, which has no relationship to any specific venture or venture pipeline
+# stage_number -- there is no "stage-exit" event to bind to. No stage-analysis step in this repo
+# spawns a browser-automation subprocess (grep-verified), and doing so synchronously inside a
+# stage's execution path would risk that stage on Playwright/browser availability it has never
+# depended on before. This repo's OWN established pattern for "make a manual Playwright check
+# automatic" is a scheduled/workflow_dispatch GH Actions workflow (see e2e-human-like.yml) -- this
+# file follows that precedent for the same category of check (a login-health smoke test, not a
+# per-venture check).
+#
+# EXTERNAL DEPENDENCY, NAMED NOT HIDDEN: BASE_URL/TEST_USER_EMAIL/TEST_USER_PASSWORD must be
+# configured as repository secrets pointing at a real, reachable EHG app instance for this to
+# exercise the actual login path. Until configured, scheduled runs SKIP CLEANLY (auth.setup.spec.ts's
+# own graceful degradation, verified this session) rather than fail or fabricate a pass -- this is
+# the same "wire it now, safely inert pending an external/human step" shape as this SD's FR-1, FR-9,
+# and FR-10.
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, off-the-hour to avoid GH Actions' documented top-of-hour congestion
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Base URL of the EHG app to test (overrides the BASE_URL secret for this run)'
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: '22'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  auth-smoke:
+    name: Authenticated Login Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run auth smoke test
+        # --trace=off overrides playwright.config.js's trace:'on' (SECURITY finding: a trace
+        # records full request/response bodies -- the sign-in POST carries TEST_USER_PASSWORD and
+        # the auth response carries session tokens. Uploading that trace on failure would leak
+        # both into a GitHub artifact downloadable by anyone with repo read access. This login
+        # smoke test's own pass/fail + console/step output is sufficient signal without a trace.
+        # continue-on-error: the NEXT step distinguishes "genuinely failed" from "skipped because
+        # unconfigured" and is what actually decides the job's outcome (see VALIDATION finding
+        # below) -- a bare Playwright failure here must still be able to reach that step.
+        id: playwright
+        continue-on-error: true
+        run: npx playwright test tests/e2e/ehg-app/auth.setup.spec.ts --project=chromium --trace=off
+        env:
+          BASE_URL: ${{ inputs.target_url || secrets.EHG_APP_BASE_URL }}
+          TEST_USER_EMAIL: ${{ secrets.EHG_APP_TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.EHG_APP_TEST_USER_PASSWORD }}
+          # SECURITY finding (independent sweep): SD_ID is never set in this job, so
+          # leo-playwright-reporter.js's ingestResults() always short-circuits at
+          # "Skipping ingestion - no SD_ID configured" before it ever touches Supabase --
+          # SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY were dead env here, unnecessarily
+          # exposing a full-privilege service-role key to the whole npm ci/playwright
+          # install/chromium process tree. Omitted rather than passed unused.
+          CI: true
+
+      # VALIDATION finding (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 PLAN-VERIFY review): a skip
+      # (setup.skip() when the app is unreachable -- the ALWAYS-true case until EHG_APP_BASE_URL
+      # etc. are configured, since no dev server runs in this workflow) exits 0, identical to a
+      # genuine pass. A scheduled workflow reporting green forever without EVER having actually
+      # exercised login is exactly the "instrument that lies" class this SD's own FR-1/FR-8 work
+      # (function_missing / source_unavailable) exists to prevent elsewhere -- this closes the
+      # same gap for the one artifact whose PRIMARY signal (the GH Actions checkmark, not a log
+      # line) makes an honest pass/fail more load-bearing than it was for the cron sweep.
+      - name: Fail loudly if the run skipped rather than genuinely testing login
+        if: always()
+        run: |
+          node -e "
+            const fs = require('fs');
+            let report;
+            try {
+              report = JSON.parse(fs.readFileSync('test-results/results.json', 'utf8'));
+            } catch (e) {
+              console.log('::error::No test-results/results.json produced -- Playwright itself did not run to completion.');
+              process.exit(1);
+            }
+            const s = report.stats || {};
+            const ranSomething = (s.expected || 0) > 0 || (s.unexpected || 0) > 0;
+            if (!ranSomething && (s.skipped || 0) > 0) {
+              console.log('::error::EHG_APP_BASE_URL/EHG_APP_TEST_USER_EMAIL/EHG_APP_TEST_USER_PASSWORD are not configured as repository secrets (or the target is unreachable) -- the smoke test SKIPPED rather than actually verifying login. This is expected until those secrets are configured, but must NOT read as a silent pass: configure them to make this check load-bearing.');
+              process.exit(1);
+            }
+            if ((s.unexpected || 0) > 0) {
+              console.log('::error::Auth smoke test genuinely FAILED (' + s.unexpected + ' unexpected result(s)) -- see the Playwright step output above.');
+              process.exit(1);
+            }
+            // Independent sweep finding (val-fr79, low priority but cheap to close): with
+            // retries:2 on CI, a run that fails then passes on retry lands here as flaky>0,
+            // expected:0, unexpected:0 -- correctly green (it DID eventually pass), but a flaky
+            // LOGIN smoke test is itself a signal worth surfacing rather than silently absorbing.
+            if ((s.flaky || 0) > 0) {
+              console.log('::warning::Auth smoke test passed only after ' + s.flaky + ' retry -- login succeeded, but flakiness in an auth check is worth investigating, not just absorbing.');
+            }
+            console.log('Auth smoke test genuinely ran and passed (' + (s.expected || 0) + ' expected result(s)).');
+          "
+
+      - name: Upload results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ehg-app-auth-smoke-results
+          # SECURITY re-review finding A1: --trace=off (above) closes the HIGH-severity leak, but
+          # test-results/ also carries a screenshot + video (playwright.config.js's own
+          # screenshot:'only-on-failure' / video:'retain-on-failure' on CI) of the login page at
+          # failure time -- the password field is DOM-masked, but TEST_USER_EMAIL is legible in
+          # frame. Narrowed to the JSON report only, which never captures page content.
+          path: test-results/results.json
+          if-no-files-found: ignore
