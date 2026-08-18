@@ -287,8 +287,10 @@ const MAX_DIAGNOSTIC_ENTRIES = 50;
  *
  * @param {Array} rows
  * @param {Array} frs
- * @param {{repoRoot?: string, existsSync?: Function}} [fsDeps] — injectable for tests; defaults
- *   to the real filesystem via testRefResolvesToRealFile()'s own defaults.
+ * @param {{repoRoot?: string, existsSync?: Function}} [fsDeps] — injectable for tests. If
+ *   fsDeps.repoRoot is explicitly set it is used for EVERY row (test determinism); otherwise
+ *   each row's own metadata.repo_path is preferred (cross-repo SDs — see the SECURITY finding
+ *   comment below), falling back to the real cwd only when a row has neither.
  */
 export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
   const matchedTestingCoverage = [];
@@ -317,6 +319,20 @@ export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
     const coverage = row?.metadata?.fr_coverage;
     if (!Array.isArray(coverage)) continue; // wrong type entirely (incl. bare scalar strings) — absent, not iterated
 
+    // SECURITY finding (2nd EXEC-phase round): repoRoot must be resolved PER-ROW, not defaulted
+    // globally to this harness's own cwd. Measured: 16% of TESTING rows carry metadata.repo_path
+    // pointing OUTSIDE EHG_Engineer (other venture repos). Defaulting to cwd for those checks the
+    // WRONG filesystem entirely — a coincidentally-named file in THIS repo (e.g. README.md) would
+    // falsely promote a cross-repo SD's test_ref, and an honest cross-repo ref would falsely fail
+    // to resolve. metadata.repo_path is the SAME field CLAUDE.md prologue #11's
+    // SUB_AGENT_REPO_RESOLUTION contract already trusts (applySubAgentRepoVerdict), already on
+    // this fetched row (no extra query). An explicit fsDeps.repoRoot (tests) always wins over the
+    // row's own metadata; otherwise prefer metadata.repo_path, falling back to cwd only when
+    // absent (24/400 measured rows lack it).
+    const rowFsDeps = fsDeps.repoRoot !== undefined
+      ? fsDeps
+      : { ...fsDeps, repoRoot: row?.metadata?.repo_path || undefined };
+
     for (const entry of coverage) {
       if (!isWellFormedCoverageEntry(entry)) continue;
       const matchIndex = frs.findIndex((fr, i) => frIdsMatch(frIdOf(fr, i), entry.fr_id));
@@ -329,7 +345,7 @@ export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
       // (user_stories.e2e_test_path) disk-verified at lib/stories/e2e-path-guard.js, built
       // after measuring 641/1390 rows (46.1%) claiming a passing status for a file that does
       // not exist. Reusing that exact primitive rather than trusting test_ref as-is.
-      if (!testRefResolvesToRealFile(entry.test_ref, fsDeps)) {
+      if (!testRefResolvesToRealFile(entry.test_ref, rowFsDeps)) {
         if (unresolvedTestRefs.length < MAX_DIAGNOSTIC_ENTRIES) {
           unresolvedTestRefs.push({ fr_id: frIdOf(frs[matchIndex], matchIndex), test_ref: entry.test_ref, sub_agent_result_id: row?.id ?? null });
         }

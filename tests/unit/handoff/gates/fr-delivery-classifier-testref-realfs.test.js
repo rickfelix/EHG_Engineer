@@ -9,6 +9,9 @@
 // wired but never actually exercised end-to-end. This file does NOT mock e2e-path-guard.js, so
 // every call here goes through the genuine specFileExists() against the real disk.
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { classifyFrDelivery, resolveTestingEvidenceCoverage } from '../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js';
 
 // A file that genuinely, stably exists in this repo (the module under test itself) and a path
@@ -77,5 +80,60 @@ describe('SECURITY finding 2: the real specFileExists() is genuinely reachable, 
     expect(r.matchedTestingCoverage).toHaveLength(1);
     expect(calledWith).toContain('injected-marker.js');
     expect(calledWith).toContain('fake');
+  });
+});
+
+// SECURITY finding (2nd EXEC-phase round): repoRoot previously defaulted globally to
+// process.cwd() (this harness's own repo). Measured: 16% of TESTING rows carry
+// metadata.repo_path pointing at a DIFFERENT repo entirely. Defaulting to cwd for those checks
+// the wrong filesystem -- these tests use REAL temp directories (not mocks) to prove the fix.
+describe('SECURITY finding (round 3): per-row repoRoot resolved from metadata.repo_path, not a global cwd default', () => {
+  function makeOtherRepo(prefix) {
+    const root = mkdtempSync(join(tmpdir(), prefix));
+    mkdirSync(join(root, 'sub'));
+    return root;
+  }
+
+  it('a row with metadata.repo_path resolves test_ref relative to THAT repo, not process.cwd()', () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-other-repo-');
+    try {
+      writeFileSync(join(otherRepoRoot, 'sub', 'marker.js'), '// exists only in the other repo\n');
+      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'sub/marker.js' }] } }];
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+      expect(r.matchedTestingCoverage).toHaveLength(1); // resolves against otherRepoRoot, not process.cwd()
+    } finally {
+      rmSync(otherRepoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('THE SPECIFIC VULNERABILITY: a ref naming a file that exists in this harness repo but not in the row\'s own repo is rejected, not falsely promoted', () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-other-repo-empty-'); // no such file written here
+    try {
+      // REAL_FILE genuinely exists at process.cwd() (this repo) — pre-fix, this promoted for
+      // EVERY row regardless of which repo it actually belonged to.
+      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }];
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+      expect(r.matchedTestingCoverage).toEqual([]);
+      expect(r.unresolvedTestRefs).toHaveLength(1);
+    } finally {
+      rmSync(otherRepoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('a row lacking metadata.repo_path falls back to process.cwd() (the pre-fix default, still correct for same-repo SDs)', () => {
+    const rows = [{ id: 'r1', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }]; // no repo_path
+    const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }]);
+    expect(r.matchedTestingCoverage).toHaveLength(1);
+  });
+
+  it('an explicit fsDeps.repoRoot override still wins over a row\'s own metadata.repo_path (test determinism preserved)', () => {
+    const otherRepoRoot = makeOtherRepo('fr-delivery-other-repo-override-');
+    try {
+      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { repo_path: otherRepoRoot, fr_coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: REAL_FILE }] } }];
+      const r = resolveTestingEvidenceCoverage(rows, [{ id: 'FR-1' }], { repoRoot: process.cwd() });
+      expect(r.matchedTestingCoverage).toHaveLength(1); // explicit override wins, resolves against cwd despite metadata pointing elsewhere
+    } finally {
+      rmSync(otherRepoRoot, { recursive: true, force: true });
+    }
   });
 });
