@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { main, PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES } from '../../scripts/eva/check-gate-attestation-status.mjs';
+import { evaluateCrackGateCriterion } from '../../lib/eva/lifecycle/crack-gate-criterion.js';
 
 const VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
 
@@ -74,17 +75,32 @@ describe('check-gate-attestation-status.mjs --fleet-summary mode', () => {
    * mock originally simulated. `rows` should already be ordered newest-first, matching what a
    * real .order('created_at', {ascending:false}).limit(N) query returns.
    */
+  // SD-LEO-INFRA-ARM-BINDING-EXIT-001 FR-1/FR-4: reportFleetSummary() now ALSO issues an
+  // unbounded system_events fetch (.range(), via fetchAllPaginated) and two substrate-signal
+  // reads (venture_gate_attestations, venture_nursery) alongside the existing 5-row-window
+  // query below. Extended here (mock ROBUSTNESS, not assertions) so every existing test in
+  // this describe block keeps passing unchanged -- serving healthy/neutral data for the new
+  // reads has zero effect on any existing assertion, since the exit code stays governed
+  // exclusively by the 5-row-window cleanRun logic (see check-gate-attestation-status.mjs).
   function makeWindowedSupabase(rows) {
     return {
-      from: vi.fn(() => ({
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: (n) => Promise.resolve({ data: rows.slice(0, n), error: null }),
+      from: vi.fn((table) => {
+        if (table === 'system_events') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  limit: (n) => Promise.resolve({ data: rows.slice(0, n), error: null }),
+                }),
+                range: () => Promise.resolve({ data: rows, error: null }),
+              }),
             }),
-          }),
-        }),
-      })),
+          };
+        }
+        if (table === 'venture_gate_attestations') return { select: () => Promise.resolve({ count: 1, error: null }) };
+        if (table === 'venture_nursery') return { select: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) };
+        throw new Error(`unmocked table: ${table}`);
+      }),
     };
   }
 
@@ -152,5 +168,56 @@ describe('check-gate-attestation-status.mjs --fleet-summary mode', () => {
     const result = await main(['node', 's', '--fleet-summary'], { supabase });
     expect(result.exitCode).toBe(2);
     logSpy.mockRestore();
+  });
+
+  it('TS-2/TS-6: additive fields report the TRUE unbounded count/span/criterion, independently re-derived (not hardcoded), while observations_in_window stays min(N,5) unchanged', async () => {
+    const allRows = [
+      { payload: { source: 'sweep' }, created_at: '2026-08-01T00:00:00Z' },
+      { payload: { source: 'sweep' }, created_at: '2026-08-01T12:00:00Z' },
+      { payload: { source: 'publish_gate' }, created_at: '2026-08-02T00:00:00Z' },
+    ];
+    const supabase = makeWindowedSupabase(allRows);
+    let printed = '';
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((s) => { printed += s; });
+    await main(['node', 's', '--fleet-summary', '--json'], { supabase });
+    logSpy.mockRestore();
+    const summary = JSON.parse(printed);
+
+    // Independently re-derive the expected verdict from the SAME rows/signals rather than
+    // hardcoding an expected value -- the live CLI's math must match the pure evaluator's math.
+    const expected = evaluateCrackGateCriterion(allRows, { attestationRowCount: 1, pbnAvailable: true });
+    expect(summary.total_observations_all_time).toBe(expected.row_count);
+    expect(summary.evidence_span_hours).toBeCloseTo(expected.span_hours, 2);
+    expect(summary.crack_gate_evidence_criterion.verdict).toBe(expected.verdict);
+    expect(summary.crack_gate_evidence_criterion.reason).toBe(expected.reason);
+    expect(summary.source_breakdown).toEqual(expected.source_breakdown);
+    expect(summary.observations_in_window).toBe(Math.min(allRows.length, PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES));
+  });
+
+  it('TS-8: a substrate-signal query failure surfaces as exit code 2, not a false verdict -- the existing 5-row-window path is unaffected by this new failure mode existing at all', async () => {
+    const rows = Array.from({ length: PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES }, () => ({ payload: { would_block: false }, created_at: '2026-08-01T00:00:00Z' }));
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'system_events') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({ limit: (n) => Promise.resolve({ data: rows.slice(0, n), error: null }) }),
+                range: () => Promise.resolve({ data: rows, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === 'venture_gate_attestations') return { select: () => Promise.resolve({ count: null, error: { message: 'connection reset' } }) };
+        if (table === 'venture_nursery') return { select: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) };
+        throw new Error(`unmocked table: ${table}`);
+      }),
+    };
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await main(['node', 's', '--fleet-summary'], { supabase });
+    expect(result.exitCode).toBe(2);
+    logSpy.mockRestore();
+    errSpy.mockRestore();
   });
 });

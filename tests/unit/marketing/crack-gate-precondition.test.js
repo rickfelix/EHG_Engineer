@@ -6,6 +6,8 @@
  * blind spot in tests/unit/marketing/autonomy-gate.test.js's own makeSupabase().
  */
 import { describe, it, expect, vi } from 'vitest';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
   recordPendingDecision: vi.fn().mockResolvedValue({ recorded: true, id: 'decision-1' }),
@@ -154,5 +156,26 @@ describe('evaluateGraduation crack-gate precondition (FR-5)', () => {
     const supabase = makeGraduationSupabase({ crackGateFails: true });
     const result = await evaluateGraduation({ supabase, ventureId: VENTURE_ID, channelType: 'x', requiredStreak: 5 });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('SD-LEO-INFRA-ARM-BINDING-EXIT-001 FR-5/TS-7: this file and lib/eva/lifecycle/crack-gate-evaluator.js stay diff-empty', () => {
+  it('TS-7(a): git diff origin/main -- lib/marketing/autonomy-gate.js lib/eva/lifecycle/crack-gate-evaluator.js is empty', () => {
+    // TS-7(b) (behavioral identity) is proven by this file's OWN pre-existing tests above
+    // (and autonomy-gate.test.js) passing unchanged -- neither file is touched by this SD, so
+    // an unmodified file passing its unmodified tests IS the "before === after" comparison.
+    let diff;
+    try {
+      diff = execSync(
+        'git diff origin/main -- lib/marketing/autonomy-gate.js lib/eva/lifecycle/crack-gate-evaluator.js',
+        { encoding: 'utf8', cwd: fileURLToPath(new URL('../../..', import.meta.url)) }
+      );
+    } catch (e) {
+      // origin/main may be unreachable in some sandboxed CI checkouts (shallow clone, no
+      // fetch) -- skip rather than false-fail on an environment limitation unrelated to FR-5.
+      if (/unknown revision|ambiguous argument/i.test(e.message)) return;
+      throw e;
+    }
+    expect(diff.trim()).toBe('');
   });
 });
