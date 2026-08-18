@@ -134,9 +134,11 @@ async function main() {
   // already base-eligible => preFiltered. The exact-rank partition (incl. unscored / above-top) sums to the
   // aggregate as a self-check; the cumulative is what a worker AT that rung can actually claim. Fail-open
   // (non-blocking) so a tier-rollup fault never breaks the forecast. Counts SDs only (QFs are tier-agnostic).
+  let aboveTop = 0;
   try {
     const tieringActive = await isTieringActive(sb);
     const bd = tierClaimableBreakdown(claimable, { tieringActive, preFiltered: true });
+    aboveTop = bd.aboveTop || 0;
     const exactStr = Object.keys(bd.exact).map((r) => `T${r}:${bd.exact[r]}`).join(' ');
     const cumStr = Object.keys(bd.cumulative).map((r) => `≤T${r}:${bd.cumulative[r]}`).join(' ');
     console.log(`  BELT-BY-TIER: ${tieringActive ? 'tiering ON' : 'tiering OFF (degrade-to-1: every rung sees the full aggregate)'}`);
@@ -215,7 +217,7 @@ async function main() {
     } else if (decision.reason === 'saturation-unchanged') {
       console.log(`  ACTION: deficit unchanged since last ping (same belt-dry state, no supply change) — suppressing duplicate Adam ping until supply changes.`);
     } else {
-      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, rows, awareness });
+      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, aboveTop, rows, awareness });
       if (sent) { writeCooldown(currentFp); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
       else console.log('  ACTION: ⚠ no live Adam session found to reach — surface to operator.');
     }
@@ -237,7 +239,7 @@ async function main() {
     } else if (since < cooldownMin) {
       console.log(`  ACTION: ${maskedIds.size} MASKED-STALL worker(s), but escalation was emitted ${since.toFixed(0)}m ago (< ${cooldownMin}m cooldown) — holding.`);
     } else {
-      const emitted = await emitMaskedStallEscalation({ who, count: maskedIds.size, beltDepth, claimable });
+      const emitted = await emitMaskedStallEscalation({ who, count: maskedIds.size, beltDepth, claimable, aboveTop });
       if (emitted) { writeMaskedCooldown(); console.log('  ACTION: ✅ masked-stall operator escalation emitted (cooldown started).'); }
       else console.log('  ACTION: ⚠ masked-stall escalation emit failed — surface to operator.');
     }
@@ -339,7 +341,7 @@ async function emitMaskedStallEscalation(f) {
     const body = [
       `[COORD->ADAM] MASKED-STALL: ${f.count} worker(s) [${f.who}] have a CONFIRMED dead /loop — fresh heartbeat (parent alive) but a dead session-tick (process_alive_at stale), holding NO claim while ${f.beltDepth} ranked item(s) wait.`,
       `These workers cannot self-revive and the coordinator cannot re-arm a /loop. ACTION: surface to the operator to re-paste the /loop (or /checkin) wake prompt into those windows, or let the staleness sweep recycle them.`,
-      `Claimable now: ${f.claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ') || 'NONE'}.`,
+      `Claimable now: ${formatClaimableNow(f.claimable, f.aboveTop)}.`,
     ].join('\n');
     const res = await insertCoordinationRow(sb, {
       message_type: 'INFO',
@@ -387,6 +389,19 @@ function writeCooldown(fingerprint) {
   try { writeFileSync(COOLDOWN_FILE, JSON.stringify({ at: Date.now(), iso: new Date().toISOString(), fingerprint: fingerprint ?? null })); } catch {}
 }
 
+// QF-20260818-381: "Claimable now: NONE" (below and in emitMaskedStallEscalation) conflated a
+// genuinely empty belt with items that exist but sit above every live worker's tier rung --
+// Adam's measured diagnostic: USAGE-PANEL was invisible at the 11:44Z forecast purely via
+// min_tier_rank=2, not a filter bug. aboveTop is already computed for the console BELT-BY-TIER
+// display (tierClaimableBreakdown().aboveTop) but was never threaded into these Adam-facing
+// messages. Pure (no IO) so it is directly unit-testable.
+export function formatClaimableNow(claimable, aboveTop = 0) {
+  if (Array.isArray(claimable) && claimable.length) {
+    return claimable.map((d) => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ');
+  }
+  return aboveTop > 0 ? `0 claimable; ${aboveTop} tier-fenced (above every live worker's rung)` : 'NONE';
+}
+
 // SD-REFILL-00G39SZT: saturation-ack suppression. The time cooldown alone re-pings Adam with the
 // SAME deficit on an unchanged belt-dry state once it lapses (6+ pings in ~2h after Adam reports
 // saturation). A deficit fingerprint identifies the belt-dry STATE — verdict + belt depth + deficit
@@ -432,7 +447,7 @@ async function reachAdam(f) {
   const body = [
     `[COORD->ADAM] PREDICTIVE belt-low (capacity forecaster). Verdict=${f.verdict}.`,
     `Belt=${f.beltDepth} claimable vs demand(soon)=${f.demandSoon} (idle ${f.idleNow} + freeing-soon ${f.freeingSoon}) → short by ${f.deficit}.`,
-    `Claimable now: ${f.claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ') || 'NONE'}. Idle/at-risk workers: ${idleList}.`,
+    `Claimable now: ${formatClaimableNow(f.claimable, f.aboveTop)}. Idle/at-risk workers: ${idleList}.`,
     // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the engine state FIRST so
     // the ask is "activate/distill the engine/roadmap" when it's dormant-with-backlog, NOT perpetual
     // manual sourcing (the anti-pattern). The engine (10/10 children) + roadmap_wave_items are the SSOT.
