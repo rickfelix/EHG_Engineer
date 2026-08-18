@@ -129,17 +129,20 @@ try {
     assert(row.rows[0].severity === 'medium', `TS-1c severity=critical is CLAMPED to medium, never stored as critical (got ${row.rows[0].severity})`);
   }
 
-  // TS-3: invalid severity enum value rejected
-  r = await withSavepoint(client, 'TS-3', () =>
+  // VALIDATION-severity: invalid severity enum value rejected. Deliberately NOT labeled TS-3/TS-4 --
+  // those PRD ids belong to the React render-error and window-error scenarios (GlobalErrorBoundary.
+  // test.tsx), covered by an unrelated file; reusing the numbers here was flagged by the TESTING
+  // sub-agent as confusing (a passing count here could misread as those scenarios being live-verified).
+  r = await withSavepoint(client, 'VALIDATION-severity', () =>
     client.query(`SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5)`, ['t', null, null, 'urgent', '{}'])
   );
-  assert(!r.ok && r.code === '22004', `TS-3 invalid severity enum raises 22004 (got ${r.ok ? 'success' : r.code})`);
+  assert(!r.ok && r.code === '22004', `VALIDATION-severity: invalid severity enum raises 22004 (got ${r.ok ? 'success' : r.code})`);
 
-  // TS-4: empty message rejected
-  r = await withSavepoint(client, 'TS-4', () =>
+  // VALIDATION-empty-message: empty message rejected
+  r = await withSavepoint(client, 'VALIDATION-empty-message', () =>
     client.query(`SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5)`, ['', null, null, 'medium', '{}'])
   );
-  assert(!r.ok && r.code === '22004', `TS-4 empty message raises 22004 (got ${r.ok ? 'success' : r.code})`);
+  assert(!r.ok && r.code === '22004', `VALIDATION-empty-message: empty message raises 22004 (got ${r.ok ? 'success' : r.code})`);
 
   // TS-2: dedup -- an IDENTICAL (message, stack_trace) pair increments occurrence_count on the SAME
   // row rather than inserting a new one.
