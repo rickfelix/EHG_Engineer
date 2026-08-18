@@ -34,7 +34,7 @@ Both layers call the same evaluator (`lib/eva/lifecycle/crack-gate-evaluator.js`
 |---|---|---|
 | PBN validation score | `venture_pbn_status(uuid)` DB function, reading both existing (disjoint) PBN storage locations | 151/152 ventures `PBN_NOT_SCORED`; 1 `PBN_SOURCE_UNAVAILABLE` (a nursery row whose verdict column doesn't exist yet — the underlying migration is separately chairman-gated) |
 | Stage-17 UI/UX judgment | `venture_gate_attestations` table, `check_type='stage17_judgment'` | No rows exist. The automated judgment engine (APA Child E) is a separate, unbuilt draft SD — this SD provides an interim human-attested path via `record-gate-attestation.mjs`, not the automated engine itself |
-| Chairman site review | `venture_gate_attestations` table, `check_type='chairman_site_review'` | No rows exist. A prior, purely conventional version of this check already exists as a coordinator-maintained metadata marker on `SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E` (`state=REQUIRED-UNMET`) — this SD's structural attestation is meant to supersede that marker for AltifyAI, not run alongside it indefinitely |
+| Chairman site review | `venture_gate_attestations` table, `check_type='chairman_site_review'` | Automated as of SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-3: `scripts/chairman-decisions.mjs decide` bridge-writes a real row whenever a `decision_type='product_review'` chairman_decisions row is approved/rejected. A prior, purely conventional version of this check already exists as a coordinator-maintained metadata marker on `SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E` (`state=REQUIRED-UNMET`) — this SD's structural attestation is meant to supersede that marker for AltifyAI, not run alongside it indefinitely |
 
 ## Running the tools
 
@@ -140,6 +140,24 @@ judgment evidence (thresholds applied, gap counts, wireframe-gating flag) — th
 within Stage-17's own audit trail and does **not** write to `venture_gate_attestations`. FR-2
 deliberately does not add an automated attestation write from Stage-17's own scoring pass: see
 "Explicitly out of scope" below.
+
+## Chairman site review: the real write path (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-3)
+
+`lib/eva/chairman-product-review.js`'s `recordProductReviewVerdict()` has **zero production
+callers** (confirmed by repo-wide grep) — only `requestProductReview()` (the create-the-packet
+half) is actually wired live, from `lib/eva/stage-execution-worker.js`. The real, live,
+human-identity-carrying path a chairman decision travels today is
+`scripts/chairman-decisions.mjs decide <decision_type:id> <approve|reject|defer>` →
+`fn_chairman_decide` RPC, run with `CHAIRMAN_DECIDED_BY=<real email>` in the environment.
+
+FR-3's bridge (`lib/eva/bridge/chairman-site-review-attestation.js`) hooks that RPC call: after
+it succeeds, it re-fetches the real `chairman_decisions` row (never trusts the CLI's
+`'chairman_approval'` routing category alone — that category covers many `decision_type` values
+through the same RPC) and writes a `chairman_site_review` attestation only when
+`decision_type='product_review'`. `vga_chairman_review_is_human` is the actual enforcement that
+`attested_by` is a real human — the CLI's `DECIDED_BY` defaults to the generic string
+`'chairman-cli'` when `CHAIRMAN_DECIDED_BY` is unset, which fails that constraint's email-shape
+check, so an un-configured invocation cannot silently produce a fake attestation.
 
 ## Explicitly out of scope
 

@@ -16,6 +16,7 @@ import {
 import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY, DISPOSITION_SELECT } from '../lib/chairman/decision-disposition.mjs';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
+import { resolveAndWriteChairmanSiteReviewAttestation } from '../lib/eva/bridge/chairman-site-review-attestation.js';
 
 const parsed = parseArgs(process.argv.slice(2));
 if (parsed.error) {
@@ -105,7 +106,25 @@ const writers = {
     });
     if (error) throw new Error('fn_chairman_decide: ' + error.message);
     if (data && data.success === false) throw new Error('fn_chairman_decide refused: ' + (data.error || data.code));
-    return { table: 'chairman_decisions', via: 'fn_chairman_decide RPC', id, action, data };
+    const result = { table: 'chairman_decisions', via: 'fn_chairman_decide RPC', id, action, data };
+
+    // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-3 (class c): bridge-write a chairman_site_review
+    // attestation when this decision is specifically the venture's product_review (Stage 23) --
+    // 'chairman_approval' routes many decision_type values through this same RPC, so the bridge
+    // re-fetches the real row and filters there (see chairman-site-review-attestation.js). Never
+    // blocks or unwinds the primary chairman_decisions write above, which already committed.
+    try {
+      const attestation = await resolveAndWriteChairmanSiteReviewAttestation(db, { decisionId: id, action, decidedBy: DECIDED_BY, rationale });
+      result.chairman_site_review_attestation = attestation;
+      if (!attestation.written) {
+        console.error(`[chairman-decisions] chairman_site_review attestation not written: ${attestation.reason}`);
+      }
+    } catch (attestErr) {
+      result.chairman_site_review_attestation_error = attestErr.message;
+      console.error('[chairman-decisions] chairman_site_review attestation FAILED (non-fatal, primary decision already recorded): ' + attestErr.message);
+    }
+
+    return result;
   },
   // feedback rows — resolve with a resolution note.
   resolveFeedback: async (id, status, note) => {
