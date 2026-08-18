@@ -13,6 +13,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateCrackGateStatus } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // FR-9's documented promotion criterion (mirrors bind-criterion-checker.js's MIN_ROWS/
 // MIN_SPAN_HOURS shape) — see docs/reference/venture-gate-attestations-guide.md for the
@@ -121,7 +122,6 @@ export async function main(argv = process.argv, deps = {}) {
   }
 }
 
-const isMain = !!process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href;
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().then(({ exitCode }) => process.exit(exitCode));
 }
