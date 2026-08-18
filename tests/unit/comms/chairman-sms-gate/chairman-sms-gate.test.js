@@ -162,3 +162,57 @@ describe('FR-1/FR-4 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-141): chairmanZone resol
     expect(stub).not.toHaveBeenCalled();
   });
 });
+
+// QF-20260818-263: answered implies resolved — a reply-class send resolves parked chairman
+// inbound in the SAME write path, no separate manual resolve-parked-chairman-sms.cjs step.
+describe('QF-20260818-263: a reply-class send auto-resolves parked chairman inbound', () => {
+  /** Minimal chainable fake — only the sms_relay_staging update().not().is().select() shape. */
+  function makeFakeSupabase() {
+    const updates = [];
+    return {
+      updates,
+      from(table) {
+        return {
+          update(vals) {
+            updates.push({ table, vals });
+            return {
+              not() { return this; },
+              is() { return this; },
+              async select() { return { data: [{ id: 'row-1' }, { id: 'row-2' }] }; },
+            };
+          },
+        };
+      },
+    };
+  }
+
+  it('a successful send with replyToInbound resolves all outstanding parked rows via the injected supabase', async () => {
+    const sender = makeSender();
+    const sb = makeFakeSupabase();
+    const res = await sendChairmanSMS(
+      wellFormedDecision(), { ...DAYTIME, replyToInbound: true }, { sender, console: silentConsole, supabase: sb }
+    );
+    expect(res.sent).toBe(true);
+    expect(sb.updates).toHaveLength(1);
+    expect(sb.updates[0].table).toBe('sms_relay_staging');
+    expect(sb.updates[0].vals).toHaveProperty('resolved_at');
+  });
+
+  it('a successful send WITHOUT replyToInbound never touches sms_relay_staging', async () => {
+    const sender = makeSender();
+    const sb = makeFakeSupabase();
+    const res = await sendChairmanSMS(wellFormedDecision(), DAYTIME, { sender, console: silentConsole, supabase: sb });
+    expect(res.sent).toBe(true);
+    expect(sb.updates).toHaveLength(0);
+  });
+
+  it('a resolve failure is fail-soft — the send still reports sent:true, error logged not thrown', async () => {
+    const sender = makeSender();
+    const throwingSupabase = { from() { throw new Error('db down'); } };
+    const res = await sendChairmanSMS(
+      wellFormedDecision(), { ...DAYTIME, replyToInbound: true }, { sender, console: silentConsole, supabase: throwingSupabase }
+    );
+    expect(res.sent).toBe(true);
+    expect(silentConsole.error).toHaveBeenCalledWith(expect.stringContaining('parked-inbound auto-resolve failed'));
+  });
+});
