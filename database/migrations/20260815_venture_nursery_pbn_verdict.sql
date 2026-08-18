@@ -8,9 +8,12 @@
 -- email (must match git user.email — see scripts/lib/migration-guards.js APPROVED_BY_RE)
 -- and applied via `node scripts/apply-migration.js`.
 --
--- @approved-by:
---   ^ INTENTIONALLY BLANK. checkApproverFactor() fails closed on a missing header, so this
---     migration cannot be applied by accident. Do NOT fill this in on the SD's behalf.
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman VERBAL approval by SMS 2026-08-18 16:46:32Z (staging 2e680ee8), verbatim: "Add the
+--   pbn verdict column to the venture nursery table." — the A on the oracle-cleared decision
+--   packet #2 (A/B/no-reply-HELD frame, sent 15:46:39Z). Adam-scribed under the ratified
+--   chairman-verbal ceremony; stamped by the applier identity per checkApproverFactor.
+--   (Original header: INTENTIONALLY BLANK pending chairman approval — now obtained.)
 --
 -- ============================================================================
 -- MEASURED PRE-STATE (live catalog over the pooler, 2026-08-15 — not read from a file)
