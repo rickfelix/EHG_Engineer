@@ -87,9 +87,16 @@ async function main() {
   console.log(`Admitted-phase TESTING rows seen across all pinned SDs: ${totalAdmittedTestingRowsSeen}`);
   console.log(`FRs delivered via testing_evidence (matched, schema-valid fr_coverage): ${totalFrsDeliveredViaTestingEvidence}`);
   console.log(`SDs newly moved off 100%-unverifiable/undelivered via testing_evidence: ${sdsMovedByTestingEvidence}`);
+  // REGRESSION sub-agent finding (PLAN-VERIFY): pre-existing metadata.fr_coverage writers DO
+  // exist in production (TESTING/VALIDATION/STORIES agents write object- or string-shaped
+  // values for unrelated purposes) -- "no writer exists" was inaccurate. What's actually true,
+  // and what keeps this a zero-blast-radius reader-only change, is that none of those writers
+  // produce the strict {fr_id, status, test_ref} array shape this SD's schema check requires;
+  // every pre-existing row is rejected by the sub_agent_code filter, the Array.isArray guard,
+  // or isWellFormedCoverageEntry. 0 SDs move via those guards, not via writer absence.
   console.log(sdsMovedByTestingEvidence === 0
-    ? 'REASON: 0 SDs moved -- no production TESTING-agent writer for metadata.fr_coverage exists yet (deferred follow-up SD); this SD only adds the READER.'
-    : 'NOTE: some SDs DID move -- a fr_coverage writer already exists in production; investigate before treating this as a zero-blast-radius reader-only change.');
+    ? 'REASON: 0 SDs moved -- pre-existing metadata.fr_coverage writers exist but none produce the schema-valid {fr_id,status,test_ref} array shape this SD reads; every row is rejected by the sub_agent_code filter, the array-shape check, or well-formedness. This SD only adds the READER.'
+    : 'NOTE: some SDs DID move -- a schema-valid fr_coverage writer already exists in production; investigate before treating this as a zero-blast-radius reader-only change.');
   console.log(`Baseline written to: ${OUTPUT_PATH}`);
 }
 
