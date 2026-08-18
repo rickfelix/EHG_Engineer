@@ -14,6 +14,11 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateCrackGateStatus } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import {
+  evaluateCrackGateCriterion,
+  fetchAllCrackGateObserveRows,
+  fetchCrackGateSubstrateSignals,
+} from '../../lib/eva/lifecycle/crack-gate-criterion.js';
 
 // FR-9's documented promotion criterion (mirrors bind-criterion-checker.js's MIN_ROWS/
 // MIN_SPAN_HOURS shape) — see docs/reference/venture-gate-attestations-guide.md for the
@@ -80,11 +85,29 @@ async function reportFleetSummary(supabase, asJson) {
   const wouldBlockInWindow = rows.filter((r) => r.payload?.would_block === true);
   const cleanRun = wouldBlockInWindow.length === 0 && rows.length >= PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES;
 
+  // SD-LEO-INFRA-ARM-BINDING-EXIT-001 FR-1/FR-2/FR-3/FR-4: additive evidence-sufficiency
+  // check over the TRUE unbounded observation history. Never replaces observations_in_window/
+  // promotion_ready above -- cleanRun's own true/false is untouched by this block. ADVERSARIAL
+  // REVIEW FIX: on the SUCCESS path this fully determines the exit code (0/1), but a failure in
+  // either fetch below still throws, same as the existing window fetch's own error path -- main()'s
+  // catch converts that to exit 2 ("could not determine"), same contract as before, one more
+  // source that can trigger it. Not a regression: TS-8 asserts exactly this (clean 5-row window +
+  // failing substrate read -> exit 2, not exit 0).
+  const [allRows, substrateSignals] = await Promise.all([
+    fetchAllCrackGateObserveRows(supabase),
+    fetchCrackGateSubstrateSignals(supabase),
+  ]);
+  const criterion = evaluateCrackGateCriterion(allRows, substrateSignals);
+
   const summary = {
     observations_in_window: rows.length,
     would_block_in_window: wouldBlockInWindow.length,
     promotion_criterion: `most recent ${PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES} observation(s), zero would_block — a sliding window, not the all-time total (old failures age out as new clean observations arrive)`,
     promotion_ready: cleanRun,
+    total_observations_all_time: criterion.row_count,
+    evidence_span_hours: Number(criterion.span_hours.toFixed(2)),
+    source_breakdown: criterion.source_breakdown,
+    crack_gate_evidence_criterion: { verdict: criterion.verdict, reason: criterion.reason },
   };
 
   if (asJson) console.log(JSON.stringify(summary, null, 2));
@@ -93,6 +116,10 @@ async function reportFleetSummary(supabase, asJson) {
     console.log(`Would-block in window: ${summary.would_block_in_window}`);
     console.log(`Promotion criterion: ${summary.promotion_criterion}`);
     console.log(`Promotion ready: ${summary.promotion_ready}`);
+    console.log(`Total observations (all-time): ${summary.total_observations_all_time}`);
+    console.log(`Evidence span (hours): ${summary.evidence_span_hours}`);
+    console.log(`Source breakdown: ${JSON.stringify(summary.source_breakdown)}`);
+    console.log(`Crack-gate evidence criterion: ${summary.crack_gate_evidence_criterion.verdict}${summary.crack_gate_evidence_criterion.reason ? ' (' + summary.crack_gate_evidence_criterion.reason + ')' : ''}`);
   }
 
   return cleanRun ? 0 : 1;
