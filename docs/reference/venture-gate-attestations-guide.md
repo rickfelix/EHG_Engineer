@@ -2,8 +2,8 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.2.0
-**Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001, extended by SD-MAN-INFRA-VENTURE-CRACK-GATE-001
+**Version**: 1.3.0
+**Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001, extended by SD-MAN-INFRA-VENTURE-CRACK-GATE-001, SD-LEO-INFRA-ARM-BINDING-EXIT-001
 **Last Updated**: 2026-08-18
 **Tags**: venture-lifecycle, governance, observe-only, pbn, chairman-review, account-prerequisites
 
@@ -233,6 +233,45 @@ FR-1/FR-6/FR-7, documented here for the same reason as the round-1 section above
 - A CI workflow (`ehg-app-auth-smoke.yml`) exposed a full-privilege `SUPABASE_SERVICE_ROLE_KEY` to
   its whole process tree even though nothing in that job's execution path could ever consume it
   (the ingestion path it would feed short-circuits on a never-set `SD_ID`) — removed.
+
+## Evidence-sufficiency criterion (SD-LEO-INFRA-ARM-BINDING-EXIT-001, 2026-08-18, PR #7261)
+
+The "promotion criterion" section above (5 consecutive clean cycles) answers *"has the gate
+recently been clean?"* — it does not answer *"is there enough of the RIGHT KIND of evidence to
+trust that answer at all?"* This SD adds a second, additive check that answers the second
+question, ARMED-BUT-INERT (mirrors the completed `SD-LEO-INFRA-BIND-OBSERVE-ONLY-001` precedent —
+reports a verdict, gates nothing live). It lives entirely in a new module,
+`lib/eva/lifecycle/crack-gate-criterion.js`, so `lib/marketing/autonomy-gate.js` and
+`lib/eva/lifecycle/crack-gate-evaluator.js` stay untouched (verified diff-empty against
+`origin/main` by an automated test, not just checked by hand).
+
+`check-gate-attestation-status.mjs --fleet-summary` now ALSO reports (additive fields,
+never replacing `observations_in_window`/`promotion_ready` above):
+
+- `total_observations_all_time` / `evidence_span_hours` — the TRUE unbounded observation
+  count/span (vs. the existing 5-row sliding window).
+- `source_breakdown` — count + most-recent timestamp per `payload.source` (`sweep` /
+  `publish_gate` / `deploy_precondition`, plus an `other` bucket for any future 4th value).
+- `crack_gate_evidence_criterion` — `{verdict, reason}`, evaluated with this precedence (most
+  severe first, mirroring `bind-criterion-checker.js`'s `evaluateExitGateCriterion()` pattern):
+  1. `SUBSTRATE_EMPTY` — `venture_gate_attestations` has 0 rows and/or the
+     `venture_nursery.pbn_verdict` column is unreadable (the chairman-gated
+     `20260815_venture_nursery_pbn_verdict.sql` migration not yet applied). Highest precedence:
+     fires even when rows/span/source-mix would otherwise read as sufficient.
+  2. `insufficient_rows` / `insufficient_span` — reuses `bind-criterion-checker.js`'s
+     `MIN_ROWS`(25)/`MIN_SPAN_HOURS`(48) via import (now exported for this purpose), not
+     re-typed literals.
+  3. `missing_chokepoint_evidence` — `sweep` observations alone (a periodic background check,
+     not gated on any real user/system action) never satisfy the criterion; at least one
+     `publish_gate` or `deploy_precondition` observation is required.
+
+Live measured 2026-08-18 ~22:00Z: 16 total observations, 100% `sweep`-sourced, 17.1h span —
+reads `insufficient_rows` today (rows/span themselves are still below threshold; the substrate
+question and the chokepoint-mix question haven't come into play yet at this volume). This SD's
+own PLAN-phase framing assumed the substrate would still read `SUBSTRATE_EMPTY` at EXEC time —
+by EXEC, a real `venture_gate_attestations` row and the applied PBN migration had already moved
+that particular signal; the automated tests assert against freshly-measured values, not the
+PLAN-time snapshot, for exactly this reason.
 
 ## Explicitly out of scope
 
