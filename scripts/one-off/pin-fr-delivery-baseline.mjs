@@ -35,6 +35,24 @@ async function main() {
     console.warn(`WARNING: only found ${sds?.length ?? 0} completed infrastructure SDs (wanted 30)`);
   }
 
+  // VALIDATION sub-agent finding C2 (PLAN-VERIFY): FR-5 AC-3 names three claims the report must
+  // state; this one was measured live at EXEC time (TESTING row 070277ee) but never printed. Global
+  // (not scoped to the 30 pinned SDs) -- every sub_agent_execution_results row carrying an
+  // fr_coverage key, any sub_agent_code, checked for >=1 array entry satisfying the strict
+  // {fr_id, status, test_ref} shape this SD's schema check requires.
+  const { data: fcRows, error: fcError } = await supabase
+    .from('sub_agent_execution_results')
+    .select('id, metadata')
+    .not('metadata->fr_coverage', 'is', null);
+  if (fcError) throw new Error(`Failed to measure pre-existing fr_coverage rows: ${fcError.message}`);
+  const isStrictSchemaEntry = (e) => e && typeof e === 'object'
+    && typeof e.fr_id === 'string' && e.fr_id.trim() !== ''
+    && (e.status === 'delivered' || e.status === 'undelivered')
+    && typeof e.test_ref === 'string' && e.test_ref.trim() !== '';
+  const rowsPassingStrictSchema = fcRows.filter(
+    (r) => Array.isArray(r.metadata?.fr_coverage) && r.metadata.fr_coverage.some(isStrictSchemaEntry),
+  ).length;
+
   const results = [];
   let sdsWithRegexMentions = 0;
   let totalAdmittedTestingRowsSeen = 0;
@@ -76,6 +94,10 @@ async function main() {
     sd_type_filter: 'infrastructure',
     sd_count: results.length,
     query: "status='completed' AND sd_type='infrastructure', ordered by completion_date DESC, limit 30",
+    global_fr_coverage_schema_check: {
+      rows_with_fr_coverage_present: fcRows.length,
+      rows_passing_strict_schema: rowsPassingStrictSchema,
+    },
     sds: results,
   };
 
@@ -84,9 +106,13 @@ async function main() {
   console.log('=== FR-5 pre-merge pinned-baseline report ===');
   console.log(`SDs pinned: ${results.length}`);
   console.log(`SDs with >=1 regex_fr_mentions (report-only, never delivery-promoting): ${sdsWithRegexMentions}`);
+  console.log(`CLAIM 1: 0 SDs move via the regex signal -- true by construction (regex_fr_mentions is never read by conventionInUse or the status-assignment block; enforced by TS-9's mutation test).`);
   console.log(`Admitted-phase TESTING rows seen across all pinned SDs: ${totalAdmittedTestingRowsSeen}`);
+  console.log(`Pre-existing sub_agent_execution_results rows carrying metadata.fr_coverage (any sub_agent_code, global): ${fcRows.length}`);
+  console.log(`CLAIM 2: ${rowsPassingStrictSchema} of ${fcRows.length} pre-existing fr_coverage rows pass the strict {fr_id,status,test_ref} schema.`);
   console.log(`FRs delivered via testing_evidence (matched, schema-valid fr_coverage): ${totalFrsDeliveredViaTestingEvidence}`);
   console.log(`SDs newly moved off 100%-unverifiable/undelivered via testing_evidence: ${sdsMovedByTestingEvidence}`);
+  console.log(`CLAIM 3: ${sdsMovedByTestingEvidence} SDs move via a genuine new-shape (schema-valid) fr_coverage entry.`);
   // REGRESSION sub-agent finding (PLAN-VERIFY): pre-existing metadata.fr_coverage writers DO
   // exist in production (TESTING/VALIDATION/STORIES agents write object- or string-shaped
   // values for unrelated purposes) -- "no writer exists" was inaccurate. What's actually true,

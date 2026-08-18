@@ -1,8 +1,12 @@
 {
-  "generated_at": "2026-08-18T10:29:26.473Z",
+  "generated_at": "2026-08-18T13:29:52.881Z",
   "sd_type_filter": "infrastructure",
   "sd_count": 30,
   "query": "status='completed' AND sd_type='infrastructure', ordered by completion_date DESC, limit 30",
+  "global_fr_coverage_schema_check": {
+    "rows_with_fr_coverage_present": 98,
+    "rows_passing_strict_schema": 0
+  },
   "sds": [
     {
       "sd_key": "SD-LEO-INFRA-BIND-OBSERVE-ONLY-001",
