@@ -201,4 +201,56 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names('+ await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });'))
       .toContain('permission_escalation');
   });
+
+  // QF-20260818-024 -- combined-diff (--cc) polarity-column width. QF-20260818-651's
+  // width-1 rule (`startsWith('+')`) FAILED OPEN on combined-diff format (git's
+  // default for `git show <merge-sha>` on a 2+-parent merge): a line added relative
+  // to only ONE parent renders with a leading SPACE before the '+' (e.g. ' +code'
+  // for a 2-parent merge), so `startsWith('+')` was false and a genuine finding was
+  // silently dropped -- worse in kind than the false positives QF-651 fixed (a false
+  // positive is noisy; a fail-open says PASS on a real hit). Confirmed by rca-agent
+  // independently re-diagnosing QF-651's own fix. Coordinator ruling 9933a4cb:
+  // "combined-diff polarity-column semantics + --cc fixture + consumer audit".
+  const ccDiffFor = (path, hunkLines) =>
+    `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@@ -1,3 -1,3 +1,4 @@@\n${hunkLines}`;
+
+  it('FLAGS a line added relative to only ONE merge parent (the fail-open shape, 2-parent width)', () => {
+    // Column 1 (parent 1): ' ' unchanged. Column 2 (parent 2): '+' new relative to
+    // parent 2. Pre-fix: startsWith('+') is false (leading char is a space) -> dropped.
+    expect(names(ccDiffFor('config.js', ' +await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });')))
+      .toContain('permission_escalation');
+  });
+
+  it('FLAGS a line added relative to BOTH merge parents (brand-new, width-2 "++")', () => {
+    expect(names(ccDiffFor('config.js', '++await sb.rpc(\'exec_sql\', { sql: "GRANT ALL ON feedback TO anon" });')))
+      .toContain('permission_escalation');
+  });
+
+  it('does NOT flag a combined-diff line that is pure CONTEXT in both parents ("  ")', () => {
+    expect(names(ccDiffFor('config.js', '  const disableAuthForTesting = true; // disable rls checks locally')))
+      .not.toContain('auth_bypass');
+  });
+
+  it('does NOT flag a combined-diff line REMOVED relative to a parent ("- ")', () => {
+    expect(names(ccDiffFor('config.js', "- 'SUPABASE_SERVICE_ROLE_KEY, used via createSupabaseServiceClient helper.',")))
+      .not.toContain('permission_escalation');
+  });
+
+  it('sets inHunk on a combined-diff header, closing the sibling +++-spoof gap for the whole file', () => {
+    // Without inHunk recognizing '@@@', a subsequent in-hunk raw line that reads
+    // '+++ b/tests/x' (2-wide polarity '++' immediately followed by content starting
+    // '+ b/tests/x') would be honored as a real path header (leaking the test-fixture
+    // exemption onto the rest of a genuinely non-test file). The REAL header above
+    // sets the path to src/query.js (not a test path); confirm CRIT-002 still fires
+    // on the genuine payload line that follows the spoof attempt.
+    const spoofed = [
+      'diff --git a/src/query.js b/src/query.js',
+      '--- a/src/query.js',
+      '+++ b/src/query.js',
+      '@@@ -1,2 -1,2 +1,3 @@@',
+      '+++ b/tests/spoof.test.js',
+      '++const q = base + "SELECT * FROM users";',
+    ].join('\n');
+    expect(names(spoofed)).toContain('sql_injection');
+  });
 });
