@@ -330,7 +330,7 @@ async function main() {
 }
 
 // Print summary
-function printSummary(results) {
+export function printSummary(results) {
   console.log('\n' + '═'.repeat(60));
   console.log('  PREFLIGHT SUMMARY');
   console.log('═'.repeat(60));
@@ -363,12 +363,23 @@ function printSummary(results) {
   }
 
   if (results.multiRepoCoordination) {
+    const isPartial = results.multiRepoCoordination.partial === true;
+    const baseDetails = results.multiRepoCoordination.passed
+      ? `${results.multiRepoCoordination.branches.length} branch(es) coordinated`
+      : `${results.multiRepoCoordination.coordinationPlan.length} action(s) needed`;
     checks.push({
       name: 'Multi-Repo Coordination',
       passed: results.multiRepoCoordination.passed,
-      details: results.multiRepoCoordination.passed
-        ? `${results.multiRepoCoordination.branches.length} branch(es) coordinated`
-        : `${results.multiRepoCoordination.coordinationPlan.length} action(s) needed`
+      // FR-6 (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001): MultiRepoCoordinator's
+      // 60s SCAN_DEADLINE_MS (MultiRepoCoordinator.js:28/75) can truncate the
+      // repo scan mid-way. A truncated scan can under-report actions needed
+      // just as easily as over-report them -- when it still reports PASS,
+      // downgrade the icon to a warning instead of a silent green check,
+      // since "clean" was never actually confirmed for every repo.
+      warning: isPartial && results.multiRepoCoordination.passed,
+      details: isPartial
+        ? `${baseDetails} — ⚠️  PARTIAL: scan deadline exceeded, not all repos were checked`
+        : baseDetails
     });
   }
 

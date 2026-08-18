@@ -10,7 +10,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { TestExecutionVerifier } from '../TestExecutionVerifier.js';
 
 vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
@@ -154,5 +156,111 @@ describe('TestExecutionVerifier.runTests — timeout/kill classification (SD-LEO
     expect(result.outcome).toBe('fail');
     expect(result.passed).toBe(false);
     expect(result.failedTests).toBe(3);
+  });
+});
+
+/**
+ * Regression tests for SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001.
+ *
+ * TS-1: the vitest invocation is scoped to --project unit (matching what CI
+ * actually gates via .github/workflows/unit-tier.yml), not an unfiltered
+ * `vitest run` across all 4 configured projects (vitest.config.js).
+ * TS-2: the child's stdout/stderr no longer flows through execSync's default
+ * 1MB `pipe` buffer -- TR-4's fix for the ENOBUFS exposure FR-4 classifies.
+ */
+describe('TestExecutionVerifier.runTests — vitest invocation scope & stdio (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001 FR-1/TR-4)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('scopes the vitest invocation to --project unit (TS-1)', () => {
+    execSync.mockReturnValue('{}');
+    readFileSync.mockReturnValue(
+      JSON.stringify({ numTotalTests: 1, numPassedTests: 1, numFailedTests: 0 })
+    );
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    verifier.runTests();
+
+    const [cmd] = execSync.mock.calls[0];
+    expect(cmd).toContain('--project unit');
+  });
+
+  it("does not pipe the child through execSync's default 1MB buffer (TS-2)", () => {
+    execSync.mockReturnValue('{}');
+    readFileSync.mockReturnValue(
+      JSON.stringify({ numTotalTests: 1, numPassedTests: 1, numFailedTests: 0 })
+    );
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    verifier.runTests();
+
+    const [, options] = execSync.mock.calls[0];
+    expect(options.stdio).not.toBe('pipe');
+    expect(options.stdio).toEqual(['ignore', 'inherit', 'inherit']);
+  });
+});
+
+/**
+ * TS-6: error.code is the ONLY field that distinguishes an ENOBUFS
+ * maxBuffer-overflow kill from a genuine timeout kill -- both set
+ * signal='SIGTERM' and killed=undefined on this host (TS-5, the genuine-
+ * timeout counterpart, is already covered above by the "Windows-shaped
+ * timeout kill" case). Before FR-4, an ENOBUFS kill classified identically
+ * to a genuine timeout (inconclusive/passed:true) -- a buffer-truncated run
+ * would have shipped.
+ */
+describe('TestExecutionVerifier.runTests — ENOBUFS vs genuine timeout classification (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001 FR-4)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('classifies an ENOBUFS buffer-overflow kill as a genuine failure, not inconclusive (TS-6)', () => {
+    execSync.mockImplementation(() => {
+      const err = new Error('stdout maxBuffer length exceeded');
+      err.killed = undefined;
+      err.signal = 'SIGTERM';
+      err.code = 'ENOBUFS';
+      err.status = null;
+      throw err;
+    });
+    readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    const verifier = new TestExecutionVerifier({ cwd: '/repo' });
+    const result = verifier.runTests();
+
+    expect(result.outcome).toBe('fail');
+    expect(result.passed).toBe(false);
+  });
+});
+
+/**
+ * TS-8: RESULT_PATHS now includes this verifier's own runTests() outputFile
+ * ('.vitest-preflight-report.json'), so a genuinely recent (<15min) prior
+ * local run is reused instead of re-invoking vitest. Uses a REAL mkdtempSync
+ * fixture (not fs mocking) so the file's actual mtime drives the freshness
+ * check -- only readFileSync needs a mock override, since it is already
+ * globally replaced with vi.fn() by this file's vi.mock('node:fs', ...).
+ */
+describe('TestExecutionVerifier.verify — recent-results fast path (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001 FR-5)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reuses a recent local .vitest-preflight-report.json instead of re-running vitest (TS-8)', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'tev-fastpath-'));
+    try {
+      const reportPath = join(tmpDir, '.vitest-preflight-report.json');
+      const reportJson = JSON.stringify({ numTotalTests: 3, numPassedTests: 3, numFailedTests: 0 });
+      writeFileSync(reportPath, reportJson);
+      readFileSync.mockImplementation((path) => {
+        if (String(path) === reportPath) return reportJson;
+        throw new Error(`unexpected readFileSync(${path})`);
+      });
+
+      const verifier = new TestExecutionVerifier({ cwd: tmpDir });
+      const result = await verifier.verify();
+
+      expect(execSync).not.toHaveBeenCalled();
+      expect(result.passed).toBe(true);
+      expect(result.skipped).toBe(false);
+      expect(result.details).toMatch(/Recent passing results/);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

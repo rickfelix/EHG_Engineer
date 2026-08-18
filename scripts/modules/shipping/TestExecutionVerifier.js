@@ -26,12 +26,15 @@ const RECENT_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 const TEST_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
 
 /**
- * Standard locations for test result files.
+ * Standard locations for test result files. Includes this verifier's own
+ * runTests() outputFile (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001 FR-5) so a
+ * recent local run is actually reusable by the fast-path above.
  */
 const RESULT_PATHS = [
   'test-results.json',
   '.vitest-results.json',
-  'coverage/test-results.json'
+  'coverage/test-results.json',
+  '.vitest-preflight-report.json'
 ];
 
 export class TestExecutionVerifier {
@@ -159,11 +162,18 @@ export class TestExecutionVerifier {
     let exitCode = 0;
     let killInfo = null;
     try {
-      execSync(`npx vitest run --reporter=json --outputFile=${JSON.stringify(outputFile)}`, {
+      // FR-1 (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001): scoped to the unit project,
+      // matching what CI actually gates (.github/workflows/unit-tier.yml) — an
+      // unfiltered `vitest run` executes all 4 configured projects (vitest.config.js:60).
+      execSync(`npx vitest run --project unit --reporter=json --outputFile=${JSON.stringify(outputFile)}`, {
         cwd: this.cwd,
         encoding: 'utf8',
         timeout: TEST_TIMEOUT_MS,
-        stdio: 'pipe'
+        // TR-4 (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001): the JSON report already
+        // goes to --outputFile above, so buffering the child's combined stdout+stderr
+        // through the default 1MB execSync pipe both hides live progress and risks an
+        // ENOBUFS kill on a large run. inherit removes the buffer limit entirely.
+        stdio: ['ignore', 'inherit', 'inherit']
       });
     } catch (error) {
       // execSync throws on non-zero exit code; the report file is still written.
@@ -174,7 +184,12 @@ export class TestExecutionVerifier {
       // killed=undefined, signal='SIGTERM', code='ETIMEDOUT'; POSIX sets killed=true),
       // so all three fields are checked. Final classification still defers to the
       // parsed JSON report in parseTestOutput — this is only a candidate signal.
-      if (error.killed === true || error.signal === 'SIGTERM' || error.code === 'ETIMEDOUT') {
+      // FR-4 (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001): error.code==='ENOBUFS' is
+      // EXCLUDED here — a maxBuffer overflow also sets signal='SIGTERM', identical to
+      // a genuine timeout kill, and was previously misclassified as the same
+      // fleet-load 'inconclusive' signal. error.code is the only field that
+      // distinguishes the two (measured: both set killed=undefined on this host).
+      if ((error.killed === true || error.signal === 'SIGTERM' || error.code === 'ETIMEDOUT') && error.code !== 'ENOBUFS') {
         killInfo = { killed: error.killed, signal: error.signal, code: error.code };
       }
     }
