@@ -1,9 +1,9 @@
 ---
 category: architecture
 status: draft
-version: 1.0.0
+version: 1.0.1
 author: Rick Felix
-last_updated: 2026-02-28
+last_updated: 2026-08-18
 tags: [architecture, auto-generated]
 ---
 # Multi-Repository Architecture
@@ -514,6 +514,12 @@ Both repos import from `@ehg/types` for consistency.
   - `handoff.js` - STEP 0 multi-repo check in precheck, warning in execute
   - `sd-verify.js` - Multi-repo status in verification checklist, blocks completion if uncommitted
 - Benefit: Prevents forgetting uncommitted work in related repos during phase transitions
+
+**Phase 3 Worktree-Awareness Fix (2026-08-18, SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001)**:
+- Fixed two root causes of non-deterministic `ship-preflight.js` verdicts (29th reported occurrence, previously misattributed to a fleet-load timeout): `EHG_BASE_DIR` resolved to the wrong directory when the module loaded from inside a `.worktrees/<sd>` checkout, and `discoverRepos()` counted a linked worktree's `.git` **file** the same as a real repo's `.git` **directory**
+- `EHG_BASE_DIR` now derives from `lib/repo-paths.js`'s `getRepoRoot()` (worktree-suffix-stripped) instead of a raw 3-levels-up `__dirname` guess
+- `discoverRepos()` now requires `.git` to be a directory, excluding sibling worktrees from the discovered-repo set
+- Benefit: `ship-preflight.js` and every other caller of this module (branch-cleanup-v2.js, cross-repo-consumer-impact.js, multi-repo-status.js, sd-verify.js, sd-next data-loaders, multi-repo-check.js) now behave identically whether invoked from the main repo or from a worktree, which is where SD work actually runs
 
 ### Multi-Repo Status CLI
 
