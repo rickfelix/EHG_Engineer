@@ -1,6 +1,11 @@
 -- Migration: rebuild v_patterns_with_decay so its column list matches issue_patterns again
 -- Date: 2026-08-01
 -- SD: SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 (FR-5)
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman VERBAL approval at-terminal 2026-08-18 ~18:47Z: "5 5A" (item 5 of the evening
+--   sitting packet, presented with rec+rationale; decision row 31ad8691 deferred-to-sitting at
+--   17:5xZ then approved here). Adam-scribed under the ratified chairman-verbal ceremony;
+--   stamped by the applier identity per checkApproverFactor. File read in full pre-apply.
 --
 -- *** CORRECTED AFTER A FAILED APPLY. The previous revision of THIS FILE could never have
 -- worked, and the reason is worth reading before editing it again. ***
