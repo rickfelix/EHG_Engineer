@@ -225,6 +225,11 @@ describe('venture-ops-actuals-sweep Job 4: crack-gate sweep (SD-FDBK-FIX-VENTURE
 
     expect(recordCrackGateObservation).toHaveBeenCalledTimes(2);
     expect(result.summary.jobs['venture-crack-gate-sweep'].would_block).toBe(1);
+    // F3 fix (post-merge TESTING finding): the sweep must identify itself as 'sweep', not fall
+    // through to recordCrackGateObservation's default parameter — this call site always passes
+    // the literal explicitly, so a future edit that dropped the 4th argument (silently reverting
+    // to the shared default) would previously have gone undetected here.
+    expect(recordCrackGateObservation).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), 'sweep');
   });
 
   it('a per-venture evaluator error is isolated (does not stop the other jobs or other ventures) and surfaces in summary.jobs errors', async () => {

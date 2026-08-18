@@ -42,6 +42,20 @@ describe('check-gate-attestation-status.mjs single-venture mode', () => {
     logSpy.mockRestore();
   });
 
+  it('F5 fix (post-merge TESTING finding): exits 2, not 1, when a source is unavailable and overall != MEETS_CRITERION — asymmetric with the sibling record-CLI test file (crack-gate-record-cli.test.js), which already covered its own exit-2 path', async () => {
+    const supabase = {
+      rpc: vi.fn(() => Promise.resolve({ data: [{ status: 'PBN_NOT_SCORED', verdict: null, source: 'none', reason: 'legit', degraded: false }], error: null })),
+      from: vi.fn((table) => {
+        if (table === 'v_venture_gate_attestations_latest') return chainable({ data: null, error: { code: 'PGRST205', message: 'schema cache miss' } });
+        throw new Error(`unmocked table: ${table}`);
+      }),
+    };
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await main(['node', 's', VENTURE_ID], { supabase });
+    expect(result.exitCode).toBe(2);
+    logSpy.mockRestore();
+  });
+
   it('--json prints valid, parseable JSON matching the evaluator verdict shape', async () => {
     const supabase = makeSupabase({ pbnRow: { status: 'PBN_SCORED', verdict: 'PASS', source: 'x', reason: 'ok', degraded: false }, attestationRow: PASS_ROW });
     let printed = '';
@@ -120,5 +134,23 @@ describe('check-gate-attestation-status.mjs --fleet-summary mode', () => {
 
   it('documents PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES as a real, non-zero threshold (not left as a TODO)', () => {
     expect(PROMOTION_MIN_CONSECUTIVE_CLEAN_CYCLES).toBeGreaterThan(0);
+  });
+
+  it('F5 fix (post-merge TESTING finding): exits 2 when system_events is unreadable (table not yet applied)', async () => {
+    const supabase = {
+      from: vi.fn(() => ({
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: () => Promise.resolve({ data: null, error: { code: 'PGRST205', message: 'schema cache miss' } }),
+            }),
+          }),
+        }),
+      })),
+    };
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await main(['node', 's', '--fleet-summary'], { supabase });
+    expect(result.exitCode).toBe(2);
+    logSpy.mockRestore();
   });
 });
