@@ -149,7 +149,9 @@ describe('createFromFeedback untrusted-origin marking', () => {
 
     expect(createSDMock).toHaveBeenCalledTimes(1);
     const [sdInput] = createSDMock.mock.calls[0];
-    expect(sdInput.title).toBe(injected); // title intentionally NOT wrapped, mirrors the other cases
+    expect(sdInput.title).toBe(injected); // title unwrapped by THIS adapter specifically (createFromFeedback)
+    // -- not a universal claim across all 6 isUntrustedOrigin consumers; scripts/sd-from-feedback.js:204
+    // sanitizes the title too for untrusted origins (adversarial /ship review finding, PR #7254 round 2).
     expect(sdInput.description).toBe(`<user-feedback>${injected}</user-feedback>`);
   });
 

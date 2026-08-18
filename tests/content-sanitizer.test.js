@@ -141,14 +141,15 @@ describe('content-sanitizer', () => {
 
     // SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001: 'telegram' is now ALSO untrusted -- a schema-legal
     // source_type (feedback_source_type_check permits it) that was absent from
-    // PUBLIC_ORIGIN_SOURCE_TYPES, same omission class as error_capture/venture_worker above. No
-    // live anon-write RLS path to a telegram-sourced row exists today (both candidate paths --
-    // the named telegram_bot_insert_feedback policy and the source_type-agnostic
-    // venture_user_insert_feedback residual path -- are currently closed), but this is a
-    // defense-in-depth fix: a staged, chairman-gated migration would reopen the residual path
-    // (which does not discriminate on source_type) if ever applied. This assertion REPLACES the
-    // previous one in the trustedTypes catch-all below, which asserted telegram was trusted (a
-    // fact-pin snapshotting the gap itself as "correct").
+    // PUBLIC_ORIGIN_SOURCE_TYPES, same omission class as error_capture/venture_worker above.
+    // NOT a purely hypothetical gap: telegram_bot_insert_feedback was a LIVE, anon-key-reachable
+    // permissive INSERT policy from 2026-02-23 until dropped 2026-08-16, two days before this
+    // fix, and produced at least one real row. Both write-path axes (RLS policies AND
+    // SECURITY-DEFINER-RPC-with-anon-EXECUTE, the vector that actually armed error_capture/
+    // venture_worker) are confirmed closed as of this fix -- see lib/factory/content-sanitizer.js's
+    // own comment for the full accounting. This assertion REPLACES the previous one in the
+    // trustedTypes catch-all below, which asserted telegram was trusted (a fact-pin snapshotting
+    // the gap itself as "correct").
     it("classifies a schema-legal but allowlist-omitted row (source_type='telegram') as untrusted", () => {
       expect(isUntrustedOrigin({ source_type: 'telegram', source_application: 'telegram-bot' })).toBe(true);
     });
