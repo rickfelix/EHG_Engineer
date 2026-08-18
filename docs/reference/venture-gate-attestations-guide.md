@@ -2,9 +2,9 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001
-**Last Updated**: 2026-08-17
+**Last Updated**: 2026-08-18
 **Tags**: venture-lifecycle, governance, observe-only, pbn, chairman-review
 
 ## What this is
@@ -88,6 +88,39 @@ of the following hold, measurable via `check-gate-attestation-status.mjs --fleet
    has watched real traffic and found nothing it would have wrongly blocked.
 
 `--fleet-summary` reports live standing against this exact criterion; it is not a TODO.
+
+## Post-merge hardening (2026-08-18, PR #7222)
+
+Three rounds of adversarial review on a small follow-up PR surfaced real defects, including one
+that had shipped silently in the original PR and would have affected the majority of the target
+population. Documented here so a future reader of the code doesn't have to re-derive it.
+
+- **`set_venture_pbn_verdict_stage_zero(uuid, jsonb)` was a silent no-op for most ventures.** The
+  original write called `jsonb_set(metadata, '{stage_zero,pbn_verdict}', p_pbn_verdict, true)` — a
+  two-level path. Postgres's `create_missing=true` only auto-creates the *final* path element, not
+  a missing intermediate container, so for any venture without an existing `metadata.stage_zero`
+  key (114 of 152 live ventures at the time — the exact population `retroactive-pbn-score.mjs`
+  exists to backfill), the call returned the metadata **completely unchanged**, with no error. The
+  caller saw no `writeError` and reported success for a verdict that was never persisted. Fixed by
+  collapsing to a single-level `jsonb_set` on `{stage_zero}` merged via `||`, which correctly
+  creates the key when absent and preserves sibling `stage_zero` fields when present.
+- **The "already scored" guard is now atomic**, not a check-then-act SELECT-then-UPDATE — it's
+  folded into the `UPDATE ... WHERE` predicate itself, so two concurrent calls for the same venture
+  can't race past the check before either commits.
+- **Both leg of the pipeline touch triggers on `ventures`** that a naive `INSERT`/behavioral-proof
+  didn't originally account for: `trg_enforce_stage0_origin` (blocks direct INSERT unless
+  `leo.stage0_bypass` is set) and `auto_populate_company_id_trigger` (raises for a NULL
+  `company_id` outside a real auth session — and `company_id` **does** carry a live FK to
+  `companies(id)`, confirmed via `pg_constraint`; an `information_schema`-based check that reported
+  otherwise was wrong). The migration's own `DO $verify$` block now disables the second trigger for
+  its transaction rather than fabricating a `company_id`.
+- **S1/S2, carried forward as FR-9 preconditions, not fixed here**: the PBN leg's storage integrity
+  is weaker than the two attestation legs' append-only/audit-trail guarantees (plain mutable jsonb,
+  writer-supplied timestamp) — a gate is only as strong as its weakest input, and PBN is that input
+  today. The `--fleet-summary` promotion window also counts *rows* (one per venture per sweep
+  cycle), not *cycles* — with few live ventures, "5 most recent rows" can span less than 2 real
+  sweep cycles. Both are pre-existing design questions outside this SD's scope; a future SD should
+  resolve them before ever flipping either layer from observe-only to enforcing.
 
 ## Explicitly out of scope
 
