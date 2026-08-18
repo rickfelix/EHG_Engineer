@@ -63,7 +63,8 @@ class GitCommitVerifier {
       commitCount: 0,
       unpushedCount: 0,
       uncommittedFiles: [],
-      currentBranch: ''
+      currentBranch: '',
+      mergedPR: null
     };
   }
 
@@ -402,6 +403,50 @@ class GitCommitVerifier {
   }
 
   /**
+   * Check: has this SD's branch already been merged via a PR?
+   *
+   * SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001 (harness-bug fix, campaign mode): checks 3/4 assume
+   * PLAN-TO-LEAD always runs BEFORE /ship's merge step, so a legitimately merged-and-deleted
+   * branch (attemptAutoMerge's standard, correct post-merge cleanup) reads identically to
+   * "work was never pushed" -- "Branch has no remote tracking branch" / "does not exist on
+   * remote" are TRUE but MISLEADING once the branch's own PR has already merged. A merged PR
+   * is STRONGER evidence of completion than an open, unmerged branch would be (it proves the
+   * work was reviewed and landed on the base branch), so this is a legitimate alternate pass
+   * condition, not a bypass. Looked up by branch name text via `gh pr list`, which GitHub
+   * still resolves correctly even after the branch ref itself is deleted.
+   *
+   * @returns {Promise<{merged: boolean, prNumber: number|null, mergedAt: string|null}>}
+   */
+  async checkMergedPR(branchName) {
+    if (!branchName) return { merged: false, prNumber: null, mergedAt: null };
+    const result = await this.gitCommand([
+      'ls-remote', '--heads', 'origin', branchName,
+    ]);
+    // Only worth asking gh if the branch is genuinely gone from origin -- an ordinary,
+    // still-open branch should go through checks 3/4 normally, not this shortcut.
+    if (result.success && result.stdout.trim().length > 0) {
+      return { merged: false, prNumber: null, mergedAt: null };
+    }
+    try {
+      // --limit 10, filtered client-side by baseRefName: a PR merged into some OTHER branch
+      // (stacked/intermediate work) is not evidence the work reached this repo's trunk -- only
+      // a merge into 'main' is "stronger evidence than an open branch" for GATE5's purpose.
+      const { stdout } = await execFileAsync('gh', [
+        'pr', 'list', '--head', branchName, '--state', 'merged',
+        '--json', 'number,mergedAt,baseRefName', '--limit', '10',
+      ], { cwd: this.effectiveCwd });
+      const prs = JSON.parse(stdout || '[]');
+      const landed = prs.find((pr) => pr.baseRefName === 'main');
+      if (landed) {
+        return { merged: true, prNumber: landed.number, mergedAt: landed.mergedAt };
+      }
+    } catch {
+      // gh unavailable or query failed -- fall through to the normal (stricter) checks.
+    }
+    return { merged: false, prNumber: null, mergedAt: null };
+  }
+
+  /**
    * Check 5: Branch matches SD-ID
    */
   async checkBranchMatchesSD() {
@@ -497,9 +542,47 @@ class GitCommitVerifier {
     // Run all checks
     const check1 = await this.checkCleanWorkingDirectory();
     const check2 = await this.checkCommitsExist();
-    const check3 = await this.checkAllCommitsPushed();
-    const check4 = await this.checkRemoteBranchExists();
+    let check3 = await this.checkAllCommitsPushed();
+    let check4 = await this.checkRemoteBranchExists();
     const check5 = await this.checkBranchMatchesSD();
+
+    // If checks 3/4 failed on a missing remote branch specifically, see whether that's because
+    // the branch was already merged and cleaned up (legitimate) rather than never pushed at all.
+    //
+    // IMPORTANT: check3 (checkAllCommitsPushed) fails for TWO distinct reasons -- (a) no remote
+    // tracking branch at all (the merge-and-delete signature this override targets), or (b) N
+    // genuinely UNPUSHED commits sitting on top of an otherwise-tracked branch. A merged PR only
+    // explains (a); it says nothing about local commits added AFTER that PR was opened/merged
+    // (e.g. continued work on the same local branch post-merge). Flipping check3 unconditionally
+    // would let that second, unrelated failure silently PASS -- exactly the lost-work scenario
+    // GATE5 exists to catch. So each check is only overridden if ITS OWN blocker matches the
+    // missing-branch signature; a different failure reason must still block.
+    if ((!check3 || !check4) && this.results.currentBranch) {
+      const noTrackingBlocker = `Branch "${this.results.currentBranch}" has no remote tracking branch`;
+      const notOnRemoteBlocker = `Branch "${this.results.currentBranch}" does not exist on remote`;
+      const check3IsMissingBranchOnly = !check3 && this.results.blockers.includes(noTrackingBlocker);
+      const check4IsMissingBranchOnly = !check4 && this.results.blockers.includes(notOnRemoteBlocker);
+
+      if (check3IsMissingBranchOnly || check4IsMissingBranchOnly) {
+        const mergedPR = await this.checkMergedPR(this.results.currentBranch);
+        if (mergedPR.merged) {
+          console.log(`\n   ℹ️  Branch "${this.results.currentBranch}" not found on remote, but PR #${mergedPR.prNumber} `
+            + `for this branch already MERGED into main (${mergedPR.mergedAt}) -- treating the missing-remote-branch `
+            + 'failure as PASS. Any OTHER failure (e.g. genuinely unpushed commits) still blocks.');
+          this.results.mergedPR = mergedPR;
+          if (check3IsMissingBranchOnly) {
+            this.results.blockers = this.results.blockers.filter((b) => b !== noTrackingBlocker);
+            this.results.allCommitsPushed = true;
+            check3 = true;
+          }
+          if (check4IsMissingBranchOnly) {
+            this.results.blockers = this.results.blockers.filter((b) => b !== notOnRemoteBlocker);
+            this.results.remoteBranchExists = true;
+            check4 = true;
+          }
+        }
+      }
+    }
 
     // Determine verdict
     const allPassed = check1 && check2 && check3 && check4 && check5;
