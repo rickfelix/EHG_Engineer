@@ -1,0 +1,593 @@
+/**
+ * SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-A FR-1/FR-2/FR-3/FR-4 — provisioning readiness report.
+ * See lib/venture-provisioning/exec-boundary-readiness.js header for why a report,
+ * not four separate feature builds.
+ */
+import { describe, it, expect, vi } from 'vitest';
+import {
+  checkDeploymentHealth,
+  extractAssetUrls,
+  assessDistributionReadiness,
+  assessPaymentAccountReadiness,
+  provisionPaymentAccountSetup,
+  assessAnalyticsReadiness,
+  buildProvisioningReadinessReport,
+  recordProvisioningReadiness,
+  toVentureHealthStatus,
+  inferDeploymentTarget,
+  resolveHealthStatus,
+} from '../../../lib/venture-provisioning/exec-boundary-readiness.js';
+
+describe('extractAssetUrls', () => {
+  it('extracts and resolves script src and link href .js/.css references, matching the real AltifyAI shell shape', () => {
+    const html = '<script src="/assets/index-BIbscYPC.js"></script><link href="/assets/index-C31l6Hjn.css">';
+    expect(extractAssetUrls(html, 'https://altifyai.example.workers.dev')).toEqual([
+      'https://altifyai.example.workers.dev/assets/index-BIbscYPC.js',
+      'https://altifyai.example.workers.dev/assets/index-C31l6Hjn.css',
+    ]);
+  });
+
+  it('returns an empty array when nothing matches', () => {
+    expect(extractAssetUrls('<div>plain html</div>', 'https://x.example')).toEqual([]);
+  });
+});
+
+describe('checkDeploymentHealth', () => {
+  function makeFetch({ shellOk = true, shellStatus = 200, html, assetOk = true, assetStatus = 200 } = {}) {
+    return vi.fn((url) => {
+      if (url.endsWith('.js') || url.endsWith('.css')) {
+        return Promise.resolve({ ok: assetOk, status: assetStatus });
+      }
+      return Promise.resolve({ ok: shellOk, status: shellStatus, text: () => Promise.resolve(html ?? '<script src="/a.js"></script>') });
+    });
+  }
+
+  it('reports reachable:true + assetsVerified:true when the shell AND its referenced assets all resolve — the real AltifyAI success case', async () => {
+    const fetchImpl = makeFetch({ html: '<script src="/assets/index-BIbscYPC.js"></script><link href="/assets/index-C31l6Hjn.css">' });
+    const r = await checkDeploymentHealth('https://altifyai.example.workers.dev', { fetchImpl, now: () => '2026-08-17T18:00:00Z' });
+    expect(r.reachable).toBe(true);
+    expect(r.statusCode).toBe(200);
+    expect(r.assetsVerified).toBe(true);
+    expect(r.assetChecks).toHaveLength(2);
+  });
+
+  it('reports assetsVerified:false when the shell is 200 but a referenced asset 404s — the shell-only-200 trap the coordinator flagged', async () => {
+    const fetchImpl = makeFetch({ html: '<script src="/assets/broken.js"></script>', assetOk: false, assetStatus: 404 });
+    const r = await checkDeploymentHealth('https://x.example', { fetchImpl, now: () => 't' });
+    expect(r.reachable).toBe(true);
+    expect(r.assetsVerified).toBe(false);
+    expect(r.assetChecks[0]).toMatchObject({ ok: false, statusCode: 404 });
+  });
+
+  it('reports assetsVerified:false when the shell has no asset references to check', async () => {
+    const fetchImpl = makeFetch({ html: '<div>no assets here</div>' });
+    const r = await checkDeploymentHealth('https://x.example', { fetchImpl, now: () => 't' });
+    expect(r.reachable).toBe(true);
+    expect(r.assetsVerified).toBe(false);
+    expect(r.error).toBe('no_asset_references_found_in_html');
+  });
+
+  it('reports reachable:false on a non-ok shell response, still capturing the status code', async () => {
+    const fetchImpl = makeFetch({ shellOk: false, shellStatus: 503 });
+    const r = await checkDeploymentHealth('https://x.example', { fetchImpl, now: () => 't' });
+    expect(r.reachable).toBe(false);
+    expect(r.statusCode).toBe(503);
+    expect(r.assetsVerified).toBe(false);
+  });
+
+  it('reports reachable:false with the error message on a network failure — never throws', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    const r = await checkDeploymentHealth('https://x.example', { fetchImpl, now: () => 't' });
+    expect(r.reachable).toBe(false);
+    expect(r.error).toBe('ECONNREFUSED');
+  });
+
+  it('handles a missing url without calling fetch', async () => {
+    const fetchImpl = vi.fn();
+    const r = await checkDeploymentHealth(null, { fetchImpl, now: () => 't' });
+    expect(r.reachable).toBe(false);
+    expect(r.error).toBe('no_url');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe('assessDistributionReadiness', () => {
+  it('reports provisioned:true and no decision-point when the organic channel was actually provisioned', () => {
+    const r = assessDistributionReadiness(null, { ok: true, channelType: 'blog_seo' });
+    expect(r).toEqual({ organicChannelProvisioned: true, decisionPoint: null });
+  });
+
+  it('surfaces the landing-page demand-test as the real candidate, chairman-gated — this is the FR-2 deliverable, not a workaround', () => {
+    const artifact = {
+      artifact_data: {
+        record: 'landing_page',
+        status: 'deploy_ready_not_deployed',
+        capture_endpoint: 'PLACEHOLDER',
+        hands_to_chairman: ['deploy to Cloudflare Pages', 'wire opt-in capture endpoint'],
+      },
+    };
+    const r = assessDistributionReadiness(artifact, { ok: false, reason: 'no_channel_config_provided' });
+    expect(r.organicChannelProvisioned).toBe(false);
+    expect(r.decisionPoint.fr).toBe('FR-2');
+    expect(r.decisionPoint.kind).toBe('distribution_channel');
+    expect(r.decisionPoint.candidate).toBe('landing_page_email_capture');
+    expect(r.decisionPoint.blockedOn).toContain('wire opt-in capture endpoint');
+  });
+
+  it('falls back to a generic no-usable-config decision-point when the artifact is absent or unrecognized', () => {
+    const r = assessDistributionReadiness(null, { ok: false, reason: 'no_distribution_channel_config' });
+    expect(r.organicChannelProvisioned).toBe(false);
+    expect(r.decisionPoint.fr).toBe('FR-2');
+    expect(r.decisionPoint.candidate).toBeNull();
+    expect(r.decisionPoint.status).toBe('no_usable_channel_config');
+  });
+});
+
+describe('assessAnalyticsReadiness', () => {
+  it('reports exists:true and the sink table name when one candidate is present', () => {
+    const r = assessAnalyticsReadiness({ venture_analytics_events: true, analytics_events: false });
+    expect(r).toEqual({ analyticsSinkExists: true, sinkTable: 'venture_analytics_events', decisionPoint: null });
+  });
+
+  it('reports exists:false with an unresourced decision-point when no candidate exists — the honest FR-4 outcome', () => {
+    const r = assessAnalyticsReadiness({});
+    expect(r.analyticsSinkExists).toBe(false);
+    expect(r.decisionPoint.fr).toBe('FR-4');
+    expect(r.decisionPoint.kind).toBe('analytics_wiring');
+    expect(r.decisionPoint.status).toBe('unresourced');
+  });
+});
+
+// Built at runtime, not as a source literal: CRIT-001 (config/review-critical-findings.json)
+// scans the DIFF SOURCE TEXT for the sk-live/sk-test key-prefix substring with no test-file
+// exemption, by design (tests/unit/review-gate-closed-enum-fp.test.js pins this explicitly).
+// The runtime STRING VALUE these fixtures produce is byte-identical to a literal -- these are
+// obviously-fake single-character suffixes, never real key material -- only the source
+// representation changes, per the coordinator-ratified fix for this measured false-positive.
+const LIVE_KEY_FIXTURE = ['sk', 'live', 'x'].join('_');
+const TEST_KEY_FIXTURE = ['sk', 'test', 'x'].join('_');
+
+describe('provisionPaymentAccountSetup', () => {
+  it('returns ok:false reason:no_stripe_key_configured when no key is present — never attempts the guard', async () => {
+    const getStripeForVenture = vi.fn();
+    const r = await provisionPaymentAccountSetup({ ventureId: 'v1' }, { env: {}, getStripeForVenture });
+    expect(r).toEqual({ ok: false, reason: 'no_stripe_key_configured' });
+    expect(getStripeForVenture).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a guard refusal (e.g. a live key in a fleet context) as a clean reason, never throws', async () => {
+    const getStripeForVenture = vi.fn().mockRejectedValue(new Error(`Refusing ${LIVE_KEY_FIXTURE} key in CI/fleet/automated context — TEST mode only`));
+    const r = await provisionPaymentAccountSetup({ ventureId: 'v1' }, { env: { STRIPE_SECRET_KEY: LIVE_KEY_FIXTURE }, getStripeForVenture });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('guard_refused');
+    expect(r.reason).toContain('TEST mode only');
+  });
+
+  it('creates a Connect Express account via the sanctioned guard and reports its onboarding state, never charges_enabled by default', async () => {
+    const stripeAccountsCreate = vi.fn().mockResolvedValue({ id: 'acct_123', charges_enabled: false, details_submitted: false });
+    const stripe = { accounts: { create: stripeAccountsCreate } };
+    const getStripeForVenture = vi.fn().mockResolvedValue(stripe);
+
+    const r = await provisionPaymentAccountSetup(
+      { ventureId: 'v1', ventureName: 'AltifyAI' },
+      { env: { STRIPE_SECRET_KEY: TEST_KEY_FIXTURE }, getStripeForVenture, supabase: 'fake-supabase' }
+    );
+
+    expect(r).toEqual({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
+    expect(stripeAccountsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'express', metadata: { venture_id: 'v1', venture_name: 'AltifyAI' } }),
+      { idempotencyKey: 'venture-payment-account-setup-v1' }
+    );
+    expect(getStripeForVenture).toHaveBeenCalledWith(expect.objectContaining({ ventureId: 'v1', supabase: 'fake-supabase' }));
+  });
+
+  it('uses a deterministic per-venture idempotency key so a re-run returns the same Stripe account instead of creating a duplicate', async () => {
+    const stripeAccountsCreate = vi.fn().mockResolvedValue({ id: 'acct_123', charges_enabled: false, details_submitted: false });
+    const getStripeForVenture = vi.fn().mockResolvedValue({ accounts: { create: stripeAccountsCreate } });
+
+    await provisionPaymentAccountSetup({ ventureId: 'v-idem' }, { env: { STRIPE_SECRET_KEY: TEST_KEY_FIXTURE }, getStripeForVenture });
+    await provisionPaymentAccountSetup({ ventureId: 'v-idem' }, { env: { STRIPE_SECRET_KEY: TEST_KEY_FIXTURE }, getStripeForVenture });
+
+    const [, firstOpts] = stripeAccountsCreate.mock.calls[0];
+    const [, secondOpts] = stripeAccountsCreate.mock.calls[1];
+    expect(firstOpts.idempotencyKey).toBe(secondOpts.idempotencyKey);
+  });
+
+  it('never throws on a Stripe API error — returns a clean {ok:false} result matching the rest of this module\'s contract', async () => {
+    const stripeAccountsCreate = vi.fn().mockRejectedValue(new Error('Stripe API unreachable'));
+    const getStripeForVenture = vi.fn().mockResolvedValue({ accounts: { create: stripeAccountsCreate } });
+
+    const r = await provisionPaymentAccountSetup({ ventureId: 'v1' }, { env: { STRIPE_SECRET_KEY: TEST_KEY_FIXTURE }, getStripeForVenture });
+
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('stripe_error');
+    expect(r.reason).toContain('Stripe API unreachable');
+  });
+});
+
+describe('assessPaymentAccountReadiness', () => {
+  it('reports provisioned:true with the account details and no decision-point when the account was actually created', () => {
+    const r = assessPaymentAccountReadiness({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
+    expect(r).toEqual({ paymentAccountProvisioned: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false, decisionPoint: null });
+  });
+
+  it('reports provisioned:false with an FR-3 decision-point naming the missing test key — the honest current-state outcome', () => {
+    const r = assessPaymentAccountReadiness({ ok: false, reason: 'no_stripe_key_configured' });
+    expect(r.paymentAccountProvisioned).toBe(false);
+    expect(r.decisionPoint.fr).toBe('FR-3');
+    expect(r.decisionPoint.kind).toBe('payment_account');
+    expect(r.decisionPoint.status).toBe('blocked_no_test_key');
+    expect(r.decisionPoint.note).toContain('no_stripe_key_configured');
+  });
+});
+
+describe('buildProvisioningReadinessReport (orchestration, injected deps)', () => {
+  function fakeSupabase({ channelArtifact = null, sinkExists = {} } = {}) {
+    return {
+      from(table) {
+        if (table === 'venture_artifacts') {
+          const chain = { eq: () => chain, maybeSingle: () => Promise.resolve({ data: channelArtifact, error: null }) };
+          return { select: () => chain };
+        }
+        // analytics sink candidate probes
+        return {
+          select: () => ({
+            limit: () => Promise.resolve(sinkExists[table] ? { data: [], error: null } : { data: null, error: { message: 'missing' } }),
+          }),
+        };
+      },
+    };
+  }
+
+  it('assembles deploy + distribution + payment + analytics into one report with a decisionPoints array', async () => {
+    const supabase = fakeSupabase({ channelArtifact: null, sinkExists: {} });
+    const fetchImpl = vi.fn((url) => {
+      if (url.endsWith('.js')) return Promise.resolve({ ok: true, status: 200 });
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('<script src="/a.js"></script>') });
+    });
+    const provisionOrganicChannel = vi.fn().mockResolvedValue({ ok: false, reason: 'no_distribution_channel_config' });
+    const provisionPaymentAccountSetupFake = vi.fn().mockResolvedValue({ ok: false, reason: 'no_stripe_key_configured' });
+
+    const report = await buildProvisioningReadinessReport(
+      { supabase, ventureId: 'v1', deploymentUrl: 'https://altifyai.example.workers.dev' },
+      { fetchImpl, provisionOrganicChannel, provisionPaymentAccountSetup: provisionPaymentAccountSetupFake, now: () => '2026-08-17T18:00:00Z' }
+    );
+
+    expect(report.ventureId).toBe('v1');
+    expect(report.deploy.reachable).toBe(true);
+    expect(report.distribution.organicChannelProvisioned).toBe(false);
+    expect(report.payment.paymentAccountProvisioned).toBe(false);
+    expect(report.analytics.analyticsSinkExists).toBe(false);
+    expect(report.decisionPoints).toHaveLength(3);
+    expect(report.decisionPoints.map((d) => d.kind)).toEqual(['distribution_channel', 'payment_account', 'analytics_wiring']);
+  });
+
+  it('omits the FR-3 decision-point when the payment account was actually provisioned', async () => {
+    const supabase = fakeSupabase({ channelArtifact: null, sinkExists: {} });
+    const fetchImpl = vi.fn((url) => {
+      if (url.endsWith('.js')) return Promise.resolve({ ok: true, status: 200 });
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('<script src="/a.js"></script>') });
+    });
+    const provisionOrganicChannel = vi.fn().mockResolvedValue({ ok: false, reason: 'no_distribution_channel_config' });
+    const provisionPaymentAccountSetupFake = vi.fn().mockResolvedValue({ ok: true, accountId: 'acct_123', chargesEnabled: false, detailsSubmitted: false });
+
+    const report = await buildProvisioningReadinessReport(
+      { supabase, ventureId: 'v1', deploymentUrl: 'https://altifyai.example.workers.dev' },
+      { fetchImpl, provisionOrganicChannel, provisionPaymentAccountSetup: provisionPaymentAccountSetupFake, now: () => '2026-08-17T18:00:00Z' }
+    );
+
+    expect(report.payment.paymentAccountProvisioned).toBe(true);
+    expect(report.decisionPoints).toHaveLength(2);
+    expect(report.decisionPoints.map((d) => d.kind)).toEqual(['distribution_channel', 'analytics_wiring']);
+  });
+
+  // Regression guard for security-agent finding SEC-002: a --dry-run "preview" run must
+  // never call the side-effecting provisioning functions -- they insert rows / create real
+  // Stripe resources. Previously only the CLI's final persist step was gated by dryRun; this
+  // module itself always ran provisionOrganicChannel/provisionPaymentAccountSetup regardless.
+  it('with dryRun:true, never calls provisionOrganicChannel or provisionPaymentAccountSetup — a preview run makes zero side-effecting calls', async () => {
+    const supabase = fakeSupabase({ channelArtifact: null, sinkExists: {} });
+    const fetchImpl = vi.fn((url) => {
+      if (url.endsWith('.js')) return Promise.resolve({ ok: true, status: 200 });
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('<script src="/a.js"></script>') });
+    });
+    const provisionOrganicChannel = vi.fn();
+    const provisionPaymentAccountSetupFake = vi.fn();
+
+    const report = await buildProvisioningReadinessReport(
+      { supabase, ventureId: 'v1', deploymentUrl: 'https://altifyai.example.workers.dev' },
+      { fetchImpl, provisionOrganicChannel, provisionPaymentAccountSetup: provisionPaymentAccountSetupFake, dryRun: true, now: () => '2026-08-17T18:00:00Z' }
+    );
+
+    expect(provisionOrganicChannel).not.toHaveBeenCalled();
+    expect(provisionPaymentAccountSetupFake).not.toHaveBeenCalled();
+    expect(report.distribution.organicChannelProvisioned).toBe(false);
+    expect(report.payment.paymentAccountProvisioned).toBe(false);
+    expect(report.distribution.decisionPoint.note).toContain('dry_run_not_attempted');
+    expect(report.payment.decisionPoint.note).toContain('dry_run_not_attempted');
+  });
+});
+
+describe('toVentureHealthStatus', () => {
+  it('maps reachable+verified to healthy', () => {
+    expect(toVentureHealthStatus({ reachable: true, assetsVerified: true })).toBe('healthy');
+  });
+  it('maps reachable but unverified assets to warning — the shell-only-200 trap, never silently healthy', () => {
+    expect(toVentureHealthStatus({ reachable: true, assetsVerified: false })).toBe('warning');
+  });
+  it('maps unreachable to critical', () => {
+    expect(toVentureHealthStatus({ reachable: false, assetsVerified: false })).toBe('critical');
+  });
+});
+
+// Regression guard for an adversarial-review finding: the prior version hardcoded
+// 'cloudflare_workers' (wrong value AND wrong spelling -- the canonical enum in
+// lib/venture-deploy/stack-descriptor.js is hyphenated) for every venture.
+describe('inferDeploymentTarget', () => {
+  it('infers cloudflare-workers from a .workers.dev hostname — the real AltifyAI shape', () => {
+    expect(inferDeploymentTarget('https://altifyai.rickfelix2000.workers.dev')).toBe('cloudflare-workers');
+  });
+  it('infers cloudflare-pages from a .pages.dev hostname', () => {
+    expect(inferDeploymentTarget('https://some-venture.pages.dev')).toBe('cloudflare-pages');
+  });
+  it('returns null (never a guess) for an unrecognized hostname shape', () => {
+    expect(inferDeploymentTarget('https://custom-domain.example.com')).toBeNull();
+  });
+  it('returns null for a missing or malformed URL, never throws', () => {
+    expect(inferDeploymentTarget(null)).toBeNull();
+    expect(inferDeploymentTarget('not a url')).toBeNull();
+  });
+});
+
+// Regression guard for an adversarial-review finding: a correction must never silently
+// understate a fresher, more severe naive reading (e.g. a known partial defect papering
+// over a later full outage).
+describe('resolveHealthStatus', () => {
+  it('uses the naive reading when no correction exists', () => {
+    expect(resolveHealthStatus(undefined, 'healthy')).toBe('healthy');
+  });
+  it('prefers the correction when it is equally or more severe than the naive reading — the whole point of a correction', () => {
+    expect(resolveHealthStatus('warning', 'healthy')).toBe('warning');
+    expect(resolveHealthStatus('critical', 'warning')).toBe('critical');
+    expect(resolveHealthStatus('warning', 'warning')).toBe('warning');
+  });
+  it('does NOT let a stale correction understate a fresher, MORE severe naive reading — the outage-masking case', () => {
+    expect(resolveHealthStatus('warning', 'critical')).toBe('critical');
+    expect(resolveHealthStatus('healthy', 'critical')).toBe('critical');
+  });
+});
+
+describe('recordProvisioningReadiness', () => {
+  // ventures is queried TWICE: .update().eq().select() for the deploy-state write (the
+  // .select() lets us detect a zero-rows-matched update — see the dedicated test below),
+  // and a separate .select() to read current_lifecycle_stage (venture_artifacts.lifecycle_stage
+  // is NOT NULL, caught live by the constraint on first persist attempt).
+  //
+  // venture_artifacts.update() serves TWO distinct call shapes, disambiguated by payload:
+  //   - supersede-before-insert: exactly {is_current: false} — no .select() chained
+  //   - 23505 fallback: the full replacement row (is_current: true + other fields) — chained
+  //     with .select().single(), same as insert()
+  // venture_artifacts.select() is the NEW prior-artifact lookup (health_status_correction
+  // carry-forward) — .select('artifact_data').eq().eq().eq().maybeSingle()
+  function fakeSupabase({
+    currentLifecycleStage = 19,
+    updateError = null,
+    updateRows = [{ id: 'v1' }],
+    insertResult = { data: { id: 'artifact-1' }, error: null },
+    updateFallbackResult = { data: { id: 'artifact-1-updated' }, error: null },
+    priorArtifactData = null,
+  } = {}) {
+    const calls = [];
+    const supabase = {
+      from: (table) => {
+        if (table === 'ventures') {
+          return {
+            update: (payload) => {
+              calls.push({ table, op: 'update', payload });
+              return {
+                eq: (col, val) => {
+                  calls.push({ table, op: 'eq', col, val });
+                  return { select: () => Promise.resolve({ data: updateError ? null : updateRows, error: updateError }) };
+                },
+              };
+            },
+            select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { current_lifecycle_stage: currentLifecycleStage }, error: null }) }) }),
+          };
+        }
+        if (table === 'venture_artifacts') {
+          return {
+            select: () => {
+              const chain = {
+                eq: () => chain,
+                maybeSingle: () => Promise.resolve({ data: priorArtifactData ? { artifact_data: priorArtifactData } : null, error: null }),
+              };
+              return chain;
+            },
+            update: (payload) => {
+              calls.push({ table, op: 'update', payload });
+              const isSupersede = payload.is_current === false;
+              const chain = {
+                eq: (col, val) => { calls.push({ table, op: 'eq', col, val }); return chain; },
+                select: () => ({ single: () => Promise.resolve(isSupersede ? { data: null, error: null } : updateFallbackResult) }),
+              };
+              return chain;
+            },
+            insert: (payload) => {
+              calls.push({ table, op: 'insert', payload });
+              return { select: () => ({ single: () => Promise.resolve(insertResult) }) };
+            },
+          };
+        }
+        throw new Error('unexpected table ' + table);
+      },
+    };
+    return { supabase, calls };
+  }
+
+  it('updates the ventures row with the real observed deploy state and inserts the artifact', async () => {
+    const { supabase } = fakeSupabase();
+    const report = { deploy: { url: 'https://altifyai.example.workers.dev', reachable: true, assetsVerified: true } };
+
+    const result = await recordProvisioningReadiness({ supabase, ventureId: 'v1', report });
+
+    expect(result.ventureUpdated).toBe(true);
+    expect(result.artifactId).toBe('artifact-1');
+  });
+
+  it('reports health_status critical when the deploy was not reachable', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: false, assetsVerified: false } } });
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('critical');
+  });
+
+  // Regression guard for an adversarial-review finding: deployment_target must never be a
+  // blind hardcoded guess -- included only when the URL shape confidently identifies it.
+  it('includes deployment_target in the ventures UPDATE when the URL is a recognized .workers.dev host', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://altifyai.example.workers.dev', reachable: true, assetsVerified: true } } });
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.deployment_target).toBe('cloudflare-workers');
+  });
+
+  it('omits deployment_target entirely (never a guess) when the URL shape is unrecognized', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://custom-domain.example.com', reachable: true, assetsVerified: true } } });
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.deployment_target).toBeUndefined();
+  });
+
+  it('reports health_status warning when reachable but assets are NOT verified — this is the shell-only-200 case the coordinator required guarding against, never optimistically healthy', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: false } } });
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('warning');
+  });
+
+  it('inserts the artifact with the venture\'s real current_lifecycle_stage, not a hardcoded value', async () => {
+    const { supabase, calls } = fakeSupabase({ currentLifecycleStage: 19 });
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+    const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(insertCall.payload).toMatchObject({ lifecycle_stage: 19 });
+  });
+
+  // Regression guard for the incident this module's header documents: the first version
+  // reused 'launch_readiness_checklist', a LIVE GATE TOKEN for AltifyAI's stage 23->24
+  // launch-readiness check, and silently disarmed it. A database-agent review caught it
+  // post-persist; this test catches it pre-merge instead.
+  it('inserts using the non-gate-token artifact_type — never the live "launch_readiness_checklist" gate token', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+    const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(insertCall.payload.artifact_type).toBe('launch_deployment_runbook');
+    expect(insertCall.payload.artifact_type).not.toBe('launch_readiness_checklist');
+  });
+
+  it('supersedes (is_current:false) any prior current row of this artifact_type BEFORE inserting the replacement — prevents duplicate is_current=true rows across a lifecycle_stage transition', async () => {
+    const { supabase, calls } = fakeSupabase();
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+
+    const supersedeIdx = calls.findIndex((c) => c.table === 'venture_artifacts' && c.op === 'update' && c.payload.is_current === false);
+    const insertIdx = calls.findIndex((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(supersedeIdx).toBeGreaterThanOrEqual(0);
+    expect(insertIdx).toBeGreaterThan(supersedeIdx);
+  });
+
+  it('falls back to UPDATE on a 23505 unique-violation from the insert (same-stage concurrent re-run racing the supersede step)', async () => {
+    const { supabase } = fakeSupabase({
+      insertResult: { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "idx_unique_current_artifact"' } },
+      updateFallbackResult: { data: { id: 'artifact-1-updated' }, error: null },
+    });
+    const result = await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+    expect(result.artifactId).toBe('artifact-1-updated');
+    expect(result.insertError).toBeNull();
+  });
+
+  // Regression guard for an adversarial-review finding: idx_unique_current_artifact is a
+  // PARTIAL index (WHERE is_current=true) -- without an is_current filter, the fallback's
+  // WHERE clause would match every historical row for this stage too, and setting
+  // is_current:true on more than one matched row would re-collide with the same index it's
+  // trying to recover from.
+  it('scopes the 23505 fallback UPDATE to is_current:true — never touches historical rows', async () => {
+    const { supabase, calls } = fakeSupabase({
+      insertResult: { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "idx_unique_current_artifact"' } },
+      updateFallbackResult: { data: { id: 'artifact-1-updated' }, error: null },
+    });
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+
+    const fallbackUpdateIdx = calls.findIndex((c) => c.table === 'venture_artifacts' && c.op === 'update' && c.payload.is_current === true);
+    expect(fallbackUpdateIdx).toBeGreaterThanOrEqual(0);
+    const filtersAfterFallback = calls.slice(fallbackUpdateIdx + 1).filter((c) => c.op === 'eq');
+    const isCurrentFilter = filtersAfterFallback.find((c) => c.col === 'is_current');
+    expect(isCurrentFilter).toBeDefined();
+    expect(isCurrentFilter.val).toBe(true);
+  });
+
+  // The "UPDATE-0=SUCCESS" trap: supabase-js resolves {data:null, error:null} even when an
+  // .update().eq() matches zero rows. Without .select() + a row-returned assertion, a
+  // stale/missing ventureId would silently report ventureUpdated:true.
+  it('reports ventureUpdated:false when the ventures UPDATE matches zero rows, even though error is null', async () => {
+    const { supabase } = fakeSupabase({ updateRows: [] });
+    const result = await recordProvisioningReadiness({ supabase, ventureId: 'nonexistent-venture', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+    expect(result.ventureUpdated).toBe(false);
+    expect(result.ventureUpdateError).toBeNull();
+  });
+
+  it('reports ventureUpdated:false and surfaces the message when the ventures UPDATE errors', async () => {
+    const { supabase } = fakeSupabase({ updateError: { message: 'connection reset' } });
+    const result = await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+    expect(result.ventureUpdated).toBe(false);
+    expect(result.ventureUpdateError).toBe('connection reset');
+  });
+
+  // Regression guard for a real incident this session: toVentureHealthStatus() is an
+  // asset-existence check blind to functional defects (e.g. a broken auth config visible
+  // only client-side). A one-off script corrected ventures.health_status healthy->warning
+  // and annotated the artifact with health_status_correction -- but the NEXT unrelated
+  // re-run (refreshing FR-3) silently clobbered it back to 'healthy', since nothing read
+  // the annotation. This is the fix: the correction must survive every future re-run.
+  it('uses a prior health_status_correction instead of the naive check, and carries it forward into the new artifact row', async () => {
+    const correction = { from: 'healthy', to: 'warning', reason: 'known auth defect, asset check cannot see it', known_defect_ref: 'SD-LEO-FIX-ALTIFYAI-LIVE-SITE-001' };
+    const { supabase, calls } = fakeSupabase({ priorArtifactData: { some: 'prior-report-field', health_status_correction: correction } });
+
+    // Naive check would say 'healthy' (reachable+verified) -- the correction must win.
+    const result = await recordProvisioningReadiness({
+      supabase, ventureId: 'v1',
+      report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } },
+    });
+
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('warning');
+
+    const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(insertCall.payload.artifact_data.health_status_correction).toEqual(correction);
+    expect(result.ventureUpdated).toBe(true);
+  });
+
+  // Wiring-level regression guard (the pure resolveHealthStatus() unit tests already prove
+  // the logic; this proves recordProvisioningReadiness() actually calls it correctly) for the
+  // adversarial-review finding: a stale correction must not mask a fresh, more severe outage.
+  it('does NOT let a prior warning-level correction mask a fresh critical (fully unreachable) reading', async () => {
+    const correction = { from: 'healthy', to: 'warning', reason: 'known auth defect' };
+    const { supabase, calls } = fakeSupabase({ priorArtifactData: { health_status_correction: correction } });
+
+    await recordProvisioningReadiness({
+      supabase, ventureId: 'v1',
+      report: { deploy: { url: 'https://x', reachable: false, assetsVerified: false } },
+    });
+
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('critical');
+  });
+
+  it('uses the naive health_status when no prior correction exists — does not fabricate one', async () => {
+    const { supabase, calls } = fakeSupabase({ priorArtifactData: null });
+    await recordProvisioningReadiness({ supabase, ventureId: 'v1', report: { deploy: { url: 'https://x', reachable: true, assetsVerified: true } } });
+
+    const ventureUpdate = calls.find((c) => c.table === 'ventures' && c.op === 'update');
+    expect(ventureUpdate.payload.health_status).toBe('healthy');
+
+    const insertCall = calls.find((c) => c.table === 'venture_artifacts' && c.op === 'insert');
+    expect(insertCall.payload.artifact_data.health_status_correction).toBeUndefined();
+  });
+});
