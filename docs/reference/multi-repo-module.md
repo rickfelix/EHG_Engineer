@@ -1,9 +1,9 @@
 ---
 category: reference
 status: draft
-version: 1.0.0
+version: 1.0.1
 author: Rick Felix
-last_updated: 2026-02-28
+last_updated: 2026-08-18
 tags: [reference, auto-generated]
 ---
 # Multi-Repository Manager Module
@@ -113,7 +113,9 @@ console.log('Affected repos:', repos); // ['ehg', 'EHG_Engineer']
 
 #### `discoverRepos()`
 
-Discovers all git repositories in the EHG base directory.
+Discovers all git repositories in the EHG base directory (`EHG_BASE_DIR`, resolved via `lib/repo-paths.js`'s `getRepoRoot()` so it works identically whether this module loads from the main repo or from a `.worktrees/<sd>` checkout — SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001).
+
+An entry only counts as a repo when `<entry>/.git` is a **directory**. A linked git worktree's `.git` is a **file** containing a `gitdir:` pointer to the main repo's `.git/worktrees/<name>` — those are excluded, so a sibling worktree checkout never gets counted as its own independent repo.
 
 **Returns**: `Object` - Map of repo name to repo info
 
@@ -661,6 +663,12 @@ C:/_EHG/
   ├── ehg/
   └── EHG_Engineer/
 ```
+
+### Different repo count / verdict on repeat runs (non-deterministic)
+
+**Cause** (fixed by SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001, 29th reported occurrence): before this fix, `EHG_BASE_DIR` used a raw `resolve(__dirname, '../../..')` that resolved to the wrong directory when the module loaded from inside a `.worktrees/<sd>` checkout (where SD work actually runs), and `discoverRepos()` counted any entry with an existing `.git` path as a repo — including a linked worktree's `.git` **file**, not just a real repo's `.git` **directory**. This produced different repo counts (and different `ship-preflight.js` verdicts) depending on which worktree the scan ran from and which sibling worktrees happened to exist at scan time.
+
+**Fix**: `EHG_BASE_DIR` now derives from `lib/repo-paths.js`'s `getRepoRoot()` (worktree-suffix-stripped), and `discoverRepos()` requires `.git` to be a directory. If you still see non-determinism after this fix, check `MultiRepoCoordinator`'s `partial` flag in the printed `ship-preflight.js` summary — a scan cut short by the 60s scan deadline is now visibly flagged rather than rendering identically to a complete scan.
 
 ### "Branch might not have upstream" warnings
 
