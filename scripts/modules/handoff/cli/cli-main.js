@@ -456,6 +456,42 @@ export async function handleDryRunCommand(handoffType, sdId, options = {}) {
   return { success: true };
 }
 
+/**
+ * FR-2/FR-7 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): for venture SDs run the git-state
+ * check against the RESOLVED venture repo, not the EHG_Engineer orchestrator cwd. Platform
+ * SDs keep process.cwd() (byte-identical). An unresolvable venture fails CLOSED (skips with
+ * an actionable note) rather than silently scanning the wrong tree and masking a dirty
+ * venture worktree.
+ *
+ * SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001: two corrections. (1) `supabase` must be a real
+ * client — a hardcoded null here independently defeats DB-first venture resolution even
+ * after getSDWorkflow's select is widened to carry target_application/metadata. (2)
+ * branching keys on `resolved`, never `isVenture` — isVenture is FALSE for the EHG platform
+ * repo too (it only distinguishes venture-DB-first vs. platform-shortcut resolution, not
+ * whether repoPath is usable); an SD targeting EHG previously had its correctly resolved
+ * repoPath silently discarded in favour of the ambient cwd (EHG_Engineer).
+ *
+ * Extracted as an injectable-dependency function (CLAUDE_EXEC.md "Testability-Aware
+ * Implementation") so it is unit-testable without mocking the rest of the large
+ * handlePrecheckCommand orchestrator. Defaults are the real implementations; production
+ * call sites pass nothing extra beyond `sd` and `supabase`.
+ *
+ * @param {Object} sd - the SD row from getSDWorkflow
+ * @param {Object} deps
+ * @param {Function} deps.resolveGateRepoContext
+ * @param {Function} deps.checkGitState
+ * @param {import('@supabase/supabase-js').SupabaseClient} deps.supabase
+ * @returns {Promise<{passed: boolean, issues: Array, warnings: Array}>}
+ */
+export async function resolveAndCheckGitState(sd, { resolveGateRepoContext, checkGitState, supabase }) {
+  const repoCtx = await resolveGateRepoContext(sd, supabase);
+  if (!repoCtx.resolved) {
+    console.log(`   ⛔ [UNRESOLVABLE_VENTURE_REPO] target repo could not be resolved${repoCtx.reason ? ` (${repoCtx.reason})` : ''} — skipping git-state check (not scanning the orchestrator cwd). Populate applications.local_path / registry for this venture.`);
+    return { passed: true, issues: [], warnings: ['[UNRESOLVABLE_VENTURE_REPO] git-state check skipped'] };
+  }
+  return checkGitState({ cwd: repoCtx.repoPath });
+}
+
 export async function handlePrecheckCommand(precheckType, precheckSdId) {
   const system = createHandoffSystem();
 
@@ -506,18 +542,11 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
   try {
     const { checkGitState } = await import('../../../check-git-state.js');
     const { resolveGateRepoContext } = await import('../../../../lib/repo-paths.js');
-    // FR-2/FR-7 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): for venture SDs run the git-state
-    // check against the RESOLVED venture repo, not the EHG_Engineer orchestrator cwd. Platform
-    // SDs keep process.cwd() (byte-identical). An unresolvable venture fails CLOSED (skips with
-    // an actionable note) rather than silently scanning the wrong tree and masking a dirty venture worktree.
-    const repoCtx = await resolveGateRepoContext(workflowInfoForPrecheck.sd, null);
-    let gitResult;
-    if (repoCtx.isVenture && !repoCtx.resolved) {
-      console.log('   ⛔ [UNRESOLVABLE_VENTURE_REPO] venture target_application has no resolvable repo path — skipping git-state check (not scanning the orchestrator cwd). Populate applications.local_path / registry for this venture.');
-      gitResult = { passed: true, issues: [], warnings: ['[UNRESOLVABLE_VENTURE_REPO] git-state check skipped'] };
-    } else {
-      gitResult = await checkGitState(repoCtx.isVenture ? { cwd: repoCtx.repoPath } : {});
-    }
+    const gitResult = await resolveAndCheckGitState(workflowInfoForPrecheck.sd, {
+      resolveGateRepoContext,
+      checkGitState,
+      supabase: createSupabaseServiceClient(),
+    });
     if (!gitResult.passed) {
       console.log('');
       console.log('⛔ Git issues found - resolve before proceeding');

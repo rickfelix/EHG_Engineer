@@ -21,9 +21,14 @@ export async function getSDWorkflow(sdId) {
   const supabase = createSupabaseServiceClient();
 
   // Support UUID and sd_key lookups
+  // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-4): target_application + metadata added
+  // so callers (cli-main.js's resolveGateRepoContext call) can actually resolve a venture
+  // repo -- without these columns, every SD row here looked like a platform SD regardless
+  // of its real target_application, and the FR-2/FR-7 UNRESOLVABLE_VENTURE_REPO branch
+  // downstream could never fire for any venture SD reached via this path.
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, sd_type, intensity_level, category, current_phase, status')
+    .select('id, sd_key, title, sd_type, intensity_level, category, current_phase, status, target_application, metadata')
     .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 

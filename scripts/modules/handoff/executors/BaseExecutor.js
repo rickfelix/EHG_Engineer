@@ -1484,7 +1484,13 @@ export class BaseExecutor {
    */
   async resolveTargetRepository(sd) {
     const targetApp = sd?.target_application;
-    if (targetApp && isVentureRepo(targetApp)) {
+    // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-3): also take the DB-first path when
+    // target_application itself is a platform default but metadata.qf_target_application
+    // names a real venture (QF-escalated SDs) — otherwise this guard never lets FR-1's
+    // resolver fallback tier run for this caller, making it dead-on-arrival here.
+    const qfFallbackApp = sd?.metadata?.qf_target_application;
+    const looksLikeVenture = (targetApp && isVentureRepo(targetApp)) || (qfFallbackApp && isVentureRepo(qfFallbackApp));
+    if (looksLikeVenture) {
       try {
         const ctx = await resolveGateRepoContext(sd, this.supabase);
         if (ctx.resolved && ctx.repoPath) return ctx.repoPath;

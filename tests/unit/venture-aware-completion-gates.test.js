@@ -20,12 +20,30 @@ import {
 } from '../../lib/repo-paths.js';
 import { computeReposForSD } from '../../scripts/modules/handoff/executors/lead-final-approval/gates.js';
 
-// Mirror tests/unit/repo-paths-db-first.test.js — from().select().eq() returning rows,
+// Mirror tests/unit/repo-paths-db-first.test.js — from().select().eq().is() returning
+// rows (the real chain lib/repo-paths.js:166-169 uses: .eq('status','active').is('deleted_at',null)),
 // with a `from` spy to assert the platform path never queries the DB.
+//
+// SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001: this mock previously stopped at .eq(), which
+// returned a Promise directly. The real code calls .is() on that Promise, throwing a
+// TypeError that repo-paths.js's own try/catch (a correct fail-soft-to-registry guard)
+// silently swallowed -- so the venture-DB-first test below fell through to the registry
+// (a miss for "TestVenture") instead of exercising the real DB-hit path it was written to
+// pin. Fixed by completing the chain. Each stage rejects if called with unexpected args or
+// re-invoked, so a FUTURE chain change breaks loudly here instead of silently degrading.
 function mockSupabase(rows, { throwOnQuery = false } = {}) {
-  const eq = vi.fn(() =>
-    throwOnQuery ? Promise.reject(new Error('db down')) : Promise.resolve({ data: rows, error: null }),
-  );
+  const is = vi.fn((column, value) => {
+    if (column !== 'deleted_at' || value !== null) {
+      throw new Error(`mock chain drift: .is(${JSON.stringify(column)}, ${JSON.stringify(value)}) does not match the expected .is('deleted_at', null) -- update mockSupabase to match lib/repo-paths.js's real query chain`);
+    }
+    return throwOnQuery ? Promise.reject(new Error('db down')) : Promise.resolve({ data: rows, error: null });
+  });
+  const eq = vi.fn((column, value) => {
+    if (column !== 'status' || value !== 'active') {
+      throw new Error(`mock chain drift: .eq(${JSON.stringify(column)}, ${JSON.stringify(value)}) does not match the expected .eq('status', 'active') -- update mockSupabase to match lib/repo-paths.js's real query chain`);
+    }
+    return { is };
+  });
   const select = vi.fn(() => ({ eq }));
   const from = vi.fn(() => ({ select }));
   return { client: { from }, spies: { from } };
@@ -100,5 +118,71 @@ describe('FR-3 computeReposForSD: platform byte-identical + venture single-repo'
     expect(repos[0].githubRepo).toBe(resolveGitHubRepo('CronGenius'));
     expect(repos[0].githubRepo).toBeTruthy(); // registry-sourced, non-null (DB github_repo is NULL)
     expect(repos.map((r) => r.githubRepo)).not.toContain('rickfelix/EHG_Engineer');
+  });
+});
+
+// SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 FR-1: metadata.qf_target_application fallback.
+describe('FR-1 resolveGateRepoContext: metadata.qf_target_application fallback', () => {
+  it('platform-default target_application + venture qf_target_application → resolves via DB, isVenture:true', async () => {
+    const dbPath = 'D:/db-authoritative/test-venture';
+    const { client, spies } = mockSupabase([{ name: 'TestVenture', local_path: dbPath, status: 'active' }]);
+    const ctx = await resolveGateRepoContext(
+      { target_application: 'EHG_Engineer', metadata: { qf_target_application: 'TestVenture' } },
+      client,
+    );
+    expect(ctx.isVenture).toBe(true);
+    expect(ctx.resolved).toBe(true);
+    expect(ctx.repoPath).toBe(path.resolve(dbPath));
+    expect(spies.from).toHaveBeenCalled();
+  });
+
+  it('platform-default target_application + PLATFORM-value qf_target_application (the real 35/38 shape) → zero DB calls, byte-identical', async () => {
+    const { client, spies } = mockSupabase([{ name: 'X', local_path: 'D:/wrong', status: 'active' }]);
+    const ctx = await resolveGateRepoContext(
+      { target_application: 'EHG_Engineer', metadata: { qf_target_application: 'EHG_Engineer' } },
+      client,
+    );
+    expect(ctx.isVenture).toBe(false);
+    expect(ctx.resolved).toBe(true);
+    expect(spies.from).not.toHaveBeenCalled();
+    expect(ctx.repoPath).toBe(ENGINEER_ROOT);
+  });
+
+  it('no qf_target_application field at all → zero DB calls, byte-identical', async () => {
+    const { client, spies } = mockSupabase([{ name: 'X', local_path: 'D:/wrong', status: 'active' }]);
+    const ctx = await resolveGateRepoContext({ target_application: 'EHG_Engineer', metadata: {} }, client);
+    expect(ctx.isVenture).toBe(false);
+    expect(ctx.resolved).toBe(true);
+    expect(spies.from).not.toHaveBeenCalled();
+  });
+
+  it('unresolvable qf_target_application venture → resolved:false (fail-closed), never verified via the fallback', async () => {
+    const { client } = mockSupabase([]); // DB miss
+    const ctx = await resolveGateRepoContext(
+      { target_application: 'EHG_Engineer', metadata: { qf_target_application: 'zzz-nonexistent-venture-xyz' } },
+      client,
+    );
+    expect(ctx.resolved).toBe(false);
+    expect(ctx.repoPath).toBeNull();
+  });
+});
+
+// SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 FR-2: INCOMPLETE_SD_ROW shape guard.
+describe('FR-2 resolveGateRepoContext: INCOMPLETE_SD_ROW shape guard (property presence, not value truthiness)', () => {
+  it('sd with neither target_application nor metadata as an own key → INCOMPLETE_SD_ROW', async () => {
+    const { client, spies } = mockSupabase([]);
+    const ctx = await resolveGateRepoContext({ id: 'x' }, client);
+    expect(ctx.resolved).toBe(false);
+    expect(ctx.reason).toBe('INCOMPLETE_SD_ROW');
+    expect(spies.from).not.toHaveBeenCalled();
+  });
+
+  it('sd with target_application:null and metadata:{} (both keys present) → NOT incomplete, byte-identical to a genuine platform SD', async () => {
+    const { client, spies } = mockSupabase([]);
+    const ctx = await resolveGateRepoContext({ id: 'x', target_application: null, metadata: {} }, client);
+    expect(ctx.resolved).toBe(true);
+    expect(ctx.reason).toBeUndefined();
+    expect(ctx.repoPath).toBe(ENGINEER_ROOT);
+    expect(spies.from).not.toHaveBeenCalled();
   });
 });
