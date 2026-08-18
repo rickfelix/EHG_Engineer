@@ -60,6 +60,11 @@ on:
       # SD's migration and its ddl test would otherwise trigger nothing.
       - 'database/chairman-gated/20260816_close_remaining_secdef_execute_exposure.sql'
       - 'tests/ddl/close-remaining-secdef-execute-exposure-ddl.db.test.js'
+      # SD-FDBK-FIX-VENTURE-CRACK-GATE-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260817_venture_gate_attestations.sql'
+      - 'tests/ddl/venture-gate-attestations-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

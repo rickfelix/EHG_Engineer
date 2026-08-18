@@ -41,6 +41,7 @@ import { runVentureUptimeProbe } from '../../lib/ops/venture-uptime-probe.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
+import { evaluateCrackGateStatus, recordCrackGateObservation } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/venture-ops-actuals-cron.yml';
@@ -49,7 +50,22 @@ const JOBS = [
   { key: 'ops-product-health-collector', owner: 'ops-product-health-collector' },
   { key: 'ops-revenue-metrics-collector', owner: 'ops-revenue-metrics-collector' },
   { key: 'venture-uptime-probe', owner: 'venture-uptime-probe' },
+  { key: 'venture-crack-gate-sweep', owner: 'venture-crack-gate-sweep' },
 ];
+
+/**
+ * SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-4: the detective/primary layer of the no-crack gate.
+ * This is the real distribution choke -- it observes every venture with a live deployment_url
+ * (the same set every job in this file already watches) regardless of HOW that URL went live,
+ * which is why it catches the AltifyAI-shaped incident (a hand-run deploy CLI outside every
+ * other in-repo chokepoint) that a marketing-publish-only check would miss.
+ *
+ * OBSERVE-ONLY: never blocks anything. Writes a system_events row per venture that is NOT_MET
+ * (via the shared recordCrackGateObservation in crack-gate-evaluator.js, also used by the
+ * preventive publish-gate layer), so a queryable dataset exists to justify a future promotion
+ * to enforcing (see FR-9 / the documented promotion criterion in
+ * docs/reference/venture-gate-attestations-guide.md).
+ */
 
 export function parseArgs(argv) {
   const args = { once: false, dryRun: false, help: false };
@@ -199,6 +215,33 @@ export async function main(argv = process.argv, deps = {}) {
     // report checked=0/errors=[] — a silent green pass — even if every venture failed to seed.
     if (!args.dryRun && ventures.length > 0 && probeSummary.checked === 0) {
       logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[2].key} checked 0 deployments across ${ventures.length} venture(s) — investigate before trusting future silent passes.`);
+    }
+  }
+
+  // Job 4: venture crack-gate sweep (SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-4)
+  {
+    const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[3], logger);
+    let checked = 0;
+    let wouldBlock = 0;
+    const errors = [];
+    if (!args.dryRun) {
+      for (const v of ventures) {
+        try {
+          const verdict = await (deps.evaluateCrackGateStatus || evaluateCrackGateStatus)(supabase, v.id);
+          await (deps.recordCrackGateObservation || recordCrackGateObservation)(supabase, v.id, verdict, 'sweep');
+          checked++;
+          if (verdict.overall !== 'MEETS_CRITERION') wouldBlock++;
+        } catch (err) { errors.push(`${v.id}: ${err.message}`); }
+      }
+      try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
+      catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[3].key} (non-fatal): ${err.message}`); }
+    }
+    summary.jobs[JOBS[3].key] = { attempted: ventures.length, checked, would_block: wouldBlock, errors };
+    if (!args.dryRun && ventures.length > 0 && checked === 0) {
+      logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[3].key} checked 0 of ${ventures.length} venture(s) — investigate before trusting future silent passes.`);
+    }
+    if (wouldBlock > 0) {
+      logger.warn?.(`[ops-actuals-sweep] ${wouldBlock} venture(s) would be blocked by the no-crack gate (observe-only, not yet enforcing).`);
     }
   }
 
