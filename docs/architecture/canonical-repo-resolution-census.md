@@ -67,6 +67,21 @@ critical-path slice" this PRD deliberately scoped down to.**
 |---|---|
 | `scripts/modules/handoff/executors/lead-final-approval/gates.js` (`computeReposForSD`, ~line 100-152; literal `rickfelix/ehg` / `rickfelix/EHG_Engineer` at ~line 103-104, 504) | Gates **every SD's** LEAD-FINAL-APPROVAL. risk-agent flagged this HIGH risk — a naive repoint could silently change which repo(s) get scanned for open PRs/unmerged branches across the whole fleet. Requires `regression-agent` golden-master pass first. |
 
+### Related finding from a downstream SD (SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001, 2026-08-18)
+
+A later SD building venture-aware completion-verification instruments
+(`adam-coordinator-health.mjs`'s false-completion sampler, `scope-completion-gate.js`'s
+per-SD deliverable check) confirmed this row's risk assessment empirically without
+touching `computeReposForSD` itself: the canonical `resolveGateRepoContext()` gained a
+`metadata.qf_target_application` fallback tier plus an `isVenture`-vs-`resolved`
+branching fix (two unrelated downstream consumers were silently discarding a
+correctly-resolved EHG-platform repo path, since `isVenture` reads `false` for both
+platform repos, not just non-EHG ones). `computeReposForSD` was deliberately left
+untouched — same golden-master-regression-pass precondition as above — but a live gap
+in its own venture-branch handling was found along the way and signaled to the
+coordinator (evidence id `725bf69b`) rather than fixed inline. Still
+deferred-with-owner; not resolved by this note.
+
 ### Category B — `target_application` inline re-derivation (bare app names, not github owner/repo strings; out of FR-4 lint's literal-string scope by design)
 
 | Site | Notes |
