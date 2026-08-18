@@ -7,10 +7,12 @@
 -- SD: SD-MAN-INFRA-VENTURE-CRACK-GATE-001 (FR-4 / TR-3)
 -- Date: 2026-08-18
 --
--- @approved-by: <PENDING -- worker-authored, chairman approval not yet obtained. Per this
--- directory's separation-of-duties convention (see 20260812_venture_operating_burn_tenant_
--- predicate.sql), a worker authors and stages; the chairman's own terminal, under his own git
--- identity, performs the apply via apply-migration.js's self-consistency check.>
+-- @approved-by: codestreetlabs@gmail.com
+-- Chairman VERBAL approval 2026-08-18 ~10:2xZ, at-terminal morning sitting: "approve item 1"
+-- (item 1 = this file, presented as TOP of the sitting packet with rec+rationale; packet capture
+-- feedback 4b17aa18). Adam-scribed under the ratified chairman-verbal ceremony (worker-transcribe
+-- ruling 5d86e2e3; verbal-suffices-for-gated-applies standing rule), stamped by the applier
+-- identity per checkApproverFactor self-consistency.
 --
 -- ============================================================================================
 -- WHAT IS WRONG TODAY (verified live via pooler catalog query, worker Golf-3 (session
