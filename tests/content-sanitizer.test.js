@@ -130,6 +130,15 @@ describe('content-sanitizer', () => {
       expect(isUntrustedOrigin({ source_type: 'error_capture', source_application: 'record_venture_error' })).toBe(true);
     });
 
+    // EXEC-phase SECURITY sub-agent finding (evidence 37ac0bb7): a second, independently-
+    // discovered instance of the SAME omission class -- fn_submit_venture_feedback (live,
+    // SECURITY DEFINER, anon EXECUTE, secret-gated per venture) writes unsanitized
+    // caller-supplied text under source_type='venture_worker'. This is the value the earlier
+    // "12 live enum values" count below missed -- the live constraint has 13.
+    it("classifies a secret-gated but externally-sourced row (source_type='venture_worker') as untrusted", () => {
+      expect(isUntrustedOrigin({ source_type: 'venture_worker', source_application: 'fn_submit_venture_feedback' })).toBe(true);
+    });
+
     it("classifies an internal row (source_type='manual_feedback') as trusted", () => {
       expect(isUntrustedOrigin({ source_type: 'manual_feedback', source_application: 'EHG_Engineer' })).toBe(false);
     });
@@ -145,9 +154,12 @@ describe('content-sanitizer', () => {
       expect(isUntrustedOrigin({ source_type: 123 })).toBe(true);
     });
 
-    // 'error_capture' removed from this list (TESTING finding B1/FR-3) -- it now has its own
-    // assertion above. 10 remaining trusted values + 'error_capture' + 'user_feedback' (tested
-    // separately as untrusted) = all 12 live feedback_source_type_check enum values accounted for.
+    // 'error_capture' and 'venture_worker' removed from this list (TESTING finding B1/FR-3;
+    // EXEC-phase SECURITY finding evidence 37ac0bb7) -- both now have their own assertions
+    // above. 10 remaining trusted values + 'error_capture' + 'venture_worker' + 'user_feedback'
+    // (both tested separately as untrusted) = all 13 live feedback_source_type_check enum
+    // values accounted for (verified directly against the live pg_constraint definition, not
+    // assumed from a prior count).
     it('treats every other CHECK-constrained source_type value as trusted', () => {
       const trustedTypes = [
         'manual_feedback', 'auto_capture', 'uat_failure',
