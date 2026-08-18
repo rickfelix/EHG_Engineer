@@ -288,14 +288,57 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names(multiFile)).toContain('schema_corruption');
   });
 
-  it('REGRESSION GUARD: FLAGS a line added relative to ALL parents whose content starts with "+" (width-3, was fail-open)', () => {
+  it('REGRESSION GUARD: FLAGS a line added relative to ALL parents (width-3, polarity "+++"), was fail-open', () => {
     // 3-parent (octopus) merge, width 3. Polarity '+++' (added relative to every
-    // parent) immediately followed by content that ALSO starts with '+' -- the raw
-    // line reads '++++ ...'. Pre-FIX-2: the blanket `startsWith('+++')` guard in
-    // addedLinesOnly matched the first 3 characters of ANY qualifying line and
-    // dropped it outright, regardless of width, silently discarding a genuine
-    // width-3 finding.
+    // parent), content 'await run(...)'. Pre-FIX-2: the blanket `startsWith('+++')`
+    // guard in addedLinesOnly matched the first 3 characters of ANY qualifying line
+    // and dropped it outright, regardless of width, silently discarding a genuine
+    // width-3 finding. (TESTING finding F-5, evidence 4ef59b24: this fixture's raw
+    // text is '+++await...' -- polarity '+++' + content starting 'a', NOT content
+    // starting '+' as an earlier version of this comment described. Still validly
+    // source-pins the width-3 '+++'-guard regression; see the next test for the
+    // genuine content-starts-with-'+' case.)
     const octopus = 'diff --cc db.js\nindex 1,2,3..4\n--- a/db.js\n+++ b/db.js\n@@@@ -1,1 -1,1 -1,1 +1,2 @@@@\n+++await run("DROP TABLE users");';
     expect(names(octopus)).toContain('schema_corruption');
+  });
+
+  it('REGRESSION GUARD: FLAGS a line added relative to ALL parents whose CONTENT ALSO starts with "+" (width-3, raw line "++++...")', () => {
+    // Genuine content-starts-with-'+' case: polarity '+++' immediately followed by
+    // content that itself begins with '+', so the raw line reads '++++ "DROP TABLE
+    // users"' (4 literal '+' characters). This is the shape the guard removal in
+    // FIX-2 was actually about -- content, not the polarity prefix, starting '+'.
+    const octopus = 'diff --cc db.js\nindex 1,2,3..4\n--- a/db.js\n+++ b/db.js\n@@@@ -1,1 -1,1 -1,1 +1,2 @@@@\n++++ "DROP TABLE users"';
+    expect(names(octopus)).toContain('schema_corruption');
+  });
+
+  it('REGRESSION GUARD (TESTING finding F-2, evidence 4ef59b24): CRLF-terminated combined-diff headers do not corrupt a later-hunk\'s width bleeding onto an earlier width-1 payload', () => {
+    // A CRLF trailing '\r' on 'diff --cc'/'+++ b/'/'diff --git' header lines defeated
+    // the original '(.+)$' capture (JS '.' excludes '\r', unflagged '$' requires true
+    // end-of-string). A missed boundary collapsed both files into ONE segment; since a
+    // segment's width is read once at flush time (the LAST hunk header seen), file 2's
+    // '@@@' (width 2) retroactively applied to file 1's already-pushed width-1 payload,
+    // slicing 2 chars off its front instead of 1 -- 'DROP TABLE users;' (width 1: 'D'
+    // is the first content char) becomes 'ROP TABLE users;' (width 2 wrongly applied),
+    // and the substring 'DROP' -- required by the CRIT-004 pattern -- is gone entirely.
+    // Non-test paths used deliberately (an earlier draft of this test accidentally used
+    // a '*.test.js' filename, which is genuinely CRIT-004-exempt regardless of this bug
+    // and would have passed for the wrong reason). Fixed via '[^\\r\\n]+' (no trailing
+    // '$') in all three boundary-header regexes, which correctly separates the two
+    // files into their own segments so no cross-file width bleed can occur.
+    const crlf = [
+      'diff --cc lib/a.js\r',
+      'index 1111111,2222222..3333333\r',
+      '--- a/lib/a.js\r',
+      '+++ b/lib/a.js\r',
+      '@@ -1,1 +1,2 @@\r',
+      '+DROP TABLE users;\r',
+      'diff --cc lib/b.js\r',
+      'index 4444444,5555555..6666666\r',
+      '--- a/lib/b.js\r',
+      '+++ b/lib/b.js\r',
+      '@@@ -1,1 -1,1 +1,2 @@@\r',
+      '++const ok = true;\r',
+    ].join('\n');
+    expect(names(crlf)).toContain('schema_corruption');
   });
 });
