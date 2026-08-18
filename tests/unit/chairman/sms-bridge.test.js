@@ -4,7 +4,7 @@
  * in-memory fake Supabase client (no live DB, no live Twilio account required).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { sendChairmanSmsQuestion, handleInboundSmsReply, drainSmsRelayStaging, AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD } from '../../../lib/chairman/sms-bridge.js';
+import { sendChairmanSmsQuestion, handleInboundSmsReply, drainSmsRelayStaging, resolveAllParkedChairmanSmsRows, AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD } from '../../../lib/chairman/sms-bridge.js';
 import { isMessagingProvider } from '../../../lib/messaging/messaging-provider.js';
 
 /** Minimal in-memory multi-table fake supporting the exact query shapes sms-bridge.js uses. */
@@ -448,5 +448,34 @@ describe('drainSmsRelayStaging', () => {
     await expect(drainSmsRelayStaging(sb)).rejects.toThrow(/transient DB error/);
     // The claim was rolled back so the row is retryable, not lost.
     expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-throw').drained_at).toBe(null);
+  });
+});
+
+// QF-20260818-263: bulk disposition — a reply resolves EVERY currently-parked row, not just one,
+// matching the measured live incident (two rows, 18a07a83+2902dab6, answered by a single reply).
+describe('resolveAllParkedChairmanSmsRows', () => {
+  it('stamps resolved_at on every parked+unresolved row, leaving others untouched', async () => {
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'parked-1', parked_at: '2026-08-18T12:00:00Z', resolved_at: null },
+        { id: 'parked-2', parked_at: '2026-08-18T12:05:00Z', resolved_at: null },
+        { id: 'already-resolved', parked_at: '2026-08-18T11:00:00Z', resolved_at: '2026-08-18T11:30:00Z' },
+        { id: 'never-parked', parked_at: null, resolved_at: null },
+      ],
+    });
+    const { resolvedCount, resolvedIds } = await resolveAllParkedChairmanSmsRows(sb);
+    expect(resolvedCount).toBe(2);
+    expect(resolvedIds.sort()).toEqual(['parked-1', 'parked-2']);
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'parked-1').resolved_at).not.toBeNull();
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'parked-2').resolved_at).not.toBeNull();
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'already-resolved').resolved_at).toBe('2026-08-18T11:30:00Z');
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'never-parked').resolved_at).toBeNull();
+  });
+
+  it('is a no-op when nothing is currently parked', async () => {
+    const sb = makeFakeSupabase({ sms_relay_staging: [{ id: 'x', parked_at: null, resolved_at: null }] });
+    const { resolvedCount, resolvedIds } = await resolveAllParkedChairmanSmsRows(sb);
+    expect(resolvedCount).toBe(0);
+    expect(resolvedIds).toEqual([]);
   });
 });
