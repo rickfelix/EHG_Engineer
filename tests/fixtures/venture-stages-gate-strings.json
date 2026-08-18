@@ -1,0 +1,257 @@
+[
+  {
+    "stage_number": 1,
+    "stage_name": "Draft Idea",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "Title validated (3-120 chars)",
+          "Description validated (20-2000 chars)",
+          "Category assigned"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 2,
+    "stage_name": "AI Review",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "Multi-model pass complete",
+          "Contrarian review done",
+          "Top-5 risks identified"
+        ],
+        "entry": [
+          "Idea document complete"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 3,
+    "stage_name": "Comprehensive Validation",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "Validation score >= 6",
+          "Chairman decision: advance/revise/reject"
+        ],
+        "entry": [
+          "AI critique complete"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 4,
+    "stage_name": "Competitive Intelligence",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 5,
+    "stage_name": "Profitability Forecasting",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "Financial model complete",
+          "Unit economics viable"
+        ],
+        "entry": [
+          "Competitive analysis complete"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 6,
+    "stage_name": "Risk Evaluation",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 7,
+    "stage_name": "Revenue Architecture",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 8,
+    "stage_name": "Business Model Canvas",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 9,
+    "stage_name": "Exit Strategy",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 10,
+    "stage_name": "Customer & Brand Foundation",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 11,
+    "stage_name": "Naming & Visual Identity",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 12,
+    "stage_name": "GTM & Sales Strategy",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 13,
+    "stage_name": "Product Roadmap",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 14,
+    "stage_name": "Technical Architecture",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 15,
+    "stage_name": "Design Studio",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 16,
+    "stage_name": "Financial Projections",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 17,
+    "stage_name": "Blueprint Review",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 18,
+    "stage_name": "Marketing Copy Studio",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 19,
+    "stage_name": "Sprint Planning",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "spend guardrails ready",
+          "Application deployed",
+          "GitHub repo URL stored in venture_resources"
+        ],
+        "entry": [
+          "Marketing copy complete",
+          "GitHub repo seeded"
+        ],
+        "exit_observe": [
+          "stack descriptor valid",
+          "deployment target provisioned"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 20,
+    "stage_name": "Code Quality Gate",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "No critical security issues",
+          "No exposed secrets",
+          "Lint passes"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 21,
+    "stage_name": "Distribution Setup",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 22,
+    "stage_name": "Visual Assets",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 23,
+    "stage_name": "Launch Readiness",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "All categories green OR chairman override"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 24,
+    "stage_name": "Go Live & Announce",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "Launch triggered",
+          "All channels activated"
+        ],
+        "entry": [
+          "Launch readiness PASS"
+        ],
+        "exit_observe": [
+          "pages url live",
+          "compute deployed",
+          "publish evidence recorded"
+        ]
+      }
+    }
+  },
+  {
+    "stage_number": 25,
+    "stage_name": "Post-Launch Review",
+    "metadata": {
+      "gates": {}
+    }
+  },
+  {
+    "stage_number": 26,
+    "stage_name": "Growth Playbook",
+    "metadata": {
+      "gates": {
+        "exit": [
+          "growth_playbook",
+          "growth_optimization_roadmap"
+        ]
+      }
+    }
+  }
+]
