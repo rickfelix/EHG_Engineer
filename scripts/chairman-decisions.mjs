@@ -17,6 +17,7 @@ import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY, DISPOSITION_SELECT }
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 import { resolveAndWriteChairmanSiteReviewAttestation } from '../lib/eva/bridge/chairman-site-review-attestation.js';
+import { resolveAndRunAcquisitionPipeline } from '../lib/eva/bridge/domain-acquisition-trigger.js';
 
 const parsed = parseArgs(process.argv.slice(2));
 if (parsed.error) {
@@ -122,6 +123,21 @@ const writers = {
     } catch (attestErr) {
       result.chairman_site_review_attestation_error = attestErr.message;
       console.error('[chairman-decisions] chairman_site_review attestation FAILED (non-fatal, primary decision already recorded): ' + attestErr.message);
+    }
+
+    // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-10 (class j): the same trigger point as FR-3's
+    // attestation bridge -- runPostApprovalPipeline's own doc comment names fn_chairman_decide
+    // (approved) as its exact intended trigger event. Plan-mode only (no registrar/execute deps);
+    // never blocks or unwinds the primary chairman_decisions write above.
+    try {
+      const pipeline = await resolveAndRunAcquisitionPipeline(db, { decisionId: id, action });
+      result.domain_acquisition_pipeline = pipeline;
+      if (!pipeline.ran) {
+        console.error(`[chairman-decisions] domain-acquisition pipeline not run: ${pipeline.reason}`);
+      }
+    } catch (pipelineErr) {
+      result.domain_acquisition_pipeline_error = pipelineErr.message;
+      console.error('[chairman-decisions] domain-acquisition pipeline FAILED (non-fatal, primary decision already recorded): ' + pipelineErr.message);
     }
 
     return result;
