@@ -11,6 +11,8 @@
  * route to EHG without manual --venture intervention.
  */
 
+import { isVentureRepo } from '../../../../../../lib/repo-paths.js';
+
 // Path-prefix substrings that vote toward each application. Matches are
 // case-sensitive substring checks against `key_changes[].change` strings.
 // Update review date in the comment block below when patterns change.
@@ -129,6 +131,45 @@ export function detectPathSignalFromSd(sd) {
  * @returns {Object} Validation result
  */
 export async function validateTargetApplication(sd, supabase) {
+  // SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-B (FR-2): re-derive target_application
+  // from metadata.qf_target_application BEFORE any scope-vocabulary inference below.
+  // This is a backfill-only path for SDs escalated before FR-1's writer-side fix --
+  // once FR-1 is live, a new venture-QF escalation already carries the correct
+  // target_application and target_application_explicit=true, so this branch never
+  // fires for it (the explicit-flag guard below skips it). MUST run first: testing-agent
+  // mutation testing (evidence c636ba21) proved a check placed later -- e.g. only after
+  // the explicit-flag branch further down -- is unreachable on 3 of 5 realistic prose
+  // shapes, because unrelated prose-vocabulary branches return first. One of those
+  // (react+ui-component+src/components/-shaped prose) actively WRITES target_application
+  // to a wrong platform value before a later-placed check could ever run -- actively
+  // worse than doing nothing for the front-end-venture population this exists to serve.
+  if (sd?.metadata?.target_application_explicit !== true) {
+    const qfTargetApp = sd?.metadata?.qf_target_application;
+    // typeof guard: isVentureRepo() throws on a non-string truthy value.
+    if (typeof qfTargetApp === 'string' && isVentureRepo(qfTargetApp) && qfTargetApp !== sd.target_application) {
+      console.log(`\n   ℹ️  metadata.qf_target_application ('${qfTargetApp}') differs from target_application ('${sd.target_application || '(not set)'}') -- correcting before scope-vocabulary inference (backfill path).`);
+      const { error } = await supabase
+        .from('strategic_directives_v2')
+        .update({ target_application: qfTargetApp })
+        .eq('id', sd.id);
+      if (error) {
+        console.log(`   ❌ Failed to update: ${error.message}`);
+        return {
+          pass: false,
+          score: 0,
+          issues: [`Could not set target_application from metadata.qf_target_application: ${error.message}`]
+        };
+      }
+      console.log(`   ✅ target_application corrected to: ${qfTargetApp} (from metadata.qf_target_application)`);
+      return {
+        pass: true,
+        score: 100,
+        issues: [],
+        warnings: [`target_application corrected from ${sd.target_application || '(not set)'} to ${qfTargetApp} via metadata.qf_target_application re-derivation (backfill path for SDs escalated before SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-B)`]
+      };
+    }
+  }
+
   const scope = (sd.scope || sd.description || '').toLowerCase();
   const title = (sd.title || '').toLowerCase();
   const combinedText = `${scope} ${title}`;
