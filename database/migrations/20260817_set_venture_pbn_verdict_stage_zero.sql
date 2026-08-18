@@ -74,8 +74,17 @@ BEGIN
     -- Single-level path: create_missing correctly creates "stage_zero" itself when absent (a
     -- two-level path here would silently fail to — see header comment). The || merge preserves
     -- any other keys already inside stage_zero (solution, target_market, ...); only pbn_verdict
-    -- is set/overwritten.
-    COALESCE(metadata -> 'stage_zero', '{}'::jsonb) || jsonb_build_object('pbn_verdict', p_pbn_verdict),
+    -- is set/overwritten. KNOWN GAP (round-3 adversarial review, not fixed to full depth: 0 of
+    -- 152 live ventures have this shape today): `||` only merges two jsonb OBJECTS — if
+    -- metadata->stage_zero exists but is non-object (a malformed string/number/array, not the
+    -- 'null' case, which is handled separately below), `object || non-object` degrades into an
+    -- array-concatenation rather than raising, which would silently produce a corrupted
+    -- {"stage_zero":[<garbage>, {...}]} shape. The CASE below treats that (rare, currently
+    -- nonexistent) case the same as "absent" — safe (no corruption) but not fail-closed the way
+    -- a malformed-data RAISE would be; left as documented, not hardened further, since it cannot
+    -- occur against any live venture today.
+    CASE WHEN jsonb_typeof(metadata -> 'stage_zero') = 'object' THEN metadata -> 'stage_zero' ELSE '{}'::jsonb END
+      || jsonb_build_object('pbn_verdict', p_pbn_verdict),
     true
   )
   WHERE id = p_venture_id
