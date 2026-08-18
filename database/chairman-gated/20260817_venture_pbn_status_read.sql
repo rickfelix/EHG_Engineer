@@ -1,8 +1,11 @@
 -- SD-FDBK-FIX-VENTURE-CRACK-GATE-001 — PLAN/Gate-1 database design (DRAFT for EXEC)
 -- The PBN READ PATH. Companion to 20260817_venture_gate_attestations.sql; independently applicable.
 --
--- @approved-by:
---   ^ INTENTIONALLY BLANK. checkApproverFactor() fails closed on a missing header.
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman VERBAL approval 2026-08-18 ~10:2xZ, at-terminal morning sitting: "approve item 2"
+--   (item 2 = this file + 20260817_venture_gate_attestations.sql; packet capture 54bae512).
+--   Adam-scribed under the ratified chairman-verbal ceremony (worker-transcribe ruling 5d86e2e3).
+--   (Original header: INTENTIONALLY BLANK pending chairman approval — now obtained.)
 --
 -- ============================================================================
 -- THE PROBLEM THIS SOLVES, MEASURED LIVE THIS SESSION (pooler, not read from a file):
