@@ -2,6 +2,10 @@
 // Real per-FR delivery classification + default-OFF warn-only enforcement + approver descope.
 
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   isFrTraceabilityEnforced,
   frIdOf,
@@ -13,6 +17,10 @@ import {
   frUnverifiableCeiling,
   NOT_MEASURED_SCORE,
   ERRORED_SCORE,
+  classifyPhaseBucket,
+  isExecPhaseOrLater,
+  extractRegexFrMentions,
+  resolveTestingEvidenceCoverage,
 } from '../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js';
 
 describe('FR-2: isFrTraceabilityEnforced — default OFF', () => {
@@ -325,5 +333,341 @@ describe('frIdOf', () => {
   it('uses fr.id then falls back to FR-<n>', () => {
     expect(frIdOf({ id: 'FR-009' }, 0)).toBe('FR-009');
     expect(frIdOf({}, 3)).toBe('FR-4');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001 — testing_evidence second signal
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Extended stub: also serves sub_agent_execution_results (TESTING rows), a table the plain
+// stub() above always answers with []. Kept separate so every pre-existing test above (asserted
+// against stub()'s exact shape) stays untouched.
+function stubWithTesting({ stories = [], testingRows = [], testingError = null } = {}) {
+  return {
+    from(table) {
+      const chain = {
+        select() { return chain; },
+        eq() { return chain; },
+        maybeSingle() { return Promise.resolve({ data: null, error: null }); },
+        then(res) {
+          if (table === 'user_stories') return Promise.resolve({ data: stories, error: null }).then(res);
+          if (table === 'sub_agent_execution_results') {
+            return Promise.resolve(testingError ? { data: null, error: testingError } : { data: testingRows, error: null }).then(res);
+          }
+          return Promise.resolve({ data: [], error: null }).then(res);
+        },
+      };
+      return chain;
+    },
+  };
+}
+
+function testingRow({ id, phase, coverage = [], ...text }) {
+  return { id, phase, metadata: { fr_coverage: coverage }, ...text };
+}
+
+const FRS3 = [{ id: 'FR-1' }, { id: 'FR-2' }, { id: 'FR-3' }];
+
+describe('FR-3/TR-2/TR-6: classifyPhaseBucket / isExecPhaseOrLater — measured, normalized allow-list', () => {
+  const admitted = ['EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL', 'COMPLETED', 'PLAN_VERIFY', 'PLAN_VERIFICATION', 'EXEC_IMPLEMENTATION', 'EXEC_COMPLETE', 'orchestrated'];
+  const rejected = ['LEAD', 'PLAN', 'PLAN_TO_EXEC'];
+
+  it('AC-2/AC-3: admits EXEC-or-later phases, including spelling variants and PLAN-prefixed chronological outliers', () => {
+    for (const p of admitted) {
+      expect(isExecPhaseOrLater(p)).toBe(true);
+      expect(classifyPhaseBucket(p)).toBe('admitted');
+    }
+  });
+  it('AC-4: rejects known pre-EXEC phases', () => {
+    for (const p of rejected) {
+      expect(isExecPhaseOrLater(p)).toBe(false);
+      expect(classifyPhaseBucket(p)).toBe('rejected');
+    }
+  });
+  it('AC-1: table-driven over the full measured census, not hand-picked examples', () => {
+    for (const p of [...admitted, ...rejected]) {
+      expect(['admitted', 'rejected']).toContain(classifyPhaseBucket(p));
+    }
+  });
+  it('TS-R2 (closes R2): an unrecognized phase (PLAN_PRD, the largest real unrecognized-bucket value) fails closed, distinct from an explicit rejection', () => {
+    expect(classifyPhaseBucket('PLAN_PRD')).toBe('unrecognized');
+    expect(isExecPhaseOrLater('PLAN_PRD')).toBe(false);
+  });
+  it('null/undefined/empty fail closed', () => {
+    for (const p of [null, undefined, '']) expect(isExecPhaseOrLater(p)).toBe(false);
+  });
+});
+
+describe('FR-1: extractRegexFrMentions — report-only, phase-unfiltered, excludes its own fr_coverage', () => {
+  it('AC-1: a LEAD-phase prose mention with no fr_coverage entry is captured, tagged with its phase', () => {
+    const frs = [{ id: 'FR-3' }];
+    const rows = [{ id: 'row-1', phase: 'LEAD', detailed_analysis: 'Risk: FR-3 may need more coverage', metadata: {} }];
+    expect(extractRegexFrMentions(rows, frs)).toContainEqual({ fr_id: 'FR-3', sub_agent_result_id: 'row-1', phase: 'LEAD' });
+  });
+  it("AC-2: a fr_coverage entry's own fr_id does not itself produce a hit merely by existing in metadata JSON", () => {
+    const frs = [{ id: 'FR-3' }];
+    const rows = [{ id: 'row-1', phase: 'EXEC', metadata: { fr_coverage: [{ fr_id: 'FR-3', status: 'delivered', test_ref: 'x' }] } }];
+    expect(extractRegexFrMentions(rows, frs)).toEqual([]);
+  });
+  it('scans across all phases, not just EXEC-or-later', () => {
+    const frs = [{ id: 'FR-1' }];
+    const rows = [{ id: 'row-1', phase: 'PLAN_TO_EXEC', summary: 'mentions FR-1 in passing', metadata: {} }];
+    expect(extractRegexFrMentions(rows, frs).map((m) => m.fr_id)).toEqual(['FR-1']);
+  });
+});
+
+describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized match, unmatched diagnostics', () => {
+  it('AC-1: a schema-valid, matched entry on an admitted phase promotes', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/foo.test.js:42' }] })];
+    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    expect(r.matchedTestingCoverage).toEqual([{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/foo.test.js:42', sub_agent_result_id: 'r1' }]);
+    expect(r.testingEvidenceRowsSeen).toBe(1);
+  });
+  it('AC-2: fr_id matching is normalized (case-insensitive)', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'fr-2', status: 'delivered', test_ref: 'x' }] })];
+    expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toHaveLength(1);
+  });
+  it('AC-3: an unmatched fr_id is recorded, not silently dropped, and does not promote', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-99', status: 'delivered', test_ref: 'x' }] })];
+    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    expect(r.matchedTestingCoverage).toEqual([]);
+    expect(r.unmatchedFrCoverageIds).toEqual(['FR-99']);
+  });
+  it('rejects each of the 5 measured production shapes, including the dangerous bare-scalar-string case, without throwing', () => {
+    const shapes = [
+      { 'FR-1': 'some prose describing coverage' },  // object-keyed-by-FR-id prose
+      ['FR-1', 'FR-2'],                                // array-of-plain-id-strings
+      { covered: 'FR-1 and FR-2' },                    // object-keyed-by-prose-label
+      { fr_coverage_check: true },                     // fr_coverage_check variant
+      '7/7',                                           // bare scalar string (TR-1's flagged dangerous case)
+    ];
+    for (const coverage of shapes) {
+      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { fr_coverage: coverage } }];
+      expect(() => resolveTestingEvidenceCoverage(rows, FRS3)).not.toThrow();
+      expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
+    }
+  });
+  it('an unrecognized-phase row is diagnosed separately and does not count toward testingEvidenceRowsSeen', () => {
+    const rows = [testingRow({ id: 'r1', phase: 'PLAN_PRD', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
+    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    expect(r.matchedTestingCoverage).toEqual([]);
+    expect(r.unrecognizedPhaseRows).toEqual([{ sub_agent_result_id: 'r1', phase: 'PLAN_PRD' }]);
+    expect(r.testingEvidenceRowsSeen).toBe(0);
+  });
+});
+
+describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', () => {
+  it('TS-1 (Fixture A): story-delivered FRs classify delivered via the unchanged story signal', async () => {
+    const stories = [{ id: 's1', title: 'covers FR-1 FR-2 FR-3', status: 'completed' }];
+    const c = await classifyFrDelivery(stubWithTesting({ stories }), { sdId: 'sd-ts1', functionalRequirements: FRS3 });
+    expect(c.delivered).toBe(3);
+    expect(c.frs.every((f) => f.status === 'delivered' && f.delivery_basis === 'story')).toBe(true);
+  });
+
+  it('TS-2 (Fixture B, regression proof): a sibling FR without a reference is genuinely undelivered', async () => {
+    const frs = [{ id: 'FR-1' }, { id: 'FR-2' }, { id: 'FR-3' }, { id: 'FR-4' }];
+    const stories = [{ id: 's1', title: 'covers FR-1 FR-2 FR-3', status: 'completed' }];
+    const c = await classifyFrDelivery(stubWithTesting({ stories }), { sdId: 'sd-ts2', functionalRequirements: frs });
+    expect(c.frs.find((f) => f.id === 'FR-4').status).toBe('undelivered');
+  });
+
+  it('TS-3-zero (Fixture C-zero, non-regression): zero stories + zero TESTING evidence -> undelivered, not unverifiable', async () => {
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: [] }), { sdId: 'sd-ts3zero', functionalRequirements: FRS3 });
+    expect(c.undelivered).toBe(3);
+    expect(c.unverifiable).toBe(0);
+  });
+
+  it('TS-3 (Fixture C, genuine unverifiable): a validated story exists but references no FR', async () => {
+    const stories = [{ id: 's1', title: 'unrelated work', status: 'completed' }];
+    const c = await classifyFrDelivery(stubWithTesting({ stories }), { sdId: 'sd-ts3', functionalRequirements: FRS3 });
+    expect(c.has_work_product).toBe(true);
+    expect(c.convention_in_use).toBe(false);
+    expect(c.unverifiable).toBe(3);
+  });
+
+  it('TS-4 (Fixture D): EXEC-phase fr_coverage promotes via testing_evidence with no story; sibling is undelivered (not unverifiable) and its evidence does not falsely claim nothing was built', async () => {
+    const frs = [{ id: 'FR-2' }, { id: 'FR-3' }];
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/x.test.js:10' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-ts4', functionalRequirements: frs });
+    const fr2 = c.frs.find((f) => f.id === 'FR-2');
+    const fr3 = c.frs.find((f) => f.id === 'FR-3');
+    expect(fr2.status).toBe('delivered');
+    expect(fr2.delivery_basis).toBe('testing_evidence');
+    expect(fr3.status).toBe('undelivered');
+    expect(fr3.evidence).not.toMatch(/nothing was built/i);
+    expect(c.has_work_product).toBe(true);
+    expect(c.convention_in_use).toBe(true);
+  });
+
+  it('TS-5 (Fixture D-negative): identical fr_coverage on a LEAD-phase row is rejected by the phase filter and does not count as work product', async () => {
+    const frs = [{ id: 'FR-2' }, { id: 'FR-3' }];
+    const rows = [testingRow({ id: 'r1', phase: 'LEAD', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/x.test.js:10' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-ts5', functionalRequirements: frs });
+    expect(c.has_work_product).toBe(false);
+    expect(c.frs.find((f) => f.id === 'FR-2').status).toBe('undelivered');
+    expect(c.testing_evidence_rows_seen).toBe(0);
+  });
+
+  it('TS-6: a LEAD-phase risk-flagging prose mention (no fr_coverage) does not change delivery status, present vs absent', async () => {
+    const frs = [{ id: 'FR-3' }];
+    const withMention = [{ id: 'r1', phase: 'LEAD', detailed_analysis: 'Risk: FR-3 needs attention', metadata: {} }];
+    const c1 = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: withMention }), { sdId: 'sd-ts6', functionalRequirements: frs });
+    const c2 = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: [] }), { sdId: 'sd-ts6', functionalRequirements: frs });
+    expect(c1.frs[0].status).toBe(c2.frs[0].status);
+    expect(c1.undelivered).toBe(c2.undelivered);
+    expect(c1.regex_fr_mentions.length).toBeGreaterThan(0);
+    expect(c2.regex_fr_mentions.length).toBe(0);
+  });
+
+  it('TS-6b: a PLAN_TO_EXEC-phase prose mention (no fr_coverage) is a second, independent non-load-bearing witness', async () => {
+    const frs = [{ id: 'FR-4' }];
+    const withMention = [{ id: 'r1', phase: 'PLAN_TO_EXEC', summary: 'pre-implementation note about FR-4', metadata: {} }];
+    const c1 = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: withMention }), { sdId: 'sd-ts6b', functionalRequirements: frs });
+    const c2 = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: [] }), { sdId: 'sd-ts6b', functionalRequirements: frs });
+    expect(c1.frs[0].status).toBe(c2.frs[0].status);
+    expect(c1.regex_fr_mentions.length).toBeGreaterThan(0);
+  });
+
+  it('TS-7: malformed real-world fr_coverage shapes never throw and never promote (classifyFrDelivery level)', async () => {
+    const shapes = [{ 'FR-1': 'prose' }, ['FR-1', 'FR-2'], { covered: 'FR-1' }, { fr_coverage_check: true }, '7/7'];
+    for (const shape of shapes) {
+      const rows = [{ id: 'r1', phase: 'EXEC', metadata: { fr_coverage: shape } }];
+      const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-ts7', functionalRequirements: FRS3 });
+      expect(c.delivered).toBe(0);
+    }
+  });
+
+  it('TS-8: only the measured EXEC-or-later allow-list promotes, across spelling variants; LEAD/PLAN/PLAN_TO_EXEC do not', async () => {
+    const admittedPhases = ['EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL', 'COMPLETED', 'PLAN_VERIFY', 'PLAN_VERIFICATION', 'EXEC_IMPLEMENTATION', 'EXEC_COMPLETE', 'orchestrated'];
+    const rejectedPhases = ['LEAD', 'PLAN', 'PLAN_TO_EXEC'];
+    const allPhases = [...admittedPhases, ...rejectedPhases];
+    const frs = allPhases.map((_, i) => ({ id: `FR-${i + 1}` }));
+    const rows = allPhases.map((phase, i) => testingRow({ id: `r${i}`, phase, coverage: [{ fr_id: `FR-${i + 1}`, status: 'delivered', test_ref: 'x' }] }));
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-ts8', functionalRequirements: frs });
+    for (let i = 0; i < admittedPhases.length; i++) {
+      expect(c.frs[i].status).toBe('delivered');
+    }
+    for (let i = admittedPhases.length; i < allPhases.length; i++) {
+      expect(c.frs[i].status).not.toBe('delivered');
+    }
+  });
+
+  it('TS-8b: a COMPLETED-phase row promotes (non-regression against the corrected D2/N4 measurement)', async () => {
+    const frs = [{ id: 'FR-1' }];
+    const rows = [testingRow({ id: 'r1', phase: 'COMPLETED', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-ts8b', functionalRequirements: frs });
+    expect(c.frs[0].status).toBe('delivered');
+    expect(c.frs[0].delivery_basis).toBe('testing_evidence');
+  });
+
+  it('TS-conflict: story wins over a conflicting fr_coverage entry; the conflict is surfaced, not silently dropped', async () => {
+    const frs = [{ id: 'FR-1' }];
+    const stories = [{ id: 's1', title: 'delivers FR-1', status: 'completed' }];
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-1', status: 'undelivered', test_ref: 'x' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories, testingRows: rows }), { sdId: 'sd-tsconflict', functionalRequirements: frs });
+    expect(c.frs[0].status).toBe('delivered');
+    expect(c.frs[0].delivery_basis).toBe('story');
+    expect(c.conflicting_signals).toEqual([{ fr_id: 'FR-1', story_says: 'delivered', testing_evidence_says: 'undelivered' }]);
+  });
+
+  it('TS-N1 (closes N1): an admitted TESTING row with no valid fr_coverage entries does not count as work product', async () => {
+    for (const coverage of [[], [{ nope: true }]]) {
+      const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage })];
+      const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-tsn1', functionalRequirements: FRS3 });
+      expect(c.has_work_product).toBe(false);
+      expect(c.undelivered).toBe(3);
+      expect(c.unverifiable).toBe(0);
+      expect(c.testing_evidence_rows_seen).toBe(1);
+    }
+  });
+
+  it('TS-N2 (closes N2): an unmatched fr_coverage entry does not flip siblings from unverifiable to undelivered', async () => {
+    const stories = [{ id: 's1', title: 'unrelated work', status: 'completed' }];
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-99', status: 'delivered', test_ref: 'x' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories, testingRows: rows }), { sdId: 'sd-tsn2', functionalRequirements: FRS3 });
+    expect(c.convention_in_use).toBe(false);
+    expect(c.unverifiable).toBe(3);
+    expect(c.undelivered).toBe(0);
+    expect(c.unmatched_fr_coverage_ids).toEqual(['FR-99']);
+  });
+
+  it('AC-8/R7: a matched entry explicitly marked undelivered proves the convention is in use, at least as strongly as no evidence', async () => {
+    const stories = [{ id: 's1', title: 'unrelated work', status: 'completed' }]; // Fixture C setup: hasWorkProduct via story, references no FR
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'undelivered', test_ref: 'x' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories, testingRows: rows }), { sdId: 'sd-r7', functionalRequirements: FRS3 });
+    expect(c.convention_in_use).toBe(true);
+    expect(c.frs.find((f) => f.id === 'FR-2').status).toBe('undelivered');
+    expect(c.unverifiable).toBe(0);
+    expect(c.undelivered).toBe(3);
+  });
+
+  it('TS-R2 (closes R2): an unrecognized-phase row (PLAN_PRD) does not promote and is separately diagnosed', async () => {
+    const frs = [{ id: 'FR-1' }];
+    const rows = [testingRow({ id: 'r1', phase: 'PLAN_PRD', coverage: [{ fr_id: 'FR-1', status: 'delivered', test_ref: 'x' }] })];
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: rows }), { sdId: 'sd-tsr2', functionalRequirements: frs });
+    expect(c.frs[0].status).not.toBe('delivered');
+    expect(c.unrecognized_phase_rows).toEqual([{ sub_agent_result_id: 'r1', phase: 'PLAN_PRD' }]);
+  });
+
+  it('TR-3: a bound query error degrades gracefully to story-only behavior, not a thrown exception', async () => {
+    const stories = [{ id: 's1', title: 'covers FR-1', status: 'completed' }];
+    const c = await classifyFrDelivery(stubWithTesting({ stories, testingError: { message: 'boom' } }), { sdId: 'sd-tr3', functionalRequirements: [{ id: 'FR-1' }, { id: 'FR-2' }] });
+    expect(c.frs.find((f) => f.id === 'FR-1').status).toBe('delivered');
+    expect(c.testing_evidence_rows_seen).toBe(0);
+  });
+});
+
+describe('TS-10: consuming gates tolerate the extended classification shape', () => {
+  it('a classification with all new fields present but empty produces byte-identical scoring/warnings to the pre-extension shape', () => {
+    const base = { frs: [{ id: 'FR-002', description: 'b', status: 'undelivered' }, { id: 'FR-001', description: 'a', status: 'delivered' }], total: 2, delivered: 1, descoped: 0, undelivered: 1, unverifiable: 0 };
+    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], conflicting_signals: [], unrecognized_phase_rows: [] };
+    const rBase = projectGateResult(base, { enforced: true });
+    const rExtended = projectGateResult(extended, { enforced: true });
+    expect(rExtended.passed).toBe(rBase.passed);
+    expect(rExtended.score).toBe(rBase.score);
+    expect(rExtended.issues).toEqual(rBase.issues);
+    expect(rExtended.warnings).toEqual(rBase.warnings);
+  });
+});
+
+describe('TR-5/TS-9: mutation test — regex_fr_mentions is genuinely non-load-bearing', () => {
+  const SOURCE_PATH = fileURLToPath(new URL('../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js', import.meta.url));
+  const ANCHOR = 'const deliveredBy = validated.find((s) => frReferencesId(s, id));';
+  const MUTATED = "const deliveredBy = validated.find((s) => frReferencesId(s, id)) || (regexFrMentions.some((m) => String(m.fr_id).trim().toUpperCase() === String(id).trim().toUpperCase()) ? { id: '__MUTATION_REGEX_WITNESS__' } : undefined);";
+
+  it('wiring regex_fr_mentions into deliveredBy resolution makes TS-6 and TS-6b fail, by name', async () => {
+    const source = readFileSync(SOURCE_PATH, 'utf8');
+    const occurrences = source.split(ANCHOR).length - 1;
+    expect(occurrences).toBe(1); // the pinned anchor must exist exactly once, end-anchored, for a hermetic mutation
+    const mutatedSource = source.replace(ANCHOR, MUTATED);
+
+    const tempPath = join(tmpdir(), `fr-delivery-classifier.mutated.${Date.now()}.${Math.random().toString(36).slice(2)}.mjs`);
+    writeFileSync(tempPath, mutatedSource, 'utf8');
+    try {
+      const mutated = await import(pathToFileURL(tempPath).href);
+
+      // TS-6 witness: LEAD-phase prose mention of FR-3, no fr_coverage entry.
+      const ts6Rows = [{ id: 'r1', phase: 'LEAD', detailed_analysis: 'Risk: FR-3 needs attention', metadata: {} }];
+      const ts6Mutated = await mutated.classifyFrDelivery(stubWithTesting({ stories: [], testingRows: ts6Rows }), { sdId: 'sd-mut-ts6', functionalRequirements: [{ id: 'FR-3' }] });
+      expect(ts6Mutated.frs[0].status).toBe('delivered'); // TS-6 witness FAILS (flips) under the mutation
+
+      // TS-6b witness: PLAN_TO_EXEC-phase prose mention of FR-4, no fr_coverage entry.
+      const ts6bRows = [{ id: 'r1', phase: 'PLAN_TO_EXEC', summary: 'pre-implementation note about FR-4', metadata: {} }];
+      const ts6bMutated = await mutated.classifyFrDelivery(stubWithTesting({ stories: [], testingRows: ts6bRows }), { sdId: 'sd-mut-ts6b', functionalRequirements: [{ id: 'FR-4' }] });
+      expect(ts6bMutated.frs[0].status).toBe('delivered'); // TS-6b witness FAILS (flips) under the mutation too
+    } finally {
+      unlinkSync(tempPath);
+    }
+  });
+
+  it('sanity: the SAME fixtures do NOT flip under the real, unmutated module', async () => {
+    const ts6Rows = [{ id: 'r1', phase: 'LEAD', detailed_analysis: 'Risk: FR-3 needs attention', metadata: {} }];
+    const c1 = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: ts6Rows }), { sdId: 'sd-real-ts6', functionalRequirements: [{ id: 'FR-3' }] });
+    expect(c1.frs[0].status).not.toBe('delivered');
+
+    const ts6bRows = [{ id: 'r1', phase: 'PLAN_TO_EXEC', summary: 'pre-implementation note about FR-4', metadata: {} }];
+    const c2 = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: ts6bRows }), { sdId: 'sd-real-ts6b', functionalRequirements: [{ id: 'FR-4' }] });
+    expect(c2.frs[0].status).not.toBe('delivered');
   });
 });

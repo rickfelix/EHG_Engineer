@@ -134,6 +134,156 @@ export function descopeFor(sdMetadata, frId, requesterSessionId = null) {
 }
 
 /**
+ * SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001 — a second, TESTING-evidence-backed delivery
+ * signal for SD types (e.g. infrastructure) that are not required to have user stories, so the
+ * story-only signal above structurally never fires and every FR reads UNVERIFIABLE by
+ * construction. Two independently-measured, iteratively-corrected design constraints (see the
+ * prospective TESTING evidence rows referenced in this SD's PRD, product_requirements_v2 id
+ * PRD-SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001, for the full derivation):
+ *   1. A regex scan of TESTING evidence PROSE is a CLAIM, not proof — LEAD-phase evidence
+ *      commonly names an FR to flag RISK, not to confirm delivery. Measured: promoting on that
+ *      regex would falsely mark 9/16 currently-blind infra SDs as 100% delivered. It stays a
+ *      report-only diagnostic (regexFrMentions below), never consulted for delivery, phase, or
+ *      conventionInUse.
+ *   2. The only delivery-promoting testing signal is a STRUCTURED, schema-valid,
+ *      fr_id-MATCHED, phase-admitted metadata.fr_coverage entry. "Schema-valid" alone is not
+ *      enough (a valid-shaped entry can still name a nonexistent FR); "a row exists" alone is
+ *      not enough (74% of FR-carrying SDs have >=1 TESTING row at every handoff regardless of
+ *      whether it says anything about FR coverage) — both were tried and both let one row
+ *      silently swing every OTHER FR's classification, measured at 3/50 real SDs flipping
+ *      undelivered (blocks under enforcement) to unverifiable (never blocks, default ceiling
+ *      1.0). Only genuinely matched entries count toward hasWorkProduct/conventionInUse.
+ */
+
+/**
+ * Real, live-measured phase-column values for sub_agent_execution_results (see PRD TR-2/TR-6
+ * for the census methodology and exact counts, which drift as the population grows — re-measure
+ * at implementation/maintenance time rather than trust this list as eternally exhaustive).
+ * Normalized comparison (uppercase, hyphens->underscores) collapses spelling variants like
+ * "EXEC-TO-PLAN" / "EXEC_TO_PLAN" and "LEAD-FINAL-APPROVAL" / "LEAD_FINAL_APPROVAL".
+ */
+const EXEC_OR_LATER_PHASES = new Set([
+  'EXEC', 'EXEC_TO_PLAN', 'PLAN_TO_LEAD', 'LEAD_FINAL_APPROVAL',
+  'COMPLETED', 'PLAN_VERIFY', 'PLAN_VERIFICATION', 'EXEC_IMPLEMENTATION', 'EXEC_COMPLETE',
+  'ORCHESTRATED',
+]);
+const PRE_EXEC_PHASES = new Set(['LEAD', 'PLAN', 'PLAN_TO_EXEC', 'DRAFT']);
+
+function normalizePhase(phase) {
+  return String(phase ?? '').trim().toUpperCase().replace(/-/g, '_');
+}
+
+/**
+ * Three-way classification: 'admitted' (EXEC-or-later, matched signal may promote),
+ * 'rejected' (known pre-EXEC), or 'unrecognized' (matches neither list — a real, growing
+ * population, e.g. "PLAN_PRD"; treated as rejected for promotion purposes, per isExecPhaseOrLater,
+ * but tracked separately so drift in phase-naming is visible rather than a silent permanent gap).
+ */
+export function classifyPhaseBucket(phase) {
+  const n = normalizePhase(phase);
+  if (EXEC_OR_LATER_PHASES.has(n)) return 'admitted';
+  if (PRE_EXEC_PHASES.has(n)) return 'rejected';
+  return 'unrecognized';
+}
+
+/** Strict boolean: true ONLY for the 'admitted' bucket. 'unrecognized' fails closed. */
+export function isExecPhaseOrLater(phase) {
+  return classifyPhaseBucket(phase) === 'admitted';
+}
+
+/**
+ * Pure: does this fr_coverage entry have the required shape
+ * {fr_id: string, status: 'delivered'|'undelivered', test_ref: non-empty string}?
+ * Any deviation (wrong type, missing field, unrecognized status) is treated as absent, never
+ * partially trusted — fr_coverage already exists as an uncoordinated ad-hoc metadata key in
+ * numerous unrelated one-off scripts using several mutually-incompatible shapes.
+ */
+function isWellFormedCoverageEntry(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  if (typeof entry.fr_id !== 'string' || entry.fr_id.trim() === '') return false;
+  if (entry.status !== 'delivered' && entry.status !== 'undelivered') return false;
+  if (typeof entry.test_ref !== 'string' || entry.test_ref.trim() === '') return false;
+  return true;
+}
+
+/** Normalized fr_id match, consistent with frReferencesId()'s case-insensitivity — no padding equivalence (FR-1 !== FR-001), matching frReferencesId's own word-boundary behavior. */
+function frIdsMatch(a, b) {
+  return String(a).trim().toUpperCase() === String(b).trim().toUpperCase();
+}
+
+/**
+ * Scans TESTING evidence text for FR-id mentions across ALL phases (deliberately NOT
+ * phase-filtered — this is the report-only diagnostic; filtering it would hide exactly the
+ * LEAD-phase risk-flagging mentions it exists to surface, and would make a mutation test of its
+ * non-load-bearing-ness unreachable for non-EXEC-phase fixtures). Excludes metadata.fr_coverage
+ * itself from the scan surface so a fr_coverage entry's own fr_id never trivially echoes into
+ * this diagnostic (which would defeat its purpose of finding FRs named in prose but ABSENT from
+ * fr_coverage).
+ */
+export function extractRegexFrMentions(rows, frs) {
+  const mentions = [];
+  for (const row of rows) {
+    const metadataWithoutCoverage = row?.metadata && typeof row.metadata === 'object'
+      ? Object.fromEntries(Object.entries(row.metadata).filter(([k]) => k !== 'fr_coverage'))
+      : {};
+    const textParts = [row?.detailed_analysis, row?.summary, row?.raw_output, JSON.stringify(metadataWithoutCoverage)]
+      .filter((v) => v != null)
+      .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)));
+    const haystack = textParts.join('\n');
+    for (let i = 0; i < frs.length; i++) {
+      const id = frIdOf(frs[i], i);
+      if (frReferencesId({ title: haystack }, id)) {
+        mentions.push({ fr_id: id, sub_agent_result_id: row?.id ?? null, phase: row?.phase ?? null });
+      }
+    }
+  }
+  return mentions;
+}
+
+/**
+ * Resolves the structured testing_evidence signal from TESTING sub_agent_execution_results rows
+ * already fetched for this SD. Returns matched (schema-valid AND fr_id-matched) entries plus
+ * diagnostics for everything that did NOT make it into the promoting set, so "the writer never
+ * fired" stays distinguishable from "the writer fired but nothing was valid".
+ */
+export function resolveTestingEvidenceCoverage(rows, frs) {
+  const matchedTestingCoverage = [];
+  const unmatchedFrCoverageIds = [];
+  const unrecognizedPhaseRows = [];
+  let testingEvidenceRowsSeen = 0;
+
+  for (const row of rows) {
+    const bucket = classifyPhaseBucket(row?.phase);
+    if (bucket === 'unrecognized') {
+      unrecognizedPhaseRows.push({ sub_agent_result_id: row?.id ?? null, phase: row?.phase ?? null });
+      continue; // fails closed, same as 'rejected' — tracked separately for visibility only
+    }
+    if (bucket !== 'admitted') continue;
+    testingEvidenceRowsSeen += 1;
+
+    const coverage = row?.metadata?.fr_coverage;
+    if (!Array.isArray(coverage)) continue; // wrong type entirely (incl. bare scalar strings) — absent, not iterated
+
+    for (const entry of coverage) {
+      if (!isWellFormedCoverageEntry(entry)) continue;
+      const matchIndex = frs.findIndex((fr, i) => frIdsMatch(frIdOf(fr, i), entry.fr_id));
+      if (matchIndex === -1) {
+        unmatchedFrCoverageIds.push(entry.fr_id);
+        continue;
+      }
+      matchedTestingCoverage.push({
+        fr_id: frIdOf(frs[matchIndex], matchIndex),
+        status: entry.status,
+        test_ref: entry.test_ref,
+        sub_agent_result_id: row?.id ?? null,
+      });
+    }
+  }
+
+  return { matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, testingEvidenceRowsSeen };
+}
+
+/**
  * Classify every FR for an SD. Injectable supabase for testing.
  * @returns {Promise<{frs: Array<{id,description,status:'delivered'|'descoped'|'undelivered',evidence}>,
  *   total:number, delivered:number, descoped:number, undelivered:number}>}
@@ -160,37 +310,78 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
     .eq('sd_id', sdId);
   const validated = (stories || []).filter(isValidatedStory);
 
-  // PASS 1 — resolve the two positive signals per FR without deciding the negative case yet.
-  // The negative case (undelivered vs unverifiable) cannot be decided per-FR: it depends on
-  // whether THIS SD uses the FR-reference convention at all, which is only knowable after
-  // every FR has been examined.
+  // Second signal: TESTING sub_agent_execution_results evidence for this SD. Bind `error`
+  // explicitly (do not repeat the pre-existing stories-query anti-pattern above, which this
+  // module's own header already documents as dangerous) — an error means "no usable evidence",
+  // never "zero rows found by design".
+  const { data: testingRows, error: testingError } = await supabase
+    .from('sub_agent_execution_results')
+    .select('id, phase, detailed_analysis, summary, raw_output, metadata')
+    .eq('sd_id', sdId)
+    .eq('sub_agent_code', 'TESTING');
+  const safeTestingRows = testingError ? [] : (testingRows || []);
+
+  const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
+  const {
+    matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, testingEvidenceRowsSeen,
+  } = resolveTestingEvidenceCoverage(safeTestingRows, frs);
+
+  // PASS 1 — resolve the positive signals per FR without deciding the negative case yet. The
+  // negative case (undelivered vs unverifiable) cannot be decided per-FR: it depends on whether
+  // THIS SD uses EITHER delivery convention at all, which is only knowable after every FR has
+  // been examined.
   const resolved = [];
+  const conflictingSignals = [];
   for (let i = 0; i < frs.length; i++) {
     const fr = frs[i];
     const id = frIdOf(fr, i);
     const desc = (fr && (fr.requirement || fr.description || fr.title)) || '';
     const deliveredBy = validated.find((s) => frReferencesId(s, id));
+    const testingEntries = matchedTestingCoverage.filter((c) => frIdsMatch(c.fr_id, id));
+    const testingDelivered = testingEntries.find((c) => c.status === 'delivered') || null;
+    const testingUndelivered = testingEntries.find((c) => c.status === 'undelivered') || null;
+
+    // Precedence: a validated story always wins on conflict — it is human-reviewed, tested
+    // evidence; a TESTING agent's self-reported claim is not treated as stronger than that. A
+    // conflict is recorded as a diagnostic, never silently dropped, but never flips the verdict.
+    if (deliveredBy && testingUndelivered) {
+      conflictingSignals.push({ fr_id: id, story_says: 'delivered', testing_evidence_says: 'undelivered' });
+    }
+
     const descope = deliveredBy ? null : descopeFor(sdMetadata, id, requesterSessionId);
-    resolved.push({ id, desc, deliveredBy, descope });
+    resolved.push({ id, desc, deliveredBy, descope, testingDelivered, testingUndelivered });
   }
 
-  // PASS 2 — is the FR-reference convention in use for this SD? One genuine reference is
-  // enough to prove the instrument works here, which is what makes a missing reference on a
-  // sibling FR real evidence of non-delivery rather than an artifact of an unused convention.
-  const conventionInUse = resolved.some((r) => r.deliveredBy);
+  // PASS 2 — is EITHER delivery convention in use for this SD? A story reference can only ever
+  // express "delivered" (there is no "story says undelivered"), so its convention-proof is
+  // necessarily one-sided. A matched testing_evidence entry proves the convention is in use
+  // regardless of which way it points — a matched "undelivered" entry is the STRONGEST possible
+  // negative signal and must count at least as much as no evidence at all (an earlier draft only
+  // counted status==="delivered" here, which perversely made shipping explicit negative evidence
+  // classify as unverifiable — never-blocking — instead of undelivered — blocking).
+  const conventionInUse = resolved.some((r) => r.deliveredBy) || matchedTestingCoverage.length > 0;
 
-  // ...but UNVERIFIABLE requires that there was something we could have read. With ZERO
-  // validated stories there is no work product at all, so "the convention is not in use here"
-  // is not an available excuse — nothing exists that could have carried a reference. That is a
-  // genuinely suspicious state (FRs declared, nothing built or validated against them) and it
-  // stays UNDELIVERED rather than being laundered into blindness. Surfaced by an existing
-  // hard-fail test in fr-delivery-traceability-gate.test.js, which was right to object.
-  const hasWorkProduct = validated.length > 0;
+  // ...but UNVERIFIABLE requires that there was something we could have read. hasWorkProduct is
+  // symmetric across both signals: a validated story OR a genuinely matched testing_evidence
+  // entry both count as real work product; an admitted TESTING row with zero matched entries
+  // does NOT (it is exactly as if that row did not exist, for this purpose — it still counts
+  // toward testingEvidenceRowsSeen so "ran and found nothing" stays observable). With neither
+  // signal present there is no work product at all, so "the convention is not in use here" is
+  // not an available excuse — nothing exists that could have carried a reference. That stays
+  // UNDELIVERED rather than being laundered into blindness. Surfaced by an existing hard-fail
+  // test in fr-delivery-traceability-gate.test.js, which was right to object.
+  const hasWorkProduct = validated.length > 0 || matchedTestingCoverage.length > 0;
   const unmeasurable = !conventionInUse && hasWorkProduct;
 
-  const out = resolved.map(({ id, desc, deliveredBy, descope }) => {
+  const out = resolved.map(({ id, desc, deliveredBy, descope, testingDelivered, testingUndelivered }) => {
     if (deliveredBy) {
-      return { id, description: desc, status: 'delivered', evidence: `Validated story ${deliveredBy.id} references ${id}` };
+      return { id, description: desc, status: 'delivered', delivery_basis: 'story', evidence: `Validated story ${deliveredBy.id} references ${id}` };
+    }
+    if (testingDelivered) {
+      return {
+        id, description: desc, status: 'delivered', delivery_basis: 'testing_evidence',
+        evidence: `TESTING evidence (sub_agent_execution_results ${testingDelivered.sub_agent_result_id}) references ${id} with test_ref ${testingDelivered.test_ref}`,
+      };
     }
     if (descope) {
       return { id, description: desc, status: 'descoped', evidence: `Descoped by ${descope.approved_by}${descope.reason ? `: ${descope.reason}` : ''}` };
@@ -200,12 +391,18 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
         id,
         description: desc,
         status: 'unverifiable',
-        evidence: `No FR of this SD is referenced by any of its ${validated.length} validated story/stories, so the FR-reference convention is not in use here — delivery of this FR was not observable either way`,
+        evidence: `No FR of this SD is referenced by any of its ${validated.length} validated story/stories or ${matchedTestingCoverage.length} matched testing-evidence entries, so the FR-reference convention is not in use here — delivery of this FR was not observable either way`,
+      };
+    }
+    if (testingUndelivered) {
+      return {
+        id, description: desc, status: 'undelivered',
+        evidence: `TESTING evidence (sub_agent_execution_results ${testingUndelivered.sub_agent_result_id}) explicitly marks ${id} undelivered with test_ref ${testingUndelivered.test_ref}`,
       };
     }
     const why = hasWorkProduct
       ? 'No validated story references this FR id and no approver-gated descope, while sibling FRs of this SD ARE referenced'
-      : 'No validated story exists for this SD at all and no approver-gated descope — nothing was built or validated against this FR';
+      : 'No validated story exists for this SD and no admitted TESTING evidence matched any FR — nothing was built or validated against this FR';
     return { id, description: desc, status: 'undelivered', evidence: why };
   });
 
@@ -223,6 +420,11 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
     has_work_product: hasWorkProduct,
     validated_story_count: validated.length,
     unverifiable_ratio: total === 0 ? 0 : unverifiable / total,
+    regex_fr_mentions: regexFrMentions,
+    testing_evidence_rows_seen: testingEvidenceRowsSeen,
+    unmatched_fr_coverage_ids: unmatchedFrCoverageIds,
+    unrecognized_phase_rows: unrecognizedPhaseRows,
+    conflicting_signals: conflictingSignals,
   };
 }
 
