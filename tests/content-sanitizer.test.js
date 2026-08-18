@@ -9,7 +9,7 @@
  * to vitest here so this suite is actually collected and run in CI, not just green in isolation.
  */
 import { describe, it, expect } from 'vitest';
-import { sanitize, sanitizeUserText, isUntrustedOrigin, MAX_MESSAGE_LENGTH, MAX_USER_TEXT_LENGTH } from '../lib/factory/content-sanitizer.js';
+import { sanitize, sanitizeUserText, isUntrustedOrigin, MAX_MESSAGE_LENGTH, MAX_USER_TEXT_LENGTH, PUBLIC_ORIGIN_SOURCE_TYPES } from '../lib/factory/content-sanitizer.js';
 
 describe('content-sanitizer', () => {
   describe('sanitize() — backward compatibility with error-sanitizer', () => {
@@ -139,6 +139,21 @@ describe('content-sanitizer', () => {
       expect(isUntrustedOrigin({ source_type: 'venture_worker', source_application: 'fn_submit_venture_feedback' })).toBe(true);
     });
 
+    // SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001: 'telegram' is now ALSO untrusted -- a schema-legal
+    // source_type (feedback_source_type_check permits it) that was absent from
+    // PUBLIC_ORIGIN_SOURCE_TYPES, same omission class as error_capture/venture_worker above.
+    // NOT a purely hypothetical gap: telegram_bot_insert_feedback was a LIVE, anon-key-reachable
+    // permissive INSERT policy from 2026-02-23 until dropped 2026-08-16, two days before this
+    // fix, and produced at least one real row. Both write-path axes (RLS policies AND
+    // SECURITY-DEFINER-RPC-with-anon-EXECUTE, the vector that actually armed error_capture/
+    // venture_worker) are confirmed closed as of this fix -- see lib/factory/content-sanitizer.js's
+    // own comment for the full accounting. This assertion REPLACES the previous one in the
+    // trustedTypes catch-all below, which asserted telegram was trusted (a fact-pin snapshotting
+    // the gap itself as "correct").
+    it("classifies a schema-legal but allowlist-omitted row (source_type='telegram') as untrusted", () => {
+      expect(isUntrustedOrigin({ source_type: 'telegram', source_application: 'telegram-bot' })).toBe(true);
+    });
+
     it("classifies an internal row (source_type='manual_feedback') as trusted", () => {
       expect(isUntrustedOrigin({ source_type: 'manual_feedback', source_application: 'EHG_Engineer' })).toBe(false);
     });
@@ -154,21 +169,38 @@ describe('content-sanitizer', () => {
       expect(isUntrustedOrigin({ source_type: 123 })).toBe(true);
     });
 
-    // 'error_capture' and 'venture_worker' removed from this list (TESTING finding B1/FR-3;
-    // EXEC-phase SECURITY finding evidence 37ac0bb7) -- both now have their own assertions
-    // above. 10 remaining trusted values + 'error_capture' + 'venture_worker' + 'user_feedback'
-    // (both tested separately as untrusted) = all 13 live feedback_source_type_check enum
+    // 'error_capture', 'venture_worker', and 'telegram' removed from this list (TESTING finding
+    // B1/FR-3; EXEC-phase SECURITY finding evidence 37ac0bb7; SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001
+    // VALIDATION/TESTING findings C1/G1) -- all three now have their own assertions above. 9
+    // remaining trusted values + 'error_capture' + 'venture_worker' + 'telegram' + 'user_feedback'
+    // (all four tested separately as untrusted) = all 13 live feedback_source_type_check enum
     // values accounted for (verified directly against the live pg_constraint definition, not
-    // assumed from a prior count).
+    // assumed from a prior count). Declared once here and reused by the accounting test below
+    // (adversarial /ship review finding, PR #7254: a second, independently-declared copy of this
+    // array cannot detect drift in the first one -- the exact defect class this file is about,
+    // reimplemented as a false-assurance test).
+    const trustedTypes = [
+      'manual_feedback', 'auto_capture', 'uat_failure',
+      'uncaught_exception', 'unhandled_rejection', 'manual_capture',
+      'todoist_intake', 'youtube_intake', 'claude_code_intake',
+    ];
+
     it('treats every other CHECK-constrained source_type value as trusted', () => {
-      const trustedTypes = [
-        'manual_feedback', 'auto_capture', 'uat_failure',
-        'uncaught_exception', 'unhandled_rejection', 'manual_capture',
-        'todoist_intake', 'youtube_intake', 'claude_code_intake', 'telegram',
-      ];
       for (const source_type of trustedTypes) {
         expect(isUntrustedOrigin({ source_type }), `expected ${source_type} to be trusted`).toBe(false);
       }
+    });
+
+    // TESTING finding G1, corrected by adversarial /ship review (mutation-proved the original
+    // version was a constant-fold tautology -- both operands were literals declared in the test's
+    // own scope, never read PUBLIC_ORIGIN_SOURCE_TYPES, and stayed green after both a 5th Set
+    // entry was added AND after re-declaring a second, independent trustedTypes copy that drifted
+    // from the real one above). This version reads the REAL exported Set and the SAME trustedTypes
+    // array the preceding test iterates -- mutation-reverified: fails on a 5th PUBLIC_ORIGIN_
+    // SOURCE_TYPES entry (14 != 13) and on 'telegram' being removed from the Set (13 != 12, since
+    // trustedTypes.length is unchanged by that mutation but the Set's size is).
+    it('trustedTypes plus PUBLIC_ORIGIN_SOURCE_TYPES account for all 13 live enum values', () => {
+      expect(trustedTypes.length + PUBLIC_ORIGIN_SOURCE_TYPES.size).toBe(13);
     });
   });
 });
