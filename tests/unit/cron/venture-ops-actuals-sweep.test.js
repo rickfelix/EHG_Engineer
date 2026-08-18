@@ -399,6 +399,45 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
     );
   });
 
+  it('independent sweep finding: EVERY attempted venture failing with scoring_error (e.g. missing LLM credential) flips exitCode instead of silently exiting green', async () => {
+    const errorLog = vi.fn();
+    const retroactivelyScoreVenture = vi.fn().mockResolvedValue({ skipped: true, reason: 'scoring_error', detail: 'no LLM credential configured' });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+      logger: { log() {}, warn() {}, error: errorLog },
+    });
+
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
+      expect.objectContaining({ scored: 0, already_scored: 0, scoring_errors: 2, function_missing: 0 }),
+    );
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep'].errors).toHaveLength(1);
+    expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/SYSTEMIC ESCALATION.*ALL 2 attempted venture\(s\) failed with scoring_error/));
+    expect(result.exitCode).toBe(1); // not 0 -- a 100%-failure cycle must be loud, not silently green
+  });
+
+  it('a MIX of scored + scoring_error ventures does NOT trigger the systemic escalation (isolated per-venture noise stays retryable, not job-failing)', async () => {
+    const errorLog = vi.fn();
+    const retroactivelyScoreVenture = vi.fn()
+      .mockResolvedValueOnce({ skipped: false, verdict: 'PASS' })
+      .mockResolvedValueOnce({ skipped: true, reason: 'scoring_error', detail: 'transient timeout' });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+      logger: { log() {}, warn() {}, error: errorLog },
+    });
+
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
+      expect.objectContaining({ scored: 1, scoring_errors: 1 }),
+    );
+    expect(errorLog).not.toHaveBeenCalledWith(expect.stringMatching(/SYSTEMIC ESCALATION/));
+    expect(result.exitCode).toBe(0);
+  });
+
   it('a genuine per-venture scoring error (not a missing-function shape) is isolated and surfaces in summary.jobs errors, flipping exitCode', async () => {
     const retroactivelyScoreVenture = vi.fn()
       .mockRejectedValueOnce(new Error('ventures fetch failed: connection refused'))

@@ -31,6 +31,25 @@ describe('isPlaceholderValue (pure)', () => {
     expect(isPlaceholderValue('flag', null)).toBe(false);
     expect(isPlaceholderValue('flag', undefined)).toBe(false);
   });
+
+  it('independent sweep finding: flags an empty value as a placeholder, for any key', () => {
+    expect(isPlaceholderValue('database_id', '')).toBe(true);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', '')).toBe(true);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', '   ')).toBe(true);
+  });
+
+  it('independent sweep finding: flags realistic unfilled Clerk publishable key placeholders (the OTHER half of the AltifyAI incident, per this module\'s own header)', () => {
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_placeholder')).toBe(true);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_YOUR_KEY_HERE')).toBe(true);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_xxxxxxxxxxxx')).toBe(true);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_')).toBe(true);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'YOUR_CLERK_PUBLISHABLE_KEY')).toBe(true);
+  });
+
+  it('does not flag a real-looking Clerk publishable key as a placeholder', () => {
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_Y2xlcmsuc29tZS1yZWFsLWxvb2tpbmcta2V5JA')).toBe(false);
+    expect(isPlaceholderValue('VITE_CLERK_PUBLISHABLE_KEY', 'pk_live_Y2xlcmsuc29tZS1yZWFsLWxvb2tpbmcta2V5JA')).toBe(false);
+  });
 });
 
 describe('scanTomlForPlaceholders (pure)', () => {

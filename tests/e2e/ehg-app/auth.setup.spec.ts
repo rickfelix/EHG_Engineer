@@ -76,11 +76,18 @@ setup('authenticate', async ({ page }) => {
   // Race a NEGATIVE "left /login" predicate against an error/alert appearing, instead of only
   // waiting for the specific success pattern -- a credential rejection surfaces its real error
   // text instead of a blind, undifferentiated timeout.
+  //
+  // .catch() swallows a DOUBLE timeout (adversarial review finding, /ship Deep-tier gate --
+  // ported from tests/uat/setup/global-auth.js:148's identical guard, dropped in the initial
+  // port): without it, when BOTH branches time out (stuck on /login, no error element ever
+  // becomes visible), Promise.race REJECTS with a raw, unhandled Playwright TimeoutError and
+  // NEITHER of the diagnostic checks below ever runs -- reintroducing, for exactly that case,
+  // the same blind-timeout symptom this whole race was written to eliminate.
   await signInButton.click();
   await Promise.race([
     page.waitForURL((url) => !url.toString().includes('/login'), { timeout: 15000 }),
     page.waitForSelector(ERROR_SELECTOR, { timeout: 15000, state: 'visible' }),
-  ]);
+  ]).catch(() => { /* fall through to the explicit state checks below */ });
 
   // Only inspect ERROR_SELECTOR when the URL-left-/login race branch did NOT win --
   // the broad selector (.destructive, [class*="toast"]) can otherwise false-match an

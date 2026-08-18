@@ -342,7 +342,12 @@ export async function main(argv = process.argv, deps = {}) {
           // real LLM completion (inside retroactivelyScoreVenture, BEFORE the RPC write is even
           // attempted) per venture per cron cycle for no benefit -- ~114 discarded completions/
           // cycle at today's portfolio size. Stop the loop on the FIRST confirmation instead.
-          if (isMissingFunctionError({ message: err.message })) { functionMissing++; break; }
+          // Pass .code through (adversarial review finding, /ship Deep-tier gate): building a
+          // message-only object here made isMissingFunctionError's code==='PGRST202'/'42883'
+          // branches structurally dead at this call site, leaving detection dependent solely on
+          // a /schema cache/i message-regex match -- silently missing a raw 42883 ("function ...
+          // does not exist") shape, whose message doesn't contain that phrase.
+          if (isMissingFunctionError({ message: err.message, code: err.code })) { functionMissing++; break; }
           errors.push(`${v.id}: ${err.message}`);
         }
       }
@@ -369,6 +374,18 @@ export async function main(argv = process.argv, deps = {}) {
     }
     if (scoringErrors > 0) {
       logger.warn?.(`[ops-actuals-sweep] ${JOBS[4].key}: ${scoringErrors} venture(s) had a genuine scoring failure this cycle (LLM/network error) -- verdict NOT written (never a fabricated REJECT), will retry next cycle.`);
+    }
+    // Independent sweep finding: EVERY attempted venture failing with scoring_error (not a
+    // few isolated ones) is the systemic signature of a broken scorer -- e.g. the cron
+    // workflow's env missing an LLM credential entirely -- not normal per-venture noise.
+    // scoring_error alone only warns (by design: isolated transient failures must stay
+    // retryable, not fail the job), but this job exists BECAUSE of this SD's own "fail loud,
+    // never silently green" mandate (FR-8) -- a 100%-failure cycle must flip exitCode, not
+    // just log a line nobody is reading.
+    if (!args.dryRun && attempted > 0 && functionMissing === 0 && scored === 0 && alreadyScored === 0 && scoringErrors === attempted) {
+      const msg = `${JOBS[4].key}: ALL ${attempted} attempted venture(s) failed with scoring_error this cycle -- a systemic scorer failure (e.g. missing/invalid LLM credential in this workflow's env, or a total provider outage), not isolated noise. Zero verdicts written.`;
+      logger.error?.(`[ops-actuals-sweep] SYSTEMIC ESCALATION: ${msg}`);
+      errors.push(msg); // same array reference already assigned to summary.jobs[...].errors above
     }
   }
 

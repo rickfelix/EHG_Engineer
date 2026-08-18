@@ -93,6 +93,19 @@ describe('retroactivelyScoreVenture', () => {
     await expect(retroactivelyScoreVenture(supabase, ALTIFYAI_ID, { scorePbnBuckets, buildPbnVerdict })).rejects.toThrow('permission denied');
   });
 
+  it('independent sweep finding: preserves the RPC error .code on the re-thrown error, so a caller\'s isMissingFunctionError(err) can still detect a PGRST202/42883 shape', async () => {
+    const venture = { id: ALTIFYAI_ID, name: 'AltifyAI', description: 'd', metadata: {} };
+    const supabase = makeSupabase({ venture, rpcError: { message: 'Could not find the function public.set_venture_pbn_verdict_stage_zero in the schema cache', code: 'PGRST202' } });
+    const scorePbnBuckets = vi.fn().mockResolvedValue({ proven: {}, better: {}, new: {} });
+    const buildPbnVerdict = vi.fn().mockReturnValue({ verdict: 'REJECT' });
+    try {
+      await retroactivelyScoreVenture(supabase, ALTIFYAI_ID, { scorePbnBuckets, buildPbnVerdict });
+      throw new Error('expected retroactivelyScoreVenture to throw');
+    } catch (err) {
+      expect(err.code).toBe('PGRST202');
+    }
+  });
+
   // SECURITY finding (EXEC-TO-PLAN review, F1): the persisted verdict must be sanitized -- never
   // the raw buildPbnVerdict() output -- reopening the exact canary-content-leak class
   // SD-LEO-FEAT-PROVEN-BETTER-NEW-001's SECURITY F1 already fixed once for the primary write path.

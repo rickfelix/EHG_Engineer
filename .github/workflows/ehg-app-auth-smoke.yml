@@ -76,8 +76,12 @@ jobs:
           BASE_URL: ${{ inputs.target_url || secrets.EHG_APP_BASE_URL }}
           TEST_USER_EMAIL: ${{ secrets.EHG_APP_TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.EHG_APP_TEST_USER_PASSWORD }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # SECURITY finding (independent sweep): SD_ID is never set in this job, so
+          # leo-playwright-reporter.js's ingestResults() always short-circuits at
+          # "Skipping ingestion - no SD_ID configured" before it ever touches Supabase --
+          # SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY were dead env here, unnecessarily
+          # exposing a full-privilege service-role key to the whole npm ci/playwright
+          # install/chromium process tree. Omitted rather than passed unused.
           CI: true
 
       # VALIDATION finding (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 PLAN-VERIFY review): a skip

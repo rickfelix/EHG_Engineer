@@ -109,7 +109,15 @@ export async function retroactivelyScoreVenture(supabase, ventureId, deps = {}) 
     p_venture_id: ventureId,
     p_pbn_verdict: pbnVerdict,
   });
-  if (writeError) throw new Error(`retroactive pbn_verdict write failed: ${writeError.message}`);
+  if (writeError) {
+    // Preserve .code (e.g. PostgREST PGRST202 for a not-yet-applied migration) on the
+    // re-thrown error -- adversarial review finding (/ship Deep-tier gate): a bare `new
+    // Error(message)` here silently drops it, leaving every caller's missing-function
+    // detection dependent on a message-substring regex alone.
+    const err = new Error(`retroactive pbn_verdict write failed: ${writeError.message}`);
+    err.code = writeError.code;
+    throw err;
+  }
 
   return { skipped: false, ventureId, verdict: pbnVerdict.verdict, buckets };
 }

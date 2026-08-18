@@ -1,5 +1,8 @@
 // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-6 (class f): account-prerequisite checklist.
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { buildAccountPrerequisiteChecklist, resolveAccountPrerequisiteIndicators } from '../../../../lib/eva/bridge/account-prerequisites.js';
 
 describe('buildAccountPrerequisiteChecklist (pure)', () => {
@@ -38,12 +41,29 @@ describe('buildAccountPrerequisiteChecklist (pure)', () => {
     expect(d1.present).toBeNull();
   });
 
-  it('clerk_auth_keys is always present:null with an explicit out-of-scope explanation, never silently omitted', () => {
+  it('clerk_auth_keys reports present:null with an explicit unchecked explanation when no local wrangler.toml finding is available, never silently omitted', () => {
     const checklist = buildAccountPrerequisiteChecklist({ stripeBillingProductId: 'prod_1', cloudflareConnectionProvider: 'd1', sentryDsn: 'x', wranglerD1DatabaseId: 'real-id' });
     const clerk = checklist.find((c) => c.account === 'clerk_auth_keys');
     expect(clerk).toBeDefined();
     expect(clerk.present).toBeNull();
-    expect(clerk.detail).toMatch(/NOT CHECKED/);
+    expect(clerk.detail).toMatch(/not found in a local wrangler\.toml/);
+  });
+
+  // Independent post-ship sweep: clerk_auth_keys used to be hardcoded present:null regardless of
+  // input -- the chairman's incident named the Clerk key as the OTHER half alongside database_id
+  // (module header), so this checklist now genuinely checks it the same way it checks the D1 id.
+  it('clerk_auth_keys flags an unfilled Clerk publishable key placeholder specifically, mirroring cloudflare_d1_real_id', () => {
+    const checklist = buildAccountPrerequisiteChecklist({ clerkPublishableKeyValue: 'pk_test_YOUR_KEY_HERE' });
+    const clerk = checklist.find((c) => c.account === 'clerk_auth_keys');
+    expect(clerk.present).toBe(false);
+    expect(clerk.detail).toMatch(/unfilled Clerk publishable key placeholder/);
+  });
+
+  it('clerk_auth_keys reports present:true for a non-placeholder-shaped key, with the live-validation caveat still stated', () => {
+    const checklist = buildAccountPrerequisiteChecklist({ clerkPublishableKeyValue: 'pk_test_Y2xlcmsuc29tZS1yZWFsLWxvb2tpbmcta2V5JA' });
+    const clerk = checklist.find((c) => c.account === 'clerk_auth_keys');
+    expect(clerk.present).toBe(true);
+    expect(clerk.detail).toMatch(/live validity.*not checked/);
   });
 
   it('defaults to an empty-indicators object without throwing', () => {
@@ -77,6 +97,7 @@ describe('resolveAccountPrerequisiteIndicators (I/O)', () => {
       cloudflareConnectionProvider: 'd1',
       sentryDsn: 'https://key@sentry.io/1',
       wranglerD1DatabaseId: null,
+      clerkPublishableKeyValue: null,
     });
   });
 
@@ -88,6 +109,7 @@ describe('resolveAccountPrerequisiteIndicators (I/O)', () => {
       cloudflareConnectionProvider: null,
       sentryDsn: null,
       wranglerD1DatabaseId: null,
+      clerkPublishableKeyValue: null,
     });
   });
 
@@ -110,5 +132,75 @@ describe('resolveAccountPrerequisiteIndicators (I/O)', () => {
     expect(eqSpy).toHaveBeenCalledWith('venture_id', 'venture-correct-id');
     expect(eqSpy).not.toHaveBeenCalledWith('name', expect.anything());
     expect(indicators.stripeBillingProductId).toBe('prod_correct');
+  });
+
+  it('independent sweep finding: throws on a genuine ventures-read error instead of silently treating it as a confirmed-missing venture', async () => {
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'ventures') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'permission denied for table ventures', code: '42501' } }) }) }) };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    };
+
+    await expect(resolveAccountPrerequisiteIndicators(supabase, 'venture-1', null)).rejects.toThrow(/ventures fetch failed/);
+  });
+
+  it('independent sweep finding: throws on a genuine applications-read error instead of silently treating it as a confirmed-missing billing product', async () => {
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'ventures') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: 'X', metadata: {}, stack_descriptor: {} }, error: null }) }) }) };
+        }
+        if (table === 'applications') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'permission denied for table applications', code: '42501' } }) }) }) };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    };
+
+    await expect(resolveAccountPrerequisiteIndicators(supabase, 'venture-1', null)).rejects.toThrow(/applications fetch failed/);
+  });
+
+  describe('wrangler.toml filesystem scan (real I/O, not a fixture string)', () => {
+    let dir;
+    beforeAll(() => { dir = mkdtempSync(join(tmpdir(), 'crack-gate-fr6-')); });
+    afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+
+    it('extracts both database_id and VITE_CLERK_PUBLISHABLE_KEY from a real wrangler.toml on disk', async () => {
+      const cloneDir = join(dir, 'altifyai-shaped');
+      mkdirSync(cloneDir, { recursive: true });
+      writeFileSync(join(cloneDir, 'wrangler.toml'), [
+        'name = "altifyai"',
+        'database_id = "00000000-0000-0000-0000-000000000000"',
+        '',
+        '[vars]',
+        'VITE_CLERK_PUBLISHABLE_KEY = "pk_test_YOUR_KEY_HERE"',
+      ].join('\n'));
+
+      const indicators = await resolveAccountPrerequisiteIndicators(makeSupabase({}), 'venture-1', cloneDir);
+      expect(indicators.wranglerD1DatabaseId).toBe('00000000-0000-0000-0000-000000000000');
+      expect(indicators.clerkPublishableKeyValue).toBe('pk_test_YOUR_KEY_HERE');
+
+      const checklist = buildAccountPrerequisiteChecklist(indicators);
+      const d1 = checklist.find((c) => c.account === 'cloudflare_d1_real_id');
+      const clerk = checklist.find((c) => c.account === 'clerk_auth_keys');
+      expect(d1.present).toBe(false);
+      expect(clerk.present).toBe(false);
+    });
+
+    it('clerkPublishableKeyValue stays null when the key is absent from an otherwise-real wrangler.toml (ambiguous, not a confirmed gap)', async () => {
+      const cloneDir = join(dir, 'no-clerk-var');
+      mkdirSync(cloneDir, { recursive: true });
+      writeFileSync(join(cloneDir, 'wrangler.toml'), [
+        'name = "some-venture"',
+        'database_id = "bdbaef59-7e73-478e-9e57-57b4bf8d853b"',
+      ].join('\n'));
+
+      const indicators = await resolveAccountPrerequisiteIndicators(makeSupabase({}), 'venture-1', cloneDir);
+      expect(indicators.wranglerD1DatabaseId).toBe('bdbaef59-7e73-478e-9e57-57b4bf8d853b');
+      expect(indicators.clerkPublishableKeyValue).toBeNull();
+    });
   });
 });
