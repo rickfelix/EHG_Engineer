@@ -58,6 +58,16 @@ function noopCrackGateDeps() {
   };
 }
 
+/**
+ * No-op PBN auto-score dep (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1, Job 5) so tests focused on
+ * other jobs stay scoped to their own behavior -- job 5 always runs alongside jobs 1-4 when
+ * !dryRun, and the shared makeSupabase() fake does not define .rpc()/.eq()/.maybeSingle() on
+ * 'ventures' (job 5's real retroactivelyScoreVenture would throw against it otherwise).
+ */
+function noopPbnDeps() {
+  return { retroactivelyScoreVenture: vi.fn().mockResolvedValue({ skipped: true, reason: 'test-noop' }) };
+}
+
 describe('parseArgs', () => {
   it('parses --once and --dry-run', () => {
     expect(parseArgs(['node', 's', '--once', '--dry-run'])).toEqual({ once: true, dryRun: true, help: false });
@@ -99,16 +109,18 @@ describe('venture-ops-actuals-sweep main()', () => {
       supabase: makeSupabase(),
       collectProductHealth, collectRevenueMetrics, runVentureUptimeProbe, stampLastFired,
       ...noopCrackGateDeps(),
+      ...noopPbnDeps(),
       logger: { log() {}, warn() {}, error() {} },
     });
 
     expect(collectProductHealth).toHaveBeenCalledTimes(2);
     expect(collectRevenueMetrics).toHaveBeenCalledTimes(2);
     expect(runVentureUptimeProbe).toHaveBeenCalledTimes(1);
-    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): a 4th whole-tick stamp
+    // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): a whole-tick stamp
     // ('cron_script:venture-ops-actuals-sweep.mjs') was added before the per-job stamps, distinct
-    // from the four per-job ARMED-machinery keys asserted below.
-    expect(stampLastFired).toHaveBeenCalledTimes(5);
+    // from the five per-job ARMED-machinery keys asserted below (jobs 1-4 plus
+    // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1's Job 5, venture-pbn-auto-score-sweep).
+    expect(stampLastFired).toHaveBeenCalledTimes(6);
     expect(stampLastFired.mock.calls.some(([, key]) => key === 'cron_script:venture-ops-actuals-sweep.mjs')).toBe(true);
     expect(result.summary.jobs['ops-product-health-collector'].written).toBe(2);
     expect(result.summary.jobs['ops-revenue-metrics-collector'].written).toBe(2);
@@ -127,6 +139,7 @@ describe('venture-ops-actuals-sweep main()', () => {
       supabase: makeSupabase(),
       collectProductHealth, collectRevenueMetrics, runVentureUptimeProbe, stampLastFired,
       ...noopCrackGateDeps(),
+      ...noopPbnDeps(),
       logger: { log() {}, warn() {}, error() {} },
     });
 
@@ -149,6 +162,7 @@ describe('venture-ops-actuals-sweep main()', () => {
       supabase: makeSupabase(),
       collectProductHealth, collectRevenueMetrics, runVentureUptimeProbe, stampLastFired,
       ...noopCrackGateDeps(),
+      ...noopPbnDeps(),
       logger: { log() {}, warn() {}, error: errorLog },
     });
 
@@ -168,6 +182,7 @@ describe('venture-ops-actuals-sweep main()', () => {
       supabase: makeSupabase(),
       collectProductHealth, collectRevenueMetrics, runVentureUptimeProbe, stampLastFired,
       ...noopCrackGateDeps(),
+      ...noopPbnDeps(),
       logger: { log() {}, warn() {}, error: errorLog },
     });
 
@@ -183,6 +198,7 @@ describe('venture-ops-actuals-sweep Job 4: crack-gate sweep (SD-FDBK-FIX-VENTURE
       collectRevenueMetrics: vi.fn().mockResolvedValue({ venture_id: 'x' }),
       runVentureUptimeProbe: vi.fn().mockResolvedValue({ checked: 2, reachable: 2, unreachable: 0, newly_surfaced: 0, errors: [] }),
       stampLastFired: vi.fn().mockResolvedValue(undefined),
+      ...noopPbnDeps(),
       logger: { log() {}, warn() {}, error() {} },
     };
   }
@@ -267,5 +283,106 @@ describe('venture-ops-actuals-sweep Job 4: crack-gate sweep (SD-FDBK-FIX-VENTURE
     });
 
     expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/NC-7 ESCALATION.*venture-crack-gate-sweep/));
+  });
+});
+
+describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1)', () => {
+  function baseDeps() {
+    return {
+      collectProductHealth: vi.fn().mockResolvedValue({ venture_id: 'x' }),
+      collectRevenueMetrics: vi.fn().mockResolvedValue({ venture_id: 'x' }),
+      runVentureUptimeProbe: vi.fn().mockResolvedValue({ checked: 2, reachable: 2, unreachable: 0, newly_surfaced: 0, errors: [] }),
+      stampLastFired: vi.fn().mockResolvedValue(undefined),
+      ...noopCrackGateDeps(),
+      logger: { log() {}, warn() {}, error() {} },
+    };
+  }
+
+  it('scores every venture with no existing verdict, calling retroactivelyScoreVenture once per venture id (set identity)', async () => {
+    const seenIds = [];
+    const retroactivelyScoreVenture = vi.fn(async (_supabase, ventureId) => {
+      seenIds.push(ventureId);
+      return { skipped: false, ventureId, verdict: 'PASS' };
+    });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+    });
+
+    expect(new Set(seenIds)).toEqual(new Set(['v1', 'v2']));
+    expect(retroactivelyScoreVenture).toHaveBeenCalledTimes(2);
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
+      expect.objectContaining({ attempted: 2, scored: 2, already_scored: 0, function_missing: 0, errors: [] }),
+    );
+  });
+
+  it('counts an already-scored venture as already_scored, not scored (retroactivelyScoreVenture is itself idempotent-safe)', async () => {
+    const retroactivelyScoreVenture = vi.fn()
+      .mockResolvedValueOnce({ skipped: true, reason: 'pbn_verdict_already_present' })
+      .mockResolvedValueOnce({ skipped: false, verdict: 'REJECT' });
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+    });
+
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep'].scored).toBe(1);
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep'].already_scored).toBe(1);
+  });
+
+  it('a missing RPC (migration not yet applied) is counted as function_missing, not a per-venture error, and does not flip exitCode', async () => {
+    const errorLog = vi.fn();
+    const retroactivelyScoreVenture = vi.fn().mockRejectedValue(
+      new Error('retroactive pbn_verdict write failed: Could not find the function public.set_venture_pbn_verdict_stage_zero(p_pbn_verdict, p_venture_id) in the schema cache'),
+    );
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+      logger: { log() {}, warn() {}, error: errorLog },
+    });
+
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
+      expect.objectContaining({ scored: 0, already_scored: 0, function_missing: 2, errors: [] }),
+    );
+    expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/set_venture_pbn_verdict_stage_zero RPC not found/));
+    expect(result.exitCode).toBe(0); // function_missing is a known, expected-for-now state -- not a failure
+  });
+
+  it('a genuine per-venture scoring error (not a missing-function shape) is isolated and surfaces in summary.jobs errors, flipping exitCode', async () => {
+    const retroactivelyScoreVenture = vi.fn()
+      .mockRejectedValueOnce(new Error('ventures fetch failed: connection refused'))
+      .mockResolvedValueOnce({ skipped: false, verdict: 'PASS' });
+    const deps = baseDeps();
+
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabase(),
+      ...deps,
+      retroactivelyScoreVenture,
+    });
+
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep'].scored).toBe(1);
+    expect(result.summary.jobs['venture-pbn-auto-score-sweep'].errors).toHaveLength(1);
+    expect(result.exitCode).toBe(1);
+    // jobs 1-4 still completed fully despite job 5's per-venture error
+    expect(deps.collectProductHealth).toHaveBeenCalledTimes(2);
+    expect(deps.runVentureUptimeProbe).toHaveBeenCalledTimes(1);
+  });
+
+  it('--dry-run performs zero retroactivelyScoreVenture calls', async () => {
+    const retroactivelyScoreVenture = vi.fn();
+
+    const result = await main(['node', 's', '--once', '--dry-run'], {
+      supabase: makeSupabase(),
+      ...baseDeps(),
+      retroactivelyScoreVenture,
+    });
+
+    expect(retroactivelyScoreVenture).not.toHaveBeenCalled();
+    expect(result.action).toBe('dry_run');
   });
 });

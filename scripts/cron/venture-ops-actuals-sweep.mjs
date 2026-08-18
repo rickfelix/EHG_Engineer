@@ -42,6 +42,7 @@ import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { registerArmedMachinery, armedProcessKey } from '../../lib/machinery-class/armed-registration.js';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 import { evaluateCrackGateStatus, recordCrackGateObservation, hasUnavailableSource } from '../../lib/eva/lifecycle/crack-gate-evaluator.js';
+import { retroactivelyScoreVenture } from '../eva/retroactive-pbn-score.mjs';
 
 export const SD_KEY = 'SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/venture-ops-actuals-cron.yml';
@@ -51,7 +52,16 @@ const JOBS = [
   { key: 'ops-revenue-metrics-collector', owner: 'ops-revenue-metrics-collector' },
   { key: 'venture-uptime-probe', owner: 'venture-uptime-probe' },
   { key: 'venture-crack-gate-sweep', owner: 'venture-crack-gate-sweep' },
+  { key: 'venture-pbn-auto-score-sweep', owner: 'venture-pbn-auto-score-sweep' },
 ];
+
+/** True when a Supabase/PostgREST error means "the RPC does not exist yet" (PGRST202/42883). */
+function isMissingFunctionError(error) {
+  if (!error) return false;
+  const code = error.code || '';
+  const message = String(error.message || '');
+  return code === 'PGRST202' || code === '42883' || /schema cache/i.test(message);
+}
 
 /**
  * SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-4: the detective/primary layer of the no-crack gate.
@@ -120,6 +130,24 @@ async function fetchLiveDeploymentVentures(supabase) {
       .select('id, deployment_url')
       .not('deployment_url', 'is', null)
       .neq('deployment_url', '')
+      .order('id', { ascending: true }));
+  } catch (err) {
+    throw new Error(`ventures query failed: ${err.message}`);
+  }
+}
+
+/**
+ * SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1 (class a): PBN scoring applies to the WHOLE
+ * portfolio, not just deployed ventures -- it is a Stage-0/thesis-level check that must happen
+ * long before a venture has a deployment_url. Deliberately a SEPARATE, broader query from
+ * fetchLiveDeploymentVentures above (measured live: 152 ventures total vs. 3 with a
+ * deployment_url) rather than reusing that narrower set.
+ */
+async function fetchAllVentureIds(supabase) {
+  try {
+    return await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('id')
       .order('id', { ascending: true }));
   } catch (err) {
     throw new Error(`ventures query failed: ${err.message}`);
@@ -257,6 +285,40 @@ export async function main(argv = process.argv, deps = {}) {
     }
     if (wouldBlock > 0) {
       logger.warn?.(`[ops-actuals-sweep] ${wouldBlock} venture(s) would be blocked by the no-crack gate (observe-only, not yet enforcing).`);
+    }
+  }
+
+  // Job 5: PBN auto-score sweep (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1)
+  {
+    const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[4], logger);
+    let scored = 0;
+    let alreadyScored = 0;
+    let functionMissing = 0;
+    const errors = [];
+    const allVentures = args.dryRun ? [] : await fetchAllVentureIds(supabase);
+    if (!args.dryRun) {
+      for (const v of allVentures) {
+        try {
+          const result = await (deps.retroactivelyScoreVenture || retroactivelyScoreVenture)(supabase, v.id);
+          if (result.skipped) alreadyScored++;
+          else scored++;
+        } catch (err) {
+          // A missing RPC (migration not yet applied -- see the deployment-sequencing note in
+          // docs/reference/venture-gate-attestations-guide.md) is a distinct, expected-for-now
+          // state, not a per-venture failure -- surfaced in aggregate, not spammed 152x into
+          // the errors array.
+          if (isMissingFunctionError({ message: err.message })) functionMissing++;
+          else errors.push(`${v.id}: ${err.message}`);
+        }
+      }
+      try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
+      catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[4].key} (non-fatal): ${err.message}`); }
+    }
+    summary.jobs[JOBS[4].key] = { attempted: allVentures.length, scored, already_scored: alreadyScored, function_missing: functionMissing, errors };
+    if (functionMissing > 0) {
+      logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found for ${functionMissing}/${allVentures.length} venture(s) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
+    } else if (!args.dryRun && allVentures.length > 0 && scored === 0 && alreadyScored === 0) {
+      logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[4].key} scored 0 and skipped 0 across ${allVentures.length} venture(s) with zero function_missing -- investigate before trusting future silent passes.`);
     }
   }
 
