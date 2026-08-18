@@ -46,6 +46,14 @@ describe('computeGateConformance (pure, DB-free, unit tier — TS-1/TS-2/TS-7)',
     ]);
   });
 
+  // TESTING finding N4: FR-3's own lane (gates.exit_observe) was previously asserted only in
+  // the describeDb()-gated (CI-skipped) suite -- this unit-tier assertion closes that CI gap.
+  it('N4: reports 0 unresolvable observe (exit_observe) gate strings for the committed fixture', () => {
+    const report = computeGateConformance(fixtureStages);
+    expect(report.unresolvableObserve).toEqual([]);
+    expect(report.totalObserveCount).toBe(5);
+  });
+
   it('TS-2: reports 0 unresolvable when every binding string resolves (synthetic all-resolved fixture)', () => {
     const allResolved = [
       { stage_number: 1, stage_name: 'Test Stage', metadata: { gates: { exit: ['Application deployed'] } } },

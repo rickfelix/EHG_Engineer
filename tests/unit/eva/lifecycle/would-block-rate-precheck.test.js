@@ -43,7 +43,16 @@ function buildSourcePinnedSupabaseMock(fixtureRows) {
             if (column !== 'event_type') throw new Error(`expected filter on event_type, got ${column}`);
             const valueSet = new Set(values);
             const filtered = fixtureRows.filter((r) => valueSet.has(r.event_type));
-            return Promise.resolve({ data: filtered, error: null });
+            return {
+              // TS-N1 (pagination): .range() slices the ALREADY-filtered set, mirroring real
+              // PostgREST semantics (filter, THEN paginate). A .select().in() chain that never
+              // calls .range() (an unpaginated regression) would just get `filtered` back
+              // unbounded here, so this mock does not itself hide an unpaginated implementation
+              // -- the live-cap regression this guards against is proven separately below via a
+              // fixture sized past PAGE_SIZE.
+              then: (resolve, reject) => Promise.resolve({ data: filtered, error: null }).then(resolve, reject),
+              range: (start, end) => Promise.resolve({ data: filtered.slice(start, end + 1), error: null }),
+            };
           },
         }),
       };
@@ -69,6 +78,32 @@ describe('computeWouldBlockRate (FR-4, TS-6/TS-11)', () => {
     // would-block: the ANOMALY row + the UNRESOLVED row + the would_satisfy:false OBSERVE_ONLY row = 3
     expect(result.wouldBlockCount).toBe(3);
     expect(result.rate).toBeCloseTo(0.75, 5);
+    expect(result.hasData).toBe(true);
+  });
+
+  // TESTING finding N1 (HIGH): an earlier, unpaginated version of this query silently truncated
+  // at PostgREST's 1000-row response cap (live-verified: exactly 1000 of 139,444 rows returned).
+  // This test proves pagination actually happens by sizing the scoped fixture past PAGE_SIZE
+  // (500) and asserting ALL rows are counted, not just the first page.
+  it('TS-N1: paginates past PAGE_SIZE — all scoped rows are counted, not silently capped', async () => {
+    const bigScopedBatch = Array.from({ length: 1200 }, (_, i) => ({
+      event_type: 'EXIT_GATE_ANOMALY',
+      payload: { gate_string: `gate-${i}` },
+    }));
+    const supabase = buildSourcePinnedSupabaseMock(bigScopedBatch);
+    const result = await computeWouldBlockRate({ supabase });
+    expect(result.total).toBe(1200);
+    expect(result.wouldBlockCount).toBe(1200);
+    expect(result.rate).toBe(1);
+  });
+
+  // TESTING finding N2 (HIGH): zero observations must never read as "measured 0% would-block".
+  it('TS-N2: zero observations return rate:null and hasData:false, never a numeric 0', async () => {
+    const supabase = buildSourcePinnedSupabaseMock([]);
+    const result = await computeWouldBlockRate({ supabase });
+    expect(result.total).toBe(0);
+    expect(result.hasData).toBe(false);
+    expect(result.rate).toBeNull();
   });
 
   it('RATE_SCOPED_EVENT_TYPES contains exactly the 3 exit-gate event types, sourced from the shared constants module', () => {
