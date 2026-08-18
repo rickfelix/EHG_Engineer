@@ -96,6 +96,21 @@ jobs:
           fi
           exit "$code"
 
+      # SD-FDBK-ENH-AUTO-APPLY-MIGRATION-001 FR-2/FR-3. The strict check above is loud (::error,
+      # non-zero exit) but that verdict only ever reaches CI logs — nothing turns a newly-detected
+      # RECENT gap into an actionable ticket, so gaps accumulate (145 of 149 undispositioned at
+      # authoring time). This step diffs the current RECENT gap set against the last-recorded
+      # baseline and files one feedback row per NEWLY-detected gap (deduplicated against gaps
+      # already known from a prior run). Always non-blocking (if: always(), and the script itself
+      # never exits non-zero) — it is an accountability enhancement, not a second gate; the strict
+      # check above remains the sole blocking verdict.
+      - name: New-gap accountability notification (non-blocking)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/migration-gap-notify.mjs
+
       # SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001 (FR-2). A pure-builder unit test proves
       # buildLedger() is correct; it cannot prove the COMMITTED artifact matches what the
       # seeder would produce today. Only re-running the seeder and diffing does that — without

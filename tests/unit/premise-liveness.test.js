@@ -3,7 +3,7 @@
 // exists; LIVE when recent >= threshold; LIVE-but-warn on ambiguity (NEVER STALE). The leo-create-sd
 // stale-guard skips STALE diagnostic proposals (no SD created) and fails OPEN on any checker error.
 import { describe, it, expect } from 'vitest';
-import { checkPremiseLiveness, sanitizeOrToken } from '../../lib/eva/premise-liveness.js';
+import { checkPremiseLiveness, sanitizeOrToken, isMigrationPath } from '../../lib/eva/premise-liveness.js';
 import { extractWorkIdentifiers } from '../../lib/eva/feedback-premise-adapter.js';
 import { ingestProposalObject } from '../../scripts/leo-create-sd.js';
 
@@ -267,5 +267,77 @@ describe('sanitizeOrToken + identifier extraction (FR-2)', () => {
       { supabase: sb, git: noGit, nowMs: NOW }
     );
     expect(res.evidence.join(' | ')).toMatch(/names already-completed SD/i);
+  });
+});
+
+// SD-FDBK-ENH-AUTO-APPLY-MIGRATION-001 FR-5/FR-6 — the referenced-file git-log branch must not
+// treat commit COUNT on a migration file as proof the migration was applied. Editing a migration
+// file (comment fix, unrelated touch-up, or the very commit that introduced the still-open gap)
+// looks identical to a commit that fixed it. For migration-path referenced files, a live-state
+// probe must corroborate before the commit-count evidence is trusted as "highest confidence".
+//
+// Anti-pattern this pins: editing a migration file is not evidence the migration was applied.
+// Future creation-time guards operating on this class of claim (git-commit-count as a proxy for
+// "the underlying thing changed") should corroborate with live-state proof the same way.
+describe('checkPremiseLiveness — migration-path referenced files require live-state corroboration (FR-5)', () => {
+  const MIGRATION_FILE = 'database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql';
+  // Isolates the file-log call (`-- "<file>"`) from the token grep call (`--grep=`), so these
+  // tests exercise ONLY the referenced-file corroboration branch under test, not the separate
+  // (unrelated) --grep-on-token signal which findShippedFix also checks.
+  const gitFileCommitsOnly = (argsString) => (String(argsString).includes(' -- ') ? 'abc1234 fix: touch the migration file' : '');
+
+  it('isMigrationPath recognizes all three scanned migration dirs, and non-migration paths', () => {
+    expect(isMigrationPath('database/migrations/x.sql')).toBe(true);
+    expect(isMigrationPath('database/manual-updates/x.sql')).toBe(true);
+    expect(isMigrationPath('supabase/migrations/x.sql')).toBe(true);
+    expect(isMigrationPath('scripts/lib/foo.js')).toBe(false);
+    expect(isMigrationPath('')).toBe(false);
+  });
+
+  it('commits touching a migration file WITHOUT the declared object existing live → NOT STALE on file-match grounds alone', async () => {
+    const sb = mockSb({ handoffs: [], completed: [] });
+    const probeLiveState = async () => ({ executed: false, missingObjects: [{ kind: 'function', schema: 'public', name: 'set_venture_pbn_verdict_stage_zero' }], declaredCount: 1, fastPath: null });
+    const v = await checkPremiseLiveness(
+      { kind: 'retro-mined', gate_name: GATE, referenced_files: [MIGRATION_FILE], source: 't', premise_text: 'x' },
+      { supabase: sb, git: gitFileCommitsOnly, probeLiveState, nowMs: NOW }
+    );
+    // Commit count alone must not manufacture a STALE/ARCHIVE verdict for a migration file.
+    expect(v.status).not.toBe('STALE');
+    expect(v.evidence.join(' | ')).toMatch(/still missing.*NOT treated as a shipped fix/i);
+  });
+
+  it('commits touching a migration file WITH the declared object confirmed live → STALE, corroborated', async () => {
+    const sb = mockSb({ handoffs: [], completed: [] });
+    const probeLiveState = async () => ({ executed: true, missingObjects: [], declaredCount: 1, fastPath: null });
+    const v = await checkPremiseLiveness(
+      { kind: 'retro-mined', gate_name: GATE, referenced_files: [MIGRATION_FILE], source: 't', premise_text: 'x' },
+      { supabase: sb, git: gitFileCommitsOnly, probeLiveState, nowMs: NOW }
+    );
+    expect(v.status).toBe('STALE');
+    expect(v.confidence_score).toBeGreaterThanOrEqual(0.9);
+    expect(v.evidence.join(' | ')).toMatch(/corroborated: all declared objects present live/i);
+  });
+
+  it('live-state probe unavailable (throws) → falls back to commit-count evidence, but flags it as unconfirmed', async () => {
+    const sb = mockSb({ handoffs: [], completed: [] });
+    const probeLiveState = async () => { throw new Error('DB unreachable'); };
+    const v = await checkPremiseLiveness(
+      { kind: 'retro-mined', gate_name: GATE, referenced_files: [MIGRATION_FILE], source: 't', premise_text: 'x' },
+      { supabase: sb, git: gitFileCommitsOnly, probeLiveState, nowMs: NOW }
+    );
+    expect(v.status).toBe('STALE'); // fail-open preserved: falls back to the pre-FR-5 behavior
+    expect(v.evidence.join(' | ')).toMatch(/live-state corroboration UNAVAILABLE.*unconfirmed/i);
+  });
+
+  it('non-migration referenced files are unaffected — existing commit-count-only behavior preserved', async () => {
+    const sb = mockSb({ handoffs: [], completed: [] });
+    let probeCalled = false;
+    const probeLiveState = async () => { probeCalled = true; return { executed: true, missingObjects: [], declaredCount: 1, fastPath: null }; };
+    const v = await checkPremiseLiveness(
+      { kind: 'retro-mined', gate_name: GATE, referenced_files: ['scripts/x/acceptance-criteria-validation.js'], source: 't', premise_text: 'x' },
+      { supabase: sb, git: gitFileCommitsOnly, probeLiveState, nowMs: NOW }
+    );
+    expect(probeCalled).toBe(false);
+    expect(v.status).toBe('STALE');
   });
 });
