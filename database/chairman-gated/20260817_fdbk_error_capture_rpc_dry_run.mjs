@@ -263,6 +263,17 @@ try {
   // a silent drop" guarantee, actually exercised. Runs LAST: its 51 seed rows persist forward (see
   // note on TS-lifetime-dedup above) and would trip the ceiling for any test that ran after it.
   r = await withSavepoint(client, 'TS-storm', async () => {
+    // Submit a REAL, known-recurring error via the RPC BEFORE seeding/tripping the ceiling -- this
+    // is the fingerprint TS-storm-vs-dedup below resubmits AFTER the ceiling trips, to prove the
+    // ordering fix (adversarial ship-review finding, PLAN-TO-LEAD): dedup is now checked before the
+    // storm ceiling, so an already-known fingerprint is never blocked by it, no matter how tripped
+    // the ceiling is. Submitted first so the dynamic baseline query below naturally includes it.
+    const known = await client.query(
+      `SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5) AS result`,
+      ['known recurring error, submitted before the storm trips', null, null, 'medium', '{}']
+    );
+    const knownId = known.rows[0].result.id;
+
     // Seed count is DYNAMIC relative to the current distinct-fingerprint count, not assumed-zero --
     // every earlier test in this script (TS-1a/1b/1c/TS-2/TS-isolation/TS-lifetime-dedup) already
     // contributed its own distinct fingerprints that persist forward (RELEASE, not ROLLBACK, on
@@ -308,7 +319,17 @@ try {
       `SELECT occurrence_count FROM public.feedback WHERE error_hash = $1 AND source_type = 'error_capture' AND feedback_type = 'sentry_error'`,
       ['0'.repeat(64)]
     );
-    return { before49, at50, tripped, watermark };
+
+    // THE core fix, exercised: the ceiling is now definitely tripped (at50 above) -- resubmit the
+    // KNOWN fingerprint from before the storm and confirm it still dedupes successfully instead of
+    // being blocked.
+    const knownResubmit = await client.query(
+      `SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5) AS result`,
+      ['known recurring error, submitted before the storm trips', null, null, 'medium', '{}']
+    );
+    const knownRow = await client.query(`SELECT occurrence_count FROM public.feedback WHERE id = $1::uuid`, [knownId]);
+
+    return { before49, at50, tripped, watermark, knownResubmit, knownRow };
   });
   // The 51st call SUCCEEDS at the SQL/RPC level (no exception) -- it's the RESPONSE PAYLOAD that
   // signals rejection (ok:false, rate_limited:true), specifically so the watermark INSERT above
@@ -325,6 +346,14 @@ try {
     assert(payload.ok === false, `TS-storm: response payload reports ok:false (got ${JSON.stringify(payload)})`);
     assert(payload.rate_limited === true, `TS-storm: response payload reports rate_limited:true (got ${JSON.stringify(payload)})`);
     assert(r.result.watermark.rows.length === 1, `TS-storm: exactly one watermark row exists at the 64-char sentinel hash (got ${r.result.watermark.rows.length}) -- proves the watermark write survives the same statement (S1 fix)`);
+
+    // Adversarial ship-review finding (PLAN-TO-LEAD): a previously-known fingerprint must NEVER be
+    // blocked by a tripped storm ceiling -- the whole point of checking dedup first.
+    const knownPayload = r.result.knownResubmit.rows[0].result;
+    assert(knownPayload.ok === true, `TS-storm-vs-dedup: resubmitting an already-known fingerprint AFTER the ceiling trips still succeeds (got ${JSON.stringify(knownPayload)})`);
+    assert(knownPayload.rate_limited !== true, `TS-storm-vs-dedup: an already-known fingerprint is NOT rate-limited by a tripped ceiling (got ${JSON.stringify(knownPayload)})`);
+    assert(knownPayload.deduped === true, `TS-storm-vs-dedup: resubmission reports deduped:true (got ${JSON.stringify(knownPayload)})`);
+    assert(r.result.knownRow.rows[0].occurrence_count === 2, `TS-storm-vs-dedup: occurrence_count incremented to 2 despite the ceiling being tripped (got ${r.result.knownRow.rows[0].occurrence_count})`);
   }
 
   console.log(JSON.stringify({ pass: allPass, log }, null, 2));

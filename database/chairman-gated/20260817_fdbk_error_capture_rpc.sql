@@ -176,6 +176,7 @@ DECLARE
   v_safe_metadata JSONB;
   v_existing_id UUID;
   v_new_id UUID;
+  v_was_fresh_insert BOOLEAN;
   v_watermark_hash CONSTANT TEXT := '0000000000000000000000000000000000000000000000000000000000000000';
 BEGIN
   IF p_message IS NULL OR length(trim(p_message)) = 0 THEN
@@ -212,13 +213,46 @@ BEGIN
 
   -- Fixed allow-list of metadata keys — never persist an arbitrary client-supplied object verbatim
   -- (see header; this is the promote_payload/category injection surface RISK sub-agent flagged).
+  -- All three values length-capped (adversarial ship-review finding, PLAN-TO-LEAD): user_agent and
+  -- browser were previously persisted unbounded, unlike component_stack -- an unauthenticated caller
+  -- could otherwise write an arbitrarily large string into either field on every new-fingerprint row.
   v_safe_metadata := jsonb_build_object(
-    'user_agent', p_metadata->>'user_agent',
-    'browser', p_metadata->>'browser',
+    'user_agent', left(coalesce(p_metadata->>'user_agent', ''), 500),
+    'browser', left(coalesce(p_metadata->>'browser', ''), 200),
     'component_stack', left(coalesce(p_metadata->>'component_stack', ''), 2000)
   );
 
-  -- Distinct-fingerprint storm ceiling (defense in depth, observable watermark row — see header).
+  -- Repeat of an already-seen fingerprint (lifetime dedup, not time-windowed -- SECURITY sub-agent
+  -- finding S2, live-verified: the unique index below has no time predicate, so a time-windowed
+  -- UPDATE here would fall through to the INSERT branch for any fingerprint last seen >1h ago,
+  -- which then violates that untimed index -- 23505, permanently, on every future occurrence of
+  -- that exact fingerprint. Recurring errors (the ones worth capturing) are exactly what that broke.
+  -- first_seen is deliberately NOT touched -- it stays the original occurrence time.
+  --
+  -- DEDUP CHECKED BEFORE THE STORM CEILING (adversarial ship-review finding, PLAN-TO-LEAD; matches
+  -- record_venture_error's own explicit ordering, lines 120-166 of that sibling file: "Repeat of an
+  -- already-seen fingerprint: always aggregate, ceiling doesn't apply"). An earlier version of this
+  -- function checked the storm ceiling FIRST, unconditionally -- once tripped (trivially, by an
+  -- unauthenticated caller submitting 50 distinct fake messages in seconds, with no per-caller rate
+  -- limit anywhere in this function), every subsequent call for an ALREADY-KNOWN fingerprint also hit
+  -- the storm branch first and never reached this UPDATE, freezing occurrence_count/last_seen for
+  -- every real, recurring error app-wide -- indefinitely sustainable by the same attacker submitting
+  -- one fresh fingerprint roughly every ~72 seconds to keep the trailing-hour count above the
+  -- ceiling. Checking dedup first means the ceiling can only ever suppress genuinely NEW
+  -- fingerprints, never already-tracked ones -- closing that DoS class entirely, not just narrowing it.
+  UPDATE public.feedback
+  SET occurrence_count = occurrence_count + 1, last_seen = now(), updated_at = now()
+  WHERE source_type = 'error_capture'
+    AND feedback_type = 'sentry_error'
+    AND venture_id IS NULL
+    AND error_hash = v_error_hash
+  RETURNING id INTO v_existing_id;
+
+  IF v_existing_id IS NOT NULL THEN
+    RETURN jsonb_build_object('ok', true, 'id', v_existing_id, 'deduped', true);
+  END IF;
+
+  -- New distinct fingerprint: only NOW does the storm ceiling apply (see reordering note above).
   -- RETURNs a non-erroring payload rather than RAISE EXCEPTION -- matching record_venture_error's
   -- OWN pattern (jsonb_build_object(...); RETURN, never RAISE, in its equivalent branch), and
   -- necessarily so: a single SQL statement is atomic, so RAISE EXCEPTION immediately after this
@@ -248,27 +282,19 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'rate_limited', true, 'code', '53400');
   END IF;
 
-  -- Repeat of an already-seen fingerprint (lifetime dedup, not time-windowed -- SECURITY sub-agent
-  -- finding S2, live-verified: the unique index below has no time predicate, so a time-windowed
-  -- UPDATE here would fall through to the INSERT branch for any fingerprint last seen >1h ago,
-  -- which then violates that untimed index -- 23505, permanently, on every future occurrence of
-  -- that exact fingerprint. Recurring errors (the ones worth capturing) are exactly what that broke.
-  -- first_seen is deliberately NOT touched -- it stays the original occurrence time.
-  UPDATE public.feedback
-  SET occurrence_count = occurrence_count + 1, last_seen = now(), updated_at = now()
-  WHERE source_type = 'error_capture'
-    AND feedback_type = 'sentry_error'
-    AND venture_id IS NULL
-    AND error_hash = v_error_hash
-  RETURNING id INTO v_existing_id;
-
-  IF v_existing_id IS NOT NULL THEN
-    RETURN jsonb_build_object('ok', true, 'id', v_existing_id, 'deduped', true);
-  END IF;
-
   -- New fingerprint, never seen before. venture_id is never set (non-venture-scoped by design). status,
   -- source_type, created_at, user_id are all server-computed, never client-suppliable. category is
   -- never set by this function at all (defends against the corrective_finding injection surface).
+  --
+  -- ON CONFLICT ... DO UPDATE (adversarial ship-review finding, PLAN-TO-LEAD): the dedup UPDATE
+  -- above and this INSERT are two separate statements with no lock between them, so two concurrent
+  -- calls with an identical fingerprint (realistic: multiple tabs/users hitting the same bug within
+  -- milliseconds, or a render-error path and a window-error listener firing near-simultaneously for
+  -- the same failure) could both miss the UPDATE (0 rows yet) and both reach this INSERT -- without
+  -- this clause, the second would 23505 against idx_feedback_error_capture_hash instead of gracefully
+  -- deduping, propagating as a hard, uncaught RPC error to the "losing" caller. The xmax=0 check
+  -- distinguishes a genuine fresh insert from a conflict-recovered update for an accurate `deduped`
+  -- response either way.
   INSERT INTO public.feedback (
     type, feedback_type, source_type, source_application, title, description, severity, status,
     user_id, page_url, error_hash, error_message, occurrence_count, first_seen, last_seen, metadata
@@ -277,9 +303,11 @@ BEGIN
     left(coalesce(p_stack_trace, ''), 4000), v_severity, 'new', v_user_id, left(p_page_url, 500),
     v_error_hash, left(p_message, 2000), 1, now(), now(), v_safe_metadata
   )
-  RETURNING id INTO v_new_id;
+  ON CONFLICT (error_hash) WHERE source_type = 'error_capture' AND feedback_type = 'sentry_error' AND venture_id IS NULL
+  DO UPDATE SET occurrence_count = feedback.occurrence_count + 1, last_seen = now(), updated_at = now()
+  RETURNING id, (xmax = 0) INTO v_new_id, v_was_fresh_insert;
 
-  RETURN jsonb_build_object('ok', true, 'id', v_new_id, 'deduped', false);
+  RETURN jsonb_build_object('ok', true, 'id', v_new_id, 'deduped', NOT v_was_fresh_insert);
 END;
 $function$;
 
