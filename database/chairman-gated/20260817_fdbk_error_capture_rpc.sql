@@ -79,6 +79,21 @@
 -- venture-error volume.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- TWO SECURITY SUB-AGENT FINDINGS, BOTH LIVE-VERIFIED AND FIXED PRE-APPLY (EXEC-TO-PLAN review)
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- S1: the storm-ceiling watermark sentinel was 76 zero-chars against a varchar(64) column --
+-- every real trip of the ceiling would 22001 (value too long), silently discarding the ONE
+-- mechanism this file's own header promises ("never a silent unobservable drop"). Live-reproduced,
+-- then corrected to exactly 64 chars.
+-- S2: the fingerprint-dedup UPDATE carried a `created_at > now() - interval '1 hour'` window, but
+-- the unique index it defers to has NO time predicate. Any fingerprint last seen >1h ago fell
+-- through to the INSERT branch and permanently 23505'd against its own now-untimed index --
+-- recurring errors (the ones worth capturing) became captureable exactly once, ever, then silently
+-- dropped by the client's own failure-swallowing wrapper. Live-reproduced via a backdated
+-- service_role-seeded row, then fixed by making the dedup UPDATE lifetime-scoped (no time window) --
+-- first_seen stays the original occurrence time; occurrence_count/last_seen track recurrence.
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- SEQUENCING (TESTING sub-agent finding, prospective PLAN-TO-EXEC review, live-verified): this file
 -- must actually be applied (chairman --issue-token / MIGRATION_APPLY_TOKEN flow, matching every
 -- sibling file in this directory) before any live acceptance criterion in this SD's PRD can be
@@ -129,14 +144,17 @@ AS $function$
   WHERE source_type = 'error_capture'
     AND feedback_type = 'sentry_error'
     AND venture_id IS NULL
-    AND error_hash <> '0000000000000000000000000000000000000000000000000000000000000000000000000000'
+    AND error_hash <> '0000000000000000000000000000000000000000000000000000000000000000'
     AND created_at > now() - interval '1 hour';
 $function$;
 
 REVOKE EXECUTE ON FUNCTION public.check_error_capture_storm() FROM PUBLIC, anon, authenticated;
--- No external EXECUTE grant: only fn_submit_error_capture (below) calls this; a SECURITY DEFINER
--- function's internal calls run as the function OWNER, who always implicitly holds EXECUTE on its
--- own objects regardless of this REVOKE (matches fn_submit_internal_feedback's identical precedent).
+-- No anon/authenticated/PUBLIC grant (SECURITY sub-agent live-verified via proacl): only
+-- fn_submit_error_capture (below) calls this; a SECURITY DEFINER function's internal calls run as
+-- the function OWNER, who always implicitly holds EXECUTE on its own objects regardless of this
+-- REVOKE (matches fn_submit_internal_feedback's identical precedent). service_role and postgres
+-- still hold EXECUTE via the default ACL, as on every function in this schema -- unremarkable and
+-- not a gap; the REVOKE's purpose is closing anon/authenticated/PUBLIC only.
 
 -- ── fn_submit_error_capture ──────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.fn_submit_error_capture(
@@ -158,7 +176,7 @@ DECLARE
   v_safe_metadata JSONB;
   v_existing_id UUID;
   v_new_id UUID;
-  v_watermark_hash CONSTANT TEXT := '0000000000000000000000000000000000000000000000000000000000000000000000000000';
+  v_watermark_hash CONSTANT TEXT := '0000000000000000000000000000000000000000000000000000000000000000';
 BEGIN
   IF p_message IS NULL OR length(trim(p_message)) = 0 THEN
     RAISE EXCEPTION 'fn_submit_error_capture: message is required' USING ERRCODE = '22004';
@@ -201,6 +219,16 @@ BEGIN
   );
 
   -- Distinct-fingerprint storm ceiling (defense in depth, observable watermark row — see header).
+  -- RETURNs a non-erroring payload rather than RAISE EXCEPTION -- matching record_venture_error's
+  -- OWN pattern (jsonb_build_object(...); RETURN, never RAISE, in its equivalent branch), and
+  -- necessarily so: a single SQL statement is atomic, so RAISE EXCEPTION immediately after this
+  -- INSERT would roll the INSERT back too (live-reproduced: watermark row count stayed 0 after a
+  -- real trip, with the original RAISE EXCEPTION version). The whole point of this branch is that
+  -- the watermark write must survive even though the caller's specific submission is rejected --
+  -- which requires the overall statement to succeed. This is a genuine divergence from this SD's
+  -- own SEQUENCING note further up (which still describes the now-superseded RAISE EXCEPTION
+  -- design) and from fn_submit_internal_feedback's rate-limit convention (RAISE EXCEPTION is still
+  -- correct THERE because that function writes nothing on its rejected path).
   IF public.check_error_capture_storm() THEN
     -- Upsert the watermark row itself so the ceiling's own activity is observable, never a silent
     -- drop (matches record_venture_error's doctrine).
@@ -216,25 +244,28 @@ BEGIN
     ON CONFLICT (error_hash) WHERE source_type = 'error_capture' AND feedback_type = 'sentry_error' AND venture_id IS NULL
     DO UPDATE SET occurrence_count = feedback.occurrence_count + 1, last_seen = now(), updated_at = now();
 
-    RAISE EXCEPTION 'fn_submit_error_capture: rate limited (storm ceiling)' USING ERRCODE = '53400';
+    RETURN jsonb_build_object('ok', false, 'rate_limited', true, 'code', '53400');
   END IF;
 
-  -- Repeat of an already-seen fingerprint this hour: aggregate (occurrence_count++), never insert a
-  -- duplicate row.
+  -- Repeat of an already-seen fingerprint (lifetime dedup, not time-windowed -- SECURITY sub-agent
+  -- finding S2, live-verified: the unique index below has no time predicate, so a time-windowed
+  -- UPDATE here would fall through to the INSERT branch for any fingerprint last seen >1h ago,
+  -- which then violates that untimed index -- 23505, permanently, on every future occurrence of
+  -- that exact fingerprint. Recurring errors (the ones worth capturing) are exactly what that broke.
+  -- first_seen is deliberately NOT touched -- it stays the original occurrence time.
   UPDATE public.feedback
   SET occurrence_count = occurrence_count + 1, last_seen = now(), updated_at = now()
   WHERE source_type = 'error_capture'
     AND feedback_type = 'sentry_error'
     AND venture_id IS NULL
     AND error_hash = v_error_hash
-    AND created_at > now() - interval '1 hour'
   RETURNING id INTO v_existing_id;
 
   IF v_existing_id IS NOT NULL THEN
     RETURN jsonb_build_object('ok', true, 'id', v_existing_id, 'deduped', true);
   END IF;
 
-  -- New fingerprint this hour. venture_id is never set (non-venture-scoped by design). status,
+  -- New fingerprint, never seen before. venture_id is never set (non-venture-scoped by design). status,
   -- source_type, created_at, user_id are all server-computed, never client-suppliable. category is
   -- never set by this function at all (defends against the corrective_finding injection surface).
   INSERT INTO public.feedback (

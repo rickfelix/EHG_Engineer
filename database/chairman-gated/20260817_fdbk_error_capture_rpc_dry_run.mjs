@@ -205,6 +205,90 @@ try {
     assert(r.result.call.rows[0].result.ok === true, 'TS-isolation: fn_submit_error_capture succeeds without colliding against the unrelated venture_error row');
   }
 
+  // TS-lifetime-dedup: SECURITY sub-agent finding S2 -- a fingerprint last seen >1h ago must still
+  // dedup (not 23505 against the untimed unique index). Submit, backdate via service_role (this
+  // client IS service_role -- no RLS to work around), resubmit the identical fingerprint. Runs
+  // BEFORE TS-storm deliberately: TS-storm succeeds and its 51 seed rows correctly persist forward
+  // (RELEASE, not ROLLBACK) into the shared transaction, which would otherwise trip the storm
+  // ceiling for every fingerprint-dependent test that ran after it in the same hour window.
+  r = await withSavepoint(client, 'TS-lifetime-dedup', async () => {
+    const first = await client.query(
+      `SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5) AS result`,
+      ['stale recurring error', 'stack-stale', null, 'medium', '{}']
+    );
+    const firstId = first.rows[0].result.id;
+    await client.query(
+      `UPDATE public.feedback SET created_at = now() - interval '3 hours' WHERE id = $1::uuid`,
+      [firstId]
+    );
+    const second = await client.query(
+      `SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5) AS result`,
+      ['stale recurring error', 'stack-stale', null, 'medium', '{}']
+    );
+    return { firstId, second };
+  });
+  assert(r.ok, `TS-lifetime-dedup: resubmitting a >1h-old fingerprint succeeds, not 23505 (got ${r.ok ? 'success' : r.code + ' ' + r.message})`);
+  if (r.ok) {
+    assert(r.result.second.rows[0].result.id === r.result.firstId, 'TS-lifetime-dedup: resubmission returns the SAME row id as the original (lifetime dedup, not a new row)');
+    assert(r.result.second.rows[0].result.deduped === true, 'TS-lifetime-dedup: resubmission reports deduped:true');
+    const row = await client.query(`SELECT occurrence_count FROM public.feedback WHERE id = $1::uuid`, [r.result.firstId]);
+    assert(row.rows[0].occurrence_count === 2, `TS-lifetime-dedup: occurrence_count incremented to 2 despite the 3h gap (got ${row.rows[0].occurrence_count})`);
+  }
+
+  // TS-storm: SECURITY sub-agent finding S1 -- the storm ceiling itself was never actually
+  // exercised before (the 76-char sentinel vs varchar(64) bug survived because nothing here ever
+  // tripped it). Seed 50 distinct fingerprints directly (fast; bypasses the RPC's own per-call
+  // overhead), confirm check_error_capture_storm() flips at exactly 50, then confirm a REAL
+  // fn_submit_error_capture call at that point leaves a genuine watermark row behind -- the "never
+  // a silent drop" guarantee, actually exercised. Runs LAST: its 51 seed rows persist forward (see
+  // note on TS-lifetime-dedup above) and would trip the ceiling for any test that ran after it.
+  r = await withSavepoint(client, 'TS-storm', async () => {
+    for (let i = 0; i < 49; i++) {
+      await client.query(
+        `INSERT INTO public.feedback (
+           type, feedback_type, source_type, source_application, title, description, severity,
+           status, venture_id, error_hash, occurrence_count, first_seen, last_seen, metadata
+         ) VALUES (
+           'issue', 'sentry_error', 'error_capture', 'EHG', 'storm-seed', 'storm-seed', 'low', 'new',
+           NULL, $1, 1, now(), now(), '{}'
+         )`,
+        [`aa${String(i).padStart(2, '0')}`.padEnd(64, '0')]
+      );
+    }
+    const before49 = await client.query(`SELECT public.check_error_capture_storm() AS tripped`);
+    await client.query(
+      `INSERT INTO public.feedback (
+         type, feedback_type, source_type, source_application, title, description, severity,
+         status, venture_id, error_hash, occurrence_count, first_seen, last_seen, metadata
+       ) VALUES (
+         'issue', 'sentry_error', 'error_capture', 'EHG', 'storm-seed', 'storm-seed', 'low', 'new',
+         NULL, $1, 1, now(), now(), '{}'
+       )`,
+      ['bb'.padEnd(64, '0')] // 50th distinct fingerprint
+    );
+    const at50 = await client.query(`SELECT public.check_error_capture_storm() AS tripped`);
+    const tripped = await client.query(
+      `SELECT public.fn_submit_error_capture($1,$2,$3,$4,$5) AS result`,
+      ['51st distinct storm-triggering message', null, null, 'medium', '{}']
+    );
+    const watermark = await client.query(
+      `SELECT occurrence_count FROM public.feedback WHERE error_hash = $1 AND source_type = 'error_capture' AND feedback_type = 'sentry_error'`,
+      ['0'.repeat(64)]
+    );
+    return { before49, at50, tripped, watermark };
+  });
+  // The 51st call SUCCEEDS at the SQL/RPC level (no exception) -- it's the RESPONSE PAYLOAD that
+  // signals rejection (ok:false, rate_limited:true), specifically so the watermark INSERT above
+  // survives as part of a non-erroring statement (S1 fix: RAISE EXCEPTION here would roll back the
+  // very INSERT this branch exists to make observable -- live-reproduced with the original design).
+  assert(r.ok, `TS-storm: the 51st distinct fingerprint call succeeds at the SQL level, not a thrown 22001/53400 (got ${r.ok ? 'success' : r.code + ' ' + r.message})`);
+  if (r.ok) {
+    const payload = r.result.tripped.rows[0].result;
+    assert(payload.ok === false, `TS-storm: response payload reports ok:false (got ${JSON.stringify(payload)})`);
+    assert(payload.rate_limited === true, `TS-storm: response payload reports rate_limited:true (got ${JSON.stringify(payload)})`);
+    assert(r.result.watermark.rows.length === 1, `TS-storm: exactly one watermark row exists at the 64-char sentinel hash (got ${r.result.watermark.rows.length}) -- proves the watermark INSERT survives the same statement (S1 fix)`);
+  }
+
   console.log(JSON.stringify({ pass: allPass, log }, null, 2));
 } finally {
   await client.query('ROLLBACK');
