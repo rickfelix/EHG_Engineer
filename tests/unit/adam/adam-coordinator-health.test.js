@@ -15,6 +15,7 @@ import {
   computeCoordinatorLiveness,
   applyCoordinatorLiveness,
   COORDINATOR_LIVENESS_MAX_AGE_MINUTES,
+  computeSharpenings,
 } from '../../../scripts/adam-coordinator-health.mjs';
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
 import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
@@ -60,6 +61,12 @@ function makeFakeSupabase(tables, { onInsert, capAt } = {}) {
         eq(col, val) { filters.push((r) => (col.includes('->>') ? String(jsonbPath(r, col) ?? '') === String(val) : r[col] === val)); return builder; },
         in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
         is(col, val) { filters.push((r) => (r[col] ?? null) === val); return builder; },
+        // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001: added for computeSharpenings' recent-
+        // completions query (.gte('completion_date', ...)) — previously absent, so that
+        // query threw and was silently swallowed by computeSharpenings' own per-signal
+        // fail-soft try/catch (falseCompletionSample degraded to an error marker with zero
+        // rows, never reaching gitGrep at all).
+        gte(col, val) { filters.push((r) => r[col] >= val); return builder; },
         not(col, op, val) { filters.push((r) => r[col] !== val); return builder; },
         order(col, { ascending } = {}) { orderCol = col; orderAsc = ascending !== false; return builder; },
         limit(n) { limitN = n; return builder; },
@@ -159,6 +166,71 @@ describe('computeUtilization (TS-1, TS-2)', () => {
     const result = await computeUtilization(supabase);
     expect(result.live_workers).toBe(1);
     expect(result.claimed).toBe(1);
+  });
+});
+
+/**
+ * SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): end-to-end wiring coverage for
+ * computeSharpenings' FALSE_COMPLETION sample -- proves the async pre-resolution step
+ * (resolveGateRepoContext, seeded via the `applications` table) actually connects to the
+ * synchronous sampleFalseCompletions, not just that each half works in isolation.
+ */
+describe('computeSharpenings FALSE_COMPLETION sample (FR-5 wiring)', () => {
+  const recentCompletedRow = (over = {}) => ({
+    sd_key: 'SD-VENTURE-WIRING-001',
+    status: 'completed',
+    completion_date: new Date().toISOString(),
+    metadata: {},
+    target_application: 'TestWiringVenture',
+    ...over,
+  });
+
+  it('a genuine venture SD resolves via the applications table and is actually git-probed (verified:true)', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_directives_v2: [recentCompletedRow()],
+      applications: [{ name: 'TestWiringVenture', local_path: '/ventures/test-wiring', status: 'active', deleted_at: null }],
+    });
+    const gitGrep = vi.fn((sdKey, repoPath) => sdKey === 'SD-VENTURE-WIRING-001' && repoPath?.includes('test-wiring'));
+
+    const result = await computeSharpenings(supabase, { gitGrep });
+
+    const falseCompletionClass = result.failureClasses.find((c) => c.cls === 'FALSE_COMPLETION');
+    expect(falseCompletionClass.firing).toBe(false);
+    expect(gitGrep).toHaveBeenCalledWith('SD-VENTURE-WIRING-001', expect.stringContaining('test-wiring'));
+  });
+
+  it('an unresolvable venture SD (no applications row, no registry entry) stays unverifiable -- FALSE_COMPLETION does not fire', async () => {
+    const supabase = makeFakeSupabase({
+      strategic_directives_v2: [recentCompletedRow({ sd_key: 'SD-VENTURE-WIRING-002', target_application: 'zzz-totally-unregistered-venture' })],
+      applications: [],
+    });
+    const gitGrep = vi.fn(() => false);
+
+    const result = await computeSharpenings(supabase, { gitGrep });
+
+    const falseCompletionClass = result.failureClasses.find((c) => c.cls === 'FALSE_COMPLETION');
+    expect(falseCompletionClass.firing).toBe(false);
+    expect(gitGrep).not.toHaveBeenCalled();
+  });
+
+  it('a platform SD (target_application=EHG_Engineer) makes zero applications-table queries (TR-4 byte-identical invariant, wiring level)', async () => {
+    let applicationsQueried = false;
+    const baseSupabase = makeFakeSupabase({
+      strategic_directives_v2: [recentCompletedRow({ sd_key: 'SD-PLATFORM-WIRING-001', target_application: 'EHG_Engineer' })],
+      applications: [],
+    });
+    const supabase = {
+      from(tableName) {
+        if (tableName === 'applications') applicationsQueried = true;
+        return baseSupabase.from(tableName);
+      },
+    };
+    const gitGrep = vi.fn(() => true);
+
+    await computeSharpenings(supabase, { gitGrep });
+
+    expect(applicationsQueried).toBe(false);
+    expect(gitGrep).toHaveBeenCalledWith('SD-PLATFORM-WIRING-001', expect.any(String));
   });
 });
 

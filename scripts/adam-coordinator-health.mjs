@@ -40,6 +40,10 @@ import {
   FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS,
 } from '../lib/oversight/coordinator-health-sharpenings.mjs';
 import { registerOversightLoop } from '../lib/oversight/coordinator-health-recompute.mjs';
+// SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): the canonical shared gate-side repo
+// resolver, reused (not forked) so venture-repo resolution stays in lockstep with the
+// same resolver BaseExecutor.js/cli-main.js already use.
+import { resolveGateRepoContext } from '../lib/repo-paths.js';
 // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — the SAME
 // standalone module scripts/lib/capacity-inputs.mjs imports (TR-1: identical base population on
 // both integration points). Computed as its own try/caught reading.engagement key in runProbe
@@ -426,11 +430,16 @@ export async function persistReading(supabase, reading) {
  * SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001: FALSE_COMPLETION git verifier — a
  * DB-completed SD must leave a trace on origin/main. 'unverifiable' (git/remote
  * unavailable) is a DISTINCT status, never a silent pass and never a crash.
+ *
+ * SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): optional repoPath probes that
+ * repo's origin/main instead of the ambient cwd (EHG_Engineer). Omitting repoPath
+ * is byte-identical to the pre-fix behavior.
  */
-export function gitGrepMainForSd(sdKey) {
+export function gitGrepMainForSd(sdKey, repoPath) {
   try {
     const out = execSync(`git log origin/main --grep="${String(sdKey).replace(/["\\$`]/g, '')}" -1 --format=%h`, {
       encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
+      ...(repoPath ? { cwd: repoPath } : {}),
     });
     return out.trim().length > 0;
   } catch {
@@ -485,7 +494,25 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
       .gte('completion_date', recentIso)
       .order('completion_date', { ascending: false })
       .limit(FALSE_COMPLETION_SAMPLE);
-    falseCompletionSample = sampleFalseCompletions(recentCompleted || [], gitGrep);
+    // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): pre-resolve each row's real repo
+    // HERE (computeSharpenings is already async) so sampleFalseCompletions itself can stay
+    // synchronous (TR-2). resolveGateRepoContext's own platform short-circuit makes this
+    // cheap (no DB call) for the platform-majority of rows; each row's resolution is
+    // attached as _repoResolution for sampleFalseCompletions to key off.
+    const rowsWithResolution = await Promise.all(
+      (recentCompleted || []).map(async (row) => {
+        try {
+          const resolution = await resolveGateRepoContext(row, supabase);
+          return { ...row, _repoResolution: resolution };
+        } catch {
+          // Resolution itself failing (not a "no repo" verdict, an actual throw) must not
+          // silently drop the row into the legacy no-context path (which would call
+          // gitGrep(sdKey) against the wrong repo for a venture) — treat as unresolvable.
+          return { ...row, _repoResolution: { resolved: false } };
+        }
+      })
+    );
+    falseCompletionSample = sampleFalseCompletions(rowsWithResolution, gitGrep);
   } catch (e) { falseCompletionSample = { samples: [], false_completions: [], error: e.message }; }
   const failureClasses = classifyFailureClasses({ outcomeFlow, utilization, integrity, stuckRows, staleHoldRows, falseCompletionSample });
   return {
