@@ -139,6 +139,20 @@ describe('content-sanitizer', () => {
       expect(isUntrustedOrigin({ source_type: 'venture_worker', source_application: 'fn_submit_venture_feedback' })).toBe(true);
     });
 
+    // SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001: 'telegram' is now ALSO untrusted -- a schema-legal
+    // source_type (feedback_source_type_check permits it) that was absent from
+    // PUBLIC_ORIGIN_SOURCE_TYPES, same omission class as error_capture/venture_worker above. No
+    // live anon-write RLS path to a telegram-sourced row exists today (both candidate paths --
+    // the named telegram_bot_insert_feedback policy and the source_type-agnostic
+    // venture_user_insert_feedback residual path -- are currently closed), but this is a
+    // defense-in-depth fix: a staged, chairman-gated migration would reopen the residual path
+    // (which does not discriminate on source_type) if ever applied. This assertion REPLACES the
+    // previous one in the trustedTypes catch-all below, which asserted telegram was trusted (a
+    // fact-pin snapshotting the gap itself as "correct").
+    it("classifies a schema-legal but allowlist-omitted row (source_type='telegram') as untrusted", () => {
+      expect(isUntrustedOrigin({ source_type: 'telegram', source_application: 'telegram-bot' })).toBe(true);
+    });
+
     it("classifies an internal row (source_type='manual_feedback') as trusted", () => {
       expect(isUntrustedOrigin({ source_type: 'manual_feedback', source_application: 'EHG_Engineer' })).toBe(false);
     });
@@ -154,21 +168,37 @@ describe('content-sanitizer', () => {
       expect(isUntrustedOrigin({ source_type: 123 })).toBe(true);
     });
 
-    // 'error_capture' and 'venture_worker' removed from this list (TESTING finding B1/FR-3;
-    // EXEC-phase SECURITY finding evidence 37ac0bb7) -- both now have their own assertions
-    // above. 10 remaining trusted values + 'error_capture' + 'venture_worker' + 'user_feedback'
-    // (both tested separately as untrusted) = all 13 live feedback_source_type_check enum
+    // 'error_capture', 'venture_worker', and 'telegram' removed from this list (TESTING finding
+    // B1/FR-3; EXEC-phase SECURITY finding evidence 37ac0bb7; SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001
+    // VALIDATION/TESTING findings C1/G1) -- all three now have their own assertions above. 9
+    // remaining trusted values + 'error_capture' + 'venture_worker' + 'telegram' + 'user_feedback'
+    // (all four tested separately as untrusted) = all 13 live feedback_source_type_check enum
     // values accounted for (verified directly against the live pg_constraint definition, not
     // assumed from a prior count).
     it('treats every other CHECK-constrained source_type value as trusted', () => {
       const trustedTypes = [
         'manual_feedback', 'auto_capture', 'uat_failure',
         'uncaught_exception', 'unhandled_rejection', 'manual_capture',
-        'todoist_intake', 'youtube_intake', 'claude_code_intake', 'telegram',
+        'todoist_intake', 'youtube_intake', 'claude_code_intake',
       ];
       for (const source_type of trustedTypes) {
         expect(isUntrustedOrigin({ source_type }), `expected ${source_type} to be trusted`).toBe(false);
       }
+    });
+
+    // TESTING finding G1 (SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001, evidence 5afcbbe9): an executable
+    // accounting assertion, not just a prose comment -- a prose tally is exactly what let
+    // 'venture_worker' silently drift out of sync for the sibling SD. This test fails loudly the
+    // next time PUBLIC_ORIGIN_SOURCE_TYPES gains or loses an entry without trustedTypes (or the
+    // live enum itself) being updated to match, closing the defect class this whole file is about.
+    it('trustedTypes plus the four named untrusted assertions account for all 13 live enum values', () => {
+      const untrustedCount = 4; // user_feedback, error_capture, venture_worker, telegram
+      const trustedTypes = [
+        'manual_feedback', 'auto_capture', 'uat_failure',
+        'uncaught_exception', 'unhandled_rejection', 'manual_capture',
+        'todoist_intake', 'youtube_intake', 'claude_code_intake',
+      ];
+      expect(trustedTypes.length + untrustedCount).toBe(13);
     });
   });
 });
