@@ -1,5 +1,12 @@
 -- 20260818_demote_s1s2s3_unresolvable_binding_gates_to_observe.sql
 -- QF-20260818-010
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman VERBAL approval by SMS 2026-08-18 14:27:15Z: "A" (= yes, apply now) in reply to the
+--   oracle-cleared decision packet sent 13:50:22Z (A/B/no-reply-HELD frame; staging row 7a2afebb).
+--   Adam-scribed under the ratified chairman-verbal ceremony; stamped by the applier identity per
+--   checkApproverFactor. The @delegated-by marker below is retained as the audit trail of the
+--   FIRST attempt: the delegated path correctly REFUSED this file on scope (chairman-only
+--   UPDATE class), which is what produced this chairman decision.
 -- @delegated-by: adam
 --   Delegated apply per SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 (completed, verified) at
 --   coordinator request ad7e734b 2026-08-18 ~13:5xZ (Golf-7 correctly refused to self-stamp;
