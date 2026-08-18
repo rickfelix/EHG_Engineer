@@ -34,9 +34,20 @@ describe('ship-preflight printSummary — partial multi-repo scan warning (SD-LE
       },
     });
 
-    const output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
-    expect(output).toMatch(/PARTIAL/i);
-    expect(output).toContain('⚠️');
+    const lines = logSpy.mock.calls.map((call) => call.join(' '));
+    const lineIndex = lines.findIndex((l) => l.includes('Multi-Repo Coordination'));
+    expect(lineIndex).toBeGreaterThan(-1);
+
+    // Adversarial review finding (PR #7255): the icon selector is
+    // `passed ? checkmark : (warning ? warn : cross)` -- asserting anywhere
+    // in the FULL joined output previously passed even when the icon itself
+    // stayed a plain green check, because the details line (checked
+    // separately below) already contained the warning text. Pin the icon
+    // line itself: it must NOT be the plain green check, and the details
+    // line right after it must carry the truncation warning.
+    expect(lines[lineIndex]).not.toContain('✅');
+    expect(lines[lineIndex]).toContain('⚠️');
+    expect(lines[lineIndex + 1]).toMatch(/PARTIAL/i);
   });
 
   it('does not print a truncation warning for a complete (non-partial) scan', () => {
@@ -53,7 +64,21 @@ describe('ship-preflight printSummary — partial multi-repo scan warning (SD-LE
       },
     });
 
-    const output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n');
-    expect(output).not.toMatch(/PARTIAL/i);
+    const lines = logSpy.mock.calls.map((call) => call.join(' '));
+    const lineIndex = lines.findIndex((l) => l.includes('Multi-Repo Coordination'));
+    expect(lineIndex).toBeGreaterThan(-1);
+    expect(lines[lineIndex]).toContain('✅');
+    expect(lines[lineIndex + 1]).not.toMatch(/PARTIAL/i);
   });
 });
+
+// NOTE (adversarial review, PR #7255): main()'s companion fix --
+// `if (results.multiRepoCoordination.partial === true) results.hasWarnings = true;`
+// so the process exit code reflects a partial-but-passed scan, not just the
+// printed text -- is NOT unit-testable here. main() is not exported and
+// orchestrates the full CLI pipeline (branch verification, state
+// reconciliation, live MultiRepoCoordinator, TestExecutionVerifier,
+// process.exit calls), so covering it would require mocking the entire
+// pipeline for a 2-line conditional. Verified by direct code inspection
+// instead (scripts/ship-preflight.js, Step 3 of main()) -- see this SD's
+// user story evidence for the citation.

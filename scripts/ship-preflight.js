@@ -281,6 +281,14 @@ async function main() {
       if (!results.multiRepoCoordination.passed) {
         results.hasWarnings = true;
       }
+      // FR-6 (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001): a partial scan that
+      // still reports passed:true must ALSO flip hasWarnings -- otherwise the
+      // exit code stays 0 ("PROCEED", not even "PROCEED WITH WARNINGS") and
+      // any automation reading only the exit code gets zero signal that the
+      // scan was cut short (adversarial review finding, deep-tier PR #7255).
+      if (results.multiRepoCoordination.partial === true) {
+        results.hasWarnings = true;
+      }
     }
 
     // Step 4: Test Execution Verification (unless reconcile-only or multi-repo-only)
@@ -364,19 +372,23 @@ export function printSummary(results) {
 
   if (results.multiRepoCoordination) {
     const isPartial = results.multiRepoCoordination.partial === true;
+    const partialButPassed = isPartial && results.multiRepoCoordination.passed;
     const baseDetails = results.multiRepoCoordination.passed
       ? `${results.multiRepoCoordination.branches.length} branch(es) coordinated`
       : `${results.multiRepoCoordination.coordinationPlan.length} action(s) needed`;
     checks.push({
       name: 'Multi-Repo Coordination',
-      passed: results.multiRepoCoordination.passed,
       // FR-6 (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001): MultiRepoCoordinator's
       // 60s SCAN_DEADLINE_MS (MultiRepoCoordinator.js:28/75) can truncate the
       // repo scan mid-way. A truncated scan can under-report actions needed
       // just as easily as over-report them -- when it still reports PASS,
       // downgrade the icon to a warning instead of a silent green check,
-      // since "clean" was never actually confirmed for every repo.
-      warning: isPartial && results.multiRepoCoordination.passed,
+      // since "clean" was never actually confirmed for every repo. The icon
+      // selector below is `passed ? checkmark : (warning ? warn : cross)` --
+      // passed must be forced false here or `warning` is never consulted and
+      // the icon stays a green check (adversarial review finding, PR #7255).
+      passed: partialButPassed ? false : results.multiRepoCoordination.passed,
+      warning: partialButPassed,
       details: isPartial
         ? `${baseDetails} — ⚠️  PARTIAL: scan deadline exceeded, not all repos were checked`
         : baseDetails

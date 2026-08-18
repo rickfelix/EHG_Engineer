@@ -429,6 +429,11 @@ scripts/ops/LLM-COST-ALERT.txt
 # Per-account capacity gauge state (QF-20260720-406) — chairman-pasted usage readings
 # keyed by accountUuid8, rewritten in place by lib/fleet/account-capacity-gauge.cjs
 /.fleet-account-capacity.json
+# TestExecutionVerifier's own vitest --outputFile (SD-LEO-INFRA-SHIP-PREFLIGHT-REPORTS-001
+# FR-5) — written to the repo/worktree root on every ship-preflight run. If ever committed
+# with a passing report, every fresh checkout would get a checkout-time mtime (always
+# "recent"), silently short-circuiting the 15-min fast-path into skipping real test runs.
+/.vitest-preflight-report.json
 
 # Monitor PID files (scoped — do NOT blanket-ignore *.pid; .leo-dashboard.pid is tracked).
 /.monitor-*.pid
