@@ -216,6 +216,7 @@
     "llm:canary:quality": "node scripts/llm-canary-control.js quality",
     "llm:canary:history": "node scripts/llm-canary-control.js history",
     "separability:delta": "node scripts/separability-delta.js",
+    "eva:crack-gate-status": "node scripts/eva/check-gate-attestation-status.mjs",
     "eva:health": "node scripts/eva-health-check.cjs",
     "eva:distill-brainstorm": "node scripts/eva-distill-brainstorm.js",
     "eva:run": "node scripts/eva-run.js",
