@@ -2,10 +2,51 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.5.0
-**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, QF-20260817-752
+**Version**: 1.6.0
+**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, QF-20260817-752, SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001
 **Last Updated**: 2026-08-17
 **Tags**: rls, postgres, anon, feedback, ingress
+
+## 2026-08-17 update (SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001): the ErrorCaptureProvider caller is RESOLVED — retired, not repaired
+
+The `ehg/src/components/error-capture/ErrorCaptureProvider.tsx:92` caller documented in the section
+below (unknown columns `created_by`/`source_url`, un-admitted `source_type`/`status` values) is
+**no longer a live defect** — that component and its barrel `index.ts` are deleted entirely
+(zero imports repo-wide before deletion, confirmed). It was also, independently, dead code the
+whole time: never mounted anywhere, so its payload bugs were latent, not actively firing.
+
+Browser error telemetry is now served by a **fifth mechanism**, added to this contract's family
+rather than repairing the raw-INSERT path: `fn_submit_error_capture` (SECURITY DEFINER RPC,
+`EHG_Engineer/database/chairman-gated/20260817_fdbk_error_capture_rpc.sql`, staged/chairman-gated,
+not yet applied). Design notes for future callers hitting the same class of gap this contract
+tracks:
+
+- **Bypasses RLS entirely via SECURITY DEFINER**, same as `fn_submit_venture_user_feedback` and
+  `fn_submit_internal_feedback` — this table's RLS/write-path history (this whole document) means a
+  new permissive INSERT policy is the wrong fix for a new caller; a purpose-built RPC is the
+  established pattern now, not the exception.
+- Anon **and** authenticated are both valid callers (unlike `fn_submit_internal_feedback`, which
+  requires a real `auth.uid()`) — severity is therefore ALWAYS clamped server-side to
+  `{low,medium}`, since this table's data can influence `chairman_all_decision_signals`' flag_review
+  arm and `scripts/corrective-triage.mjs`'s `promoteFinding()` auto-SD-creation path, and an anon
+  caller must never reach either.
+- Distinct-fingerprint hourly storm ceiling with an observable watermark row, modeled on
+  `record_venture_error`'s pattern — **not** `RAISE EXCEPTION` after the watermark write (a single
+  SQL statement is atomic; that would roll the watermark INSERT back too — live-reproduced during
+  this SD's own EXEC-TO-PLAN SECURITY review). `record_venture_error`'s branch already avoids this
+  by `RETURN`ing a payload instead of raising; the new RPC now matches that, not the
+  `RAISE EXCEPTION`-on-rejection convention `fn_submit_internal_feedback`/`fn_submit_venture_user_feedback`
+  use (which is fine for THEM only because their rejected paths write nothing).
+- `record_venture_error`'s own dedup index (`idx_feedback_venture_error_hash`) excludes
+  `venture_id IS NULL` rows; this new caller's traffic is entirely `venture_id IS NULL` by nature,
+  so it needed its own partial unique index — scoped by `feedback_type='sentry_error'` in addition
+  to `source_type`/`venture_id`, specifically so its uniqueness/volume domain never overlaps
+  `record_venture_error`'s own `venture_id IS NULL` traffic (both legitimately share the same
+  `source_type='error_capture'` taxonomy value).
+- Frontend: `ehg/src/integrations/feedback/feedbackDataAccess.ts`'s `reportBrowserError`, wired into
+  the LIVE `GlobalErrorBoundary.tsx` (render errors) plus new `window` `error`/`unhandledrejection`
+  listeners — converging all three capture routes on one DAL call instead of the dead component's
+  original two-parallel-mechanisms design.
 
 ## 2026-08-17 update: the RPC path is ALSO non-functional, plus 4 more affected callers
 
