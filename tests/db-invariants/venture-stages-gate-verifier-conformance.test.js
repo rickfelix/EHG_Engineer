@@ -2,7 +2,12 @@
  * DB Invariant: every live venture_stages gate string resolves against the
  * exit-gate-verifiers.js registry.
  *
- * SD: SD-MAN-INFRA-VENTURE-CRACK-GATE-001 (FR-4/TR-1/TR-6/TS-9)
+ * Originated on SD-MAN-INFRA-VENTURE-CRACK-GATE-001 (FR-4/TR-1/TR-6/TS-9);
+ * extended + baseline-updated by SD-FDBK-FIX-EXIT-GATE-CONFORMANCE-001 (FR-1
+ * resolved 9 of the original 14 unresolvable binding strings; FR-2 extracted
+ * the comparison logic into the pure lib/eva/lifecycle/gate-conformance.js
+ * so this test and a DB-free unit-tier test — tests/unit/eva/lifecycle/
+ * gate-conformance.test.js — share ONE implementation instead of drifting).
  *
  * WHY THIS EXISTS (prospective TESTING, evidence 910016cf-54a3-4594-9ff4-cd8c870fe6b4):
  * the gate string lives in DB data (venture_stages.metadata.gates.exit / .exit_observe) while
@@ -10,47 +15,65 @@
  * can be individually "correct" (a passing unit test asserting the literal string a test author
  * typed) while disagreeing with each other. Two green endpoints do not prove the wire.
  *
- * TWO DIFFERENT INVARIANTS, deliberately asymmetric:
+ * TWO DIFFERENT INVARIANTS, both now BASELINE regression guards (as of QF-20260818-010 — see
+ * below for why `exit_observe` moved off zero-tolerance):
  *
  * 1. `exit` (BINDING gates): exit-gate-enforcer.js is fail-CLOSED on an unresolvable binding
  *    verifier — a typo is a total stage lockout, not a degraded check. MEASURED at authoring
- *    time (2026-08-18): 14 of 21 live binding gate strings are ALREADY unresolvable (only S19,
- *    S24, S26 fully resolve) — a PRE-EXISTING condition, not introduced by this SD, and NOT
- *    something this test unilaterally fixes (signalled separately to the coordinator, signal_id
- *    7178f834-3288-4cea-8ddf-136411392e27, for fleet-wide remediation). Hard-failing on the
- *    current count would break CI over a defect this SD does not own fixing. This test instead
+ *    time (2026-08-18) by SD-MAN-INFRA-VENTURE-CRACK-GATE-001: 14 of 21 live binding gate
+ *    strings were unresolvable. SD-FDBK-FIX-EXIT-GATE-CONFORMANCE-001 FR-1 resolved 9 of those
+ *    14 (real, code-verified backing data for each — see exit-gate-verifiers.js's FR-1 comment
+ *    block). QF-20260818-010 demoted the remaining 5 (NO real backing implementation anywhere in
+ *    the codebase — see exit-gate-verifiers.js's "NON-BINDING DISPOSITION" comment) from `exit`
+ *    to `exit_observe` — BASELINE = 0, not 5: a permanently-unsatisfiable string left on a
+ *    BINDING gate is a live fail-closed-lockout landmine, not a tolerable disposition. This test
  *    asserts a BASELINE REGRESSION GUARD: the unresolvable count must never exceed the measured
  *    baseline. If it does, someone added a NEW binding gate string without registering its
  *    verifier in the same commit (the exact TR-1 violation this test exists to catch).
  *
  * 2. `exit_observe` (SHADOW gates): structurally different risk. exit-gate-enforcer.js hits a
- *    bare `continue` on an unresolvable observe gate — no would_block_by entry, no system_events
- *    row, only a console.warn. A typo'd observe gate is TELEMETRICALLY IDENTICAL to a fully-
- *    satisfied one, which means TR-2's would-block-rate promotion criterion cannot see it: a
- *    typo reads as "0% block, safe to promote", and promotion is exactly what turns that typo
- *    into a real lockout (invariant 1, above). MEASURED: 0 of 5 live observe gate strings are
- *    unresolvable today — this is a HARD invariant (zero-tolerance), not a baseline, because a
- *    single silent regression here is the specific failure mode TR-6 was written to close.
+ *    bare `continue` on an unresolvable observe gate before FR-3 — after FR-3, an unresolvable
+ *    observe gate fires a fail-loud system_events row instead of silently vanishing (see
+ *    exit-gate-enforcer.js's observe-mode branch and its test coverage), and NEVER blocks
+ *    advancement either way. QF-20260818-010 deliberately, disclosedly ADDED 5 permanently-
+ *    unresolvable strings here (demoted off `exit` — see invariant 1 above): fail-LOUD-but-
+ *    non-blocking is the correct honest resting state for a gate concept that has no real
+ *    implementation and isn't slated for one. BASELINE = 5, not 0 — this is now the SAME kind of
+ *    disclosed-baseline regression guard as invariant 1 (a single SILENT regression — e.g. a
+ *    previously-resolvable observe string quietly breaking — is still caught; a deliberate,
+ *    disclosed addition like this one is not conflated with that failure mode).
  *
- * SKIPS BY DESIGN IN ORDINARY CI (matches all 3 sibling files in this directory): per
+ * SKIPS BY DESIGN IN ORDINARY CI (matches all sibling files in this directory): per
  * tests/helpers/db-available.js (QF-20260726-459), this repo has ZERO designated non-production
  * Supabase targets provisioned, so describeDb() skips everywhere by default rather than risk
  * running against the live 148+-venture production database (the exact incident that fix
  * addresses). This is NOT a gap in this test -- it is the correct, deliberately-conservative,
- * repo-wide behavior. Run manually with VITEST_DB_ALLOW_REF=<designated-non-prod-ref> if one is
- * ever provisioned, or invoke the equivalent standalone check (.artifacts/tst-gate-conformance.mjs,
- * testing-agent's original seed, produces the same numbers this test asserts) directly against
- * live data as a manual pre-flight step before a TR-2 promotion decision.
+ * repo-wide behavior (testing-agent finding F1: widening this guard to "run anyway" would
+ * re-arm the exact incident QF-20260726-459 closed). Run manually with
+ * VITEST_DB_ALLOW_REF=<designated-non-prod-ref> if one is ever provisioned. For unskipped,
+ * DB-free CI coverage of the SAME comparison logic, see tests/unit/eva/lifecycle/
+ * gate-conformance.test.js (FR-2 AC-1).
  */
 
 import { it, expect, beforeAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { describeDb, HAS_REAL_DB } from '../helpers/db-available.js';
-import { resolveVerifier } from '../../lib/eva/lifecycle/exit-gate-verifiers.js';
+import { computeGateConformance } from '../../lib/eva/lifecycle/gate-conformance.js';
 
-// Measured live 2026-08-18 (testing-agent evidence 910016cf; re-measured by EXEC-phase Golf-3
-// before authoring this test). Only S19/S24/S26 fully resolve their binding gates.
-const BINDING_UNRESOLVABLE_BASELINE = 14;
+// Measured 2026-08-18: 14 unresolvable at authoring time (SD-MAN-INFRA-VENTURE-CRACK-GATE-001);
+// SD-FDBK-FIX-EXIT-GATE-CONFORMANCE-001 FR-1 resolved 9 with real backing data, leaving 5
+// documented as non-binding (no real implementation exists to verify against — see
+// exit-gate-verifiers.js's disposition comment). QF-20260818-010 demoted those 5 off the
+// BINDING gate entirely (to gates.exit_observe — see OBSERVE_UNRESOLVABLE_BASELINE below),
+// closing the FR-4 binding-flip precondition: BASELINE = 0. Baseline updated in the same
+// commit as the demotion, per NC-EXEC guidance against silently stale regression thresholds.
+const BINDING_UNRESOLVABLE_BASELINE = 0;
+
+// QF-20260818-010: the 5 strings demoted off BINDING (see above) land here — permanently
+// unresolvable by design (no real implementation exists or is planned; see exit-gate-verifiers.js's
+// NON-BINDING DISPOSITION comment), but observe-mode never blocks advancement, so a fail-LOUD
+// system_events row (not a lockout) is the honest, disclosed resting state.
+const OBSERVE_UNRESOLVABLE_BASELINE = 5;
 
 describeDb('venture_stages gate strings resolve against exit-gate-verifiers.js', () => {
   let sb;
@@ -69,54 +92,39 @@ describeDb('venture_stages gate strings resolve against exit-gate-verifiers.js',
 
   it('exit (binding) gate strings: unresolvable count does not exceed the measured baseline', () => {
     if (!HAS_REAL_DB) return;
-    const unresolvable = [];
-    for (const stage of stages) {
-      const exitGates = Array.isArray(stage.metadata?.gates?.exit) ? stage.metadata.gates.exit : [];
-      for (const gateString of exitGates) {
-        if (!resolveVerifier(gateString)) {
-          unresolvable.push(`S${stage.stage_number} ${stage.stage_name}: "${gateString}"`);
-        }
-      }
-    }
-    if (unresolvable.length > BINDING_UNRESOLVABLE_BASELINE) {
-      const newOnes = unresolvable.length - BINDING_UNRESOLVABLE_BASELINE;
+    const { unresolvableBinding } = computeGateConformance(stages);
+    if (unresolvableBinding.length > BINDING_UNRESOLVABLE_BASELINE) {
+      const newOnes = unresolvableBinding.length - BINDING_UNRESOLVABLE_BASELINE;
+      const list = unresolvableBinding.map((e) => `S${e.stage} ${e.stageName ?? ''}: "${e.gateString}"`).join('\n  ');
       throw new Error(
-        `${unresolvable.length} unresolvable binding gate string(s), ${newOnes} more than the ` +
+        `${unresolvableBinding.length} unresolvable binding gate string(s), ${newOnes} more than the ` +
         `${BINDING_UNRESOLVABLE_BASELINE}-string baseline. A NEW gate string was added without ` +
         'registering its verifier in exit-gate-verifiers.js — this is TR-1\'s exact failure mode ' +
-        '(fail-closed, total stage lockout on the next advanceStage() call for that stage). ' +
-        `Full list:\n  ${unresolvable.join('\n  ')}`
+        `(fail-closed, total stage lockout on the next advanceStage() call for that stage). Full list:\n  ${list}`
       );
     }
-    // Equal-or-under the baseline is the expected state today — not a pass condition to hide,
-    // logged so a CI reader sees the pre-existing debt without it failing the build.
-    if (unresolvable.length > 0) {
+    if (unresolvableBinding.length > 0) {
+      const list = unresolvableBinding.map((e) => `S${e.stage}: "${e.gateString}"`).join('; ');
       console.warn(
-        `[KNOWN, PRE-EXISTING] ${unresolvable.length} binding gate string(s) unresolvable ` +
-        `(baseline ${BINDING_UNRESOLVABLE_BASELINE}) — tracked separately, not this SD's to fix: ` +
-        `${unresolvable.join('; ')}`
+        `[KNOWN, DOCUMENTED DISPOSITION] ${unresolvableBinding.length} binding gate string(s) unresolvable ` +
+        `(baseline ${BINDING_UNRESOLVABLE_BASELINE}) — no real backing implementation exists for these, ` +
+        `see exit-gate-verifiers.js's disposition comment: ${list}`
       );
     }
   });
 
-  it('exit_observe (shadow) gate strings: zero unresolvable, no baseline tolerance', () => {
+  it('exit_observe (shadow) gate strings: unresolvable count does not exceed the measured baseline', () => {
     if (!HAS_REAL_DB) return;
-    const unresolvable = [];
-    for (const stage of stages) {
-      const observeGates = Array.isArray(stage.metadata?.gates?.exit_observe) ? stage.metadata.gates.exit_observe : [];
-      for (const gateString of observeGates) {
-        if (!resolveVerifier(gateString)) {
-          unresolvable.push(`S${stage.stage_number} ${stage.stage_name}: "${gateString}"`);
-        }
-      }
+    const { unresolvableObserve } = computeGateConformance(stages);
+    if (unresolvableObserve.length > OBSERVE_UNRESOLVABLE_BASELINE) {
+      const newOnes = unresolvableObserve.length - OBSERVE_UNRESOLVABLE_BASELINE;
+      const list = unresolvableObserve.map((e) => `S${e.stage} ${e.stageName ?? ''}: "${e.gateString}"`).join('\n  ');
+      throw new Error(
+        `${unresolvableObserve.length} unresolvable observe gate string(s), ${newOnes} more than the ` +
+        `${OBSERVE_UNRESOLVABLE_BASELINE}-string baseline (QF-20260818-010). A previously-resolvable ` +
+        'observe string silently broke, or a NEW observe gate string was added without registering ' +
+        `its verifier — fail-loud (system_events), never fail-closed, but should still be investigated. Full list:\n  ${list}`
+      );
     }
-    expect(
-      unresolvable,
-      'Unresolvable shadow (exit_observe) gate string(s) found — these are SILENTLY skipped by ' +
-      'exit-gate-enforcer.js (no would_block_by entry, no system_events row), which means any ' +
-      'would-block-rate promotion criterion (TR-2) cannot see them and would read a typo as ' +
-      '"safe to promote". Zero tolerance, unlike the binding-gate baseline above: ' +
-      `${unresolvable.join('; ')}`
-    ).toHaveLength(0);
   });
 });

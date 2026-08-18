@@ -300,6 +300,65 @@ describe('exit-gate-enforcer', () => {
       warnSpy.mockRestore();
     });
 
+    // SD-FDBK-FIX-EXIT-GATE-CONFORMANCE-001 (FR-3): the pinned test above confirms log-and-allow
+    // polarity is unchanged; THIS test confirms the new fail-loud signal added alongside it.
+    it('FR-3: unresolvable observe-mode gate string fires exactly one EXIT_GATE_OBSERVE_UNRESOLVED row', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const insertedEvents = [];
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: [], exit_observe: ['Some unknown observe prose'] },
+        insertedEvents,
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+
+      // Polarity unchanged (same assertions as the pinned test above).
+      expect(result.allowed).toBe(true);
+      expect(result.would_block_by).toEqual([]);
+      expect(result.blocked_by).toEqual([]);
+
+      // NEW: exactly one system_events row, with the new, distinct event_type.
+      const observeUnresolvedEvents = insertedEvents.filter((e) => e.event_type === 'EXIT_GATE_OBSERVE_UNRESOLVED');
+      expect(observeUnresolvedEvents).toHaveLength(1);
+      expect(observeUnresolvedEvents[0].payload.gate_string).toBe('Some unknown observe prose');
+      expect(observeUnresolvedEvents[0].payload.would_satisfy).toBe(false);
+      // Never confused with the pre-existing EXIT_GATE_OBSERVE_ONLY (resolvable-gate) event type.
+      expect(insertedEvents.filter((e) => e.event_type === 'EXIT_GATE_OBSERVE_ONLY')).toHaveLength(0);
+      warnSpy.mockRestore();
+    });
+
+    // TS-4 (no regression): a RESOLVABLE observe gate still fires only EXIT_GATE_OBSERVE_ONLY,
+    // never the new unresolved event type (no double-counting).
+    it('FR-3 regression guard: a resolvable observe-mode gate fires only EXIT_GATE_OBSERVE_ONLY, never the new event type', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const insertedEvents = [];
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: [], exit_observe: ['stack descriptor valid'] },
+        stackDescriptor: { provider: 'render', region: 'us-east-1' },
+        insertedEvents,
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(true);
+      expect(insertedEvents.filter((e) => e.event_type === 'EXIT_GATE_OBSERVE_ONLY')).toHaveLength(1);
+      expect(insertedEvents.filter((e) => e.event_type === 'EXIT_GATE_OBSERVE_UNRESOLVED')).toHaveLength(0);
+    });
+
+    // TS-13: binding-lane and observe-lane unresolvable anomalies never cross-fire.
+    it('TS-13: an unresolvable BINDING gate fires only EXIT_GATE_ANOMALY, never the observe-mode event type', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const insertedEvents = [];
+      const supabase = buildSupabaseMock({
+        stageConfig: { exit: ['Frobnicate the widget cache'] },
+        insertedEvents,
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(false);
+      expect(insertedEvents.filter((e) => e.event_type === 'EXIT_GATE_ANOMALY')).toHaveLength(1);
+      expect(insertedEvents.filter((e) => e.event_type === 'EXIT_GATE_OBSERVE_UNRESOLVED')).toHaveLength(0);
+      warnSpy.mockRestore();
+    });
+
     it('blocks with structured reason when venture_stages read fails', async () => {
       const { checkExitGates } = await importEnforcerWithFlag('on');
       const supabase = buildSupabaseMock({ configError: { message: 'simulated PG error' } });

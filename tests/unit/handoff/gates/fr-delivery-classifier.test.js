@@ -88,6 +88,11 @@ describe('FR-4: descopeFor — approver-gated', () => {
 
   it('QF-20260816-923: does NOT warn when requesterSessionId is provided', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // QF-20260818-850: vi.spyOn reuses an already-active (un-restored) spy on the same
+    // property rather than creating a fresh one, so under reordered execution this spy can
+    // start with call history left by another test. Clear before acting so this assertion
+    // reflects only the descopeFor() call below, regardless of run order.
+    warnSpy.mockClear();
     try {
       descopeFor(md, 'FR-007', 'other-session');
       expect(warnSpy).not.toHaveBeenCalled();
