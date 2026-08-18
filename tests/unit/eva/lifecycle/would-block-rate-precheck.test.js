@@ -20,39 +20,43 @@ const ALL_RESOLVED_STAGE_ROWS = [
  * scoped EXIT_GATE_* rows with a large volume of unscoped S19_HARD_GATE_BLOCK-shaped rows
  * (mirroring the real live 139,000+-row pollution this precheck must be immune to).
  *
- * The returned query builder is BOTH awaitable directly (bare `select()`, no filter, resolves
- * to ALL fixture rows) AND chainable via `.in()` (resolves to the filtered subset) -- so if the
- * `.in('event_type', RATE_SCOPED_EVENT_TYPES)` clause is ever removed from the implementation,
- * the query resolves to the FULL unfiltered fixture instead of throwing or returning nothing.
- * Verified directly (2026-08-18): temporarily deleting the .in() call from
+ * makeChain(rows) models a real supabase-js query builder: .order() is a passthrough (returns
+ * an equivalent chain over the SAME rows -- ordering isn't meaningful to fake in a synthetic
+ * fixture, only chainability matters here), .range() paginates `rows`, .then() lets the chain
+ * resolve directly if ever awaited unranged. select() returns a chain over ALL fixtureRows
+ * (the "no .in() filter applied" shape) that ALSO carries .in(), which returns a NEW chain
+ * scoped to the filtered subset -- so if `.in('event_type', RATE_SCOPED_EVENT_TYPES)` is ever
+ * removed from the implementation, `select().order().range()` still resolves (no crash) but
+ * pages over the FULL unfiltered fixture instead of the scoped one. Verified directly
+ * (2026-08-18): temporarily deleting the .in() call from
  * lib/eva/lifecycle/would-block-rate-precheck.js and re-running this suite makes the `total`
  * assertion below fail with the full unfiltered count instead of the scoped one -- proving this
  * mock cannot be satisfied by a no-op filter.
  */
 function buildSourcePinnedSupabaseMock(fixtureRows) {
-  const resolveAll = () => Promise.resolve({ data: fixtureRows, error: null });
+  // TS-N1 (pagination): .range() slices `rows`, mirroring real PostgREST semantics (filter,
+  // THEN paginate). A chain that never calls .range() (an unpaginated regression) would just
+  // get `rows` back unbounded here, so this mock does not itself hide an unpaginated
+  // implementation -- the live-cap regression this guards against is proven separately below
+  // via a fixture sized past PAGE_SIZE.
+  function makeChain(rows) {
+    return {
+      then: (resolve, reject) => Promise.resolve({ data: rows, error: null }).then(resolve, reject),
+      order: () => makeChain(rows),
+      range: (start, end) => Promise.resolve({ data: rows.slice(start, end + 1), error: null }),
+    };
+  }
   return {
     from: (table) => {
       if (table !== 'system_events') throw new Error(`unexpected table ${table}`);
       return {
         select: () => ({
-          // Bare select (no .in()) resolves to ALL rows — this is what a removed filter falls
-          // back to, so the vulnerability this test guards against is directly reachable.
-          then: (resolve, reject) => resolveAll().then(resolve, reject),
+          ...makeChain(fixtureRows),
           in: (column, values) => {
             if (column !== 'event_type') throw new Error(`expected filter on event_type, got ${column}`);
             const valueSet = new Set(values);
             const filtered = fixtureRows.filter((r) => valueSet.has(r.event_type));
-            return {
-              // TS-N1 (pagination): .range() slices the ALREADY-filtered set, mirroring real
-              // PostgREST semantics (filter, THEN paginate). A .select().in() chain that never
-              // calls .range() (an unpaginated regression) would just get `filtered` back
-              // unbounded here, so this mock does not itself hide an unpaginated implementation
-              // -- the live-cap regression this guards against is proven separately below via a
-              // fixture sized past PAGE_SIZE.
-              then: (resolve, reject) => Promise.resolve({ data: filtered, error: null }).then(resolve, reject),
-              range: (start, end) => Promise.resolve({ data: filtered.slice(start, end + 1), error: null }),
-            };
+            return makeChain(filtered);
           },
         }),
       };
