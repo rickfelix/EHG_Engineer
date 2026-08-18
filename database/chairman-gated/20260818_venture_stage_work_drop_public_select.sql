@@ -117,8 +117,13 @@ BEGIN
 
     -- 2. venture_stage_work_select_policy is untouched and still correctly scoped -- this fix
     --    must not have collaterally removed the ONE policy that legitimately serves SELECT.
-    SELECT count(*), (array_agg(p.polroles))[1], (array_agg(pg_get_expr(p.polqual, p.polrelid, true)))[1]
-      INTO select_policy_count, select_policy_roles, select_policy_qual
+    -- CEREMONY FIX 2026-08-18 (apply-time, Adam-scribed, disclosed in readback): the original
+    -- check read polroles via (array_agg(p.polroles))[1] — array_agg over an oid[] column builds
+    -- a 2-D array, and single-subscript indexing a 2-D array yields NULL, so the check raised
+    -- '<NULL>' against a policy the acceptance --baseline had just shown correct ({authenticated}).
+    -- Verification logic only; the action statements above are byte-identical to the approved file.
+    SELECT count(*), min(pg_get_expr(p.polqual, p.polrelid, true))
+      INTO select_policy_count, select_policy_qual
       FROM pg_policy p
       JOIN pg_class c ON c.oid = p.polrelid
      WHERE c.relname = 'venture_stage_work'
@@ -127,8 +132,17 @@ BEGIN
     IF select_policy_count <> 1 THEN
         RAISE EXCEPTION 'venture_stage_work_select_policy is missing or duplicated after this fix (count=%).', select_policy_count;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles r WHERE r.oid = ANY(select_policy_roles) AND r.rolname = 'authenticated') THEN
-        RAISE EXCEPTION 'venture_stage_work_select_policy no longer applies to authenticated: %', select_policy_roles;
+    IF NOT EXISTS (
+        SELECT 1
+          FROM pg_policy p
+          JOIN pg_class c ON c.oid = p.polrelid
+          JOIN pg_roles r ON r.oid = ANY(p.polroles)
+         WHERE c.relname = 'venture_stage_work'
+           AND c.relnamespace = 'public'::regnamespace
+           AND p.polname = 'venture_stage_work_select_policy'
+           AND r.rolname = 'authenticated'
+    ) THEN
+        RAISE EXCEPTION 'venture_stage_work_select_policy no longer applies to authenticated.';
     END IF;
     IF select_policy_qual !~ 'fn_user_has_venture_access' THEN
         RAISE EXCEPTION 'venture_stage_work_select_policy no longer references fn_user_has_venture_access -- got: %', select_policy_qual;
