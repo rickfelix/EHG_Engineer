@@ -66,6 +66,11 @@ jobs:
         # the auth response carries session tokens. Uploading that trace on failure would leak
         # both into a GitHub artifact downloadable by anyone with repo read access. This login
         # smoke test's own pass/fail + console/step output is sufficient signal without a trace.
+        # continue-on-error: the NEXT step distinguishes "genuinely failed" from "skipped because
+        # unconfigured" and is what actually decides the job's outcome (see VALIDATION finding
+        # below) -- a bare Playwright failure here must still be able to reach that step.
+        id: playwright
+        continue-on-error: true
         run: npx playwright test tests/e2e/ehg-app/auth.setup.spec.ts --project=chromium --trace=off
         env:
           BASE_URL: ${{ inputs.target_url || secrets.EHG_APP_BASE_URL }}
@@ -74,6 +79,39 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI: true
+
+      # VALIDATION finding (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 PLAN-VERIFY review): a skip
+      # (setup.skip() when the app is unreachable -- the ALWAYS-true case until EHG_APP_BASE_URL
+      # etc. are configured, since no dev server runs in this workflow) exits 0, identical to a
+      # genuine pass. A scheduled workflow reporting green forever without EVER having actually
+      # exercised login is exactly the "instrument that lies" class this SD's own FR-1/FR-8 work
+      # (function_missing / source_unavailable) exists to prevent elsewhere -- this closes the
+      # same gap for the one artifact whose PRIMARY signal (the GH Actions checkmark, not a log
+      # line) makes an honest pass/fail more load-bearing than it was for the cron sweep.
+      - name: Fail loudly if the run skipped rather than genuinely testing login
+        if: always()
+        run: |
+          node -e "
+            const fs = require('fs');
+            let report;
+            try {
+              report = JSON.parse(fs.readFileSync('test-results/results.json', 'utf8'));
+            } catch (e) {
+              console.log('::error::No test-results/results.json produced -- Playwright itself did not run to completion.');
+              process.exit(1);
+            }
+            const s = report.stats || {};
+            const ranSomething = (s.expected || 0) > 0 || (s.unexpected || 0) > 0;
+            if (!ranSomething && (s.skipped || 0) > 0) {
+              console.log('::error::EHG_APP_BASE_URL/EHG_APP_TEST_USER_EMAIL/EHG_APP_TEST_USER_PASSWORD are not configured as repository secrets (or the target is unreachable) -- the smoke test SKIPPED rather than actually verifying login. This is expected until those secrets are configured, but must NOT read as a silent pass: configure them to make this check load-bearing.');
+              process.exit(1);
+            }
+            if ((s.unexpected || 0) > 0) {
+              console.log('::error::Auth smoke test genuinely FAILED (' + s.unexpected + ' unexpected result(s)) -- see the Playwright step output above.');
+              process.exit(1);
+            }
+            console.log('Auth smoke test genuinely ran and passed (' + (s.expected || 0) + ' expected result(s)).');
+          "
 
       - name: Upload results on failure
         if: failure()
