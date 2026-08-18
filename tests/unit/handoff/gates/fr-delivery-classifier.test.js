@@ -6,6 +6,16 @@ import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// SECURITY finding 2 (EXEC-phase review): fr-delivery-classifier.js now disk-verifies test_ref
+// via specFileExists() (lib/stories/e2e-path-guard.js). Mocked here so every pre-existing test's
+// placeholder test_ref value (e.g. 'x', 'tests/x.test.js:10') keeps resolving as "exists" without
+// touching dozens of call sites — permissive by default, false only for the one sentinel path the
+// dedicated existence-check tests below use to exercise the real rejection path.
+vi.mock('../../../../lib/stories/e2e-path-guard.js', () => ({
+  specFileExists: (_repoRoot, candidatePath) => !String(candidatePath).includes('does-not-exist'),
+}));
+
 import {
   isFrTraceabilityEnforced,
   frIdOf,
@@ -483,6 +493,45 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
     const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered' }] })];
     expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toEqual([]);
   });
+
+  // SECURITY finding 2: schema-valid, fr_id-matched entries whose test_ref does not resolve to
+  // a real file must not promote — closes the gap where any non-empty string was trusted.
+  describe('SECURITY finding 2: test_ref is disk-verified, not merely shape-checked', () => {
+    it('a schema-valid, matched entry whose test_ref does not resolve is rejected and diagnosed, not silently dropped', () => {
+      const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/does-not-exist-anywhere.test.js:9' }] })];
+      const r = resolveTestingEvidenceCoverage(rows, FRS3);
+      expect(r.matchedTestingCoverage).toEqual([]);
+      expect(r.unresolvedTestRefs).toEqual([{ fr_id: 'FR-2', test_ref: 'tests/does-not-exist-anywhere.test.js:9', sub_agent_result_id: 'r1' }]);
+    });
+    it('a resolvable test_ref (the mock treats anything without "does-not-exist" as real) promotes', () => {
+      const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/genuinely/somewhere.test.js:1' }] })];
+      expect(resolveTestingEvidenceCoverage(rows, FRS3).matchedTestingCoverage).toHaveLength(1);
+    });
+    it('a :LINE and a :LINE:COL suffix are both stripped before the existence check (same file, either suffix form)', () => {
+      const withLine = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/x.test.js:42' }] })];
+      const withLineCol = [testingRow({ id: 'r2', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/x.test.js:42:7' }] })];
+      expect(resolveTestingEvidenceCoverage(withLine, FRS3).matchedTestingCoverage).toHaveLength(1);
+      expect(resolveTestingEvidenceCoverage(withLineCol, FRS3).matchedTestingCoverage).toHaveLength(1);
+    });
+    it('classifyFrDelivery level: an unresolved test_ref does not count as work product or promote the convention', async () => {
+      const stories = [{ id: 's1', title: 'unrelated work', status: 'completed' }]; // Fixture C setup
+      const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: [{ fr_id: 'FR-2', status: 'delivered', test_ref: 'tests/does-not-exist-anywhere.test.js' }] })];
+      const c = await classifyFrDelivery(stubWithTesting({ stories, testingRows: rows }), { sdId: 'sd-sec2', functionalRequirements: FRS3 });
+      expect(c.convention_in_use).toBe(false);
+      expect(c.unverifiable).toBe(3);
+      expect(c.unresolved_test_refs).toEqual([{ fr_id: 'FR-2', test_ref: 'tests/does-not-exist-anywhere.test.js', sub_agent_result_id: 'r1' }]);
+    });
+  });
+
+  // SECURITY finding 3: a single row's fr_coverage array can be arbitrarily long; diagnostic
+  // arrays must not grow unbounded with it (measured: 200k unmatched entries -> 3.29MB blob).
+  it('SECURITY finding 3: unmatchedFrCoverageIds/unresolvedTestRefs are capped, not unbounded', () => {
+    const manyUnmatched = Array.from({ length: 200 }, (_, i) => ({ fr_id: `FR-UNMATCHED-${i}`, status: 'delivered', test_ref: 'x' }));
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: manyUnmatched })];
+    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    expect(r.unmatchedFrCoverageIds.length).toBeLessThanOrEqual(50);
+    expect(r.unmatchedFrCoverageIds.length).toBeGreaterThan(0);
+  });
 });
 
 describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', () => {
@@ -679,7 +728,7 @@ describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', 
 describe('TS-10: consuming gates tolerate the extended classification shape', () => {
   it('a classification with all new fields present but empty produces byte-identical scoring/warnings to the pre-extension shape', () => {
     const base = { frs: [{ id: 'FR-002', description: 'b', status: 'undelivered' }, { id: 'FR-001', description: 'a', status: 'delivered' }], total: 2, delivered: 1, descoped: 0, undelivered: 1, unverifiable: 0 };
-    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [] };
+    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], unresolved_test_refs: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [] };
     const rBase = projectGateResult(base, { enforced: true });
     const rExtended = projectGateResult(extended, { enforced: true });
     expect(rExtended.passed).toBe(rBase.passed);
@@ -691,14 +740,24 @@ describe('TS-10: consuming gates tolerate the extended classification shape', ()
 
 describe('TR-5/TS-9: mutation test — regex_fr_mentions is genuinely non-load-bearing', () => {
   const SOURCE_PATH = fileURLToPath(new URL('../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js', import.meta.url));
+  const E2E_PATH_GUARD_URL = pathToFileURL(fileURLToPath(new URL('../../../../lib/stories/e2e-path-guard.js', import.meta.url))).href;
   const ANCHOR = 'const deliveredBy = validated.find((s) => frReferencesId(s, id));';
   const MUTATED = "const deliveredBy = validated.find((s) => frReferencesId(s, id)) || (regexFrMentions.some((m) => String(m.fr_id).trim().toUpperCase() === String(id).trim().toUpperCase()) ? { id: '__MUTATION_REGEX_WITNESS__' } : undefined);";
+  // The mutated copy is written to os.tmpdir(), so its own relative import of e2e-path-guard.js
+  // (added for SECURITY finding 2) would resolve against the WRONG directory. Rewrite it to an
+  // absolute file:// URL before writing the copy — same end-anchored-string-replace hermetic
+  // approach as the ANCHOR mutation itself, not a fixed offset.
+  const IMPORT_ANCHOR = "import { specFileExists } from '../../../../lib/stories/e2e-path-guard.js';";
 
   it('wiring regex_fr_mentions into deliveredBy resolution makes TS-6 and TS-6b fail, by name', async () => {
     const source = readFileSync(SOURCE_PATH, 'utf8');
     const occurrences = source.split(ANCHOR).length - 1;
     expect(occurrences).toBe(1); // the pinned anchor must exist exactly once, end-anchored, for a hermetic mutation
-    const mutatedSource = source.replace(ANCHOR, MUTATED);
+    const importOccurrences = source.split(IMPORT_ANCHOR).length - 1;
+    expect(importOccurrences).toBe(1);
+    const mutatedSource = source
+      .replace(ANCHOR, MUTATED)
+      .replace(IMPORT_ANCHOR, `import { specFileExists } from '${E2E_PATH_GUARD_URL}';`);
 
     const tempPath = join(tmpdir(), `fr-delivery-classifier.mutated.${Date.now()}.${Math.random().toString(36).slice(2)}.mjs`);
     writeFileSync(tempPath, mutatedSource, 'utf8');

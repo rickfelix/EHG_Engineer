@@ -1,7 +1,16 @@
 // Tests for SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001 — the EXEC-TO-PLAN FR delivery gate
 // and its registration in BOTH the orchestrator-child and normal gate sets.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// SECURITY finding 2: fr-delivery-classifier.js now disk-verifies test_ref via specFileExists().
+// Mocked so the placeholder test_ref values below ('x', 'tests/x.test.js:1') keep resolving —
+// this file is testing gate-wiring behavior, not the existence check itself (which has its own
+// dedicated tests in fr-delivery-classifier.test.js).
+vi.mock('../../../../lib/stories/e2e-path-guard.js', () => ({
+  specFileExists: () => true,
+}));
+
 import { createFrDeliveryTraceabilityGate } from '../../../../scripts/modules/handoff/gates/fr-delivery-traceability-gate.js';
 
 // supabase stub: no children, FRs from PRD (keyed on directive_id == PRD_KEY to catch the

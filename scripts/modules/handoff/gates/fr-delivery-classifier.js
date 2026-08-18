@@ -38,6 +38,7 @@
  * BLOCKING ONLY (passed / required) — it never changes the REPORTED SCORE. A gate that reports a
  * number it did not measure is the defect this module was repaired to remove.
  */
+import { specFileExists } from '../../../../lib/stories/e2e-path-guard.js';
 
 /** True when strict FR-delivery enforcement is turned on. Default OFF (warn-only). */
 export function isFrTraceabilityEnforced(env = process.env) {
@@ -198,13 +199,11 @@ export function isExecPhaseOrLater(phase) {
  * partially trusted — fr_coverage already exists as an uncoordinated ad-hoc metadata key in
  * numerous unrelated one-off scripts using several mutually-incompatible shapes.
  *
- * test_ref IS ONLY SHAPE-CHECKED, NEVER VERIFIED. Any non-empty string promotes to delivered —
- * this module never confirms it names a real file, a real test, or a passing run. The TESTING
- * sub-agent both writes fr_coverage and is the thing being trusted, so this signal's honesty
- * rests entirely on an unaudited self-report, same trust level TESTING evidence already carries
- * elsewhere in the pipeline. Zero blast radius today (no production writer exists yet, see
- * pin-fr-delivery-baseline.mjs), but the moment a writer ships, this is the weak link: consider
- * verifying test_ref resolves to something real before trusting it at scale.
+ * This function checks SHAPE only. test_ref's EXISTENCE on disk is checked separately by
+ * testRefResolvesToRealFile() (see below) in resolveTestingEvidenceCoverage() — kept as two
+ * deliberately separate arms, same split e2e-path-guard.js itself uses (existence is decidable;
+ * anything about a passing RUN is not verified here or there — no attempt is made to re-execute
+ * the referenced test, only to confirm it exists).
  */
 function isWellFormedCoverageEntry(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
@@ -217,6 +216,21 @@ function isWellFormedCoverageEntry(entry) {
 /** Normalized fr_id match, consistent with frReferencesId()'s case-insensitivity — no padding equivalence (FR-1 !== FR-001), matching frReferencesId's own word-boundary behavior. */
 function frIdsMatch(a, b) {
   return String(a).trim().toUpperCase() === String(b).trim().toUpperCase();
+}
+
+/**
+ * SECURITY finding 2 (EXEC-phase review): does this test_ref actually name a file that exists?
+ * Strips a trailing :LINE or :LINE:COL suffix (this field's own documented convention, e.g.
+ * "tests/foo.test.js:42") before delegating to the existing specFileExists() choke-point
+ * (lib/stories/e2e-path-guard.js) — reused rather than reinvented, since the SAME TESTING
+ * sub-agent already has an analogous self-reported field (e2e_test_path) verified there, built
+ * after measuring a 46.1% fabrication rate on that field. Existence only, same as its source:
+ * this does not confirm the file is a real test, or that it ever passed — only that it exists.
+ */
+function testRefResolvesToRealFile(testRef, { repoRoot = process.cwd(), existsSync } = {}) {
+  if (typeof testRef !== 'string') return false;
+  const stripped = testRef.trim().replace(/:\d+(:\d+)?$/, '');
+  return specFileExists(repoRoot, stripped, existsSync ? { existsSync } : {});
 }
 
 /**
@@ -234,7 +248,14 @@ export function extractRegexFrMentions(rows, frs) {
     const metadataWithoutCoverage = row?.metadata && typeof row.metadata === 'object'
       ? Object.fromEntries(Object.entries(row.metadata).filter(([k]) => k !== 'fr_coverage'))
       : {};
-    const textParts = [row?.detailed_analysis, row?.summary, row?.raw_output, JSON.stringify(metadataWithoutCoverage)]
+    // SECURITY finding 1 (EXEC-phase review): JSON.stringify throws RangeError on
+    // pathologically deep input (measured: JSON.parse tolerates >=200,000 levels,
+    // JSON.stringify throws at ~5,000) while this function's own contract is report-only and
+    // must never be able to break a gate it isn't allowed to influence -- degrade to '' rather
+    // than let a malformed metadata blob propagate an exception out of a diagnostic scan.
+    let metadataText = '';
+    try { metadataText = JSON.stringify(metadataWithoutCoverage); } catch { /* degrade to '' */ }
+    const textParts = [row?.detailed_analysis, row?.summary, row?.raw_output, metadataText]
       .filter((v) => v != null)
       .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)));
     const haystack = textParts.join('\n');
@@ -248,15 +269,31 @@ export function extractRegexFrMentions(rows, frs) {
   return mentions;
 }
 
+// SECURITY finding 3 (EXEC-phase review): a single malicious row's fr_coverage array can be
+// arbitrarily long, and unmatchedFrCoverageIds/unresolvedTestRefs previously grew unbounded with
+// it (measured: 200k unmatched entries produced a 3.29MB details blob, parameterized-insert-safe
+// but still an unbounded storage cost into validation_details.gate_results). Diagnostic-only
+// arrays are capped; capping never affects delivered/undelivered/unverifiable scoring, which
+// never reads array length. Matches the existing FIFO-truncated-at-50 convention used elsewhere
+// in this codebase (issue_patterns.metadata.filter_log[]).
+const MAX_DIAGNOSTIC_ENTRIES = 50;
+
 /**
  * Resolves the structured testing_evidence signal from TESTING sub_agent_execution_results rows
- * already fetched for this SD. Returns matched (schema-valid AND fr_id-matched) entries plus
- * diagnostics for everything that did NOT make it into the promoting set, so "the writer never
- * fired" stays distinguishable from "the writer fired but nothing was valid".
+ * already fetched for this SD. Returns matched (schema-valid, fr_id-matched, AND test_ref
+ * disk-verified) entries plus diagnostics for everything that did NOT make it into the
+ * promoting set, so "the writer never fired" stays distinguishable from "the writer fired but
+ * nothing was valid".
+ *
+ * @param {Array} rows
+ * @param {Array} frs
+ * @param {{repoRoot?: string, existsSync?: Function}} [fsDeps] — injectable for tests; defaults
+ *   to the real filesystem via testRefResolvesToRealFile()'s own defaults.
  */
-export function resolveTestingEvidenceCoverage(rows, frs) {
+export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
   const matchedTestingCoverage = [];
   const unmatchedFrCoverageIds = [];
+  const unresolvedTestRefs = [];
   const unrecognizedPhaseRows = [];
   const rejectedPhaseRows = [];
   let testingEvidenceRowsSeen = 0;
@@ -284,7 +321,18 @@ export function resolveTestingEvidenceCoverage(rows, frs) {
       if (!isWellFormedCoverageEntry(entry)) continue;
       const matchIndex = frs.findIndex((fr, i) => frIdsMatch(frIdOf(fr, i), entry.fr_id));
       if (matchIndex === -1) {
-        unmatchedFrCoverageIds.push(entry.fr_id);
+        if (unmatchedFrCoverageIds.length < MAX_DIAGNOSTIC_ENTRIES) unmatchedFrCoverageIds.push(entry.fr_id);
+        continue;
+      }
+      // SECURITY finding 2: test_ref was previously shape-checked only (any non-empty string
+      // promoted). The SAME TESTING sub-agent already has an analogous self-reported field
+      // (user_stories.e2e_test_path) disk-verified at lib/stories/e2e-path-guard.js, built
+      // after measuring 641/1390 rows (46.1%) claiming a passing status for a file that does
+      // not exist. Reusing that exact primitive rather than trusting test_ref as-is.
+      if (!testRefResolvesToRealFile(entry.test_ref, fsDeps)) {
+        if (unresolvedTestRefs.length < MAX_DIAGNOSTIC_ENTRIES) {
+          unresolvedTestRefs.push({ fr_id: frIdOf(frs[matchIndex], matchIndex), test_ref: entry.test_ref, sub_agent_result_id: row?.id ?? null });
+        }
         continue;
       }
       matchedTestingCoverage.push({
@@ -297,16 +345,21 @@ export function resolveTestingEvidenceCoverage(rows, frs) {
   }
 
   return {
-    matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
+    matchedTestingCoverage, unmatchedFrCoverageIds, unresolvedTestRefs, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
   };
 }
 
 /**
  * Classify every FR for an SD. Injectable supabase for testing.
+ * @param {object} [opts]
+ * @param {{repoRoot?: string, existsSync?: Function}} [opts.fsDeps] — injectable for tests; a
+ *   test_ref's on-disk existence is checked against this (defaults to the real filesystem).
  * @returns {Promise<{frs: Array<{id,description,status:'delivered'|'descoped'|'undelivered',evidence}>,
  *   total:number, delivered:number, descoped:number, undelivered:number}>}
  */
-export async function classifyFrDelivery(supabase, { sdId, directiveId = null, sdMetadata = {}, functionalRequirements = null, requesterSessionId = null } = {}) {
+export async function classifyFrDelivery(supabase, {
+  sdId, directiveId = null, sdMetadata = {}, functionalRequirements = null, requesterSessionId = null, fsDeps = {},
+} = {}) {
   let frs = functionalRequirements;
   if (!Array.isArray(frs)) {
     // product_requirements_v2.directive_id stores the SD KEY (e.g. SD-FOO-001), not the UUID.
@@ -341,8 +394,8 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
 
   const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
   const {
-    matchedTestingCoverage, unmatchedFrCoverageIds, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
-  } = resolveTestingEvidenceCoverage(safeTestingRows, frs);
+    matchedTestingCoverage, unmatchedFrCoverageIds, unresolvedTestRefs, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
+  } = resolveTestingEvidenceCoverage(safeTestingRows, frs, fsDeps);
 
   // PASS 1 — resolve the positive signals per FR without deciding the negative case yet. The
   // negative case (undelivered vs unverifiable) cannot be decided per-FR: it depends on whether
@@ -459,6 +512,7 @@ export async function classifyFrDelivery(supabase, { sdId, directiveId = null, s
     regex_fr_mentions: regexFrMentions,
     testing_evidence_rows_seen: testingEvidenceRowsSeen,
     unmatched_fr_coverage_ids: unmatchedFrCoverageIds,
+    unresolved_test_refs: unresolvedTestRefs,
     unrecognized_phase_rows: unrecognizedPhaseRows,
     rejected_phase_rows: rejectedPhaseRows,
     conflicting_signals: conflictingSignals,
