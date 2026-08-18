@@ -2,10 +2,10 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.1.0
-**Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001
+**Version**: 1.2.0
+**Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001, extended by SD-MAN-INFRA-VENTURE-CRACK-GATE-001
 **Last Updated**: 2026-08-18
-**Tags**: venture-lifecycle, governance, observe-only, pbn, chairman-review
+**Tags**: venture-lifecycle, governance, observe-only, pbn, chairman-review, account-prerequisites
 
 ## What this is
 
@@ -32,7 +32,7 @@ Both layers call the same evaluator (`lib/eva/lifecycle/crack-gate-evaluator.js`
 
 | Check | Source | Status today (measured 2026-08-17) |
 |---|---|---|
-| PBN validation score | `venture_pbn_status(uuid)` DB function, reading both existing (disjoint) PBN storage locations | 151/152 ventures `PBN_NOT_SCORED`; 1 `PBN_SOURCE_UNAVAILABLE` (a nursery row whose verdict column doesn't exist yet — the underlying migration is separately chairman-gated) |
+| PBN validation score | `venture_pbn_status(uuid)` DB function, reading both existing (disjoint) PBN storage locations | Was 151/152 `PBN_NOT_SCORED` as of 2026-08-17. As of SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1, `venture-pbn-auto-score-sweep` (Job 5 in `scripts/cron/venture-ops-actuals-sweep.mjs`) sweeps the whole portfolio automatically every 6h cycle, capped at `MAX_SCORED_PER_CYCLE=20` new scores per cycle so the backlog clears over several cycles rather than one long-running run |
 | Stage-17 UI/UX judgment | `venture_gate_attestations` table, `check_type='stage17_judgment'` | No rows exist. The automated judgment engine (APA Child E) is a separate, unbuilt draft SD — this SD provides an interim human-attested path via `record-gate-attestation.mjs`, not the automated engine itself |
 | Chairman site review | `venture_gate_attestations` table, `check_type='chairman_site_review'` | Automated as of SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-3: `scripts/chairman-decisions.mjs decide` bridge-writes a real row whenever a `decision_type='product_review'` chairman_decisions row is approved/rejected. A prior, purely conventional version of this check already exists as a coordinator-maintained metadata marker on `SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E` (`state=REQUIRED-UNMET`) — this SD's structural attestation is meant to supersede that marker for AltifyAI, not run alongside it indefinitely |
 
@@ -158,6 +158,81 @@ through the same RPC) and writes a `chairman_site_review` attestation only when
 `attested_by` is a real human — the CLI's `DECIDED_BY` defaults to the generic string
 `'chairman-cli'` when `CHAIRMAN_DECIDED_BY` is unset, which fails that constraint's email-shape
 check, so an un-configured invocation cannot silently produce a fake attestation.
+
+## Pre-deploy account-prerequisite checks (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-5/FR-6)
+
+Two standalone, non-blocking checkers close a different, earlier-stage class of AltifyAI-shaped
+incident: not "did this venture get an unreviewed live deploy" (the three checks above) but "did
+this venture's local config still carry an unfilled scaffold placeholder when it deployed" — the
+literal AltifyAI root cause (a placeholder D1 `database_id` **and** Clerk publishable key, both
+reaching production).
+
+- **`lib/venture-deploy/config-completeness.js`** (`checkDeployConfigCompleteness(repoPath)`) scans
+  a local clone's `wrangler.toml` for `key = "value"` lines whose value looks like a never-replaced
+  placeholder (exact-match `database_id` scaffold UUID, plus generic patterns: `CHANGEME`,
+  `your-*`, `<...>`, `xxxx+`, `TODO`, `placeholder`, `YOUR_*`, an unfilled `pk_test_`/`pk_live_`
+  Clerk-key prefix, or an empty value). Key-agnostic by design — the same scanner covers both
+  halves of the original incident without hardcoding either variable name.
+- **`lib/eva/bridge/account-prerequisites.js`** (`buildAccountPrerequisiteChecklist` +
+  `resolveAccountPrerequisiteIndicators`) consolidates 5 bootstrap-account indicators (Stripe
+  billing, Cloudflare deploy-target routing, Sentry DSN, the D1 real-id check above, and — as of an
+  independent post-ship review — the Clerk publishable key, `VITE_CLERK_PUBLISHABLE_KEY` per
+  `docs/03_protocols_and_standards/venture-hosting-standard.md`) into one 3-state
+  (`true`/`false`/`null`) list instead of the chairman's own incident: 5 separate round-trips
+  discovering missing bootstrap accounts one at a time.
+
+Both are deliberately **unwired** — importable libraries with zero production callers as of this
+writing, not blocking steps in any provisioning pipeline. Wiring them into a real chokepoint
+(`venture-provisioner.js`'s `DEFAULT_STEPS`, or a pre-deploy CI gate in each venture's own repo)
+is an explicit, named follow-up, not an oversight — FR-4's own investigation this SD did found the
+real production deploy chokepoint is `promote()` (`lib/venture-deploy/cli-adapters.js`'s sole
+caller), and a venture's deploy work has historically bypassed EHG_Engineer's pipeline entirely via
+a hand-run CI workflow in the venture's own repo (the literal AltifyAI incident) — wiring either
+checker into `publish.js` alone would not have caught it.
+
+**3-state honesty, twice reinforced by independent review**: both checkers return `null` (not
+`false`) whenever they could not actually check something, rather than fabricating a "confirmed
+missing" verdict from an unread value —
+- `account-prerequisites.js`'s Supabase reads bind `error` and throw on a genuine RLS
+  denial/network failure (never silently resolve to "confirmed missing").
+- `stripe_billing` is 3-state on the `applications` lookup itself: `applications.venture_id` is
+  nullable and, measured live 2026-08-18, unpopulated on 7 of 15 rows (47%) — a lookup that finds
+  no row via the FK reports `present:null` ("ambiguous, not checkable"), not `present:false`
+  ("confirmed missing"). The FK-based lookup itself replaced an earlier free-text `applications.name`
+  join specifically because two live ventures share the name "MarketLens"
+  (`scripts/eva/retroactive-pbn-score.mjs`'s own header names this) — a name-based join could
+  silently attribute one venture's billing product to the other.
+
+## Post-merge hardening round 2 (2026-08-18, PR #7236, independent security + validation sweep)
+
+A second, independent 4-teammate sweep (2 security, 2 validation passes, both re-verified against
+the actual merged commit rather than a summary) surfaced further real defects across this SD's own
+FR-1/FR-6/FR-7, documented here for the same reason as the round-1 section above.
+
+- **`venture-pbn-auto-score-sweep` had no LLM credential in the production cron workflow.**
+  `.github/workflows/venture-ops-actuals-cron.yml`'s env carried only Supabase secrets — every
+  scoring attempt inside `scorePbnBuckets` failed with `scoring_error` for lack of a Gemini/Google
+  key, writing zero verdicts, and the job still exited green (`scoring_error` is by design never a
+  hard failure, so isolated transient failures stay retryable). Fixed two ways: wired
+  `GEMINI_API_KEY` (the repo secret already used by 7 other workflows) into the cron job's env as
+  the root-cause fix, and added a systemic-escalation check (100% of attempted ventures failing
+  with `scoring_error` in one cycle, not isolated noise) that flips `exitCode` — defense in depth
+  against a future credential expiry or provider outage reproducing the same silent-green failure.
+- **`isMissingFunctionError`'s `.code` was dropped at two independent layers** — the RPC error's
+  `.code` (e.g. PostgREST `PGRST202`) was discarded both where `retroactive-pbn-score.mjs`
+  re-threw the write error and where the sweep's catch site rebuilt a message-only object before
+  checking it — leaving missing-function detection dependent solely on a `/schema cache/i` message
+  regex, silently blind to a raw `42883` ("function does not exist") shape. Both layers now
+  preserve `.code` end to end.
+- **`tests/e2e/ehg-app/auth.setup.spec.ts`'s ported race dropped the original's `.catch()`.**
+  `tests/uat/setup/global-auth.js:148` swallows a double-timeout (both the "left /login"
+  navigation wait and the error-selector wait time out) so execution falls through to explicit
+  diagnostic state checks. The port omitted it — a double-timeout instead rejected with a raw,
+  unhandled Playwright timeout, reintroducing the exact undifferentiated-timeout symptom this port
+  existed to fix, for precisely the "stuck, no visible error" case. Restored.
+- A CI workflow (`ehg-app-auth-smoke.yml`) exposed a full-privilege `SUPABASE_SERVICE_ROLE_KEY` to
+  its whole process tree even though nothing in that job's execution path could ever consume it
+  (the ingestion path it would feed short-circuits on a never-set `SD_ID`) — removed.
 
 ## Explicitly out of scope
 
