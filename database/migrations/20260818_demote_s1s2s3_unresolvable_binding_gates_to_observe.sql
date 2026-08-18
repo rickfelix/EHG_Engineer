@@ -1,5 +1,10 @@
 -- 20260818_demote_s1s2s3_unresolvable_binding_gates_to_observe.sql
 -- QF-20260818-010
+-- @delegated-by: adam
+--   Delegated apply per SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 (completed, verified) at
+--   coordinator request ad7e734b 2026-08-18 ~13:5xZ (Golf-7 correctly refused to self-stamp;
+--   coordinator correctly declined to bypass the approver gate). Governed data-row change,
+--   idempotent, read in full by the applier before apply; Golf-7 verifies post-apply.
 --
 -- computeGateConformance() (lib/eva/lifecycle/gate-conformance.js) reads binding 16/21 live:
 -- 5 gates.exit strings on stages 1/2/3 resolve to no verifier in exit-gate-verifiers.js
