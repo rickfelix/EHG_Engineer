@@ -373,7 +373,11 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
 
     expect(retroactivelyScoreVenture).toHaveBeenCalledTimes(1); // NOT 2 -- stops after the first confirmation
     expect(result.summary.jobs['venture-pbn-auto-score-sweep']).toEqual(
-      expect.objectContaining({ scored: 0, already_scored: 0, scoring_errors: 0, function_missing: 1, errors: [] }),
+      // SECURITY re-review finding N1: `checked` (actual attempts) and `attempted` (full portfolio
+      // size) are pinned separately -- an observability regression that reported checked as if the
+      // whole portfolio ran would satisfy every other assertion here while silently lying about
+      // what the early-exit actually did.
+      expect.objectContaining({ attempted: 2, checked: 1, scored: 0, already_scored: 0, scoring_errors: 0, function_missing: 1, errors: [] }),
     );
     expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/set_venture_pbn_verdict_stage_zero RPC not found/));
     expect(result.exitCode).toBe(0); // function_missing is a known, expected-for-now state -- not a failure

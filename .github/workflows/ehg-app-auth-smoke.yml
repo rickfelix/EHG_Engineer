@@ -80,4 +80,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ehg-app-auth-smoke-results
-          path: test-results/
+          # SECURITY re-review finding A1: --trace=off (above) closes the HIGH-severity leak, but
+          # test-results/ also carries a screenshot + video (playwright.config.js's own
+          # screenshot:'only-on-failure' / video:'retain-on-failure' on CI) of the login page at
+          # failure time -- the password field is DOM-masked, but TEST_USER_EMAIL is legible in
+          # frame. Narrowed to the JSON report only, which never captures page content.
+          path: test-results/results.json
+          if-no-files-found: ignore

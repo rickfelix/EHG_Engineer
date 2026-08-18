@@ -346,7 +346,7 @@ export async function main(argv = process.argv, deps = {}) {
       errors,
     };
     if (functionMissing > 0) {
-      logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found (confirmed on venture 1 of ${allVentures.length}, remaining ventures skipped this cycle -- a schema-level fact, not per-venture) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
+      logger.error?.(`[ops-actuals-sweep] ${JOBS[4].key}: set_venture_pbn_verdict_stage_zero RPC not found (confirmed on venture ${attempted} of ${allVentures.length}, remaining ventures skipped this cycle -- a schema-level fact, not per-venture) -- the migration (database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql) has not been applied yet. Trigger code is live and will score automatically once it is.`);
     } else if (!args.dryRun && allVentures.length > 0 && scored === 0 && alreadyScored === 0 && scoringErrors === 0) {
       logger.error?.(`[ops-actuals-sweep] NC-7 ESCALATION: ${JOBS[4].key} scored 0, skipped 0, and had 0 scoring errors across ${allVentures.length} venture(s) with zero function_missing -- investigate before trusting future silent passes.`);
     }
