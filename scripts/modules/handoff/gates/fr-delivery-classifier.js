@@ -274,8 +274,10 @@ export function extractRegexFrMentions(rows, frs) {
 // it (measured: 200k unmatched entries produced a 3.29MB details blob, parameterized-insert-safe
 // but still an unbounded storage cost into validation_details.gate_results). Diagnostic-only
 // arrays are capped; capping never affects delivered/undelivered/unverifiable scoring, which
-// never reads array length. Matches the existing FIFO-truncated-at-50 convention used elsewhere
-// in this codebase (issue_patterns.metadata.filter_log[]).
+// never reads array length. Keeps the FIRST 50 entries encountered and drops the rest (NOT a
+// FIFO/rolling window — which entries survive doesn't matter for a diagnostic-only field, but
+// the mechanism is worth naming correctly). Same 50-entry bound already used elsewhere in this
+// codebase for an analogous diagnostic array (issue_patterns.metadata.filter_log[]).
 const MAX_DIAGNOSTIC_ENTRIES = 50;
 
 /**
@@ -285,12 +287,15 @@ const MAX_DIAGNOSTIC_ENTRIES = 50;
  * promoting set, so "the writer never fired" stays distinguishable from "the writer fired but
  * nothing was valid".
  *
- * @param {Array} rows
+ * @param {Array} rows — a row's metadata.repo_path (if present) is trusted as-is here. The
+ *   CALLER (classifyFrDelivery) is responsible for stripping it from any row whose compliance
+ *   has not been independently verified — see the SECURITY finding comment there — so by the
+ *   time a row reaches this function, a present repo_path has already been vetted.
  * @param {Array} frs
  * @param {{repoRoot?: string, existsSync?: Function}} [fsDeps] — injectable for tests. If
  *   fsDeps.repoRoot is explicitly set it is used for EVERY row (test determinism); otherwise
- *   each row's own metadata.repo_path is preferred (cross-repo SDs — see the SECURITY finding
- *   comment below), falling back to the real cwd only when a row has neither.
+ *   each row's own (already-vetted) metadata.repo_path is preferred, falling back to the real
+ *   cwd only when a row has neither.
  */
 export function resolveTestingEvidenceCoverage(rows, frs, fsDeps = {}) {
   const matchedTestingCoverage = [];
@@ -408,10 +413,36 @@ export async function classifyFrDelivery(supabase, {
     .eq('sub_agent_code', 'TESTING');
   const safeTestingRows = testingError ? [] : (testingRows || []);
 
+  // SECURITY finding (4th EXEC-phase round): metadata.repo_path is WRITER-CONTROLLED — the same
+  // TESTING sub-agent chooses both it and test_ref, so trusting it raw as the existence-check
+  // root hands that agent control of BOTH halves of the guard (repoRoot was previously always
+  // process.cwd(), a value no writer could influence — that was the only thing constraining the
+  // guard at all: specFileExists('C:/', 'Windows/win.ini') === true, since its own traversal
+  // guard only ever covers the relative path, never the root). It also goes stale: a worktree
+  // path resolves today and stops resolving the moment that worktree is cleaned up, making the
+  // SAME row's classification change with wall-clock time — exactly what this module exists to
+  // prevent. Only trust repo_path when the CANONICAL compliance judgment already confirms it —
+  // v_sub_agent_repo_compliance (CLAUDE.md prologue #11 / SUB_AGENT_REPO_RESOLUTION gate) compares
+  // metadata->>repo_path to this SD's registered applications.local_path by EXACT string equality;
+  // reusing that verdict rather than re-deriving it means this can never disagree with the gate
+  // that already polices the same field. A query error fails closed (nothing trusted, same as the
+  // testingError pattern above) rather than accidentally trusting an unverified path.
+  const { data: complianceRows, error: complianceError } = await supabase
+    .from('v_sub_agent_repo_compliance')
+    .select('id, compliance_status')
+    .eq('sd_id', sdId)
+    .eq('sub_agent_code', 'TESTING');
+  const compliantRowIds = complianceError
+    ? new Set()
+    : new Set((complianceRows || []).filter((r) => r?.compliance_status === 'compliant').map((r) => r.id));
+  const trustworthyTestingRows = safeTestingRows.map((row) => (
+    compliantRowIds.has(row?.id) ? row : { ...row, metadata: { ...(row?.metadata || {}), repo_path: undefined } }
+  ));
+
   const regexFrMentions = extractRegexFrMentions(safeTestingRows, frs);
   const {
     matchedTestingCoverage, unmatchedFrCoverageIds, unresolvedTestRefs, unrecognizedPhaseRows, rejectedPhaseRows, testingEvidenceRowsSeen,
-  } = resolveTestingEvidenceCoverage(safeTestingRows, frs, fsDeps);
+  } = resolveTestingEvidenceCoverage(trustworthyTestingRows, frs, fsDeps);
 
   // PASS 1 — resolve the positive signals per FR without deciding the negative case yet. The
   // negative case (undelivered vs unverifiable) cannot be decided per-FR: it depends on whether

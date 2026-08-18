@@ -425,6 +425,19 @@ describe('FR-1: extractRegexFrMentions — report-only, phase-unfiltered, exclud
     const rows = [{ id: 'row-1', phase: 'PLAN_TO_EXEC', summary: 'mentions FR-1 in passing', metadata: {} }];
     expect(extractRegexFrMentions(rows, frs).map((m) => m.fr_id)).toEqual(['FR-1']);
   });
+  // S4 (closes: SECURITY finding 1's try/catch had zero test coverage — a naive mutant deleting
+  // it survived all pre-existing tests, since none ever fed a metadata shape deep enough to
+  // actually trigger JSON.stringify's RangeError).
+  it('SECURITY finding 1: a pathologically deep metadata object does not throw, degrades to empty text instead', () => {
+    let deep = {};
+    let cursor = deep;
+    for (let i = 0; i < 6000; i++) { cursor.nested = {}; cursor = cursor.nested; } // JSON.stringify throws ~5,000 levels deep (measured)
+    const frs = [{ id: 'FR-1' }];
+    const rows = [{ id: 'row-1', phase: 'LEAD', detailed_analysis: 'FR-1 also mentioned here', metadata: deep }];
+    expect(() => extractRegexFrMentions(rows, frs)).not.toThrow();
+    // still finds the prose mention via detailed_analysis -- only the metadata-JSON text degrades
+    expect(extractRegexFrMentions(rows, frs)).toEqual([{ fr_id: 'FR-1', sub_agent_result_id: 'row-1', phase: 'LEAD' }]);
+  });
 });
 
 describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized match, unmatched diagnostics', () => {
@@ -531,6 +544,18 @@ describe('TR-1: resolveTestingEvidenceCoverage — strict schema, normalized mat
     const r = resolveTestingEvidenceCoverage(rows, FRS3);
     expect(r.unmatchedFrCoverageIds.length).toBeLessThanOrEqual(50);
     expect(r.unmatchedFrCoverageIds.length).toBeGreaterThan(0);
+  });
+
+  // S6 (closes: the above test only actually exercises unmatchedFrCoverageIds's cap -- its own
+  // name claims unresolvedTestRefs too, but every fixture entry used fr_id "FR-UNMATCHED-*",
+  // which is unmatched and never reaches the unresolvedTestRefs branch at all).
+  it('S6: unresolvedTestRefs is ALSO capped independently, not just unmatchedFrCoverageIds', () => {
+    const manyUnresolved = Array.from({ length: 200 }, (_, i) => ({ fr_id: 'FR-1', status: 'delivered', test_ref: `tests/does-not-exist-${i}.test.js` }));
+    const rows = [testingRow({ id: 'r1', phase: 'EXEC', coverage: manyUnresolved })];
+    const r = resolveTestingEvidenceCoverage(rows, FRS3);
+    expect(r.unresolvedTestRefs.length).toBeLessThanOrEqual(50);
+    expect(r.unresolvedTestRefs.length).toBeGreaterThan(0);
+    expect(r.unmatchedFrCoverageIds).toEqual([]); // FR-1 is matched -- these all take the resolved-check branch, not the unmatched one
   });
 });
 
