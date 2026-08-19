@@ -91,28 +91,30 @@ function buildIssueSummary(dimName, score, reasoning) {
  * @param {Object} [options]
  * @param {boolean} [options.dryRun=false] - Skip DB writes
  * @param {number} [options.lookbackDays=30] - Days of history to scan
- * @returns {Promise<{synced: number, skipped: number, errors: number, resolved: number, excluded: number, unscored: number}>}
+ * @returns {Promise<{synced: number, skipped: number, errors: number, resolved: number, excluded: number, unscored: number, couldNotVerify: number}>}
  */
 export async function syncVisionScoresToPatterns(supabase, options = {}) {
   const { dryRun = false, lookbackDays = DEFAULT_LOOKBACK_DAYS } = options;
 
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
 
-  // Query recent low-scoring vision alignment records
-  const { data: scores, error: scoresError } = await supabase
-    .from('eva_vision_scores')
-    .select('id, sd_id, total_score, dimension_scores, threshold_action, rubric_snapshot, scored_at, vision_id, arch_plan_id')
-    .lt('total_score', 70)  // Only process scores below 70 (minor_sd, gap_closure_sd, escalate)
-    .gte('scored_at', since)
-    .order('scored_at', { ascending: false })
-    .limit(100);
-
-  if (scoresError) {
-    throw new Error(`Failed to query eva_vision_scores: ${scoresError.message}`);
+  // QF-20260816-109: was capped .limit(100) -- a record past the cap read as silently
+  // ABSENT, indistinguishable from "improved" below. Paginate like activeVgaps (id tiebreaks).
+  let scores;
+  try {
+    scores = await fetchAllPaginated(() => supabase
+      .from('eva_vision_scores')
+      .select('id, sd_id, total_score, dimension_scores, threshold_action, rubric_snapshot, scored_at, vision_id, arch_plan_id')
+      .lt('total_score', 70)  // Only process scores below 70 (minor_sd, gap_closure_sd, escalate)
+      .gte('scored_at', since)
+      .order('scored_at', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch (e) {
+    throw new Error(`Failed to query eva_vision_scores: ${e.message}`);
   }
 
   if (!scores || scores.length === 0) {
-    return { synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0 };
+    return { synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0, couldNotVerify: 0 };
   }
 
   let synced = 0;
@@ -138,6 +140,10 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
 
   // Collect per-dimension aggregates across all score records
   const dimAggregates = {};
+
+  // QF-20260816-109: dims scoring >= SCORE_THRESHOLD this run = positive evidence of
+  // improvement, vs. merely absent (paginated-away/total_score>=70/malformed).
+  const improvedPatternIds = new Set();
 
   for (const scoreRecord of scores) {
     // SD-LEO-INFRA-LEARN-VISION-GAP-RUBRIC-CLASSIFY-001: a missing/non-object/empty
@@ -205,12 +211,15 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
         }
       }
 
+      const patternId = buildPatternId(dimId);
+
       if (dimScore >= SCORE_THRESHOLD) {
+        // QF-20260816-109: this dim WAS observed and scored fine this run -- record it as
+        // positive evidence for the auto-resolve pass below.
+        improvedPatternIds.add(patternId);
         skipped++;
         continue; // Only process low-scoring dimensions (AC-005)
       }
-
-      const patternId = buildPatternId(dimId);
 
       // Extract name from dimension key if dim.name is undefined (e.g., "A05_event_bus_integration" → "event bus integration")
       const dimName = dim.name || dimId.replace(/^[A-Z]\d+_?/i, '').replace(/_/g, ' ') || dimId;
@@ -338,6 +347,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
   // forever even after the underlying dimension improves above threshold.
   // ========================================================================
   let resolved = 0;
+  let couldNotVerify = 0;
 
   let activeVgaps;
   try {
@@ -356,7 +366,36 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
     for (const vgap of activeVgaps) {
       if (stillLowDims.has(vgap.pattern_id)) continue; // Still scoring low — keep active
 
-      // This pattern's dimension is no longer in the low-scoring set — it improved
+      if (!improvedPatternIds.has(vgap.pattern_id)) {
+        // QF-20260816-109: absent from both sets = not observed cleanly this run (SD's
+        // total_score rose >=70, or malformed/skipped) -- NOT evidence of improvement.
+        // status has no could_not_verify value in its CHECK constraint (active|assigned|
+        // resolved|obsolete only), so stamp metadata and leave status untouched.
+        if (!dryRun) {
+          const { error: markError } = await supabase
+            .from('issue_patterns')
+            .update({
+              metadata: {
+                ...(vgap.metadata || {}),
+                last_sync_outcome: 'could_not_verify',
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', vgap.id);
+
+          if (markError) {
+            console.error(`  Error marking ${vgap.pattern_id} could_not_verify: ${markError.message}`);
+            errors++;
+          } else {
+            couldNotVerify++;
+          }
+        } else {
+          console.log(`  [DRY RUN] Would mark could_not_verify: ${vgap.pattern_id} (not observed this run)`);
+          couldNotVerify++;
+        }
+        continue;
+      }
+
       if (!dryRun) {
         const { error: resolveError } = await supabase
           .from('issue_patterns')
@@ -383,7 +422,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
     }
   }
 
-  return { synced, skipped, errors, resolved, excluded, unscored };
+  return { synced, skipped, errors, resolved, excluded, unscored, couldNotVerify };
 }
 
 // ============================================================================
