@@ -1245,9 +1245,15 @@ function describeSoftHolds(sd) {
 // Fail-open on any lookup error (never blocks a caller on a guard error -- the pre-existing
 // claim_sd TTL check still arbitrates as the backstop).
 async function foreignSessionForSd(sb, sdKey, mySessionId) {
+  // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 (FR-5): process_alive_at and
+  // expected_silence_until are 2 of isSessionAlive's 5 liveness signals (hasTickAlive /
+  // hasExpectedSilence). Without them in the select, both rungs are hard-false for every
+  // caller of this function (isForeignSessionLive, foreignClaimantBlocksSteal) -- the exact
+  // "a rung that cannot see the constraint is not evidence of absence" failure documented in
+  // database/migrations/20260727_v_active_sessions_expose_tick_and_silence.sql.
   const { data: sessions } = await sb
     .from('v_active_sessions')
-    .select('session_id, is_alive, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch')
+    .select('session_id, is_alive, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch, process_alive_at, expected_silence_until')
     .eq('sd_key', sdKey)
     .neq('session_id', mySessionId)
     .limit(1);
