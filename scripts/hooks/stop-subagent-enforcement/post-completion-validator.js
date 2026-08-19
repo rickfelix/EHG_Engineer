@@ -98,6 +98,46 @@ async function _recordIndeterminate(supabase, sdKey, err) {
 }
 
 /**
+ * QF-20260817-001: sweep completion-relevant metadata for stamped obligations (amendment
+ * debts, concurrence gates, needs_*_review flags) the completion path has never read.
+ * SPECIMEN: SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 completed carrying
+ * metadata.solomon_concurrence_gate.state === 'CONCURRENCE-DEBT' — no gate consulted it; the
+ * debt survived only because a coordinator hand-noticed it. Non-blocking (missingRecommended
+ * only, never missingRequired) — this makes the debt VISIBLE with provenance, it does not
+ * gate completion itself (a hard block on the completion transition is a separate, far
+ * higher-blast-radius change this QF's scope does not cover).
+ *
+ * KNOWN_DEBT_KEYS is the confirmed real convention; DEBT_SHAPED_KEY_RE additionally catches
+ * unrecognized keys that LOOK like a debt stamp by name (fail-loud on an unknown convention,
+ * per the QF's own acceptance criteria, rather than silently trusting only the allow-list).
+ *
+ * @param {Object|null|undefined} metadata - sd.metadata
+ * @returns {string[]} human-readable findings, one per unresolved/unrecognized obligation
+ */
+const KNOWN_DEBT_KEYS = new Set(['solomon_concurrence_gate']);
+const DEBT_SHAPED_KEY_RE = /debt|concurrence|^needs_.*_review$/i;
+const UNRESOLVED_STATE_RE = /DEBT|PENDING|REQUIRED/i;
+
+export function _sweepMetadataObligations(metadata) {
+  const findings = [];
+  if (!metadata || typeof metadata !== 'object') return findings;
+  for (const [key, value] of Object.entries(metadata)) {
+    const known = KNOWN_DEBT_KEYS.has(key);
+    if (!known && !DEBT_SHAPED_KEY_RE.test(key)) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const state = typeof value.state === 'string' ? value.state : (typeof value.status === 'string' ? value.status : null);
+    if (state && UNRESOLVED_STATE_RE.test(state) && !value.resolved_at) {
+      findings.push(`${key}: state="${state}" (stamped_by=${value.stamped_by || 'unknown'}, required_before=${value.required_before || 'unknown'})`);
+    } else if (!known && !state) {
+      // Unrecognized debt-shaped key with no state/status to evaluate -- surface it so a new
+      // stamping convention is visible from day one rather than silently assumed benign.
+      findings.push(`${key}: unrecognized debt-shaped metadata key (not in allow-list) -- review manually`);
+    }
+  }
+  return findings;
+}
+
+/**
  * Validate that post-completion commands were executed for a completed SD.
  *
  * @param {Object} supabase - Supabase client
@@ -244,6 +284,14 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     missingRecommended.push('COMPLETION_FLAGS');
   }
 
+  // QF-20260817-001: metadata-obligation sweep (amendment debts, concurrence gates,
+  // needs_*_review flags) -- also deliberately outside isCodeProducing, for the same reason
+  // as the completion-flags witness above.
+  const obligationFindings = _sweepMetadataObligations(sd.metadata);
+  if (obligationFindings.length > 0) {
+    missingRecommended.push('METADATA_OBLIGATIONS');
+  }
+
   // Output results
   if (missingRequired.length > 0) {
     console.error(`\n⚠️  Post-Completion Validation for ${sdKey}`);
@@ -286,6 +334,10 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     }
     if (missingRecommended.includes('COMPLETION_FLAGS')) {
       console.error(`   ${completionFlagsWarn}`);
+    }
+    if (missingRecommended.includes('METADATA_OBLIGATIONS')) {
+      console.error('   SD completed carrying unresolved/unrecognized metadata obligations:');
+      obligationFindings.forEach(f => console.error(`     - ${f}`));
     }
     console.error('   (Not blocking - these improve continuous improvement)');
   } else {
