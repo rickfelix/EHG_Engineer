@@ -277,6 +277,38 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
       });
     }
 
+    // SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-3: when this orchestrator carries FR-1/FR-1b
+    // journey_steps (Stage-15-derived UAT walk targets, stamped only on the venture sprint
+    // orchestrator — never on children), it must not reach LEAD-FINAL until a PASSING journey
+    // walk exists. Keyed strictly on metadata.journey_steps presence, never on sd_type (which
+    // already carries EXEMPT_TYPES-driven UAT exemptions unrelated to this check).
+    // metadata.journey_walk_result is not yet written by anything in this codebase — PR 3
+    // (FR-2, the browser-executor walker) is the first real writer of that field. Until then
+    // every orchestrator with journey_steps WAITs here (expected — not a failure).
+    const journeySteps = _ctx?.sd?.metadata?.journey_steps;
+    if (Array.isArray(journeySteps) && journeySteps.length > 0) {
+      const walkResult = _ctx?.sd?.metadata?.journey_walk_result;
+      const walkStatus = walkResult?.status || 'absent';
+      if (walkStatus !== 'pass') {
+        console.log(`   ⏳ WAITING on journey walk result (status: ${walkStatus}) — ${journeySteps.length} journey step(s) declared`);
+        return buildWaitResult({
+          score: 0,
+          max_score: 100,
+          wait_reason: `Parent orchestrator declares ${journeySteps.length} journey step(s) but journey_walk_result is '${walkStatus}' (requires 'pass')`,
+          issues: [],
+          warnings: [`WAIT: journey walk ${walkStatus} — UAT journey walk has not yet passed for this orchestrator`],
+          remediation: 'Run the journey walker against this orchestrator\'s metadata.journey_steps and re-run PLAN-TO-LEAD once metadata.journey_walk_result.status="pass".',
+          details: {
+            is_parent_sd: true,
+            total_children: childSDs.length,
+            completed_children: completedChildren.length,
+            journey_step_count: journeySteps.length,
+            journey_walk_status: walkStatus,
+          },
+        });
+      }
+    }
+
     console.log('   ✅ All children completed - parent SD ready for final approval');
     return {
       passed: true,
