@@ -19,10 +19,13 @@ import { describe, it, expect } from 'vitest';
 import {
   PG_NET_FUNCTION_EXPOSURE_SQL,
   PG_NET_RELATION_EXPOSURE_SQL,
+  PG_NET_SCHEMA_EXPOSURE_SQL,
   classifyPgNetFunctionExposure,
   classifyPgNetRelationExposure,
   probePgNetExposure,
 } from '../../../lib/security/pg-net-exposure.js';
+
+const CLEAN_SCHEMA_ROW = { rows: [{ anon_usage: false, authenticated_usage: false }] };
 
 const EXPOSED_FN = {
   name: 'http_post', args: 'url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer',
@@ -72,6 +75,11 @@ describe('PG_NET_FUNCTION_EXPOSURE_SQL / PG_NET_RELATION_EXPOSURE_SQL predicates
 
   it('relation query is not hardcoded to specific table names — scoped by relkind so future net.* relations are caught', () => {
     expect(PG_NET_RELATION_EXPOSURE_SQL).not.toMatch(/http_request_queue|_http_response/);
+  });
+
+  it('schema query checks USAGE on net for both anon and authenticated (SECURITY finding C1: the reachability gate object ACLs sit behind)', () => {
+    expect(PG_NET_SCHEMA_EXPOSURE_SQL).toMatch(/has_schema_privilege\('anon', 'net', 'USAGE'\)/);
+    expect(PG_NET_SCHEMA_EXPOSURE_SQL).toMatch(/has_schema_privilege\('authenticated', 'net', 'USAGE'\)/);
   });
 });
 
@@ -139,28 +147,35 @@ describe('probePgNetExposure — three distinguishable states, two parallel axes
     expect(r.relations_at_risk).toBeNull();
     expect(r.functions).toEqual([]);
     expect(r.relations).toEqual([]);
+    expect(r.schema_usage).toBeNull();
   });
 
-  it('reports probe_ran:true with both counts when the catalog answers', async () => {
+  it('reports probe_ran:true with both counts AND schema_usage when the catalog answers', async () => {
     const r = await probePgNetExposure({
-      connect: async () => sequencedClient([{ rows: [EXPOSED_FN] }, { rows: [EXPOSED_TABLE, EXPOSED_SEQUENCE] }]),
+      connect: async () => sequencedClient([
+        { rows: [EXPOSED_FN] },
+        { rows: [EXPOSED_TABLE, EXPOSED_SEQUENCE] },
+        { rows: [{ anon_usage: true, authenticated_usage: true }] },
+      ]),
     });
     expect(r.probe_ran).toBe(true);
     expect(r.reason).toBeNull();
     expect(r.functions_at_risk).toBe(1);
     expect(r.relations_at_risk).toBe(2);
+    expect(r.schema_usage).toEqual({ anon: true, authenticated: true });
   });
 
   it('reports probe_ran:true with zero on both axes when the catalog is genuinely clean', async () => {
     const r = await probePgNetExposure({
-      connect: async () => sequencedClient([{ rows: [] }, { rows: [] }]),
+      connect: async () => sequencedClient([{ rows: [] }, { rows: [] }, CLEAN_SCHEMA_ROW]),
     });
     expect(r.probe_ran).toBe(true);
     expect(r.functions_at_risk).toBe(0);
     expect(r.relations_at_risk).toBe(0);
+    expect(r.schema_usage).toEqual({ anon: false, authenticated: false });
   });
 
-  it('connect() rejecting is probe_ran:false with BOTH counts null', async () => {
+  it('connect() rejecting is probe_ran:false with BOTH counts null and schema_usage null', async () => {
     const r = await probePgNetExposure({
       connect: async () => { throw new Error('connection refused'); },
     });
@@ -168,6 +183,21 @@ describe('probePgNetExposure — three distinguishable states, two parallel axes
     expect(r.reason).toMatch(/connection refused/);
     expect(r.functions_at_risk).toBeNull();
     expect(r.relations_at_risk).toBeNull();
+    expect(r.schema_usage).toBeNull();
+  });
+
+  it('a malformed payload on the SCHEMA query is probe_ran:false, never a clean result on any axis', async () => {
+    for (const bad of [{ rows: [] }, { rows: 'not-an-array' }, { rows: [{}, {}] }, {}, undefined, null]) {
+      const r = await probePgNetExposure({
+        connect: async () => sequencedClient([{ rows: [] }, { rows: [] }, bad]),
+      });
+      expect(r.probe_ran).toBe(false);
+      expect(r.functions_at_risk).toBeNull();
+      expect(r.relations_at_risk).toBeNull();
+      expect(r.schema_usage).toBeNull();
+      expect(r.reason).toMatch(/uninterpretable|rows/i);
+      expect(r.reason).toMatch(/schema/i);
+    }
   });
 
   it('client.query() throwing (distinct from connect() rejecting) is probe_ran:false with BOTH counts null, and still tears down', async () => {
@@ -226,7 +256,7 @@ describe('probePgNetExposure — three distinguishable states, two parallel axes
     // The wrapper has no `end` property at all. If probePgNetExposure ever called
     // client.end() unconditionally, this would throw "client.end is not a function" and
     // the test would fail with that error rather than resolving normally.
-    const wrapper = sequencedClient([{ rows: [] }, { rows: [] }], { hasEnd: false });
+    const wrapper = sequencedClient([{ rows: [] }, { rows: [] }, CLEAN_SCHEMA_ROW], { hasEnd: false });
     expect(wrapper.end).toBeUndefined();
     const r = await probePgNetExposure({ connect: async () => wrapper });
     expect(r.probe_ran).toBe(true);

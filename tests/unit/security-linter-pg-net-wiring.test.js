@@ -56,9 +56,10 @@ function benignExceptPgNet({ pgNetError } = {}) {
   return {
     query: async (sql) => {
       if (closed) throw new Error('query() after end(): the shared client was already closed');
-      if (String(sql).includes("nspname = 'net'")) {
+      if (String(sql).includes("nspname = 'net'") || String(sql).includes('has_schema_privilege')) {
         if (pgNetError) throw pgNetError;
       }
+      if (String(sql).includes('has_schema_privilege')) return { rows: [{ anon_usage: false, authenticated_usage: false }] };
       if (String(sql).includes('pg_event_trigger')) return { rows: [{ evtenabled: 'O' }] };
       return { rows: [] };
     },

@@ -190,6 +190,7 @@ export async function runSentinel({ connect } = {}) {
             probeRan: true,
             functions: pgNet.functions.map(f => `${f.name}(${f.args})`),
             relations: pgNet.relations.map(r => `${r.name} [${r.kind}]`),
+            schemaUsage: pgNet.schema_usage,
           }
         : { probeRan: false, reason: pgNet.reason },
       triggerEnabled: trig.rows.length === 1 && trig.rows[0].evtenabled !== 'D',
@@ -240,7 +241,9 @@ export async function runSentinel({ connect } = {}) {
   } else if (result.pgNetExposure.functions.length || result.pgNetExposure.relations.length) {
     log('  pg_net-exposed objects (net schema, functions / relations):');
     log('    ' + [...result.pgNetExposure.functions, ...result.pgNetExposure.relations].join('\n    '));
+    log(`    schema USAGE on net: anon=${result.pgNetExposure.schemaUsage.anon} authenticated=${result.pgNetExposure.schemaUsage.authenticated} (the reachability gate object-level ACLs above sit behind)`);
     log('    ^ report-only: pre-existing exposure, direct remediation platform-blocked (see lib/security/pg-net-exposure.js), not fixed by this job.');
+    log('    Severity note: this is an amplifier, not an open door — net is not PostgREST-exposed, so reaching it today requires a separate SQL-execution vector first.');
   }
   if (!result.triggerEnabled) log('  ⚠ PREVENTION GAP: view-invoker event trigger missing/disabled!');
   log(clean ? '  ✓ CLEAN' : '  ✗ FINDINGS PRESENT');
