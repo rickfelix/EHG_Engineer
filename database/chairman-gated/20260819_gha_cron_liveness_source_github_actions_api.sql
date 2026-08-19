@@ -1,7 +1,8 @@
 -- 20260819_gha_cron_liveness_source_github_actions_api.sql
 -- QF-20260728-069 (consolidates QF-20260729-497, QF-20260801-527) — ceremony lane; chairman-gated DATA migration
 -- on periodic_process_registry (UPDATE = chairman-only class per delegated-apply scope); NOT auto-applied.
--- @approved-by: codestreetlabs@gmail.com (chairman ruling 2A at terminal 2026-08-19T16:07Z; scribe adam-08049808)
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling 2A at terminal 2026-08-19T16:07Z; scribe adam-08049808
 --
 -- DEFECT (measured live 2026-08-19): 108 periodic_process_registry rows with process_key LIKE 'gha_cron:%' all carry
 -- liveness_source='self_stamped' (github_actions_api: 0). scripts/periodic-liveness-watcher.mjs:190/:435 selects ONLY

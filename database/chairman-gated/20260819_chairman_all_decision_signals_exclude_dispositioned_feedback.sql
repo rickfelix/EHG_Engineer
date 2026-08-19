@@ -1,6 +1,7 @@
 -- 20260819_chairman_all_decision_signals_exclude_dispositioned_feedback.sql
 -- QF-20260728-996 (ceremony lane — chairman-gated VIEW DDL; NOT auto-applied; apply only on chairman A)
--- @approved-by: codestreetlabs@gmail.com (chairman ruling 1A at terminal 2026-08-19T16:07Z; scribe adam-08049808)
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling 1A at terminal 2026-08-19T16:07Z; scribe adam-08049808
 --
 -- DEFECT (measured 2026-08-19 vs live pg_get_viewdef): the feedback branch of
 -- public.chairman_all_decision_signals (consumed by chairman_unified_decisions → chairman_pending_decisions)
