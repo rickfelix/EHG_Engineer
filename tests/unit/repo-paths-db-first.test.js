@@ -27,11 +27,22 @@ function mockSupabase(rows, { throwOnQuery = false } = {}) {
   const chain = createSupabaseChainMock({
     result: throwOnQuery ? undefined : { data: rows, error: null },
   });
-  if (throwOnQuery) {
-    // Override select() itself to reject — the source's try/catch must degrade
-    // to the registry fallback rather than throwing or returning a bare null.
-    chain.select = () => Promise.reject(new Error('db down'));
-  }
+  const chainSelect = chain.select;
+  // SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C follow-up (adversarial review, pre-merge):
+  // pin the exact select() column list here too, not only in
+  // venture-aware-completion-gates.test.js — createSupabaseChainMock resolves to
+  // `result` regardless of chained args, so THIS file (the one named for the
+  // behavior it protects) could not otherwise detect a revert to the old
+  // server-side-filtered query shape (.eq('status','active').is('deleted_at',null)).
+  chain.select = (columns) => {
+    if (columns !== 'name, local_path, status, deleted_at') {
+      throw new Error(`mock chain drift: .select(${JSON.stringify(columns)}) does not match the expected .select('name, local_path, status, deleted_at') -- update mockSupabase to match lib/repo-paths.js's real query`);
+    }
+    // Override select() itself to reject on throwOnQuery — the source's try/catch
+    // must degrade to the registry fallback rather than throwing or returning a
+    // bare null.
+    return throwOnQuery ? Promise.reject(new Error('db down')) : chainSelect(columns);
+  };
   return { client: { from: chain.from }, spies: { from: chain.from } };
 }
 
@@ -126,6 +137,38 @@ describe('FR-2/FR-3: a DB-tombstoned application is refused, never silently re-a
     const result = await resolveRepoPathDbFirstDetailed('CronGenius', client);
     expect(result.source).toBe('registry');
     expect(result.reason).toBe('fallback');
+  });
+});
+
+describe('FR-2/FR-3 follow-up: tombstoned + live rows coexisting under the same name (adversarial-review finding, pre-merge)', () => {
+  // 20260530_applications_soft_delete_reconcile.sql FR-2 deliberately swapped FULL
+  // unique name indexes for PARTIAL ones (WHERE deleted_at IS NULL) "so a retired
+  // name can be reused by a new live application" -- so a tombstoned MarketLens row
+  // and a live re-registered MarketLens row coexisting in `applications` is a
+  // DESIGNED-FOR state, not an anomaly. The query has no .order(), so a bare
+  // .find() over the unmatched result set would nondeterministically return
+  // whichever row Postgres returns first -- reproduced empirically pre-fix: row
+  // order [tombstone, live] incorrectly refused the live application. The live row
+  // must be resolved regardless of which order the DB returns the two rows in.
+  const tombstoned = { name: 'MarketLens', local_path: '/stale/old-marketlens', status: 'inactive', deleted_at: '2026-07-01T00:00:00Z' };
+  const live = { name: 'MarketLens', local_path: '/live/new-marketlens', status: 'active', deleted_at: null };
+
+  it('tombstone-first order → still resolves the live row, not refused', async () => {
+    const { client } = mockSupabase([tombstoned, live]);
+    const result = await resolveRepoPathDbFirstDetailed('MarketLens', client);
+    expect(result).toEqual({ path: path.resolve('/live/new-marketlens'), source: 'db', reason: 'active' });
+  });
+
+  it('live-first order → resolves the live row (order must not matter)', async () => {
+    const { client } = mockSupabase([live, tombstoned]);
+    const result = await resolveRepoPathDbFirstDetailed('MarketLens', client);
+    expect(result).toEqual({ path: path.resolve('/live/new-marketlens'), source: 'db', reason: 'active' });
+  });
+
+  it('only a tombstoned row matches (no coexisting live row) → still correctly refused', async () => {
+    const { client } = mockSupabase([tombstoned]);
+    const result = await resolveRepoPathDbFirstDetailed('MarketLens', client);
+    expect(result).toEqual({ path: null, source: 'db', reason: 'tombstoned' });
   });
 });
 

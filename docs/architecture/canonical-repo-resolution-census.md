@@ -130,6 +130,12 @@ deferred-with-owner; not resolved by this note.
 |---|---|
 | `resolveCanonicalAppName` (`lib/repo-paths.js:250-277`; consumer: `scripts/generate-retrospective.js:170`) | Has the **identical** tombstone-fallback defect class this SD fixes in `resolveRepoPathDbFirst` (FR-2/FR-3): its query at lines 261-265 filters `.eq('status','active').is('deleted_at', null)` server-side, so a tombstoned app is indistinguishable from a never-registered one — both fall through to `loadValidatedRegistry()` (line 276), a static file with no `deleted_at` concept, which can return a stale name for an app that was since retired. Explicitly **NOT fixed by this narrowly-scoped SD** — disclosed here per FR-7 rather than silently omitted. Owner: fleet-worker follow-up SD/QF, applying the same additive-detailed-resolver pattern this SD used for `resolveRepoPathDbFirst` (FR-1/FR-2/FR-3). |
 
+### Disclosed but not fixed — a consequence of this SD's own fix, at a third call site
+
+| Site | Notes |
+|---|---|
+| `scripts/resolve-sd-workdir.js:717-728` via `lib/venture-repo-root.js:69-70` | Adversarial-review finding (pre-merge, this SD's own PR). Before this SD, a tombstoned app's `resolveRepoPathDbFirst` call fell through to a (possibly stale, non-null) registry.json path, so this call site rarely saw `null`. After FR-2/FR-3, a genuinely tombstoned app with no live re-registration now correctly returns `null` — which `resolveVentureRepoRoot` (line 69-70) degrades to `defaultRepoRoot` (EHG_Engineer) with `source:'venture_not_found'`, emitting a `worktree.venture_repo_not_found` event. This is NOT silent, and the prior behavior (creating a worktree inside a retired venture's stale clone) was arguably worse — but the posture now diverges from this SD's other two consumers, which fail loud (`scripts/modules/traceability-validation/utils.js:59-62`) or fail closed (`lib/repo-paths.js`'s own `resolveGateRepoContext`, line ~441-443). Aligning this call site's posture with the other two is out of this SD's PRD scope (none of the 7 FRs touch `resolve-sd-workdir.js` or `venture-repo-root.js`). Owner: fleet-worker follow-up SD/QF. |
+
 ### Category B — `target_application` inline re-derivation (bare app names, not github owner/repo strings; out of FR-4 lint's literal-string scope by design)
 
 | Site | Notes |
