@@ -13,7 +13,7 @@ const {
   selectNegativeBackprop, collectNegativeRefs, backPropagateNegativeOutcomes, addRefsFromMetadata,
   NEGATIVE_OUTCOME, NEGATIVE_BACKPROP_SOURCE,
   selectNotApplicableOutcomes, resolveNotApplicableOutcomes,
-  computeLegCoverage, COVERAGE_FLOOR_PCT, isExpectedPreMigrationFailure,
+  computeLegCoverage, COVERAGE_FLOOR_PCT, isExpectedPreMigrationFailure, classifyZeroWriteOutcome,
 } = require('../../scripts/solomon-ledger-reconcile.cjs');
 
 // SECURITY sub-agent (EXEC phase, S1): the real write chains .eq('id').eq('outcome','unknown')
@@ -368,6 +368,33 @@ describe('SECURITY S5 (SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001): isExpectedPreMig
   it('empty failures list -> not "expected" (there was nothing to be expected about)', () => {
     expect(isExpectedPreMigrationFailure([])).toBe(false);
     expect(isExpectedPreMigrationFailure(undefined)).toBe(false);
+  });
+});
+
+describe('REGRESSION sub-agent (VERIFY phase, REG-M1): classifyZeroWriteOutcome', () => {
+  it('all rows skipped by the lost-update guard (matched>0, updated=0, failures=[]) -> benign, NOT an error', () => {
+    const res = classifyZeroWriteOutcome({ matched: [{ id: 'r1' }, { id: 'r2' }], updated: [], failures: [] });
+    expect(res.status).toBe('skipped_lost_update');
+    expect(res.isError).toBe(false);
+    expect(res.message).toContain('lost-update guard');
+  });
+
+  it('all failures are Postgres 23514 (pre-migration) -> expected, NOT an error', () => {
+    const res = classifyZeroWriteOutcome({ matched: [{ id: 'r1' }], updated: [], failures: [{ id: 'r1', code: '23514' }] });
+    expect(res.status).toBe('expected_pre_migration');
+    expect(res.isError).toBe(false);
+  });
+
+  it('a failure with a non-23514 code -> a real anomaly, IS an error', () => {
+    const res = classifyZeroWriteOutcome({ matched: [{ id: 'r1' }], updated: [], failures: [{ id: 'r1', code: '08006' }] });
+    expect(res.status).toBe('anomaly');
+    expect(res.isError).toBe(true);
+  });
+
+  it('a mix of skipped (no failure entry) and a real failure -> still anomaly (failures.length>0 drives the check)', () => {
+    const res = classifyZeroWriteOutcome({ matched: [{ id: 'r1' }, { id: 'r2' }], updated: [], failures: [{ id: 'r2', code: '08006' }] });
+    expect(res.status).toBe('anomaly');
+    expect(res.isError).toBe(true);
   });
 });
 

@@ -2134,30 +2134,35 @@ async function printSolomonInbox() {
  * ledger rows at all; an all-pending ledger now returns decidedCount=0 with pending fields populated
  * so decay is visible from day one. Exported for tests.
  */
+// FR-5/TR-3 (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W2): rows carrying the durable
+// batch_stamped marker are the 2026-07-12 non-contemporaneous retro backfill. They are EXCLUDED
+// from the accuracy math — numerator AND denominator — so accuracy reflects only trustworthy
+// contemporaneous evidence. Deterministic: keys on the durable column, never a timestamp heuristic.
+// SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-4 — EXPLICIT ALLOW-LIST, not a negation.
+//
+// This was `r.decision !== 'pending'`, which silently admits EVERY future decision value into the
+// accuracy DENOMINATOR while the numerator below uses a positive allow-list. Any new terminal
+// state therefore lands in the denominator and can never reach the numerator, so adding one
+// mechanically drives accuracy DOWN with no change in the world. Simulated on live data at the
+// time of writing: routing judgment-expiry through `decision` (this SD's original design) would
+// have moved 566 rows and dropped accuracy from 16% to 6%.
+//
+// That design was reversed — expiry now lives in its own column and never touches `decision` —
+// so this is no longer load-bearing for THIS change. It is fixed anyway because the trap is
+// aimed at whoever adds the next value, and the reversal removed the current victim, not the trap.
+//
+// BEHAVIOUR-PRESERVING: this list is exactly the complement of 'pending' under today's CHECK
+// constraint (pending|accepted|rejected|partial|deferred), so the computed number is unchanged.
+//
+// SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (REGRESSION sub-agent, REG-M2): hoisted to module scope
+// so computeSolomonLedgerByLegAndKind (FR-3) shares this SAME array instead of re-declaring an
+// inline literal copy that could silently drift from it.
+const JUDGED_DECISIONS = Object.freeze(['accepted', 'rejected', 'partial', 'deferred']);
+
 function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const all = rows || [];
   if (all.length === 0) return null;
 
-  // FR-5/TR-3 (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W2): rows carrying the durable
-  // batch_stamped marker are the 2026-07-12 non-contemporaneous retro backfill. They are EXCLUDED
-  // from the accuracy math — numerator AND denominator — so accuracy reflects only trustworthy
-  // contemporaneous evidence. Deterministic: keys on the durable column, never a timestamp heuristic.
-  // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-4 — EXPLICIT ALLOW-LIST, not a negation.
-  //
-  // This was `r.decision !== 'pending'`, which silently admits EVERY future decision value into the
-  // accuracy DENOMINATOR while the numerator below uses a positive allow-list. Any new terminal
-  // state therefore lands in the denominator and can never reach the numerator, so adding one
-  // mechanically drives accuracy DOWN with no change in the world. Simulated on live data at the
-  // time of writing: routing judgment-expiry through `decision` (this SD's original design) would
-  // have moved 566 rows and dropped accuracy from 16% to 6%.
-  //
-  // That design was reversed — expiry now lives in its own column and never touches `decision` —
-  // so this is no longer load-bearing for THIS change. It is fixed anyway because the trap is
-  // aimed at whoever adds the next value, and the reversal removed the current victim, not the trap.
-  //
-  // BEHAVIOUR-PRESERVING: this list is exactly the complement of 'pending' under today's CHECK
-  // constraint (pending|accepted|rejected|partial|deferred), so the computed number is unchanged.
-  const JUDGED_DECISIONS = ['accepted', 'rejected', 'partial', 'deferred'];
   const decidedAll = all.filter((r) => JUDGED_DECISIONS.includes(r.decision));
   const batchExcludedCount = decidedAll.filter((r) => r.batch_stamped === true).length;
   // SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (FR-3, TS-9): a newly-accepted correlation-leg row can
@@ -2240,7 +2245,7 @@ function computeSolomonLedgerByLegAndKind(rows) {
     groups[kind][leg].push(r);
   }
   const accuracyFor = (legRows) => {
-    const decidedAll = legRows.filter((r) => ['accepted', 'rejected', 'partial', 'deferred'].includes(r.decision));
+    const decidedAll = legRows.filter((r) => JUDGED_DECISIONS.includes(r.decision));
     const decided = decidedAll.filter((r) => r.batch_stamped !== true && !(r.decision === 'accepted' && r.outcome === 'unknown'));
     if (decided.length === 0) return { decidedCount: 0, accuracyPct: null };
     const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;

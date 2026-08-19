@@ -148,6 +148,25 @@ function isExpectedPreMigrationFailure(failures) {
   return (failures || []).length > 0 && failures.every((f) => f.code === '23514');
 }
 
+/**
+ * Pure: classify a zero-write not_applicable resolution run (matched.length > 0, updated.length
+ * === 0) into one of three states, extracted from main() for testability (REGRESSION sub-agent,
+ * VERIFY phase, REG-M1). `failures.length === 0` means every matched row hit the lost-update guard
+ * (row changed since selection — benign, per S1's compare-and-set fix) rather than a real write
+ * error; this must NOT be conflated with "not the expected pre-migration CHECK violation", which
+ * the original inline logic did, tripping process.exitCode=1 for a non-anomaly. Exported for tests.
+ */
+function classifyZeroWriteOutcome(naResult) {
+  const n = naResult.matched.length;
+  if (naResult.failures.length === 0) {
+    return { status: 'skipped_lost_update', isError: false, message: `0/${n} row(s) written — all skipped by the lost-update guard (row(s) changed since selection; benign, not treated as a failure).` };
+  }
+  if (isExpectedPreMigrationFailure(naResult.failures)) {
+    return { status: 'expected_pre_migration', isError: false, message: `0/${n} row(s) written — TR-1 migration not yet applied (expected, chairman-apply-gated; not treated as a failure).` };
+  }
+  return { status: 'anomaly', isError: true, message: `0/${n} row(s) written — failures are NOT the expected pre-migration CHECK violation. Treating as a real anomaly.` };
+}
+
 // FR-2/TS-4: catches the ledger going structurally silent on a leg (near-zero resolution
 // progress), not a target to optimize toward. TESTING sub-agent (EXEC phase, F6) correctly flagged
 // the original comment here as citing the wrong baseline: FR-4's acceptance criteria describes
@@ -372,12 +391,9 @@ async function main() {
     if (dryRun) {
       for (const m of naResult.matched) console.log(`  [dry-run] ${m.id}: would set outcome='not_applicable' (ref shape=${m.shape})`);
     } else if (naResult.matched.length > 0 && naResult.updated.length === 0) {
-      if (isExpectedPreMigrationFailure(naResult.failures)) {
-        console.log('  0/' + naResult.matched.length + ' row(s) written — TR-1 migration not yet applied (expected, chairman-apply-gated; not treated as a failure).');
-      } else {
-        console.error('  0/' + naResult.matched.length + ' row(s) written — failures are NOT the expected pre-migration CHECK violation. Treating as a real anomaly.');
-        process.exitCode = 1;
-      }
+      const { message, isError } = classifyZeroWriteOutcome(naResult);
+      (isError ? console.error : console.log)('  ' + message);
+      if (isError) process.exitCode = 1;
     } else {
       console.log(`  ${naResult.updated.length}/${naResult.matched.length} row(s) written outcome='not_applicable'.`);
     }
@@ -465,7 +481,7 @@ module.exports = {
   selectNegativeBackprop, collectNegativeRefs, backPropagateNegativeOutcomes, addRefsFromMetadata,
   NEGATIVE_OUTCOME, NEGATIVE_BACKPROP_SOURCE, NEGATIVE_AUDIT_EVENTS, NEGATIVE_BACKPROP_TERMINAL_SKIP,
   selectNotApplicableOutcomes, resolveNotApplicableOutcomes, NOT_APPLICABLE_ELIGIBLE_SHAPES,
-  computeLegCoverage, COVERAGE_FLOOR_PCT, isExpectedPreMigrationFailure,
+  computeLegCoverage, COVERAGE_FLOOR_PCT, isExpectedPreMigrationFailure, classifyZeroWriteOutcome,
 };
 
 if (require.main === module) {
