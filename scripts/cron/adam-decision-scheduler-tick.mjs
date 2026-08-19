@@ -97,7 +97,12 @@ async function ensureArmedRegistration(supabase, logger) {
     if (!data) {
       const reg = await registerArmedMachinery(supabase, { sd_key: SD_KEY }, {
         activationTrigger: ACTIVATION_TRIGGER,
-        expectedIntervalSeconds: 2 * 60 * 60, // hourly cron with headroom
+        // FR-4 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): corrected from a blind 2h guess to the
+        // real active-window cadence (this cron fires hourly during 00-01,11-23 UTC) plus the
+        // workflow's own cron string, so FR-1's gap-subtraction can subtract the declared 02:00-
+        // 10:59 UTC chairman SMS quiet window instead of that guess relying on padding alone.
+        expectedIntervalSeconds: 60 * 60,
+        workflowCron: '20 0-1,11-23 * * *',
         owner: 'adam-decision-scheduler-tick',
       });
       if (!reg.ok) logger.warn?.(`[decision-scheduler-tick] ARMED registration failed (non-fatal): ${reg.error}`);

@@ -2,7 +2,7 @@
  * SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001 (G3, FR-4) — ARMED registration via
  * periodic_process_registry reuse.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { armedProcessKey, registerArmedMachinery } from '../../../lib/machinery-class/armed-registration.js';
 
 // SD-LEO-INFRA-STAMP-ARMING-TIME-001 FR-1: registerArmedMachinery now READS the existing row
@@ -166,5 +166,54 @@ describe('registerArmedMachinery — arming time (FR-1)', () => {
     // Critical: an unreadable prior row must NOT fall through to an upsert, because that upsert
     // would write a fresh armed_at over an older one and silently reset the alarm clock.
     expect(sb.calls).toHaveLength(0);
+  });
+});
+
+// FR-1/FR-4 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): optional workflowCron, stored verbatim
+// into liveness_source_ref for periodic-liveness-watcher.mjs's gap-subtraction, plus an arm-time
+// coverage guard that warns (never blocks) when the threshold under-covers the workflow's own
+// declared gap.
+describe('registerArmedMachinery workflowCron (FR-1/FR-4)', () => {
+  it('stores workflowCron verbatim in liveness_source_ref.workflow_cron when provided', async () => {
+    const sb = fakeSb();
+    await registerArmedMachinery(sb, { sd_key: 'SD-X-001' }, {
+      activationTrigger: 'trigger', expectedIntervalSeconds: 3600, workflowCron: '15 0-2,10-23 * * *',
+    });
+    expect(sb.calls[0].payload.liveness_source_ref.workflow_cron).toBe('15 0-2,10-23 * * *');
+  });
+
+  it('omits workflow_cron entirely when not provided (backward-compatible, event-driven case)', async () => {
+    const sb = fakeSb();
+    await registerArmedMachinery(sb, { sd_key: 'SD-X-001' }, { activationTrigger: 'trigger' });
+    expect(sb.calls[0].payload.liveness_source_ref.workflow_cron).toBeUndefined();
+  });
+
+  it('preserves a previously-set workflow_cron on re-registration when the caller omits it', async () => {
+    const sb = fakeSb({ existing: { liveness_source_ref: { armed_at: '2026-01-01T00:00:00.000Z', workflow_cron: '0 * * * *' }, last_fired_at: null } });
+    await registerArmedMachinery(sb, { sd_key: 'SD-X-001' }, { activationTrigger: 'trigger' });
+    expect(sb.calls[0].payload.liveness_source_ref.workflow_cron).toBe('0 * * * *');
+  });
+
+  it('warns (does not block) when expected_interval_seconds x grace under-covers the declared gap', async () => {
+    const sb = fakeSb();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // 1h x grace(2) = 2h covered; the SLA cron's own declared gap (hours 3-9) is 7h -- under-covered.
+    const result = await registerArmedMachinery(sb, { sd_key: 'SD-X-001' }, {
+      activationTrigger: 'trigger', expectedIntervalSeconds: 3600, workflowCron: '15 0-2,10-23 * * *',
+    });
+    expect(result.ok).toBe(true); // never blocks
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('does not cover'));
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when the threshold comfortably covers the declared gap', async () => {
+    const sb = fakeSb();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // 1h x grace(2) = 2h covered; a cron with no declared gap (fires every hour) has nothing to under-cover.
+    await registerArmedMachinery(sb, { sd_key: 'SD-X-001' }, {
+      activationTrigger: 'trigger', expectedIntervalSeconds: 3600, workflowCron: '0 * * * *',
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
