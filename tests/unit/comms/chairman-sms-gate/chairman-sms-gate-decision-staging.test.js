@@ -303,6 +303,29 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(sentBody).toContain('No reply by 5pm ET -> Adam proceeds with the recommendation.');
   });
 
+  it('TS-15 (QF-20260728-077): the rubric length check validates the COMPOSED body, not the short pre-composition one — composing after the gate would let an over-length message through undetected', async () => {
+    const sb = makeFakeSupabase({});
+    const sender = makeSender();
+    // Free text alone is 12 chars (comfortably under any maxLength); composed with the options,
+    // reply instruction, and no-reply consequence below it is much longer. A gate that validated
+    // only the free text would pass this; a gate that validates the actual wire body must block it.
+    const res = await sendChairmanSMS(
+      wellFormedDecision({
+        decisionId: null,
+        body: 'Approve?',
+        options: [{ label: 'A: approve the change' }, { label: 'B: reject the change' }],
+        replyInstruction: 'Reply with the option letter, or DETAILS for more context.',
+        noReplyConsequence: 'No reply by 5pm ET -> Adam proceeds with the recommendation.',
+      }),
+      { ...DAYTIME, maxLength: 40 },
+      { sender, console: silentConsole, supabase: sb },
+    );
+    expect(res.sent).toBe(false);
+    expect(res.held).toBe(true);
+    expect(res.blockedReasons.join(' ')).toContain('length');
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
   it('TS-14 (QF-20260728-077 scope guard): a status (non-decision) send is untouched — no options/replyInstruction folding applied', async () => {
     const sb = makeFakeSupabase({});
     const sender = makeSender();
