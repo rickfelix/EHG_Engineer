@@ -28,6 +28,9 @@ function wellFormedDecision(overrides = {}) {
 const DAYTIME = { nowHourET: 14, rateCap: 10, sentInWindow: 0 };
 const makeSender = () => ({ send: vi.fn(async () => ({ sid: 'SM-test' })) });
 const silentConsole = { warn: vi.fn(), error: vi.fn(), log: vi.fn() };
+// Neutral pass-through stub for the SD-LEO-INFRA-WIRE-CHAIRMAN-SMS-001 pre-send consult seam —
+// this file's tests predate that gate and assert on dispatch behavior, not consult behavior.
+const runPreSendConsultLane = async () => ({ action: 'send' });
 
 /** Minimal fake supabase covering exactly what stageDecisionSmsNotification + handleInboundSmsReply need. */
 function makeFakeSupabase(seed = {}, { forceInsertError = null, forceUpdateError = null } = {}) {
@@ -116,7 +119,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       const res = await sendChairmanSMS(
         wellFormedDecision({ decisionId: 'dec-env-1' }),
         DAYTIME,
-        { sender, console: silentConsole, supabase: sb },
+        { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
       );
       expect(res.sent).toBe(true);
       expect(sender.send).toHaveBeenCalledTimes(1);
@@ -145,7 +148,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       wellFormedDecision({ decisionId: 'dec-2' }),
       DAYTIME,
-      { sender, console: silentConsole, supabase: sb },
+      { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
     );
     expect(res.sent).toBe(false);
     expect(res.reason).toBe('notification_stage_failed');
@@ -159,7 +162,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       wellFormedDecision({ decisionId: 'dec-3', recipientPhone: '+15559998888' }),
       DAYTIME,
-      { sender, console: silentConsole, supabase: sb },
+      { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
     );
     expect(res.sent).toBe(true);
 
@@ -177,7 +180,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       { type: 'status', body: 'heartbeat: all clear', kind: 'heartbeat' },
       DAYTIME,
-      { sender, console: silentConsole, get supabase() { supabaseSpy(); return undefined; } },
+      { sender, console: silentConsole, get supabase() { supabaseSpy(); return undefined; }, runPreSendConsultLane },
     );
     expect(res.sent).toBe(true);
     expect(supabaseSpy).not.toHaveBeenCalled();
@@ -191,7 +194,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     // is that a CONFIRMED success now transitions the row before sendChairmanSMS returns.
     const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-7', status: 'pending', brief_data: {} }] });
     const sender = makeSender();
-    const res = await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-7' }), DAYTIME, { sender, console: silentConsole, supabase: sb });
+    const res = await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-7' }), DAYTIME, { sender, console: silentConsole, supabase: sb, runPreSendConsultLane });
     expect(res.sent).toBe(true);
     const row = sb._tables.chairman_notifications[0];
     expect(row.status).toBe('sent');
@@ -207,7 +210,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       { type: 'status', body: 'informational only', kind: 'status_update', decisionId: 'dec-8' },
       DAYTIME,
-      { sender, console: silentConsole, supabase: sb },
+      { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
     );
     expect(res.sent).toBe(true);
     expect(sb._tables.chairman_notifications).toHaveLength(0);
@@ -219,7 +222,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       wellFormedDecision({ decisionId: null }),
       DAYTIME,
-      { sender, console: silentConsole, supabase: sb },
+      { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
     );
     expect(res.sent).toBe(true);
     expect(sb._tables.chairman_notifications).toHaveLength(0);
@@ -232,7 +235,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       wellFormedDecision({ decisionId: 'dec-10', recipientPhone: '+15557778888' }),
       DAYTIME,
-      { sender, console: silentConsole, supabase: sb },
+      { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
     );
     expect(res.sent).toBe(false);
     expect(res.transportFailed).toBe(true);
@@ -258,7 +261,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     const res = await sendChairmanSMS(
       wellFormedDecision({ decisionId: 'dec-11', recipientPhone: '+15556667777' }),
       DAYTIME,
-      { sender, console: silentConsole, supabase: sb },
+      { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
     );
     expect(res.sent).toBe(false);
     expect(res.transportFailed).toBe(true);
@@ -272,7 +275,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       { forceUpdateError: { table: 'chairman_notifications', message: 'status update boom' } },
     );
     const sender = makeSender();
-    const res = await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-12' }), DAYTIME, { sender, console: silentConsole, supabase: sb });
+    const res = await sendChairmanSMS(wellFormedDecision({ decisionId: 'dec-12' }), DAYTIME, { sender, console: silentConsole, supabase: sb, runPreSendConsultLane });
     expect(res.sent).toBe(true);
     expect(silentConsole.error).toHaveBeenCalledWith(expect.stringContaining('notification status update failed'));
     // The row is left exactly as staging left it (queued) -- the update genuinely failed, not silently no-op'd.
