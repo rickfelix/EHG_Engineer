@@ -70,7 +70,17 @@ describe('twilio-provider checkMessageStatus (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-00
     });
     vi.stubGlobal('fetch', fetchMock);
     const result = await checkMessageStatus('SM123');
-    expect(result).toEqual({ status: 'delivered' });
+    expect(result).toEqual({ status: 'delivered', dateUpdated: null });
+  });
+
+  it('QF-20260729-286: passes through Twilio\'s date_updated so the caller can stamp true delivery time, not its own poll tick', async () => {
+    fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ status: 'delivered', date_updated: 'Thu, 30 Jul 2026 20:12:31 +0000' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await checkMessageStatus('SM123');
+    expect(result).toEqual({ status: 'delivered', dateUpdated: 'Thu, 30 Jul 2026 20:12:31 +0000' });
   });
 
   it('throws when Twilio credentials are not configured (fail closed, never guesses)', async () => {

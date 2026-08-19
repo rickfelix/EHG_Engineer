@@ -60,7 +60,7 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
-const { evaluateRow, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS, stampStateChangeAnchor } = await import('../../scripts/periodic-liveness-watcher.mjs');
+const { evaluateRow, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS, stampStateChangeAnchor, deriveFailureSignature } = await import('../../scripts/periodic-liveness-watcher.mjs');
 
 function roleSessionRow(overrides = {}) {
   return {
@@ -434,5 +434,39 @@ describe('stampStateChangeAnchor', () => {
   it('a failed anchor update (e.g. pre-migration missing column) logs but does not throw', async () => {
     state.updateError = { message: 'column "last_state_changed_at" does not exist' };
     await expect(stampStateChangeAnchor({ process_key: 'x', last_state: 'OK' }, { state: 'OVERDUE' })).resolves.toBeUndefined();
+  });
+});
+
+// FR-3 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): direct producer-side coverage. Prior to this,
+// every test exercising ladder signature-suppression injected a hand-written signature literal,
+// proving only the CONSUMER (emitLadderDigest's partition logic) works while leaving the actual
+// producer (this function) untested and unexported -- a regression here (e.g. reverting to
+// `return evaluation.reason` for heartbeat rows) would defeat FR-3's dismissal match for exactly
+// the highest-profile role_session processes while every other test in the suite stayed green.
+describe('deriveFailureSignature (FR-3)', () => {
+  it('claude_sessions_heartbeat rows get the STABLE label, invariant to churning reason text', () => {
+    // Two evaluations of the SAME ongoing outage, one tick apart -- the seat-census detail in
+    // `reason` differs (this is the real, observed shape of signalNote), but the signature must not.
+    const row = { liveness_source: 'claude_sessions_heartbeat' };
+    const tick1 = deriveFailureSignature(row, { state: STATE.OVERDUE, reason: 'adam dead 2/3 sessions, coordinator alive' });
+    const tick2 = deriveFailureSignature(row, { state: STATE.OVERDUE, reason: 'adam dead 1/3 sessions, coordinator alive' });
+    expect(tick1).toBe('stale_heartbeat');
+    expect(tick2).toBe('stale_heartbeat');
+    expect(tick1).toBe(tick2);
+  });
+
+  it('a non-heartbeat row with a set reason returns that reason verbatim', () => {
+    const row = { liveness_source: 'self_stamped' };
+    expect(deriveFailureSignature(row, { state: STATE.OVERDUE, reason: 'armed_never_produced' })).toBe('armed_never_produced');
+  });
+
+  it('a non-heartbeat OVERDUE row with no reason falls back to threshold_exceeded', () => {
+    const row = { liveness_source: 'self_stamped' };
+    expect(deriveFailureSignature(row, { state: STATE.OVERDUE, reason: null })).toBe('threshold_exceeded');
+  });
+
+  it('a non-heartbeat, non-OVERDUE row with no reason falls back to unknown (never undefined)', () => {
+    const row = { liveness_source: 'self_stamped' };
+    expect(deriveFailureSignature(row, { state: STATE.OK, reason: null })).toBe('unknown');
   });
 });

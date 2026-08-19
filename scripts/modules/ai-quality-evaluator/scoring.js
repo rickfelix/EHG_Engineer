@@ -85,7 +85,11 @@ export function getPassThreshold(contentType, sd = null) {
     return ORCHESTRATOR_THRESHOLD;
   }
 
-  return SD_TYPE_PASS_THRESHOLDS[sd.sd_type] || DEFAULT_THRESHOLD;
+  const entry = SD_TYPE_PASS_THRESHOLDS[sd.sd_type];
+  if (!entry) return DEFAULT_THRESHOLD;
+
+  const override = contentType && Object.hasOwn(entry, contentType) ? entry[contentType] : undefined;
+  return override ?? entry.default ?? DEFAULT_THRESHOLD;
 }
 
 /**

@@ -12,18 +12,28 @@ export const BAND_THRESHOLDS = {
 
 // SD-type-aware pass thresholds
 // PHASE 1: Start lenient, tighten based on data
+//
+// SHAPE (SD-LEO-INFRA-QUALITY-GATE-TYPE-001): each sd_type maps to an object with a mandatory
+// `default` (the threshold used when no content_type-specific override exists) plus optional
+// per-content_type overrides, e.g. `{ default: 55, prd: 60 }`. getPassThreshold() in scoring.js
+// resolves content_type -> default -> DEFAULT_THRESHOLD. This unblocks per-(sd_type, content_type)
+// tuning recommendations (from v_ai_quality_tuning_recommendations) that were previously refused
+// whenever raising the shared sd_type-level number would collaterally raise a sibling content_type
+// cell that could not bear it -- see scripts/quality/tuning-002/003/004-disposition.mjs for the
+// three review rounds this structural gap stalled. This SD changed ONLY the shape; every `default`
+// value below is byte-identical to the flat number it replaces.
 export const SD_TYPE_PASS_THRESHOLDS = {
   // Documentation-only SDs: Very lenient (focus on clarity)
-  documentation: 50,
+  documentation: { default: 50 },
 
   // Infrastructure SDs: Lenient (internal tooling)
-  infrastructure: 55,
+  infrastructure: { default: 55 },
 
   // Feature SDs: Moderate baseline
-  feature: 60,
+  feature: { default: 60 },
 
   // Database SDs: Slightly stricter (data integrity)
-  database: 65,
+  database: { default: 65 },
 
   // Security SDs: raised 65 -> 70 by QF-20260807-698 (re-measured at claim per Adam addendum
   // 2026-08-16, superseding the 3-set recorded at filing).
@@ -40,7 +50,7 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // live-2026-08-16 INCREASE recommendations that clears this test; see
   // scripts/quality/tuning-003-disposition.mjs for the full snapshot and the collateral
   // measurement that refused the other five (bugfix, feature, infrastructure x2, orchestrator).
-  security: 70,
+  security: { default: 70 },
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
   // BEFORE VALUE FOR ROLLBACK: no key at all — refactor fell through to DEFAULT_THRESHOLD (60).
@@ -62,7 +72,7 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // TUNING-001 used to exonerate the scorer — the healthy user_story lane proving the same scorer
   // CAN pass user stories. This raises that control's bar on 2026-08-04. Anyone re-reading that
   // exoneration needs to know the instrument moved, and when.
-  refactor: 65
+  refactor: { default: 65 }
 };
 
 // SD-type-aware blocking thresholds for feedback generation

@@ -12,12 +12,33 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const t = Date.now();
 const RETRO_RE = /FLEET[\s-]?RETRO/i;
 
-(async () => {
+/**
+ * Pure summary-string builder (QF-20260727-390), factored out for unit testing.
+ * A captured=0 run previously read identically whether the fleet was genuinely quiet or
+ * workers had stopped emitting the FLEET-RETRO convention -- surface the newest retro's
+ * age and flag a zero-capture run loudly instead of letting it pass as silent success.
+ * @param {{captured:number, errs:number, all:Array<{created_at:string}>, now:number}} params
+ * @returns {{summaryLine:string, zeroSignalWarning:string|null}}
+ */
+export function buildFleetRetroSummary({ captured, errs, all, now }) {
+  const newest = (all && all[0]) ? new Date(all[0].created_at) : null;
+  const newestAgeHours = newest ? ((now - newest.getTime()) / 3600000).toFixed(1) : null;
+  const summaryLine = '[FLEET-RETRO] captured ' + captured + ' new this run' + (errs ? ' (' + errs + ' insert errors)' : '') +
+    '; ' + (all || []).length + ' retros in last 7d' +
+    (newestAgeHours ? ' (newest ' + newestAgeHours + 'h old)' : ' (digest EMPTY)') + '.';
+  const zeroSignalWarning = captured === 0
+    ? '[FLEET-RETRO] ⚠️  zero new signals this run -- cross-check the retrospectives table before treating this as a quiet fleet (a lapsed worker-emission convention reads identically).'
+    : null;
+  return { summaryLine, zeroSignalWarning };
+}
+
+async function runFleetRetro() {
   // ── 1) CAPTURE: pull FLEET-RETRO signals from the (ephemeral) coordination channel into durable feedback ──
   const since = new Date(t - 24 * 3600 * 1000).toISOString();
   const { data: sigs } = await db.from('session_coordination')
@@ -44,7 +65,9 @@ const RETRO_RE = /FLEET[\s-]?RETRO/i;
   const since7 = new Date(t - 7 * 24 * 3600 * 1000).toISOString();
   const { data: all } = await db.from('feedback').select('description,created_at')
     .eq('category', 'fleet_retro').gte('created_at', since7).order('created_at', { ascending: false }).limit(50);
-  console.log('[FLEET-RETRO] captured ' + captured + ' new this run' + (errs ? ' (' + errs + ' insert errors)' : '') + '; ' + (all || []).length + ' retros in last 7d.');
+  const { summaryLine, zeroSignalWarning } = buildFleetRetroSummary({ captured, errs, all, now: t });
+  console.log(summaryLine);
+  if (zeroSignalWarning) console.log(zeroSignalWarning);
   if ((all || []).length) {
     console.log('--- recent worker retros (coordinator: synthesize themes + ADJUST) ---');
     for (const r of (all || []).slice(0, 15)) console.log('  ' + (r.created_at || '').slice(5, 16) + ' | ' + String(r.description || '').replace(/\s+/g, ' ').slice(0, 170));
@@ -58,4 +81,8 @@ const RETRO_RE = /FLEET[\s-]?RETRO/i;
   } catch (err) {
     console.error(`[FLEET-RETRO] stampLastFired failed (non-fatal): ${err.message}`);
   }
-})();
+}
+
+if (isMainModule(import.meta.url)) {
+  runFleetRetro();
+}

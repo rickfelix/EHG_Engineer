@@ -31,16 +31,20 @@ export async function validateCompletionForType(supabase, sd, sdKey) {
   const warnings = [];
 
   // 1. Check UAT execution for types that require it
-  if (uatRequirement === 'REQUIRED' || requirements.requiresUATExecution) {
+  // QF-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-5: uat_test_runs has no overall_result column
+  // (fixed to pass_rate, mirroring the already-proven fix in phase-state-enforcement.js,
+  // QF-20260719-890). uatRequirement is an OBJECT (getUATRequirement without
+  // {returnLegacy:true}) -- comparing it to the string 'REQUIRED' was always false.
+  if (uatRequirement.status === 'REQUIRED' || requirements.requiresUATExecution) {
     const { data: uatRecords } = await supabase
       .from('uat_test_runs')
-      .select('id, status, overall_result')
+      .select('id, status, pass_rate')
       .eq('sd_id', sd.id)
       .order('created_at', { ascending: false })
       .limit(1);
 
     const hasPassingUAT = uatRecords?.some(r =>
-      r.status === 'completed' && ['pass', 'partial_pass'].includes(r.overall_result)
+      r.status === 'completed' && Number(r.pass_rate) >= 93
     );
 
     if (!hasPassingUAT) {

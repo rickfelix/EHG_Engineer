@@ -17,6 +17,8 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getRepoPaths, resolveGitHubRepo } from '../../../lib/repo-paths.js';
+import { isStackedLanding } from './stack-landing-detector.js';
+import { matchesSdBranchPattern } from './branch-pattern-match.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +54,9 @@ export class ShippingPreflightVerifier {
       passed: true,
       openPRs: [],
       unmergedBranches: [],
+      // QF-20260727-876: sibling PRs recognized as a deliberate multi-part landing
+      // (isStackedLanding) -- reported as context, never blocking.
+      stackContext: [],
       warnings: [],
       errors: []
     };
@@ -111,7 +116,7 @@ export class ShippingPreflightVerifier {
 
       try {
         const result = execSync(
-          `gh pr list --repo ${repo} --state open --json number,title,headRefName,url --limit 100`,
+          `gh pr list --repo ${repo} --state open --json number,title,headRefName,url,baseRefName --limit 100`,
           { encoding: 'utf8', timeout: 30000 }
         );
 
@@ -119,14 +124,20 @@ export class ShippingPreflightVerifier {
 
         // Filter PRs that match this SD's branch patterns
         const matchingPRs = prs.filter(pr =>
-          branchPatterns.some(pattern =>
-            pr.headRefName.toLowerCase().includes(pattern.toLowerCase())
-          )
+          branchPatterns.some(pattern => matchesSdBranchPattern(pr.headRefName, pattern))
         );
 
         if (matchingPRs.length > 0) {
+          // QF-20260727-876: N sibling PRs for this SD, all independently based on
+          // main, are a deliberate multi-part landing (CLAUDE.md's own Small-PRs
+          // guidance) -- blocking on them makes preflight unsatisfiable BY the merge
+          // it gates. Route to stackContext (informational) instead of openPRs
+          // (blocking). A single PR is unchanged: indistinguishable from one
+          // genuinely forgotten branch, which this check must keep catching.
+          const stacked = isStackedLanding(matchingPRs.map(pr => pr.baseRefName));
+          const bucket = stacked ? this.results.stackContext : this.results.openPRs;
           for (const pr of matchingPRs) {
-            this.results.openPRs.push({
+            bucket.push({
               repo,
               repoPath,
               number: pr.number,
@@ -167,15 +178,15 @@ export class ShippingPreflightVerifier {
           const matchingBranches = branchList.split('\n')
             .map(b => b.trim())
             .filter(b =>
-              b.toLowerCase().includes(pattern.toLowerCase()) &&
+              matchesSdBranchPattern(b, pattern) &&
               !b.includes('HEAD')
             );
 
           for (const branch of matchingBranches) {
             const cleanBranch = branch.replace('origin/', '');
 
-            // Skip if already tracked as open PR
-            const hasOpenPR = this.results.openPRs.some(
+            // Skip if already tracked as open PR (blocking or stack-context)
+            const hasOpenPR = [...this.results.openPRs, ...this.results.stackContext].some(
               pr => pr.branch === cleanBranch && pr.repo === repo
             );
             if (hasOpenPR) continue;
@@ -224,6 +235,14 @@ export class ShippingPreflightVerifier {
         console.log(`     Branch: ${pr.branch}`);
         console.log(`     Repo: ${pr.repo}`);
         console.log(`     → Merge: gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`); // gh-merge-guard-exempt: FR-1B -- gh-merge-safe.mjs has no --repo support (Category E, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
+      }
+    }
+
+    if (this.results.stackContext.length > 0) {
+      console.log(`\nℹ️  ${this.results.stackContext.length} sibling PR(s) recognized as a stacked landing (context, not blocking):`);
+      for (const pr of this.results.stackContext) {
+        console.log(`   • PR #${pr.number}: ${pr.title}`);
+        console.log(`     Branch: ${pr.branch} (repo: ${pr.repo})`);
       }
     }
 
