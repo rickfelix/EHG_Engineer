@@ -4,16 +4,25 @@
 // (applications.local_path, DB-first / registry.json fallback), returning null
 // (fail-loud) rather than defaulting to cwd when unresolvable.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import path from 'path';
 import { resolveSDContext, EHG_ROOT, EHG_ENGINEER_ROOT } from '../../../scripts/modules/traceability-validation/utils.js';
+import { createSupabaseChainMock } from '../../helpers/supabase-chain-mock.js';
 
+// SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C: the old hand-rolled mock only chained
+// .select().eq().is() -- resolveRepoPathDbFirst (via resolveRepoPathDbFirstDetailed)
+// now does a bare .select(...) that resolves directly, so .select() returning a plain
+// { eq } object (not a Promise) made `await` resolve to that object itself, `data`
+// came back undefined, and the DB-hit test below silently fell through to the REAL
+// (unmocked) registry.json on disk instead of the test's own dbPath fixture -- caught
+// by CI (Linux runner), not locally, because both the mocked D: path and the real
+// registry's local C: path get mangled identically by POSIX path.resolve() on a
+// drive-letter string, so only the exact mangled value differed. Fixed by using the
+// shared, chain-safe createSupabaseChainMock() instead, matching
+// tests/unit/repo-paths-db-first.test.js and tests/unit/venture-aware-completion-gates.test.js.
 function mockAppsSupabase(rows) {
-  const is = vi.fn(() => Promise.resolve({ data: rows, error: null }));
-  const eq = vi.fn(() => ({ is }));
-  const select = vi.fn(() => ({ eq }));
-  const from = vi.fn(() => ({ select }));
-  return { from };
+  const chain = createSupabaseChainMock({ result: { data: rows, error: null } });
+  return { from: chain.from };
 }
 
 describe('QF-20260704-440: resolveSDContext venture repo resolution', () => {

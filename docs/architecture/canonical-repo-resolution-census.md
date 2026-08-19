@@ -5,9 +5,14 @@ hardcoded-two-repo-assumption site found while sourcing and executing this SD. N
 site is silently omitted — everything found is `swept`, `deliberately-exempt`, or
 `deferred-with-owner`.
 
-The canonical resolver is `lib/repo-paths.js` / `lib/repo-paths.cjs` (DB-first via
-`applications.local_path`, registry.json fallback). Any site NOT going through it is,
-by definition, a candidate for this class of bug.
+The canonical resolver is `lib/repo-paths.js` (DB-first via `applications.local_path`,
+registry.json fallback, tombstone-aware as of SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C).
+`lib/repo-paths.cjs` is a **registry-only** CJS sibling for hooks/CJS scripts — it has
+no DB access at all and reads `applications/registry.json` directly, a static file with
+zero `deleted_at` concept anywhere in it. It is therefore structurally incapable of
+honoring a tombstone. Earlier census language calling `.cjs` "DB-first" alongside `.js`
+was a mischaracterization; corrected here (FR-7). Any site NOT going through the
+canonical `.js` resolver is, by definition, a candidate for this class of bug.
 
 ## Disposition legend
 
@@ -16,6 +21,41 @@ by definition, a candidate for this class of bug.
   the rest of the system depends on.
 - **deferred-with-owner** — a real, tracked violation, explicitly out of this SD's
   tractable-slice scope. Owner + reason given, not a bare "later".
+
+## Previously-undocumented parallel resolver family (catalogued by FR-7, not yet dispositioned)
+
+Three resolver modules exist alongside `lib/repo-paths.js`/`.cjs` and had **zero**
+references anywhere in this census before FR-7. They are catalogued here so a future
+sweep can no longer miss them — none has been audited against the tombstone-fallback
+defect class this SD fixes (FR-2/FR-3); that audit is separate follow-up work, not
+performed here. Cataloguing ≠ dispositioning.
+
+| Module | What it does | Notes |
+|---|---|---|
+| `lib/venture-resolver.js` | 8 named exports (`getVenturePath`, `validateVentureRepo`, `getVentureConfig`, `getVentureConfigAsync`, `listVentures`, `getGitHubRepo`, `getCurrentVenture`, `clearRegistryCache`) plus a default export. ~15 production consumers (13 confirmed by a static `from '...venture-resolver'` grep; the higher estimate accounts for require()/dynamic-import forms the grep pattern doesn't match). A separately-maintained venture-config resolution surface, not a thin wrapper around `repo-paths.js`. |
+| `lib/venture-repo-root.js` | Single export `resolveVentureRepoRoot(targetApp, defaultRepoRoot, deps)`. Already has useful source-provenance prior art — returns `{repoRoot, source, logs}` with `source` one of `'platform'` \| `'venture'` \| `'venture_not_found'` — the same shape-of-intent as this SD's own `resolveRepoPathDbFirstDetailed` addition (FR-1), arrived at independently and earlier. |
+| `lib/venture-name-resolver.js` | Single export `resolveActiveVentureByName(supabase, name, opts)` → `Promise<{id, name, status}\|null>`. Two-tier lookup: prefers a live (`active`/`paused`) match, falls back to any-status (preserves resolution under a since-renamed/cancelled venture). `opts.partial` (default `false`) switches exact `ilike` matching to substring (`%name%`). Distinct from both `resolveCanonicalAppName` and the two modules above — this one resolves a **venture row**, not a repo path or a canonical name string. |
+
+**Why this matters**: three independently-evolved resolver modules doing adjacent work
+to the "canonical" pair means "the canonical resolver" is aspirational, not actual, for
+at least these call paths. Reconciling each one's relationship to `lib/repo-paths.js`
+(duplicate? necessary specialization? migration target?) is out of this SD's
+tractable-slice scope and is not claimed as done here.
+
+### `lib/venture-resolver.js` — per-export detail (8 exports)
+
+| Export | Signature | Returns | Notes |
+|---|---|---|---|
+| `getVenturePath` | `(targetApp: string)` | `string \| null` — absolute local path | Registry-only (sync), case-insensitive name match. `!targetApp` → `ENGINEER_ROOT`. Auto-discovery filesystem-guess fallback was deliberately removed (SD-LEO-INFRA-MULTI-REPO-ROUTING-001, CRO risk assessment) — unmatched returns `null`, never guesses. |
+| `validateVentureRepo` | `(repoPath: string)` | `{valid: boolean, reason?: string}` | Checks the path exists AND has a `.git` entry. |
+| `getVentureConfig` | `(targetApp: string)` | `Object \| null` (registry entry, `local_path` resolved to absolute) | Sync, registry.json-only ("legacy" per its own JSDoc). NFKC + alphanumeric-strip normalization (matches `'CommitCraft AI'` to registry key `commitcraft-ai`). Rejects normalized inputs `<2` chars (e.g. emoji-only) by returning `null`, not throwing. |
+| `getVentureConfigAsync` | `({name: string, supabase: SupabaseClient})` | `Promise<Object \| null>` — `{id, name, normalized_name, local_path, repo_url, deployment_url, deployment_target, status, current_lifecycle_stage}` | DB-first (queries `vw_venture_registry`, not registry.json). Same NFKC normalization as the sync sibling. **Throws** `VentureRegistryInvalidNameError` on empty/too-short input and `VentureRegistryCollisionError` when 2+ active ventures normalize to the same key — the only resolver in this whole family that throws on ambiguity instead of silently picking one. |
+| `listVentures` | `()` | `Array<Object>` | All registry entries with `status === 'active'`, `local_path` resolved to absolute. |
+| `getGitHubRepo` | `(targetApp: string)` | `string` (never null) | Delegates to `getVentureConfig`; falls back to the guessed literal `` `rickfelix/${targetApp \|\| 'EHG_Engineer'}` `` when no `github_repo` is registered — the one export in this module that can return an **unvalidated guess**. |
+| `getCurrentVenture` | `()` | `string` | Detects the venture from `process.cwd()` against registry `local_path` entries, sorted longest-path-first so e.g. `EHG_Engineer` matches before the `ehg` substring. Ambient-cwd-trusting, same risk pattern as the `shared-git-context.js`/`post-completion-validator.js` High-risk entries above — not itself added there since FR-7 named only those two, but worth the same caution if touched. |
+| `clearRegistryCache` | `()` | `void` | Clears the module-scope `_registryCache` (test-only utility, mirrors `repo-paths.js`'s `clearCache`). |
+
+`normalizeVentureName`, `VentureRegistryCollisionError`, `VentureRegistryInvalidNameError` are also re-exported (not independently documented here — they're support types for `getVentureConfigAsync` above, not separate resolution entry points).
 
 ## Swept (fixed in this SD)
 
@@ -66,6 +106,8 @@ critical-path slice" this PRD deliberately scoped down to.**
 | Site | Notes |
 |---|---|
 | `scripts/modules/handoff/executors/lead-final-approval/gates.js` (`computeReposForSD`, ~line 100-152; literal `rickfelix/ehg` / `rickfelix/EHG_Engineer` at ~line 103-104, 504) | Gates **every SD's** LEAD-FINAL-APPROVAL. risk-agent flagged this HIGH risk — a naive repoint could silently change which repo(s) get scanned for open PRs/unmerged branches across the whole fleet. Requires `regression-agent` golden-master pass first. |
+| `scripts/modules/handoff/shared-git-context.js` (`SharedGitContext` class; optional `opts.cwd` threaded into 8+ `execSync` git calls at lines 40/47/52/57/85/104/127/134/158/165; explicit `process.cwd()` fallback at line 110 when `git rev-parse --show-toplevel` fails) | Added per the parent orchestrator's LEAD-phase decision (FR-7). Every property is lazily computed and cached from whatever `cwd` (or ambient `process.cwd()`) the caller threads in, with **no cross-check against the canonical resolver** — a stale/wrong worktree cwd would be silently trusted and threaded through every cached git fact the handoff pipeline reads (branch, diff files, diff stat). Used by 20-30 execSync calls' worth of handoff-gate state per SD, so it is load-bearing at the same scale as `computeReposForSD`. Requires a `regression-agent` golden-master pass before any change to its cwd-resolution logic. |
+| `scripts/hooks/stop-subagent-enforcement/post-completion-validator.js` (lines 143/148: `execSync('git branch --show-current', ...)`, `execSync('git diff main...HEAD --name-only', ...)`) | Added per the parent orchestrator's LEAD-phase decision (FR-7). Sharper than the `shared-git-context.js` entry above: these two calls take **no `cwd` parameter at all**, so they unconditionally trust ambient `process.cwd()` with zero opt-in override and zero canonical-resolver cross-check. Gates the Stop-hook post-completion-tail enforcement (/ship, /learn, /document, completion-flags witness) for every completed SD. Requires a `regression-agent` golden-master pass before any change. |
 
 ### Related finding from a downstream SD (SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001, 2026-08-18)
 
@@ -97,6 +139,19 @@ closing the exact "two independent representations of the same predicate" gap th
 design review (testing-agent evidence `c636ba21`/`ce10a1bd`) flagged. `computeReposForSD`
 itself remains untouched and deferred, per the golden-master-regression precondition
 above — this resolution is scoped to the QF-escalation writer/gate pair only.
+
+### Disclosed but not fixed — identical defect class to this SD's FR-2/FR-3
+
+| Site | Notes |
+|---|---|
+| `resolveCanonicalAppName` (`lib/repo-paths.js:250-277`; consumer: `scripts/generate-retrospective.js:170`) | Has the **identical** tombstone-fallback defect class this SD fixes in `resolveRepoPathDbFirst` (FR-2/FR-3): its query at lines 261-265 filters `.eq('status','active').is('deleted_at', null)` server-side, so a tombstoned app is indistinguishable from a never-registered one — both fall through to `loadValidatedRegistry()` (line 276), a static file with no `deleted_at` concept, which can return a stale name for an app that was since retired. Explicitly **NOT fixed by this narrowly-scoped SD** — disclosed here per FR-7 rather than silently omitted. Owner: fleet-worker follow-up SD/QF, applying the same additive-detailed-resolver pattern this SD used for `resolveRepoPathDbFirst` (FR-1/FR-2/FR-3). |
+
+### Disclosed but not fixed — a consequence of this SD's own fix, at a third call site
+
+| Site | Notes |
+|---|---|
+| `scripts/resolve-sd-workdir.js:717-728` via `lib/venture-repo-root.js:69-70` | Adversarial-review finding (pre-merge, this SD's own PR). Before this SD, a tombstoned app's `resolveRepoPathDbFirst` call fell through to a (possibly stale, non-null) registry.json path, so this call site rarely saw `null`. After FR-2/FR-3, a genuinely tombstoned app with no live re-registration now correctly returns `null` — which `resolveVentureRepoRoot` (line 69-70) degrades to `defaultRepoRoot` (EHG_Engineer) with `source:'venture_not_found'`, emitting a `worktree.venture_repo_not_found` event. This is NOT silent, and the prior behavior (creating a worktree inside a retired venture's stale clone) was arguably worse — but the posture now diverges from this SD's other two consumers, which fail loud (`scripts/modules/traceability-validation/utils.js:59-62`) or fail closed (`lib/repo-paths.js`'s own `resolveGateRepoContext`, line ~441-443). Aligning this call site's posture with the other two is out of this SD's PRD scope (none of the 7 FRs touch `resolve-sd-workdir.js` or `venture-repo-root.js`). Owner: fleet-worker follow-up SD/QF. |
+| `lib/repo-paths.js:178` (`resolveRepoPathDbFirstDetailed`'s `matches` array) | Second adversarial-review round (pre-merge, this SD's own PR, on the fix for the row above this table's CRITICAL finding). `matches` groups same-named rows by `normalizeAppName` (strips ALL non-alphanumerics) — broader than the partial unique index's actual basis (`lower(name)` / `normalized_name`). Two DB-distinct live application names that collide only under the looser `normalizeAppName` equivalence could theoretically both land in `matches` simultaneously (the partial index doesn't forbid it, since each is unique under its own narrower basis). Consequence is benign either way — the first live row is picked; worst case is a registry fallback on a null `local_path`, never a wrong path — so not fixed in this PR. Tightening the match to `normalized_name` (would require selecting that column too) is the real fix; owner: fleet-worker follow-up, same bucket as the row above. |
 
 ### Category B — `target_application` inline re-derivation (bare app names, not github owner/repo strings; out of FR-4 lint's literal-string scope by design)
 
