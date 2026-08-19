@@ -221,6 +221,9 @@ describe('produceJourneyWalkFindings', () => {
       ventureKey: 'ALTIFYAI',
       baseUrl: 'https://altifyai.example.com',
       journeySteps: [{ step_id: 's1', goal: 'do the thing' }],
+      // M2 (Solomon/Oracle completeness finding): Stage 20 exercises the "existing" test
+      // identity, not "fresh" -- see the call site's own comment for why.
+      persona: { type: 'existing' },
     });
   });
 

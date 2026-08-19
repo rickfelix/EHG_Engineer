@@ -64,6 +64,47 @@ describe('getTestCredential()', () => {
     process.env[ENV_KEY] = JSON.stringify({ email: 'x@example.com', password: 'secret' });
     expect(getTestCredential('testventure')).toEqual({ email: 'x@example.com', password: 'secret' });
   });
+
+  it('defaults to personaType "existing" when omitted', () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'x@example.com', password: 'secret' });
+    expect(getTestCredential('TESTVENTURE')).toEqual(getTestCredential('TESTVENTURE', 'existing'));
+  });
+});
+
+describe('getTestCredential() — dual persona (M2, Solomon/Oracle completeness finding)', () => {
+  const BASE = 'VENTURE_UAT_TEST_ACCOUNT_PERSONATEST';
+  afterEach(() => {
+    delete process.env[BASE];
+    delete process.env[`${BASE}_EXISTING`];
+    delete process.env[`${BASE}_FRESH`];
+  });
+
+  it('reads the _EXISTING-suffixed var for personaType "existing"', () => {
+    process.env[`${BASE}_EXISTING`] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
+    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'existing@example.com', password: 'pw1' });
+  });
+
+  it('reads the _FRESH-suffixed var for personaType "fresh"', () => {
+    process.env[`${BASE}_FRESH`] = JSON.stringify({ email: 'fresh@example.com', password: 'pw2' });
+    expect(getTestCredential('PERSONATEST', 'fresh')).toEqual({ email: 'fresh@example.com', password: 'pw2' });
+  });
+
+  it('the two persona slots are independent — setting one does not satisfy the other', () => {
+    process.env[`${BASE}_EXISTING`] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
+    expect(getTestCredential('PERSONATEST', 'fresh')).toBeNull();
+  });
+
+  it('falls back to the un-suffixed var when the typed var is unset (backward compatible)', () => {
+    process.env[BASE] = JSON.stringify({ email: 'legacy@example.com', password: 'pw3' });
+    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'legacy@example.com', password: 'pw3' });
+    expect(getTestCredential('PERSONATEST', 'fresh')).toEqual({ email: 'legacy@example.com', password: 'pw3' });
+  });
+
+  it('prefers the typed var over the un-suffixed fallback when both are set', () => {
+    process.env[BASE] = JSON.stringify({ email: 'legacy@example.com', password: 'pw3' });
+    process.env[`${BASE}_EXISTING`] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
+    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'existing@example.com', password: 'pw1' });
+  });
 });
 
 describe('getVentureRegistration()', () => {
@@ -87,7 +128,7 @@ describe('buildStepExecutor() fallback — no registered override', () => {
     const page = makeMockPage();
 
     await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
-      .rejects.toThrow(/auth required.*no test credential configured/i);
+      .rejects.toThrow(/auth required.*no existing test credential configured/i);
     // Never navigated anywhere in pursuit of registering an account.
     expect(page.calls.goto).toHaveLength(0);
     expect(page.calls.fill).toHaveLength(0);
@@ -114,6 +155,56 @@ describe('buildStepExecutor() fallback — no registered override', () => {
     await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: true }))
       .rejects.toThrow(/no verified UI mapping/i);
     expect(page.calls.goto).toHaveLength(0);
+  });
+});
+
+describe('buildStepExecutor() fallback — persona.type selects the credential slot (M2)', () => {
+  const step = { step_id: 'stp-abc123-do-a-thing', goal: 'do a thing' };
+  const EXISTING_KEY = 'VENTURE_UAT_TEST_ACCOUNT_PERSONAVENTURE_EXISTING';
+  const FRESH_KEY = 'VENTURE_UAT_TEST_ACCOUNT_PERSONAVENTURE_FRESH';
+  afterEach(() => {
+    delete process.env[EXISTING_KEY];
+    delete process.env[FRESH_KEY];
+  });
+
+  it('persona.type "existing" signs in with the _EXISTING credential', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
+    const executor = buildStepExecutor(step, 'PERSONAVENTURE');
+    const page = makeMockPage({ locatorCounts: { 'text=Already have an account? Sign in': 1 } });
+
+    await expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
+  });
+
+  it('persona.type "fresh" signs in with the _FRESH credential, not the _EXISTING one', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
+    process.env[FRESH_KEY] = JSON.stringify({ email: 'fresh@example.com', password: 'pw2' });
+    const executor = buildStepExecutor(step, 'PERSONAVENTURE');
+    const page = makeMockPage({ locatorCounts: { 'text=Already have an account? Sign in': 1 } });
+
+    await expect(executor(page, { type: 'fresh' }, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'fresh@example.com']);
+    expect(page.calls.fill).not.toContainEqual(['input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
+  });
+
+  it('an unrecognized persona.type value falls back to "existing" rather than throwing', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
+    const executor = buildStepExecutor(step, 'PERSONAVENTURE');
+    const page = makeMockPage({ locatorCounts: { 'text=Already have an account? Sign in': 1 } });
+
+    await expect(executor(page, { type: 'bogus' }, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
+  });
+
+  it('the "auth required" error names which persona type was missing', async () => {
+    const executor = buildStepExecutor(step, 'PERSONAVENTURE');
+    const page = makeMockPage();
+
+    await expect(executor(page, { type: 'fresh' }, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/no fresh test credential configured/i);
   });
 });
 
