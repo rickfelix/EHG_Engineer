@@ -214,8 +214,19 @@ export async function readSalientState(sb) {
     // this filter is defense in depth against a future less-trusted write path, not a fix for a
     // currently-reachable issue.
     const SAFE_KIND_TOKEN = /^[A-Za-z][A-Za-z0-9_]*$/;
+    // QF-20260728-694: roll_call and coordinator_reminder are UNACKABLE BY DESIGN in the
+    // coordinator drain set -- roll_call is periodic-liveness-watcher's own broadcast (measured
+    // 0/169 acked over 24h); coordinator_reminder is what the coordinator/sweep emit TO workers
+    // with no ack path in the worker checkin flow (measured 2/234). Together 49% of this gauge's
+    // population at a ~1% combined ack rate, outpacing actionable arrivals in 5 of 6 measured
+    // hours -- counting them means the gauge can never reach zero and its salience delta mostly
+    // tracks broadcast cadence, not real backlog. Mirrors the SAME exclusion pattern
+    // lib/adam/inbound-backlog.js's ACKNOWLEDGED_UNDRAINABLE_KINDS already established for this
+    // exact problem on the Adam side of the same table. Scoped to what was measured -- do NOT add
+    // coordinator_request: its 0/5 ack rate here is too small a sample to classify.
+    const COORDINATOR_UNACKABLE_KINDS = new Set(['roll_call', 'coordinator_reminder']);
     const resolvedCoordinatorKinds = (await resolveRecognizedKinds({ supabase: sb, role: 'coordinator' }))
-      .filter((k) => k !== PAYLOAD_KINDS.CROSS_PARTY_PING && SAFE_KIND_TOKEN.test(k));
+      .filter((k) => k !== PAYLOAD_KINDS.CROSS_PARTY_PING && !COORDINATOR_UNACKABLE_KINDS.has(k) && SAFE_KIND_TOKEN.test(k));
     const orFilter = resolvedCoordinatorKinds.length > 0
       ? `payload->>signal_type.not.is.null,payload->>kind.in.(${resolvedCoordinatorKinds.join(',')})`
       : 'payload->>signal_type.not.is.null';
