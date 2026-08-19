@@ -109,7 +109,7 @@ describe('genuine enhancement pass-through', () => {
     expect(skippedFleetOps).toBe(0);
   });
 
-  it('does not exclude a future/unrecognized category — strict allowlist-by-exclusion of exactly 7 names, never a heuristic', () => {
+  it('does not exclude a future/unrecognized category — strict allowlist-by-exclusion of exactly 12 names, never a heuristic', () => {
     const enriched = [row({ id: 'new-cat', category: 'some_brand_new_enhancement_category' })];
     const { enhancements, skippedFleetOps } = filterEnhancementsExcludingFleetOps(enriched);
     expect(enhancements.map((r) => r.id)).toEqual(['new-cat']);
