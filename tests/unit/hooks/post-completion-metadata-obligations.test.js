@@ -6,8 +6,17 @@
  * check ever read it; the debt survived only because a coordinator hand-noticed it. This
  * sweep makes the debt visible (non-blocking) instead of silently dropping it.
  */
-import { describe, it, expect } from 'vitest';
-import { _sweepMetadataObligations } from '../../../scripts/hooks/stop-subagent-enforcement/post-completion-validator.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../../../lib/governance/emit-feedback.js', () => ({
+  emitFeedback: vi.fn().mockResolvedValue({ id: 'fake-feedback-id', deduped: false }),
+}));
+
+import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
+import {
+  _sweepMetadataObligations,
+  _flagMetadataObligations,
+} from '../../../scripts/hooks/stop-subagent-enforcement/post-completion-validator.js';
 
 describe('_sweepMetadataObligations', () => {
   it('flags an unresolved solomon_concurrence_gate debt (the real specimen shape, pre-resolution)', () => {
@@ -71,5 +80,51 @@ describe('_sweepMetadataObligations', () => {
       needs_chairman_review: { flagged_by: 'coordinator' },
     };
     expect(_sweepMetadataObligations(metadata)).toHaveLength(2);
+  });
+});
+
+describe('_flagMetadataObligations', () => {
+  const fakeSupabase = {};
+
+  beforeEach(() => {
+    emitFeedback.mockClear();
+  });
+
+  it('writes a completion-flag feedback row with provenance when findings exist', async () => {
+    const findings = ['solomon_concurrence_gate: state="CONCURRENCE-DEBT" (stamped_by=0d37100a, required_before=LEAD-FINAL)'];
+    await _flagMetadataObligations(fakeSupabase, 'SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001', 'sd-uuid-123', findings);
+
+    expect(emitFeedback).toHaveBeenCalledTimes(1);
+    const call = emitFeedback.mock.calls[0][0];
+    expect(call.supabase).toBe(fakeSupabase);
+    expect(call.category).toBe('completion_flag');
+    expect(call.type).toBe('issue');
+    expect(call.status).toBe('new');
+    expect(call.sd_id).toBe('sd-uuid-123');
+    expect(call.description).toContain('CONCURRENCE-DEBT');
+    expect(call.dedup_key).toBe('qf-20260817-001-metadata-obligation::SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001');
+    expect(call.metadata.sd_key).toBe('SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001');
+    expect(call.metadata.obligations).toEqual(findings);
+    // Must NOT reuse the human-reflection witness's origin markers -- that would let an
+    // automated finding silently satisfy a check whose purpose is proving a human ran it.
+    expect(call.metadata.completion_flag_origin).toBeUndefined();
+    expect(call.metadata.source_sd_key).toBeUndefined();
+  });
+
+  it('does not write anything when there are no findings', async () => {
+    await _flagMetadataObligations(fakeSupabase, 'SD-CLEAN-001', 'sd-uuid-456', []);
+    expect(emitFeedback).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when emitFeedback rejects (best-effort, non-blocking)', async () => {
+    emitFeedback.mockRejectedValueOnce(new Error('db unavailable'));
+    await expect(
+      _flagMetadataObligations(fakeSupabase, 'SD-X-001', 'sd-uuid-789', ['some_key: state="DEBT"'])
+    ).resolves.toBeUndefined();
+  });
+
+  it('is a no-op when supabase is falsy', async () => {
+    await _flagMetadataObligations(null, 'SD-X-001', 'sd-uuid-789', ['some_key: state="DEBT"']);
+    expect(emitFeedback).not.toHaveBeenCalled();
   });
 });
