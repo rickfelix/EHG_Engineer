@@ -278,4 +278,63 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     // The row is left exactly as staging left it (queued) -- the update genuinely failed, not silently no-op'd.
     expect(sb._tables.chairman_notifications[0].status).toBe('queued');
   });
+
+  it('TS-13 (QF-20260728-077): the wire body actually transmitted carries the labeled options, reply instruction, and no-reply consequence — not just the free text', async () => {
+    const sb = makeFakeSupabase({});
+    const sender = makeSender();
+    const res = await sendChairmanSMS(
+      wellFormedDecision({
+        decisionId: null,
+        body: 'Approve the budget change?',
+        options: [{ label: 'A: approve the change' }, { label: 'B: reject the change' }, { label: 'C: defer to next review' }],
+        replyInstruction: 'Reply with the option letter, or DETAILS for more context.',
+        noReplyConsequence: 'No reply by 5pm ET -> Adam proceeds with the recommendation.',
+      }),
+      DAYTIME,
+      { sender, console: silentConsole, supabase: sb },
+    );
+    expect(res.sent).toBe(true);
+    const sentBody = sender.send.mock.calls[0][0].body;
+    expect(sentBody).toContain('Approve the budget change?');
+    expect(sentBody).toContain('A: approve the change');
+    expect(sentBody).toContain('B: reject the change');
+    expect(sentBody).toContain('C: defer to next review');
+    expect(sentBody).toContain('Reply with the option letter, or DETAILS for more context.');
+    expect(sentBody).toContain('No reply by 5pm ET -> Adam proceeds with the recommendation.');
+  });
+
+  it('TS-15 (QF-20260728-077): the rubric length check validates the COMPOSED body, not the short pre-composition one — composing after the gate would let an over-length message through undetected', async () => {
+    const sb = makeFakeSupabase({});
+    const sender = makeSender();
+    // Free text alone is 12 chars (comfortably under any maxLength); composed with the options,
+    // reply instruction, and no-reply consequence below it is much longer. A gate that validated
+    // only the free text would pass this; a gate that validates the actual wire body must block it.
+    const res = await sendChairmanSMS(
+      wellFormedDecision({
+        decisionId: null,
+        body: 'Approve?',
+        options: [{ label: 'A: approve the change' }, { label: 'B: reject the change' }],
+        replyInstruction: 'Reply with the option letter, or DETAILS for more context.',
+        noReplyConsequence: 'No reply by 5pm ET -> Adam proceeds with the recommendation.',
+      }),
+      { ...DAYTIME, maxLength: 40 },
+      { sender, console: silentConsole, supabase: sb },
+    );
+    expect(res.sent).toBe(false);
+    expect(res.held).toBe(true);
+    expect(res.blockedReasons.join(' ')).toContain('length');
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it('TS-14 (QF-20260728-077 scope guard): a status (non-decision) send is untouched — no options/replyInstruction folding applied', async () => {
+    const sb = makeFakeSupabase({});
+    const sender = makeSender();
+    const res = await sendChairmanSMS(
+      { type: 'status', body: 'Deploy completed successfully.' },
+      DAYTIME,
+      { sender, console: silentConsole, supabase: sb },
+    );
+    expect(res.sent).toBe(true);
+    expect(sender.send.mock.calls[0][0].body).toBe('Deploy completed successfully.');
+  });
 });
