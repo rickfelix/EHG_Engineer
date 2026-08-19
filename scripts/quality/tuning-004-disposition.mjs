@@ -42,6 +42,16 @@ const kind = (r) => String(r.recommendation).split(':')[0].split(' ')[0];
 const cell = (r) => r.sd_type + ' x ' + r.content_type;
 const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
 
+/**
+ * KNOWN LIMITATION (flagged in adversarial review, non-blocking because DECREASE rows always
+ * route to HELD regardless of this probe's result -- see the bucketing loop below): this always
+ * selects the single global-minimum-score specimen. That is the ideal probe for INCREASE's
+ * `validated` signal, but for a DECREASE it is the specimen LEAST likely to land in the
+ * [suggested, current) "would newly pass" masking band -- a real near-miss elsewhere in the same
+ * window can go unreported in the diagnostic text even though the row is still correctly HELD for
+ * human review either way. A future revision could instead search specifically within
+ * [suggested, current) when kind(r) === 'DECREASE'.
+ */
 async function knownBad(sd_type, content_type) {
   const { data, error: qErr } = await sb.from('ai_quality_assessments')
     .select('id,content_id,weighted_score,assessed_at')
