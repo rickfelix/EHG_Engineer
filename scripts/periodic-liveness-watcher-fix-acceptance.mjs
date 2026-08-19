@@ -224,6 +224,23 @@ async function t7_operatorContractRegression(q) {
   const capabilityKeys = rows.map((r) => r.process_key);
   const result = validateCadence({ registryRows: rows, capabilityKeys });
   record('T7: validateCadence finds a cadence_armed row among the live g3-armed population', result.cadence_armed === true, JSON.stringify(result));
+
+  // T7b (closes a real gap, EXEC-phase TESTING review of PR #7304): validateCadence's loop over
+  // capabilityKeys `return`s on the FIRST match -- passing the FULL population above proves only
+  // "at least one row is armed", and it can (and did, on the run that surfaced this) short-circuit
+  // on a row FR-4 never touched. Scope capabilityKeys to EXACTLY the two rows FR-4 corrected, so
+  // validateCadence is forced to evaluate one of THEM, and assert their activation directly from
+  // the query result (not just through the gate's opaque boolean).
+  const FR4_KEYS = ['g3-armed-sd-leo-infra-chairman-decision-surfacing-001', 'g3-armed-sd-leo-infra-adam-decision-scheduler-001'];
+  const fr4Rows = rows.filter((r) => FR4_KEYS.includes(r.process_key));
+  record('T7b setup: both FR-4-corrected specimen rows are present', fr4Rows.length === 2, `found ${fr4Rows.map((r) => r.process_key).join(', ')}`);
+  for (const row of fr4Rows) {
+    record(`T7b: ${row.process_key} is currently_expected_active with a finite expected_interval_seconds`,
+      row.currently_expected_active === true && Number.isFinite(Number(row.expected_interval_seconds)) && Number(row.expected_interval_seconds) > 0,
+      JSON.stringify(row));
+  }
+  const fr4Result = validateCadence({ registryRows: rows, capabilityKeys: FR4_KEYS });
+  record('T7b: validateCadence, scoped to ONLY the two FR-4 rows, still reports cadence_armed', fr4Result.cadence_armed === true && FR4_KEYS.includes(fr4Result.process_key), JSON.stringify(fr4Result));
 }
 
 // ---------------------------------------------------------------------------------------------
