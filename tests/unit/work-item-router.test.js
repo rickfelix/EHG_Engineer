@@ -217,6 +217,113 @@ describe('Unified Work-Item Router', () => {
       expect(decision.tier).toBe(1);
       expect(decision.escalationReason).toBeNull();
     });
+
+    // QF-20260728-987: negation-blindness regression. "No schema change" contains "schema"
+    // with "change" inside VERB_WINDOW, so the verb-context heuristic escalates a description
+    // that explicitly denies a schema change -- ticket repro (live instance QF-20260728-912).
+    test('KNOWN LIMITATION: negated schema mention still escalates via the fallback text scan (documents the unfixed inference path)', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const decision = await routeWorkItem({
+        estimatedLoc: 10,
+        type: 'bug',
+        description: 'No schema change, no write-path change',
+      }, mockSupabase);
+
+      expect(decision.tier).toBe(3);
+      expect(decision.escalationReason).toContain('schema');
+    });
+
+    test('touchesSchema=false overrides the text scan and prevents the negation false-positive', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const decision = await routeWorkItem({
+        estimatedLoc: 10,
+        type: 'bug',
+        description: 'No schema change, no write-path change',
+        touchesSchema: false,
+      }, mockSupabase);
+
+      expect(decision.tier).toBe(1);
+      expect(decision.escalationReason).toBeNull();
+    });
+
+    test('touchesSchema=true escalates to Tier 3 even with a schema-silent description', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const decision = await routeWorkItem({
+        estimatedLoc: 10,
+        type: 'bug',
+        description: 'Fix button color on dashboard page',
+        touchesSchema: true,
+      }, mockSupabase);
+
+      expect(decision.tier).toBe(3);
+      expect(decision.escalationReason).toContain('touchesSchema=true');
+    });
+
+    test('touchesSchema=false does not suppress an independent risk-keyword escalation', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const decision = await routeWorkItem({
+        estimatedLoc: 10,
+        type: 'bug',
+        description: 'No schema change, fix authentication bypass in login flow',
+        touchesSchema: false,
+      }, mockSupabase);
+
+      expect(decision.tier).toBe(3);
+      expect(decision.escalationReason).toContain('auth');
+    });
+
+    test('touchesSchema=true still escalates even when a genuine schema keyword is also present (no double-reporting conflict)', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const decision = await routeWorkItem({
+        estimatedLoc: 10,
+        type: 'bug',
+        description: 'alter table to add column',
+        touchesSchema: true,
+      }, mockSupabase);
+
+      expect(decision.tier).toBe(3);
+      expect(decision.escalationReason).toContain('touchesSchema=true');
+    });
+
+    test('touchesSchema undefined (not provided) is byte-identical to pre-QF behavior', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const decision = await routeWorkItem({
+        estimatedLoc: 10,
+        type: 'bug',
+        description: 'Need to alter table to add column',
+      }, mockSupabase);
+
+      expect(decision.tier).toBe(3);
+      expect(decision.escalationReason).toContain('verb-context');
+    });
+
+    // Adversarial-review finding: touchesSchema uses strict === against the boolean
+    // primitives, so a non-boolean truthy/falsy value must fall through to the pre-QF
+    // default scan rather than being coerced into either override. Locks in the fail-safe
+    // (no coercion bypass) rather than leaving it provable only by reading the source.
+    test('non-boolean touchesSchema values fall through to default text-scan behavior (no coercion bypass)', async () => {
+      mockThresholds([{ id: 'thresh-1', tier1_max_loc: 30, tier2_max_loc: 75 }]);
+
+      const stringFalse = await routeWorkItem({
+        estimatedLoc: 10, type: 'bug',
+        description: 'No schema change, no write-path change',
+        touchesSchema: 'false',
+      }, mockSupabase);
+      expect(stringFalse.tier).toBe(3); // string "false" is not === false -> default scan still escalates
+
+      const zero = await routeWorkItem({
+        estimatedLoc: 10, type: 'bug',
+        description: 'Fix button color on dashboard page',
+        touchesSchema: 0,
+      }, mockSupabase);
+      expect(zero.tier).toBe(1); // 0 is not === true -> no forced escalation on a clean description
+    });
   });
 
   describe('Database misconfiguration (fail-closed)', () => {
