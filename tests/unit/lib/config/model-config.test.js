@@ -68,3 +68,23 @@ describe('model-config.js image-generation and premium-generation purposes (TS-1
     expect(getClaudeModel('premium-generation')).toBe('claude-opus-4-8');
   });
 });
+
+describe('QF-20260818-343: Gemini 3.7 Flash per-role upgrade (chairman commission)', () => {
+  beforeEach(clearEnv);
+  afterEach(clearEnv);
+
+  it('upgrades validation and generation to gemini-3.7-flash (live A/B: real quality gain)', () => {
+    expect(getGoogleModel('validation')).toBe('gemini-3.7-flash');
+    expect(getGoogleModel('generation')).toBe('gemini-3.7-flash');
+  });
+
+  it('leaves classification, fast, and vision on gemini-2.5-flash (live A/B: no quality gain, or untested)', () => {
+    expect(getGoogleModel('classification')).toBe('gemini-2.5-flash');
+    expect(getGoogleModel('fast')).toBe('gemini-2.5-flash');
+    expect(getGoogleModel('vision')).toBe('gemini-2.5-flash');
+  });
+
+  it('reasoning tier is untouched by this QF (stays gemini-2.5-pro)', () => {
+    expect(getGoogleModel('reasoning')).toBe('gemini-2.5-pro');
+  });
+});
