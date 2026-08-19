@@ -102,24 +102,25 @@ const NOT_A_SINK = [
  * that constrains the transports themselves.
  */
 const KNOWN_DEBT = [
-  { path: 'lib/adam/stall-alert.js', reason: 'Reaches a transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/chairman/chairman-gated-decision-row-guard.mjs', reason: 'New caller of the already-non-conformant lib/chairman/record-pending-decision.mjs (same LIB-LAYER-originator shape, no transport literal of its own). Wiring should-consult-solomon into this caller instead of its callee would be leaf-placement, the exact defect class this census exists to catch, and is a live-chairman-comms behavior change outside the reviewed PRD scope for this SD.', linked_ref: 'SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001' },
-  { path: 'lib/chairman/record-pending-decision.mjs', reason: 'LIB-LAYER originator reaching a transport without the consult gate; invisible to grep because it holds no transport literal.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/chairman/sms-bridge.js', reason: 'Static import of the Twilio provider, no consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/chairman/sms-channel-health.js', reason: 'Reaches the SMS transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/chairman/sms-outbound-worker.js', reason: 'Static import of the Twilio provider, no consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/comms/adam-outbound/chairman-sms-gate/index.js', reason: 'Reaches the email transport via a literal dynamic import, no consult gate — and its own comment notes the gate "was absent here".', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/comms/adam-outbound/decision-scheduler/index.js', reason: 'Reaches a transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/notifications/channel-health-recorder.js', reason: 'Reaches the email transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/notifications/orchestrator.js', reason: 'Static consumer of the Resend adapter, no consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'lib/notifications/scheduler.js', reason: 'Reaches the email transport without the consult gate. Pre-existing at census authoring.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
-  { path: 'lib/switch-automation/switchon-decision-packet.js', reason: 'LIB-LAYER originator of the second decision-packet stack; missed entirely by entrypoint-only enumeration.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'scripts/adam-decision-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom; invisible to the census until that idiom was resolved.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'scripts/adam-exec-summary.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
   { path: 'scripts/adam-heartbeat-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.', linked_ref: 'SD-LEO-INFRA-OUTBOUND-SINK-CONFORMANCE-001' },
 ];
-/** Committed ceiling — the ratchet. Never raise this; lowering it is the point. */
-const KNOWN_DEBT_CEILING = 15;
+/** Committed ceiling — the ratchet. Never raise this; lowering it is the point.
+ *  Lowered 15->9 by SD-LEO-INFRA-WIRE-CHAIRMAN-SMS-001: wiring the consult gate into
+ *  lib/comms/adam-outbound/chairman-sms-gate/index.js retired 6 entries at once (ANY-path
+ *  reachability — measured via a direct runCensus() invocation against the post-fix tree, not
+ *  assumed): the gate module itself, plus 5 callers that only ever reached the transport BY
+ *  ROUTING THROUGH it (lib/adam/stall-alert.js, lib/chairman/chairman-gated-decision-row-guard.mjs,
+ *  lib/chairman/record-pending-decision.mjs, lib/comms/adam-outbound/decision-scheduler/index.js,
+ *  lib/switch-automation/switchon-decision-packet.js). */
+const KNOWN_DEBT_CEILING = 9;
 
 /**
  * IDENTITY BASELINE — the actual anti-laundering guarantee.
@@ -136,17 +137,12 @@ const KNOWN_DEBT_CEILING = 15;
  * (or the module is gone).
  */
 const EXPECTED_NON_CONFORMANT = [
-  'lib/adam/stall-alert.js',
-  'lib/chairman/record-pending-decision.mjs',
   'lib/chairman/sms-bridge.js',
   'lib/chairman/sms-channel-health.js',
   'lib/chairman/sms-outbound-worker.js',
-  'lib/comms/adam-outbound/chairman-sms-gate/index.js',
-  'lib/comms/adam-outbound/decision-scheduler/index.js',
   'lib/notifications/channel-health-recorder.js',
   'lib/notifications/orchestrator.js',
   'lib/notifications/scheduler.js',
-  'lib/switch-automation/switchon-decision-packet.js',
   'scripts/adam-decision-email.mjs',
   'scripts/adam-exec-summary.mjs',
   'scripts/adam-heartbeat-email.mjs',
@@ -292,7 +288,7 @@ describe('allowlist integrity', () => {
     // Without this, `KNOWN_DEBT.length <= CEILING` is trivially satisfiable by editing
     // the constant. Lowering it as debt is genuinely remediated is the only intended
     // change, and it must be a deliberate diffed edit here too.
-    expect(KNOWN_DEBT_CEILING).toBe(15);
+    expect(KNOWN_DEBT_CEILING).toBe(9);
   });
 
   it('KNOWN_DEBT and NOT_A_SINK are disjoint (blocks duplication, NOT migration)', () => {
