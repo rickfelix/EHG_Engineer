@@ -13,6 +13,7 @@
 
 import { execSync } from 'child_process';
 import { COMPLETION_FLAG, WITNESS_INDETERMINATE, isWitnessIndeterminate } from '../../../lib/governance/completion-flag-keys.js';
+import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
 
 /**
  * SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001 / FR-4 + TR-6.
@@ -103,9 +104,9 @@ async function _recordIndeterminate(supabase, sdKey, err) {
  * SPECIMEN: SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 completed carrying
  * metadata.solomon_concurrence_gate.state === 'CONCURRENCE-DEBT' — no gate consulted it; the
  * debt survived only because a coordinator hand-noticed it. Non-blocking (missingRecommended
- * only, never missingRequired) — this makes the debt VISIBLE with provenance, it does not
- * gate completion itself (a hard block on the completion transition is a separate, far
- * higher-blast-radius change this QF's scope does not cover).
+ * only, never missingRequired) — this makes the debt visible, it does not gate completion
+ * itself (a hard block on the completion transition is a separate, far higher-blast-radius
+ * change this QF's scope does not cover).
  *
  * KNOWN_DEBT_KEYS is the confirmed real convention; DEBT_SHAPED_KEY_RE additionally catches
  * unrecognized keys that LOOK like a debt stamp by name (fail-loud on an unknown convention,
@@ -135,6 +136,46 @@ export function _sweepMetadataObligations(metadata) {
     }
   }
   return findings;
+}
+
+/**
+ * QF-20260817-001: durably record unresolved/unrecognized metadata obligations as an actual
+ * completion flag (a `feedback` row), not merely a console warning -- the QF's own acceptance
+ * criteria requires the debt be "explicitly carried as a completion flag with provenance".
+ *
+ * Uses the same canonical emitFeedback() writer scripts/capture-completion-flags.js uses, so
+ * dedup + audit semantics match every other feedback writer. Deliberately does NOT reuse
+ * COMPLETION_FLAG.ORIGIN_KEY/SOURCE_SD_KEY -- that pair is what _checkCompletionFlagsWitness()
+ * above reads to confirm the HUMAN end-of-SD reflection ran; reusing it here would let an
+ * automated finding silently satisfy a check whose whole purpose is proving a human ran it.
+ * emitFeedback's own dedup (category + sha256(today::description::dedup_key)) keeps repeated
+ * Stop-hook firings for the same unresolved obligation from spamming duplicate rows.
+ *
+ * Best-effort by construction, same posture as _recordIndeterminate above: a telemetry
+ * failure must never affect the hook's (non-blocking) decision.
+ *
+ * @param {Object} supabase
+ * @param {string} sdKey
+ * @param {string|null} sdId
+ * @param {string[]} findings - output of _sweepMetadataObligations
+ */
+export async function _flagMetadataObligations(supabase, sdKey, sdId, findings) {
+  if (!supabase || !findings || findings.length === 0) return;
+  try {
+    await emitFeedback({
+      supabase,
+      title: `Unresolved metadata obligation(s) at completion — ${sdKey}`,
+      description: findings.join('; '),
+      type: 'issue',
+      category: 'completion_flag',
+      status: 'new',
+      sd_id: sdId || null,
+      dedup_key: `qf-20260817-001-metadata-obligation::${sdKey}`,
+      metadata: { sd_key: sdKey, qf: 'QF-20260817-001', obligations: findings },
+    });
+  } catch (e) {
+    console.error(`   ⚠️  METADATA_OBLIGATIONS completion-flag write failed for ${sdKey} (${e && e.message}) — surfaced via console only, not blocking`);
+  }
 }
 
 /**
@@ -290,6 +331,7 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
   const obligationFindings = _sweepMetadataObligations(sd.metadata);
   if (obligationFindings.length > 0) {
     missingRecommended.push('METADATA_OBLIGATIONS');
+    await _flagMetadataObligations(supabase, sdKey, sd.id, obligationFindings);
   }
 
   // Output results
