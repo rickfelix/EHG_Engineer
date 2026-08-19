@@ -61,7 +61,21 @@ async function main() {
       order by n.nspname, p.proname
     `, [schemaList]);
 
-    const dynamicSqlFns = secdefFns.filter((f) => /\bEXECUTE\s+(format\(|'|\$)/i.test(f.def));
+    // EXEC-phase correction (TESTING + SECURITY, converged 2026-08-19): the original regex required
+    // EXECUTE to be IMMEDIATELY followed by format( -- blind to the equally-common PL/pgSQL idiom
+    // `v_query := format(...); EXECUTE v_query USING ...;` (build into a variable, execute the
+    // variable). Broadened to flag ANY dynamic EXECUTE (a bare `EXECUTE <identifier>` or `EXECUTE
+    // format(`/string/$-quoted literal), then require a human read the body before treating any hit
+    // as safe -- this detector's job is to flag candidates for review, not to clear them by regex.
+    // Second broadening: EXECUTE <variable> [INTO <target>] USING ... has an optional INTO clause
+    // BETWEEN the variable and USING (measured live: this is exactly the shape
+    // governance.validate_cross_schema_ref uses -- EXECUTE v_query INTO v_exists USING p_ref_value)
+    // -- requiring "; or USING immediately after" missed it. Now flags any EXECUTE followed by a bare
+    // identifier at all (excluding the FUNCTION/PROCEDURE keywords used by CREATE TRIGGER ... EXECUTE
+    // FUNCTION/PROCEDURE, a structurally different construct). Biased toward false positives over
+    // false negatives on purpose: this detector flags candidates for a human to read, it does not
+    // clear them by regex.
+    const dynamicSqlFns = secdefFns.filter((f) => /\bEXECUTE\s+(format\(|'|\$\$?[a-z_]*\$?|(?!function\b|procedure\b)[a-z_][a-z0-9_]*\b)/i.test(f.def));
 
     findings.push({
       claim: `full anon-executable SECURITY DEFINER survey across derived schema list [${schemaList.join(', ')}]`,
@@ -73,11 +87,26 @@ async function main() {
 
     for (const f of findings) console.log(JSON.stringify(f, null, 2));
 
+    if (dynamicSqlFns.length > 0) {
+      console.log(`\n${dynamicSqlFns.length} function(s) flagged for dynamic SQL -- this script only DETECTS the pattern, it cannot verify safety. Each must be individually read for injection risk (parameterization via USING, identifier quoting via %I, no user-controlled verb position) before being treated as safe. As of 2026-08-19, both flagged functions (governance.validate_cross_schema_ref, _text) were manually read by the SECURITY sub-agent and confirmed not injectable -- see sub_agent_execution_results phase=EXEC sub_agent_code=SECURITY.`);
+    }
+
     const baselineExpectedCount = 27; // recorded at PLAN phase, 2026-08-19
     if (secdefFns.length !== baselineExpectedCount) {
       console.log(`\nDRIFT NOTICE: live count (${secdefFns.length}) differs from the PLAN-phase baseline (${baselineExpectedCount}). Not necessarily a problem -- new functions may have been added -- but any NEW function not already reviewed must be individually checked for dynamic SQL before FR-4 is considered closed for this EXEC pass.`);
     } else {
       console.log(`\nCount matches PLAN-phase baseline (${baselineExpectedCount}) -- no drift.`);
+    }
+
+    // FR-4 AC-5 (SECURITY EXEC-phase review, "D4"): a script that silently exits 0 on a changed
+    // reachability claim defeats the point of re-verifying it. Fail loud and non-zero so this is
+    // never mistaken for routine output.
+    const failedClaims = findings.filter((f) => 'reverified' in f && f.reverified === false);
+    if (failedClaims.length > 0) {
+      console.error(`\nREACHABILITY_CHANGED: ${failedClaims.length} claim(s) that were true at LEAD/PLAN phase no longer hold:`);
+      for (const f of failedClaims) console.error(`  - ${f.claim}`);
+      console.error('\nACTION REQUIRED before PLAN-TO-LEAD: run /signal stuck "SD-LEO-INFRA-ANON-TRUNCATE-SWEEP-001 FR-4 reachability claim(s) changed since LEAD/PLAN measurement: ' + failedClaims.map((f) => f.claim).join('; ') + '" --severity high');
+      process.exitCode = 2;
     }
   } finally {
     await q('ROLLBACK');

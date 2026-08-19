@@ -62,44 +62,63 @@ BEGIN;
 
 SET LOCAL lock_timeout = '5s';
 
+-- Baseline capture, BEFORE any REVOKE runs. The anon TRUNCATE-holding population is heterogeneous
+-- (2 distinct ACL signatures measured at PLAN phase) -- NOT every relation holds the same set of
+-- other privileges (EXEC-phase discovery: an early draft of this post-condition assumed a uniform
+-- 7-privilege baseline and 9 relations genuinely failed that assumption, a false positive). The
+-- correct check is a per-relation BEFORE/AFTER diff of the actual privilege set, not an assumed
+-- fixed set -- this temp table is that "before" snapshot.
+CREATE TEMP TABLE _sweep_baseline AS
+SELECT rel::text AS rel_text, rel,
+       (SELECT array_agg(a.privilege_type ORDER BY a.privilege_type)
+        FROM aclexplode(coalesce((SELECT relacl FROM pg_class WHERE oid = rel), acldefault('r', (SELECT relowner FROM pg_class WHERE oid = rel)))) a
+        JOIN pg_roles r ON r.oid = a.grantee
+        WHERE r.rolname = 'anon') AS anon_privs
+FROM unnest(ARRAY[
+  ${arrayLiteral}
+]::regclass[]) AS rel;
+
 ${revokeStatements}
 
--- Post-condition. Uses unnest(ARRAY[...]::regclass[]) rather than a hardcoded text-name list: a
--- regclass literal for a relation that has since been dropped or renamed raises 42P01 AT EXECUTION,
--- converting a vacuous pass into a hard failure -- a hardcoded text-name comparison would silently
--- match nothing and pass on a stale list. Asserts BOTH has_table_privilege()=false AND zero direct
--- anon+TRUNCATE aclitems via pg_catalog (never information_schema.role_table_grants for this
--- assertion -- see FR-2 AC-4 in the PRD for why that view would pass for the wrong reason in this
--- environment). Also asserts a positive control: anon still holds SELECT on every relation, proving
--- this REVOKE did not over-broadly strip more than TRUNCATE.
+-- Post-condition: per-relation diff against _sweep_baseline. Uses regclass array elements (via the
+-- baseline table, captured from the same unnest(ARRAY[...]::regclass[]) source) rather than a
+-- hardcoded text-name list -- a relation dropped/renamed between staging and apply would have
+-- already raised 42P01 at the baseline-capture step above, converting a vacuous pass into a hard
+-- failure at the earliest possible point. Asserts (a) TRUNCATE is gone from the current privilege
+-- set, and (b) the current set equals baseline MINUS TRUNCATE exactly -- not an assumed fixed set of
+-- "should be true" privileges, which a heterogeneous population (2 measured signatures) would falsely
+-- fail. Never information_schema.role_table_grants (role-filtered -- see FR-1/FR-2 in the PRD).
 DO $$
 DECLARE
-  rel regclass;
+  b RECORD;
+  current_privs text[];
+  expected_privs text[];
   bad_truncate_count integer := 0;
-  bad_select_count integer := 0;
+  bad_diff_count integer := 0;
   checked_count integer := 0;
 BEGIN
-  FOR rel IN SELECT unnest(ARRAY[
-    ${arrayLiteral}
-  ]::regclass[])
+  FOR b IN SELECT rel_text, rel, anon_privs FROM _sweep_baseline
   LOOP
     checked_count := checked_count + 1;
-    IF has_table_privilege('anon', rel, 'TRUNCATE') THEN
+
+    SELECT array_agg(a.privilege_type ORDER BY a.privilege_type)
+    INTO current_privs
+    FROM aclexplode(coalesce((SELECT relacl FROM pg_class WHERE oid = b.rel), acldefault('r', (SELECT relowner FROM pg_class WHERE oid = b.rel)))) a
+    JOIN pg_roles r ON r.oid = a.grantee
+    WHERE r.rolname = 'anon';
+
+    IF has_table_privilege('anon', b.rel, 'TRUNCATE') OR 'TRUNCATE' = ANY(coalesce(current_privs, ARRAY[]::text[])) THEN
       bad_truncate_count := bad_truncate_count + 1;
-      RAISE WARNING 'POST_CONDITION: anon still has TRUNCATE via has_table_privilege on %', rel;
+      RAISE WARNING 'POST_CONDITION: anon still has TRUNCATE on %', b.rel_text;
     END IF;
-    IF EXISTS (
-      SELECT 1 FROM pg_class c
-      JOIN aclexplode(c.relacl) a ON true
-      JOIN pg_roles r ON r.oid = a.grantee
-      WHERE c.oid = rel AND r.rolname = 'anon' AND a.privilege_type = 'TRUNCATE'
-    ) THEN
-      bad_truncate_count := bad_truncate_count + 1;
-      RAISE WARNING 'POST_CONDITION: anon still has a direct TRUNCATE aclitem on %', rel;
-    END IF;
-    IF NOT has_table_privilege('anon', rel, 'SELECT') THEN
-      bad_select_count := bad_select_count + 1;
-      RAISE WARNING 'POST_CONDITION: anon lost SELECT (should be untouched) on %', rel;
+
+    SELECT array_agg(p ORDER BY p) INTO expected_privs
+    FROM unnest(coalesce(b.anon_privs, ARRAY[]::text[])) p
+    WHERE p != 'TRUNCATE';
+
+    IF coalesce(current_privs, ARRAY[]::text[]) IS DISTINCT FROM coalesce(expected_privs, ARRAY[]::text[]) THEN
+      bad_diff_count := bad_diff_count + 1;
+      RAISE WARNING 'POST_CONDITION: anon privilege set changed beyond TRUNCATE on % -- before(minus truncate)=%, after=%', b.rel_text, expected_privs, current_privs;
     END IF;
   END LOOP;
 
@@ -109,12 +128,14 @@ BEGIN
   IF bad_truncate_count > 0 THEN
     RAISE EXCEPTION 'POST_CONDITION_FAILED: % relation(s) still show anon TRUNCATE after REVOKE', bad_truncate_count;
   END IF;
-  IF bad_select_count > 0 THEN
-    RAISE EXCEPTION 'POST_CONDITION_FAILED: % relation(s) lost anon SELECT (should be untouched)', bad_select_count;
+  IF bad_diff_count > 0 THEN
+    RAISE EXCEPTION 'POST_CONDITION_FAILED: % relation(s) changed anon privileges beyond TRUNCATE -- REVOKE was over-broad or under-broad', bad_diff_count;
   END IF;
 
-  RAISE NOTICE 'POST_CONDITION_PASSED: % relations verified -- anon TRUNCATE revoked, anon SELECT untouched', checked_count;
+  RAISE NOTICE 'POST_CONDITION_PASSED: % relations verified via per-relation before/after diff -- anon TRUNCATE revoked, every other privilege exactly unchanged', checked_count;
 END $$;
+
+DROP TABLE _sweep_baseline;
 
 COMMIT;
 `;

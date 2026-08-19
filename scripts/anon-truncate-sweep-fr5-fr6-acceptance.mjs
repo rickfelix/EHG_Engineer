@@ -10,6 +10,14 @@ import { dirname, join } from 'node:path';
 import { createDatabaseClient } from './lib/supabase-connection.js';
 import { classifyMigration } from './lib/migration-tier-classifier.mjs';
 
+// Same COMMIT-never-issued guard as anon-truncate-sweep-acceptance.mjs (SECURITY EXEC-phase review:
+// this sibling suite lacked it despite advertising the same safety invariant).
+const COMMIT_FAMILY = /(^|;)\s*(commit\b|end(?!\s*(loop|if|case|\$\$)\b)\s*;|prepare\s+transaction|release\s+savepoint\s+all)/i;
+function assertNotCommitFamily(sql) {
+  if (COMMIT_FAMILY.test(sql)) throw new Error(`REFUSING_COMMIT_FAMILY_STATEMENT: ${sql.slice(0, 80)}`);
+  return sql;
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GATED_DIR = join(__dirname, '..', 'database', 'chairman-gated');
 
@@ -34,7 +42,7 @@ function stripTx(sql) {
 
 async function main() {
   const client = await createDatabaseClient('engineer', { verify: true, verbose: true });
-  const q = (sql, params) => client.query(sql, params);
+  const q = (sql, params) => client.query(assertNotCommitFamily(sql), params);
   try {
     await q('BEGIN');
     for (const f of FILES) {
