@@ -83,7 +83,7 @@ Static reachability (above) answers "does anything reference this file?"; the
 
 A cron-backed process's own schedule can declare a genuine quiet window (e.g.
 `15 0-2,10-23 * * *` excludes hours 3-9 UTC) — raw `now - last_fired_at` false-alarms
-inside that window unless the threshold is padded so wide it also hides real staleness
+inside that window unless the threshold grows so wide it also hides real staleness
 outside it. `lib/periodic-liveness/cron-gap.mjs`'s `gapAdjustedAgeMs(cronExpr, since, at)`
 subtracts hour-aligned buckets outside the cron's covered hours, so the threshold check
 sees only genuine elapsed time. Monotonic by construction — a dead process's staleness
@@ -92,7 +92,7 @@ declared quiet window itself.
 
 - **Opt-in via `workflowCron`.** `scripts/periodic-liveness-watcher.mjs`'s `evaluateRow`
   reads `liveness_source_ref.workflow_cron` when present; rows without it (the majority —
-  event-driven or non-cron-backed processes) are unaffected, raw elapsed time as before.
+  event-driven or non-cron-backed processes) still use raw elapsed time, unchanged.
   `lib/machinery-class/armed-registration.js`'s `registerArmedMachinery` accepts an
   optional `workflowCron` opt to set it, and warns (never blocks) at registration time if
   `expected_interval_seconds x grace_multiplier` under-covers the cron's own largest
