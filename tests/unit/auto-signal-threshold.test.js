@@ -108,6 +108,32 @@ describe('buildAutoSignalArgs (FR-1)', () => {
     const args = buildAutoSignalArgs({ toolName: 'Bash', signature: 'sig', attempts: 2 });
     expect(args[1]).not.toContain('(SD ');
   });
+
+  it('QF-20260803-596: includes the repeated command text and occurrence timestamps when supplied', () => {
+    const args = buildAutoSignalArgs({
+      toolName: 'Bash', signature: 'Bash:abc123', attempts: 3, sdKey: 'SD-X-001',
+      commandText: 'npm run build', occurredAt: ['2026-08-03T10:00:00.000Z', '2026-08-03T10:01:00.000Z', '2026-08-03T10:02:00.000Z'],
+    });
+    const body = args[1];
+    expect(body).toContain('repeated command: "npm run build"');
+    expect(body).toContain('2026-08-03T10:00:00.000Z');
+    expect(body).toContain('2026-08-03T10:02:00.000Z');
+    expect(body).not.toContain('\n');
+  });
+
+  it('QF-20260803-596: falls back to the pre-existing signature-only body when commandText/occurredAt are absent (non-Bash tools)', () => {
+    const args = buildAutoSignalArgs({ toolName: 'Edit', signature: 'Edit:a.js:abc', attempts: 3 });
+    expect(args[1]).not.toContain('repeated command:');
+    expect(args[1]).not.toContain(' at [');
+  });
+
+  it('QF-20260803-596: truncates a long commandText and collapses embedded whitespace/newlines', () => {
+    const longCmd = 'echo ' + 'x'.repeat(300) + '\n\tmore   spacing';
+    const args = buildAutoSignalArgs({ toolName: 'Bash', signature: 'sig', attempts: 3, commandText: longCmd });
+    expect(args[1]).not.toContain('\n');
+    expect(args[1]).not.toContain('x'.repeat(300));   // the un-truncated run must not survive
+    expect(args[1]).toContain('repeated command: "echo x');
+  });
 });
 
 // SD-LEO-INFRA-RCA-ENFORCEMENT-PROGRESS-STALL-NOT-REPETITION-001: the hard-block decision must
