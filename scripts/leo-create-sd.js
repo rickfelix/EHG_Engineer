@@ -148,10 +148,12 @@ Flags:
                         guardrail (required when scope contains drop/delete/truncate/purge
                         keywords). Attests a backup/rollback plan is authored in the SD's own
                         description -- the flag is consent, not the plan itself. Honored on
-                        --from-feedback (QF-20260818-873; mirrors --security-reviewed at :143).
+                        --from-feedback (QF-20260818-873; mirrors --security-reviewed at :143)
+                        and --from-plan (QF-20260819-415).
   --deletion-approved    Set metadata.deletion_approved=true -- alternate GR-DELETION-SAFEGUARD
                         attestation (explicit approval in lieu of an authored backup plan).
-                        Honored on --from-feedback (QF-20260818-873).
+                        Honored on --from-feedback (QF-20260818-873) and --from-plan
+                        (QF-20260819-415).
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
@@ -400,6 +402,10 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Parse boolean review flags (satisfy GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE)
       const migrationReviewed = args.includes('--migration-reviewed');
       const securityReviewed = args.includes('--security-reviewed');
+      // QF-20260819-415: mirror the --from-feedback pair (QF-20260818-873) satisfying
+      // GR-DELETION-SAFEGUARD, which --from-plan never got.
+      const backupPlan = args.includes('--backup-plan');
+      const deletionApproved = args.includes('--deletion-approved');
       // QF-20260509-LEO-CREATE-PLAN-DUP-GUARD: override the same-plan-within-24h refusal
       const forceCreate = args.includes('--force-create');
       // SD-LEO-INFRA-LEO-CREATE-CROSS-001: --target-repos for cross-repo SDs
@@ -444,6 +450,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const knownPlanFlags = new Set([
         '--yes', '-y', '--type', '--title', '--priority', '--from-plan',
         '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed',
+        '--backup-plan', '--deletion-approved',
         '--target-repos', '--force-create', '--wave', '--no-wave',
         '--depends-on', '--roadmap-link-reason'
       ]);
@@ -458,6 +465,8 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         archKey,
         migrationReviewed,
         securityReviewed,
+        backupPlan,
+        deletionApproved,
         targetRepos: targetReposPlan,
         forceCreate,
         waveDisposition: waveDispositionPlan,
