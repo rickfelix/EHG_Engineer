@@ -9,12 +9,23 @@
  * ADDS the Goodhart falsifier the oracle review (306a3a12) requires and the prior two
  * dispositions did not perform: for each actionable cell, replay ONE real known-bad historical
  * specimen (lowest weighted_score in the 4-week window, individual ai_quality_assessments row,
- * not the aggregate view) against the proposed threshold. If a known-bad specimen CURRENTLY
- * PASSES and would STILL PASS under the new threshold, the increase is masking and must be
- * REJECTED regardless of the aggregate numbers. For a pure INCREASE this is structurally rare
- * (raising a bar cannot turn a fail into a pass), so the falsifier's real value here is
- * confirming (a) a genuine known-bad specimen exists for the cell, and (b) whether it is a
- * CURRENT false negative the increase would newly catch.
+ * not the aggregate view) against the proposed threshold.
+ *
+ * MASKING, DEFINED DIRECTION-AGNOSTICALLY: the known-bad specimen currently FAILS
+ * (passesOld=false) but would NEWLY PASS under the proposed threshold (passesNew=true). This is
+ * the only algebra that can actually fire for a DECREASE (a lowered bar can turn a fail into a
+ * pass) -- for a pure INCREASE it is structurally impossible (a raised bar can never turn a fail
+ * into a pass), so an INCREASE cell can never be rejected on masking grounds; its own Goodhart
+ * value is instead the VALIDATED signal below. An earlier draft of this script defined masking as
+ * passesOld && passesNew, which degenerates to "already passing" for a DECREASE and can never
+ * fire on a currently-failing specimen -- exactly the case the falsifier exists to catch.
+ * Adversarial review on PR #7283 caught this before merge.
+ *
+ * DECREASE-kind rows are NOT auto-verdicted by the granularity check alone: per
+ * tuning-003-disposition.mjs's own precedent, a DECREASE requires the fuller two-sided review
+ * QF-20260807-145 established (is the depressed score a CONTENT signal or a THRESHOLD signal).
+ * This script surfaces the masking result for a DECREASE but routes it to a HELD bucket rather
+ * than an auto-APPLY, even when masking is clear.
  *
  * Read-only. Run: node scripts/quality/tuning-004-disposition.mjs
  */
@@ -32,12 +43,13 @@ const cell = (r) => r.sd_type + ' x ' + r.content_type;
 const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
 
 async function knownBad(sd_type, content_type) {
-  const { data } = await sb.from('ai_quality_assessments')
+  const { data, error: qErr } = await sb.from('ai_quality_assessments')
     .select('id,content_id,weighted_score,assessed_at')
     .eq('sd_type', sd_type).eq('content_type', content_type)
     .gte('assessed_at', fourWeeksAgo)
     .order('weighted_score', { ascending: true }).limit(1);
-  return data?.[0] || null;
+  if (qErr) return { error: qErr.message };
+  return { specimen: data?.[0] || null };
 }
 
 console.log('=== FR-1 SNAPSHOT (' + rows.length + ' rows, live re-measurement at QF-20260818-306 claim) ===');
@@ -51,21 +63,41 @@ for (const r of actionable) {
 console.log('\n=== GOODHART FALSIFIER — one real known-bad specimen replayed per cell ===');
 const verdicts = [];
 for (const r of actionable) {
-  const kb = await knownBad(r.sd_type, r.content_type);
+  const { specimen: kb, error: kbErr } = await knownBad(r.sd_type, r.content_type);
+  if (kbErr) {
+    console.log('  ' + cell(r).padEnd(34) + 'QUERY FAILED: ' + kbErr + ' -- treated as UNVERIFIED, not "no specimen"');
+    verdicts.push({ r, kb: null, kbErr, masking: false, validated: false });
+    continue;
+  }
   const passesOld = kb ? kb.weighted_score >= r.current_threshold : null;
   const passesNew = kb ? kb.weighted_score >= r.suggested_threshold : null;
-  const masking = passesOld === true && passesNew === true;
+  const masking = passesOld === false && passesNew === true;
+  const validated = passesOld === true && passesNew === false;
+  let note;
+  if (!kb) note = 'NO SPECIMEN FOUND in 4-week window';
+  else if (masking) note = '*** MASKING: currently fails, would newly pass -> REJECT ***';
+  else if (validated) note = '(current false negative: currently passes, would newly fail -> increase catches it)';
+  else if (passesOld) note = '(already passing both old and new bar -- this specimen does not validate the change)';
+  else note = '(already failing both old and new bar -- change adds no new evidence either way)';
   console.log('  ' + cell(r).padEnd(34) + (kb
-    ? `specimen=${kb.content_id} score=${kb.weighted_score} passesOld=${passesOld} passesNew=${passesNew}`
-      + (masking ? '  *** MASKING -> REJECT ***' : passesOld ? '  (current false negative, increase would newly catch it)' : '  (already failing; increase adds no new evidence)')
-    : 'NO SPECIMEN FOUND in 4-week window'));
-  verdicts.push({ r, kb, masking });
+    ? `specimen=${kb.content_id} score=${kb.weighted_score} passesOld=${passesOld} passesNew=${passesNew}  ${note}`
+    : note));
+  verdicts.push({ r, kb, masking, validated });
 }
 
 console.log('\n=== GRANULARITY COLLATERAL CHECK (SD_TYPE_PASS_THRESHOLDS is keyed by sd_type alone) ===');
 const applied = [];
 const refused = [];
-for (const { r, masking } of verdicts) {
+const held = [];
+for (const { r, masking, kbErr } of verdicts) {
+  if (kind(r) === 'DECREASE') {
+    // Never auto-verdict a DECREASE from this script alone -- tuning-003-disposition.mjs's own
+    // precedent: it needs the fuller two-sided content-vs-threshold-signal review
+    // (QF-20260807-145), which this falsifier does not perform.
+    held.push({ r, reason: masking ? 'DECREASE + Goodhart MASKING confirmed -- still needs the two-sided review before any action, not a green light' : 'DECREASE -- needs the QF-20260807-145 two-sided review, not performed here' });
+    continue;
+  }
+  if (kbErr) { refused.push({ r, reason: `UNVERIFIED: known-bad query failed (${kbErr}) -- cannot confirm Goodhart-clean` }); continue; }
   if (masking) { refused.push({ r, reason: 'GOODHART: known-bad specimen would newly pass (masking)' }); continue; }
   const siblings = rows.filter((x) => x.sd_type === r.sd_type && x.content_type !== r.content_type);
   const blockers = siblings.filter((s) => s.avg_score < r.suggested_threshold);
@@ -90,6 +122,9 @@ for (const r of applied) {
 for (const { r, reason } of refused) {
   console.log('  ' + cell(r).padEnd(34) + 'REFUSED — ' + reason);
 }
+for (const { r, reason } of held) {
+  console.log('  ' + cell(r).padEnd(34) + 'HELD — ' + reason);
+}
 
-console.log(`\nOK: ${applied.length} clear (see ALREADY APPLIED vs APPLY above), ${refused.length} refused.`);
+console.log(`\nOK: ${applied.length} clear, ${refused.length} refused, ${held.length} held for further review.`);
 console.log('No threshold is moved by this script — review is the deliverable per QF-20260818-306.');
