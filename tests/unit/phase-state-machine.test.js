@@ -171,18 +171,32 @@ describe('Phase State Machine Enforcement', () => {
     });
 
     describe('UAT requirement for COMPLETED transition', () => {
+      // QF-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-5: getUATRequirement(sdType) (called without
+      // {returnLegacy:true}, as both real call sites do) returns an OBJECT ({status, ...}),
+      // never a bare string. The previous version of this test hand-coded
+      // `uatRequirement = 'REQUIRED'` as a plain string and never called the real function —
+      // it pinned the exact shape mismatch that made `uatRequirement === 'REQUIRED'` always
+      // false in production (scripts/hooks/stop-subagent-enforcement/type-aware-validator.js,
+      // scripts/hooks/phase-state-enforcement.js). Using the real object shape here so this
+      // "logic pattern" test can't drift from what the code actually receives again.
       it('should require UAT for feature SDs transitioning to COMPLETED', () => {
-        const uatRequirement = 'REQUIRED';
+        const uatRequirement = { status: 'REQUIRED', uatRequired: true, uatExempt: false };
         const targetPhase = 'COMPLETED';
-        const requiresUAT = (targetPhase === 'COMPLETED' && uatRequirement === 'REQUIRED');
+        const requiresUAT = (targetPhase === 'COMPLETED' && uatRequirement.status === 'REQUIRED');
         expect(requiresUAT).toBe(true);
       });
 
       it('should NOT require UAT for infrastructure SDs transitioning to COMPLETED', () => {
-        const uatRequirement = 'EXEMPT';
+        const uatRequirement = { status: 'EXEMPT', uatRequired: false, uatExempt: true };
         const targetPhase = 'COMPLETED';
-        const requiresUAT = (targetPhase === 'COMPLETED' && uatRequirement === 'REQUIRED');
+        const requiresUAT = (targetPhase === 'COMPLETED' && uatRequirement.status === 'REQUIRED');
         expect(requiresUAT).toBe(false);
+      });
+
+      it('a bare-string comparison against the real object shape is always false (regression guard)', () => {
+        const uatRequirement = { status: 'REQUIRED', uatRequired: true, uatExempt: false };
+        // eslint-disable-next-line eqeqeq -- deliberately reproducing the historical bug's exact comparison
+        expect(uatRequirement === 'REQUIRED').toBe(false);
       });
     });
 
