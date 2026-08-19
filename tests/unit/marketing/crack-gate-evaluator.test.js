@@ -7,7 +7,7 @@ const VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
  * Per TR-5: no catch-all fallback. Any table/rpc not explicitly configured throws, so a new
  * unmocked read is a loud test failure, never a silent pass-through.
  */
-function makeSupabase({ pbnRow, pbnError, attestations = {} } = {}) {
+function makeSupabase({ pbnRow, pbnError, attestations = {}, deploymentRow, deploymentError } = {}) {
   return {
     rpc: vi.fn((fnName, args) => {
       if (fnName !== 'venture_pbn_status') throw new Error(`unmocked rpc: ${fnName}`);
@@ -15,24 +15,32 @@ function makeSupabase({ pbnRow, pbnError, attestations = {} } = {}) {
       return Promise.resolve({ data: pbnRow ? [pbnRow] : [], error: null });
     }),
     from: vi.fn((table) => {
-      if (table !== 'v_venture_gate_attestations_latest') throw new Error(`unmocked table: ${table}`);
-      return {
-        select: vi.fn(() => ({
-          eq: vi.fn((col, val) => ({
-            eq: vi.fn((col2, checkType) => ({
-              order: vi.fn(() => ({
-                limit: vi.fn(() => ({
-                  maybeSingle: vi.fn(() => {
-                    const entry = attestations[checkType];
-                    if (entry?.error) return Promise.resolve({ data: null, error: entry.error });
-                    return Promise.resolve({ data: entry?.row ?? null, error: null });
-                  }),
+      if (table === 'v_venture_gate_attestations_latest') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((col, val) => ({
+              eq: vi.fn((col2, checkType) => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({
+                    maybeSingle: vi.fn(() => {
+                      const entry = attestations[checkType];
+                      if (entry?.error) return Promise.resolve({ data: null, error: entry.error });
+                      return Promise.resolve({ data: entry?.row ?? null, error: null });
+                    }),
+                  })),
                 })),
               })),
             })),
           })),
-        })),
-      };
+        };
+      }
+      // FR-6: checkDeployFreshness() reads venture_deployments only when a PASS row's subject_ref
+      // embeds a deploy sha -- every fixture in this file predating FR-6 uses subject_ref values
+      // with no ':deploy:' marker, so this branch is unreached by any pre-existing test.
+      if (table === 'venture_deployments') {
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve({ data: deploymentRow ?? null, error: deploymentError ?? null })) })) })) };
+      }
+      throw new Error(`unmocked table: ${table}`);
     }),
   };
 }
@@ -92,6 +100,78 @@ describe('crack-gate-evaluator (SD-FDBK-FIX-VENTURE-CRACK-GATE-001)', () => {
       expect(result.verdict).toBe('ATTESTATION_SOURCE_UNAVAILABLE');
       expect(result.reason).toContain('connection timeout');
       expect(result.reason).not.toBe('attestations_table_not_yet_applied');
+    });
+  });
+
+  describe('checkDeployFreshness (FR-6, via evaluateCrackGateStatus)', () => {
+    const PASS_WITH_DEPLOY = (sha) => ({
+      verdict: 'PASS', attested_by: 'rick@example.com', produced_by: 'chairman_product_review_packet',
+      subject_ref: `venture_site:${VENTURE_ID}:deploy:${sha}`, citation: 'https://example.com/review', path_to_pass: 'n/a', computed_at: new Date().toISOString(),
+    });
+    const basePbn = { status: 'PBN_SCORED', verdict: 'PASS', source: 'ventures_metadata', reason: 'metadata_authoritative', degraded: false };
+
+    it('a matching current deploy sha leaves the PASS unchanged', async () => {
+      const supabase = makeSupabase({
+        pbnRow: basePbn,
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') }, chairman_site_review: { row: PASS_WITH_DEPLOY('abc1234') } },
+        deploymentRow: { sha: 'abc1234' },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.chairman_site_review.verdict).toBe('PASS');
+      expect(result.overall).toBe('MEETS_CRITERION');
+    });
+
+    it('a mismatched current deploy sha downgrades PASS to STALE_DEPLOY and flips overall to NOT_MET', async () => {
+      const supabase = makeSupabase({
+        pbnRow: basePbn,
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') }, chairman_site_review: { row: PASS_WITH_DEPLOY('abc1234') } },
+        deploymentRow: { sha: 'newer99' },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.chairman_site_review.verdict).toBe('STALE_DEPLOY');
+      expect(result.chairman_site_review.reason).toContain('abc1234');
+      expect(result.chairman_site_review.reason).toContain('newer99');
+      expect(result.overall).toBe('NOT_MET');
+      expect(result.missing.map((m) => m.check)).toContain('chairman_site_review');
+    });
+
+    it('a pre-FR-6 row with no embedded deploy sha is left unchanged even if venture_deployments has a real sha (cannot compare what was never recorded)', async () => {
+      const supabase = makeSupabase({
+        pbnRow: basePbn,
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') }, chairman_site_review: { row: PASS_ROW('chairman_site_review') } },
+        deploymentRow: { sha: 'anything' },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.chairman_site_review.verdict).toBe('PASS');
+    });
+
+    it('current deploy sha is the literal "unknown" sentinel -- fail-soft, PASS unchanged', async () => {
+      const supabase = makeSupabase({
+        pbnRow: basePbn,
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') }, chairman_site_review: { row: PASS_WITH_DEPLOY('abc1234') } },
+        deploymentRow: { sha: 'unknown' },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.chairman_site_review.verdict).toBe('PASS');
+    });
+
+    it('no venture_deployments row for this venture at all -- fail-soft, PASS unchanged', async () => {
+      const supabase = makeSupabase({
+        pbnRow: basePbn,
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') }, chairman_site_review: { row: PASS_WITH_DEPLOY('abc1234') } },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.chairman_site_review.verdict).toBe('PASS');
+    });
+
+    it('a non-PASS chairman_site_review (e.g. NO_DATA) is never touched by the freshness check', async () => {
+      const supabase = makeSupabase({
+        pbnRow: basePbn,
+        attestations: { stage17_judgment: { row: PASS_ROW('stage17_judgment') } },
+        deploymentRow: { sha: 'anything' },
+      });
+      const result = await evaluateCrackGateStatus(supabase, VENTURE_ID);
+      expect(result.chairman_site_review.verdict).toBe('NO_DATA');
     });
   });
 

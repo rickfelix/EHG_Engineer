@@ -81,9 +81,24 @@ describe('buildChairmanSiteReviewAttestationRow (pure)', () => {
     const row = buildChairmanSiteReviewAttestationRow({ decisionRow: PRODUCT_REVIEW_ROW, decisionId: DECISION_ID, verdict: 'PASS', decidedBy: 'rick@example.com' });
     expect(row.enforcement_strength).toBe('convention');
   });
+
+  // FR-6 (SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001): subject_content_hash's own column comment always
+  // promised "deployed sha + rendered site build", but nothing ever captured the deploy half --
+  // embedding it in subject_ref (an existing free-text column, no migration needed) is what
+  // crack-gate-evaluator.js's checkDeployFreshness() later parses back out to detect staleness.
+  it('a deploySha is embedded in subject_ref when known', () => {
+    const row = buildChairmanSiteReviewAttestationRow({ decisionRow: PRODUCT_REVIEW_ROW, decisionId: DECISION_ID, verdict: 'PASS', decidedBy: 'rick@example.com', deploySha: 'abc1234' });
+    expect(row.subject_ref).toBe(`venture_site:${VENTURE_ID}:deploy:abc1234`);
+  });
+
+  it('subject_ref keeps its original shape when deploySha is unknown (null) -- backward compatible with every pre-FR-6 row', () => {
+    const row = buildChairmanSiteReviewAttestationRow({ decisionRow: PRODUCT_REVIEW_ROW, decisionId: DECISION_ID, verdict: 'PASS', decidedBy: 'rick@example.com' });
+    expect(row.subject_ref).toBe(`venture_site:${VENTURE_ID}`);
+    expect(row.subject_ref).not.toContain(':deploy:');
+  });
 });
 
-function makeSupabase({ decisionRow, decisionFetchError, insertResult, insertError } = {}) {
+function makeSupabase({ decisionRow, decisionFetchError, insertResult, insertError, deploymentRow, deploymentError } = {}) {
   const insert = vi.fn(() => ({
     select: vi.fn(() => ({
       single: vi.fn(() => Promise.resolve({ data: insertResult ?? null, error: insertError ?? null })),
@@ -96,6 +111,13 @@ function makeSupabase({ decisionRow, decisionFetchError, insertResult, insertErr
       }
       if (table === 'venture_gate_attestations') {
         return { insert };
+      }
+      // FR-6: fetchCurrentDeploySha's own try/catch already tolerates an unmocked/throwing
+      // venture_deployments read (falls back to deploySha=null), so tests that don't care about
+      // deploy-sha behavior need no changes here -- only tests that explicitly pass
+      // deploymentRow/deploymentError opt into a real mocked response.
+      if (table === 'venture_deployments') {
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve({ data: deploymentRow ?? null, error: deploymentError ?? null })) })) })) };
       }
       throw new Error(`unmocked table: ${table}`);
     }),
@@ -144,5 +166,24 @@ describe('resolveAndWriteChairmanSiteReviewAttestation (I/O)', () => {
     const supabase = makeSupabase({ decisionFetchError: { message: 'connection refused' } });
     await expect(resolveAndWriteChairmanSiteReviewAttestation(supabase, { decisionId: DECISION_ID, action: 'approved', decidedBy: 'rick@example.com' }))
       .rejects.toThrow('connection refused');
+  });
+
+  it('FR-6: a real venture_deployments.sha is read and embedded in the written subject_ref', async () => {
+    const supabase = makeSupabase({ decisionRow: PRODUCT_REVIEW_ROW, insertResult: { id: 9 }, deploymentRow: { sha: 'deadbee1' } });
+    await resolveAndWriteChairmanSiteReviewAttestation(supabase, { decisionId: DECISION_ID, action: 'approved', decidedBy: 'rick@example.com' });
+    expect(supabase.__insert).toHaveBeenCalledWith(expect.objectContaining({ subject_ref: `venture_site:${VENTURE_ID}:deploy:deadbee1` }));
+  });
+
+  it('FR-6: a venture_deployments.sha of the literal string "unknown" is treated as no signal, not embedded', async () => {
+    const supabase = makeSupabase({ decisionRow: PRODUCT_REVIEW_ROW, insertResult: { id: 10 }, deploymentRow: { sha: 'unknown' } });
+    await resolveAndWriteChairmanSiteReviewAttestation(supabase, { decisionId: DECISION_ID, action: 'approved', decidedBy: 'rick@example.com' });
+    expect(supabase.__insert).toHaveBeenCalledWith(expect.objectContaining({ subject_ref: `venture_site:${VENTURE_ID}` }));
+  });
+
+  it('FR-6: no venture_deployments row at all -- write still succeeds with the original subject_ref shape (fail-soft)', async () => {
+    const supabase = makeSupabase({ decisionRow: PRODUCT_REVIEW_ROW, insertResult: { id: 11 } });
+    const result = await resolveAndWriteChairmanSiteReviewAttestation(supabase, { decisionId: DECISION_ID, action: 'approved', decidedBy: 'rick@example.com' });
+    expect(result.written).toBe(true);
+    expect(supabase.__insert).toHaveBeenCalledWith(expect.objectContaining({ subject_ref: `venture_site:${VENTURE_ID}` }));
   });
 });
