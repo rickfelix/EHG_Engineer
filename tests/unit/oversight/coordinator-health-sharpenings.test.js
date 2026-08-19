@@ -62,6 +62,57 @@ describe('TS-3 dispatch reason band (S3)', () => {
     expect(evaluateReasonBand(tiny)).toMatchObject({ band_ok: true, insufficient_n: true });
     expect(REASON_BAND.now_wave_remainder).toEqual([0, 1]); // 100%-roadmap is NOT a target
   });
+
+  // QF-20260728-972: counts[classifyDispatchReason(r)]++ on an 'unclassified'-stamped row hit
+  // counts[undefined]++ = NaN when the counts initializer only declared five of REASON_BAND's
+  // six keys, poisoning total and rendering the divide-by-zero guards (`total ? v/total : 0`)
+  // as a confident 0 -- and NaN < minCohort is false, so insufficient_n never fired either.
+  // Ticket repro: band_ok=true, insufficient_n=false, over a cohort of nothing measurable.
+  it('a cohort of only unclassified-stamped rows produces a finite total and a real (non-silent) verdict', () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      ({ sd_key: `SD-U-${i}`, metadata: { dispatch_reason_band: 'unclassified' } }));
+    const reasons = deriveDispatchReasons(rows);
+
+    expect(Number.isFinite(reasons.total)).toBe(true);
+    expect(reasons.total).toBe(10);
+    expect(reasons.distribution.unclassified).toBe(1);
+    expect(reasons.stamped_coverage).toBe(1);
+
+    const verdict = evaluateReasonBand(reasons);
+    // 100% unclassified exceeds REASON_BAND.unclassified's [0, 0.6] ceiling -- must trip, not
+    // pass. A verdict of band_ok=true here would mean the fix only silenced the NaN without
+    // restoring real measurement (the exact failure mode the ticket describes).
+    expect(verdict.insufficient_n).toBe(false);
+    expect(verdict.band_ok).toBe(false);
+    expect(verdict.violations.map((v) => v.category)).toContain('unclassified');
+  });
+
+  // Structural drift-proofing: counts must always carry every REASON_BAND key, by construction,
+  // not by two lists happening to agree today.
+  it('deriveDispatchReasons.counts always has exactly REASON_BAND\'s key set', () => {
+    const reasons = deriveDispatchReasons([{ sd_key: 'SD-X', metadata: {} }]);
+    expect(Object.keys(reasons.counts).sort()).toEqual(Object.keys(REASON_BAND).sort());
+  });
+
+  // Falsification test (ticket's own explicit requirement, "over-correction risk"): a fix that
+  // silences the NaN must not become a checker that can never fire. A mixed-but-still-skewed
+  // cohort (including a legitimate 'other' share past its own [0, 0.6] ceiling) must still alarm.
+  it('the fix does not over-correct into a checker that can never fail', () => {
+    const rows = [
+      ...Array.from({ length: 3 }, (_, i) => ({ sd_key: `SD-FDBK-${i}`, metadata: {} })),
+      ...Array.from({ length: 7 }, (_, i) => ({ sd_key: `SD-OTHER-${i}`, metadata: {} })), // -> 'other'
+    ];
+    const verdict = evaluateReasonBand(deriveDispatchReasons(rows));
+    expect(verdict.insufficient_n).toBe(false);
+    expect(verdict.band_ok).toBe(false); // 'other' at 70% exceeds its [0, 0.6] ceiling
+  });
+
+  // Defense-in-depth guard, isolated from the counts fix: evaluateReasonBand must treat a
+  // non-finite total as unmeasured regardless of what produced it, not just the one known cause.
+  it('evaluateReasonBand treats any non-finite total as insufficient_n, independent of cause', () => {
+    const verdict = evaluateReasonBand({ total: NaN, distribution: { chairman_directed: 0 } });
+    expect(verdict).toMatchObject({ band_ok: true, insufficient_n: true, violations: [] });
+  });
 });
 
 describe('TS-2 seven failure classes (S2)', () => {
