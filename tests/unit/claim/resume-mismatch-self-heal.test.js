@@ -17,6 +17,12 @@ const resumeStep = require('../../../lib/checkin/steps/resume.cjs');
 // .eq() must be directly awaitable. resume.cjs's OWN staleTerminal check does
 // `await sb.from(T).select(...).eq(...).maybeSingle()` -- .eq() must ALSO expose .maybeSingle().
 // One object supporting both shapes lets a single fake sb serve both call sites correctly.
+//
+// ARGUMENT-AWARE (adversarial-review finding): an .eq() that ignores its (column, value) args and
+// returns the same canned rows regardless can't catch a wrong-argument regression -- e.g. resume.cjs
+// accidentally calling getMyClaims(sb, ctx.mySd) instead of getMyClaims(sb, sessionId). Filtering by
+// the actual query mirrors real Supabase semantics (a mismatched .eq() returns zero rows, not all
+// rows) and makes such a swap surface as "claims.length === 0", which changes this test's outcome.
 function eqResult({ data, error = null, singleData = null }) {
   return {
     then: (resolve, reject) => Promise.resolve({ data, error }).then(resolve, reject),
@@ -28,9 +34,19 @@ function makeSb({ sdClaims = [], qfClaims = [], sdStatusRow = null } = {}) {
   return {
     from: (table) => ({
       select: () => ({
-        eq: () => {
-          if (table === 'strategic_directives_v2') return eqResult({ data: sdClaims, singleData: sdStatusRow });
-          if (table === 'quick_fixes') return eqResult({ data: qfClaims });
+        eq: (column, value) => {
+          if (table === 'strategic_directives_v2') {
+            if (column === 'claiming_session_id') {
+              return eqResult({ data: sdClaims.filter((r) => r.claiming_session_id === value), singleData: sdStatusRow });
+            }
+            return eqResult({ data: [], singleData: sdStatusRow });
+          }
+          if (table === 'quick_fixes') {
+            if (column === 'claiming_session_id') {
+              return eqResult({ data: qfClaims.filter((r) => r.claiming_session_id === value) });
+            }
+            return eqResult({ data: [] });
+          }
           return eqResult({ data: [] });
         },
       }),
@@ -42,7 +58,7 @@ describe('FR-1: resume.run() self-heals a claim_mirror_mismatch (behavioral, not
   it('clears the stale mirror and does NOT resume the foreign claim when ctx.mySd matches no authoritative claim', async () => {
     const selfHealStaleClaim = vi.fn(async () => true);
     const sb = makeSb({
-      sdClaims: [{ sd_key: 'SD-REAL-OWNED-001', status: 'active', current_phase: 'EXEC' }],
+      sdClaims: [{ sd_key: 'SD-REAL-OWNED-001', status: 'active', current_phase: 'EXEC', claiming_session_id: 'session-ME' }],
       qfClaims: [],
     });
     const ctx = {
@@ -78,7 +94,7 @@ describe('FR-1: resume.run() self-heals a claim_mirror_mismatch (behavioral, not
   it('does NOT self-heal when the mirror matches an authoritative claim (no false trigger)', async () => {
     const selfHealStaleClaim = vi.fn(async () => true);
     const sb = makeSb({
-      sdClaims: [{ sd_key: 'SD-REAL-OWNED-001', status: 'active', current_phase: 'EXEC' }],
+      sdClaims: [{ sd_key: 'SD-REAL-OWNED-001', status: 'active', current_phase: 'EXEC', claiming_session_id: 'session-ME' }],
       qfClaims: [],
     });
     const ctx = {
