@@ -135,7 +135,7 @@ BEGIN
   RAISE NOTICE 'POST_CONDITION_PASSED: % relations verified via per-relation before/after diff -- anon TRUNCATE revoked, every other privilege exactly unchanged', checked_count;
 END $$;
 
-DROP TABLE _sweep_baseline;
+DROP TABLE IF EXISTS _sweep_baseline;
 
 COMMIT;
 `;

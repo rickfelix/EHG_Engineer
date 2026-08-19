@@ -81,8 +81,8 @@ function extractUpFileSections(sql) {
 
   const doStart = revokeVsPostCondition[1].indexOf('DO $$');
   if (doStart === -1) throw new Error('PARSE_FAILED: no "DO $$" found after the post-condition comment');
-  const afterDo = revokeVsPostCondition[1].slice(doStart).split('\n\nDROP TABLE _sweep_baseline;\n');
-  if (afterDo.length !== 2) throw new Error(`PARSE_FAILED: expected exactly one "DROP TABLE _sweep_baseline;" delimiter, found ${afterDo.length - 1}`);
+  const afterDo = revokeVsPostCondition[1].slice(doStart).split('\n\nDROP TABLE IF EXISTS _sweep_baseline;\n');
+  if (afterDo.length !== 2) throw new Error(`PARSE_FAILED: expected exactly one "DROP TABLE IF EXISTS _sweep_baseline;" delimiter, found ${afterDo.length - 1}`);
   const postConditionBlock = afterDo[0]; // DO $$ ... END $$;
 
   return { baselineCapture, revokeStatements, postConditionBlock };
@@ -100,8 +100,9 @@ async function t1_dryRunRealFile(client, q, artifact) {
   } catch (err) {
     record('T1: real staged UP file applies cleanly', false, err.message);
   } finally {
-    // ROLLBACK TO SAVEPOINT alone (no separate DROP TABLE first) -- if an earlier statement in this
-    // block errored, the transaction is aborted and NO normal statement (including DROP TABLE) can
+    // ROLLBACK TO SAVEPOINT alone (no separate baseline-table cleanup statement first) -- if an
+    // earlier statement in this block errored, the transaction is aborted and NO normal statement
+    // (including a table-cleanup statement) can
     // run until a ROLLBACK recovers it; ROLLBACK TO SAVEPOINT also undoes the CREATE TEMP TABLE
     // itself, so an explicit DROP is both redundant and, ordered first, the actual bug.
     await q('ROLLBACK TO SAVEPOINT sp_t1');
@@ -125,8 +126,9 @@ async function t2_mutationTestPostCondition(client, q, artifact) {
     try { await q(postConditionBlock); } catch { raised = true; }
     record('T2a: real post-condition RAISEs when one relation is left un-revoked', raised);
   } finally {
-    // ROLLBACK TO SAVEPOINT alone (no separate DROP TABLE first) -- if an earlier statement in this
-    // block errored, the transaction is aborted and NO normal statement (including DROP TABLE) can
+    // ROLLBACK TO SAVEPOINT alone (no separate baseline-table cleanup statement first) -- if an
+    // earlier statement in this block errored, the transaction is aborted and NO normal statement
+    // (including a table-cleanup statement) can
     // run until a ROLLBACK recovers it; ROLLBACK TO SAVEPOINT also undoes the CREATE TEMP TABLE
     // itself, so an explicit DROP is both redundant and, ordered first, the actual bug.
     await q('ROLLBACK TO SAVEPOINT sp_t2a');
@@ -145,8 +147,9 @@ async function t2_mutationTestPostCondition(client, q, artifact) {
     try { await q(mutatedBaseline); } catch (err) { code = err.code; }
     record('T2b: baseline capture raises 42P01 for a bogus relation name in the regclass array', code === '42P01', `code=${code}`);
   } finally {
-    // ROLLBACK TO SAVEPOINT alone (no separate DROP TABLE first) -- if an earlier statement in this
-    // block errored, the transaction is aborted and NO normal statement (including DROP TABLE) can
+    // ROLLBACK TO SAVEPOINT alone (no separate baseline-table cleanup statement first) -- if an
+    // earlier statement in this block errored, the transaction is aborted and NO normal statement
+    // (including a table-cleanup statement) can
     // run until a ROLLBACK recovers it; ROLLBACK TO SAVEPOINT also undoes the CREATE TEMP TABLE
     // itself, so an explicit DROP is both redundant and, ordered first, the actual bug.
     await q('ROLLBACK TO SAVEPOINT sp_t2b');
@@ -162,8 +165,9 @@ async function t2_mutationTestPostCondition(client, q, artifact) {
     try { await q(postConditionBlock); } catch { raised = true; }
     record('T2c: real post-condition RAISEs when anon loses SELECT (over-broad revoke) on one relation', raised);
   } finally {
-    // ROLLBACK TO SAVEPOINT alone (no separate DROP TABLE first) -- if an earlier statement in this
-    // block errored, the transaction is aborted and NO normal statement (including DROP TABLE) can
+    // ROLLBACK TO SAVEPOINT alone (no separate baseline-table cleanup statement first) -- if an
+    // earlier statement in this block errored, the transaction is aborted and NO normal statement
+    // (including a table-cleanup statement) can
     // run until a ROLLBACK recovers it; ROLLBACK TO SAVEPOINT also undoes the CREATE TEMP TABLE
     // itself, so an explicit DROP is both redundant and, ordered first, the actual bug.
     await q('ROLLBACK TO SAVEPOINT sp_t2c');
@@ -181,8 +185,9 @@ async function t2_mutationTestPostCondition(client, q, artifact) {
     try { await q(postConditionBlock); } catch { raised = true; }
     record('T2d: real post-condition RAISEs when anon loses MAINTAIN (a non-SELECT untouched privilege)', raised);
   } finally {
-    // ROLLBACK TO SAVEPOINT alone (no separate DROP TABLE first) -- if an earlier statement in this
-    // block errored, the transaction is aborted and NO normal statement (including DROP TABLE) can
+    // ROLLBACK TO SAVEPOINT alone (no separate baseline-table cleanup statement first) -- if an
+    // earlier statement in this block errored, the transaction is aborted and NO normal statement
+    // (including a table-cleanup statement) can
     // run until a ROLLBACK recovers it; ROLLBACK TO SAVEPOINT also undoes the CREATE TEMP TABLE
     // itself, so an explicit DROP is both redundant and, ordered first, the actual bug.
     await q('ROLLBACK TO SAVEPOINT sp_t2d');
@@ -202,8 +207,9 @@ async function t2_mutationTestPostCondition(client, q, artifact) {
     try { await q(postConditionBlock); } catch (err) { mismatchDetected = /COUNT_MISMATCH/.test(err.message); }
     record('T2e: real post-condition raises POST_CONDITION_COUNT_MISMATCH when the baseline row count differs from the expected literal', mismatchDetected);
   } finally {
-    // ROLLBACK TO SAVEPOINT alone (no separate DROP TABLE first) -- if an earlier statement in this
-    // block errored, the transaction is aborted and NO normal statement (including DROP TABLE) can
+    // ROLLBACK TO SAVEPOINT alone (no separate baseline-table cleanup statement first) -- if an
+    // earlier statement in this block errored, the transaction is aborted and NO normal statement
+    // (including a table-cleanup statement) can
     // run until a ROLLBACK recovers it; ROLLBACK TO SAVEPOINT also undoes the CREATE TEMP TABLE
     // itself, so an explicit DROP is both redundant and, ordered first, the actual bug.
     await q('ROLLBACK TO SAVEPOINT sp_t2e');
@@ -224,7 +230,7 @@ function partitionStatements(sql) {
 }
 
 const REVOKE_STATEMENT = /^REVOKE TRUNCATE ON [a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]* FROM anon$/;
-const SCAFFOLD_ALLOWLIST = new Set(['BEGIN', "SET LOCAL lock_timeout = '5s'", 'DO_BLOCK', 'COMMIT', 'DROP TABLE _sweep_baseline']);
+const SCAFFOLD_ALLOWLIST = new Set(['BEGIN', "SET LOCAL lock_timeout = '5s'", 'DO_BLOCK', 'COMMIT', 'DROP TABLE IF EXISTS _sweep_baseline']);
 function isAllowedNonPrivilegeStatement(stmt) {
   return SCAFFOLD_ALLOWLIST.has(stmt) || /^CREATE TEMP TABLE _sweep_baseline\b/.test(stmt);
 }
@@ -242,7 +248,8 @@ async function t5_fileLint(artifact) {
   record('T5b: the file\'s relation set equals the enumeration artifact, byte-for-byte (sorted)', identical, identical ? `${fileRelations.length} relations` : `file=${fileRelations.length} artifact=${artifactRelations.length}`);
 
   // T5c (SECURITY EXEC-phase re-review, "SEC-R5"): T5a/T5b self-select to lines that ALREADY start
-  // with "REVOKE TRUNCATE ON" -- an appended GRANT, an out-of-artifact REVOKE, or a DROP TABLE
+  // with "REVOKE TRUNCATE ON" -- an appended GRANT, an out-of-artifact REVOKE, or an unexpected
+  // table-level DDL statement
   // anywhere else in the file is invisible to both, since neither ever looks at what else is present.
   // Partition EVERY statement in the file; each must be either a conforming REVOKE TRUNCATE or a
   // member of the file's own fixed scaffold -- nothing else is permitted to exist.
