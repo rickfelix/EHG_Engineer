@@ -124,6 +124,22 @@ in its own venture-branch handling was found along the way and signaled to the
 coordinator (evidence id `725bf69b`) rather than fixed inline. Still
 deferred-with-owner; not resolved by this note.
 
+**Resolved (SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-B, 2026-08-18, PR #7259):** the
+narrower, adjacent gap this finding pointed at — `leo-create-sd.js`'s QF-escalation
+path never passing an explicit `target_application` to `createSD()` even when the
+originating quick-fix's own `target_application` resolves to a venture repo — is fixed.
+`lib/sd-creation/source-adapters/qf.js`'s `resolveExplicitTargetApplication()` now
+spreads an explicit `target_application` at creation time for venture-targeted QFs, and
+the LEAD-TO-PLAN `target-application.js` gate re-derives from
+`metadata.qf_target_application` (backfill path for SDs escalated before this fix) as
+its first check, before any scope/title prose-vocabulary inference. Both call sites
+share one predicate, `isQfFallbackEligible()` in `lib/repo-paths.js`, extracted from
+`resolveGateRepoContext`'s pre-existing fallback condition rather than re-derived —
+closing the exact "two independent representations of the same predicate" gap the
+design review (testing-agent evidence `c636ba21`/`ce10a1bd`) flagged. `computeReposForSD`
+itself remains untouched and deferred, per the golden-master-regression precondition
+above — this resolution is scoped to the QF-escalation writer/gate pair only.
+
 ### Disclosed but not fixed — identical defect class to this SD's FR-2/FR-3
 
 | Site | Notes |

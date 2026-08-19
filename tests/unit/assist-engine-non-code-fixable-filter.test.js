@@ -20,7 +20,7 @@ describe('FR-1 AC5: direct CommonJS require() of the new governance module', () 
   it('exposes NON_CODE_FIXABLE_CATEGORIES and filterIssuesExcludingNonCodeFixable via require(), not only via the assist-engine.js re-export', () => {
     const direct = require('../../lib/governance/non-code-fixable-categories.cjs');
     expect(direct.NON_CODE_FIXABLE_CATEGORIES).toBeInstanceOf(Set);
-    expect(direct.NON_CODE_FIXABLE_CATEGORIES.size).toBe(11);
+    expect(direct.NON_CODE_FIXABLE_CATEGORIES.size).toBe(14);
     expect(typeof direct.filterIssuesExcludingNonCodeFixable).toBe('function');
     // Same module.exports shape as the precedent (module.exports = { CONSTANT, function }).
     expect(Object.keys(direct).sort()).toEqual(['NON_CODE_FIXABLE_CATEGORIES', 'filterIssuesExcludingNonCodeFixable'].sort());
@@ -70,7 +70,7 @@ function row({ id, type = 'issue', category = null, quick_fix_id = undefined }) 
   };
 }
 
-const ALL_ELEVEN = [
+const ALL_CATEGORIES = [
   'invariant_gauge_finding',
   'comms_quality',
   'verification_ledger',
@@ -82,16 +82,20 @@ const ALL_ELEVEN = [
   'feedback_sla_breach',
   'relay_drop',
   'sms_relay',
+  // QF-20260818-390: category taxonomy drift additions
+  'chairman_decision_capture',
+  'solomon_adherence_drift',
+  'g2_apply_evidence',
 ];
 
 // ── T1-T3, T5-T7: pure-function tests on filterIssuesExcludingNonCodeFixable ──
 
 describe('T1: per-category mutation-resistant exclusion', () => {
-  it('excludes one issue-type row per each of the 11 categories', () => {
-    const enriched = ALL_ELEVEN.map((category, i) => row({ id: `n${i}`, category }));
+  it('excludes one issue-type row per each of the 14 categories', () => {
+    const enriched = ALL_CATEGORIES.map((category, i) => row({ id: `n${i}`, category }));
     const { issues, skippedNonCodeFixable } = filterIssuesExcludingNonCodeFixable(enriched);
     expect(issues).toEqual([]);
-    expect(skippedNonCodeFixable).toBe(11);
+    expect(skippedNonCodeFixable).toBe(14);
   });
 });
 
@@ -105,15 +109,15 @@ describe('T2: control pass-through for non-excluded categories', () => {
 });
 
 describe('T3: set-size/contents pin', () => {
-  it('NON_CODE_FIXABLE_CATEGORIES has exactly the 11 expected members', () => {
-    expect(NON_CODE_FIXABLE_CATEGORIES.size).toBe(11);
-    for (const c of ALL_ELEVEN) expect(NON_CODE_FIXABLE_CATEGORIES.has(c)).toBe(true);
+  it('NON_CODE_FIXABLE_CATEGORIES has exactly the 14 expected members', () => {
+    expect(NON_CODE_FIXABLE_CATEGORIES.size).toBe(14);
+    for (const c of ALL_CATEGORIES) expect(NON_CODE_FIXABLE_CATEGORIES.has(c)).toBe(true);
   });
 });
 
 describe('T5: disjointness invariant across exclusion sets', () => {
   it('no category appears in more than one of NON_CODE_FIXABLE_CATEGORIES, NEEDS_DECISION_CATEGORY, TERMINAL_CATEGORIES', () => {
-    for (const c of ALL_ELEVEN) {
+    for (const c of ALL_CATEGORIES) {
       expect(c).not.toBe(NEEDS_DECISION_CATEGORY);
       expect(TERMINAL_CATEGORIES.includes(c)).toBe(false);
     }
@@ -194,6 +198,24 @@ describe('T4/T8: real chained pipeline (loadInboxItems)', () => {
     expect(ids).toContain('ci-1');
     expect(ids).not.toContain('cf-1');
     expect(ids).not.toContain('gauge-1');
+    expect(ids).toEqual(['ci-1']);
+  });
+
+  it('T9 (QF-20260818-390 regression): excludes chairman_decision_capture, solomon_adherence_drift, and g2_apply_evidence through the real pipeline; ci_failure survives', async () => {
+    currentFixture = [
+      row({ id: 'cdc-1', category: 'chairman_decision_capture' }),
+      row({ id: 'sad-1', category: 'solomon_adherence_drift' }),
+      row({ id: 'g2-1', category: 'g2_apply_evidence' }),
+      row({ id: 'ci-1', category: 'ci_failure' }),
+    ];
+    const engine = new AssistEngine({ dryRun: true });
+    const { issues } = await engine.loadInboxItems();
+    const ids = issues.map((i) => i.id);
+
+    expect(ids).toContain('ci-1');
+    expect(ids).not.toContain('cdc-1');
+    expect(ids).not.toContain('sad-1');
+    expect(ids).not.toContain('g2-1');
     expect(ids).toEqual(['ci-1']);
   });
 
