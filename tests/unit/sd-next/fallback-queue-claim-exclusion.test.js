@@ -10,30 +10,43 @@
 import { describe, it, expect, vi } from 'vitest';
 import { showFallbackQueue } from '../../../scripts/modules/sd-next/display/fallback-queue.js';
 
-// Table-aware chainable Supabase stub. strategic_directives_v2's real chain is
-// .select().eq().in().in().order().limit() -- two non-terminal .in() calls before the
-// terminal .limit(). sd_key_result_alignment's chain is .select().in() -- .in() IS the
-// terminal there. A single shared chain object (as the existing no-SD-path test uses) can't
-// express both, so this mock switches behavior by table name.
+// Table-aware, COLUMN-PROJECTING chainable Supabase stub. strategic_directives_v2's real chain
+// is .select().eq().in().in().order().limit() -- two non-terminal .in() calls before the
+// terminal .limit(). sd_key_result_alignment's chain is .select().in() -- .in() IS the terminal
+// there. A single shared chain object (as the existing no-SD-path test uses) can't express both,
+// so this mock switches behavior by table name.
+//
+// Projection matters (mutation-testing finding): a mock that ignores its select() argument and
+// always returns hand-built rows can't detect a regression that DROPS a column from the real
+// select() string -- the test fixtures already have claiming_session_id baked in regardless of
+// what the source code actually asked for. Recording the requested columns and stripping the
+// fixture rows down to exactly those columns makes the test fail if the real select() ever loses
+// claiming_session_id, the way foreign-session-liveness-columns.test.js already does for FR-5.
 function makeSupabase({ sds = [] } = {}) {
-  const resultFor = (table) => {
-    if (table === 'strategic_directives_v2') return { data: sds, error: null };
-    return { data: [], error: null }; // sd_key_result_alignment, chairman_dashboard_config
-  };
   return {
     from: (table) => {
+      let requestedCols = null;
+      const project = (row) => {
+        if (!requestedCols) return row;
+        const out = {};
+        for (const col of requestedCols) if (col in row) out[col] = row[col];
+        return out;
+      };
       const chain = {
-        select: () => chain,
+        select: (colsStr) => {
+          if (typeof colsStr === 'string') requestedCols = colsStr.split(',').map((s) => s.trim());
+          return chain;
+        },
         eq: () => chain,
         order: () => chain,
         single: async () => ({ data: null, error: null }),
       };
       if (table === 'strategic_directives_v2') {
         chain.in = () => chain; // non-terminal: two calls precede .order().limit()
-        chain.limit = async () => resultFor(table);
+        chain.limit = async () => ({ data: sds.map(project), error: null });
       } else {
-        chain.in = async () => resultFor(table); // terminal here
-        chain.limit = async () => resultFor(table);
+        chain.in = async () => ({ data: [], error: null }); // sd_key_result_alignment, chairman_dashboard_config
+        chain.limit = async () => ({ data: [], error: null });
       }
       return chain;
     },

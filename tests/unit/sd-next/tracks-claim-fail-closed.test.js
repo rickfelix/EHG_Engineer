@@ -6,6 +6,11 @@
 // whether the row is genuinely claimed by someone else. An indeterminate caller identity was
 // treated as "available" (fail OPEN) instead of "can't confirm it's mine, so don't offer it"
 // (fail CLOSED). This test pins the corrected direction.
+//
+// sd_keys below deliberately avoid the substring "CLAIMED" (mutation-testing caught an earlier
+// revision using SD-CLAIMED-001/-002: displaySDItem always echoes sd_key into its output line,
+// so /CLAIMED/ matched the fixture NAME even with the CLAIMED badge reverted to fail-open --
+// the two positive assertions were unfalsifiable).
 
 import { describe, it, expect, vi } from 'vitest';
 import { displayTrackSection } from '../../../scripts/modules/sd-next/display/tracks.js';
@@ -36,8 +41,8 @@ async function runTrack(item, sessionContext) {
 
 describe('FR-4: tracks.js claim classification fails CLOSED on an indeterminate caller', () => {
   it('shows CLAIMED for a row held by another session when currentSession is null (fail closed)', async () => {
-    const item = baseItem({ sd_key: 'SD-CLAIMED-001' });
-    const claimedSDs = new Map([['SD-CLAIMED-001', 'session-OTHER']]);
+    const item = baseItem({ sd_key: 'SD-HELD-001' });
+    const claimedSDs = new Map([['SD-HELD-001', 'session-OTHER']]);
 
     const output = await runTrack(item, { claimedSDs, currentSession: null, activeSessions: [] });
 
@@ -54,8 +59,8 @@ describe('FR-4: tracks.js claim classification fails CLOSED on an indeterminate 
   });
 
   it('shows CLAIMED for a row held by another session when currentSession IS known (unchanged behavior)', async () => {
-    const item = baseItem({ sd_key: 'SD-CLAIMED-002' });
-    const claimedSDs = new Map([['SD-CLAIMED-002', 'session-OTHER']]);
+    const item = baseItem({ sd_key: 'SD-HELD-002' });
+    const claimedSDs = new Map([['SD-HELD-002', 'session-OTHER']]);
 
     const output = await runTrack(item, {
       claimedSDs,
