@@ -44,16 +44,26 @@ describe('TS-10: findings-sum structural guard (US-004)', () => {
 
 // Every non-pg_net query returns an empty, well-formed result — isolates the forced
 // failure to exactly the two `nspname = 'net'` queries pg_net-exposure.js issues.
+//
+// end() MUST actually invalidate query(). An inert `end: async () => {}` would make this
+// fixture blind to the very hazard TR-6/TS-7 exists to catch: with a no-op teardown, a
+// wrongly-OWNING wrapper (one that forwards end() to the shared client) closes nothing
+// observable, the later trigger-liveness query still answers, and the contract test passes
+// against a broken implementation. Verified by mutation: adding `end: () => client.end()`
+// to the sentinel's injected wrapper is caught here only because closing is observable.
 function benignExceptPgNet({ pgNetError } = {}) {
+  let closed = false;
   return {
     query: async (sql) => {
+      if (closed) throw new Error('query() after end(): the shared client was already closed');
       if (String(sql).includes("nspname = 'net'")) {
         if (pgNetError) throw pgNetError;
       }
       if (String(sql).includes('pg_event_trigger')) return { rows: [{ evtenabled: 'O' }] };
       return { rows: [] };
     },
-    end: async () => {},
+    end: async () => { closed = true; },
+    isClosed: () => closed,
   };
 }
 
@@ -82,7 +92,10 @@ describe('TS-9: a forced pg_net probe failure renders distinguishably at the sen
   it('TR-6: the sentinel-owned client is not ended by the pg_net probe — the trigger-liveness query after it still succeeds', async () => {
     let ended = false;
     const client = benignExceptPgNet();
-    const wrapped = { ...client, end: async () => { ended = true; } };
+    // Preserve the fixture's real closure semantics (spreading would drop the closure's
+    // binding if end() were replaced outright) — record the call AND close for real, so a
+    // probe that wrongly ends this client makes the trigger-liveness query below throw.
+    const wrapped = { ...client, end: async () => { ended = true; await client.end(); } };
     const result = await runSentinel({ connect: async () => wrapped });
     // The trigger-liveness query (after the pg_net check in source order) resolved --
     // if the probe had wrongly closed the shared client, this call would have thrown
