@@ -140,11 +140,11 @@ design review (testing-agent evidence `c636ba21`/`ce10a1bd`) flagged. `computeRe
 itself remains untouched and deferred, per the golden-master-regression precondition
 above — this resolution is scoped to the QF-escalation writer/gate pair only.
 
-### Disclosed but not fixed — identical defect class to this SD's FR-2/FR-3
+### FIXED — identical defect class to this SD's FR-2/FR-3, closed by SD-LEARN-FIX-ADDRESS-PAT-LES-002 (2026-08-19)
 
 | Site | Notes |
 |---|---|
-| `resolveCanonicalAppName` (`lib/repo-paths.js:250-277`; consumer: `scripts/generate-retrospective.js:170`) | Has the **identical** tombstone-fallback defect class this SD fixes in `resolveRepoPathDbFirst` (FR-2/FR-3): its query at lines 261-265 filters `.eq('status','active').is('deleted_at', null)` server-side, so a tombstoned app is indistinguishable from a never-registered one — both fall through to `loadValidatedRegistry()` (line 276), a static file with no `deleted_at` concept, which can return a stale name for an app that was since retired. Explicitly **NOT fixed by this narrowly-scoped SD** — disclosed here per FR-7 rather than silently omitted. Owner: fleet-worker follow-up SD/QF, applying the same additive-detailed-resolver pattern this SD used for `resolveRepoPathDbFirst` (FR-1/FR-2/FR-3). |
+| `resolveCanonicalAppName` (`lib/repo-paths.js`; consumer: `scripts/generate-retrospective.js:170`) | Previously had the **identical** tombstone-fallback defect class this SD fixed in `resolveRepoPathDbFirst` (FR-2/FR-3): its query filtered `.eq('status','active').is('deleted_at', null)` server-side, so a tombstoned app was indistinguishable from a never-registered one — both fell through to `loadValidatedRegistry()`, a static file with no `deleted_at` concept, which could return a stale name for an app that was since retired. **Fixed by SD-LEARN-FIX-ADDRESS-PAT-LES-002**, applying the same client-side status/deleted_at evaluation pattern in place (no additive-sibling-wrapper needed — this function has only 1 real consumer, versus `resolveRepoPathDbFirst`'s 8, so the wrapper pattern that preserved those 8 contracts was unnecessary here). Tests: `tests/unit/repo-paths-canonical-app-name.test.js`. |
 
 ### Disclosed but not fixed — a consequence of this SD's own fix, at a third call site
 
