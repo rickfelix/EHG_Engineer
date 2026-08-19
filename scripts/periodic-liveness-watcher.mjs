@@ -32,6 +32,7 @@ const { pidVenueCapability } = require('../lib/fleet/pid-venue.cjs');
 import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
 import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
+import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
 import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
 import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
@@ -180,6 +181,12 @@ async function resolveSchedulerRound(row) {
 }
 
 async function evaluateRow(row, ctx = {}) {
+  // TR-6 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): injectable clock seam, same style as the
+  // existing pidVenue seam (see the class-split doc comment above) -- required so gap/lag-relative
+  // test scenarios (TS-1, TS-2, TS-4, TS-9) can deterministically control whether `now` falls
+  // inside/outside a declared cron gap, rather than depending on the wall-clock hour a test
+  // happens to run in.
+  const { now = Date.now() } = ctx;
   if (!row.currently_expected_active) {
     return { process_key: row.process_key, state: STATE.INTENTIONALLY_DOWN };
   }
@@ -273,7 +280,11 @@ async function evaluateRow(row, ctx = {}) {
     // positive window.
     const thresholdMs = overdueThresholdMs(row);
     if (Number.isFinite(armedMs) && Number.isFinite(thresholdMs) && thresholdMs > 0) {
-      const armedAgeMs = Date.now() - armedMs;
+      // FR-1: gap-adjusted, not raw, elapsed time -- a declared cron gap between arming and the
+      // process's first-ever fire must not count against "armed but never produced" any more than
+      // it counts against ordinary staleness below. Falls back to raw elapsed time when the row
+      // carries no workflow_cron (every row that predates this fix).
+      const armedAgeMs = gapAdjustedAgeMs(row.liveness_source_ref?.workflow_cron, armedMs, now);
       if (armedAgeMs > thresholdMs) {
         return {
           process_key: row.process_key,
@@ -287,9 +298,35 @@ async function evaluateRow(row, ctx = {}) {
     return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'no_last_fired_data_available' };
   }
 
-  const ageMs = Date.now() - new Date(lastFiredAt).getTime();
+  // FR-1/FR-2: gap-adjusted elapsed time. A row carrying liveness_source_ref.workflow_cron gets
+  // its declared cron gaps subtracted (never resetting the underlying staleness signal -- see
+  // gapAdjustedAgeMs's own doc comment / TS-9); a row without one falls back to plain elapsed
+  // time unchanged, so FR-2's stochastic-lag tolerance stays entirely in grace_multiplier, not a
+  // second code path.
+  const ageMs = gapAdjustedAgeMs(row.liveness_source_ref?.workflow_cron, new Date(lastFiredAt).getTime(), now);
   const state = ageMs > overdueThresholdMs(row) ? STATE.OVERDUE : STATE.OK;
   return { process_key: row.process_key, state, last_fired_at: lastFiredAt, age_ms: ageMs, reason: signalNote };
+}
+
+/**
+ * FR-3 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): derive a stable failure-signature string from
+ * an evaluation result, for the ladder's per-process relapse-vs-new-failure discriminator. Falls
+ * back to a generic label for the plain flat-threshold-exceeded case (evaluateRow's main OVERDUE
+ * path leaves `reason` null for a self_stamped row -- signalNote is only ever set inside the
+ * claude_sessions_heartbeat branch), so every OVERDUE row gets SOME signature, never undefined.
+ *
+ * Adversarial-review finding (PR #7300): claude_sessions_heartbeat's `reason` (signalNote, set at
+ * line ~240) embeds live per-tick seat-census detail -- session IDs, alive/dead counts -- that
+ * naturally churns tick-to-tick even for the SAME ongoing outage. Using it verbatim as a
+ * signature would defeat FR-3's same-pattern dismissal match for exactly the highest-profile
+ * role_session processes (adam/solomon/coordinator), re-escalating a just-dismissed recurring
+ * failure because its seat census happened to differ this tick. Use a stable label for that
+ * source instead; every other source's `reason` is already a stable enumerated string.
+ */
+function deriveFailureSignature(row, evaluation) {
+  if (row.liveness_source === 'claude_sessions_heartbeat') return 'stale_heartbeat';
+  if (evaluation.reason) return evaluation.reason;
+  return evaluation.state === STATE.OVERDUE ? 'threshold_exceeded' : 'unknown';
 }
 
 // SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-B (FR-1/FR-2): owner-first routing, resolved via
@@ -502,7 +539,7 @@ async function main({ includeFixtures = false } = {}) {
       try {
         const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
         const climb = await climbLadder({ supabase, row, ownerTarget });
-        if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name });
+        if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name, signature: deriveFailureSignature(row, evaluation) });
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
@@ -552,6 +589,12 @@ async function main({ includeFixtures = false } = {}) {
     owner: 'coordinator-fleet',
     process_type: 'standalone_cron',
     expected_interval_seconds: 900,
+    // FR-2: calibrated from measured live GHA delivery lag for this exact cron (*/15 * * * *) --
+    // observed gaps up to 83min (~5.5x the 900s base interval) in a single ~13.5h sample window
+    // (LEAD-phase discovery). grace_multiplier=7 gives a 105min threshold, comfortably above the
+    // measured ceiling with headroom, replacing the column default (3, giving only 45min -- the
+    // exact miscalibration this SD fixes).
+    grace_multiplier: 7,
     liveness_source: 'self_stamped',
     session_bound: false,
     currently_expected_active: true,

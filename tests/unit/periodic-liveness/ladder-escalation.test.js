@@ -152,15 +152,16 @@ describe('emitLadderDigest', () => {
 
   it('creates ONE digest row for multiple candidates in the same tick', async () => {
     const findExisting = vi.fn().mockResolvedValue(null);
-    const candidates = [{ process_key: 'p1', display_name: 'P1' }, { process_key: 'p2', display_name: 'P2' }];
-    const result = await emitLadderDigest({}, candidates, { findExisting, recordPending, escalate });
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map());
+    const candidates = [{ process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded' }, { process_key: 'p2', display_name: 'P2', signature: 'threshold_exceeded' }];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
     expect(recordPending).toHaveBeenCalledTimes(1);
     expect(recordPending).toHaveBeenCalledWith({}, expect.objectContaining({
       title: 'Periodic-liveness ladder: 2 processes escalated',
       blocking: true,
-      context: { process_keys: ['p1', 'p2'] },
+      context: { process_keys: ['p1', 'p2'], process_signatures: { p1: 'threshold_exceeded', p2: 'threshold_exceeded' } },
     }));
-    expect(result).toEqual({ emitted: true, decisionId: 'decision-1', refreshed: false, escalated: true });
+    expect(result).toEqual({ emitted: true, decisionId: 'decision-1', refreshed: false, escalated: true, suppressedKeys: [] });
   });
 
   it('refreshes an existing pending digest in place instead of creating a new row', async () => {
@@ -168,12 +169,13 @@ describe('emitLadderDigest', () => {
     const update = vi.fn(() => ({ eq: updateEq }));
     const supabase = { from: () => ({ update }) };
     const findExisting = vi.fn().mockResolvedValue({ id: 'decision-existing', brief_data: { foo: 'bar' } });
-    const candidates = [{ process_key: 'p1', display_name: 'P1' }];
-    const result = await emitLadderDigest(supabase, candidates, { findExisting, recordPending, escalate });
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map());
+    const candidates = [{ process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded' }];
+    const result = await emitLadderDigest(supabase, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
     expect(recordPending).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Periodic-liveness ladder: P1' }));
     expect(escalate).toHaveBeenCalledWith(supabase, 'decision-existing');
-    expect(result).toEqual({ emitted: true, decisionId: 'decision-existing', refreshed: true, escalated: true });
+    expect(result).toEqual({ emitted: true, decisionId: 'decision-existing', refreshed: true, escalated: true, suppressedKeys: [] });
   });
 
   it('throws if the caller does not inject recordPending/escalate deps', async () => {
@@ -184,23 +186,56 @@ describe('emitLadderDigest', () => {
   // QF-20260710-818 fix. Without this, dismissing the digest (moving it off 'pending') gets
   // immediately re-escalated on the very next tick while the underlying processes are still
   // overdue, defeating the dismissal.
-  it('suppresses re-escalation when a recently-dismissed digest overlaps the current candidates', async () => {
+  //
+  // FR-3 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001) replaced the single-overlap digest lookup
+  // with a per-process, per-signature Map (findDismissedSignatures) -- the processKeys.some()
+  // check this replaced suppressed EVERY process sharing a digest on ANY overlap, not just the
+  // matching one. See the cross-process non-suppression test below for that regression coverage.
+  it('suppresses re-escalation when the SAME process + SAME signature was recently dismissed', async () => {
     const findExisting = vi.fn().mockResolvedValue(null);
-    const findDismissed = vi.fn().mockResolvedValue({ id: 'decision-dismissed', updated_at: new Date().toISOString() });
-    const candidates = [{ process_key: 'p1', display_name: 'P1' }];
-    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissed, recordPending, escalate });
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map([['p1', new Set(['threshold_exceeded'])]]));
+    const candidates = [{ process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded' }];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
     expect(recordPending).not.toHaveBeenCalled();
-    expect(result).toEqual({ emitted: true, decisionId: 'decision-dismissed', refreshed: false, escalated: false, suppressed: true });
+    expect(result).toEqual({ emitted: true, refreshed: false, escalated: false, suppressed: true, suppressedKeys: ['p1'] });
   });
 
-  it('does NOT suppress and creates a new digest when no dismissed digest overlaps', async () => {
+  it('does NOT suppress and creates a new digest when no dismissed signature matches', async () => {
     const findExisting = vi.fn().mockResolvedValue(null);
-    const findDismissed = vi.fn().mockResolvedValue(null);
-    const candidates = [{ process_key: 'p1', display_name: 'P1' }];
-    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissed, recordPending, escalate });
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map());
+    const candidates = [{ process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded' }];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
     expect(recordPending).toHaveBeenCalledTimes(1);
     expect(result.emitted).toBe(true);
     expect(result.suppressed).toBeUndefined();
+  });
+
+  // FR-3 core regression coverage: the bug this SD fixes. Two processes share one digest; only
+  // one of them (p1) was dismissed. The pre-fix processKeys.some() check would have suppressed
+  // BOTH on p1's overlap alone -- this asserts p2 still escalates on its own.
+  it('suppresses only the genuinely-dismissed process, not every process sharing a digest (cross-process non-suppression)', async () => {
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map([['p1', new Set(['threshold_exceeded'])]]));
+    const candidates = [
+      { process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded' },
+      { process_key: 'p2', display_name: 'P2', signature: 'threshold_exceeded' },
+    ];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
+    expect(recordPending).toHaveBeenCalledWith({}, expect.objectContaining({
+      context: { process_keys: ['p2'], process_signatures: { p2: 'threshold_exceeded' } },
+    }));
+    expect(result.suppressedKeys).toEqual(['p1']);
+  });
+
+  // A different failure signature on the SAME process must still escalate, even though the
+  // process_key itself was previously dismissed for a DIFFERENT signature.
+  it('still escalates when the process_key matches a dismissal but the signature differs', async () => {
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map([['p1', new Set(['armed_never_produced'])]]));
+    const candidates = [{ process_key: 'p1', display_name: 'P1', signature: 'latest_scheduled_run_failed' }];
+    const result = await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
+    expect(recordPending).toHaveBeenCalledTimes(1);
+    expect(result.suppressedKeys).toEqual([]);
   });
 
   it('fails soft (does not throw) when the underlying chairman_decisions calls error out', async () => {
