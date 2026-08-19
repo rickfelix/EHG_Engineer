@@ -2160,29 +2160,30 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const JUDGED_DECISIONS = ['accepted', 'rejected', 'partial', 'deferred'];
   const decidedAll = all.filter((r) => JUDGED_DECISIONS.includes(r.decision));
   const batchExcludedCount = decidedAll.filter((r) => r.batch_stamped === true).length;
-  const decided = decidedAll.filter((r) => r.batch_stamped !== true);
+  // SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (FR-3, TS-9): a newly-accepted correlation-leg row can
+  // legitimately have decision resolved before outcome (outcome resolution can lag while waiting
+  // for a QF/PR to reach a terminal state). Without this exclusion such a row would sit as
+  // accepted+outcome=unknown, mechanically failing the numerator as a false "miss" with zero
+  // real-world change. Excluded from the denominator entirely -- not counted as a miss, not yet
+  // judged. not_applicable rows (TR-1) need NO special handling here: a rejected row already sits
+  // in the denominator via decision alone and already fails the numerator (decision!=='accepted'),
+  // so writing outcome='not_applicable' is accuracy-math-neutral by construction.
+  const decidedBatchOnly = decidedAll.filter((r) => r.batch_stamped !== true);
+  const unresolvedAcceptedCount = decidedBatchOnly.filter((r) => r.decision === 'accepted' && r.outcome === 'unknown').length;
+  // Accuracy denominator only — cost-per-accepted below intentionally uses decidedBatchOnly (an
+  // accepted row already incurred cost regardless of whether its outcome has resolved yet).
+  const decided = decidedBatchOnly.filter((r) => !(r.decision === 'accepted' && r.outcome === 'unknown'));
   const pending = all.filter((r) => !r.decision || r.decision === 'pending');
   const oldestPendingAgeMs = pending.length > 0
     ? Math.max(...pending.map((r) => nowMs - new Date(r.created_at).getTime()))
     : null;
 
-  if (decided.length === 0) {
-    return {
-      decidedCount: 0,
-      pendingCount: pending.length,
-      oldestPendingAgeMs,
-      acceptedShippedClean: 0,
-      accuracyPct: null,
-      acceptedCount: 0,
-      costPerAccepted: null,
-      batchExcludedCount,
-    };
-  }
-
-  const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
-  const accuracyPct = Math.round((acceptedShippedClean / decided.length) * 100);
-
-  const accepted = decided.filter((r) => r.decision === 'accepted');
+  // TESTING sub-agent (EXEC phase, F2): computed from decidedBatchOnly, BEFORE the decided.length
+  // early-return below — an accepted+outcome=unknown row (excluded from the accuracy-only `decided`
+  // set) already incurred real cost and must still be counted here even when it's the ONLY decided
+  // row (decided.length===0 must not silently report acceptedCount=0/costPerAccepted=null for a
+  // ledger that actually has accepted, cost-bearing rows).
+  const accepted = decidedBatchOnly.filter((r) => r.decision === 'accepted');
   // TR-4 (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, W3): the budget rollup counts ONLY rows whose
   // cost was actually captured from telemetry — a fail-soft cost_captured=false row (cost_tokens=null)
   // is excluded from BOTH the numerator and the denominator so a missing datum never silently distorts
@@ -2191,6 +2192,24 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const acceptedCaptured = accepted.filter((r) => r.cost_captured !== false && Number.isFinite(r.cost_tokens));
   const acceptedCostSum = acceptedCaptured.reduce((sum, r) => sum + r.cost_tokens, 0);
   const costPerAccepted = acceptedCaptured.length > 0 ? Math.round(acceptedCostSum / acceptedCaptured.length) : null;
+
+  if (decided.length === 0) {
+    return {
+      decidedCount: 0,
+      pendingCount: pending.length,
+      oldestPendingAgeMs,
+      acceptedShippedClean: 0,
+      accuracyPct: null,
+      acceptedCount: accepted.length,
+      costCapturedCount: acceptedCaptured.length,
+      costPerAccepted,
+      batchExcludedCount,
+      unresolvedAcceptedCount,
+    };
+  }
+
+  const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
+  const accuracyPct = Math.round((acceptedShippedClean / decided.length) * 100);
 
   return {
     decidedCount: decided.length,
@@ -2202,7 +2221,36 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
     costCapturedCount: acceptedCaptured.length,
     costPerAccepted,
     batchExcludedCount,
+    unresolvedAcceptedCount,
   };
+}
+
+// SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (FR-3): by-leg (SD-keyed vs correlation-keyed) accuracy
+// breakdown within each proposal_kind group — "duty cluster" does not exist in this domain
+// (corrected during LEAD phase); proposal_kind is the only real grouping column present. Shares
+// the SAME accuracy-denominator rules as computeSolomonLedgerRollup (batch_stamped exclusion +
+// TS-9's accepted+outcome=unknown exclusion) so the by-group numbers are never inconsistent with
+// the headline number they sum into.
+function computeSolomonLedgerByLegAndKind(rows) {
+  const groups = {};
+  for (const r of (rows || [])) {
+    const kind = r.proposal_kind || '(unset)';
+    const leg = r.outcome_sd_key ? 'sdLeg' : 'correlationLeg';
+    groups[kind] ||= { sdLeg: [], correlationLeg: [] };
+    groups[kind][leg].push(r);
+  }
+  const accuracyFor = (legRows) => {
+    const decidedAll = legRows.filter((r) => ['accepted', 'rejected', 'partial', 'deferred'].includes(r.decision));
+    const decided = decidedAll.filter((r) => r.batch_stamped !== true && !(r.decision === 'accepted' && r.outcome === 'unknown'));
+    if (decided.length === 0) return { decidedCount: 0, accuracyPct: null };
+    const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
+    return { decidedCount: decided.length, accuracyPct: Math.round((acceptedShippedClean / decided.length) * 100) };
+  };
+  const out = {};
+  for (const [kind, legs] of Object.entries(groups)) {
+    out[kind] = { sdLeg: accuracyFor(legs.sdLeg), correlationLeg: accuracyFor(legs.correlationLeg) };
+  }
+  return out;
 }
 
 async function printSolomonLedgerRollup() {
@@ -2216,7 +2264,7 @@ async function printSolomonLedgerRollup() {
     // claiming a 5000-row sample. Paginate up to the declared 5000-row sampling cap.
     rows = await fapPaginate(() => supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .select('decision, outcome, cost_tokens, cost_captured, batch_stamped, created_at')
+      .select('decision, outcome, cost_tokens, cost_captured, batch_stamped, created_at, proposal_kind, outcome_sd_key')
       .order('created_at', { ascending: false })
       .order('id', { ascending: true }), { maxRows: 5000 }); // most-recent 5000, stable boundaries
   } catch (e) {
@@ -2248,7 +2296,28 @@ async function printSolomonLedgerRollup() {
   if (rollup.batchExcludedCount > 0) {
     console.log('  (excluded ' + rollup.batchExcludedCount + ' batch-stamped/non-contemporaneous row(s) from accuracy)');
   }
-  console.log('  cost-per-accepted-proposal: ' + (rollup.costPerAccepted !== null ? rollup.costPerAccepted + ' tokens' : 'n/a (0 accepted)'));
+  // TESTING sub-agent (EXEC phase, F1): this exclusion (TS-9) is correct in intent but MUST stay
+  // visible — measured live, it moves accuracy from 8% to 96% because 1241 of 1353 would-be-decided
+  // rows are accepted+outcome=unknown. That is not "8% accurate" being hidden; it is the SD's own
+  // 92%-blind-spot problem showing up as scale the PLAN-phase design decision didn't have in view.
+  // Printing the count keeps the headline number from silently reading as "the whole population"
+  // when it is really "the sliver that has resolved so far" — never omit this line when nonzero.
+  if (rollup.unresolvedAcceptedCount > 0) {
+    console.log('  (' + rollup.unresolvedAcceptedCount + ' additional accepted row(s) have not resolved an outcome yet — excluded from accuracy above, not counted as a miss)');
+  }
+  console.log('  cost-per-accepted-proposal: ' + (rollup.costPerAccepted !== null ? rollup.costPerAccepted + ' tokens (' + rollup.acceptedCount + ' accepted)' : 'n/a (' + rollup.acceptedCount + ' accepted)'));
+
+  // FR-3: by-leg breakdown within proposal_kind — only prints kinds/legs that have decided rows,
+  // so a sparse ledger doesn't produce a wall of "0 decided" noise.
+  const byGroup = computeSolomonLedgerByLegAndKind(rows);
+  const printable = Object.entries(byGroup).filter(([, legs]) => legs.sdLeg.decidedCount > 0 || legs.correlationLeg.decidedCount > 0);
+  if (printable.length > 0) {
+    console.log('  by proposal_kind / leg:');
+    for (const [kind, legs] of printable) {
+      const fmt = (l) => l.decidedCount > 0 ? `${l.accuracyPct}% (${l.decidedCount} decided)` : 'no decided rows';
+      console.log(`    ${kind}: SD-keyed ${fmt(legs.sdLeg)} | correlation-keyed ${fmt(legs.correlationLeg)}`);
+    }
+  }
   console.log('');
 }
 
@@ -2826,7 +2895,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

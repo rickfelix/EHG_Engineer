@@ -44,6 +44,141 @@ async function fapPaginate(queryFactory, opts) {
 
 const CLOSER_OF_RECORD = 'solomon-ledger-reconcile.cjs';
 
+// SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (FR-1/TR-2): correlation-only rows (no outcome_sd_key --
+// a conversational Solomon proposal never tied to a downstream SD) that are decision='rejected'
+// had NO path to outcome resolution at all: mapSdStatusToOutcome only reads outcome_sd_key, so
+// these rows sat at outcome='unknown' forever even though "rejected, nothing built" is a fully
+// determined, honest state (TR-1's migration adds 'not_applicable' for exactly this).
+//
+// EXEC-PHASE FINDING: decision resolution and human-disposition surfacing (the two other pieces
+// this SD's original design assumed were missing) ALREADY EXIST and work correctly --
+// scripts/coordinator-ack-adam.cjs's --disposition path and scripts/solomon-ledger-pending-
+// resurface.cjs's digest ("Disposition individually by correlation_id"). No classifier is built;
+// an automatic classifier over real reply payloads would also be unsafe (dense multi-topic free
+// prose, not a structured signal -- a wrong auto-classification is worse than an honest pending).
+let _refShapeModule = null;
+async function refShapePaginate() {
+  _refShapeModule ||= await import('../lib/ledger/ref-shape.js');
+  return _refShapeModule;
+}
+
+// TESTING sub-agent (EXEC phase, F8): literal fallback for direct/unit-test invocation only
+// (selectNotApplicableOutcomes is a sync pure function; lib/ledger/ref-shape.js's SHAPE object
+// lives behind an async dynamic import, so a sync default can't source from it directly). The
+// REAL production path (resolveNotApplicableOutcomes below) always passes the live SHAPE-derived
+// list explicitly -- see there -- so a shape-name rename in ref-shape.js fails loudly in
+// production, not just silently in this literal fallback.
+const NOT_APPLICABLE_ELIGIBLE_SHAPES = Object.freeze(['empty', 'narrative-prose', 'commit-sha', 'qf-excluded-by-design']);
+
+/**
+ * Pure: given ledger rows and a classifyRef function, return the rows eligible for
+ * outcome='not_applicable' -- decision='rejected', no outcome_sd_key, and a ref shape with no
+ * traceable artifact. Exported for tests (classifyRef injected so tests stay dependency-free).
+ * `eligibleShapes` defaults to the literal fallback above; resolveNotApplicableOutcomes always
+ * passes the live SHAPE-derived list instead.
+ */
+function selectNotApplicableOutcomes(rows, classifyRef, eligibleShapes = NOT_APPLICABLE_ELIGIBLE_SHAPES) {
+  const out = [];
+  for (const r of (rows || [])) {
+    if (r.decision !== 'rejected') continue;
+    if (r.outcome_sd_key) continue; // has an SD key -- belongs to the existing SD-status path
+    const shape = classifyRef(r.outcome_ref);
+    if (!eligibleShapes.includes(shape)) continue; // ELIGIBLE/CASE_DRIFT -- resolvable, leave alone
+    out.push({ id: r.id, shape });
+  }
+  return out;
+}
+
+/**
+ * Resolve outcome='not_applicable' for correlation-only rejected rows with no traceable artifact.
+ * Fail-open per row (a write failure -- e.g. the TR-1 migration not yet applied -- is logged and
+ * skipped, never aborts the batch; this is the documented degrade-safe behavior). dryRun returns
+ * the matches without writing. Exported for tests.
+ */
+async function resolveNotApplicableOutcomes(supabase, rows, { dryRun = false, nowIso = new Date().toISOString() } = {}) {
+  const { classifyRef, SHAPE } = await refShapePaginate();
+  // Live SHAPE-derived list (not the literal fallback). A silent `undefined` entry (from a rename
+  // in ref-shape.js's SHAPE object) would otherwise just match nothing and quietly stop resolving
+  // any row -- assert explicitly so that renders as a loud, immediate throw instead.
+  const liveEligibleShapes = [SHAPE.EMPTY, SHAPE.NARRATIVE, SHAPE.COMMIT_SHA, SHAPE.EXCLUDED_QF];
+  if (liveEligibleShapes.some((s) => s === undefined)) {
+    throw new Error('resolveNotApplicableOutcomes: lib/ledger/ref-shape.js SHAPE object is missing an expected key — check for a rename');
+  }
+  const matched = selectNotApplicableOutcomes(rows, classifyRef, liveEligibleShapes);
+  if (dryRun || matched.length === 0) return { matched, updated: [], failures: [] };
+  const updated = [];
+  const failures = [];
+  for (const m of matched) {
+    try {
+      // FR-4: same closer-of-record discipline as the SD-keyed auto-close path (mapSdStatusToOutcome
+      // above) — this resolver IS the reward-spine closer's correlation-leg linkage now.
+      //
+      // SECURITY sub-agent (EXEC phase, S1): the select-then-update sequence spans a loop of up to
+      // 500 rows (minutes wide in production). Without re-asserting the SAME predicates the row was
+      // selected under, an explicit human disposition (coordinator-ack-adam.cjs), a negative
+      // back-propagation (backPropagateNegativeOutcomes below), or a manual caused_rework update
+      // landing in that window would be silently clobbered back to 'not_applicable' -- an
+      // authoritative outcome overwritten by a non-authoritative one, the same integrity failure
+      // CONST-002 guards against, just from the opposite direction. Compare-and-set: only writes
+      // if the row is STILL exactly the state it was selected under.
+      const { error, count } = await supabase
+        .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
+        .update({ outcome: 'not_applicable', closed_by: CLOSER_OF_RECORD, closed_at: nowIso }, { count: 'exact' })
+        .eq('id', m.id)
+        .eq('outcome', 'unknown')
+        .eq('decision', 'rejected')
+        .is('outcome_sd_key', null);
+      if (!error && count === 0) { console.error(`  WARN: not_applicable write skipped for ${m.id} — row changed since selection (lost-update guard, not an error)`); continue; }
+      if (error) { console.error(`  WARN: not_applicable write failed for ${m.id} (migration may not be applied yet): ${error.message}`); failures.push({ id: m.id, code: error.code, message: error.message }); continue; }
+      updated.push(m.id);
+    } catch (e) {
+      console.error(`  WARN: not_applicable write threw for ${m.id}: ${(e && e.message) || e}`);
+      failures.push({ id: m.id, code: (e && e.code) || null, message: (e && e.message) || String(e) });
+    }
+  }
+  return { matched, updated, failures };
+}
+
+// SECURITY sub-agent (EXEC phase, S5): distinguishes the EXPECTED pre-migration state (every
+// failure is Postgres 23514, "check constraint violation" -- the TR-1 migration hasn't been
+// applied yet, a known temporary condition, not worth failing the daily cron over) from a REAL
+// anomaly (connectivity, permissions, an unrelated schema problem) that deserves the loud signal.
+// Exported for tests.
+function isExpectedPreMigrationFailure(failures) {
+  return (failures || []).length > 0 && failures.every((f) => f.code === '23514');
+}
+
+// FR-2/TS-4: catches the ledger going structurally silent on a leg (near-zero resolution
+// progress), not a target to optimize toward. TESTING sub-agent (EXEC phase, F6) correctly flagged
+// the original comment here as citing the wrong baseline: FR-4's acceptance criteria describes
+// outcome_sd_key LINKAGE coverage (a different numerator/denominator), not outcome RESOLUTION
+// coverage, which is what this floor actually measures. Corrected: live-measured (2026-08-19,
+// this session) SD-leg resolution is 64% and correlation-leg is ~4.9% -- 1% is comfortably below
+// both live-healthy figures. Known, accepted limitation (not "never trips" as originally
+// overclaimed): a genuinely small, early-days leg with a handful of rows and zero resolved yet
+// WILL trip this floor at any size -- there is no minimum-total exemption. That is an intentional
+// trade-off (silence on a small leg is exactly as worth surfacing as silence on a large one), not
+// an oversight.
+const COVERAGE_FLOOR_PCT = 1;
+
+/**
+ * Pure: per-leg resolution coverage (rows with outcome != 'unknown' / total) for the SD-keyed leg
+ * (outcome_sd_key populated) and the correlation-keyed leg (outcome_sd_key null) separately.
+ * Also runs lib/ledger/ref-shape.js's summarise() over each leg (TR-4) for ref-shape-hygiene
+ * context alongside the resolution-progress numbers. Exported for tests.
+ */
+function computeLegCoverage(rows, summarise) {
+  const legStats = (legRows) => {
+    const total = legRows.length;
+    const resolved = legRows.filter((r) => r.outcome && r.outcome !== 'unknown').length;
+    const pct = total > 0 ? +(100 * resolved / total).toFixed(1) : null;
+    return { total, resolved, pct, belowFloor: total > 0 && pct < COVERAGE_FLOOR_PCT, refShape: summarise(legRows) };
+  };
+  const sdLeg = legStats((rows || []).filter((r) => r.outcome_sd_key));
+  const correlationLeg = legStats((rows || []).filter((r) => !r.outcome_sd_key));
+  return { sdLeg, correlationLeg, anyBelowFloor: sdLeg.belowFloor || correlationLeg.belowFloor };
+}
+
 /**
  * Pure: map a downstream SD's terminal status to a ledger outcome value.
  * Returns null when the status is not yet a confident terminal signal (leave 'unknown'). Exported for tests.
@@ -109,9 +244,15 @@ function addRefsFromMetadata(set, metadata) {
 /**
  * Pure: given ledger rows and a set of negative reference strings, return the rows to flip to
  * 'reverted'. EXACT outcome_ref equality only. A NO_ARTIFACT sentinel ref (FR-3 no-artifact marker)
- * is never linkable. Rows already terminal-negative (reverted/caused_rework) are skipped (idempotent);
+ * is never linkable. Rows already terminal-negative (reverted/caused_rework) are skipped (idempotent).
+ * SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (SECURITY sub-agent S2): not_applicable rows are ALSO
+ * skipped -- that outcome means "rejected, nothing was ever built" (decision='rejected'), so its
+ * outcome_ref can legitimately be a bare commit-sha-shaped or narrative string with no real
+ * artifact behind it; a LATER unrelated red-merge/revert event that happens to name the same
+ * string must never flip a never-built proposal to "reverted" (there is nothing to revert).
  * unknown/shipped_clean flip (a later revert means it was not actually clean). Exported for tests.
  */
+const NEGATIVE_BACKPROP_TERMINAL_SKIP = Object.freeze([NEGATIVE_OUTCOME, 'caused_rework', 'not_applicable']);
 function selectNegativeBackprop(ledgerRows, negativeRefs) {
   const refSet = negativeRefs instanceof Set ? negativeRefs : new Set((negativeRefs || []).filter(Boolean).map(String));
   const out = [];
@@ -120,7 +261,7 @@ function selectNegativeBackprop(ledgerRows, negativeRefs) {
     if (!ref || typeof ref !== 'string') continue;
     if (ref === 'NO_ARTIFACT' || ref.startsWith('NO_ARTIFACT:')) continue; // explicit no-artifact — nothing to track
     if (!refSet.has(ref)) continue;                                        // EXACT linkage only, never heuristic
-    if (r.outcome === NEGATIVE_OUTCOME || r.outcome === 'caused_rework') continue; // already negative — idempotent
+    if (NEGATIVE_BACKPROP_TERMINAL_SKIP.includes(r.outcome)) continue;     // already negative or never-built — idempotent
     out.push({ id: r.id, outcome_ref: ref, priorOutcome: r.outcome });
   }
   return out;
@@ -213,6 +354,57 @@ async function main() {
     .select('*', { count: 'exact', head: true })
     .eq('outcome', 'unknown');
 
+  // FR-1/TR-2: correlation-only rows (no outcome_sd_key) that are decision='rejected' -- resolve
+  // outcome='not_applicable' when there is no traceable artifact. Runs independently of the
+  // SD-keyed leg below (queried and reported before that leg's early-returns).
+  const { data: rejectedNoKey, error: rejectedErr } = await supabase
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
+    .select('id, outcome_sd_key, outcome_ref, decision')
+    .eq('outcome', 'unknown')
+    .eq('decision', 'rejected')
+    .is('outcome_sd_key', null)
+    .limit(500);
+  if (rejectedErr) {
+    console.error('WARN: correlation-only rejected-row query failed (skipping not_applicable resolution):', rejectedErr.message);
+  } else {
+    const naResult = await resolveNotApplicableOutcomes(supabase, rejectedNoKey || [], { dryRun });
+    console.log(`Correlation-only leg: ${(rejectedNoKey || []).length} decision='rejected' row(s) with no outcome_sd_key checked, ${naResult.matched.length} have no traceable artifact.`);
+    if (dryRun) {
+      for (const m of naResult.matched) console.log(`  [dry-run] ${m.id}: would set outcome='not_applicable' (ref shape=${m.shape})`);
+    } else if (naResult.matched.length > 0 && naResult.updated.length === 0) {
+      if (isExpectedPreMigrationFailure(naResult.failures)) {
+        console.log('  0/' + naResult.matched.length + ' row(s) written — TR-1 migration not yet applied (expected, chairman-apply-gated; not treated as a failure).');
+      } else {
+        console.error('  0/' + naResult.matched.length + ' row(s) written — failures are NOT the expected pre-migration CHECK violation. Treating as a real anomaly.');
+        process.exitCode = 1;
+      }
+    } else {
+      console.log(`  ${naResult.updated.length}/${naResult.matched.length} row(s) written outcome='not_applicable'.`);
+    }
+  }
+
+  // FR-2/TR-4: per-leg (SD-keyed vs correlation-keyed) resolution coverage, reported to both CLI
+  // stdout and (via the GHA step's `tee reconcile.log` + step-summary cat) the job summary. Exits
+  // non-zero when either leg's coverage falls below COVERAGE_FLOOR_PCT — a silent-regression
+  // signal, not a target.
+  try {
+    const { summarise } = await refShapePaginate();
+    const allRows = await fapPaginate(() => supabase
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
+      .select('id, outcome_sd_key, outcome, outcome_ref')
+      .order('id', { ascending: true }));
+    const coverage = computeLegCoverage(allRows, summarise);
+    console.log('Leg coverage (resolved outcome / total):');
+    console.log(`  SD-keyed:          ${coverage.sdLeg.resolved}/${coverage.sdLeg.total} (${coverage.sdLeg.pct ?? 'n/a'}%)${coverage.sdLeg.belowFloor ? `  *** BELOW FLOOR (${COVERAGE_FLOOR_PCT}%) ***` : ''}`);
+    console.log(`  correlation-keyed: ${coverage.correlationLeg.resolved}/${coverage.correlationLeg.total} (${coverage.correlationLeg.pct ?? 'n/a'}%)${coverage.correlationLeg.belowFloor ? `  *** BELOW FLOOR (${COVERAGE_FLOOR_PCT}%) ***` : ''}`);
+    if (coverage.anyBelowFloor) {
+      console.error(`WARN: leg coverage below the ${COVERAGE_FLOOR_PCT}% floor — resolution has gone silent on at least one leg.`);
+      process.exitCode = 1;
+    }
+  } catch (e) {
+    console.error('WARN: leg coverage computation failed (non-fatal):', (e && e.message) || e);
+  }
+
   const { data: pending, error } = await supabase
     .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
     .select('id, outcome_sd_key')
@@ -271,7 +463,9 @@ async function main() {
 module.exports = {
   mapSdStatusToOutcome, reconcileBatch,
   selectNegativeBackprop, collectNegativeRefs, backPropagateNegativeOutcomes, addRefsFromMetadata,
-  NEGATIVE_OUTCOME, NEGATIVE_BACKPROP_SOURCE, NEGATIVE_AUDIT_EVENTS,
+  NEGATIVE_OUTCOME, NEGATIVE_BACKPROP_SOURCE, NEGATIVE_AUDIT_EVENTS, NEGATIVE_BACKPROP_TERMINAL_SKIP,
+  selectNotApplicableOutcomes, resolveNotApplicableOutcomes, NOT_APPLICABLE_ELIGIBLE_SHAPES,
+  computeLegCoverage, COVERAGE_FLOOR_PCT, isExpectedPreMigrationFailure,
 };
 
 if (require.main === module) {

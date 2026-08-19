@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { computeSolomonLedgerRollup } = require('../../scripts/fleet-dashboard.cjs');
+const { computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind } = require('../../scripts/fleet-dashboard.cjs');
 
 describe('FR-5: computeSolomonLedgerRollup', () => {
   it('TS-4: excludes pending rows from the accuracy denominator', () => {
@@ -136,6 +136,37 @@ describe('FR-5/TR-3 (W2, SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001): batch-sta
     expect(r.batchExcludedCount).toBe(1);
   });
 
+  it('SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 TS-9: excludes accepted+outcome=unknown from the accuracy denominator (not yet resolved, not a miss)', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean', created_at: '2026-08-19T00:00:00Z' },      // (a) counts in both num+denom
+      { decision: 'accepted', outcome: 'unknown', created_at: '2026-08-19T00:00:00Z' },             // (b) excluded entirely
+      { decision: 'rejected', outcome: 'not_applicable', created_at: '2026-08-19T00:00:00Z' },      // (c) counts via decision alone, never satisfies numerator
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(2);            // (b) excluded -- only (a) and (c)
+    expect(r.acceptedShippedClean).toBe(1);
+    expect(r.accuracyPct).toBe(50);             // 1/2, not 1/3 and not 1/2-with-b-as-a-miss
+    expect(r.unresolvedAcceptedCount).toBe(1);  // (b) surfaced for observability, mirroring batchExcludedCount
+  });
+
+  it('TS-9: accepted+outcome=unknown is still counted in acceptedCount/costPerAccepted (cost was already incurred)', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'unknown', cost_tokens: 100, cost_captured: true, created_at: '2026-08-19T00:00:00Z' },
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 300, cost_captured: true, created_at: '2026-08-19T00:00:00Z' },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.acceptedCount).toBe(2);            // both accepted rows counted for cost purposes
+    expect(r.costPerAccepted).toBe(200);        // (100+300)/2 — unaffected by the accuracy-denominator exclusion
+    expect(r.decidedCount).toBe(1);             // but only the resolved one counts toward accuracy
+  });
+
+  it('TS-9: unresolvedAcceptedCount is 0 and absent-safe when all-pending (decidedCount=0 branch)', () => {
+    const rows = [{ decision: 'pending', outcome: 'unknown', created_at: '2026-08-19T00:00:00Z' }];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(0);
+    expect(r.unresolvedAcceptedCount).toBe(0);
+  });
+
   it('rows with batch_stamped=false or undefined are unaffected (W3 cost tests stay green)', () => {
     const rows = [
       { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 100, cost_captured: true, batch_stamped: false },
@@ -146,5 +177,50 @@ describe('FR-5/TR-3 (W2, SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001): batch-sta
     expect(r.acceptedCount).toBe(2);
     expect(r.costPerAccepted).toBe(200);
     expect(r.batchExcludedCount).toBe(0);
+  });
+});
+
+describe('FR-3 (SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001): computeSolomonLedgerByLegAndKind — by proposal_kind, by leg', () => {
+  it('groups decided rows by proposal_kind, then by SD-keyed vs correlation-keyed leg, with independent accuracy per cell', () => {
+    const rows = [
+      { proposal_kind: 'roadmap', outcome_sd_key: 'SD-X-001', decision: 'accepted', outcome: 'shipped_clean' },
+      { proposal_kind: 'roadmap', outcome_sd_key: 'SD-X-002', decision: 'accepted', outcome: 'reverted' },
+      { proposal_kind: 'roadmap', outcome_sd_key: null, decision: 'rejected', outcome: 'not_applicable' },
+      { proposal_kind: 'qf', outcome_sd_key: null, decision: 'accepted', outcome: 'shipped_clean' },
+    ];
+    const byGroup = computeSolomonLedgerByLegAndKind(rows);
+    expect(byGroup.roadmap.sdLeg).toEqual({ decidedCount: 2, accuracyPct: 50 });        // 1/2 shipped_clean
+    expect(byGroup.roadmap.correlationLeg).toEqual({ decidedCount: 1, accuracyPct: 0 }); // rejected, never numerator
+    expect(byGroup.qf.correlationLeg).toEqual({ decidedCount: 1, accuracyPct: 100 });
+    expect(byGroup.qf.sdLeg).toEqual({ decidedCount: 0, accuracyPct: null });            // no SD-keyed qf rows
+  });
+
+  it('unset proposal_kind is grouped under "(unset)" rather than silently dropped', () => {
+    const rows = [{ proposal_kind: null, outcome_sd_key: null, decision: 'accepted', outcome: 'shipped_clean' }];
+    const byGroup = computeSolomonLedgerByLegAndKind(rows);
+    expect(byGroup['(unset)'].correlationLeg).toEqual({ decidedCount: 1, accuracyPct: 100 });
+  });
+
+  it('excludes accepted+outcome=unknown from each cell (TS-9 rule applies per-group too)', () => {
+    const rows = [
+      { proposal_kind: 'roadmap', outcome_sd_key: null, decision: 'accepted', outcome: 'unknown' },
+      { proposal_kind: 'roadmap', outcome_sd_key: null, decision: 'accepted', outcome: 'shipped_clean' },
+    ];
+    const byGroup = computeSolomonLedgerByLegAndKind(rows);
+    expect(byGroup.roadmap.correlationLeg).toEqual({ decidedCount: 1, accuracyPct: 100 }); // the unknown row excluded
+  });
+
+  it('excludes batch_stamped rows from each cell (same rule as the top-level rollup)', () => {
+    const rows = [
+      { proposal_kind: 'roadmap', outcome_sd_key: 'SD-X', decision: 'accepted', outcome: 'unknown', batch_stamped: true },
+      { proposal_kind: 'roadmap', outcome_sd_key: 'SD-X', decision: 'accepted', outcome: 'shipped_clean' },
+    ];
+    const byGroup = computeSolomonLedgerByLegAndKind(rows);
+    expect(byGroup.roadmap.sdLeg).toEqual({ decidedCount: 1, accuracyPct: 100 });
+  });
+
+  it('empty input returns an empty object, never throws', () => {
+    expect(computeSolomonLedgerByLegAndKind([])).toEqual({});
+    expect(computeSolomonLedgerByLegAndKind(undefined)).toEqual({});
   });
 });
