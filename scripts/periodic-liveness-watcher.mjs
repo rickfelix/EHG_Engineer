@@ -314,8 +314,17 @@ async function evaluateRow(row, ctx = {}) {
  * back to a generic label for the plain flat-threshold-exceeded case (evaluateRow's main OVERDUE
  * path leaves `reason` null for a self_stamped row -- signalNote is only ever set inside the
  * claude_sessions_heartbeat branch), so every OVERDUE row gets SOME signature, never undefined.
+ *
+ * Adversarial-review finding (PR #7300): claude_sessions_heartbeat's `reason` (signalNote, set at
+ * line ~240) embeds live per-tick seat-census detail -- session IDs, alive/dead counts -- that
+ * naturally churns tick-to-tick even for the SAME ongoing outage. Using it verbatim as a
+ * signature would defeat FR-3's same-pattern dismissal match for exactly the highest-profile
+ * role_session processes (adam/solomon/coordinator), re-escalating a just-dismissed recurring
+ * failure because its seat census happened to differ this tick. Use a stable label for that
+ * source instead; every other source's `reason` is already a stable enumerated string.
  */
-function deriveFailureSignature(evaluation) {
+function deriveFailureSignature(row, evaluation) {
+  if (row.liveness_source === 'claude_sessions_heartbeat') return 'stale_heartbeat';
   if (evaluation.reason) return evaluation.reason;
   return evaluation.state === STATE.OVERDUE ? 'threshold_exceeded' : 'unknown';
 }
@@ -530,7 +539,7 @@ async function main({ includeFixtures = false } = {}) {
       try {
         const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
         const climb = await climbLadder({ supabase, row, ownerTarget });
-        if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name, signature: deriveFailureSignature(evaluation) });
+        if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name, signature: deriveFailureSignature(row, evaluation) });
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
