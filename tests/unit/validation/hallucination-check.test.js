@@ -1,32 +1,52 @@
 // SD-FDBK-ENH-RETRO-SUB-AGENT-001: RETRO sub-agent hallucination-checker false-positives on real
 // files. Covers FR-1 (unconditional JSON-escape normalization in extractFileReferences), FR-2
-// (bare-basename fallback in checkFileExists via a per-call, node_modules/.git-excluded basename
-// index, plus the findBasenameMatches export), and FR-3 (ambiguous-match disclosure via
-// result.warnings, not result.file_references).
+// (bare-basename fallback in checkFileExists via a per-call, node_modules/.git/.worktrees/
+// .reaper-source-excluded basename index, plus the findBasenameMatches export), and FR-3
+// (ambiguous-match disclosure via result.warnings, not result.file_references).
 //
 // Runs against this repo's real filesystem rather than a mocked fs -- checkFileExists/
 // buildBasenameIndex have no injectable fs dependency, and the module's own real-file behavior
 // (which real basenames are unique/ambiguous/node_modules-only) is exactly what these fixes are
 // about, so faking the filesystem would test a fiction instead of the actual bug class.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+//
+// Call-count assertions spy on fs.readdirSync directly, not on buildBasenameIndex's own export
+// binding: buildBasenameIndex/findBasenameMatches call each other as same-file local functions
+// inside file-checks.js, so a vi.mock() on the re-export barrel (hallucination/index.js) only
+// ever sees hallucination-check.js's own single top-level call and is blind to file-checks.js's
+// internal build-on-demand fallback -- confirmed by a mutation test during EXEC-TO-PLAN review
+// that silently passed all assertions even with the index-sharing thread-through reverted.
+// fs.readdirSync is the one primitive every path bottoms out at, regardless of which JS function
+// calls it, so spying there is immune to that interception-target mismatch.
+import { describe, it, expect, vi } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 
-vi.mock('../../../lib/validation/hallucination/index.js', async (importOriginal) => {
-  const actual = await importOriginal();
-  return { ...actual, buildBasenameIndex: vi.fn(actual.buildBasenameIndex) };
-});
-
-import { buildBasenameIndex } from '../../../lib/validation/hallucination/index.js';
+import { buildBasenameIndex, findBasenameMatches } from '../../../lib/validation/hallucination/index.js';
 import { extractFileReferences, prepareOutputForAnalysis } from '../../../lib/validation/hallucination/extractors.js';
-import { checkFileExists, findBasenameMatches } from '../../../lib/validation/hallucination/file-checks.js';
+import { checkFileExists } from '../../../lib/validation/hallucination/file-checks.js';
 import { validateSubAgentOutput, quickHallucinationCheck } from '../../../lib/validation/hallucination-check.js';
 
 const baseDir = path.resolve(__dirname, '../../..');
 
-beforeEach(() => {
-  buildBasenameIndex.mockClear();
-});
+function makeOutput(scope) {
+  return {
+    message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
+    findings: { sd_metadata: { scope } }
+  };
+}
+
+// Picked live from the real index rather than hardcoded, so this can never silently vacuously
+// pass if the repo's contents drift -- the prior fixture (a hardcoded 'registry.json') would
+// have early-return-skipped its own assertion the moment the repo stopped having 3 real matches
+// for that name. 545 ambiguous basenames were measured in this repo at review time, so a live
+// pick is expected to always succeed.
+function pickAmbiguousBasename() {
+  const index = buildBasenameIndex(baseDir);
+  for (const [name, paths] of index) {
+    if (paths.length > 1) return { name, paths };
+  }
+  return null;
+}
 
 describe('FR-1: extractFileReferences unconditional escape normalization', () => {
   it('TS-1: extracts the unmangled reference through the real production chain (prepareOutputForAnalysis -> extractFileReferences)', () => {
@@ -34,14 +54,7 @@ describe('FR-1: extractFileReferences unconditional escape normalization', () =>
     // RETRO sub-agent's findings.sd_metadata.scope (verbatim SD prose) is JSON.stringify'd by
     // prepareOutputForAnalysis. Calling extractFileReferences directly on a raw object would
     // exercise its own (dead-in-production) JSON.stringify branch instead of the real path.
-    const output = {
-      message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
-      findings: {
-        sd_metadata: {
-          scope: 'Fixes lib/eva/bridge/stage-execution-worker.js:694 and\nlib/eva/bridge/venture-build-consumer.js:573) plus more work'
-        }
-      }
-    };
+    const output = makeOutput('Fixes lib/eva/bridge/stage-execution-worker.js:694 and\nlib/eva/bridge/venture-build-consumer.js:573) plus more work');
     const analysisContent = prepareOutputForAnalysis(output);
     // Confirms the escape genuinely reaches extractFileReferences as a literal 2-char sequence,
     // proving this test exercises the real bug rather than a synthetic shortcut.
@@ -58,12 +71,15 @@ describe('FR-1: extractFileReferences unconditional escape normalization', () =>
     expect(refs).toContain('scripts/baz.js');
   });
 
-  it('TS-8: a doubled-backslash edge case does not throw (naive-vs-backslash-aware tradeoff, documented limitation)', () => {
+  it('TS-8: a doubled-backslash edge case degrades to a basename-only capture, not a throw or a full mangled path (pins the naive-vs-backslash-aware tradeoff)', () => {
     // Naive \[nrt] normalization was chosen over a backslash-aware variant: measured zero
     // incidence of this edge case in a 400-row real corpus, while a backslash-aware alternative
-    // was measurably worse (breaks consecutive escapes and CRLF sequences). This test pins the
-    // choice by documenting the accepted behavior, not by asserting perfect extraction.
-    expect(() => extractFileReferences('path\\\\nfile.js:12')).not.toThrow();
+    // was measurably worse (breaks consecutive escapes and CRLF sequences). Empirically verified
+    // behavior: the SECOND backslash of the doubled pair + 'n' is consumed by the replace,
+    // leaving a literal backslash + space that breaks path-segment continuity -- the regex then
+    // matches fresh from 'file.js:12', recovering the basename rather than nothing or garbage.
+    const refs = extractFileReferences('path\\\\nfile.js:12');
+    expect(refs).toEqual(['file.js']);
   });
 });
 
@@ -79,9 +95,9 @@ describe('FR-2: checkFileExists bare-basename fallback', () => {
 
   it('TS-4: returns false for a basename that exists only inside node_modules', () => {
     const index = buildBasenameIndex(baseDir);
-    // Find a real basename that node_modules contains but the repo tree (excluding node_modules)
-    // does not, so the assertion is grounded in this checkout's actual contents rather than a
-    // guessed filename.
+    // Find a real basename that node_modules contains but the repo tree (excluding
+    // node_modules/.git/.worktrees/.reaper-source) does not, so the assertion is grounded in
+    // this checkout's actual contents rather than a guessed filename.
     let nodeModulesOnlyBasename = null;
     try {
       const nmEntries = fs.readdirSync(path.join(baseDir, 'node_modules'), { withFileTypes: true }).filter(e => e.isDirectory());
@@ -113,13 +129,15 @@ describe('FR-2: checkFileExists bare-basename fallback', () => {
     expect(typeof checkFileExists('totally-fabricated-file-name-zzz-999.js', baseDir)).toBe('boolean');
   });
 
-  it('buildBasenameIndex excludes node_modules and .git from its walk', () => {
+  it('buildBasenameIndex excludes node_modules, .git, .worktrees, and .reaper-source from its walk', () => {
     const index = buildBasenameIndex(baseDir);
     expect(index.size).toBeGreaterThan(0);
     for (const paths of index.values()) {
       for (const p of paths) {
         expect(p.startsWith('node_modules/')).toBe(false);
         expect(p.startsWith('.git/')).toBe(false);
+        expect(p.startsWith('.worktrees/')).toBe(false);
+        expect(p.startsWith('.reaper-source/')).toBe(false);
       }
     }
   });
@@ -131,59 +149,83 @@ describe('FR-2: checkFileExists bare-basename fallback', () => {
   });
 });
 
-describe('FR-2/TR-1: basename index shared once per validateSubAgentOutput() call', () => {
-  it('TS-6: buildBasenameIndex is invoked at most once per call, across a batch of multiple bare-basename references', async () => {
-    const output = {
-      message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
-      findings: {
-        sd_metadata: {
-          scope: 'shared-git-context.js and post-completion-validator.js and registry.json and totally-fabricated-aaa.js'
-        }
-      }
-    };
-    await validateSubAgentOutput(output, { baseDir });
-    expect(buildBasenameIndex).toHaveBeenCalledTimes(1);
+describe('FR-2/TR-1: basename index built lazily, at most once per validateSubAgentOutput() call', () => {
+  it('TS-6: fs.readdirSync call count does not scale with the number of bare-basename references in one call (proves the index is shared, not rebuilt per-reference)', async () => {
+    const spy = vi.spyOn(fs, 'readdirSync');
+
+    spy.mockClear();
+    await validateSubAgentOutput(makeOutput('shared-git-context.js'), { baseDir });
+    const oneRefCalls = spy.mock.calls.length;
+
+    spy.mockClear();
+    await validateSubAgentOutput(
+      makeOutput('shared-git-context.js and post-completion-validator.js and registry.json and totally-fabricated-aaa.js'),
+      { baseDir }
+    );
+    const fourRefCalls = spy.mock.calls.length;
+
+    spy.mockRestore();
+
+    expect(oneRefCalls).toBeGreaterThan(0);
+    // A per-reference rebuild would cost ~4x the readdir calls of a single-reference batch. A
+    // shared, once-per-call index costs the same regardless of how many references are in the
+    // batch -- the walk cost depends on tree size, not reference count.
+    expect(fourRefCalls).toBeLessThan(oneRefCalls * 1.5);
   });
 
-  it('is called fresh (not skipped) on a second, independent validateSubAgentOutput() call -- no cross-call cache', async () => {
-    const output = { message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
-      findings: { sd_metadata: { scope: 'shared-git-context.js' } } };
-    await validateSubAgentOutput(output, { baseDir });
-    await validateSubAgentOutput(output, { baseDir });
-    expect(buildBasenameIndex).toHaveBeenCalledTimes(2);
+  it('does not walk the filesystem at all when every reference is a full path (lazy build)', async () => {
+    const spy = vi.spyOn(fs, 'readdirSync');
+    spy.mockClear();
+    await validateSubAgentOutput(makeOutput('See lib/validation/hallucination/extractors.js for details'), { baseDir });
+    const calls = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(calls).toBe(0);
+  });
+
+  it('does not walk the filesystem at all when there are zero file references', async () => {
+    const spy = vi.spyOn(fs, 'readdirSync');
+    spy.mockClear();
+    await validateSubAgentOutput(makeOutput('no file references in this text at all'), { baseDir });
+    const calls = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(calls).toBe(0);
+  });
+
+  it('builds a fresh index on a second, independent call -- no cross-call cache (TR-1)', async () => {
+    const spy = vi.spyOn(fs, 'readdirSync');
+    spy.mockClear();
+    await validateSubAgentOutput(makeOutput('shared-git-context.js'), { baseDir });
+    const firstCallCount = spy.mock.calls.length;
+    spy.mockClear();
+    await validateSubAgentOutput(makeOutput('shared-git-context.js'), { baseDir });
+    const secondCallCount = spy.mock.calls.length;
+    spy.mockRestore();
+    expect(firstCallCount).toBeGreaterThan(0);
+    expect(secondCallCount).toBe(firstCallCount);
   });
 });
 
 describe('FR-3: ambiguous basename matches surface via result.warnings, not result.file_references', () => {
-  it('TS-5: a basename shared by multiple real files produces an ambiguous_basename_match warning, and still counts as valid', async () => {
-    const matches = findBasenameMatches('registry.json', baseDir);
-    if (matches.length <= 1) {
-      // This repo's contents can drift; skip gracefully rather than assert a false premise.
-      expect(true).toBe(true);
-      return;
-    }
-    const output = { message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
-      findings: { sd_metadata: { scope: 'See registry.json for details' } } };
-    const result = await validateSubAgentOutput(output, { baseDir });
+  it('TS-5: a basename shared by multiple real files (picked live from the current index) produces an ambiguous_basename_match warning, and still counts as valid', async () => {
+    const picked = pickAmbiguousBasename();
+    expect(picked).not.toBeNull();
 
-    const warning = result.warnings.find(w => w.type === 'ambiguous_basename_match' && w.reference === 'registry.json');
+    const result = await validateSubAgentOutput(makeOutput(`See ${picked.name} for details`), { baseDir });
+
+    const warning = result.warnings.find(w => w.type === 'ambiguous_basename_match' && w.reference === picked.name);
     expect(warning).toBeTruthy();
-    expect(result.file_references.invalid.some(i => i.path === 'registry.json')).toBe(false);
+    expect(result.file_references.invalid.some(i => i.path === picked.name)).toBe(false);
   });
 
   it('a uniquely-resolved bare basename produces no ambiguous_basename_match warning', async () => {
-    const output = { message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
-      findings: { sd_metadata: { scope: 'See shared-git-context.js for details' } } };
-    const result = await validateSubAgentOutput(output, { baseDir });
+    const result = await validateSubAgentOutput(makeOutput('See shared-git-context.js for details'), { baseDir });
     expect(result.warnings.some(w => w.type === 'ambiguous_basename_match')).toBe(false);
   });
 
   it('result.file_references carries no ambiguity data -- only result.warnings does', async () => {
-    const matches = findBasenameMatches('registry.json', baseDir);
-    if (matches.length <= 1) { expect(true).toBe(true); return; }
-    const output = { message: null, summary: null, recommendations: [], critical_issues: [], warnings: [], detailed_analysis: null,
-      findings: { sd_metadata: { scope: 'See registry.json for details' } } };
-    const result = await validateSubAgentOutput(output, { baseDir });
+    const picked = pickAmbiguousBasename();
+    expect(picked).not.toBeNull();
+    const result = await validateSubAgentOutput(makeOutput(`See ${picked.name} for details`), { baseDir });
     expect(JSON.stringify(result.file_references)).not.toContain('ambiguous');
   });
 });
