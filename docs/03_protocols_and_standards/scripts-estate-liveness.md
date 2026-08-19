@@ -1,9 +1,9 @@
 ---
 category: protocol
 status: active
-version: 1.1.0
-author: SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001
-last_updated: 2026-07-12
+version: 1.2.0
+author: SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001, SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001
+last_updated: 2026-08-19
 tags: [protocol, scripts, liveness, hygiene]
 ---
 # Scripts-Estate Liveness Norm
@@ -78,6 +78,35 @@ Static reachability (above) answers "does anything reference this file?"; the
   runner cannot evaluate without false-OVERDUE). No row is double-evaluated.
 - **UNVERIFIED is by design** for freshly registered rows: visible on the dashboard,
   never false-alarming, until the process wires `lib/periodic-liveness/stamp-last-fired.js`.
+
+### Gap-adjusted staleness (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001)
+
+A cron-backed process's own schedule can declare a genuine quiet window (e.g.
+`15 0-2,10-23 * * *` excludes hours 3-9 UTC) — raw `now - last_fired_at` false-alarms
+inside that window unless the threshold grows so wide it also hides real staleness
+outside it. `lib/periodic-liveness/cron-gap.mjs`'s `gapAdjustedAgeMs(cronExpr, since, at)`
+subtracts hour-aligned buckets outside the cron's covered hours, so the threshold check
+sees only genuine elapsed time. Monotonic by construction — a dead process's staleness
+still accumulates across any number of gap cycles, it just doesn't get penalized for the
+declared quiet window itself.
+
+- **Opt-in via `workflowCron`.** `scripts/periodic-liveness-watcher.mjs`'s `evaluateRow`
+  reads `liveness_source_ref.workflow_cron` when present; rows without it (the majority —
+  event-driven or non-cron-backed processes) still use raw elapsed time, unchanged.
+  `lib/machinery-class/armed-registration.js`'s `registerArmedMachinery` accepts an
+  optional `workflowCron` opt to set it, and warns (never blocks) at registration time if
+  `expected_interval_seconds x grace_multiplier` under-covers the cron's own largest
+  declared gap.
+- **Two live specimens**: `scripts/cron/chairman-decision-sla-sweep.mjs` and
+  `scripts/cron/adam-decision-scheduler-tick.mjs`, both corrected from a blind
+  `expected_interval_seconds` guess to their real active-window cadence plus their actual
+  workflow cron string.
+- **Signature-stable ladder dismissal (FR-3).** `lib/periodic-liveness/ladder-escalation.mjs`'s
+  `findRecentlyDismissedSignatures` scopes a dismissed-digest cooldown per `process_key` +
+  failure signature (not the whole digest), so dismissing one process's alert no longer
+  suppresses an unrelated process sharing the same escalation batch.
+- **Verify**: `node scripts/periodic-liveness-watcher-fix-acceptance.mjs` (standalone binary
+  — the vitest `db` project silently skips with no designated non-production target).
 
 ### Post-activation verification (QF-20260712-741, retro follow-up to SD-LEO-INFRA-VENTURE-OPS-ACTUALS-001)
 
