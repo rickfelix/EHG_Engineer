@@ -155,7 +155,13 @@ export async function selfReviewMain() {
   const body = 'COORDINATOR-FEEDBACK REQUEST (recurring review of the COORDINATOR, triggered by ' + delta + ' SDs shipped since the last review): candid critique of how the coordinator is running the fleet — (1) what worked (routing/sourcing/RCA/conflict-resolution/keeping you fed), (2) friction caused BY the coordinator (slow/missing replies, mis-routing, bad SD sourcing, unclear guidance, missed signals), (3) ONE concrete thing to do differently. Be blunt. Reply: /signal feedback, prefix "COORDINATOR-FEEDBACK".';
   for (const w of workers) {
     try {
-      await insertCoordinationRow(db, { target_session: w, sender_session: me, subject: 'Coordinator review (every ' + REVIEW_EVERY + ' SDs) — your candid feedback', message_type: 'COACHING', body, payload: { kind: 'coordinator_reply', body } });
+      // QF-20260818-283: was kind:'coordinator_reply', the kind worker inbox hooks (worker-
+      // checkin.cjs) SKIP fleet-wide -- 8 rows stranded undeliverable per review cycle, re-
+      // flagging as unread-at-live-target on every hourly review. review_request is already a
+      // registered DIRECTIVE_KIND (deliver-not-consume, never auto-acked) -- SD-LEO-INFRA-
+      // DISTINCT-REVIEW-REQUEST-001 proved this exact fix on the Adam leg below; this closes the
+      // worker leg that SD explicitly deferred (FR-3).
+      await insertCoordinationRow(db, { target_session: w, sender_session: me, subject: 'Coordinator review (every ' + REVIEW_EVERY + ' SDs) — your candid feedback', message_type: 'COACHING', body, payload: { kind: 'review_request', body } });
       solicited++;
     } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] solicit skip ' + w + ': ' + e.message.split('\n')[0]); }
   }

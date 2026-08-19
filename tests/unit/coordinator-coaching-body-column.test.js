@@ -24,7 +24,10 @@ describe('coordinator-self-review.mjs: coaching solicitation rows carry top-leve
     expect(m).toBeTruthy();
     const call = m[0];
     expect(call).toMatch(/\bbody,/);
-    expect(call).toMatch(/payload: \{ kind: 'coordinator_reply', body \}/);
+    // QF-20260818-283: kind flipped from coordinator_reply (skipped by worker inbox hooks) to
+    // review_request (a registered DIRECTIVE_KIND) -- the top-level/payload body dual-write this
+    // test guards is unaffected by the kind, so only the kind literal needed updating here.
+    expect(call).toMatch(/payload: \{ kind: 'review_request', body \}/);
   });
 
   it('Adam-directed bidirectional review solicitation sets top-level body === payload.body (both from `adamBody`)', () => {

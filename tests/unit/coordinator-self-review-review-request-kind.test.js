@@ -1,9 +1,11 @@
 /**
- * Unit tests — SD-LEO-INFRA-DISTINCT-REVIEW-REQUEST-001
+ * Unit tests — SD-LEO-INFRA-DISTINCT-REVIEW-REQUEST-001 + QF-20260818-283
  * FR-1: review_request is a distinct, registered kind (not coordinator_request/coordinator_reply).
  * FR-2: the Adam leg of coordinator-self-review.mjs's bidirectional review emits it, and the
  *       shared classifier (imported DIRECTIVE_KINDS, never duplicated) treats it as action-required.
- * FR-3: the worker leg (out of scope for this SD) is untouched — proves backward compatibility.
+ * FR-3 (QF-20260818-283): the worker leg, deliberately deferred by SD-LEO-INFRA-DISTINCT-REVIEW-
+ *       REQUEST-001, now also emits review_request -- it previously used coordinator_reply, a
+ *       kind worker inbox hooks (worker-checkin.cjs) skip fleet-wide, stranding 8 rows per cycle.
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
@@ -40,7 +42,11 @@ describe('FR-2/FR-3: coordinator-self-review.mjs Adam leg emits review_request; 
     expect(text).toMatch(/target_session: a,[\s\S]{0,300}kind: 'review_request'/);
   });
 
-  it('worker-directed review solicitation still uses kind: coordinator_reply (out of this SD scope)', () => {
-    expect(text).toMatch(/target_session: w,[\s\S]{0,300}kind: 'coordinator_reply'/);
+  it('worker-directed review solicitation uses kind: review_request (QF-20260818-283)', () => {
+    expect(text).toMatch(/target_session: w,[\s\S]{0,300}kind: 'review_request'/);
+  });
+
+  it('worker-directed review solicitation no longer uses the skipped coordinator_reply kind', () => {
+    expect(text).not.toMatch(/target_session: w,[\s\S]{0,300}kind: 'coordinator_reply'/);
   });
 });
