@@ -19,8 +19,12 @@
  *   T3 -- UP -> DOWN round-trip, byte-identical relacl (AC-10/TS-10), plus a GRANT ALL lint on every
  *         staged _DOWN file in this SD.
  *   T4 -- TRUNCATE-refusal probe on a representative sample, SAVEPOINT-guarded per relation (FR-3
- *         AC-5), exact-42501 discrimination distinguishing genuine refusal from the 0A000
- *         FK-referenced-table error path (FR-3 AC-6).
+ *         AC-5), exact-42501-only pass (FR-3 AC-6: any other SQLSTATE, including 0A000, is reported
+ *         as a failure, never treated as a pass -- see VAL-1, PLAN_VERIFICATION review 2026-08-19:
+ *         Postgres checks TRUNCATE privilege before the FK-referential check, so a correctly
+ *         role-switched anon can only ever raise 42501; 0A000 can only fire if `SET LOCAL ROLE anon`
+ *         silently failed and the statement ran as a privileged role instead -- treating it as an
+ *         acceptable "refused via a different path" was the exact hole AC-6 exists to close).
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -343,12 +347,16 @@ async function t4_refusalProbe(client, q) {
         await q(`TRUNCATE ${rel}`);
         record(`T4: TRUNCATE as anon on ${rel} (post-revoke)`, false, 'LANDED (should be refused)');
       } catch (err) {
+        // AC-6: any SQLSTATE other than 42501 is reported as a failure, never treated as a pass. In
+        // particular 0A000 (feature_not_supported, the FK-referenced-table error) can ONLY occur if
+        // the privilege check already passed -- Postgres checks TRUNCATE privilege before evaluating
+        // FK-referential constraints -- so a live 0A000 here means SET LOCAL ROLE anon silently did
+        // not take effect and the statement ran as a privileged role, not that anon was refused.
         const exactRefusal = err.code === '42501';
-        const fkPath = err.code === '0A000';
         record(
           `T4: TRUNCATE as anon on ${rel} (post-revoke)`,
-          exactRefusal || fkPath,
-          exactRefusal ? 'REFUSED (42501, exact)' : fkPath ? 'REFUSED via FK-referenced-table path (0A000, distinguished per AC-6)' : `UNEXPECTED code=${err.code}`
+          exactRefusal,
+          exactRefusal ? 'REFUSED (42501, exact)' : `UNEXPECTED code=${err.code} (not a pass per AC-6 -- 0A000 in particular signals the role switch silently failed, not genuine refusal)`
         );
         // The savepoint is now in an aborted state (a real Postgres error occurred inside it) --
         // do NOT run any further statement (e.g. RESET ROLE) before the outer finally's
