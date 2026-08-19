@@ -267,10 +267,16 @@ async function displayWorkingOnSD(supabase, workingOn, sessionContext = {}) {
 
   // Add duration estimate
   try {
+    // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 EXEC-TO-PLAN SECURITY review: FR-2's
+    // own-claim-first rewrite made this line reach more often (the old .single() rarely got here
+    // on a multi-claim fleet), surfacing a pre-existing raw-string .or() PostgREST filter
+    // (`sd_key.eq.${sdId},id.eq.${workingOn.id}`) as a hardening target. workingOn.id is always
+    // populated here -- both of getWorkingOnSD's queries above select it -- so the OR fallback to
+    // sd_key is unnecessary; a parameterized .eq() on the primary key is both safer and simpler.
     const { data: sdFull } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_type, category, priority')
-      .or(`sd_key.eq.${sdId},id.eq.${workingOn.id}`)
+      .eq('id', workingOn.id)
       .single();
 
     if (sdFull) {
