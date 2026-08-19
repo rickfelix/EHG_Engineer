@@ -602,4 +602,28 @@ describe('syncVisionScoresToPatterns positive-evidence gating (QF-20260816-109)'
     expect(resolveCalls[0].id).toBe('p-fixed');
     expect(result.couldNotVerify).toBe(0);
   });
+
+  it('mixed evidence in one run (same pattern_id low in one record, improved in another) never resolves -- stillLowDims must win over improvedPatternIds', async () => {
+    const scoreRecords = [
+      {
+        id: 'mixed-low', sd_id: 'SD-MIXED-LOW', total_score: 40,
+        dimension_scores: { shared: { name: 'shared dim', score: 30 } },
+        rubric_snapshot: {},
+      },
+      {
+        id: 'mixed-high', sd_id: 'SD-MIXED-HIGH', total_score: 65,
+        dimension_scores: { shared: { name: 'shared dim', score: 80 } },
+        rubric_snapshot: {},
+      },
+    ];
+    const seededActivePatterns = [
+      { id: 'p-shared', pattern_id: 'VGAP-shared', status: 'active', metadata: {} },
+    ];
+    const supabase = createGatingMockSupabase(scoreRecords, seededActivePatterns);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
+
+    expect(result.resolved).toBe(0);
+    expect(result.couldNotVerify).toBe(0);
+    expect(supabase._updateCalls.filter((c) => c.id === 'p-shared' && c.payload.status === 'resolved')).toHaveLength(0);
+  });
 });
