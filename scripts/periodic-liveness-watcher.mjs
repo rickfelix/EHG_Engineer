@@ -623,4 +623,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, STATE, UNVERIFIED_ESCALATION_MS };
+export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, deriveFailureSignature, STATE, UNVERIFIED_ESCALATION_MS };
