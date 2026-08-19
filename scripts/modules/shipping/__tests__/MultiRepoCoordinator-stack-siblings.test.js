@@ -92,4 +92,31 @@ describe('QF-20260727-876 — MultiRepoCoordinator.markStackSiblings', () => {
     expect(() => coordinator.markStackSiblings()).not.toThrow();
     expect(coordinator.branchStatus).toEqual([]);
   });
+
+  it('scopes the stack check PER REPO — a lone open PR in one repo stays blocking even when another repo has a real stack (adversarial review finding, PR #7298)', () => {
+    const coordinator = new MultiRepoCoordinator('SD-X');
+    coordinator.branchStatus = [
+      // A real 3-PR stack in EHG_Engineer.
+      branch({ repo: 'EHG_Engineer', branch: 'feat/SD-X-part-1', prNumber: 1, prStatus: 'OPEN', prBaseRefName: 'main' }),
+      branch({ repo: 'EHG_Engineer', branch: 'feat/SD-X-part-2', prNumber: 2, prStatus: 'OPEN', prBaseRefName: 'main' }),
+      branch({ repo: 'EHG_Engineer', branch: 'feat/SD-X-part-3', prNumber: 3, prStatus: 'OPEN', prBaseRefName: 'main' }),
+      // An UNRELATED lone open PR in a different repo -- genuinely blocking on its
+      // own (N=1 within its own repo). Combining repos would have inflated this to
+      // N=4 globally and misclassified it as part of the stack too.
+      branch({ repo: 'ehg', branch: 'feat/SD-X-part-99', prNumber: 99, prStatus: 'OPEN', prBaseRefName: 'main',
+        repoInfo: { priority: 2, path: '/y', github: 'rickfelix/ehg' } }),
+    ];
+
+    coordinator.markStackSiblings();
+
+    const engineerBranches = coordinator.branchStatus.filter((b) => b.repo === 'EHG_Engineer');
+    const ehgBranch = coordinator.branchStatus.find((b) => b.repo === 'ehg');
+
+    for (const b of engineerBranches) {
+      expect(b.isStackSibling).toBe(true);
+      expect(b.needsAction).toBe(false);
+    }
+    expect(ehgBranch.isStackSibling).toBeUndefined();
+    expect(ehgBranch.needsAction).toBe(true);
+  });
 });

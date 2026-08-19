@@ -20,6 +20,7 @@ import {
   getPrimaryRepos
 } from '../../../lib/multi-repo/index.js';
 import { isStackedLanding } from './stack-landing-detector.js';
+import { matchesSdBranchPattern } from './branch-pattern-match.js';
 
 // QF-20260703-388: per-repo git/gh calls use execFileSync (no shell) so a timeout's
 // kill signal reaches the real process directly -- execSync's shell:true default wraps
@@ -144,7 +145,7 @@ export class MultiRepoCoordinator {
           const matching = branchList.split('\n')
             .map(b => b.trim())
             .filter(b =>
-              b.toLowerCase().includes(pattern.toLowerCase()) &&
+              matchesSdBranchPattern(b, pattern) &&
               !b.includes('HEAD')
             );
 
@@ -238,18 +239,31 @@ export class MultiRepoCoordinator {
   /**
    * QF-20260727-876: demote still-open-PR branches from blocking to context
    * (needsAction=false, isStackSibling=true) when this SD has multiple concurrent
-   * open PRs all independently based on main -- a deliberate multi-part landing,
-   * not orphaned work. A lone open PR is unaffected (still blocking), matching
-   * ShippingPreflightVerifier's identical, narrower-on-purpose guard.
+   * open PRs, WITHIN THE SAME REPO, all independently based on main -- a
+   * deliberate multi-part landing, not orphaned work. Grouped by repo (adversarial
+   * review finding, PR #7298): this.branchStatus spans every repo this SD touches,
+   * so an ungrouped check would combine a genuinely lone, blocking PR in one repo
+   * with an unrelated real stack in another repo and misclassify BOTH as safe --
+   * exactly the false-"safe to ship" failure mode this guard exists to avoid, and
+   * it also defeats cross-repo coordination ordering (infrastructure before
+   * frontend). A lone open PR within its own repo is unaffected (still blocking),
+   * matching ShippingPreflightVerifier's identical, per-repo guard.
    */
   markStackSiblings() {
     const openPrBranches = this.branchStatus.filter(
       (b) => b.needsAction && b.prNumber && b.prStatus === 'OPEN'
     );
-    if (!isStackedLanding(openPrBranches.map((b) => b.prBaseRefName))) return;
-    for (const branch of openPrBranches) {
-      branch.isStackSibling = true;
-      branch.needsAction = false;
+    const byRepo = new Map();
+    for (const b of openPrBranches) {
+      if (!byRepo.has(b.repo)) byRepo.set(b.repo, []);
+      byRepo.get(b.repo).push(b);
+    }
+    for (const branches of byRepo.values()) {
+      if (!isStackedLanding(branches.map((b) => b.prBaseRefName))) continue;
+      for (const branch of branches) {
+        branch.isStackSibling = true;
+        branch.needsAction = false;
+      }
     }
   }
 

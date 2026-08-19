@@ -18,6 +18,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getRepoPaths, resolveGitHubRepo } from '../../../lib/repo-paths.js';
 import { isStackedLanding } from './stack-landing-detector.js';
+import { matchesSdBranchPattern } from './branch-pattern-match.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -123,9 +124,7 @@ export class ShippingPreflightVerifier {
 
         // Filter PRs that match this SD's branch patterns
         const matchingPRs = prs.filter(pr =>
-          branchPatterns.some(pattern =>
-            pr.headRefName.toLowerCase().includes(pattern.toLowerCase())
-          )
+          branchPatterns.some(pattern => matchesSdBranchPattern(pr.headRefName, pattern))
         );
 
         if (matchingPRs.length > 0) {
@@ -179,7 +178,7 @@ export class ShippingPreflightVerifier {
           const matchingBranches = branchList.split('\n')
             .map(b => b.trim())
             .filter(b =>
-              b.toLowerCase().includes(pattern.toLowerCase()) &&
+              matchesSdBranchPattern(b, pattern) &&
               !b.includes('HEAD')
             );
 
