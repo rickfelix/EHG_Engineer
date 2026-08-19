@@ -2156,8 +2156,10 @@ async function printSolomonInbox() {
 //
 // SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (REGRESSION sub-agent, REG-M2): hoisted to module scope
 // so computeSolomonLedgerByLegAndKind (FR-3) shares this SAME array instead of re-declaring an
-// inline literal copy that could silently drift from it.
-const JUDGED_DECISIONS = Object.freeze(['accepted', 'rejected', 'partial', 'deferred']);
+// inline literal copy that could silently drift from it. Kept as a plain literal (not
+// Object.freeze-wrapped) -- tests/unit/fleet-dashboard-judged-allowlist.test.js source-pins the
+// exact `JUDGED_DECISIONS = [...]` text via regex; wrapping it broke that pin (caught by CI).
+const JUDGED_DECISIONS = ['accepted', 'rejected', 'partial', 'deferred'];
 
 function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const all = rows || [];
