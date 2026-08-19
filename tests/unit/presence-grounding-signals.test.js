@@ -117,9 +117,21 @@ describe('getFleetPresence (FR-2)', () => {
 });
 
 // ---- getReadReceipts (FR-3) ------------------------------------------------------------------
-function stubSupabaseReceipts({ rows = [], error = null, capturedFilters = {} } = {}) {
+// QF-20260727-554: getReadReceipts now ALSO queries retention_archive (a genuinely separate
+// table/shape — row_data-wrapped), so the stub routes per-table rather than sharing one api
+// object across both calls. archiveRows/archiveError default to an empty/no-op archive so every
+// pre-existing test below is byte-identical to its pre-fix behavior.
+function stubSupabaseReceipts({ rows = [], error = null, archiveRows = [], archiveError = null, capturedFilters = {} } = {}) {
   return {
     from(table) {
+      if (table === 'retention_archive') {
+        return {
+          select() { return this; },
+          eq(col, val) { capturedFilters.archiveSourceTable = val; return this; },
+          gte(col, val) { capturedFilters.archiveGte = val; return this; },
+          then(resolve) { return resolve({ data: archiveRows, error: archiveError }); },
+        };
+      }
       const api = {
         _table: table,
         select() { return api; },
@@ -134,6 +146,10 @@ function stubSupabaseReceipts({ rows = [], error = null, capturedFilters = {} } 
     },
   };
 }
+
+// NOW (fixed 2001 timestamp) predates the REAL Date.now() the archive-window math runs against;
+// a sinceMs this large spans that gap so archive fixtures built off NOW aren't filtered out.
+const LARGE_SINCE_MS = 900_000_000_000; // ~28.5 years
 
 describe('getReadReceipts (FR-3)', () => {
   it('queries session_coordination filtered by sender_session with read_at NOT NULL', async () => {
@@ -162,6 +178,59 @@ describe('getReadReceipts (FR-3)', () => {
   it('returns [] for missing supabase/sessionId (never throws)', async () => {
     await expect(getReadReceipts(null, 'sess-1')).resolves.toEqual([]);
     await expect(getReadReceipts({}, null)).resolves.toEqual([]);
+  });
+
+  // QF-20260727-554: an acked, expired row is archived+deleted from session_coordination within
+  // seconds, so the live query alone under-reports. retention_archive.row_data carries the full
+  // original row — a receipt for the same sender, once revived, must still surface.
+  it('revives an archived receipt (live table empty) from retention_archive.row_data', async () => {
+    const archivedReadAt = new Date(NOW).toISOString();
+    const sb = stubSupabaseReceipts({
+      rows: [],
+      archiveRows: [{
+        row_data: {
+          id: 'msg-archived', sender_session: 'sess-1', target_session: 'coord-1',
+          read_at: archivedReadAt, created_at: new Date(NOW - 60000).toISOString(), subject: 'HOLD',
+        },
+      }],
+    });
+    // NOW is a fixed 2001 timestamp but getReadReceipts filters against the REAL Date.now(), so
+    // sinceMs must span that gap for created_at/coarse-archive-bound comparisons to include it.
+    const r = await getReadReceipts(sb, 'sess-1', { sinceMs: LARGE_SINCE_MS });
+    expect(r).toEqual([{ id: 'msg-archived', target_session: 'coord-1', read_at: archivedReadAt, created_at: expect.any(String), subject: 'HOLD' }]);
+  });
+
+  it('excludes an archived row belonging to a DIFFERENT sender', async () => {
+    const sb = stubSupabaseReceipts({
+      rows: [],
+      archiveRows: [{ row_data: { id: 'msg-x', sender_session: 'other-session', read_at: new Date(NOW).toISOString(), created_at: new Date(NOW).toISOString() } }],
+    });
+    const r = await getReadReceipts(sb, 'sess-1', {});
+    expect(r).toEqual([]);
+  });
+
+  it('merges live + archived receipts, newest read_at first', async () => {
+    const sb = stubSupabaseReceipts({
+      rows: [{ id: 'msg-live', target_session: 'coord-1', read_at: new Date(NOW).toISOString(), created_at: new Date(NOW).toISOString(), subject: 'live' }],
+      archiveRows: [{
+        row_data: {
+          id: 'msg-archived', sender_session: 'sess-1', target_session: 'coord-2',
+          read_at: new Date(NOW - 120000).toISOString(), created_at: new Date(NOW - 180000).toISOString(), subject: 'archived',
+        },
+      }],
+    });
+    const r = await getReadReceipts(sb, 'sess-1', { sinceMs: LARGE_SINCE_MS });
+    expect(r.map((x) => x.id)).toEqual(['msg-live', 'msg-archived']);
+  });
+
+  it('fail-open on the archive query alone: live results still return', async () => {
+    const sb = stubSupabaseReceipts({
+      rows: [{ id: 'msg-live', target_session: 'coord-1', read_at: new Date(NOW).toISOString() }],
+      archiveError: { message: 'archive boom' },
+    });
+    const r = await getReadReceipts(sb, 'sess-1', {});
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('msg-live');
   });
 });
 

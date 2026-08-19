@@ -372,20 +372,30 @@ export class SDNextSelector {
         }
       } catch { /* non-fatal: absent field -> normal classification (fail-safe) */ }
 
-      for (const session of this.activeSessions) {
-        if (session.sd_id) {
-          this.claimedSDs.set(session.sd_id, session.session_id);
+      // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 FR-4: source claimedSDs from
+      // strategic_directives_v2.claiming_session_id -- the authoritative ownership
+      // column -- instead of session.sd_id, which is v_active_sessions' alias for the
+      // self-reported claude_sessions.sd_key cache mirror and can silently drift from
+      // the real claim. This also subsumes the old getClaimedSessions() supplement:
+      // an idle session with an active claim is now visible because the claim lives
+      // on the SD row itself, independent of session activity/heartbeat.
+      // Adversarial-review INFO finding: paginate via fetchAllPaginated (already used
+      // elsewhere in this file, per its own FR-6-batch-4 comment) rather than a bare
+      // .select() -- a PostgREST 1000-row cap would otherwise silently truncate this
+      // read and hide claimed SDs past the cap.
+      try {
+        const claimedRows = await fetchAllPaginated(() =>
+          this.supabase
+            .from('strategic_directives_v2')
+            .select('sd_key, claiming_session_id')
+            .not('claiming_session_id', 'is', null)
+        );
+        for (const row of claimedRows) {
+          if (row.sd_key && row.claiming_session_id) {
+            this.claimedSDs.set(row.sd_key, row.claiming_session_id);
+          }
         }
-      }
-
-      // Supplement with direct claimed-sessions query so idle sessions with
-      // active claims are not shown as available (QF-SD-NEXT-CLAIM-BLIND-SPOT-001)
-      const claimedSessions = await this.sessionManager.getClaimedSessions();
-      for (const session of claimedSessions) {
-        if (session.sd_id && !this.claimedSDs.has(session.sd_id)) {
-          this.claimedSDs.set(session.sd_id, session.session_id);
-        }
-      }
+      } catch { /* non-fatal: continue without claim data */ }
     } catch {
       // Non-fatal - continue without session data
     }

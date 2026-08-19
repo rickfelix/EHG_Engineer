@@ -88,14 +88,17 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
   const sdId = item.sd_key || item.sd_id;
   const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
 
-  // Check if claimed by another session
+  // Check if claimed by another session.
+  // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 FR-4: fail CLOSED when
+  // currentSession is unknown -- a claim we cannot confirm is ours is treated
+  // as claimed-by-other (indeterminate ownership is not availability), not
+  // silently treated as unclaimed the way `claimedBySession && currentSession && ...`
+  // did (both sides of that chain fell through falsy whenever currentSession was null).
   const claimedBySession = claimedSDs.get(sdId);
-  let isClaimedByOther = claimedBySession &&
-    currentSession &&
-    claimedBySession !== currentSession.session_id;
-  let isClaimedByMe = claimedBySession &&
-    currentSession &&
+  let isClaimedByMe = !!claimedBySession &&
+    !!currentSession &&
     claimedBySession === currentSession.session_id;
+  let isClaimedByOther = !!claimedBySession && !isClaimedByMe;
 
   // Use claim analysis for richer classification when claimed by another session
   let claimAnalysis = null;

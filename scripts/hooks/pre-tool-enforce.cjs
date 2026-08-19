@@ -1270,7 +1270,7 @@ async function main() {
         // Missing/malformed outcome file → fall through to command-only signature (back-compat).
       }
 
-      const { attempts, signature, rcaResetApplied, progressStalled } = await stateMgr.recordAndCount(
+      const { attempts, signature, rcaResetApplied, progressStalled, commandText, occurredAt } = await stateMgr.recordAndCount(
         _SESSION_ID, claimedSdKey, TOOL_NAME, input, { lastOutcome, progressFingerprint }
       );
 
@@ -1306,7 +1306,7 @@ async function main() {
           if (shouldEmitAutoSignal({ attempts, sessionId: _SESSION_ID, progressStalled, isCoordinatorSession, env: process.env })) {
             const path = require('path');
             const { spawn } = require('child_process');
-            const args = buildAutoSignalArgs({ toolName: TOOL_NAME, signature, attempts, sdKey: claimedSdKey });
+            const args = buildAutoSignalArgs({ toolName: TOOL_NAME, signature, attempts, sdKey: claimedSdKey, commandText, occurredAt });
             const child = spawn(
               process.execPath,
               [path.join(__dirname, '..', 'worker-signal.cjs'), ...args],

@@ -55,3 +55,15 @@ correctly RAISEs** (all 6 tables currently fully write-granted); post-apply it P
   chairman applies.
 - **Rollback (chairman-gated):** re-GRANT the exact revoked privileges per table if a legitimate
   anon/authenticated write path is ever found (none exists today). service_role is never touched.
+
+## FR-5 — overlap with the general anon-TRUNCATE sweep (SD-LEO-INFRA-ANON-TRUNCATE-SWEEP-001)
+
+All 6 tables here are also present in that SD's live enumeration (2026-08-19) of ~760 relations
+where `anon` holds an unrevoked, Supabase-default `TRUNCATE` grant — confirming neither this SD's
+FR-1/FR-2 nor that sweep has been applied yet (both remain staged/chairman-gated). Both migrations
+`REVOKE TRUNCATE ... FROM anon` on these 6 tables; applying either first makes the other's REVOKE on
+this axis a harmless no-op (idempotent, same direction). This SD's own scope — INSERT/UPDATE/DELETE,
+plus the `authenticated`-axis carve-out for `chairman_directives` — is NOT covered by that sweep
+(which is anon-only, TRUNCATE-only, and does not distinguish these 6 as higher-sensitivity); apply
+both for full closure on these tables, in either order. See `database/chairman-gated/README.md` for
+that sweep's own apply ceremony.

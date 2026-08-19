@@ -47,6 +47,24 @@ describe('retry-state-manager', () => {
     expect(second.attempts).toBe(2);
   });
 
+  it('QF-20260803-596: returns commandText and occurredAt for Bash, growing with each repeat', async () => {
+    const noopRca = async () => null;
+    const first = await stateMgr.recordAndCount('sess-1', 'SD-X', 'Bash', { command: 'npm test --watch' }, { rcaCheck: noopRca });
+    const second = await stateMgr.recordAndCount('sess-1', 'SD-X', 'Bash', { command: 'npm test --watch' }, { rcaCheck: noopRca });
+    expect(first.commandText).toBe('npm test --watch');
+    expect(first.occurredAt).toHaveLength(1);
+    expect(second.commandText).toBe('npm test --watch');
+    expect(second.occurredAt).toHaveLength(2);
+    expect(() => new Date(second.occurredAt[0]).toISOString()).not.toThrow();
+  });
+
+  it('QF-20260803-596: omits commandText for non-Bash tools (signature already carries the file path)', async () => {
+    const noopRca = async () => null;
+    const r = await stateMgr.recordAndCount('sess-1', 'SD-X', 'Edit', { file_path: '/a.js' }, { rcaCheck: noopRca });
+    expect(r.commandText).toBeUndefined();
+    expect(r.occurredAt).toHaveLength(1);
+  });
+
   it('isolates attempts per-target', async () => {
     const noopRca = async () => null;
     await stateMgr.recordAndCount('sess-1', 'SD-X', 'Edit', { file_path: '/a.js' }, { rcaCheck: noopRca });

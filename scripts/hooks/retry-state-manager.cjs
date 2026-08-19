@@ -550,7 +550,12 @@ async function fetchRcaInvocationSince(sdKey, lastResetAt) {
  * @param {Function} [opts.rcaCheck] - injectable async (sdKey, lastResetAt) => ISO|null
  * @param {number}   [opts.now]      - injectable current time in ms (for tests)
  * @param {Object}   [opts.lastOutcome] - {exit_code, stderr_sha} from prior tool call
- * @returns {Promise<{ attempts: number, signature: string|null, rcaResetApplied: boolean }>}
+ * @returns {Promise<{ attempts: number, signature: string|null, rcaResetApplied: boolean,
+ *   commandText?: string, occurredAt?: string[] }>} commandText (Bash only) and occurredAt
+ *   (ISO timestamps of every recorded occurrence of this signature) let a caller build an
+ *   AUTO-SIGNAL payload a receiving worker can actually answer from — QF-20260803-596: the
+ *   emitted signal previously carried only the opaque hash-based signature, so a busy seat
+ *   with no matching local activity could not tell what had repeated or when.
  */
 async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) {
   const signature = signatureFor(toolName, toolInput, opts.lastOutcome);
@@ -669,7 +674,14 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
 
   writeState(sessionId, state);
 
-  return { attempts: existing.length, signature, rcaResetApplied, progressStalled };
+  return {
+    attempts: existing.length,
+    signature,
+    rcaResetApplied,
+    progressStalled,
+    commandText: toolName === 'Bash' && typeof toolInput?.command === 'string' ? toolInput.command : undefined,
+    occurredAt: existing.map((ts) => new Date(ts).toISOString()),
+  };
 }
 
 module.exports = {

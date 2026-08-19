@@ -170,20 +170,44 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
  * Get SD marked as "working on", cross-referenced with session claims.
  * Uses analyzeClaimRelationship for same-conversation detection.
  */
-async function getWorkingOnSD(supabase, sessionContext = {}) {
-  // SD-LEO-INFRA-CLAIM-GUARD-001: Use claiming_session_id as primary, fall back to is_working_on
-  const { data: workingOn } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, progress_percentage, claiming_session_id')
-    .eq('is_active', true)
-    .or('claiming_session_id.not.is.null,is_working_on.eq.true')
-    .lt('progress_percentage', 100)
-    .single();
-
-  if (!workingOn) return null;
-
+export async function getWorkingOnSD(supabase, sessionContext = {}) {
   const { currentSession, activeSessions = [] } = sessionContext;
   const currentSessionId = currentSession?.session_id;
+
+  // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 FR-2: resolve THIS session's own
+  // claim first (own-claim-first pattern proven in scripts/get-working-on-sd.js,
+  // QF-20260703-742). The unscoped .single() fallback below silently discards its
+  // PostgREST error and returns null whenever >=2 SDs are claimed fleet-wide, hiding
+  // the caller's own legitimate claim along with everyone else's.
+  let workingOn = null;
+  if (currentSessionId) {
+    const { data: ownClaim, error: ownError } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, progress_percentage, claiming_session_id')
+      .eq('is_active', true)
+      .eq('claiming_session_id', currentSessionId)
+      .lt('progress_percentage', 100);
+    if (!ownError && ownClaim && ownClaim.length > 0) {
+      workingOn = ownClaim[0];
+    }
+  }
+
+  if (!workingOn) {
+    // SD-LEO-INFRA-CLAIM-GUARD-001: Use claiming_session_id as primary, fall back to is_working_on.
+    // Array-based (not .single()) so a multi-claim fleet degrades to "pick one to display"
+    // instead of erroring/returning null.
+    const { data: spotlight } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, progress_percentage, claiming_session_id')
+      .eq('is_active', true)
+      .or('claiming_session_id.not.is.null,is_working_on.eq.true')
+      .lt('progress_percentage', 100);
+    if (spotlight && spotlight.length > 0) {
+      workingOn = spotlight[0];
+    }
+  }
+
+  if (!workingOn) return null;
 
   if (workingOn.claiming_session_id && workingOn.claiming_session_id !== currentSessionId) {
     // Check if this is the same conversation post-compaction
@@ -243,10 +267,16 @@ async function displayWorkingOnSD(supabase, workingOn, sessionContext = {}) {
 
   // Add duration estimate
   try {
+    // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 EXEC-TO-PLAN SECURITY review: FR-2's
+    // own-claim-first rewrite made this line reach more often (the old .single() rarely got here
+    // on a multi-claim fleet), surfacing a pre-existing raw-string .or() PostgREST filter
+    // (`sd_key.eq.${sdId},id.eq.${workingOn.id}`) as a hardening target. workingOn.id is always
+    // populated here -- both of getWorkingOnSD's queries above select it -- so the OR fallback to
+    // sd_key is unnecessary; a parameterized .eq() on the primary key is both safer and simpler.
     const { data: sdFull } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_type, category, priority')
-      .or(`sd_key.eq.${sdId},id.eq.${workingOn.id}`)
+      .eq('id', workingOn.id)
       .single();
 
     if (sdFull) {

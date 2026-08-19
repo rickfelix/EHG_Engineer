@@ -92,7 +92,7 @@ describe('FR-8: resume detects MISMATCH and MULTIPLICITY, not just NULL', () => 
 
   it('flags a mirror-vs-authoritative MISMATCH', () => {
     expect(elseBranch).toMatch(/claim_mirror_mismatch/);
-    expect(elseBranch).toMatch(/!keys\.includes\(ctx\.mySd\)/);
+    expect(elseBranch).toMatch(/!keys\.includes\(mirrorValue\)/);
   });
 
   it('flags MULTIPLICITY — a second held claim was previously unreachable through this path', () => {
@@ -100,12 +100,23 @@ describe('FR-8: resume detects MISMATCH and MULTIPLICITY, not just NULL', () => 
     expect(elseBranch).toMatch(/keys\.length > 1/);
   });
 
-  // DETECTION ONLY, DELIBERATELY. Choosing a winner between two authoritative claims is a policy
-  // call; guessing wrong silently drops real work. A future "helpful" auto-heal here would do
-  // exactly that, so the boundary is pinned.
-  it('does NOT self-heal — it reports and leaves the decision to a human or a later FR', () => {
+  // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 (FR-1): MISMATCH is now self-healed. Unlike
+  // MULTIPLICITY (two authoritatively-held claims — picking a winner is a policy call), a mismatched
+  // mirror names a claim the session does NOT hold at all, so there is no winner to pick: the mirror
+  // is just wrong, and falling through to resume it would work a foreign claim. This test used to pin
+  // the OLD detection-only behavior; it now pins the self-heal.
+  it('self-heals the MISMATCH — clears the stale pointer and falls through instead of resuming a foreign claim', () => {
+    expect(elseBranch).toMatch(/selfHealStaleClaim\(sb, sessionId, mirrorValue\)/);
+    expect(elseBranch).toMatch(/self_healed_claim_mismatch/);
+    expect(elseBranch).toMatch(/ctx\.mySd = null/);
+  });
+
+  // The MULTIPLICITY boundary from FR-8 is unchanged by FR-1: choosing a winner between two
+  // authoritative claims is still a policy call, and a future "helpful" auto-heal here would guess
+  // wrong and silently drop real work, so the boundary stays pinned.
+  it('still does NOT auto-resolve MULTIPLICITY — picking between two held claims stays a policy call', () => {
     expect(elseBranch).not.toMatch(/healOwnClaimPointer/);
-    expect(elseBranch).toMatch(/Detection only/);
+    expect(elseBranch).toMatch(/MULTIPLICITY stays detection-only/);
   });
 
   // A read error is not evidence of agreement. Setting no flags on error is the honest outcome;

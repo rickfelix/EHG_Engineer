@@ -198,6 +198,8 @@ All autonomous fixes must pass these gates:
 
 ## Phase 2: Interactive Enhancement Scheduling
 
+Before presentation, the enhancements stream is pre-filtered to exclude rows that are not genuine, schedulable enhancement requests: `category='harness_backlog'` and write-time-terminal categories (QF-20260509-149, SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001), and fleet-ops telemetry categories such as `wind_down_survey`, `fleet_retro`, and `coordinator_review` (SD-FDBK-ENH-LEO-ASSIST-PHASE-001 — see `FLEET_OPS_TELEMETRY_CATEGORIES` in `lib/quality/assist-engine.js` for the full list). Excluded rows are not deleted; they remain visible via `/leo inbox`, just outside this autonomous-scheduling queue. Toggle `LEO_ASSIST_ENH_OPSFILTER=false` to disable the fleet-ops exclusion for emergency debugging.
+
 For each enhancement, you'll see:
 
 ```
@@ -404,6 +406,7 @@ node -e "require('dotenv').config(); console.log(process.env.SUPABASE_URL ? 'OK'
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-01-31 | Initial release with two-phase processing |
+| 1.1.0 | 2026-08-19 | Phase 2 enhancements stream now excludes fleet-ops telemetry categories (SD-FDBK-ENH-LEO-ASSIST-PHASE-001), in addition to the pre-existing harness_backlog/terminal-category exclusion |
 
 ---
 

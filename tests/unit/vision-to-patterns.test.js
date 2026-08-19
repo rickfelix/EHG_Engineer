@@ -338,7 +338,7 @@ describe('syncVisionScoresToPatterns', () => {
     const supabase = createMockSupabase([]); // zero eva_vision_scores rows in window
     const result = await syncVisionScoresToPatterns(supabase, { dryRun: true });
 
-    expect(result).toEqual({ synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0 });
+    expect(result).toEqual({ synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0, couldNotVerify: 0 });
   });
 });
 
@@ -403,7 +403,7 @@ describe('syncVisionScoresToPatterns auto-resolve cascade safety (TS-6, FR-5)', 
     };
   }
 
-  it('TS-6: reclassification/exclusion under the corrected logic never falsely auto-resolves a still-valid active pattern (negative control), while a genuinely-absent dimension still gets auto-resolved (positive control)', async () => {
+  it('TS-6: reclassification/exclusion under the corrected logic never falsely auto-resolves a still-valid active pattern (negative control), a genuinely-improved dimension gets auto-resolved (positive control), and a dimension merely absent from this run is left alone (QF-20260816-109)', async () => {
     // Mixed-rubric fixture. The PRE-FIX key set this sync produces is a hard-coded
     // literal derived from buildPatternId's known transform, not computed by calling
     // the function under test -- computing it here would make the assertion
@@ -416,6 +416,11 @@ describe('syncVisionScoresToPatterns auto-resolve cascade safety (TS-6, FR-5)', 
           A02: { score: 90 }, A03: { score: 90 }, A04: { score: 90 }, A05: { score: 90 },
           A06: { score: 90 }, A07: { score: 90 }, A08: { score: 90 },
           V01: { score: 90 }, V02: { score: 90 }, V03: { score: 90 },
+          // QF-20260816-109: re-measured this run at >= SCORE_THRESHOLD -> positive evidence
+          // that VGAP-obsolete genuinely improved (the pre-fix "positive control" instead
+          // relied on VGAP-obsolete being merely ABSENT from every record below, which this
+          // fix no longer treats as improvement -- see p-unseen further down).
+          obsolete: { name: 'improved dim', score: 75 },
         },
         rubric_snapshot: {},
       },
@@ -451,17 +456,22 @@ describe('syncVisionScoresToPatterns auto-resolve cascade safety (TS-6, FR-5)', 
       // Negative control: this dimension IS present (and still low) in the sync above --
       // must NOT be auto-resolved.
       { id: 'p-negative', pattern_id: 'VGAP-successcriteri', status: 'active', metadata: {} },
-      // Positive control: this dimension is genuinely ABSENT from the sync above (no
-      // scoreRecord references it) -- MUST be auto-resolved, proving the mechanism
-      // itself still functions and this test is not vacuously passing.
+      // Positive control: this dimension IS present this run AND re-measured >= threshold
+      // (see the `obsolete` dim added to vav-ts6 above) -- MUST be auto-resolved, proving
+      // the mechanism itself still fires on genuine positive evidence.
       { id: 'p-positive', pattern_id: 'VGAP-obsolete', status: 'active', metadata: {} },
+      // QF-20260816-109: genuinely absent from every record in this sync (no scoreRecord
+      // references it at all) -- the pre-fix bug auto-resolved this; the corrected logic
+      // must leave it alone (could_not_verify), since absence is not evidence of improvement.
+      { id: 'p-unseen', pattern_id: 'VGAP-neverseen', status: 'active', metadata: {} },
     ];
 
     const supabase = createAutoResolveMockSupabase(scoreRecords, seededActivePatterns);
     const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
 
-    // Positive control: genuinely absent from this sync -> auto-resolved (proves the
-    // mechanism at vision-to-patterns.js:307-329 still fires, so this test is not vacuous).
+    // Positive control: observed this run AND re-measured >= threshold -> genuinely
+    // improved -> auto-resolved (proves the mechanism at vision-to-patterns.js still fires,
+    // so this test is not vacuous).
     expect(result.resolved).toBe(1);
     const resolveCalls = supabase._updateCalls.filter((c) => c.payload.status === 'resolved');
     expect(resolveCalls).toHaveLength(1);
@@ -474,5 +484,146 @@ describe('syncVisionScoresToPatterns auto-resolve cascade safety (TS-6, FR-5)', 
       (c) => c.id === 'p-negative' && c.payload.status === 'resolved'
     );
     expect(negativeControlResolveCalls).toHaveLength(0);
+
+    // QF-20260816-109: genuinely absent (not in stillLowDims, not in improvedPatternIds) ->
+    // could_not_verify, never resolved, status left untouched.
+    expect(result.couldNotVerify).toBe(1);
+    const unseenResolveCalls = supabase._updateCalls.filter(
+      (c) => c.id === 'p-unseen' && c.payload.status === 'resolved'
+    );
+    expect(unseenResolveCalls).toHaveLength(0);
+    const unseenMarkCalls = supabase._updateCalls.filter(
+      (c) => c.id === 'p-unseen' && c.payload.metadata?.last_sync_outcome === 'could_not_verify'
+    );
+    expect(unseenMarkCalls).toHaveLength(1);
+  });
+});
+
+describe('syncVisionScoresToPatterns positive-evidence gating (QF-20260816-109)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Mirrors createAutoResolveMockSupabase above -- distinguishes the per-pattern eq lookup
+   * from the ilike auto-resolve scan so the resolve branch actually executes. */
+  function createGatingMockSupabase(scoreRecords, seededActivePatterns) {
+    const updateCalls = [];
+
+    return {
+      from: vi.fn((table) => {
+        if (table === 'eva_vision_scores') return makeBuilder(scoreRecords);
+        if (table === 'issue_patterns') {
+          let usedIlike = false;
+          let eqPatternId = null;
+          const builder = {};
+          builder.select = vi.fn(() => builder);
+          builder.eq = vi.fn((col, val) => {
+            if (col === 'pattern_id') eqPatternId = val;
+            return builder;
+          });
+          builder.ilike = vi.fn(() => { usedIlike = true; return builder; });
+          builder.in = vi.fn(() => builder);
+          builder.order = vi.fn(() => builder);
+          builder.limit = vi.fn(() => builder);
+          builder.range = vi.fn(() => builder);
+          builder.update = vi.fn((payload) => ({
+            eq: vi.fn((col, val) => {
+              updateCalls.push({ id: val, payload });
+              return Promise.resolve({ error: null });
+            }),
+          }));
+          builder.insert = vi.fn(() => Promise.resolve({ error: null }));
+          builder.then = (onFulfilled, onRejected) => {
+            const data = usedIlike
+              ? seededActivePatterns
+              : seededActivePatterns.filter((p) => p.pattern_id === eqPatternId);
+            return Promise.resolve({ data, error: null }).then(onFulfilled, onRejected);
+          };
+          return builder;
+        }
+        return makeBuilder([]);
+      }),
+      _updateCalls: updateCalls,
+    };
+  }
+
+  it('a dim that reads malformed this run leaves its VGAP active (could_not_verify), not resolved -- ticket repro step 1', async () => {
+    const scoreRecords = [{
+      id: 'malformed-run', sd_id: 'SD-MALFORMED-RUN', total_score: 40,
+      dimension_scores: { flaky: { name: undefined, score: undefined } },
+      rubric_snapshot: {},
+    }];
+    const seededActivePatterns = [
+      { id: 'p-flaky', pattern_id: 'VGAP-flaky', status: 'active', metadata: {} },
+    ];
+    const supabase = createGatingMockSupabase(scoreRecords, seededActivePatterns);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
+
+    expect(result.resolved).toBe(0);
+    expect(supabase._updateCalls.filter((c) => c.payload.status === 'resolved')).toHaveLength(0);
+    expect(result.couldNotVerify).toBe(1);
+  });
+
+  it('a dim absent because its own SD total_score rose to >=70 leaves its VGAP active (could_not_verify), not resolved -- ticket repro step 2', async () => {
+    const scoreRecords = [{
+      // Unrelated SD still below 70 this run -- keeps scores.length > 0 so the auto-resolve
+      // cascade actually executes (an empty `scores` array short-circuits before ever
+      // reaching it, which is a separate, already-safe path this test is not exercising).
+      id: 'other-sd', sd_id: 'SD-OTHER', total_score: 50,
+      dimension_scores: { other_dim: { name: 'other', score: 30 } },
+      rubric_snapshot: {},
+    }];
+    const seededActivePatterns = [
+      { id: 'p-risingsd', pattern_id: 'VGAP-risingsd', status: 'active', metadata: {} },
+    ];
+    const supabase = createGatingMockSupabase(scoreRecords, seededActivePatterns);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
+
+    expect(result.resolved).toBe(0);
+    expect(supabase._updateCalls.filter((c) => c.payload.status === 'resolved')).toHaveLength(0);
+    expect(result.couldNotVerify).toBe(1);
+  });
+
+  it('a dim re-measured this run at >= SCORE_THRESHOLD gets its VGAP auto-resolved -- ticket repro step 3', async () => {
+    const scoreRecords = [{
+      id: 'remeasured', sd_id: 'SD-REMEASURED', total_score: 65,
+      dimension_scores: { fixed: { name: 'fixed dim', score: 72 } },
+      rubric_snapshot: {},
+    }];
+    const seededActivePatterns = [
+      { id: 'p-fixed', pattern_id: 'VGAP-fixed', status: 'active', metadata: {} },
+    ];
+    const supabase = createGatingMockSupabase(scoreRecords, seededActivePatterns);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
+
+    expect(result.resolved).toBe(1);
+    const resolveCalls = supabase._updateCalls.filter((c) => c.payload.status === 'resolved');
+    expect(resolveCalls).toHaveLength(1);
+    expect(resolveCalls[0].id).toBe('p-fixed');
+    expect(result.couldNotVerify).toBe(0);
+  });
+
+  it('mixed evidence in one run (same pattern_id low in one record, improved in another) never resolves -- stillLowDims must win over improvedPatternIds', async () => {
+    const scoreRecords = [
+      {
+        id: 'mixed-low', sd_id: 'SD-MIXED-LOW', total_score: 40,
+        dimension_scores: { shared: { name: 'shared dim', score: 30 } },
+        rubric_snapshot: {},
+      },
+      {
+        id: 'mixed-high', sd_id: 'SD-MIXED-HIGH', total_score: 65,
+        dimension_scores: { shared: { name: 'shared dim', score: 80 } },
+        rubric_snapshot: {},
+      },
+    ];
+    const seededActivePatterns = [
+      { id: 'p-shared', pattern_id: 'VGAP-shared', status: 'active', metadata: {} },
+    ];
+    const supabase = createGatingMockSupabase(scoreRecords, seededActivePatterns);
+    const result = await syncVisionScoresToPatterns(supabase, { dryRun: false });
+
+    expect(result.resolved).toBe(0);
+    expect(result.couldNotVerify).toBe(0);
+    expect(supabase._updateCalls.filter((c) => c.id === 'p-shared' && c.payload.status === 'resolved')).toHaveLength(0);
   });
 });

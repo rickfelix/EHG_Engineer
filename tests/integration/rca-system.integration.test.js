@@ -29,7 +29,7 @@ describe('RCA System Integration', () => {
   let testCAPAId;
 
   beforeAll(async () => {
-    supabase = createDatabaseClient();
+    supabase = await createDatabaseClient();
 
     // Create test Strategic Directive
     // Table strategic_directives (legacy) replaced by strategic_directives_v2

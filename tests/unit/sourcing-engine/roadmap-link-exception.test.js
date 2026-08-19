@@ -8,7 +8,7 @@
  * fail is one that feeds the recorded metadata THROUGH the real coverage function and separately
  * asserts the wave_disposition key is absent. Both are done below.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildRoadmapLinkException,
   countRoadmapLinkExceptions,
@@ -88,6 +88,42 @@ describe('buildRoadmapLinkException — FR-3 (record unconditionally, operator r
     const ex = buildRoadmapLinkException('SD-X-001', huge, NOW);
     expect(ex.operator_reason).toHaveLength(REASON_MAX_CHARS);
     expect(ex.reason_supplied).toBe(true); // truncated, not rejected — refusing would fail FR-1
+  });
+});
+
+describe('QF-20260818-459 — loud-not-blocking console.warn on a reason-less stamp', () => {
+  let warnSpy;
+  afterEach(() => {
+    warnSpy?.mockRestore();
+  });
+
+  /** console.warn is a shared global; other code in the worker may also call it. Match on
+   *  this test's own unique sd_key rather than asserting an exact total call count. */
+  function warnedFor(spy, sdKey) {
+    return spy.mock.calls.filter(([msg]) => typeof msg === 'string' && msg.includes('ROADMAP_LINK_EXCEPTION') && msg.includes(sdKey));
+  }
+
+  it('warns, naming the sd_key, when no reason is supplied', () => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    buildRoadmapLinkException('SD-NO-REASON-QF459-001', null, NOW);
+    expect(warnedFor(warnSpy, 'SD-NO-REASON-QF459-001')).toHaveLength(1);
+  });
+
+  it('does NOT warn (about this exception) when a real reason is supplied', () => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    buildRoadmapLinkException('SD-HAS-REASON-QF459-001', 'a genuine reason', NOW);
+    expect(warnedFor(warnSpy, 'SD-HAS-REASON-QF459-001')).toHaveLength(0);
+  });
+
+  it('a whitespace-only reason still counts as missing and still warns', () => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    buildRoadmapLinkException('SD-WS-ONLY-QF459-001', '   ', NOW);
+    expect(warnedFor(warnSpy, 'SD-WS-ONLY-QF459-001')).toHaveLength(1);
+  });
+
+  it('FR-1 REGRESSION GUARD: still never throws on a missing reason -- loud is not blocking', () => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => buildRoadmapLinkException('SD-NO-REASON-002', undefined, NOW)).not.toThrow();
   });
 });
 

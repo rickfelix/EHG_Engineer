@@ -95,7 +95,7 @@ export async function showFallbackQueue(supabase, options = {}) {
   // Column list mirrors what rankItems() reads: sequence_rank, category, metadata, vision_*, venture_id.
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id, category, vision_score, vision_origin_score_id, venture_id, governance_metadata')
+    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, claiming_session_id, parent_sd_id, category, vision_score, vision_origin_score_id, venture_id, governance_metadata')
     .eq('is_active', true)
     .in('status', ['draft', 'lead_review', 'plan_active', 'exec_active', 'active', 'in_progress'])
     .in('priority', ['critical', 'high', 'medium'])
@@ -183,7 +183,14 @@ export async function showFallbackQueue(supabase, options = {}) {
 
   console.log(`\n${colors.bold}${colors.green}RECOMMENDED STARTING POINTS:${colors.reset}`);
 
-  const workingOn = sds.find(s => s.is_working_on);
+  // SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001 FR-3: a row claimed by a
+  // session other than the caller must never surface as a recommendation
+  // (CONTINUE or per-track ready pick). Fails closed — an indeterminate
+  // caller (no currentSession) treats any claimed row as claimed-by-other.
+  const currentSessionId = sessionContext.currentSession?.session_id;
+  const isClaimedByOther = (s) => !!s.claiming_session_id && s.claiming_session_id !== currentSessionId;
+
+  const workingOn = sds.find(s => s.is_working_on && !isClaimedByOther(s));
   if (workingOn) {
     console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.sd_key || workingOn.id} - ${workingOn.title}`);
     console.log(`${colors.dim}   (Marked as "Working On" in UI)${colors.reset}`);
@@ -193,7 +200,7 @@ export async function showFallbackQueue(supabase, options = {}) {
   for (const [trackKey, trackSDs] of Object.entries(tracks)) {
     // QF-20260511-565: exclude LEAD-paused/deferred SDs from RECOMMENDED STARTING POINTS
     // QF-20260512-300: exclude test-harness SDs (metadata.is_test=true) from recommendations
-    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on && !isLeadDecisionPaused(s) && s.metadata?.is_test !== true);
+    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on && !isLeadDecisionPaused(s) && s.metadata?.is_test !== true && !isClaimedByOther(s));
     if (ready) {
       const trackLabel = `Track ${trackKey}`;
       console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.sd_key || ready.id} - ${ready.title.substring(0, 50)}...`);
