@@ -213,6 +213,18 @@ async function t2_mutationTestPostCondition(client, q, artifact) {
  * strict pattern REVOKE TRUNCATE ON <schema>.<relation> FROM anon; and the sorted relation set must
  * equal the enumeration artifact byte-for-byte.
  */
+function partitionStatements(sql) {
+  const withoutDoBlock = sql.replace(/DO \$\$[\s\S]*?\$\$;/g, 'DO_BLOCK;');
+  const withoutComments = withoutDoBlock.split('\n').filter((l) => !/^\s*--/.test(l)).join('\n');
+  return withoutComments.split(';').map((s) => s.trim().replace(/\s+/g, ' ')).filter(Boolean);
+}
+
+const REVOKE_STATEMENT = /^REVOKE TRUNCATE ON [a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]* FROM anon$/;
+const SCAFFOLD_ALLOWLIST = new Set(['BEGIN', "SET LOCAL lock_timeout = '5s'", 'DO_BLOCK', 'COMMIT', 'DROP TABLE _sweep_baseline']);
+function isAllowedNonPrivilegeStatement(stmt) {
+  return SCAFFOLD_ALLOWLIST.has(stmt) || /^CREATE TEMP TABLE _sweep_baseline\b/.test(stmt);
+}
+
 async function t5_fileLint(artifact) {
   const upSql = readFileSync(UP_PATH, 'utf8');
   const STRICT_LINE = /^REVOKE TRUNCATE ON ([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*) FROM anon;$/;
@@ -224,6 +236,34 @@ async function t5_fileLint(artifact) {
   const artifactRelations = [...artifact.relations].sort();
   const identical = JSON.stringify(fileRelations) === JSON.stringify(artifactRelations);
   record('T5b: the file\'s relation set equals the enumeration artifact, byte-for-byte (sorted)', identical, identical ? `${fileRelations.length} relations` : `file=${fileRelations.length} artifact=${artifactRelations.length}`);
+
+  // T5c (SECURITY EXEC-phase re-review, "SEC-R5"): T5a/T5b self-select to lines that ALREADY start
+  // with "REVOKE TRUNCATE ON" -- an appended GRANT, an out-of-artifact REVOKE, or a DROP TABLE
+  // anywhere else in the file is invisible to both, since neither ever looks at what else is present.
+  // Partition EVERY statement in the file; each must be either a conforming REVOKE TRUNCATE or a
+  // member of the file's own fixed scaffold -- nothing else is permitted to exist.
+  const allStatements = partitionStatements(upSql);
+  const privilegeStatements = allStatements.filter((s) => /^(GRANT|REVOKE)\b/i.test(s));
+  const otherStatements = allStatements.filter((s) => !/^(GRANT|REVOKE)\b/i.test(s));
+  const nonConformingPrivilege = privilegeStatements.filter((s) => !REVOKE_STATEMENT.test(s));
+  const nonConformingOther = otherStatements.filter((s) => !isAllowedNonPrivilegeStatement(s));
+  const clean = nonConformingPrivilege.length === 0 && nonConformingOther.length === 0;
+  record(
+    'T5c: every statement in the staged UP file is a conforming REVOKE TRUNCATE or a named scaffold statement (no smuggled addition)',
+    clean,
+    clean ? `${allStatements.length} statements checked` : `bad_privilege=${nonConformingPrivilege.length} bad_other=${nonConformingOther.map((s) => s.slice(0, 60)).join(' | ')}`
+  );
+
+  // T5d: mutation-prove T5c is not vacuous. Append a statement T5a/T5b structurally cannot see (it
+  // never starts with "REVOKE TRUNCATE ON") and confirm the SAME partition logic flags it. Runs
+  // against an in-memory mutated copy only -- never touches the real file or the database.
+  const mutated = upSql.replace('\nCOMMIT;\n', '\nGRANT ALL ON public.__sec_r5_mutation_probe TO anon;\nCOMMIT;\n');
+  if (mutated === upSql) throw new Error('T5D_MUTATION_NOOP: replace target not found in the real file -- test would give a false pass');
+  const mutatedStatements = partitionStatements(mutated);
+  const mutatedPrivilege = mutatedStatements.filter((s) => /^(GRANT|REVOKE)\b/i.test(s));
+  const mutatedOther = mutatedStatements.filter((s) => !/^(GRANT|REVOKE)\b/i.test(s));
+  const mutationCaught = mutatedPrivilege.some((s) => !REVOKE_STATEMENT.test(s)) || mutatedOther.some((s) => !isAllowedNonPrivilegeStatement(s));
+  record('T5d: T5c catches a smuggled statement (appended GRANT ALL) that T5a/T5b would miss', mutationCaught);
 }
 
 async function t3_upDownRoundTrip(client, q, artifact) {
