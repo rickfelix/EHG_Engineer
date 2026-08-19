@@ -1,3 +1,7 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A by SMS 2026-08-19T19:13:20Z (drift packet #2: 5 structural, Solomon 299de763); additive/idempotent; drift-guard gap; scribe adam-08049808
+-- @approved-by: 2026-08-19T19:26Z
+-- approval-note: chairman ruling A by SMS 2026-08-19T19:13:20Z (drift packet #2: 5 structural, Solomon 299de763); additive/idempotent; drift-guard gap; scribe adam-08049808
 -- SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-001 FR-1 — judgment expiry as its OWN column.
 --
 -- CHAIRMAN-APPLY-GATED. Authored, not applied.

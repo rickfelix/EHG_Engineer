@@ -1,3 +1,7 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A by SMS 2026-08-19T19:13:20Z (drift packet #2: 5 structural, Solomon 299de763); additive/idempotent; drift-guard gap; scribe adam-08049808
+-- @approved-by: 2026-08-19T19:26Z
+-- approval-note: chairman ruling A by SMS 2026-08-19T19:13:20Z (drift packet #2: 5 structural, Solomon 299de763); additive/idempotent; drift-guard gap; scribe adam-08049808
 -- SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 (FR-2)
 -- Add ship_review_findings.metadata (nullable jsonb) so P2's witness-evaluation
 -- rung (evaluateP2Witness(), lib/ship/merge-witness-ladder.mjs) can move off a

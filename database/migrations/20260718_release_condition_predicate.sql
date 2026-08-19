@@ -1,3 +1,7 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A by SMS 2026-08-19T19:13:20Z (drift packet #2: 5 structural, Solomon 299de763); additive/idempotent; drift-guard gap; scribe adam-08049808
+-- @approved-by: 2026-08-19T19:26Z
+-- approval-note: chairman ruling A by SMS 2026-08-19T19:13:20Z (drift packet #2: 5 structural, Solomon 299de763); additive/idempotent; drift-guard gap; scribe adam-08049808
 -- Migration: release_condition_predicate — additive machine-evaluable predicate column
 -- SD: SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-A (FR-3)
 -- Purpose: hold_state_contract_violations.release_condition is free-TEXT, observe-mode-only,
