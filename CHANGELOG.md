@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-19](#2026-08-19)
+  - [Infrastructure](#infrastructure)
 - [2026-08-18](#2026-08-18)
   - [Security](#security)
   - [Bugfix](#bugfix)
@@ -124,6 +126,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-19
+
+### Infrastructure
+- **A registry.json fallback could re-admit a DB-tombstoned venture repo as live, live-confirmed via 31 SDs sitting behind the leak — closing orchestrator SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001's second and final child** - PR #7269 (SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001-C)
+  - **What shipped**: `lib/repo-paths.js`'s `resolveRepoPathDbFirst` gains an additive sibling, `resolveRepoPathDbFirstDetailed({path, source, reason})`, evaluating `status`/`deleted_at` client-side and refusing the registry.json fallback only on a matched-but-tombstoned row; the original function becomes a thin wrapper preserving its existing `Promise<string|null>` contract, so 6 of 8 production call sites needed zero code changes. Root cause: the server-side `.eq('status','active').is('deleted_at', null)` filter made a DB-tombstoned app (e.g. MarketLens) return the same empty result as a never-registered one, so the registry fallback — which has no `deleted_at` concept — could hand back a stale live path for a retired application. Both real call sites in `lib/sub-agents/resolve-repo.js` fixed directly, removing a redundant secondary registry fallback that could re-leak a tombstoned app even after the primary fix refused it, and correcting a `registrySource` label that was already self-witnessed as wrong (`'db'` reported for a zero-DB-access registry result).
+  - **The regression tests were broken by the same root cause as the production bug, not a coincidence**: 2 quarantined tests (`repo-paths-db-first.test.js`, `registry-aware-target-application.test.js`) used a hand-rolled Supabase mock that stopped at `.eq()` and didn't chain through `.is()`, throwing inside a swallowed catch and silently falling through to the registry — reproducing the exact defect class inside the tests' own fixtures. Un-quarantined and rewritten onto the shared `createSupabaseChainMock()` helper instead of patching a third bespoke mock.
+  - **A full dependent-file re-run (not just the 2 directly-touched files) caught a live regression the fix itself introduced**: `tests/unit/venture-aware-completion-gates.test.js` had its own strict chain-mock still pinned to the OLD `.eq().is()` query shape this fix replaced, silently degrading 2 of its DB-hit tests to a false-pass via the registry fallback — found and fixed in the same PR rather than shipped broken. A fixture-blind assertion in the live soft-delete test (`applications-soft-delete-reconcile.db.test.js`) was also strengthened: `.not.toBe(sentinel)` passed even when the resolver returned a wrong-but-different live path from the registry — exactly this SD's defect class — now asserts `reason:'tombstoned'` specifically.
+  - **Documentation**: 3 previously-uncatalogued parallel resolver modules (`venture-resolver.js`, `venture-repo-root.js`, `venture-name-resolver.js`) catalogued in `docs/architecture/canonical-repo-resolution-census.md`; `repo-paths.cjs`'s mischaracterization as DB-first corrected (it's registry-only, structurally incapable of honoring a tombstone); 3 deferred-with-owner follow-ups disclosed (`shared-git-context.js`, `post-completion-validator.js`, `resolveCanonicalAppName`'s identical defect class) rather than silently omitted.
+  - **Verification**: 7 tests added, 1 regression found and 4 total bugs resolved in-PR; all 7 PRD user stories individually verified against cited test evidence per acceptance criterion (2 with PRD/auto-generated-AC wording drift caught and disclosed rather than silently passed); the live-DB-gated `.db.test.js` file, unable to execute in the build sandbox, verified instead by disclosed source-pin reasoning.
+- **Orchestrator SD-LEO-INFRA-CLOSE-REMAINING-CROSS-001 completed** — both children (B: QF-escalation routing above, C: registry/DB reconciliation above) reached LEAD-FINAL-APPROVAL and the parent's own PLAN-TO-LEAD/LEAD-FINAL-APPROVAL passed at 93%/94%. Sequencing (Child 1 before Child 2, since Child 1 changes which rows get auto-registered into the `applications` table Child 2 reconciles) was enforced at the claim layer, not just documented — Child 2 was genuinely unclaimable until Child 1's status flipped to completed. Three items remain explicitly deferred-with-owner in the canonical census doc (`shared-git-context.js` repo-path threading, `post-completion-validator.js`'s SHIP check venture-awareness, `computeReposForSD`), each with a measured risk/benefit rationale rather than a bare "later."
 
 ## 2026-08-18
 
