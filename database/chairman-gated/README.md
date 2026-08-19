@@ -316,6 +316,61 @@ from this SD family's own completion retro: a verify block that only re-checks c
 (function exists) can pass while every real call still 42501s, because EXECUTE grants were never
 asserted.
 
+## Applying `20260819_anon_truncate_sweep.sql`, `20260819_anon_truncate_default_privileges.sql`, `20260819_security_audit_events_revoke_authenticated_truncate.sql`
+
+```
+node scripts/apply-migration.js "database/chairman-gated/20260819_anon_truncate_sweep.sql" \
+  --prod-deploy --allow-any-path
+node scripts/apply-migration.js "database/chairman-gated/20260819_anon_truncate_default_privileges.sql" \
+  --prod-deploy --allow-any-path
+node scripts/apply-migration.js "database/chairman-gated/20260819_security_audit_events_revoke_authenticated_truncate.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-ANON-TRUNCATE-SWEEP-001.) Three independent files, applicable in **any order** — they
+touch disjoint axes (anon vs. authenticated; existing relations vs. future-relation default
+privileges) and none depends on another having landed. Rollback is the paired `_DOWN.sql` for each,
+grant-precise (never a broader `GRANT ALL`).
+
+**⚠️ REGENERATE THE SWEEP FILE IMMEDIATELY BEFORE APPLYING.** `20260819_anon_truncate_sweep.sql` was
+generated from a live enumeration snapshot (`anon-truncate-sweep-enumeration.json`, committed
+alongside it) taken at authoring time. Its baseline-capture step resolves every relation through a
+`regclass` array literal — if any of the 760 named relations has been dropped or renamed by ceremony
+time, that step raises `42P01` and the **whole transaction aborts before any REVOKE runs** (fails
+safe, nothing partial is applied) — but the apply will not proceed until the file is regenerated
+against current state:
+
+```
+node scripts/one-off/anon-truncate-sweep-enumerate.mjs
+node scripts/one-off/anon-truncate-sweep-generate-migration.mjs
+```
+
+**Proof sequence — run before ceremony, safe to re-run any time (all three scripts run inside
+`BEGIN`/`ROLLBACK`, never touch live data, live in `scripts/` at the repo root — not co-located in
+this directory like earlier entries above):**
+
+```
+node scripts/anon-truncate-sweep-acceptance.mjs           # FR-1..FR-4: real UP file dry-run, 5 post-condition mutation proofs, UP->DOWN round-trip, TRUNCATE-refusal probe, whole-file statement lint (16 checks)
+node scripts/anon-truncate-sweep-fr5-fr6-acceptance.mjs   # FR-5/FR-6: tier classification, clean apply, UP->DOWN round-trip on pg_default_acl / relacl (8 checks)
+node scripts/one-off/anon-truncate-sweep-fr4-reachability.mjs   # FR-4: re-verify anon cannot reach TRUNCATE via any other path (schema CREATE, exec_sql, SECURITY DEFINER survey) before trusting the REVOKEs above as sufficient
+```
+
+### What it does
+
+Closes the anon-TRUNCATE gap left after `SD-LEO-INFRA-AUDIT-LOG-MUTATION-BLIND-001` (which revoked
+TRUNCATE from `authenticated` on governed tables but explicitly did not touch `anon`, and did not
+sweep the wider Supabase-default `GRANT ALL` artifact anon inherited across the schema). RLS cannot
+gate `TRUNCATE` at all — REVOKE is the only mechanism. `_sweep.sql` revokes anon's TRUNCATE on the
+760 ordinary, postgres-owned tables that currently hold it (views and 3 `storage.*`-owned tables are
+excluded by mechanism, not by list curation — see the file's own header). `_default_privileges.sql`
+closes the same gap for FUTURE tables via `ALTER DEFAULT PRIVILEGES` (3 `supabase_admin`-owned
+schemas are a disclosed, deferred residual — see the file header, no project credential can join that
+platform-reserved role). `_security_audit_events...sql` closes one specific `authenticated`-axis gap
+the predecessor SD's own sweep missed on this table's partition tree.
+
+**Never applied by the builder.** All three pairs remain `@approved-by:`-unstamped by design; the
+chairman applies each via the ceremony above.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
