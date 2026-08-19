@@ -17,6 +17,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getRepoPaths, resolveGitHubRepo } from '../../../lib/repo-paths.js';
+import { matchesSdBranchPattern } from './branch-pattern-match.js';
 
 dotenv.config();
 
@@ -173,7 +174,7 @@ export class SDGitStateReconciler {
         for (const pattern of branchPatterns) {
           const matching = branchList.split('\n')
             .map(b => b.trim())
-            .filter(b => b.toLowerCase().includes(pattern.toLowerCase()) && !b.includes('HEAD'));
+            .filter(b => matchesSdBranchPattern(b, pattern) && !b.includes('HEAD'));
 
           for (const branch of matching) {
             const cleanBranch = branch.replace('origin/', '');
