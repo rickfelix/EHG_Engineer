@@ -123,7 +123,7 @@ for (const r of applied) {
   // Compare against the ACTUAL LIVE config value, not the view row's own historical
   // current_threshold stamp (which reflects whatever threshold was in effect when that
   // specific assessment ran, and can be stale relative to config.js today).
-  const liveConfigValue = SD_TYPE_PASS_THRESHOLDS[r.sd_type];
+  const liveConfigValue = SD_TYPE_PASS_THRESHOLDS[r.sd_type]?.default;
   const alreadyLive = liveConfigValue >= r.suggested_threshold;
   console.log('  ' + cell(r).padEnd(34) + (alreadyLive
     ? `ALREADY APPLIED (config.js SD_TYPE_PASS_THRESHOLDS.${r.sd_type}=${liveConfigValue}, already >= ${r.suggested_threshold})`
