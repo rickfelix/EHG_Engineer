@@ -455,13 +455,11 @@ export async function surfaceInboxItems(sb) {
 }
 
 // QF-20260719-848: contract CHAIRMAN SMS CHANNEL DUTY (INBOUND WATCH) — every tick must surface
-// undrained chairman replies (one sat undrained ~25min on 2026-07-19; the tick had ZERO sms
-// visibility). Anti-fragile: filter ONLY on drained_at IS NULL (NO time filter — the live miss
-// was a hand-anchored received_at>= on a misremembered send time) and NEVER drop on a phone
-// mismatch. The relay is chairman-dedicated: with CHAIRMAN_PHONE unset (it is not in the tick
-// env) every undrained row is a chairman-candidate hard interrupt; when set, an exact match is
-// labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
-// all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
+// undrained chairman replies. Never drop on a phone mismatch (labelled when CHAIRMAN_PHONE is
+// set, but non-matches still surface). SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-5: the original
+// version of this comment described a drained_at IS NULL filter that QF-20260808-673 replaced —
+// see the surfaceSmsInbound docstring below (current received_at-window + sms_outbound_obligations
+// implementation) for the actual, current predicate.
 const SMS_INBOUND_CAP = 50;
 // QF-20260810-590 provenance now lives in lib/comms/adam-outbound/watchdog-detector.js
 // (SD-LEO-FIX-QUIET-HOURS-GATE-001 relocation). Re-exported here so external consumers that
