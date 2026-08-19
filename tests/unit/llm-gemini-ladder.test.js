@@ -65,8 +65,24 @@ describe('TS-2 per-tier env var override', () => {
 });
 
 describe('TS-4 existing purpose-based routing is unaffected (regression guard)', () => {
-  it('MODEL_DEFAULTS.google purpose routing is byte-identical to pre-SD values', () => {
-    expect(getGoogleModel('validation')).toBe('gemini-2.5-flash');
+  // QF-20260818-343: this suite doesn't clear GEMINI_MODEL*/CLAUDE_MODEL*/OPENAI_MODEL*
+  // env vars, so a local dev .env pin (observed: GEMINI_MODEL=gemini-2.5-flash) can mask
+  // a real MODEL_DEFAULTS change and pass locally while CI (no such pin) correctly fails
+  // -- exactly what happened when `validation` was intentionally moved off 2.5-flash.
+  // Clearing here makes the assertions test the actual hardcoded default, not ambient env.
+  const GUARD_ENV_KEYS = ['GEMINI_MODEL', 'GEMINI_MODEL_VALIDATION', 'GEMINI_MODEL_FAST', 'GEMINI_MODEL_REASONING'];
+  const savedEnv = {};
+  beforeEach(() => {
+    for (const k of GUARD_ENV_KEYS) { savedEnv[k] = process.env[k]; delete process.env[k]; }
+  });
+  afterEach(() => {
+    for (const k of GUARD_ENV_KEYS) {
+      if (savedEnv[k] === undefined) delete process.env[k]; else process.env[k] = savedEnv[k];
+    }
+  });
+
+  it('MODEL_DEFAULTS.google purpose routing matches current intent (QF-20260818-343: validation upgraded to 3.7-flash)', () => {
+    expect(getGoogleModel('validation')).toBe('gemini-3.7-flash');
     expect(getGoogleModel('fast')).toBe('gemini-2.5-flash');
     expect(getGoogleModel('reasoning')).toBe('gemini-2.5-pro');
   });
