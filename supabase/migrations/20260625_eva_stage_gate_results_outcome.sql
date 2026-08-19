@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-19T18:11Z ('I agree with your recommendation'); additive ADD COLUMN IF NOT EXISTS; drift-guard gap since June; scribe adam-08049808
 -- SD-LEO-INFRA-S3-SOFT-GATE-REDESIGN-001 (FR-5): verdict + eventual-outcome data foundation.
 -- ADDITIVE + NULLABLE + REVERSIBLE / idempotent. eva_stage_gate_results already records the
 -- gate VERDICT (passed, gate_criteria, overall_score, evaluated_by); this adds the EVENTUAL

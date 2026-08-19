@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-19T18:11Z ('I agree with your recommendation'); additive ADD COLUMN IF NOT EXISTS; drift-guard gap since June; scribe adam-08049808
 -- 20260616_sd_capabilities_scope_dimension.sql
 -- SD-LEO-INFRA-UNBLOCK-PORTFOLIO-WIDE-001 (FR-1): the SD-3 keystone structural unblock.
 --
