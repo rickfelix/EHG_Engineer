@@ -62,6 +62,39 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     });
   });
 
+  describe('--backup-plan / --deletion-approved on --from-feedback (QF-20260818-873: GR-DELETION-SAFEGUARD had no CLI flag, unlike sibling GR-SECURITY-BASELINE)', () => {
+    it('createFromFeedback destructures backupPlan + deletionApproved from options', () => {
+      const idx = src.indexOf('async function createFromFeedback');
+      expect(idx).toBeGreaterThan(0);
+      const body = src.slice(idx, idx + 3500);
+      expect(body).toMatch(/backupPlan\s*=\s*false/);
+      expect(body).toMatch(/deletionApproved\s*=\s*false/);
+    });
+
+    it('createFromFeedback metadata propagates backup_plan=true / deletion_approved=true when the flags are set', () => {
+      const idx = src.indexOf('async function createFromFeedback');
+      const body = src.slice(idx, idx + 6500);
+      expect(body).toMatch(/backupPlan\s*\?\s*\{\s*backup_plan:\s*true\s*\}/);
+      expect(body).toMatch(/deletionApproved\s*\?\s*\{\s*deletion_approved:\s*true\s*\}/);
+    });
+
+    it('CLI args parser includes --backup-plan / --deletion-approved in fbKnownFlags', () => {
+      const idx = src.indexOf('const fbKnownFlags = new Set');
+      expect(idx).toBeGreaterThan(0);
+      const block = src.slice(idx, idx + 300);
+      expect(block).toMatch(/--backup-plan/);
+      expect(block).toMatch(/--deletion-approved/);
+    });
+
+    it('CLI passes args.includes(--backup-plan) / --deletion-approved to createFromFeedback', () => {
+      const idx = src.indexOf('await createFromFeedback(feedbackId,');
+      expect(idx).toBeGreaterThan(0);
+      const block = src.slice(idx, idx + 500);
+      expect(block).toMatch(/backupPlan:\s*args\.includes\(['"]--backup-plan['"]\)/);
+      expect(block).toMatch(/deletionApproved:\s*args\.includes\(['"]--deletion-approved['"]\)/);
+    });
+  });
+
   describe('--from-qf path (SD-LEO-FIX-LEO-CREATE-ROUTE-001)', () => {
     it('createFromQF accepts an opts param and destructures securityReviewed', () => {
       const idx = src.indexOf('async function createFromQF');

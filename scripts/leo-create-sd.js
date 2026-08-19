@@ -144,6 +144,14 @@ Flags:
                         guardrail (required when scope contains auth/credential/RLS keywords).
                         Honored on the same routes as --migration-reviewed (incl. proposal
                         metadata.security_reviewed===true).
+  --backup-plan          Set metadata.backup_plan=true to satisfy GR-DELETION-SAFEGUARD
+                        guardrail (required when scope contains drop/delete/truncate/purge
+                        keywords). Attests a backup/rollback plan is authored in the SD's own
+                        description -- the flag is consent, not the plan itself. Honored on
+                        --from-feedback (QF-20260818-873; mirrors --security-reviewed at :143).
+  --deletion-approved    Set metadata.deletion_approved=true -- alternate GR-DELETION-SAFEGUARD
+                        attestation (explicit approval in lieu of an authored backup plan).
+                        Honored on --from-feedback (QF-20260818-873).
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
@@ -270,7 +278,9 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       );
       // QF-20260509-LEO-CREATE-FLAGS: include review flags so they're not
       // mistaken for the feedback ID positional. Closes 8a640d32 sibling parity.
-      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--force-liveness', '--target-repos']);
+      // QF-20260818-873: --backup-plan/--deletion-approved close the GR-DELETION-SAFEGUARD
+      // sibling-parity gap (--security-reviewed had a flag at :143, this guardrail didn't).
+      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--backup-plan', '--deletion-approved', '--force-liveness', '--target-repos']);
       const feedbackId = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !fbFlagValuePositions.has(i) && !fbKnownFlags.has(arg)
       ) || args[1];
@@ -279,6 +289,8 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         titleOverride: fbTitleIdx !== -1 ? args[fbTitleIdx + 1] : null,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
+        backupPlan: args.includes('--backup-plan'),
+        deletionApproved: args.includes('--deletion-approved'),
         forceLiveness: fbForceLivenessIdx !== -1 ? args[fbForceLivenessIdx + 1] : null,
         targetRepos: fbTargetReposIdx !== -1 ? parseTargetReposArg(args[fbTargetReposIdx + 1]) : null,
       });
