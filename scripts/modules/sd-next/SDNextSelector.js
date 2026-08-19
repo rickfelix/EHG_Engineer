@@ -379,16 +379,20 @@ export class SDNextSelector {
       // the real claim. This also subsumes the old getClaimedSessions() supplement:
       // an idle session with an active claim is now visible because the claim lives
       // on the SD row itself, independent of session activity/heartbeat.
+      // Adversarial-review INFO finding: paginate via fetchAllPaginated (already used
+      // elsewhere in this file, per its own FR-6-batch-4 comment) rather than a bare
+      // .select() -- a PostgREST 1000-row cap would otherwise silently truncate this
+      // read and hide claimed SDs past the cap.
       try {
-        const { data: claimedRows } = await this.supabase
-          .from('strategic_directives_v2')
-          .select('sd_key, claiming_session_id')
-          .not('claiming_session_id', 'is', null);
-        if (claimedRows) {
-          for (const row of claimedRows) {
-            if (row.sd_key && row.claiming_session_id) {
-              this.claimedSDs.set(row.sd_key, row.claiming_session_id);
-            }
+        const claimedRows = await fetchAllPaginated(() =>
+          this.supabase
+            .from('strategic_directives_v2')
+            .select('sd_key, claiming_session_id')
+            .not('claiming_session_id', 'is', null)
+        );
+        for (const row of claimedRows) {
+          if (row.sd_key && row.claiming_session_id) {
+            this.claimedSDs.set(row.sd_key, row.claiming_session_id);
           }
         }
       } catch { /* non-fatal: continue without claim data */ }

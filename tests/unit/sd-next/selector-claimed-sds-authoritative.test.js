@@ -17,7 +17,10 @@ function makeSupabase(claimedRows) {
   return {
     from: (table) => {
       if (table === 'strategic_directives_v2') {
-        return { select: () => ({ not: async () => ({ data: claimedRows, error: null }) }) };
+        // fetchAllPaginated calls queryFactory().range(offset, offset+pageSize-1) --
+        // .range() is the terminal call here, not .not(). One page is enough since
+        // claimedRows.length is always far below the 1000-row pageSize in these tests.
+        return { select: () => ({ not: () => ({ range: async () => ({ data: claimedRows, error: null }) }) }) };
       }
       // claude_sessions silence-enrichment path (non-fatal, only reached when activeSessions
       // is non-empty) -- shape doesn't matter beyond not throwing.
