@@ -337,6 +337,31 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', (
     expect(row.delivered_at).toBeTruthy();
   });
 
+  it('QF-20260729-286: when Twilio reports date_updated, delivered_at uses Twilio\'s true delivery time, not this poll tick\'s now', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-truth-ts', sent_at: agoAt(90 * MIN), delivered_at: null })] });
+    // Twilio confirms the message actually delivered 88 minutes ago -- long before this poll
+    // tick ran. Pre-fix, delivered_at would be stamped with `now` (DAY_NOW), understating the
+    // true delivery time by ~88 minutes.
+    const twilioDeliveredAt = new Date(DAY_NOW - 88 * MIN).toUTCString();
+    const checkMessageStatus = vi.fn(async () => ({ status: 'delivered', dateUpdated: twilioDeliveredAt }));
+    const provider = { ...okProvider(), checkMessageStatus };
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, now: DAY_NOW });
+    expect(summary.confirmedDelivered).toBe(1);
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.delivered_at).toBe(new Date(twilioDeliveredAt).toISOString());
+    expect(row.delivered_at).not.toBe(new Date(DAY_NOW).toISOString());
+  });
+
+  it('QF-20260729-286: when Twilio omits/malforms date_updated, delivered_at falls back to this poll tick\'s now (no worse than pre-fix)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-no-ts', sent_at: agoAt(20 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'delivered', dateUpdated: 'not-a-real-date' }));
+    const provider = { ...okProvider(), checkMessageStatus };
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, now: DAY_NOW });
+    expect(summary.confirmedDelivered).toBe(1);
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.delivered_at).toBe(new Date(DAY_NOW).toISOString());
+  });
+
   it('Solomon Pin #3: the provider-check ITSELF failing (no callback AND a failed check) escalates to owed_escalate, never silently closed', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-check-fails', sent_at: ago(20 * MIN), delivered_at: null })] });
     const checkMessageStatus = vi.fn(async () => { throw new Error('twilio_status_check_http_500'); });
