@@ -19,8 +19,12 @@ const execSyncMock = vi.fn();
 vi.mock('child_process', () => ({ execSync: (...args) => execSyncMock(...args) }));
 
 const { ShippingPreflightVerifier } = await import('../ShippingPreflightVerifier.js');
+// Resolved, not hardcoded (lint-repo-resolution-drift flags a literal platform-repo
+// string outside lib/repo-paths.js and tests/**; this file lives under
+// scripts/modules/shipping/__tests__/, not the top-level tests/ allowlist prefix).
+const { resolveGitHubRepo } = await import('../../../../lib/repo-paths.js');
 
-const TARGET_REPO = 'rickfelix/EHG_Engineer';
+const TARGET_REPO = resolveGitHubRepo('EHG_Engineer');
 
 // This environment's real applications/registry.json carries several repos
 // beyond EHG_Engineer (ehg, test-venture, marketlens, ...), all present on
