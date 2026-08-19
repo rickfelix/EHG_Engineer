@@ -2285,6 +2285,13 @@ async function printSolomonLedgerRollup() {
     : 'n/a';
   if (rollup.decidedCount === 0) {
     console.log('  0 decided proposal(s) yet (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
+    // VALIDATION sub-agent (VERIFY phase, V3): this branch used to silently drop
+    // unresolvedAcceptedCount even when nonzero -- a ledger that is ENTIRELY accepted-but-
+    // unresolved (decidedCount=0 via TS-9's own exclusion) rendered "0 decided" with no hint that
+    // acceptedCount rows actually exist and are just waiting on their outcome.
+    if (rollup.unresolvedAcceptedCount > 0) {
+      console.log('  (' + rollup.unresolvedAcceptedCount + ' additional accepted row(s) have not resolved an outcome yet — excluded from accuracy above, not counted as a miss)');
+    }
     console.log('');
     return;
   }
