@@ -1319,6 +1319,24 @@ async function printForecast(d) {
   console.log('');
 }
 
+// QF-20260808-127: v_active_sessions.sd_key mirrors claude_sessions, which can lag a genuine
+// claim release (measured incident: Alpha-4 released PUBLISH-SHELL-INJECTION-001, mirror stayed
+// stale, and the aging-alert loop kept flagging "has not heartbeated" 45min after release).
+// Cross-check the AUTHORITATIVE claim surface (strategic_directives_v2.claiming_session_id, via
+// the SAME single-source-of-truth reader already used by sweep/dashboard/sd-start/handoff) before
+// flagging a session as aging on an SD. Extracted + exported so the ownership check is injectable
+// and testable without a live claim surface. QF ids (non-SD- prefix) are left unguarded — out of
+// this QF's measured scope (the reported incident was SD-only).
+async function selectAgingWorkers(activeSessions, staleWarningSeconds, isClaimedByFn) {
+  const out = [];
+  for (const s of activeSessions) {
+    if (s.heartbeat_age_seconds < staleWarningSeconds) continue;
+    if (s.sd_key && /^SD-/.test(s.sd_key) && !(await isClaimedByFn(s.sd_key, s.session_id))) continue;
+    out.push(s);
+  }
+  return out;
+}
+
 // ── Section: Predictions ──
 async function printPredictions(d) {
   const signals = [];
@@ -1402,18 +1420,17 @@ async function printPredictions(d) {
 
   // 3. Heartbeat aging — workers approaching stale threshold (FIX #5: with coordination messages)
   const STALE_WARNING = STALE_THRESHOLD * 0.6; // 60% of 5min = 3min
-  const agingWorkers = [];
-  for (const s of d.activeSessions) {
-    if (s.heartbeat_age_seconds >= STALE_WARNING) {
-      const remaining = Math.round(STALE_THRESHOLD - s.heartbeat_age_seconds);
-      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
-      signals.push({
-        icon: '~~',
-        label: 'AGING',
-        msg: s.tty + ' on ' + shortSd + ' — heartbeat aging (' + s.heartbeat_age_human + '), stale in ~' + remaining + 's'
-      });
-      agingWorkers.push(s);
-    }
+  const { isClaimedBy } = await import('../lib/claim/ownership-detection.js');
+  const agingWorkers = await selectAgingWorkers(d.activeSessions, STALE_WARNING,
+    (sdKey, sessionId) => isClaimedBy(sdKey, sessionId, supabase));
+  for (const s of agingWorkers) {
+    const remaining = Math.round(STALE_THRESHOLD - s.heartbeat_age_seconds);
+    const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    signals.push({
+      icon: '~~',
+      label: 'AGING',
+      msg: s.tty + ' on ' + shortSd + ' — heartbeat aging (' + s.heartbeat_age_human + '), stale in ~' + remaining + 's'
+    });
   }
 
   // Send STALE_WARNING coordination messages for aging workers
@@ -2809,7 +2826,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
