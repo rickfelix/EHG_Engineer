@@ -63,6 +63,34 @@ describe('readSalientState openSignalCount generalization (TS-4)', () => {
     expect(captured.orFilter).toContain('coordinator_directive');
   });
 
+  // QF-20260728-694: roll_call (0/169 acked, measured) and coordinator_reminder (2/234 acked,
+  // measured) are unackable by design in the coordinator drain set -- together 49% of the gauge
+  // at a ~1% combined ack rate. Excluded from the OR filter the same way cross_party_ping already
+  // is, above.
+  it('roll_call and coordinator_reminder (unackable by design, QF-20260728-694) are NOT present in the constructed OR filter', async () => {
+    const captured = {};
+    const mock = makeMock({
+      drainSetsRows: [{ kind: 'roll_call' }, { kind: 'coordinator_reminder' }, { kind: 'coordinator_directive' }],
+      coordinationRows: [],
+      captured,
+    });
+    await readSalientState(mock);
+    expect(captured.orFilter).not.toContain('roll_call');
+    expect(captured.orFilter).not.toContain('coordinator_reminder');
+    expect(captured.orFilter).toContain('coordinator_directive');
+  });
+
+  it('does NOT exclude coordinator_request (too small a measured sample per the ticket -- not swept in on n=5)', async () => {
+    const captured = {};
+    const mock = makeMock({
+      drainSetsRows: [{ kind: 'coordinator_request' }],
+      coordinationRows: [],
+      captured,
+    });
+    await readSalientState(mock);
+    expect(captured.orFilter).toContain('coordinator_request');
+  });
+
   it('EXEC-phase SECURITY hardening: a resolved kind containing filter-breaking characters (comma/paren) is excluded from the constructed OR filter, not interpolated raw', async () => {
     const captured = {};
     const mock = makeMock({
