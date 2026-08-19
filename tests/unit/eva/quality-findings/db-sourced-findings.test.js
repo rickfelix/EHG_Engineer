@@ -21,6 +21,7 @@ const {
   produceUatSignoffFindings,
   produceBugReportFindings,
   produceCapabilityFindings,
+  produceJourneyWalkFindings,
   collectNonRepoFindings,
 } = await import('../../../../lib/eva/quality-findings/db-sourced-findings.js');
 
@@ -186,18 +187,143 @@ describe('produceCapabilityFindings', () => {
   });
 });
 
+describe('produceJourneyWalkFindings', () => {
+  const ORCH_WITH_STEPS = {
+    id: 'orch-1',
+    sd_key: 'SD-ALTIFYAI-ORCH-001',
+    metadata: { venture_id: 'venture-1', journey_steps: [{ step_id: 's1', goal: 'do the thing' }] },
+  };
+  const VENTURE_WITH_URL = { id: 'venture-1', name: 'AltifyAI', deployment_url: 'https://altifyai.example.com' };
+
+  it('skips when the venture has no deployment_url', async () => {
+    const supabase = makeSupabase({ ventures: { data: { ...VENTURE_WITH_URL, deployment_url: null }, error: null } });
+    expect(await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, {})).toEqual([]);
+  });
+
+  it('skips when no orchestrator SD has derived journey_steps yet', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [{ id: 'orch-1', sd_key: 'SD-A', metadata: { venture_id: 'venture-1' } }], error: null },
+    });
+    expect(await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, {})).toEqual([]);
+  });
+
+  it('runs the walk with the derived venture key + journey steps, emitting nothing on pass', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [ORCH_WITH_STEPS], error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => ({ status: 'pass', testRunId: 'run-1', brokenAtStep: null }));
+    const out = await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk });
+    expect(out).toEqual([]);
+    expect(runVentureJourneyWalk).toHaveBeenCalledWith({
+      sdId: 'orch-1',
+      ventureKey: 'ALTIFYAI',
+      baseUrl: 'https://altifyai.example.com',
+      journeySteps: [{ step_id: 's1', goal: 'do the thing' }],
+    });
+  });
+
+  it('emits a high-severity uat_test finding when the walk fails', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [ORCH_WITH_STEPS], error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => ({ status: 'fail', testRunId: 'run-2', brokenAtStep: 's1' }));
+    const out = await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ check: 'uat_test', severity: 'high' });
+    expect(out[0].title).toContain('SD-ALTIFYAI-ORCH-001');
+    expect(out[0].detail).toContain('brokenAtStep=s1');
+    expect(out[0].detail).toContain('testRunId=run-2');
+  });
+
+  it('emits a medium-severity finding when the walk is blocked (instance unreachable)', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [ORCH_WITH_STEPS], error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => ({ status: 'blocked', reason: 'instance_unreachable: timeout' }));
+    const out = await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk });
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe('medium');
+    expect(out[0].detail).toContain('reason=instance_unreachable');
+  });
+
+  it('emits a medium-severity timeout finding when the walk does not settle within its own budget (does not wait for the real production timeout)', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [ORCH_WITH_STEPS], error: null },
+    });
+    const neverSettles = new Promise(() => {}); // simulates a hung walk
+    const runVentureJourneyWalk = vi.fn(() => neverSettles);
+    const out = await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk, timeoutMs: 10 });
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe('medium');
+    expect(out[0].title).toContain('timeout');
+    expect(out[0].detail).toContain('exceeded 10ms budget');
+  });
+
+  it('is best-effort: returns [] when the ventures query errors', async () => {
+    const supabase = makeSupabase({ ventures: { data: null, error: { message: 'db down' } } });
+    expect(await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, {})).toEqual([]);
+  });
+
+  it('is best-effort: returns [] when runVentureJourneyWalk itself throws', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [ORCH_WITH_STEPS], error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => { throw new Error('boom'); });
+    expect(await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk })).toEqual([]);
+  });
+
+  it('picks the most-recent orchestrator that actually has journey_steps, skipping a newer one without it', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [
+        { id: 'orch-new', sd_key: 'SD-NEW', metadata: { venture_id: 'venture-1' } }, // no journey_steps
+        ORCH_WITH_STEPS,
+      ], error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => ({ status: 'fail' }));
+    const out = await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk });
+    expect(out[0].title).toContain('SD-ALTIFYAI-ORCH-001');
+  });
+});
+
 describe('collectNonRepoFindings', () => {
-  it('combines all four producers', async () => {
+  it('combines all producers (journeyWalk contributing none without a deployment_url configured)', async () => {
     evalMock.mockReturnValue({ pass: false, missing_required: [{ name: 'gh-cli', error: 'missing' }], missing_optional: [], versions: {} });
     const supabase = makeSupabase({
       strategic_directives_v2: { data: [{ id: 'u1', sd_key: 'SD-A-001' }], error: null },
       uat_test_runs: { data: [{ run_id: 'r', sd_id: 'SD-A-001', failed_tests: 1, pass_rate: 80 }], error: null },
       uat_test_results: { data: [{ test_case_id: 'TC-1', status: 'fail', error_message: 'x' }], error: null },
       feedback: { data: [{ id: 'fb-1', title: 'bug', description: 'd', severity: 'medium' }], error: null },
+      // ventures left unconfigured -> default { data: [], error: null } -> no deployment_url -> journeyWalk skips.
     });
     const out = await collectNonRepoFindings({ supabase, ventureId: 'venture-1', logger: silentLogger });
     const cats = new Set(out.map((f) => f.check));
     expect(cats).toEqual(new Set(['uat_test', 'uat_signoff', 'bug_report', 'capability']));
+  });
+
+  it('FR-4: threads journeyWalkDeps through so a failing live walk really flows into allFindings via this one path', async () => {
+    evalMock.mockReturnValue({ pass: true, missing_required: [], missing_optional: [], versions: {} });
+    const supabase = makeSupabase({
+      strategic_directives_v2: { data: [{
+        id: 'orch-1', sd_key: 'SD-ALTIFYAI-ORCH-001',
+        metadata: { venture_id: 'venture-1', journey_steps: [{ step_id: 's1' }] },
+      }], error: null },
+      ventures: { data: { id: 'venture-1', name: 'AltifyAI', deployment_url: 'https://altifyai.example.com' }, error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => ({ status: 'fail', testRunId: 'run-9', brokenAtStep: 's1' }));
+    const out = await collectNonRepoFindings({
+      supabase, ventureId: 'venture-1', logger: silentLogger,
+      journeyWalkDeps: { runVentureJourneyWalk },
+    });
+    const journeyFinding = out.find((f) => f.title?.startsWith('Venture journey walk'));
+    expect(journeyFinding).toMatchObject({ check: 'uat_test', severity: 'high' });
+    expect(runVentureJourneyWalk).toHaveBeenCalledTimes(1);
   });
 
   it('returns only capability findings when supabase/ventureId are absent', async () => {

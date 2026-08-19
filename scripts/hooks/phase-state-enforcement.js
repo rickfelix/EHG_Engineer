@@ -207,7 +207,10 @@ async function canTransitionPhase(supabase, sd, targetPhase, handoffType) {
 
   if (targetPhase === 'COMPLETED' || handoffType === 'LEAD-FINAL-APPROVAL') {
     // Completion requires UAT for types that need it
-    if (uatRequirement === 'REQUIRED' || requirements.requiresUATExecution) {
+    // QF-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-5: uatRequirement is an OBJECT
+    // (getUATRequirement without {returnLegacy:true}) -- comparing it to the string
+    // 'REQUIRED' was always false. Sibling fix to type-aware-validator.js's same defect.
+    if (uatRequirement.status === 'REQUIRED' || requirements.requiresUATExecution) {
       // QF-20260719-890 (schema-reference-lint): uat_test_runs has no overall_result
       // column — selecting it errored the whole query into data=null, so this UAT gate
       // silently never saw any runs. pass/partial_pass maps to pass_rate >= 93 per the

@@ -224,5 +224,28 @@ describe('Type-Aware SD Completion Validation', () => {
       expect(reqs.hasUIComponents).toBe(true);
       expect(reqs.requiresDesign).toBe(true);
     });
+
+    // QF-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-5: humanVerificationConfig had no 'docs' key,
+    // so getValidationRequirements({sd_type:'docs'}) fell through to
+    // humanVerificationConfig.feature (requiresUATExecution:true) even though
+    // getUATRequirement('docs') already reports EXEMPT via EXEMPT_TYPES/UAT_EXEMPTION_REASONS.
+    it('UAT requirement should align with validation requirements for docs SDs (regression)', () => {
+      const sd = { sd_type: 'docs', title: 'Docs SD' };
+      const uatReq = getUATRequirement('docs').status;
+      const validationReqs = getValidationRequirements(sd);
+
+      expect(uatReq).toBe('EXEMPT');
+      expect(validationReqs.requiresUATExecution).toBe(false);
+      expect(validationReqs.requiresHumanVerifiableOutcome).toBe(false);
+    });
+
+    it('docs and documentation sd_types produce identical validation requirements', () => {
+      const docsReqs = getValidationRequirements({ sd_type: 'docs', title: 'Docs' });
+      const documentationReqs = getValidationRequirements({ sd_type: 'documentation', title: 'Documentation' });
+
+      expect(docsReqs.requiresUATExecution).toBe(documentationReqs.requiresUATExecution);
+      expect(docsReqs.requiresHumanVerifiableOutcome).toBe(documentationReqs.requiresHumanVerifiableOutcome);
+      expect(docsReqs.humanVerificationType).toBe(documentationReqs.humanVerificationType);
+    });
   });
 });
