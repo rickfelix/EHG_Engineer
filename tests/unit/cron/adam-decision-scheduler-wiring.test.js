@@ -123,7 +123,7 @@ describe('adam decision-scheduler tick — behavioral wiring', () => {
     expect(tick).toHaveBeenCalledTimes(1);
   });
 
-  it('TS-7: second run (registry row already exists) does NOT re-register — idempotent, never wipes last_fired_at', async () => {
+  it('TS-7 (revised, SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): second run (registry row already exists) DOES re-register every tick, but the upsert payload omits last_fired_at -- idempotent via registerArmedMachinery\'s own contract, not a caller-side skip', async () => {
     const sb = makeRegistrySupabase({ existingRow: { process_key: 'g3-armed-sd-leo-infra-adam-decision-scheduler-001', last_fired_at: '2026-07-17T00:00:00.000Z' } });
     const stampLastFired = vi.fn(async () => ({ stamped: true }));
     const tick = vi.fn(async () => ({ ran: true, results: [] }));
@@ -133,7 +133,14 @@ describe('adam decision-scheduler tick — behavioral wiring', () => {
       now: new Date(Date.UTC(2026, 6, 18, 12, 0, 0)),
     });
     expect(result.exitCode).toBe(0);
-    expect(sb._upserts).toHaveLength(0); // no re-registration, real last_fired_at never touched by an upsert
+    // Adversarial review of PR #7304 found the previous `if (!data)` caller-side gate meant this
+    // SD's FR-4 calibration fix (expected_interval_seconds/workflow_cron) could never reach an
+    // already-registered live row. registerArmedMachinery is safe to call on every tick (FR-1,
+    // SD-LEO-INFRA-STAMP-ARMING-TIME-001: preserves armed_at, and omits last_fired_at entirely
+    // from the upsert payload on re-registration so a real timestamp is never overwritten) -- so
+    // the caller-side gate is gone and registration now runs unconditionally.
+    expect(sb._upserts).toHaveLength(1);
+    expect('last_fired_at' in sb._upserts[0]).toBe(false); // never wipes a real last_fired_at
     expect(stampLastFired).toHaveBeenCalledTimes(1); // liveness is still stamped every real run
   });
 

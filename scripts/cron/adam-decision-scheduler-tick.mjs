@@ -85,28 +85,29 @@ function buildSupabase() {
   return createClient(url, key);
 }
 
-/** Ensure the ARMED registration exists WITHOUT wiping last_fired_at (registerArmedMachinery upserts null). */
+/**
+ * Ensure the ARMED registration exists / stays calibrated. Called unconditionally on every tick --
+ * registerArmedMachinery is a safe read-before-upsert (SD-LEO-INFRA-STAMP-ARMING-TIME-001 FR-1): it
+ * preserves armed_at and never wipes a real last_fired_at on re-registration, but DOES re-assert
+ * expected_interval_seconds/workflow_cron/grace_multiplier from these opts every call. A prior
+ * `if (!data)` guard here (added when registerArmedMachinery unconditionally wiped last_fired_at,
+ * before that FR-1 fix) meant this SD's FR-4 calibration correction below could never reach the
+ * already-registered live row -- confirmed via adversarial review of PR #7304 -- so the guard is gone.
+ */
 async function ensureArmedRegistration(supabase, logger) {
   const processKey = armedProcessKey(SD_KEY);
   try {
-    const { data } = await supabase
-      .from('periodic_process_registry')
-      .select('process_key')
-      .eq('process_key', processKey)
-      .maybeSingle();
-    if (!data) {
-      const reg = await registerArmedMachinery(supabase, { sd_key: SD_KEY }, {
-        activationTrigger: ACTIVATION_TRIGGER,
-        // FR-4 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): corrected from a blind 2h guess to the
-        // real active-window cadence (this cron fires hourly during 00-01,11-23 UTC) plus the
-        // workflow's own cron string, so FR-1's gap-subtraction can subtract the declared 02:00-
-        // 10:59 UTC chairman SMS quiet window instead of that guess relying on padding alone.
-        expectedIntervalSeconds: 60 * 60,
-        workflowCron: '20 0-1,11-23 * * *',
-        owner: 'adam-decision-scheduler-tick',
-      });
-      if (!reg.ok) logger.warn?.(`[decision-scheduler-tick] ARMED registration failed (non-fatal): ${reg.error}`);
-    }
+    const reg = await registerArmedMachinery(supabase, { sd_key: SD_KEY }, {
+      activationTrigger: ACTIVATION_TRIGGER,
+      // FR-4 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): corrected from a blind 2h guess to the
+      // real active-window cadence (this cron fires hourly during 00-01,11-23 UTC) plus the
+      // workflow's own cron string, so FR-1's gap-subtraction can subtract the declared 02:00-
+      // 10:59 UTC chairman SMS quiet window instead of that guess relying on padding alone.
+      expectedIntervalSeconds: 60 * 60,
+      workflowCron: '20 0-1,11-23 * * *',
+      owner: 'adam-decision-scheduler-tick',
+    });
+    if (!reg.ok) logger.warn?.(`[decision-scheduler-tick] ARMED registration failed (non-fatal): ${reg.error}`);
   } catch (err) {
     logger.warn?.(`[decision-scheduler-tick] ARMED registration check failed (non-fatal): ${err.message}`);
   }
