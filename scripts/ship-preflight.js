@@ -346,11 +346,15 @@ export function printSummary(results) {
   const checks = [];
 
   if (results.branchVerification) {
+    // QF-20260727-876: a recognized stack landing is context, not a defect -- but a
+    // clean "No unmerged branches" would silently hide that N sibling PRs exist,
+    // same silent-truncation concern the multi-repo partial-scan warning above closes.
+    const stackCount = results.branchVerification.stackContext?.length || 0;
     checks.push({
       name: 'Branch Verification',
       passed: results.branchVerification.passed,
       details: results.branchVerification.passed
-        ? 'No unmerged branches'
+        ? (stackCount > 0 ? `No blocking branches (${stackCount} stack sibling(s), context only)` : 'No unmerged branches')
         : `${results.branchVerification.openPRs.length} open PRs, ${results.branchVerification.unmergedBranches.length} unmerged`
     });
   }

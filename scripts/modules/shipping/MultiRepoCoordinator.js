@@ -19,6 +19,7 @@ import {
   discoverRepos as discoverReposFromLib,
   getPrimaryRepos
 } from '../../../lib/multi-repo/index.js';
+import { isStackedLanding } from './stack-landing-detector.js';
 
 // QF-20260703-388: per-repo git/gh calls use execFileSync (no shell) so a timeout's
 // kill signal reaches the real process directly -- execSync's shell:true default wraps
@@ -80,6 +81,11 @@ export class MultiRepoCoordinator {
 
     // Check PR status for each branch
     await this.checkPRStatus();
+
+    // QF-20260727-876: N sibling open-PR branches for this SD, all independently
+    // based on main, are a deliberate multi-part landing -- demote them from
+    // blocking to context so coordination is satisfiable BY the merge it gates.
+    this.markStackSiblings();
 
     // Print unified status table
     this.printStatusTable();
@@ -204,7 +210,7 @@ export class MultiRepoCoordinator {
 
       try {
         const result = execFileSync(
-          'gh', ['pr', 'list', '--repo', branch.repoInfo.github, '--head', branch.branch, '--state', 'all', '--json', 'number,state,url', '--limit', '1'],
+          'gh', ['pr', 'list', '--repo', branch.repoInfo.github, '--head', branch.branch, '--state', 'all', '--json', 'number,state,url,baseRefName', '--limit', '1'],
           { encoding: 'utf8', timeout: PER_REPO_TIMEOUT_MS }
         );
 
@@ -213,6 +219,7 @@ export class MultiRepoCoordinator {
           branch.prNumber = prs[0].number;
           branch.prStatus = prs[0].state;
           branch.prUrl = prs[0].url;
+          branch.prBaseRefName = prs[0].baseRefName;
 
           // If PR is merged, branch no longer needs action
           if (prs[0].state === 'MERGED') {
@@ -225,6 +232,24 @@ export class MultiRepoCoordinator {
           console.log(`   ⚠️  Could not check PR for ${branch.branch}: ${error.message?.substring(0, 50)}`);
         }
       }
+    }
+  }
+
+  /**
+   * QF-20260727-876: demote still-open-PR branches from blocking to context
+   * (needsAction=false, isStackSibling=true) when this SD has multiple concurrent
+   * open PRs all independently based on main -- a deliberate multi-part landing,
+   * not orphaned work. A lone open PR is unaffected (still blocking), matching
+   * ShippingPreflightVerifier's identical, narrower-on-purpose guard.
+   */
+  markStackSiblings() {
+    const openPrBranches = this.branchStatus.filter(
+      (b) => b.needsAction && b.prNumber && b.prStatus === 'OPEN'
+    );
+    if (!isStackedLanding(openPrBranches.map((b) => b.prBaseRefName))) return;
+    for (const branch of openPrBranches) {
+      branch.isStackSibling = true;
+      branch.needsAction = false;
     }
   }
 
@@ -250,7 +275,9 @@ export class MultiRepoCoordinator {
       const prCol = branch.prNumber ? `#${branch.prNumber}`.padStart(6) : '-'.padStart(6);
 
       let status = 'Merged';
-      if (branch.needsAction) {
+      if (branch.isStackSibling) {
+        status = 'Stack';
+      } else if (branch.needsAction) {
         if (branch.prNumber && branch.prStatus === 'OPEN') {
           status = 'Open PR';
         } else if (branch.commitsAhead > 0 && !branch.prNumber) {
@@ -269,10 +296,13 @@ export class MultiRepoCoordinator {
     // Summary
     const needsAction = this.branchStatus.filter(b => b.needsAction);
     const merged = this.branchStatus.filter(b => b.isMerged);
+    const stackSiblings = this.branchStatus.filter(b => b.isStackSibling);
 
     if (needsAction.length === 0) {
       console.log('\n✅ Multi-Repo Coordination: PASS');
-      console.log(`   All ${this.branchStatus.length} branch(es) are merged`);
+      console.log(stackSiblings.length > 0
+        ? `   ${merged.length} branch(es) merged, ${stackSiblings.length} recognized as a stacked landing (context, not blocking)`
+        : `   All ${this.branchStatus.length} branch(es) are merged`);
     } else {
       console.log(`\n⚠️  Multi-Repo Coordination: ${needsAction.length} action(s) needed`);
       console.log(`   Merged: ${merged.length} | Pending: ${needsAction.length}`);
