@@ -371,6 +371,13 @@ the predecessor SD's own sweep missed on this table's partition tree.
 **Never applied by the builder.** All three pairs remain `@approved-by:`-unstamped by design; the
 chairman applies each via the ceremony above.
 
+**Overlap note:** 6 of the 760 relations swept here (`protocol_constitution`, `leo_feature_flags`,
+`eva_vision_documents`, `chairman_decisions`, `ventures_kill_log`, `chairman_directives`) are also
+covered by the higher-sensitivity, broader-scope (INSERT/UPDATE/DELETE, not just TRUNCATE) revoke
+staged separately in `docs/audits/sensitive-table-write-grant-audit.md`
+(SD-LEO-INFRA-GOV-TABLE-WRITE-GRANT-REVOKE-001). Both remain unapplied; applying either first makes
+the other's `REVOKE TRUNCATE` on those 6 tables a harmless no-op. Apply both for full closure.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
