@@ -2,10 +2,11 @@
 
 **Category**: Runbook
 **Status**: Approved
-**Version**: 1.1.0
+**Version**: 1.2.0
 **Author**: SD-LEO-INFRA-COMPLETE-SMS-RELAY-001 (Alpha-4); parking behavior added by
-SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001
-**Last Updated**: 2026-08-10
+SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001; stale-escalation + audit added by
+SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001
+**Last Updated**: 2026-08-21
 **Tags**: chairman-comms, sms, drain, go-live, cutover, parking
 
 ---
@@ -87,6 +88,28 @@ message that resolves `no_match` or `rate_limited` will show up TWICE in tick ou
 persistent `QUIET_TICK_SMS_PARKED` until someone runs the resolve script. Seeing the row disappear
 from `QUIET_TICK_SMS_INBOUND` alone is NOT the end state to look for — confirm it either answered
 (no `QUIET_TICK_SMS_PARKED` line) or is parked-and-later-resolved.
+
+### Stale-parked escalation (SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001)
+
+A parked row that has sat unresolved for `>= 24h` (`isStaleParkedSms` in
+`lib/governance/parked-sms-stall.mjs`) additionally emits `QUIET_TICK_SMS_PARKED_STALE` on the
+same tick, right after its routine `QUIET_TICK_SMS_PARKED` line — the distinct tag exists so a
+genuinely-overdue row is grep-able instead of indistinguishable from routine parked traffic (356
+parked-unmatched real chairman texts had accumulated silently before this was added). It carries
+no new remediation of its own: disposition via `resolve-parked-chairman-sms.cjs` as above, just
+prioritize the `_STALE` rows first.
+
+### One-time / retroactive backlog audit
+
+`node scripts/audit-parked-chairman-sms.mjs [--dry-run] [--include-resolved]` batch-dispositions
+parked rows via `classifyParkedSmsDisposition` (`lib/chairman/parked-sms-audit.mjs`) — it only
+trusts a LATER same-phone `sms_inbound_log` row with `outcome=answered` as evidence a message was
+actually handled (never `matched_decision_id` alone, per the 2026-08-19 migration's diagnostic-only
+caveat for rows before 2026-08-21). Each row gets one `feedback` table entry
+(`category=chairman_sms_parked_audit`, disposition `EVIDENCE_HANDLED` or `NEEDS_ADAM_REVIEW`) —
+chairman SMS body content is never written to a git-tracked file. Default scope is
+`resolved_at IS NULL`; pass `--include-resolved` to retroactively audit the full historical
+population instead of only the currently-unresolved backlog.
 
 ## Rollback
 
