@@ -141,18 +141,38 @@ export async function mintCallsign(supabase) {
  * legitimately name their slots; only the requirement is dropped.
  */
 /**
- * Holder identity from the CANONICAL resolvers — the same ones registration uses, so the route
- * and registration can never disagree about WHO holds the role. Injectable purely so the verdict
- * logic is testable without standing up three CJS identity modules.
+ * Holder identity for the singleton-spawn STALENESS CHECK. Injectable purely so the verdict logic
+ * is testable without standing up three CJS identity modules.
+ *
+ * SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001 / FR-1, DECIDED SCOPE (round-2 adversarial critique):
+ * adam/solomon use an UNFILTERED lookup (fetchAllAdamsStrict/fetchAllSolomonsStrict) plus the SAME
+ * pure canonical picker registration itself uses (pickCanonicalAdam/pickCanonicalSolomon) — NOT
+ * getActiveAdamId/getActiveSolomonId. Those two pre-filter to heartbeat_at >= now-600s
+ * (ADAM_FRESH_MS/SOLOMON_FRESH_MS), so a genuinely stale-but-present (600–3600s) holder never
+ * reaches decideSingletonSpawn at all — it always resolves as "no holder", leaving the amber
+ * "Replace the stale X" verdict (singleton-spawn-decision.mjs's holder-past-guard-window branch)
+ * unreachable dead code via this route.
+ *
+ * ROUTE-LOCAL ONLY: getActiveAdamId/getActiveSolomonId themselves, and every OTHER caller of them,
+ * are completely unchanged — this route builds its own holder lookup from the same underlying
+ * fetch + pick primitives registration already exports, rather than widening the shared resolver's
+ * semantics for every caller (a regression test in addsession-singleton-refusal.test.js proves
+ * getActiveAdamId's fresh-only behavior is unaffected).
  */
-async function defaultResolveHolderId(supabase, role) {
+export async function defaultResolveHolderId(supabase, role) {
   if (role === 'adam') {
-    const { getActiveAdamId } = await import('../../lib/coordinator/adam-identity.cjs');
-    return getActiveAdamId(supabase, {});
+    const { fetchAllAdamsStrict, pickCanonicalAdam } = await import('../../lib/coordinator/adam-identity.cjs');
+    const { rows, error } = await fetchAllAdamsStrict(supabase);
+    if (error) return null; // fail-open: an unresolvable holder must not manufacture a refusal
+    const winner = pickCanonicalAdam(rows || []);
+    return winner ? winner.session_id : null;
   }
   if (role === 'solomon') {
-    const { getActiveSolomonId } = await import('../../lib/coordinator/solomon-identity.cjs');
-    return getActiveSolomonId(supabase, {});
+    const { fetchAllSolomonsStrict, pickCanonicalSolomon } = await import('../../lib/coordinator/solomon-identity.cjs');
+    const { rows, error } = await fetchAllSolomonsStrict(supabase);
+    if (error) return null;
+    const winner = pickCanonicalSolomon(rows || []);
+    return winner ? winner.session_id : null;
   }
   // coordinator: resolved for LABELLING only — it is never refused.
   const { getActiveCoordinatorId } = await import('../../lib/coordinator/resolve.cjs');
@@ -228,9 +248,19 @@ export async function addSession(req, res) {
   // Coordinator is never refused — silent takeover is designed, and refusing it breaks succession.
   // Fail-open: if the holder cannot be resolved we do NOT invent a refusal; spawn()'s own dedup
   // still answers honestly with skipped:already_live.
+  // FR-1 (SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001): uiLabel/uiEnabled/holderIsFresh are forwarded
+  // on BOTH outcomes below — decideSingletonSpawn already computes a distinct uiLabel for every
+  // path (including the amber "Replace the stale X" case, allowed:true), and the panel renders
+  // exactly this server-provided data rather than re-deciding anything client-side.
   const singletonVerdict = await resolveSingletonSpawnVerdict(supabase, role);
   if (!singletonVerdict.allowed) {
-    res.status(singletonVerdict.httpStatus).json({ ok: false, reason: singletonVerdict.reason });
+    res.status(singletonVerdict.httpStatus).json({
+      ok: false,
+      reason: singletonVerdict.reason,
+      uiLabel: singletonVerdict.uiLabel,
+      uiEnabled: singletonVerdict.uiEnabled,
+      holderIsFresh: singletonVerdict.holderIsFresh,
+    });
     return;
   }
 
@@ -278,8 +308,18 @@ export async function addSession(req, res) {
     return;
   }
   // callsign LAST and authoritative: the UI must report the name that was actually spawned, not the
-  // (now absent) one the operator typed.
-  res.json({ live: isLiveEnabled(), ...result, callsign: resolvedCallsign, callsign_minted: !supplied });
+  // (now absent) one the operator typed. uiLabel/uiEnabled/holderIsFresh (FR-1) ride along on the
+  // success path too — the amber "Replace the stale X" case is allowed:true, so the label the
+  // operator saw before clicking must still be confirmable in the response.
+  res.json({
+    live: isLiveEnabled(),
+    ...result,
+    callsign: resolvedCallsign,
+    callsign_minted: !supplied,
+    uiLabel: singletonVerdict.uiLabel,
+    uiEnabled: singletonVerdict.uiEnabled,
+    holderIsFresh: singletonVerdict.holderIsFresh,
+  });
 }
 
 /**
