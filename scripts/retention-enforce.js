@@ -27,6 +27,10 @@
  *   node scripts/retention-enforce.js --apply          # enforce (npm run retention:apply)
  *   node scripts/retention-enforce.js --liveness       # exit 1 if last run > LIVENESS_MAX_AGE_DAYS
  *   node scripts/retention-enforce.js --arming-spec    # print the CronCreate spec
+ *   node scripts/retention-enforce.js --table <name> [--apply]
+ *     # SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 FR-1: scope a run to ONE registered table (e.g.
+ *     # a table needing a cadence more frequent than the shared weekly cron). Repeatable to
+ *     # scope to several tables. Omitting --table runs the full registry, unchanged.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -159,16 +163,26 @@ export async function enforcePolicy(supabase, policy, { apply = false, runId = n
   }
 }
 
-export async function runEnforcement({ apply = false } = {}) {
+/**
+ * @param {{apply?: boolean, tables?: string[]|null}} [opts] `tables`, when a non-empty array,
+ *   scopes this run to those registered table(s) only (FR-1, SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001)
+ *   — e.g. a table that needs a more frequent cadence than the shared weekly cron, run from its
+ *   own workflow. Unknown table names are ignored (never invented); `null`/omitted runs the full
+ *   registry, byte-identical to pre-FR-1 behavior.
+ */
+export async function runEnforcement({ apply = false, tables = null } = {}) {
   const supabase = createSupabaseServiceClient();
   const started = Date.now();
   const runId = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : undefined;
   const mode = apply ? 'apply' : 'dry_run';
-  console.log(`\n— retention-enforce (${mode}) —`);
+  const scoped = Array.isArray(tables) && tables.length > 0
+    ? RETENTION_POLICIES.filter((p) => tables.includes(p.table))
+    : RETENTION_POLICIES;
+  console.log(`\n— retention-enforce (${mode}${scoped !== RETENTION_POLICIES ? `, scoped to: ${scoped.map((p) => p.table).join(', ')}` : ''}) —`);
 
   const perTable = [];
   let anyError = false;
-  for (const policy of RETENTION_POLICIES) {
+  for (const policy of scoped) {
     const r = await enforcePolicy(supabase, policy, { apply, runId });
     perTable.push(r);
     anyError = anyError || Boolean(r.error);
@@ -187,7 +201,7 @@ export async function runEnforcement({ apply = false } = {}) {
   // Age-keyed liveness stamp — written for EVERY run including dry.
   const { error: stampErr } = await supabase.from('retention_runs').insert({
     mode,
-    caps: { batch: BATCH_SIZE, deleteChunk: DELETE_CHUNK, perRunCaps: Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.perRunCap])) },
+    caps: { batch: BATCH_SIZE, deleteChunk: DELETE_CHUNK, perRunCaps: Object.fromEntries(scoped.map((p) => [p.table, p.perRunCap])) },
     per_table: perTable,
     duration_ms: Date.now() - started,
     ran_by: process.env.CLAUDE_SESSION_ID || 'cli',
@@ -237,6 +251,11 @@ if (isMainModule(import.meta.url)) {
   } else if (argv.includes('--liveness')) {
     checkLiveness().then((code) => { process.exitCode = code; });
   } else {
-    runEnforcement({ apply: argv.includes('--apply') }).then((code) => { process.exitCode = code; });
+    const tables = [];
+    for (let i = 0; i < argv.length; i++) {
+      if (argv[i] === '--table' && argv[i + 1]) tables.push(argv[++i]);
+    }
+    runEnforcement({ apply: argv.includes('--apply'), tables: tables.length > 0 ? tables : null })
+      .then((code) => { process.exitCode = code; });
   }
 }
