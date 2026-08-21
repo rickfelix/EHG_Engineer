@@ -8,7 +8,10 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../lib/comms/adam-outbound/quiet-hours-extension.js', () => ({
   resolveChairmanZone: vi.fn(async () => ({ zone: 'America/New_York', source: 'default' })),
 }));
-import { evaluateFleetDownAlert, evaluateDeadCoordinatorAlert, buildDeadCoordinatorMessage, checkDeadCoordinator } from '../../scripts/fleet-down-alert.mjs';
+import {
+  evaluateFleetDownAlert, evaluateDeadCoordinatorAlert, buildDeadCoordinatorMessage, checkDeadCoordinator,
+  evaluateFleetDeadManPredicate, buildFleetDeadManMessage, checkFleetDeadMan,
+} from '../../scripts/fleet-down-alert.mjs';
 
 // Helper: build a newest-first pulse list from active_count values.
 const pulses = (...active) => active.map((a) => ({ active_count: a }));
@@ -203,5 +206,171 @@ describe('evaluateDeadCoordinatorAlert (SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-0
     };
     await checkDeadCoordinator(db, false, sendChairmanSMSFn, NOW);
     expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+});
+
+// SD-LEO-INFRA-FLEET-DEAD-MAN-001 / FR-1 — third, independent outage arm. Deliberately reads
+// neither fleet_worker_pulse nor is_coordinator=true claude_sessions, so a defect in either of
+// the two describe blocks above can't mask an outage this arm would otherwise catch.
+describe('evaluateFleetDeadManPredicate (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1)', () => {
+  const NOW = new Date('2026-08-21T16:00:00.000Z');
+  const minutesAgo = (m) => new Date(NOW.getTime() - m * 60000).toISOString();
+
+  it('TS-1: zero completions and a stale heartbeat => dead', () => {
+    const r = evaluateFleetDeadManPredicate({ lastHeartbeatAt: minutesAgo(150), completionsInWindow: 0, now: NOW, windowMin: 120 });
+    expect(r.dead).toBe(true);
+    expect(r.reason).toMatch(/zero completions AND no heartbeat/);
+  });
+
+  it('TS-2: a recent heartbeat with zero completions is NOT dead (quiet but alive)', () => {
+    const r = evaluateFleetDeadManPredicate({ lastHeartbeatAt: minutesAgo(10), completionsInWindow: 0, now: NOW, windowMin: 120 });
+    expect(r.dead).toBe(false);
+    expect(r.reason).toMatch(/within the/);
+  });
+
+  it('TS-2: any completion in the window is NOT dead, even with a stale heartbeat', () => {
+    const r = evaluateFleetDeadManPredicate({ lastHeartbeatAt: minutesAgo(500), completionsInWindow: 1, now: NOW, windowMin: 120 });
+    expect(r.dead).toBe(false);
+    expect(r.reason).toMatch(/is producing/);
+  });
+
+  it('TS-3: schedule-jitter robust — a heartbeat far past the window still reads dead (no narrow alertable window to miss)', () => {
+    // Unlike evaluateDeadCoordinatorAlert's narrow [staleMin, staleMin+cronIntervalMin) window, this
+    // predicate has no upper bound -- a delayed/skipped cron tick landing hours late still correctly
+    // reads dead instead of silently falling past an alertable window.
+    const r = evaluateFleetDeadManPredicate({ lastHeartbeatAt: minutesAgo(5000), completionsInWindow: 0, now: NOW, windowMin: 120 });
+    expect(r.dead).toBe(true);
+  });
+
+  it('no heartbeat ever recorded and zero completions => dead', () => {
+    const r = evaluateFleetDeadManPredicate({ lastHeartbeatAt: null, completionsInWindow: 0, now: NOW });
+    expect(r.dead).toBe(true);
+    expect(r.reason).toMatch(/has ever been recorded/);
+  });
+
+  it('is total / fail-safe on odd input', () => {
+    expect(evaluateFleetDeadManPredicate().dead).toBe(true); // no heartbeat, 0 completions -> dead by construction
+    expect(evaluateFleetDeadManPredicate({ lastHeartbeatAt: 'not-a-date', completionsInWindow: 0, now: NOW }).dead).toBe(true);
+  });
+
+  it('buildFleetDeadManMessage names the fleet-dead-man condition distinctly', () => {
+    const verdict = evaluateFleetDeadManPredicate({ lastHeartbeatAt: minutesAgo(150), completionsInWindow: 0, now: NOW, windowMin: 120 });
+    const msg = buildFleetDeadManMessage(verdict, NOW);
+    expect(msg.body).toMatch(/FLEET DEAD-MAN/);
+    expect(msg.kind).toBe('fleet_dead_man_alert');
+    expect(msg.dedupeKey).toBe(`fleet-dead-man-${NOW.toISOString().slice(0, 13)}`);
+  });
+});
+
+describe('checkFleetDeadMan (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1 integration)', () => {
+  const NOW = new Date('2026-08-21T16:00:00.000Z');
+  const minutesAgo = (m) => new Date(NOW.getTime() - m * 60000).toISOString();
+
+  // A tiny 3-table router double: claude_sessions (heartbeat), strategic_directives_v2
+  // (completions, HEAD-count shape), system_events (the verdict read-back + write). Mutable
+  // `_state` lets a single db instance model successive cron ticks across one outage lifecycle
+  // (TS-9), and `_events`/`_inserted` let a test assert on the persisted verdict trail.
+  function makeDeadManDb(initial = {}) {
+    const state = { heartbeatAt: null, completions: 0, ...initial };
+    const events = [];
+    const inserted = [];
+    const calls = {};
+    return {
+      _state: state, _events: events, _inserted: inserted, _calls: calls,
+      from(table) {
+        if (table === 'claude_sessions') {
+          return {
+            select: (cols) => { calls.hbSelect = cols; return {
+              order: (col) => { calls.hbOrderCol = col; return {
+                limit: async () => ({ data: state.heartbeatAt ? [{ heartbeat_at: state.heartbeatAt }] : [], error: null }),
+              }; },
+            }; },
+          };
+        }
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: () => ({
+              eq: (col, val) => { calls.sdEq = [col, val]; return {
+                gte: (col2, val2) => { calls.sdGte = [col2, val2]; return Promise.resolve({ count: state.completions, error: null }); },
+              }; },
+            }),
+          };
+        }
+        if (table === 'system_events') {
+          return {
+            select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: events.slice(0, 1), error: null }) }) }) }),
+            insert: async (row) => {
+              const full = { ...row, created_at: new Date().toISOString() };
+              inserted.push(full); events.unshift(full);
+              return { data: null, error: null };
+            },
+          };
+        }
+        throw new Error(`unexpected table in fleet-dead-man test double: ${table}`);
+      },
+    };
+  }
+
+  it('TS-1: genuinely dead fleet pages the chairman exactly once', async () => {
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(150), completions: 0 });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    const [message] = sendChairmanSMSFn.mock.calls[0];
+    expect(message.kind).toBe('fleet_dead_man_alert');
+    expect(message.body).toMatch(/FLEET DEAD-MAN/);
+  });
+
+  it('TS-2: a live fleet (recent heartbeat) does not page', async () => {
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(5), completions: 0 });
+    const sendChairmanSMSFn = vi.fn();
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  it('TS-8: queries the correct columns — heartbeat_at, status=completed, completion_date (column-name trap pin)', async () => {
+    // completion_date, NOT updated_at: adversarial-review finding, verified live -- updated_at
+    // on an already-completed row keeps moving for months via unrelated housekeeping writes, so
+    // filtering on it would make "zero completions" almost never true.
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(5), completions: 1 });
+    await checkFleetDeadMan(db, false, vi.fn(), NOW);
+    expect(db._calls.hbOrderCol).toBe('heartbeat_at');
+    expect(db._calls.sdEq).toEqual(['status', 'completed']);
+    expect(db._calls.sdGte[0]).toBe('completion_date');
+  });
+
+  it('TS-9: fires once on the initial outage, stays silent while still dead, re-fires after a recovery then a new outage', async () => {
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(150), completions: 0 });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW); // tick 1: newly dead -> fires
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW); // tick 2: still dead -> suppressed
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+
+    db._state.heartbeatAt = minutesAgo(1); // recovery
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW); // tick 3: alive -> no page, records recovery
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+
+    db._state.heartbeatAt = minutesAgo(150); // dead again
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW); // tick 4: new outage -> fires again
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('TS-10: two sequential ticks against the same outage never double-fire (serialized by the cron concurrency group)', async () => {
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(150), completions: 0 });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW);
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('FR-3: writes a verdict row to system_events on every run, whether or not the state changed', async () => {
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(5), completions: 0 });
+    await checkFleetDeadMan(db, false, vi.fn(), NOW);
+    await checkFleetDeadMan(db, false, vi.fn(), NOW);
+    expect(db._inserted.length).toBe(2);
+    expect(db._inserted.every((r) => r.event_type === 'fleet_dead_man_verdict')).toBe(true);
   });
 });
