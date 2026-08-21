@@ -407,8 +407,27 @@ describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => 
     const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
     const match = src.match(/const \{ failed \} = await runAlertArms\(\[([\s\S]*?)\]\);/);
     expect(match).not.toBeNull();
-    const armsBlock = match[1];
+    // Adversarial-review finding: a commented-out entry (the JS parser drops it from the real
+    // array, exactly the "arm silently doesn't fire" class this pin exists to catch) still reads
+    // as a live entry to a naive regex over raw text. Strip `//`-to-end-of-line before matching so
+    // a commented-out arm is correctly seen as ABSENT, not present.
+    const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
     const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
     expect(armNames).toEqual(['dead-coordinator-pager', 'fleet-dead-man-pager', 'worker-fleet-email']);
+  });
+
+  it('is comment-blind-proof: a commented-out arm entry is correctly seen as absent, not present', () => {
+    // Regression pin for the adversarial-review finding above: without the comment-strip, this
+    // synthetic sample (mirroring what main() would look like if an arm were commented out rather
+    // than deleted) would still show all three names and falsely pass.
+    const sample = `const { failed } = await runAlertArms([
+    ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
+    // ['fleet-dead-man-pager', () => checkFleetDeadMan(db, DRY)],
+    ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
+  ]);`;
+    const match = sample.match(/const \{ failed \} = await runAlertArms\(\[([\s\S]*?)\]\);/);
+    const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
+    const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(armNames).toEqual(['dead-coordinator-pager', 'worker-fleet-email']);
   });
 });

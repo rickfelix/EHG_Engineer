@@ -335,7 +335,13 @@ const FLEET_DEAD_MAN_EVENT_TYPE = 'fleet_dead_man_verdict';
  *
  * TS-11: wrapped so a system_events outage degrades to "no audit row for this tick", never to
  * "no page sent" — and fails OPEN on the transition question (treats an unreadable prior state
- * as a transition) rather than risk silently swallowing a real outage.
+ * as a transition) rather than risk silently swallowing a real outage. This applies uniformly to
+ * BOTH the read and the write below (adversarial-review finding, accepted trade-off, not a bug):
+ * an isolated insert failure on an already-known-dead tick can force one spurious re-page instead
+ * of the silent no-op the pre-hardening code produced. An occasional extra page during a
+ * persistent, already-alerted outage is a far cheaper failure mode than the silence this SD exists
+ * to close, so this function never tries to distinguish "read failed" from "write failed" for the
+ * purpose of softening the fail-open default.
  *
  * @returns {Promise<{transitioned:boolean}>}
  */
