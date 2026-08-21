@@ -174,6 +174,7 @@ There is a SEPARATE failure mode (feedback `34113d39`, `category='harness_backlo
 | Teardown cron inventory + matcher | `lib/coordinator/teardown-coordinator.cjs` (`listCoordinatorCrons`, `selectCoordinatorCronJobs`) |
 | SCRIPT-SHAPED loop durability (GHA-backed, additive) | `.github/workflows/*-cron.yml` per migrated `STANDARD_LOOPS` entry (`gha_backed:true` marker in `scripts/coordinator-startup-check.mjs`) |
 | Dead-coordinator chairman page | `scripts/fleet-down-alert.mjs` (`evaluateDeadCoordinatorAlert`) → `.github/workflows/fleet-down-alert-cron.yml` |
+| Fleet dead-man page — 3rd, independent arm (SD-LEO-INFRA-FLEET-DEAD-MAN-001): fires when BOTH zero `claude_sessions` heartbeats AND zero SD/QF completions in a trailing 2h window, catching the case where a defect in the pulse-writer or the dead-coordinator arm's own narrow trigger would otherwise leave the fleet unpaged. State-based edge-trigger (a persisted `system_events` verdict row, not a narrow elapsed-time window), so a delayed/skipped cron tick can't silently miss the alertable moment the way the dead-coordinator arm's window can. | `scripts/fleet-down-alert.mjs` (`checkFleetDeadMan`, `evaluateFleetDeadManPredicate`) → same `.github/workflows/fleet-down-alert-cron.yml`, 3rd entry in `runAlertArms()` |
 
 ## Two-layer durability contract (SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001)
 
