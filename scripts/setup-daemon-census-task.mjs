@@ -138,7 +138,7 @@ async function main() {
     const wrapperPath = path.join(REPO_ROOT, WRAPPER_REL_PATH);
     if (args.dryRun) {
       console.log(`${TAG} DRY RUN — would run: schtasks ${buildRemoveArgs().join(' ')}`);
-      console.log(`${TAG} DRY RUN — would also delete wrapper ${wrapperPath} if present`);
+      console.log(`${TAG} DRY RUN — would also remove wrapper ${wrapperPath} if present`);
       return;
     }
     execFileSync('schtasks', buildRemoveArgs(), { encoding: 'utf8' });
