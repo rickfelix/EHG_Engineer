@@ -48,29 +48,87 @@ function mockSupabase({ existing = null, lookupErr = null, insertErr = null, ins
   };
 }
 
+/**
+ * Stateful mock: tracks inserted rows by dedup_hash across MULTIPLE
+ * recordCorrectiveFinding calls, so a second call with the same natural key
+ * (different gate_run_id) sees the first call's row as an existing match --
+ * exactly what the real feedback table's dedup_hash lookup does. The mock
+ * threads the actual queried dedup_hash value through .eq() so the lookup
+ * responds to the CURRENT call's hash, not a captured prior-call value.
+ */
+function mockSupabaseStateful() {
+  const rowsByHash = new Map();
+  let nextId = 1;
+  return {
+    rowCount: () => rowsByHash.size,
+    from(table) {
+      if (table !== 'feedback') throw new Error(`unexpected table ${table}`);
+      return {
+        select: () => ({
+          eq: (_col, hashValue) => ({
+            eq: () => ({
+              limit: () => ({
+                maybeSingle: () => {
+                  const existing = rowsByHash.get(hashValue);
+                  return Promise.resolve({ data: existing ? { id: existing.id } : null, error: null });
+                },
+              }),
+            }),
+          }),
+        }),
+        insert(row) {
+          const id = `fb-${nextId++}`;
+          rowsByHash.set(row.metadata.dedup_hash, { ...row, id });
+          return {
+            select: () => ({
+              single: () => Promise.resolve({ data: { id }, error: null }),
+            }),
+          };
+        },
+      };
+    },
+  };
+}
+
 describe('computeDedupHash', () => {
   it('produces stable hash for identical input', () => {
-    const a = computeDedupHash('SD-X', ['V01', 'V02'], 'run-1');
-    const b = computeDedupHash('SD-X', ['V01', 'V02'], 'run-1');
+    const a = computeDedupHash('SD-X', ['V01', 'V02'], 70);
+    const b = computeDedupHash('SD-X', ['V01', 'V02'], 70);
     expect(a).toBe(b);
     expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('is order-independent for dimensions', () => {
-    const a = computeDedupHash('SD-X', ['V02', 'V01'], 'run-1');
-    const b = computeDedupHash('SD-X', ['V01', 'V02'], 'run-1');
+    const a = computeDedupHash('SD-X', ['V02', 'V01'], 70);
+    const b = computeDedupHash('SD-X', ['V01', 'V02'], 70);
     expect(a).toBe(b);
   });
 
   it('differs when source_sd_id differs', () => {
-    const a = computeDedupHash('SD-X', ['V01'], 'run-1');
-    const b = computeDedupHash('SD-Y', ['V01'], 'run-1');
+    const a = computeDedupHash('SD-X', ['V01'], 70);
+    const b = computeDedupHash('SD-Y', ['V01'], 70);
     expect(a).not.toBe(b);
   });
 
-  it('handles null source_sd_id and gate_run_id', () => {
+  it('handles null source_sd_id and score band', () => {
     const h = computeDedupHash(null, ['V01'], null);
     expect(h).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  // SD-LEO-INFRA-CORRECTIVE-FINDING-GENERATOR-001 (FR-3): the natural key no longer
+  // includes gate_run_id, so two calls sharing source_sd_id/dimensions/score-band but
+  // DIFFERENT gate_run_id values must produce the SAME hash (this is the fix -- the
+  // prior gate_run_id-keyed hash made every scoring pass mint a fresh, non-deduping row).
+  it('is stable across different gate_run_id values for the same natural key', () => {
+    const a = computeDedupHash('SD-X', ['V01', 'V02'], 70);
+    const b = computeDedupHash('SD-X', ['V01', 'V02'], 70);
+    expect(a).toBe(b);
+  });
+
+  it('differs when score band differs (crosses a 10-point boundary)', () => {
+    const a = computeDedupHash('SD-X', ['V01'], 70);
+    const b = computeDedupHash('SD-X', ['V01'], 60);
+    expect(a).not.toBe(b);
   });
 });
 
@@ -102,7 +160,7 @@ describe('recordCorrectiveFinding', () => {
     expect(row.type).toBe('issue');
     expect(row.source_application).toBe('EHG_Engineer');
     expect(row.source_type).toBe('auto_capture');
-    expect(row.feedback_type).toBe('corrective_finding');
+    expect(row.feedback_type).toBe('sentry_error');
     expect(row.corrective_class).toBe('vision_gap');
     expect(row.source_gate).toBe('eva_vision_score');
     expect(row.gate_run_id).toBe('11111111-1111-1111-1111-111111111111');
@@ -168,5 +226,51 @@ describe('recordCorrectiveFinding', () => {
     const sb = mockSupabase({ lookupErr: { message: 'connection lost' } });
     await expect(recordCorrectiveFinding(sb, baseFinding))
       .rejects.toThrow(/dedup lookup failed: connection lost/);
+  });
+});
+
+// SD-LEO-INFRA-CORRECTIVE-FINDING-GENERATOR-001 (FR-6): observational regression --
+// proves the FIX behaviorally (only one row survives two scoring passes for the same
+// recurring gap), not merely that the hash STRING shape changed.
+describe('recordCorrectiveFinding — recurring-gap dedup (FR-6 observational)', () => {
+  const baseFinding = {
+    source_sd_id: 'SD-SOURCE-001',
+    source_gate: 'eva_vision_score',
+    corrective_class: 'vision_gap',
+    dimensions: ['V03', 'V07'],
+    tier: 'gap-closure',
+    score: 72,
+    title: 'Vision gap V03/V07 below threshold',
+    description: 'Score 72 < 83 threshold for SD-SOURCE-001',
+  };
+
+  it('two scoring passes for the same (source_sd_id, dimensions, score-band) but DIFFERENT gate_run_id produce only ONE feedback row', async () => {
+    const sb = mockSupabaseStateful();
+
+    const first = await recordCorrectiveFinding(sb, {
+      ...baseFinding,
+      gate_run_id: '11111111-1111-1111-1111-111111111111',
+    });
+    expect(first.recorded).toBe(true);
+
+    const second = await recordCorrectiveFinding(sb, {
+      ...baseFinding,
+      gate_run_id: '22222222-2222-2222-2222-222222222222', // simulates a fresh scoring pass
+    });
+    expect(second.recorded).toBe(false);
+    expect(second.feedbackId).toBe(first.feedbackId);
+    expect(second.dedupHash).toBe(first.dedupHash);
+
+    expect(sb.rowCount()).toBe(1);
+  });
+
+  it('a genuinely different score band (crosses a 10-point boundary) still mints a fresh row', async () => {
+    const sb = mockSupabaseStateful();
+
+    await recordCorrectiveFinding(sb, { ...baseFinding, gate_run_id: 'run-a', score: 72 });
+    const worse = await recordCorrectiveFinding(sb, { ...baseFinding, gate_run_id: 'run-b', score: 55 });
+
+    expect(worse.recorded).toBe(true);
+    expect(sb.rowCount()).toBe(2);
   });
 });
