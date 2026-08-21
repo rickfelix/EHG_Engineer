@@ -41,7 +41,7 @@ import { checkSyntheticActorFencing } from '../../../lib/eva/synthetic-actor-gua
 
 const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
 
-function makeSupabase() {
+function makeSupabase({ fenceEnforceEnabled = null } = {}) {
   const calls = { venturesUpdate: 0 };
   const from = (table) => {
     const chain = {
@@ -53,7 +53,11 @@ function makeSupabase() {
       order: () => chain,
       limit: () => chain,
       maybeSingle: async () => {
-        if (table === 'leo_feature_flags') return { data: null, error: null };
+        if (table === 'leo_feature_flags') {
+          return fenceEnforceEnabled === null
+            ? { data: null, error: null }
+            : { data: { is_enabled: fenceEnforceEnabled }, error: null };
+        }
         if (table === 'chairman_decisions') return { data: null, error: null };
         if (table === 'ventures') return { data: { metadata: {} }, error: null };
         if (table === 'venture_stages') return { data: { required_artifacts: [] }, error: null };
@@ -125,9 +129,9 @@ describe('_advanceStage fenced synthetic-actor choke-point (FR-6) — real metho
     expect(supabase.calls.venturesUpdate).toBe(1);
   });
 
-  it('BLOCKS the advance when the venture opted in and the guard is NOT satisfied', async () => {
+  it('BLOCKS the advance when the venture opted in, the guard is NOT satisfied, AND LEO_SYNTHETIC_ACTOR_FENCE_ENFORCE is enabled', async () => {
     mockFencingResult = { applies: true, satisfied: false, reason: 'synthetic_actor.exclusion_predicate_ref is a placeholder' };
-    const supabase = makeSupabase();
+    const supabase = makeSupabase({ fenceEnforceEnabled: true });
     const worker = makeWorker(supabase);
 
     const result = await worker._advanceStage('v-1', 19, 20, {});
@@ -139,6 +143,35 @@ describe('_advanceStage fenced synthetic-actor choke-point (FR-6) — real metho
       details: 'synthetic_actor.exclusion_predicate_ref is a placeholder',
     });
     expect(supabase.calls.venturesUpdate).toBe(0);
+  });
+
+  // SEC-42 (EXEC-TO-PLAN SECURITY finding): shipping this choke-point
+  // unconditionally binding, with no flag, would have hard-blocked AltifyAI's
+  // very next Stage 19->20 attempt the moment LEO_ALTIFYAI_UAT_READ_TOKEN was
+  // left unprovisioned, with no off switch short of a code revert. These two
+  // tests pin the safe default: an unsatisfied result advances anyway
+  // (observe-only) unless LEO_SYNTHETIC_ACTOR_FENCE_ENFORCE is explicitly true.
+  it('OBSERVE-ONLY: advances anyway (with a warning, not blocked) when the flag row is ABSENT (default)', async () => {
+    mockFencingResult = { applies: true, satisfied: false, reason: 'no completed run found on main' };
+    const supabase = makeSupabase({ fenceEnforceEnabled: null });
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 19, 20, {});
+
+    expect(result?.blocked).not.toBe(true);
+    expect(supabase.calls.venturesUpdate).toBe(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('OBSERVE-ONLY'));
+  });
+
+  it('OBSERVE-ONLY: advances anyway when the flag is explicitly is_enabled:false', async () => {
+    mockFencingResult = { applies: true, satisfied: false, reason: 'GitHub API error and no fresh cached result' };
+    const supabase = makeSupabase({ fenceEnforceEnabled: false });
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 19, 20, {});
+
+    expect(result?.blocked).not.toBe(true);
+    expect(supabase.calls.venturesUpdate).toBe(1);
   });
 
   it('does not block a 19->20 transition that is already blocked by an earlier backstop (this choke-point never runs)', async () => {
