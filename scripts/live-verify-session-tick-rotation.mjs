@@ -68,13 +68,20 @@ const realSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function pollUntil(sb, sessionId, predicate, { timeoutMs = 60000, intervalMs = 2000, sleepFn = realSleep, clockFn = Date.now } = {}) {
   const deadline = clockFn() + timeoutMs;
   let last = null;
+  let lastError = null;
   while (clockFn() < deadline) {
-    const { data } = await sb.from('claude_sessions').select('session_id,status,heartbeat_at,metadata').eq('session_id', sessionId).maybeSingle();
+    // ADVERSARIAL REVIEW (PR #7369, WARNING): destructuring only `data` made an RLS denial, a
+    // network fault, or a typo'd --session id indistinguishable from "predicate not met yet" --
+    // both looped silently to the deadline. Since this observer arms once before a real, one-shot
+    // /clear, a diagnosable query error and a genuine negative observation must not report
+    // identically.
+    const { data, error } = await sb.from('claude_sessions').select('session_id,status,heartbeat_at,metadata').eq('session_id', sessionId).maybeSingle();
+    lastError = error ? (error.message || String(error)) : null;
     last = data || null;
-    if (last && predicate(last)) return { ok: true, row: last };
+    if (last && predicate(last)) return { ok: true, row: last, lastError: null };
     await sleepFn(intervalMs);
   }
-  return { ok: false, row: last };
+  return { ok: false, row: last, lastError };
 }
 
 /**
@@ -100,11 +107,17 @@ export async function observeRotation({ sb, session, parkedWorker, now = () => D
   const result = {
     session, parkedWorker, startedAt: new Date(now()).toISOString(),
     releaseObserved: null, heartbeatFrozenObserved: null, parkedWorkerUnaffected: null,
-    adamRegisterProbe: null, overall: 'FAIL',
+    adamRegisterProbe: null, overall: 'FAIL', errors: [],
   };
+  // ADVERSARIAL REVIEW (PR #7369, WARNING): every read below used to discard `error`, so a query
+  // failure (RLS denial, network fault, bad session id) reported identically to a genuine negative
+  // observation. Tagged pushes onto result.errors so a diagnosable failure is distinguishable from
+  // "watched and it didn't happen" -- this observer gets exactly one shot at a real /clear.
+  const trackError = (tag, error) => { if (error) result.errors.push(`${tag}: ${error.message || error}`); };
 
   const releaseWait = await pollUntil(sb, session, (row) => row.status === 'released', { timeoutMs: releaseTimeoutMs, sleepFn, clockFn });
   result.releaseObserved = releaseWait.ok;
+  trackError('release_poll', releaseWait.lastError ? { message: releaseWait.lastError } : null);
   if (!releaseWait.ok) { result.overall = 'FAIL_NO_RELEASE'; return result; }
 
   const hbAtRelease = releaseWait.row.heartbeat_at;
@@ -114,16 +127,19 @@ export async function observeRotation({ sb, session, parkedWorker, now = () => D
   let parkedBefore = null;
   if (parkedWorker) {
     const p = await sb.from('claude_sessions').select('status,heartbeat_at').eq('session_id', parkedWorker).maybeSingle();
+    trackError('parked_before', p.error);
     parkedBefore = p.data || null;
   }
 
   await sleepFn(freezeWaitMs);
 
   const post = await sb.from('claude_sessions').select('heartbeat_at').eq('session_id', session).maybeSingle();
+  trackError('post_freeze', post.error);
   result.heartbeatFrozenObserved = isHeartbeatFrozen(hbAtRelease, post.data?.heartbeat_at || null);
 
   if (parkedWorker) {
     const parkedAfter = await sb.from('claude_sessions').select('status,heartbeat_at').eq('session_id', parkedWorker).maybeSingle();
+    trackError('parked_after', parkedAfter.error);
     const neverReleased = Boolean(parkedAfter.data && parkedAfter.data.status !== 'released');
     const heartbeatAdvanced = Boolean(parkedBefore?.heartbeat_at) && Boolean(parkedAfter.data?.heartbeat_at)
       && !isHeartbeatFrozen(parkedBefore.heartbeat_at, parkedAfter.data.heartbeat_at);
@@ -157,8 +173,16 @@ async function main() {
 
   const result = await observeRotation({ sb, session: args.session, parkedWorker: args.parkedWorker, releaseTimeoutMs: args.timeoutS * 1000 });
 
+  // ADVERSARIAL REVIEW (PR #7369, INFO): echo BEFORE persisting -- this observation cannot be
+  // re-run (the rotation it watched is destroyed by the /clear), so a write failure below must not
+  // be the only way this result is ever seen.
+  console.log(JSON.stringify(result, null, 2));
+
   fs.mkdirSync(args.outDir, { recursive: true });
-  const outPath = path.join(args.outDir, `${args.session}-${Date.now()}.json`);
+  // Sanitize the session id for filename use (INFO): it reaches here as a raw CLI arg, so a
+  // mistyped value containing a path separator must not escape outDir or fail the write outright.
+  const safeSessionId = String(args.session).replace(/[^A-Za-z0-9_-]/g, '_');
+  const outPath = path.join(args.outDir, `${safeSessionId}-${Date.now()}.json`);
   fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
   console.log(`[live-verify] ${result.overall} -- results written to ${outPath}`);
   process.exit(result.overall === 'PASS' ? 0 : 1);

@@ -65,6 +65,16 @@ describe('pollUntil (hermetic, virtual clock)', () => {
     expect(r.ok).toBe(false);
     expect(r.row).toBeNull();
   });
+
+  // ADVERSARIAL REVIEW (PR #7369, WARNING): a Supabase query error used to be indistinguishable
+  // from "predicate not met" -- both looped silently to the deadline. lastError must surface it.
+  it('surfaces a Supabase query error via lastError instead of looping silently to the deadline', async () => {
+    const { clockFn, sleepFn } = fakeClock();
+    const sb = { from: () => ({ select() { return this; }, eq() { return this; }, async maybeSingle() { return { data: null, error: { message: 'permission denied for table claude_sessions' } }; } }) };
+    const r = await pollUntil(sb, 'sid', () => true, { timeoutMs: 4000, intervalMs: 2000, sleepFn, clockFn });
+    expect(r.ok).toBe(false);
+    expect(r.lastError).toMatch(/permission denied/);
+  });
 });
 
 describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
@@ -204,5 +214,29 @@ describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
     expect(result.releaseObserved).toBe(true);
     expect(result.heartbeatFrozenObserved).toBe(false);
     expect(result.overall).toBe('PARTIAL');
+  });
+
+  // ADVERSARIAL REVIEW (PR #7369, WARNING): a query error mid-flow (e.g. the post-freeze read)
+  // used to vanish silently -- heartbeatFrozenObserved would just read false with no diagnostic.
+  it('tags a query error onto result.errors instead of discarding it (post-freeze read fails)', async () => {
+    const { clockFn, sleepFn } = fakeClock();
+    let pollCount = 0;
+    const sb = {
+      from: () => ({
+        select() { return this; },
+        eq(_c, val) { this._id = val; return this; },
+        async maybeSingle() {
+          if (this._id === 'target') {
+            pollCount += 1;
+            if (pollCount === 1) return { data: { status: 'active', heartbeat_at: 'live-hb' }, error: null };
+            if (pollCount === 2) return { data: { status: 'released', heartbeat_at: 'frozen-hb' }, error: null };
+            return { data: null, error: { message: 'network timeout' } }; // the post-freeze read
+          }
+          return { data: null, error: null };
+        },
+      }),
+    };
+    const result = await observeRotation({ sb, session: 'target', sleepFn, clockFn, releaseTimeoutMs: 10_000, freezeWaitMs: 5_000 });
+    expect(result.errors.some((e) => e.includes('post_freeze') && e.includes('network timeout'))).toBe(true);
   });
 });
