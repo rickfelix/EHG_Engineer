@@ -158,6 +158,14 @@ async function main() {
   // still hand the work item back here, silently undoing the fail-closed decision made two steps
   // earlier (GK-1, SD-LEO-INFRA-RELEASE-WORK-ITEM-001).
   // Imported lazily so a dry run that never reaches step 7 does not pull the module in.
+  //
+  // KNOWN GAP (SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001 FR-3 AC-4): recordStop is attached HERE,
+  // OUT OF BAND, rather than inside buildKillDeps' own returned object -- a future caller that
+  // builds deps via buildKillDeps() alone and calls gracefulKillSession directly would silently
+  // get NO recordStop and skip step 7 (RECORD) entirely, with no error. Documented rather than
+  // fixed: recordStop needs `supabase` and `dryRun` from THIS scope, and folding it into
+  // buildKillDeps would either duplicate the client-construction logic or change its signature --
+  // out of this FR's scope. Any new caller of buildKillDeps must supply its own recordStop.
   deps.recordStop = dryRun ? null : async (sid, o = {}) => {
     const { stop } = await import('../lib/fleet/spawn-control.js');
     await stop(sid, { by: 'session_id', supabaseClient: supabase, holderVerifiedGone: o.gone });
