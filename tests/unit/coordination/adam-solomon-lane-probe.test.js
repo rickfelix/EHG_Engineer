@@ -42,6 +42,7 @@ function fakeSessionsDb() {
     // .in('status', [...]) -- this probe doesn't model status, so a passthrough keeps every
     // seeded row "fresh enough" as the comment above already establishes.
     in() { return table; },
+    or() { return table; }, // fetchFreshAdams now uses .or() (INFO, PR #7369) instead of .in()
     // FR-6 (count-truncation discipline): the role scans paginate via fetchAllPaginated, so the
     // chain continues .order(...).range(from, to) after .filter() — record the role filter and
     // resolve the page at .range.

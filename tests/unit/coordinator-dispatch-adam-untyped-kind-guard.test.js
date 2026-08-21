@@ -27,6 +27,7 @@ function stubSupabase({ adamSessionId } = {}) {
         // .in('status', [...]) -- this stub doesn't model status, so a passthrough keeps
         // adamSessionId authoritative as it already was.
         in() { return chain; },
+        or() { return chain; }, // fetchFreshAdams now uses .or() (INFO, PR #7369) instead of .in()
         limit() { return chain; },
         // FR-6 (count-truncation discipline): fetchFreshAdams paginates via fetchAllPaginated,
         // whose pages end in .order(...).range(from, to) — resolve the same adam-lookup rows.

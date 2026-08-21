@@ -46,16 +46,30 @@ describe('pickCanonicalAdam (deterministic election, mirror of coordinator)', ()
 function stub(rows, { error = null } = {}) {
   return {
     from() {
-      let statusAllowlist = null; // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1: .in('status', [...])
+      // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1, tightened per ADVERSARIAL REVIEW (PR
+      // #7369, INFO): production switched from .in('status', [...]) to .or('status.is.null,
+      // status.in.(...)') so a NULL status matches too (SQL `IN` never matches NULL, disagreeing
+      // with isStatusFreshEligible's own null-is-eligible predicate). Small parser, not a literal
+      // string match, so the stub still exercises real semantics if the clause order ever changes.
+      let statusPredicate = null;
       const chain = {
         select() { return chain; },
         gte() { return chain; },
         filter() { return chain; },
-        in(col, values) { if (col === 'status') statusAllowlist = values; return chain; },
+        or(expr) {
+          // Match directly against the full string rather than splitting on ',' first -- a naive
+          // split breaks apart the commas INSIDE status.in.(active,idle,stale) itself.
+          const str = String(expr);
+          const allowNull = /(^|,)status\.is\.null(,|$)/.test(str);
+          const inMatch = /status\.in\.\(([^)]*)\)/.exec(str);
+          const allowedValues = new Set(inMatch ? inMatch[1].split(',') : []);
+          statusPredicate = (status) => (status == null ? allowNull : allowedValues.has(status));
+          return chain;
+        },
         order() { return chain; },
         range(from, to) {
           if (error) return Promise.resolve({ data: null, error });
-          const source = statusAllowlist ? (rows || []).filter((r) => statusAllowlist.includes(r.status)) : (rows || []);
+          const source = statusPredicate ? (rows || []).filter((r) => statusPredicate(r.status)) : (rows || []);
           return Promise.resolve({ data: source.slice(from, to + 1), error: null });
         },
       };
@@ -88,6 +102,18 @@ describe('electAdamFromDb / getActiveAdamId / countFreshAdams (fail-open)', () =
       { session_id: 'live', heartbeat_at: fresh(1), status: 'idle', metadata: { role: 'adam' } },
     ]);
     expect(await adam.electAdamFromDb(sb, { nowMs: NOW })).toBe('live');
+    expect(await adam.countFreshAdams(sb, { nowMs: NOW })).toBe(1);
+  });
+
+  // ADVERSARIAL REVIEW (PR #7369, INFO): SQL's `status IN (...)` never matches NULL, which used to
+  // silently disagree with isStatusFreshEligible(null)===true (SECURITY evidence 46d5f420) --
+  // fetchFreshAdams's QUERY excluded a NULL-status row that the PURE predicate would have allowed.
+  // Proves agreement is restored at the query layer, not just the predicate.
+  it('INCLUDES a NULL-status fresh row in election (query-level .or() now agrees with isStatusFreshEligible)', async () => {
+    const sb = stub([
+      { session_id: 'nullStatus', heartbeat_at: fresh(1), status: null, metadata: { role: 'adam' } },
+    ]);
+    expect(await adam.electAdamFromDb(sb, { nowMs: NOW })).toBe('nullStatus');
     expect(await adam.countFreshAdams(sb, { nowMs: NOW })).toBe(1);
   });
 });
@@ -382,6 +408,63 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
     expect(r.retire_fallback_used).toEqual(['staleprior']);
     expect(r.retire_blocked).toBeUndefined();
     expect(calls.drainSelect).toBeGreaterThan(0); // FR-4 drain still ran for the JS-merge-retired prior
+  });
+
+  // ADVERSARIAL REVIEW (PR #7369): a released-but-heartbeat-not-yet-stale prior (heartbeat_at
+  // frozen at release, not backdated -- FR-1's own finding) must be RETIRED, not skipped as
+  // "became fresh since the decision". Before this fix, decideSingleAdamGuard correctly excluded
+  // this row from "fresh" (so it landed in decision.retire, and registration proceeded), but the
+  // retire re-check's bare isFresh() still saw its heartbeat as fresh and skipped clearing it --
+  // leaving TWO simultaneous role='adam' rows with no convergence path.
+  it('a RELEASED-but-heartbeat-still-fresh prior => retired (not wrongly skipped as "became fresh")', async () => {
+    // heartbeat_at set relative to the SAME injected nowMs2 the retire re-check reads (not the
+    // fresh() helper, which is relative to the frozen initial-decision NOW and would be many
+    // real-world months stale by the time the re-check ran on a hardcoded Date.now() -- that gap is
+    // exactly what made this scenario untestable before nowMs2 became injectable).
+    const heartbeatAt = new Date(NOW - 5 * 60_000).toISOString();
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'releasedRecentHb', heartbeat_at: heartbeatAt, status: 'released', metadata: { role: 'adam' } }],
+    });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW, nowMs2: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire' });
+    expect(r.retired).toEqual(['releasedRecentHb']);
+    expect(calls.rpc.map((c) => c.fn)).toEqual(expect.arrayContaining(['clear_adam_flag', 'set_adam_flag']));
+  });
+
+  // Negative control: a prior with the SAME recent heartbeat but a LIVE status (no status field,
+  // matching real callers/fixtures predating the field) is still correctly refused, not retired --
+  // proves the fix didn't flip the guard's other direction. (Refused at the FIRST decision, so it
+  // never reaches the retire re-check -- nowMs2 is irrelevant here, but passed for consistency.)
+  it('a LIVE (no-status) prior with the same recent heartbeat is still REFUSED, not retired', async () => {
+    const heartbeatAt = new Date(NOW - 5 * 60_000).toISOString();
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'liveRecentHb', heartbeat_at: heartbeatAt, metadata: { role: 'adam' } }],
+    });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW, nowMs2: NOW });
+    expect(r).toMatchObject({ ok: false, action: 'refused' });
+    expect(calls.rpc).toHaveLength(0);
+  });
+
+  // ADVERSARIAL REVIEW (PR #7369): the retire re-check's OWN racing-restart protection ("a prior
+  // that became fresh since the decision is NEVER cleared") was silently dead code before this fix
+  // -- isFresh() was called with only 2 of its 3 args, so `nowMs2 - hb <= undefined` was false for
+  // every value, meaning freshNow was always empty and nothing was ever protected. Now that the
+  // missing ADAM_FRESH_MS is restored, prove the protection actually engages: a prior classified
+  // stale at DECISION time (nowMs) but whose SAME heartbeat_at is within the freshness window as of
+  // the retire RE-CHECK time (nowMs2) must be skipped, not cleared. (nowMs2 < nowMs here is a
+  // deliberate proxy for "this row looks fresher from the second read's vantage point" -- the
+  // fixture harness shares one static heartbeat_at across both reads, so this is the only way to
+  // simulate a genuinely later, fresher stamp without changing the harness itself.)
+  it('a prior that raced back to fresh between decision and retire re-check is SKIPPED, not cleared', async () => {
+    const heartbeatAt = new Date(NOW - 15 * 60_000).toISOString(); // 15min before NOW: stale at decision (nowMs=NOW)
+    const nowMs2 = NOW - 10 * 60_000; // only 5min after heartbeatAt: fresh as of the re-check
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'racingRestart', heartbeat_at: heartbeatAt, metadata: { role: 'adam' } }],
+    });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW, nowMs2 });
+    expect(r).toMatchObject({ ok: true, action: 'tagged' }); // NOT tagged_after_retire
+    expect(r.retired).toEqual([]);
+    expect(calls.rpc.map((c) => c.fn)).not.toContain('clear_adam_flag');
   });
 
   // FR-1/TS-1: the bug this SD fixes — a session with NO existing claude_sessions row must be

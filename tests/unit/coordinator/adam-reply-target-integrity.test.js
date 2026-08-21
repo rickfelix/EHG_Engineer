@@ -47,6 +47,7 @@ function makeSb({ freshAdams = [], retiredSeats = [], retargetRows = [], retarge
         // .in('status', [...]) -- this file doesn't test status filtering itself (that's
         // adam-singleton.test.js), so a passthrough keeps freshAdams fixtures authoritative.
         in() { return builder; },
+        or() { return builder; }, // fetchFreshAdams now uses .or() (INFO, PR #7369) instead of .in()
         // FR-6 (count-truncation discipline): fetchFreshAdams / resolveRetiredAdamSeats paginate
         // via fetchAllPaginated, whose pages end in .order(...).range(from, to).
         order() { return builder; },
