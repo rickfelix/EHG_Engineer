@@ -51,6 +51,19 @@ describe('FR4-UI: there is NO client-side role gate — the route is the only en
     }
   });
 
+  it('does not disable buttons via setAttribute/classList either -- the .disabled PROPERTY is the only disabling mechanism this panel may use', () => {
+    // UAT-agent finding, traced to feedback a64a6807 (2026-07-28): the .disabled-PROPERTY check
+    // above is a source-text grep that only sees ONE of several ways JS can disable a DOM element.
+    // A role-based gate expressed via setAttribute('disabled', ...) or classList.add('disabled')
+    // would slip past it entirely -- so THAT test cannot fail on this alternate route. Rather than
+    // writing a similarly-permissive-but-checked regex for every possible disabling mechanism,
+    // this asserts the additional mechanisms are simply ABSENT -- true today, and a deliberate
+    // constraint: this panel has exactly ONE disabling mechanism, so a second one appearing via any
+    // means is itself worth a human's attention, disabling-logic or not.
+    expect(PANEL).not.toMatch(/setAttribute\(\s*['"]disabled['"]/);
+    expect(PANEL).not.toMatch(/classList\.(add|remove|toggle)\(\s*['"]disabled/);
+  });
+
   it('does not re-derive singleton/role state client-side', () => {
     // Any of these appearing client-side means the button is deciding for itself instead of
     // rendering what the route would answer.
