@@ -9,6 +9,8 @@
 // category-scoped DELETE) to exercise runOneBatch's own ordering/guard logic without a live DB.
 
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { runOneBatch, BATCH_SIZE, ARCHIVED_BY } from '../../../scripts/one-off/purge-wind-down-survey-backlog.mjs';
 
 function makeMockClient({ feedback, retentionArchive = [], failArchiveInsert = false }) {
@@ -18,11 +20,13 @@ function makeMockClient({ feedback, retentionArchive = [], failArchiveInsert = f
     txn: false,
     committed: [],
     rolledBack: 0,
+    queries: [], // {sql, params} for every call, in order — used by the cast-regression pin below
   };
   const client = {
     state,
     async query(sql, params = []) {
       const s = sql.trim();
+      state.queries.push({ sql: s, params });
       if (s === 'BEGIN') { state.txn = true; return { rows: [], rowCount: 0 }; }
       if (s === 'COMMIT') { state.txn = false; state.committed.push(true); return { rows: [], rowCount: 0 }; }
       if (s === 'ROLLBACK') { state.txn = false; state.rolledBack++; return { rows: [], rowCount: 0 }; }
@@ -148,5 +152,50 @@ describe('runOneBatch (SD-LEO-INFRA-WIND-DOWN-SURVEY-001 FR-2)', () => {
   it('ARCHIVED_BY is a stable, non-empty identifier', () => {
     expect(typeof ARCHIVED_BY).toBe('string');
     expect(ARCHIVED_BY.length).toBeGreaterThan(0);
+  });
+
+  // TESTING evidence (f7d7b63a, T-1): the mock client above dispatches purely on SQL substring
+  // and never type-checks params — fixture ids are plain strings like '1', so it would stay green
+  // even if the ::uuid[] cast on feedback.id were reverted back to the ::text[] that failed live
+  // with 42883. This test closes that gap by asserting on the RAW SQL TEXT the mock actually
+  // received, independent of whether the mock's own dispatch logic understands SQL semantics.
+  it('feedback.id comparisons cast to ::uuid[] (not ::text[]) in both the archive INSERT and the DELETE; retention_archive.source_id stays ::text[]', async () => {
+    const client = makeMockClient({
+      feedback: [{ id: '1', category: 'wind_down_survey', created_at: '2026-08-01T00:00:00Z' }],
+    });
+    await runOneBatch(client, 'run-1');
+
+    const insertQuery = client.state.queries.find((q) => q.sql.includes('INSERT INTO public.retention_archive'));
+    const deleteQuery = client.state.queries.find((q) => q.sql.includes('DELETE FROM public.feedback'));
+    const idCursorQuery = client.state.queries.find((q) => q.sql.includes('SELECT source_id FROM public.retention_archive'));
+
+    expect(insertQuery).toBeTruthy();
+    expect(insertQuery.sql).toContain('f.id = ANY($1::uuid[])');
+    expect(insertQuery.sql).not.toContain('f.id = ANY($1::text[])');
+
+    expect(deleteQuery).toBeTruthy();
+    expect(deleteQuery.sql).toContain('id = ANY($1::uuid[])');
+    expect(deleteQuery.sql).not.toContain('id = ANY($1::text[])');
+
+    // retention_archive.source_id genuinely is text (verified live) — this cast must NOT change.
+    expect(idCursorQuery).toBeTruthy();
+    expect(idCursorQuery.sql).toContain('source_id = ANY($1::text[])');
+  });
+
+  // TESTING evidence (f7d7b63a, T-1): runId generation happens in main(), which runOneBatch's
+  // mock-based tests above never exercise (they receive runId as a plain string parameter). A
+  // revert of the crypto.randomUUID() fix back to the composite descriptive string (which fails
+  // live against retention_archive.run_id's uuid column with 22P02) would be invisible to every
+  // other test in this file. Source-pinned against the live file rather than re-imported, since
+  // main() is not exported and its side effects (createDatabaseClient, process.argv) are not
+  // meant to run under vitest.
+  it('main() generates runId via crypto.randomUUID(), not a composite descriptive string', () => {
+    const scriptPath = fileURLToPath(new URL('../../../scripts/one-off/purge-wind-down-survey-backlog.mjs', import.meta.url));
+    const source = fs.readFileSync(scriptPath, 'utf8');
+    expect(source).toMatch(/const runId = crypto\.randomUUID\(\);/);
+    // The old composite form embedded ARCHIVED_BY/a date/a hex slice directly into runId itself —
+    // guard against that shape reappearing under the `runId` name specifically (runLabel, which
+    // legitimately builds a human-readable string, is a different variable and untouched by this).
+    expect(source).not.toMatch(/const runId = `wind-down-survey-backlog-purge-/);
   });
 });
