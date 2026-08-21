@@ -598,6 +598,47 @@ describe('sms_inbound_log matched_decision_id vs considered_decision_id (FR-1)',
     const joinable = sb._tables.sms_inbound_log.filter((r) => r.matched_decision_id === 'dec-fr3-neg');
     expect(joinable.length).toBe(1);
   });
+
+  // testing-agent B2: logInbound's insert was previously unbound -- a schema-drift or constraint
+  // rejection would silently drop the entire audit row with no trace. Must be fail-soft (logged,
+  // never thrown) so a schema-drift edge case degrades to a lost audit row, not claim thrash.
+  it('a failed sms_inbound_log insert is fail-soft: logged via console.warn, never thrown', async () => {
+    const sb = makeFakeSupabase();
+    const realFrom = sb.from.bind(sb);
+    sb.from = (table) => {
+      const realApi = realFrom(table);
+      // Only the insert() chain is faulted -- sms_inbound_log is also SELECTed (rate-limit
+      // count check) in the same request, and that must keep behaving normally so the flow
+      // reaches logInbound's insert at all.
+      if (table === 'sms_inbound_log') {
+        const originalInsert = realApi.insert;
+        realApi.insert = (row) => {
+          const result = originalInsert(row);
+          result.then = (resolve) => resolve({ data: null, error: { message: 'column "considered_decision_id" does not exist' } });
+          return result;
+        };
+      }
+      return realApi;
+    };
+    // vi.spyOn(console, 'warn') here inherits Vitest's file-wide console-interception history
+    // (unrelated earlier tests' warn calls are already present), so assert on the DELTA this
+    // call produces, not the spy's absolute total.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const preCallCount = warnSpy.mock.calls.length;
+    let threw = false;
+    let result;
+    try {
+      result = await handleInboundSmsReply(sb, { from: '+15550010009', to: '+15559999999', body: 'x', messageSid: 'SM-fr-b2', signatureValid: true });
+    } catch {
+      threw = true;
+    }
+    const newCalls = warnSpy.mock.calls.slice(preCallCount);
+    expect(threw).toBe(false);
+    expect(result.outcome).toBe('no_match');
+    expect(newCalls.length).toBe(1);
+    expect(newCalls[0][0]).toMatch(/logInbound insert failed.*audit row lost/);
+    warnSpy.mockRestore();
+  });
 });
 
 // SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-4/FR-6: PARK_OUTCOMES extension + CHAIRMAN_PHONE gate.
