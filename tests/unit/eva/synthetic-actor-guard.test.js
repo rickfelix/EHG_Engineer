@@ -61,6 +61,14 @@ function makeThrowingSupabase(errorMessage) {
   };
 }
 
+// EXEC-TO-PLAN SECURITY/TESTING round-5 finding: pullNamedStepConclusion now
+// checks step.completed_at against STALENESS_WINDOW_MS (7 days), so every
+// fixture step expected to read satisfied:true needs a completed_at within
+// that window -- FRESH is safely inside it, STALE is well beyond it (10 days,
+// comfortably clear of the 7-day boundary so the test isn't timing-fragile).
+const FRESH_COMPLETED_AT = new Date(Date.now() - 60 * 1000).toISOString(); // 1 minute ago
+const STALE_COMPLETED_AT = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days ago
+
 function githubFetchSequence({ runs = [{ id: 1, head_sha: 'abc123' }], jobs = [] } = {}) {
   return vi.fn(async (url) => {
     if (url.includes('/actions/workflows/')) {
@@ -179,7 +187,7 @@ describe('checkSyntheticActorFencing — venture_resources independent cross-che
   it('proceeds to the GitHub pull when github_repo matches the venture_resources record', async () => {
     const supabase = makeSupabase(meta, { registeredRepo: VALID_SA.github_repo });
     const fetchImpl = githubFetchSequence({
-      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success' }] }],
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
     });
     const result = await checkSyntheticActorFencing(supabase, 'v-xcheck-4', { fetchImpl, githubToken: 'tok' });
     expect(result.satisfied).toBe(true);
@@ -199,7 +207,7 @@ describe('checkSyntheticActorFencing — GitHub step-granularity pull', () => {
 
   it('satisfied:true when the named step concludes success', async () => {
     const fetchImpl = githubFetchSequence({
-      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success' }] }],
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
     });
     const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-gh-1', { fetchImpl, githubToken: 'tok' });
     expect(result).toEqual({ applies: true, satisfied: true, reason: expect.stringContaining('verified PASS'), details: expect.any(Object) });
@@ -253,13 +261,66 @@ describe('checkSyntheticActorFencing — GitHub step-granularity pull', () => {
   });
 });
 
+describe('checkSyntheticActorFencing — staleness window (EXEC-TO-PLAN SECURITY/TESTING round-5 finding)', () => {
+  const meta = { uat_probe_required: true, synthetic_actor: VALID_SA };
+
+  it('satisfied:false when the step succeeded but completed beyond the 7-day staleness window', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: STALE_COMPLETED_AT }] }],
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-stale-1', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/beyond the 7-day staleness window/);
+    expect(result.reason).toMatch(/dispatch deploy\.yml/); // actionable remediation, not just a red flag
+    expect(result.details.stepConclusion).toBe('success'); // the step itself DID pass -- staleness is a distinct reason
+  });
+
+  it('satisfied:true when the step succeeded and completed within the staleness window', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-stale-2', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(true);
+    expect(result.reason).toMatch(/within the 7-day staleness window/);
+  });
+
+  it('fails CLOSED when the step succeeded but has no completed_at field at all', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success' }] }], // no completed_at
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-stale-3', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/no parseable completed_at/);
+    expect(result.reason).toMatch(/fail-closed/);
+  });
+
+  it('fails CLOSED when completed_at is present but unparseable', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: 'not-a-date' }] }],
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-stale-4', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/no parseable completed_at/);
+  });
+
+  it('a failing step is not-verified for its own conclusion, never reaching the staleness check (staleness only gates an otherwise-passing step)', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'failure', completed_at: STALE_COMPLETED_AT }] }],
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-stale-5', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).not.toMatch(/staleness window/); // reason is the conclusion, not the age
+    expect(result.reason).toMatch(/conclusion=failure/);
+  });
+});
+
 describe('checkSyntheticActorFencing — short-TTL cached-last-known-good fallback', () => {
   const meta = { uat_probe_required: true, synthetic_actor: VALID_SA };
 
   it('uses the cached result from a prior successful pull when a LATER call hits a transient GitHub error', async () => {
     const ventureId = 'v-cache-1';
     const goodFetch = githubFetchSequence({
-      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success' }] }],
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
     });
     const first = await checkSyntheticActorFencing(makeSupabase(meta), ventureId, { fetchImpl: goodFetch, githubToken: 'tok' });
     expect(first.satisfied).toBe(true);
