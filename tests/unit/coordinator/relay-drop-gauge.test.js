@@ -6,7 +6,7 @@
  * (unlike pending-question-timer.cjs's single-set decidePendingQuestions()).
  */
 import { describe, it, expect } from 'vitest';
-import { decideRelayDrops, isTrackedInbound, satisfiesCorrelation, DEFAULT_WINDOW_MS, DEFAULT_REVIEW_WINDOW_MS, windowMsForRow, resolveReviewWindowMs } from '../../../lib/coordinator/relay-drop-gauge.cjs';
+import { decideRelayDrops, isTrackedInbound, satisfiesCorrelation, DEFAULT_WINDOW_MS, DEFAULT_REVIEW_WINDOW_MS, windowMsForRow, resolveReviewWindowMs, loadInboundCandidates, loadOutboundCandidates, INBOUND_QUERY_LOOKBACK_BUFFER_MS } from '../../../lib/coordinator/relay-drop-gauge.cjs';
 import { PAYLOAD_KINDS } from '../../../lib/fleet/worker-status.cjs';
 
 const NOW = Date.parse('2026-07-02T00:00:00Z');
@@ -128,5 +128,59 @@ describe('per-kind window discrimination (QF-20260821-607)', () => {
     expect(resolveReviewWindowMs({})).toBe(DEFAULT_REVIEW_WINDOW_MS);
     expect(resolveReviewWindowMs({ RELAY_DROP_GAUGE_REVIEW_WINDOW_MIN: '60' })).toBe(60 * 60 * 1000);
     expect(resolveReviewWindowMs({ RELAY_DROP_GAUGE_REVIEW_WINDOW_MIN: 'not-a-number' })).toBe(DEFAULT_REVIEW_WINDOW_MS);
+  });
+});
+
+// QF-20260821-607 (adversarial review round 2): an EQUAL query-lookback/flag-window pairing
+// silently defeats flagging under discrete polling -- a row ages out of the QUERY'S visibility
+// at essentially the same tick it becomes flag-eligible, so it goes 'pending' -> gone, never
+// 'flag'. These tests call the REAL loadInboundCandidates/loadOutboundCandidates (not the pure
+// decideRelayDrops core) against a capturing mock, to prove the actual DB-query headroom, not
+// just the in-memory decision logic the round-1 tests above already cover.
+function makeCapturingSupabase() {
+  const captured = {};
+  const builder = {
+    from() { return builder; },
+    select() { return builder; },
+    in() { return builder; },
+    eq() { return builder; },
+    or() { return builder; },
+    gte(col, val) { captured.gte = { col, val }; return builder; },
+    limit() { return Promise.resolve({ data: [] }); },
+  };
+  return { supabase: builder, captured };
+}
+
+describe('query-level lookback headroom (QF-20260821-607 round 2)', () => {
+  const NOW2 = Date.parse('2026-08-21T12:00:00Z');
+  const ONE_POLL_CYCLE_MS = 15 * 60 * 1000; // this gauge's own cron cadence (relay-drop-gauge-cron.yml)
+
+  it('INBOUND_QUERY_LOOKBACK_BUFFER_MS clears one poll cycle with wide margin', () => {
+    expect(INBOUND_QUERY_LOOKBACK_BUFFER_MS).toBeGreaterThan(ONE_POLL_CYCLE_MS);
+  });
+
+  it('loadInboundCandidates default lookback clears DEFAULT_REVIEW_WINDOW_MS by at least one poll cycle (the exact race the round-1 fix alone still missed)', async () => {
+    const { supabase, captured } = makeCapturingSupabase();
+    await loadInboundCandidates(supabase, { now: NOW2 });
+    expect(captured.gte).toBeDefined();
+    const lookbackUsed = NOW2 - Date.parse(captured.gte.val);
+    expect(lookbackUsed).toBeGreaterThanOrEqual(DEFAULT_REVIEW_WINDOW_MS + ONE_POLL_CYCLE_MS);
+  });
+
+  it('loadOutboundCandidates default lookback is widened to match (no longer a flat, now-too-narrow 24h)', async () => {
+    const { supabase, captured } = makeCapturingSupabase();
+    await loadOutboundCandidates(supabase, { now: NOW2 });
+    const lookbackUsed = NOW2 - Date.parse(captured.gte.val);
+    expect(lookbackUsed).toBeGreaterThanOrEqual(DEFAULT_REVIEW_WINDOW_MS);
+  });
+
+  it('an explicit windowLookbackMs override still wins over the default for both loaders', async () => {
+    const { supabase: sIn, captured: cIn } = makeCapturingSupabase();
+    await loadInboundCandidates(sIn, { now: NOW2, windowLookbackMs: 5000 });
+    expect(NOW2 - Date.parse(cIn.gte.val)).toBe(5000);
+
+    const { supabase: sOut, captured: cOut } = makeCapturingSupabase();
+    await loadOutboundCandidates(sOut, { now: NOW2, windowLookbackMs: 5000 });
+    expect(NOW2 - Date.parse(cOut.gte.val)).toBe(5000);
   });
 });

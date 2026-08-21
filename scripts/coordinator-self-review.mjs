@@ -229,11 +229,23 @@ export async function selfReviewMain() {
   // Same 14-day lookback for both "requests I sent" and "answers I've received" so the two are
   // compared on equal footing (see SOLICIT_HISTORY_LOOKBACK_MS above); deliberately NOT the same
   // 24h-windowed `sigs` fetch used for the capture step (1), which is too narrow for this purpose.
+  // QF-20260821-607 (adversarial review round 2): both queries need .order(created_at desc)
+  // paired with .limit() -- matching this file's OWN established convention (the `sigs` capture
+  // query above, and the `all` reviews query below, both pair .limit() with an explicit order --
+  // an UNordered .limit() has no "most recent N" guarantee, so the newest (most relevant) rows
+  // are exactly the ones a busy fleet's row count could silently cut off). replyRows is further
+  // narrowed to payload->>signal_type=feedback (the ONLY shape a genuine "/signal feedback"
+  // reply ever takes -- confirmed in scripts/worker-signal.cjs, `signal_type: type`; the SAME
+  // established narrowing lib/coordinator/relay-drop-gauge.cjs's loadOutboundCandidates already
+  // applies) so this wide 14-day/500-row cap isn't dominated by unrelated traffic (roll_call,
+  // etc.) addressed to this coordinator.
   const solicitSince = new Date(t - SOLICIT_HISTORY_LOOKBACK_MS).toISOString();
   const { data: sentRows } = await db.from('session_coordination').select('target_session,created_at')
-    .eq('sender_session', me).eq('payload->>kind', 'review_request').gte('created_at', solicitSince).limit(500);
+    .eq('sender_session', me).eq('payload->>kind', 'review_request').gte('created_at', solicitSince)
+    .order('created_at', { ascending: false }).limit(500);
   const { data: replyRows } = await db.from('session_coordination').select('sender_session,payload,created_at')
-    .eq('target_session', me).gte('created_at', solicitSince).limit(500);
+    .eq('target_session', me).eq('payload->>signal_type', 'feedback').gte('created_at', solicitSince)
+    .order('created_at', { ascending: false }).limit(500);
   const replyBody = (r) => String((r.payload || {}).body || (r.payload || {}).message || '');
   const workerAnswerRows = (replyRows || []).filter((r) => RE.test(replyBody(r)));
   const adamAnswerRows = (replyRows || []).filter((r) => ADAM_RE.test(replyBody(r)));

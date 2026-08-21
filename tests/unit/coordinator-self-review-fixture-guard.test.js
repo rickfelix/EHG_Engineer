@@ -15,6 +15,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { partitionParticipants, isSolicitationDue, buildSolicitationHistory } from '../../scripts/coordinator-self-review.mjs';
 
 const { isFullUuid } = createRequire(import.meta.url)('../../lib/coordinator/dispatch.cjs');
@@ -231,5 +234,30 @@ describe('coordinator self-review — solicitation dedup/cooldown (QF-20260821-6
       isSolicitationDue({ lastRequestSentAt: lastSentByTarget.get(w), lastAnswerAt: lastAnswerBySender.get(w) }, { now: NOW, cooldownMs: COOLDOWN_MS }).due
     );
     expect(dueWorkers).toEqual([REAL2]);
+  });
+});
+
+// QF-20260821-607 (adversarial review round 2): the sentRows/replyRows queries feeding
+// buildSolicitationHistory() above are NOT dependency-injected (selfReviewMain() runs against
+// a module-level `db` singleton), so their DB-query wiring can't be exercised via a mock the
+// way relay-drop-gauge.cjs's exported loaders can. Pinned via source-text assertion instead --
+// the SAME established pattern already used by loadOutboundCandidates' wiring test in
+// tests/unit/coordinator/relay-drop-gauge-worker-signal-reply.test.js.
+describe('coordinator self-review — sentRows/replyRows query wiring (QF-20260821-607 round 2)', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.resolve(__dirname, '../../scripts/coordinator-self-review.mjs'), 'utf8');
+  const region = src.slice(src.indexOf('const solicitSince'), src.indexOf('const replyBody'));
+
+  it('region was actually found (guards the slice itself from silently matching nothing)', () => {
+    expect(region.length).toBeGreaterThan(0);
+  });
+
+  it('both sentRows and replyRows are explicitly ordered by created_at desc -- a bare .limit() has no "most recent N" guarantee', () => {
+    const orderCount = (region.match(/\.order\(\s*['"]created_at['"]\s*,\s*\{\s*ascending:\s*false\s*\}\s*\)/g) || []).length;
+    expect(orderCount).toBe(2);
+  });
+
+  it('replyRows is narrowed to payload->>signal_type=feedback (the only shape a genuine "/signal feedback" reply ever takes)', () => {
+    expect(region).toMatch(/payload->>signal_type/);
   });
 });
