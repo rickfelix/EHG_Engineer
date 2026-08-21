@@ -14,7 +14,7 @@ import {
   buildStepExecutor,
 } from '../../../lib/apa/venture-step-executors.js';
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {} } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current' } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   return {
     calls,
@@ -42,7 +42,7 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
     },
     async fill(selector, value) { calls.fill.push([selector, value]); },
     async click(selector) { calls.click.push(selector); },
-    url: () => 'http://fixture/current',
+    url: () => currentUrl,
   };
 }
 
@@ -251,16 +251,49 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
     expect(page.calls.click).toEqual([TOGGLE, 'button:has-text("Continue")']);
   });
 
-  it('does not click when the toggle is genuinely absent (real sign-in-only page, no toggle ever mounts)', async () => {
+  it('SEC-001 residual (found by security-agent re-verification): refuses to submit credentials when the toggle is never found -- FAIL-CLOSED, not a fallthrough to fill+submit', async () => {
     process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
     const executor = buildStepExecutor(step, 'RACEVENTURE');
     const page = makeMockPage({ locatorCounts: { [TOGGLE]: 0 }, waitForVisible: { [TOGGLE]: false } });
 
+    // The first version of this fix only closed the RACE (slow-but-present toggle). It still
+    // fell through to fill+submit when the toggle was never found at all -- the DEFAULT outcome
+    // for any venture with different copy, i18n, a non-Clerk provider, or a genuinely
+    // registration-only page. That is exactly the case where submitting is most likely to
+    // create a real account, so "toggle not found" must refuse, not proceed.
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/could not confirm a sign-in affordance.*refusing to submit credentials/i);
+
+    // The bug this guards against: no credential fields ever filled, no Continue click --
+    // nothing reaches a form when a sign-in surface can't be confirmed.
+    expect(page.calls.click).toEqual([]);
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('SEC-003 (bundled -- same fix shape): refuses to submit the password if the page navigated away from the expected origin after clicking the toggle', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    const page = makeMockPage({
+      locatorCounts: { [TOGGLE]: 1 },
+      currentUrl: 'http://attacker.example/phish',
+    });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/refusing to submit credentials.*navigated away from expected origin/i);
+
+    expect(page.calls.click).toEqual([TOGGLE]); // toggle clicked, but no email/password ever filled
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('same-origin, different path is accepted (the check is origin equality, not exact-URL equality)', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'http://fixture/sign-in' });
+
     await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
 
-    expect(page.calls.click).not.toContain(TOGGLE);
-    expect(page.calls.click).toEqual(['button:has-text("Continue")']);
+    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
   });
 });
 
