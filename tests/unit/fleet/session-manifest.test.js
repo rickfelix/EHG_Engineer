@@ -80,6 +80,24 @@ describe('session-manifest DESIRED-STATE SLOTS (FR-1, Solomon checkpoint-1 amend
     expect(v.present).toEqual([{ name: 'Alpha-5', mismatches: ['model'] }]);
   });
 
+  // QF-20260821-462: resume_uuid is populated on <0.1% of live rows by design -- an absent live
+  // value must not be reported as drift, only a genuine live-vs-desired disagreement should.
+  it('computeSlotDrift: an absent LIVE resume_uuid is NOT a mismatch, even when desired has one', () => {
+    const v = computeSlotDrift({
+      desired: [fullSlot],
+      actualByKey: { 'Alpha-5': { ...fullSlot, resume_uuid: null } },
+    });
+    expect(v.present).toEqual([{ name: 'Alpha-5', mismatches: [] }]);
+  });
+
+  it('computeSlotDrift: a genuine resume_uuid disagreement (both sides populated) still flags', () => {
+    const v = computeSlotDrift({
+      desired: [fullSlot],
+      actualByKey: { 'Alpha-5': { ...fullSlot, resume_uuid: 'uuid-2' } },
+    });
+    expect(v.present).toEqual([{ name: 'Alpha-5', mismatches: ['resume_uuid'] }]);
+  });
+
   it('computeSlotDrift: unexpected actual entries not in the desired list are surfaced', () => {
     const v = computeSlotDrift({ desired: [fullSlot], actualByKey: { 'Alpha-5': fullSlot, 'ghost': { name: 'ghost' } } });
     expect(v.unexpected).toEqual(['ghost']);
