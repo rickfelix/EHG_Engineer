@@ -16,7 +16,7 @@ const NOW = Date.parse('2026-07-20T12:00:00Z');
 const iso = (msAgo) => new Date(NOW - msAgo).toISOString();
 
 /** Table-aware supabase mock: per-table select rows + recorded upserts/updates. */
-function makeMock({ obligations = [], selectError = null, registryError = null } = {}) {
+function makeMock({ obligations = [], selectError = null, registryError = null, insertError = null } = {}) {
   // QF-20260816-173: selectError may be a bare string (message-only, no .code — an
   // operational fault with no PostgREST error code) or a full {code, message} object
   // (e.g. {code: 'PGRST205', ...} for a genuine table-absent signature).
@@ -33,7 +33,10 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
       select: () => c,
       update: (p) => { state.op = 'update'; state.payload = p; return c; },
       upsert: (p) => { state.op = 'upsert'; state.payload = p; return finishThenable(); },
-      insert: (p) => { inserts.push({ table, payload: p }); return Promise.resolve({ data: null, error: null }); },
+      insert: (p) => {
+        if (insertError) return Promise.resolve({ data: null, error: { message: insertError } });
+        inserts.push({ table, payload: p }); return Promise.resolve({ data: null, error: null });
+      },
       eq: () => c, in: () => c, is: () => c, gte: () => c,
       not: (col, op, val) => { state.notFilters.push([col, op, val]); return c; },
       order: (col, opts) => { state.orderCol = col; state.orderOpts = opts; return c; },
@@ -334,5 +337,27 @@ describe('sweep wiring: channel-health layer runs after reconcile, fail-soft', (
     });
     expect(res.exitCode).toBe(0);
     expect(warn.mock.calls.join(' ')).toMatch(/verdict audit-write failed/);
+  });
+
+  it('TESTING sub-agent finding: a PostgREST-level insert rejection (not a thrown exception) is caught and logged, never silently swallowed', async () => {
+    // supabase-js resolves {data:null, error:{...}} on a constraint/RLS rejection instead of
+    // throwing -- a naive await with no destructuring would let that vanish silently.
+    const mock = makeMock({ insertError: 'permission denied for table system_events' });
+    const warn = vi.fn();
+    const res = await sweepMain(['node', 'x', '--once'], {
+      supabase: mock.supabase,
+      reconcile: vi.fn(async () => ({ ran: true, unconfigured: 0 })),
+      channelHealth: {
+        ensureSweepSchedule: vi.fn(async () => ({ ok: true })),
+        witnessSweepFired: vi.fn(async () => ({ stamped: true })),
+        detectChannelDegradation: vi.fn(async () => ({ alarmed: false })),
+        escalateCarrierFiltered: vi.fn(async () => ({ scanned: 0, escalated: 0, emailUnavailable: 0 })),
+      },
+      logger: { ...quiet, warn },
+    });
+    expect(res.exitCode).toBe(0);
+    expect(warn.mock.calls.join(' ')).toMatch(/verdict audit-write failed/);
+    expect(warn.mock.calls.join(' ')).toMatch(/permission denied/);
+    expect(mock.inserts.filter((i) => i.table === 'system_events')).toHaveLength(0);
   });
 });

@@ -80,7 +80,10 @@ export async function main(argv = process.argv, deps = {}) {
   // running, not just that it once found a problem. Fail-soft: never lets an audit-write failure
   // affect the sweep's own exit code.
   try {
-    await supabase.from('system_events').insert({
+    // TESTING sub-agent finding (SD-LEO-INFRA-FLEET-DEAD-MAN-001): supabase-js resolves
+    // {data:null, error:{...}} on a PostgREST-level rejection instead of throwing -- the
+    // returned error must be checked explicitly or a rejected write silently vanishes here.
+    const { error: insertErr } = await supabase.from('system_events').insert({
       event_type: 'sms_outbound_sweep_verdict',
       actor_type: 'system',
       actor_role: 'sms-outbound-sweep',
@@ -89,6 +92,7 @@ export async function main(argv = process.argv, deps = {}) {
         unconfigured: summary.unconfigured || 0, reason: summary.reason || null,
       },
     });
+    if (insertErr) throw new Error(insertErr.message);
   } catch (err) {
     logger.warn?.(`[sms-outbound-sweep] verdict audit-write failed (non-fatal): ${err?.message || err}`);
   }
