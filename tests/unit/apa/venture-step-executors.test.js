@@ -14,7 +14,7 @@ import {
   buildStepExecutor,
 } from '../../../lib/apa/venture-step-executors.js';
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {} } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {} } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   return {
     calls,
@@ -26,9 +26,18 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {} } = {}) {
     },
     locator(selector) {
       const count = Object.prototype.hasOwnProperty.call(locatorCounts, selector) ? locatorCounts[selector] : 0;
+      // waitForVisible defaults to count>0 so existing count-only fixtures behave unchanged.
+      // Set it explicitly, independent of count, to simulate a real Playwright waitFor()
+      // finding an element that an instant, non-waiting count() snapshot would have missed
+      // (SEC-001 regression coverage).
+      const visible = Object.prototype.hasOwnProperty.call(waitForVisible, selector) ? waitForVisible[selector] : count > 0;
       return {
         count: async () => count,
         click: async () => { calls.click.push(selector); },
+        waitFor: async ({ state } = {}) => {
+          if (state === 'visible' && visible) return;
+          throw new Error(`waitFor timeout: "${selector}" not ${state}`);
+        },
       };
     },
     async fill(selector, value) { calls.fill.push([selector, value]); },
@@ -208,6 +217,53 @@ describe('buildStepExecutor() fallback — persona.type selects the credential s
   });
 });
 
+describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding SEC-001)', () => {
+  const step = { step_id: 'stp-abc123-do-a-thing', goal: 'do a thing' };
+  const ENV_KEY = 'VENTURE_UAT_TEST_ACCOUNT_RACEVENTURE_EXISTING';
+  const TOGGLE = 'text=Already have an account? Sign in';
+  afterEach(() => { delete process.env[ENV_KEY]; });
+
+  it('clicks the sign-in toggle when it is slow to mount (count()=0) but genuinely present (waitFor succeeds) -- proves the fix does not race a real Playwright load', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    // count() says "not there yet" (an instant snapshot before the widget mounts); waitFor()
+    // says "there, once you actually wait for it" -- exactly the measured real-world gap
+    // between Playwright's non-waiting count() and its waiting waitFor().
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 0 }, waitForVisible: { [TOGGLE]: true } });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+
+    expect(page.calls.click).toContain(TOGGLE);
+  });
+
+  it('regression guard: a count()-only check would have missed this and fallen through to /register -- fails if the fix reverts to count()', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 0 }, waitForVisible: { [TOGGLE]: true } });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+
+    // The bug this guards against: on a real /register page with no toggle click, fill()+click()
+    // submit against the actual registration form -- a PRD-violating account-creation attempt.
+    // This assertion is the one that fails under the pre-fix count()-only code.
+    expect(page.calls.click).toEqual([TOGGLE, 'button:has-text("Continue")']);
+  });
+
+  it('does not click when the toggle is genuinely absent (real sign-in-only page, no toggle ever mounts)', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 0 }, waitForVisible: { [TOGGLE]: false } });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+
+    expect(page.calls.click).not.toContain(TOGGLE);
+    expect(page.calls.click).toEqual(['button:has-text("Continue")']);
+  });
+});
+
 describe('buildStepExecutor() — explicit stepOverrides take precedence', () => {
   it('uses the registered override instead of the generic fallback', async () => {
     const overrideFn = vi.fn(async () => ({ url: 'http://fixture/verified', renderedStateSummary: 'hand-verified step' }));
@@ -218,6 +274,45 @@ describe('buildStepExecutor() — explicit stepOverrides take precedence', () =>
 
     expect(overrideFn).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ url: 'http://fixture/verified', renderedStateSummary: 'hand-verified step' });
+  });
+});
+
+describe('buildStepExecutor() — Object.hasOwn guard against inherited step_id (SECURITY finding SEC-002)', () => {
+  it('a step_id matching an Object.prototype member ("constructor") never resolves to that inherited value', async () => {
+    registerVenture('PROTO-TEST', { preflightChecks: [], stepOverrides: {} });
+
+    // Bare bracket access (`stepOverrides[step.step_id]`) on step_id="constructor" would
+    // resolve to Object.prototype.constructor -- a truthy, wrong-shaped "executor" that the
+    // caller (browser-executor.js's executeJourneyStep) would invoke, silently fabricating a
+    // PASS with zero real navigation, feeding a false-green verdict into FR-3's PLAN-TO-LEAD
+    // gate. Object.hasOwn must reject this and fall through to the honest fallback executor.
+    const executor = buildStepExecutor({ step_id: 'constructor', goal: 'do a thing' }, 'PROTO-TEST');
+
+    // The fallback executor (not the Object.prototype constructor function) is what runs --
+    // proven by it producing this fallback's characteristic honest failure, not silently
+    // returning success or throwing an unrelated "not a function" / "invalid step" error.
+    await expect(executor(makeMockPage(), {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/auth required.*no existing test credential configured/i);
+  });
+
+  it('other inherited names ("toString", "hasOwnProperty") are equally rejected', async () => {
+    registerVenture('PROTO-TEST-2', { preflightChecks: [], stepOverrides: {} });
+    for (const stepId of ['toString', 'hasOwnProperty', '__proto__']) {
+      const executor = buildStepExecutor({ step_id: stepId, goal: 'do a thing' }, 'PROTO-TEST-2');
+      await expect(executor(makeMockPage(), {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/auth required.*no existing test credential configured/i);
+    }
+  });
+
+  it('a genuinely registered override for an inherited-sounding name still works (hasOwn, not a blanket ban)', async () => {
+    const overrideFn = vi.fn(async () => ({ url: 'http://fixture/verified', renderedStateSummary: 'explicitly registered' }));
+    registerVenture('PROTO-TEST-3', { preflightChecks: [], stepOverrides: { toString: overrideFn } });
+
+    const executor = buildStepExecutor({ step_id: 'toString', goal: 'explicitly overridden' }, 'PROTO-TEST-3');
+    const result = await executor(makeMockPage(), {}, { baseUrl: 'http://fixture' });
+
+    expect(overrideFn).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ url: 'http://fixture/verified', renderedStateSummary: 'explicitly registered' });
   });
 });
 
