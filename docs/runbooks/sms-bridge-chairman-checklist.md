@@ -2,7 +2,7 @@
 category: runbook
 status: active
 sd: SD-LEO-FEAT-TWO-WAY-CHAIRMAN-001
-last_updated: 2026-08-15
+last_updated: 2026-08-21
 ---
 
 # Two-Way Chairman SMS Bridge — Architecture + Chairman-Gated Checklist
@@ -116,6 +116,34 @@ ever writing the notification, not the token pair — so every option-letter rep
 soft-failure or throws — a staged-but-undelivered token is never left live and matchable.
 This only applies to the **decision-packet** path; the original `sendChairmanSmsQuestion()`
 outbound flow documented above was already correct and is unchanged.
+
+## Resolved vs. considered: matched_decision_id / considered_decision_id split (2026-08-21, SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001)
+
+`sms_inbound_log.matched_decision_id` previously got stamped on EVERY inbound attempt that
+had a decision candidate at all — a genuine resolution (`outcome=answered` or `undone`) AND
+a merely-considered-but-unresolved one (`no_match`/`ambiguous`/`expired`/`rate_limited`)
+looked identical in the column. Measured live before the fix: 328-329 of ~365 rows had
+`matched_decision_id` set, but only 1 was ever a real resolution — a consumer trusting the
+column as a join target to `chairman_decisions` would be wrong 99.7% of the time.
+
+`logInbound` (`lib/chairman/sms-bridge.js`) now takes two separate ID params:
+- `matchedDecisionId` — set ONLY on a genuine resolution (`answered`/`undone`). Safe to join
+  against `chairman_decisions.id`.
+- `consideredDecisionId` — set on every non-resolving outcome instead. **No FK constraint**,
+  diagnostic-only; may reference a decision that's since changed state. Never a join target.
+
+The live `matched_decision_id`/`considered_decision_id` column comments are the authoritative,
+up-to-date source for how to distinguish the two on a query — always check `outcome IN
+('answered','undone')`, never infer it from `created_at` or a migration date (an earlier
+comment draft tried a date-based cutoff and a peer review measured it false against live data
+before it shipped). Schema change: `database/migrations/20260819_sms_inbound_log_considered_decision_id.sql`
+(additive-only, applied 2026-08-19). The ~327 pre-existing rows are NOT backfilled — that's a
+separate, explicitly chairman-gated data migration, deferred out of this SD's scope.
+
+Same fix also widened `PARK_OUTCOMES` (the chairman-visibility alarm surfaced by
+`scripts/adam-quiet-tick.mjs`) to include `expired`/`ambiguous` alongside the original
+`no_match`/`rate_limited` — both outcomes previously went dark to every consumer once they
+aged out of the alarm's lookback window.
 
 ## Not in scope (deferred, per the archived plan)
 
