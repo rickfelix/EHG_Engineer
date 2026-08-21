@@ -38,7 +38,7 @@ by a different session. Replaced entirely; nothing from it carries forward.)
 - **SEC-02** (severity high): pre-existing residual `"Allow all for anon"` RLS policy on
   `claude_sessions` never dropped by the 2026-01-23 hardening migration — currently mitigated only
   by a missing GRANT (measured live: anon SELECT works, anon write is 42501). A routine future
-  `GRANT ALL ... TO anon` would silently make the table fully anon-writable. Recommend its own SD.
+  a broad privilege grant to the `anon` role would silently make the table fully anon-writable. Recommend its own SD.
 - **Solomon-mirror status-blindness** (severity high): `scripts/solomon-register.cjs:199` has the
   identical 2-arg `isFresh()` bug just fixed on the Adam side, AND `solomon-identity.cjs`'s guard
   has NONE of FR-1's status-awareness at all (doesn't even SELECT `status`) — reproduces the exact
