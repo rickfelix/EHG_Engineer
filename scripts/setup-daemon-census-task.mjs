@@ -9,31 +9,66 @@
  * it runs ON. A GitHub Actions runner has its own ephemeral, disconnected hostname that never
  * matches any real fleet-worker session, so a workflow-scheduled run would always see 0 rows and
  * report PASS — not because nothing leaked, but because it queried for a hostname nobody uses. That
- * is a check that always passes for the wrong reason, worse than no check: it would read as
- * ongoing regression protection while providing none. The script (and its 15-test unit suite,
- * daemon-census.test.js) has existed since SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 but was wired into
- * neither CI nor a local scheduler — this registrar closes that gap the only way it can actually be
- * closed: on the host whose own sessions it is meant to census.
+ * is a check that always passes for the wrong reason, worse than no check.
+ *
+ * WHY A WRAPPER SCRIPT, NOT A BARE `/TR "node" "<path>"` (TESTING evidence 534ab65e, finding F2).
+ * schtasks runs a task with cwd defaulted to %SystemRoot%\System32, not the repo. assert-daemon-
+ * census.mjs's first line is `import 'dotenv/config'`, which resolves .env relative to
+ * process.cwd() — from System32 that resolves to nothing, SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY
+ * come back undefined, and createClient(undefined, undefined) fails every single interval,
+ * invisibly, unless someone happens to check Task Scheduler's history. Mirrors
+ * scripts/setup-liveness-watcher-task.mjs's buildWrapperScript: a .cmd that `cd /d`'s into the repo
+ * root before invoking node, so dotenv resolves .env correctly regardless of the task's own cwd.
  *
  * Usage:
  *   node scripts/setup-daemon-census-task.mjs [--interval-minutes 60] [--cleanup] [--dry-run]
  *   node scripts/setup-daemon-census-task.mjs --status | --remove
+ *
+ * DO NOT run this for real (no --dry-run) from an ephemeral EXEC worktree (TESTING evidence
+ * 534ab65e, findings F1/F3). REPO_ROOT below resolves relative to THIS file's own location --
+ * from a worktree that is `.worktrees/<SD>/scripts/...`, and worktrees are deleted post-merge.
+ * The wrapper .cmd would then embed a path that stops existing, reproducing the exact
+ * "registers happily, fails silently every interval" failure class F2 exists to prevent -- just
+ * caused by worktree lifecycle instead of schtasks' cwd default. Real registration is a
+ * POST-MERGE step, run once from the stable main checkout.
+ *
+ * No /RU/RL (independently re-verified, not just asserted): assert-daemon-census.mjs's own
+ * source touches only os.hostname() (a read) and Supabase via the service-role key in .env --
+ * no Windows process-table access, unlike scripts/setup-console-reaper-task.mjs, which DOES pass
+ * /RU/RL HIGHEST because its target reads live process handles.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const TAG = '[daemon-census-task]';
 export const TASK_NAME = 'LEO-DaemonCensus';
+export const WRAPPER_REL_PATH = path.join('scripts', 'cron', 'daemon-census-task.cmd');
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Build the `schtasks /Create` argv. PURE — no embedded quoting; execFileSync quotes spaced args.
- * @param {{intervalMinutes?: number, cleanup?: boolean, nodePath?: string, requireRunner?: boolean, runnerPath?: string|null}} [opts]
+ * Build the wrapper .cmd content (PURE). `cd /d` into repoRoot before invoking node so dotenv
+ * resolves .env correctly regardless of the task's own working directory (TESTING F2).
  */
-export function buildCensusSchtasksArgs({ intervalMinutes = 60, cleanup = false, nodePath = 'node', requireRunner = true, runnerPath = null } = {}) {
+export function buildWrapperScript({ repoRoot, cleanup = false }) {
+  if (!repoRoot) throw new Error('buildWrapperScript: repoRoot required');
+  const runner = path.join(repoRoot, 'scripts', 'assert-daemon-census.mjs');
+  const cleanupFlag = cleanup ? ' --cleanup' : '';
+  const lines = [
+    '@echo off',
+    `cd /d "${repoRoot}"`,
+    `call node "${runner}"${cleanupFlag}`,
+  ];
+  return lines.join('\r\n') + '\r\n';
+}
+
+/**
+ * Build the `schtasks /Create` argv. PURE — no embedded quoting; execFileSync quotes spaced args.
+ * @param {{intervalMinutes?: number, wrapperPath?: string, requireRunner?: boolean, runnerPath?: string|null}} [opts]
+ */
+export function buildCensusSchtasksArgs({ intervalMinutes = 60, wrapperPath, requireRunner = true, runnerPath = null } = {}) {
   const minutes = Number(intervalMinutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1439) {
     throw new Error(`${TAG} --interval-minutes must be an integer 1..1439 (got ${intervalMinutes})`);
@@ -47,12 +82,16 @@ export function buildCensusSchtasksArgs({ intervalMinutes = 60, cleanup = false,
       'silently every interval.'
     );
   }
-  const cleanupFlag = cleanup ? ' --cleanup' : '';
+  if (!wrapperPath) throw new Error(`${TAG} wrapperPath required`);
   return [
     '/Create', '/TN', TASK_NAME,
-    '/TR', `"${nodePath}" "${runner}"${cleanupFlag}`,
+    '/TR', `"${wrapperPath}"`,
     '/SC', 'MINUTE', '/MO', String(minutes),
     '/F', // idempotent re-register
+    // No /RU/RL: assert-daemon-census.mjs only reads/updates claude_sessions via the Supabase
+    // service-role key already in .env — it touches no Windows process table and needs no
+    // elevation, unlike console-reaper (which reads live process handles). Runs as the
+    // registering user by schtasks' own default.
   ];
 }
 
@@ -96,11 +135,14 @@ async function main() {
     return;
   }
 
+  const wrapperPath = path.join(REPO_ROOT, WRAPPER_REL_PATH);
+  const wrapperContent = buildWrapperScript({ repoRoot: REPO_ROOT, cleanup: args.cleanup });
+
   let schtasksArgs;
   try {
     schtasksArgs = buildCensusSchtasksArgs({
       intervalMinutes: Number(args.intervalMinutes),
-      cleanup: args.cleanup,
+      wrapperPath,
     });
   } catch (err) {
     console.error((err && err.message) || String(err));
@@ -108,12 +150,16 @@ async function main() {
   }
 
   if (args.dryRun) {
+    console.log(`${TAG} DRY RUN — wrapper ${wrapperPath}:`);
+    console.log(wrapperContent.replace(/\r\n/g, '\n'));
     console.log(`${TAG} DRY RUN — would run: schtasks ${schtasksArgs.join(' ')}`);
     return;
   }
 
+  mkdirSync(path.dirname(wrapperPath), { recursive: true });
+  writeFileSync(wrapperPath, wrapperContent, 'utf8');
   execFileSync('schtasks', schtasksArgs, { encoding: 'utf8' });
-  console.log(`${TAG} registered ${TASK_NAME} every ${args.intervalMinutes}m${args.cleanup ? ' (--cleanup armed)' : ' (report-only)'}`);
+  console.log(`${TAG} registered ${TASK_NAME} every ${args.intervalMinutes}m${args.cleanup ? ' (--cleanup armed)' : ' (report-only)'} -> ${wrapperPath}`);
 }
 
 if (process.argv[1]?.endsWith('setup-daemon-census-task.mjs')) {
