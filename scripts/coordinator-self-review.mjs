@@ -37,6 +37,18 @@ const REVIEW_EVERY = parseInt(process.env.COORD_REVIEW_EVERY || '8', 10);
 // last ACTUAL review (durable state.lastReviewAt). Default 6h; 0/negative disables the floor.
 const MIN_REVIEW_INTERVAL_MS = Math.max(0, parseFloat(process.env.COORD_REVIEW_MIN_INTERVAL_HOURS || '6') * 3600 * 1000);
 const RE = /COORDINATOR-FEEDBACK|COORD-REVIEW/i;
+// QF-20260821-607: PER-WORKER cooldown/dedup, independent of and in ADDITION to
+// MIN_REVIEW_INTERVAL_MS above -- that floor rate-limits the whole CYCLE; this rate-limits
+// each WORKER within a cycle that DID fire. Deliberately its OWN named constant, not a reuse
+// of MIN_REVIEW_INTERVAL_MS's value (same reasoning CLAUDE_CORE.md documents for
+// DEAD_COORDINATOR_STALE_MIN vs resolve.cjs's STALE_THRESHOLD_MIN: changing one must never
+// silently retune the other). Default equal to the cycle floor (6h) is a starting point, not
+// an assumption the two should track each other.
+const WORKER_SOLICIT_COOLDOWN_MS = Math.max(0, parseFloat(process.env.COORD_REVIEW_WORKER_COOLDOWN_HOURS || '6') * 3600 * 1000);
+// Same lookback used for both "requests I already sent" and "answers I've received" so the
+// two are compared on equal footing -- a request or answer older than this is treated as if
+// it never happened (rare in practice; MIN_REVIEW_INTERVAL_MS keeps cycles well inside it).
+const SOLICIT_HISTORY_LOOKBACK_MS = 14 * 24 * 3600 * 1000;
 
 /**
  * SD-LEO-INFRA-BIDIRECTIONAL-REVIEW-MININTERVAL-001 (FR-1): pure min-interval-floor decision.
@@ -52,6 +64,53 @@ export function reviewSuppressedByMinInterval({ lastReviewAt, now, minIntervalMs
 }
 // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-D / FR-5: Adam's reciprocal response marker.
 const ADAM_RE = /ADAM-COORD-FEEDBACK|ADAM-REVIEW/i;
+
+/**
+ * QF-20260821-607: pure per-target solicitation-due decision. A target is skipped when
+ * EITHER (a) a review_request already sent to them has no reply yet (UNANSWERED — a
+ * request awaiting a considered reply is not a target for a duplicate solicitation), or
+ * (b) their most recent reply is newer than the cooldown floor (TOO SOON — re-soliciting
+ * 13-14min after a genuine answer, observed live, is ritual, not signal).
+ * @param {{lastRequestSentAt?: string|null, lastAnswerAt?: string|null}} args
+ * @param {{now: number, cooldownMs: number}} opts
+ * @returns {{due: boolean, reason: string}}
+ */
+export function isSolicitationDue({ lastRequestSentAt, lastAnswerAt } = {}, { now, cooldownMs } = {}) {
+  const sentAt = lastRequestSentAt ? Date.parse(lastRequestSentAt) : null;
+  const answeredAt = lastAnswerAt ? Date.parse(lastAnswerAt) : null;
+  if (Number.isFinite(sentAt) && sentAt !== null && (!Number.isFinite(answeredAt) || answeredAt < sentAt)) {
+    return { due: false, reason: 'unanswered_request_pending' };
+  }
+  if (Number.isFinite(answeredAt) && (now - answeredAt) < cooldownMs) {
+    return { due: false, reason: 'cooldown_since_last_answer' };
+  }
+  return { due: true, reason: 'due' };
+}
+
+/**
+ * QF-20260821-607: build { lastSentByTarget, lastAnswerBySender } maps (each value the most
+ * recent created_at) from raw session_coordination rows, for isSolicitationDue() above.
+ * @param {Array<{target_session?:string, created_at:string}>} sentRows - review_request rows I sent
+ * @param {Array<{sender_session?:string, created_at:string}>} answerRows - reply rows I received (pre-filtered to matching bodies)
+ * @returns {{lastSentByTarget: Map<string,string>, lastAnswerBySender: Map<string,string>}}
+ */
+export function buildSolicitationHistory(sentRows, answerRows) {
+  const lastSentByTarget = new Map();
+  for (const r of (sentRows || [])) {
+    const key = r && r.target_session;
+    if (!key || !r.created_at) continue;
+    const prev = lastSentByTarget.get(key);
+    if (!prev || r.created_at > prev) lastSentByTarget.set(key, r.created_at);
+  }
+  const lastAnswerBySender = new Map();
+  for (const r of (answerRows || [])) {
+    const key = r && r.sender_session;
+    if (!key || !r.created_at) continue;
+    const prev = lastAnswerBySender.get(key);
+    if (!prev || r.created_at > prev) lastAnswerBySender.set(key, r.created_at);
+  }
+  return { lastSentByTarget, lastAnswerBySender };
+}
 
 // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-D / FR-4: split active sessions into
 // worker vs Adam participants. DEFAULT-OFF (COORD_ADAM_REVIEW_V1): when OFF this is
@@ -163,10 +222,39 @@ export async function selfReviewMain() {
   // UUIDs up front; per-target try/catch below contains anything else.
   const workers = rawWorkers.filter((w) => isFullUuid(w));
   const adamParticipants = rawAdam.filter((a) => isFullUuid(a));
+
+  // QF-20260821-607: per-target solicitation-due dedup/cooldown. A target with an unanswered
+  // review_request already pending, or whose most recent reply is inside the cooldown window,
+  // is skipped -- prevents re-soliciting a worker who answered 13-14min ago (observed live).
+  // Same 14-day lookback for both "requests I sent" and "answers I've received" so the two are
+  // compared on equal footing (see SOLICIT_HISTORY_LOOKBACK_MS above); deliberately NOT the same
+  // 24h-windowed `sigs` fetch used for the capture step (1), which is too narrow for this purpose.
+  const solicitSince = new Date(t - SOLICIT_HISTORY_LOOKBACK_MS).toISOString();
+  const { data: sentRows } = await db.from('session_coordination').select('target_session,created_at')
+    .eq('sender_session', me).eq('payload->>kind', 'review_request').gte('created_at', solicitSince).limit(500);
+  const { data: replyRows } = await db.from('session_coordination').select('sender_session,payload,created_at')
+    .eq('target_session', me).gte('created_at', solicitSince).limit(500);
+  const replyBody = (r) => String((r.payload || {}).body || (r.payload || {}).message || '');
+  const workerAnswerRows = (replyRows || []).filter((r) => RE.test(replyBody(r)));
+  const adamAnswerRows = (replyRows || []).filter((r) => ADAM_RE.test(replyBody(r)));
+  const { lastSentByTarget, lastAnswerBySender: lastWorkerAnswerBySender } = buildSolicitationHistory(sentRows, workerAnswerRows);
+  const { lastAnswerBySender: lastAdamAnswerBySender } = buildSolicitationHistory(sentRows, adamAnswerRows);
+  let solicitSkipped = 0;
+  const dueWorkers = workers.filter((w) => {
+    const verdict = isSolicitationDue({ lastRequestSentAt: lastSentByTarget.get(w), lastAnswerAt: lastWorkerAnswerBySender.get(w) }, { now: t, cooldownMs: WORKER_SOLICIT_COOLDOWN_MS });
+    if (!verdict.due) { solicitSkipped++; console.log('[COORD-REVIEW] solicit skip (dedup) ' + w + ': ' + verdict.reason); }
+    return verdict.due;
+  });
+  const dueAdamParticipants = adamParticipants.filter((a) => {
+    const verdict = isSolicitationDue({ lastRequestSentAt: lastSentByTarget.get(a), lastAnswerAt: lastAdamAnswerBySender.get(a) }, { now: t, cooldownMs: WORKER_SOLICIT_COOLDOWN_MS });
+    if (!verdict.due) { solicitSkipped++; console.log('[COORD-REVIEW] adam solicit skip (dedup) ' + a + ': ' + verdict.reason); }
+    return verdict.due;
+  });
+
   let solicited = 0;
   let solicitFailed = 0;
   const body = 'COORDINATOR-FEEDBACK REQUEST (recurring review of the COORDINATOR, triggered by ' + delta + ' SDs shipped since the last review): candid critique of how the coordinator is running the fleet — (1) what worked (routing/sourcing/RCA/conflict-resolution/keeping you fed), (2) friction caused BY the coordinator (slow/missing replies, mis-routing, bad SD sourcing, unclear guidance, missed signals), (3) ONE concrete thing to do differently. Be blunt. Reply: /signal feedback, prefix "COORDINATOR-FEEDBACK".';
-  for (const w of workers) {
+  for (const w of dueWorkers) {
     try {
       // QF-20260818-283: was kind:'coordinator_reply', the kind worker inbox hooks (worker-
       // checkin.cjs) SKIP fleet-wide -- 8 rows stranded undeliverable per review cycle, re-
@@ -180,9 +268,9 @@ export async function selfReviewMain() {
   }
   // SD-...-001-D / FR-5: bidirectional coordinator<->Adam solicitation (default-OFF).
   let adamSolicited = 0;
-  if (adamReviewOn && adamParticipants.length) {
+  if (adamReviewOn && dueAdamParticipants.length) {
     const adamBody = 'ADAM-REVIEW REQUEST (bidirectional coordinator<->Adam review, ' + delta + ' SDs shipped since last review): candid critique of how the COORDINATOR works WITH Adam — (1) assignment clarity, (2) comms latency / reply timeliness on the advisory lane, (3) dependency handling for Adam-sourced work. Adam: reciprocate with your OWN friction. Reply: /signal feedback, prefix "ADAM-COORD-FEEDBACK". Both sides self-improve (coordinator.md + CLAUDE_ADAM.md).';
-    for (const a of adamParticipants) {
+    for (const a of dueAdamParticipants) {
       try {
         // SD-LEO-INFRA-DISTINCT-REVIEW-REQUEST-001: was kind:'coordinator_reply' — not even a
         // DIRECTIVE_KIND, so this substantive review was fully collapsible to a routine ack
@@ -204,7 +292,7 @@ export async function selfReviewMain() {
 
   const since7 = new Date(t - 14 * 24 * 3600 * 1000).toISOString();
   const { data: all } = await db.from('feedback').select('description,created_at').eq('category', 'coordinator_review').gte('created_at', since7).order('created_at', { ascending: false }).limit(30);
-  console.log('[COORD-REVIEW] DUE (' + delta + ' SDs since last review). captured ' + captured + ' new; solicited ' + solicited + ' worker(s)' + (adamReviewOn ? ' + ' + adamSolicited + ' adam' : '') + '; ' + ((all || []).length) + ' reviews on file.');
+  console.log('[COORD-REVIEW] DUE (' + delta + ' SDs since last review). captured ' + captured + ' new; solicited ' + solicited + ' worker(s)' + (adamReviewOn ? ' + ' + adamSolicited + ' adam' : '') + (solicitSkipped ? '; skipped ' + solicitSkipped + ' (dedup/cooldown)' : '') + '; ' + ((all || []).length) + ' reviews on file.');
   if ((all || []).length) {
     console.log('--- recent coordinator reviews (cluster what-worked / friction / one-fix; ADJUST + source concrete fixes as DRAFT SDs) ---');
     for (const r of (all || []).slice(0, 12)) console.log('  ' + (r.created_at || '').slice(5, 16) + ' | ' + String(r.description || '').replace(/\s+/g, ' ').slice(0, 160));

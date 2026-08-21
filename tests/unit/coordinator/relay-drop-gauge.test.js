@@ -6,7 +6,7 @@
  * (unlike pending-question-timer.cjs's single-set decidePendingQuestions()).
  */
 import { describe, it, expect } from 'vitest';
-import { decideRelayDrops, isTrackedInbound, satisfiesCorrelation, DEFAULT_WINDOW_MS } from '../../../lib/coordinator/relay-drop-gauge.cjs';
+import { decideRelayDrops, isTrackedInbound, satisfiesCorrelation, DEFAULT_WINDOW_MS, DEFAULT_REVIEW_WINDOW_MS, windowMsForRow, resolveReviewWindowMs } from '../../../lib/coordinator/relay-drop-gauge.cjs';
 import { PAYLOAD_KINDS } from '../../../lib/fleet/worker-status.cjs';
 
 const NOW = Date.parse('2026-07-02T00:00:00Z');
@@ -82,5 +82,51 @@ describe('decideRelayDrops — correlation core (TS-5/TS-6)', () => {
 
   it('DEFAULT_WINDOW_MS is ~15 minutes', () => {
     expect(DEFAULT_WINDOW_MS).toBe(15 * 60 * 1000);
+  });
+});
+
+// QF-20260821-607: review_request awaits a considered reply, not a quick relay/decision
+// confirm -- sharing DEFAULT_WINDOW_MS (15min) with those time-critical kinds produced 13
+// false drop-flags/day. review_request gets its own, much longer window.
+describe('per-kind window discrimination (QF-20260821-607)', () => {
+  it('DEFAULT_REVIEW_WINDOW_MS is ~48 hours, far longer than DEFAULT_WINDOW_MS', () => {
+    expect(DEFAULT_REVIEW_WINDOW_MS).toBe(48 * 60 * 60 * 1000);
+    expect(DEFAULT_REVIEW_WINDOW_MS).toBeGreaterThan(DEFAULT_WINDOW_MS);
+  });
+
+  it('windowMsForRow selects the review window for kind=review_request', () => {
+    const row = { payload: { kind: 'review_request' } };
+    expect(windowMsForRow(row, {})).toBe(DEFAULT_REVIEW_WINDOW_MS);
+    expect(windowMsForRow(row, { reviewWindowMs: 5000 })).toBe(5000);
+  });
+
+  it('windowMsForRow selects the standard window for relay_request/decision_request', () => {
+    expect(windowMsForRow({ payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST } }, {})).toBe(DEFAULT_WINDOW_MS);
+    expect(windowMsForRow({ payload: { kind: 'decision_request' } }, { windowMs: 999 })).toBe(999);
+  });
+
+  it('a review_request 1h old (past the OLD 15min window) reads pending, not flag', () => {
+    const inbound = [{ id: 'r1', payload: { kind: 'review_request', correlation_id: 'c1' }, created_at: '2026-07-01T22:00:00Z' }]; // 2h old
+    const decisions = decideRelayDrops(inbound, [], { now: NOW });
+    expect(decisions[0].action).toBe('pending');
+  });
+
+  it('a review_request 49h old with no reply IS flagged (the review window does eventually elapse)', () => {
+    const farFuture = NOW + 49 * 60 * 60 * 1000;
+    const inbound = [{ id: 'r1', payload: { kind: 'review_request', correlation_id: 'c1' }, created_at: '2026-07-01T00:00:00Z' }];
+    const decisions = decideRelayDrops(inbound, [], { now: farFuture });
+    expect(decisions[0].action).toBe('flag');
+  });
+
+  it('a relay_request 2h old (fine for review_request) is STILL flagged under the standard window (no regression)', () => {
+    const inbound = [{ id: 'r1', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, correlation_id: 'c1' }, created_at: '2026-07-01T22:00:00Z' }]; // 2h old
+    const decisions = decideRelayDrops(inbound, [], { now: NOW });
+    expect(decisions[0].action).toBe('flag');
+  });
+
+  it('resolveReviewWindowMs reads RELAY_DROP_GAUGE_REVIEW_WINDOW_MIN from env, falling back to the default', () => {
+    expect(resolveReviewWindowMs({})).toBe(DEFAULT_REVIEW_WINDOW_MS);
+    expect(resolveReviewWindowMs({ RELAY_DROP_GAUGE_REVIEW_WINDOW_MIN: '60' })).toBe(60 * 60 * 1000);
+    expect(resolveReviewWindowMs({ RELAY_DROP_GAUGE_REVIEW_WINDOW_MIN: 'not-a-number' })).toBe(DEFAULT_REVIEW_WINDOW_MS);
   });
 });

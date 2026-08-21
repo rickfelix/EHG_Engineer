@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
-import { partitionParticipants } from '../../scripts/coordinator-self-review.mjs';
+import { partitionParticipants, isSolicitationDue, buildSolicitationHistory } from '../../scripts/coordinator-self-review.mjs';
 
 const { isFullUuid } = createRequire(import.meta.url)('../../lib/coordinator/dispatch.cjs');
 
@@ -130,5 +130,106 @@ describe('coordinator self-review — non-fleet role exclusion from workers (QF-
     ];
     const { workers } = partitionParticipants(sess, 'me-coordinator', true);
     expect(workers).toEqual([REAL]);
+  });
+});
+
+// QF-20260821-607: the coordinator's every-N-SD review re-solicited a worker who had already
+// answered within the last ~13-14min (observed live) because the solicit loop had no memory of
+// prior requests/answers -- every DUE cycle solicited every worker unconditionally. Fixed with a
+// pure per-target decision (isSolicitationDue) fed by a pure history-builder (buildSolicitationHistory).
+describe('coordinator self-review — solicitation dedup/cooldown (QF-20260821-607)', () => {
+  const NOW = Date.parse('2026-08-21T12:00:00Z');
+  const COOLDOWN_MS = 6 * 3600 * 1000; // matches the 6h default
+
+  describe('isSolicitationDue', () => {
+    it('is due when no request was ever sent and no answer ever received', () => {
+      expect(isSolicitationDue({}, { now: NOW, cooldownMs: COOLDOWN_MS })).toEqual({ due: true, reason: 'due' });
+    });
+
+    it('is NOT due when a request was sent with no reply since (unanswered, still pending)', () => {
+      const verdict = isSolicitationDue(
+        { lastRequestSentAt: '2026-08-21T11:00:00Z', lastAnswerAt: null },
+        { now: NOW, cooldownMs: COOLDOWN_MS }
+      );
+      expect(verdict).toEqual({ due: false, reason: 'unanswered_request_pending' });
+    });
+
+    it('is NOT due when the last answer predates the last request (stale answer to an older ask)', () => {
+      const verdict = isSolicitationDue(
+        { lastRequestSentAt: '2026-08-21T11:00:00Z', lastAnswerAt: '2026-08-20T09:00:00Z' },
+        { now: NOW, cooldownMs: COOLDOWN_MS }
+      );
+      expect(verdict).toEqual({ due: false, reason: 'unanswered_request_pending' });
+    });
+
+    it('is NOT due when the reply landed 14min ago, inside the cooldown (reproduces the live incident)', () => {
+      const verdict = isSolicitationDue(
+        { lastRequestSentAt: '2026-08-21T11:00:00Z', lastAnswerAt: '2026-08-21T11:46:00Z' },
+        { now: NOW, cooldownMs: COOLDOWN_MS }
+      );
+      expect(verdict).toEqual({ due: false, reason: 'cooldown_since_last_answer' });
+    });
+
+    it('IS due once the last answer is older than the cooldown', () => {
+      const verdict = isSolicitationDue(
+        { lastRequestSentAt: '2026-08-21T02:00:00Z', lastAnswerAt: '2026-08-21T02:30:00Z' }, // 9.5h ago
+        { now: NOW, cooldownMs: COOLDOWN_MS }
+      );
+      expect(verdict).toEqual({ due: true, reason: 'due' });
+    });
+
+    it('applies the cooldown even to an unsolicited answer (no matching lastRequestSentAt)', () => {
+      const dueTooSoon = isSolicitationDue(
+        { lastRequestSentAt: null, lastAnswerAt: '2026-08-21T11:00:00Z' }, // 1h ago
+        { now: NOW, cooldownMs: COOLDOWN_MS }
+      );
+      expect(dueTooSoon.due).toBe(false);
+      const dueLater = isSolicitationDue(
+        { lastRequestSentAt: null, lastAnswerAt: '2026-08-21T02:00:00Z' }, // 10h ago
+        { now: NOW, cooldownMs: COOLDOWN_MS }
+      );
+      expect(dueLater.due).toBe(true);
+    });
+  });
+
+  describe('buildSolicitationHistory', () => {
+    it('keeps only the MOST RECENT row per target/sender when rows arrive out of order', () => {
+      const sentRows = [
+        { target_session: REAL, created_at: '2026-08-21T09:00:00Z' },
+        { target_session: REAL, created_at: '2026-08-21T11:00:00Z' }, // newer, listed second
+        { target_session: REAL2, created_at: '2026-08-21T10:00:00Z' },
+      ];
+      const answerRows = [
+        { sender_session: REAL, created_at: '2026-08-21T11:30:00Z' },
+        { sender_session: REAL, created_at: '2026-08-21T08:00:00Z' }, // older, listed second
+      ];
+      const { lastSentByTarget, lastAnswerBySender } = buildSolicitationHistory(sentRows, answerRows);
+      expect(lastSentByTarget.get(REAL)).toBe('2026-08-21T11:00:00Z');
+      expect(lastSentByTarget.get(REAL2)).toBe('2026-08-21T10:00:00Z');
+      expect(lastAnswerBySender.get(REAL)).toBe('2026-08-21T11:30:00Z');
+    });
+
+    it('ignores rows missing the key field or created_at, and never throws on empty/undefined input', () => {
+      const sentRows = [
+        { created_at: '2026-08-21T09:00:00Z' }, // no target_session
+        { target_session: REAL }, // no created_at
+        { target_session: REAL2, created_at: '2026-08-21T09:00:00Z' },
+      ];
+      const { lastSentByTarget } = buildSolicitationHistory(sentRows, undefined);
+      expect(lastSentByTarget.has(REAL)).toBe(false);
+      expect(lastSentByTarget.get(REAL2)).toBe('2026-08-21T09:00:00Z');
+      expect(() => buildSolicitationHistory(undefined, undefined)).not.toThrow();
+      expect(buildSolicitationHistory(undefined, undefined).lastSentByTarget.size).toBe(0);
+    });
+  });
+
+  it('end-to-end: a worker solicited 14min ago is filtered OUT of the due set; an untouched worker stays IN', () => {
+    const sentRows = [{ target_session: REAL, created_at: '2026-08-21T11:00:00Z' }];
+    const answerRows = [{ sender_session: REAL, created_at: '2026-08-21T11:46:00Z', payload: { body: 'COORDINATOR-FEEDBACK: all good' } }];
+    const { lastSentByTarget, lastAnswerBySender } = buildSolicitationHistory(sentRows, answerRows);
+    const dueWorkers = [REAL, REAL2].filter((w) =>
+      isSolicitationDue({ lastRequestSentAt: lastSentByTarget.get(w), lastAnswerAt: lastAnswerBySender.get(w) }, { now: NOW, cooldownMs: COOLDOWN_MS }).due
+    );
+    expect(dueWorkers).toEqual([REAL2]);
   });
 });
