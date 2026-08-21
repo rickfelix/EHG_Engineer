@@ -75,6 +75,7 @@ import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
 import { findOverdueHolds } from '../lib/governance/hold-state-sweep.js';
 import { readHoldStateMode } from '../lib/governance/hold-state-contract.js';
+import { runCheck as checkWindDownRecurrence } from './gauges/wind-down-recurrence-check.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the hold-state-overdue detector's
 // .limit(5000) still silently re-clamps to the PostgREST 1000-row cap on a table with 5000+ live
 // SDs -- exactly the false-negative risk this detector's own comment already flags. Paginate.
@@ -367,6 +368,10 @@ function buildDetectorResolvers(supabase) {
     'ghost-ceo': async () => {
       const result = await checkGhostCeos(supabase);
       return { ...result, count: result.ghosts.length };
+    },
+    'wind-down-recurrence': async () => {
+      const result = await checkWindDownRecurrence({ supabase });
+      return { ...result, count: result.alarmed ? 1 : 0 };
     },
   };
 }

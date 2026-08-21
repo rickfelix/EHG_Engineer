@@ -21,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 25 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 + ghost-ceo, SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001 + hold-state-overdue, SD-LEO-INFRA-HOLD-STATE-CONTRACT-001 + fw3-cmv-rejecter-fake-separation, SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-D)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(25);
+  it('exports exactly 26 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 + ghost-ceo, SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001 + hold-state-overdue, SD-LEO-INFRA-HOLD-STATE-CONTRACT-001 + fw3-cmv-rejecter-fake-separation, SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-D + wind-down-recurrence, SD-LEO-INFRA-WIND-DOWN-SURVEY-001 FR-3)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(26);
   });
 
-  it('22 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('23 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(22);
+    expect(live).toHaveLength(23);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -102,9 +102,9 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 22 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 23 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(22);
+    expect(selected).toHaveLength(23);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
@@ -128,6 +128,7 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'stale-tree',
       'unranked-claimable-leaves',
       'venture-capture-completeness',
+      'wind-down-recurrence',
     ]);
   });
 
