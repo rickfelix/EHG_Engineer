@@ -139,14 +139,25 @@ BEGIN
 END;
 $function$;
 
+-- SECURITY DEFINER EXECUTE hygiene (secdef-execute-revoke-lint): this function has carried the
+-- PostgreSQL default PUBLIC EXECUTE grant since it was first created (database/migrations/
+-- 20260315_fix_eva_ventures_status_sync.sql never revoked it — part of the exact "created SECDEF,
+-- zero migration ever wrote a REVOKE" backlog class SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 exists
+-- to catch). It is trigger-only — invoked by trg_ventures_update_sync_eva, never called directly by
+-- any role — so revoking direct EXECUTE closes a real pre-existing gap with zero behavior change to
+-- the trigger itself (trigger firing does not require an EXECUTE grant). No re-GRANT: nothing
+-- legitimately calls this function directly.
+REVOKE EXECUTE ON FUNCTION public.sync_ventures_to_eva_ventures_update() FROM PUBLIC, anon, authenticated;
+
 -- Self-verify: the replacement is live, still carries the preserved behaviours, and the constraint
 -- this function now depends on is present. Fails the whole apply if any of that is untrue.
 DO $esqt_post$
 DECLARE
   v_src text;
   v_con text;
+  v_fn_oid oid;
 BEGIN
-  SELECT p.prosrc INTO v_src
+  SELECT p.oid, p.prosrc INTO v_fn_oid, v_src
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public' AND p.proname = 'sync_ventures_to_eva_ventures_update';
 
@@ -180,7 +191,16 @@ BEGIN
     RAISE EXCEPTION 'post-assert failed: eva_scheduler_queue_status_check does not permit cancelled — apply 20260821_eva_scheduler_queue_status_add_cancelled.sql FIRST (def: %)', COALESCE(v_con, '<missing>');
   END IF;
 
-  RAISE NOTICE 'kill-time teardown installed; is_demo guard + stage/status/name sync preserved; cancelled is a legal queue status';
+  -- The REVOKE above actually took effect — proven via has_function_privilege against anon/
+  -- authenticated (NOT aclexplode of the direct ACL, which is a false-green: it resolves EXECUTE
+  -- inherited via the PUBLIC pseudo-role too), matching the established pattern in
+  -- database/migrations/20260603_03_revoke_secdef_execute_from_anon_authenticated.sql:110-120.
+  IF has_function_privilege('anon', v_fn_oid, 'EXECUTE')
+     OR has_function_privilege('authenticated', v_fn_oid, 'EXECUTE') THEN
+    RAISE EXCEPTION 'post-assert failed: anon/authenticated can still EXECUTE sync_ventures_to_eva_ventures_update() after the REVOKE (inherited via PUBLIC or a direct grant)';
+  END IF;
+
+  RAISE NOTICE 'kill-time teardown installed; is_demo guard + stage/status/name sync preserved; cancelled is a legal queue status; PUBLIC EXECUTE confirmed revoked';
 END
 $esqt_post$;
 

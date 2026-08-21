@@ -74,12 +74,19 @@ BEGIN
 END;
 $function$;
 
+-- SECURITY DEFINER EXECUTE hygiene (secdef-execute-revoke-lint): a fresh CREATE OR REPLACE re-states
+-- the REVOKE explicitly rather than relying on the UP migration's grant change surviving the
+-- rollback implicitly -- self-contained per file, matching the UP migration's own reasoning.
+-- Trigger-only function; no re-GRANT needed.
+REVOKE EXECUTE ON FUNCTION public.sync_ventures_to_eva_ventures_update() FROM PUBLIC, anon, authenticated;
+
 DO $esqtd_post$
 DECLARE
   v_src text;
   v_stranded bigint;
+  v_fn_oid oid;
 BEGIN
-  SELECT p.prosrc INTO v_src
+  SELECT p.oid, p.prosrc INTO v_fn_oid, v_src
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public' AND p.proname = 'sync_ventures_to_eva_ventures_update';
 
@@ -91,6 +98,10 @@ BEGIN
   END IF;
   IF position('NEW.is_demo' in v_src) = 0 THEN
     RAISE EXCEPTION 'DOWN post-assert failed: the is_demo guard was lost by the rollback';
+  END IF;
+  IF has_function_privilege('anon', v_fn_oid, 'EXECUTE')
+     OR has_function_privilege('authenticated', v_fn_oid, 'EXECUTE') THEN
+    RAISE EXCEPTION 'DOWN post-assert failed: anon/authenticated can still EXECUTE sync_ventures_to_eva_ventures_update() after the REVOKE';
   END IF;
 
   SELECT count(*) INTO v_stranded FROM eva_scheduler_queue WHERE status = 'cancelled';
