@@ -1,7 +1,7 @@
 ---
 category: deployment
 status: approved
-version: 1.1.0
+version: 1.1.1
 author: EXEC (Alpha-2) — SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001; updated by SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001
 last_updated: 2026-08-21
 tags: [deployment, fleet, sessions, kill, restart, reconcile, operations, console-reaper]
@@ -153,7 +153,13 @@ mechanism with its own live-drill doc: `docs/protocol/console-creation-watcher-d
 - A refusal is a **result**, not a failure of the tool. `refused` with a named reason is the design
   working: it means the system declined to act on something it could not verify.
 - The Fleet Panel's "Add session" button surfaces *why* a singleton request was allowed or refused
-  (`uiLabel`/`uiEnabled`/`holderIsFresh` in the `add-session` response body) — e.g. an amber
-  "stale-but-present holder" label when the existing Adam/Solomon row's heartbeat is old enough to
-  permit a second spawn. The label is server-decided and rendered verbatim; the panel never
-  re-derives the role/singleton decision client-side.
+  via the `add-session` response body's `uiLabel` field — e.g. a "stale-but-present holder" label
+  when the existing Adam/Solomon row's heartbeat is old enough to permit a second spawn. The label
+  is server-decided and rendered verbatim; the panel never re-derives the role/singleton decision
+  client-side. Two corrections found by mutation-tested peer review after this doc first shipped:
+  the label renders in the same grey status-line color as every other message
+  (`.fp-status-line` uses `--sv-muted`, not the `--sv-warn` amber token this doc previously implied)
+  and only appears AFTER the add-session POST has already succeeded — post-hoc confirmation, not a
+  pre-click warning. `uiEnabled`/`holderIsFresh` ride along in the same response body but have no
+  reader anywhere in `fleet-panel.js` — by construction they cannot: they arrive in the response to
+  the action already taken, so no moment exists at which either field could gate the button first.
