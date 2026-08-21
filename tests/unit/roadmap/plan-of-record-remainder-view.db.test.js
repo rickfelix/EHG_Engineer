@@ -84,6 +84,15 @@ describe.skipIf(!HAS_CREDS)(
     // a direct live query to be 6 items, down from the ~1495 dead-generation rows the old
     // unscoped gauge conflated. This is a point-in-time snapshot, not a permanent invariant --
     // update the expected count when the chairman promotes/resolves plan-of-record items.
+    //
+    // SD-LEO-INFRA-REMAINDER-STATE-STAMPER-001 (2026-08-21): this baseline is EXPECTED TO CHANGE
+    // to 9 once database/chairman-gated/20260821_plan_of_record_remainder_restamp.sql has been
+    // applied -- that restamp corrects 17 previously-false-terminal items overall, 3 of which are
+    // view-visible (belong to an approved wave) and move from satisfied_elsewhere into an open
+    // state. NOT updated to 9 in this PR because the restamp is chairman-gated and has not run
+    // yet -- updating the literal now would make this currently-passing assertion wrong until it
+    // does. Whoever applies that restamp should update the literal below to 9 (or the then-current
+    // live count) in the same change.
     it('AC-5: the true (open) remainder baseline matches the live-verified count at ship time', () => {
       const OPEN_STATES = new Set(['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']);
       const trueRemainder = viewRows.filter((r) => OPEN_STATES.has(r.remainder_state));
