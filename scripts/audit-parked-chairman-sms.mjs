@@ -12,8 +12,13 @@
  * resolveParkedChairmanSmsRow so the row stops re-firing QUIET_TICK_SMS_PARKED.
  *
  * Usage:
- *   node scripts/audit-parked-chairman-sms.mjs --dry-run   # classify + print counts, write nothing
- *   node scripts/audit-parked-chairman-sms.mjs             # run for real
+ *   node scripts/audit-parked-chairman-sms.mjs --dry-run             # classify + print counts, write nothing
+ *   node scripts/audit-parked-chairman-sms.mjs                       # run for real (unresolved backlog only)
+ *   node scripts/audit-parked-chairman-sms.mjs --include-resolved    # ALSO disposition already-resolved rows
+ *     (retroactive mode — writes the feedback disposition record for a row already resolved by the
+ *     existing per-row resolve-parked-chairman-sms.cjs process, without re-touching resolved_at;
+ *     resolveParkedChairmanSmsRow's own conditional UPDATE is a safe no-op on an already-resolved
+ *     row regardless, but --include-resolved skips calling it at all for clarity of intent)
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
@@ -31,13 +36,15 @@ const TAG = '[audit-parked-chairman-sms]';
  * @param {(row: object, disposition: 'EVIDENCE_HANDLED'|'NEEDS_ADAM_REVIEW', evidence: object|null) => Promise<void>} deps.insertFeedback
  * @param {(id: string) => Promise<{resolved: boolean}>} deps.resolveRow
  * @param {boolean} [deps.dryRun]
+ * @param {boolean} [deps.resolveRows] - if false, skip calling resolveRow (retroactive mode over
+ *   already-resolved rows — nothing to stamp, only the feedback disposition record is written)
  * @param {(msg: string) => void} [deps.onLog]
  * @returns {Promise<{total: number, evidenceHandled: number, needsReview: number}>}
  */
 export async function runAudit(deps) {
   const {
     fetchParkedRows, fetchInboundLogRows, insertFeedback, resolveRow,
-    dryRun = false, onLog = (m) => console.log(m),
+    dryRun = false, resolveRows = true, onLog = (m) => console.log(m),
   } = deps;
 
   const rows = await fetchParkedRows();
@@ -63,7 +70,7 @@ export async function runAudit(deps) {
     }
 
     await insertFeedback(row, disposition, evidence);
-    await resolveRow(row.id);
+    if (resolveRows) await resolveRow(row.id);
     onLog(`${TAG} id=${row.id} phone=...${String(row.from_phone).slice(-4)} disposition=${disposition}`);
   }
 
@@ -74,6 +81,7 @@ export async function runAudit(deps) {
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
+  const includeResolved = process.argv.includes('--include-resolved');
   const supabase = createClient(
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -81,13 +89,15 @@ async function main() {
 
   const deps = {
     dryRun,
+    resolveRows: !includeResolved,
     async fetchParkedRows() {
-      const { data, error } = await supabase
+      let query = supabase
         .from('sms_relay_staging')
         .select('id, from_phone, body_raw, parked_at')
         .not('parked_at', 'is', null)
-        .is('resolved_at', null)
         .order('parked_at', { ascending: false });
+      if (!includeResolved) query = query.is('resolved_at', null);
+      const { data, error } = await query;
       if (error) throw new Error(`fetchParkedRows: ${error.message}`);
       return data || [];
     },

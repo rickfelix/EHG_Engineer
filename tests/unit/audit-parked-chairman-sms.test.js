@@ -5,11 +5,12 @@
 import { describe, it, expect } from 'vitest';
 import { runAudit } from '../../scripts/audit-parked-chairman-sms.mjs';
 
-function makeDeps({ rows, logRows = [], dryRun = false } = {}) {
+function makeDeps({ rows, logRows = [], dryRun = false, resolveRows = true } = {}) {
   const inserted = [];
   const resolved = [];
   return {
     dryRun,
+    resolveRows,
     onLog: () => {},
     fetchParkedRows: async () => rows,
     fetchInboundLogRows: async () => logRows,
@@ -49,6 +50,14 @@ describe('runAudit — TS-4', () => {
     const summary = await runAudit(deps);
     expect(summary.total).toBe(2);
     expect(deps._inserted).toHaveLength(0);
+    expect(deps._resolved).toHaveLength(0);
+  });
+
+  it('retroactive mode (resolveRows:false) writes feedback disposition but never calls resolveRow', async () => {
+    const deps = makeDeps({ rows: ROWS, resolveRows: false });
+    const summary = await runAudit(deps);
+    expect(summary.total).toBe(2);
+    expect(deps._inserted).toHaveLength(2);
     expect(deps._resolved).toHaveLength(0);
   });
 
