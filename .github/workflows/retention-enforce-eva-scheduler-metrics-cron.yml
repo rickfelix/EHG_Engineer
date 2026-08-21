@@ -1,0 +1,58 @@
+name: "Retention enforcement — eva_scheduler_metrics (daily)"
+
+# SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 (FR-1).
+#
+# eva_scheduler_metrics is already registered in lib/retention/policies.js and covered by
+# retention-enforce-cron.yml's shared weekly cadence, but measured steady-state inflow
+# (~120-140K rows/day) diverges from a weekly-cron 20K/run cap regardless of hotDays tuning
+# (drain rate must match inflow rate at steady state, independent of window size). This
+# workflow scopes ONLY this table to a daily cadence via `--table eva_scheduler_metrics`
+# (scripts/retention-enforce.js's new FR-1 flag) with a perRunCap raised to 200,000 in its
+# policies.js entry — every other registered table keeps the existing weekly cadence in
+# retention-enforce-cron.yml, unchanged.
+#
+# Same secrets, same fail-soft/archive-before-delete semantics as the shared weekly workflow —
+# this is a cadence override for one table, not a second retention mechanism.
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  retention-apply-eva-scheduler-metrics:
+    name: Daily retention enforcement — eva_scheduler_metrics only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Apply retention — eva_scheduler_metrics only (archive-before-delete)
+        run: node scripts/retention-enforce.js --table eva_scheduler_metrics --apply
+
+      - name: Liveness check (advisory — never fails the job; shared stamp covers all tables)
+        if: always()
+        run: node scripts/retention-enforce.js --liveness || echo "::warning::retention liveness reports STALE"
