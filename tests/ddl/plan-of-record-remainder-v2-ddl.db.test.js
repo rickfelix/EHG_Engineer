@@ -112,10 +112,8 @@ FOR EACH ROW EXECUTE FUNCTION trg_restamp_items_on_sd_cancel();
 `;
 
 let client;
-let itemCounter = 0;
 
 async function makeItem({ promotedKey = null, disposition = null, lane = null } = {}) {
-  itemCounter += 1;
   const { rows } = await client.query(
     `INSERT INTO public.roadmap_wave_items (item_disposition, lane, promoted_to_sd_key)
      VALUES ($1, $2, $3) RETURNING id`,
