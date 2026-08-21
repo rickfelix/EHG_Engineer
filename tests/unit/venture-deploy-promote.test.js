@@ -76,6 +76,7 @@ function mockSupabase({ descriptor = DESCRIPTOR, insertError = null } = {}) {
           select() {
             const chain = {
               eq() { return chain; },
+              in() { return chain; },
               limit() { return chain; },
               async maybeSingle() { return { data: null, error: null }; }, // no dedup hit
             };

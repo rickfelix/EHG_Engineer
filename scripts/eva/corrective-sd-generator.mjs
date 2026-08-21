@@ -805,6 +805,12 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
         score: score.total_score ?? null,
         title,
         description,
+        // SD-LEO-INFRA-CORRECTIVE-FINDING-GENERATOR-001 (FR-3): this is the ONLY
+        // caller that opts into the natural-key dedup scope. Other callers
+        // (lib/venture-deploy/promote.js, lib/apa/standing-assessment-round.mjs)
+        // pass source_sd_id=null with constant/empty dimensions and rely on
+        // gate_run_id as their sole discriminator -- they must keep the default.
+        dedup_scope: 'natural_key',
         metadata: {
           source: 'corrective_sd_generator',
           dim_summary: dimSummary,
