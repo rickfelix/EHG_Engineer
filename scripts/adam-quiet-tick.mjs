@@ -48,6 +48,9 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 // alarm class layered onto the existing orchestrator-blocked venture stall scan below. Consumes
 // the Child-A discriminator (lib/governance/real-build-discriminator.mjs) transitively.
 import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm.mjs';
+// SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive STALE escalation for a parked chairman
+// SMS row unresolved >=24h, layered onto the existing QUIET_TICK_SMS_PARKED line below.
+import { isStaleParkedSms } from '../lib/governance/parked-sms-stall.mjs';
 // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: the durable standing priority. Surfaced ABOVE the inbox
 // below, because the measured failure was the queue setting the agenda — a priority printed beneath
 // a dozen inbound rows has been filed, not surfaced.
@@ -618,6 +621,24 @@ export async function surfaceParkedChairmanSms(sb) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: the log lines for one surfaceParkedChairmanSms
+ * row — always the existing QUIET_TICK_SMS_PARKED line, PLUS a distinct QUIET_TICK_SMS_PARKED_STALE
+ * line when the row has sat unresolved >=24h (isStaleParkedSms). Pure — no I/O, no console — so
+ * the escalation decision is unit-testable without invoking main()'s full DB-touching tick.
+ * @param {{id:string, fromPhone:string, ageMin:number, body:string}} s
+ * @returns {string[]}
+ */
+export function buildParkedSmsLogLines(s) {
+  const lines = [
+    `QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`,
+  ];
+  if (isStaleParkedSms(s.ageMin)) {
+    lines.push(`QUIET_TICK_SMS_PARKED_STALE=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m — parked >=24h unresolved, chairman-channel integrity risk; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+  }
+  return lines;
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -1004,7 +1025,7 @@ async function main() {
     // (unlike QUIET_TICK_SMS_INBOUND above, there is no inert-drain-flag case to downgrade for:
     // resolving a parked row is a CLI script, not gated on SMS_RELAY_DRAIN_ENABLED).
     for (const s of smsParked.rows) {
-      console.log(`QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+      for (const line of buildParkedSmsLogLines(s)) console.log(line);
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
