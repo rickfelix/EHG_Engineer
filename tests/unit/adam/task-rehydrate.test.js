@@ -19,8 +19,8 @@ function readBuilder(data) {
   return b;
 }
 
-function makeSupabase({ coordination = [], sds = [] } = {}) {
-  const ledger = [];
+function makeSupabase({ coordination = [], sds = [], ledger: seedLedger = [] } = {}) {
+  const ledger = [...seedLedger];
   const keyOf = (r) => `${r.source_kind}|${r.source_ref}`;
   function from(table) {
     if (table === 'adam_task_ledger') {
@@ -37,6 +37,18 @@ function makeSupabase({ coordination = [], sds = [] } = {}) {
                   return { data: created, error: null };
                 },
               };
+            },
+          };
+        },
+        // select(): the closing/expiry sweep re-filters in JS (mirrors the SD-source convention),
+        // so the stub just returns the full ledger regardless of chained filters.
+        select: () => readBuilder(ledger),
+        update(patch) {
+          return {
+            eq: async (col, val) => {
+              const row = ledger.find((r) => r.id === val);
+              if (row) Object.assign(row, patch);
+              return { data: row ? [row] : [], error: null };
             },
           };
         },
@@ -157,5 +169,51 @@ describe('rehydrateBoard — reconstruct from the 3 live sources', () => {
     expect(sb._ledger.some((r) => r.source_kind === 'awaited_reply' && r.source_ref === 'corr-request')).toBe(true);
     expect(summary.threads).toBe(1);
     expect(summary.awaited).toBe(1);
+  });
+
+  // QF-20260802-139: a row already ON the board from a prior tick, still 'open', whose reply has
+  // now landed — this is the exact bug (nothing previously wrote back to a pre-existing row).
+  it('close-on-verdict: an existing open advisory_thread row closes once its correlation has a reply', async () => {
+    const sb = makeSupabase({
+      coordination: [
+        { id: 'sc-reply', sender_type: 'coordinator', payload: { reply_to: 'corr-late-reply', body: 'verdict landed' } },
+      ],
+      ledger: [
+        { id: 'preexisting-1', source_kind: 'advisory_thread', source_ref: 'corr-late-reply', tier: 'parent', status: 'open', title: 'stale open thread', created_at: new Date().toISOString() },
+        { id: 'preexisting-2', source_kind: 'awaited_reply', source_ref: 'corr-late-reply', tier: 'parent', status: 'open', title: 'awaiting reply', created_at: new Date().toISOString() },
+      ],
+    });
+    const summary = await rehydrateBoard(sb);
+    expect(sb._ledger.find((r) => r.id === 'preexisting-1').status).toBe('done');
+    expect(sb._ledger.find((r) => r.id === 'preexisting-2').status).toBe('done');
+    expect(summary.closed).toBe(2);
+    expect(summary.errors).toHaveLength(0);
+  });
+
+  // QF-20260802-139: an existing open row with no reply anywhere, past the TTL, is auto-cancelled
+  // with a visible expiry marker instead of sitting open forever.
+  it('expiry: an existing open advisory_thread row past the TTL with no reply is cancelled', async () => {
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const sb = makeSupabase({
+      coordination: [],
+      ledger: [
+        { id: 'preexisting-3', source_kind: 'advisory_thread', source_ref: 'corr-abandoned', tier: 'parent', status: 'open', title: 'never answered', created_at: tenDaysAgo },
+      ],
+    });
+    const summary = await rehydrateBoard(sb);
+    const row = sb._ledger.find((r) => r.id === 'preexisting-3');
+    expect(row.status).toBe('cancelled');
+    expect(row.blocker).toMatch(/expired/i);
+    expect(summary.expired).toBe(1);
+  });
+
+  // A freshly-opened row (within TTL, no reply yet) must be left untouched by the sweep.
+  it('leaves a recently-opened, unanswered row open (not expired, not closed)', async () => {
+    const sb = makeSupabase(fixture());
+    const summary = await rehydrateBoard(sb);
+    const node = sb._ledger.find((r) => r.source_kind === 'advisory_thread' && r.source_ref === 'corr-open');
+    expect(node.status).toBe('open');
+    expect(summary.closed).toBe(0);
+    expect(summary.expired).toBe(0);
   });
 });
