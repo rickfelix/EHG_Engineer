@@ -31,7 +31,11 @@ function makeFakeSupabase(seed = {}) {
         if (op === 'not_is_null') return row[col] !== null && row[col] !== undefined;
         if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
         if (op === 'is') return (row[col] ?? null) === val;
-        return true;
+        // adversarial-review finding: silently passing an unrecognized operator makes the
+        // fixture unable to observe the predicate under test at all (this is exactly how the
+        // undo path's .gt() went unexercised for so long) -- fail loud instead, so a future
+        // missing operator is a test error, not a false-green.
+        throw new Error(`fake Supabase: unrecognized filter operator "${op}" on column "${col}" -- add it to applyFilters/the query builder`);
       })
     );
   }
