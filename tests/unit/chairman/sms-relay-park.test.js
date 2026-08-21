@@ -118,8 +118,17 @@ afterEach(() => {
 });
 
 describe('PARK_OUTCOMES contract', () => {
-  it('parks exactly no_match and rate_limited — the two outcomes that terminal-drain without resolving anything', () => {
-    expect(PARK_OUTCOMES).toEqual(['no_match', 'rate_limited']);
+  // SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-4: extended from ['no_match','rate_limited'] to
+  // also cover expired/ambiguous, which previously went fully dark to every alarm once they
+  // aged past the 60-minute surfaceSmsInbound window. This is an intentional widening, not a
+  // regression -- suspended/invalid_signature remain deliberately excluded below.
+  it('parks no_match, rate_limited, expired, and ambiguous — outcomes that terminal-drain without resolving anything', () => {
+    expect(PARK_OUTCOMES).toEqual(['no_match', 'rate_limited', 'expired', 'ambiguous']);
+  });
+
+  it('does NOT park suspended or invalid_signature — likely-spoofed/abusive senders, not genuine unanswered messages', () => {
+    expect(PARK_OUTCOMES).not.toContain('suspended');
+    expect(PARK_OUTCOMES).not.toContain('invalid_signature');
   });
 });
 

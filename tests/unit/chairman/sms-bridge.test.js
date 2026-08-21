@@ -3,7 +3,7 @@
  * MessagingProvider (proves the seam is swappable, per success criteria) and an
  * in-memory fake Supabase client (no live DB, no live Twilio account required).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sendChairmanSmsQuestion, handleInboundSmsReply, drainSmsRelayStaging, resolveAllParkedChairmanSmsRows, AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD } from '../../../lib/chairman/sms-bridge.js';
 import { isMessagingProvider } from '../../../lib/messaging/messaging-provider.js';
 
@@ -27,10 +27,15 @@ function makeFakeSupabase(seed = {}) {
       filters.every(([col, op, val]) => {
         if (op === 'eq') return row[col] === val;
         if (op === 'gte') return row[col] >= val;
+        if (op === 'gt') return row[col] > val;
         if (op === 'not_is_null') return row[col] !== null && row[col] !== undefined;
         if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
         if (op === 'is') return (row[col] ?? null) === val;
-        return true;
+        // adversarial-review finding: silently passing an unrecognized operator makes the
+        // fixture unable to observe the predicate under test at all (this is exactly how the
+        // undo path's .gt() went unexercised for so long) -- fail loud instead, so a future
+        // missing operator is a test error, not a false-green.
+        throw new Error(`fake Supabase: unrecognized filter operator "${op}" on column "${col}" -- add it to applyFilters/the query builder`);
       })
     );
   }
@@ -59,6 +64,7 @@ function makeFakeSupabase(seed = {}) {
       },
       eq(col, val) { ctx.filters.push([col, 'eq', val]); return api; },
       gte(col, val) { ctx.filters.push([col, 'gte', val]); return api; },
+      gt(col, val) { ctx.filters.push([col, 'gt', val]); return api; },
       not(col, _op, _val) { ctx.filters.push([col, 'not_is_null', null]); return api; },
       in(col, arr) { ctx.filters.push([col, 'in', arr]); return api; },
       is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
@@ -293,6 +299,19 @@ describe('handleInboundSmsReply — send/receive round trip against a fake provi
     const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-race');
     // Exactly one reply's text landed — not a merge/clobber of both.
     expect(['answer A', 'answer B']).toContain(decision.brief_data.sms_reply.text);
+
+    // FR-1 guard on the lost-race branch itself (testing-agent finding: this site converted
+    // consideredDecisionId but had no assertion distinguishing it, so a regression back to
+    // matchedDecisionId here would pass every existing check). The loser's log row must carry
+    // considered_decision_id only; the winner's must carry matched_decision_id only.
+    const winnerSid = first.outcome === 'answered' ? 'SM-race-A' : 'SM-race-B';
+    const loserSid = winnerSid === 'SM-race-A' ? 'SM-race-B' : 'SM-race-A';
+    const winnerRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === winnerSid);
+    const loserRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === loserSid);
+    expect(winnerRow.matched_decision_id).toBe('dec-race');
+    expect(winnerRow.considered_decision_id).toBeFalsy();
+    expect(loserRow.matched_decision_id).toBeFalsy();
+    expect(loserRow.considered_decision_id).toBe('dec-race');
   });
 
   // SD-LEO-FEAT-SMS-INBOUND-RELAY-001 FR-3 additions.
@@ -477,5 +496,279 @@ describe('resolveAllParkedChairmanSmsRows', () => {
     const { resolvedCount, resolvedIds } = await resolveAllParkedChairmanSmsRows(sb);
     expect(resolvedCount).toBe(0);
     expect(resolvedIds).toEqual([]);
+  });
+});
+
+// SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-1/FR-3: matched_decision_id must record ONLY a
+// genuine resolution. Before this SD, non-resolving outcomes also populated it via a "best-effort
+// diagnostic label" (candidateIds[0]/decisionId), making it indistinguishable from a real match —
+// measured live: 327/364 sms_inbound_log rows populated, only 1 ever genuinely resolved anything.
+describe('sms_inbound_log matched_decision_id vs considered_decision_id (FR-1)', () => {
+  it('a genuine resolution (answered) sets matched_decision_id and leaves considered_decision_id null', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{ id: 'dec-fr1-ok', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(Date.now() + 10 * 60_000).toISOString() }],
+      chairman_notifications: [{ id: 'n-fr1-ok', channel: 'sms', recipient_phone: '+15550010001', decision_id: 'dec-fr1-ok', created_at: new Date().toISOString() }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15550010001', to: '+15559999999', body: 'yes proceed', messageSid: 'SM-fr1-ok', signatureValid: true,
+    });
+    expect(result.outcome).toBe('answered');
+    const row = sb._tables.sms_inbound_log[0];
+    expect(row.matched_decision_id).toBe('dec-fr1-ok');
+    expect(row.considered_decision_id).toBeFalsy();
+  });
+
+  it('ambiguous (2+ eligible candidates) sets considered_decision_id and leaves matched_decision_id null', async () => {
+    const now = Date.now();
+    const sb = makeFakeSupabase({
+      chairman_decisions: [
+        { id: 'dec-fr1-amb-1', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(now + 10 * 60_000).toISOString() },
+        { id: 'dec-fr1-amb-2', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(now + 10 * 60_000).toISOString() },
+      ],
+      chairman_notifications: [
+        { id: 'n-fr1-amb-1', channel: 'sms', recipient_phone: '+15550010002', decision_id: 'dec-fr1-amb-1', created_at: new Date(now - 120_000).toISOString() },
+        { id: 'n-fr1-amb-2', channel: 'sms', recipient_phone: '+15550010002', decision_id: 'dec-fr1-amb-2', created_at: new Date(now - 60_000).toISOString() },
+      ],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15550010002', to: '+15559999999', body: 'yes', messageSid: 'SM-fr1-amb', signatureValid: true,
+    });
+    expect(result.outcome).toBe('ambiguous');
+    const row = sb._tables.sms_inbound_log[0];
+    expect(row.matched_decision_id).toBeFalsy();
+    expect(row.considered_decision_id).toBe('dec-fr1-amb-2'); // most-recently-sent-first candidate
+  });
+
+  it('expired (token TTL passed) sets considered_decision_id and leaves matched_decision_id null', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-fr1-exp', status: 'pending', brief_data: {},
+        sms_reply_token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      }],
+      chairman_notifications: [{ id: 'n-fr1-exp', channel: 'sms', recipient_phone: '+15550010003', decision_id: 'dec-fr1-exp', created_at: new Date(Date.now() - 120_000).toISOString() }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15550010003', to: '+15559999999', body: 'yes', messageSid: 'SM-fr1-exp', signatureValid: true,
+    });
+    expect(result.outcome).toBe('expired');
+    const row = sb._tables.sms_inbound_log[0];
+    expect(row.matched_decision_id).toBeFalsy();
+    expect(row.considered_decision_id).toBe('dec-fr1-exp');
+  });
+
+  it('a match rejected on presented-options mismatch sets considered_decision_id, not matched_decision_id', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-fr1-optmis', status: 'pending', brief_data: { sms_options: ['Approve', 'Reject'] },
+        sms_reply_token_expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+      }],
+      chairman_notifications: [{ id: 'n-fr1-optmis', channel: 'sms', recipient_phone: '+15550010004', decision_id: 'dec-fr1-optmis', created_at: new Date().toISOString() }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15550010004', to: '+15559999999', body: 'zzz not an option', messageSid: 'SM-fr1-optmis', signatureValid: true,
+    });
+    expect(result.outcome).toBe('no_match');
+    const row = sb._tables.sms_inbound_log[0];
+    expect(row.matched_decision_id).toBeFalsy();
+    expect(row.considered_decision_id).toBe('dec-fr1-optmis');
+  });
+
+  // The 4 "no-op" branches: no candidate was ever hydrated, so there is nothing to redirect —
+  // both columns must stay null, exactly as they did before this SD (regression guard, not new
+  // behavior). Confirms the fix touches only the 6 branches that had a diagnostic candidate id.
+  it('no-op branches (suspended, invalid_signature, rate_limited, no-candidate no_match) leave BOTH columns null', async () => {
+    const sbSuspended = makeFakeSupabase({
+      sms_inbound_suspensions: [{ from_phone: '+15550010005', suspended_at: new Date().toISOString(), reason: 'flood', cleared_at: null }],
+    });
+    await handleInboundSmsReply(sbSuspended, { from: '+15550010005', to: '+15559999999', body: 'x', messageSid: 'SM-fr1-noop-susp', signatureValid: true });
+    expect(sbSuspended._tables.sms_inbound_log[0].matched_decision_id).toBeFalsy();
+    expect(sbSuspended._tables.sms_inbound_log[0].considered_decision_id).toBeFalsy();
+
+    const sbInvalidSig = makeFakeSupabase();
+    await handleInboundSmsReply(sbInvalidSig, { from: '+15550010006', to: '+15559999999', body: 'x', messageSid: 'SM-fr1-noop-sig', signatureValid: false });
+    expect(sbInvalidSig._tables.sms_inbound_log[0].matched_decision_id).toBeFalsy();
+    expect(sbInvalidSig._tables.sms_inbound_log[0].considered_decision_id).toBeFalsy();
+
+    const sbNoCandidate = makeFakeSupabase();
+    await handleInboundSmsReply(sbNoCandidate, { from: '+15550010007', to: '+15559999999', body: 'x', messageSid: 'SM-fr1-noop-nocand', signatureValid: true });
+    expect(sbNoCandidate._tables.sms_inbound_log[0].outcome).toBe('no_match');
+    expect(sbNoCandidate._tables.sms_inbound_log[0].matched_decision_id).toBeFalsy();
+    expect(sbNoCandidate._tables.sms_inbound_log[0].considered_decision_id).toBeFalsy();
+  });
+
+  // Negative test (FR-3, SD's own explicit acceptance criterion, run against the live-shaped
+  // outcome mix rather than isolated single-outcome fixtures): a matched row and a
+  // considered-only row must be state-distinguishable, not just differently-outcomed.
+  it('negative test: a matched row and an unmatched row are distinguishable on matched_decision_id, not just outcome', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{ id: 'dec-fr3-neg', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(Date.now() + 10 * 60_000).toISOString() }],
+      chairman_notifications: [{ id: 'n-fr3-neg', channel: 'sms', recipient_phone: '+15550010008', decision_id: 'dec-fr3-neg', created_at: new Date().toISOString() }],
+    });
+    await handleInboundSmsReply(sb, { from: '+15550010008', to: '+15559999999', body: 'yes', messageSid: 'SM-fr3-neg-match', signatureValid: true });
+    await handleInboundSmsReply(sb, { from: '+15559990009', to: '+15559999999', body: 'random text', messageSid: 'SM-fr3-neg-nomatch', signatureValid: true });
+
+    const matchedRows = sb._tables.sms_inbound_log.filter((r) => r.matched_decision_id);
+    const unmatchedRows = sb._tables.sms_inbound_log.filter((r) => !r.matched_decision_id);
+    expect(matchedRows.length).toBe(1);
+    expect(matchedRows[0].outcome).toBe('answered');
+    expect(unmatchedRows.length).toBe(1);
+    expect(unmatchedRows[0].outcome).toBe('no_match');
+    // The join a live consumer would run: only the genuinely-resolved row is a valid join target.
+    const joinable = sb._tables.sms_inbound_log.filter((r) => r.matched_decision_id === 'dec-fr3-neg');
+    expect(joinable.length).toBe(1);
+  });
+
+  // testing-agent per-site mutation sweep (V3): the undo path's two non-resolving branches
+  // (no eligible window; lost the claim race) had no dedicated coverage at all, so a regression
+  // back to matchedDecisionId on either site would pass every existing test unnoticed.
+  it('undo with no open undo window: no_match, considered only (not a genuine resolution)', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-undo-closed', status: 'pending', brief_data: {}, amount_usd: 500,
+        // undo_deadline already in the past -- the window has closed, nothing to cancel.
+        undo_deadline: new Date(Date.now() - 60_000).toISOString(),
+        undone_at: null, consumed_at: null,
+      }],
+      chairman_notifications: [{
+        id: 'n-undo-closed', channel: 'sms', recipient_phone: '+15550020001', decision_id: 'dec-undo-closed',
+        created_at: new Date().toISOString(),
+      }],
+    });
+    const result = await handleInboundSmsReply(sb, { from: '+15550020001', to: '+15559999999', body: 'undo', messageSid: 'SM-undo-closed', signatureValid: true });
+    expect(result.resolved).toBe(false);
+    expect(result.outcome).toBe('no_match');
+    const row = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === 'SM-undo-closed');
+    expect(row.matched_decision_id).toBeFalsy();
+    expect(row.considered_decision_id).toBe('dec-undo-closed');
+    // The decision itself is untouched -- never claimed by an undo that had no window to use.
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-undo-closed');
+    expect(decision.undone_at).toBeFalsy();
+  });
+
+  it('two concurrent undo replies for the same window: only one wins, the loser is considered-only', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-undo-race', status: 'pending', brief_data: {}, amount_usd: 500,
+        undo_deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
+        undone_at: null, consumed_at: null,
+      }],
+      chairman_notifications: [{
+        id: 'n-undo-race', channel: 'sms', recipient_phone: '+15550020002', decision_id: 'dec-undo-race',
+        created_at: new Date().toISOString(),
+      }],
+    });
+    const [first, second] = await Promise.all([
+      handleInboundSmsReply(sb, { from: '+15550020002', to: '+15559999999', body: 'undo', messageSid: 'SM-undo-race-A', signatureValid: true }),
+      handleInboundSmsReply(sb, { from: '+15550020002', to: '+15559999999', body: 'undo', messageSid: 'SM-undo-race-B', signatureValid: true }),
+    ]);
+    const outcomes = [first.outcome, second.outcome].sort();
+    expect(outcomes).toEqual(['no_match', 'undone']);
+    const winnerSid = first.outcome === 'undone' ? 'SM-undo-race-A' : 'SM-undo-race-B';
+    const loserSid = winnerSid === 'SM-undo-race-A' ? 'SM-undo-race-B' : 'SM-undo-race-A';
+    const winnerRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === winnerSid);
+    const loserRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === loserSid);
+    expect(winnerRow.matched_decision_id).toBe('dec-undo-race');
+    expect(winnerRow.considered_decision_id).toBeFalsy();
+    expect(loserRow.matched_decision_id).toBeFalsy();
+    expect(loserRow.considered_decision_id).toBe('dec-undo-race');
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-undo-race');
+    expect(decision.undone_at).toBeTruthy();
+  });
+
+  // testing-agent B2: logInbound's insert was previously unbound -- a schema-drift or constraint
+  // rejection would silently drop the entire audit row with no trace. Must be fail-soft (logged,
+  // never thrown) so a schema-drift edge case degrades to a lost audit row, not claim thrash.
+  it('a failed sms_inbound_log insert is fail-soft: logged via console.warn, never thrown', async () => {
+    const sb = makeFakeSupabase();
+    const realFrom = sb.from.bind(sb);
+    sb.from = (table) => {
+      const realApi = realFrom(table);
+      // Only the insert() chain is faulted -- sms_inbound_log is also SELECTed (rate-limit
+      // count check) in the same request, and that must keep behaving normally so the flow
+      // reaches logInbound's insert at all.
+      if (table === 'sms_inbound_log') {
+        const originalInsert = realApi.insert;
+        realApi.insert = (row) => {
+          const result = originalInsert(row);
+          result.then = (resolve) => resolve({ data: null, error: { message: 'column "considered_decision_id" does not exist' } });
+          return result;
+        };
+      }
+      return realApi;
+    };
+    // vi.spyOn(console, 'warn') here inherits Vitest's file-wide console-interception history
+    // (unrelated earlier tests' warn calls are already present), so assert on the DELTA this
+    // call produces, not the spy's absolute total.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const preCallCount = warnSpy.mock.calls.length;
+    let threw = false;
+    let result;
+    try {
+      result = await handleInboundSmsReply(sb, { from: '+15550010009', to: '+15559999999', body: 'x', messageSid: 'SM-fr-b2', signatureValid: true });
+    } catch {
+      threw = true;
+    }
+    const newCalls = warnSpy.mock.calls.slice(preCallCount);
+    expect(threw).toBe(false);
+    expect(result.outcome).toBe('no_match');
+    expect(newCalls.length).toBe(1);
+    expect(newCalls[0][0]).toMatch(/logInbound insert failed.*audit row lost/);
+    warnSpy.mockRestore();
+  });
+});
+
+// SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-4/FR-6: PARK_OUTCOMES extension + CHAIRMAN_PHONE gate.
+describe('drainSmsRelayStaging parking (FR-4/FR-6)', () => {
+  const CHAIRMAN = '+15551234567';
+  let originalChairmanPhone;
+  beforeEach(() => { originalChairmanPhone = process.env.CHAIRMAN_PHONE; });
+  afterEach(() => { process.env.CHAIRMAN_PHONE = originalChairmanPhone; });
+
+  it('expired and ambiguous outcomes from the chairman number now get parked (previously did not)', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIRMAN;
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-park-exp', status: 'pending', brief_data: {},
+        sms_reply_token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      }],
+      chairman_notifications: [{ id: 'n-park-exp', channel: 'sms', recipient_phone: CHAIRMAN, decision_id: 'dec-park-exp', created_at: new Date(Date.now() - 120_000).toISOString() }],
+      sms_relay_staging: [{
+        id: 'stg-park-exp', provider_message_id: 'SM-park-exp', from_phone: CHAIRMAN, to_phone: '+15559999999',
+        body_raw: 'too late', signature_valid: true, received_at: new Date().toISOString(), drained_at: null,
+      }],
+    });
+    await drainSmsRelayStaging(sb);
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-exp');
+    expect(row.drained_at).toBeTruthy();
+    expect(row.parked_at).toBeTruthy();
+  });
+
+  it('suspended and invalid_signature outcomes remain excluded from parking', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIRMAN;
+    const sb = makeFakeSupabase({
+      sms_inbound_suspensions: [{ from_phone: CHAIRMAN, suspended_at: new Date().toISOString(), reason: 'flood', cleared_at: null }],
+      sms_relay_staging: [{
+        id: 'stg-park-susp', provider_message_id: 'SM-park-susp', from_phone: CHAIRMAN, to_phone: '+15559999999',
+        body_raw: 'x', signature_valid: true, received_at: new Date().toISOString(), drained_at: null,
+      }],
+    });
+    await drainSmsRelayStaging(sb);
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-susp');
+    expect(row.drained_at).toBeTruthy();
+    expect(row.parked_at).toBeFalsy();
+  });
+
+  it('when CHAIRMAN_PHONE is unset, parking never fires for any otherwise-parkable outcome', async () => {
+    delete process.env.CHAIRMAN_PHONE;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [{
+        id: 'stg-park-nophone', provider_message_id: 'SM-park-nophone', from_phone: '+15559990000', to_phone: '+15559999999',
+        body_raw: 'no candidate here', signature_valid: true, received_at: new Date().toISOString(), drained_at: null,
+      }],
+    });
+    await drainSmsRelayStaging(sb);
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-nophone');
+    expect(row.drained_at).toBeTruthy();
+    expect(row.parked_at).toBeFalsy();
   });
 });
