@@ -341,6 +341,18 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
       metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at },
       // One row per session per minute-bucket per reason — idempotent if the hook fires twice.
       dedup_key: `wind_down::${sessionId}::${reason}::${at.slice(0, 16)}`,
+      // QF-20260803-503: self-resolve at write time instead of landing status='new' in the
+      // human triage lane. FR-3's own acceptance is "the stop-reason distribution can be
+      // queried over time" — a category+metadata.reason aggregate query that is status-
+      // agnostic, so a terminal status costs that reader nothing. Deliberately NOT routed
+      // through MACHINE_TELEMETRY_CATEGORIES/record_telemetry_occurrence (that path collapses
+      // same-day rows to ONE per category, destroying the per-row metadata.reason breakdown —
+      // tried once for this exact category and reverted, see feedback-audience.js's
+      // MACHINE_TELEMETRY_CATEGORIES comment). This keeps the plain per-row insert (full
+      // fidelity, real dedup_key) and satisfies chk_feedback_terminal_resolution with a
+      // non-empty resolution_notes instead of requiring a later, separate disposition pass.
+      status: 'resolved',
+      resolution_notes: 'Auto-filed machine telemetry (wind_down_survey) — not a human action item; aggregated for fleet-wide stop-reason distribution analysis (SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 FR-3).',
     });
   } catch (e) {
     process.stderr.write(`[stop-loop-wakeup-reminder] wind_down feedback mirror (non-fatal): ${e.message}\n`);
