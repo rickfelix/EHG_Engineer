@@ -119,6 +119,34 @@ describe('FR-2 / TS-2: channel-state degradation alarm', () => {
     expect(computeDegradationRatio([], { now: NOW }).ratio).toBe(0);
   });
 
+  it('TS-9 (SD-LEO-FIX-SMS-OUTBOUND-WORKER-001 FR-6/VAL-5): canceled (voided) rows are excluded from the denominator, not just the numerator', () => {
+    const rows = [
+      { status: 'delivered', created_at: iso(1 * HOUR) },
+      { status: 'delivered', created_at: iso(1 * HOUR) },
+      { status: 'delivered', created_at: iso(1 * HOUR) },
+      { status: 'delivered', created_at: iso(1 * HOUR) },
+      { status: 'delivered', created_at: iso(1 * HOUR) },
+      { status: 'canceled', created_at: iso(1 * HOUR) },
+      { status: 'canceled', created_at: iso(1 * HOUR) },
+      { status: 'canceled', created_at: iso(1 * HOUR) },
+    ];
+    const r = computeDegradationRatio(rows, { windowMs: 6 * HOUR, now: NOW });
+    expect(r.total).toBe(5); // NOT 8 — the 3 voided rows never attempted delivery
+    expect(r.bad).toBe(0);
+    expect(r.ratio).toBe(0);
+  });
+
+  it('TS-9 regression: with zero canceled rows in the window, behavior is unchanged', () => {
+    const rows = [
+      { status: 'delivered', created_at: iso(1 * HOUR) },
+      { status: 'undelivered', created_at: iso(1 * HOUR) },
+    ];
+    const r = computeDegradationRatio(rows, { windowMs: 6 * HOUR, now: NOW });
+    expect(r.total).toBe(2);
+    expect(r.bad).toBe(1);
+    expect(r.ratio).toBe(0.5);
+  });
+
   it('raises a durable alarm naming the ratio when above threshold', async () => {
     const m = makeMock({ obligations: [
       { status: 'undelivered', created_at: iso(HOUR) }, { status: 'failed', created_at: iso(HOUR) },
