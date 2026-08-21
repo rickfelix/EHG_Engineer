@@ -9,7 +9,7 @@
  * that actually consumes the secret have silently diverged -- exactly the
  * cross-repo drift class this test scenario exists to catch.
  *
- * Run via: node scripts/verify-uat-secret-name-drift.mjs
+ * Run via: node scripts/uat-secret-name-drift-check.mjs
  * Requires: gh CLI authenticated (reads altifyai's deploy.yml via `gh api`),
  * SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_URL in env.
  */
@@ -69,7 +69,7 @@ async function main() {
   }
 
   if (errors.length > 0) {
-    console.error('::error::verify-uat-secret-name-drift: ' + errors.join(' | '));
+    console.error('::error::uat-secret-name-drift-check: ' + errors.join(' | '));
     process.exit(1);
   }
   console.log('UAT secret-name drift check PASSED -- keystrokes document, deploy.yml, and the pinned constant all agree.');

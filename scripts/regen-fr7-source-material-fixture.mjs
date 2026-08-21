@@ -32,47 +32,60 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE_PATH = join(root, 'tests', 'fixtures', 'fr7-synthetic-actors-source-material.json');
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const { data: sd, error } = await supabase
-  .from('strategic_directives_v2')
-  .select('metadata')
-  .eq('sd_key', 'SD-LEO-INFRA-ALTIFYAI-TEST-IDENTITY-001')
-  .maybeSingle();
-if (error) throw error;
+// SEC-60 (EXEC-TO-PLAN SECURITY, informational): async IIFE + process.exitCode
+// instead of process.exit() at each branch -- the Supabase client leaves an
+// open handle that process.exit() tears down mid-flight, tripping a
+// Windows-only libuv teardown assertion (harmless; the check itself had
+// already completed and logged by that point, and ubuntu-latest CI runners
+// are unaffected either way) rather than draining naturally.
+async function main() {
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const { data: sd, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('metadata')
+    .eq('sd_key', 'SD-LEO-INFRA-ALTIFYAI-TEST-IDENTITY-001')
+    .maybeSingle();
+  if (error) throw error;
 
-const live = sd?.metadata?.source_material?.fr7_synthetic_actors;
-if (!live) {
-  console.error('::error::regen-fr7-source-material-fixture: source_material.fr7_synthetic_actors is missing on the live SD row.');
-  process.exit(1);
+  const live = sd?.metadata?.source_material?.fr7_synthetic_actors;
+  if (!live) {
+    console.error('::error::regen-fr7-source-material-fixture: source_material.fr7_synthetic_actors is missing on the live SD row.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
+
+  const diffs = [];
+  if (fixture.verbatim_sentence_must_survive_unchanged !== live.verbatim_sentence_must_survive_unchanged) {
+    diffs.push('verbatim_sentence_must_survive_unchanged differs');
+  }
+  const liveClasses = live.exclusion_classes_THREE_not_two || [];
+  const fixtureClasses = fixture.exclusion_classes_THREE_not_two || [];
+  if (JSON.stringify(liveClasses) !== JSON.stringify(fixtureClasses)) {
+    diffs.push('exclusion_classes_THREE_not_two differs');
+  }
+
+  if (diffs.length === 0) {
+    console.log('Fixture matches the live SD row. No action needed.');
+    process.exitCode = 0;
+    return;
+  }
+
+  console.error(`::error::regen-fr7-source-material-fixture: fixture has drifted from the live SD row: ${diffs.join(', ')}`);
+  if (process.argv.includes('--write')) {
+    writeFileSync(FIXTURE_PATH, JSON.stringify({
+      ...fixture,
+      _captured_at: new Date().toISOString(),
+      exclusion_classes_THREE_not_two: liveClasses,
+      verbatim_sentence_must_survive_unchanged: live.verbatim_sentence_must_survive_unchanged,
+    }, null, 2) + '\n', 'utf8');
+    console.log('Fixture rewritten from the live row (--write passed). Re-run venture-hosting-standard.md\'s own drift fix if the DOC needs to change too -- this only updated the fixture.');
+    process.exitCode = 0;
+    return;
+  }
+  console.error('Re-run with --write to update the fixture from the live row, after confirming the live row (not the fixture) is the side that should win.');
+  process.exitCode = 1;
 }
 
-const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
-
-const diffs = [];
-if (fixture.verbatim_sentence_must_survive_unchanged !== live.verbatim_sentence_must_survive_unchanged) {
-  diffs.push('verbatim_sentence_must_survive_unchanged differs');
-}
-const liveClasses = live.exclusion_classes_THREE_not_two || [];
-const fixtureClasses = fixture.exclusion_classes_THREE_not_two || [];
-if (JSON.stringify(liveClasses) !== JSON.stringify(fixtureClasses)) {
-  diffs.push('exclusion_classes_THREE_not_two differs');
-}
-
-if (diffs.length === 0) {
-  console.log('Fixture matches the live SD row. No action needed.');
-  process.exit(0);
-}
-
-console.error(`::error::regen-fr7-source-material-fixture: fixture has drifted from the live SD row: ${diffs.join(', ')}`);
-if (process.argv.includes('--write')) {
-  writeFileSync(FIXTURE_PATH, JSON.stringify({
-    ...fixture,
-    _captured_at: new Date().toISOString(),
-    exclusion_classes_THREE_not_two: liveClasses,
-    verbatim_sentence_must_survive_unchanged: live.verbatim_sentence_must_survive_unchanged,
-  }, null, 2) + '\n', 'utf8');
-  console.log('Fixture rewritten from the live row (--write passed). Re-run venture-hosting-standard.md\'s own drift fix if the DOC needs to change too -- this only updated the fixture.');
-  process.exit(0);
-}
-console.error('Re-run with --write to update the fixture from the live row, after confirming the live row (not the fixture) is the side that should win.');
-process.exit(1);
+await main();
