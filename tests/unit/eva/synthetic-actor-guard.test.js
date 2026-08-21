@@ -262,6 +262,21 @@ describe('checkSyntheticActorFencing — GitHub step-granularity pull', () => {
     const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-gh-6', { fetchImpl, githubToken: 'tok' });
     expect(result.satisfied).toBe(false);
     expect(result.reason).toMatch(/fail-closed/);
+    // VALIDATION V-3 (AC#14): a GitHub API error with no cache is "cannot
+    // determine," distinct from a genuine not-verified result -- the caller
+    // (stage-execution-worker.js) uses this to avoid logging a transient
+    // outage as a false would-block, which would corrupt AC#15's
+    // promotion-readiness signal (N consecutive clean observe cycles).
+    expect(result.indeterminate).toBe(true);
+  });
+
+  it('a genuine not-verified result (step failed) does NOT set indeterminate -- only an unrecoverable API error does', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'failure' }] }],
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-gh-6b', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.indeterminate).toBeUndefined();
   });
 
   it('fails CLOSED when no token is configured', async () => {

@@ -174,6 +174,34 @@ describe('_advanceStage fenced synthetic-actor choke-point (FR-6) — real metho
     expect(supabase.calls.venturesUpdate).toBe(1);
   });
 
+  // VALIDATION V-3 (AC#14): an indeterminate result (GitHub API error, no
+  // cache) must log as "CANNOT DETERMINE," never "would have REFUSED" -- the
+  // two read identically to a human/tool scanning logs for AC#15's
+  // promotion-readiness signal (N consecutive clean observe cycles), and a
+  // transient outage is not the fence catching a real problem.
+  it('OBSERVE-ONLY: logs CANNOT DETERMINE (not "would have REFUSED") when the guard result is indeterminate', async () => {
+    mockFencingResult = { applies: true, satisfied: false, indeterminate: true, reason: 'GitHub API error and no fresh cached result (fail-closed, cannot determine)' };
+    const supabase = makeSupabase({ fenceEnforceEnabled: null });
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 19, 20, {});
+
+    expect(result?.blocked).not.toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('CANNOT DETERMINE'));
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('would have REFUSED'));
+  });
+
+  it('OBSERVE-ONLY: a genuine (non-indeterminate) unsatisfied result still logs "would have REFUSED"', async () => {
+    mockFencingResult = { applies: true, satisfied: false, reason: 'synthetic_actor.exclusion_predicate_ref is a placeholder' };
+    const supabase = makeSupabase({ fenceEnforceEnabled: null });
+    const worker = makeWorker(supabase);
+
+    await worker._advanceStage('v-1', 19, 20, {});
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('would have REFUSED'));
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('CANNOT DETERMINE'));
+  });
+
   it('does not block a 19->20 transition that is already blocked by an earlier backstop (this choke-point never runs)', async () => {
     // Force the artifact-precondition backstop to block by making venture_stages
     // report a required artifact via the `.then` fallback path used by
