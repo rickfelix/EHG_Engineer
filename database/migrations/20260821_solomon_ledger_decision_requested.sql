@@ -30,7 +30,9 @@
 --
 -- Purely ADDITIVE. No existing column altered or dropped; no data loss on decision_requested's own
 -- account. RLS unchanged (the table's existing solomon_advice_outcome_ledger_read / _service_write
--- policies are column-agnostic). Idempotent (IF NOT EXISTS) -- re-applying is a no-op.
+-- policies are column-agnostic). The column add is idempotent (IF NOT EXISTS) -- re-applying it is a
+-- no-op. The constraint add below is SEPARATELY guarded (existence-checked, not DROP-then-ADD) for
+-- the same reason: see its own comment.
 --
 -- LOCK_TIMEOUT: SET LOCAL wrapper, matching this repo's established pattern for ALTER TABLE against
 -- a live-written table (20260416_leo_wiring_validations.sql C5; 20260423_add_scope_slice_to_sds.sql).
@@ -49,17 +51,40 @@
 -- a fix for already-lost historical rationale (that data is gone, see
 -- .artifacts/incident-damage-manifest-20260821.json) -- this closes the ongoing/future risk only.
 --
--- NOT VALID, DELIBERATELY: live-measured (2026-08-21, this SD's own EXEC phase) 11 EXISTING rows
--- currently violate this shape (the same unidentified-writer prose this constraint exists to stop
--- going forward), and that count is growing while the writer remains active. A validating ADD
--- CONSTRAINT would FAIL THE WHOLE MIGRATION outright the moment the chairman applies it -- including
--- the unrelated decision_requested column add in the same transaction -- which would be strictly
--- worse than shipping no constraint at all. NOT VALID enforces the CHECK on every new INSERT/UPDATE
--- immediately (closing the forward-looking risk this migration exists to close) while grandfathering
--- existing violators. Follow-up (NOT in this migration, needs its own change once violators are
--- cleaned up via the backfill script or otherwise): `ALTER TABLE solomon_advice_outcome_ledger
--- VALIDATE CONSTRAINT solomon_advice_outcome_ledger_decision_by_identity_check;` (SHARE UPDATE
--- EXCLUSIVE lock, does not block concurrent reads/writes, unlike the initial ADD).
+-- NOT VALID, DELIBERATELY -- AND WHAT NOT VALID ACTUALLY MEANS (round-2 review correction: an
+-- earlier revision of this comment claimed NOT VALID "grandfathers existing violators", which
+-- overstates it -- Postgres skips ONLY the initial bulk validation scan at ADD time. A grandfathered
+-- row is STILL RE-CHECKED on any subsequent UPDATE to it, including one that never touches
+-- decision_by at all: the CHECK evaluates the row's FULL new image, not just the changed columns.
+-- Concretely, scripts/solomon-judgment-expiry-run.mjs's aging stamp (patch = {judgment_expired_at,
+-- judgment_expired_by}, never decision_by) would 23514 forever on a still-violating `pending` row
+-- without the bounded self-healing retry added there in the same round (see
+-- lib/solomon/judgment-expiry.js isDecisionByIdentityCheckViolation). Live-measured (2026-08-21,
+-- this SD's own EXEC phase) 11 EXISTING rows currently violate this shape (the same unidentified
+-- writer this constraint exists to stop going forward; all currently decision='deferred', so today's
+-- 11 do not intersect solomon-judgment-expiry-run.mjs's `decision='pending'` selection -- but the
+-- writer is still active and a future violating row could be 'pending'). These 11 are NOT cleaned up
+-- as of this migration shipping (a deliberate --apply run of the backfill script was attempted and
+-- blocked by this session's own permission classifier, correctly treating a live production write as
+-- requiring operator/chairman authorization rather than an EXEC agent's unilateral action) --
+-- cleaning them up (via `node scripts/one-off/backfill-solomon-ledger-decision-by.mjs --apply`, dry-run
+-- verified safe) is an explicit PRE-APPLY step for whoever runs this migration, not an assumption this
+-- file makes. NOT VALID is the right choice regardless of whether that cleanup has happened yet, since
+-- the writer keeps producing new candidates and a validating ADD CONSTRAINT would FAIL THE WHOLE
+-- MIGRATION outright the moment the chairman applies it -- including the unrelated decision_requested
+-- column add in the same transaction -- which would be strictly worse than shipping no constraint at
+-- all. NOT VALID
+-- enforces the CHECK on every new INSERT and every UPDATE (including updates to grandfathered rows)
+-- immediately, which is what actually closes the forward-looking risk. Follow-up (NOT in this
+-- migration, needs its own change once violators are at zero and stay there): `ALTER TABLE
+-- solomon_advice_outcome_ledger VALIDATE CONSTRAINT
+-- solomon_advice_outcome_ledger_decision_by_identity_check;` (SHARE UPDATE EXCLUSIVE lock, does not
+-- block concurrent reads/writes, unlike the initial ADD).
+--
+-- GUARDED, NOT DROP-THEN-ADD (round-2 review finding): re-applying this file must not be able to
+-- silently downgrade an already-VALIDATEd constraint back to NOT VALID. The DO block below only adds
+-- the constraint if it is not already present, so a later re-run after VALIDATE CONSTRAINT has run is
+-- a genuine no-op rather than reverting validated state with zero signal.
 --
 -- requires-chairman-apply
 
@@ -70,16 +95,22 @@ SET LOCAL lock_timeout = '5s';
 ALTER TABLE solomon_advice_outcome_ledger
   ADD COLUMN IF NOT EXISTS decision_requested boolean NOT NULL DEFAULT true;
 
-ALTER TABLE solomon_advice_outcome_ledger
-  DROP CONSTRAINT IF EXISTS solomon_advice_outcome_ledger_decision_by_identity_check;
-
-ALTER TABLE solomon_advice_outcome_ledger
-  ADD CONSTRAINT solomon_advice_outcome_ledger_decision_by_identity_check
-  CHECK (decision_by IS NULL OR (length(decision_by) <= 40 AND decision_by !~ '\s'))
-  NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'solomon_advice_outcome_ledger_decision_by_identity_check'
+      AND conrelid = 'solomon_advice_outcome_ledger'::regclass
+  ) THEN
+    ALTER TABLE solomon_advice_outcome_ledger
+      ADD CONSTRAINT solomon_advice_outcome_ledger_decision_by_identity_check
+      CHECK (decision_by IS NULL OR (length(decision_by) <= 40 AND decision_by !~ '[[:space:]]'))
+      NOT VALID;
+  END IF;
+END $$;
 
 COMMENT ON COLUMN solomon_advice_outcome_ledger.decision_requested IS 'Admission discriminator (SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-1b): true iff the sending Solomon advisory REQUESTS a decision; false iff informational-only. Sender-stamped at send time from scripts/solomon-advisory.cjs --informational (opt-OUT: absent => true, the non-suppressing direction) via payload.decision_requested. Read by scripts/solomon-ledger-pending-resurface.cjs planStalePending (the actionable-workload queue). DELIBERATELY NOT read by lib/solomon/conduct-probes.js staleOpenAdviceCount, which is a separate governance probe holding an explicit anti-aging principle -- do not fold the two predicates into one helper. All pre-existing rows are true by DEFAULT: an explicitly documented assumption, NOT a measurement (source payloads purge at ~13 days and were unrecoverable for the large majority of them).';
 
-COMMENT ON CONSTRAINT solomon_advice_outcome_ledger_decision_by_identity_check ON solomon_advice_outcome_ledger IS 'decision_by must be a bare identity token (<=40 chars, no whitespace) -- see scripts/coordinator-ack-adam.cjs normalizeDecisionBy. Added SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 in response to a ship-gate adversarial review finding that the two enforced write paths were not backed by a data-layer invariant, leaving a documented unidentified third writer free to silently re-contaminate the column indefinitely. NOT VALID: 11 pre-existing rows violate it as of 2026-08-21 (same unidentified writer); run VALIDATE CONSTRAINT separately once those are cleaned up.';
+COMMENT ON CONSTRAINT solomon_advice_outcome_ledger_decision_by_identity_check ON solomon_advice_outcome_ledger IS 'decision_by must be a bare identity token (<=40 chars, no whitespace, [[:space:]] used over \s for escape-processing independence) -- see scripts/coordinator-ack-adam.cjs normalizeDecisionBy. Added SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 in response to a ship-gate adversarial review finding that the two enforced write paths were not backed by a data-layer invariant, leaving a documented unidentified third writer free to silently re-contaminate the column indefinitely. NOT VALID: re-checked on every UPDATE to a grandfathered row regardless, not exempted from it (round-2 correction) -- see scripts/solomon-judgment-expiry-run.mjs for the resulting bounded self-healing retry this required. Added via a guarded DO block, not DROP-then-ADD, so re-applying this file cannot silently revert a validated state back to NOT VALID.';
 
 COMMIT;

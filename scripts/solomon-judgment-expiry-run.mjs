@@ -32,7 +32,9 @@ import {
   EXPIRY_DAYS,
   EXPIRY_ACTOR,
   ENABLED_BY_DEFAULT,
+  isDecisionByIdentityCheckViolation,
 } from '../lib/solomon/judgment-expiry.js';
+import { normalizeDecisionBy } from './coordinator-ack-adam.cjs';
 
 const TABLE = 'solomon_advice_outcome_ledger';
 const PAGE = 1000;
@@ -99,12 +101,24 @@ async function main() {
 
   const patch = expiryPatch({ nowIso: new Date().toISOString(), actor: EXPIRY_ACTOR });
   let stamped = 0;
+  let healedOnRetry = 0;
   for (const r of due) {
     const { error } = await supabase.from(TABLE).update(patch).eq('id', r.id).is('judgment_expired_at', null);
-    if (error) { console.error(`  FAILED ${r.id}: ${error.message}`); continue; }
-    stamped++;
+    if (!error) { stamped++; continue; }
+    // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001's decision_by CHECK is NOT VALID -- a
+    // grandfathered violating row still 23514s on ANY update, even this one, which never sets
+    // decision_by. Bounded, single retry: also normalize decision_by so the row becomes compliant
+    // and this class of failure cannot recur for it. Scoped strictly to this one constraint by name
+    // -- a genuine DB fault is never masked or retried.
+    if (!isDecisionByIdentityCheckViolation(error)) { console.error(`  FAILED ${r.id}: ${error.message}`); continue; }
+    const { data: current, error: readErr } = await supabase.from(TABLE).select('decision_by').eq('id', r.id).single();
+    if (readErr) { console.error(`  FAILED ${r.id} (decision_by identity check, and could not read current value to retry: ${readErr.message})`); continue; }
+    const retryPatch = { ...patch, decision_by: normalizeDecisionBy(current?.decision_by) };
+    const retry = await supabase.from(TABLE).update(retryPatch).eq('id', r.id).is('judgment_expired_at', null);
+    if (retry.error) { console.error(`  FAILED ${r.id} (decision_by identity check, retry with normalized decision_by also failed: ${retry.error.message})`); continue; }
+    stamped++; healedOnRetry++;
   }
-  console.log(`[judgment-expiry] stamped=${stamped}/${due.length}`);
+  console.log(`[judgment-expiry] stamped=${stamped}/${due.length}${healedOnRetry ? ` (${healedOnRetry} required a decision_by-normalizing retry)` : ''}`);
   return 0;
 }
 
