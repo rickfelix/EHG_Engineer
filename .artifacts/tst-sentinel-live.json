@@ -1,6 +1,6 @@
-◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
 {
   "findings": 15,
+  "clean": false,
   "securityDefinerViews": [],
   "rlsDisabled": [
     "claim_rejects",
@@ -98,7 +98,11 @@
       "_http_response [table]",
       "http_request_queue [table]",
       "http_request_queue_id_seq [sequence]"
-    ]
+    ],
+    "schemaUsage": {
+      "anon": true,
+      "authenticated": true
+    }
   },
   "triggerEnabled": true
 }
