@@ -1,0 +1,12 @@
+{
+  "_generated_by": "scripts/temp/fix-doc-verbatim-drift.mjs (captured, not hand-typed)",
+  "_source": "strategic_directives_v2.metadata.source_material.fr7_synthetic_actors WHERE sd_key='SD-LEO-INFRA-ALTIFYAI-TEST-IDENTITY-001'",
+  "_captured_at": "2026-08-21T19:26:17.919Z",
+  "_reconfirm_via": "node scripts/regen-fr7-source-material-fixture.mjs -- re-fetches the live row and fails loud on any diff from this file",
+  "exclusion_classes_THREE_not_two": [
+    "money movement (provider test mode only, ratified once per provider)",
+    "outbound-to-real-humans",
+    "third-party trust surfaces (reviews/marketplace/reputation writes)"
+  ],
+  "verbatim_sentence_must_survive_unchanged": "a synthetic actor is a USER stand-in, NEVER a chairman stand-in -- no test identity satisfies a chairman_site_review, crack-gate attestation, or any approval surface."
+}

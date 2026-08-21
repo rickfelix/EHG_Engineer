@@ -24,7 +24,7 @@ const VALID_SA = {
 // don't care about the venture_resources cross-check keep passing by
 // default; pass a different value (or null) to exercise a mismatch/absent
 // case specifically.
-function makeSupabase(ventureMetadata, { registeredRepo = VALID_SA.github_repo } = {}) {
+function makeSupabase(ventureMetadata, { registeredRepo = VALID_SA.github_repo, ventureRowAbsent = false } = {}) {
   return {
     from: (table) => {
       if (table === 'venture_resources') {
@@ -41,7 +41,7 @@ function makeSupabase(ventureMetadata, { registeredRepo = VALID_SA.github_repo }
       return {
         select: () => ({
           eq: () => ({
-            maybeSingle: async () => ({ data: { metadata: ventureMetadata }, error: null }),
+            maybeSingle: async () => ({ data: ventureRowAbsent ? null : { metadata: ventureMetadata }, error: null }),
           }),
         }),
       };
@@ -87,6 +87,18 @@ describe('checkSyntheticActorFencing — opt-in short-circuit (fleet safety)', (
     expect(result.applies).toBe(false);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  // SEC-51 (round 9): a missing ventures row must fail CLOSED, matching
+  // every other absent-record path in this function -- previously it took
+  // the opposite polarity (silently treated as "not opted in").
+  it('fails CLOSED (does not silently pass) when the ventures row itself does not exist', async () => {
+    const fetchImpl = vi.fn();
+    const result = await checkSyntheticActorFencing(makeSupabase({}, { ventureRowAbsent: true }), 'v-nonexistent', { fetchImpl });
+    expect(result.applies).toBe(true);
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/no ventures row found/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });
 
 describe('checkSyntheticActorFencing — hollow/absent config detection', () => {
@@ -112,6 +124,22 @@ describe('checkSyntheticActorFencing — hollow/absent config detection', () => 
     );
     expect(result.satisfied).toBe(false);
     expect(result.reason).toMatch(/incomplete/);
+  });
+
+  // SEC-55 (round 9): uat_step_name is validated against a code-side
+  // allowlist rather than left as unchecked free text -- repointing it at
+  // an unrelated always-green step (even within the correct, cross-checked
+  // repo) must fail closed, never reach the network.
+  it('blocks (fail-closed, zero fetch calls) when uat_step_name is not in the allowlist', async () => {
+    const fetchImpl = vi.fn();
+    const result = await checkSyntheticActorFencing(
+      makeSupabase({ uat_probe_required: true, synthetic_actor: { ...VALID_SA, uat_step_name: 'Checkout' } }),
+      'v-hollow-4', { fetchImpl, githubToken: 'tok' },
+    );
+    expect(result.applies).toBe(true);
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/not in the allowlist/);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 
