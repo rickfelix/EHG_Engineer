@@ -68,9 +68,10 @@ describe('pollUntil (hermetic, virtual clock)', () => {
 });
 
 describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
-  it('PASS: release observed, heartbeat frozen after, parked worker unaffected', async () => {
+  it('PASS: release observed, heartbeat frozen after, parked worker unaffected (status stable AND heartbeat advanced)', async () => {
     const { clockFn, sleepFn } = fakeClock();
     let pollCount = 0;
+    let parkedPollCount = 0;
     const sb = {
       from: () => ({
         select() { return this; },
@@ -82,7 +83,10 @@ describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
             return { data: pollCount >= 2 ? { status: 'released', heartbeat_at: 'frozen-hb' } : { status: 'active', heartbeat_at: 'live-hb' }, error: null };
           }
           if (this._id === 'parked') {
-            return { data: { status: 'idle', heartbeat_at: 'still-advancing' }, error: null };
+            // distinct heartbeat_at each read (before vs after the freeze wait) -- proves
+            // genuine advancement, not just a single static snapshot (TESTING F6).
+            parkedPollCount += 1;
+            return { data: { status: 'idle', heartbeat_at: `parked-hb-${parkedPollCount}` }, error: null };
           }
           return { data: null, error: null };
         },
@@ -97,6 +101,64 @@ describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
     expect(result.parkedWorkerUnaffected).toBe(true);
     expect(result.overall).toBe('PASS');
     expect(result.adamRegisterProbe.decideSingleAdamGuardAvailable).toBe(true);
+    expect(parkedPollCount).toBe(2); // proves both a before- and after-sample were actually taken
+  });
+
+  it('parkedWorkerUnaffected=false when the parked worker itself released mid-window (TESTING F9)', async () => {
+    const { clockFn, sleepFn } = fakeClock();
+    let pollCount = 0;
+    const sb = {
+      from: () => ({
+        select() { return this; },
+        eq(_c, val) { this._id = val; return this; },
+        async maybeSingle() {
+          if (this._id === 'target') {
+            pollCount += 1;
+            return { data: pollCount >= 2 ? { status: 'released', heartbeat_at: 'frozen-hb' } : { status: 'active', heartbeat_at: 'live-hb' }, error: null };
+          }
+          if (this._id === 'parked') {
+            // released itself -- must fail regardless of its own heartbeat behavior.
+            return { data: { status: 'released', heartbeat_at: 'parked-hb' }, error: null };
+          }
+          return { data: null, error: null };
+        },
+      }),
+    };
+    const result = await observeRotation({
+      sb, session: 'target', parkedWorker: 'parked', sleepFn, clockFn,
+      releaseTimeoutMs: 10_000, freezeWaitMs: 5_000,
+    });
+    expect(result.parkedWorkerUnaffected).toBe(false);
+    expect(result.overall).toBe('PARTIAL'); // release+freeze were fine; parked-worker leak sinks overall
+  });
+
+  it('parkedWorkerUnaffected=false when the parked worker heartbeat did NOT advance (went silent too)', async () => {
+    const { clockFn, sleepFn } = fakeClock();
+    let pollCount = 0;
+    const sb = {
+      from: () => ({
+        select() { return this; },
+        eq(_c, val) { this._id = val; return this; },
+        async maybeSingle() {
+          if (this._id === 'target') {
+            pollCount += 1;
+            return { data: pollCount >= 2 ? { status: 'released', heartbeat_at: 'frozen-hb' } : { status: 'active', heartbeat_at: 'live-hb' }, error: null };
+          }
+          if (this._id === 'parked') {
+            // status never flips, but heartbeat_at is IDENTICAL on both samples -- a single
+            // post-hoc snapshot would call this "unaffected"; two samples correctly reject it.
+            return { data: { status: 'idle', heartbeat_at: 'static-hb' }, error: null };
+          }
+          return { data: null, error: null };
+        },
+      }),
+    };
+    const result = await observeRotation({
+      sb, session: 'target', parkedWorker: 'parked', sleepFn, clockFn,
+      releaseTimeoutMs: 10_000, freezeWaitMs: 5_000,
+    });
+    expect(result.parkedWorkerUnaffected).toBe(false);
+    expect(result.overall).toBe('PARTIAL');
   });
 
   it('FAIL_NO_RELEASE: status never flips within the timeout', async () => {

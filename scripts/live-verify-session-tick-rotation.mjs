@@ -16,24 +16,32 @@
  *     note its own CLAUDE_SESSION_ID, then run /clear
  *   Terminal B (started BEFORE the /clear, from anywhere -- does not need to be the rotating
  *   session):
- *     node scripts/live-verify-session-tick-rotation.mjs --session <SID> [--parked-worker <SID2>] [--timeout-s 120]
+ *     node scripts/live-verify-session-tick-rotation.mjs --session <SID> [--parked-worker <SID2>] [--timeout-s 60]
  *
  * Persists a JSON result file (default .claude/live-verify-results/<SID>-<timestamp>.json) that a
  * LATER session (or this same terminal B process) can read back -- satisfying FR-2's "captured by
  * the observer, not narrated" acceptance criteria.
  *
  * Watches, for the target --session:
- *   - status transitions to 'released' within 60s (smoke step 4 / success criterion 1)
- *   - heartbeat_at STOPS advancing for >=90s after release (smoke step 5's freeze check)
- *   - post-release, adam-register.cjs succeeds immediately if the target held role=adam
- *     (smoke step 8 / success criterion 4, proving FR-1's fix live)
+ *   - status transitions to 'released' within --timeout-s seconds (default 60 -- smoke step 4 /
+ *     success criterion 1)
+ *   - heartbeat_at STOPS advancing for a fixed 90s after release (smoke step 5's freeze check;
+ *     not controlled by --timeout-s, which bounds only the wait-for-release phase)
  *
- * If --parked-worker is given, ALSO watches that session (should be unaffected the whole time --
- * smoke step 6, "the step the fix must not fail"):
- *   - heartbeat_at keeps advancing normally (never frozen)
- *   - status never flips to released
+ * If --parked-worker is given, ALSO watches that session across the SAME 90s window (should be
+ * unaffected the whole time -- smoke step 6, "the step the fix must not fail"):
+ *   - heartbeat_at is sampled before and after the 90s window and must have ADVANCED (two
+ *     identical samples would mean the parked worker itself went silent, not proof it survived)
+ *   - status must not flip to released
  *
- * Exits 0 on full PASS, 1 on any watched outcome not observed within --timeout-s, 2 on missing args.
+ * DOES NOT invoke scripts/adam-register.cjs (no role-mutating write from an observer) -- smoke
+ * step 8 / success criterion 4 (registration succeeds immediately post-rotation) is proven at the
+ * unit level by tests/unit/coordination/adam-singleton.test.js against the real
+ * decideSingleAdamGuard function, not re-proven live by this script; adamRegisterProbe below only
+ * confirms that function is importable from the checkout this observer is running against.
+ *
+ * Exits 0 on full PASS, 1 on any watched outcome not observed within --timeout-s / the fixed
+ * 90s freeze window, 2 on missing args.
  */
 import 'dotenv/config';
 import fs from 'node:fs';
@@ -45,7 +53,7 @@ function parseArgs(argv) {
   return {
     session: get('--session'),
     parkedWorker: get('--parked-worker') || null,
-    timeoutS: Number(get('--timeout-s') || 120),
+    timeoutS: Number(get('--timeout-s') || 60),
     outDir: get('--out-dir') || path.join('.claude', 'live-verify-results'),
   };
 }
@@ -88,7 +96,7 @@ async function runAdamRegisterProbe(sessionId) {
   return { probed: true, note: 'adam-register.cjs itself is not invoked by this observer (no role mutation); see FR-1 unit tests (adam-singleton.test.js) for the live registration-guard proof against a released row.', decideSingleAdamGuardAvailable: typeof decideSingleAdamGuard === 'function' };
 }
 
-export async function observeRotation({ sb, session, parkedWorker, timeoutS = 120, now = () => Date.now(), sleepFn = realSleep, clockFn = Date.now, releaseTimeoutMs = 60_000, freezeWaitMs = 90_000 } = {}) {
+export async function observeRotation({ sb, session, parkedWorker, now = () => Date.now(), sleepFn = realSleep, clockFn = Date.now, releaseTimeoutMs = 60_000, freezeWaitMs = 90_000 } = {}) {
   const result = {
     session, parkedWorker, startedAt: new Date(now()).toISOString(),
     releaseObserved: null, heartbeatFrozenObserved: null, parkedWorkerUnaffected: null,
@@ -100,13 +108,26 @@ export async function observeRotation({ sb, session, parkedWorker, timeoutS = 12
   if (!releaseWait.ok) { result.overall = 'FAIL_NO_RELEASE'; return result; }
 
   const hbAtRelease = releaseWait.row.heartbeat_at;
+
+  // Sample the parked worker BEFORE the freeze wait too (TESTING F6): a single
+  // post-wait snapshot can only prove status, never "advancing" as the header claims.
+  let parkedBefore = null;
+  if (parkedWorker) {
+    const p = await sb.from('claude_sessions').select('status,heartbeat_at').eq('session_id', parkedWorker).maybeSingle();
+    parkedBefore = p.data || null;
+  }
+
   await sleepFn(freezeWaitMs);
+
   const post = await sb.from('claude_sessions').select('heartbeat_at').eq('session_id', session).maybeSingle();
   result.heartbeatFrozenObserved = isHeartbeatFrozen(hbAtRelease, post.data?.heartbeat_at || null);
 
   if (parkedWorker) {
-    const parked = await sb.from('claude_sessions').select('status,heartbeat_at').eq('session_id', parkedWorker).maybeSingle();
-    result.parkedWorkerUnaffected = Boolean(parked.data && parked.data.status !== 'released');
+    const parkedAfter = await sb.from('claude_sessions').select('status,heartbeat_at').eq('session_id', parkedWorker).maybeSingle();
+    const neverReleased = Boolean(parkedAfter.data && parkedAfter.data.status !== 'released');
+    const heartbeatAdvanced = Boolean(parkedBefore?.heartbeat_at) && Boolean(parkedAfter.data?.heartbeat_at)
+      && !isHeartbeatFrozen(parkedBefore.heartbeat_at, parkedAfter.data.heartbeat_at);
+    result.parkedWorkerUnaffected = neverReleased && heartbeatAdvanced;
   } else {
     result.parkedWorkerUnaffected = 'not_provided';
   }
@@ -126,7 +147,7 @@ async function main() {
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   console.log(`[live-verify] armed, watching session ${args.session}${args.parkedWorker ? ` (+ parked worker ${args.parkedWorker})` : ''}. Perform /clear now.`);
 
-  const result = await observeRotation({ sb, session: args.session, parkedWorker: args.parkedWorker, timeoutS: args.timeoutS });
+  const result = await observeRotation({ sb, session: args.session, parkedWorker: args.parkedWorker, releaseTimeoutMs: args.timeoutS * 1000 });
 
   fs.mkdirSync(args.outDir, { recursive: true });
   const outPath = path.join(args.outDir, `${args.session}-${Date.now()}.json`);
