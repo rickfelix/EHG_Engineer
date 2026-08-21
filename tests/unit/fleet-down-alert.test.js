@@ -328,12 +328,15 @@ describe('checkFleetDeadMan (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1 integration)',
     expect(sendChairmanSMSFn).not.toHaveBeenCalled();
   });
 
-  it('TS-8: queries the correct columns — heartbeat_at, status=completed, updated_at (column-name trap pin)', async () => {
+  it('TS-8: queries the correct columns — heartbeat_at, status=completed, completion_date (column-name trap pin)', async () => {
+    // completion_date, NOT updated_at: adversarial-review finding, verified live -- updated_at
+    // on an already-completed row keeps moving for months via unrelated housekeeping writes, so
+    // filtering on it would make "zero completions" almost never true.
     const db = makeDeadManDb({ heartbeatAt: minutesAgo(5), completions: 1 });
     await checkFleetDeadMan(db, false, vi.fn(), NOW);
     expect(db._calls.hbOrderCol).toBe('heartbeat_at');
     expect(db._calls.sdEq).toEqual(['status', 'completed']);
-    expect(db._calls.sdGte[0]).toBe('updated_at');
+    expect(db._calls.sdGte[0]).toBe('completion_date');
   });
 
   it('TS-9: fires once on the initial outage, stays silent while still dead, re-fires after a recovery then a new outage', async () => {

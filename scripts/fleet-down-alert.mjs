@@ -372,6 +372,14 @@ export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now =
   // are NOT interchangeable with created_at/updated_at/last_seen_at — confirmed against live
   // schema. strategic_directives_v2.status='completed' covers BOTH SDs and QFs: QF rows are
   // ordinary strategic_directives_v2 rows keyed by an "QF-..." sd_key, not a separate table.
+  //
+  // completion_date, NOT updated_at (adversarial-review finding, verified live): updated_at on
+  // an already-completed row keeps moving for months afterward -- post-completion housekeeping
+  // (quality_checked_at, wiring_validated, retro generation, one-off maintenance scripts) routinely
+  // re-touches old completed rows. Measured live across 30 recently-updated completed SDs: drift
+  // between completion_date and updated_at ranged from minutes to 2600+ minutes. Filtering on
+  // updated_at would make Leg B's "zero completions" condition almost always false (some old row
+  // is nearly always being housekept), silently defeating this predicate's entire purpose.
   const windowStartIso = new Date(now.getTime() - FLEET_DEAD_MAN_WINDOW_MIN * 60000).toISOString();
 
   const { data: hbRows, error: hbErr } = await db
@@ -385,7 +393,7 @@ export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now =
     .from('strategic_directives_v2')
     .select('*', { count: 'exact', head: true })
     .eq('status', 'completed')
-    .gte('updated_at', windowStartIso);
+    .gte('completion_date', windowStartIso);
   if (cErr) { console.error('[fleet-dead-man] completions query failed:', cErr.message); return; }
 
   const lastHeartbeatAt = hbRows && hbRows[0] ? hbRows[0].heartbeat_at : null;
