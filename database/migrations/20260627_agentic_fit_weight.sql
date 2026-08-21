@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-21T10:09Z (item 3: agentic_fit_params column; the weights half already live on 9/9 profiles); scribe adam-08049808
 -- SD-EHG-FACTORY-AGENTIC-FIT-SELECTION-001 (FR-4 / FR-6)
 -- Make agentic_fit a weighted COMPONENT of the Stage-0 venture_score and store the
 -- machine-improvement multiplier params in the evaluation_profiles config SSOT so the
