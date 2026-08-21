@@ -1,102 +1,97 @@
-# Session state — fleet worker (no callsign), session 51fab48f-8867-4fe2-9698-0a1b8639e6ee
+# Session state — fleet worker Golf-6, session 642532a6-bd77-485d-9717-aa034628319c
 
-Autonomous fleet worker under coordinator session=sess-987. `[MODE: campaign]` (SD-LEO-*
-prefix). Compacted 2026-08-18 ~21:55 ET. Worktree `.worktrees/SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001`,
-currently on branch `feat/SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001` (fast-forwarded to origin/main
-tip `8c08d2bb601` — this branch is now just a name-anchor matching the SD's ID, not a source of
-unique work; do not develop new code on it).
+Autonomous fleet worker under coordinator session=0d37100a-d9a9-4d54-a711-2466e22244ec.
+`[MODE: campaign]` (SD-MAN-INFRA-* prefix). Compacted 2026-08-21 ~18:50 ET. Worktree
+`.worktrees/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001`, branch (now merged and deleted)
+`feat/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001`.
 
-## What this session completed, in order
+(Prior content of this file, about session 51fab48f / SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001,
+was stale leftover from this worktree's creation snapshot — that work is long since shipped
+by a different session. Replaced entirely; nothing from it carries forward.)
 
-1. **SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001** — post-completion tail only (document/heal/
-   learn/signal/completion-flags), inherited already-shipped from before this window.
-2. **SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001** (id `371c648b-4853-4019-a919-bbe529978480`) — full
-   LEAD→PLAN→EXEC→PLAN→LEAD cycle, **status=COMPLETED** (LEAD-FINAL-APPROVAL passed, score 93%).
-   Security fix: `lib/factory/content-sanitizer.js`'s `PUBLIC_ORIGIN_SOURCE_TYPES` allowlist was
-   missing `'telegram'` (schema-legal source_type, was a live anon-writable RLS path until 2 days
-   before the fix). Shipped via PR #7254 (merged). Two rounds of genuine adversarial security
-   review found and fixed real defects (tautological accounting test, cardinality-vs-membership
-   test blindness — closed with a genuine db-tier live-schema test).
-   **Post-completion tail (/document → /heal → /learn → capture-completion-flags) NOT YET RUN —
-   this is the immediate next step, per CLAUDE.md a continuation, never a pause point.**
-3. **QF-20260818-655** (merged PR #7258) — `GATE5_GIT_COMMIT_ENFORCEMENT` false-blocked a
-   legitimately merged-and-deleted branch. Root-caused two real bugs in self-review (auto review
-   prompt truncated at the known 8000-char cap, self-reviewed the full diff directly): (a)
-   CRITICAL — the merged-PR override force-set BOTH check3/check4 even when check3 failed for an
-   unrelated reason (genuine unpushed commits), letting verdict=PASS hide real lost work;
-   mutation-proved. (b) WARNING — `checkMergedPR` didn't verify `baseRefName==='main'`. Both fixed
-   in `scripts/verify-git-commit-status.js`, 8 tests total, all passing.
-4. **QF-20260818-148** (merged PR #7260) — while investigating SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001's
-   PLAN-TO-LEAD `SCOPE_AUDIT` blocker (67%), found `autoCompleteDeliverablesForSD`
-   (`scripts/modules/handoff/executors/exec-to-plan/test-evidence.js`) checked
-   `needsCompletion.needs_completion` but the real property is `needed` — the completion branch
-   was PERMANENTLY UNREACHABLE for every SD, ever. Confirmed via direct DB query: **>=13 other SDs
-   fleet-wide** share the same two stuck boilerplate deliverable rows ("Development environment
-   setup", "Documentation updated") — **NOT bulk-remediated, disclosed as a separate finding**.
-   Fixed the property name + options-object shape, 5 mutation-proved regression tests. Manually
-   invoked the real (now-reachable) function to close SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001's own
-   2 stuck rows (genuine HANDOFF_TRUST-tier verification, 6/6 = 100% coverage).
+## What this session completed, in order (this window)
+
+1. **QF-20260821-313** (merged) — `corrective-triage.mjs` missing `generateSDKey()` call.
+2. **SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001** — LEAD→PLAN→EXEC built (FR-1 adam-identity
+   status-aware election fix, FR-2a live-rotation observer tooling with FR-2b deliberately
+   deferred, FR-3 target-SD metrics honesty, FR-4 local scheduled-task registrar, FR-5 documented
+   descope). Went through **3 rounds of independent sub-agent review** (TESTING x3, SECURITY,
+   VALIDATION, REGRESSION, RETRO) plus **3 rounds of adversarial code review** at /ship's Deep
+   tier — every round found real, fixed defects. Full chain: EXEC-TO-PLAN (score 92) →
+   PLAN-TO-LEAD (score 91) → **PR #7369 MERGED** (just now, this tick).
+   **LEAD-FINAL-APPROVAL handoff NOT YET RUN — immediate next step.**
+
+   Round-3 adversarial review's CRITICAL finding (now fixed, mutation-verified): FR-1 made the
+   Adam election *decision* status-aware but not the retire *action* one call frame later
+   (`scripts/adam-register.cjs`'s `freshNow` re-check). Investigating turned up a SEPARATE
+   pre-existing bug: `isFresh(heartbeatAt, nowMs)` was called with only 2 of its 3 required args
+   everywhere in that file — `x <= undefined` is always `false` in JS, so the "protect a racing
+   restart from being cleared" check had been silently dead code. Fixed both (added the missing
+   `ADAM_FRESH_MS` arg + `isStatusFreshEligible`), made `nowMs2` injectable for testability, and
+   added a `retire_skipped_fresh` disclosure field so the now-reachable skip branch doesn't report
+   a misleadingly plain "Registered" success. **Pattern worth remembering**: a 2-arg call to a
+   3-required-arg helper doesn't throw in JS — it silently no-ops via `<= undefined`. Grep for
+   this shape (`isFresh(x, y)` missing a 3rd arg) if touching adjacent freshness-check code.
+
+## Signals sent this window (not yet actioned by anyone)
+
+- **SEC-02** (severity high): pre-existing residual `"Allow all for anon"` RLS policy on
+  `claude_sessions` never dropped by the 2026-01-23 hardening migration — currently mitigated only
+  by a missing GRANT (measured live: anon SELECT works, anon write is 42501). A routine future
+  `GRANT ALL ... TO anon` would silently make the table fully anon-writable. Recommend its own SD.
+- **Solomon-mirror status-blindness** (severity high): `scripts/solomon-register.cjs:199` has the
+  identical 2-arg `isFresh()` bug just fixed on the Adam side, AND `solomon-identity.cjs`'s guard
+  has NONE of FR-1's status-awareness at all (doesn't even SELECT `status`) — reproduces the exact
+  post-`/clear` registration blackout this SD fixed for Adam. Recommend a dedicated SD applying
+  the same FR-1 pattern to Solomon.
+- **generate-retrospective.js systemic defect** (severity high): its 4 content arrays
+  (what_went_well/key_learnings/action_items/what_needs_improvement) are 100% static hardcoded
+  boilerplate for EVERY SD ever processed — confirmed live on this SD's own retrospective (fixed
+  directly, quality_score 90→100 on real content). High-value because `/learn` sources "top
+  lessons" from the `retrospectives` table — has likely been reading generic noise fleet-wide.
 
 ## Immediate next steps (in order)
 
-1. **Run SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001's post-completion tail**: `/document` → `/heal sd
-   --sd-id SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001` → `/learn` → `capture-completion-flags`. This is
-   the very next action, already due, not yet started.
-2. **Route these disclosed findings through completion-flags** (all already identified, none yet
-   filed):
-   - The fleet-wide >=13-SD stuck-deliverables backlog (QF-20260818-148's disclosed-not-fixed
-     scope boundary) — likely worth its own follow-up QF/SD to bulk-remediate, or at minimum a
-     harness-bug log entry.
-   - "Allowlist architecture recurs" structural observation from SD-LEO-GEN-SECURITY-TELEGRAM-BOT-001's
-     own retrospective (id `48d8ab7a-58cc-451e-9a54-5370e6e3f430`) — the enumerate-untrusted-by-
-     exception design in `content-sanitizer.js` has now had 3 separate SDs add a missing value
-     (`error_capture`, `venture_worker`, `telegram`); a genuine fail-closed redesign (TRUSTED-
-     allowlist inversion) was explicitly deferred as out of scope each time.
-   - TESTING finding I1: stale 12-value enum mirrors in
-     `tests/ddl/telegram-bot-insert-feedback-drop-ddl.db.test.js` and `wakeup-arm-evidence.test.js`
-     (live constraint has 13 values as of this SD).
-   - Round-2 adversarial review's disclosed INFO: no cost/tradeoff-pin test exists for the
-     allowlist design decision itself.
-   - The CLI `appPath` default quirk in `scripts/verify-git-commit-status.js`'s `main()` —
-     `args[1] || EHG_ROOT` (frontend) vs the class constructor's own documented default
-     `EHG_ENGINEER_ROOT` — pre-existing, unrelated, minor, not yet signaled.
-3. **Continue the standing fleet-worker loop indefinitely**: `/checkin` → claim next work → build
-   → never park while claimable work exists → always end tool-enabled turns with an armed
-   `ScheduleWakeup`.
+1. **Run SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001's LEAD-FINAL-APPROVAL handoff**, then the full
+   post-completion tail: `/document` → `/heal sd --sd-id SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001`
+   → `/learn` → `capture-completion-flags` (with the reflective interrogation "are there any gaps
+   we failed to close?" — route the 3 signals above through it if not otherwise tracked).
+2. **`/checkin`**, which will very likely self-claim **QF-20260821-351** (already filed, Tier 1,
+   `scripts/adam-register.cjs:198`'s retire re-check status-blindness — same defect class,
+   deliberately scoped out of the SD above to keep it from re-opening). Read it fresh via
+   `node scripts/read-quick-fix.js QF-20260821-351` before assuming the description above is
+   still accurate — it may already be stale by the time this is read back.
+3. **Continue the standing fleet-worker loop indefinitely**: claim next work → build → never park
+   while claimable work exists → always end tool-enabled turns with an armed `ScheduleWakeup`.
 
 ## Standing session constraints (apply for the rest of this autonomous run)
 
-- Never touch the primary repo root (`C:\Users\rickf\Projects\_EHG\EHG_Engineer` itself, not a
-  worktree) — it's the coordinator's own live workspace.
 - Always merge via the hardened `lib/ship/auto-merge.mjs` `attemptAutoMerge` sequence
-  (`{prNumber, repoOwner, repoName, branch}`), never a bare `gh pr merge`.
-- Use `git merge-base HEAD origin/main` (not `origin/main..HEAD` directly) for true PR-scoped
-  diffs feeding the review gate.
-- Fresh branch off `origin/main` for every new PR — never reuse a merged-and-deleted branch name
-  (confirmed twice this session: PR #7258, PR #7260).
-- The Standard-tier review-gate prompt (`lib/ship/review-gate.js`) truncates at ~8000 chars with
-  no file-boundary awareness (known bug, already signaled: `signal_id 26fb7933`). Diffs under
-  ~7500 chars usually survive intact (confirmed on PR #7260); larger ones silently cut mid-file —
-  always verify by reading the generated prompt file's tail before trusting it; if truncated,
-  self-review the full diff directly instead.
-- `node scripts/create-quick-fix.js` and similar long-running DB-writing scripts can appear to
-  time out (exit via the tool's own timeout, not a script error) while having ALREADY written to
-  the DB — always verify via direct query before assuming failure/retrying (avoids duplicate rows;
-  confirmed 4+ times this overall session).
-- `quick_fixes.status='completed'` requires `tests_passing=true AND uat_verified=true` (or
-  `force_completed=true`) — the `completed_requires_verification` CHECK constraint. Also set
-  `verified_by`/`verified_at`/`verification_notes`.
-- **Never inline backticks inside a bash `-e "..."` double-quoted Node script string** — bash
-  performs command substitution on `` `...` `` even inside double quotes, silently swallowing the
-  enclosed text (happened once this session, corrupted a QF's `verification_notes`; fixed by
-  writing the script to a `.mjs` file instead and running `node <file>`).
-- Checking out an SD's OLD branch to restore its name (e.g. for GATE5's branch-name-match check)
-  also reverts ALL tracked source files on that worktree to that branch's stale snapshot,
-  INCLUDING any harness scripts fixed later on `main` — if the old branch has zero unique commits
-  vs `origin/main` (verify via `git log --oneline branch..origin/main` / `origin/main..branch`),
-  `git merge --ff-only origin/main` safely brings both the correct name AND latest code together.
-- A CI run's `coverage` and `Run Unit Tier (quarantine-aware)` checks routinely take 8-17 minutes
-  each — not stuck; check via `gh pr checks <N>` on a matched cadence (ScheduleWakeup, never a
-  blocking sleep/poll loop).
-- `gh pr checks <N> --watch` can itself hit this tool's 5-minute timeout on long CI — prefer a
-  plain snapshot `gh pr checks <N>` + ScheduleWakeup over `--watch` for CI known to run long.
+  (`{prNumber, repoOwner, repoName, branch}`), never a bare `gh pr merge`. Resolve repo
+  owner/name ONCE per /ship run (`.claude-work/ship-repo-resolved.json`) and reuse it for both
+  findings-logging and the merge call — never re-invoke `gh repo view` mid-flow.
+- Use `git diff origin/main...HEAD` (three dots — merge-base-aware) for PR-scoped diffs/stats,
+  never `origin/main..HEAD` (two dots) once `main` has moved — the two-dot form pulled in 100+
+  unrelated files and 20K phantom deletions this window from normal upstream drift.
+- Before trusting a `gh pr merge` failure as final: it may just be a required CI check still
+  `pending` (not failed) — `gh pr checks <N>` to distinguish, then `ScheduleWakeup` (~600-1200s),
+  never a blocking sleep/poll loop.
+- A closed-enumeration review-gate CRITICAL pattern (`config/review-critical-findings.json`,
+  e.g. CRIT-002 sql_injection) can false-positive on plain English inside a template literal
+  (a `${...}` interpolation followed later on the same line by a bare SQL keyword, case-
+  insensitive — "delete" in a log message tripped it this window). Verify by reading the exact
+  matched diff line before assuming a real injection; reword to dodge rather than touch the
+  shared gate config for a one-off.
+- `general-purpose` Agent-tool spawns for adversarial review have twice gone idle without
+  producing their findings message on the first attempt this window (no tool error, no crash) —
+  a direct `SendMessage` follow-up nudge eventually got the full result both times (once after 1
+  nudge, once after 2). Not yet root-caused; signaled as harness friction. Give it one nudge
+  before killing/respawning.
+- **Mutation-verify every fix, every time**: revert the ONE line that constitutes the fix, re-run
+  the specific test, confirm it fails, then restore. This caught that an early version of a new
+  test was accidentally vacuous (a frozen test-fixture `NOW` many months stale vs. a
+  hardcoded-`Date.now()` production call site meant the intended branch could never trigger
+  either way) — passing on the first try is not sufficient by itself as evidence of a real fix.
+- `.claude/session-state.md` is worktree-local but can carry stale content from an unrelated
+  earlier session if the worktree was cloned/created from a stale snapshot — verify its content
+  is actually about the current SD before trusting it; overwrite rather than append if it isn't.
