@@ -3,11 +3,16 @@
  * Unit tests for scripts/corrective-triage.mjs
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { createSD } from '../../../scripts/leo-create-sd.js';
+import { generateSDKey } from '../../../scripts/modules/sd-key-generator.js';
 
 vi.mock('dotenv', () => ({ config: vi.fn(), default: { config: vi.fn() } }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({})) }));
 vi.mock('../../../scripts/leo-create-sd.js', () => ({
   createSD: vi.fn(async () => ({ id: 'sd-uuid-1', sd_key: 'SD-PROMOTED-001' })),
+}));
+vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({
+  generateSDKey: vi.fn(async () => 'SD-MAN-INFRA-CORRECTIVE-001'),
 }));
 vi.mock('../../../lib/eva/event-bus/vision-events.js', () => ({
   publishVisionEvent: vi.fn(),
@@ -109,11 +114,22 @@ describe('promoteFinding', () => {
   };
 
   it('creates an SD and updates feedback row when row is promotable', async () => {
+    createSD.mockClear();
+    generateSDKey.mockClear();
     const sb = mockSupabase({ single: baseRow });
     const r = await promoteFinding(sb, 'fb-1', { promotedBy: 'tester' });
     expect(r.promoted).toBe(true);
     expect(r.sdKey).toBe('SD-PROMOTED-001');
     expect(r.feedbackId).toBe('fb-1');
+
+    // QF-20260821-313: the argument-ignoring createSD mock previously stayed green
+    // whether or not the caller passed sdKey -- this is the exact regression that cost
+    // 106 days (createSD called with no sdKey, hitting a raw Postgres NOT NULL
+    // violation). Assert the real call arguments, not just the mocked return value.
+    expect(generateSDKey).toHaveBeenCalledWith(expect.objectContaining({ source: 'MANUAL' }));
+    expect(createSD).toHaveBeenCalledWith(
+      expect.objectContaining({ sdKey: expect.stringMatching(/^SD-/) })
+    );
   });
 
   it('returns already_promoted when feedback.promoted_to_sd_id is set', async () => {
