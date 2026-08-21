@@ -144,6 +144,14 @@ async function main() {
     console.error('[live-verify] --session <SID> is required. See file header for usage.');
     process.exit(2);
   }
+  // TESTING evidence 534ab65e re-verification, finding N2: a malformed --timeout-s used to
+  // silently produce NaN, an always-false poll deadline, and an instant, undiagnosed
+  // FAIL_NO_RELEASE -- expensive here specifically because this observer is armed once before a
+  // REAL /clear, so a typo would burn the one-shot rotation with no clue why it failed.
+  if (!Number.isFinite(args.timeoutS) || args.timeoutS <= 0) {
+    console.error(`[live-verify] --timeout-s must be a positive number of seconds (got "${process.argv[process.argv.indexOf('--timeout-s') + 1] ?? ''}"). See file header for usage.`);
+    process.exit(2);
+  }
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   console.log(`[live-verify] armed, watching session ${args.session}${args.parkedWorker ? ` (+ parked worker ${args.parkedWorker})` : ''}. Perform /clear now.`);
 

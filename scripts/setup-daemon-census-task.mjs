@@ -39,7 +39,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -85,7 +85,13 @@ export function buildCensusSchtasksArgs({ intervalMinutes = 60, wrapperPath, req
   if (!wrapperPath) throw new Error(`${TAG} wrapperPath required`);
   return [
     '/Create', '/TN', TASK_NAME,
-    '/TR', `"${wrapperPath}"`,
+    // Unquoted (TESTING evidence 534ab65e, finding N3): execFileSync passes each argv element as
+    // its own token via CreateProcess, with no shell to strip wrapping quote characters -- embedding
+    // literal `"..."` here would hand schtasks a path string containing quote characters, which is
+    // not the real file (matches the established convention in setup-liveness-watcher-task.mjs,
+    // setup-reboot-respawn-task.mjs, setup-eva-watcher-task.mjs, setup-console-creation-watcher-task.mjs,
+    // all of which pass wrapperPath bare for the same reason).
+    '/TR', wrapperPath,
     '/SC', 'MINUTE', '/MO', String(minutes),
     '/F', // idempotent re-register
     // No /RU/RL: assert-daemon-census.mjs only reads/updates claude_sessions via the Supabase
@@ -129,9 +135,17 @@ async function main() {
   }
 
   if (args.remove) {
-    if (args.dryRun) { console.log(`${TAG} DRY RUN — would run: schtasks ${buildRemoveArgs().join(' ')}`); return; }
+    const wrapperPath = path.join(REPO_ROOT, WRAPPER_REL_PATH);
+    if (args.dryRun) {
+      console.log(`${TAG} DRY RUN — would run: schtasks ${buildRemoveArgs().join(' ')}`);
+      console.log(`${TAG} DRY RUN — would also delete wrapper ${wrapperPath} if present`);
+      return;
+    }
     execFileSync('schtasks', buildRemoveArgs(), { encoding: 'utf8' });
-    console.log(`${TAG} removed ${TASK_NAME}`);
+    // Also remove the generated wrapper (TESTING N5) -- --Create writes it, so --remove should be
+    // its inverse rather than leaving a stale, unreferenced .cmd file behind.
+    rmSync(wrapperPath, { force: true });
+    console.log(`${TAG} removed ${TASK_NAME} and its wrapper`);
     return;
   }
 

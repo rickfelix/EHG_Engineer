@@ -44,10 +44,15 @@ describe('FR4-TASK: argv shape', () => {
     expect(args).toEqual(expect.arrayContaining(['/TN', TASK_NAME, '/F']));
   });
 
-  it('/TR points at the WRAPPER, not directly at node+script (TESTING F2)', () => {
+  it('/TR points at the WRAPPER, not directly at node+script (TESTING F2), UNQUOTED (TESTING N3)', () => {
+    // execFileSync passes each argv element as its own token via CreateProcess -- no shell strips
+    // wrapping quote characters, so embedding literal `"..."` would hand schtasks a path string
+    // containing quote characters, not the real file. Matches setup-liveness-watcher-task.mjs /
+    // setup-reboot-respawn-task.mjs / setup-eva-watcher-task.mjs / setup-console-creation-watcher-task.mjs,
+    // which all pass wrapperPath bare for the same reason.
     const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH });
     const trArg = args[args.indexOf('/TR') + 1];
-    expect(trArg).toBe(`"${WRAPPER_PATH}"`);
+    expect(trArg).toBe(WRAPPER_PATH);
   });
 
   it('throws without wrapperPath', () => {

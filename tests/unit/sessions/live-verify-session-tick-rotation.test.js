@@ -104,9 +104,16 @@ describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
     expect(parkedPollCount).toBe(2); // proves both a before- and after-sample were actually taken
   });
 
-  it('parkedWorkerUnaffected=false when the parked worker itself released mid-window (TESTING F9)', async () => {
+  it('parkedWorkerUnaffected=false when the parked worker itself released mid-window, EVEN THOUGH its heartbeat kept advancing (TESTING F9, tightened per N1)', async () => {
+    // TESTING evidence 534ab65e re-verification, finding N1: the original version of this test
+    // gave the parked worker a STATIC heartbeat on both samples, so heartbeatAdvanced was already
+    // false and masked whether the `neverReleased` conjunct was doing anything at all -- deleting
+    // `neverReleased &&` from observeRotation left this test green. Advancing the parked heartbeat
+    // here isolates the released-status path specifically: a worker that stays busy (heartbeat
+    // still moving) but flips to released mid-window must still fail.
     const { clockFn, sleepFn } = fakeClock();
     let pollCount = 0;
+    let parkedPollCount = 0;
     const sb = {
       from: () => ({
         select() { return this; },
@@ -117,8 +124,8 @@ describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
             return { data: pollCount >= 2 ? { status: 'released', heartbeat_at: 'frozen-hb' } : { status: 'active', heartbeat_at: 'live-hb' }, error: null };
           }
           if (this._id === 'parked') {
-            // released itself -- must fail regardless of its own heartbeat behavior.
-            return { data: { status: 'released', heartbeat_at: 'parked-hb' }, error: null };
+            parkedPollCount += 1;
+            return { data: { status: 'released', heartbeat_at: `parked-hb-${parkedPollCount}` }, error: null };
           }
           return { data: null, error: null };
         },
@@ -130,6 +137,7 @@ describe('observeRotation (hermetic, virtual clock, mocked DB)', () => {
     });
     expect(result.parkedWorkerUnaffected).toBe(false);
     expect(result.overall).toBe('PARTIAL'); // release+freeze were fine; parked-worker leak sinks overall
+    expect(parkedPollCount).toBe(2); // heartbeat genuinely advanced -- isolates the status conjunct
   });
 
   it('parkedWorkerUnaffected=false when the parked worker heartbeat did NOT advance (went silent too)', async () => {
