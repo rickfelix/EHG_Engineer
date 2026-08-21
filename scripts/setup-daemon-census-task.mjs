@@ -170,6 +170,28 @@ async function main() {
     return;
   }
 
+  // ADVERSARIAL REVIEW (PR #7369, INFO): the header above documents that registering for real from
+  // an ephemeral EXEC worktree embeds a REPO_ROOT path that stops existing post-merge, but until
+  // now that was advisory-only -- existsSync(runner) PASSES from a worktree because the runner
+  // genuinely exists THERE, so nothing machine-checkable actually enforced the warning. Enforced
+  // here instead of left as prose the next reader has to notice and honor manually.
+  if (REPO_ROOT.includes('.worktrees')) {
+    console.error(`${TAG} REFUSING real registration from an ephemeral worktree checkout: ${REPO_ROOT}`);
+    console.error(`${TAG} This would embed a path that stops existing post-merge (see file header). Re-run from the main checkout.`);
+    process.exit(4);
+  }
+
+  // ADVERSARIAL REVIEW (PR #7369, WARNING): scheduling with --cleanup converts assert-daemon-
+  // census.mjs's normally human-reviewed release step (its own CLI prints the leaked list, THEN
+  // asks the operator to re-run with --cleanup) into an unattended recurring release loop. Not
+  // refused -- an operator may deliberately want this after building confidence in report-only mode
+  // -- but the arming must be loud, since the .cmd it lives in is gitignored and otherwise invisible
+  // after the fact.
+  if (args.cleanup) {
+    console.warn(`${TAG} WARNING: --cleanup is armed. Every ${args.intervalMinutes}m this task will call`);
+    console.warn(`${TAG} 'status: released' on leaked sessions with NO operator review of that run's list.`);
+  }
+
   mkdirSync(path.dirname(wrapperPath), { recursive: true });
   writeFileSync(wrapperPath, wrapperContent, 'utf8');
   execFileSync('schtasks', schtasksArgs, { encoding: 'utf8' });
