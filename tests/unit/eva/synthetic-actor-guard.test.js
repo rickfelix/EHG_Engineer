@@ -69,10 +69,21 @@ function makeThrowingSupabase(errorMessage) {
 const FRESH_COMPLETED_AT = new Date(Date.now() - 60 * 1000).toISOString(); // 1 minute ago
 const STALE_COMPLETED_AT = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days ago
 
-function githubFetchSequence({ runs = [{ id: 1, head_sha: 'abc123' }], jobs = [] } = {}) {
+// SEC-64: tipSha defaults to the default run's own head_sha ('abc123'), so
+// every existing fixture that expects satisfied:true keeps passing without
+// per-test changes -- "main is at the same sha the verified run ran against"
+// is the ordinary case. Pass a DIFFERENT tipSha to exercise the mismatch.
+function githubFetchSequence({ runs = [{ id: 1, head_sha: 'abc123' }], jobs = [], tipSha = 'abc123' } = {}) {
   return vi.fn(async (url) => {
     if (url.includes('/actions/workflows/')) {
       return { ok: true, json: async () => ({ workflow_runs: runs }) };
+    }
+    if (url.includes('/git/refs/heads/main')) {
+      // null (not undefined -- a destructured default only applies to
+      // undefined, so an explicit `tipSha: undefined` in a caller would
+      // silently fall through to the 'abc123' default instead of testing
+      // the malformed-body path) means "simulate a body with no object.sha".
+      return { ok: true, json: async () => (tipSha === null ? {} : { object: { sha: tipSha } }) };
     }
     if (url.includes('/jobs')) {
       return { ok: true, json: async () => ({ jobs }) };
@@ -311,6 +322,68 @@ describe('checkSyntheticActorFencing — staleness window (EXEC-TO-PLAN SECURITY
     expect(result.satisfied).toBe(false);
     expect(result.reason).not.toMatch(/staleness window/); // reason is the conclusion, not the age
     expect(result.reason).toMatch(/conclusion=failure/);
+  });
+});
+
+describe('checkSyntheticActorFencing — head_sha vs current tip of main (SEC-64)', () => {
+  const meta = { uat_probe_required: true, synthetic_actor: VALID_SA };
+
+  it('satisfied:false when main has advanced past the verified run\'s head_sha', async () => {
+    const fetchImpl = githubFetchSequence({
+      runs: [{ id: 1, head_sha: 'old-sha-111' }],
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
+      tipSha: 'new-sha-222',
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-tip-1', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/main has since advanced to new-sha-222/);
+    expect(result.reason).toMatch(/dispatch deploy\.yml/);
+    expect(result.details.stepConclusion).toBe('success'); // the step itself DID pass -- this is a distinct reason
+  });
+
+  it('satisfied:true when main is still at the verified run\'s head_sha', async () => {
+    const fetchImpl = githubFetchSequence({
+      runs: [{ id: 1, head_sha: 'same-sha' }],
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
+      tipSha: 'same-sha',
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-tip-2', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(true);
+  });
+
+  it('fails CLOSED when the refs/heads/main lookup returns a malformed body (no object.sha)', async () => {
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }],
+      tipSha: null,
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-tip-3', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/could not determine main's current tip sha/);
+    expect(result.reason).toMatch(/fail-closed/);
+  });
+
+  it('fails CLOSED (no cache) when the refs/heads/main lookup itself errors', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.includes('/actions/workflows/')) return { ok: true, json: async () => ({ workflow_runs: [{ id: 1, head_sha: 'abc123' }] }) };
+      if (url.includes('/jobs')) return { ok: true, json: async () => ({ jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success', completed_at: FRESH_COMPLETED_AT }] }] }) };
+      if (url.includes('/git/refs/heads/main')) return { ok: false, status: 502 };
+      throw new Error(`unexpected fetch URL: ${url}`);
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-tip-4', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/fail-closed/);
+  });
+
+  it('a failing step is not-verified for its own conclusion, never reaching the tip-of-main check', async () => {
+    const fetchImpl = githubFetchSequence({
+      runs: [{ id: 1, head_sha: 'old-sha-111' }],
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'failure', completed_at: FRESH_COMPLETED_AT }] }],
+      tipSha: 'new-sha-222', // would fail the tip check too, but conclusion is checked first
+    });
+    const result = await checkSyntheticActorFencing(makeSupabase(meta), 'v-tip-5', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/conclusion=failure/);
+    expect(result.reason).not.toMatch(/main has since advanced/);
   });
 });
 
