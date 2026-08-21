@@ -30,6 +30,13 @@ const { resolveWorkerTierRank, ladderTopRank, stampRankForWorker } = require('..
 // below for why that is deliberately NOT stamped on every session.
 const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
 
+// QF-20260803-932: filterOutCoordinators() only excluded metadata.is_coordinator=true, so a
+// non_fleet / role='adam' / role='adam_retired' / role='solomon' session (propose-only, CONST-002)
+// still received a worker callsign and was counted/solicited as a fleet seat. The repo already
+// holds one correct not-a-worker predicate (worker-checkin's acquisition-time guard, the
+// claim-validity gate) -- reuse it here instead of hand-rolling a narrower one beside it.
+const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
+
 // QF-20260627-108 (FR-1): the chairman effort-encoded callsign scheme. A worker's callsign is
 // derived from its metadata.tier_rank (the source-of-truth), NOT flat first-available NATO order —
 // otherwise the 5-min cron re-clobbers the effort names every pass. Shared by the cron AND
@@ -132,8 +139,13 @@ function nextAvailable(pool, usedSet) {
 // QF-20260508-648: writer/consumer asymmetry — lib/coordinator/resolve.cjs
 // setActiveCoordinator() writes metadata.is_coordinator=true; this consumer
 // must filter it out so coordinator sessions aren't assigned worker callsigns.
+//
+// QF-20260803-932: widened to the shared isBuildForbiddenSession() predicate (a strict
+// superset of the original is_coordinator-only check) so non_fleet / role='adam' /
+// role='adam_retired' / role='solomon' sessions are excluded too — same reasoning as the
+// coordinator exclusion above, applied to every propose-only role, not just one of them.
 function filterOutCoordinators(rows) {
-  return (rows || []).filter(w => w && w.metadata?.is_coordinator !== true);
+  return (rows || []).filter(w => w && !isBuildForbiddenSession(w.metadata));
 }
 
 // QF-20260528-581 (Bug B): filter out test/ghost sessions that consume the clean
@@ -614,7 +626,12 @@ async function main() {
     .neq('status', 'terminated')
     .gte('heartbeat_at', reserveWindow);
   const activeSessionIds = new Set(uniqueWorkers.map(w => w.session_id));
-  reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, activeSessionIds);
+  // QF-20260803-932: mirror the same exclusion here — a build-forbidden session (coordinator /
+  // non_fleet / adam / adam_retired / solomon) must never get its stray callsign RESERVED either,
+  // or a leftover mis-stamped identity on a non-worker row parks a NATO letter unusable by real
+  // workers for up to the 60-min window above.
+  const recentWorkerSessions = (recentSessions || []).filter(s => s && !isBuildForbiddenSession(s.metadata));
+  reserveParkedIdentities(usedCallsigns, usedColors, recentWorkerSessions, activeSessionIds);
 
   // nextAvailable is now module-scoped (hoisted above) and shared with worker-checkin.cjs.
 
