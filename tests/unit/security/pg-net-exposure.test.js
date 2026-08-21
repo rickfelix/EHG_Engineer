@@ -200,6 +200,31 @@ describe('probePgNetExposure — three distinguishable states, two parallel axes
     }
   });
 
+  it('a single SCHEMA row with missing/mistyped keys is probe_ran:false, never a fabricated clean schema_usage (adversarial review finding)', async () => {
+    // Distinct from the row-COUNT malformation above: here exactly one row comes back (so
+    // the array/length guard is satisfied), but its content is uninterpretable — a future
+    // column-alias typo or driver change, not a query failure. Must not silently coerce
+    // missing/undefined keys to `false` and report a confident "not exposed".
+    for (const badRow of [
+      {},
+      { anon_usage: true },
+      { authenticated_usage: false },
+      { anon_usage: 'true', authenticated_usage: 'false' },
+      { anon_usage: 1, authenticated_usage: 0 },
+      { anon_usage: null, authenticated_usage: null },
+    ]) {
+      const r = await probePgNetExposure({
+        connect: async () => sequencedClient([{ rows: [] }, { rows: [] }, { rows: [badRow] }]),
+      });
+      expect(r.probe_ran).toBe(false);
+      expect(r.functions_at_risk).toBeNull();
+      expect(r.relations_at_risk).toBeNull();
+      expect(r.schema_usage).toBeNull();
+      expect(r.reason).toMatch(/uninterpretable|boolean/i);
+      expect(r.reason).toMatch(/schema/i);
+    }
+  });
+
   it('client.query() throwing (distinct from connect() rejecting) is probe_ran:false with BOTH counts null, and still tears down', async () => {
     let ended = false;
     const r = await probePgNetExposure({
