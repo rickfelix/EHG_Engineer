@@ -111,6 +111,28 @@ stopped, with a named closer-of-record (not the proposer).
   `shipped_clean`). **Its gap is not logic — it's that nothing schedules it, and there is no
   `closed_by`/`closed_at` column to record the closer-of-record.** This is Child B's scope.
 
+  **Two-leg outcome model (SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001, 2026-08-19):** a row's leg
+  is determined by whether `outcome_sd_key` is populated. **SD-keyed leg** (unchanged):
+  `reconcileBatch` in `scripts/solomon-ledger-reconcile.cjs` resolves `outcome` from
+  `strategic_directives_v2.status`, exactly as Child B's original design describes.
+  **Correlation-keyed leg** (new): rows with no `outcome_sd_key` are a conversational Solomon
+  proposal never tied to a downstream SD. Live measurement (2026-08-19, this SD): of ~1500 such
+  rows, only ~3 were `decision='rejected'` with no traceable artifact — the addressable
+  population for this leg's resolver, `resolveNotApplicableOutcomes`, which sets
+  `outcome='not_applicable'` (never `shipped_clean`/`reverted`/`caused_rework`, since nothing
+  was built) via `lib/ledger/ref-shape.js`'s `classifyRef` — same closer-of-record discipline
+  (`closed_by`/`closed_at`) as the SD-keyed path, preserving mechanic #1 below for this leg too.
+  A NEW disposition classifier over Adam's free-text replies was explicitly NOT built: EXEC-phase
+  code reading found decision resolution and human-disposition surfacing already exist end-to-end
+  (`scripts/coordinator-ack-adam.cjs` + `scripts/solomon-ledger-pending-resurface.cjs`), and real
+  reply payloads are dense multi-topic prose, not a structured accept/reject signal — an automatic
+  classifier would itself have been a self-report risk (mechanic #2 below). The dashboard rollup
+  (`computeSolomonLedgerRollup`/`computeSolomonLedgerByLegAndKind`,
+  `scripts/fleet-dashboard.cjs`) now reads both legs and excludes `accepted+outcome=unknown` rows
+  from the accuracy denominator (visibly disclosed via `unresolvedAcceptedCount`) — outcome
+  resolution can legitimately lag decision resolution, and treating "not yet resolved" as a miss
+  would be exactly the kind of process-proxy distortion this spine exists to prevent.
+
 ### L3 — VENTURE (usage telemetry / cash-burn / customer events)
 
 **Definition:** a venture's outcome is grounded in real usage, revenue, and customer signal —
