@@ -47,7 +47,7 @@ on `sd_type` (`scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite
 
 The walker authenticates via pre-provisioned credentials only. It never
 registers a new account — this is a hard constraint, not a preference, and
-the code is structured to fail loudly rather than fall back to registration.
+the code fails loudly rather than falling back to registration.
 
 **Two identities, not one.** A venture that has been live for a while has
 users whose accounts predate some prior deploy (an "existing" identity); a
@@ -71,8 +71,8 @@ VENTURE_UAT_TEST_ACCOUNT_ALTIFYAI='{"email":"...","password":"..."}'
 ```
 
 `lib/apa/venture-step-executors.js`'s `getTestCredential(ventureKey, personaType)`
-reads the typed var first, falling back to the un-suffixed form. Neither slot
-is populated for any venture as of this writing — the mechanism exists;
+reads the typed var first, falling back to the un-suffixed form. Nobody has
+populated either slot for any venture as of this writing — the mechanism exists;
 provisioning is separate follow-up work.
 
 **Fail-closed by design.** The walker refuses to submit credentials unless it
