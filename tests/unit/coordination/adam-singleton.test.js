@@ -207,6 +207,9 @@ describe('isStatusFreshEligible (pure status-allowlist helper, FR-1)', () => {
   it('undefined status defers to caller (fresh-eligible) for backward compatibility', () => {
     expect(adam.isStatusFreshEligible(undefined)).toBe(true);
   });
+  it('null status ALSO defers (fresh-eligible) -- PostgREST\'s real wire value for a NULL column (SECURITY evidence 46d5f420, SEC-01)', () => {
+    expect(adam.isStatusFreshEligible(null)).toBe(true);
+  });
   it('an unknown/future status value is NOT fresh-eligible (fail-closed allowlist)', () => {
     expect(adam.isStatusFreshEligible('some_future_status')).toBe(false);
   });
