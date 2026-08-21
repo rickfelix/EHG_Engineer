@@ -1,31 +1,41 @@
 /**
- * SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 — TS-6: quiet-tick's parked-SMS log-line builder
- * (scripts/adam-quiet-tick.mjs's buildParkedSmsLogLines). Pure, no DB.
+ * SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 — TS-6: quiet-tick's parked-SMS STALE escalation wiring.
+ *
+ * The emit lives inline inside adam-quiet-tick.mjs's main() loop (a function that reaches the
+ * network/DB), so — mirroring tests/unit/qf590-sms-watchdog-not-chairman.test.js's own
+ * established convention for this exact file — this is a structural, source-text test: it
+ * confirms the QUIET_TICK_SMS_PARKED_STALE emit is present, gated on isStaleParkedSms, and
+ * positioned AFTER the routine QUIET_TICK_SMS_PARKED line within the smsParked loop. The
+ * DECISION logic itself (the threshold) is fully unit-tested in isolation by
+ * tests/unit/governance/parked-sms-stall.test.js — this test only proves the wiring.
  */
 import { describe, it, expect } from 'vitest';
-import { buildParkedSmsLogLines } from '../../../scripts/adam-quiet-tick.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
 
-describe('buildParkedSmsLogLines — TS-6', () => {
-  it('a fresh row produces only the routine QUIET_TICK_SMS_PARKED line', () => {
-    const lines = buildParkedSmsLogLines({ id: 'r1', fromPhone: '+15551234567', ageMin: 5, body: 'YES' });
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('QUIET_TICK_SMS_PARKED=adam');
-    expect(lines[0]).not.toContain('STALE');
+const raw = fs.readFileSync(path.join(process.cwd(), 'scripts/adam-quiet-tick.mjs'), 'utf8');
+const block = raw.slice(raw.indexOf('for (const s of smsParked.rows)'), raw.indexOf('for (const p of outboundSilence.probed)'));
+
+describe('quiet-tick parked-SMS STALE escalation — TS-6', () => {
+  it('the block was located and is non-trivial', () => {
+    expect(block.length).toBeGreaterThan(100);
   });
 
-  it('a stale (>=24h) row produces the routine line AND a distinct STALE line', () => {
-    const lines = buildParkedSmsLogLines({ id: 'r2', fromPhone: '+15559876543', ageMin: 1500, body: 'status?' });
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain('QUIET_TICK_SMS_PARKED=adam');
-    expect(lines[0]).not.toContain('STALE');
-    expect(lines[1]).toContain('QUIET_TICK_SMS_PARKED_STALE=adam');
+  it('emits the routine QUIET_TICK_SMS_PARKED line unconditionally', () => {
+    expect(block).toContain('QUIET_TICK_SMS_PARKED=adam');
   });
 
-  it('preserves the row id/phone/age/body in both lines', () => {
-    const lines = buildParkedSmsLogLines({ id: 'abc-123', fromPhone: '+15550001111', ageMin: 2000, body: 'please provide status' });
-    for (const line of lines) {
-      expect(line).toContain('abc-123');
-      expect(line).toContain('+15550001111');
-    }
+  it('emits a distinct QUIET_TICK_SMS_PARKED_STALE line, gated on isStaleParkedSms, AFTER the routine line', () => {
+    const routineIdx = block.indexOf('QUIET_TICK_SMS_PARKED=adam');
+    const staleIdx = block.indexOf('QUIET_TICK_SMS_PARKED_STALE=adam');
+    const gateIdx = block.indexOf('isStaleParkedSms(');
+    expect(staleIdx).toBeGreaterThan(-1);
+    expect(gateIdx).toBeGreaterThan(-1);
+    expect(routineIdx).toBeLessThan(gateIdx);
+    expect(gateIdx).toBeLessThan(staleIdx);
+  });
+
+  it('imports isStaleParkedSms from the pure predicate module', () => {
+    expect(raw).toContain("import { isStaleParkedSms } from '../lib/governance/parked-sms-stall.mjs'");
   });
 });

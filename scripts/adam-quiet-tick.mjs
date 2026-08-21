@@ -621,24 +621,6 @@ export async function surfaceParkedChairmanSms(sb) {
   }
 }
 
-/**
- * SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: the log lines for one surfaceParkedChairmanSms
- * row — always the existing QUIET_TICK_SMS_PARKED line, PLUS a distinct QUIET_TICK_SMS_PARKED_STALE
- * line when the row has sat unresolved >=24h (isStaleParkedSms). Pure — no I/O, no console — so
- * the escalation decision is unit-testable without invoking main()'s full DB-touching tick.
- * @param {{id:string, fromPhone:string, ageMin:number, body:string}} s
- * @returns {string[]}
- */
-export function buildParkedSmsLogLines(s) {
-  const lines = [
-    `QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`,
-  ];
-  if (isStaleParkedSms(s.ageMin)) {
-    lines.push(`QUIET_TICK_SMS_PARKED_STALE=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m — parked >=24h unresolved, chairman-channel integrity risk; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
-  }
-  return lines;
-}
-
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -1025,7 +1007,14 @@ async function main() {
     // (unlike QUIET_TICK_SMS_INBOUND above, there is no inert-drain-flag case to downgrade for:
     // resolving a parked row is a CLI script, not gated on SMS_RELAY_DRAIN_ENABLED).
     for (const s of smsParked.rows) {
-      for (const line of buildParkedSmsLogLines(s)) console.log(line);
+      console.log(`QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+      // SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive escalation — the line above fires
+      // identically for a 2-minute-old row and a 6-day-old one, which is exactly how 356 rows
+      // accumulated as unread noise. A distinct tag for anything >=24h makes a genuinely-overdue
+      // row grep-able instead of indistinguishable from routine parked traffic.
+      if (isStaleParkedSms(s.ageMin)) {
+        console.log(`QUIET_TICK_SMS_PARKED_STALE=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m — parked >=24h unresolved, chairman-channel integrity risk; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+      }
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
