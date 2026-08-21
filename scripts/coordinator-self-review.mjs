@@ -12,6 +12,11 @@ import { resolve } from 'path';
 import { createRequire } from 'module';
 // SD-LEO-INFRA-COORDINATOR-DISPATCH-TARGET-001: validated dispatch guard.
 const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('../lib/coordinator/dispatch.cjs');
+// QF-20260729-675: canonical non-fleet predicate (lib/claim/build-forbidden-session.cjs),
+// already the single source of truth for non_fleet/role=adam/is_coordinator sessions
+// elsewhere in the fleet (dispatch.cjs, assign-fleet-identities.cjs, claim-validity-gate.js).
+// Reused here instead of the inline role!=='adam' re-derivation that only ever excluded Adam.
+const { isBuildForbiddenSession } = createRequire(import.meta.url)('../lib/claim/build-forbidden-session.cjs');
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: single-writer mutation guard.
 import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
 // SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-2: graded coordinator self-score (shared role-agnostic core).
@@ -54,6 +59,14 @@ const ADAM_RE = /ADAM-COORD-FEEDBACK|ADAM-REVIEW/i;
 // stays in `workers`. When ON, role=adam sessions are pulled OUT of the
 // worker-framed review into their own bidirectional coordinator<->Adam lane so they
 // are not mis-framed with a worker prompt. Pure + exported for unit testing.
+//
+// QF-20260729-675: `workers` now excludes every build-forbidden (non_fleet/role=adam/
+// is_coordinator) session via the canonical predicate, not just role==='adam'. A prior
+// inline role!=='adam' negation left OTHER non-fleet roles (e.g. Solomon) misclassified
+// as workers and solicited with a worker-framed prompt that doesn't describe their lane.
+// `adamParticipants` is unchanged (still role==='adam' specifically) -- a non-Adam
+// non-fleet session (Solomon, or any future role) is simply not solicited by this
+// worker/Adam-scoped review, matching the QF's own explicit scope (no third bucket).
 export function partitionParticipants(sess, me, adamReviewOn) {
   const active = (sess || []).filter(r => !(r.metadata || {}).is_coordinator && r.session_id !== me);
   const uniq = (rows) => [...new Set(rows.map(r => r.session_id))];
@@ -61,7 +74,7 @@ export function partitionParticipants(sess, me, adamReviewOn) {
     return { workers: uniq(active), adamParticipants: [] };
   }
   return {
-    workers: uniq(active.filter(r => (r.metadata || {}).role !== 'adam')),
+    workers: uniq(active.filter(r => !isBuildForbiddenSession(r.metadata))),
     adamParticipants: uniq(active.filter(r => (r.metadata || {}).role === 'adam')),
   };
 }
