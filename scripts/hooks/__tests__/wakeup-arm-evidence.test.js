@@ -540,48 +540,55 @@ describe('step B — awaiting_tick is stamped only on real arm evidence (AC3, co
   });
 });
 
-// The step-C gate reads feedback(category='wind_down_survey'). That channel had written ZERO rows
-// since it shipped, because source_type='wind_down_survey' violates feedback_source_type_check and
-// recordWindDown swallows the throw to stderr. A dead writer reads identically to an empty
-// population — the gate would have returned 0 forever and killed step C for the wrong reason.
-describe('wind-down mirror writes through a source_type the DB actually accepts', () => {
+// SD-LEO-INFRA-WIND-DOWN-SURVEY-001 (FR-1): the wind-down mirror no longer writes to the shared
+// feedback table at all — feedback(category='wind_down_survey') dominated 68.4% of feedback
+// inflow with zero dedicated readers (gauge-registry.js's own 'wind-down-survey' entry documents
+// "write-only sink, no dedicated reader"), so the mirror now targets a dedicated
+// worker_wind_down_events table instead of a 4th per-consumer exclusion list on the shared table.
+// These tests replace the OLD source_type/category/status/resolution_notes source-pins (which
+// only made sense for a feedback-table writer) with source-pins for the NEW table-identity and
+// idempotency contract — deliberately rewritten, not deleted, per the same "a dead writer reads
+// identically to an empty population" concern the OLD block existed to catch: an emitter that
+// silently stops firing must be distinguishable from one that never had a population to begin
+// with.
+describe('wind-down mirror writes to the dedicated worker_wind_down_events table', () => {
   const hookSrc = fs.readFileSync(HOOK_PATH, 'utf8');
-  // Mirrors CHECK feedback_source_type_check (database/schema-reference-snapshot.json:1505).
-  const ALLOWED_SOURCE_TYPES = [
-    'manual_feedback', 'auto_capture', 'uat_failure', 'error_capture', 'uncaught_exception',
-    'unhandled_rejection', 'manual_capture', 'todoist_intake', 'youtube_intake',
-    'claude_code_intake', 'telegram', 'user_feedback',
-  ];
 
-  it('every source_type this hook emits is admitted by the CHECK constraint', () => {
-    const emitted = [...hookSrc.matchAll(/source_type:\s*'([^']+)'/g)].map((m) => m[1]);
-    expect(emitted.length).toBeGreaterThan(0);
-    for (const st of emitted) expect(ALLOWED_SOURCE_TYPES).toContain(st);
+  it('recordWindDown targets worker_wind_down_events, not the shared feedback table', () => {
+    expect(hookSrc).toMatch(/\.from\(\s*'worker_wind_down_events'\s*\)/);
   });
 
-  // The category is the discriminator the gauge registry reads; it was never the blocker and
-  // must not drift while fixing the source_type.
-  it('still files under category wind_down_survey (what the gate and gauge query)', () => {
-    expect(hookSrc).toMatch(/category:\s*'wind_down_survey'/);
+  it('the insert carries session_id, reason, had_claim, and dedup_key (the fields a reader would key on)', () => {
+    const block = hookSrc.match(/\.from\(\s*'worker_wind_down_events'\s*\)[\s\S]{0,400}/);
+    expect(block).not.toBeNull();
+    expect(block[0]).toMatch(/session_id:\s*sessionId/);
+    expect(block[0]).toMatch(/reason(:|,)/);
+    expect(block[0]).toMatch(/had_claim:/);
+    expect(block[0]).toMatch(/dedup_key:/);
   });
 
-  // QF-20260803-503: these rows must self-resolve at write time (never land status='new' in
-  // the human triage lane) without losing per-row fidelity via the collapsing machine-lane RPC.
-  it('files wind_down_survey rows pre-resolved, satisfying chk_feedback_terminal_resolution', () => {
-    expect(hookSrc).toMatch(/status:\s*'resolved'/);
-    // chk_feedback_terminal_resolution requires a non-empty resolution_notes (or a resolution
-    // FK) whenever status='resolved' — a bare status flip with no notes violates the CHECK.
-    const notesMatch = hookSrc.match(/resolution_notes:\s*'([^']+)'/);
-    expect(notesMatch).not.toBeNull();
-    expect(notesMatch[1].trim().length).toBeGreaterThan(0);
+  // Mirrors the OLD emitFeedback dedup_key's exact idempotency contract ("one row per session
+  // per minute-bucket per reason") — now enforced by a DB-side UNIQUE constraint on a PLAIN
+  // (not generated) dedup_key column computed app-side (see the migration: to_char()/date_trunc()
+  // on a timestamptz are STABLE, not IMMUTABLE, so Postgres rejects them in a GENERATED
+  // expression — caught live by scripts/probe-wind-down-events-migration.mjs), so a 23505
+  // collision on a double-fire is EXPECTED and must be swallowed as a non-error, not surfaced.
+  it('treats a dedup_key collision (23505) as a benign idempotent no-op, not a logged failure', () => {
+    const block = hookSrc.match(/\.from\(\s*'worker_wind_down_events'\s*\)[\s\S]{0,900}/);
+    expect(block).not.toBeNull();
+    expect(block[0]).toMatch(/23505/);
   });
 
-  // Never re-add this category to the collapsing aggregate-UPSERT path — that's the exact
-  // change feedback-audience.js's own MACHINE_TELEMETRY_CATEGORIES comment documents as tried
-  // and reverted (it collapses every same-day row to ONE, destroying per-row metadata.reason).
-  it('is never routed through the machine-telemetry aggregate-UPSERT category set', async () => {
+  it('is never re-routed through the machine-telemetry aggregate-UPSERT category set (feedback-audience.js)', async () => {
     const { MACHINE_TELEMETRY_CATEGORIES } = await import('../../../lib/governance/feedback-audience.js');
     expect(MACHINE_TELEMETRY_CATEGORIES).not.toContain('wind_down_survey');
+  });
+
+  it('no longer imports or calls the feedback-table emitFeedback writer', () => {
+    // Regex requires a call-shape (an opening paren) or an import specifier so a plain
+    // prose mention of the old mechanism's name in a comment (explaining what changed and
+    // why) does not itself trip this guard — only a live import or invocation should.
+    expect(hookSrc).not.toMatch(/emitFeedback\s*\(|\{\s*emitFeedback\s*\}/);
   });
 });
 

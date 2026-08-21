@@ -294,11 +294,19 @@ function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveCla
 }
 
 /**
- * SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): record WHY this worker wound down.
+ * SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a), SD-LEO-INFRA-WIND-DOWN-SURVEY-001 (c): record WHY
+ * this worker wound down.
  * (a) merge claude_sessions.metadata.wind_down = {reason, at, had_claim} (read-modify-merge,
  *     preserving sibling metadata keys), surfaced at re-engage by worker-checkin.
- * (c) mirror to the feedback table (category='wind_down_survey') via the canonical emitFeedback
- *     writer for fleet-wide stop-reason aggregation.
+ * (c) mirror to the dedicated worker_wind_down_events table for fleet-wide stop-reason
+ *     aggregation — NOT the shared feedback table (see SD-LEO-INFRA-WIND-DOWN-SURVEY-001: the
+ *     feedback(category='wind_down_survey') mirror dominated 68.4% of feedback inflow with zero
+ *     readers; this table exists so the data keeps its per-row fidelity while being structurally
+ *     excluded from any human-facing table, rather than needing a 4th per-consumer exclusion
+ *     list). KNOWN INTERIM GAP: worker_wind_down_events is a chairman-gated migration
+ *     (database/migrations/20260821_worker_wind_down_events.sql) — until the chairman applies
+ *     it, this insert fails (table does not exist) and is swallowed by the catch below exactly
+ *     like any other failure: fail-open, stderr-logged, no row lands anywhere in the interim.
  * Best-effort / fail-open — any failure is logged and never blocks the stop.
  */
 async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
@@ -316,46 +324,27 @@ async function recordWindDown(supabase, sessionId, { reason, hadClaim } = {}) {
   } catch (e) {
     process.stderr.write(`[stop-loop-wakeup-reminder] wind_down metadata (non-fatal): ${e.message}\n`);
   }
-  // (c) fleet-wide aggregation mirror — canonical feedback writer (ESM; dynamic-import from CJS).
+  // (c) fleet-wide aggregation mirror — dedicated table, not the shared feedback table.
+  // dedup_key preserves the OLD emitFeedback dedup_key's exact "one row per session per
+  // minute-bucket per reason — idempotent if the hook fires twice" contract; it is a plain
+  // UNIQUE-constrained column (NOT a GENERATED column — to_char()/date_trunc() on a timestamptz
+  // are STABLE, not IMMUTABLE, in Postgres, so a GENERATED expression using either is rejected;
+  // caught live by scripts/probe-wind-down-events-migration.mjs), so it is computed here exactly
+  // like the old dedup_key was.
+  const dedupKey = `${sessionId}::${reason}::${at.slice(0, 16)}`;
   try {
-    const { emitFeedback } = await import('../../lib/governance/emit-feedback.js');
-    await emitFeedback({
-      supabase,
-      title: `Worker wind-down (${reason})`,
-      description: `Worker session ${sessionId} wound down: reason=${reason}, had_claim=${!!hadClaim}.`,
-      category: 'wind_down_survey',
-      severity: 'low',
-      // 'wind_down_survey' is a valid CATEGORY but NOT a valid source_type: CHECK
-      // feedback_source_type_check admits only a fixed list, and machine telemetry uses
-      // 'auto_capture' (1000/1000 sampled rows). The old value threw on EVERY call, and the
-      // catch below swallowed it to stderr — so this mirror has written ZERO rows since it
-      // shipped, while reading as healthy. Measured 2026-08-02: 0 rows for the category, and a
-      // direct emitFeedback call reproduced the constraint violation; swapping this one value
-      // made the row land and the count go 0 -> 1.
-      //
-      // THIS IS LOAD-BEARING FOR THIS SD. Step A's 'second_stop_still_unarmed' — the substitute
-      // shipped INSTEAD of the debt marker, and the pre-registered gate for step C — writes
-      // through here. Left unfixed, that gate would have read 0 forever and killed step C for
-      // the wrong reason: not "the population is empty" but "the instrument was never plugged in".
-      source_type: 'auto_capture',
-      metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at },
-      // One row per session per minute-bucket per reason — idempotent if the hook fires twice.
-      dedup_key: `wind_down::${sessionId}::${reason}::${at.slice(0, 16)}`,
-      // QF-20260803-503: self-resolve at write time instead of landing status='new' in the
-      // human triage lane. FR-3's own acceptance is "the stop-reason distribution can be
-      // queried over time" — a category+metadata.reason aggregate query that is status-
-      // agnostic, so a terminal status costs that reader nothing. Deliberately NOT routed
-      // through MACHINE_TELEMETRY_CATEGORIES/record_telemetry_occurrence (that path collapses
-      // same-day rows to ONE per category, destroying the per-row metadata.reason breakdown —
-      // tried once for this exact category and reverted, see feedback-audience.js's
-      // MACHINE_TELEMETRY_CATEGORIES comment). This keeps the plain per-row insert (full
-      // fidelity, real dedup_key) and satisfies chk_feedback_terminal_resolution with a
-      // non-empty resolution_notes instead of requiring a later, separate disposition pass.
-      status: 'resolved',
-      resolution_notes: 'Auto-filed machine telemetry (wind_down_survey) — not a human action item; aggregated for fleet-wide stop-reason distribution analysis (SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 FR-3).',
-    });
+    const { error } = await supabase
+      .from('worker_wind_down_events')
+      .insert({ session_id: sessionId, reason, had_claim: !!hadClaim, created_at: at, dedup_key: dedupKey, metadata: { session_id: sessionId, reason, had_claim: !!hadClaim, at } })
+      .select('id')
+      .single();
+    // A dedup_key collision (23505) means the hook fired twice in the same minute for the same
+    // session+reason — an EXPECTED idempotent no-op, not a real failure. Anything else is logged.
+    if (error && error.code !== '23505') {
+      process.stderr.write(`[stop-loop-wakeup-reminder] wind_down event insert (non-fatal): ${error.message}\n`);
+    }
   } catch (e) {
-    process.stderr.write(`[stop-loop-wakeup-reminder] wind_down feedback mirror (non-fatal): ${e.message}\n`);
+    process.stderr.write(`[stop-loop-wakeup-reminder] wind_down event insert (non-fatal): ${e.message}\n`);
   }
 }
 
