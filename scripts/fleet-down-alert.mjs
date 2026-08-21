@@ -335,7 +335,13 @@ const FLEET_DEAD_MAN_EVENT_TYPE = 'fleet_dead_man_verdict';
  *
  * TS-11: wrapped so a system_events outage degrades to "no audit row for this tick", never to
  * "no page sent" — and fails OPEN on the transition question (treats an unreadable prior state
- * as a transition) rather than risk silently swallowing a real outage.
+ * as a transition) rather than risk silently swallowing a real outage. This applies uniformly to
+ * BOTH the read and the write below (adversarial-review finding, accepted trade-off, not a bug):
+ * an isolated insert failure on an already-known-dead tick can force one spurious re-page instead
+ * of the silent no-op the pre-hardening code produced. An occasional extra page during a
+ * persistent, already-alerted outage is a far cheaper failure mode than the silence this SD exists
+ * to close, so this function never tries to distinguish "read failed" from "write failed" for the
+ * purpose of softening the fail-open default.
  *
  * @returns {Promise<{transitioned:boolean}>}
  */
@@ -351,12 +357,17 @@ async function recordFleetDeadManVerdict(db, verdict) {
     const lastState = rows && rows[0] ? rows[0].payload?.state : 'alive'; // no prior row => assume alive
     const nextState = verdict.dead ? 'dead' : 'alive';
     const transitioned = nextState !== lastState;
-    await db.from('system_events').insert({
+    // TESTING sub-agent finding: supabase-js does not throw on a PostgREST-level rejection
+    // (constraint/RLS) -- it resolves {data:null, error:{...}}. The insert's own result must be
+    // checked explicitly, or a rejected write silently vanishes into this same try block without
+    // ever reaching the catch below.
+    const { error: insertErr } = await db.from('system_events').insert({
       event_type: FLEET_DEAD_MAN_EVENT_TYPE,
       actor_type: 'system',
       actor_role: 'fleet-down-alert',
       payload: { state: nextState, reason: verdict.reason, transitioned },
     });
+    if (insertErr) throw new Error(insertErr.message);
     return { transitioned };
   } catch (err) {
     console.error('[fleet-dead-man] verdict recording failed (non-fatal, alert logic unaffected):', err.message);
@@ -382,9 +393,15 @@ export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now =
   // is nearly always being housekept), silently defeating this predicate's entire purpose.
   const windowStartIso = new Date(now.getTime() - FLEET_DEAD_MAN_WINDOW_MIN * 60000).toISOString();
 
+  // TESTING sub-agent finding: DESC ordering on a nullable column is NULLS FIRST in Postgres --
+  // a NULL heartbeat_at row would sort ahead of every real timestamp and read as "no heartbeat
+  // ever", which is wrong (rows with other non-null activity exist). Currently inert (0 of
+  // 13k+ rows are null) but excluding nulls at the query makes it structurally impossible rather
+  // than relying on that fact staying true.
   const { data: hbRows, error: hbErr } = await db
     .from('claude_sessions')
     .select('heartbeat_at')
+    .not('heartbeat_at', 'is', null)
     .order('heartbeat_at', { ascending: false })
     .limit(1);
   if (hbErr) { console.error('[fleet-dead-man] heartbeat query failed:', hbErr.message); return; }

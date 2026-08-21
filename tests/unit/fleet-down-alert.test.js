@@ -2,6 +2,8 @@
 // Oscillation-robust (sustained window, not point-in-time), claimable-gated, and edge-trigger-deduped
 // so a long outage emails once rather than every 15-min run.
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 // SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001 (E1): checkDeadCoordinator's send branch now
 // resolves the chairman's zone via a dynamic import; the real resolver reaches a live
 // ChairmanPreferenceStore/Supabase client, which hangs in the vitest sandbox.
@@ -281,8 +283,10 @@ describe('checkFleetDeadMan (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1 integration)',
         if (table === 'claude_sessions') {
           return {
             select: (cols) => { calls.hbSelect = cols; return {
-              order: (col) => { calls.hbOrderCol = col; return {
-                limit: async () => ({ data: state.heartbeatAt ? [{ heartbeat_at: state.heartbeatAt }] : [], error: null }),
+              not: (col, op, val) => { calls.hbNotFilter = [col, op, val]; return {
+                order: (col2) => { calls.hbOrderCol = col2; return {
+                  limit: async () => ({ data: state.heartbeatAt ? [{ heartbeat_at: state.heartbeatAt }] : [], error: null }),
+                }; },
               }; },
             }; },
           };
@@ -300,6 +304,7 @@ describe('checkFleetDeadMan (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1 integration)',
           return {
             select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: events.slice(0, 1), error: null }) }) }) }),
             insert: async (row) => {
+              if (state.insertError) return { data: null, error: { message: state.insertError } };
               const full = { ...row, created_at: new Date().toISOString() };
               inserted.push(full); events.unshift(full);
               return { data: null, error: null };
@@ -335,6 +340,7 @@ describe('checkFleetDeadMan (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1 integration)',
     const db = makeDeadManDb({ heartbeatAt: minutesAgo(5), completions: 1 });
     await checkFleetDeadMan(db, false, vi.fn(), NOW);
     expect(db._calls.hbOrderCol).toBe('heartbeat_at');
+    expect(db._calls.hbNotFilter).toEqual(['heartbeat_at', 'is', null]);
     expect(db._calls.sdEq).toEqual(['status', 'completed']);
     expect(db._calls.sdGte[0]).toBe('completion_date');
   });
@@ -372,5 +378,56 @@ describe('checkFleetDeadMan (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1 integration)',
     await checkFleetDeadMan(db, false, vi.fn(), NOW);
     expect(db._inserted.length).toBe(2);
     expect(db._inserted.every((r) => r.event_type === 'fleet_dead_man_verdict')).toBe(true);
+  });
+
+  it('TESTING sub-agent finding: a PostgREST-level insert rejection (not a thrown exception) is caught and logged, never silently swallowed', async () => {
+    // supabase-js resolves {data:null, error:{...}} on a constraint/RLS rejection instead of
+    // throwing -- a naive `await db.from(...).insert(...)` with no destructuring would let that
+    // vanish silently. Assert the error surfaces via console.error.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const db = makeDeadManDb({ heartbeatAt: minutesAgo(150), completions: 0 });
+    db._state.insertError = 'permission denied for table system_events';
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetDeadMan(db, false, sendChairmanSMSFn, NOW);
+    expect(errSpy.mock.calls.join(' ')).toMatch(/verdict recording failed/);
+    expect(errSpy.mock.calls.join(' ')).toMatch(/permission denied/);
+    // Fails OPEN: the page still fires even though the audit write itself was rejected.
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
+  });
+});
+
+// TESTING sub-agent finding (SD-LEO-INFRA-FLEET-DEAD-MAN-001): main() isn't exported (it's a CLI
+// entry point, guarded by the import.meta.url check at the bottom of the file), so no test
+// previously verified the SHIPPED runAlertArms() call actually includes all three arms. Given
+// this SD exists precisely because an alert arm didn't reliably fire, a source-text pin closes
+// that gap without needing to invoke main() itself (which would require a live-shaped db/env).
+describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => {
+  it('runAlertArms([...]) in main() includes all three arms, dead-coordinator-pager first', () => {
+    const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
+    const match = src.match(/const \{ failed \} = await runAlertArms\(\[([\s\S]*?)\]\);/);
+    expect(match).not.toBeNull();
+    // Adversarial-review finding: a commented-out entry (the JS parser drops it from the real
+    // array, exactly the "arm silently doesn't fire" class this pin exists to catch) still reads
+    // as a live entry to a naive regex over raw text. Strip `//`-to-end-of-line before matching so
+    // a commented-out arm is correctly seen as ABSENT, not present.
+    const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
+    const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(armNames).toEqual(['dead-coordinator-pager', 'fleet-dead-man-pager', 'worker-fleet-email']);
+  });
+
+  it('is comment-blind-proof: a commented-out arm entry is correctly seen as absent, not present', () => {
+    // Regression pin for the adversarial-review finding above: without the comment-strip, this
+    // synthetic sample (mirroring what main() would look like if an arm were commented out rather
+    // than deleted) would still show all three names and falsely pass.
+    const sample = `const { failed } = await runAlertArms([
+    ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
+    // ['fleet-dead-man-pager', () => checkFleetDeadMan(db, DRY)],
+    ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
+  ]);`;
+    const match = sample.match(/const \{ failed \} = await runAlertArms\(\[([\s\S]*?)\]\);/);
+    const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
+    const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(armNames).toEqual(['dead-coordinator-pager', 'worker-fleet-email']);
   });
 });
