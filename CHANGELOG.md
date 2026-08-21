@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-21](#2026-08-21)
+  - [Security](#security)
 - [2026-08-19](#2026-08-19)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -127,6 +129,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-21
+
+### Security
+- **`anon`/`authenticated` hold PUBLIC EXECUTE on all 10 pg_net functions plus RLS-free access to its 3 internal relations — direct REVOKE proven infeasible, so a drift-detecting sentinel ships instead** - PR #7327 (SD-LEO-INFRA-REVOKE-DEFAULT-PUBLIC-001)
+  - **LEAD-phase infeasibility finding, not a scope choice**: `postgres` (the only DB role available to this project) has zero grant-authority over `supabase_admin`-owned `net.*` objects. `REVOKE` silently no-ops (a server WARNING, not an error — PUBLIC's grant survives); `ALTER DEFAULT PRIVILEGES` hard-errors `42501`; escalating the role itself (`GRANT supabase_admin TO postgres`) is blocked by a Supabase-specific reservation ("role memberships are reserved, only superusers can grant them"); a `postgres`-owned `SECURITY DEFINER` event-trigger workaround was built and tested and fails for the identical reason. Scope pivoted to a report-only detection sentinel mirroring the existing `lib/security/definer-exposure.js` precedent, so drift is at least visible even though this codebase cannot close it — recommended follow-up (DROP EXTENSION pg_net, zero live consumers measured, or a supabase_admin-executed REVOKE) is a chairman decision, not executed by this module.
+  - **What shipped**: `lib/security/pg-net-exposure.js` probes the WHOLE `net` schema by `relkind`/`prokind`, not a hardcoded object list, via `has_function_privilege`/`has_table_privilege`/`has_sequence_privilege` — never `proacl`/`relacl` text matching, since PUBLIC's grant renders as an empty-grantee aclitem (`=X/supabase_admin`), never the literal string `'PUBLIC'`. Wired into `scripts/sentinels/audit-security-linter.mjs` as a 6th check, explicitly excluded from the `findings` sum and `--strict` exit code (report-only, matching the existing `definerRlsBypassExposed` treatment of a different pre-existing, remediation-blocked exposure class). A 3-outcome contract (`probe_ran`/`reason`/counts) ensures a failure on any one axis renders as `probe_ran:false`, never a fabricated clean 0 on the others.
+  - **A SECURITY sub-agent finding (EXEC-TO-PLAN) added a third axis mid-SD**: object-level privileges alone are necessary but not sufficient — Postgres also requires schema-level USAGE on `net` itself, and that's exactly what Supabase's own `extensions.grant_pg_net_access()` event trigger re-grants on every `CREATE EXTENSION`/`ALTER EXTENSION pg_net UPDATE`. A probe that only checked object ACLs would keep reporting today's exposure forever even after a successful fix, if that fix revokes schema USAGE rather than touching every object individually — the single most likely remediation shape.
+  - **A deep-tier adversarial ship review found the new schema-USAGE axis validated row count but not row content**: a single row present with missing/mistyped `anon_usage`/`authenticated_usage` keys would have silently coerced via `=== true` to a confident "not exposed" instead of failing loudly — the one axis with exactly one row to get right, unlike the function/relation checks which dilute a bad row across many. Fixed by requiring both keys to be actual booleans before trusting them, with 6 new negative-path cases (missing keys, string/numeric/null coercion attempts).
+  - **Verification**: 28 tests (24 unit + 4 wiring, up from 27 pre-review), plus a committed live-run evidence artifact (`.artifacts/tst-sentinel-live.json`) confirming the schema-USAGE axis against the real database (`anon`/`authenticated` both `true` today). PLAN-TO-LEAD passed at 97%; LEAD-FINAL-APPROVAL precheck at 94% (the one sub-70% component, `FR_DELIVERY_VERIFICATION` at 20%, is a known warn-only traceability-convention gap — the user-story text for FR-2..FR-5 never cites the FR id literally, a documented pre-existing limitation of that gate, not a functional gap; all 5 FRs independently verified delivered by direct code/test inspection).
 
 ## 2026-08-19
 
