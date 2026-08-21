@@ -237,3 +237,40 @@ describe('QF-20260725-761 — comments must not change the tier', () => {
     T2('CREATE FUNCTION f() RETURNS void LANGUAGE sql SECURITY/*x*/DEFINER AS $$ SELECT 1 $$;');
   });
 });
+
+describe('SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 — real specimen pinned at TIER-1', () => {
+  // Adversarial-review finding, corrected 2026-08-21: commandVerbCount() counts SQL command
+  // verbs found ANYWHERE in a statement's text, including inside a COMMENT string literal.
+  // An earlier draft of this file's two COMMENT ON COLUMN bodies happened to contain the
+  // words "comment" and "do" ("...matched_decision_id's comment for the check...", "...do
+  // not rely on created_at..."), each pairing with the statement's own COMMENT verb and
+  // misclassifying the file TIER-2 -- contradicting its own TIER-1 header claim. Fixed by
+  // rewording (not by changing the classifier). This test pins the property that actually
+  // matters -- the file classifies TIER-1 -- so a future edit to this migration's comment
+  // text that reintroduces a landmine word (see migration-tier-tripping words below) fails
+  // loudly here at test time instead of silently at apply time.
+  it('classifies TIER-1, all three statements matched, no ambiguity reason', () => {
+    const sql = readFileSync('database/migrations/20260819_sms_inbound_log_considered_decision_id.sql', 'utf8');
+    const r = classifyMigration(sql);
+    expect(r.tier).toBe(1);
+    expect(r.reason).toBe('all_statements_provably_additive');
+    expect(r.matched).toEqual([
+      'add_column_nullable:sms_inbound_log.considered_decision_id',
+      'comment_on_column:sms_inbound_log.considered_decision_id',
+      'comment_on_column:sms_inbound_log.matched_decision_id',
+    ]);
+  });
+
+  // Measured (sms-decision-migration, 2026-08-21): commandVerbCount() is whole-word and
+  // word-boundary aware, so "created_at" survives even though it contains "create". These
+  // six are the ones that actually trip a false TIER-2 when paired with a statement's own
+  // COMMAND_VERBS token (e.g. this file's own COMMENT statements) -- "comment" is the one
+  // most likely to be reintroduced in good faith by someone editing prose about a comment.
+  it.each(['do', 'comment', 'grant', 'alter', 'create', 'truncate'])(
+    'documents that reintroducing the word "%s" inside a COMMENT literal would trip tier 2 (landmine, not a bug)',
+    (word) => {
+      const sql = `ALTER TABLE t ADD COLUMN a uuid;\nCOMMENT ON COLUMN t.a IS 'note about ${word} here';`;
+      expect(classifyMigration(sql).tier).toBe(2);
+    }
+  );
+});
