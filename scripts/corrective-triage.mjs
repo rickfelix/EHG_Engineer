@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { publishVisionEvent, VISION_EVENTS } from '../lib/eva/event-bus/vision-events.js';
 import { createSD } from './leo-create-sd.js';
+import { generateSDKey } from './modules/sd-key-generator.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -85,7 +86,20 @@ export async function promoteFinding(supabase, feedbackId, { promotedBy = 'corre
   const sourceSdId = row.metadata?.source_sd_id ?? null;
   const dims = row.metadata?.dimensions ?? [];
 
+  // QF-20260821-313: generateSDKey() before createSD() -- the original two-line idiom
+  // (still present, orphaned, at scripts/eva/corrective-sd-generator.mjs:19's unused
+  // import) was dropped during the a73e0438 refactor that moved SD creation into this
+  // function, leaving every promote crash on strategic_directives_v2.sd_key's NOT NULL
+  // constraint. 'MANUAL' is the SD_SOURCES key (not the value 'MAN') -- passing the value
+  // instead of the key silently falls back to MANUAL anyway for this one source, but the
+  // key is what every other source adapter (feedback.js, qf.js, roadmap-item.js) passes,
+  // so match that convention rather than rely on a MANUAL-specific coincidence. 'MANUAL'
+  // is chosen deliberately (not e.g. a new taxonomy entry) to keep producing the same
+  // SD-MAN-*-CORRECTIVE-* shape as the 178 pre-existing corrective SDs.
+  const sdKey = await generateSDKey({ source: 'MANUAL', type: payload.sdType, title: row.title });
+
   const newSD = await createSD({
+    sdKey,
     title: row.title,
     description: row.description,
     type: payload.sdType,
