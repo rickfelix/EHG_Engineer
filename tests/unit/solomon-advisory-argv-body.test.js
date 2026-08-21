@@ -36,9 +36,13 @@ describe('FR-1: flag values never leak into the message body', () => {
     }
   });
 
-  it('strips a boolean flag without eating the word after it', () => {
-    // --direct takes no value; consuming the next token would silently truncate the message.
-    expect(sendBodyFromArgv(['send', '--direct', 'the', 'body'])).toBe('the body');
+  it('strips every boolean flag without eating the word after it', () => {
+    // A bool flag takes no value; consuming the next token would silently truncate the message.
+    // Looped over BOOL_FLAGS (not hardcoded to --direct) so --informational (SD-ALTIFYAI-LEO-FIX-
+    // SOLOMON-ADVICE-LEDGER-001) gets the same coverage automatically — TS-2.
+    for (const flag of BOOL_FLAGS) {
+      expect(sendBodyFromArgv(['send', flag, 'the', 'body'])).toBe('the body');
+    }
   });
 
   it('strips a flag token wherever it sits — exclusion is SYMMETRIC with the parse', () => {
@@ -84,6 +88,14 @@ describe('FR-1: the exclusion list cannot silently drift from the parse', () => 
     // The other direction: a stale entry would strip a token that is really body text.
     const parsed = parsedFlags(SRC);
     expect(VALUE_FLAGS.filter((f) => !parsed.has(f))).toEqual([]);
+  });
+
+  // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001: the reverse check above was VALUE_FLAGS-only —
+  // a BOOL_FLAGS entry that stopped being parsed (e.g. renamed in the source) had no equivalent
+  // guard. Widened so both lists are checked in both directions, not just the forward union.
+  it('BOOL_FLAGS contains no flag the file does not actually parse', () => {
+    const parsed = parsedFlags(SRC);
+    expect(BOOL_FLAGS.filter((f) => !parsed.has(f))).toEqual([]);
   });
 
   it('the guard can actually SEE the parse — negative control', () => {

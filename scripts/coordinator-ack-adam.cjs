@@ -67,6 +67,43 @@ function isNoArtifactRef(ref) {
   return typeof ref === 'string' && (ref === NO_ARTIFACT_MARKER || ref.startsWith(`${NO_ARTIFACT_MARKER}:`));
 }
 
+/** decision_by must be an identity, never a notes field (SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-2). */
+const DECISION_BY_MAX_LEN = 40;
+
+/**
+ * Pure: truncate a decision_by value to its LEADING TOKEN ONLY, never reject. This is
+ * identity-prefix extraction, not lossless round-tripping: anything after the first whitespace
+ * character is discarded as notes, by design (decision_by is an identity field, not a notes
+ * field) -- including a hash that happens to be space-separated from its identity rather than
+ * joined with ':' or '-' (see the deliberately-pinned 'truncates a space-separated era-closure
+ * specimen' test). Every live identity OBSERVED so far (adam, adam:hash, adam-hash,
+ * solomon-hash-tail-walk) is itself a single whitespace-free token, so for every value this
+ * codebase's one production writer (recordLedgerDecision's sole call site, which passes
+ * `decidedBy: coordinatorSession = process.env.CLAUDE_SESSION_ID`, itself always whitespace-free)
+ * WILL produce once this SD ships, the leading token IS the whole identity and nothing is lost --
+ * but that is a property of the observed inputs (all pre-dating this SD, from a writer no longer
+ * in this codebase) plus a read of the current call site, NOT a guarantee the function itself
+ * enforces for arbitrary strings, and NOT yet an empirical observation of this specific writer's
+ * live output (0 of 1567 currently-observed leading tokens are UUID-shaped, since this write path
+ * has not shipped yet -- corrected per TESTING's EXEC-2 finding that an earlier revision of this
+ * comment overstated "UUID" as an already-observed live shape rather than a code-level guarantee).
+ * A single long token with no whitespace at all is simply capped at DECISION_BY_MAX_LEN, stored
+ * verbatim rather than silently mangled. Exported for tests.
+ *
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (F2, TESTING adversarial EXEC review): an earlier
+ * revision of this comment claimed "0 exceptions" / "losslessly" in a way that overstated this
+ * guarantee -- corrected here rather than adding a hex-guessing heuristic to catch space-separated
+ * hashes, which would risk misfiring on ordinary English words that are also valid hex (cab, dead,
+ * beef, face, cafe) and would reverse the already-tested, deliberate tradeoff above.
+ */
+function normalizeDecisionBy(value) {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const firstToken = s.split(/\s+/, 1)[0];
+  return firstToken.slice(0, DECISION_BY_MAX_LEN);
+}
+
 /**
  * Pure: resolve the outcome_ref to store for a decision, enforcing FR-3 mandatory linkage.
  * - accepted/partial: MUST supply a non-empty outcomeRef OR noArtifact — else { error }.
@@ -198,7 +235,7 @@ function resolveOutcomeRef(disposition, { outcomeRef = null, noArtifact = null }
  */
 async function inheritTailDecisions(supabase, { correlationId, disposition, decidedBy, decisionAt, deferTrigger, outcomeRef }) {
   try {
-    const patch = { decision: disposition, decision_by: decidedBy || null, decision_at: decisionAt };
+    const patch = { decision: disposition, decision_by: normalizeDecisionBy(decidedBy), decision_at: decisionAt };
     // A deferred primary's tails must carry the SAME defer_trigger, or the DB's
     // defer_trigger_required CHECK would reject the tail update once the migration is applied.
     if (disposition === 'deferred') patch.defer_trigger = deferTrigger;
@@ -243,7 +280,7 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
     const row = {
       correlation_id: correlationId,
       decision: disposition,
-      decision_by: decidedBy || null,
+      decision_by: normalizeDecisionBy(decidedBy),
       decision_at: decisionAt,
     };
     if (resolvedOutcomeRef) row.outcome_ref = resolvedOutcomeRef;
@@ -497,7 +534,8 @@ async function main() {
 }
 
 module.exports = {
-  isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS, deliverReplyOrExit };
+  isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS, deliverReplyOrExit,
+  normalizeDecisionBy, DECISION_BY_MAX_LEN }; // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-2
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

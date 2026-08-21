@@ -1,0 +1,85 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 92,
+  "summary": "TESTING adversarial pass #2 (independent, EXEC). 108/108 unit tests pass across 9 targeted files, run twice (before and after mutation experiments) with an identical git diff --stat, so no residue. All three prior findings are genuinely fixed and independently re-verified rather than rubber-stamped: F1's 42703 claim is confirmed by a live read-only DB probe AND mutation-tested (reverting to PGRST204-only fails exactly 2 tests, proving they are load-bearing); F3's two-probe design is confirmed live (head:true on a missing column returns {message:'', no code} while non-head returns a clean 42703); F2's unreachability analysis is confirmed by a full live census of all 1567 non-null decision_by values (the hazard shape occurs 0 times) plus a source trace showing the sole production call site passes a bare process.env.CLAUDE_SESSION_ID. The backfill main-guard is correct in BOTH directions: a bare import() does not execute main(), and a direct --dry-run invocation still does. CONDITIONAL on one new MEDIUM-HIGH finding: captureLedgerRow's write-path fallback (scripts/solomon-advisory.cjs:704) is still single-code PGRST204-only, its stated justification is measurably wrong about the select-list path, and the upsert error shape is live-verified nowhere. Because the migration is confirmed NOT applied live, the pre-migration window is the current state, so if the upsert shape is 42703 rather than PGRST204 every Solomon advisory loses ledger capture entirely -- exactly the outcome the fallback exists to prevent.",
+  "critical_issues": [
+    "NEW-1 (MEDIUM-HIGH, recommend fixing before merge; one line, zero test churn): scripts/solomon-advisory.cjs:704 gates captureLedgerRow's degraded-fallback on `error.code === 'PGRST204'` alone. On any other code, line 705 returns {captured:false} and the advisory is never ledgered -- total capture loss, which the function's own docblock at :671-672 promises will never happen. This is the same defect class as F1 but on the higher-consequence path, and it is not hypothetical: the migration is confirmed unapplied live (probe returned 42703), so the pre-migration window is the current state the moment this ships. Two independent reasons to widen: (a) the upsert error shape is asserted with no live evidence anywhere, in contrast to the read path whose comment explicitly says 'verified live against the unmigrated table'; (b) the comment used to justify keeping it narrow (tests/unit/solomon-ledger-pending-resurface.test.js:51-52) claims PGRST204 is 'the schema-cache-miss shape upsert/select-list paths see', but I measured the select-list path live and it returns 42703 -- and the code itself already agrees, since scripts/solomon-advisory.cjs:753 checks 42703 on exactly that select-list probe. FIX: widen :704 to new Set(['42703','PGRST204']).has(error.code) && /decision_requested/.test(error.message||''), matching the read path. The message-scope guard already prevents masking a genuine DB fault. No test pins PGRST204-exclusivity -- the 'non-PGRST204' test at tests/unit/solomon-advisory-ledger-capture.test.js:115 uses 57014 (statement timeout)."
+  ],
+  "warnings": [
+    "NEW-1b (LOW): scripts/coordinator-ack-adam.cjs:81-82 -- the F2 docblock correction introduced a new unmeasured claim. It states the writer 'only ever passes a bare CLAUDE_SESSION_ID UUID'. The 'bare/whitespace-free' half is correct and load-bearing; the 'UUID' half is contradicted live -- 0 of 1567 leading decision_by tokens are UUID-shaped. Real values are adam (1241), adam:d02c9e34 (186), adam-08049808 (66), adam-c514430f (50), solomon-52f5bab8-tail-walk (8), adam:60bb9219 (6), adam:39b3e4f6 (5), adam:ac499e67 (4), adam:41a358ca (1). Notable because this comment's whole purpose was to remove an overclaim and it substituted a different one. FIX: 'a bare, whitespace-free CLAUDE_SESSION_ID (observed live as adam / adam:hash / adam-hash)'.",
+    "NEW-2 (MEDIUM): the decision_by identity invariant is not durable -- out-of-band writers demonstrably re-contaminate it. 6 live rows dated 2026-08-18 hold whitespace-bearing prose ('adam-08049808 deferred pending SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 admission redesign (ant...'). They were written AFTER this SD began and cannot originate from recordLedgerDecision or inheritTailDecisions, whose only call site (scripts/coordinator-ack-adam.cjs:501) passes a bare env var -- so a writer outside the two enforced sites exists in practice. LEAD's own DB evidence confirms no CHECK constraint, length cap, or trigger exists on decision_by. FR-2 therefore enforces the invariant in application code at two sites while the database accepts anything, so the one-off backfill is a point-in-time cleanup that begins drifting immediately. The acceptance criterion '0 rows exceed a defined identity-length ceiling after backfill' is only true instantaneously. FIX: either a DB-level CHECK/trigger, or document decision_by as best-effort.",
+    "NEW-3 (LOW): scripts/one-off/backfill-solomon-ledger-decision-by.mjs:15 -- the Usage block does not state the backfill must run AFTER the FR-2 write-path fix merges. Run before, and enforced writers keep emitting un-normalized values behind it. Current live dry-run: Scanned 1567, Would change 6, Already-normalized 1561; the residual 6 are exactly the out-of-band rows from NEW-2.",
+    "SCOPE: TS-10 (post-apply information_schema verification) and TS-11 (7-day live-variance check that both true and false decision_requested rows appear in real traffic) remain correctly classified as manual/deferred-live and are NOT satisfied by this pass.",
+    "COVERAGE GAP (LOW): scripts/one-off/backfill-solomon-ledger-decision-by.mjs exports nothing, so main() is unreachable from tests -- the backfill loop itself has no direct unit coverage; only normalizeDecisionBy does. Acceptable for a one-off, and it is the direct consequence of the (correct) main-guard hardening."
+  ],
+  "recommendations": [
+    "BEFORE MERGE (one line, no test churn): widen scripts/solomon-advisory.cjs:704 to accept 42703 alongside PGRST204, matching the read path. The migration is unapplied live, so the pre-migration window is the current state, and the write path is the one place where a wrong error-code guess costs total ledger capture rather than a degraded read.",
+    "Correct the 'CLAUDE_SESSION_ID UUID' phrasing at scripts/coordinator-ack-adam.cjs:81-82 to match the live token shapes (adam / adam:hash / adam-hash).",
+    "Fix or delete the 'upsert/select-list paths see PGRST204' claim at tests/unit/solomon-ledger-pending-resurface.test.js:51-52 -- the select-list path returns 42703, as scripts/solomon-advisory.cjs:753 already assumes.",
+    "Decide explicitly whether decision_by's identity invariant belongs at the DB layer (CHECK/trigger) or is documented as best-effort; 6 live rows written after this SD began prove application-layer-only enforcement leaks.",
+    "Add the backfill's ordering precondition (run only after the write-path fix ships) to its Usage block.",
+    "No action needed on F1, F3, the migration, the main-guard, or mock fidelity -- all verified independently this pass."
+  ],
+  "detailed_analysis": {
+    "test_results": {
+      "command": "npx vitest run tests/unit/solomon-advisory-ledger-capture.test.js tests/unit/solomon-advisory-argv-body.test.js tests/unit/solomon-ledger-pending-resurface.test.js tests/unit/solomon-ledger-decision-requested.test.js tests/unit/coordinator-ack-adam-decision-by.test.js tests/unit/solomon-conduct-probes-decision-requested-unaffected.test.js tests/unit/solomon-startup-check-decision-requested-prompt.test.js tests/unit/coordinator-ack-outcome-ref-shape.test.js tests/unit/coordinator-ack-adam-disposition.test.js",
+      "test_files_passed": 9,
+      "test_files_failed": 0,
+      "tests_passed": 108,
+      "tests_failed": 0,
+      "integrity": "Run twice -- 108/108 before mutation testing and 108/108 after full restore. git diff --stat identical pre/post (solomon-advisory.cjs 127 insertions, solomon-ledger-pending-resurface.cjs 42 insertions), confirming no residue."
+    },
+    "live_db_verification": {
+      "migration_applied_live": false,
+      "P1_select_decision_requested": "42703 -- column solomon_advice_outcome_ledger.decision_requested does not exist",
+      "P3_eq_filter_on_missing_column": "42703 (control)",
+      "H1_head_true_on_missing_column": "{message:'', no code, count:null} -- PostgREST swallows the diagnostic on HEAD",
+      "H3_non_head_select_missing_column": "42703 (clean)",
+      "H2_control_head_true_existing_column": "count=1678, no error",
+      "method_note": "All probes strictly read-only (.select only). An insert-shaped probe was attempted and correctly blocked by the permission classifier; not retried or worked around, given this session's earlier production-mutation incident."
+    },
+    "F1": {
+      "prior_severity": "BLOCKER",
+      "status": "FIXED -- VERIFIED INDEPENDENTLY",
+      "location": "scripts/solomon-ledger-pending-resurface.cjs:222-223",
+      "detail": "Live probe confirms the real error code for an .eq() filter on the missing decision_requested column is 42703 (undefined_column), NOT PGRST204 -- the prior finding was correct. The fix accepts new Set(['42703','PGRST204']) and is correctly narrowed by /decision_requested/ tested against error.message; the real live message ('column solomon_advice_outcome_ledger.decision_requested does not exist') does contain the column name, so the guard fires. Test mock at tests/unit/solomon-ledger-pending-resurface.test.js:57 uses 42703.",
+      "mutation_test": "Reverted line 222 to new Set(['PGRST204']) and re-ran: exactly 2 tests FAILED -- TS-5a (test at line 225) and TS-12 (test at line 237), both with 'planStalePending query failed: column ... does not exist'. The tests are genuinely load-bearing, not decorative. File restored and verified byte-equivalent."
+    },
+    "F2": {
+      "prior_severity": "HIGH",
+      "status": "RESOLUTION ADEQUATE -- I AGREE WITH DOC-FIX-NOT-BEHAVIOR-CHANGE",
+      "location": "scripts/coordinator-ack-adam.cjs:73-99",
+      "independent_verdict": "I formed my own judgment and concur with the resolution. A hex-guessing heuristic would misfire on English words that are valid hex (cab/dead/beef/face/cafe) and would reverse an already-pinned deliberate test. No behavior change is warranted.",
+      "evidence": "Live census of all 1567 non-null decision_by values: the hazard shape '<identity> <bare-hex>' occurs 0 times. Only 9 distinct leading identity tokens exist and every one is whitespace-free, using ':' or '-' as the identity/hash separator, never a space. Reachability confirmed at source: the sole production call site (coordinator-ack-adam.cjs:501) passes decidedBy: coordinatorSession = process.env.CLAUDE_SESSION_ID (line 445, hard-required at 446); inheritTailDecisions receives the identical value via line 320. Neither can carry whitespace.",
+      "residual": "See NEW-1b -- the corrected docblock introduced a different inaccurate claim."
+    },
+    "F3": {
+      "prior_severity": "MEDIUM",
+      "status": "FIXED -- VERIFIED, AND ITS EMPIRICAL CLAIM CONFIRMED LIVE",
+      "location": "scripts/solomon-advisory.cjs:904-912 (inbox WARN branching); :741-760 (checkLedgerCaptureHealth)",
+      "detail": "Inbox mode now branches on ledgerHealth.columnMissing with an accurate 'capture is DEGRADED, not stopped' message, retaining the generic 'NOT being captured' message for the genuine-unhealthy branch at :910. Separately I live-verified the two-probe redesign's empirical justification, which PLAN had flagged as an open question (TS-13): a head:true request on a nonexistent column really does return an empty error with no code, while a non-head select surfaces 42703 cleanly. The docblock at :729-739 is accurate and the two-probe split is necessary, not defensive padding."
+    },
+    "main_guard_incident_followup": {
+      "status": "VERIFIED CORRECT IN BOTH DIRECTIONS",
+      "location": "scripts/one-off/backfill-solomon-ledger-decision-by.mjs:77-80",
+      "guard": "process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]",
+      "safe_direction": "A bare import() resolves in 104ms with exports:[] and process.argv[1] undefined, so the && short-circuits and main() never runs -- no DB traffic. The leading `process.argv[1] &&` is precisely what makes the node -e import() case (the actual incident vector) safe.",
+      "not_over_tight_direction": "Checked for the 'the fix for a blind guard is usually blind too' failure: a direct `node scripts/one-off/backfill-solomon-ledger-decision-by.mjs --dry-run` DID execute and produced real output, so the guard does not silently no-op a legitimate run."
+    },
+    "migration_review": {
+      "status": "PASS",
+      "location": "database/migrations/20260821_solomon_ledger_decision_requested.sql",
+      "detail": "Purely additive ADD COLUMN IF NOT EXISTS, wrapped in BEGIN/COMMIT, idempotent (re-apply is a no-op; COMMENT ON COLUMN is also idempotent). NOT NULL DEFAULT true is metadata-only on PG 11+ (fast default) and the table is 1678 rows, so no rewrite concern either way. Verified by reading that it does NOT touch solomon_advice_outcome_ledger_decision_check, consistent with the stated judgment_expired_at anti-pattern precedent. RLS unaffected (existing policies are column-agnostic). requires-chairman-apply marker present. No DOWN migration, consistent with repo convention. The DEFAULT-true choice is documented as an explicit assumption rather than a measurement, which is the honest framing."
+    },
+    "mock_fidelity_and_guard_blindness": {
+      "status": "PASS",
+      "detail": "Checked whether the argv-body suite's BOOL_FLAGS loop is self-referentially blind -- a test that iterates the very list it validates cannot see a MISSING registration. Mutation-tested by removing '--informational' from BOOL_FLAGS at scripts/solomon-advisory.cjs:815: the flag-drift guard at tests/unit/solomon-advisory-argv-body.test.js:84 FAILED with uncovered ['--informational']. The guard scans the source for parsed flags rather than trusting the list, so it is NOT blind. File restored. Also confirmed the new CLAUDE_SOLOMON.md and solomon-startup-check.mjs prompts instruct `send --informational \"<body>\"` (flag before body) and that this ordering is genuinely supported: BOOL_FLAGS registration makes sendBodyFromArgv strip it positionally, covered by the ['send', flag, 'the', 'body'] -> 'the body' assertion."
+    },
+    "safety_notes": [
+      "All DB access this pass was read-only (.select only). An insert-shaped probe was blocked by the permission classifier and deliberately not retried or worked around.",
+      "scripts/one-off/backfill-solomon-ledger-decision-by.mjs was invoked exactly once, directly, with --dry-run, per explicit instruction. It was never bare-imported for execution and never run without --dry-run.",
+      "Two temporary source mutations (solomon-ledger-pending-resurface.cjs:222 and solomon-advisory.cjs:815) were made for mutation testing and both restored; git diff --stat is identical to pre-mutation and the full 9-file suite re-passes 108/108."
+    ],
+    "evidence_writer_note": "The first store attempt (row 8aefee09-84a2-48aa-b0f6-b4dbf83759da) used a top-level 'findings' key, which is not in this writer's canonical field set -- it was silently dropped (detailed_analysis empty, critical_issues/warnings 0) with no warning, unlike the 4 fields it did warn about. This row re-stores the same analysis under the canonical detailed_analysis / critical_issues / warnings fields."
+  }
+}
