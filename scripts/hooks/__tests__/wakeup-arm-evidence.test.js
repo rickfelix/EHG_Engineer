@@ -564,6 +564,25 @@ describe('wind-down mirror writes through a source_type the DB actually accepts'
   it('still files under category wind_down_survey (what the gate and gauge query)', () => {
     expect(hookSrc).toMatch(/category:\s*'wind_down_survey'/);
   });
+
+  // QF-20260803-503: these rows must self-resolve at write time (never land status='new' in
+  // the human triage lane) without losing per-row fidelity via the collapsing machine-lane RPC.
+  it('files wind_down_survey rows pre-resolved, satisfying chk_feedback_terminal_resolution', () => {
+    expect(hookSrc).toMatch(/status:\s*'resolved'/);
+    // chk_feedback_terminal_resolution requires a non-empty resolution_notes (or a resolution
+    // FK) whenever status='resolved' — a bare status flip with no notes violates the CHECK.
+    const notesMatch = hookSrc.match(/resolution_notes:\s*'([^']+)'/);
+    expect(notesMatch).not.toBeNull();
+    expect(notesMatch[1].trim().length).toBeGreaterThan(0);
+  });
+
+  // Never re-add this category to the collapsing aggregate-UPSERT path — that's the exact
+  // change feedback-audience.js's own MACHINE_TELEMETRY_CATEGORIES comment documents as tried
+  // and reverted (it collapses every same-day row to ONE, destroying per-row metadata.reason).
+  it('is never routed through the machine-telemetry aggregate-UPSERT category set', async () => {
+    const { MACHINE_TELEMETRY_CATEGORIES } = await import('../../../lib/governance/feedback-audience.js');
+    expect(MACHINE_TELEMETRY_CATEGORIES).not.toContain('wind_down_survey');
+  });
 });
 
 describe('no new hook or registry (constraint)', () => {
