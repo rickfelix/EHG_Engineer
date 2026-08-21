@@ -15,6 +15,8 @@ import {
   EXPIRY_DAYS,
   EXPIRY_ACTOR,
   ENABLED_BY_DEFAULT,
+  isDecisionByIdentityCheckViolation,
+  violatesDecisionByIdentityCheck,
 } from '../../lib/solomon/judgment-expiry.js';
 
 const NOW = Date.parse('2026-07-29T00:00:00Z');
@@ -169,5 +171,94 @@ describe('FR-2 — the runner refuses to write by default', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
     expect(src).toMatch(/\.range\(/);
     expect(src, 'an unpaginated read silently clamps at 1000').toMatch(/for \(let from = 0/);
+  });
+});
+
+/**
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (ship-gate adversarial review, round 2): that SD's
+ * decision_by CHECK is NOT VALID, which grandfathers existing violators from the initial bulk scan
+ * ONLY -- any subsequent UPDATE to a grandfathered row re-checks the CHECK, so this runner's stamp
+ * (which never sets decision_by) can 23514 forever on such a row. isDecisionByIdentityCheckViolation
+ * is the pure classifier gating a bounded, single self-healing retry in the runner's main loop.
+ */
+describe('isDecisionByIdentityCheckViolation — pure classifier for the bounded retry', () => {
+  it('matches a genuine check_violation naming this specific constraint', () => {
+    expect(isDecisionByIdentityCheckViolation({
+      code: '23514',
+      message: 'new row for relation "solomon_advice_outcome_ledger" violates check constraint "solomon_advice_outcome_ledger_decision_by_identity_check"',
+    })).toBe(true);
+  });
+
+  it('does NOT match a 23514 naming a different constraint — scoped, not any check violation', () => {
+    expect(isDecisionByIdentityCheckViolation({ code: '23514', message: 'violates check constraint "some_other_check"' })).toBe(false);
+  });
+
+  it('does NOT match a non-23514 error, even one mentioning the constraint name', () => {
+    expect(isDecisionByIdentityCheckViolation({ code: '57014', message: 'statement timeout on solomon_advice_outcome_ledger_decision_by_identity_check' })).toBe(false);
+  });
+
+  it('is null/undefined-safe', () => {
+    expect(isDecisionByIdentityCheckViolation(null)).toBe(false);
+    expect(isDecisionByIdentityCheckViolation(undefined)).toBe(false);
+    expect(isDecisionByIdentityCheckViolation({})).toBe(false);
+  });
+});
+
+describe('the runner retries with a normalized decision_by, scoped to the identity-check violation only', () => {
+  const src = readFileSync(resolve(process.cwd(), 'scripts/solomon-judgment-expiry-run.mjs'), 'utf8');
+
+  it('imports the pure classifier and normalizeDecisionBy rather than hand-rolling error matching', () => {
+    expect(src).toMatch(/isDecisionByIdentityCheckViolation/);
+    expect(src).toMatch(/import\s*\{\s*normalizeDecisionBy\s*\}\s*from\s*['"]\.\/coordinator-ack-adam\.cjs['"]/);
+  });
+
+  it('the retry patch still spreads the original expiry patch — never drops judgment_expired_at/_by', () => {
+    expect(src).toMatch(/const normalized = normalizeDecisionBy\(current\?\.decision_by\)/);
+    expect(src).toMatch(/retryPatch\s*=\s*\{\s*\.\.\.patch,\s*decision_by:\s*normalized\s*\}/);
+  });
+
+  it('a non-matching error is still reported and NOT retried — the bound holds', () => {
+    expect(src).toMatch(/if \(!isDecisionByIdentityCheckViolation\(error\)\)\s*\{\s*console\.error/);
+  });
+});
+
+/**
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (ship-gate adversarial review, round 3): the
+ * self-healing retry performs the SAME destructive decision_by normalization that irreversibly
+ * destroyed 1212 rows in the 2026-08-21 incident -- as an automatic side effect of an unrelated aging
+ * stamp. Round 3's finding: the dry run gave an operator zero disclosure that a live run would ALSO
+ * rewrite decision_by, even though the dry run is this file's own stated safety mechanism ("seeing
+ * exactly which rows would be stamped is how an operator decides whether the first real run is
+ * safe"). violatesDecisionByIdentityCheck is the pure predicate the dry-run disclosure is built on.
+ */
+describe('violatesDecisionByIdentityCheck — mirrors the migration CHECK exactly', () => {
+  it('matches every real violating shape seen live (prose with embedded whitespace, or >40 chars)', () => {
+    expect(violatesDecisionByIdentityCheck('adam-08049808 deferred pending SD-ALTIFYAI-LEO-FIX')).toBe(true);
+    expect(violatesDecisionByIdentityCheck('a'.repeat(41))).toBe(true);
+  });
+
+  it('does NOT match any real clean identity shape', () => {
+    for (const v of ['adam', 'adam:d02c9e34', 'adam-08049808', 'solomon-52f5bab8-tail-walk', 'a'.repeat(40)]) {
+      expect(violatesDecisionByIdentityCheck(v)).toBe(false);
+    }
+  });
+
+  it('null/undefined never violate — the CHECK itself is decision_by IS NULL OR (...)', () => {
+    expect(violatesDecisionByIdentityCheck(null)).toBe(false);
+    expect(violatesDecisionByIdentityCheck(undefined)).toBe(false);
+  });
+});
+
+describe('the dry run discloses the decision_by rewrite BEFORE a live run, not just a post-hoc count', () => {
+  const src = readFileSync(resolve(process.cwd(), 'scripts/solomon-judgment-expiry-run.mjs'), 'utf8');
+
+  it('the dry-run branch (before --apply is checked) computes and prints the would-rewrite set', () => {
+    const dryRunBranch = src.slice(src.indexOf('if (!mode.apply)'), src.indexOf('const patch = expiryPatch'));
+    expect(dryRunBranch).toMatch(/violatesDecisionByIdentityCheck/);
+    expect(dryRunBranch).toMatch(/would ALSO have decision_by rewritten/);
+  });
+
+  it('the live retry logs the actual before/after value, not only a running count', () => {
+    expect(src).toMatch(/console\.log\(`\s*HEALED \$\{r\.id\}: decision_by/);
   });
 });

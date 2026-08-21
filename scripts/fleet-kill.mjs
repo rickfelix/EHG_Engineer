@@ -17,6 +17,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { execSync } from 'node:child_process';
 
 import { gracefulKillSession, isGracefulKillEnabled } from '../lib/fleet/graceful-kill.mjs';
 import { sampleToolActivityTwice } from '../lib/fleet/release-work-item.mjs';
@@ -52,9 +53,46 @@ export function markerPidFor(sessionId, repoRoot = REPO_ROOT) {
   return Number.isInteger(pid) ? pid : null;
 }
 
+/**
+ * SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001 / FR-3 — graceful-kill's OWN, INDEPENDENT dirty check.
+ *
+ * MUST STAY SYNCHRONOUS. graceful-kill.mjs reads this as `isWorktreeDirty(worktreePath)` with no
+ * `await` — an async implementation would bind wasDirty to an always-truthy Promise object,
+ * silently breaking the clean-tree fast path this function's caller depends on. Verified by a
+ * concrete runtime check in fleet-kill-cli.test.js (TR-2): the return value must be a boolean, not
+ * a thenable.
+ *
+ * DELIBERATELY NOT lib/execute/wip-guard.cjs's checkWorktreeWIP, for two reasons: (1) it fails
+ * OPEN on a git-status error (`dirty: false`) — the opposite polarity this destructive-operation
+ * gate needs; (2) graceful-kill.mjs's architecture comment is explicit that wasDirty here is a
+ * SEPARATE measurement from prepark's own internal dirty check, not a shared one — collapsing them
+ * back into one implementation would remove the redundancy the design intends.
+ *
+ * FAILS CLOSED: any unresolvable state (no path, git not found, not a repo, non-zero exit) reports
+ * dirty:true. An unknown state must never read as "safe to kill".
+ */
+export function isWorktreeDirty(worktreePath) {
+  if (!worktreePath) return true;
+  try {
+    const out = execSync('git status --porcelain', {
+      cwd: worktreePath,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 10000,
+    });
+    return out.trim().length > 0;
+  } catch {
+    return true;
+  }
+}
+
 export function buildKillDeps(supabase, sessionId, { reason, dryRun = false } = {}) {
   return {
     reason: reason || 'operator_graceful_kill',
+    // Explicit, not merely relying on gracefulKillSession's own env=process.env default (UAT-agent
+    // finding, FR-3 AC-4): a future caller building deps by hand from this shape should see the
+    // key present, not need to know it's safe to omit.
+    env: process.env,
     getSession: async () => {
       const { data } = await supabase
         .from('claude_sessions')
@@ -66,6 +104,10 @@ export function buildKillDeps(supabase, sessionId, { reason, dryRun = false } = 
     readMarkerPid: (sid) => markerPidFor(sid),
     pidIsClaude: (pid) => claudeProbeToTriState(pidIsClaude(pid)),
     sampleToolActivity: (sb, sid) => sampleToolActivityTwice(sb, sid, { intervalMs: 5_000 }),
+    // FR-3: was ABSENT here, which left wasDirty unconditionally false in production regardless of
+    // the isWorkDurableAfterPrepark fix — the two halves of the defect (the decision and the wiring
+    // gap that hid it) both needed closing.
+    isWorktreeDirty,
     runPreparkWip,
     releaseClaim: async (sessionId, sdKey) => {
       const r = await bestEffortReleaseSd(supabase, sessionId, reason || 'operator_graceful_kill',
@@ -116,6 +158,14 @@ async function main() {
   // still hand the work item back here, silently undoing the fail-closed decision made two steps
   // earlier (GK-1, SD-LEO-INFRA-RELEASE-WORK-ITEM-001).
   // Imported lazily so a dry run that never reaches step 7 does not pull the module in.
+  //
+  // KNOWN GAP (SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001 FR-3 AC-4): recordStop is attached HERE,
+  // OUT OF BAND, rather than inside buildKillDeps' own returned object -- a future caller that
+  // builds deps via buildKillDeps() alone and calls gracefulKillSession directly would silently
+  // get NO recordStop and skip step 7 (RECORD) entirely, with no error. Documented rather than
+  // fixed: recordStop needs `supabase` and `dryRun` from THIS scope, and folding it into
+  // buildKillDeps would either duplicate the client-construction logic or change its signature --
+  // out of this FR's scope. Any new caller of buildKillDeps must supply its own recordStop.
   deps.recordStop = dryRun ? null : async (sid, o = {}) => {
     const { stop } = await import('../lib/fleet/spawn-control.js');
     await stop(sid, { by: 'session_id', supabaseClient: supabase, holderVerifiedGone: o.gone });

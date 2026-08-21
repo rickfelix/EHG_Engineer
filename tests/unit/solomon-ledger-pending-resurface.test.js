@@ -29,28 +29,62 @@ const ADAM_ID = 'adam-session-1';
  * call order, so a query-shape change surfaces as a failure rather than a wrong-but-green
  * result.
  */
-function createMockSupabase({ ledgerRows = [], inboxRows = [] } = {}) {
+function createMockSupabase({ ledgerRows = [], inboxRows = [], decisionRequestedColumnMissing = false } = {}) {
   const ledger = [...ledgerRows];
   const inbox = [...inboxRows];
   return {
     from(table) {
       if (table === 'solomon_advice_outcome_ledger') {
-        return {
-          select: () => ({
-            eq: (col, val) => ({
-              lte: (col2, val2) => ({
-                order: () => ({
-                  range: async (from, to) => {
-                    const filtered = ledger
-                      .filter((r) => r[col] === val && r[col2] <= val2)
-                      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
-                    return { data: filtered.slice(from, to + 1), error: null };
-                  },
-                }),
-              }),
+        // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-3/TS-6): now supports one OR two
+        // .eq() calls before .lte() — planStalePending always applies decision='pending', then
+        // conditionally decision_requested=true. Accumulates equality filters so the query
+        // CONTENT is what's asserted (per TESTING's PLAN finding that chain ORDER is not
+        // something PostgREST makes semantically meaningful) — an unexpected filter column
+        // still throws, preserving the "unexpected query shape fails" guard.
+        const KNOWN_EQ_COLS = new Set(['decision', 'decision_requested']);
+        const buildEqChain = (filters) => ({
+          eq: (col, val) => {
+            if (!KNOWN_EQ_COLS.has(col)) throw new Error(`unexpected filter column ${col}`);
+            if (col === 'decision_requested' && decisionRequestedColumnMissing) {
+              // 42703 (undefined_column) is the REAL live Postgres error for THIS query shape —
+              // an .eq() filter on a missing column — verified live against the unmigrated table.
+              // NOT PGRST204 — that's the schema-cache-miss shape UPSERT sees (captureLedgerRow),
+              // live-verified separately via a direct upsert probe. A plain (non-head) SELECT, like
+              // this .eq() filter and checkLedgerCaptureHealth's column probe, sees 42703 instead —
+              // corrected per TESTING's EXEC-2 finding that this comment previously mis-stated
+              // "select-list" as a PGRST204 shape too. A prior version of this mock hardcoded
+              // PGRST204 here, which made TS-5a/TS-12 pass while the production fallback guard
+              // silently never fired (F1, caught by adversarial EXEC review): fixed together with
+              // the guard in solomon-ledger-pending-resurface.cjs so mock and reality agree on which
+              // code fires. Both solomon-ledger-pending-resurface.cjs's fallback AND
+              // captureLedgerRow's fallback now defensively accept EITHER code regardless of which
+              // one is live-confirmed for their own specific query type, given this table has shown
+              // 3 different shapes across 3 query types for the identical underlying condition.
+              return {
+                lte: () => ({ order: () => ({ range: async () => ({ data: null, error: { code: '42703', message: 'column solomon_advice_outcome_ledger.decision_requested does not exist' } }) }) }),
+              };
+            }
+            return buildEqChain([...filters, { col, val }]);
+          },
+          lte: (col2, val2) => ({
+            order: () => ({
+              range: async (from, to) => {
+                // decision_requested: an ABSENT field on a fixture row simulates a row written
+                // before the migration existed — the DB's own DEFAULT true (FR-1b) means it reads
+                // as true, not undefined. Existing pre-SD fixtures (no decision_requested at all)
+                // therefore keep matching without needing every call site updated.
+                const matches = (f, r) => (f.col === 'decision_requested' && r.decision_requested === undefined)
+                  ? f.val === true
+                  : r[f.col] === f.val;
+                const filtered = ledger
+                  .filter((r) => filters.every((f) => matches(f, r)) && r[col2] <= val2)
+                  .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+                return { data: filtered.slice(from, to + 1), error: null };
+              },
             }),
           }),
-        };
+        });
+        return { select: () => buildEqChain([]) };
       }
       if (table === 'session_coordination') {
         return {
@@ -156,6 +190,68 @@ describe('planStalePending()', () => {
 
     const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs, pageSize: 2, maxPages: 3 });
     expect(rows).toHaveLength(6); // 3 pages * 2 per page, not the full 10
+  });
+
+  // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-3/TS-6): the query CONTENT is what's
+  // asserted here (which rows are included/excluded), not chain call order — PostgREST filter
+  // chain order is semantically inert, per TESTING's PLAN-phase finding.
+  describe('TS-6: decision_requested filtering', () => {
+    it('excludes a stale pending row with decision_requested=false', async () => {
+      const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+      const supabase = createMockSupabase({
+        ledgerRows: [
+          { id: 'l1', decision: 'pending', decision_requested: true, created_at: '2026-07-04T00:00:00Z' }, // stale, actionable
+          { id: 'l2', decision: 'pending', decision_requested: false, created_at: '2026-07-04T00:00:00Z' }, // stale, informational — excluded
+          { id: 'l3', decision: 'pending', decision_requested: true, created_at: '2026-07-05T11:00:00Z' }, // fresh, actionable but not yet stale
+        ],
+      });
+      const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs });
+      expect(rows.map((r) => r.id)).toEqual(['l1']);
+    });
+
+    it('a pre-migration row with no decision_requested field at all still surfaces (DEFAULT true semantics)', async () => {
+      const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+      const supabase = createMockSupabase({
+        ledgerRows: [{ id: 'l1', decision: 'pending', created_at: '2026-07-04T00:00:00Z' }],
+      });
+      const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs });
+      expect(rows.map((r) => r.id)).toEqual(['l1']);
+    });
+  });
+
+  // TS-5a: mirrors captureLedgerRow's write-path fallback on the read side.
+  describe('TS-5a: fallback when decision_requested column is not yet migrated', () => {
+    it('falls back to the pre-SD query (decision=pending alone) instead of throwing', async () => {
+      const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+      const supabase = createMockSupabase({
+        decisionRequestedColumnMissing: true,
+        ledgerRows: [
+          { id: 'l1', decision: 'pending', created_at: '2026-07-04T00:00:00Z' },
+        ],
+      });
+      const rows = await planStalePending(supabase, { thresholdHours: 24, nowMs });
+      expect(rows.map((r) => r.id)).toEqual(['l1']); // did not throw, did not return empty
+    });
+  });
+
+  // TS-12: DEFAULT true guarantees every pre-deploy row still surfaces once decision_requested
+  // is wired in — a drop involving a pre-deploy row would be a blocking regression.
+  describe('TS-12: no pre-deploy row is ever silently dropped', () => {
+    it('a row with no decision_requested field (pre-migration) surfaces identically before and after the filter is applied', async () => {
+      const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+      const preDeployRow = { id: 'l1', decision: 'pending', created_at: '2026-07-04T00:00:00Z' };
+
+      const before = await planStalePending(
+        createMockSupabase({ decisionRequestedColumnMissing: true, ledgerRows: [preDeployRow] }),
+        { thresholdHours: 24, nowMs }
+      );
+      const after = await planStalePending(
+        createMockSupabase({ ledgerRows: [preDeployRow] }),
+        { thresholdHours: 24, nowMs }
+      );
+      expect(before.map((r) => r.id)).toEqual(after.map((r) => r.id));
+      expect(after.map((r) => r.id)).toEqual(['l1']);
+    });
   });
 });
 

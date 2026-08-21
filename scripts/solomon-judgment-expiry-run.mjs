@@ -32,7 +32,10 @@ import {
   EXPIRY_DAYS,
   EXPIRY_ACTOR,
   ENABLED_BY_DEFAULT,
+  isDecisionByIdentityCheckViolation,
+  violatesDecisionByIdentityCheck,
 } from '../lib/solomon/judgment-expiry.js';
+import { normalizeDecisionBy } from './coordinator-ack-adam.cjs';
 
 const TABLE = 'solomon_advice_outcome_ledger';
 const PAGE = 1000;
@@ -54,7 +57,9 @@ async function fetchPending(supabase) {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from(TABLE)
-      .select('id, decision, created_at, judgment_expired_at')
+      // decision_by is read (not written) here so the dry run can disclose which due rows would
+      // ALSO be rewritten by the self-healing retry below -- see violatesDecisionByIdentityCheck.
+      .select('id, decision, created_at, judgment_expired_at, decision_by')
       .eq('decision', 'pending')
       .order('created_at', { ascending: true })
       .range(from, from + PAGE - 1);
@@ -94,17 +99,46 @@ async function main() {
   if (!mode.apply) {
     for (const r of due.slice(0, 20)) console.log(`  WOULD STAMP ${r.id} (age ${r.ageDays.toFixed(1)}d)`);
     if (due.length > 20) console.log(`  ...and ${due.length - 20} more`);
+    // The rewrite disclosure is a safety signal, not a display convenience: check the FULL due set
+    // (not just the first 20 printed above) so it cannot silently under-report a rewrite just because
+    // a row falls past the print cap.
+    const rowsById = new Map(rows.map((r) => [r.id, r]));
+    const wouldRewrite = due.filter((r) => violatesDecisionByIdentityCheck(rowsById.get(r.id)?.decision_by));
+    if (wouldRewrite.length > 0) {
+      console.log(`  WARNING: ${wouldRewrite.length} of the above would ALSO have decision_by rewritten (the self-healing retry -- see lib/solomon/judgment-expiry.js violatesDecisionByIdentityCheck):`);
+      for (const r of wouldRewrite.slice(0, 20)) {
+        const before = rowsById.get(r.id)?.decision_by;
+        console.log(`    ${r.id}: ${JSON.stringify(before).slice(0, 60)} -> ${JSON.stringify(normalizeDecisionBy(before))}`);
+      }
+      if (wouldRewrite.length > 20) console.log(`    ...and ${wouldRewrite.length - 20} more`);
+    }
     return 0;
   }
 
   const patch = expiryPatch({ nowIso: new Date().toISOString(), actor: EXPIRY_ACTOR });
   let stamped = 0;
+  let healedOnRetry = 0;
   for (const r of due) {
     const { error } = await supabase.from(TABLE).update(patch).eq('id', r.id).is('judgment_expired_at', null);
-    if (error) { console.error(`  FAILED ${r.id}: ${error.message}`); continue; }
-    stamped++;
+    if (!error) { stamped++; continue; }
+    // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001's decision_by CHECK is NOT VALID -- a
+    // grandfathered violating row still 23514s on ANY update, even this one, which never sets
+    // decision_by. Bounded, single retry: also normalize decision_by so the row becomes compliant
+    // and this class of failure cannot recur for it. Scoped strictly to this one constraint by name
+    // -- a genuine DB fault is never masked or retried.
+    if (!isDecisionByIdentityCheckViolation(error)) { console.error(`  FAILED ${r.id}: ${error.message}`); continue; }
+    const { data: current, error: readErr } = await supabase.from(TABLE).select('decision_by').eq('id', r.id).single();
+    if (readErr) { console.error(`  FAILED ${r.id} (decision_by identity check, and could not read current value to retry: ${readErr.message})`); continue; }
+    const normalized = normalizeDecisionBy(current?.decision_by);
+    const retryPatch = { ...patch, decision_by: normalized };
+    const retry = await supabase.from(TABLE).update(retryPatch).eq('id', r.id).is('judgment_expired_at', null);
+    if (retry.error) { console.error(`  FAILED ${r.id} (decision_by identity check, retry with normalized decision_by also failed: ${retry.error.message})`); continue; }
+    // Log the actual before/after, not just a count -- the destructive part of this retry deserves
+    // the same disclosure the backfill script's own sampleChanges gives an operator, not a tally.
+    console.log(`  HEALED ${r.id}: decision_by ${JSON.stringify(current?.decision_by).slice(0, 60)} -> ${JSON.stringify(normalized)}`);
+    stamped++; healedOnRetry++;
   }
-  console.log(`[judgment-expiry] stamped=${stamped}/${due.length}`);
+  console.log(`[judgment-expiry] stamped=${stamped}/${due.length}${healedOnRetry ? ` (${healedOnRetry} required a decision_by-normalizing retry)` : ''}`);
   return 0;
 }
 

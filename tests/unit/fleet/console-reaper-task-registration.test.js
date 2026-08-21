@@ -3,6 +3,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildReaperSchtasksArgs,
+  buildQueryArgs,
+  buildRemoveArgs,
   principalSpecFor,
   TASK_NAME,
 } from '../../../scripts/setup-console-reaper-task.mjs';
@@ -68,5 +70,37 @@ describe('FR5-TASK: argv shape', () => {
     for (const bad of [0, -1, 1440, 2.5, 'soon']) {
       expect(() => buildReaperSchtasksArgs({ intervalMinutes: bad, requireRunner: false })).toThrow(/interval-minutes/);
     }
+  });
+});
+
+// SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001 / FR-2, TS-9 — rollback is proven, not just forward
+// activation. The pure argv-construction half is fully testable here; the LIVE round-trip
+// (register on the host, confirm FOUND, unregister, confirm NOT FOUND) requires an elevated
+// (Administrator) principal this session's shell does not hold -- schtasks /Create refused with
+// "Access is denied" for /RU SYSTEM. CORRECTED (was wrongly claimed "no sibling task is
+// registered either" here): several sibling watcher tasks (EVA Scheduler Watcher, LEO Liveness
+// Watcher, LEO Stale-Session Sweep, LEO LLM Cost Check) ARE registered on this host, under the
+// CURRENT USER (schtasks /RU <user> /NP, which does not need admin). The console reaper genuinely
+// cannot use that same route: lib/fleet/console-parentage.mjs's validateScheduledTaskPrincipal
+// structurally requires a session-0 principal (SYSTEM/ServiceAccount/S4U) and correctly refuses a
+// plain named-user principal -- that IS the leak mechanism this reaper exists to stop. The
+// admin-privilege blockage is real, just specific to this reaper's own safety requirement, not a
+// fleet-wide absence of scheduling capability. Whoever completes the elevated registration should
+// run the full round-trip once as final proof; this suite is the part of that proof that does not
+// require elevation.
+describe('FR5-TASK: rollback (--status / --remove) argv is correct and idempotent', () => {
+  it('buildQueryArgs targets the exact task name with a verbose, parseable format', () => {
+    expect(buildQueryArgs()).toEqual(['/Query', '/TN', TASK_NAME, '/V', '/FO', 'LIST']);
+  });
+
+  it('buildRemoveArgs force-deletes the exact task name (no confirmation prompt to hang on)', () => {
+    expect(buildRemoveArgs()).toEqual(['/Delete', '/TN', TASK_NAME, '/F']);
+  });
+
+  it('query and remove both target LEO-ConsoleReaper specifically, not a wildcard', () => {
+    // A wildcard or mistyped name here would make --remove a no-op that reports success, or worse,
+    // touch an unrelated task -- the exact "accepted but silently wrong" shape this SD is full of.
+    expect(buildQueryArgs()).toContain(TASK_NAME);
+    expect(buildRemoveArgs()).toContain(TASK_NAME);
   });
 });

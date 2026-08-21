@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 16 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 17 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -78,6 +78,11 @@ describe('policy registry (TS-1)', () => {
       // .delete() can actually reap it). Keyed on created_at, DATABASE-stamped (DEFAULT now()),
       // not the app-supplied ranked_at.
       drive_rank_snapshots: 'created_at',
+      // SD-LEO-INFRA-WIND-DOWN-SURVEY-001 (FR-3): worker_wind_down_events is the dedicated
+      // replacement for the feedback(category='wind_down_survey') mirror this SD removed — one
+      // row per worker Stop-hook firing, fleet-wide, unbounded. Keyed on created_at,
+      // DATABASE-stamped (DEFAULT now(), the writer never supplies its own value).
+      worker_wind_down_events: 'created_at',
     });
   });
 

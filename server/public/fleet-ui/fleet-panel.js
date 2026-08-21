@@ -190,13 +190,18 @@
     return payload;
   }
 
-  function wireAction(button, run, doneMessage) {
+  function wireAction(button, run, doneMessage, describeResult) {
     button.addEventListener('click', async () => {
       button.disabled = true;
       els.statusLine.textContent = 'Working…';
       try {
-        await run();
-        els.statusLine.textContent = doneMessage;
+        const payload = await run();
+        // FR-1 (SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001): when the caller supplies a describer,
+        // render whatever label the SERVER put in the response VERBATIM -- plain data forwarded
+        // from the route's JSON body, never a client-side decision (see the no-UI-only-gate test
+        // for this file: role/singleton logic must never be re-derived here).
+        const extra = typeof describeResult === 'function' ? describeResult(payload) : null;
+        els.statusLine.textContent = extra ? `${doneMessage} ${extra}` : doneMessage;
         await refresh();
       } catch (err) {
         els.statusLine.textContent = `Action failed: ${err.message}`;
@@ -218,6 +223,7 @@
       return callAction('add-session', { body: { role, callsign } });
     },
     'Session added.',
+    (payload) => (payload && payload.uiLabel ? `(${payload.uiLabel})` : null),
   );
   wireAction(
     els.relaunchButton,

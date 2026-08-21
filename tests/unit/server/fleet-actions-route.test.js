@@ -131,6 +131,55 @@ describe('POST /api/fleet-actions/add-session', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  // FR-1 (SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001): uiLabel/uiEnabled/holderIsFresh reach the
+  // ACTUAL JSON response body, on both outcomes -- AC-1. A minimal role-scoped double (no .gte()
+  // honoring needed here; the resolver-swap itself is proven in addsession-singleton-refusal.test.js)
+  // supplies the holder row through the route's real resolveSingletonSpawnVerdict → addSession path.
+  function adamHolderSb(row) {
+    return {
+      from: () => ({
+        select: () => ({
+          filter: () => ({ order: () => ({ range: (from, to) => Promise.resolve({ data: row ? [row].slice(from, to + 1) : [], error: null }) }) }),
+          eq: (col, val) => ({ maybeSingle: () => Promise.resolve({ data: row && row.session_id === val ? row : null, error: null }) }),
+        }),
+      }),
+    };
+  }
+
+  describe('FR-1: uiLabel/uiEnabled/holderIsFresh reach the response body', () => {
+    it('allowed path (amber, stale holder): forwarded on the 200 response', async () => {
+      const staleRow = {
+        session_id: 'stale-adam-1',
+        heartbeat_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+        metadata: { role: 'adam' },
+      };
+      const req = { app: { locals: { supabase: adamHolderSb(staleRow) } }, body: { role: 'adam', callsign: 'adam' } };
+      const res = mockRes();
+      await addSession(req, res);
+
+      expect(res.status).not.toHaveBeenCalledWith(400);
+      const payload = res.json.mock.calls.at(-1)[0];
+      expect(payload.uiLabel).toBe('Replace the stale Adam');
+      expect(payload.uiEnabled).toBe(true);
+      expect(payload.holderIsFresh).toBe(false);
+    });
+
+    it('refused path (fresh holder): forwarded on the 400 response, alongside reason', async () => {
+      const freshRow = { session_id: 'fresh-adam-1', heartbeat_at: new Date().toISOString(), metadata: { role: 'adam' } };
+      const req = { app: { locals: { supabase: adamHolderSb(freshRow) } }, body: { role: 'adam', callsign: 'adam' } };
+      const res = mockRes();
+      await addSession(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      const payload = res.json.mock.calls.at(-1)[0];
+      expect(payload.ok).toBe(false);
+      expect(payload.reason).toMatch(/already holds this role/);
+      expect(payload.uiLabel).toBe('Adam is live');
+      expect(payload.uiEnabled).toBe(false);
+      expect(payload.holderIsFresh).toBe(true);
+    });
+  });
+
   // Quick-fix QF-20260731-222: a refusal thrown inside spawn() (tree-currency, launch contract)
   // must answer {ok:false, reason} — not fall through to the EVA error handler, which flattens it
   // to a bare 422 the sessions page can only render as "Spawn failed: 422".

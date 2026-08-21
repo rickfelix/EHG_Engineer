@@ -1,10 +1,10 @@
 ---
 category: deployment
 status: approved
-version: 1.0.0
-author: EXEC (Alpha-2) — SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001
-last_updated: 2026-07-28
-tags: [deployment, fleet, sessions, kill, restart, reconcile, operations]
+version: 1.1.0
+author: EXEC (Alpha-2) — SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001; updated by SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001
+last_updated: 2026-08-21
+tags: [deployment, fleet, sessions, kill, restart, reconcile, operations, console-reaper]
 ---
 # Fleet session lifecycle — kill, restart, reconcile
 
@@ -43,6 +43,16 @@ Not an implementation detail — the sequence is what makes the verb safe to run
   signalled. An **unrecoverable** tree HALTS the whole operation with nothing released and nothing
   terminated. The property that matters is *durability*, not pushability: work committed locally is
   preserved, so a dirty tree with no remote proceeds once committed.
+
+  **A session with no `worktree_path` has nothing to preserve, and must not halt.** `wasDirty` is
+  decided by its own check (`isWorktreeDirty`, `scripts/fleet-kill.mjs`) rather than an
+  unconditional `false` — correct for a seat *with* a worktree, but that alone made every seat
+  *without* one (9 of 11 live sessions, measured at the time) permanently unkillable: `prepark-wip`
+  had nothing to run against, `pre.action` read `'noop'`, and a noop was read as non-durable
+  regardless of cause. The fix is a `hasWorktree` short-circuit: no `worktree_path` → `wasDirty`
+  is `false` by construction and the noop is durable *because there was nothing to lose*, not
+  because a check ran and happened to pass. A `noop` for any other reason (a protected branch, an
+  unrecoverable push) still reports non-durable and still halts.
 - **release → reset** — the claim is released before the work item is handed back, and the hand-back
   is skipped entirely if the release was not proven.
 - **record** — a `fleet_verb_stop` event is the durable record that the kill happened.
@@ -91,7 +101,14 @@ is restart completing its own contract on a process it has already replaced.
 
 `claude_sessions.session_id` **is** Claude Code's resume token — not `metadata.resume_uuid`, which
 is populated on 1 of 13,025 rows and would silently cold-start anything that read it. A repo-wide
-test enforces that nothing reads it.
+test enforces that nothing reads it — widened to catch **aliased** reads too, since a destructure
+or a renamed local variable reading `resume_uuid` cold-starts identically while being invisible to
+a literal-property-access detector. One legitimate read is allowlisted with its rationale recorded
+alongside it: `lib/fleet/session-registry-adapter.js`'s `resume_uuid: meta.resume_uuid || null`
+forwards the field for storage — it never treats it as the resume token. The detector is not
+exhaustive against every aliasing shape (destructuring, `this.meta`, optional chaining); see the
+"KNOWN RESIDUAL LIMITATION" comment in `lib/fleet/resume-context.test.js` for what remains
+unguarded and why it is believed latent, not live.
 
 - The transcript's existence is proven by a **real `stat`**, never inferred from the id.
 - A restart with a token emits `--fork-session` with a **fresh** `--session-id`; re-registering
@@ -106,6 +123,28 @@ Resolution lives in `spawnReplacement`, the single choke point, so `restart`,
 `restart()` covered only three of the four — **coverage by call-routing is not coverage of the
 invariant**.
 
+## Console reaping (adjacent, separate mechanism)
+
+Not part of the kill order above — a **different** problem (an orphaned, empty Windows console
+with no session attached to it at all, vs. a live seat's own graceful exit). `reapEmptyConsoles`
+(`lib/fleet/console-reaper.mjs`) declares a console dead only on the AND of two independent legs
+(absent from the `claude.exe` image set, AND `last_tool_at` unmoved across a ≥10-minute sampling
+window) and re-checks each candidate immediately before killing, so a stale scan cannot destroy
+live work — reaping is asymmetric-safe by construction, since "contains no process" means a false
+positive has nothing to lose.
+
+Gated by `FLEET_CONSOLE_REAPER_ENABLED` (default off, checked inside the function that actually
+kills — not only in its caller, so a future second caller cannot bypass it). Scheduled via
+`node scripts/setup-console-reaper-task.mjs [--interval-minutes 30]` under a session-0 principal
+(`SYSTEM`); `--status` / `--remove` roll it back. Registering it under a plain named-user account
+is refused by construction (`lib/fleet/console-parentage.mjs`'s `validateScheduledTaskPrincipal`)
+— that principal type is the exact leak mechanism this reaper exists to stop, so there is no
+non-elevated fallback route; registering the task requires an Administrator prompt.
+
+Capturing a console's parentage *at creation time* (rather than reaping it later) is a separate
+mechanism with its own live-drill doc: `docs/protocol/console-creation-watcher-drill.md`
+(`SD-LEO-INFRA-CONSOLE-REAPER-CREATION-001`).
+
 ## Operating notes
 
 - Rehearse with `--dry-run` first; it exercises identify/sample/preserve without signalling.
@@ -113,3 +152,8 @@ invariant**.
   `claude auth status` reports identity happily while every API call 401s.
 - A refusal is a **result**, not a failure of the tool. `refused` with a named reason is the design
   working: it means the system declined to act on something it could not verify.
+- The Fleet Panel's "Add session" button surfaces *why* a singleton request was allowed or refused
+  (`uiLabel`/`uiEnabled`/`holderIsFresh` in the `add-session` response body) — e.g. an amber
+  "stale-but-present holder" label when the existing Adam/Solomon row's heartbeat is old enough to
+  permit a second spawn. The label is server-decided and rendered verbatim; the panel never
+  re-derives the role/singleton decision client-side.

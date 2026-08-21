@@ -2,8 +2,12 @@
 // The orchestration is tested in lib/fleet/graceful-kill.test.js; these cover the ADAPTER,
 // where a wrong mapping would silently change what the operator is told.
 
-import { describe, it, expect } from 'vitest';
-import { claudeProbeToTriState, buildKillDeps } from '../../../scripts/fleet-kill.mjs';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { claudeProbeToTriState, buildKillDeps, isWorktreeDirty } from '../../../scripts/fleet-kill.mjs';
 
 describe('FR2-CLI: pidIsClaude is TRI-STATE and must not be flattened', () => {
   it('MATCH means the pid IS the agent', () => {
@@ -61,5 +65,62 @@ describe('FR2-CLI: buildKillDeps supplies verifyGone and it FAILS CLOSED', () =>
     expect(claudeProbeToTriState('NO_MATCH') === false).toBe(true);   // gone
     expect(claudeProbeToTriState('MATCH') === false).toBe(false);     // still alive
     expect(claudeProbeToTriState('PROBE_FAILED') === false).toBe(false); // unverifiable -> NOT gone
+  });
+
+  it('FR-3: supplies isWorktreeDirty -- the regression that left wasDirty unconditionally false in production', () => {
+    // Was absent before the fix, matching verifyGone's own prior omission -- the wiring gap that
+    // hid the isWorkDurableAfterPrepark defect regardless of that function being fixed.
+    expect(typeof deps({ dryRun: false }).isWorktreeDirty).toBe('function');
+  });
+});
+
+// SD-LEO-INFRA-FLEET-SESSION-LIFECYCLE-001 / FR-3 — graceful-kill's own, independent dirty check.
+// Real git operations against throwaway tmpdirs, not a mocked execSync: a synchronicity claim in
+// particular is only meaningful proven against the ACTUAL return value, not a stubbed one.
+describe('FR-3: isWorktreeDirty — synchronous, fail-closed, and correctly discriminates', () => {
+  let dirtyRepo;
+  let cleanRepo;
+
+  beforeAll(() => {
+    dirtyRepo = mkdtempSync(path.join(tmpdir(), 'fk-dirty-'));
+    execSync('git init -q', { cwd: dirtyRepo });
+    writeFileSync(path.join(dirtyRepo, 'untracked.txt'), 'wip');
+
+    cleanRepo = mkdtempSync(path.join(tmpdir(), 'fk-clean-'));
+    execSync('git init -q', { cwd: cleanRepo });
+    execSync('git config user.email "t@t.com" && git config user.name "t"', { cwd: cleanRepo });
+    writeFileSync(path.join(cleanRepo, 'committed.txt'), 'stable');
+    execSync('git add -A && git commit -q -m init', { cwd: cleanRepo });
+  });
+
+  afterAll(() => {
+    rmSync(dirtyRepo, { recursive: true, force: true });
+    rmSync(cleanRepo, { recursive: true, force: true });
+  });
+
+  it('TR-2: the return value is a real boolean, not a thenable -- the caller reads it unawaited', () => {
+    // The concrete, falsifiable check the PLAN-phase correction asks for: an accidentally-async
+    // implementation would return a Promise here, and `typeof promise.then` would be 'function'.
+    const result = isWorktreeDirty(cleanRepo);
+    expect(typeof result).toBe('boolean');
+    expect(typeof result?.then).not.toBe('function');
+  });
+
+  it('detects a genuinely dirty tree (untracked file)', () => {
+    expect(isWorktreeDirty(dirtyRepo)).toBe(true);
+  });
+
+  it('detects a genuinely clean tree', () => {
+    expect(isWorktreeDirty(cleanRepo)).toBe(false);
+  });
+
+  it('FAILS CLOSED on a path git cannot resolve at all', () => {
+    expect(isWorktreeDirty(path.join(tmpdir(), 'fk-does-not-exist-' + Date.now()))).toBe(true);
+  });
+
+  it('FAILS CLOSED on a missing/empty worktreePath -- never silently treated as clean', () => {
+    expect(isWorktreeDirty(null)).toBe(true);
+    expect(isWorktreeDirty('')).toBe(true);
+    expect(isWorktreeDirty(undefined)).toBe(true);
   });
 });
