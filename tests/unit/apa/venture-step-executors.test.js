@@ -295,6 +295,33 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
 
     expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
   });
+
+  it('SEC-003 subdomain-prefix residual (found by a second security-agent re-verification): a host that merely STARTS WITH the expected origin is rejected, not accepted', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    // startsWith() is a PREFIX match, not an origin comparison -- an origin has no
+    // terminating delimiter, so "http://fixture.evil.com".startsWith("http://fixture") is
+    // true. An attacker controlling the redirect target arranges exactly this by naming a
+    // subdomain after the victim host. True origin equality (new URL(...).origin) must
+    // reject it.
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'http://fixture.evil.com/register' });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/refusing to submit credentials.*navigated away from expected origin/i);
+
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('an unparseable current URL fails closed (refuses) rather than silently passing', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'not-a-valid-url' });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/could not be parsed to verify its origin/i);
+
+    expect(page.calls.fill).toEqual([]);
+  });
 });
 
 describe('buildStepExecutor() — explicit stepOverrides take precedence', () => {
