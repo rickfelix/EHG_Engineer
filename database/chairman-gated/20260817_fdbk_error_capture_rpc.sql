@@ -40,10 +40,16 @@
 -- regardless of client input, because chairman_all_decision_signals' flag_review arm ingests any row
 -- at severity high/critical using client-influenced content as the chairman-facing title — an anon
 -- caller must never reach that path. p_metadata is accepted but only a fixed allow-list of keys is
--- persisted (message/stack_trace/page_url context only) — scripts/corrective-triage.mjs's
--- promoteFinding() reads metadata.promote_payload straight into SD creation, gated on
--- category='corrective_finding'; this function never accepts or sets category, and never persists an
--- arbitrary client-supplied metadata object verbatim.
+-- ever persisted (user_agent/browser/component_stack, each length-capped — see fn body). CORRECTED
+-- (SECURITY re-verify, post-apply-review): the load-bearing control against
+-- scripts/corrective-triage.mjs's promoteFinding() is THIS allow-list, not `category`.
+-- promoteFinding() selects by id only (no category/source_type filter) and gates purely on
+-- `metadata.promote_payload` being present (live-read: scripts/corrective-triage.mjs:70-83) — an
+-- earlier version of this comment claimed the gate was category='corrective_finding', which is
+-- promoteFinding()'s SIBLING listing path (listFindings, :56), not the promotion path itself. This
+-- function never sets category (stays NULL) and, independently, the metadata allow-list means no
+-- key outside {user_agent, browser, component_stack} — including promote_payload — is ever
+-- persisted verbatim, live-verified against a hostile {"promote_payload":{...}} input.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- error_hash IS SERVER-COMPUTED, NOT A CLIENT PARAMETER — a deliberate divergence from
@@ -120,7 +126,11 @@
 --     is the same unbounded-repeat-call property every dedup-and-aggregate counter has (including
 --     record_venture_error's own identical design), not a new hole this file introduces. Accepted
 --     because a genuine per-caller/per-IP limiter is separate infrastructure this RPC family does not
---     have anywhere yet, not a gap specific to this file.
+--     have anywhere yet, not a gap specific to this file. IMPACT, STATED PLAINLY (SECURITY re-verify,
+--     post-apply-review -- the original text here understated this): each such call is an UPDATE on
+--     public.feedback -- a dead tuple, a WAL record, and the updated_at trigger firing, per request,
+--     with no per-caller/per-IP limit anywhere. Sustained, this is autovacuum/index-bloat pressure and
+--     lock contention on a shared, chairman-facing operational table, not merely a harmless counter.
 -- (b) The storm ceiling itself remains a real, unauthenticated DoS against NEW-fingerprint capture:
 --     ~50 distinct fake messages/hour (~1 every 72s) keeps the ceiling tripped indefinitely, so real,
 --     never-before-seen errors that hour are not individually recorded (the watermark row still makes
@@ -128,6 +138,35 @@
 --     fixed-ceiling volume control, already present in record_venture_error's own identical ceiling
 --     design, and NOT newly introduced by the reorder below -- the reorder only closes the narrower
 --     sub-case where the ceiling also blocked already-tracked fingerprints.
+--
+-- TWO MORE DISCLOSED, ACCEPTED RESIDUALS (SECURITY re-verify, post-apply-review, coordinator-
+-- requested independent pass -- both live-verified, not inferred):
+-- (c) FIRST-WRITER-WINS CONTENT SUBSTITUTION: the dedup UPDATE and both ON CONFLICT DO UPDATE
+--     clauses only ever touch occurrence_count/last_seen/updated_at -- title, description,
+--     error_message, and metadata are written ONCE, by whoever submits a fingerprint first, and are
+--     never revised. An unauthenticated caller who can predict a real error's message+stack_trace
+--     (common React/browser error strings are guessable) can pre-seed that fingerprint with arbitrary
+--     title/description/component_stack; every genuine subsequent occurrence then silently aggregates
+--     into the attacker's row, climbing occurrence_count -- making poisoned content look MORE
+--     important on any operator dashboard. Bounded by the severity clamp (stays out of
+--     chairman_all_decision_signals' flag_review arm) and by ~50 seedable fingerprints/hour, but this
+--     is a real, persistent, unauthenticated telemetry-poisoning primitive, not covered by (a) or (b).
+--     Accepted because closing it (e.g. content-immutable-after-first-write is already the design;
+--     a genuine fix needs caller-identity-aware moderation, out of scope for a telemetry-intake RPC).
+-- (d) THE SEVERITY CLAMP IS AN UNBACKED SINGLE POINT OF FAILURE: chairman_all_decision_signals'
+--     flag_review arm gates purely on severity IN ('critical','high') with client-controlled title/
+--     description for these rows -- no source_type/feedback_type/category/venture_id filter. The
+--     in-function clamp (this file, always forces critical/high -> medium) is correct today, but the
+--     compensating control OUTSIDE this function -- the RESTRICTIVE policy
+--     anon_feedback_ingress_bounds, whose WITH CHECK includes severity <> ALL('critical','high') --
+--     is structurally bypassed for this function's writes: public.feedback is owned by postgres,
+--     relforcerowsecurity=false, and postgres has rolbypassrls=true, so RLS never evaluates against
+--     this SECURITY DEFINER function's own inserts/updates. A future CREATE OR REPLACE that drops or
+--     weakens the in-function clamp would NOT be caught by that policy. Unlike the sibling
+--     fn_submit_internal_feedback (whose header names this exact bypass explicitly), this file did
+--     not. Accepted as a known residual rather than added as a table CHECK constraint (which WOULD
+--     survive owner-privileged writes) because that constraint change is a separate, independently
+--     reviewable decision this SD does not make.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -306,7 +345,9 @@ BEGIN
 
   -- New fingerprint, never seen before. venture_id is never set (non-venture-scoped by design). status,
   -- source_type, created_at, user_id are all server-computed, never client-suppliable. category is
-  -- never set by this function at all (defends against the corrective_finding injection surface).
+  -- never set by this function at all -- but the actual defense against promoteFinding()'s
+  -- promote_payload injection surface is the metadata allow-list at v_safe_metadata above, not
+  -- category (see the corrected header note).
   --
   -- ON CONFLICT ... DO UPDATE (adversarial ship-review finding, PLAN-TO-LEAD): the dedup UPDATE
   -- above and this INSERT are two separate statements with no lock between them, so two concurrent
@@ -340,9 +381,10 @@ GRANT EXECUTE ON FUNCTION public.fn_submit_error_capture(TEXT, TEXT, TEXT, TEXT,
 COMMENT ON FUNCTION public.fn_submit_error_capture(TEXT, TEXT, TEXT, TEXT, JSONB) IS
 'SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001. Anon+authenticated-callable SECURITY DEFINER RPC
 for browser error telemetry. Severity always clamped to low/medium (anonymous threat model).
-error_hash always server-computed, never client-supplied. Fixed metadata key allow-list only --
-never persists an arbitrary client object or sets category (defends the corrective_finding /
-promote_payload injection surface). Distinct-fingerprint hourly storm ceiling with an observable
+error_hash always server-computed, never client-supplied. Fixed metadata key allow-list (user_agent/
+browser/component_stack only, each length-capped) is the load-bearing defense against
+corrective-triage.mjs promoteFinding()''s promote_payload injection surface -- this function also
+never sets category, but promoteFinding() does not gate on category at all. Distinct-fingerprint hourly storm ceiling with an observable
 watermark row, mirroring record_venture_error''s doctrine.';
 
 -- ============================================================
@@ -366,11 +408,32 @@ BEGIN
   IF (SELECT prosecdef FROM pg_proc WHERE oid = 'public.fn_submit_error_capture(text,text,text,text,jsonb)'::regprocedure) IS NOT TRUE THEN
     RAISE EXCEPTION 'VERIFY FAILED: fn_submit_error_capture is not SECURITY DEFINER';
   END IF;
+  -- SECURITY re-verify follow-up (coordinator-requested, post-apply-review): the original check
+  -- here only asserted the index NAME exists. CREATE UNIQUE INDEX IF NOT EXISTS silently no-ops
+  -- when an index of that name already exists under a DIFFERENT definition -- the exact retro
+  -- pitfall this block's own preamble names (a verify that only checks catalog SHAPE passes while
+  -- every real call fails). A wrong-definition survivor here means the ON CONFLICT arbiter in
+  -- fn_submit_error_capture no longer matches any live index -> 42P10 on every single call, with
+  -- the name-only check still reporting PASS. Assert uniqueness AND the exact predicate/definition,
+  -- not just that a same-named object exists.
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE schemaname = 'public' AND tablename = 'feedback' AND indexname = 'idx_feedback_error_capture_hash'
   ) THEN
     RAISE EXCEPTION 'VERIFY FAILED: idx_feedback_error_capture_hash is missing -- ON CONFLICT in fn_submit_error_capture would fail';
+  END IF;
+  -- Predicate string live-verified (rolled-back transaction, same DB, this review) against the
+  -- ACTUAL Postgres pg_get_expr rendering of this exact WHERE clause -- NOT hand-typed/guessed:
+  -- both varchar columns render with an explicit ::text cast on each side of the comparison.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE c.relname = 'idx_feedback_error_capture_hash'
+      AND i.indisunique
+      AND pg_get_expr(i.indpred, i.indrelid) = '(((source_type)::text = ''error_capture''::text) AND ((feedback_type)::text = ''sentry_error''::text) AND (venture_id IS NULL))'
+  ) THEN
+    RAISE EXCEPTION 'VERIFY FAILED: idx_feedback_error_capture_hash exists but is NOT unique with the expected partial predicate -- a stale/wrong-definition index of the same name would leave ON CONFLICT in fn_submit_error_capture matching no live index (42P10 on every call), invisible to a name-only check';
   END IF;
 END
 $verify$;
