@@ -7,12 +7,27 @@
  * CHECK constraint at all. A status='void' write (the ORIGINAL, pre-VALIDATION proposal) would
  * have passed every mock-based unit test green while being a live no-op (23514, silently
  * swallowed by this file's pre-existing unchecked-UPDATE pattern -- QF-20260728-870). This test
- * proves a status='canceled' write genuinely survives the LIVE constraint, not just the mock.
+ * proves the constraint actually accepts 'canceled' and rejects both plausible near-misses
+ * ('cancelled', 'void'), via introspection of the live pg_get_constraintdef -- no write, no probe
+ * insert (the EXEC-TO-PLAN TESTING review flagged the original version's unconditional live probe
+ * INSERT into the operational chairman-SMS table as unnecessarily risky given a read-only
+ * alternative exists and was confirmed working in this environment).
  *
- * Approach: follows tests/database/model-usage-log-phase-check.test.js's two-tier pattern --
- * introspect pg_get_constraintdef first; fall back to a tagged probe insert+delete against the
- * real table if the introspection RPC is unavailable. Avoids touching real chairman-SMS rows by
- * tagging the probe with a unique dedupe_key and deleting it unconditionally afterward.
+ * KNOWN GAP, DISCLOSED (TESTING review, EXEC-TO-PLAN): this file lives under tests/database/, so
+ * it is collected into vitest's `db` project (vitest.config.js DB_INCLUDE). That project's setup
+ * (tests/setup.db.js -> installDbTierGate) applies an UNCONDITIONAL beforeEach(ctx.skip()) to
+ * EVERY test in the project when no non-production Supabase ref is designated
+ * (tests/helpers/db-target.js DESIGNATED_NON_PROD_REFS, currently empty) -- regardless of whether
+ * the individual test is read-only. This test is therefore SKIPPED today, same as its sibling
+ * tests/database/model-usage-log-phase-check.test.js. Moving it to tests/unit/ is NOT a fix: that
+ * project's setupFiles deliberately omit the dotenv load ("unit tests must not reach the live
+ * DB" -- vitest.config.js), so it would either silently fail to connect or rely on ambient env
+ * vars the project's own design intentionally withholds. This SD does not re-architect the
+ * db-tier gate (out of scope, and would affect 225+ other DB suites) -- the constraint value
+ * itself has been independently verified correct via direct measurement four times this session
+ * (LEAD VALIDATION, EXEC self, EXEC-TO-PLAN TESTING, EXEC-TO-PLAN SECURITY), so the shipped code
+ * is not at risk; what remains missing is a DURABLE regression guard that would catch a FUTURE
+ * accidental typo. Flagged via /signal as a systemic harness gap, tracked separately.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -26,61 +41,29 @@ const supabase = createClient(
 );
 
 describe('sms_outbound_obligations_status_check enum (SD-LEO-FIX-SMS-OUTBOUND-WORKER-001 TS-10)', () => {
-  it("accepts status='canceled' -- the exact value this SD's voidStaleAndCollapseObligations writes", async () => {
-    let def = null;
-    let introspectError = null;
-    try {
-      // exec_sql (param sql_text) -- confirmed live in this environment. exec_sql_readonly
-      // (the sibling model-usage-log test's RPC name) does not exist here; using the
-      // RPC directly confirmed to resolve avoids a guaranteed-fallback first attempt.
-      const rpcResult = await supabase.rpc('exec_sql', {
-        sql_text: `SELECT pg_get_constraintdef(c.oid) AS def
-              FROM pg_constraint c
-              JOIN pg_class t ON t.oid = c.conrelid
-              WHERE t.relname = 'sms_outbound_obligations'
-                AND c.conname = 'sms_outbound_obligations_status_check'`
-      });
-      if (rpcResult.error) introspectError = rpcResult.error;
-      else def = rpcResult.data?.[0]?.result?.[0]?.def ?? null;
-    } catch (e) {
-      introspectError = e;
+  it("accepts 'canceled' and rejects both 'cancelled' and 'void' -- read-only introspection, no writes", async () => {
+    // exec_sql (param sql_text) -- confirmed live in this environment across four independent
+    // checks this SD. exec_sql_readonly (the sibling model-usage-log test's RPC name) does not
+    // exist here.
+    const { data, error } = await supabase.rpc('exec_sql', {
+      sql_text: `SELECT pg_get_constraintdef(c.oid) AS def
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            WHERE t.relname = 'sms_outbound_obligations'
+              AND c.conname = 'sms_outbound_obligations_status_check'`
+    });
+
+    if (error) {
+      // Introspection RPC unavailable in this environment -- report clearly rather than silently
+      // passing. This is NOT expected to fire given the RPC's confirmed availability; if it does,
+      // that is itself a signal the environment changed and this test needs attention.
+      throw new Error(`exec_sql introspection failed: ${error.message}. The value has not been re-verified by this run.`);
     }
 
-    if (def) {
-      expect(def, `constraint def should mention 'canceled': ${def}`).toMatch(/canceled/);
-      // Locks in the spelling-hazard finding (VAL-1): neither variant spelling is accepted.
-      expect(def, `constraint def should NOT accept the double-L spelling: ${def}`).not.toMatch(/cancelled/);
-      return;
-    }
-
-    // Fallback: RPC unavailable in this environment -- probe INSERT against the real table.
-    const probeDedupeKey = 'test-status-check-probe-' + Date.now();
-    const probeRow = {
-      recipient_phone: '+15550000000',
-      kind: 'test_status_check_probe',
-      body: 'SD-LEO-FIX-SMS-OUTBOUND-WORKER-001 TS-10 probe row -- safe to delete if found stale.',
-      status: 'canceled',
-      dedupe_key: probeDedupeKey,
-    };
-    const { error: insertErr } = await supabase.from('sms_outbound_obligations').insert(probeRow);
-    // Cleanup synth probe row regardless of outcome.
-    await supabase.from('sms_outbound_obligations').delete().eq('dedupe_key', probeDedupeKey);
-    expect(insertErr, `status='canceled' should not raise 23514 (introspection unavailable: ${introspectError?.message}): ${insertErr?.message}`)
-      .toBeNull();
-  });
-
-  it("rejects an unlisted status value (e.g. 'void') -- proves the mock's silent-acceptance gap is real", async () => {
-    const probeDedupeKey = 'test-status-check-reject-probe-' + Date.now();
-    const probeRow = {
-      recipient_phone: '+15550000000',
-      kind: 'test_status_check_probe',
-      body: 'SD-LEO-FIX-SMS-OUTBOUND-WORKER-001 TS-10 negative probe -- should be rejected by the CHECK.',
-      status: 'void',
-      dedupe_key: probeDedupeKey,
-    };
-    const { error: insertErr } = await supabase.from('sms_outbound_obligations').insert(probeRow);
-    await supabase.from('sms_outbound_obligations').delete().eq('dedupe_key', probeDedupeKey);
-    expect(insertErr).not.toBeNull();
-    expect(insertErr?.code).toBe('23514');
+    const def = data?.[0]?.result?.[0]?.def;
+    expect(def, 'constraint definition should be present').toBeTruthy();
+    expect(def, `constraint def should accept 'canceled': ${def}`).toMatch(/\bcanceled\b/);
+    expect(def, `constraint def should NOT accept the double-L spelling 'cancelled': ${def}`).not.toMatch(/\bcancelled\b/);
+    expect(def, `constraint def should NOT accept the original 'void' proposal: ${def}`).not.toMatch(/\bvoid\b/);
   });
 });

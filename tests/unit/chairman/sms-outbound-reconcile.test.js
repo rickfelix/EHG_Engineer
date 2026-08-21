@@ -317,20 +317,71 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
   });
 
-  it('TS-3: a stale decision_question obligation WITH a decision_id is re-emitted, never voided', async () => {
+  it('TS-3: a stale decision_question obligation WITH a decision_id is re-emitted as a fresh obligation, and the original is superseded (never re-asked again) -- SECURITY SEC-2 fix', async () => {
+    const originalCreatedAt = ago(7 * HOUR);
     const sb = makeFakeSupabase({ sms_outbound_obligations: [
-      owedRow({ id: 'ob-decision', kind: 'decision_question', decision_id: 'dec-123', created_at: ago(7 * HOUR) }),
+      owedRow({ id: 'ob-decision', kind: 'decision_question', decision_id: 'dec-123', created_at: originalCreatedAt }),
     ] });
     const provider = okProvider();
     const summary = await reconcileOutboundSms(sb, { provider });
     expect(summary.reEmitted).toBe(1);
-    expect(summary.voided).toBe(0);
+    expect(summary.voided).toBe(0); // NOT counted as a stale-void -- distinct reason (superseded-by-reask)
     const original = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-decision');
-    expect(original.status).not.toBe('canceled'); // NEVER voided by the staleness path
+    // The original IS marked canceled once superseded by its own re-ask (SEC-2 fix) -- this is
+    // NOT the "not-after check" voiding FR-1 describes (last_error names the specific successor,
+    // never a bare voided_stale:), so the decision is never silently dropped, only replaced.
+    expect(original.status).toBe('canceled');
+    expect(original.last_error).toMatch(/^re_asked_as:/);
     const reAsk = sb._tables.sms_outbound_obligations.find((r) => r.id !== 'ob-decision');
     expect(reAsk).toBeTruthy();
     expect(reAsk.decision_id).toBe('dec-123');
     expect(reAsk.kind).toBe('decision_question');
+    expect(reAsk.status).not.toBe('canceled'); // eligible (this single row is well under burst cap, so it is claimed+sent in this same drain)
+    // FR-2 AC-2: the re-ask carries a FRESH created_at, strictly newer than the stale original's.
+    expect(new Date(reAsk.created_at).getTime()).toBeGreaterThan(new Date(originalCreatedAt).getTime());
+    expect(original.last_error).toContain(reAsk.id);
+  });
+
+  it('SECURITY SEC-2 regression: repeated sweeps against the SAME stale decision produce exactly ONE re-ask, not one per sweep (amplification guard)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-decision-amp', kind: 'decision_question', decision_id: 'dec-amp', created_at: ago(7 * HOUR) }),
+    ] });
+    const provider = okProvider();
+    // Four consecutive sweeps against the SAME persisted state -- pre-fix this produced one fresh
+    // re-ask row EVERY sweep (proven live by the SECURITY sub-agent's PROBE-A: table size grew
+    // every tick, unbounded). Post-fix, the original is superseded after sweep 1, so it is no
+    // longer status='owed' and cannot be picked up as "stale decision_question" again.
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    const decisionRows = sb._tables.sms_outbound_obligations.filter((r) => r.decision_id === 'dec-amp');
+    // Exactly 2 rows total for this decision: the original (now superseded) and ONE re-ask -- not
+    // 5 (original + 4 sweeps' worth of re-asks).
+    expect(decisionRows.length).toBe(2);
+    expect(decisionRows.filter((r) => r.status === 'canceled').length).toBe(1);
+  });
+
+  it('SECURITY SEC-2 regression (multi-decision, matches the sub-agent\'s PROBE-B shape): N stale decisions across several sweeps produce exactly N re-asks total, never more', async () => {
+    const rows = Array.from({ length: 9 }, (_, i) => owedRow({
+      id: `ob-decision-${i}`, kind: 'decision_question', decision_id: `dec-${i}`, created_at: ago(7 * HOUR),
+    }));
+    const sb = makeFakeSupabase({ sms_outbound_obligations: rows });
+    const provider = okProvider();
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    // 9 originals (now superseded) + 9 re-asks = 18 total -- NOT the unbounded growth the security
+    // sub-agent measured pre-fix (9 -> 15 -> 18 SENDS while the table kept growing every sweep).
+    expect(sb._tables.sms_outbound_obligations.length).toBe(18);
+    const supersededOriginals = sb._tables.sms_outbound_obligations.filter((r) => r.last_error && r.last_error.startsWith('re_asked_as:'));
+    expect(supersededOriginals.length).toBe(9); // exactly one supersede per original -- never re-superseded
+    // Every decision_id has exactly 2 rows total (original + its one re-ask), never 3+ (which
+    // would mean it was re-asked more than once across the 3 sweeps).
+    for (let i = 0; i < 9; i++) {
+      const forThisDecision = sb._tables.sms_outbound_obligations.filter((r) => r.decision_id === `dec-${i}`);
+      expect(forThisDecision.length).toBe(2);
+    }
   });
 
   it('TS-11 (VAL-3): a stale decision_question obligation WITHOUT a decision_id is neither voided nor re-emitted -- it is left untouched and proceeds through the normal (unmodified) send path', async () => {
@@ -349,6 +400,27 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     expect(row.status).toBe('sent');
   });
 
+  it('self-review gap: a re-ask enqueue failure (missing_fields) is logged, never silently dropped, and never crashes the sweep', async () => {
+    // enqueueChairmanSms guards on recipientPhone/kind/body before ever touching the DB. A
+    // corrupt row (should not occur via this codebase's own writers, but defensive coverage
+    // matters here since a re-ask failure must never crash the whole reconcile pass) exercises
+    // that guard's failure return rather than its happy path.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-corrupt-decision', kind: 'decision_question', decision_id: 'dec-999', body: '', created_at: ago(7 * HOUR) }),
+    ] });
+    const provider = okProvider();
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.reEmitted).toBe(0); // the enqueue failed -- not counted as a success
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('re-ask enqueue failed'))).toBe(true);
+    expect(sb._tables.sms_outbound_obligations.length).toBe(1); // no phantom row inserted
+    // The original row is still never voided -- a failed re-ask must not be conflated with a
+    // successful one that then gets treated as safe to drop the original.
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).not.toBe('canceled');
+  });
+
   it('TS-4: same-kind duplicates collapse to newest-only', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [
       owedRow({ id: 'ob-old', kind: 'status_update', created_at: ago(3 * MIN) }),
@@ -365,7 +437,11 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     expect(old.last_error).toBe('voided_superseded_by:ob-new');
     expect(mid.status).toBe('canceled');
     expect(mid.last_error).toBe('voided_superseded_by:ob-new');
-    expect(newest.status).not.toBe('canceled'); // survives — eligible to send
+    // FR-3 AC-1 ("only the newest is claimed/sent"), asserted directly rather than by the weaker
+    // "not canceled" (TESTING review finding: a regression stranding the newest as 'owed' would
+    // have still passed the weaker assertion).
+    expect(summary.sent).toBe(1);
+    expect(newest.status).toBe('sent');
   });
 
   it('FR-2 guard: two FRESH (non-stale) decision_question obligations sharing a kind are NEVER collapsed against each other', async () => {
@@ -453,7 +529,9 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
       const realUpdate = api.update.bind(api);
       api.update = (vals) => {
         if (vals && vals.status === 'canceled') {
-          return { eq: () => ({ eq: () => ({ then: (resolve) => resolve({ data: null, error: { message: 'simulated write failure' } }) }) }) };
+          const failResult = { data: null, error: { message: 'simulated write failure' } };
+          const thenable = { then: (resolve) => resolve(failResult) };
+          return { eq: () => ({ eq: () => ({ select: () => thenable, then: thenable.then }) }) };
         }
         return realUpdate(vals);
       };
@@ -467,6 +545,115 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     // Fail-soft: the row is NOT silently believed voided — it remains eligible and is reconsidered.
     const row = sb._tables.sms_outbound_obligations[0];
     expect(row.status).not.toBe('canceled');
+  });
+
+  it('SECURITY SEC-3: a lost race (UPDATE matches 0 rows, no error) is NOT counted as a successful void -- the row stays eligible, not silently over-reported', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ id: 'ob-raced', kind: 'status_update', created_at: ago(7 * HOUR) })] });
+    // Simulate a concurrent worker having already moved this row off 'owed' between the
+    // voidStaleAndCollapseObligations select and its own UPDATE: the real DB would return
+    // data:[] (0 matched rows), error:null -- indistinguishable from success unless the caller
+    // checks the returned array, which is exactly what SEC-3 required this code to start doing.
+    const realFrom = sb.from.bind(sb);
+    sb.from = (table) => {
+      const api = realFrom(table);
+      if (table !== 'sms_outbound_obligations') return api;
+      const realUpdate = api.update.bind(api);
+      api.update = (vals) => {
+        if (vals && vals.status === 'canceled') {
+          const lostRace = { data: [], error: null };
+          const thenable = { then: (resolve) => resolve(lostRace) };
+          return { eq: () => ({ eq: () => ({ select: () => thenable, then: thenable.then }) }) };
+        }
+        return realUpdate(vals);
+      };
+      return api;
+    };
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider() });
+    expect(summary.voided).toBe(0); // NOT counted -- 0 rows actually matched
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).not.toBe('canceled'); // the mock never actually mutated it either
+  });
+
+  it('TR-2/TR-3 injectability: opts.staleThresholdMs and opts.burstCap actually govern behavior, not just the exported defaults', async () => {
+    // A row only 90s old would NOT be stale under the 6h default, but IS stale under a 60s override.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ kind: 'status_update', created_at: ago(90 * 1000) })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, staleThresholdMs: 60 * 1000 });
+    expect(summary.voided).toBe(1); // proves the injected threshold was actually used, not the 6h default
+
+    const sb2 = makeFakeSupabase({ sms_outbound_obligations: Array.from({ length: 5 }, (_, i) => owedRow({ id: `ob-cap-${i}`, kind: `kind-${i}`, created_at: ago((5 - i) * MIN) })) });
+    const summary2 = await reconcileOutboundSms(sb2, { provider: okProvider(), burstCap: 1 });
+    expect(summary2.sent).toBe(1); // proves the injected cap (1) was used, not DEFAULT_BURST_CAP (3)
+  });
+
+  it('all-decision_question burst (VAL-4 shape, SECURITY PROBE-P2): decision packets are still burst-bounded even though they are never voided or collapsed', async () => {
+    const rows = Array.from({ length: 5 }, (_, i) => owedRow({
+      id: `ob-dq-${i}`, kind: 'decision_question', decision_id: null, created_at: ago((5 - i) * MIN),
+    }));
+    const sb = makeFakeSupabase({ sms_outbound_obligations: rows });
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider() });
+    expect(summary.voided).toBe(0);
+    expect(summary.collapsed).toBe(0);
+    expect(summary.sent).toBe(3); // the burst cap alone still bounds decision-kind sends
+  });
+
+  it('a stale non-decision row whose not_before is still in the future is NOT voided -- it has not yet had its chance to send (TESTING review finding)', async () => {
+    const future = new Date(Date.now() + 30 * MIN).toISOString();
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-deferred', kind: 'status_update', created_at: ago(7 * HOUR), not_before: future }),
+    ] });
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider() });
+    expect(summary.voided).toBe(0);
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('owed'); // untouched -- not voided, not sent (still deferred)
+  });
+
+  it('SECURITY SEC-1: a successful stale-void fires the alert seam (never silently dropped)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ id: 'ob-alert-check', kind: 'dead_coordinator_alert', created_at: ago(7 * HOUR) })] });
+    const alert = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), alert });
+    expect(summary.voided).toBe(1);
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert.mock.calls[0][0].id).toBe('ob-alert-check');
+  });
+
+  it('a collapse-void does NOT fire the alert seam (a genuine duplicate is not lost information -- the newest survivor sends regardless)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-dup-old', kind: 'status_update', created_at: ago(2 * MIN) }),
+      owedRow({ id: 'ob-dup-new', kind: 'status_update', created_at: ago(1 * MIN) }),
+    ] });
+    const alert = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), alert });
+    expect(summary.collapsed).toBe(1);
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('a rejected collapse-superseding write is diagnosed and does not over-report the collapsed count', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-collapse-old', kind: 'status_update', created_at: ago(2 * MIN) }),
+      owedRow({ id: 'ob-collapse-new', kind: 'status_update', created_at: ago(1 * MIN) }),
+    ] });
+    const realFrom = sb.from.bind(sb);
+    sb.from = (table) => {
+      const api = realFrom(table);
+      if (table !== 'sms_outbound_obligations') return api;
+      const realUpdate = api.update.bind(api);
+      api.update = (vals) => {
+        if (vals && vals.status === 'canceled' && vals.last_error && vals.last_error.startsWith('voided_superseded_by:')) {
+          const failResult = { data: null, error: { message: 'simulated collapse write failure' } };
+          const thenable = { then: (resolve) => resolve(failResult) };
+          return { eq: () => ({ eq: () => ({ select: () => thenable, then: thenable.then }) }) };
+        }
+        return realUpdate(vals);
+      };
+      return api;
+    };
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.collapsed).toBe(0);
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('collapse UPDATE failed'))).toBe(true);
+    const old = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-collapse-old');
+    expect(old.status).not.toBe('canceled');
   });
 });
 
