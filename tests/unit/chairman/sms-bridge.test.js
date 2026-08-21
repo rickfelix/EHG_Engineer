@@ -27,6 +27,7 @@ function makeFakeSupabase(seed = {}) {
       filters.every(([col, op, val]) => {
         if (op === 'eq') return row[col] === val;
         if (op === 'gte') return row[col] >= val;
+        if (op === 'gt') return row[col] > val;
         if (op === 'not_is_null') return row[col] !== null && row[col] !== undefined;
         if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
         if (op === 'is') return (row[col] ?? null) === val;
@@ -59,6 +60,7 @@ function makeFakeSupabase(seed = {}) {
       },
       eq(col, val) { ctx.filters.push([col, 'eq', val]); return api; },
       gte(col, val) { ctx.filters.push([col, 'gte', val]); return api; },
+      gt(col, val) { ctx.filters.push([col, 'gt', val]); return api; },
       not(col, _op, _val) { ctx.filters.push([col, 'not_is_null', null]); return api; },
       in(col, arr) { ctx.filters.push([col, 'in', arr]); return api; },
       is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
@@ -293,6 +295,19 @@ describe('handleInboundSmsReply — send/receive round trip against a fake provi
     const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-race');
     // Exactly one reply's text landed — not a merge/clobber of both.
     expect(['answer A', 'answer B']).toContain(decision.brief_data.sms_reply.text);
+
+    // FR-1 guard on the lost-race branch itself (testing-agent finding: this site converted
+    // consideredDecisionId but had no assertion distinguishing it, so a regression back to
+    // matchedDecisionId here would pass every existing check). The loser's log row must carry
+    // considered_decision_id only; the winner's must carry matched_decision_id only.
+    const winnerSid = first.outcome === 'answered' ? 'SM-race-A' : 'SM-race-B';
+    const loserSid = winnerSid === 'SM-race-A' ? 'SM-race-B' : 'SM-race-A';
+    const winnerRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === winnerSid);
+    const loserRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === loserSid);
+    expect(winnerRow.matched_decision_id).toBe('dec-race');
+    expect(winnerRow.considered_decision_id).toBeFalsy();
+    expect(loserRow.matched_decision_id).toBeFalsy();
+    expect(loserRow.considered_decision_id).toBe('dec-race');
   });
 
   // SD-LEO-FEAT-SMS-INBOUND-RELAY-001 FR-3 additions.
@@ -597,6 +612,63 @@ describe('sms_inbound_log matched_decision_id vs considered_decision_id (FR-1)',
     // The join a live consumer would run: only the genuinely-resolved row is a valid join target.
     const joinable = sb._tables.sms_inbound_log.filter((r) => r.matched_decision_id === 'dec-fr3-neg');
     expect(joinable.length).toBe(1);
+  });
+
+  // testing-agent per-site mutation sweep (V3): the undo path's two non-resolving branches
+  // (no eligible window; lost the claim race) had no dedicated coverage at all, so a regression
+  // back to matchedDecisionId on either site would pass every existing test unnoticed.
+  it('undo with no open undo window: no_match, considered only (not a genuine resolution)', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-undo-closed', status: 'pending', brief_data: {}, amount_usd: 500,
+        // undo_deadline already in the past -- the window has closed, nothing to cancel.
+        undo_deadline: new Date(Date.now() - 60_000).toISOString(),
+        undone_at: null, consumed_at: null,
+      }],
+      chairman_notifications: [{
+        id: 'n-undo-closed', channel: 'sms', recipient_phone: '+15550020001', decision_id: 'dec-undo-closed',
+        created_at: new Date().toISOString(),
+      }],
+    });
+    const result = await handleInboundSmsReply(sb, { from: '+15550020001', to: '+15559999999', body: 'undo', messageSid: 'SM-undo-closed', signatureValid: true });
+    expect(result.resolved).toBe(false);
+    expect(result.outcome).toBe('no_match');
+    const row = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === 'SM-undo-closed');
+    expect(row.matched_decision_id).toBeFalsy();
+    expect(row.considered_decision_id).toBe('dec-undo-closed');
+    // The decision itself is untouched -- never claimed by an undo that had no window to use.
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-undo-closed');
+    expect(decision.undone_at).toBeFalsy();
+  });
+
+  it('two concurrent undo replies for the same window: only one wins, the loser is considered-only', async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-undo-race', status: 'pending', brief_data: {}, amount_usd: 500,
+        undo_deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
+        undone_at: null, consumed_at: null,
+      }],
+      chairman_notifications: [{
+        id: 'n-undo-race', channel: 'sms', recipient_phone: '+15550020002', decision_id: 'dec-undo-race',
+        created_at: new Date().toISOString(),
+      }],
+    });
+    const [first, second] = await Promise.all([
+      handleInboundSmsReply(sb, { from: '+15550020002', to: '+15559999999', body: 'undo', messageSid: 'SM-undo-race-A', signatureValid: true }),
+      handleInboundSmsReply(sb, { from: '+15550020002', to: '+15559999999', body: 'undo', messageSid: 'SM-undo-race-B', signatureValid: true }),
+    ]);
+    const outcomes = [first.outcome, second.outcome].sort();
+    expect(outcomes).toEqual(['no_match', 'undone']);
+    const winnerSid = first.outcome === 'undone' ? 'SM-undo-race-A' : 'SM-undo-race-B';
+    const loserSid = winnerSid === 'SM-undo-race-A' ? 'SM-undo-race-B' : 'SM-undo-race-A';
+    const winnerRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === winnerSid);
+    const loserRow = sb._tables.sms_inbound_log.find((r) => r.provider_message_id === loserSid);
+    expect(winnerRow.matched_decision_id).toBe('dec-undo-race');
+    expect(winnerRow.considered_decision_id).toBeFalsy();
+    expect(loserRow.matched_decision_id).toBeFalsy();
+    expect(loserRow.considered_decision_id).toBe('dec-undo-race');
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-undo-race');
+    expect(decision.undone_at).toBeTruthy();
   });
 
   // testing-agent B2: logInbound's insert was previously unbound -- a schema-drift or constraint
