@@ -148,11 +148,15 @@
 --     (common React/browser error strings are guessable) can pre-seed that fingerprint with arbitrary
 --     title/description/component_stack; every genuine subsequent occurrence then silently aggregates
 --     into the attacker's row, climbing occurrence_count -- making poisoned content look MORE
---     important on any operator dashboard. Bounded by the severity clamp (stays out of
---     chairman_all_decision_signals' flag_review arm) and by ~50 seedable fingerprints/hour, but this
---     is a real, persistent, unauthenticated telemetry-poisoning primitive, not covered by (a) or (b).
---     Accepted because closing it (e.g. content-immutable-after-first-write is already the design;
---     a genuine fix needs caller-identity-aware moderation, out of scope for a telemetry-intake RPC).
+--     important on any operator dashboard. CORRECTED (see (e) below, cross-session JS-consumer
+--     trace, live-verified): this is NOT bounded by the severity clamp the way an earlier version of
+--     this note claimed -- the clamp only closes chairman_all_decision_signals' flag_review arm.
+--     lib/inbox/unified-inbox-builder.js's loadFeedback() has no severity filter at all, so poisoned
+--     content reaches that operator-facing surface regardless of severity. Bounded only by ~50
+--     seedable fingerprints/hour. A real, persistent, unauthenticated telemetry-poisoning primitive,
+--     not covered by (a) or (b). Accepted because closing it needs caller-identity-aware moderation,
+--     out of scope for a telemetry-intake RPC (content-immutable-after-first-write is already the
+--     current design, not a gap to fix here).
 -- (d) THE SEVERITY CLAMP IS AN UNBACKED SINGLE POINT OF FAILURE: chairman_all_decision_signals'
 --     flag_review arm gates purely on severity IN ('critical','high') with client-controlled title/
 --     description for these rows -- no source_type/feedback_type/category/venture_id filter. The
@@ -167,6 +171,41 @@
 --     not. Accepted as a known residual rather than added as a table CHECK constraint (which WOULD
 --     survive owner-privileged writes) because that constraint change is a separate, independently
 --     reviewable decision this SD does not make.
+--
+-- TWO MORE, FROM A CROSS-SESSION CONSUMER TRACE REQUESTED DURING THIS SAME SECURITY RE-VERIFY
+-- (live-verified against lib/inbox/unified-inbox-builder.js and a repo-wide grep of ehg/src, not
+-- inferred):
+-- (e) lib/inbox/unified-inbox-builder.js's loadFeedback() (lines ~192-201) has NO filter on
+--     `feedback` at all -- no status/severity/category/source_type predicate, unlike
+--     chairman_all_decision_signals' flag_review arm (severity-gated) or corrective-triage.mjs's
+--     promoteFinding() (metadata.promote_payload-gated, see the corrected note above). Every row
+--     this function writes -- at ANY severity, including the clamped low/medium default -- surfaces
+--     its client-controlled title (normalizeFeedback(), row.title, which fn_submit_error_capture
+--     sets verbatim from left(p_message,255)) into the unified inbox / EVA intake-disposition
+--     surface unfiltered. This supersedes the "bounded by the severity clamp" framing in the
+--     original (c) above: the clamp only closes ONE surfacing path (flag_review), not this one.
+--     lib/quality/triage-engine.js's triageUntriaged() (lines ~494-515) similarly has no
+--     severity/category filter and does pick these rows up, but its autoAssign() rule-key lookup
+--     matches nothing for source_type='error_capture' and silently no-ops (no notification, no
+--     auto-SD) -- not a further surfacing path beyond (e) itself. No auto-SD-creation path was found
+--     that reads `feedback` unfiltered and would match an error_capture row (corrective-triage.mjs
+--     and pattern-alert-sd-creator.js are both gated or reads a different table respectively).
+--     Accepted as a residual, same reasoning as (c) -- an intake RPC's whole purpose is to surface
+--     telemetry somewhere; the gap is the ABSENCE of any severity/trust-weighting on that surfacing,
+--     not a new hole this file introduces (unified-inbox-builder.js pre-dates this file and applies
+--     identically to every other feedback source, e.g. record_venture_error).
+-- (f) MITIGATING CONTEXT, not a residual: as of this review, NOTHING in the live ehg frontend calls
+--     fn_submit_error_capture -- a repo-wide grep of ehg/src (outside worktree-archive/coverage-JSON
+--     noise) found zero call sites. ehg/src/components/error-capture/ErrorCaptureProvider.tsx (which
+--     inserts into `feedback` directly, with a non-conforming payload the live schema already
+--     rejects) is unmounted dead code. ehg/src/components/error/GlobalErrorBoundary.tsx IS mounted
+--     app-wide (ehg/src/main.tsx) but its onError handler only console.errors in DEV and does not
+--     call this RPC or touch `feedback`. So (a) through (e) above describe this RPC's exposure once
+--     something wires a live caller to it, not a currently-exploitable path today -- the anon GRANT
+--     alone does not make it reachable without a frontend caller. Re-verify (a)-(e)'s framing again
+--     once a live caller is added, since the actual traffic pattern (predictability of real
+--     message/stack_trace strings, realistic call volume) will then be measurable rather than
+--     theoretical.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 BEGIN;
