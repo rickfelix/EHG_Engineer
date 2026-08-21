@@ -87,17 +87,36 @@ const DECISION_BY_MAX_LEN = 40;
  * live output (0 of 1567 currently-observed leading tokens are UUID-shaped, since this write path
  * has not shipped yet -- corrected per TESTING's EXEC-2 finding that an earlier revision of this
  * comment overstated "UUID" as an already-observed live shape rather than a code-level guarantee).
- * A single long token with no whitespace at all is simply capped at DECISION_BY_MAX_LEN, stored
- * verbatim rather than silently mangled. Exported for tests.
+ * A single long token with no whitespace at all is TRUNCATED to DECISION_BY_MAX_LEN, not stored
+ * verbatim -- corrected per the ship-gate adversarial review (an earlier revision of this line said
+ * "verbatim", which is imprecise: two distinct 60-char tokens sharing the same 40-char prefix DO
+ * collapse to the same stored value on truncation. What's actually guaranteed: never rejected, never
+ * remapped/hashed into something unrelated -- length-capped, not "mangled" in that stronger sense.
+ * Exported for tests.
  *
  * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (F2, TESTING adversarial EXEC review): an earlier
  * revision of this comment claimed "0 exceptions" / "losslessly" in a way that overstated this
  * guarantee -- corrected here rather than adding a hex-guessing heuristic to catch space-separated
  * hashes, which would risk misfiring on ordinary English words that are also valid hex (cab, dead,
  * beef, face, cafe) and would reverse the already-tested, deliberate tradeoff above.
+ *
+ * SHIP-GATE ADVERSARIAL REVIEW (deep-tier): a data-layer CHECK constraint now backs this function's
+ * contract (see database/migrations/20260821_solomon_ledger_decision_requested.sql) -- any write
+ * violating "<=40 chars, no whitespace" now fails at the DB regardless of which code path attempted
+ * it, closing the risk that an unidentified third writer (documented in
+ * scripts/one-off/backfill-solomon-ledger-decision-by.mjs's header) could silently keep contaminating
+ * this column forever with zero signal.
  */
 function normalizeDecisionBy(value) {
-  if (value == null) return null;
+  if (value == null) return null; // loose equality: null/undefined only. 0 and false proceed to
+  // String(value) below ("0", "false") rather than collapsing to null like the old `x || null`
+  // pattern did -- an intentional behavior change (SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001):
+  // never silently drop a value that isn't actually nullish. Unreachable today at every current
+  // caller (the sole production call site always passes a string session id; the backfill script's
+  // input is always a DB text column, never a JS boolean/number) but exported functions get called
+  // by code that doesn't exist yet, and "silently returns null for falsy input" is a worse contract
+  // than "stores the falsy value's string form" for a field whose whole job is not silently dropping
+  // a real decision-maker's identity.
   const s = String(value).trim();
   if (!s) return null;
   const firstToken = s.split(/\s+/, 1)[0];
