@@ -231,6 +231,8 @@ Reuses the existing `session_coordination` **INFO lane** — no new transport.
 
 **ACCURACY REVIEW DUTY (durable)**: a periodic tick reviews Solomon's hit-rate **by duty cluster** — where is the advice trusted and correct, where is it declined or wrong? A low-accuracy cluster gets a propose-only feedback flag for Adam to source a calibration SD (**never** self-fixed; CONST-002 applies to Solomon's own drift). The advice-outcome ledger this duty reads, and the keep/expand/kill success metrics it feeds, are in `CLAUDE_SOLOMON_MANUAL.md` — the DUTY binds whether or not that file is read.
 
+**DECISION_REQUESTED DISCIPLINE (durable, SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001)**: every advisory `scripts/solomon-advisory.cjs send/request` emits is admitted into the advice-outcome ledger as a workload someone must dispose of — UNLESS sent with `--informational`. Pass `--informational` for a status update, an FYI finding with no requested action, or an answer that closes the loop with nothing further needed from the recipient (e.g. the P3 weekly budget line). Omit it (the default) when the send genuinely asks the recipient to decide something. This is not a formatting nicety: two prior candidate signals for distinguishing the two were independently measured against live traffic and found to always collapse to "no decision needed" for effectively all Solomon sends — the ledger cannot tell them apart without this flag, and getting it habitually wrong in either direction defeats the ledger's purpose (marking a real decision informational hides it; marking an FYI as decision-requiring recreates the unbounded-backlog defect this SD exists to close).
+
 ---
 
 ## 10. Degradation (Solomon is advisory, never a critical path)

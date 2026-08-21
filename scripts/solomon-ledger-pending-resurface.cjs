@@ -181,18 +181,56 @@ async function collectLegacyNotifiedIds(supabase, adamId, candidates, nowMs = Da
  * whenever the oldest 50 stale-pending rows never resolved -- pages via .range() past that
  * window (bounded by maxPages) so the whole backlog surfaces over successive/single runs.
  */
+/**
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-3): an informational (fire-and-forget)
+ * advisory is not a workload — admission-scoped, not aging-scoped. This is a DIFFERENT axis than
+ * lib/solomon/conduct-probes.js's staleOpenAdviceCount (decision='pending' alone), which holds its
+ * own explicit anti-aging principle ("the drain must not be able to retire the backlog signal by
+ * aging it") and is a SEPARATE governance consumer — DO NOT extract a shared predicate helper
+ * between the two; that would silently narrow conduct-probes.js's visibility too.
+ * @param {*} query - a query builder already filtered to .eq('decision','pending')
+ */
+function applyDecisionRequestedFilter(query) {
+  return query.eq('decision_requested', true);
+}
+
 async function planStalePending(supabase, { thresholdHours = DEFAULT_THRESHOLD_HOURS, nowMs = Date.now(), pageSize = DEFAULT_PAGE_SIZE, maxPages = DEFAULT_MAX_PAGES } = {}) {
   const cutoff = new Date(nowMs - thresholdHours * 60 * 60 * 1000).toISOString();
   const all = [];
+  // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-3/TS-5a): mirrors captureLedgerRow's
+  // sequencing fallback on the read side. If decision_requested is queried before the chairman
+  // applies 20260821_solomon_ledger_decision_requested.sql, fall back to the pre-SD query
+  // (decision='pending' alone) instead of throwing — FR-1b's DEFAULT true guarantees this fallback
+  // returns exactly the same rows the post-migration query would return for every existing row.
+  let decisionRequestedColumnMissing = false;
   for (let page = 0; page < maxPages; page++) {
     const from = page * pageSize;
-    const { data, error } = await supabase
+    let query = supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table, not yet in the live snapshot
       .select('id, correlation_id, sd_key, proposal_summary, created_at')
-      .eq('decision', 'pending')
+      .eq('decision', 'pending');
+    if (!decisionRequestedColumnMissing) query = applyDecisionRequestedFilter(query);
+    let { data, error } = await query
       .lte('created_at', cutoff)
       .order('created_at', { ascending: true })
       .range(from, from + pageSize - 1);
+    // 42703 (undefined_column) is the REAL live code for this query shape — an .eq() filter on a
+    // missing column surfaces Postgres's own error, verified live against the unmigrated table.
+    // PGRST204 (schema-cache-miss) is accepted too, belt-and-braces: this codebase has already
+    // hit THREE different error shapes for the identical missing-column condition depending on
+    // query type (write/upsert vs. head-count-read vs. normal-read) — see checkLedgerCaptureHealth.
+    const missingColumnCodes = new Set(['42703', 'PGRST204']);
+    if (error && !decisionRequestedColumnMissing && missingColumnCodes.has(error.code) && /decision_requested/.test(error.message || '')) {
+      decisionRequestedColumnMissing = true;
+      console.error(`WARN: decision_requested column missing — falling back to pre-SD query (apply database/migrations/20260821_solomon_ledger_decision_requested.sql) — ${error.message}`);
+      ({ data, error } = await supabase
+        .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — same table, degraded-fallback read
+        .select('id, correlation_id, sd_key, proposal_summary, created_at')
+        .eq('decision', 'pending')
+        .lte('created_at', cutoff)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1));
+    }
     if (error) throw new Error(`planStalePending query failed: ${error.message}`);
     if (!data || data.length === 0) break;
     all.push(...data);

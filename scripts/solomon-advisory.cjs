@@ -127,8 +127,17 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
  * FRAMING_CLASSES) is stamped as payload.framing_class alongside payload.oracle=true — a
  * sub-discriminator on the SAME leg (no new kind), per FW-3 design doc §6c. Omitted entirely when
  * not provided (byte-identical to pre-SD behavior for every existing sender).
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1): `informational` stamps
+ * payload.decision_requested UNCONDITIONALLY (always a real boolean, unlike this payload's other
+ * optional keys) via resolveDecisionRequested(). DELIBERATELY INDEPENDENT of reply_class/replyTo —
+ * two derived signals (expectsReply, then resolvedReplyClass) were independently measured against
+ * live Solomon traffic and disproven before this one was chosen: both collapse to
+ * 'fire-and-forget' for effectively all live Solomon sends (resolvedReplyClass even discards
+ * replyClass outright when replyTo is set, the line above), so deriving decision_requested from
+ * either would have suppressed the large majority of advisories that demonstrably needed and got a
+ * real disposition. See tests/fixtures/solomon-ledger-decision-requested-counterexample.json.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal, informational }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -139,6 +148,7 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     sender_callsign: senderCallsign || null,
     repo: repo || null,
     reply_class: resolvedReplyClass,
+    decision_requested: resolveDecisionRequested({ informational }),
   };
   if (framingClass) payload.framing_class = framingClass;
   // FR-1/FR-4 (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C): the correction discriminator. NOTE what
@@ -185,6 +195,22 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   if (resolvedReplyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type, no intent_action.
   return payload;
+}
+
+/**
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1): does this advisory REQUEST a decision?
+ * Default TRUE — `--informational` is the explicit opt-OUT. Default-true is deliberate, not
+ * incidental: on the day this ships, before Solomon has adopted the flag, every send is
+ * unflagged — under a default-false design that would classify 100% of real dispositions as
+ * "no decision needed" (measured against the 34-row counter-example fixture), reproducing the
+ * exact suppression failure that disqualified the two prior candidate signals. Default-true is a
+ * provable no-op for every existing consumer, and makes the FALSE-count (not the true-count) the
+ * real, non-gameable adoption metric once Solomon starts using the flag. Strict `!== true` so a
+ * non-boolean parse result (e.g. the string 'true') never silently no-ops the signal. Exported for
+ * tests.
+ */
+function resolveDecisionRequested({ informational } = {}) {
+  return informational !== true;
 }
 
 /**
@@ -637,10 +663,28 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
  * unavailable the row still lands with cost_tokens/cost_wall_ms=null and the durable cost_captured=false
  * marker, so a missing datum never blocks a write nor silently distorts the budget rollup (which counts
  * only cost_captured rows). `readTelemetry` is injectable for tests.
+ *
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1c): also writes decision_requested (default
+ * true when omitted, matching the migration's own DEFAULT and resolveDecisionRequested's contract).
+ * SEQUENCING GUARD: the whole upsert above fails on ANY error, including an unknown-column error if
+ * the chairman-gated 20260821_solomon_ledger_decision_requested.sql migration has not landed yet.
+ * A single bounded retry WITHOUT decision_requested degrades to exactly pre-SD capture behavior
+ * (never total silent capture loss) — scoped to an error naming this column, so a genuine DB fault
+ * is never masked or retried. Live-verified (EXEC, direct upsert probe against the real unmigrated
+ * table): the upsert path currently returns PGRST204 for this condition, same as before this SD.
+ * 42703 is ALSO accepted defensively — not because it's been observed on this specific path, but
+ * because this table has now demonstrated 3 DIFFERENT error shapes for the identical missing-column
+ * condition depending on query TYPE (42703 on a plain select/`.eq()` filter, an uninformative
+ * `{message:""}` on a head:true count, PGRST204 on upsert) — narrowing to only the one shape
+ * confirmed today would silently break again if a client-library/PostgREST version change ever
+ * shifts which shape a given query type produces. The `/decision_requested/` message-content check
+ * is the actual safety net against masking an unrelated fault, not the error code. Not cached across calls: each call independently
+ * attempts the full write first, so capture resumes automatically the moment the migration lands,
+ * with no process restart required.
  */
 async function captureLedgerRow(
   supabase,
-  { advisoryId, correlationId, sdKey, body, sessionId } = {},
+  { advisoryId, correlationId, sdKey, body, sessionId, decisionRequested } = {},
   { readTelemetry = readSessionCostTelemetry } = {}
 ) {
   if (!correlationId) return { captured: false, reason: 'no correlation_id' };
@@ -649,24 +693,33 @@ async function captureLedgerRow(
   try { tele = readTelemetry({ sessionId }) || { captured: false }; }
   catch { tele = { captured: false }; }
   const costCaptured = tele.captured === true;
+  const row = {
+    advisory_id: advisoryId || null,
+    correlation_id: correlationId,
+    sd_key: sdKey || null,
+    proposal_summary: String(body || '').slice(0, 4000),
+    proposal_kind: 'advisory',
+    cost_tokens: costCaptured ? tele.costTokens : null,
+    cost_wall_ms: costCaptured ? tele.wallMs : null,
+    cost_captured: costCaptured,
+    decision_requested: decisionRequested !== false,
+  };
   try {
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .upsert(
-        {
-          advisory_id: advisoryId || null,
-          correlation_id: correlationId,
-          sd_key: sdKey || null,
-          proposal_summary: String(body || '').slice(0, 4000),
-          proposal_kind: 'advisory',
-          cost_tokens: costCaptured ? tele.costTokens : null,
-          cost_wall_ms: costCaptured ? tele.wallMs : null,
-          cost_captured: costCaptured,
-        },
-        { onConflict: 'correlation_id', ignoreDuplicates: true }
-      );
-    if (error) return { captured: false, reason: error.message };
-    return { captured: true, costCaptured };
+      .upsert(row, { onConflict: 'correlation_id', ignoreDuplicates: true });
+    if (!error) return { captured: true, costCaptured };
+    const missingColumnCodes = new Set(['PGRST204', '42703']);
+    const unknownDecisionRequestedColumn = missingColumnCodes.has(error.code) && /decision_requested/.test(error.message || '');
+    if (!unknownDecisionRequestedColumn) return { captured: false, reason: error.message };
+    // Bounded, single retry: exactly pre-SD payload shape, so a pending chairman-apply degrades
+    // gracefully instead of stopping capture entirely.
+    const { decision_requested: _omit, ...preSdRow } = row;
+    const retry = await supabase
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — same table, degraded-fallback write
+      .upsert(preSdRow, { onConflict: 'correlation_id', ignoreDuplicates: true });
+    if (retry.error) return { captured: false, reason: retry.error.message };
+    return { captured: true, costCaptured, degraded: true, reason: error.message };
   } catch (e) {
     return { captured: false, reason: (e && e.message) || String(e) };
   }
@@ -681,16 +734,37 @@ let ledgerCaptureFailures = 0;
  * solomon_advice_outcome_ledger is reachable (not PGRST205/missing) and reports its current row
  * count. Stateless (one cheap head-count SELECT) — callers compare successive counts over time to
  * confirm the count is advancing. Fail-open: never throws. Exported for tests.
+ *
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1c): a SECOND, tiny probe (limit(1), NOT
+ * head:true) detects a not-yet-applied decision_requested migration as a DISTINCT
+ * columnMissing:true state. Two probes, not one, because they were empirically found (live
+ * against the real, then-unmigrated table) to behave differently: a head:true request on a
+ * nonexistent column returns an essentially empty error ({message:""}, no code) — PostgREST
+ * appears to swallow the diagnostic on HEAD responses — while a normal (non-head) select surfaces
+ * Postgres's own 42703 "undefined_column" cleanly. The row-count probe therefore stays head:true
+ * (cheap, reliable for its own purpose, unchanged from pre-SD); the column-existence probe is a
+ * SEPARATE, minimal (1 row, 1 boolean column) non-head request run only for that diagnostic.
+ * captureLedgerRow's degraded-fallback already keeps capture alive on its own; this probe is what
+ * makes that degraded state loud rather than silently indistinguishable from full health.
  */
 async function checkLedgerCaptureHealth(supabase) {
   try {
     const { count, error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — same table as captureLedgerRow above
       .select('id', { count: 'exact', head: true });
-    if (error) return { healthy: false, reason: error.message };
+    if (error) return { healthy: false, columnMissing: false, reason: error.message };
+
+    const colProbe = await supabase
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — tiny non-head probe, see docblock above
+      .select('decision_requested')
+      .limit(1);
+    if (colProbe.error) {
+      const columnMissing = colProbe.error.code === '42703' && /decision_requested/.test(colProbe.error.message || '');
+      return { healthy: false, columnMissing, reason: colProbe.error.message };
+    }
     return { healthy: true, rowCount: count ?? 0 };
   } catch (e) {
-    return { healthy: false, reason: (e && e.message) || String(e) };
+    return { healthy: false, columnMissing: false, reason: (e && e.message) || String(e) };
   }
 }
 
@@ -744,7 +818,10 @@ async function drainSolomonOutbound(supabase, { newSessionId, oldSessionIds } = 
 // flag the SEND path parses; a drift test pins them against the source so a newly parsed flag cannot
 // be added without appearing here.
 const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout', '--framing-class'];
-const BOOL_FLAGS = ['--direct'];
+// SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001: --informational added here, not just parsed at the
+// call site — this list is what sendBodyFromArgv strips, so an entry missing here reproduces the
+// exact --part/--message-kind body-leak defect documented above, for this flag instead.
+const BOOL_FLAGS = ['--direct', '--informational'];
 // The status sub-command has its own narrower parse. Keeping it separate stops a legitimate '--eta'
 // token inside a message body from being stripped by the send path — the same asymmetry the leak
 // caused, pointing the other way.
@@ -833,7 +910,13 @@ async function main() {
     // "startup" (its first fire after Solomon starts) AND "periodic" (every subsequent fire). Always
     // loud (not --quiet-suppressed): a silent capture gap must never hide behind routine quiet mode.
     const ledgerHealth = await checkLedgerCaptureHealth(supabase);
-    if (!ledgerHealth.healthy) {
+    if (!ledgerHealth.healthy && ledgerHealth.columnMissing) {
+      // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (F3): distinct from the generic unhealthy
+      // case below — captureLedgerRow's bounded fallback (FR-1c) means capture IS still happening
+      // here, just degraded (no decision_requested on new rows). The generic "NOT being captured"
+      // wording is actively wrong for this state, so it gets its own accurate message.
+      console.error(`WARN: solomon_advice_outcome_ledger decision_requested column not yet migrated — capture is DEGRADED, not stopped (fallback keeps writing rows without decision_requested; apply database/migrations/20260821_solomon_ledger_decision_requested.sql to restore full capture; ${ledgerHealth.reason})`);
+    } else if (!ledgerHealth.healthy) {
       console.error(`WARN: solomon_advice_outcome_ledger capture gauge UNHEALTHY — ${ledgerHealth.reason} (advisories are NOT being captured; QF-20260701-289)`);
     }
     // FR-1: surface broadcast chairman directives FIRST-CLASS (above consults) with Solomon's per-directive
@@ -939,6 +1022,11 @@ async function main() {
   const toArg = toIdx >= 0 ? (argv[toIdx + 1] || '').toLowerCase() || null : null;
   const directIdx = argv.indexOf('--direct');
   const peerArg = toArg || (directIdx >= 0 ? 'adam' : null);
+  // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1): a real boolean, never the string
+  // '--informational' or 'true' — resolveDecisionRequested's strict `!== true` check depends on it.
+  // argv.indexOf(...) >= 0, matching --direct's own convention above (not .includes()) — the
+  // flag-drift guard (tests/unit/helpers/parsed-flags.js) only recognizes argv.indexOf('--flag').
+  const informationalArg = argv.indexOf('--informational') >= 0;
   // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: partIdx and mkIdx were MISSING here,
   // so --part and --message-kind and their values fell through into the message BODY. Proven by
   // execution before fixing: `send --part 2/3 --message-kind amend "real body here"` produced
@@ -1015,7 +1103,7 @@ async function main() {
   // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
   let payload;
   try {
-    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg });
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg, informational: informationalArg });
   } catch (e) {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
@@ -1088,10 +1176,13 @@ async function main() {
     sdKey: process.env.SD_KEY || null,
     body: payload.body,
     sessionId, // W3 (FR-6): key cost telemetry to the writing session at write time
+    decisionRequested: payload.decision_requested, // FR-1: threaded straight from the payload's own resolved value
   });
   if (!ledgerResult.captured) {
     ledgerCaptureFailures += 1;
     console.error(`WARN: ledger capture failed (${ledgerCaptureFailures} this run) — ${ledgerResult.reason}`);
+  } else if (ledgerResult.degraded) {
+    console.error(`WARN: ledger capture DEGRADED (decision_requested column missing — apply database/migrations/20260821_solomon_ledger_decision_requested.sql) — ${ledgerResult.reason}`);
   }
 
   // QF-20260705-488 (chairman-caught): a consult ANSWER must also land in the ORIGINATOR's
@@ -1171,6 +1262,7 @@ module.exports = {
   // The parse lives in an unexported main(), which is half of why the flag-leak went unseen — every
   // existing assertion called buildAdvisoryPayload with named args and never crossed argv.
   bodyFromArgv, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS,
+  resolveDecisionRequested, // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-1
 };
 
 if (require.main === module) {
