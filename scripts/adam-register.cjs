@@ -182,6 +182,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   // — surfaced by the MULTIPLE_ADAMS detector + refused on the next register (eventual convergence).
   const retired = [];
   const retireFallbackUsed = []; // QF-20260703-883: priors retired via JS-merge (clear_adam_flag RPC absent)
+  const retireSkippedFresh = []; // ADVERSARIAL REVIEW (PR #7369): priors skipped as "raced back to fresh"
   let retireBlocked = false;
   if (decision.retire.length) {
     // Injectable (defaults to a fresh Date.now() read, unchanged production behavior) so tests can
@@ -220,7 +221,13 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     // isStatusFreshEligible must classify freshness the SAME way decideSingleAdamGuard just did.
     const freshNow = new Set(current.filter((a) => isStatusFreshEligible(a.status) && isFresh(a.heartbeat_at, nowMs2, ADAM_FRESH_MS)).map((a) => a.session_id));
     for (const sid of decision.retire) {
-      if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Adam
+      // ADVERSARIAL REVIEW (PR #7369, WARNING): restoring isFresh()'s missing arg made this skip
+      // reachable for the first time -- it used to be dead code (isFresh always returned false).
+      // Track it: registration above already ran unconditionally, so a skip here means this call
+      // knowingly leaves a second role='adam' row tagged (the deliberate racing-restart protection,
+      // not a bug) -- the result and message must say so, not report a plain "Registered" as if
+      // nothing else changed. Mirrors the existing retireBlocked/retireFallbackUsed disclosure.
+      if (freshNow.has(sid)) { retireSkippedFresh.push(sid); continue; }
       const r = await supabase.rpc('clear_adam_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
       if (!(r && r.error)) { retired.push(sid); continue; }
       if (!isMissingFunctionError(r.error)) { retireBlocked = true; continue; } // real error — swept later
@@ -269,7 +276,8 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained, inherited,
     retire_fallback_used: retireFallbackUsed.length ? retireFallbackUsed : undefined,
     retire_blocked: retireBlocked || undefined,
-    message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')})` : ''}${drained ? ` — inherited ${drained} row(s) from retired seat(s) (${Object.entries(inherited).map(([k, n]) => `${k}:${n}`).join(', ')})` : ''}${retireFallbackUsed.length ? ` [clear_adam_flag RPC absent — retired via JS-merge fallback; apply the chairman-gated migration for atomic clears]` : ''}${retireBlocked ? ' — WARNING: a stale prior could NOT be retired (see retire_blocked)' : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
+    retire_skipped_fresh: retireSkippedFresh.length ? retireSkippedFresh : undefined,
+    message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')})` : ''}${drained ? ` — inherited ${drained} row(s) from retired seat(s) (${Object.entries(inherited).map(([k, n]) => `${k}:${n}`).join(', ')})` : ''}${retireFallbackUsed.length ? ` [clear_adam_flag RPC absent — retired via JS-merge fallback; apply the chairman-gated migration for atomic clears]` : ''}${retireBlocked ? ' — WARNING: a stale prior could NOT be retired (see retire_blocked)' : ''}${retireSkippedFresh.length ? ` — NOTE: prior(s) ${retireSkippedFresh.join(', ')} raced back to fresh and were deliberately left tagged role=adam (racing-restart protection) — a 2nd role=adam row may exist until its own next register/retire cycle` : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
 }
 
 /**

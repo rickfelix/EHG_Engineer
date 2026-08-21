@@ -465,6 +465,10 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
     expect(r).toMatchObject({ ok: true, action: 'tagged' }); // NOT tagged_after_retire
     expect(r.retired).toEqual([]);
     expect(calls.rpc.map((c) => c.fn)).not.toContain('clear_adam_flag');
+    // ADVERSARIAL REVIEW round 2 (PR #7369, WARNING): this skip is disclosed, not silent -- a 2nd
+    // role=adam row may now exist and the result/message must say so.
+    expect(r.retire_skipped_fresh).toEqual(['racingRestart']);
+    expect(r.message).toMatch(/racingRestart.*raced back to fresh/);
   });
 
   // FR-1/TS-1: the bug this SD fixes — a session with NO existing claude_sessions row must be
