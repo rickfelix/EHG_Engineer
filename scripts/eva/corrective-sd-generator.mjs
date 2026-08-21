@@ -555,10 +555,13 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
 
   // 1b. Minimum occurrence threshold — don't create SDs from single-run data
   // Critical severity override: escalation-level scores (<70) require only 1 occurrence.
-  // SD heal scores (mode='sd-heal') also require only 1 occurrence since they are one-shot.
+  // SD-LEO-INFRA-CORRECTIVE-FINDING-GENERATOR-001 (FR-4): the prior blanket isSDHeal
+  // bypass (mode='sd-heal' => 1 occurrence) let every /heal-driven, non-escalation score
+  // mint on first sight, defeating the anti-noise gate for exactly the path that floods
+  // the queue. /heal-driven scores now require the same MIN_OCCURRENCES=2 confirmation
+  // as any other non-escalation score.
   const isEscalation = (score.total_score ?? 0) < THRESHOLDS.GAP_CLOSURE;
-  const isSDHeal = score.rubric_snapshot?.mode === 'sd-heal';
-  const effectiveMinOccurrences = (isEscalation || isSDHeal) ? 1 : MIN_OCCURRENCES;
+  const effectiveMinOccurrences = isEscalation ? 1 : MIN_OCCURRENCES;
   const { qualifies, count } = await checkMinOccurrences(supabase, score.sd_id ?? null, effectiveMinOccurrences);
   if (!qualifies) {
     console.log(`[corrective-sd-generator] Skipping: only ${count}/${effectiveMinOccurrences} occurrences below threshold`);
@@ -802,6 +805,12 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
         score: score.total_score ?? null,
         title,
         description,
+        // SD-LEO-INFRA-CORRECTIVE-FINDING-GENERATOR-001 (FR-3): this is the ONLY
+        // caller that opts into the natural-key dedup scope. Other callers
+        // (lib/venture-deploy/promote.js, lib/apa/standing-assessment-round.mjs)
+        // pass source_sd_id=null with constant/empty dimensions and rely on
+        // gate_run_id as their sole discriminator -- they must keep the default.
+        dedup_scope: 'natural_key',
         metadata: {
           source: 'corrective_sd_generator',
           dim_summary: dimSummary,

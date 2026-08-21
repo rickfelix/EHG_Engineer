@@ -29,8 +29,8 @@ describe('redirect contract — recorder module', () => {
 
   it('computeDedupHash is deterministic and order-independent', async () => {
     const { computeDedupHash } = await import('../../../lib/eva/corrective-finding-recorder.js');
-    const a = computeDedupHash('SD-X', ['V01', 'V02'], 'run');
-    const b = computeDedupHash('SD-X', ['V02', 'V01'], 'run');
+    const a = computeDedupHash('SD-X', ['V01', 'V02'], 70);
+    const b = computeDedupHash('SD-X', ['V02', 'V01'], 70);
     expect(a).toBe(b);
     expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
