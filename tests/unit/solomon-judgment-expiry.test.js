@@ -16,6 +16,7 @@ import {
   EXPIRY_ACTOR,
   ENABLED_BY_DEFAULT,
   isDecisionByIdentityCheckViolation,
+  violatesDecisionByIdentityCheck,
 } from '../../lib/solomon/judgment-expiry.js';
 
 const NOW = Date.parse('2026-07-29T00:00:00Z');
@@ -212,10 +213,52 @@ describe('the runner retries with a normalized decision_by, scoped to the identi
   });
 
   it('the retry patch still spreads the original expiry patch — never drops judgment_expired_at/_by', () => {
-    expect(src).toMatch(/retryPatch\s*=\s*\{\s*\.\.\.patch,\s*decision_by:\s*normalizeDecisionBy/);
+    expect(src).toMatch(/const normalized = normalizeDecisionBy\(current\?\.decision_by\)/);
+    expect(src).toMatch(/retryPatch\s*=\s*\{\s*\.\.\.patch,\s*decision_by:\s*normalized\s*\}/);
   });
 
   it('a non-matching error is still reported and NOT retried — the bound holds', () => {
     expect(src).toMatch(/if \(!isDecisionByIdentityCheckViolation\(error\)\)\s*\{\s*console\.error/);
+  });
+});
+
+/**
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (ship-gate adversarial review, round 3): the
+ * self-healing retry performs the SAME destructive decision_by normalization that irreversibly
+ * destroyed 1212 rows in the 2026-08-21 incident -- as an automatic side effect of an unrelated aging
+ * stamp. Round 3's finding: the dry run gave an operator zero disclosure that a live run would ALSO
+ * rewrite decision_by, even though the dry run is this file's own stated safety mechanism ("seeing
+ * exactly which rows would be stamped is how an operator decides whether the first real run is
+ * safe"). violatesDecisionByIdentityCheck is the pure predicate the dry-run disclosure is built on.
+ */
+describe('violatesDecisionByIdentityCheck — mirrors the migration CHECK exactly', () => {
+  it('matches every real violating shape seen live (prose with embedded whitespace, or >40 chars)', () => {
+    expect(violatesDecisionByIdentityCheck('adam-08049808 deferred pending SD-ALTIFYAI-LEO-FIX')).toBe(true);
+    expect(violatesDecisionByIdentityCheck('a'.repeat(41))).toBe(true);
+  });
+
+  it('does NOT match any real clean identity shape', () => {
+    for (const v of ['adam', 'adam:d02c9e34', 'adam-08049808', 'solomon-52f5bab8-tail-walk', 'a'.repeat(40)]) {
+      expect(violatesDecisionByIdentityCheck(v)).toBe(false);
+    }
+  });
+
+  it('null/undefined never violate — the CHECK itself is decision_by IS NULL OR (...)', () => {
+    expect(violatesDecisionByIdentityCheck(null)).toBe(false);
+    expect(violatesDecisionByIdentityCheck(undefined)).toBe(false);
+  });
+});
+
+describe('the dry run discloses the decision_by rewrite BEFORE a live run, not just a post-hoc count', () => {
+  const src = readFileSync(resolve(process.cwd(), 'scripts/solomon-judgment-expiry-run.mjs'), 'utf8');
+
+  it('the dry-run branch (before --apply is checked) computes and prints the would-rewrite set', () => {
+    const dryRunBranch = src.slice(src.indexOf('if (!mode.apply)'), src.indexOf('const patch = expiryPatch'));
+    expect(dryRunBranch).toMatch(/violatesDecisionByIdentityCheck/);
+    expect(dryRunBranch).toMatch(/would ALSO have decision_by rewritten/);
+  });
+
+  it('the live retry logs the actual before/after value, not only a running count', () => {
+    expect(src).toMatch(/console\.log\(`\s*HEALED \$\{r\.id\}: decision_by/);
   });
 });
