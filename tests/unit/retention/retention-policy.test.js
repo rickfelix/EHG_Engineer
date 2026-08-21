@@ -139,12 +139,17 @@ describe('policy registry (TS-1)', () => {
     expect(iso).toBe(new Date(now.getTime() - 90 * 86_400_000).toISOString());
   });
 
-  it('the quarantine soak entry is report-only (no archive mode)', () => {
-    expect(SOAK_ENTRIES).toHaveLength(1);
+  it('the quarantine soak entries are report-only (no archive mode)', () => {
+    expect(SOAK_ENTRIES).toHaveLength(3);
     expect(SOAK_ENTRIES[0].table).toBe('management_reviews_quarantine_20260610');
-    expect(SOAK_ENTRIES[0].mode).toBe('soak_until');
-    // and it is NOT in the executable policy list
-    expect(RETENTION_POLICIES.some((p) => p.table === SOAK_ENTRIES[0].table)).toBe(false);
+    const soakTables = SOAK_ENTRIES.map((s) => s.table);
+    expect(soakTables).toContain('eva_scheduler_queue_qkilled20260821');
+    expect(soakTables).toContain('eva_scheduler_queue_qkilled20260821_interlopers');
+    for (const s of SOAK_ENTRIES) {
+      expect(s.mode).toBe('soak_until');
+      // and none is in the executable policy list
+      expect(RETENTION_POLICIES.some((p) => p.table === s.table)).toBe(false);
+    }
   });
 });
 
