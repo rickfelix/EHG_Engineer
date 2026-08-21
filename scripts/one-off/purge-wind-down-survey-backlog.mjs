@@ -62,6 +62,8 @@ export async function runOneBatch(client, runId) {
 
     // Id-cursor guard: skip re-archiving ids a prior partial run already archived (its delete
     // may have failed after a successful archive) — only their delete is retried below.
+    // retention_archive.source_id IS text (verified live), so this stays ::text[] — the bug
+    // was specifically on the feedback.id (uuid) side below.
     const { rows: already } = await client.query(
       `SELECT source_id FROM public.retention_archive
        WHERE source_table = 'feedback' AND source_id = ANY($1::text[])`,
@@ -70,6 +72,10 @@ export async function runOneBatch(client, runId) {
     const alreadyArchivedIds = new Set(already.map((r) => r.source_id));
     const toArchiveIds = ids.filter((id) => !alreadyArchivedIds.has(String(id)));
 
+    // SECURITY evidence (d0547fd5): feedback.id is uuid, not text — `f.id = ANY($1::text[])`
+    // fails live with 42883 "operator does not exist: uuid = text". Both this INSERT's WHERE and
+    // the DELETE below need ::uuid[], not ::text[]. retention_archive.source_id itself stays text
+    // (that column really is text) — only the comparison AGAINST feedback.id needed the fix.
     let archived = 0;
     if (toArchiveIds.length > 0) {
       const { rowCount: insCount } = await client.query(
@@ -77,7 +83,7 @@ export async function runOneBatch(client, runId) {
            (source_table, source_id, row_data, row_timestamp, archived_by, run_id)
          SELECT 'feedback', f.id::text, to_jsonb(f), f.created_at, $2, $3
          FROM public.feedback f
-         WHERE f.id = ANY($1::text[])`,
+         WHERE f.id = ANY($1::uuid[]) AND f.category = 'wind_down_survey'`,
         [toArchiveIds.map(String), ARCHIVED_BY, runId],
       );
       if (insCount !== toArchiveIds.length) {
@@ -86,8 +92,12 @@ export async function runOneBatch(client, runId) {
       archived = toArchiveIds.length;
     }
 
+    // TESTING/SECURITY evidence: defensive AND category='wind_down_survey' on the DELETE too —
+    // belt-and-suspenders against the id set ever including a row from another category (it
+    // can't today, since `ids` comes straight from the category-scoped SELECT above, but a
+    // future edit to that SELECT should not be able to silently widen what this DELETE touches).
     const { rowCount: deleted } = await client.query(
-      `DELETE FROM public.feedback WHERE id = ANY($1::text[])`,
+      `DELETE FROM public.feedback WHERE id = ANY($1::uuid[]) AND category = 'wind_down_survey'`,
       [ids.map(String)],
     );
     await client.query('COMMIT');
@@ -101,7 +111,13 @@ export async function runOneBatch(client, runId) {
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
-  const runId = `wind-down-survey-backlog-purge-${new Date().toISOString().slice(0, 10)}-${crypto.randomUUID().slice(0, 8)}`;
+  // SECURITY evidence (d0547fd5): retention_archive.run_id is uuid (verified live) — the
+  // original composite descriptive string ("wind-down-survey-backlog-purge-<date>-<8hex>") is
+  // not valid uuid input and fails with 22P02. The bare UUID is what actually gets stored;
+  // runLabel is a human-readable tag for console output only, matching
+  // scripts/retention-enforce.js's own runId (a bare crypto.randomUUID(), no prefix).
+  const runId = crypto.randomUUID();
+  const runLabel = `wind-down-survey-backlog-purge-${new Date().toISOString().slice(0, 10)}-${runId.slice(0, 8)}`;
 
   const client = await createDatabaseClient('engineer', {
     connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL,
@@ -111,7 +127,7 @@ async function main() {
     const { rows: [{ n: totalMatching }] } = await client.query(
       `SELECT count(*) AS n FROM public.feedback WHERE category = 'wind_down_survey'`,
     );
-    console.log(`Run: ${runId}`);
+    console.log(`Run: ${runLabel} (retention_archive.run_id=${runId})`);
     console.log(`Matching rows (category='wind_down_survey'): ${totalMatching}`);
 
     if (dryRun) {

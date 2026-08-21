@@ -20,9 +20,17 @@ export async function runCheck({ supabase, baselineCount = SHIP_TIME_BASELINE_CO
     .eq('category', 'wind_down_survey')
     .gte('created_at', since24h);
   if (error) throw new Error(`wind-down-recurrence-check: query failed: ${error.message}`);
+  // SECURITY evidence (d0547fd5): a `head:true` count query can come back `{count: null,
+  // error: null}` (e.g. against a missing/renamed table or an RLS-empty result) — coercing that
+  // to 0 via `?? 0` would read as "confirmed zero inflow, all clear" instead of "the instrument
+  // itself is broken", the exact "blind check reads as healthy" shape this guard exists to
+  // avoid becoming. A non-finite count is a hard failure, never silently folded into 0.
+  if (!Number.isFinite(trailingCount)) {
+    throw new Error(`wind-down-recurrence-check: query returned a non-finite count (${trailingCount}) with no error — the instrument itself may be broken (missing table, RLS, etc.), refusing to treat this as zero inflow`);
+  }
 
-  const verdict = evaluateWindDownRecurrence({ baselineCount, trailingCount: trailingCount ?? 0 });
-  return { ...verdict, baselineCount, trailingCount: trailingCount ?? 0, since24h };
+  const verdict = evaluateWindDownRecurrence({ baselineCount, trailingCount });
+  return { ...verdict, baselineCount, trailingCount, since24h };
 }
 
 async function main() {

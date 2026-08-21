@@ -11,6 +11,24 @@ function record(label, pass, detail = '') {
   console.log(`${pass ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
+// SECURITY evidence (d0547fd5): a defensive guard against ever executing a migration file that
+// contains its OWN COMMIT/BEGIN — this probe's entire safety property rests on being the only
+// thing that opens/closes the transaction. Every migration file in this repo is required to omit
+// explicit BEGIN/COMMIT (apply-migration.js owns the transaction) — this just makes that
+// assumption an explicit, checked precondition here too, not merely an unenforced convention.
+//
+// Must NOT match a PL/pgSQL block's bare `BEGIN` (as in `DO $$ BEGIN ... END $$;`) — that BEGIN
+// opens a procedural block, not a transaction, and this migration legitimately contains two of
+// them (the idempotent-constraint DO block and the self-verification DO block). The reliable
+// discriminator: real transaction-control BEGIN/COMMIT/START TRANSACTION always terminate that
+// same statement with `;` right there (optionally via TRANSACTION/WORK) — a PL/pgSQL block-opening
+// BEGIN is never itself followed directly by `;`.
+function assertNoOwnTransactionControl(sql, path) {
+  if (/^\s*(BEGIN\s*(TRANSACTION|WORK)?\s*;|START\s+TRANSACTION\b[^;]*;|COMMIT\s*(TRANSACTION|WORK)?\s*;)/im.test(sql)) {
+    throw new Error(`${path}: contains its own BEGIN/COMMIT/START TRANSACTION — refusing to execute inside this probe's transaction`);
+  }
+}
+
 const client = await createDatabaseClient('engineer', {
   connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL,
 });
@@ -18,7 +36,9 @@ const client = await createDatabaseClient('engineer', {
 try {
   await client.query('BEGIN');
 
-  const upSql = fs.readFileSync('database/migrations/20260821_worker_wind_down_events.sql', 'utf8');
+  const upPath = 'database/migrations/20260821_worker_wind_down_events.sql';
+  const upSql = fs.readFileSync(upPath, 'utf8');
+  assertNoOwnTransactionControl(upSql, upPath);
   await client.query(upSql);
   record('UP migration executes without error (includes its own self-verification DO block)', true);
 
@@ -78,7 +98,9 @@ try {
   record('a different reason in the same session/minute does NOT collide', ins2.rows.length === 1);
 
   // DOWN exercise: apply DOWN (still inside the same outer transaction — never committed).
-  const downSql = fs.readFileSync('database/migrations/20260821_worker_wind_down_events_DOWN.sql', 'utf8');
+  const downPath = 'database/migrations/20260821_worker_wind_down_events_DOWN.sql';
+  const downSql = fs.readFileSync(downPath, 'utf8');
+  assertNoOwnTransactionControl(downSql, downPath);
   await client.query(downSql);
   const afterDown = await client.query(`SELECT to_regclass('public.worker_wind_down_events') AS t`);
   record('DOWN migration drops the table cleanly', afterDown.rows[0]?.t === null);

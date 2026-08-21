@@ -101,8 +101,8 @@ GRANT ALL ON public.worker_wind_down_events TO service_role;
 -- ---------------------------------------------------------------------------
 DO $wwde_verify$
 DECLARE
-  v_anon_ins   boolean;
-  v_authn_ins  boolean;
+  v_anon_any   boolean;
+  v_authn_any  boolean;
 BEGIN
   ASSERT to_regclass('public.worker_wind_down_events') IS NOT NULL,
     'worker_wind_down_events table did not land';
@@ -118,10 +118,15 @@ BEGIN
       AND policyname = 'worker_wind_down_events_service_role'
   ), 'worker_wind_down_events: service-role policy is missing';
 
-  SELECT has_table_privilege('anon', 'public.worker_wind_down_events', 'INSERT') INTO v_anon_ins;
-  SELECT has_table_privilege('authenticated', 'public.worker_wind_down_events', 'INSERT') INTO v_authn_ins;
-  IF v_anon_ins OR v_authn_ins THEN
-    RAISE EXCEPTION 'worker_wind_down_events: anon/authenticated still hold table-level INSERT after REVOKE (anon=%, authenticated=%)', v_anon_ins, v_authn_ins;
+  -- SECURITY evidence (d0547fd5): has_table_privilege() with a single privilege only proves
+  -- THAT ONE is revoked — a comma-separated list checks whether ANY of them is still held, which
+  -- is the actual "is this table anon/authenticated-writable in any way" question. Checking the
+  -- full class (not just INSERT) so a leaked SELECT/UPDATE/DELETE/TRUNCATE/REFERENCES grant can't
+  -- pass this assert silently.
+  SELECT has_table_privilege('anon', 'public.worker_wind_down_events', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') INTO v_anon_any;
+  SELECT has_table_privilege('authenticated', 'public.worker_wind_down_events', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') INTO v_authn_any;
+  IF v_anon_any OR v_authn_any THEN
+    RAISE EXCEPTION 'worker_wind_down_events: anon/authenticated still hold SOME table-level privilege after REVOKE (anon=%, authenticated=%)', v_anon_any, v_authn_any;
   END IF;
 
   ASSERT EXISTS (
