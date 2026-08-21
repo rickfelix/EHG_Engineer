@@ -13,15 +13,39 @@
 import { describe, it, expect, vi } from 'vitest';
 import { checkSyntheticActorFencing } from '../../../lib/eva/synthetic-actor-guard.js';
 
-function makeSupabase(ventureMetadata) {
+const VALID_SA = {
+  exclusion_predicate_ref: 'lib/synthetic-actor.js#isSyntheticActor',
+  github_repo: 'rickfelix/altifyai',
+  workflow_file: 'deploy.yml',
+  uat_step_name: 'post-deploy-signed-in-uat',
+};
+
+// registeredRepo defaults to VALID_SA.github_repo so existing tests that
+// don't care about the venture_resources cross-check keep passing by
+// default; pass a different value (or null) to exercise a mismatch/absent
+// case specifically.
+function makeSupabase(ventureMetadata, { registeredRepo = VALID_SA.github_repo } = {}) {
   return {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: { metadata: ventureMetadata }, error: null }),
+    from: (table) => {
+      if (table === 'venture_resources') {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: registeredRepo ? { resource_identifier: registeredRepo } : null, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: { metadata: ventureMetadata }, error: null }),
+          }),
         }),
-      }),
-    }),
+      };
+    },
   };
 }
 
@@ -36,13 +60,6 @@ function makeThrowingSupabase(errorMessage) {
     }),
   };
 }
-
-const VALID_SA = {
-  exclusion_predicate_ref: 'lib/synthetic-actor.js#isSyntheticActor',
-  github_repo: 'rickfelix/altifyai',
-  workflow_file: 'deploy.yml',
-  uat_step_name: 'post-deploy-signed-in-uat',
-};
 
 function githubFetchSequence({ runs = [{ id: 1, head_sha: 'abc123' }], jobs = [] } = {}) {
   return vi.fn(async (url) => {
@@ -95,6 +112,50 @@ describe('checkSyntheticActorFencing — hollow/absent config detection', () => 
     );
     expect(result.satisfied).toBe(false);
     expect(result.reason).toMatch(/incomplete/);
+  });
+});
+
+describe('checkSyntheticActorFencing — venture_resources independent cross-check (round 8)', () => {
+  const meta = { uat_probe_required: true, synthetic_actor: VALID_SA };
+
+  it('blocks (fail-closed) when synthetic_actor.github_repo does not match the venture_resources record -- repointing attack', async () => {
+    const supabase = makeSupabase(meta, { registeredRepo: 'rickfelix/some-other-repo' });
+    const fetchImpl = vi.fn();
+    const result = await checkSyntheticActorFencing(supabase, 'v-xcheck-1', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/does not match the venture's independently-registered repo/);
+    expect(fetchImpl).not.toHaveBeenCalled(); // never even attempts the pull against an unverified repo
+  });
+
+  it('blocks (fail-closed) when no venture_resources github_repo record exists at all', async () => {
+    const supabase = makeSupabase(meta, { registeredRepo: null });
+    const result = await checkSyntheticActorFencing(supabase, 'v-xcheck-2', { fetchImpl: vi.fn(), githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/no venture_resources github_repo record exists/);
+  });
+
+  it('fails closed when the venture_resources read itself throws', async () => {
+    const supabase = {
+      from: (table) => {
+        if (table === 'venture_resources') {
+          return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => { throw new Error('db down'); } }) }) }) };
+        }
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { metadata: meta }, error: null }) }) }) };
+      },
+    };
+    const result = await checkSyntheticActorFencing(supabase, 'v-xcheck-3', { fetchImpl: vi.fn(), githubToken: 'tok' });
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/fail-closed/);
+  });
+
+  it('proceeds to the GitHub pull when github_repo matches the venture_resources record', async () => {
+    const supabase = makeSupabase(meta, { registeredRepo: VALID_SA.github_repo });
+    const fetchImpl = githubFetchSequence({
+      jobs: [{ name: 'deploy', steps: [{ name: 'post-deploy-signed-in-uat', conclusion: 'success' }] }],
+    });
+    const result = await checkSyntheticActorFencing(supabase, 'v-xcheck-4', { fetchImpl, githubToken: 'tok' });
+    expect(result.satisfied).toBe(true);
+    expect(fetchImpl).toHaveBeenCalled();
   });
 });
 
