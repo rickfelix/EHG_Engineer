@@ -85,3 +85,50 @@ describe('coordinator self-review — fixture/non-UUID session guard (SD-LEO-FEA
     expect(solicitableWorkers(sess, me)).toEqual([REAL2]);
   });
 });
+
+// QF-20260729-675: partitionParticipants re-derived worker-ness as role!=='adam', so ANY
+// non-Adam non-fleet role (e.g. Solomon) was misclassified as a worker and solicited with
+// a worker-framed prompt. Fixed by reusing the canonical isBuildForbiddenSession predicate.
+// WARNING (per the QF's own falsification-test note): a fixture asserting only that
+// role='adam' is excluded PASSES ON THE BROKEN CODE -- it must use a non-Adam non-fleet
+// role or it does not reproduce the original defect's blind spot.
+describe('coordinator self-review — non-fleet role exclusion from workers (QF-20260729-675)', () => {
+  it('a role=solomon, non_fleet=true session is NOT classified as a worker (adamReviewOn)', () => {
+    const sess = [
+      { session_id: REAL, metadata: { role: 'solomon', non_fleet: true }, heartbeat_at: 'now' },
+      { session_id: REAL2, metadata: {}, heartbeat_at: 'now' },
+    ];
+    const { workers, adamParticipants } = partitionParticipants(sess, 'me-coordinator', true);
+    expect(workers).not.toContain(REAL);
+    expect(adamParticipants).not.toContain(REAL); // Solomon is not Adam either -- neither bucket
+    expect(workers).toEqual([REAL2]);
+  });
+
+  it('role=adam is still excluded from workers and still lands in adamParticipants (no regression)', () => {
+    const sess = [
+      { session_id: REAL, metadata: { role: 'adam', non_fleet: true }, heartbeat_at: 'now' },
+      { session_id: REAL2, metadata: {}, heartbeat_at: 'now' },
+    ];
+    const { workers, adamParticipants } = partitionParticipants(sess, 'me-coordinator', true);
+    expect(workers).toEqual([REAL2]);
+    expect(adamParticipants).toEqual([REAL]);
+  });
+
+  it('a bare non_fleet=true session with no role is also excluded from workers (fail-closed, matches isBuildForbiddenSession)', () => {
+    const sess = [
+      { session_id: REAL, metadata: { non_fleet: true }, heartbeat_at: 'now' },
+      { session_id: REAL2, metadata: {}, heartbeat_at: 'now' },
+    ];
+    const { workers } = partitionParticipants(sess, 'me-coordinator', true);
+    expect(workers).toEqual([REAL2]);
+  });
+
+  it('a genuine fleet worker (no role, non_fleet unset) is unaffected', () => {
+    const sess = [
+      { session_id: REAL, metadata: {}, heartbeat_at: 'now' },
+      { session_id: REAL2, metadata: { role: 'solomon', non_fleet: true }, heartbeat_at: 'now' },
+    ];
+    const { workers } = partitionParticipants(sess, 'me-coordinator', true);
+    expect(workers).toEqual([REAL]);
+  });
+});
