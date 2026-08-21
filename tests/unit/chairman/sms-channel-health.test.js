@@ -22,7 +22,7 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
   // (e.g. {code: 'PGRST205', ...} for a genuine table-absent signature).
   const selectErrorObj = selectError == null ? null
     : (typeof selectError === 'string' ? { message: selectError } : selectError);
-  const upserts = []; const updates = [];
+  const upserts = []; const updates = []; const inserts = [];
   // QF-20260816-245: exposes the LAST select-mode query built against sms_outbound_obligations
   // (not/order/limit args) so a test can assert the fix is actually wired, without needing this
   // shared mock to implement real WHERE-clause filtering for every table.
@@ -33,6 +33,7 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
       select: () => c,
       update: (p) => { state.op = 'update'; state.payload = p; return c; },
       upsert: (p) => { state.op = 'upsert'; state.payload = p; return finishThenable(); },
+      insert: (p) => { inserts.push({ table, payload: p }); return Promise.resolve({ data: null, error: null }); },
       eq: () => c, in: () => c, is: () => c, gte: () => c,
       not: (col, op, val) => { state.notFilters.push([col, op, val]); return c; },
       order: (col, opts) => { state.orderCol = col; state.orderOpts = opts; return c; },
@@ -67,7 +68,7 @@ function makeMock({ obligations = [], selectError = null, registryError = null }
     }
     return c;
   }
-  return { supabase: { from: chain }, upserts, updates, get lastObligationsQuery() { return lastObligationsQuery; } };
+  return { supabase: { from: chain }, upserts, updates, inserts, get lastObligationsQuery() { return lastObligationsQuery; } };
 }
 
 const quiet = { warn: vi.fn(), log: vi.fn(), error: vi.fn() };
@@ -294,5 +295,44 @@ describe('sweep wiring: channel-health layer runs after reconcile, fail-soft', (
     });
     expect(res.exitCode).toBe(0);
     expect(warn.mock.calls.join(' ')).toMatch(/failed soft/);
+  });
+
+  it('SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-3: writes a system_events verdict row surfacing unconfigured distinctly', async () => {
+    const mock = makeMock();
+    const health = {
+      ensureSweepSchedule: vi.fn(async () => ({ ok: true })),
+      witnessSweepFired: vi.fn(async () => ({ stamped: true })),
+      detectChannelDegradation: vi.fn(async () => ({ alarmed: false })),
+      escalateCarrierFiltered: vi.fn(async () => ({ scanned: 0, escalated: 0, emailUnavailable: 0 })),
+    };
+    const res = await sweepMain(['node', 'x', '--once'], {
+      supabase: mock.supabase,
+      reconcile: vi.fn(async () => ({ ran: true, sent: 0, failed: 0, unconfigured: 3 })),
+      channelHealth: health,
+      logger: quiet,
+    });
+    expect(res.exitCode).toBe(0);
+    const verdictRows = mock.inserts.filter((i) => i.table === 'system_events');
+    expect(verdictRows).toHaveLength(1);
+    expect(verdictRows[0].payload.event_type).toBe('sms_outbound_sweep_verdict');
+    expect(verdictRows[0].payload.payload.unconfigured).toBe(3);
+  });
+
+  it('an unwritable system_events layer never fails the sweep (TS-11-style: audit write cannot suppress the sweep)', async () => {
+    const supabase = { from: () => ({ insert: () => { throw new Error('table down'); } }) };
+    const warn = vi.fn();
+    const res = await sweepMain(['node', 'x', '--once'], {
+      supabase,
+      reconcile: vi.fn(async () => ({ ran: true, unconfigured: 0 })),
+      channelHealth: {
+        ensureSweepSchedule: vi.fn(async () => ({ ok: true })),
+        witnessSweepFired: vi.fn(async () => ({ stamped: true })),
+        detectChannelDegradation: vi.fn(async () => ({ alarmed: false })),
+        escalateCarrierFiltered: vi.fn(async () => ({ scanned: 0, escalated: 0, emailUnavailable: 0 })),
+      },
+      logger: { ...quiet, warn },
+    });
+    expect(res.exitCode).toBe(0);
+    expect(warn.mock.calls.join(' ')).toMatch(/verdict audit-write failed/);
   });
 });

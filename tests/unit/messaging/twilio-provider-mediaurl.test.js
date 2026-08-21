@@ -4,7 +4,7 @@
  * recon) -- this is the first direct unit test of send()'s form-body construction.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { send, checkMessageStatus } from '../../../lib/messaging/providers/twilio-provider.js';
+import { send, checkMessageStatus, isConfigured } from '../../../lib/messaging/providers/twilio-provider.js';
 
 describe('twilio-provider send() MediaUrl (FR-3)', () => {
   const originalEnv = { ...process.env };
@@ -99,5 +99,34 @@ describe('twilio-provider checkMessageStatus (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-00
     fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) })); // no `status` field
     vi.stubGlobal('fetch', fetchMock);
     await expect(checkMessageStatus('SM123')).rejects.toThrow('twilio_status_check_malformed_response');
+  });
+});
+
+describe('twilio-provider isConfigured() (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-2)', () => {
+  const originalEnv = { ...process.env };
+  afterEach(() => { process.env = { ...originalEnv }; });
+
+  it('returns true when both SID and auth token are set', () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC_test';
+    process.env.TWILIO_AUTH_TOKEN = 'token_test';
+    expect(isConfigured()).toBe(true);
+  });
+
+  it('returns false when the account SID is missing', () => {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    process.env.TWILIO_AUTH_TOKEN = 'token_test';
+    expect(isConfigured()).toBe(false);
+  });
+
+  it('returns false when the auth token is missing', () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC_test';
+    delete process.env.TWILIO_AUTH_TOKEN;
+    expect(isConfigured()).toBe(false);
+  });
+
+  it('returns false when both are missing', () => {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    expect(isConfigured()).toBe(false);
   });
 });
