@@ -42,6 +42,16 @@ const DEAD_COORDINATOR_CRON_INTERVAL_MIN = Number(process.env.DEAD_COORDINATOR_C
   ? Number(process.env.DEAD_COORDINATOR_CRON_INTERVAL_MIN)
   : 15;
 
+// SD-LEO-INFRA-FLEET-DEAD-MAN-001 / FR-1: a THIRD, independent outage signal alongside the two
+// above. checkWorkerFleetDown reads fleet_worker_pulse; checkDeadCoordinator reads claude_sessions
+// filtered to is_coordinator=true. Neither would notice if the pulse-writer cron itself silently
+// died, or if the live incident's own root cause (no reliable off-host SMS retry — see FR-2) meant
+// an outage went unpaged for 36h despite the fleet later self-recovering. This predicate is
+// deliberately independent: it never reads fleet_worker_pulse at all.
+const FLEET_DEAD_MAN_WINDOW_MIN = Number(process.env.FLEET_DEAD_MAN_WINDOW_MIN) > 0
+  ? Number(process.env.FLEET_DEAD_MAN_WINDOW_MIN)
+  : 120;
+
 /**
  * Pure decision: should we page the chairman that the coordinator itself is dead?
  *
@@ -252,6 +262,160 @@ export async function checkDeadCoordinator(db, DRY, sendChairmanSMSFn = null, no
 }
 
 /**
+ * Pure decision (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1): is the ENTIRE fleet — workers AND
+ * coordinator alike — showing zero signs of life at all?
+ *
+ * Two independent legs, BOTH required:
+ *   Leg A: zero claude_sessions heartbeats (any role) in the trailing window.
+ *   Leg B: zero SD/QF completions (strategic_directives_v2.status='completed') in the window.
+ * Leg B alone false-positives on a live-but-stuck fleet (one long task, nothing finishing yet).
+ * Requiring Leg A too means something has stopped even checking in, not merely stopped
+ * finishing — a much stronger "genuinely nothing is running" signal, and independent of
+ * whatever data source checkWorkerFleetDown/checkDeadCoordinator each rely on.
+ *
+ * No time-of-day gate: unlike the chairman's own SMS quiet-hours (a delivery-time concern
+ * handled downstream by sendChairmanSMS), this fleet has no expected-inactive window — workers
+ * loop continuously per the fleet-worker loop directive, so silence is alarm-worthy at any hour.
+ *
+ * @param {Object} args
+ * @param {string|null} args.lastHeartbeatAt - ISO timestamp of the most recent claude_sessions
+ *   heartbeat (any role), or null if none has ever been recorded.
+ * @param {number} args.completionsInWindow - count of SD/QF completions in the trailing window.
+ * @param {Date} [args.now]
+ * @param {number} [args.windowMin=FLEET_DEAD_MAN_WINDOW_MIN]
+ * @returns {{dead:boolean, reason:string}}
+ */
+export function evaluateFleetDeadManPredicate({
+  lastHeartbeatAt,
+  completionsInWindow,
+  now = new Date(),
+  windowMin = FLEET_DEAD_MAN_WINDOW_MIN,
+} = {}) {
+  const nowTs = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const completions = Number.isFinite(completionsInWindow) ? completionsInWindow : 0;
+
+  if (completions > 0) {
+    return { dead: false, reason: `${completions} completion(s) in the trailing ${windowMin}min — fleet is producing` };
+  }
+  if (!lastHeartbeatAt) {
+    return { dead: true, reason: 'zero completions and no claude_sessions heartbeat has ever been recorded' };
+  }
+  const last = new Date(lastHeartbeatAt);
+  if (Number.isNaN(last.getTime())) {
+    return { dead: true, reason: 'zero completions and lastHeartbeatAt is unparseable — treating as no signal' };
+  }
+  const elapsedMin = (nowTs.getTime() - last.getTime()) / 60000;
+  if (elapsedMin < windowMin) {
+    return { dead: false, reason: `zero completions but a heartbeat is ${elapsedMin.toFixed(1)}min old — within the ${windowMin}min window` };
+  }
+  return { dead: true, reason: `zero completions AND no heartbeat for ${elapsedMin.toFixed(1)}min (>= ${windowMin}min)` };
+}
+
+/** Pure: the chairman-SMS message payload for a fleet-dead-man trip (mirrors buildDeadCoordinatorMessage). */
+export function buildFleetDeadManMessage(verdict, now = new Date()) {
+  return {
+    type: 'status',
+    body: `FLEET DEAD-MAN: zero heartbeats and zero SD/QF completions for ${FLEET_DEAD_MAN_WINDOW_MIN}min. ${verdict.reason}. Start/restart a worker or coordinator session.`,
+    kind: 'fleet_dead_man_alert',
+    dedupeKey: `fleet-dead-man-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
+const FLEET_DEAD_MAN_EVENT_TYPE = 'fleet_dead_man_verdict';
+
+/**
+ * FR-3 (observability) + FR-1's own edge-trigger dedup, combined: writes ONE verdict row every
+ * run (never just on transition — an operator/gauge reviewing system_events needs to see this
+ * check is actually running even when nothing changed), and returns whether THIS run's state
+ * differs from the last recorded one so the caller can fire only on alive->dead transitions.
+ *
+ * Read-then-write, not transactionally atomic — acceptable because fleet-down-alert-cron.yml's
+ * `concurrency: {group, cancel-in-progress: true}` guarantees this workflow never has two
+ * invocations in flight at once, so two ticks are always strictly sequential.
+ *
+ * TS-11: wrapped so a system_events outage degrades to "no audit row for this tick", never to
+ * "no page sent" — and fails OPEN on the transition question (treats an unreadable prior state
+ * as a transition) rather than risk silently swallowing a real outage.
+ *
+ * @returns {Promise<{transitioned:boolean}>}
+ */
+async function recordFleetDeadManVerdict(db, verdict) {
+  try {
+    const { data: rows, error } = await db
+      .from('system_events')
+      .select('payload')
+      .eq('event_type', FLEET_DEAD_MAN_EVENT_TYPE)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error(error.message);
+    const lastState = rows && rows[0] ? rows[0].payload?.state : 'alive'; // no prior row => assume alive
+    const nextState = verdict.dead ? 'dead' : 'alive';
+    const transitioned = nextState !== lastState;
+    await db.from('system_events').insert({
+      event_type: FLEET_DEAD_MAN_EVENT_TYPE,
+      actor_type: 'system',
+      actor_role: 'fleet-down-alert',
+      payload: { state: nextState, reason: verdict.reason, transitioned },
+    });
+    return { transitioned };
+  } catch (err) {
+    console.error('[fleet-dead-man] verdict recording failed (non-fatal, alert logic unaffected):', err.message);
+    return { transitioned: true };
+  }
+}
+
+// SD-LEO-INFRA-FLEET-DEAD-MAN-001 / FR-1: third independent arm, same injectable-sender /
+// injectable-clock shape as checkDeadCoordinator (TS-1/TS-2/TS-9 assert against a fake db +
+// spy sender without touching real Twilio/Supabase).
+export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now = new Date()) {
+  // Column-name traps (TS-8): fleet_worker_pulse.captured_at and claude_sessions.heartbeat_at
+  // are NOT interchangeable with created_at/updated_at/last_seen_at — confirmed against live
+  // schema. strategic_directives_v2.status='completed' covers BOTH SDs and QFs: QF rows are
+  // ordinary strategic_directives_v2 rows keyed by an "QF-..." sd_key, not a separate table.
+  //
+  // completion_date, NOT updated_at (adversarial-review finding, verified live): updated_at on
+  // an already-completed row keeps moving for months afterward -- post-completion housekeeping
+  // (quality_checked_at, wiring_validated, retro generation, one-off maintenance scripts) routinely
+  // re-touches old completed rows. Measured live across 30 recently-updated completed SDs: drift
+  // between completion_date and updated_at ranged from minutes to 2600+ minutes. Filtering on
+  // updated_at would make Leg B's "zero completions" condition almost always false (some old row
+  // is nearly always being housekept), silently defeating this predicate's entire purpose.
+  const windowStartIso = new Date(now.getTime() - FLEET_DEAD_MAN_WINDOW_MIN * 60000).toISOString();
+
+  const { data: hbRows, error: hbErr } = await db
+    .from('claude_sessions')
+    .select('heartbeat_at')
+    .order('heartbeat_at', { ascending: false })
+    .limit(1);
+  if (hbErr) { console.error('[fleet-dead-man] heartbeat query failed:', hbErr.message); return; }
+
+  const { count: completionsInWindow, error: cErr } = await db
+    .from('strategic_directives_v2')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'completed')
+    .gte('completion_date', windowStartIso);
+  if (cErr) { console.error('[fleet-dead-man] completions query failed:', cErr.message); return; }
+
+  const lastHeartbeatAt = hbRows && hbRows[0] ? hbRows[0].heartbeat_at : null;
+  const verdict = evaluateFleetDeadManPredicate({ lastHeartbeatAt, completionsInWindow: completionsInWindow || 0, now });
+  const { transitioned } = await recordFleetDeadManVerdict(db, verdict);
+  console.log(`[fleet-dead-man] ${verdict.dead ? 'DEAD' : 'alive'} (transitioned=${transitioned}): ${verdict.reason}`);
+
+  if (!verdict.dead || !transitioned) return;
+
+  const message = buildFleetDeadManMessage(verdict, now);
+  if (DRY) {
+    console.log('[fleet-dead-man] [DRY] would page chairman via sendChairmanSMS:', message.body);
+    return;
+  }
+  const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
+  const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
+  const { zone: chairmanZone } = await resolveChairmanZone(now);
+  const r = await send(message, { now, chairmanZone });
+  console.log('[fleet-dead-man] sendChairmanSMS result:', JSON.stringify(r));
+}
+
+/**
  * QF-20260803-882: run one notification arm in isolation, so no arm can suppress another.
  *
  * THE DEFECT THIS REPLACES: main() ran the arms as two bare awaits with nothing between them, and
@@ -319,6 +483,7 @@ async function main() {
   // suppressed the pager entirely and the run still looked clean.
   const { failed } = await runAlertArms([
     ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
+    ['fleet-dead-man-pager', () => checkFleetDeadMan(db, DRY)],
     ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
   ]);
   // A half-delivered alert must not exit 0. The workflow treating a partial page as success is the

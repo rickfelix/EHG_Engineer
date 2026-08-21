@@ -48,6 +48,9 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 // alarm class layered onto the existing orchestrator-blocked venture stall scan below. Consumes
 // the Child-A discriminator (lib/governance/real-build-discriminator.mjs) transitively.
 import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm.mjs';
+// SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive STALE escalation for a parked chairman
+// SMS row unresolved >=24h, layered onto the existing QUIET_TICK_SMS_PARKED line below.
+import { isStaleParkedSms } from '../lib/governance/parked-sms-stall.mjs';
 // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: the durable standing priority. Surfaced ABOVE the inbox
 // below, because the measured failure was the queue setting the agenda — a priority printed beneath
 // a dozen inbound rows has been filed, not surfaced.
@@ -1005,6 +1008,13 @@ async function main() {
     // resolving a parked row is a CLI script, not gated on SMS_RELAY_DRAIN_ENABLED).
     for (const s of smsParked.rows) {
       console.log(`QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+      // SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive escalation — the line above fires
+      // identically for a 2-minute-old row and a 6-day-old one, which is exactly how 356 rows
+      // accumulated as unread noise. A distinct tag for anything >=24h makes a genuinely-overdue
+      // row grep-able instead of indistinguishable from routine parked traffic.
+      if (isStaleParkedSms(s.ageMin)) {
+        console.log(`QUIET_TICK_SMS_PARKED_STALE=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m — parked >=24h unresolved, chairman-channel integrity risk; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+      }
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);

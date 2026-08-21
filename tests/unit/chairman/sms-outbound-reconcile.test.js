@@ -658,6 +658,83 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
 });
 
 // =======================================================================================
+// FR-2 (SD-LEO-INFRA-FLEET-DEAD-MAN-001) — unconfigured-provider send gate
+//
+// Incident: the dead-coordinator alert's own narrow edge-trigger makes exactly ONE off-host
+// send attempt per outage. Pre-fix, that attempt still claimed the row, burned an attempts
+// slot, and left the only retry to Pass 1 one full sweep later -- with nothing scheduled to
+// reliably trigger it off-host. Fix: gate the whole claim+send pass on provider.isConfigured()
+// so an unconfigured outage leaves every owed row completely untouched.
+// =======================================================================================
+const unconfiguredProvider = () => ({
+  isConfigured: vi.fn(() => false),
+  send: vi.fn(async () => ({ provider_message_id: null, status: 'failed', reason: 'twilio_not_configured' })),
+});
+
+// Mirrors any provider double that omits isConfigured (every existing fixture in this file,
+// including okProvider above) -- the gate's fallback treats that as "configured", so a
+// genuine send failure must still claim/send/fail/burn-an-attempt exactly as pre-fix.
+const noSelfReportFailingProvider = () => ({
+  send: vi.fn(async () => ({ provider_message_id: null, status: 'failed', reason: 'http_500' })),
+});
+
+describe('unconfigured provider (FR-2 — SD-LEO-INFRA-FLEET-DEAD-MAN-001)', () => {
+  it('TS-4: an unconfigured provider skips every owed row untouched — no send, no attempts bump, no status change', async () => {
+    // Distinct kinds (SD-LEO-FIX-SMS-OUTBOUND-WORKER-001 merge note): two rows of the SAME
+    // default kind would otherwise be same-kind duplicates and legitimately collapsed by
+    // voidStaleAndCollapseObligations's pre-Pass-2 hygiene pass -- which runs regardless of
+    // provider configuration, since collapsing genuine duplicates is queue hygiene independent
+    // of send capability. Distinct kinds isolate this test to its own concern (the unconfigured
+    // gate), matching its original 2-independent-rows intent.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ kind: 'morning_review' }), owedRow({ id: 'ob-2', kind: 'heartbeat_status' })] });
+    const provider = unconfiguredProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(summary.claimed).toBe(0);
+    expect(summary.unconfigured).toBe(2);
+    for (const row of sb._tables.sms_outbound_obligations) {
+      expect(row.status).toBe('owed');
+      expect(row.attempts).toBe(0);
+      expect(row.claimed_at).toBeNull();
+    }
+  });
+
+  it('TS-5: config restored on a later pass — the previously-skipped row sends normally, not permanently skipped', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow()] });
+    const down = await reconcileOutboundSms(sb, { provider: unconfiguredProvider() });
+    expect(down.unconfigured).toBe(1);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('owed');
+
+    const provider = okProvider(); // no isConfigured method => treated as configured
+    const up = await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    expect(up.sent).toBe(1);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent');
+  });
+
+  it('TS-6 (non-regression): a provider that cannot self-report config state still reaches terminal failed on a genuine send failure', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow()] });
+    const provider = noSelfReportFailingProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3 });
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    expect(summary.claimed).toBe(1);
+    expect(summary.failed).toBe(1);
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('failed');
+    expect(row.attempts).toBe(1);
+    expect(row.last_error).toBe('http_500');
+  });
+
+  it('a provider explicitly reporting isConfigured()===true sends normally', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow()] });
+    const provider = { isConfigured: vi.fn(() => true), send: vi.fn(async () => ({ provider_message_id: 'SM-X', status: 'queued' })) };
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    expect(summary.sent).toBe(1);
+  });
+});
+
+// =======================================================================================
 // SECURITY MEDIUM-2 — sent-no-callback delivery-timeout reconcile
 // =======================================================================================
 describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', () => {

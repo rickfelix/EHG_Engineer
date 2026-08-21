@@ -73,6 +73,26 @@ export async function main(argv = process.argv, deps = {}) {
   const summary = await reconcile(supabase, {});
   logger.log?.(`[sms-outbound-sweep] ${JSON.stringify({ ts: new Date().toISOString(), ...summary })}`);
 
+  // SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-3: a twilio_not_configured outage (FR-2's
+  // summary.unconfigured) needs to be visible to an off-host observer even though this sweep's
+  // own console.log line above only reaches a GitHub Actions log nobody is tailing live. Written
+  // every run (not just when unconfigured>0) so system_events shows this sweep is actually
+  // running, not just that it once found a problem. Fail-soft: never lets an audit-write failure
+  // affect the sweep's own exit code.
+  try {
+    await supabase.from('system_events').insert({
+      event_type: 'sms_outbound_sweep_verdict',
+      actor_type: 'system',
+      actor_role: 'sms-outbound-sweep',
+      payload: {
+        ran: summary.ran, sent: summary.sent, failed: summary.failed,
+        unconfigured: summary.unconfigured || 0, reason: summary.reason || null,
+      },
+    });
+  } catch (err) {
+    logger.warn?.(`[sms-outbound-sweep] verdict audit-write failed (non-fatal): ${err?.message || err}`);
+  }
+
   // SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-B: run-side operator layer, all fail-soft —
   // FR-1 governed cadence (register + witness the fire), FR-2 degradation alarm,
   // FR-3 carrier-filter email-fallback escalation. deps.channelHealth is the test seam.

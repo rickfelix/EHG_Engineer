@@ -14,13 +14,15 @@
 -- promoted_to_sd_key IS NOT NULL (non-promoted items are untouched, governed by the
 -- disposition/lane branches which this SD does not change).
 --
--- EXPECTED RESULT (live-measured 2026-08-21, BEFORE this migration runs -- verify actual matches
--- expected before trusting the outcome):
---   17 rows currently satisfied_elsewhere move to in_flight_or_sequence_blocked
---     (14 with a deferred-status linked SD, 2 draft, 1 active; 0 completed among them)
---   0 rows currently satisfied_elsewhere move to void (no cancelled/closed links among the 17)
---   0 rows currently in any other state change (there are 0 QF-keyed promoted_to_sd_key values
---     today, so the QF-side branch this SD adds has nothing to restamp)
+-- EXPECTED RESULT (re-measured live 2026-08-21 post-merge, BEFORE this migration runs -- verify
+-- actual matches expected before trusting the outcome; superseded the original pre-merge count of
+-- 17/14/2/1 -- one of the 3 originally-open linked SDs completed in the interim, which is exactly
+-- the kind of population drift this file already treats as expected/fine, not a bug):
+--   16 rows currently satisfied_elsewhere move to in_flight_or_sequence_blocked
+--     (14 with a deferred-status linked SD, 2 draft; 0 active, 0 completed among them)
+--   0 rows currently satisfied_elsewhere move to void (no cancelled/closed links among the 16)
+--   0 rows currently in any other state change (0 QF-keyed promoted_to_sd_key values today, so
+--     the QF-side branch this SD adds has nothing to restamp yet)
 --
 -- Run the BEFORE/AFTER report queries (commented, below) immediately before and after applying the
 -- UPDATE, and confirm the delta matches the expected result above. A mismatch means either the
@@ -59,9 +61,15 @@ COMMIT;
 -- GROUP BY remainder_state
 -- ORDER BY remainder_state;
 --
--- Specimen spot-check:
--- SELECT remainder_state FROM roadmap_wave_items WHERE id = '6527a6e3-4df7-4b0f-a74b-f2bdf808c16e';
+-- Specimen spot-check (picked from a DEFERRED-status linked SD, not draft/active, since a
+-- deferred SD is the least likely of the three to change status between authoring this file and
+-- running it -- a draft/active specimen already caused one false "mismatch" scare on the first
+-- candidate row, whose linked SD went draft -> completed before this file was applied):
+-- SELECT remainder_state FROM roadmap_wave_items WHERE id = 'd47b5edc-8128-4a51-ad7f-4949bcf4ea1a';
+-- -- linked SD: SD-REFILL-00KK7VTR (status=deferred as of 2026-08-21)
 -- -- expected: in_flight_or_sequence_blocked (was satisfied_elsewhere before this migration)
+-- -- if it instead reads satisfied_elsewhere/void, first check whether SD-REFILL-00KK7VTR's status
+-- -- changed in the interim (completed/cancelled) before treating this as a function bug
 
 -- ============================================================
 -- ROLLBACK PATH: since this is a pure re-derivation, re-running the SAME restamp loop after

@@ -14,8 +14,9 @@
 //
 // The EXISTING strategic_directives_v2-side trigger (sd_cancel_restamp_remainder, shipped by
 // database/migrations/20260719a_plan_of_record_remainder_view.sql, NOT modified by this SD) is
-// reproduced verbatim in STUB_SCHEMA below so TS-7 can prove it still works correctly against the
-// REWRITTEN function -- this SD's own migration file does not redefine it (by design, TR-3).
+// reproduced verbatim below -- its function in STUB_SCHEMA, its CREATE TRIGGER in CREATE_TRIGGERS
+// (created after MIGRATION_SQL runs) -- so TS-7 can prove it still works correctly against the
+// REWRITTEN function; this SD's own migration file does not redefine it (by design, TR-3).
 //
 // FAIL-CLOSED, no skip branch: if this file cannot reach a database it fails loudly.
 // EXEC must add this file's path (and the migration's) to

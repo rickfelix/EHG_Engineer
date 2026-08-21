@@ -62,6 +62,7 @@
     "cascade:watch:cron": "node scripts/cron/cascade-watcher.mjs --once",
     "leo:build:start:cron": "node scripts/cron/leo-build-starter.mjs --once",
     "eva:scheduler:watch:cron": "node scripts/cron/eva-scheduler-watcher.mjs --once",
+    "console-creation-watcher": "node scripts/run-console-creation-watcher.mjs",
     "adam:decision-scheduler:tick:cron": "node scripts/cron/adam-decision-scheduler-tick.mjs --once",
     "apa:standing:probe:once": "node scripts/apa-standing-probe-once.mjs --once",
     "adam:exec:email:cron": "node scripts/adam-exec-summary.mjs",

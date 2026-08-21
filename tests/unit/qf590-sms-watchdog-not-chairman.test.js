@@ -50,7 +50,11 @@ const src = raw
     return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
   })
   .join('\n');
-const block = src.slice(src.indexOf('for (const s of smsInbound.rows)'), src.indexOf('QUIET_TICK_SMS_PARKED=adam'));
+// SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001: the end-anchor was the 'QUIET_TICK_SMS_PARKED=adam'
+// literal, which FR-3 relocated out of main() into an exported buildParkedSmsLogLines() helper
+// (now the FIRST occurrence in the file, well before this loop) -- breaking the slice. Anchored
+// instead on the next loop's opener, which stays structurally at the smsInbound block's end.
+const block = src.slice(src.indexOf('for (const s of smsInbound.rows)'), src.indexOf('for (const s of smsParked.rows)'));
 
 describe('QF-590 emit-site wiring — checked before the drain-flag branch, informational, never re-arms', () => {
   it('the watchdog check runs FIRST, unconditionally of smsDrainEnabled', () => {

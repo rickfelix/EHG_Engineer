@@ -76,6 +76,59 @@ describe('filterOutCoordinators (QF-20260508-648)', () => {
   });
 });
 
+// QF-20260803-932: filterOutCoordinators only excluded is_coordinator=true, so non_fleet /
+// role='adam' / role='adam_retired' / role='solomon' sessions still received worker callsigns
+// and were counted/solicited as fleet seats. Widened to the shared isBuildForbiddenSession()
+// predicate (worker-checkin's own acquisition-time guard) instead of a second hand-rolled check.
+describe('filterOutCoordinators also excludes build-forbidden sessions (QF-20260803-932)', () => {
+  it('excludes the witnessed live shape: non_fleet=true + role=adam_retired', () => {
+    const rows = [
+      { session_id: 'b22451df', metadata: { non_fleet: true, role: 'adam_retired' } },
+      { session_id: 'worker-1', metadata: { fleet_identity: { callsign: 'Bravo' } } }
+    ];
+    expect(filterOutCoordinators(rows).map(r => r.session_id)).toEqual(['worker-1']);
+  });
+
+  it('excludes role=adam even without an explicit non_fleet flag', () => {
+    const rows = [
+      { session_id: 'adam-1', metadata: { role: 'adam' } },
+      { session_id: 'worker-1', metadata: {} }
+    ];
+    expect(filterOutCoordinators(rows).map(r => r.session_id)).toEqual(['worker-1']);
+  });
+
+  it('excludes a solomon session (non_fleet=true + role=solomon, the solomon-register.cjs shape)', () => {
+    const rows = [
+      { session_id: 'solomon-1', metadata: { non_fleet: true, role: 'solomon' } },
+      { session_id: 'worker-1', metadata: {} }
+    ];
+    expect(filterOutCoordinators(rows).map(r => r.session_id)).toEqual(['worker-1']);
+  });
+
+  it('excludes a bare non_fleet=true session regardless of role', () => {
+    const rows = [
+      { session_id: 'nf-1', metadata: { non_fleet: true } },
+      { session_id: 'worker-1', metadata: {} }
+    ];
+    expect(filterOutCoordinators(rows).map(r => r.session_id)).toEqual(['worker-1']);
+  });
+
+  it('still excludes is_coordinator=true (no regression on the original QF-20260508-648 behavior)', () => {
+    const rows = [
+      { session_id: 'coord-1', metadata: { is_coordinator: true } },
+      { session_id: 'worker-1', metadata: {} }
+    ];
+    expect(filterOutCoordinators(rows).map(r => r.session_id)).toEqual(['worker-1']);
+  });
+
+  it('retains a genuine worker with an unrelated role/metadata shape', () => {
+    const rows = [
+      { session_id: 'worker-1', metadata: { fleet_identity: { callsign: 'Bravo' }, tier_rank: 2 } }
+    ];
+    expect(filterOutCoordinators(rows).map(r => r.session_id)).toEqual(['worker-1']);
+  });
+});
+
 // QF-20260528-581 (Bug B): filter test/ghost sessions that consume the NATO pool.
 // Mirrors the dashboard/coaching "active worker" cohort (sd_key IS NOT NULL),
 // while retaining real workers momentarily between SDs.
