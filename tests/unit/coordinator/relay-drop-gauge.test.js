@@ -146,7 +146,8 @@ function makeCapturingSupabase() {
     eq() { return builder; },
     or() { return builder; },
     gte(col, val) { captured.gte = { col, val }; return builder; },
-    limit() { return Promise.resolve({ data: [] }); },
+    order(col, opts) { captured.order = { col, opts }; return builder; },
+    limit(n) { captured.limit = n; return Promise.resolve({ data: [] }); },
   };
   return { supabase: builder, captured };
 }
@@ -182,5 +183,29 @@ describe('query-level lookback headroom (QF-20260821-607 round 2)', () => {
     const { supabase: sOut, captured: cOut } = makeCapturingSupabase();
     await loadOutboundCandidates(sOut, { now: NOW2, windowLookbackMs: 5000 });
     expect(NOW2 - Date.parse(cOut.gte.val)).toBe(5000);
+  });
+
+  // QF-20260821-607 (adversarial review round 3): the widened lookback more than doubles the
+  // row population competing for the query's LIMIT -- without an explicit ORDER BY there is no
+  // "most recent N" guarantee, so the newest (most relevant) rows are exactly what a plain
+  // LIMIT can silently drop once fleet-wide volume exceeds the cap.
+  it('both loaders explicitly ORDER BY created_at desc before LIMIT (round 1/2 tests above proved the window value alone is not enough)', async () => {
+    const { supabase: sIn, captured: cIn } = makeCapturingSupabase();
+    await loadInboundCandidates(sIn, { now: NOW2 });
+    expect(cIn.order).toEqual({ col: 'created_at', opts: { ascending: false } });
+
+    const { supabase: sOut, captured: cOut } = makeCapturingSupabase();
+    await loadOutboundCandidates(sOut, { now: NOW2 });
+    expect(cOut.order).toEqual({ col: 'created_at', opts: { ascending: false } });
+  });
+
+  it('both loaders raise their row cap proportionally to the widened window (was 200 at 24h, now >=500 at 54h)', async () => {
+    const { supabase: sIn, captured: cIn } = makeCapturingSupabase();
+    await loadInboundCandidates(sIn, { now: NOW2 });
+    expect(cIn.limit).toBeGreaterThanOrEqual(500);
+
+    const { supabase: sOut, captured: cOut } = makeCapturingSupabase();
+    await loadOutboundCandidates(sOut, { now: NOW2 });
+    expect(cOut.limit).toBeGreaterThanOrEqual(500);
   });
 });

@@ -237,15 +237,23 @@ export async function selfReviewMain() {
   // narrowed to payload->>signal_type=feedback (the ONLY shape a genuine "/signal feedback"
   // reply ever takes -- confirmed in scripts/worker-signal.cjs, `signal_type: type`; the SAME
   // established narrowing lib/coordinator/relay-drop-gauge.cjs's loadOutboundCandidates already
-  // applies) so this wide 14-day/500-row cap isn't dominated by unrelated traffic (roll_call,
-  // etc.) addressed to this coordinator.
+  // applies) so this wide 14-day cap isn't dominated by unrelated traffic (roll_call, etc.)
+  // addressed to this coordinator.
+  //
+  // QF-20260821-607 (round 3): replyRows' cap raised 500->2000 -- signal_type=feedback is
+  // shared with OTHER high-frequency worker->coordinator traffic beyond review replies (the
+  // attrition diagnostic on every session revival, comms-check acks on every /coordinator
+  // start), so on a busy fleet that non-review traffic can compete for the same top-N-most-
+  // recent slots as a genuine review reply. Extra headroom here is deliberately NOT a body-text
+  // DB filter narrowing to just the RE/ADAM_RE markers -- that would duplicate those regexes
+  // into a second, DB-side representation that could drift from the JS source of truth.
   const solicitSince = new Date(t - SOLICIT_HISTORY_LOOKBACK_MS).toISOString();
   const { data: sentRows } = await db.from('session_coordination').select('target_session,created_at')
     .eq('sender_session', me).eq('payload->>kind', 'review_request').gte('created_at', solicitSince)
     .order('created_at', { ascending: false }).limit(500);
   const { data: replyRows } = await db.from('session_coordination').select('sender_session,payload,created_at')
     .eq('target_session', me).eq('payload->>signal_type', 'feedback').gte('created_at', solicitSince)
-    .order('created_at', { ascending: false }).limit(500);
+    .order('created_at', { ascending: false }).limit(2000);
   const replyBody = (r) => String((r.payload || {}).body || (r.payload || {}).message || '');
   const workerAnswerRows = (replyRows || []).filter((r) => RE.test(replyBody(r)));
   const adamAnswerRows = (replyRows || []).filter((r) => ADAM_RE.test(replyBody(r)));

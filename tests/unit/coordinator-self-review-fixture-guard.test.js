@@ -260,4 +260,15 @@ describe('coordinator self-review — sentRows/replyRows query wiring (QF-202608
   it('replyRows is narrowed to payload->>signal_type=feedback (the only shape a genuine "/signal feedback" reply ever takes)', () => {
     expect(region).toMatch(/payload->>signal_type/);
   });
+
+  // QF-20260821-607 (round 3): signal_type=feedback is shared with high-frequency non-review
+  // traffic (attrition diagnostics, comms-check acks), so replyRows needs headroom beyond
+  // sentRows' narrower, kind-filtered cap to avoid that traffic crowding out a genuine reply.
+  it('replyRows has a materially higher row cap than sentRows (headroom against non-review feedback-signal traffic)', () => {
+    const sentLimitMatch = region.match(/sentRows[\s\S]*?\.limit\((\d+)\)/);
+    const replyLimitMatch = region.match(/replyRows[\s\S]*?\.limit\((\d+)\)/);
+    expect(sentLimitMatch).not.toBeNull();
+    expect(replyLimitMatch).not.toBeNull();
+    expect(Number(replyLimitMatch[1])).toBeGreaterThan(Number(sentLimitMatch[1]));
+  });
 });
