@@ -89,6 +89,10 @@ export function isWorktreeDirty(worktreePath) {
 export function buildKillDeps(supabase, sessionId, { reason, dryRun = false } = {}) {
   return {
     reason: reason || 'operator_graceful_kill',
+    // Explicit, not merely relying on gracefulKillSession's own env=process.env default (UAT-agent
+    // finding, FR-3 AC-4): a future caller building deps by hand from this shape should see the
+    // key present, not need to know it's safe to omit.
+    env: process.env,
     getSession: async () => {
       const { data } = await supabase
         .from('claude_sessions')
