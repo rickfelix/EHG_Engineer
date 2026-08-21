@@ -455,13 +455,11 @@ export async function surfaceInboxItems(sb) {
 }
 
 // QF-20260719-848: contract CHAIRMAN SMS CHANNEL DUTY (INBOUND WATCH) — every tick must surface
-// undrained chairman replies (one sat undrained ~25min on 2026-07-19; the tick had ZERO sms
-// visibility). Anti-fragile: filter ONLY on drained_at IS NULL (NO time filter — the live miss
-// was a hand-anchored received_at>= on a misremembered send time) and NEVER drop on a phone
-// mismatch. The relay is chairman-dedicated: with CHAIRMAN_PHONE unset (it is not in the tick
-// env) every undrained row is a chairman-candidate hard interrupt; when set, an exact match is
-// labelled but non-matches still surface. Read-only surfacing (mirrors drainSmsRelayStaging's
-// all-undrained query in lib/chairman/sms-bridge.js); fail-soft — any error returns rows:[].
+// undrained chairman replies. Never drop on a phone mismatch (labelled when CHAIRMAN_PHONE is
+// set, but non-matches still surface). SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-5: the original
+// version of this comment described a drained_at IS NULL filter that QF-20260808-673 replaced —
+// see the surfaceSmsInbound docstring below (current received_at-window + sms_outbound_obligations
+// implementation) for the actual, current predicate.
 const SMS_INBOUND_CAP = 50;
 // QF-20260810-590 provenance now lives in lib/comms/adam-outbound/watchdog-detector.js
 // (SD-LEO-FIX-QUIET-HOURS-GATE-001 relocation). Re-exported here so external consumers that
@@ -590,7 +588,8 @@ export async function surfaceSmsInbound(sb) {
 /**
  * SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-2: surface PARKED chairman SMS every tick,
  * until explicitly resolved (scripts/resolve-parked-chairman-sms.cjs). A parked row is a
- * verified-chairman-number message that resolved no_match/rate_limited and already terminal-
+ * verified-chairman-number message that resolved to a PARK_OUTCOMES value (no_match/
+ * rate_limited/expired/ambiguous, per lib/chairman/sms-bridge.js) and already terminal-
  * drained (drained_at is set) — surfaceSmsInbound's received_at window above will never show it
  * again once it ages out. This detector has NO time window: `parked_at IS NOT NULL AND
  * resolved_at IS NULL` IS the queue, so a parked row re-fires every tick for as long as it stays
@@ -999,8 +998,9 @@ async function main() {
       console.log(`QUIET_TICK_SMS_INBOUND=adam ${detail} — undrained chairman SMS; DRAIN+reply per CHAIRMAN SMS CHANNEL DUTY (node scripts/sms-relay-drain.cjs, then reply with node scripts/adam-chairman-sms.mjs --reply-to-inbound --kind heartbeat_status --body "<line>" to reach the quiet-hours measured-presence carve-out)`);
     }
     // SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 FR-2: a parked row already terminal-drained
-    // (drained_at is set) as no_match/rate_limited, so it will NEVER appear in the smsInbound
-    // loop above — this is the only surface that re-fires it. Hard interrupt, unconditionally
+    // (drained_at is set) as a PARK_OUTCOMES value (no_match/rate_limited/expired/ambiguous),
+    // so it will NEVER appear in the smsInbound loop above — this is the only surface that
+    // re-fires it. Hard interrupt, unconditionally
     // (unlike QUIET_TICK_SMS_INBOUND above, there is no inert-drain-flag case to downgrade for:
     // resolving a parked row is a CLI script, not gated on SMS_RELAY_DRAIN_ENABLED).
     for (const s of smsParked.rows) {

@@ -30,6 +30,10 @@ import { createDatabaseClient } from '../lib/supabase-connection.js';
 // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001: shared with the SECURITY sub-agent
 // (lib/sub-agents/security.js) so one catalog definition serves both instruments.
 import { DEFINER_EXPOSURE_SQL, classifyDefinerExposure } from '../../lib/security/definer-exposure.js';
+// SD-LEO-INFRA-REVOKE-DEFAULT-PUBLIC-001: pg_net (net schema) exposure — report-only,
+// see the check (6) comment below and lib/security/pg-net-exposure.js's own header for
+// why this is detection-only rather than a fix.
+import { probePgNetExposure } from '../../lib/security/pg-net-exposure.js';
 
 const JSON_MODE = process.argv.includes('--json');
 const STRICT = process.argv.includes('--strict');
@@ -79,7 +83,17 @@ export function isExemptTable(name) {
 
 function log(msg = '') { if (!JSON_MODE) console.log(msg); }
 
-async function main() {
+/**
+ * SD-LEO-INFRA-REVOKE-DEFAULT-PUBLIC-001 (FR-2/TS-8): exported, injectable entrypoint so
+ * the pg_net check's integration with the sentinel (probe_ran discrimination surviving
+ * the call site, TS-9) is unit-testable without a subprocess spawn or touching the live
+ * weekly job. `main()` below is a thin wrapper for the CLI path.
+ *
+ * @param {object}   [opts]
+ * @param {Function} [opts.connect] injectable connection factory, overriding the default
+ *   createDatabaseClient call. Used by tests to simulate catalog failures.
+ */
+export async function runSentinel({ connect } = {}) {
   // 'engineer' matches scripts/apply-migration.js (the same consolidated instance the
   // remediation migration targeted). In CI the connectionString comes from DATABASE_URL
   // (SUPABASE_POOLER_URL is not a configured secret in this repo — DATABASE_URL is the
@@ -88,9 +102,11 @@ async function main() {
   // createDatabaseClient strips any `?sslmode=require` so the committed-CA TLS config
   // governs (else SELF_SIGNED_CERT_IN_CHAIN on the runner) — see stripSslmode in
   // scripts/lib/supabase-connection.js.
-  const client = await createDatabaseClient('engineer', {
-    connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL,
-  });
+  const client = connect
+    ? await connect()
+    : await createDatabaseClient('engineer', {
+        connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL,
+      });
 
   let result;
   try {
@@ -141,6 +157,21 @@ async function main() {
     // this query on proconfig/search_path.
     const definerExposed = classifyDefinerExposure((await client.query(DEFINER_EXPOSURE_SQL)).rows);
 
+    // (6) pg_net_exposure — SD-LEO-INFRA-REVOKE-DEFAULT-PUBLIC-001. REPORT-ONLY, same
+    // treatment as (5) above and for the identical reason: direct remediation (REVOKE/
+    // ALTER DEFAULT PRIVILEGES on the net schema's PUBLIC-exposed functions + tables +
+    // sequence) is proven infeasible — `postgres` has zero grant-authority over the
+    // `supabase_admin`-owned objects (see lib/security/pg-net-exposure.js's header for
+    // the full investigation). Excluded from `findings`/`clean`/`--strict` below.
+    //
+    // Calls probePgNetExposure() (never raw client.query().rows — that would discard
+    // probe_ran, the exact defect class this SD exists to prevent) via a NON-OWNING
+    // wrapper exposing only query(): probePgNetExposure's own teardown guard
+    // (`typeof client.end === 'function'`) sees no `end` on this wrapper and therefore
+    // never closes THIS function's shared client, which the trigger-liveness query
+    // right below still needs.
+    const pgNet = await probePgNetExposure({ connect: async () => ({ query: (...args) => client.query(...args) }) });
+
     // Prevention liveness: is the view event trigger present + enabled? ('D' = disabled)
     const trig = await client.query(
       `SELECT evtenabled FROM pg_event_trigger WHERE evtname = 'leo_enforce_view_security_invoker'`);
@@ -151,10 +182,21 @@ async function main() {
       sensitiveExposed: sensitive.rows.map(r => r.name).filter(n => !isExemptTable(n)),
       securityDefinerMutableFns: secdefFns.rows.map(r => r.name),
       definerRlsBypassExposed: definerExposed.map(f => `${f.name}(${f.args})`),
+      // TS-9 contract: probeRan is ALWAYS present and explicit — a failed probe must
+      // render distinguishably, never collapse into an empty/zero-looking report-only
+      // section that reads identically to "checked, found nothing."
+      pgNetExposure: pgNet.probe_ran
+        ? {
+            probeRan: true,
+            functions: pgNet.functions.map(f => `${f.name}(${f.args})`),
+            relations: pgNet.relations.map(r => `${r.name} [${r.kind}]`),
+            schemaUsage: pgNet.schema_usage,
+          }
+        : { probeRan: false, reason: pgNet.reason },
       triggerEnabled: trig.rows.length === 1 && trig.rows[0].evtenabled !== 'D',
     };
   } finally {
-    await client.end();
+    if (typeof client.end === 'function') await client.end();
   }
 
   // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001: definerRlsBypassExposed is REPORTED but is
@@ -178,6 +220,11 @@ async function main() {
   log(`  sensitive_columns_exposed (session_id, no RLS):     ${result.sensitiveExposed.length}`);
   log(`  function_search_path_mutable (SECURITY DEFINER fn): ${result.securityDefinerMutableFns.length}`);
   log(`  definer_rls_bypass_exposed (report-only):            ${result.definerRlsBypassExposed.length}`);
+  log(`  pg_net_exposure (net schema, report-only):          ${
+    result.pgNetExposure.probeRan
+      ? `${result.pgNetExposure.functions.length} functions, ${result.pgNetExposure.relations.length} relations`
+      : 'PROBE FAILED'
+  }`);
   log(`  view-invoker event trigger enabled:                 ${result.triggerEnabled}`);
   log('  ' + '-'.repeat(40));
   if (result.securityDefinerViews.length) log('  Views:  ' + result.securityDefinerViews.join(', '));
@@ -188,6 +235,16 @@ async function main() {
     log('    ' + result.definerRlsBypassExposed.join('\n    '));
     log('    ^ report-only: pre-existing exposure, remediated by the cutover runbook, not by this job.');
   }
+  if (!result.pgNetExposure.probeRan) {
+    // TS-9: a failed probe renders distinguishably here — never a silent 0/clean line.
+    log(`  ⚠ pg_net exposure PROBE FAILED — ${result.pgNetExposure.reason} (report-only check could not run; does not affect clean/--strict)`);
+  } else if (result.pgNetExposure.functions.length || result.pgNetExposure.relations.length) {
+    log('  pg_net-exposed objects (net schema, functions / relations):');
+    log('    ' + [...result.pgNetExposure.functions, ...result.pgNetExposure.relations].join('\n    '));
+    log(`    schema USAGE on net: anon=${result.pgNetExposure.schemaUsage.anon} authenticated=${result.pgNetExposure.schemaUsage.authenticated} (the reachability gate object-level ACLs above sit behind)`);
+    log('    ^ report-only: pre-existing exposure, direct remediation platform-blocked (see lib/security/pg-net-exposure.js), not fixed by this job.');
+    log('    Severity note: this is an amplifier, not an open door — net is not PostgREST-exposed, so reaching it today requires a separate SQL-execution vector first.');
+  }
   if (!result.triggerEnabled) log('  ⚠ PREVENTION GAP: view-invoker event trigger missing/disabled!');
   log(clean ? '  ✓ CLEAN' : '  ✗ FINDINGS PRESENT');
   log('='.repeat(60));
@@ -196,6 +253,12 @@ async function main() {
 
   // A missing/disabled prevention trigger is itself a strict-mode failure.
   if (STRICT && !clean) process.exitCode = 1;
+
+  return result;
+}
+
+async function main() {
+  return runSentinel();
 }
 
 // Only run the live audit when invoked directly (node scripts/sentinels/...).

@@ -43,6 +43,18 @@ function makeSupabase({ coordination = [], sds = [] } = {}) {
             },
           };
         },
+        // QF-20260802-139: the close/expiry sweep re-filters in JS, so the stub returns the
+        // full ledger regardless of chained filters (mirrors task-rehydrate.test.js's stub).
+        select: () => readBuilder(ledger),
+        update(patch) {
+          return {
+            eq: async (col, val) => {
+              const row = ledger.find((r) => r.id === val);
+              if (row) Object.assign(row, patch);
+              return { data: row ? [row] : [], error: null };
+            },
+          };
+        },
       };
     }
     if (table === 'session_coordination') return readBuilder(coordination);

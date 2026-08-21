@@ -1,14 +1,33 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config();
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const { data, error } = await sb.from('sub_agent_execution_results').select('*').eq('id','457a403c-0517-4bc6-8805-42ee438f5df0').maybeSingle();
-if (error) { console.log('ERR', error.message); process.exit(1); }
-console.log('code=', data.sub_agent_code, '| phase=', data.phase, '| verdict=', data.verdict, '| conf=', data.confidence ?? data.confidence_score);
-console.log('metadata.repo_path      =', data.metadata?.repo_path);
-console.log('metadata.repo_resolved  =', data.metadata?.repo_resolved);
-console.log('metadata.executed_from_cwd =', data.metadata?.executed_from_cwd);
-console.log('top-level repo_path col exists? ', Object.prototype.hasOwnProperty.call(data,'repo_path'));
-console.log('findings count =', Array.isArray(data.findings) ? data.findings.length : typeof data.findings);
-const { data: app } = await sb.from('applications').select('local_path').eq('name','EHG_Engineer').maybeSingle();
-console.log('applications.local_path =', app?.local_path, '| EXACT MATCH =', app?.local_path === data.metadata?.repo_path);
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+const s = createSupabaseServiceClient();
+const { data, error } = await s.from('sub_agent_execution_results')
+  .select('id,sub_agent_code,sd_id,phase,verdict,created_at,metadata,summary')
+  .eq('id','06a4d82f-0366-48a6-9900-0dc989ebc5c5').maybeSingle();
+if (error) { console.error('ERR', error.message); process.exit(1); }
+if (!data) { console.error('ROW NOT FOUND -- NOT PERSISTED'); process.exit(1); }
+console.log('PERSISTED ROW:');
+console.log('  id            :', data.id);
+console.log('  sub_agent_code:', data.sub_agent_code);
+console.log('  sd_id         :', data.sd_id);
+console.log('  phase         :', data.phase);
+console.log('  verdict       :', data.verdict);
+console.log('  confidence    :', data.confidence);
+console.log('  created_at    :', data.created_at);
+console.log('  repo_path     :', data.metadata?.repo_path);
+console.log('  repo_resolved :', data.metadata?.repo_resolved);
+console.log('  exec_from_cwd :', data.metadata?.executed_from_cwd);
+console.log('  recs count    :', (data.metadata?.q3_reuse_opportunities?.items||[]).length);
+console.log('  summary[0:120]:', String(data.summary).slice(0,120));
+
+// Gate-shaped lookup: does a fresh VALIDATION row exist for this SD at LEAD?
+const { data: gateRows } = await s.from('sub_agent_execution_results')
+  .select('id,sub_agent_code,phase,verdict,created_at')
+  .eq('sd_id', data.sd_id).eq('sub_agent_code','VALIDATION')
+  .order('created_at',{ascending:false}).limit(5);
+console.log('\nGATE-SHAPED LOOKUP (VALIDATION rows for this SD):');
+for (const r of (gateRows||[])) console.log(`  ${r.created_at} phase=${r.phase} verdict=${r.verdict} id=${r.id}`);
+
+// repo compliance view
+const { data: comp, error: cErr } = await s.from('v_sub_agent_repo_compliance')
+  .select('*').eq('id', data.id).maybeSingle();
+console.log('\nREPO COMPLIANCE VIEW:', cErr ? 'ERR '+cErr.message : JSON.stringify(comp));

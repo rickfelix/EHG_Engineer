@@ -1,6 +1,6 @@
 {
   "_comment": "SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001, FR-5. Files with a KNOWN, censused current_lifecycle_stage write (docs/architecture/stage-advancement-path-census.md) -- gated, deliberately-exempt (revert-only/initialization/manual-operator-CLI), or a deferred-but-documented bypass (#16, #17). The lint's job is to catch a NEW write appearing OUTSIDE this list, not to re-litigate the existing census on every PR.",
-  "_comment_historical": "The database/migrations/* entries below (after the staged-migration block) are superseded historical CREATE OR REPLACE versions of fn_advance_venture_stage / rescan_stage_20 (dead code from a live-behavior standpoint -- only the latest-applied definition matters), the eva_ventures sync trigger (census #17, deferred), the stage=1 null-guard trigger (fn_validate_stage_column -- validation only, no gating, no conflict with FR-7), venture-initialization SQL, a fixture-purge one-off, a canary health-probe script, and this lint script's own file (whose comments literally contain the pattern strings being described).",
+  "_comment_historical": "The database/migrations/* entries below (after the staged-migration block) are superseded historical CREATE OR REPLACE versions of fn_advance_venture_stage / rescan_stage_20 (dead code from a live-behavior standpoint -- only the latest-applied definition matters), the eva_ventures sync trigger sync_ventures_to_eva_ventures_update() -- 20260315_fix_eva_ventures_status_sync.sql (original) plus its verbatim SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 FR-4 reproduction in the two 20260821_eva_scheduler_queue_kill_time_teardown*.sql files, all three census #18 (same disposition class as #17, deferred) -- the stage=1 null-guard trigger (fn_validate_stage_column -- validation only, no gating, no conflict with FR-7), venture-initialization SQL, a fixture-purge one-off, a canary health-probe script, and this lint script's own file (whose comments literally contain the pattern strings being described).",
   "files": [
     "lib/eva/stage-execution-worker.js",
     "lib/eva/stage-artifact-precondition.js",
@@ -31,6 +31,8 @@
     "database/migrations/20251220_fix_schema_field_alignment.sql",
     "database/migrations/20260118_stage20_compliance_gate_integration.sql",
     "database/migrations/20260315_fix_eva_ventures_status_sync.sql",
+    "database/migrations/20260821_eva_scheduler_queue_kill_time_teardown.sql",
+    "database/migrations/20260821_eva_scheduler_queue_kill_time_teardown_DOWN.sql",
     "database/migrations/20260317_advance_rpc_unblock_orchestrator.sql",
     "database/migrations/20260317_fix_fn_advance_venture_stage_orchestrator_state.sql",
     "database/migrations/20260322_update_advance_stage_gates_26.sql",

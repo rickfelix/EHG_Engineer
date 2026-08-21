@@ -20,7 +20,8 @@ on:
       dry_run:
         description: 'If true, log would-close actions without updating DB'
         required: false
-        default: 'false'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -36,6 +37,11 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # SECURITY sub-agent (EXEC phase, S4): hoisted here rather than interpolated directly into
+      # the run: script body -- a free-text `${{ }}` expansion inline in a shell script is a
+      # template-injection surface in a job holding SUPABASE_SERVICE_ROLE_KEY. `type: boolean`
+      # above closes the free-text half; env: closes the inline-interpolation half.
+      DRY_RUN: ${{ inputs.dry_run }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,8 +56,21 @@ jobs:
         run: npm ci --ignore-scripts --prefer-offline --no-audit
 
       - name: Run reconcile
+        shell: bash
         run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          # SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001 (FR-2): REAL FIX, not cosmetic. This step
+          # previously had no `shell:` key, which GH Actions resolves to `bash -e {0}` -- NO
+          # pipefail. `false | tee x; echo done` under that exact invocation prints "done" with
+          # exit 0: the `| tee reconcile.log` pipe was silently swallowing reconcile.cjs's own
+          # exit code, so a genuine failure never surfaced as a failed step. Empirically
+          # re-verified twice (EXEC phase): an earlier pass in this same session tested
+          # `-eo pipefail` directly and wrongly concluded the UNSPECIFIED default already behaved
+          # this way -- it does not; only explicit `shell: bash` (selecting
+          # `bash --noprofile --norc -eo pipefail {0}`) or an explicit `set -o pipefail` line
+          # fixes it. Both the `shell: bash` key above and this line are load-bearing; do not
+          # remove either as "just style".
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
             node scripts/solomon-ledger-reconcile.cjs --dry-run 2>&1 | tee reconcile.log
           else
             node scripts/solomon-ledger-reconcile.cjs 2>&1 | tee reconcile.log
