@@ -46,14 +46,17 @@ describe('pickCanonicalAdam (deterministic election, mirror of coordinator)', ()
 function stub(rows, { error = null } = {}) {
   return {
     from() {
+      let statusAllowlist = null; // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1: .in('status', [...])
       const chain = {
         select() { return chain; },
         gte() { return chain; },
         filter() { return chain; },
+        in(col, values) { if (col === 'status') statusAllowlist = values; return chain; },
         order() { return chain; },
         range(from, to) {
           if (error) return Promise.resolve({ data: null, error });
-          return Promise.resolve({ data: (rows || []).slice(from, to + 1), error: null });
+          const source = statusAllowlist ? (rows || []).filter((r) => statusAllowlist.includes(r.status)) : (rows || []);
+          return Promise.resolve({ data: source.slice(from, to + 1), error: null });
         },
       };
       return chain;
@@ -64,8 +67,8 @@ function stub(rows, { error = null } = {}) {
 describe('electAdamFromDb / getActiveAdamId / countFreshAdams (fail-open)', () => {
   it('elects the canonical Adam from fresh rows', async () => {
     const sb = stub([
-      { session_id: 'old', heartbeat_at: fresh(1), metadata: { role: 'adam', adam_since: '2026-06-15T09:00:00Z' } },
-      { session_id: 'new', heartbeat_at: fresh(1), metadata: { role: 'adam', adam_since: '2026-06-15T11:00:00Z' } },
+      { session_id: 'old', heartbeat_at: fresh(1), status: 'active', metadata: { role: 'adam', adam_since: '2026-06-15T09:00:00Z' } },
+      { session_id: 'new', heartbeat_at: fresh(1), status: 'active', metadata: { role: 'adam', adam_since: '2026-06-15T11:00:00Z' } },
     ]);
     expect(await adam.electAdamFromDb(sb, { nowMs: NOW })).toBe('new');
     expect(await adam.getActiveAdamId(sb, { nowMs: NOW })).toBe('new');
@@ -76,6 +79,16 @@ describe('electAdamFromDb / getActiveAdamId / countFreshAdams (fail-open)', () =
     expect(await adam.electAdamFromDb(sbErr, { nowMs: NOW })).toBeNull();
     expect(await adam.countFreshAdams(sbErr, { nowMs: NOW })).toBe(0);
     expect(await adam.electAdamFromDb(null)).toBeNull(); // no client
+  });
+  // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1 (TS-3): a released-but-heartbeat-fresh row
+  // must not win election -- fetchFreshAdams now applies a query-level status allowlist.
+  it('EXCLUDES a released-but-heartbeat-fresh row from election', async () => {
+    const sb = stub([
+      { session_id: 'released', heartbeat_at: fresh(1), status: 'released', metadata: { role: 'adam' } },
+      { session_id: 'live', heartbeat_at: fresh(1), status: 'idle', metadata: { role: 'adam' } },
+    ]);
+    expect(await adam.electAdamFromDb(sb, { nowMs: NOW })).toBe('live');
+    expect(await adam.countFreshAdams(sb, { nowMs: NOW })).toBe(1);
   });
 });
 
@@ -129,6 +142,73 @@ describe('decideSingleAdamGuard (refuse-new-on-fresh-prior divergence)', () => {
     });
     expect(d.action).toBe('retire_stale_then_register');
     expect(d.retire).toEqual(['nullhb']);
+  });
+
+  // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1: closes the fetchAllAdamsStrict blackout —
+  // a rotated-out prior's heartbeat_at is frozen at release time, not backdated, so it reads as
+  // "fresh" for up to ADAM_FRESH_MS. Without a status check this REFUSED new registration; the
+  // fix reclassifies it as retirable-stale instead.
+  it('a RELEASED prior with a fresh heartbeat is classified non-fresh, not refused (registration succeeds)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'released1', heartbeat_at: fresh(1), status: 'released' }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('retire_stale_then_register');
+    expect(d.retire).toEqual(['released1']);
+    expect(d.freshPriors).toEqual([]);
+  });
+
+  // Negative control (TESTING evidence d8ad67a2, TS-2): the fix must not blind the guard to a
+  // genuinely live prior. A non-released, heartbeat-fresh row with status EXPLICITLY set still
+  // refuses registration.
+  it('a non-released, fresh-heartbeat prior with explicit status still REFUSES (negative control)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'live1', heartbeat_at: fresh(1), status: 'active' }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('refuse');
+    expect(d.freshPriors).toEqual(['live1']);
+  });
+
+  // Backward compatibility: existing/legacy priorAdams entries with NO status field at all
+  // (predating this fix) must be unaffected — absent status defers to heartbeat_at alone.
+  it('a fresh-heartbeat prior with NO status field is still classified fresh (backward compatible)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'legacy1', heartbeat_at: fresh(1) }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('refuse');
+    expect(d.freshPriors).toEqual(['legacy1']);
+  });
+
+  it('mixed released + genuinely-fresh priors => REFUSE (the live one still dominates), released one still retirable', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [
+        { session_id: 'released2', heartbeat_at: fresh(1), status: 'released' },
+        { session_id: 'live2', heartbeat_at: fresh(1), status: 'idle' },
+      ],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('refuse');
+    expect(d.freshPriors).toEqual(['live2']);
+    expect(d.retire).toEqual([]); // refuse path never retires, matching the existing mixed-fresh-priors test above
+  });
+});
+
+describe('isStatusFreshEligible (pure status-allowlist helper, FR-1)', () => {
+  it('active/idle/stale are fresh-eligible', () => {
+    expect(adam.isStatusFreshEligible('active')).toBe(true);
+    expect(adam.isStatusFreshEligible('idle')).toBe(true);
+    expect(adam.isStatusFreshEligible('stale')).toBe(true);
+  });
+  it('released is NOT fresh-eligible', () => {
+    expect(adam.isStatusFreshEligible('released')).toBe(false);
+  });
+  it('undefined status defers to caller (fresh-eligible) for backward compatibility', () => {
+    expect(adam.isStatusFreshEligible(undefined)).toBe(true);
+  });
+  it('an unknown/future status value is NOT fresh-eligible (fail-closed allowlist)', () => {
+    expect(adam.isStatusFreshEligible('some_future_status')).toBe(false);
   });
 });
 

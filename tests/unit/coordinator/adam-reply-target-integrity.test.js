@@ -43,6 +43,10 @@ function makeSb({ freshAdams = [], retiredSeats = [], retargetRows = [], retarge
         filter() { return builder; },
         eq(col, val) { if (col === 'metadata->>role') roleFilter = val; return builder; },
         is() { return builder; },
+        // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1: fetchFreshAdams now applies
+        // .in('status', [...]) -- this file doesn't test status filtering itself (that's
+        // adam-singleton.test.js), so a passthrough keeps freshAdams fixtures authoritative.
+        in() { return builder; },
         // FR-6 (count-truncation discipline): fetchFreshAdams / resolveRetiredAdamSeats paginate
         // via fetchAllPaginated, whose pages end in .order(...).range(from, to).
         order() { return builder; },

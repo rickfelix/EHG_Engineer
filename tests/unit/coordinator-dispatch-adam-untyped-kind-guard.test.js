@@ -23,6 +23,10 @@ function stubSupabase({ adamSessionId } = {}) {
         eq(_col, val) { chain._eq = val; return chain; },
         gte() { chain._mode = 'adam-lookup'; return chain; },
         filter() { return chain; },
+        // QF/SD-MAN-INFRA-CORRECTIVE-VISION-GAP-001 FR-1: fetchFreshAdams now applies
+        // .in('status', [...]) -- this stub doesn't model status, so a passthrough keeps
+        // adamSessionId authoritative as it already was.
+        in() { return chain; },
         limit() { return chain; },
         // FR-6 (count-truncation discipline): fetchFreshAdams paginates via fetchAllPaginated,
         // whose pages end in .order(...).range(from, to) — resolve the same adam-lookup rows.
