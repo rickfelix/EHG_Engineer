@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-22](#2026-08-22)
+  - [Security](#security)
 - [2026-08-21](#2026-08-21)
   - [Security](#security)
   - [Infrastructure](#infrastructure)
@@ -131,6 +133,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-22
+
+### Security
+- **62+ of 578 `scripts/one-off/*` files held `SUPABASE_SERVICE_ROLE_KEY` with no guard against bare-import execution — a lint now blocks the class** - PR #7376 (SD-FDBK-ENH-578-SCRIPTS-ONE-001)
+  - **Root incident (2026-08-21)**: importing `scripts/one-off/backfill-solomon-ledger-decision-by.mjs` for ESM/CJS-interop inspection — no intent to run it — executed its unconditional top-level `main()` for real against live prod, mutating 1212 `solomon_advice_outcome_ledger.decision_by` rows irreversibly, pre-merge.
+  - **What shipped**: `eslint-rules/require-main-guard-in-one-off.js` flags an unconditional top-level `main()`/`run()` call (including `.then()/.catch()/.finally()` chains and top-level `const x = await main();` declarations) with no recognized guard (`isMainModule(import.meta.url)` or the equivalent `fileURLToPath`/`argv[1]` comparison); enforced CI-blocking via `scripts/lint/require-main-guard-in-one-off-lint.mjs` and `.github/workflows/require-main-guard-in-one-off-lint.yml`, with a reason-required grandfather allowlist (144 entries) for the remaining pre-existing corpus. ~18 highest-blast-radius, service-role-holding files retrofitted directly with real guards rather than grandfathered.
+  - **Notable while shipping**: the branch went stale (49, then 5, commits behind `main`) while its PR sat open; each re-merge surfaced newly-landed unguarded files the lint caught live. Independent EXEC-TO-PLAN TESTING and SECURITY sub-agent review — deliberately not trusting the control's own self-report — found and closed 3 real detection gaps (a promise-chain peel limited to one `.catch()` link, no `VariableDeclaration` visitor, and a missing `.js` scan extension) that had let a handful of real service-role-holding files go undetected while the lint reported "0 violations." Both reviews' remaining disclosed-but-unclosed findings (two more inherited bypass vectors, an allowlist ratchet gap, and the residual scope outside `scripts/one-off/`) are tracked as completion-flag follow-ups rather than silently accepted.
 
 ## 2026-08-21
 
