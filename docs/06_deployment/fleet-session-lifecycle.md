@@ -147,6 +147,14 @@ mechanism with its own live-drill doc: `docs/protocol/console-creation-watcher-d
 
 ## Operating notes
 
+- **Never replay a dead window's shell history to restart a killed session.** After a
+  non-graceful kill (e.g. `Stop-Process`), the window's last command still carries
+  `--session-id <uuid>` for an identity that already has a transcript on disk — the CLI
+  refuses to reuse it **by design**, and there is nothing to safely clear (deleting the
+  transcript or its `session-env`/`file-history` companions destroys history, not just a
+  lock). Close the dead window (`Ctrl+D` / `exit`) and open a **genuinely new** one, or drive
+  the restart through `restart()` / `fleet-kill.mjs` above — both mint a fresh `--session-id`
+  on every (re)start instead of pinning a stored one (QF-20260822-494).
 - Rehearse with `--dry-run` first; it exercises identify/sample/preserve without signalling.
 - If a session reports `unauthorized` rather than dying, check the profile's token `expiresAt` —
   `claude auth status` reports identity happily while every API call 401s.
