@@ -27,10 +27,11 @@ describe('isReplyRow (FR-4 reply-lane predicate)', () => {
 // Stub the supabase query/update chain. The SELECT uses AND-only filters (NO .or()), and the
 // chain captures the eq/is filters so we can PROVE lane scoping is applied, plus the consumed ids.
 function stub(rows) {
-  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false, updatePayloads: [] };
+  const captured = { eq: {}, in: {}, isNull: [], updatedIds: null, usedOr: false, updatePayloads: [] };
   const selectChain = {
     select() { return selectChain; },
     eq(col, val) { captured.eq[col] = val; return selectChain; },
+    in(col, val) { captured.in[col] = val; return selectChain; },
     or() { captured.usedOr = true; return selectChain; },
     is(col) { captured.isNull.push(col); return selectChain; },
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: window scoping added to the lane query.
@@ -67,7 +68,8 @@ describe('drainReplies (FR-4 full-lane, AND-only query + JS filter)', () => {
     ];
     const { supabase, captured } = stub(rows);
     await drainReplies(supabase, 'adam-session');
-    expect(captured.eq.target_session).toBe('adam-session'); // lane scoped by the AND-only query
+    // QF-20260822-133: scope widened to also read the 'broadcast-adam' fallback sentinel.
+    expect(captured.in.target_session).toEqual(['adam-session', 'broadcast-adam']); // lane scoped by the AND-only query
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): recoverable filter is
     // acknowledged_at IS NULL — read_at is only a stamp, never a hiding filter.
     expect(captured.isNull).toContain('acknowledged_at');

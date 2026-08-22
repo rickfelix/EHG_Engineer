@@ -17,7 +17,7 @@ const { drainInbox } = require('../../scripts/adam-advisory.cjs');
 // head-count) added; the empty-lane wording changed 'no unread' -> 'no unacked'.
 function makeSupabase(rows) {
   const q = {
-    select: () => q, eq: () => q, is: () => q, gte: () => q, order: () => q,
+    select: () => q, eq: () => q, in: () => q, is: () => q, gte: () => q, order: () => q,
     lt: () => Promise.resolve({ count: 0, error: null }),
     limit: () => Promise.resolve({ data: rows, error: null }),
   };
