@@ -3,7 +3,7 @@
  * scripts/one-off/* Missing Main-Guard Class Guard Lint
  * SD-FDBK-ENH-578-SCRIPTS-ONE-001
  *
- * Scans scripts/one-off/**\/*.{mjs,cjs} for an unconditional top-level main()/run() entrypoint
+ * Scans scripts/one-off/**\/*.{mjs,cjs,js} for an unconditional top-level main()/run() entrypoint
  * call with no recognized guard -- the exact shape that caused the 2026-08-21 incident
  * (importing scripts/one-off/backfill-solomon-ledger-decision-by.mjs for inspection executed
  * main() for real against live prod, mutating 1212 rows irreversibly). Reuses the SAME
@@ -28,9 +28,24 @@
  *     -- the rule never verifies the guard's condition is one of the two known-safe shapes
  *     (isMainModule(...) or the raw fileURLToPath/argv[1] comparison). A wrong-condition guard
  *     that still executes unconditionally in practice would read as fixed.
- *   - only scripts/one-off/**\/*.{mjs,cjs} is scanned; the identical unconditional-entrypoint
+ *   - only scripts/one-off/**\/*.{mjs,cjs,js} is scanned; the identical unconditional-entrypoint
  *     footgun in scripts/, lib/, or any .ts one-off-style file elsewhere in the repo is outside
  *     this control's population entirely.
+ *   - SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-22: two more undisclosed, zero-trace
+ *     bypasses remain inside scripts/one-off/ itself, inherited unchanged from the sibling
+ *     ismainmodule-classguard-lint.mjs control this driver is structurally modeled on --
+ *     EXCLUDE_FILE_RE drops any filename containing `.test.`/`.spec.`, and EXCLUDE_DIR_SEGMENTS
+ *     drops `archive/`/`_deprecated/` subdirectories. Neither needs an allowlist entry to evade
+ *     detection, so neither leaves a reviewable diff line -- less audit trace than the sanctioned
+ *     grandfather-allowlist path. Left as-is here (changing an established, repo-wide convention
+ *     shared with that sibling control is a broader decision than this SD's scope), not silently
+ *     accepted.
+ *   - SECURITY sub-agent finding, same review: this driver file itself (scripts/lint/
+ *     require-main-guard-in-one-off-lint.mjs) ends in an unconditional main() call and is outside
+ *     its own scanned population (scripts/lint/, not scripts/one-off/) -- matching the identical,
+ *     pre-existing pattern in the sibling ismainmodule-classguard-lint.mjs. Low blast radius (a
+ *     bare import runs a read-only 605-file scan then process.exit()s), but real: it hard-kills
+ *     the importing process before any code after the import can run.
  *   - the grandfather allowlist (144 entries at authoring) means every listed path is STILL
  *     genuinely unguarded and exploitable via a bare import -- this control reports those paths
  *     as "grandfathered", never as fixed, and blocks nothing for them.
@@ -59,7 +74,13 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const ALLOWLIST_PATH = path.resolve(__dirname, 'require-main-guard-in-one-off-allowlist.json');
 
 const SCAN_DIRS = ['scripts/one-off'];
-const SCAN_EXTENSIONS = new Set(['.mjs', '.cjs']);
+// SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-22: package.json declares
+// "type":"module", so a plain .js file under scripts/one-off/ is valid, importable ESM -- omitting
+// it here was an undisclosed, zero-trace bypass (no allowlist entry needed to evade the lint).
+// Verified before widening: exactly 1 such file exists today (backfill-roadmap-promote-titles.js)
+// and it is not even the risky shape (its entrypoint is named runBackfill, not main/run), so this
+// closes the vector with zero corpus impact.
+const SCAN_EXTENSIONS = new Set(['.mjs', '.cjs', '.js']);
 const EXCLUDE_DIR_SEGMENTS = ['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive', '_deprecated'];
 const EXCLUDE_FILE_RE = /(\.test\.|\.spec\.)/i;
 
