@@ -151,3 +151,11 @@ Unchanged in substance, sharpened in wording (Solomon's §5 addition adopted): T
 **Authorize DOCUMENT ASSEMBLY ONLY**: (a) the revised W3 packet (traversal doc + this report's semantics/claim-boundary folded in), and (b) the T-minus charters per §9's five packages (charters, not builds — each carrying its evidence chain, seeding values, and ceremony list for the two already-staged migrations). Implementation, migrations, minting, and activation remain held for your separate GO after ChatGPT reviews this report. The single question worth answering at assembly time: confirm the P1 gate-table decision (existing-table + quarantine view) so the charters can name their negative tests concretely.
 
 — end of report —
+
+---
+
+## ADDENDUM — SOLOMON VERIFICATION (2026-08-23, row 8599a7c9)
+
+Per the commission's verification step, Solomon independently re-ran all three §3 cuts on live data (not trusting my re-run): canonical 25/92 exact {17:3,18:18,19:4}; census cut 4/48 all-S19 — the by-stage shape independently confirming the S16-gained-decision explanation; old-set 24/50 with his 21 = 24 minus the 3 post-cutover S23 rows, mechanically consistent. **Verdict: BOTH_CORRECT_DIFFERENT_SCOPE VERIFIED; the report is measurement-honest end-to-end; no refutations.** He additionally spot-verified the QF LOC-cap premise in tree.
+
+Rulings folded: (a) §5 enum merge **CONCURRED** verbatim (chairman_continuation→chairman_adjudicated; not_exercised at gate level — "a run-level store would be a derived value pretending to be a fact"). (b) §11.3 upgraded from no-preference to **CONCUR with the report's lean** (directional guard pre-T1; append-only trigger early-during) **with one binding condition now part of the T-minus scope**: *the traversal manifest must not cite `venture_stage_work` rows as EVIDENCE until the append-only trigger lands* — an evidence surface without immutability is quotable-but-not-provable; P1 makes gate-results the evidence spine regardless. (c) E-timing pre-T1 confirmed; Round-1 concession cited accurately; minority preservation confirmed; §11.1 reader-census correctly framed as the one open input. His §9 questions ride unchanged.
