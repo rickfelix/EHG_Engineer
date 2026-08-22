@@ -1,0 +1,34 @@
+-- QF-20260822-628 — narrow public.v_plan_item_position to SELECT-only for anon/authenticated.
+-- @chairman-gated
+--
+-- ⚠ THERE IS DELIBERATELY NO `-- @approved-by:` LINE IN THIS FILE.
+--   REVOKE/GRANT are unconditionally in scripts/lib/migration-tier-classifier.mjs's
+--   FORBIDDEN_TOPLEVEL set, so this migration is TIER-2 regardless of content — it cannot
+--   self-apply. The builder that authored this file holds none of the 3-factor chairman-gate
+--   credentials and MUST NOT forge the attestation. The chairman adds the `@approved-by` line
+--   and runs:
+--       node scripts/apply-migration.js database/migrations/20260822_narrow_plan_item_position_view_grants.sql --prod-deploy
+--   Observable proof of application: node scripts/plan-item-position-grant-posture.mjs
+--     (STAGED_NOT_APPLIED before, APPLIED_AND_SAFE after — read-only, never issues DDL).
+--
+-- ⚠ NO EXPLICIT BEGIN/COMMIT. apply-migration.js already wraps the file in BEGIN/COMMIT.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- WHY: v_plan_item_position (database/migrations/20260803_plan_item_position_view.sql) is a bare
+-- CREATE VIEW with no explicit GRANT of its own. It inherited the schema's default privileges
+-- for public.*, which grant anon/authenticated the FULL set on every new relation — measured
+-- live 2026-08-22: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE, not SELECT
+-- alone. Same family as SEC-02 (claude_sessions anon FOR ALL policy) — a read-only instrument
+-- carrying write-shaped grants it was never meant to need.
+--
+-- NOT currently exploitable via the view itself: it JOINs roadmap_wave_items/roadmap_waves/
+-- strategic_directives_v2, so Postgres refuses DML against it (no INSTEAD OF rule/trigger
+-- exists) regardless of the grant. This is least-privilege hygiene against a future landmine
+-- (the view being redefined simple/auto-updatable without anyone re-reviewing its grants), not
+-- an active-incident fix — stated plainly so the ceremony window isn't over-escalated.
+--
+-- service_role is UNTOUCHED (kept at its current full grant set) — it is the fleet's own
+-- trusted write path elsewhere and out of this QF's stated scope ("narrow to SELECT" refers to
+-- anon+authenticated only, per the QF title).
+REVOKE ALL ON public.v_plan_item_position FROM anon, authenticated;
+GRANT SELECT ON public.v_plan_item_position TO anon, authenticated;
