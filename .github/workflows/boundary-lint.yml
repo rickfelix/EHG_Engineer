@@ -34,34 +34,48 @@ jobs:
           set -eo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.sha }}"
-          # -c core.quotePath=false: git's default quotePath=true C-quotes any path with a
-          # non-ASCII byte (e.g. "003_caf\303\251.sql" for 003_café.sql). The loop below reads
-          # that literal quoted text into $f, [ -f "$f" ] then fails against the real on-disk
-          # file, and the fall-through "|| true" swallows it with zero output -- a violation in
-          # a non-ASCII-named migration ships silently. Force raw UTF-8 paths instead.
-          RAW=$(git -c core.quotePath=false diff --name-only --diff-filter=d "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
+          # NUL-delimited throughout (git diff -z / read -r -d ''): git's default path
+          # quoting (core.quotePath=true) C-escapes non-ASCII bytes, and ALWAYS escapes
+          # TAB, LF, double-quote and backslash regardless of that setting -- no config
+          # flag suppresses quoting for that whole class at once. A quoted path read into
+          # $f no longer matches the real on-disk file via [ -f "$f" ], and the
+          # fall-through "|| true" swallows the miss silently. -z is the only git output
+          # mode that is raw for all of those bytes simultaneously.
+          RAW_FILE=$(mktemp)
+          LEGACY_NEW_FILE=$(mktemp)
+          CHANGED_FILE=$(mktemp)
+          trap 'rm -f "$RAW_FILE" "$LEGACY_NEW_FILE" "$CHANGED_FILE"' EXIT
+          git diff -z --name-only --diff-filter=d "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql' > "$RAW_FILE"
           # legacy/ is grandfathered so a PATCH to an already-existing legacy file doesn't
           # trip the vh_ check -- but a file that is NEW at this PR (diff-filter=A) cannot
           # be "already existing", so it must NOT dodge the check just by living under
           # legacy/. Re-merge newly-added legacy/ files back into CHANGED.
-          NEW_UNDER_LEGACY=$(git -c core.quotePath=false diff --name-only --diff-filter=A "$BASE" "$HEAD" -- 'db/migrations/vh/legacy/*.sql' 'db/migrations/vh/legacy/**/*.sql')
-          CHANGED=$(printf '%s\n' "$RAW" | grep -v '^db/migrations/vh/legacy/' || true)
-          if [ -n "$NEW_UNDER_LEGACY" ]; then
-            CHANGED=$(printf '%s\n%s\n' "$CHANGED" "$NEW_UNDER_LEGACY" | grep -v '^$' || true)
-          fi
-          if [ -z "$CHANGED" ]; then
+          git diff -z --name-only --diff-filter=A "$BASE" "$HEAD" -- 'db/migrations/vh/legacy/*.sql' 'db/migrations/vh/legacy/**/*.sql' > "$LEGACY_NEW_FILE"
+          : > "$CHANGED_FILE"
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              db/migrations/vh/legacy/*) continue ;;
+            esac
+            printf '%s\0' "$f" >> "$CHANGED_FILE"
+          done < "$RAW_FILE"
+          while IFS= read -r -d '' f; do
+            printf '%s\0' "$f" >> "$CHANGED_FILE"
+          done < "$LEGACY_NEW_FILE"
+          if [ ! -s "$CHANGED_FILE" ]; then
             echo 'No new/changed vh migration files outside legacy/ - skipping check';
             exit 0;
           fi
-          # Per-file loop, not a single unquoted-$CHANGED grep call: word-splitting on a
-          # filename containing a space silently drops it from the check, and a single
+          # Per-file loop, not a single unquoted grep call: word-splitting on a filename
+          # containing a space silently drops it from the check, and a single
           # missing/unreadable path makes the WHOLE pipeline exit 2, which set -eo pipefail
           # then reads as "if" being false -- a real violation printed earlier in the same
-          # step passes silently. Read one path per line instead so one bad path can never
-          # mask the rest.
-          OFFENDERS=$(printf '%s\n' "$CHANGED" | while IFS= read -r f; do
-            [ -n "$f" ] && [ -f "$f" ] && grep -H "CREATE TABLE" -- "$f" || true
-          done | grep -v "vh_" || true)
+          # step passes silently. Read one NUL-delimited path at a time instead so one bad
+          # path can never mask the rest.
+          OFFENDERS=$(
+            while IFS= read -r -d '' f; do
+              [ -f "$f" ] && grep -H "CREATE TABLE" -- "$f" || true
+            done < "$CHANGED_FILE" | grep -v "vh_" || true
+          )
           if [ -n "$OFFENDERS" ]; then
             printf '%s\n' "$OFFENDERS";
             echo 'Venture migration defining non vh_ table';
