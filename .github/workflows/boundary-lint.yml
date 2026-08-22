@@ -34,7 +34,7 @@ jobs:
           set -eo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.sha }}"
-          RAW=$(git diff --name-only "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
+          RAW=$(git diff --name-only --diff-filter=d "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
           # legacy/ is grandfathered so a PATCH to an already-existing legacy file doesn't
           # trip the vh_ check -- but a file that is NEW at this PR (diff-filter=A) cannot
           # be "already existing", so it must NOT dodge the check just by living under
@@ -48,7 +48,17 @@ jobs:
             echo 'No new/changed vh migration files outside legacy/ - skipping check';
             exit 0;
           fi
-          if grep -H "CREATE TABLE" $CHANGED | grep -v "vh_"; then
+          # Per-file loop, not a single unquoted-$CHANGED grep call: word-splitting on a
+          # filename containing a space silently drops it from the check, and a single
+          # missing/unreadable path makes the WHOLE pipeline exit 2, which set -eo pipefail
+          # then reads as "if" being false -- a real violation printed earlier in the same
+          # step passes silently. Read one path per line instead so one bad path can never
+          # mask the rest.
+          OFFENDERS=$(printf '%s\n' "$CHANGED" | while IFS= read -r f; do
+            [ -n "$f" ] && [ -f "$f" ] && grep -H "CREATE TABLE" -- "$f" || true
+          done | grep -v "vh_" || true)
+          if [ -n "$OFFENDERS" ]; then
+            printf '%s\n' "$OFFENDERS";
             echo 'Venture migration defining non vh_ table';
             exit 1;
           fi
