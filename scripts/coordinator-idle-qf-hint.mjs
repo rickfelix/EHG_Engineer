@@ -312,11 +312,8 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
 
   const ranked = eligibleQfCandidates(qfs, nowMs);
   summary.skippedGated = (qfs || []).length - ranked.length;
-  // QF-20260821-032: of the skipped-gated set, how many are held ONLY by the staleness gate
-  // (i.e. would be eligible right now if isAutoStartableQF's window were the sole blocker).
-  // Computed unconditionally, before the ranked-empty early return, since "ranked is empty but
-  // claimableWithVerify > 0" is precisely the verify-gated-not-supply-empty case this exists to
-  // surface.
+  // QF-20260821-032: of skippedGated, how many are held ONLY by staleness. Computed before the
+  // ranked-empty early return -- "ranked empty but claimableWithVerify > 0" is the case this exists to surface.
   summary.claimableWithVerify = (qfs || []).filter(
     (qf) => isClaimableWithVerify(qf, nowMs) && !isHintExcludedGated(qf)
   ).length;

@@ -275,10 +275,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     // behaviour at the call site where a reader can see it, instead of weakening the shared gauge for
     // every other consumer.
     countAutoStartableQuickFixes(sb).catch(() => null),
-    // QF-20260821-032: SEPARATE from openQfCount above — QFs held ONLY by the staleness gate
-    // (isClaimableWithVerify), so a deficit verdict can tell "verify-gated" apart from
-    // "genuinely no supply" instead of both reading as the same 0. Same fail-open contract as
-    // openQfCountRaw: an unreadable belt degrades to 0 contribution, not an aborted forecast.
+    // QF-20260821-032: SEPARATE from openQfCount -- staleness-only-held QFs, same fail-open contract.
     countClaimableWithVerifyQuickFixes(sb).catch(() => null),
     // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (TR-3): a SEPARATE, additive lookup for the
     // engagement gauge's ENGAGED signal only — never folded into claimsBySession below, which
