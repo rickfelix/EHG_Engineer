@@ -53,21 +53,47 @@ describe('summarizeSuggestionActivity (FR-4 reader)', () => {
   });
 });
 
+const FAKE_UUID = '11111111-1111-1111-1111-111111111111';
+
 describe('recordOverride (FR-4 writer refuses malformed input)', () => {
+  it('refuses a non-UUID suggestionId before ever querying the DB', async () => {
+    const sb = { from: () => { throw new Error('should not be reached'); } };
+    await expect(recordOverride(sb, 'not-a-uuid', 'a reason')).rejects.toThrow(/not a full UUID/);
+  });
+
   it('refuses a missing reason — an unreasoned override is not training signal', async () => {
-    const sb = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'x', payload: { kind: 'dispatch_suggestion' } }, error: null }) }) }) }) };
-    await expect(recordOverride(sb, 'x', '')).rejects.toThrow(/missing reason/);
+    const sb = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: FAKE_UUID, payload: { kind: 'dispatch_suggestion' } }, error: null }) }) }) }) };
+    await expect(recordOverride(sb, FAKE_UUID, '')).rejects.toThrow(/missing reason/);
+  });
+
+  it('strips control characters and caps length on the reason field', async () => {
+    let inserted = null;
+    const sb = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { id: FAKE_UUID, payload: { kind: 'dispatch_suggestion', sd_key: 'SD-A' } }, error: null }) }),
+        }),
+        insert: (row) => {
+          inserted = row;
+          return { select: () => ({ single: async () => ({ data: { id: 'override-1' }, error: null }) }) };
+        },
+      }),
+    };
+    const dirty = `bad${String.fromCharCode(27)}[31mreason${'x'.repeat(600)}`;
+    await recordOverride(sb, FAKE_UUID, dirty);
+    expect(inserted.payload.reason).not.toMatch(/\x1B/);
+    expect(inserted.payload.reason.length).toBeLessThanOrEqual(500);
   });
 
   it('refuses when the referenced row is not a dispatch_suggestion', async () => {
     const sb = {
       from: () => ({
         select: () => ({
-          eq: () => ({ maybeSingle: async () => ({ data: { id: 'x', payload: { kind: 'dispatch_override' } }, error: null }) }),
+          eq: () => ({ maybeSingle: async () => ({ data: { id: FAKE_UUID, payload: { kind: 'dispatch_override' } }, error: null }) }),
         }),
       }),
     };
-    await expect(recordOverride(sb, 'x', 'a reason')).rejects.toThrow(/not a dispatch_suggestion/);
+    await expect(recordOverride(sb, FAKE_UUID, 'a reason')).rejects.toThrow(/not a dispatch_suggestion/);
   });
 
   it('records an override row referencing the original suggestion when valid', async () => {
@@ -77,7 +103,7 @@ describe('recordOverride (FR-4 writer refuses malformed input)', () => {
         if (table !== 'session_coordination') throw new Error('unexpected table');
         return {
           select: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: { id: 'sugg-1', payload: { kind: 'dispatch_suggestion', sd_key: 'SD-A' } }, error: null }) }),
+            eq: () => ({ maybeSingle: async () => ({ data: { id: FAKE_UUID, payload: { kind: 'dispatch_suggestion', sd_key: 'SD-A' } }, error: null }) }),
           }),
           insert: (row) => {
             inserted = row;
@@ -86,10 +112,10 @@ describe('recordOverride (FR-4 writer refuses malformed input)', () => {
         };
       },
     };
-    const id = await recordOverride(sb, 'sugg-1', 'coordinator disagreed');
+    const id = await recordOverride(sb, FAKE_UUID, 'coordinator disagreed');
     expect(id).toBe('override-1');
     expect(inserted.payload.kind).toBe('dispatch_override');
-    expect(inserted.payload.suggestion_id).toBe('sugg-1');
+    expect(inserted.payload.suggestion_id).toBe(FAKE_UUID);
     expect(inserted.payload.sd_key).toBe('SD-A');
     expect(inserted.payload.reason).toBe('coordinator disagreed');
   });

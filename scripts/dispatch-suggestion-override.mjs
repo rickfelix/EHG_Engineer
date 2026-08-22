@@ -23,9 +23,27 @@ const require = createRequire(import.meta.url);
 // ESLint rule AND violates the table's `subject` NOT NULL + `valid_target` CHECK constraints.
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 
+// SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (SECURITY hardening, evidence 76aa95ea): `reason` is
+// free text from the coordinator, stored verbatim and echoed into every PLAN-phase preflight run
+// (scripts/phase-preflight.js) — an unsanitized cross-session text channel with no prior length
+// cap. No web/HTML surface reads session_coordination (repo-wide), so this is not an XSS risk,
+// but strip control/ANSI characters and cap length anyway, matching the existing precedent at
+// lib/fleet/account-usage-reader.cjs identityDisplayMap() for the same reason: a config/text
+// value that reaches a console/log line should not carry terminal escape sequences.
+const MAX_REASON_LENGTH = 500;
+function sanitizeReason(raw) {
+  return String(raw).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim().slice(0, MAX_REASON_LENGTH);
+}
+
+const FULL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function recordOverride(supabase, suggestionId, reason) {
   if (!suggestionId) throw new Error('recordOverride: missing suggestionId');
-  if (!reason || !String(reason).trim()) throw new Error('recordOverride: missing reason — an unreasoned override is not training signal');
+  if (!FULL_UUID_RE.test(String(suggestionId))) {
+    throw new Error(`recordOverride: suggestionId "${suggestionId}" is not a full UUID (expected 8-4-4-4-12 hex)`);
+  }
+  const trimmedReason = sanitizeReason(reason);
+  if (!trimmedReason) throw new Error('recordOverride: missing reason — an unreasoned override is not training signal');
 
   const { data: suggestion, error: readErr } = await supabase
     .from('session_coordination')
@@ -37,7 +55,6 @@ export async function recordOverride(supabase, suggestionId, reason) {
     throw new Error(`recordOverride: ${suggestionId} is not a dispatch_suggestion row`);
   }
 
-  const trimmedReason = String(reason).trim();
   const res = await insertCoordinationRow(supabase, {
     sender_type: 'system',
     target_session: 'broadcast',
