@@ -397,6 +397,23 @@ const HOST_QUERY_ROW_LIMIT = Number(process.env.HOST_QUERY_ROW_LIMIT) > 0
 const MAX_HOSTS_PAGED_PER_RUN = Number(process.env.MAX_HOSTS_PAGED_PER_RUN) > 0
   ? Number(process.env.MAX_HOSTS_PAGED_PER_RUN)
   : 5;
+// Deep-tier /ship adversarial review, Finding 1 (independently verified): MAX_HOSTS_PAGED_PER_RUN
+// above only bounds the DEAD branch of checkPerHostFreeze's loop -- every ALIVE host still gets an
+// unconditional recordFleetDeadManVerdict call (1 read + 1 write to system_events), every run, with
+// no cap at all. The same fabricated-hostname attack that motivated MAX_HOSTS_PAGED_PER_RUN (anon
+// can INSERT into claude_sessions) applies here just as directly: up to HOST_QUERY_ROW_LIMIT (5000)
+// fabricated "alive" hosts would cost up to 10,000 sequential Supabase round-trips and 5000 new
+// system_events rows on a single ~15-minute cron tick -- no chairman-SMS spam (alive hosts never
+// page), but real DB-write amplification and, more importantly, a real risk of the cron job itself
+// running long enough to threaten a workflow timeout, which would jeopardize every OTHER arm in
+// this same run (runAlertArm isolates FAILURES, not SLOWNESS). Bounds the WHOLE loop (dead + alive
+// combined), independent of and larger than MAX_HOSTS_PAGED_PER_RUN, since legitimate recency-
+// filtered eligibility (HOST_ELIGIBILITY_WINDOW_MIN=4h) is expected to surface at most a handful of
+// real hosts -- see fetchEligibleHosts' own HOST_QUERY_ROW_LIMIT comment for the same "several
+// concurrent hosts, never thousands" scoping this SD targets.
+const MAX_HOSTS_PROCESSED_PER_RUN = Number(process.env.MAX_HOSTS_PROCESSED_PER_RUN) > 0
+  ? Number(process.env.MAX_HOSTS_PROCESSED_PER_RUN)
+  : 200;
 
 /**
  * Pure decision (FR-2): is THIS HOST showing zero heartbeat signs of life within the window?
@@ -635,11 +652,25 @@ export async function checkPerHostFreeze(db, DRY, sendChairmanSMSFn = null, now 
   // this run (a superset of how many actually page, since only transitioned ones do) -- a host
   // beyond the cap gets NO write this run, so its last recorded state is untouched and it
   // re-competes for a cap slot next run once this run's paged hosts have themselves flipped to
-  // transitioned=false. Alive hosts never count against the cap; only dead ones do.
+  // transitioned=false. Alive hosts never count against THIS cap; only dead ones do -- see
+  // MAX_HOSTS_PROCESSED_PER_RUN immediately below for the cap that also covers alive hosts.
   let deadProcessed = 0;
   let deadSkippedByCap = 0;
+  // Deep-tier /ship review, Finding 1: bounds total DB read+write volume (dead + alive combined),
+  // independent of the paging cap above. Same residual limitation as fetchEligibleHosts' own
+  // HOST_QUERY_ROW_LIMIT truncation (Finding 2, disclosed there, not re-solved here): eligibleHosts
+  // is ordered by most-recent-heartbeat-first, so an adversarial flood of freshly-stamped fake
+  // "alive" hosts could in principle push a genuinely stale real host past this cap in the same run
+  // it would otherwise have been evaluated. Closing that fully requires a known-host allowlist or
+  // tightened claude_sessions RLS -- out of scope for this SD; tracked as a follow-up.
+  let totalProcessed = 0;
 
   for (const [hostname, lastHeartbeatAtForHost] of eligibleHosts) {
+    if (totalProcessed >= MAX_HOSTS_PROCESSED_PER_RUN) {
+      console.error(`[fleet-dead-man-per-host] STOPPED at ${MAX_HOSTS_PROCESSED_PER_RUN} hosts processed this run -- remaining eligible hosts got no verdict this tick. If this is a genuine mass outage rather than fabricated claude_sessions rows, raise MAX_HOSTS_PROCESSED_PER_RUN.`);
+      break;
+    }
+
     const verdict = evaluatePerHostFreezePredicate({ hostname, lastHeartbeatAtForHost, now });
 
     if (verdict.dead) {
@@ -650,6 +681,7 @@ export async function checkPerHostFreeze(db, DRY, sendChairmanSMSFn = null, now 
       deadProcessed += 1;
     }
 
+    totalProcessed += 1;
     const { transitioned } = await recordFleetDeadManVerdict(db, verdict, hostname);
     console.log(`[fleet-dead-man-per-host] ${hostname}: ${verdict.dead ? 'DEAD' : 'alive'} (transitioned=${transitioned}): ${verdict.reason}`);
 

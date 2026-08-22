@@ -691,6 +691,46 @@ describe('checkPerHostFreeze (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2/FR-3 integr
     expect(db._inserted.some((r) => r.payload.host === 'Legion-Laptop' && r.payload.state === 'alive')).toBe(true);
   });
 
+  it('deep-tier /ship review, Finding 1: bounds TOTAL hosts processed (alive + dead) at MAX_HOSTS_PROCESSED_PER_RUN (default 200), not just dead ones -- a flood of fabricated ALIVE hosts is bounded too, not only dead ones', async () => {
+    // claude_sessions' permissive anon RLS lets an attacker fabricate thousands of "alive" hosts
+    // (heartbeat_at = now). Alive hosts never page (MAX_HOSTS_PAGED_PER_RUN only guards the dead
+    // branch), but each one still cost a read+write to system_events before this fix -- unbounded
+    // DB amplification and a real risk of the cron job itself running long enough to threaten a
+    // workflow timeout. 201 alive hosts (1 over the default 200 cap) proves the bound holds.
+    const sessions = Array.from({ length: 201 }, (_, i) => ({ hostname: `alive-host-${i}`, heartbeat_at: minutesAgo(1) }));
+    const db = makeHostDb({ sessions });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await checkPerHostFreeze(db, false, sendChairmanSMSFn, NOW);
+    expect(db._inserted.length).toBe(200);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled(); // none of these are dead -- no pages either way
+    // mockRestore() clears recorded call history as part of restoring the original implementation
+    // (this file's own earlier precedent at "PostgREST-level insert rejection" reads .mock.calls
+    // BEFORE calling mockRestore() for the same reason) -- read calls first, restore last.
+    expect(errSpy.mock.calls.join(' ')).toMatch(/STOPPED at 200 hosts processed/);
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it('deep-tier /ship review, Finding 1: the total-processed cap and the dead-host paging cap compose independently -- 6 dead hosts (5 paged, 1 skipped-and-unrecorded) plus 195 alive hosts (all recorded) hits exactly 200 total inserted rows', async () => {
+    // Trace: dead-host-0..4 (5) are recorded+paged; dead-host-5 (6th) hits the PAGE cap first and
+    // is skipped WITHOUT being recorded (continue fires before totalProcessed increments) -- so
+    // totalProcessed is 5, not 6, after the dead hosts. All 195 alive hosts then get recorded
+    // (5+195=200 exactly), so the PROCESSED cap never truncates this particular run -- it simply
+    // isn't hit before the fixture runs out of hosts. 5 paged + 195 alive-recorded = 200 rows total.
+    const sessions = [
+      ...Array.from({ length: 6 }, (_, i) => ({ hostname: `dead-host-${i}`, heartbeat_at: minutesAgo(150) })),
+      ...Array.from({ length: 195 }, (_, i) => ({ hostname: `alive-host-${i}`, heartbeat_at: minutesAgo(1) })),
+    ];
+    const db = makeHostDb({ sessions });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkPerHostFreeze(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(5);
+    expect(db._inserted.length).toBe(200);
+    expect(db._inserted.some((r) => r.payload.host === 'dead-host-5')).toBe(false);
+  });
+
   it('excludes hosts fetchEligibleHosts did not return (query-level filtering, not this function\'s job)', async () => {
     // fetchEligibleHosts is responsible for the recency/NULL filtering (its own dedicated unit
     // tests below cover that); this integration test only proves checkPerHostFreeze iterates
