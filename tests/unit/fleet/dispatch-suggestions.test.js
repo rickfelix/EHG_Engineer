@@ -1,18 +1,20 @@
 /**
  * SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 — per-FR tests for the advisory dispatch-suggestion
- * engine and its shared FR-2 pickup-fit primitive.
+ * engine.
  *
  *   FR-1 advisory-only invariant + ranking          — TS-1
- *   FR-2 pickup-fit defer primitive                 — TS-2
  *   FR-1 fail-open fit-resolution error handling     — TS-7
+ *
+ * FR-2 (worker self-claim "pickup intelligence") is NOT tested here — it was descoped from this
+ * module after investigating a real bug it produced surfaced that lib/fleet/tier-backlog.cjs's
+ * lowerTierBacklog() + claim-eligibility.cjs's tierAxes 'reserved_no_lower_backlog' branch
+ * already implement this concern (see dispatch-suggestions.cjs header for the full account).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  bestFitRankForItem,
-  shouldDeferForBetterFit,
   candidateFitScore,
   rankCandidatesForItem,
   fitErrorFallback,
@@ -72,33 +74,6 @@ describe('FR-1 candidateFitScore / rankCandidatesForItem', () => {
     ];
     const ranked = rankCandidatesForItem({ item, liveWorkers });
     expect(ranked.map((r) => r.session_id)).toEqual(['exact', 'over']);
-  });
-});
-
-// ---- TS-2: FR-2 pickup-fit defer primitive --------------------------------
-describe('FR-2 shouldDeferForBetterFit', () => {
-  it('a strong-fit seat defers to a closer-fit live peer for the item', () => {
-    // Item floor rank 2; I am rank 4 (over-qualified); a peer at rank 2 is live -> I defer.
-    expect(shouldDeferForBetterFit({ myRank: 4, minTierRank: 2, liveRanks: [2] })).toBe(true);
-  });
-
-  it('does not defer when no live peer is a closer (still-eligible) fit', () => {
-    expect(shouldDeferForBetterFit({ myRank: 2, minTierRank: 2, liveRanks: [4] })).toBe(false);
-  });
-
-  it('does not defer on a tie (only a STRICTLY closer fit defers — prevents mutual live-lock)', () => {
-    expect(shouldDeferForBetterFit({ myRank: 2, minTierRank: 2, liveRanks: [2] })).toBe(false);
-  });
-
-  it('single-seat / unscored-item fallback: undefined inputs never defer (byte-identical to pre-FR-2)', () => {
-    expect(shouldDeferForBetterFit({ myRank: 4, minTierRank: 2, liveRanks: undefined })).toBe(false);
-    expect(shouldDeferForBetterFit({ myRank: 4, minTierRank: undefined, liveRanks: [1] })).toBe(false);
-    expect(shouldDeferForBetterFit({})).toBe(false);
-  });
-
-  it('bestFitRankForItem returns null when no live rank meets the floor', () => {
-    expect(bestFitRankForItem(3, [1, 2])).toBeNull();
-    expect(bestFitRankForItem(3, [3, 5])).toBe(3);
   });
 });
 

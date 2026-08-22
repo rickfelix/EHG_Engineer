@@ -1,23 +1,30 @@
 /**
- * SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (FR-2 support): liveWorkerCapabilitySnapshot is the
- * fetchLiveFleetRows-sharing extraction that gives merged-pool-self-claim + dispatch-suggestions
- * the per-worker live ranks isTieringActive's boolean does not expose.
+ * SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (FR-1 support): liveWorkerCapabilitySnapshot is the
+ * fetchLiveFleetRows-sharing extraction that gives lib/fleet/dispatch-suggestions.cjs's advisory
+ * suggestion engine the per-worker live ranks isTieringActive's boolean does not expose.
  *
- * ONE LADDER, NOT TWO: selfRank and ranks (peers) MUST come from the SAME dense-rank computation
- * over the full live fleet (self included), not self ranked separately from peers — otherwise a
- * caller comparing selfRank against ranks compares two incommensurate scales. This was caught
- * live while writing the FR-2 wiring-pin test (tests/unit/checkin/pickup-fit-wiring.test.js) and
- * is pinned here directly against the primitive.
+ * STATIC RANK SPACE, NOT LIVE-DYNAMIC (caught live while an earlier iteration of this SD also
+ * wired a defer mechanism into merged-pool-self-claim.cjs — since removed, see
+ * dispatch-suggestions.cjs header): the rank must be rankForModelEffort()'s FIXED 4-rung static
+ * rank, the same space item.metadata.min_tier_rank is calibrated in (lib/fleet/sd-tier-rank.mjs
+ * computeMinTierRank). A live-relative dense rank (1..K over whoever happens to be live right
+ * now) silently disagrees with that static floor the moment fleet composition changes — pinned
+ * here directly against the primitive.
  */
 import { describe, it, expect } from 'vitest';
-import { liveWorkerCapabilitySnapshot } from '../../../lib/fleet/tier-ladder.cjs';
+import { liveWorkerCapabilitySnapshot, rankForModelEffort } from '../../../lib/fleet/tier-ladder.cjs';
 
 const NOW = new Date('2026-08-22T12:00:00.000Z').getTime();
 const FRESH = new Date(NOW - 60_000).toISOString(); // 1 min ago — well inside the 15-min window
 
+// The 4 named STATIC LADDER rungs (lib/fleet/tier-ladder.cjs LADDER), so ranks are unambiguous.
+const RUNG1 = ['sonnet', 'low'];   // static rank 1
+const RUNG3 = ['opus', 'medium'];  // static rank 3
+const RUNG4 = ['opus', 'high'];    // static rank 4
+
 // Minimal but genuine-worker.mjs-satisfying claude_sessions row: live status, everClaimed via
 // sd_key, not coordinator/adam/non_fleet.
-const liveRow = (session_id, model, effort, over = {}) => ({
+const liveRow = (session_id, [model, effort], over = {}) => ({
   session_id, status: 'active', heartbeat_at: FRESH, sd_key: `SD-${session_id}`,
   metadata: { model, effort }, ...over,
 });
@@ -42,10 +49,16 @@ function makeSb(rows) {
 }
 
 describe('liveWorkerCapabilitySnapshot', () => {
-  it('fails open to an empty snapshot (including selfRank:null) on any query fault', async () => {
+  it('sanity: the named rungs resolve to their expected static ranks (ground truth for this file)', () => {
+    expect(rankForModelEffort(...RUNG1)).toBe(1);
+    expect(rankForModelEffort(...RUNG3)).toBe(3);
+    expect(rankForModelEffort(...RUNG4)).toBe(4);
+  });
+
+  it('fails open to an empty snapshot on any query fault', async () => {
     const brokenSb = { from() { throw new Error('synthetic fault'); } };
     const snap = await liveWorkerCapabilitySnapshot(brokenSb);
-    expect(snap).toEqual({ workers: [], ranks: [], selfRank: null });
+    expect(snap).toEqual({ workers: [], ranks: [] });
   });
 
   it('fails open to an empty snapshot when the query itself errors', async () => {
@@ -63,39 +76,30 @@ describe('liveWorkerCapabilitySnapshot', () => {
       }),
     };
     const snap = await liveWorkerCapabilitySnapshot(sb);
-    expect(snap).toEqual({ workers: [], ranks: [], selfRank: null });
+    expect(snap).toEqual({ workers: [], ranks: [] });
   });
 
-  it('selfRank and peer ranks come from ONE ladder computed over the full live fleet', async () => {
-    // 3 live workers: haiku (weakest), sonnet (mid), opus (strongest) — 3 distinct scores -> dense
-    // ranks 1, 2, 3 respectively when all three are ranked TOGETHER.
-    const rows = [
-      liveRow('weak', 'haiku', 'low'),
-      liveRow('mid', 'sonnet', 'medium'),
-      liveRow('strong', 'opus', 'high'),
-    ];
-    const sb = makeSb(rows);
-    const snap = await liveWorkerCapabilitySnapshot(sb, { excludeSessionId: 'mid', nowMs: NOW });
-    // 'mid' (sonnet) ranks 2 of 3 in the FULL ladder — not 1-of-2 as it would if ranked only
-    // among the OTHER two peers after exclusion (the bug this test exists to catch).
-    expect(snap.selfRank).toBe(2);
-    expect(snap.workers.map((w) => w.session_id).sort()).toEqual(['strong', 'weak']);
-    expect(snap.ranks.sort((a, b) => a - b)).toEqual([1, 3]);
+  it('every worker is ranked with the STATIC rankForModelEffort value, independent of fleet composition', async () => {
+    // A 2-live-worker snapshot and a 5-live-worker snapshot must rank the SAME (model,effort) at
+    // RUNG3 identically — a dynamic dense rank would NOT (it would shift with fleet composition).
+    const small = makeSb([liveRow('mid', RUNG3), liveRow('other', RUNG1)]);
+    const large = makeSb([
+      liveRow('mid', RUNG3), liveRow('a', RUNG1), liveRow('b', RUNG1), liveRow('c', RUNG4), liveRow('d', RUNG4),
+    ]);
+    const snapSmall = await liveWorkerCapabilitySnapshot(small, { nowMs: NOW });
+    const snapLarge = await liveWorkerCapabilitySnapshot(large, { nowMs: NOW });
+    const midInSmall = snapSmall.workers.find((w) => w.session_id === 'mid');
+    const midInLarge = snapLarge.workers.find((w) => w.session_id === 'mid');
+    expect(midInSmall.rank).toBe(3);
+    expect(midInLarge.rank).toBe(3);
   });
 
-  it('without excludeSessionId, selfRank is null and workers/ranks cover everyone', async () => {
-    const rows = [liveRow('a', 'haiku', 'low'), liveRow('b', 'opus', 'high')];
+  it('workers/ranks cover every live worker, with model/effort passed through', async () => {
+    const rows = [liveRow('a', RUNG1), liveRow('b', RUNG4)];
     const sb = makeSb(rows);
     const snap = await liveWorkerCapabilitySnapshot(sb, { nowMs: NOW });
-    expect(snap.selfRank).toBeNull();
     expect(snap.workers).toHaveLength(2);
-  });
-
-  it('selfRank is null when the excluded session is not among the live rows (fail-open, not a crash)', async () => {
-    const rows = [liveRow('a', 'haiku', 'low')];
-    const sb = makeSb(rows);
-    const snap = await liveWorkerCapabilitySnapshot(sb, { excludeSessionId: 'nonexistent', nowMs: NOW });
-    expect(snap.selfRank).toBeNull();
-    expect(snap.workers).toHaveLength(1);
+    expect(snap.ranks.sort((x, y) => x - y)).toEqual([1, 4]);
+    expect(snap.workers.find((w) => w.session_id === 'a').model).toBe('sonnet');
   });
 });
