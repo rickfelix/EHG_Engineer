@@ -22,6 +22,24 @@
 -- change). Intentionally omits the @approved-by tag until the chairman explicitly applies it.
 --
 -- requires-chairman-apply
+--
+-- SUPERSEDED — DO NOT APPLY (SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001, 2026-08-22, corrected 2026-08-22
+-- per security-agent finding — this is NOT a no-op if applied):
+-- archetype_benchmarks_admin already reads raw_app_meta_data live, but NOT via this file's approach.
+-- database/migrations/20260731_fix_chairman_privilege_app_metadata.sql centralized the policy onto
+-- is_chairman_role() via ALTER POLICY. The DROP POLICY + CREATE POLICY below would instead RE-INLINE
+-- the raw_app_meta_data derivation directly into this one policy, diverging from the now-centralized
+-- live definition — applying this file would be a REGRESSION (decentralizing a since-centralized
+-- check), not a harmless redundant re-apply. It is retired alongside sibling file
+-- 20260716_a_backfill_chairman_app_metadata.sql (see that file's guard for the fuller rationale —
+-- the trio was staged as an ordered set and is superseded as a set). The guard below makes this
+-- file a hard no-op; the original staged body is preserved beneath it, unreachable, for
+-- historical record only.
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'SUPERSEDED: applying this would regress the live is_chairman_role()-centralized policy (from 20260731_fix_chairman_privilege_app_metadata.sql) back to an inlined raw_app_meta_data check. DO NOT APPLY. See SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001.';
+END $$;
 
 DROP POLICY IF EXISTS archetype_benchmarks_admin ON public.archetype_benchmarks;
 
