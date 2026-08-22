@@ -4,6 +4,15 @@
  *
  *   summarizeSuggestionActivity: ratio + top reasons over already-fetched rows   — TS-4
  *   recordOverride: refuses to log a suggestion_id that isn't a real suggestion  — TS-4
+ *
+ * NOTE on mocked-vs-live coverage: a first version of writeSuggestionRow/recordOverride used a
+ * raw `.from('session_coordination').insert()`, which passed every mocked test here but violated
+ * the table's `subject` NOT NULL + `valid_target` CHECK constraints live (caught by testing-agent
+ * evidence db80264a-2655-4f19-9e89-cd3ad8f225d9 — mocked Supabase cannot see a DB constraint).
+ * Both writers now route through insertCoordinationRow (lib/coordinator/dispatch.cjs), the
+ * repo's canonical session_coordination choke point, and a manual live round trip was run during
+ * EXEC (write suggestion -> record override -> read back via fetchSuggestionActivity -> verified
+ * -> cleaned up) confirming the real insert/read path works end to end.
  */
 import { describe, it, expect } from 'vitest';
 import { summarizeSuggestionActivity } from '../../../scripts/dispatch-suggestion-report.mjs';
@@ -72,7 +81,7 @@ describe('recordOverride (FR-4 writer refuses malformed input)', () => {
           }),
           insert: (row) => {
             inserted = row;
-            return { select: () => ({ maybeSingle: async () => ({ data: { id: 'override-1' }, error: null }) }) };
+            return { select: () => ({ single: async () => ({ data: { id: 'override-1' }, error: null }) }) };
           },
         };
       },

@@ -14,7 +14,14 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'node:module';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+
+const require = createRequire(import.meta.url);
+// Canonical choke point (SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 correction): a raw
+// .from('session_coordination').insert() both fails the repo's no-raw-session-coordination-insert
+// ESLint rule AND violates the table's `subject` NOT NULL + `valid_target` CHECK constraints.
+const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 
 export async function recordOverride(supabase, suggestionId, reason) {
   if (!suggestionId) throw new Error('recordOverride: missing suggestionId');
@@ -30,22 +37,23 @@ export async function recordOverride(supabase, suggestionId, reason) {
     throw new Error(`recordOverride: ${suggestionId} is not a dispatch_suggestion row`);
   }
 
-  const { data, error } = await supabase
-    .from('session_coordination')
-    .insert({
-      message_type: 'INFO',
-      payload: {
-        kind: 'dispatch_override',
-        suggestion_id: suggestionId,
-        sd_key: suggestion.payload.sd_key,
-        reason: String(reason).trim(),
-        overridden_at: new Date().toISOString(),
-      },
-    })
-    .select('id')
-    .maybeSingle();
-  if (error) throw new Error(`recordOverride: insert failed: ${error.message}`);
-  return data ? data.id : null;
+  const trimmedReason = String(reason).trim();
+  const res = await insertCoordinationRow(supabase, {
+    sender_type: 'system',
+    target_session: 'broadcast',
+    message_type: 'INFO',
+    subject: `[DISPATCH_OVERRIDE] ${suggestion.payload.sd_key || suggestionId}`,
+    body: `Coordinator overrule of suggestion ${suggestionId}: ${trimmedReason}`,
+    payload: {
+      kind: 'dispatch_override',
+      suggestion_id: suggestionId,
+      sd_key: suggestion.payload.sd_key,
+      reason: trimmedReason,
+      overridden_at: new Date().toISOString(),
+    },
+  }, { select: 'id', single: true });
+  if (!res || res.error) throw new Error(`recordOverride: insert failed: ${(res && res.error && res.error.message) || 'unknown error'}`);
+  return res.data ? res.data.id : null;
 }
 
 async function main() {
