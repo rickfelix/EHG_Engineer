@@ -11,14 +11,16 @@ let ROLE_VERDICT = null; let verdictFromMetadata = () => null;
 try {
   ({ ROLE_VERDICT, verdictFromMetadata } = require('../../lib/fleet/role-status-identity.cjs'));
 } catch { /* predicate unavailable -> behave exactly as before this SD */ }
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
-
 // SD-LEO-FIX-ENF-TRUSTS-FILE-001: same VITEST-gated, per-PID isolation as resolve.cjs's
 // ACTIVE_COORDINATOR_FILE (this file hardcodes its own copy of the pointer path rather than
-// importing resolve.cjs's, so it needs the identical rule applied here too).
+// importing resolve.cjs's, so it needs the identical rule applied here too). Deliberately BEFORE
+// the dotenv.config() call below: process.env.VITEST is set only by the test runner, never by an
+// operator .env file, so evaluating this constant first makes that true by construction rather
+// than by the current absence of a VITEST key in .env (security-agent evidence b52eba04).
 const COORD_FILE = process.env.VITEST
   ? path.join(os.tmpdir(), `leo-coord-test-${process.pid}`, 'active-coordinator.json')
   : path.resolve(__dirname, '../../.claude/active-coordinator.json');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const BUDGET_MS = 1500;
 // The receipt write's own deadline, matching the sibling coordinator lane's WRITE_TIMEOUT_MS. Its
 // own constant rather than BUDGET_MS: the reads race the orientation output and must land before

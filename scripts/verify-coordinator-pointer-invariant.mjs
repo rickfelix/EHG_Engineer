@@ -42,6 +42,11 @@ function main() {
   const [cmd, ...args] = process.argv.slice(sepIdx + 1);
 
   const before = snapshot();
+  // shell:true is required on Windows to resolve npm .cmd shims (spawnSync fails with EINVAL
+  // otherwise -- Node cannot exec .cmd/.bat files directly). Safe here per the repo's governed
+  // shell-injection-argv-lint allowlist convention: cmd/args arrive as an argv array (never a
+  // template-literal string), and the only caller is the fixed `test:coordinator-pointer-invariant`
+  // npm script -- no untrusted/external input reaches this call.
   const result = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
   const after = snapshot();
 
