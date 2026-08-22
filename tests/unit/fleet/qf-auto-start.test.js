@@ -18,7 +18,7 @@
 import { describe, test, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { isAutoStartableQF, TIER3_RISK_RE, STALE_QF_DAYS } = require('../../../lib/fleet/qf-auto-start.cjs');
+const { isAutoStartableQF, isClaimableWithVerify, TIER3_RISK_RE, STALE_QF_DAYS } = require('../../../lib/fleet/qf-auto-start.cjs');
 
 const NOW = Date.parse('2026-08-15T12:00:00Z');
 
@@ -142,5 +142,35 @@ describe('isAutoStartableQF — FR-6 verified_at age-source', () => {
 
   test('both verified_at and created_at unparseable excludes (fail-closed), never throws', () => {
     expect(isAutoStartableQF(qf({ created_at: 'not-a-date', verified_at: 'also-not-a-date' }), NOW)).toBe(false);
+  });
+});
+
+// QF-20260821-032: isClaimableWithVerify is the COMPLEMENT of isAutoStartableQF on the
+// staleness axis only — every other gate is identical (shared via passesNonStaleGates).
+describe('isClaimableWithVerify — complement of isAutoStartableQF on staleness only', () => {
+  const staleCreated = new Date(NOW - (STALE_QF_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString();
+  const freshCreated = new Date(NOW - (STALE_QF_DAYS - 1) * 24 * 60 * 60 * 1000).toISOString();
+
+  test('a stale-but-otherwise-eligible QF is claimable-with-verify (and NOT auto-startable)', () => {
+    const row = qf({ created_at: staleCreated });
+    expect(isAutoStartableQF(row, NOW)).toBe(false);
+    expect(isClaimableWithVerify(row, NOW)).toBe(true);
+  });
+
+  test('a fresh, already auto-startable QF is NOT claimable-with-verify (the two sets are disjoint)', () => {
+    const row = qf({ created_at: freshCreated });
+    expect(isAutoStartableQF(row, NOW)).toBe(true);
+    expect(isClaimableWithVerify(row, NOW)).toBe(false);
+  });
+
+  test('a stale QF blocked by ANY other gate is excluded from BOTH sets, not counted as verify-gated', () => {
+    expect(isClaimableWithVerify(qf({ created_at: staleCreated, factory_lane: true }), NOW)).toBe(false);
+    expect(isClaimableWithVerify(qf({ created_at: staleCreated, routing_tier: 3 }), NOW)).toBe(false);
+    expect(isClaimableWithVerify(qf({ created_at: staleCreated, owner: 'chairman', release_condition: 'x' }), NOW)).toBe(false);
+    expect(isClaimableWithVerify(qf({ created_at: staleCreated, status: 'in_progress' }), NOW)).toBe(false);
+  });
+
+  test('an unparseable age excludes rather than throwing (cannot be "verify-gated" with no age to measure)', () => {
+    expect(isClaimableWithVerify(qf({ created_at: 'not-a-date', verified_at: 'also-not-a-date' }), NOW)).toBe(false);
   });
 });

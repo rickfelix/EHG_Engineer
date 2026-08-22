@@ -68,6 +68,16 @@ The **product remains the hosted SaaS control plane** (Cloudflare-default); the 
 
 - **Venture metrics** (`docs/03_protocols_and_standards/venture-metrics-standard.md`, SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001): every venture (Cloudflare-default or Replit opt-in) exposes an authenticated, **aggregates-only** `GET /v1/metrics` that the platform PULLs one-way for portfolio analysis — the platform never opens a venture database. This is how cross-venture portfolio data is gathered despite per-venture isolation.
 - **SEO basics** (SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C, FR-5): every venture ships a `sitemap.xml`, a `robots.txt`, OpenGraph/meta tags on public pages, and structured data (JSON-LD). This closes the "generator-without-consumer" gap where distribution configs assumed discoverable pages that didn't exist — MarketLens, the pilot venture, shipped with none of the four. Enforced the same way as `/v1/metrics`: four new `REQUIRED` entries (`sitemap`, `robots_txt`, `og_meta`, `structured_data`) in the per-venture stack-enforcing CI scanner (`lib/eva/bridge/templates/venture-stack-scan.js`).
+- **Fenced synthetic-actor testing** (SD-LEO-INFRA-ALTIFYAI-TEST-IDENTITY-001): a venture that needs a chairman-operated, signed-in test identity for post-deploy UAT (this venture's `GET /v1/metrics` above, or any admin/analytics surface) fences that identity behind three exclusion classes and never treats it as an approval surface:
+  - money movement (provider test mode only, ratified once per provider)
+  - outbound-to-real-humans
+  - third-party trust surfaces (reviews/marketplace/reputation writes)
+
+  Verbatim: a synthetic actor is a USER stand-in, NEVER a chairman stand-in -- no test identity satisfies a chairman_site_review, crack-gate attestation, or any approval surface.
+
+  The identity is created directly in the venture's auth-provider dashboard (never the app's own sign-up flow), carries an explicit `is_test_identity` marker, and is excluded from every cross-user aggregate/analytics surface through ONE canonical, venture-owned predicate — every consumer imports it, no second parallel convention. **Any cross-user aggregate, admin, or analytics endpoint added to a venture AFTER its synthetic-actor predicate ships MUST consume that predicate before shipping** — a predicate that exists but isn't wired into a new endpoint provides no protection for that endpoint. This is the standing gap for this venture's own `GET /v1/metrics` mandate above, which does not yet exist in code: whichever follow-on closes that compliance gap must wire it through the predicate at build time, not after.
+
+  Enforced at the platform side by a bespoke, independent check inside `_advanceStage()` (`lib/eva/synthetic-actor-guard.js`) — the daemon-walk's single side-effecting stage-advancement function, covering all its callers by construction — which PULLS live verification from the venture's own CI provider (never trusts a DB-stored "verified" flag written from the venture's own repo, which would be forgeable) and reads the specific UAT step's own conclusion, not its job's coarser one. **Known limitation:** this guard covers `_advanceStage()` callers only; the `fn_advance_venture_stage` RPC and the `EHG` frontend's `advance_venture_stage` RPC bypass it and are not yet fenced.
 
 ## Scope boundary (explicit)
 

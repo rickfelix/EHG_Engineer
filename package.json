@@ -7,6 +7,8 @@
     "ack:advisory": "node scripts/worker-ack-advisory.cjs",
     "schema:snapshot:prd": "node scripts/snapshot-prd-schema.js",
     "schema:check-drift": "node scripts/snapshot-prd-schema.js --check-drift",
+    "altifyai:fr7-fixture-drift": "node scripts/regen-fr7-source-material-fixture.mjs",
+    "altifyai:uat-secret-drift": "node scripts/uat-secret-name-drift-check.mjs",
     "migration:apply": "node scripts/apply-migration.js",
     "migration:issue-token": "node scripts/apply-migration.js --issue-token",
     "income:capture": "node scripts/income/run-income-capture.mjs",
