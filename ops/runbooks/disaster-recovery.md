@@ -1,9 +1,11 @@
 # Disaster Recovery Runbook — Single Machine, Single Database
 
 - **Category**: Runbook
-- **Status**: Active (backup entitlement pending chairman verification — see §1)
+- **Status**: Active (backup entitlement partially verified — daily physical
+  backups confirmed 2026-08-21; plan tier and PITR window still pending —
+  see §1)
 - **Author**: SD-LEO-INFRA-RESILIENCE-REVIEW-SPECIAL-001
-- **Last Updated**: 2026-06-10
+- **Last Updated**: 2026-08-22
 - **Evidence basis**: live resilience review of 2026-06-10 (read-only audit of
   Supabase project `dedlbzhpgkmetvhbkyzq` + the Windows estate under
   `C:\Users\rickf\Projects\_EHG`)
@@ -27,9 +29,15 @@ The two failure scenarios this runbook covers are **machine death** and
 > restorable backup**.
 >
 > - [ ] Plan tier: ______
-> - [ ] Daily physical backups: yes / no — retention ____ days
+> - [x] Daily physical backups: yes — retention window not yet recorded
 > - [ ] PITR enabled: yes / no — window ____ days
-> - [ ] Verified by / date: ______
+> - [x] Verified by / date: chairman, 2026-08-21 — verified 2026-08-21 by
+>   chairman via Supabase backups page (coordinator ruling, row
+>   6ec46db8-reply)
+>
+> Plan tier and PITR enabled/window remain unticked — the chairman's direct
+> dashboard verification confirmed daily physical backups exist but did not
+> record those two fields. Tick only what the cited evidence covers.
 
 What IS verifiable from inside the DB (read-only `pg_settings`, 2026-06-10):
 `archive_mode=on` with `archive_command = wal-push` (WAL-G) — platform WAL
