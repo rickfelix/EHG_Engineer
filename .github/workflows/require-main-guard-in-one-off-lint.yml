@@ -1,0 +1,50 @@
+name: scripts/one-off Missing Main-Guard Class Guard Lint
+
+# SD-FDBK-ENH-578-SCRIPTS-ONE-001
+#
+# Blocks any PR that introduces a new scripts/one-off/*.{mjs,cjs} file with an unconditional
+# top-level main()/run() entrypoint call and no recognized main-guard -- the exact defect class
+# that caused the 2026-08-21 incident (importing scripts/one-off/backfill-solomon-ledger-decision-
+# by.mjs for ESM/CJS-interop inspection executed main() for real against live prod, mutating 1212
+# solomon_advice_outcome_ledger rows irreversibly, pre-merge). A pre-existing-debt allowlist
+# (scripts/lint/require-main-guard-in-one-off-allowlist.json, 143 entries at this workflow's
+# introduction) grandfathers files not yet retrofitted, each with a required, non-empty reason.
+#
+# GENUINELY BLOCKING (no continue-on-error): the checker's own output was verified synchronously
+# before this workflow shipped -- non-zero yield on the real corpus (149 files before Part B's
+# 6-file retrofit, 143 after), deterministic across repeated runs, correctly silent on both
+# accepted guard shapes (including the variable-indirection shape used in this incident's own
+# fix), and independently proven to catch a fresh unguarded fixture file while passing a guarded
+# one. That verification stands in for a live CI observe-only soak, which an autonomous EXEC
+# session cannot literally wait out across days.
+#
+# HARD CONSTRAINT (per the documented 32-day CI-blindness incident on the sibling
+# ismainmodule-classguard-lint.yml workflow): list ONE path-filter entry PER EXTENSION below.
+# GitHub Actions does NOT expand brace-glob alternation (scripts/one-off/**/*.{mjs,cjs} would
+# silently match nothing) -- never combine extensions into one glob entry here.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/one-off/**/*.mjs'
+      - 'scripts/one-off/**/*.cjs'
+      - 'eslint-rules/require-main-guard-in-one-off.js'
+      - 'scripts/lint/require-main-guard-in-one-off-lint.mjs'
+      - 'scripts/lint/require-main-guard-in-one-off-allowlist.json'
+      - '.github/workflows/require-main-guard-in-one-off-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  require-main-guard-in-one-off-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect unguarded scripts/one-off entrypoints
+        run: node scripts/lint/require-main-guard-in-one-off-lint.mjs

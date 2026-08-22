@@ -411,5 +411,21 @@
       "input": "The raw text content of the 21 files named in the SCAN_FILES const (scripts/lint/gh-merge-guard-lint.mjs), read via fs.readFileSync relative to repo root (or --root when overridden). Comment-stripped for .js/.cjs/.mjs files via a local line-count-preserving stripper before regex matching; .md files scanned raw. Consumes no DB columns and no environment variables.",
       "seen": "Real positive observed repeatedly during this SD's own EXEC phase (2026-08-16, before FR-1/FR-2/FR-3/FR-4 landed): local invocation against the real (non-fixture) repo tree reported 42 genuine bare `gh pr merge` sites across the 21 SCAN_FILES files, independently confirmed via git show/grep against each flagged file:line, then driven to 0 as each site was fixed or pragma'd across commits 9b1b4585153..3a8d05caf7f. gh-merge-guard-lint also ran and passed (0 violations, exit 0) in this PR's own CI (workflow run visible on PR #7146) -- a live enforcement run, not a fixture trial."
     }
+  },
+  {
+    "name": "require-main-guard-in-one-off-lint",
+    "script": "scripts/lint/require-main-guard-in-one-off-lint.mjs",
+    "rootFlag": "--root",
+    "note": "SD-FDBK-ENH-578-SCRIPTS-ONE-001. Structurally modeled on ismainmodule-classguard-lint.mjs (also --root scoped). The allowlist loaded during the trial is ALWAYS the real repo's scripts/lint/require-main-guard-in-one-off-allowlist.json (ALLOWLIST_PATH is derived from the script's own __dirname, not from --root), so the seeded path below must not collide with a real allowlist entry -- it does not.",
+    "fixtures": [
+      {
+        "path": "scripts/one-off/seeded-main-guard-defect.mjs",
+        "content": "// SEEDED DEFECT: unconditional top-level main() call with no recognized guard -- the exact\n// shape that caused the 2026-08-21 incident (a bare import of scripts/one-off/backfill-\n// solomon-ledger-decision-by.mjs executed main() for real against live prod, mutating 1212\n// rows irreversibly).\nfunction main() { console.log('ran'); }\nmain();\n"
+      }
+    ],
+    "observability_proof": {
+      "input": "scripts/one-off/**/*.{mjs,cjs} file TEXT (enumerated via fs.readdirSync directory walk, not git ls-files), each parsed through ESLint's Linter API against eslint-rules/require-main-guard-in-one-off.js -- an unconditional top-level main()/run() CallExpression with no isMainModule(...) call or fileURLToPath(import.meta.url)===process.argv[1] comparison anywhere in the file -- filtered against scripts/lint/require-main-guard-in-one-off-allowlist.json by repo-relative path. Consumes no DB columns and no environment variables.",
+      "seen": "Real positive observed in this PR's own CI (GitHub Actions run 32548280401, job require-main-guard-in-one-off-lint, PR #7376, 2026-08-22): found 6 real un-allowlisted violations by exact file:line -- scripts/one-off/fix-fleet-down-alert-sd-scope-v2.mjs:72, fix-fleet-down-alert-sd-scope.mjs:91, fix-prd-fleet-down-alert-v2.mjs:297, fix-user-stories-fleet-down-alert-v2.mjs:100, insert-prd-fleet-down-alert-v2.mjs:368, insert-user-stories-fleet-down-alert-v2.mjs:151 -- six SUPABASE_SERVICE_ROLE_KEY-holding files that landed on origin/main after this branch's base and were genuinely unguarded (exit 1, a live CI block, not a fixture trial). All six were retrofitted with the recognized isMainModule(import.meta.url) guard in this same PR immediately after that run; a local re-run then reported 0 ungoverned violations."
+    }
   }
 ]

@@ -93,6 +93,16 @@ jobs:
         # actually run in CI instead of only on the author's machine.
         run: npm run test:adam-github-assessment
 
+      - name: Verify coordinator pointer-file isolation (SD-LEO-FIX-ENF-TRUSTS-FILE-001)
+        # Serialized on purpose, run AFTER the parallel unit tier above (not as a vitest test
+        # inside it) -- a check racing the same pool:forks parallelism it verifies would be the
+        # exact flake class this SD forbids. Wraps the 5 files whose test suites previously wrote/
+        # deleted the live .claude/active-coordinator.json and independently proves the real file
+        # (never imported through the now-VITEST-gated resolve.cjs/session-role-orient.cjs
+        # constants -- that would make the check pass vacuously even if the fix broke) is
+        # byte-identical before and after.
+        run: npm run test:coordinator-pointer-invariant
+
       - name: Quarantine burn-down summary
         if: always()
         # SD-LEO-FIX-UNIT-TIER-STARTUP-001: block scalar (run: |) so the embedded

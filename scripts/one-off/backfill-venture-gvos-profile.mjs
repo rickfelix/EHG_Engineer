@@ -27,6 +27,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { classifyArchetypeRuleOnly } from '../../lib/gvos/rule-classifier.js';
 import { buildClassifierInputFromVenture } from '../../lib/gvos/venture-classifier-inputs.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -137,4 +138,8 @@ async function main() {
   console.log(`Anthropic SDK invocations: 0 (rule_only path — verified by construction; CI enforces via anthropic-spy in tests/integration/backfill-venture-gvos-profile.test.js)`);
 }
 
-await main();
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001: guard against a bare import()/require() executing main()
+// against live prod. Behavior when run directly is unchanged.
+if (isMainModule(import.meta.url)) {
+  await main();
+}

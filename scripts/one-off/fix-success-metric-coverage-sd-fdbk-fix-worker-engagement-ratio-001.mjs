@@ -27,6 +27,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001';
 
@@ -66,4 +67,8 @@ async function main() {
   console.log('Updated metric:', JSON.stringify(metrics[idx], null, 2));
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001: guard against a bare import()/require() executing main()
+// against live prod. Behavior when run directly is unchanged.
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}

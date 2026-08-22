@@ -73,7 +73,11 @@ describe('decide()', () => {
 describe('readCoordFile()', () => {
   let readCoordFile;
   let savedCoord;
-  const COORD_PATH = path.resolve(__dirname, '../../../.claude/active-coordinator.json');
+  // SD-LEO-FIX-ENF-TRUSTS-FILE-001: sourced from the hook's own exported COORD_FILE (VITEST-gated,
+  // per-PID tmpdir path) rather than independently recomputed — an independent copy would silently
+  // diverge from the hook's redirected constant and this describe block would read/write the real
+  // .claude/active-coordinator.json while readCoordFile() reads the isolated fixture path.
+  const COORD_PATH = loadHook().COORD_FILE;
 
   beforeEach(() => {
     ({ readCoordFile } = loadHook());

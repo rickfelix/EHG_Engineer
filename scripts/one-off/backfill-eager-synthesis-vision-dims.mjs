@@ -16,6 +16,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { parseMarkdownToSections, buildDefaultMapping } from '../eva/markdown-to-sections-parser.mjs';
 import { extractDimensions } from '../../lib/eva/vision-dimensions-extractor.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -54,4 +55,8 @@ async function main() {
   process.exit(0);
 }
 
-main();
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001: guard against a bare import()/require() executing main()
+// against live prod. Behavior when run directly is unchanged.
+if (isMainModule(import.meta.url)) {
+  main();
+}
