@@ -220,6 +220,9 @@ scripts/verify-*.cjs
 # JS terminal-status mirror against complete_orchestrator_sd()'s guard 4 -- lives outside vitest's
 # db-tier project since the function only exists in the one production database.
 !scripts/verify-orchestrator-completion-guard4-crosscheck.mjs
+# SD-LEO-FIX-ENF-TRUSTS-FILE-001: CI-wired regression check (npm run test:coordinator-pointer-invariant,
+# .github/workflows/unit-tier.yml) proving the coordinator unit suites never touch the live pointer file.
+!scripts/verify-coordinator-pointer-invariant.mjs
 # Exception: verify-l2p/ directory is production code (modular handoff verifier)
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs
