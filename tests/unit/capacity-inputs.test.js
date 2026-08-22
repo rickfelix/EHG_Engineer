@@ -217,6 +217,21 @@ describe('gatherCapacityInputs — the counts the verdict ladder consumes', () =
     expect(out.idleNow, 'an unclaimed live worker is idle demand').toBe(1);
   });
 
+  // QF-20260821-032: a stale-but-otherwise-eligible QF must surface as claimableWithVerifyQfCount,
+  // SEPARATELY from openQfCount — a deficit verdict built on openQfCount alone must not see this
+  // supply, and a reader checking claimableWithVerifyQfCount must see it named, not folded into 0.
+  it('a stale-but-otherwise-eligible QF counts toward claimableWithVerifyQfCount, not openQfCount', async () => {
+    const staleQf = {
+      id: 'qf-stale-1', status: 'open', pr_url: null, commit_sha: null,
+      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      routing_tier: null, title: 'Fix a typo', description: 'No behavioral change.',
+      not_before: null, factory_lane: false, owner: null, release_condition: null,
+    };
+    const out = await gatherCapacityInputs(fakeClient({ sds: [], qfs: [staleQf] }));
+    expect(out.openQfCount).toBe(0);
+    expect(out.claimableWithVerifyQfCount).toBe(1);
+  });
+
   it('an SD held for human action does NOT inflate the belt', async () => {
     // The fail-open direction: over-reporting capacity suppresses the deficit that triggers the
     // Adam sourcing reach-out, so a worker starves while the gauge reads healthy.
