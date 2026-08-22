@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { countDispatchableBacklog, countClaimableQuickFixes, countAutoStartableQuickFixes, countBeltDepth } = require('../../../lib/fleet/belt-depth.cjs');
+const { countDispatchableBacklog, countClaimableQuickFixes, countAutoStartableQuickFixes, countClaimableWithVerifyQuickFixes, countBeltDepth } = require('../../../lib/fleet/belt-depth.cjs');
 const { CLAIMABLE_QF_STATUSES } = require('../../../lib/coordinator/qf-supply-predicate.cjs');
 
 /**
@@ -143,6 +143,35 @@ describe('SEC-GSB-1 — a NON-NUMERIC count is a failed measurement, not an empt
 // such arbiter. Without a query-level filter, a status='open'-but-claimed row (a reachable state
 // — see lib/checkin/steps/resume.cjs, lib/fleet/best-effort-release.mjs) would be over-counted,
 // reopening the exact defect class SD-LEO-INFRA-GATE-SIDE-BELT-001 fixed.
+// QF-20260821-032: countClaimableWithVerifyQuickFixes shares fetchAutoStartCandidateRows with
+// countAutoStartableQuickFixes (its fetch-layer edge cases — 42703 fallback, fail-loud, lane
+// scoping — are already exhaustively covered above and apply identically here); this block only
+// pins the NEW predicate's own behavior: it counts the complement, on the SAME candidate rows.
+describe('countClaimableWithVerifyQuickFixes — the complement of countAutoStartableQuickFixes', () => {
+  const STALE_QF_DAYS_MS = 4 * 24 * 60 * 60 * 1000; // safely past the default 3-day window
+  const staleCreated = new Date(Date.now() - STALE_QF_DAYS_MS).toISOString();
+  const openStale = (n) => Array.from({ length: n }, (_, i) => ({ id: `qf-stale-${i}`, status: CLAIMABLE_QF_STATUSES[0], claiming_session_id: null, created_at: staleCreated }));
+
+  it('counts a stale-but-otherwise-eligible row that countAutoStartableQuickFixes excludes', async () => {
+    const client = fakeClient({ qfs: openStale(3) });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(0);
+    await expect(countClaimableWithVerifyQuickFixes(client)).resolves.toBe(3);
+  });
+
+  it('a fresh eligible row counts toward countAutoStartableQuickFixes only, never both', async () => {
+    const client = fakeClient({ qfs: [...openUnclaimed(2), ...openStale(5)] });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(2);
+    await expect(countClaimableWithVerifyQuickFixes(client)).resolves.toBe(5);
+  });
+
+  it('a stale row blocked by another gate (factory_lane) is excluded from both counts', async () => {
+    const gated = openStale(2).map((r) => ({ ...r, factory_lane: true }));
+    const client = fakeClient({ qfs: gated });
+    await expect(countAutoStartableQuickFixes(client)).resolves.toBe(0);
+    await expect(countClaimableWithVerifyQuickFixes(client)).resolves.toBe(0);
+  });
+});
+
 describe('countAutoStartableQuickFixes — claiming_session_id exclusion (adversarial-review fix)', () => {
   it('does not count a row that is status=open but already claimed by another session', async () => {
     const client = fakeClient({ qfs: [...openUnclaimed(4), ...openClaimed(3)] });

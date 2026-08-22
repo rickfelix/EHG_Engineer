@@ -222,4 +222,28 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
       expect(summary.hinted).toBe(1); // the fresh routine QF, not the stale one
     });
   });
+
+  // QF-20260821-032: a stale-but-otherwise-eligible QF is not hinted (staleness still gates
+  // delivery), but must be visible on summary.claimableWithVerify — distinct from skippedGated,
+  // which also counts rows excluded for reasons that are NOT "just needs a verify".
+  it('a stale-but-otherwise-eligible QF is not hinted, but is counted in summary.claimableWithVerify', async () => {
+    const oldCreatedAt = new Date(NOW - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10d old, past the 3d fence
+    const sb = makeFakeSupabase({
+      sessions: [worker()],
+      qfs: [qf({ created_at: oldCreatedAt })],
+    });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.hinted).toBe(0);
+    expect(summary.claimableWithVerify).toBe(1);
+  });
+
+  it('the near-miss (governance-gated) QF is NOT counted in claimableWithVerify, even though it is also skippedGated', async () => {
+    const sb = makeFakeSupabase({
+      sessions: [worker()],
+      qfs: [qf({ id: 'QF-20260719-281', title: 'Apply 5 committed-but-unapplied migrations (CHAIRMAN-GATED DDL)' })],
+    });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.skippedGated).toBe(1);
+    expect(summary.claimableWithVerify).toBe(0);
+  });
 });

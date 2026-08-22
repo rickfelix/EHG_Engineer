@@ -41,7 +41,7 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { logCoordinationEvent } = require('../lib/coordinator/coordination-events.cjs');
-const { isAutoStartableQF, sortQfCandidatesBySeverity } = require('./worker-checkin.cjs');
+const { isAutoStartableQF, isClaimableWithVerify, sortQfCandidatesBySeverity } = require('./worker-checkin.cjs');
 const { resolveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
 const { workClassIneligibilityReason } = require('../lib/fleet/work-class.cjs');
 
@@ -244,7 +244,7 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // still counts, which is the other half of this SD.
   // QF-20260808-782: skippedCapped/capUnknown are initialised to 0 rather than left undefined —
   // a counter that only appears once it fires cannot be distinguished from one that never ran.
-  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: 0, capUnknown: 0 };
+  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, claimableWithVerify: 0, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: 0, capUnknown: 0 };
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is unbounded and this
   // read has no heartbeat/status filter at all (the QF-763 `.order()` only avoids a STALENESS bias
@@ -312,6 +312,14 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
 
   const ranked = eligibleQfCandidates(qfs, nowMs);
   summary.skippedGated = (qfs || []).length - ranked.length;
+  // QF-20260821-032: of the skipped-gated set, how many are held ONLY by the staleness gate
+  // (i.e. would be eligible right now if isAutoStartableQF's window were the sole blocker).
+  // Computed unconditionally, before the ranked-empty early return, since "ranked is empty but
+  // claimableWithVerify > 0" is precisely the verify-gated-not-supply-empty case this exists to
+  // surface.
+  summary.claimableWithVerify = (qfs || []).filter(
+    (qf) => isClaimableWithVerify(qf, nowMs) && !isHintExcludedGated(qf)
+  ).length;
   if (ranked.length === 0) return summary;
 
   return deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun });
@@ -467,6 +475,7 @@ async function main() {
   console.log(
     `IDLE_QF_HINT idleWorkers=${summary.idleWorkers} delivered=${summary.hinted} attempted=${summary.attempted}`
     + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}`
+    + ` claimableWithVerify=${summary.claimableWithVerify || 0}`
     + ` skippedCapped=${summary.skippedCapped || 0} capUnknown=${summary.capUnknown || 0}${dryRun ? ' (dry-run)' : ''}`,
   );
   // FR-6: the alarm must be DURABLE, not just loud. emitDeliveryAlarm no-ops unless the pass is

@@ -55,7 +55,7 @@ import { parentLeadPendingVerdict } from '../../lib/fleet/claim-eligibility.cjs'
 // risk-flagged QFs no worker could reach. lib/governance/qf-mint-gate.mjs's demand gauge still calls
 // countClaimableQuickFixes directly — a different contract (mint-floor supply, not forecast belt) —
 // and is untouched by this SD.
-import { countAutoStartableQuickFixes } from '../../lib/fleet/belt-depth.cjs';
+import { countAutoStartableQuickFixes, countClaimableWithVerifyQuickFixes } from '../../lib/fleet/belt-depth.cjs';
 // SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001: reuse the ranker's PURE leaf predicates from the
 // client-free SSOT so the forecaster belt spans the DISPATCHABLE-leaf extent (what the ranker
 // counts as "1 claimable leaf"), not the raw-unclaimed extent. Applied IN-MEMORY on the rows this
@@ -207,7 +207,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   // — the one actually surfaced — is correct. Tracked as a completion-flag follow-up rather than
   // fixed here to avoid a 4th adversarial-review round chasing a narrower edge of an edge case.
   const engagementLiveCutoff = new Date(Date.now() - ENGAGEMENT_LIVE_WINDOW_MS).toISOString();
-  const [sessions, sds, openQfCountRaw, qfClaimedRows, engagementSessions] = await Promise.all([
+  const [sessions, sds, openQfCountRaw, claimableWithVerifyQfCountRaw, qfClaimedRows, engagementSessions] = await Promise.all([
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is a growing
     // table and this read feeds worker-count/capacity math directly (filtered + iterated
     // below) — paginate to completion.
@@ -275,6 +275,11 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     // behaviour at the call site where a reader can see it, instead of weakening the shared gauge for
     // every other consumer.
     countAutoStartableQuickFixes(sb).catch(() => null),
+    // QF-20260821-032: SEPARATE from openQfCount above — QFs held ONLY by the staleness gate
+    // (isClaimableWithVerify), so a deficit verdict can tell "verify-gated" apart from
+    // "genuinely no supply" instead of both reading as the same 0. Same fail-open contract as
+    // openQfCountRaw: an unreadable belt degrades to 0 contribution, not an aborted forecast.
+    countClaimableWithVerifyQuickFixes(sb).catch(() => null),
     // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (TR-3): a SEPARATE, additive lookup for the
     // engagement gauge's ENGAGED signal only — never folded into claimsBySession below, which
     // feeds the forecaster's own building/idleNow/stalled counts and DEFICIT/TIGHT/SURPLUS
@@ -304,6 +309,8 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   ]);
   const openQfCountRendered = renderCount(openQfCountRaw);
   const openQfCount = typeof openQfCountRendered === 'number' ? openQfCountRendered : 0; // fail-open: unreadable → 0 belt contribution, unchanged from the prior fallback
+  const claimableWithVerifyQfCountRendered = renderCount(claimableWithVerifyQfCountRaw);
+  const claimableWithVerifyQfCount = typeof claimableWithVerifyQfCountRendered === 'number' ? claimableWithVerifyQfCountRendered : 0; // fail-open, same contract as openQfCount
 
   // ── resolve dependency statuses → DISPATCHABLE-LEAF belt (SD-LEO-INFRA-CAPACITY-FORECASTER-BELT-001) ──
   // blockerKeysFor is the SAME shared predicate the ranker uses: `dependencies` column PLUS the
@@ -451,7 +458,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
 
   return {
     idleNow, freeingSoon, building, stalled,
-    claimableCount: claimable.length, openQfCount,
+    claimableCount: claimable.length, openQfCount, claimableWithVerifyQfCount,
     claimable, rows, workers, claimsBySession,
     maskedIds, stalledIds, phaseMinActuals,
     beltExcludes, ineligibleExcludes,
