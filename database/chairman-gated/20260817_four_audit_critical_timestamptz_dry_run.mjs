@@ -7,10 +7,11 @@
  *
  * Exists because a DATABASE sub-agent review (evidence 8c3ed611) found the migration as
  * originally authored would abort at ceremony time: 10 of the 15 target columns are referenced
- * by 11 dependent views/matviews (2 in the `governance` schema), which `ALTER COLUMN TYPE`
- * cannot touch without first dropping them. This script proves the corrected drop/recreate
- * envelope actually works end-to-end -- both directions -- against the live schema, not just
- * that the SQL parses.
+ * by 12 dependent views/matviews (2 in the `governance` schema; re-censused 2026-08-22 after the
+ * original 11-object list missed public.v_plan_item_position and the 2026-08-22 ceremony
+ * attempt failed-and-rolled-back exactly on that gap), which `ALTER COLUMN TYPE` cannot touch
+ * without first dropping them. This script proves the corrected drop/recreate envelope actually
+ * works end-to-end -- both directions -- against the live schema, not just that the SQL parses.
  *
  * Run before the chairman ceremony (and again if the schema has changed since) to catch any
  * drift between this file's assumptions and the live view/matview definitions before the real
@@ -57,6 +58,7 @@ export async function runDryRun(client) {
 
     await client.query('SELECT count(*) FROM public.v_active_sessions');
     await client.query('SELECT count(*) FROM governance.v_governance_overview');
+    await client.query('SELECT count(*) FROM public.v_plan_item_position');
     log.push('Recreated views queryable post-UP');
 
     await client.query(downBody);

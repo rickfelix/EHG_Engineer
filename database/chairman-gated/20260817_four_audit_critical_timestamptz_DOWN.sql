@@ -16,10 +16,10 @@
 -- file's `<col> AT TIME ZONE 'UTC'` (naive-as-UTC -> instant) conversion, byte-for-byte reversible
 -- for any value that has not been re-written since the UP file applied.
 --
--- SAME DEPENDENT-VIEW ENVELOPE AS THE UP FILE (DATABASE sub-agent review, evidence 8c3ed611): this
--- file has the identical dependent-view defect as the UP file — 10 of the 15 columns being
--- reverted are referenced by the same 11 views/matviews recreated by the UP file. Drop, revert,
--- recreate, in the same shape.
+-- SAME DEPENDENT-VIEW ENVELOPE AS THE UP FILE (DATABASE sub-agent review, evidence 8c3ed611,
+-- re-censused 2026-08-22): this file has the identical dependent-view defect as the UP file — 10
+-- of the 15 columns being reverted are referenced by the same 12 views/matviews recreated by the
+-- UP file. Drop, revert, recreate, in the same shape.
 --
 -- Does NOT touch the 6 already-aware sibling columns on these same tables, or product_requirements_v2
 -- (out of scope for both directions — see the UP file's header).
@@ -29,7 +29,8 @@ BEGIN;
 SET LOCAL lock_timeout = '5s';
 
 -- STEP 1: Drop dependent views/matviews (recreated by the UP file; must be dropped again before
--- reverting the column types beneath them).
+-- reverting the column types beneath them). RE-CENSUSED 2026-08-22 (see the UP file's MAX-AGE
+-- GUARD section) -- public.v_plan_item_position added, missing from the original 11-object list.
 DROP VIEW IF EXISTS governance.v_governance_overview;
 DROP VIEW IF EXISTS governance.v_phase_handoff_status;
 DROP VIEW IF EXISTS public.legacy_handoff_executions_view;
@@ -38,6 +39,7 @@ DROP MATERIALIZED VIEW IF EXISTS public.mv_sd_summary;
 DROP VIEW IF EXISTS public.strategic_directives_backlog;
 DROP VIEW IF EXISTS public.v_active_sessions;
 DROP VIEW IF EXISTS public.v_blocked_handoffs_pending;
+DROP VIEW IF EXISTS public.v_plan_item_position;
 DROP VIEW IF EXISTS public.v_sd_alignment_warnings;
 DROP VIEW IF EXISTS public.v_sd_completion_integrity;
 DROP VIEW IF EXISTS public.v_sds_needing_business_evaluation;
@@ -387,6 +389,31 @@ CREATE VIEW public.v_blocked_handoffs_pending AS
   WHERE h.status::text = 'blocked'::text
   ORDER BY h.created_at DESC;
 GRANT ALL ON public.v_blocked_handoffs_pending TO anon, authenticated, service_role;
+
+-- Added in the 2026-08-22 re-stage -- see the UP file's MAX-AGE GUARD section for why.
+CREATE VIEW public.v_plan_item_position AS
+ SELECT i.id AS item_id,
+    i.wave_id,
+    w.sequence_rank AS wave_sequence_rank,
+    w.title AS wave_title,
+    w.status AS wave_status,
+    w.time_horizon,
+    i.title AS item_title,
+    i.item_disposition,
+    i.promoted_to_sd_key AS child_sd_key,
+    sd.status AS child_status,
+    sd.current_phase AS child_phase,
+    sd.claiming_session_id IS NOT NULL AS child_is_claimed,
+    sd.claiming_session_id AS child_claiming_session_id,
+    i.promoted_to_sd_key IS NOT NULL AND sd.sd_key IS NULL AS is_orphaned,
+    GREATEST(i.updated_at, COALESCE(sd.updated_at::timestamp with time zone, i.updated_at)) AS last_advance_at
+   FROM roadmap_wave_items i
+     JOIN roadmap_waves w ON w.id = i.wave_id
+     LEFT JOIN strategic_directives_v2 sd ON sd.sd_key = i.promoted_to_sd_key
+  WHERE (w.roadmap_id IN ( SELECT strategic_roadmaps.id
+           FROM strategic_roadmaps
+          WHERE strategic_roadmaps.status::text = 'active'::text));
+GRANT ALL ON public.v_plan_item_position TO anon, authenticated, service_role;
 
 CREATE VIEW public.v_sd_alignment_warnings AS
  SELECT sd.id,

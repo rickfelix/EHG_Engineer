@@ -1,15 +1,19 @@
--- @approved-by: codestreetlabs@gmail.com
--- approval-note: chairman ruling A at terminal 2026-08-21 ~10:06Z (quiesce re-arm packet, timestamptz on 4 audit tables); applied in the 2026-08-22 06:00Z quiesce window; scribe adam-08049808
+-- @approved-by:
 -- SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 — timestamp -> timestamptz, 15 columns, 4 audit-critical tables.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE except at the named ceremony, and only
 -- during a coordinator-scheduled QUIESCE WINDOW (see below).
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- AWAITING CHAIRMAN REVIEW — no @approved-by stamp exists for this file yet, deliberately (house
--- convention: never write an approval stamp until an approval actually happened). Chairman decision
--- 374fbb24 (GO/A, 2026-08-15) authorized BUILD of this staged migration; the ALTER itself is applied
--- ONLY at the chairman 3-factor ceremony.
+-- AWAITING FRESH CHAIRMAN REVIEW (re-stage, 2026-08-22) — the PRIOR @approved-by (codestreetlabs@gmail.com,
+-- chairman ruling A at terminal 2026-08-21 ~10:06Z) was exercised in the 2026-08-22 06:00Z quiesce
+-- window and FAILED-AND-ROLLED-BACK (SQLSTATE 0A000, public.v_plan_item_position missing from the
+-- DROP/CREATE envelope -- see the MAX-AGE GUARD section below). That approval covered the OLD
+-- 11-object envelope, not this file's now-12-object content -- deliberately blanked per house
+-- convention (never carry an approval stamp forward onto materially-changed SQL it never reviewed).
+-- This re-staged version needs a FRESH chairman A before its next ceremony attempt. Chairman decision
+-- 374fbb24 (GO/A, 2026-08-15) still authorizes BUILD of this staged migration; the ALTER itself is
+-- applied ONLY at a chairman 3-factor ceremony.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- THE BUG THIS CLOSES
@@ -39,19 +43,32 @@
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- DEPENDENT VIEWS/MATVIEWS — DROP/RECREATE ENVELOPE REQUIRED (DATABASE sub-agent review, evidence
--- 8c3ed611, EXEC phase — proven live via a TEMP TABLE + TEMP VIEW dependency reproduction)
+-- 8c3ed611, EXEC phase — proven live via a TEMP TABLE + TEMP VIEW dependency reproduction;
+-- RE-CENSUSED 2026-08-22 per the MAX-AGE GUARD above)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- 10 of the 15 target columns are referenced by 11 dependent view/matview objects (2 in the
+-- 10 of the 15 target columns are referenced by 12 dependent view/matview objects (2 in the
 -- `governance` schema, invisible to a public-schema-only check). Without dropping these first,
 -- `ALTER COLUMN TYPE` raises SQLSTATE 0A000 ("cannot alter type of a column used by a view or
 -- rule") and the ceremony transaction aborts cleanly (no data risk — BEGIN/COMMIT means a failed
--- statement just rolls the whole transaction back) but never applies. This was NOT caught by the
--- PLAN-phase automated DATABASE sub-agent run (which found zero migration files, since none
--- existed yet) — it required a live review of the actual authored SQL. Exact definitions and
--- grants captured live 2026-08-17 via pg_get_viewdef()/information_schema.role_table_grants; each
+-- statement just rolls the whole transaction back) but never applies. The original 2026-08-17
+-- census (11 objects) was NOT caught missing public.v_plan_item_position by the PLAN-phase
+-- automated DATABASE sub-agent run (which found zero migration files, since none existed yet) — it
+-- required a live review of the actual authored SQL, and that live review's own pg_depend scan
+-- still missed one object, live-confirmed exactly by the 2026-08-22 ceremony's failure. THE
+-- COORDINATION GAP: public.v_plan_item_position has existed since 2026-08-03
+-- (SD-LEO-INFRA-PLAN-POSITION-READABLE-001) — it predates this migration's own chairman BUILD
+-- decision (374fbb24, 2026-08-15) and its 2026-08-17 census, so this was a CENSUS-COMPLETENESS gap
+-- in the original migration's own authoring, not a later SD shipping against an already-pending
+-- target invisibly (that narrower framing does not match the actual timeline, checked directly
+-- against git history — corrected here rather than carried forward unverified). Exact definitions
+-- and grants for the original 11 captured live 2026-08-17; the 12th (v_plan_item_position) captured
+-- live 2026-08-22 via the same pg_get_viewdef()/information_schema.role_table_grants method; each
 -- object is recreated identically below. Two distinct grant shapes exist (public-schema views get
 -- the full anon/authenticated/service_role set; the governance pair is narrower for anon); the 2
--- matviews carry NO explicit grants (owner-only) and need none re-applied.
+-- matviews carry NO explicit grants (owner-only) and need none re-applied. SEPARATE FINDING, not
+-- fixed here: public.v_plan_item_position's live grants include DELETE/INSERT/UPDATE/TRUNCATE for
+-- anon/authenticated on a read-only derived view — unusually broad for its purpose, flagged via
+-- /signal feedback rather than narrowed unilaterally in a migration this SD did not originate.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- SCOPE: 15 columns, 4 tables. OUT OF SCOPE: the 6 already-aware sibling columns on these same
@@ -80,7 +97,28 @@ BEGIN;
 SET LOCAL lock_timeout = '5s';
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- STEP 1: Drop dependent views/matviews (none of these 11 objects depend on each other, so order
+-- MAX-AGE GUARD (re-stage, 2026-08-22, Solomon Shape Ruling option B) — the 2026-08-17 census
+-- missed public.v_plan_item_position (live since 2026-08-03, SD-LEO-INFRA-PLAN-POSITION-READABLE-001
+-- -- it predates even this migration's chairman BUILD decision 374fbb24 of 2026-08-15, so the
+-- original DATABASE sub-agent scan was incomplete, not outrun by a later ship). The 2026-08-22
+-- ceremony attempt failed and rolled back on exactly this (SQLSTATE 0A000). A fresh census taken
+-- 2026-08-22 (script: scripts/one-off/census-timestamptz-four-audit-critical-deps.mjs, pg_depend-based, ALL schemas) now
+-- finds 12 dependent objects; this file's DROP/CREATE envelope below is that fresh census. To stop
+-- this failure class recurring silently, the migration now refuses to apply if its own census is
+-- older than the ceremony window -- re-run the census and re-stage rather than trusting a stale list.
+DO $census_guard$
+DECLARE
+  census_generated_at CONSTANT timestamptz := '2026-08-22T07:00:00Z';
+  max_age_hours CONSTANT numeric := 48;
+BEGIN
+  IF now() - census_generated_at > (max_age_hours || ' hours')::interval THEN
+    RAISE EXCEPTION 'MAX-AGE GUARD: dependent-view census generated at % is older than % hours (now=%) -- re-run scripts/one-off/census-timestamptz-four-audit-critical-deps.mjs and re-stage this migration with a fresh census_generated_at before applying', census_generated_at, max_age_hours, now();
+  END IF;
+END;
+$census_guard$;
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- STEP 1: Drop dependent views/matviews (none of these 12 objects depend on each other, so order
 -- is not significant; non-CASCADE so an unexpected additional dependency fails loud rather than
 -- silently cascading further).
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -92,6 +130,7 @@ DROP MATERIALIZED VIEW IF EXISTS public.mv_sd_summary;
 DROP VIEW IF EXISTS public.strategic_directives_backlog;
 DROP VIEW IF EXISTS public.v_active_sessions;
 DROP VIEW IF EXISTS public.v_blocked_handoffs_pending;
+DROP VIEW IF EXISTS public.v_plan_item_position;
 DROP VIEW IF EXISTS public.v_sd_alignment_warnings;
 DROP VIEW IF EXISTS public.v_sd_completion_integrity;
 DROP VIEW IF EXISTS public.v_sds_needing_business_evaluation;
@@ -447,6 +486,33 @@ CREATE VIEW public.v_blocked_handoffs_pending AS
   WHERE h.status::text = 'blocked'::text
   ORDER BY h.created_at DESC;
 GRANT ALL ON public.v_blocked_handoffs_pending TO anon, authenticated, service_role;
+
+-- Added in the 2026-08-22 re-stage (fresh census -- missed by the original 2026-08-17 scan; this
+-- view has existed since 2026-08-03, SD-LEO-INFRA-PLAN-POSITION-READABLE-001). Definition and
+-- grants captured live 2026-08-22 via pg_get_viewdef()/information_schema.role_table_grants.
+CREATE VIEW public.v_plan_item_position AS
+ SELECT i.id AS item_id,
+    i.wave_id,
+    w.sequence_rank AS wave_sequence_rank,
+    w.title AS wave_title,
+    w.status AS wave_status,
+    w.time_horizon,
+    i.title AS item_title,
+    i.item_disposition,
+    i.promoted_to_sd_key AS child_sd_key,
+    sd.status AS child_status,
+    sd.current_phase AS child_phase,
+    sd.claiming_session_id IS NOT NULL AS child_is_claimed,
+    sd.claiming_session_id AS child_claiming_session_id,
+    i.promoted_to_sd_key IS NOT NULL AND sd.sd_key IS NULL AS is_orphaned,
+    GREATEST(i.updated_at, COALESCE(sd.updated_at::timestamp with time zone, i.updated_at)) AS last_advance_at
+   FROM roadmap_wave_items i
+     JOIN roadmap_waves w ON w.id = i.wave_id
+     LEFT JOIN strategic_directives_v2 sd ON sd.sd_key = i.promoted_to_sd_key
+  WHERE (w.roadmap_id IN ( SELECT strategic_roadmaps.id
+           FROM strategic_roadmaps
+          WHERE strategic_roadmaps.status::text = 'active'::text));
+GRANT ALL ON public.v_plan_item_position TO anon, authenticated, service_role;
 
 CREATE VIEW public.v_sd_alignment_warnings AS
  SELECT sd.id,
