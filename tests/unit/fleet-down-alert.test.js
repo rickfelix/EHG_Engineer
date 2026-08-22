@@ -421,6 +421,14 @@ describe('evaluatePerHostFreezePredicate (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2
     expect(r.reason).toMatch(/no heartbeat for/);
   });
 
+  it('buildPerHostFreezeMessage names the specific host and host-scopes the dedupeKey (mirrors buildDeadCoordinatorMessage/buildFleetDeadManMessage convention above)', () => {
+    const verdict = evaluatePerHostFreezePredicate({ hostname: 'stale-host', lastHeartbeatAtForHost: minutesAgo(150), now: NOW, windowMin: 120 });
+    const msg = buildPerHostFreezeMessage('stale-host', verdict, NOW);
+    expect(msg.body).toMatch(/HOST DOWN: stale-host/);
+    expect(msg.kind).toBe('fleet_dead_man_alert');
+    expect(msg.dedupeKey).toBe(`fleet-dead-man-host-stale-host-${NOW.toISOString().slice(0, 13)}`);
+  });
+
   it('never reads or references completions -- Leg-A-only by construction (source-text pin — TESTING sub-agent finding M2)', () => {
     // A destructured single-object parameter always reports Function.length === 1 regardless of
     // how many fields the object literal has -- `.length` could never fail even if a `completions`
