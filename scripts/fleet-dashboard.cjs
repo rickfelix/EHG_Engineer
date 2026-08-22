@@ -1788,7 +1788,9 @@ async function printAttentionStrip() {
  *
  * ADVISORY ONLY. This drives no release, quarantine or handback — see PRECEDENCE in the predicate.
  */
-const STUCK_SEAT_CUT_POINT_MINUTES = 120;   // operator-facing display threshold, NOT a calibration
+// RECALIBRATED (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-1, ~44-sample measurement): kept in sync with
+// lib/fleet/genuine-worker.mjs's FREEZE_CUT_MINUTES and fleet-health.cjs's TOOL_SILENCE_CUT_MINUTES.
+const STUCK_SEAT_CUT_POINT_MINUTES = 60;   // operator-facing display threshold, NOT a calibration
 
 // `client` is injectable ONLY so the render path can be unit-tested; production passes nothing and
 // uses the module-scope client. Every sibling renderer here is exported "for unit testing" and this

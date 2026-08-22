@@ -160,6 +160,12 @@ function buildEmail({ claimableCount, consecutiveZero, requiredConsecutive }) {
   return { subject, text, html };
 }
 
+// DELIVERY CHANNEL (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-5, corrected): this arm emails the
+// operator via Resend (buildEmail/sendEmail below) -- it does NOT send a chairman SMS. An earlier
+// draft of that SD assumed all 3 arms shared one SMS channel and could "triple-page" the chairman;
+// that premise was false (this arm's channel is email, a different recipient/medium entirely) and
+// has been corrected. See the docblock above checkFleetDeadMan for the freeze-vs-dead-man division
+// of labor this arm participates in (this is the clock-frozen-while-present signal).
 async function checkWorkerFleetDown(db, DRY) {
   // Read one more than the window so the edge-trigger dedup can inspect the pulse before it.
   const { data: pulses, error: pErr } = await db
@@ -265,6 +271,16 @@ export async function checkDeadCoordinator(db, DRY, sendChairmanSMSFn = null, no
  * Pure decision (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-1): is the ENTIRE fleet — workers AND
  * coordinator alike — showing zero signs of life at all?
  *
+ * DIVISION OF LABOR (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-5, corrected): this function is a
+ * heartbeat-writer/host-death signal, NOT a "row absence" detector (an earlier draft of that SD said
+ * rows vanish; they do not -- 13,110+ of them persist indefinitely). A frozen-but-heartbeating seat
+ * (heartbeat_at stamped by a separate always-on timer, independent of actual work) keeps THIS
+ * function reading alive regardless of last_tool_at -- which is exactly why the SEPARATE freeze/
+ * pager chain (checkWorkerFleetDown below, via liveFleetWorkers/classifySeat) exists: it is the
+ * clock-frozen-while-present signal this function structurally cannot see. Neither replaces the
+ * other. This function is UNMODIFIED by FR-1/FR-2 of that SD; see checkPerHostFreeze/
+ * evaluatePerHostFreezePredicate below for the new, structurally separate per-host companion.
+ *
  * Two independent legs, BOTH required:
  *   Leg A: zero claude_sessions heartbeats (any role) in the trailing window.
  *   Leg B: zero SD/QF completions (strategic_directives_v2.status='completed') in the window.
@@ -321,7 +337,102 @@ export function buildFleetDeadManMessage(verdict, now = new Date()) {
   };
 }
 
+// SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2: the Solomon GROUP-BY-HOST binding constraint
+// (SD-LEO-INFRA-FLEET-DEAD-MAN-001's own metadata.design_notes, never shipped) named "the dead-man
+// predicate" specifically. evaluateFleetDeadManPredicate above cannot be made host-aware directly:
+// its Leg B (completions) reads strategic_directives_v2, which carries NO hostname column and no
+// reliably-populated session FK (measured: active_session_id populated on 1 of 500 completed SDs,
+// claiming_session_id on 0) -- Leg B is structurally un-attributable to a host. Worse, Leg B's
+// existing `if (completions > 0) return {dead:false}` short-circuits BEFORE Leg A is ever read, so a
+// naive "group both legs by host" would let a completion on ANY host mask a real freeze on every
+// OTHER host -- live-corroborated: all 5 most-recent fleet_dead_man_verdict rows read alive via this
+// exact short-circuit. THE FIX: a separate, additive, Leg-A-ONLY check below -- it never reads
+// completions and never touches evaluateFleetDeadManPredicate, which stays exactly as shipped and
+// keeps covering the class it was built for (fleet-wide silence, not per-host).
+//
+// HOST ELIGIBILITY (measured live, 2026-08-21, full 13,110-row population): 12 distinct hostnames.
+// Legion-Laptop's most recent heartbeat is live (seconds old); every other hostname -- 2 test
+// fixtures ("test-host", "test"), 4 ephemeral runnervm* GitHub Actions runners (a new one per cron
+// run), 2 CI-run-named hosts ("execute-stop-integration", "team-banner-integration", "integration-
+// test" -- none matching a runnervm*/"test" pattern), and one unrecognized single-row host ("h") --
+// is stale by WEEKS TO MONTHS (newest of the 11 non-live hosts: 2026-07-17, over a month before this
+// comment was written). A single recency gate on the query itself (only consider hosts with at
+// least one heartbeat inside HOST_ELIGIBILITY_WINDOW_MIN) correctly excludes every one of them
+// without any pattern-matching or hardcoded denylist -- simpler and more robust than name-based
+// exclusion, which would need updating for every new ephemeral/fixture hostname that appears (as
+// the un-pattern-matched "execute-stop-integration"/"h" cases already demonstrate). NULL hostname
+// rows (81 of them, also weeks-stale) are excluded explicitly at the query -- grouping NULLs
+// together would otherwise collapse many small, unrelated registrations into one artificially-
+// populated "host".
+// WINDOW SIZE, REVISED (TESTING sub-agent finding H1, EXEC-TO-PLAN review): an unbounded/large-
+// windowed read of claude_sessions is NOT safe against a single busy host's own row volume --
+// Legion-Laptop heartbeats roughly every 30s, so a 24h window could alone contribute ~2,880 rows,
+// well past PostgREST's default 1000-row page cap (measured live). Ordered newest-first, a capped
+// page would keep the busiest host's rows and could silently push a quieter-but-real second host's
+// rows out entirely -- in the one query whose job is finding quiet hosts. Shrunk to 4h: still 2x
+// FLEET_DEAD_MAN_WINDOW_MIN (a host that went quiet within the dead-man window is still correctly
+// evaluated, just correctly judged dead if truly silent), while bounding one host's worst-case
+// contribution to ~480 rows at the same cadence -- comfortable headroom under HOST_QUERY_ROW_LIMIT
+// even with several concurrent hosts (the near-term cloud-pilot scenario this FR exists for).
+const HOST_ELIGIBILITY_WINDOW_MIN = Number(process.env.HOST_ELIGIBILITY_WINDOW_MIN) > 0
+  ? Number(process.env.HOST_ELIGIBILITY_WINDOW_MIN)
+  : 4 * 60;
+// Explicit, generous bound (mirrors lib/fleet/stuck-seat-population.cjs's POPULATION_ROW_LIMIT
+// pattern) so truncation is a loud, detectable event rather than a silent PostgREST default.
+const HOST_QUERY_ROW_LIMIT = Number(process.env.HOST_QUERY_ROW_LIMIT) > 0
+  ? Number(process.env.HOST_QUERY_ROW_LIMIT)
+  : 5000;
+
+/**
+ * Pure decision (FR-2): is THIS HOST showing zero heartbeat signs of life within the window?
+ * Leg-A-ONLY -- never reads completions, never shares state with evaluateFleetDeadManPredicate.
+ *
+ * @param {Object} args
+ * @param {string} args.hostname
+ * @param {string|null} args.lastHeartbeatAtForHost - most recent heartbeat_at among this host's sessions
+ * @param {Date} [args.now]
+ * @param {number} [args.windowMin=FLEET_DEAD_MAN_WINDOW_MIN]
+ * @returns {{dead:boolean, reason:string}}
+ */
+export function evaluatePerHostFreezePredicate({
+  hostname,
+  lastHeartbeatAtForHost,
+  now = new Date(),
+  windowMin = FLEET_DEAD_MAN_WINDOW_MIN,
+} = {}) {
+  const nowTs = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  if (!lastHeartbeatAtForHost) {
+    return { dead: true, reason: `host ${hostname}: no heartbeat recorded in the eligibility window` };
+  }
+  const last = new Date(lastHeartbeatAtForHost);
+  if (Number.isNaN(last.getTime())) {
+    return { dead: true, reason: `host ${hostname}: lastHeartbeatAtForHost unparseable -- treating as no signal` };
+  }
+  const elapsedMin = (nowTs.getTime() - last.getTime()) / 60000;
+  if (elapsedMin < windowMin) {
+    return { dead: false, reason: `host ${hostname}: heartbeat ${elapsedMin.toFixed(1)}min old -- within the ${windowMin}min window` };
+  }
+  return { dead: true, reason: `host ${hostname}: no heartbeat for ${elapsedMin.toFixed(1)}min (>= ${windowMin}min)` };
+}
+
+/** Pure: the chairman-SMS message payload for a per-host freeze trip. */
+export function buildPerHostFreezeMessage(hostname, verdict, now = new Date()) {
+  return {
+    type: 'status',
+    body: `HOST DOWN: ${hostname} -- ${verdict.reason}. Start/restart a worker session on that host.`,
+    kind: 'fleet_dead_man_alert',
+    // TR-6: reuses the existing dedupeKey namespace convention (dead-coordinator-<hour>,
+    // fleet-dead-man-<hour>) rather than inventing new cross-arm coordination -- host-qualified so
+    // two hosts' pages can never collide, and hour-bucketed so a persistent outage doesn't re-spam.
+    dedupeKey: `fleet-dead-man-host-${hostname}-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
 const FLEET_DEAD_MAN_EVENT_TYPE = 'fleet_dead_man_verdict';
+// Distinct event_type (not an optional `host` field on the existing type) so the per-host and
+// global verdict populations can never cross-contaminate each other's edge-trigger dedup reads --
+// no JSONB-path null-filtering subtlety to get wrong, no query change to the existing global path.
+const FLEET_DEAD_MAN_PER_HOST_EVENT_TYPE = 'fleet_dead_man_verdict_per_host';
 
 /**
  * FR-3 (observability) + FR-1's own edge-trigger dedup, combined: writes ONE verdict row every
@@ -343,34 +454,41 @@ const FLEET_DEAD_MAN_EVENT_TYPE = 'fleet_dead_man_verdict';
  * to close, so this function never tries to distinguish "read failed" from "write failed" for the
  * purpose of softening the fail-open default.
  *
+ * @param {string|null} [host] - FR-3: when provided, scopes both the read and the write to this
+ *   host's OWN row population (via FLEET_DEAD_MAN_PER_HOST_EVENT_TYPE + a host-filtered read), so
+ *   two hosts' edge-trigger states can never clobber each other. Omitting it (the pre-existing
+ *   global caller) is byte-identical to this function's pre-FR-3 behavior -- same event_type, same
+ *   unfiltered "most recent row" read, same payload shape.
  * @returns {Promise<{transitioned:boolean}>}
  */
-async function recordFleetDeadManVerdict(db, verdict) {
+export async function recordFleetDeadManVerdict(db, verdict, host = null) {
   try {
-    const { data: rows, error } = await db
+    let query = db
       .from('system_events')
       .select('payload')
-      .eq('event_type', FLEET_DEAD_MAN_EVENT_TYPE)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .eq('event_type', host ? FLEET_DEAD_MAN_PER_HOST_EVENT_TYPE : FLEET_DEAD_MAN_EVENT_TYPE);
+    if (host) query = query.eq('payload->>host', host);
+    const { data: rows, error } = await query.order('created_at', { ascending: false }).limit(1);
     if (error) throw new Error(error.message);
     const lastState = rows && rows[0] ? rows[0].payload?.state : 'alive'; // no prior row => assume alive
     const nextState = verdict.dead ? 'dead' : 'alive';
     const transitioned = nextState !== lastState;
+    const payload = { state: nextState, reason: verdict.reason, transitioned };
+    if (host) payload.host = host;
     // TESTING sub-agent finding: supabase-js does not throw on a PostgREST-level rejection
     // (constraint/RLS) -- it resolves {data:null, error:{...}}. The insert's own result must be
     // checked explicitly, or a rejected write silently vanishes into this same try block without
     // ever reaching the catch below.
     const { error: insertErr } = await db.from('system_events').insert({
-      event_type: FLEET_DEAD_MAN_EVENT_TYPE,
+      event_type: host ? FLEET_DEAD_MAN_PER_HOST_EVENT_TYPE : FLEET_DEAD_MAN_EVENT_TYPE,
       actor_type: 'system',
-      actor_role: 'fleet-down-alert',
-      payload: { state: nextState, reason: verdict.reason, transitioned },
+      actor_role: host ? 'fleet-down-alert-per-host' : 'fleet-down-alert',
+      payload,
     });
     if (insertErr) throw new Error(insertErr.message);
     return { transitioned };
   } catch (err) {
-    console.error('[fleet-dead-man] verdict recording failed (non-fatal, alert logic unaffected):', err.message);
+    console.error(`[fleet-dead-man]${host ? ` host=${host}` : ''} verdict recording failed (non-fatal, alert logic unaffected):`, err.message);
     return { transitioned: true };
   }
 }
@@ -430,6 +548,70 @@ export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now =
   const { zone: chairmanZone } = await resolveChairmanZone(now);
   const r = await send(message, { now, chairmanZone });
   console.log('[fleet-dead-man] sendChairmanSMS result:', JSON.stringify(r));
+}
+
+/**
+ * FR-2: fetch eligible hosts (recent-enough activity) and each one's most-recent heartbeat.
+ * Excludes NULL hostnames and any host with no heartbeat inside HOST_ELIGIBILITY_WINDOW_MIN.
+ *
+ * @returns {Promise<Map<string,string>>} hostname -> most recent heartbeat_at (ISO string)
+ */
+export async function fetchEligibleHosts(db, now) {
+  const windowStartIso = new Date(now.getTime() - HOST_ELIGIBILITY_WINDOW_MIN * 60000).toISOString();
+  const { data, error } = await db
+    .from('claude_sessions')
+    .select('hostname, heartbeat_at')
+    .not('hostname', 'is', null)
+    .gte('heartbeat_at', windowStartIso)
+    .order('heartbeat_at', { ascending: false })
+    .limit(HOST_QUERY_ROW_LIMIT);
+  if (error) throw new Error(error.message);
+  const rows = data || [];
+  // TRUNCATION IS REPORTED LOUDLY, NEVER SILENT (mirrors stuck-seat-population.cjs's own
+  // truncated-flag discipline): hitting the cap means a busier host may be crowding a quieter one
+  // out of this result, which is exactly the failure mode this function exists to avoid.
+  if (rows.length >= HOST_QUERY_ROW_LIMIT) {
+    console.error(`[fleet-dead-man-per-host] fetchEligibleHosts TRUNCATED at ${HOST_QUERY_ROW_LIMIT} rows -- a quieter host may be missing from this result. Consider raising HOST_QUERY_ROW_LIMIT or shrinking HOST_ELIGIBILITY_WINDOW_MIN.`);
+  }
+  const byHost = new Map();
+  for (const row of rows) {
+    // Rows arrive newest-first; the first row seen per host is that host's most recent heartbeat.
+    if (!byHost.has(row.hostname)) byHost.set(row.hostname, row.heartbeat_at);
+  }
+  return byHost;
+}
+
+// SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2: per-host, Leg-A-only companion to checkFleetDeadMan.
+// Same injectable-sender / injectable-clock shape; ships the Solomon GROUP-BY-HOST constraint
+// without modifying the existing global check (see the design-rationale comment above
+// evaluatePerHostFreezePredicate for why the two cannot be combined).
+export async function checkPerHostFreeze(db, DRY, sendChairmanSMSFn = null, now = new Date()) {
+  // TESTING sub-agent finding (M3, EXEC-TO-PLAN review): a local try/catch here would swallow a
+  // real query failure as a clean, silent no-op -- runAlertArm would record ok:true, no PARTIAL
+  // DELIVERY warning, exit code 0. That is precisely the indistinguishable-failure class
+  // QF-20260803-882 fixed for the OTHER arms in this same file. Let it throw; runAlertArm's own
+  // catch (below, in runAlertArm/runAlertArms) already logs "ARM FAILED" loudly and marks the run
+  // non-zero-exit -- do not re-solve a problem this file already solved correctly.
+  const eligibleHosts = await fetchEligibleHosts(db, now);
+
+  for (const [hostname, lastHeartbeatAtForHost] of eligibleHosts) {
+    const verdict = evaluatePerHostFreezePredicate({ hostname, lastHeartbeatAtForHost, now });
+    const { transitioned } = await recordFleetDeadManVerdict(db, verdict, hostname);
+    console.log(`[fleet-dead-man-per-host] ${hostname}: ${verdict.dead ? 'DEAD' : 'alive'} (transitioned=${transitioned}): ${verdict.reason}`);
+
+    if (!verdict.dead || !transitioned) continue;
+
+    const message = buildPerHostFreezeMessage(hostname, verdict, now);
+    if (DRY) {
+      console.log(`[fleet-dead-man-per-host] [DRY] would page chairman via sendChairmanSMS for ${hostname}:`, message.body);
+      continue;
+    }
+    const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
+    const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
+    const { zone: chairmanZone } = await resolveChairmanZone(now);
+    const r = await send(message, { now, chairmanZone });
+    console.log(`[fleet-dead-man-per-host] sendChairmanSMS result for ${hostname}:`, JSON.stringify(r));
+  }
 }
 
 /**
@@ -501,6 +683,7 @@ async function main() {
   const { failed } = await runAlertArms([
     ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
     ['fleet-dead-man-pager', () => checkFleetDeadMan(db, DRY)],
+    ['fleet-dead-man-per-host-pager', () => checkPerHostFreeze(db, DRY)],
     ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
   ]);
   // A half-delivered alert must not exit 0. The workflow treating a partial page as success is the
