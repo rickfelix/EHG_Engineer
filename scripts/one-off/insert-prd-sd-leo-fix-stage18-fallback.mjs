@@ -10,6 +10,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_UUID = '42c60c0c-4156-428f-ab19-9f8bad01d271';
 const SD_KEY = 'SD-LEO-FIX-STAGE18-SILENT-FALLBACK-001';
@@ -321,11 +322,13 @@ async function main() {
   return data;
 }
 
-const data = await main();
+if (isMainModule(import.meta.url)) {
+  const data = await main();
 
-console.log('PRD inserted:', JSON.stringify(data, null, 2));
-console.log('FR count:', functional_requirements.length);
-console.log('TR count:', technical_requirements.length);
-console.log('TS count:', test_scenarios.length);
-console.log('AC count:', acceptance_criteria.length);
-console.log('Risk count:', risks.length);
+  console.log('PRD inserted:', JSON.stringify(data, null, 2));
+  console.log('FR count:', functional_requirements.length);
+  console.log('TR count:', technical_requirements.length);
+  console.log('TS count:', test_scenarios.length);
+  console.log('AC count:', acceptance_criteria.length);
+  console.log('Risk count:', risks.length);
+}

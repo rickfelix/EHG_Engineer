@@ -121,6 +121,7 @@
     "lint:count-delta-gate": "node scripts/lint/count-delta-gate-lint.mjs",
     "lint:no-process-cwd": "node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs",
     "lint:ismainmodule-classguard": "node scripts/lint/ismainmodule-classguard-lint.mjs",
+    "lint:main-guard-one-off": "node scripts/lint/require-main-guard-in-one-off-lint.mjs",
     "lint:mocked-sut-import": "node scripts/lint/no-mocked-sut-import-lint.mjs",
     "lint:session-coordination-insert": "node scripts/lint/session-coordination-insert-classguard-lint.mjs",
     "lint:no-connection-string-literals": "node scripts/lint/no-connection-string-literals-lint.mjs",

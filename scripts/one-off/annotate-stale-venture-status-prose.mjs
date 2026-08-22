@@ -20,6 +20,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { deriveVentureBuildStatus } from '../../lib/governance/venture-build-status.mjs';
 import { ventureStatusContradictionNote } from '../../lib/chairman/decision-layman.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const DRY = process.argv.includes('--dry-run');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -80,4 +81,9 @@ async function main() {
   console.log(`[annotate-stale-venture-status-prose] ${flagged} row(s) ${DRY ? 'would be' : ''} flagged, ${skippedAlreadyAnnotated} already annotated (skipped, idempotent)${DRY ? ' [DRY RUN -- no writes]' : ''}`);
 }
 
-main();
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001: guard against a bare import()/require() executing main()
+// against live prod (the same defect class as the 2026-08-21 solomon_advice_outcome_ledger
+// incident). Behavior when run directly is unchanged.
+if (isMainModule(import.meta.url)) {
+  main();
+}

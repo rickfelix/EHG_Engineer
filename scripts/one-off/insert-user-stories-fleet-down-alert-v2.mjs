@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -148,4 +149,6 @@ async function main() {
   console.log('Inserted', data.length, 'user stories:', JSON.stringify(data, null, 2));
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

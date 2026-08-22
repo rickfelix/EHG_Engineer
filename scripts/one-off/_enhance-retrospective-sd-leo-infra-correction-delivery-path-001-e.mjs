@@ -34,6 +34,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -155,9 +156,11 @@ async function main() {
   console.log(JSON.stringify(data, null, 2));
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('Fatal error:', error.message);
-    process.exit(1);
-  });
+if (isMainModule(import.meta.url)) {
+  main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error('Fatal error:', error.message);
+      process.exit(1);
+    });
+}

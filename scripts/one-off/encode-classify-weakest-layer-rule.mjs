@@ -12,6 +12,7 @@
  */
 import 'dotenv/config';
 import { createRequire } from 'node:module';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 const require = createRequire(import.meta.url);
 const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
 
@@ -45,4 +46,6 @@ async function main() {
   console.log('Done. Regenerate docs: node scripts/generate-claude-md-from-db.js');
 }
 
-main().then(() => process.exit(0)).catch((e) => { console.error('FATAL:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().then(() => process.exit(0)).catch((e) => { console.error('FATAL:', e.message); process.exit(1); });
+}
