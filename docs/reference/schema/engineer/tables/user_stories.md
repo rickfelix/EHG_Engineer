@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 12,805
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 16,543
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -37,11 +37,11 @@
 | technical_notes | `text` | YES | - | - |
 | implementation_approach | `text` | YES | - | - |
 | test_scenarios | `jsonb` | YES | `'[]'::jsonb` | - |
-| created_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | - |
+| created_at | `timestamp with time zone` | YES | `CURRENT_TIMESTAMP` | - |
 | created_by | `character varying(100)` | YES | `'SYSTEM'::character varying` | - |
-| updated_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | - |
+| updated_at | `timestamp with time zone` | YES | `CURRENT_TIMESTAMP` | - |
 | updated_by | `character varying(100)` | YES | - | - |
-| completed_at | `timestamp without time zone` | YES | - | - |
+| completed_at | `timestamp with time zone` | YES | - | - |
 | completed_by | `character varying(100)` | YES | - | - |
 | actual_points | `integer(32)` | YES | - | - |
 | time_spent_hours | `numeric(10,2)` | YES | - | - |

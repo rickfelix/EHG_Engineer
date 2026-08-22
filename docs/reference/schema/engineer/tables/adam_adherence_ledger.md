@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 339
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 2,964
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (8 total)
+## Columns (9 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -26,6 +26,7 @@
 | detail | `text` | YES | - | - |
 | remediation_ref | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| check_class | `text` | YES | - | What this verdict is a claim ABOUT: duty = the duty is wired (a presence check); conduct = behaviour complied (read live behaviour). NULL means the row predates classification and asserts NOTHING — it must never be read as duty. SD-LEO-INFRA-ROLE-SESSION-SELF-001 FR-2. |
 
 ## Constraints
 
@@ -33,6 +34,7 @@
 - `adam_adherence_ledger_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
+- `adam_adherence_ledger_check_class_check`: CHECK (((check_class IS NULL) OR (check_class = ANY (ARRAY['duty'::text, 'conduct'::text]))))
 - `adam_adherence_ledger_verdict_check`: CHECK ((verdict = ANY (ARRAY['pass'::text, 'fail'::text, 'unknown'::text])))
 
 ## Indexes
@@ -40,6 +42,10 @@
 - `adam_adherence_ledger_pkey`
   ```sql
   CREATE UNIQUE INDEX adam_adherence_ledger_pkey ON public.adam_adherence_ledger USING btree (id)
+  ```
+- `idx_adam_adherence_ledger_check_class`
+  ```sql
+  CREATE INDEX idx_adam_adherence_ledger_check_class ON public.adam_adherence_ledger USING btree (check_class, created_at DESC) WHERE (check_class IS NOT NULL)
   ```
 - `idx_adam_adherence_ledger_created`
   ```sql

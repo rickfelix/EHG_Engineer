@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 30,161
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 35,695
 **RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -33,9 +33,9 @@
 | completeness_report | `text` | YES | - | Element 7: Completeness assessment |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | rejection_reason | `text` | YES | - | - |
-| created_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | - |
-| accepted_at | `timestamp without time zone` | YES | - | - |
-| rejected_at | `timestamp without time zone` | YES | - | - |
+| created_at | `timestamp with time zone` | YES | `CURRENT_TIMESTAMP` | - |
+| accepted_at | `timestamp with time zone` | YES | - | - |
+| rejected_at | `timestamp with time zone` | YES | - | - |
 | created_by | `character varying(50)` | YES | `'LEO_AGENT'::character varying` | - |
 | template_id | `text` | YES | - | Optional handoff template reference for standardized handoffs. Allows handoff system to use predefined templates for consistency. |
 | validation_details | `jsonb` | YES | `'{}'::jsonb` | Detailed validation results from handoff verification including sub-agent outputs, gate checks, and quality metrics. |

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 46
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 58
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -58,11 +58,11 @@
 
 ## RLS Policies
 
-### 1. Chairman full access on kr_progress_snapshots (ALL)
+### 1. Chairman role access on kr_progress_snapshots (ALL)
 
 - **Roles**: {authenticated}
-- **Using**: `((auth.jwt() ->> 'email'::text) = 'rick@emeraldholdingsgroup.com'::text)`
-- **With Check**: `((auth.jwt() ->> 'email'::text) = 'rick@emeraldholdingsgroup.com'::text)`
+- **Using**: `is_chairman_role()`
+- **With Check**: `is_chairman_role()`
 
 ### 2. Service role bypass on kr_progress_snapshots (ALL)
 

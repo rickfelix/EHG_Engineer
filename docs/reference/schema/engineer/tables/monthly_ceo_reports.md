@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-08-22T17:33:48.904Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -64,11 +64,11 @@
 
 ## RLS Policies
 
-### 1. chairman_full_access_monthly_ceo_reports (ALL)
+### 1. Chairman role access on monthly_ceo_reports (ALL)
 
 - **Roles**: {authenticated}
-- **Using**: `((auth.jwt() ->> 'email'::text) = 'rick@emeraldholdingsgroup.com'::text)`
-- **With Check**: `((auth.jwt() ->> 'email'::text) = 'rick@emeraldholdingsgroup.com'::text)`
+- **Using**: `is_chairman_role()`
+- **With Check**: `is_chairman_role()`
 
 ### 2. service_role_all_monthly_ceo_reports (ALL)
 

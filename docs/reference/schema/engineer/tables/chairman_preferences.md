@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 1
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 3
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -34,7 +34,7 @@
 - `chairman_preferences_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `uq_chairman_pref_scope`: UNIQUE (chairman_id, venture_id, preference_key)
+- `uq_chairman_pref_scope`: UNIQUE NULLS NOT DISTINCT (chairman_id, venture_id, preference_key)
 
 ### Check Constraints
 - `chairman_preferences_value_type_check`: CHECK ((value_type = ANY (ARRAY['number'::text, 'string'::text, 'boolean'::text, 'object'::text, 'array'::text])))
@@ -55,7 +55,7 @@
   ```
 - `uq_chairman_pref_scope`
   ```sql
-  CREATE UNIQUE INDEX uq_chairman_pref_scope ON public.chairman_preferences USING btree (chairman_id, venture_id, preference_key)
+  CREATE UNIQUE INDEX uq_chairman_pref_scope ON public.chairman_preferences USING btree (chairman_id, venture_id, preference_key) NULLS NOT DISTINCT
   ```
 
 ## RLS Policies

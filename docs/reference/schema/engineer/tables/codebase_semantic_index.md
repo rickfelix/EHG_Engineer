@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 0
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 18,367
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -42,7 +42,7 @@
 
 ### Check Constraints
 - `codebase_semantic_index_application_check`: CHECK ((application = ANY (ARRAY['ehg'::text, 'ehg_engineer'::text])))
-- `codebase_semantic_index_entity_type_check`: CHECK ((entity_type = ANY (ARRAY['function'::text, 'class'::text, 'component'::text, 'interface'::text, 'type'::text, 'utility'::text, 'module'::text])))
+- `codebase_semantic_index_entity_type_check`: CHECK ((entity_type = ANY (ARRAY['function'::text, 'class'::text, 'component'::text, 'interface'::text, 'type'::text, 'utility'::text, 'module'::text, 'table'::text, 'view'::text])))
 - `codebase_semantic_index_language_check`: CHECK ((language = ANY (ARRAY['typescript'::text, 'javascript'::text, 'tsx'::text, 'jsx'::text, 'sql'::text, 'json'::text])))
 
 ## Indexes
