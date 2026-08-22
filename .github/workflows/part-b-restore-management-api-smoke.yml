@@ -29,6 +29,12 @@ jobs:
 
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # SEC-1 (EXEC-phase SECURITY sub-agent finding): never interpolate an untrusted
+      # workflow_dispatch input directly into a `run:` shell step -- GitHub expands ${{ }}
+      # textually before bash parses it, so a crafted input could break quoting and run
+      # arbitrary shell in a job with SUPABASE_ACCESS_TOKEN in its environment. Routing through
+      # an env var lets the shell treat it as an opaque, safely-quoted string instead.
+      PROJECT_REF: ${{ inputs.project_ref }}
 
     steps:
       - name: Checkout repository
@@ -44,4 +50,4 @@ jobs:
         run: npm ci
 
       - name: Run Management API smoke check (read-only GET only)
-        run: node scripts/one-off/smoke-check-management-api-execute-part-backup-001.mjs "${{ inputs.project_ref }}"
+        run: node scripts/one-off/smoke-check-management-api-execute-part-backup-001.mjs "$PROJECT_REF"
