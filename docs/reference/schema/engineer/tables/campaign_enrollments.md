@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 1
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 2
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (11 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -29,6 +29,7 @@
 | metadata | `jsonb` | **NO** | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| consent_event_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -36,6 +37,7 @@
 - `campaign_enrollments_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `campaign_enrollments_consent_event_id_fkey`: consent_event_id → venture_consent_events(id)
 - `campaign_enrollments_venture_id_fkey`: venture_id → ventures(id)
 
 ### Unique Constraints
@@ -81,6 +83,13 @@
 - **Using**: `(venture_id IN ( SELECT ventures.id
    FROM ventures
   WHERE ((auth.uid())::text = (ventures.created_by)::text)))`
+
+## Triggers
+
+### campaign_enrollments_requires_consent_trg
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION campaign_enrollments_requires_consent()`
 
 ---
 

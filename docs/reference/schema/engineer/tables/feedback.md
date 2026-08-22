@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-04T23:07:17.175Z
-**Rows**: 5,584
-**RLS**: Enabled (8 policies)
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 33,559
+**RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (64 total)
+## Columns (65 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -82,6 +82,7 @@
 | promoted_at | `timestamp with time zone` | YES | - | Timestamp when triage CLI promoted this finding to an SD. Set together with promoted_to_sd_id. |
 | promoted_by | `text` | YES | - | session_id of the operator who ran corrective-triage promote. Audit trail. |
 | provenance_source | `text` | YES | - | AI-provenance source per Pocock pattern. Format: agent:SEAT:ROUND_ID | human:USER_ID. NULL = legacy / human-authored. Phase-1 permissive (no CHECK). SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-F. |
+| archived_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-6: set by the age-out job for category='informational_note' rows untouched 30+ days. NULL means active/not archived. Archive-not-delete: the row is never removed, only marked. |
 
 ## Constraints
 
@@ -112,10 +113,10 @@ END)
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
 - `feedback_auto_correction_status_check`: CHECK ((auto_correction_status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'resolved'::text, 'failed'::text])))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
-- `feedback_feedback_type_check`: CHECK (((feedback_type)::text = ANY ((ARRAY['sentry_error'::character varying, 'user_bug'::character varying, 'user_feature_request'::character varying, 'user_usability'::character varying, 'user_other'::character varying, 'venture_error'::character varying])::text[])))
+- `feedback_feedback_type_check`: CHECK (((feedback_type)::text = ANY ((ARRAY['sentry_error'::character varying, 'user_bug'::character varying, 'user_feature_request'::character varying, 'user_usability'::character varying, 'user_other'::character varying, 'venture_error'::character varying, 'venture_feedback'::character varying])::text[])))
 - `feedback_rubric_score_check`: CHECK (((rubric_score >= 0) AND (rubric_score <= 100)))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
-- `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying, 'todoist_intake'::character varying, 'youtube_intake'::character varying, 'claude_code_intake'::character varying, 'telegram'::character varying, 'user_feedback'::character varying])::text[])))
+- `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying, 'todoist_intake'::character varying, 'youtube_intake'::character varying, 'claude_code_intake'::character varying, 'telegram'::character varying, 'user_feedback'::character varying, 'venture_worker'::character varying])::text[])))
 - `feedback_status_check`: CHECK (((status)::text = ANY (ARRAY[('new'::character varying)::text, ('triaged'::character varying)::text, ('in_progress'::character varying)::text, ('resolved'::character varying)::text, ('wont_fix'::character varying)::text, ('duplicate'::character varying)::text, ('invalid'::character varying)::text, ('backlog'::character varying)::text, ('shipped'::character varying)::text])))
 - `feedback_type_check`: CHECK (((type)::text = ANY ((ARRAY['issue'::character varying, 'enhancement'::character varying])::text[])))
 - `feedback_value_estimate_check`: CHECK (((value_estimate)::text = ANY ((ARRAY['high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
@@ -138,6 +139,10 @@ END)
   ```sql
   CREATE INDEX idx_feedback_category_status ON public.feedback USING btree (category, status) WHERE ((category)::text = ANY ((ARRAY['corrective_finding'::character varying, 'harness_backlog'::character varying])::text[]))
   ```
+- `idx_feedback_chairman_override_dedup`
+  ```sql
+  CREATE UNIQUE INDEX idx_feedback_chairman_override_dedup ON public.feedback USING btree (category, source_type, ((metadata ->> 'override_key'::text))) WHERE (((category)::text = 'chairman_override'::text) AND ((source_type)::text = 'auto_capture'::text))
+  ```
 - `idx_feedback_clustering`
   ```sql
   CREATE INDEX idx_feedback_clustering ON public.feedback USING btree (error_hash, created_at DESC) WHERE (((status)::text = ANY ((ARRAY['new'::character varying, 'triaged'::character varying])::text[])) AND (cluster_processed_at IS NULL))
@@ -153,6 +158,10 @@ END)
 - `idx_feedback_enhancements`
   ```sql
   CREATE INDEX idx_feedback_enhancements ON public.feedback USING btree (created_at DESC) WHERE ((type)::text = 'enhancement'::text)
+  ```
+- `idx_feedback_error_capture_hash`
+  ```sql
+  CREATE UNIQUE INDEX idx_feedback_error_capture_hash ON public.feedback USING btree (error_hash) WHERE (((source_type)::text = 'error_capture'::text) AND ((feedback_type)::text = 'sentry_error'::text) AND (venture_id IS NULL))
   ```
 - `idx_feedback_error_hash`
   ```sql
@@ -214,6 +223,10 @@ END)
   ```sql
   CREATE INDEX idx_feedback_strategic_directive_id ON public.feedback USING btree (strategic_directive_id) WHERE (strategic_directive_id IS NOT NULL)
   ```
+- `idx_feedback_telemetry_dedup`
+  ```sql
+  CREATE UNIQUE INDEX idx_feedback_telemetry_dedup ON public.feedback USING btree (category, ((metadata ->> 'dedup_hash'::text))) WHERE ((category)::text = 'fleet_dormancy'::text)
+  ```
 - `idx_feedback_value`
   ```sql
   CREATE INDEX idx_feedback_value ON public.feedback USING btree (value_estimate) WHERE ((type)::text = 'enhancement'::text)
@@ -237,25 +250,30 @@ END)
 
 ## RLS Policies
 
-### 1. delete_feedback_policy (DELETE)
+### 1. anon_feedback_ingress_bounds (INSERT)
+
+- **Roles**: {public}
+- **With Check**: `(((severity IS NULL) OR ((severity)::text <> ALL (ARRAY[('critical'::character varying)::text, ('high'::character varying)::text]))) AND ((category)::text IS DISTINCT FROM 'chairman_decision_deferred'::text) AND (fn_anon_ingress_prior_hour_count((source_type)::text) <
+CASE (source_type)::text
+    WHEN 'auto_capture'::text THEN 250
+    WHEN 'manual_feedback'::text THEN 200
+    ELSE 50
+END))`
+
+### 2. delete_feedback_policy (DELETE)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 
-### 2. insert_feedback_policy (INSERT)
+### 3. insert_feedback_policy (INSERT)
 
 - **Roles**: {service_role}
 - **With Check**: `true`
 
-### 3. select_feedback_policy (SELECT)
+### 4. select_feedback_policy (SELECT)
 
 - **Roles**: {authenticated}
-- **Using**: `true`
-
-### 4. telegram_bot_insert_feedback (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `((source_type)::text = 'telegram'::text)`
+- **Using**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND fn_user_has_venture_access(venture_id))`
 
 ### 5. telegram_bot_select_feedback (SELECT)
 
@@ -266,16 +284,6 @@ END)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-
-### 7. venture_user_insert_feedback (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND venture_exists_and_active(venture_id) AND (NOT check_feedback_rate_limit(venture_id)))`
-
-### 8. venture_user_select_feedback (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL))`
 
 ## Triggers
 

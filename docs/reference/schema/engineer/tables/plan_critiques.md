@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 193
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 257
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,8 @@
 | model_used | `text` | YES | - | - |
 | token_usage | `jsonb` | YES | - | LLM token usage for cost tracking: {input_tokens, output_tokens} |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| metadata | `jsonb` | YES | - | Gate-run metadata. llm_result: {findings,overall_severity} (RAW pre-merge LLM output, read by the FR-4 cache — never the combined top-level columns). truncated: {prd,arch,shownPrd,totalPrd,shownArch,totalArch}. cache_hit/cache_source_id: set when this row reused a prior LLM call. |
+| content_hash | `text` | YES | - | SHA-256 of the FULL, pre-truncation PRD+arch content (not the truncated text sent to the LLM), plus adapter.defaultModel + archLoadStatus + the MAX_CRITIQUE_ANALYSIS_CHARS/SECTION_BUDGETS constants. |
 
 ## Constraints
 
@@ -39,7 +41,7 @@
 - `plan_critiques_sd_id_fkey`: sd_id → strategic_directives_v2(id)
 
 ### Check Constraints
-- `plan_critiques_overall_severity_check`: CHECK ((overall_severity = ANY (ARRAY['block'::text, 'warn'::text, 'note'::text, 'pass'::text])))
+- `plan_critiques_overall_severity_check`: CHECK ((overall_severity = ANY (ARRAY['block'::text, 'warn'::text, 'note'::text, 'pass'::text, 'could_not_check'::text])))
 
 ## Indexes
 

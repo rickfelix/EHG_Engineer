@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 582
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 1,591
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (38 total)
+## Columns (50 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,9 +41,9 @@
 | uat_verified | `boolean` | YES | `false` | User confirmed fix works during manual testing |
 | verified_by | `text` | YES | - | - |
 | verification_notes | `text` | YES | - | - |
-| created_at | `timestamp without time zone` | YES | `now()` | - |
-| started_at | `timestamp without time zone` | YES | - | - |
-| completed_at | `timestamp without time zone` | YES | - | - |
+| created_at | `timestamp with time zone` | YES | `now()` | - |
+| started_at | `timestamp with time zone` | YES | - | - |
+| completed_at | `timestamp with time zone` | YES | - | - |
 | created_by | `text` | YES | `'UAT_AGENT'::text` | - |
 | target_application | `text` | YES | - | Target repository: EHG (main app) or EHG_Engineer (infrastructure). Used by complete-quick-fix.js to run tests in correct directory. |
 | compliance_score | `integer(32)` | YES | - | Self-scoring rubric result (0-100 scale). PASS: ≥90, WARN: 70-89, FAIL: <70 |
@@ -56,6 +56,30 @@
 | actual_test_loc | `integer(32)` | YES | - | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: test-file lines changed (matched by .test./.spec./__tests__/tests/e2e/playwright path patterns). Excluded from cap. |
 | force_completed | `boolean` | **NO** | `false` | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: --force-complete CLI flag set this to true. Operator-supplied --reason recorded in verification_notes JSON. |
 | resolution_sd_id | `text` | YES | - | SD that resolved/superseded this QF. When that SD completes, trg_auto_close_quick_fixes_on_sd_completion cancels this QF. Populated operator-confirmed via the FR-3 close-the-loop prompt (SD-LEO-INFRA-AUTO-CLOSE-QUICK-001). |
+| not_before | `timestamp with time zone` | YES | - | Durable time-gated defer: when set, the quick-fix is not eligible for claim
+   until NOW() >= not_before. NULL (default) means no defer / immediately
+   eligible. Added an additional WHERE predicate (e.g. not_before IS NULL OR
+   not_before <= NOW()) to claim queries; not an ORDER BY key, so no index. |
+| reason | `text` | YES | - | Hold-state contract stamp (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001): why this QF was deferred. NULL for QFs deferred before this column existed, or while HOLD_STATE_CONTRACT_MODE=observe let an incomplete stamp proceed. |
+| owner | `text` | YES | - | Hold-state contract stamp: who is accountable for reviewing/releasing this defer. |
+| release_condition | `text` | YES | - | Hold-state contract stamp: the condition under which this defer should be released, distinct from the time-based not_before. |
+| runtime_observation | `jsonb` | YES | - | SD-LEO-INFRA-COMPLETION-EVIDENCE-RUNTIME-001 FR-1. One timestamped observation of the RUNNING system at close time (probe/render/log line/status code) — NOT a merge SHA; commit_sha and pr_url already witness that code landed. Shape: {observed_at, method, observation, declared_by}. Trigger is worker-declared, so NULL means "nobody declared one", never "not applicable". |
+| disposition | `text` | YES | - | Structured sweep verdict (scripts/coordinator-stale-qf-disposition-sweep.mjs). NULL = never
+   swept. See CHECK constraint for the 5 possible values and their paired status transition. |
+| disposition_reason_code | `text` | YES | - | Machine-checkable evidence code, e.g. test_passing:<path>, file_absent:<path>. Populated for
+   every premise_resolved row; NULL is invalid for that disposition (see sweep unit tests). |
+| disposed_at | `timestamp with time zone` | YES | - | Timestamp the sweep last wrote a disposition to this row. |
+| disposed_by | `text` | YES | - | Actor that wrote the disposition, e.g. coordinator-stale-qf-disposition-sweep. Not a session
+   or chairman identity -- an automated-actor label for audit trail. |
+| verified_at | `timestamp with time zone` | YES | - | Timestamp the premise was last machine-confirmed still-present (re_verified/promoted) or
+   resolved. Read by lib/fleet/qf-auto-start.cjs isAutoStartableQF() as an alternate, more-recent
+   staleness-clock source alongside created_at (whichever is more recent wins). |
+| duplicate_of_id | `text` | YES | - | FK to the surviving quick_fixes.id this row was closed as a near-duplicate of. TEXT, not
+   uuid -- quick_fixes.id is a TEXT QF-YYYYMMDD-NNN identifier, not a uuid (LEAD-phase
+   correction to the original proposal, which specified uuid and would not have applied). |
+| factory_lane | `boolean` | **NO** | `false` | Structured marker: TRUE means this quick-fix is coordinator-dispatch-only
+   (e.g. routes through the venture machine) and must be excluded from worker
+   self-claim (scripts/worker-checkin.cjs isAutoStartableQF()). Default false. |
 
 ## Constraints
 
@@ -63,6 +87,7 @@
 - `quick_fixes_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `quick_fixes_duplicate_of_id_fkey`: duplicate_of_id → quick_fixes(id)
 - `quick_fixes_escalated_to_sd_id_fkey`: escalated_to_sd_id → strategic_directives_v2(id)
 - `quick_fixes_resolution_sd_id_fkey`: resolution_sd_id → strategic_directives_v2(id)
 - `quick_fixes_routing_threshold_id_fkey`: routing_threshold_id → work_item_thresholds(id)
@@ -74,10 +99,10 @@
 - `loc_reasonable`: CHECK (((estimated_loc IS NULL) OR (estimated_loc <= 200)))
 - `quick_fixes_compliance_score_check`: CHECK (((compliance_score >= 0) AND (compliance_score <= 100)))
 - `quick_fixes_compliance_verdict_check`: CHECK ((compliance_verdict = ANY (ARRAY['PASS'::text, 'WARN'::text, 'FAIL'::text])))
+- `quick_fixes_disposition_check`: CHECK ((disposition = ANY (ARRAY['premise_resolved'::text, 'premise_unverified_stale'::text, 'duplicate_of'::text, 're_verified'::text, 'promoted'::text])))
 - `quick_fixes_found_during_check`: CHECK ((found_during = ANY (ARRAY['uat'::text, 'manual-testing'::text, 'code-review'::text])))
 - `quick_fixes_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
 - `quick_fixes_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'completed'::text, 'escalated'::text, 'cancelled'::text, 'closed'::text])))
-- `quick_fixes_target_application_check`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
 - `quick_fixes_type_check`: CHECK ((type = ANY (ARRAY['bug'::text, 'polish'::text, 'typo'::text, 'documentation'::text])))
 
 ## Indexes
@@ -133,10 +158,25 @@
 
 ## Triggers
 
+### qf_status_restamp_remainder
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_restamp_items_on_qf_status_change()`
+
 ### trg_auto_close_feedback_on_qf_completion
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_auto_close_feedback_on_qf_completion()`
+
+### trg_quick_fixes_validate_target_application
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION fn_quick_fixes_validate_target_application()`
+
+### trg_quick_fixes_validate_target_application
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_quick_fixes_validate_target_application()`
 
 ---
 

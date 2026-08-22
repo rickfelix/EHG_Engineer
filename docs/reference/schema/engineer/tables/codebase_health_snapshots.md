@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 1,137
-**RLS**: Enabled (2 policies)
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 5,568
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -69,6 +69,11 @@
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 3. trend_eyes_receipt_service_role_only (SELECT)
+
+- **Roles**: {anon,authenticated}
+- **Using**: `(dimension IS DISTINCT FROM 'trend_eyes_sweep_receipt'::text)`
 
 ---
 

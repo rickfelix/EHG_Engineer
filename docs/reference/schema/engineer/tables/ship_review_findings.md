@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 77
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 503
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,7 @@
 | reviewed_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | synthesized_at | `timestamp with time zone` | YES | - | Set when row was inserted by post-hoc reconciliation (e.g., scripts/audit-phantom-completions.js for SD-MAN-INFRA-RECONCILE-S18-S26-001). NULL for real-time-logged rows from /ship Step 5.5. |
+| metadata | `jsonb` | YES | - | SD-LEO-INFRA-SHIP-WITNESS-TRIO-001 FR-2: optional actor attribution ({actor_type, actor_role, agent_id}, reusing the system_events vocabulary) so evaluateP2Witness() can evaluate reviewer/author separation instead of permanently reporting not_evaluable. NULL means no attribution captured for this row (backward-compatible default -- P2 stays not_evaluable for it). |
 
 ## Constraints
 

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-08-22T17:33:48.904Z
 **Rows**: 217
 **RLS**: Enabled (3 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (24 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -42,6 +42,7 @@
 | depends_on | `jsonb` | YES | `'[]'::jsonb` | Array of capability_keys this capability depends on |
 | depended_by | `jsonb` | YES | `'[]'::jsonb` | Array of capability_keys that depend on this capability |
 | taxonomy_domain | `text` | YES | - | - |
+| scope | `text` | YES | - | SD-LEO-INFRA-UNBLOCK-PORTFOLIO-WIDE-001: portfolio-scope dimension for a capability (e.g., venture | portfolio | platform). Nullable; distinct from category/taxonomy_domain. Dormant until portfolio-scope reasoning is wired. |
 
 ## Constraints
 

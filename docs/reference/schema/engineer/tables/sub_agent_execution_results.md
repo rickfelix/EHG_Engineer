@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 34,249
+**Generated**: 2026-08-22T17:33:48.904Z
+**Rows**: 24,618
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -158,11 +158,6 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION strip_nested_findings_from_metadata()`
-
-### trg_complete_deliverables_on_github_pass
-
-- **Timing**: AFTER INSERT
-- **Action**: `EXECUTE FUNCTION complete_deliverables_on_github_pass()`
 
 ### trg_subagent_evidence_reject_control_chars
 
