@@ -20,7 +20,7 @@ describe('FR-1 AC5: direct CommonJS require() of the new governance module', () 
   it('exposes NON_CODE_FIXABLE_CATEGORIES and filterIssuesExcludingNonCodeFixable via require(), not only via the assist-engine.js re-export', () => {
     const direct = require('../../lib/governance/non-code-fixable-categories.cjs');
     expect(direct.NON_CODE_FIXABLE_CATEGORIES).toBeInstanceOf(Set);
-    expect(direct.NON_CODE_FIXABLE_CATEGORIES.size).toBe(14);
+    expect(direct.NON_CODE_FIXABLE_CATEGORIES.size).toBe(16);
     expect(typeof direct.filterIssuesExcludingNonCodeFixable).toBe('function');
     // Same module.exports shape as the precedent (module.exports = { CONSTANT, function }).
     expect(Object.keys(direct).sort()).toEqual(['NON_CODE_FIXABLE_CATEGORIES', 'filterIssuesExcludingNonCodeFixable'].sort());
@@ -86,16 +86,19 @@ const ALL_CATEGORIES = [
   'chairman_decision_capture',
   'solomon_adherence_drift',
   'g2_apply_evidence',
+  // QF-20260822-307: category taxonomy drift additions
+  'corrective_finding',
+  'solomon_trend_candidate',
 ];
 
 // ── T1-T3, T5-T7: pure-function tests on filterIssuesExcludingNonCodeFixable ──
 
 describe('T1: per-category mutation-resistant exclusion', () => {
-  it('excludes one issue-type row per each of the 14 categories', () => {
+  it('excludes one issue-type row per each of the 16 categories', () => {
     const enriched = ALL_CATEGORIES.map((category, i) => row({ id: `n${i}`, category }));
     const { issues, skippedNonCodeFixable } = filterIssuesExcludingNonCodeFixable(enriched);
     expect(issues).toEqual([]);
-    expect(skippedNonCodeFixable).toBe(14);
+    expect(skippedNonCodeFixable).toBe(16);
   });
 });
 
@@ -109,8 +112,8 @@ describe('T2: control pass-through for non-excluded categories', () => {
 });
 
 describe('T3: set-size/contents pin', () => {
-  it('NON_CODE_FIXABLE_CATEGORIES has exactly the 14 expected members', () => {
-    expect(NON_CODE_FIXABLE_CATEGORIES.size).toBe(14);
+  it('NON_CODE_FIXABLE_CATEGORIES has exactly the 16 expected members', () => {
+    expect(NON_CODE_FIXABLE_CATEGORIES.size).toBe(16);
     for (const c of ALL_CATEGORIES) expect(NON_CODE_FIXABLE_CATEGORIES.has(c)).toBe(true);
   });
 });
@@ -216,6 +219,26 @@ describe('T4/T8: real chained pipeline (loadInboxItems)', () => {
     expect(ids).not.toContain('cdc-1');
     expect(ids).not.toContain('sad-1');
     expect(ids).not.toContain('g2-1');
+    expect(ids).toEqual(['ci-1']);
+  });
+
+  it('T10 (QF-20260822-307 regression): excludes the 4 live-measured corrective_finding/solomon_trend_candidate specimens through the real pipeline; ci_failure survives', async () => {
+    currentFixture = [
+      row({ id: 'cf-vision-1', category: 'corrective_finding' }), // "Corrective: Vision Gap — ... (score 75/100)"
+      row({ id: 'cf-arch-1', category: 'corrective_finding' }), // "Corrective: Architecture Gap — ... (score 79/100)"
+      row({ id: 'trend-1', category: 'solomon_trend_candidate' }), // "Trend candidate: t1_repeat_question"
+      row({ id: 'trend-2', category: 'solomon_trend_candidate' }), // "Trend candidate: t1_repeat_question" (dupe)
+      row({ id: 'ci-1', category: 'ci_failure' }),
+    ];
+    const engine = new AssistEngine({ dryRun: true });
+    const { issues } = await engine.loadInboxItems();
+    const ids = issues.map((i) => i.id);
+
+    expect(ids).toContain('ci-1');
+    expect(ids).not.toContain('cf-vision-1');
+    expect(ids).not.toContain('cf-arch-1');
+    expect(ids).not.toContain('trend-1');
+    expect(ids).not.toContain('trend-2');
     expect(ids).toEqual(['ci-1']);
   });
 
