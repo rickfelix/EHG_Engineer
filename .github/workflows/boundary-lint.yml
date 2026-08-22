@@ -30,6 +30,7 @@ jobs:
             exit 1;
           fi
       - name: Ensure venture migrations stay in vh namespace
+        shell: bash
         run: |
           set -eo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
