@@ -51,6 +51,14 @@ describe('require-main-guard-in-one-off', () => {
     it('bare top-level await main()', () => {
       expect(violations('function main() {}\nawait main();')).toBe(1);
     });
+
+    it('main().then(...).catch(...) chained -- a chain LONGER than one link', () => {
+      expect(violations('function main() {}\nmain().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });')).toBe(1);
+    });
+
+    it('top-level `const data = await main();` -- a VariableDeclaration, not an ExpressionStatement', () => {
+      expect(violations('async function main() { return 1; }\nconst data = await main();')).toBe(1);
+    });
   });
 
   describe('does NOT flag a file with a recognized guard', () => {
