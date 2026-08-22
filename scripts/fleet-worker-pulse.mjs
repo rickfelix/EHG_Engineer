@@ -33,7 +33,7 @@ const RETENTION_HOURS = parseInt(process.env.FLEET_PULSE_RETENTION_HOURS || '6',
  */
 export const PULSE_SESSION_COLUMNS = [
   'session_id', 'heartbeat_at', 'sd_key', 'status', 'claimed_at',
-  'worktree_path', 'continuous_sds_completed', 'metadata',
+  'worktree_path', 'continuous_sds_completed', 'released_at', 'metadata',
   ...FREEZE_TERM_COLUMNS
 ].join(',');
 

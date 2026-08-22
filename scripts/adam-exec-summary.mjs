@@ -162,7 +162,7 @@ const fetchPulses = async (hours) => {
 const computeLive = async () => {
   try {
     const { data: sessRaw, error: sErr } = await db.from('claude_sessions')
-      .select(['session_id', 'heartbeat_at', 'sd_key', 'status', 'claimed_at', 'worktree_path', 'continuous_sds_completed', 'metadata', ...FREEZE_TERM_COLUMNS].join(','))
+      .select(['session_id', 'heartbeat_at', 'sd_key', 'status', 'claimed_at', 'worktree_path', 'continuous_sds_completed', 'released_at', 'metadata', ...FREEZE_TERM_COLUMNS].join(','))
       .order('heartbeat_at', { ascending: false }).limit(60);
     if (sErr) throw sErr;
     const live = liveFleetWorkers(sessRaw, me, t);

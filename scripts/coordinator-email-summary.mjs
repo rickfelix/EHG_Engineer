@@ -68,7 +68,7 @@ const workable = workableKeys.length;
 //    Do NOT generalize this into "sd_key always wins": ownership questions (who may release the SD)
 //    still read SDv2. The workaround noted here was correct but had never been propagated to the
 //    dispatch path, which is why coordination-inbox.cjs could advertise a busy SD (FR-4). ──
-const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,claimed_at,worktree_path,continuous_sds_completed,metadata').order('heartbeat_at', { ascending: false }).limit(60);
+const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,claimed_at,worktree_path,continuous_sds_completed,released_at,metadata').order('heartbeat_at', { ascending: false }).limit(60);
 // QF-20260607-608: identify a GENUINE worker the same way fleet-dashboard.cjs does, so the email
 // and the dashboard never disagree (the email was showing "9 workers" vs the dashboard's ~6 because
 // it counted every session heartbeating <15m regardless of status or whether it ever claimed):

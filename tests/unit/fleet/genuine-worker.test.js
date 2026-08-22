@@ -30,6 +30,21 @@ describe('everClaimed (ghost-filter)', () => {
   it('false when the session never held a claim (a ghost)', () => {
     expect(everClaimed({ sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 0 })).toBe(false);
   });
+  // QF-20260728-930: a worker that completes an SD and cleanly releases has sd_key,
+  // claimed_at, and worktree_path all NULLed and continuous_sds_completed unreliable —
+  // this is the exact moment a genuine worker was previously misclassified as a ghost.
+  it('true for a released-but-not-reclaimed worker (released_at survives release)', () => {
+    expect(everClaimed({
+      sd_key: null, claimed_at: null, worktree_path: null,
+      continuous_sds_completed: 0, released_at: '2026-08-22T12:00:00Z',
+    })).toBe(true);
+  });
+  it('still false for a true never-claimed ghost even with released_at absent', () => {
+    expect(everClaimed({
+      sd_key: null, claimed_at: null, worktree_path: null,
+      continuous_sds_completed: 0, released_at: null,
+    })).toBe(false);
+  });
 });
 
 describe('isFleetWorker', () => {
@@ -38,6 +53,12 @@ describe('isFleetWorker', () => {
   });
   it('accepts a genuine idle worker that ever claimed (no current sd_key)', () => {
     expect(isFleetWorker(worker({ session_id: 'w2', sd_key: null, status: 'idle', continuous_sds_completed: 3 }), ME)).toBe(true);
+  });
+  it('accepts an idle worker that just completed and cleanly released (QF-20260728-930 live witness shape)', () => {
+    expect(isFleetWorker(worker({
+      session_id: 'w3', sd_key: null, status: 'idle',
+      continuous_sds_completed: 0, released_at: fresh(),
+    }), ME)).toBe(true);
   });
   it('excludes the coordinator itself', () => {
     expect(isFleetWorker(worker({ session_id: ME }), ME)).toBe(false);
