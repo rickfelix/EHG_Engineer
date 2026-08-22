@@ -393,11 +393,15 @@ async function drainReplies(supabase, sessionId, { background = false, windowMs 
   // acknowledged_at IS NULL (never read_at IS NULL) — a reply a background/legacy pass
   // stamped read_at on stays surfaced until genuinely actioned. Window-scoped as a
   // backlog guard (default 7d); older unacked rows are counted loudly, never silent.
+  // QF-20260822-133 (mirrors solomon-advisory PR #6170): also read the 'broadcast-adam'
+  // sentinel lane. adam-advisory's own resolveAdamAdvisoryTarget falls back to that
+  // sentinel exactly when Adam's identity is transiently unresolvable, and no Adam-side
+  // consumer read those rows at all — a 32-row dead-drop witnessed 2026-08-22.
   const cutoffIso = new Date(Date.now() - windowMs).toISOString();
   const { data: allRows, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, subject, body, payload, created_at, read_at')
-    .eq('target_session', sessionId)
+    .in('target_session', [sessionId, 'broadcast-adam'])
     .is('acknowledged_at', null)
     .gte('created_at', cutoffIso)
     .order('created_at', { ascending: true })
@@ -475,7 +479,10 @@ async function ackRows(supabase, ids, { expectedTarget = null } = {}) {
       .update({ acknowledged_at: now })
       .eq('id', id)
       .is('acknowledged_at', null);
-    if (expectedTarget) q = q.eq('target_session', expectedTarget);
+    // QF-20260822-133 (mirrors solomon-advisory PR #6170): drainInbox/drainReplies now also
+    // surface the 'broadcast-adam' sentinel lane, so the ownership scope must admit those
+    // rows too or a surfaced fallback row could never be acked.
+    if (expectedTarget) q = q.in('target_session', [expectedTarget, 'broadcast-adam']);
     const { data, error } = await q.select('id, read_at, payload, body');
     if (error) { console.error(`ERROR: ack failed for ${id}: ${error.message}`); continue; }
     if (data && data.length > 0) {
@@ -588,13 +595,15 @@ async function renderChairmanDirectives(supabase, role, { quiet = false } = {}) 
  * payload.kind in the imported DIRECTIVE_KINDS allowlist) targeting the Adam session were never
  * drained by the recurring inbox-monitor tick.
  *
- * This drains BOTH lanes for THIS Adam session. It fetches this session's UNREAD rows with AND-ONLY
- * server filters (target_session + read_at IS NULL) — NEVER a payload->>kind .or()/.in() (the
+ * This drains BOTH lanes for THIS Adam session (plus the 'broadcast-adam' fallback sentinel,
+ * QF-20260822-133). It fetches those UNREAD rows with AND-ONLY server filters (target_session
+ * IN [session, sentinel] + read_at IS NULL) — NEVER a payload->>kind .or()/.in() (the
  * ambiguous-PostgREST trap PR #4770 hit) — and classifies the lane IN JS:
  *   reply lane     = isReplyRow(r)            (coordinator_reply OR a payload.reply_to correlation)
  *   directive lane = isDirectiveRow(r)        (payload.kind in the IMPORTED DIRECTIVE_KINDS)
- * Lane separation is GUARANTEED by the AND-only target_session scope (every returned row is THIS
- * session's). Surfaced rows are stamped read_at = DELIVERED. acknowledged_at / payload.actioned_at
+ * Lane separation is GUARANTEED by the AND-only target_session scope (every returned row is
+ * addressed to THIS session or its sentinel, never a foreign one). Surfaced rows are stamped
+ * read_at = DELIVERED. acknowledged_at / payload.actioned_at
  * are WITHHELD (two-stage ACK, mirroring classifyInboxMessage's {markRead:true, markAck:false}) so a
  * DELIVERED-but-unacked directive stays recoverable via scripts/read-adam-directives.cjs (the
  * acknowledged_at IS NULL tier) until Adam genuinely acts.
@@ -662,11 +671,13 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
   // until actioned (the read-stamped-not-processed class, chairman-caught 2026-07-10, is
   // structurally unreachable). Window-scoped (default 7d) as a backlog guard; older
   // unacked rows are COUNTED below, never silently invisible.
+  // QF-20260822-133 (mirrors solomon-advisory PR #6170): also read the 'broadcast-adam'
+  // sentinel lane — Adam is the intended consumer of its own fallback sentinel.
   const cutoffIso = new Date(Date.now() - windowMs).toISOString();
   const { data: allRows, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at, read_at')
-    .eq('target_session', sessionId)
+    .in('target_session', [sessionId, 'broadcast-adam'])
     .is('acknowledged_at', null)
     .gte('created_at', cutoffIso)
     .order('created_at', { ascending: true })
@@ -686,7 +697,7 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     const { count: olderCount } = await supabase
       .from('session_coordination')
       .select('id', { count: 'exact', head: true })
-      .eq('target_session', sessionId)
+      .in('target_session', [sessionId, 'broadcast-adam'])
       .is('acknowledged_at', null)
       .lt('created_at', cutoffIso);
     if (olderCount > 0) {

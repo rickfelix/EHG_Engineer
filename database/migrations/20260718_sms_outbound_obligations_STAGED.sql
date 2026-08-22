@@ -1,3 +1,21 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- CORRECTED NOTICE (SD-LEO-FIX-SMS-OUTBOUND-WORKER-002, escalated from QF-20260728-870, FR-4):
+-- THE TABLE THIS FILE CREATES IS ALREADY LIVE. It was applied via the sibling file
+-- 20260718_sms_outbound_obligations_APPROVED.sql (sha256-matched in schema_migrations_applied,
+-- applied_at 2026-07-19T13:39:00Z) — NOT this file. This file's body was edited AFTER that apply
+-- to describe an 'owed_escalate' status value and a prior_provider_message_ids column that were
+-- never actually applied; that drift between "what this file describes" and "what is live" is
+-- the bug SD-LEO-FIX-SMS-OUTBOUND-WORKER-002 exists to fix.
+--
+-- DO NOT APPLY THIS FILE to close that gap — CREATE TABLE IF NOT EXISTS is a silent no-op
+-- against a table that already exists, so running this file today would leave you believing
+-- owed_escalate/prior_provider_message_ids were applied when nothing changed. The real,
+-- narrowly-scoped fix is a dedicated ALTER migration:
+--   database/chairman-gated/20260822_sms_outbound_obligations_owed_escalate_column_drift.sql
+-- Apply THAT file instead. This file remains here only as the (now-inaccurate-for-apply-purposes)
+-- historical record of the originally-proposed full CREATE TABLE shape.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+
 -- SMS outbound obligations — durable owed-state substrate for the chairman outbound SMS channel.
 -- SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-B (FR-1). Closes FAILURE F1: today a Twilio 201
 -- POST-accept is treated as SUCCESS and the send runs fire-and-forget in whatever session

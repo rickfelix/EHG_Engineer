@@ -50,10 +50,11 @@ describe('isAdamInboxRow predicate', () => {
 // advisory older-rows head-count (terminal .lt), and records the UPDATE payload so the stamp
 // matrix (read_at interactive / delivered_at background / acknowledged_at never) is pinned.
 function stub(rows) {
-  const captured = { eq: {}, isNull: [], updatedIds: null, usedOr: false, updatePayloads: [] };
+  const captured = { eq: {}, in: {}, isNull: [], updatedIds: null, usedOr: false, updatePayloads: [] };
   const selectChain = {
     select() { return selectChain; },
     eq(col, val) { captured.eq[col] = val; return selectChain; },
+    in(col, val) { captured.in[col] = val; return selectChain; },
     or() { captured.usedOr = true; return selectChain; },
     is(col) { captured.isNull.push(col); return selectChain; },
     gte() { return selectChain; },
@@ -92,7 +93,8 @@ describe('drainInbox (all-classes drain)', () => {
     ];
     const { supabase, captured } = stub(rows);
     await drainInbox(supabase, 'adam-session');
-    expect(captured.eq.target_session).toBe('adam-session');
+    // QF-20260822-133: scope widened to also read the 'broadcast-adam' fallback sentinel.
+    expect(captured.in.target_session).toEqual(['adam-session', 'broadcast-adam']);
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): the recoverable filter is
     // acknowledged_at IS NULL — read_at is a stamp, never a server filter, so a
     // read-stamped-but-unactioned row can never be hidden.

@@ -1172,3 +1172,270 @@ describe('no session-local timers (FR-3 durability)', () => {
     expect(src).not.toMatch(/\bset(?:Timeout|Interval)\s*\(/);
   });
 });
+
+// =======================================================================================
+// SD-LEO-FIX-SMS-OUTBOUND-WORKER-002 — all 7 terminalizing UPDATE sites check their result:
+// warn on a genuine error, silently absorb a legitimate zero-rows lost race. Mirrors the
+// TR-5/SEC-3 injection idiom already established above for voidStaleAndCollapseObligations.
+// =======================================================================================
+// Overrides the UPDATE path for exactly one target status value, matching the TR-5/SEC-3
+// pattern above but parametrized so it's reusable across this SD's 7 sites.
+function withUpdateResultOverride(sb, targetStatus, overrideResult) {
+  const realFrom = sb.from.bind(sb);
+  sb.from = (table) => {
+    const api = realFrom(table);
+    if (table !== 'sms_outbound_obligations') return api;
+    const realUpdate = api.update.bind(api);
+    api.update = (vals) => {
+      if (vals && vals.status === targetStatus) {
+        // Chainable stub supporting any combination/order of .eq()/.in()/.is() before
+        // terminating in .select()/awaiting directly -- the real sites in this file use
+        // different chain shapes (.eq().eq(), .eq().in()), so this must not hardcode one shape.
+        const thenable = { then: (resolve) => resolve(overrideResult) };
+        const chain = { eq: () => chain, in: () => chain, is: () => chain, select: () => thenable, then: thenable.then };
+        return chain;
+      }
+      return realUpdate(vals);
+    };
+    return api;
+  };
+  return sb;
+}
+
+describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002: escalate() write-result checking', () => {
+  it('TS-1: a genuine error on the owed_escalate write (e.g. the live CHECK constraint rejecting the value) is logged loudly, not silently discarded', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-escalate-err', status: 'sent', attempts: 0, provider_message_id: null, sent_at: ago(20 * MIN), delivered_at: null }),
+    ] });
+    withUpdateResultOverride(sb, 'owed_escalate', { data: null, error: { message: 'new row for relation "sms_outbound_obligations" violates check constraint "sms_outbound_obligations_status_check"', code: '23514' } });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), sentDeliveryTimeoutMs: 15 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.escalated).toBe(1); // the code still attempts and counts the outcome
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('escalate UPDATE failed'))).toBe(true);
+    // The defect this SD fixes: pre-fix, the row silently stayed 'sent' with no visible trace.
+    // Post-fix it STILL stays 'sent' (the constraint genuinely rejects it) but the failure is
+    // now LOUD instead of silent -- that loudness is what this SD delivers.
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('sent');
+  });
+
+  it('TS-2: escalate() succeeds normally — no warning, row reaches owed_escalate (non-regression)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-escalate-ok', status: 'sent', attempts: 0, provider_message_id: null, sent_at: ago(20 * MIN), delivered_at: null }),
+    ] });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), sentDeliveryTimeoutMs: 15 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.escalated).toBe(1);
+    // non-regression -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning fires
+    // unconditionally in this test env; only the escalate-write warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('escalate UPDATE failed'))).toBe(false);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('owed_escalate');
+  });
+
+  it('a lost race on the owed_escalate write (0 rows, no error) is silently absorbed — not counted as a new false-alarm warning', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-escalate-race', status: 'sent', attempts: 0, provider_message_id: null, sent_at: ago(20 * MIN), delivered_at: null }),
+    ] });
+    withUpdateResultOverride(sb, 'owed_escalate', { data: [], error: null });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), sentDeliveryTimeoutMs: 15 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.escalated).toBe(1);
+    // legitimate lost race -- NOT a warning-worthy error (a separate, unrelated
+    // TWILIO_STATUS_CALLBACK_URL-unset warning fires unconditionally in this test env; only the
+    // lost-race message itself must be absent).
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('lost a race'))).toBe(false);
+  });
+});
+
+describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002: retryOrAlert() write-result checking', () => {
+  it('TS-3: a genuine error on the alert-at-cap write is logged loudly', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-alert-err', status: 'undelivered', attempts: 3, last_error: 'undelivered' }),
+    ] });
+    withUpdateResultOverride(sb, 'failed', { data: null, error: { message: 'simulated write failure' } });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), maxAttempts: 3, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.alerted).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('retryOrAlert alert-write UPDATE failed'))).toBe(true);
+  });
+
+  it('a lost race on the alert-at-cap write is silently absorbed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-alert-race', status: 'undelivered', attempts: 3, last_error: 'undelivered' }),
+    ] });
+    withUpdateResultOverride(sb, 'failed', { data: [], error: null });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), maxAttempts: 3, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.alerted).toBe(1);
+    // legitimate lost race -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning
+    // fires unconditionally in this test env; only the alert-write warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('retryOrAlert alert-write UPDATE failed'))).toBe(false);
+  });
+
+  it('a genuine error on the re-arm-to-owed write is logged loudly', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-rearm-err', status: 'undelivered', attempts: 0, last_error: 'undelivered' }),
+    ] });
+    withUpdateResultOverride(sb, 'owed', { data: null, error: { message: 'simulated write failure' } });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), maxAttempts: 3, now: DAY_NOW, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.retried).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('retryOrAlert re-arm UPDATE failed'))).toBe(true);
+  });
+
+  it('a lost race on the re-arm-to-owed write is silently absorbed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-rearm-race', status: 'undelivered', attempts: 0, last_error: 'undelivered' }),
+    ] });
+    withUpdateResultOverride(sb, 'owed', { data: [], error: null });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), maxAttempts: 3, now: DAY_NOW, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.retried).toBe(1);
+    // legitimate lost race -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning
+    // fires unconditionally in this test env; only the re-arm warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('retryOrAlert re-arm UPDATE failed'))).toBe(false);
+  });
+});
+
+describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002: confirmedDelivered-stamp write-result checking', () => {
+  it('a genuine error stamping delivered_at is logged loudly (Twilio confirmed delivery but the local ledger failed to record it)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-deliver-err', status: 'sent', attempts: 0, provider_message_id: 'SM-deliver-err', sent_at: ago(20 * MIN), delivered_at: null }),
+    ] });
+    withUpdateResultOverride(sb, 'delivered', { data: null, error: { message: 'simulated write failure' } });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'delivered' }));
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: { ...okProvider(), checkMessageStatus }, sentDeliveryTimeoutMs: 15 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.confirmedDelivered).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('confirmedDelivered stamp UPDATE failed'))).toBe(true);
+    expect(sb._tables.sms_outbound_obligations[0].status).toBe('sent'); // write genuinely rejected
+  });
+
+  it('a lost race stamping delivered_at is silently absorbed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-deliver-race', status: 'sent', attempts: 0, provider_message_id: 'SM-deliver-race', sent_at: ago(20 * MIN), delivered_at: null }),
+    ] });
+    withUpdateResultOverride(sb, 'delivered', { data: [], error: null });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'delivered' }));
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: { ...okProvider(), checkMessageStatus }, sentDeliveryTimeoutMs: 15 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.confirmedDelivered).toBe(1);
+    // legitimate lost race -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning
+    // fires unconditionally in this test env; only the stamp-write warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('confirmedDelivered stamp UPDATE failed'))).toBe(false);
+  });
+});
+
+describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002: sending-crash reaper flip-to-sent write-result checking', () => {
+  it('a genuine error on the reaper flip-to-sent write is logged loudly', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-reap-err', status: 'sending', claimed_at: ago(10 * MIN), provider_message_id: 'SM-reap-err' }),
+    ] });
+    withUpdateResultOverride(sb, 'sent', { data: null, error: { message: 'simulated write failure' } });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), claimTimeoutMs: 5 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.reaped).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('sending-crash reaper UPDATE failed'))).toBe(true);
+  });
+
+  it('a lost race on the reaper flip-to-sent write is silently absorbed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-reap-race', status: 'sending', claimed_at: ago(10 * MIN), provider_message_id: 'SM-reap-race' }),
+    ] });
+    withUpdateResultOverride(sb, 'sent', { data: [], error: null });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), claimTimeoutMs: 5 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.reaped).toBe(1);
+    // legitimate lost race -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning
+    // fires unconditionally in this test env; only the reaper warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('sending-crash reaper UPDATE failed'))).toBe(false);
+  });
+});
+
+describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002: Pass 2 send-outcome (money path) write-result checking', () => {
+  it('TS-4: a genuine error on the send-success write is logged loudly (Twilio accepted the send but the local ledger was not updated)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ id: 'ob-send-ok-err' })] });
+    withUpdateResultOverride(sb, 'sent', { data: null, error: { message: 'simulated write failure' } });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.sent).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('send-success UPDATE failed'))).toBe(true);
+  });
+
+  it('a genuine error on the send-failure write is logged loudly', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ id: 'ob-send-fail-err' })] });
+    withUpdateResultOverride(sb, 'failed', { data: null, error: { message: 'simulated write failure' } });
+    const provider = noSelfReportFailingProvider();
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.failed).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('send-failure UPDATE failed'))).toBe(true);
+  });
+
+  it('a lost race on the send-failure write is silently absorbed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ id: 'ob-send-fail-race' })] });
+    withUpdateResultOverride(sb, 'failed', { data: [], error: null });
+    const provider = noSelfReportFailingProvider();
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.failed).toBe(1);
+    // legitimate lost race -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning
+    // fires unconditionally in this test env; only the send-failure warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('send-failure UPDATE failed'))).toBe(false);
+  });
+
+  it('a lost race on the send-success write is silently absorbed', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ id: 'ob-send-ok-race' })] });
+    withUpdateResultOverride(sb, 'sent', { data: [], error: null });
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider: okProvider(), logger: { warn, log: vi.fn(), error: vi.fn() } });
+    expect(summary.sent).toBe(1);
+    // legitimate lost race -- a separate, unrelated TWILIO_STATUS_CALLBACK_URL-unset warning
+    // fires unconditionally in this test env; only the send-success warning itself must be absent.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('send-success UPDATE failed'))).toBe(false);
+  });
+});
+
+describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002 (FR-2): Pass 1c isConfigured guard', () => {
+  it('TS-5: an unconfigured provider skips Pass 1c untouched, but Pass 2 (claim+send) still runs normally', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-1c-skip', status: 'sent', attempts: 0, provider_message_id: null, sent_at: ago(20 * MIN), delivered_at: null }),
+      owedRow({ id: 'ob-2-normal', status: 'owed', kind: 'heartbeat_status' }),
+    ] });
+    const provider = unconfiguredProvider();
+    const warn = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    // Pass 1c: the sent-no-callback row is left completely untouched, no checkMessageStatus call.
+    expect(provider.checkMessageStatus).toBeUndefined();
+    expect(sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-1c-skip').status).toBe('sent');
+    expect(summary.escalated).toBe(0);
+    // Pass 2 must ALSO see the unconfigured provider and skip -- this asserts reconcileOutboundSms
+    // did not early-return out of the whole sweep from within Pass 1c's guard (the bug this test
+    // exists to catch: an early `return summary` from Pass 1c would make this indistinguishable
+    // from Pass 2 running normally, since both report summary.unconfigured > 0 for different rows).
+    expect(sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-2-normal').status).toBe('owed');
+    // Exact count, not >=1: Pass 1c contributes 1 (ob-1c-skip) and Pass 2 contributes 1
+    // (ob-2-normal) -- a bare `summary.unconfigured = claimable.length` in Pass 2 (instead of
+    // `+=`) would silently CLOBBER Pass 1c's contribution and report 1, not the honest 2. A
+    // >=1 assertion cannot see that regression; only an exact count can.
+    expect(summary.unconfigured).toBe(2);
+  });
+
+  it('a configured provider runs Pass 1c normally (non-regression)', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-1c-normal', status: 'sent', attempts: 0, provider_message_id: 'SM-1c-normal', sent_at: ago(20 * MIN), delivered_at: null }),
+    ] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'delivered' }));
+    const provider = { isConfigured: vi.fn(() => true), send: vi.fn(async () => ({ provider_message_id: 'SM-X', status: 'queued' })), checkMessageStatus };
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(checkMessageStatus).toHaveBeenCalledWith('SM-1c-normal');
+    expect(summary.confirmedDelivered).toBe(1);
+  });
+});

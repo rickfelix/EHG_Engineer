@@ -444,7 +444,10 @@ describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
           select() { return q; },
           update(patch) { captured.update = patch; return q; },
           eq() { return q; },
-          in(_k, ids) { captured.ids = ids; return q; },
+          // QF-20260822-133: drainInbox's SELECT now also calls .in('target_session', [..]) to
+          // read the 'broadcast-adam' sentinel lane — only the UPDATE's .in('id', ids) is the
+          // surfaced-row capture this mock exists to assert on.
+          in(k, ids) { if (k === 'id') captured.ids = ids; return q; },
           is() { return q; },
           gte() { return q; },
           lt() { return Promise.resolve({ count: 0, error: null }); },
