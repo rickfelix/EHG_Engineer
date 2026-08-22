@@ -34,12 +34,17 @@ jobs:
           set -eo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.sha }}"
-          RAW=$(git diff --name-only --diff-filter=d "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
+          # -c core.quotePath=false: git's default quotePath=true C-quotes any path with a
+          # non-ASCII byte (e.g. "003_caf\303\251.sql" for 003_café.sql). The loop below reads
+          # that literal quoted text into $f, [ -f "$f" ] then fails against the real on-disk
+          # file, and the fall-through "|| true" swallows it with zero output -- a violation in
+          # a non-ASCII-named migration ships silently. Force raw UTF-8 paths instead.
+          RAW=$(git -c core.quotePath=false diff --name-only --diff-filter=d "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
           # legacy/ is grandfathered so a PATCH to an already-existing legacy file doesn't
           # trip the vh_ check -- but a file that is NEW at this PR (diff-filter=A) cannot
           # be "already existing", so it must NOT dodge the check just by living under
           # legacy/. Re-merge newly-added legacy/ files back into CHANGED.
-          NEW_UNDER_LEGACY=$(git diff --name-only --diff-filter=A "$BASE" "$HEAD" -- 'db/migrations/vh/legacy/*.sql' 'db/migrations/vh/legacy/**/*.sql')
+          NEW_UNDER_LEGACY=$(git -c core.quotePath=false diff --name-only --diff-filter=A "$BASE" "$HEAD" -- 'db/migrations/vh/legacy/*.sql' 'db/migrations/vh/legacy/**/*.sql')
           CHANGED=$(printf '%s\n' "$RAW" | grep -v '^db/migrations/vh/legacy/' || true)
           if [ -n "$NEW_UNDER_LEGACY" ]; then
             CHANGED=$(printf '%s\n%s\n' "$CHANGED" "$NEW_UNDER_LEGACY" | grep -v '^$' || true)
