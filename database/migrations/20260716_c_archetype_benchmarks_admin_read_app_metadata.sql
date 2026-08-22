@@ -22,6 +22,20 @@
 -- change). Intentionally omits the @approved-by tag until the chairman explicitly applies it.
 --
 -- requires-chairman-apply
+--
+-- SUPERSEDED — DO NOT APPLY (SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001, 2026-08-22):
+-- The policy rewrite below is now redundant: archetype_benchmarks_admin already reads
+-- raw_app_meta_data live, delivered by database/migrations/20260731_fix_chairman_privilege_app_metadata.sql
+-- (which also folded this policy in). It is retired alongside sibling file
+-- 20260716_a_backfill_chairman_app_metadata.sql (see that file's guard for the fuller rationale —
+-- the trio was staged as an ordered set and is superseded as a set). The guard below makes this
+-- file a hard no-op; the original staged body is preserved beneath it, unreachable, for
+-- historical record only.
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'SUPERSEDED: archetype_benchmarks_admin already reads raw_app_meta_data live via 20260731_fix_chairman_privilege_app_metadata.sql. DO NOT APPLY. See SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001.';
+END $$;
 
 DROP POLICY IF EXISTS archetype_benchmarks_admin ON public.archetype_benchmarks;
 

@@ -21,6 +21,23 @@
 -- explicit chairman GO — see check-migration-readiness.mjs). The build worker STAGES; the chairman APPLIES.
 --
 -- requires-chairman-apply
+--
+-- SUPERSEDED — DO NOT APPLY (SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001, 2026-08-22):
+-- Applying this migration REVERSES the chairman-approved fix in
+-- database/migrations/20260731_fix_chairman_privilege_app_metadata.sql, which flipped
+-- fn_is_chairman()/is_chairman_role() to read raw_app_meta_data ONLY and deliberately left
+-- test@ehg.dev un-backfilled because that account is approved for deletion (chairman decision
+-- d11b99a0, 2026-07-31). Running this UPDATE today would copy raw_user_meta_data.role='owner'
+-- into raw_app_meta_data for test@ehg.dev, re-granting chairman-equivalent privilege across the
+-- 29 RLS policies + 22 functions that consume fn_is_chairman()/is_chairman_role() (per the
+-- 20260731 migration's own header) — to the exact account slated for deletion. The guard below
+-- makes this file a hard no-op; the original staged body is preserved beneath it, unreachable,
+-- for historical record only.
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'SUPERSEDED: this migration would reverse the chairman-approved 20260731_fix_chairman_privilege_app_metadata.sql fix and re-grant privilege to test@ehg.dev (approved for deletion, decision d11b99a0). DO NOT APPLY. See SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001.';
+END $$;
 
 DO $$
 DECLARE

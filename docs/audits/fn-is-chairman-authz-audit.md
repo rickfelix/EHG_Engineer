@@ -1,9 +1,28 @@
+---
+Category: Report
+Status: Deprecated
+Version: 1.1.0
+Author: rickfelix
+Last Updated: 2026-08-22
+Tags: [audit, security, authz]
+---
+
 # Authorization Audit — `raw_user_meta_data` privilege escalation
 
 **SD:** SD-LEO-INFRA-FN-IS-CHAIRMAN-APP-METADATA-001 (SECURITY-CRITICAL, coordinator-sourced)
 **Date:** 2026-07-16
 **Auditor:** fleet worker Alpha (opus/xhigh), EXEC phase
 **Class:** authenticated-user privilege escalation via user-writable metadata
+
+> **SUPERSEDED NOTICE (2026-08-22, SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001):** the fix was ultimately
+> delivered by `database/migrations/20260731_fix_chairman_privilege_app_metadata.sql`, NOT by the
+> `20260716_a`/`_b`/`_c` trio staged below — that trio was never applied and is now hard-guarded
+> against ever running (see each file). The 20260731 fix deliberately left `test@ehg.dev`
+> un-backfilled, because that account is approved for deletion under chairman decision `d11b99a0`
+> (2026-07-31) — the "preserve the status quo" rationale in the backfill-targets note below no
+> longer applies to that account. Do not apply the deliverables list below; it is historical record
+> only. Live blast radius as of the 20260731 fix is **29 policies + 22 functions** (broader than the
+> 21/16 RLS-only count this audit originally measured).
 
 ## Vulnerability
 
@@ -59,23 +78,31 @@ keys (clobbering those would break Supabase auth). Post-fix authorization is the
 both remain `fn_is_chairman()=TRUE`; for the archetype policy (admin/chairman only), `admin` still
 matches and `owner` still does not — exactly as before this change (no regression, no lockout).
 
-> Note: `test@ehg.dev` (role=owner) is a test account. It is backfilled to preserve the status quo
-> (no-lockout criterion). Whether a test account *should* retain owner/chairman-equivalent access is a
-> separate access-governance question for the chairman — **out of scope** for this SD.
+> Note (SUPERSEDED as of 2026-08-22, see notice above): as originally filed, `test@ehg.dev`
+> (role=owner) was going to be backfilled to preserve the status quo (no-lockout criterion). That
+> plan is now moot — the account is approved for deletion (chairman decision `d11b99a0`), and the
+> fix that actually shipped (`20260731_fix_chairman_privilege_app_metadata.sql`) intentionally left
+> it un-backfilled, deriving chairman/admin/owner status solely from `rickfelix2000@gmail.com`'s
+> `raw_app_meta_data.role='admin'`.
 
-## Deliverables (all STAGED — chairman applies, in order)
+## Deliverables (SUPERSEDED — do not apply; see notice above. Historical record of the original plan.)
 
-1. `database/migrations/20260716_a_backfill_chairman_app_metadata.sql` — backfill (idempotent, readback-verified). **Apply first.**
-2. `database/migrations/20260716_b_fn_is_chairman_read_app_metadata.sql` — `fn_is_chairman` reads `raw_app_meta_data`. Apply after (1).
-3. `database/migrations/20260716_c_archetype_benchmarks_admin_read_app_metadata.sql` — archetype policy reads `raw_app_meta_data`. Apply after (1).
-4. `tests/security/fn-is-chairman-app-metadata.acceptance.sql` — post-apply acceptance assertions.
+1. `database/migrations/20260716_a_backfill_chairman_app_metadata.sql` — backfill (idempotent, readback-verified). Hard-guarded against apply (SD-LEO-FIX-IDENTIFY-RETIRE-TEST-001).
+2. `database/migrations/20260716_b_fn_is_chairman_read_app_metadata.sql` — `fn_is_chairman` reads `raw_app_meta_data`. Hard-guarded against apply.
+3. `database/migrations/20260716_c_archetype_benchmarks_admin_read_app_metadata.sql` — archetype policy reads `raw_app_meta_data`. Hard-guarded against apply.
+4. `tests/security/fn-is-chairman-app-metadata.acceptance.sql` — post-apply acceptance assertions (never exercised; the trio was never applied).
 
-**Apply authority:** CHAIRMAN-ONLY / non-delegatable (access-control change, permission class). The
-build worker stages only; the migrations carry no `@approved-by` tag. **Rollback** (chairman-gated):
-`CREATE OR REPLACE` the prior `fn_is_chairman` body / recreate the archetype policy against
-`raw_user_meta_data`; the additive backfill can be left in place.
+**What actually shipped instead:** `database/migrations/20260731_fix_chairman_privilege_app_metadata.sql` (SD-LEO-FIX-CHAIRMAN-PRIVILEGE-FROM-WRITABLE-METADATA-001, `@approved-by: codestreetlabs@gmail.com`), which achieves the same read-source flip without backfilling `test@ehg.dev`.
 
-## Acceptance criteria → coverage
+**Apply authority (HISTORICAL — describes the original, now-superseded plan; the trio is hard-guarded
+against apply regardless of authority, see notice above):** CHAIRMAN-ONLY / non-delegatable
+(access-control change, permission class). The build worker stages only; the migrations carry no
+`@approved-by` tag. **Rollback** (chairman-gated): `CREATE OR REPLACE` the prior `fn_is_chairman`
+body / recreate the archetype policy against `raw_user_meta_data`; the additive backfill can be
+left in place.
+
+## Acceptance criteria → coverage (HISTORICAL — as originally filed; the fix that actually shipped is
+`20260731_fix_chairman_privilege_app_metadata.sql`, not the trio described in this table)
 
 | Criterion | Covered by |
 |-----------|-----------|
@@ -84,4 +111,4 @@ build worker stages only; the migrations carry no `@approved-by` tag. **Rollback
 | 21-policy spot-check authorizes correctly | `fn_is_chairman` contract preserved (signature/SECURITY DEFINER/search_path unchanged); acceptance check (1) |
 | Sequencing hazard neutralized | apply order enforced in headers + `_a_` readback assertion |
 | No other authz path reads user_metadata | this audit (only `fn_is_chairman` + `archetype_benchmarks_admin`, both fixed) |
-| Staged, chairman-only apply | all migrations `requires-chairman-apply`, no `@approved-by` |
+| Staged, chairman-only apply | all migrations `requires-chairman-apply`, no `@approved-by`, now additionally hard-guarded against ever running |
