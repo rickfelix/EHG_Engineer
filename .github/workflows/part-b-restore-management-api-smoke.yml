@@ -1,0 +1,47 @@
+name: Part B restore -- Management API smoke check
+
+# SD-ALTIFYAI-LEO-GEN-EXECUTE-PART-BACKUP-001 (FR-3), incident ba330d67 Part B.
+# workflow_dispatch ONLY -- deliberately no schedule. This proves SUPABASE_ACCESS_TOKEN and
+# lib/supabase-management-api.mjs work end-to-end via a single read-only GET call. It does NOT
+# invoke Restore-to-new-project -- that stays out of scope until the backup-entitlement question
+# (signal 6ec46db8-37ca-4da4-9119-5e2a6b6482f1) is resolved. Self-triggering a real restore call
+# from this repo's own CI is explicitly out of scope for this SD.
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: 'Supabase project ref to smoke-check'
+        required: false
+        default: 'dedlbzhpgkmetvhbkyzq'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  smoke-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Management API smoke check (read-only GET only)
+        run: node scripts/one-off/smoke-check-management-api-execute-part-backup-001.mjs "${{ inputs.project_ref }}"
