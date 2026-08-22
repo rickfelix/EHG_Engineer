@@ -62,7 +62,7 @@ describe.skipIf(!HAS_REAL_DB)('Legal-doc producer activation invariant (SD-FDBK-
       current_lifecycle_stage: 1,
       status: 'active',
       created_at: new Date().toISOString(),
-    });
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/integration/legal-doc-producer-activation.test.js' });
     if (ventureError) throw new Error(`Fixture venture insert failed: ${ventureError.message}`);
   });
 
