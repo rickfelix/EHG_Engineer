@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-22 ~13:4xZ (4-file packet, EVA retention index); scribe adam-08049808
 -- SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 (FR-1)
 --
 -- ROOT CAUSE of the "archive-dedup check failed: canceling statement due to statement timeout"

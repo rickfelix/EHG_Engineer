@@ -1,4 +1,5 @@
 -- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-22 ~13:4xZ (4-file packet, STAMPER v2 fn); scribe adam-08049808
 -- SD-LEO-INFRA-REMAINDER-STATE-STAMPER-001
 --
 -- Fixes stamp_plan_of_record_remainder_state() (database/migrations/20260719a_...): it resolved
