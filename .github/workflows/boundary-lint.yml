@@ -32,8 +32,18 @@ jobs:
       - name: Ensure venture migrations stay in vh namespace
         run: |
           set -eo pipefail
-          RAW=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          RAW=$(git diff --name-only "$BASE" "$HEAD" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
+          # legacy/ is grandfathered so a PATCH to an already-existing legacy file doesn't
+          # trip the vh_ check -- but a file that is NEW at this PR (diff-filter=A) cannot
+          # be "already existing", so it must NOT dodge the check just by living under
+          # legacy/. Re-merge newly-added legacy/ files back into CHANGED.
+          NEW_UNDER_LEGACY=$(git diff --name-only --diff-filter=A "$BASE" "$HEAD" -- 'db/migrations/vh/legacy/*.sql' 'db/migrations/vh/legacy/**/*.sql')
           CHANGED=$(printf '%s\n' "$RAW" | grep -v '^db/migrations/vh/legacy/' || true)
+          if [ -n "$NEW_UNDER_LEGACY" ]; then
+            CHANGED=$(printf '%s\n%s\n' "$CHANGED" "$NEW_UNDER_LEGACY" | grep -v '^$' || true)
+          fi
           if [ -z "$CHANGED" ]; then
             echo 'No new/changed vh migration files outside legacy/ - skipping check';
             exit 0;
