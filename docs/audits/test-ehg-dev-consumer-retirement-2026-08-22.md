@@ -49,7 +49,7 @@ no longer instructs applying them.
 ## Consumer 2 — the 2026-07-26T11:29Z sign-in
 
 Live `auth.sessions`/`auth.audit_log_entries` query: 5 sessions total for this account, ever, all
-`user_agent="node"` from IP `108.24.1.103` — never a browser. A tight cluster on 2026-07-26
+`user_agent="node"` from a single operator IP (redacted here) — never a browser. A tight cluster on 2026-07-26
 (`user_recovery_requested` → `login` pairs at 00:51:22, 01:11:47, 11:26:13, 11:29:37 — the last matches
 the task's cited sign-in), each login preceded by a password-recovery request seconds earlier. Zero
 sessions since.
@@ -63,12 +63,13 @@ fleet-panel architecture change.
 **Ruled out — test-suite fixture:** `tests/`, `e2e/`, and all Playwright/Vitest configs contain zero
 references to `test@ehg.dev`. `.env.test` sets `TEST_USER_EMAIL=rickfelix2000@gmail.com`.
 
-**Disposition: HISTORICAL, not a live/ongoing consumer.** Best-evidence hypothesis: a one-off
-diagnostic/PoC script (never committed to the repo) exercising the account's password-recovery flow,
-consistent with the same-day chairman briefing on the "buyable NXDOMAIN domain + pre-confirmed email =
-free authenticated session" exposure this account itself embodied. No cron, GitHub Actions workflow, or
-committed script reproduces this pattern today. Stated as a best-evidence hypothesis, not a certainty —
-see "Residual risks not eliminated" below.
+**Disposition: HISTORICAL, not a live/ongoing consumer.** Best-evidence hypothesis: a one-off,
+never-committed diagnostic/PoC script exercising the account's password-recovery flow, related to a
+same-day chairman briefing on a class of account-security exposure this account itself illustrated
+(details intentionally omitted here — this is a public repository and the account is still live
+pending chairman-executed deletion). No cron, GitHub Actions workflow, or committed script reproduces
+this pattern today. Stated as a best-evidence hypothesis, not a certainty — see "Residual risks not
+eliminated" below.
 
 ## Consumer 3 — full-codebase literal-string references
 
