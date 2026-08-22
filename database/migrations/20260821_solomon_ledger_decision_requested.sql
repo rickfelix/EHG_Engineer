@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-21 ~23:2xZ (2A on the mini-packet: bookkeeping column as named third item in tonight window); applied in the 2026-08-22 06:00Z quiesce window; scribe adam-08049808
 -- solomon_advice_outcome_ledger admission discriminator: does this advisory REQUEST a decision?
 -- SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1b).
 --

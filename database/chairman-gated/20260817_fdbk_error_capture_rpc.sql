@@ -1,4 +1,5 @@
--- @approved-by:
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A by SMS 2026-08-21 ~12:10Z (RPC bundled into the quiesce window; 5 residuals disclosed, PR #7333 head); applied in the 2026-08-22 06:00Z quiesce window; scribe adam-08049808
 -- SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001 — a purpose-built, anon+authenticated,
 -- rate-limited RPC for browser error telemetry (React render errors + window
 -- error/unhandledrejection events) in the ehg app.

@@ -1,4 +1,5 @@
--- @approved-by:
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling A at terminal 2026-08-21 ~10:06Z (quiesce re-arm packet, timestamptz on 4 audit tables); applied in the 2026-08-22 06:00Z quiesce window; scribe adam-08049808
 -- SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 — timestamp -> timestamptz, 15 columns, 4 audit-critical tables.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
