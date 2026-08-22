@@ -1,4 +1,5 @@
--- @approved-by: PENDING CHAIRMAN APPROVAL -- do not apply until reviewed and explicitly run
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman verbal "A all" at terminal 2026-08-22 ~22:17Z (5-file evening packet: retention idx, solomon attestations, owed_escalate drift, remainder restamp, plan-item-position grants); scribe adam-0549d739
 -- SD-LEO-INFRA-REMAINDER-STATE-STAMPER-001 (FR-3)
 --
 -- One-time DATA restamp: re-derives remainder_state for every roadmap_wave_items row that has a

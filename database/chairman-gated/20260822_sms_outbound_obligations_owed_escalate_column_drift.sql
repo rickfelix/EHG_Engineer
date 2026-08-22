@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman verbal "A all" at terminal 2026-08-22 ~22:17Z (5-file evening packet: retention idx, solomon attestations, owed_escalate drift, remainder restamp, plan-item-position grants); scribe adam-0549d739
 -- requires-chairman-apply
 -- SD-LEO-FIX-SMS-OUTBOUND-WORKER-002 (escalated from QF-20260728-870, FR-3).
 --

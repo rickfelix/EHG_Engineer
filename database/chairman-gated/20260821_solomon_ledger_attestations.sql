@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman verbal "A all" at terminal 2026-08-22 ~22:17Z (5-file evening packet: retention idx, solomon attestations, owed_escalate drift, remainder restamp, plan-item-position grants); scribe adam-0549d739
 -- SD-LEO-GEN-STAGE-DECISION-RESTORE-001 (FR-3/FR-4) -- Restore ceremony staging: decision_by
 -- attestation table + the 2 tick-line-verified attestation rows, per RESTORE RULING A
 -- (chairman_decisions id 00919a91-8ccf-4684-ba6e-e7af8fdb861a) for incident ba330d67.

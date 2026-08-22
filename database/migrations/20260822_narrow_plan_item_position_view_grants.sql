@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman verbal "A all" at terminal 2026-08-22 ~22:17Z (5-file evening packet: retention idx, solomon attestations, owed_escalate drift, remainder restamp, plan-item-position grants); scribe adam-0549d739
 -- QF-20260822-628 — narrow public.v_plan_item_position to SELECT-only for anon/authenticated.
 -- @chairman-gated
 --

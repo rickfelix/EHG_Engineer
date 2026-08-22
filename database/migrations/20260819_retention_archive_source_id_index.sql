@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman verbal "A all" at terminal 2026-08-22 ~22:17Z (5-file evening packet: retention idx, solomon attestations, owed_escalate drift, remainder restamp, plan-item-position grants); scribe adam-0549d739
 -- SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 (FR-1)
 --
 -- ROOT CAUSE of the "archive-dedup check failed: canceling statement due to statement timeout"
