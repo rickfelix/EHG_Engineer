@@ -1,4 +1,7 @@
--- @approved-by:
+-- @approved-by: codestreetlabs@gmail.com
+-- approval-note: chairman ruling "1 A" at terminal 2026-08-22 — FRESH A on this re-staged 12-object
+-- envelope + census MAX-AGE guard (supersedes the exercised-and-rolled-back 08-21 approval blanked
+-- below); coordinator mini-hold grant db668946 / ack 821b9914; scribe adam-08049808
 -- SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001 — timestamp -> timestamptz, 15 columns, 4 audit-critical tables.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -11,7 +14,8 @@
 -- DROP/CREATE envelope -- see the MAX-AGE GUARD section below). That approval covered the OLD
 -- 11-object envelope, not this file's now-12-object content -- deliberately blanked per house
 -- convention (never carry an approval stamp forward onto materially-changed SQL it never reviewed).
--- This re-staged version needs a FRESH chairman A before its next ceremony attempt. Chairman decision
+-- This re-staged version needed a FRESH chairman A — GRANTED 2026-08-22 ("1 A" at terminal; stamped
+-- in the @approved-by header above). Chairman decision
 -- 374fbb24 (GO/A, 2026-08-15) still authorizes BUILD of this staged migration; the ALTER itself is
 -- applied ONLY at a chairman 3-factor ceremony.
 --
