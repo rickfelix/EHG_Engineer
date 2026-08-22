@@ -1,0 +1,58 @@
+name: AltifyAI UAT Drift Check
+
+# SD-LEO-INFRA-ALTIFYAI-TEST-IDENTITY-001 (FR-7/TS-7, SEC-58): wires the two
+# drift-check scripts built for this SD to actual periodic execution -- both
+# worked correctly on demand but were wired to nothing recurring, defeating
+# "periodic" per their own docstrings (EXEC-TO-PLAN SECURITY finding SEC-58).
+#
+#  1. scripts/regen-fr7-source-material-fixture.mjs: confirms
+#     tests/fixtures/fr7-synthetic-actors-source-material.json still matches
+#     the live strategic_directives_v2 row it was generated from.
+#  2. scripts/uat-secret-name-drift-check.mjs: confirms the pinned secret-name
+#     constant still matches both the chairman's keystrokes document and
+#     altifyai's live deploy.yml. Cross-repo (reads rickfelix/altifyai) --
+#     fails OPEN with a warning if no cross-repo token is configured, same
+#     policy as .github/workflows/design-prompts-cross-repo.yml, since this
+#     is an advisory drift guard, not a security gate.
+
+on:
+  schedule:
+    - cron: '43 6 * * *' # daily, off-peak-ish UTC minute to avoid the :00 stampede
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+
+      - name: FR-7 fixture drift (venture-hosting-standard.md source material)
+        run: npm run altifyai:fr7-fixture-drift
+
+      - name: TS-7 secret-name drift (keystrokes doc + altifyai deploy.yml)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.EHG_RO_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::No cross-repo token configured (GH_TOKEN_CROSS_REPO / EHG_RO_PAT) -- skipping the TS-7 secret-name drift check (advisory, not a security gate; it needs cross-repo read access to rickfelix/altifyai). Set one of those secrets to enable it."
+            exit 0
+          fi
+          npm run altifyai:uat-secret-drift
