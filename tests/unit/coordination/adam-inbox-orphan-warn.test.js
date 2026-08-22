@@ -13,6 +13,7 @@ function stub(rows) {
   const selectChain = {
     select() { return selectChain; },
     eq(col, val) { captured.eq[col] = val; return selectChain; },
+    in(col, val) { captured.eq[col] = val; return selectChain; },
     or() { captured.usedOr = true; return selectChain; },
     is(col) { captured.isNull.push(col); return selectChain; },
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001: window scope (gte) + advisory

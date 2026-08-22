@@ -137,7 +137,7 @@ describe('FR-4: ack subcommand is the action-time stamp', () => {
         update: (payload) => { state.payload = payload; return c; },
         eq: (col, v) => { state.guards.push([col, v]); return c; },
         is: (col, v) => { state.guards.push([col, v]); return c; },
-        in: () => c,
+        in: (col, v) => { state.guards.push([col, v]); return c; },
         select: async () => {
           updates.push(state);
           return { data: [{ id: 'id-1', read_at: '2026-07-10T00:00:00Z' }], error: null };
@@ -161,7 +161,9 @@ describe('FR-4: ack subcommand is the action-time stamp', () => {
     const { supabase, updates } = ackMock();
     await ackRows(supabase, ['id-1'], { expectedTarget: ADAM });
     expect(updates).toHaveLength(1);
-    expect(updates[0].guards).toContainEqual(['target_session', ADAM]);
+    // QF-20260822-133: ownership scope widened to also admit the 'broadcast-adam' sentinel
+    // (mirrors solomon-advisory's ackRows fix, PR #6170) so a surfaced fallback row is ackable.
+    expect(updates[0].guards).toContainEqual(['target_session', [ADAM, 'broadcast-adam']]);
   });
 });
 
