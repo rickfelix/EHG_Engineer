@@ -18,6 +18,23 @@
  * A reason-required allowlist (require-main-guard-in-one-off-allowlist.json) grandfathers
  * pre-existing unguarded files pending retrofit, without red-lining CI for the whole corpus.
  *
+ * KNOWN LIMITATION: shapes this control knowingly does NOT catch (see eslint-rules/
+ * require-main-guard-in-one-off.js's own "DELIBERATELY NARROW" note for the detection-side
+ * rationale) --
+ *   - only an unconditional top-level call to an entrypoint literally named `main` or `run` is
+ *     flagged; a file whose entrypoint has any other name (or no named entrypoint function at
+ *     all) is invisible to this rule, guarded or not.
+ *   - ANY top-level conditional wrapping the call is accepted as a pass -- e.g. `if (true) main()`
+ *     -- the rule never verifies the guard's condition is one of the two known-safe shapes
+ *     (isMainModule(...) or the raw fileURLToPath/argv[1] comparison). A wrong-condition guard
+ *     that still executes unconditionally in practice would read as fixed.
+ *   - only scripts/one-off/**\/*.{mjs,cjs} is scanned; the identical unconditional-entrypoint
+ *     footgun in scripts/, lib/, or any .ts one-off-style file elsewhere in the repo is outside
+ *     this control's population entirely.
+ *   - the grandfather allowlist (144 entries at authoring) means every listed path is STILL
+ *     genuinely unguarded and exploitable via a bare import -- this control reports those paths
+ *     as "grandfathered", never as fixed, and blocks nothing for them.
+ *
  * Usage:
  *   node scripts/lint/require-main-guard-in-one-off-lint.mjs [--json] [--root <dir>]
  *   npm run lint:main-guard-one-off
