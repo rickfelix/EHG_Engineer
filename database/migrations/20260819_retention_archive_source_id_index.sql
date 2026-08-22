@@ -1,5 +1,5 @@
 -- @approved-by: codestreetlabs@gmail.com
--- approval-note: chairman verbal "A all" at terminal 2026-08-22 ~22:17Z (5-file evening packet: retention idx, solomon attestations, owed_escalate drift, remainder restamp, plan-item-position grants); scribe adam-0549d739
+-- approval-note: chairman verbal "A all" 22:17Z + amendment verbal "A" ~22:5xZ 2026-08-22 (CONCURRENTLY dropped — pooler txn-mode cannot run it; plain build, seconds on 687K-row archive table); scribe adam-0549d739
 -- SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 (FR-1)
 --
 -- ROOT CAUSE of the "archive-dedup check failed: canceling statement due to statement timeout"
@@ -23,7 +23,7 @@
 -- Apply: supabase db query --linked --file database/migrations/20260819_retention_archive_source_id_index.sql
 -- Rollback: DROP INDEX CONCURRENTLY IF EXISTS idx_retention_archive_source_table_id;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retention_archive_source_table_id
+CREATE INDEX IF NOT EXISTS idx_retention_archive_source_table_id
   ON retention_archive (source_table, source_id);
 
 COMMENT ON INDEX idx_retention_archive_source_table_id IS
