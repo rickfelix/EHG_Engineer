@@ -37,7 +37,19 @@ export const PULSE_SESSION_COLUMNS = [
   ...FREEZE_TERM_COLUMNS
 ].join(',');
 
-/** Bounded read of the pulse population. Exported so the wiring can be tested without running main(). */
+/**
+ * Bounded read of the pulse population. Exported so the wiring can be tested without running main().
+ *
+ * .limit(60) RISK DIRECTION (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-4, corrected): an earlier draft of
+ * that SD assumed a quiet-dead host's rows could be silently truncated out of this result by a
+ * noisy live host, hiding an outage. That direction is backwards -- liveFleetWorkers() already
+ * excludes any seat with a stale heartbeat BEFORE this limit matters, so truncating an already-
+ * filtered-out dead host's rows is a no-op. The real (opposite) risk is a live, busy host's rows
+ * crowding OUT another live host's rows, causing an UNDER-count -> a false POSITIVE (declaring the
+ * fleet down when it is not). Measured live (2026-08-21): only 11 concurrent sessions exist; the
+ * 60th-newest row is ~21 days old -- this limit is safe today by a wide margin. Re-measure before
+ * changing it; do not raise it speculatively with no evidence of risk.
+ */
 export async function fetchPulseSessions(db) {
   const { data, error } = await db.from('claude_sessions')
     .select(PULSE_SESSION_COLUMNS)

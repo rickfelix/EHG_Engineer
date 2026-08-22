@@ -73,17 +73,22 @@ describe('decideRelayDrops: worker-signal reply to a review_request (QF-20260812
     expect(decisions[0].action).toBe('ok');
   });
 
-  it('REGRESSION CONTROL: still flags when genuinely nothing replied', () => {
+  // QF-20260821-607: review_request now gets its own, much longer (48h default) window
+  // before promotion to 'flag' -- these two controls now age the inbound row past THAT
+  // window (49h) instead of the original ~1h gap, which correctly reads 'pending' post-fix.
+  const NOW_PAST_REVIEW_WINDOW = Date.parse('2026-08-14T21:42:44Z'); // 49h after the inbound row
+
+  it('REGRESSION CONTROL: still flags when genuinely nothing replied (aged past the review window)', () => {
     const inbound = [{
       id: '324acaff',
       payload: { kind: 'review_request', correlation_id: 'cb5587b3-aaaa-bbbb-cccc-111122223333' },
       created_at: '2026-08-12T20:42:44Z',
     }];
-    const decisions = decideRelayDrops(inbound, [], { now: NOW });
+    const decisions = decideRelayDrops(inbound, [], { now: NOW_PAST_REVIEW_WINDOW });
     expect(decisions[0].action).toBe('flag');
   });
 
-  it('REGRESSION CONTROL: an unrelated worker-signal body does not falsely satisfy', () => {
+  it('REGRESSION CONTROL: an unrelated worker-signal body does not falsely satisfy (aged past the review window)', () => {
     const inbound = [{
       id: '324acaff',
       payload: { kind: 'review_request', correlation_id: 'cb5587b3-aaaa-bbbb-cccc-111122223333' },
@@ -94,8 +99,18 @@ describe('decideRelayDrops: worker-signal reply to a review_request (QF-20260812
       payload: { signal_type: 'feedback', body: 'idle-absorb claim hint acked, no correlation here' },
       created_at: '2026-08-12T20:56:43Z',
     }];
-    const decisions = decideRelayDrops(inbound, outbound, { now: NOW });
+    const decisions = decideRelayDrops(inbound, outbound, { now: NOW_PAST_REVIEW_WINDOW });
     expect(decisions[0].action).toBe('flag');
+  });
+
+  it('a review_request aged past the OLD 15min window but within the NEW 48h window reads pending, not flag', () => {
+    const inbound = [{
+      id: '324acaff',
+      payload: { kind: 'review_request', correlation_id: 'cb5587b3-aaaa-bbbb-cccc-111122223333' },
+      created_at: '2026-08-12T20:42:44Z',
+    }];
+    const decisions = decideRelayDrops(inbound, [], { now: NOW }); // NOW is ~1h after created_at
+    expect(decisions[0].action).toBe('pending');
   });
 
   it('a relay_confirm row still satisfies via the pre-existing exact-match path (unchanged)', () => {
