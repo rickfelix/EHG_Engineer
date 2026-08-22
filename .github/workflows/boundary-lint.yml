@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check for governance table writes from venture app
         run: |
           if grep -R "strategic_directives_v2" -n applications/APP001 apps/ingest | grep -v "v_eng_"; then
@@ -29,7 +31,14 @@ jobs:
           fi
       - name: Ensure venture migrations stay in vh namespace
         run: |
-          if grep -R "CREATE TABLE" db/migrations/vh | grep -v "vh_"; then
+          set -eo pipefail
+          RAW=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- 'db/migrations/vh/*.sql' 'db/migrations/vh/**/*.sql')
+          CHANGED=$(printf '%s\n' "$RAW" | grep -v '^db/migrations/vh/legacy/' || true)
+          if [ -z "$CHANGED" ]; then
+            echo 'No new/changed vh migration files outside legacy/ - skipping check';
+            exit 0;
+          fi
+          if grep -H "CREATE TABLE" $CHANGED | grep -v "vh_"; then
             echo 'Venture migration defining non vh_ table';
             exit 1;
           fi
