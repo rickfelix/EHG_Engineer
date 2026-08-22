@@ -34,6 +34,14 @@
  *   - the grandfather allowlist (144 entries at authoring) means every listed path is STILL
  *     genuinely unguarded and exploitable via a bare import -- this control reports those paths
  *     as "grandfathered", never as fixed, and blocks nothing for them.
+ *   - the guard-presence check (isMainModuleCall / isFileURLToPathArgv1Comparison in
+ *     eslint-rules/require-main-guard-in-one-off.js) is a WHOLE-FILE TOKEN SCAN, not scoped to
+ *     whether the guard actually wraps the flagged call -- an isMainModule(...) token appearing
+ *     ANYWHERE in the file (a dead function, a guard on a different entrypoint) silences a
+ *     genuinely unconditional main()/run() elsewhere in that same file. TESTING sub-agent finding,
+ *     EXEC-TO-PLAN review 2026-08-22: zero corpus instances today, but it lands precisely on every
+ *     file this control has ever retrofitted -- each now carries a guard token, so a future
+ *     re-added unconditional call in any of them would go undetected.
  *
  * Usage:
  *   node scripts/lint/require-main-guard-in-one-off-lint.mjs [--json] [--root <dir>]

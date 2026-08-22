@@ -1,10 +1,11 @@
 /**
  * ESLint Rule: require-main-guard-in-one-off
  *
- * Flags an unconditional top-level entrypoint call (`main()` / `run()`, optionally
- * `.catch(...)`-chained, or `await main()` / `await run()`) that is NOT wrapped in any
- * top-level conditional. An unconditional call at module scope executes on a bare
- * `import()`/`require()` of the file -- no direct invocation needed.
+ * Flags an unconditional top-level entrypoint call (`main()` / `run()`, optionally chained with
+ * any of `.then(...)`/`.catch(...)`/`.finally(...)`, or `await main()` / `await run()` -- as a
+ * bare expression statement OR as a top-level `const x = await main();` declarator init) that is
+ * NOT wrapped in any top-level conditional. An unconditional call at module scope executes on a
+ * bare `import()`/`require()` of the file -- no direct invocation needed.
  *
  * SD-FDBK-ENH-578-SCRIPTS-ONE-001. Root incident, 2026-08-21: importing
  * scripts/one-off/backfill-solomon-ledger-decision-by.mjs for ESM/CJS-interop inspection
@@ -33,24 +34,34 @@
  */
 
 const ENTRYPOINT_NAMES = new Set(['main', 'run']);
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001 EXEC-TO-PLAN TESTING finding (2026-08-22): a real corpus scan
+// found 3 live, service-role-holding, DB-mutating scripts.one-off/* files whose unconditional
+// main() executed on bare import while this rule reported "0 ungoverned violations" over them --
+// this SD's own defect class, uncaught by the tool built to catch it. Two independent gaps, both
+// closed below: a single `.catch` peel missed any LONGER promise chain (`main().then(a).catch(b)`
+// resolved to `main().then(a)`, whose callee is a MemberExpression, not the named Identifier), and
+// only `Program > ExpressionStatement` was visited, so `const data = await main();` -- a top-level
+// VariableDeclaration, never an ExpressionStatement -- was invisible outright.
+const CHAIN_METHODS = new Set(['then', 'catch', 'finally']);
 
 /**
  * If `node` is a CallExpression to an Identifier named `main` or `run` -- either directly, or
- * with one `.catch(handler)` chained on top (`main().catch(...)`) -- return the INNER,
- * named CallExpression (never the `.catch(...)` wrapper, which has no `.callee.name` of its
- * own). Returns null if `node` doesn't match either shape.
+ * with any chain of `.then(...)`/`.catch(...)`/`.finally(...)` calls layered on top (e.g.
+ * `main().then(a).catch(b)`) -- return the INNER, named CallExpression (never a chain wrapper,
+ * which has no `.callee.name` of its own). Returns null if `node` doesn't match either shape.
  * @param {import('estree').Node} node
  * @returns {import('estree').Node | null}
  */
 function resolveEntrypointCall(node) {
   if (!node || node.type !== 'CallExpression') return null;
   let target = node;
-  if (
+  while (
     target.callee.type === 'MemberExpression' &&
     !target.callee.computed &&
     target.callee.property &&
     target.callee.property.type === 'Identifier' &&
-    target.callee.property.name === 'catch'
+    CHAIN_METHODS.has(target.callee.property.name) &&
+    target.callee.object.type === 'CallExpression'
   ) {
     target = target.callee.object;
   }
@@ -66,9 +77,10 @@ function resolveEntrypointCall(node) {
 }
 
 /**
- * Given a top-level ExpressionStatement's expression, resolve the risky entrypoint call --
- * either directly, or as the argument of a bare top-level `await`. Always returns the INNER
- * named CallExpression (e.g. `main()`, not `main().catch(...)`) so `.callee.name` is reliable.
+ * Given a top-level ExpressionStatement's expression, OR a top-level VariableDeclarator's init
+ * expression, resolve the risky entrypoint call -- either directly, or as the argument of a bare
+ * top-level `await`. Always returns the INNER named CallExpression (e.g. `main()`, not
+ * `main().catch(...)`) so `.callee.name` is reliable.
  * @param {import('estree').Node} expr
  * @returns {import('estree').Node | null}
  */
@@ -156,6 +168,13 @@ export default {
       'Program > ExpressionStatement'(node) {
         const found = findUnconditionalEntrypointCall(node.expression);
         if (found && !unconditionalCall) unconditionalCall = found;
+      },
+      'Program > VariableDeclaration'(node) {
+        for (const decl of node.declarations) {
+          if (!decl.init) continue;
+          const found = findUnconditionalEntrypointCall(decl.init);
+          if (found && !unconditionalCall) unconditionalCall = found;
+        }
       },
       'Program:exit'() {
         if (unconditionalCall && !hasRecognizedGuard) {
