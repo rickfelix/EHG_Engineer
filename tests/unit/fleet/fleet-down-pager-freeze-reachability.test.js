@@ -25,6 +25,15 @@ import {
   liveFleetWorkers, isFleetWorker, isKnownWedged,
   FREEZE_CUT_MINUTES, FREEZE_TERM_COLUMNS
 } from '../../../lib/fleet/genuine-worker.mjs';
+
+/**
+ * SD-LEO-INFRA-FLEET-DOWN-ALERT-001 / FR-1 / FR-6 (PLAN-phase prospective TESTING review #2
+ * finding F8): the pre-existing 120min cut value has no other symbolic home in the codebase after
+ * this SD's recalibration (FREEZE_CUT_MINUTES now IS the new value) — so the OLD value is pinned
+ * here as a literal, explicitly labeled, purely for this before/after comparison. It must never be
+ * read as "the current shipped value" anywhere else.
+ */
+const PRE_SD_FREEZE_CUT_MINUTES = 120;
 import { PULSE_SESSION_COLUMNS, fetchPulseSessions } from '../../../scripts/fleet-worker-pulse.mjs';
 import { evaluateFleetDownAlert } from '../../../scripts/fleet-down-alert.mjs';
 
@@ -370,5 +379,49 @@ describe('TS-12: a fleet latched in awaiting_tick — judged on its OWN DEADLINE
       metadata: { expected_wake_at: minsAgo(60) }
     };
     expect(isKnownWedged(woke, NOW)).toBe(false);
+  });
+});
+
+describe('SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-1/FR-6: recalibrated threshold pages materially faster', () => {
+  // TESTING review #2 (F8) correction: the fixture must exercise the REAL elapsed-freeze-time
+  // comparison, not just "stale session rows" -- a seat frozen for a duration BETWEEN the new and
+  // old cut is exactly the class this recalibration exists to catch sooner.
+  const FREEZE_ELAPSED_MIN = 65; // between the new 60min cut and the old 120min cut
+
+  it('TS-1 (regression-latency): a seat frozen for 65min is WEDGED under the NEW 60min cut but NOT under the OLD 120min cut', () => {
+    const frozen65 = { ...fullRow({ loop_state: 'active' }), last_tool_at: minsAgo(FREEZE_ELAPSED_MIN) };
+    expect(FREEZE_CUT_MINUTES).toBeLessThan(PRE_SD_FREEZE_CUT_MINUTES); // sanity: recalibration actually lowered the cut
+    expect(isKnownWedged(frozen65, NOW, FREEZE_CUT_MINUTES)).toBe(true);
+    expect(isKnownWedged(frozen65, NOW, PRE_SD_FREEZE_CUT_MINUTES)).toBe(false);
+  });
+
+  it('TS-1 (regression-latency, fleet-level): the real 19:20-19:29Z 5-seat freeze shape reaches active_count=0 under the NEW cut well before it would under the OLD cut', async () => {
+    // Replays the actual incident shape (this SD's own provenance): seats frozen mid-iteration,
+    // heartbeat fresh throughout (heartbeats never stop -- that IS the original defect this
+    // predicate class already fixed). At FREEZE_ELAPSED_MIN minutes past freeze onset:
+    const fleet = [1, 2, 3, 4, 5].map((i) => ({
+      ...fullRow({ session_id: `incident-seat-${i}`, loop_state: 'active' }),
+      last_tool_at: minsAgo(FREEZE_ELAPSED_MIN),
+    }));
+    assertOnlyFreezeExcluded(fleet);
+
+    // NEW: every seat already reads STUCK -> active_count 0 -> pages once the 3-pulse dedup elapses.
+    const activeNew = fleet.filter((s) => !isKnownWedged(s, NOW, FREEZE_CUT_MINUTES)).length;
+    expect(activeNew).toBe(0);
+    expect(pagesOn(activeNew)).toBe(true);
+
+    // OLD: none of the 5 seats have reached the 120min cut yet at this elapsed time -- the fleet
+    // still reads fully live, so the pager would not even begin its 45min dedup countdown, let
+    // alone fire. This is the ~166-181min real page-latency this SD closes.
+    const activeOld = fleet.filter((s) => !isKnownWedged(s, NOW, PRE_SD_FREEZE_CUT_MINUTES)).length;
+    expect(activeOld).toBe(5);
+    expect(pagesOn(activeOld)).toBe(false);
+  });
+
+  it('a healthy fixture (fresh last_tool_at) does not page under the new recalibrated threshold (negative control)', async () => {
+    const fleet = [workingSeat('h1'), workingSeat('h2'), workingSeat('h3')];
+    const active = await activeCountVia(fleet);
+    expect(active).toBe(3);
+    expect(pagesOn(active)).toBe(false);
   });
 });
