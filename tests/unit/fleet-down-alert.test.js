@@ -429,6 +429,27 @@ describe('evaluatePerHostFreezePredicate (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2
     expect(msg.dedupeKey).toBe(`fleet-dead-man-host-stale-host-${NOW.toISOString().slice(0, 13)}`);
   });
 
+  it('SECURITY sub-agent finding (Finding 3, EXEC-TO-PLAN review): bounds the WHOLE composed SMS body, not just the first hostname interpolation, but keeps the dedupeKey keyed on the untruncated original', () => {
+    // verdict.reason (built by evaluatePerHostFreezePredicate) embeds the raw hostname A SECOND
+    // TIME -- an earlier draft of this fix only truncated the first "HOST DOWN: <hostname>"
+    // interpolation and left the copy inside reason unbounded. This fixture would have caught that:
+    // the full 200-char hostname would still have appeared once, past the truncation point.
+    const longHostname = 'x'.repeat(200);
+    const verdict = evaluatePerHostFreezePredicate({ hostname: longHostname, lastHeartbeatAtForHost: minutesAgo(150), now: NOW, windowMin: 120 });
+    const msg = buildPerHostFreezeMessage(longHostname, verdict, NOW);
+    expect(msg.body.length).toBeLessThan(220); // MAX_MESSAGE_BODY_CHARS (200) + '...(truncated)'
+    expect(msg.body).not.toContain(longHostname); // the full 200-char run never survives intact
+    expect(msg.body).toMatch(/\.\.\.\(truncated\)/);
+    expect(msg.dedupeKey).toBe(`fleet-dead-man-host-${longHostname}-${NOW.toISOString().slice(0, 13)}`);
+  });
+
+  it('does NOT truncate a normal-length message (no false-positive truncation on legitimate alerts)', () => {
+    const verdict = evaluatePerHostFreezePredicate({ hostname: 'Legion-Laptop', lastHeartbeatAtForHost: minutesAgo(150), now: NOW, windowMin: 120 });
+    const msg = buildPerHostFreezeMessage('Legion-Laptop', verdict, NOW);
+    expect(msg.body).not.toMatch(/\.\.\.\(truncated\)/);
+    expect(msg.body).toBe('HOST DOWN: Legion-Laptop -- host Legion-Laptop: no heartbeat for 150.0min (>= 120min). Start/restart a worker session on that host.');
+  });
+
   it('never reads or references completions -- Leg-A-only by construction (source-text pin — TESTING sub-agent finding M2)', () => {
     // A destructured single-object parameter always reports Function.length === 1 regardless of
     // how many fields the object literal has -- `.length` could never fail even if a `completions`
@@ -436,8 +457,14 @@ describe('evaluatePerHostFreezePredicate (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2
     // function body text instead (mirrors this file's own "main() wiring" source-text-pin
     // convention below), so a real regression wiring Leg B into this Leg-A-only predicate is
     // visible to the test.
+    // End-anchored on the function's OWN closing brace alone on its own line (column 0) -- every
+    // brace inside the function body is indented under an `if`, so this cannot match early. NOT
+    // anchored to whatever text happens to follow the function (a prior version anchored on
+    // "\n\n/**" and silently over-matched into unrelated sibling functions the moment code was
+    // inserted between this function and the next docblock -- caught when this exact test started
+    // failing against a legitimate "completions" mention 100+ lines away).
     const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
-    const match = src.match(/export function evaluatePerHostFreezePredicate\([\s\S]*?\n\}\n\n\/\*\*/);
+    const match = src.match(/export function evaluatePerHostFreezePredicate\([\s\S]*?\n\}\n/);
     expect(match).not.toBeNull();
     const body = match[0];
     expect(body).not.toMatch(/completions/);
@@ -631,6 +658,37 @@ describe('checkPerHostFreeze (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2/FR-3 integr
     expect(hostAInsert.payload.transitioned).toBe(true);
     expect(hostBInsert.payload.state).toBe('dead');
     expect(hostBInsert.payload.transitioned).toBe(false);
+  });
+
+  it('SECURITY sub-agent finding (Finding 1, EXEC-TO-PLAN review): caps chairman SMS volume at MAX_HOSTS_PAGED_PER_RUN (default 5) even with 6 simultaneously-dead hosts, and records nothing for the host beyond the cap', async () => {
+    // claude_sessions carries permissive anon RLS -- an attacker could otherwise insert thousands
+    // of fabricated hostnames and turn this arm into an unbounded chairman-SMS-bombing vector. This
+    // fixture (6 dead hosts, default cap 5) proves the bound holds without needing an env override.
+    const sessions = Array.from({ length: 6 }, (_, i) => ({ hostname: `dead-host-${i}`, heartbeat_at: minutesAgo(150) }));
+    const db = makeHostDb({ sessions });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkPerHostFreeze(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(5);
+    // The 6th host got NO system_events row this run (not just no page) -- so it is left eligible
+    // to compete for a cap slot on the NEXT run instead of being permanently latched out.
+    expect(db._inserted.length).toBe(5);
+    const pagedHostnames = sendChairmanSMSFn.mock.calls.map(([msg]) => msg.body);
+    const skippedHost = sessions.map((s) => s.hostname).find((h) => !pagedHostnames.some((body) => body.includes(h)));
+    expect(db._inserted.some((r) => r.payload.host === skippedHost)).toBe(false);
+  });
+
+  it('a healthy host never counts against the dead-host cap, even alongside 6 dead hosts', async () => {
+    const sessions = [
+      { hostname: 'Legion-Laptop', heartbeat_at: minutesAgo(1) },
+      ...Array.from({ length: 6 }, (_, i) => ({ hostname: `dead-host-${i}`, heartbeat_at: minutesAgo(150) })),
+    ];
+    const db = makeHostDb({ sessions });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkPerHostFreeze(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(5); // still capped at 5, the healthy host is separate
+    // 5 dead + 1 alive = 6 rows recorded; only the 6th DEAD host is skipped.
+    expect(db._inserted.length).toBe(6);
+    expect(db._inserted.some((r) => r.payload.host === 'Legion-Laptop' && r.payload.state === 'alive')).toBe(true);
   });
 
   it('excludes hosts fetchEligibleHosts did not return (query-level filtering, not this function\'s job)', async () => {

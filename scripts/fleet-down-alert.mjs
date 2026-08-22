@@ -382,6 +382,21 @@ const HOST_ELIGIBILITY_WINDOW_MIN = Number(process.env.HOST_ELIGIBILITY_WINDOW_M
 const HOST_QUERY_ROW_LIMIT = Number(process.env.HOST_QUERY_ROW_LIMIT) > 0
   ? Number(process.env.HOST_QUERY_ROW_LIMIT)
   : 5000;
+// SECURITY sub-agent finding (EXEC-TO-PLAN review, Finding 1): claude_sessions carries
+// `FOR ALL TO anon USING (true) WITH CHECK (true)` (database/migrations/20251204_multi_session_
+// coordination.sql:436) -- any anon-key holder can insert up to HOST_QUERY_ROW_LIMIT fabricated
+// hostnames with a heartbeat_at inside the eligibility window and, on the tick those rows age past
+// FLEET_DEAD_MAN_WINDOW_MIN, every OTHER alert arm in this file sends at most one SMS per run, but
+// this per-host loop had no such bound -- it paged the chairman once per dead host, unbounded. This
+// caps worst-case chairman-SMS volume from a single run to a small, humanly-plausible number: a
+// real simultaneous multi-host outage in the near-term cloud-pilot deployment this FR targets is
+// expected to be a handful of hosts, never thousands. Truncation is reported loudly (never silent),
+// mirroring this file's own HOST_QUERY_ROW_LIMIT/POPULATION_ROW_LIMIT convention -- a host beyond
+// the cap is NOT silently un-paged forever: it stays 'dead'+untransitioned in system_events and is
+// picked up the next run once earlier hosts have recovered or an operator raises the cap.
+const MAX_HOSTS_PAGED_PER_RUN = Number(process.env.MAX_HOSTS_PAGED_PER_RUN) > 0
+  ? Number(process.env.MAX_HOSTS_PAGED_PER_RUN)
+  : 5;
 
 /**
  * Pure decision (FR-2): is THIS HOST showing zero heartbeat signs of life within the window?
@@ -415,15 +430,36 @@ export function evaluatePerHostFreezePredicate({
   return { dead: true, reason: `host ${hostname}: no heartbeat for ${elapsedMin.toFixed(1)}min (>= ${windowMin}min)` };
 }
 
+// SECURITY sub-agent finding (EXEC-TO-PLAN review, Finding 3, LOW): hostname is an unvalidated
+// claude_sessions column value (claude_sessions carries permissive anon RLS -- see
+// MAX_HOSTS_PAGED_PER_RUN's comment) interpolated into a chairman-facing SMS body. Not an injection
+// vector (SMS bodies are inert text), but an unbounded value could pad or reshape the message in a
+// way that reads as chairman-deceptive. chairman-sms-gate already fail-closes at 1600 chars
+// (lib/comms/adam-outbound/rubric-engine/lint.js:15, DEFAULT_MAX_LEN) -- but that only guarantees
+// the send is REJECTED past 1600, not that a shorter padded/reshaped body never reaches the
+// chairman. Bound the WHOLE composed body here, tighter than that backstop and complementary to it.
+// MUST truncate the FINAL composed string, not just the hostname substitution: verdict.reason
+// (built by evaluatePerHostFreezePredicate) ALSO embeds the raw hostname a second time, so
+// truncating only the first interpolation left the second one unbounded -- caught by this file's
+// own direct test for this function, not assumed safe from the sub-agent's finding alone.
+const MAX_MESSAGE_BODY_CHARS = 200;
+
 /** Pure: the chairman-SMS message payload for a per-host freeze trip. */
 export function buildPerHostFreezeMessage(hostname, verdict, now = new Date()) {
+  const rawBody = `HOST DOWN: ${hostname} -- ${verdict.reason}. Start/restart a worker session on that host.`;
+  const body = rawBody.length > MAX_MESSAGE_BODY_CHARS
+    ? `${rawBody.slice(0, MAX_MESSAGE_BODY_CHARS)}...(truncated)`
+    : rawBody;
   return {
     type: 'status',
-    body: `HOST DOWN: ${hostname} -- ${verdict.reason}. Start/restart a worker session on that host.`,
+    body,
     kind: 'fleet_dead_man_alert',
     // TR-6: reuses the existing dedupeKey namespace convention (dead-coordinator-<hour>,
     // fleet-dead-man-<hour>) rather than inventing new cross-arm coordination -- host-qualified so
     // two hosts' pages can never collide, and hour-bucketed so a persistent outage doesn't re-spam.
+    // Deliberately keyed on the ORIGINAL hostname, not the truncated body: this key only needs to
+    // be stable and collision-resistant per real host, never displayed, so truncation here would
+    // just discard uniqueness for no benefit.
     dedupeKey: `fleet-dead-man-host-${hostname}-${now.toISOString().slice(0, 13)}`,
   };
 }
@@ -594,8 +630,26 @@ export async function checkPerHostFreeze(db, DRY, sendChairmanSMSFn = null, now 
   // non-zero-exit -- do not re-solve a problem this file already solved correctly.
   const eligibleHosts = await fetchEligibleHosts(db, now);
 
+  // SECURITY sub-agent finding (EXEC-TO-PLAN review, Finding 1): see MAX_HOSTS_PAGED_PER_RUN's own
+  // comment for the threat model. The cap bounds how many DEAD hosts get a FRESH recorded verdict
+  // this run (a superset of how many actually page, since only transitioned ones do) -- a host
+  // beyond the cap gets NO write this run, so its last recorded state is untouched and it
+  // re-competes for a cap slot next run once this run's paged hosts have themselves flipped to
+  // transitioned=false. Alive hosts never count against the cap; only dead ones do.
+  let deadProcessed = 0;
+  let deadSkippedByCap = 0;
+
   for (const [hostname, lastHeartbeatAtForHost] of eligibleHosts) {
     const verdict = evaluatePerHostFreezePredicate({ hostname, lastHeartbeatAtForHost, now });
+
+    if (verdict.dead) {
+      if (deadProcessed >= MAX_HOSTS_PAGED_PER_RUN) {
+        deadSkippedByCap += 1;
+        continue;
+      }
+      deadProcessed += 1;
+    }
+
     const { transitioned } = await recordFleetDeadManVerdict(db, verdict, hostname);
     console.log(`[fleet-dead-man-per-host] ${hostname}: ${verdict.dead ? 'DEAD' : 'alive'} (transitioned=${transitioned}): ${verdict.reason}`);
 
@@ -611,6 +665,10 @@ export async function checkPerHostFreeze(db, DRY, sendChairmanSMSFn = null, now 
     const { zone: chairmanZone } = await resolveChairmanZone(now);
     const r = await send(message, { now, chairmanZone });
     console.log(`[fleet-dead-man-per-host] sendChairmanSMS result for ${hostname}:`, JSON.stringify(r));
+  }
+
+  if (deadSkippedByCap > 0) {
+    console.error(`[fleet-dead-man-per-host] CAPPED at ${MAX_HOSTS_PAGED_PER_RUN} dead host(s) processed this run -- ${deadSkippedByCap} additional dead host(s) were NOT recorded or paged. They will re-compete for a cap slot on the next run. If this is a genuine mass outage rather than fabricated claude_sessions rows, raise MAX_HOSTS_PAGED_PER_RUN.`);
   }
 }
 
