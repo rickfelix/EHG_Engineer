@@ -110,7 +110,7 @@ describe('eligibleIdleWorkers — sd_key + spin-up grace', () => {
 describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live insert)', () => {
   function qfsForSelect(qfs, selectedCols) {
     if (selectedCols.includes('verified_at')) return qfs;
-    return (qfs || []).map(({ verified_at, ...rest }) => rest);
+    return (qfs || []).map(({ verified_at: _verified_at, ...rest }) => rest);
   }
 
   // verifiedAtMissing simulates the staged (not-yet-applied) verified_at column
