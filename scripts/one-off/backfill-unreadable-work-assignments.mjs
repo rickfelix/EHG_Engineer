@@ -47,6 +47,7 @@
  */
 import 'dotenv/config';
 import { createRequire } from 'node:module';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const require_ = createRequire(import.meta.url);
 const { resolveAssignmentTarget } = require_('../../lib/fleet/assignment-target.cjs');
@@ -120,4 +121,8 @@ async function main() {
   console.log(`\nAPPLIED: retired ${retired}, failed ${failed}. READABLE_NOW rows left untouched by design.`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001: guard against a bare import()/require() executing main()
+// against live prod. Behavior when run directly is unchanged.
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

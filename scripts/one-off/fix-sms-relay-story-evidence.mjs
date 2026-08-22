@@ -7,6 +7,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_ID = '05b55a82-3d91-40f0-ba1c-081d35dad2dc'; // SD-LEO-FEAT-SMS-INBOUND-RELAY-001
@@ -151,7 +152,11 @@ async function main() {
   console.log('\nDone.');
 }
 
-main().catch((e) => {
-  console.error('FATAL:', e.message);
-  process.exitCode = 1;
-});
+// SD-FDBK-ENH-578-SCRIPTS-ONE-001: guard against a bare import()/require() executing main()
+// against live prod. Behavior when run directly is unchanged.
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('FATAL:', e.message);
+    process.exitCode = 1;
+  });
+}
