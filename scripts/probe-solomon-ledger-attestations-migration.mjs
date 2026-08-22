@@ -1,6 +1,8 @@
 // SD-LEO-GEN-STAGE-DECISION-RESTORE-001 -- live probe for the chairman-gated
 // solomon_ledger_attestations migration pair. Runs UP inside a transaction, exercises the
 // append-only guards + the 2-row attestation content, then ROLLS BACK. Never commits anything.
+// @wire-check-exempt: standalone probe script, run manually once (no permanent entry point by
+// design), mirrors the established scripts/probe-*.mjs convention (e.g. probe-wind-down-events-migration.mjs).
 //
 // SAFETY NOTE (the reason this probe exists in this exact shape): unlike an earlier probe this
 // session for a DIFFERENT migration (which deliberately omitted its own BEGIN/COMMIT so a probe
