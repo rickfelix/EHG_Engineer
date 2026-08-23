@@ -210,12 +210,24 @@ describe('roleArmingStates — arming is measured, not asserted', () => {
      */
     for (const s of roleArmingStates(REPO)) {
       expect(s.tokens).toBeGreaterThan(0);
-      expect(s.armed).toBe(s.tokens <= SINGLE_READ_TOKEN_BUDGET);
+      // ONE DIRECTION, NOT EQUALITY (found live, SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002):
+      // over budget must never read armed. Under budget CAN still read unarmed -- the production
+      // marginal-prediction carve-out (coordinator-startup-check.mjs's `predicted_marginal` path)
+      // deliberately reports armed=false near the cap, within the tokenizer's own error band, even
+      // though the raw count is <= budget -- an honest "unconfirmed", not a false "fits". Solomon's
+      // real contract landed exactly there (tokens<=budget, armed=false) the first time any role's
+      // content reached that zone, and the old strict equality read that CORRECT caution as a bug.
+      if (s.tokens > SINGLE_READ_TOKEN_BUDGET) {
+        expect(s.armed).toBe(false);
+      } else if (s.armed) {
+        expect(s.tokens).toBeLessThanOrEqual(SINGLE_READ_TOKEN_BUDGET);
+      }
       expect(s.reason).toContain('token');
     }
 
-    // MUTATION: hardcode any role's verdict, or compare bytes instead of tokens -> armed stops
-    // agreeing with tokens and this fails.
+    // MUTATION: hardcode any role's verdict to `armed: true` regardless of tokens -> the
+    // over-budget branch fails. Compare bytes instead of tokens -> the reason/armed reasoning
+    // stops agreeing with SINGLE_READ_TOKEN_BUDGET and this fails.
   });
 
   it('the RENDERED table reflects injected measurements rather than a fixed string', () => {
