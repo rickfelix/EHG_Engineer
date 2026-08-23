@@ -713,6 +713,26 @@ ${coordinatorContent}
 `;
 }
 
+/** CLAUDE_COORDINATOR_MANUAL.md — the how-to companion. SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 (FR-1). */
+function generateCoordinatorManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_COORDINATOR_MANUAL.md', {
+    heading: 'Coordinator Manual (how-to companion)',
+    purpose: 'How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail',
+    loadWhen: 'At the MOMENT OF DOING the procedure — not at session start',
+    note: 'This companion carries PROCEDURE. The RULES that govern these procedures stay in CLAUDE_COORDINATOR.md and are in force whether or not this file is read.',
+  });
+}
+
+/** CLAUDE_COORDINATOR_PROVENANCE.md — the dated-rationale companion. SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 (FR-1). */
+function generateCoordinatorProvenance(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_COORDINATOR_PROVENANCE.md', {
+    heading: 'Coordinator Provenance (dated rationale)',
+    purpose: 'Why each clause exists — dated operator/chairman directives, live incidents, superseded cadences',
+    loadWhen: 'When you need to know WHY a rule exists, or before proposing to change one',
+    note: 'Every rule in CLAUDE_COORDINATOR.md is IN FORCE regardless of whether its history is read here. This file explains; it does not govern.',
+  });
+}
+
 function generateSolomon(data, fileMapping) {
   const { protocol } = data;
   const sections = protocol.sections;
@@ -793,6 +813,8 @@ export {
   generateLeadManual,
   generatePlanManual,
   generateCoordinator,
+  generateCoordinatorManual,
+  generateCoordinatorProvenance,
   generateSolomon,
   generateSolomonManual,
   findCopiedSharedSections,

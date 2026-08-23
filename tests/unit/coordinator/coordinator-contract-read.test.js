@@ -272,4 +272,16 @@ describe('PROTOCOL_FILES tracking prerequisite', () => {
 
     // MUTATION: remove it from PROTOCOL_FILES -> reads go untracked and the check can never pass.
   });
+
+  it('the tracker knows about the coordinator manual + provenance companions (FR-7, SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002)', async () => {
+    // Same reasoning as the charter assertion above: without this, a seat that reads only
+    // CLAUDE_COORDINATOR.md post-split is indistinguishable from one that read the full
+    // charter+manual+provenance contract -- the tracker has nothing to consult either way.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../../../scripts/hooks/protocol-file-tracker.cjs', import.meta.url), 'utf8');
+    expect(src).toContain("'CLAUDE_COORDINATOR_MANUAL.md'");
+    expect(src).toContain("'CLAUDE_COORDINATOR_PROVENANCE.md'");
+
+    // MUTATION: remove either companion from PROTOCOL_FILES -> its reads go untracked.
+  });
 });

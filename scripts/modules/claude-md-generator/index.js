@@ -42,6 +42,8 @@ import {
   generateSolomon,
   generateAdamManual,
   generateAdamProvenance,
+  generateCoordinatorManual,
+  generateCoordinatorProvenance,
   generateLeadManual,
   generateSolomonManual,
   generatePlanManual,
@@ -204,6 +206,10 @@ class CLAUDEMDGeneratorV3 {
       ['CLAUDE_ADAM_MANUAL.md', (d) => generateAdamManual(d, this.fileMapping), 'full'],
       ['CLAUDE_ADAM_PROVENANCE.md', (d) => generateAdamProvenance(d, this.fileMapping), 'full'],
       ['CLAUDE_COORDINATOR.md', (d) => generateCoordinator(d, this.fileMapping), 'full'],
+      // SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 / FR-1: mirrors the Adam companion pattern —
+      // the contract references both companions by name; they must actually be generated.
+      ['CLAUDE_COORDINATOR_MANUAL.md', (d) => generateCoordinatorManual(d, this.fileMapping), 'full'],
+      ['CLAUDE_COORDINATOR_PROVENANCE.md', (d) => generateCoordinatorProvenance(d, this.fileMapping), 'full'],
       ['CLAUDE_SOLOMON.md', (d) => generateSolomon(d, this.fileMapping), 'full'],
       // SD-FDBK-INFRA-CLAUDE-SOLOMON-EXCEEDS-001: the reference companion that gets
       // CLAUDE_SOLOMON.md back under the Read tool's 25k single-call cap. Rules, prohibitions and
@@ -660,7 +666,7 @@ export function assertSingleReadFit(files, opts = {}) {
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 

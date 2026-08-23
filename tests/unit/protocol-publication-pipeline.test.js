@@ -143,7 +143,7 @@ describe('FR-4: --only scoped regeneration', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('KNOWN_GENERATED_FILES covers the 21 generated files', () => {
+  it('KNOWN_GENERATED_FILES covers the 23 generated files', () => {
     // Grew 12 -> 14 (Coordinator) -> 16 (Solomon: CLAUDE_SOLOMON.md + CLAUDE_SOLOMON_DIGEST.md)
     // -> 18 (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001: the two Adam companions, which the chairman
     // ruled A-GOVERN on so they are GENERATED from governed rows rather than hand-maintained files).
@@ -155,7 +155,9 @@ describe('FR-4: --only scoped regeneration', () => {
     // returned "showing lines 1-301 of 371 total (26138 tokens, cap 25000)" for CLAUDE_SOLOMON.md,
     // and the dropped tail held the chairman-ratified clause REPEALING a rule the surviving head
     // still stated — truncation kept the superseded rule and discarded its repeal.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(21);
+    // -> 23 (SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002: CLAUDE_COORDINATOR_MANUAL.md +
+    // CLAUDE_COORDINATOR_PROVENANCE.md, mirroring the Adam companion pattern.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(23);
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');
@@ -176,6 +178,10 @@ describe('FR-4: --only scoped regeneration', () => {
     // notice it went missing.
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_MANUAL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_PLAN_MANUAL.md');
+    // SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 (FR-1): named explicitly for the same reason as
+    // the Adam companions above — a future edit that drops them fails HERE, not silently.
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_MANUAL.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_PROVENANCE.md');
   });
 });
 

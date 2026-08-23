@@ -234,6 +234,18 @@
       "role_partnership_contract"
     ]
   },
+  "CLAUDE_COORDINATOR_MANUAL.md": {
+    "description": "Coordinator MANUAL companion — how-to procedures (dispatch mechanics, gauge/count verification steps, loop-registry operating detail). Read at the moment of doing, not at session start. SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002.",
+    "sections": [
+      "coordinator_manual"
+    ]
+  },
+  "CLAUDE_COORDINATOR_PROVENANCE.md": {
+    "description": "Coordinator PROVENANCE companion — dated rationale, live incidents, superseded cadences. Every rule in CLAUDE_COORDINATOR.md is in force regardless of whether its history is read. SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002.",
+    "sections": [
+      "coordinator_provenance"
+    ]
+  },
   "CLAUDE_SOLOMON.md": {
     "description": "Solomon oracle role contract — deep-reasoning oracle session. Loaded by the /solomon skill or when orienting a deep-reasoning oracle session.",
     "sections": [

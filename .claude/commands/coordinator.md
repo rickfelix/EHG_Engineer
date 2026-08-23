@@ -32,7 +32,7 @@ ARGUMENTS: $ARGUMENTS
 
 ## Coordinator standing responsibilities (SRE charter)
 
-> **CANONICAL — generated, do not hand-edit here.** The coordinator role + SRE charter — the six standing duties, conveyor-belt loading, the quiet-tick protocol, the maximize-utilization directive, the belt-low→ask-Adam default, and the deploy-verification practice — is the single source of truth in the governed `leo_protocol_sections` row `section_type=coordinator_role_contract`, published to **CLAUDE_COORDINATOR.md** (+ `CLAUDE_COORDINATOR_DIGEST.md`) by `node scripts/generate-claude-md-from-db.js`. **Load CLAUDE_COORDINATOR.md for the charter; to change it, edit the DB section and regenerate — do not re-add the charter prose here** (de-duplicated by SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001).
+> **CANONICAL — generated, do not hand-edit here.** The coordinator role + SRE charter — the six standing duties, conveyor-belt loading, the quiet-tick protocol, the maximize-utilization directive, the belt-low→ask-Adam default, and the deploy-verification practice — is the single source of truth in the governed `leo_protocol_sections` rows (`section_type` in `coordinator_role_contract`, `coordinator_manual`, `coordinator_provenance`), published to **CLAUDE_COORDINATOR.md** + its **CLAUDE_COORDINATOR_MANUAL.md** / **CLAUDE_COORDINATOR_PROVENANCE.md** companions (+ `CLAUDE_COORDINATOR_DIGEST.md`) by `node scripts/generate-claude-md-from-db.js`. **Load CLAUDE_COORDINATOR.md for the charter; to change it, edit the DB section and regenerate — do not re-add the charter prose here** (de-duplicated by SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001; companion split by SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002). This whole skill file is itself SUBORDINATE to the DB-generated charter: on any conflict between this file's doctrine and CLAUDE_COORDINATOR.md, the charter controls.
 
 ---
 
@@ -672,6 +672,12 @@ When the user mentions any of these phrases, suggest `/coordinator`:
 > **SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001.** This complements — does not restate —
 > the charter's belt-low→ask-Adam duty (canonical in `CLAUDE_COORDINATOR.md`). It defines the
 > decision path the coordinator runs *before* a manual hand-ask.
+>
+> **SUBORDINATE TO CODE (SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002, FR-3):** the flag list below
+> MUST name every flag in `SOURCING_ENGINE_FLAGS` (`scripts/lib/sourcing-engine-awareness.mjs`) —
+> drift-checked by `tests/unit/coordinator/coordinator-sourcing-doctrine-drift.test.js`. This
+> doctrine-bearing section is a live specimen of the drift class this SD closes: a prior missing
+> flag (`SOURCING_AUTO_REFILL_V1`) went unnoticed here until this SD's ground-truth pass found it.
 
 **You have a sourcing engine.** The sourcing-engine SD family (10/10 children, shipped) plus the
 `roadmap_wave_items` SSOT and the rung roadmap already exist to keep the belt fed *automatically*.
@@ -680,8 +686,8 @@ dips) is the **anti-pattern** — it means the engine is idle while you do its j
 
 **On belt-low, the FIRST check is the engine, NOT a hand-ask to Adam:**
 1. **Engine activation-flag state** — are the `SOURCING_*` flags on? (`SOURCING_GAUGE_GAP_MINER_V1`,
-   `SOURCING_DEFERRED_WATCHER_V1`, …). The canonical list + the reader live in
-   `scripts/lib/sourcing-engine-awareness.mjs` (`readSourcingEngineFlags`).
+   `SOURCING_DEFERRED_WATCHER_V1`, `SOURCING_AUTO_REFILL_V1`). The canonical list + the reader live
+   in `scripts/lib/sourcing-engine-awareness.mjs` (`readSourcingEngineFlags`).
 2. **Unpromoted roadmap depth** — how many `roadmap_wave_items` have `promoted_to_sd_key IS NULL`?
    A rich unpromoted backlog with the engine OFF is the tell.
 3. **Remediation order:**
