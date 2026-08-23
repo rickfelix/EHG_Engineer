@@ -53,12 +53,19 @@ describe('kill-gate fail-loud: a produce/persist failure must never be swallowed
   });
 });
 
-describe('promotion gates retain autonomy-aware bypass (no regression)', () => {
+describe('promotion gates: skip no longer bypasses production (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 FR-5); auto_approve (L2) unaffected by design', () => {
   for (const stage of PROMOTION_GATES) {
-    it(`promotion stage ${stage} bypasses on skip/auto_approve, produces on manual`, () => {
+    it(`promotion stage ${stage} now PRODUCES on skip (L3/L4, was the silent bypass), still bypasses on auto_approve (L2), produces on manual`, () => {
       const { gateType } = isDevilsAdvocateGate(stage);
       expect(gateType).toBe('promotion');
-      expect(mustProduceDevilsAdvocate(gateType, 'skip')).toBe(false);
+      // FR-5 (descoped per O1: no code-expressible "W3-class evaluation" definition was obtainable
+      // within this SD's window -- see strategic_directives_v2.metadata.scope_correction and the
+      // completion retrospective for which path was taken). The autonomy matrix
+      // (autonomy-model.js:44-45) gives devils_advocate:'skip' ONLY at L3/L4 -- disabling the skip
+      // bypass here disables it for L3/L4 generally, matching the descope's stated broader claim.
+      expect(mustProduceDevilsAdvocate(gateType, 'skip')).toBe(true);
+      // D9/TS-10: L2's 'auto_approve' bypass is a SEPARATE autonomy action and stays intact by
+      // design -- FR-5 only targets 'skip'.
       expect(mustProduceDevilsAdvocate(gateType, 'auto_approve')).toBe(false);
       expect(mustProduceDevilsAdvocate(gateType, 'manual')).toBe(true); // manual still produces
       expect(isKillGateFailLoud(gateType)).toBe(false); // and stays non-fatal
@@ -70,5 +77,44 @@ describe('promotion gates retain autonomy-aware bypass (no regression)', () => {
     expect(isGate).toBe(false);
     expect(mustProduceDevilsAdvocate(gateType, 'manual')).toBe(false);
     expect(isKillGateFailLoud(gateType)).toBe(false);
+  });
+});
+
+// SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 (FR-5) TS-9/TS-10.
+describe('FR-5: fix lives at the real live devils_advocate site, never the dead stage_gate branch', () => {
+  it('TS-9 (source-pin, END-ANCHORED, never a fixed line number): the real orchestrator call site '
+    + 'still consumes mustProduceDevilsAdvocate(daGateType, daAutonomy.action) -- the site this SD '
+    + 'fixed -- and it is textually DISTINCT from the dead stageAutonomy.action===\'skip\' branch '
+    + '(a different guard on a different variable, confirmed unreachable independently by '
+    + 'stage-governance.js\'s _autonomyGateType, per O6) which this SD does NOT touch', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const src = fs.readFileSync(path.resolve(process.cwd(), 'lib/eva/eva-orchestrator.js'), 'utf8');
+
+    // The real, live devils_advocate guard this SD's fix reaches at runtime.
+    expect(src).toMatch(/mustProduceDevilsAdvocate\(daGateType, daAutonomy\.action\)/);
+
+    // The dead branch (stage_gate autonomy, NOT devils_advocate) is a separate guard on a
+    // separate variable -- present, unrelated, and untouched by this SD.
+    expect(src).toMatch(/stageAutonomy\.action === 'skip'/);
+
+    // They must never collapse into the same conditional -- END-ANCHORED on the literal guard
+    // text itself, not a char offset, so an unrelated edit above/below never false-fails this.
+    const liveGuardIdx = src.indexOf('mustProduceDevilsAdvocate(daGateType, daAutonomy.action)');
+    const deadBranchIdx = src.indexOf("stageAutonomy.action === 'skip'");
+    expect(liveGuardIdx).toBeGreaterThan(-1);
+    expect(deadBranchIdx).toBeGreaterThan(-1);
+    expect(liveGuardIdx).not.toBe(deadBranchIdx);
+  });
+
+  it('TS-10 edge-case controls: an L2 promotion-gate auto_approve is unaffected, and a non-promotion '
+    + 'stage_gate never produces regardless of skip', () => {
+    // Control (a): L2 promotion-gate bypass (auto_approve) stays intact -- already asserted per-stage
+    // above; restated here as an explicit named control per D9's "no over-broad regression" requirement.
+    expect(mustProduceDevilsAdvocate('promotion', 'auto_approve')).toBe(false);
+    // Control (b): a non-promotion, non-kill gate (e.g. stage_gate) NEVER produces, regardless of
+    // 'skip' -- FR-5's fix only has teeth on promotion gates (devils-advocate.js:106, D9).
+    expect(mustProduceDevilsAdvocate('stage_gate', 'skip')).toBe(false);
+    expect(mustProduceDevilsAdvocate(null, 'skip')).toBe(false);
   });
 });
