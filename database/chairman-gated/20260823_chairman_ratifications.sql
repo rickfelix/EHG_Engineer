@@ -152,6 +152,20 @@ CREATE TRIGGER chairman_ratifications_no_truncate_trg
   BEFORE TRUNCATE ON public.chairman_ratifications
   FOR EACH STATEMENT EXECUTE FUNCTION public.chairman_ratifications_no_truncate();
 
+-- SECURITY finding M1 (EXEC-phase adversarial review): default ORIGIN-mode triggers are
+-- suppressed by `SET LOCAL session_replication_role = 'replica'` -- measured live as ALLOWED for
+-- the `postgres` role this harness itself connects as, which would silently disable all three
+-- append-only guards for the duration of that setting. ALWAYS-mode triggers still fire in replica
+-- mode (they only skip on 'origin' vs 'replica' vs 'local' semantics the other way -- ALWAYS fires
+-- in both 'origin' and 'replica', only 'disable' mode is fully off). This table has no legitimate
+-- logical-replication or bulk-load use case that needs replica-mode trigger suppression, so there
+-- is no cost to closing this. (Pre-existing class-wide gap in the modelled-on precedent,
+-- solomon_ledger_attestations, whose triggers are still ORIGIN-mode -- not fixed here, out of
+-- this SD's scope, but not repeated in this new table.)
+ALTER TABLE public.chairman_ratifications ENABLE ALWAYS TRIGGER chairman_ratifications_no_update;
+ALTER TABLE public.chairman_ratifications ENABLE ALWAYS TRIGGER chairman_ratifications_no_delete_trg;
+ALTER TABLE public.chairman_ratifications ENABLE ALWAYS TRIGGER chairman_ratifications_no_truncate_trg;
+
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- POSTURE. pg_default_acl grants anon/authenticated arwdDxtm on every new public-schema table by
 -- default -- RLS-with-no-policy blocks rows, but the grant itself still exists until revoked.
