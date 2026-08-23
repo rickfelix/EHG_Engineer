@@ -140,9 +140,9 @@ describe('the tick cannot pass the flag — which is WHY the env gate exists', (
     expect(TICK).not.toMatch(/no-orphan-sweep/);
   });
 
-  it('the cron workflow invokes the reaper directly, with no tick in between', () => {
+  it('the GHA workflow invokes the reaper directly, with no tick in between (QF-20260823-761: schedule retired, dispatch-only)', () => {
     const wf = readFileSync(resolve(REPO_ROOT, '.github/workflows/worktree-reaper-cadence.yml'), 'utf8');
-    expect(wf).toMatch(/schedule:/);
+    expect(wf).toMatch(/workflow_dispatch:/);
     expect(wf).toMatch(/worktree:reap/);
     expect(wf).not.toMatch(/worktree-reaper-tick/);
   });

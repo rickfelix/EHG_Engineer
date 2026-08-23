@@ -64,6 +64,13 @@ The reaper ticks on every 12th `stale-session-sweep` run (~1h at 5-min
 intervals). Wired in `scripts/fleet/worktree-reaper-tick.cjs`, invoked from
 `stale-session-sweep.cjs` right before `=== SWEEP COMPLETE ===`.
 
+**Sole owner (QF-20260823-761):** this machine-local sweep-tick chain is the
+ONLY thing that reaps the pool. `.github/workflows/worktree-reaper-cadence.yml`
+had a `gha_backed`-style daily schedule invoking this same script directly, but
+a GitHub-hosted runner's fresh fetch-depth-1 clone never has a populated
+`.worktrees/` (it's gitignored), so that schedule scanned 0 every day and was
+retired (workflow_dispatch-only now, for an explicit human-triggered run).
+
 | Env var | Default | Effect |
 |---|---|---|
 | `WORKTREE_REAPER_ENABLED` | `true` | Master kill switch. Set `false`/`0`/`off` to disable sweep integration. |

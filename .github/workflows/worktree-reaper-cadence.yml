@@ -6,10 +6,16 @@
 # scans 0 and exits 0 every day. The asymmetry was not closed; it was converted into a daily green
 # certification that reaping happens. The scanned==0 guard below now refuses to report success for
 # a run that did nothing. Stage 1 only.
+#
+# RETIRED (QF-20260823-761): the guard above was correct, and its own message is the fix — this
+# runner structurally CANNOT observe the pool, so the schedule was failing daily by design
+# (2026-08-21/22/23) and filing a spurious issue every time. Removed the `schedule:` trigger; the
+# job body stays intact for an explicit human `workflow_dispatch` (never fails on scanned==0, since
+# that guard is scoped to scheduled runs only — see "SCHEDULE-ONLY, deliberately" below). Reaping is
+# owned exclusively by a separate MACHINE-LOCAL cadence, on the host that actually has .worktrees/ —
+# see docs/lib/worktree-reaper/README.md, "Cadence integration (automated)".
 name: Worktree Reaper Cadence
 on:
-  schedule:
-    - cron: '0 3 * * *'  # Daily 03:00 UTC, low-traffic window.
   workflow_dispatch:
     inputs:
       dry_run:

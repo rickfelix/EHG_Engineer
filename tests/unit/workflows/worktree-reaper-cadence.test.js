@@ -29,12 +29,12 @@ describe('QF-20260511-414: worktree-reaper-cadence.yml', () => {
     expect(wf.name).toBe('Worktree Reaper Cadence');
   });
 
-  it('runs on daily cron + workflow_dispatch', () => {
+  it('QF-20260823-761: schedule is retired (a fresh CI clone can never see .worktrees/) — workflow_dispatch only', () => {
     // js-yaml parses YAML `on:` key as boolean `true` (the "Norway problem"
     // sibling); access via bracket notation.
     const trig = wf.on ?? wf[true];
     expect(trig).toBeTruthy();
-    expect(trig.schedule).toEqual([{ cron: '0 3 * * *' }]);
+    expect(trig.schedule).toBeUndefined();
     expect(trig.workflow_dispatch).toBeDefined();
     expect(trig.workflow_dispatch.inputs.dry_run).toBeDefined();
   });
