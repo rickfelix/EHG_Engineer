@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T04:18:25.727Z",
-  "git_commit": "42e990d0",
+  "generated_at": "2026-08-23T04:58:20.373Z",
+  "git_commit": "b6930e11",
   "db_snapshot_hash": "a9dcd7a2e7939fe0",
   "files": {
     "CLAUDE.md": {
@@ -85,10 +85,10 @@
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 25336,
-      "bytes": 25528,
-      "estimated_tokens": 6334,
-      "content_hash": "5e3c5545362ced58",
+      "chars": 25533,
+      "bytes": 25727,
+      "estimated_tokens": 6384,
+      "content_hash": "a118c322d777d4b0",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
@@ -173,10 +173,10 @@
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
-      "chars": 8301,
-      "bytes": 8367,
-      "estimated_tokens": 2076,
-      "content_hash": "9390d9eba748ce95",
+      "chars": 8498,
+      "bytes": 8566,
+      "estimated_tokens": 2125,
+      "content_hash": "98e634fb7dd424ad",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
@@ -189,7 +189,7 @@
     }
   },
   "section_digests": {
-    "global": "2dae056ae434de57",
+    "global": "95dadf3cab63b4f0",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -465,7 +465,7 @@
       "630": "7851b31f692ec87c",
       "632": "f3ebf4de6f9fefbe",
       "633": "12cf4526e9c9fd09",
-      "634": "4b9e7014c2db98f2",
+      "634": "6518b5f83a72be9e",
       "635": "4d256bd4f129b597"
     },
     "meta": {

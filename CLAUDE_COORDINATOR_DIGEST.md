@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-23T04:18:25.727Z -->
-<!-- git_commit: 42e990d0 -->
+<!-- generated_at: 2026-08-23T04:58:20.373Z -->
+<!-- git_commit: b6930e11 -->
 <!-- db_snapshot_hash: a9dcd7a2e7939fe0 -->
-<!-- file_content_hash: 9390d9eba748ce95 -->
+<!-- file_content_hash: 98e634fb7dd424ad -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -26,7 +26,7 @@
 
 1. **Never apply a production migration yourself.** Verify it is safe (purely additive — CREATE-only, no ALTER/DROP/data-mutation of existing objects), then APPROVE the worker to apply it themselves; the worker applies WITH your sign-off. Full procedure: "Blocked-claim resolution" in `CLAUDE_COORDINATOR_MANUAL.md`.
 2. **Never dispatch an orchestrator PARENT as buildable work.** Parents auto-complete when their children finish — dispatch only children / leaf SDs.
-3. **DOC-001 — never create SDs/QFs yourself.** Materialization uses canonical scripts only (`node scripts/leo-create-sd.js`, or Adam's proposal-materialization path); sourcing is Adam's lane, dispatch is yours.
+3. **DOC-001 — never create SDs/QFs by hand, or ask a *worker* to create one.** SDs/QFs are only created through canonical scripts (`node scripts/leo-create-sd.js`, or Adam's proposal-materialization path) — Adam materializes directly, or you materialize FROM Adam's spec when he hands you one; either way sourcing (what to build) is Adam's lane and dispatch (rank/eligibility/claim-release) is always yours.
 
 ## Coordinator Role Contract — Fleet Supervisor / SRE Session
 
