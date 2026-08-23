@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-23](#2026-08-23)
+  - [Bugfix](#bugfix)
 - [2026-08-22](#2026-08-22)
   - [Security](#security)
   - [Bugfix](#bugfix)
@@ -134,6 +136,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-23
+
+### Bugfix
+- **The DATABASE sub-agent's migration file discovery had never found a single file, for any SD, ever — a fixture-blind PASS on every migration-related check** - PR #7420 (SD-LEO-FIX-DATABASE-SCHEMA-VALIDATOR-001, escalated from QF-20260822-945)
+  - **What the QF proposed vs. what was actually broken**: QF-20260822-945 scoped this as "add `database/chairman-gated/*.sql` to `migrationPaths`" (56 real migration files there were invisible to the check). LEAD-phase prospective TESTING found that fix would have been a strict no-op: `staticFileValidation()`'s `const files = await glob(pattern)` (`lib/sub-agents/database/schema-validator.js`) awaited glob@7.2.3's callback/EventEmitter export as if it were a Promise — `await` resolved to the `Glob` instance itself, not the match list, so `allFiles` was always empty for every one of the three pre-existing patterns too, not just the missing fourth.
+  - **Live proof of the bug, independently reproduced twice**: `staticFileValidation('SD-KNOWLEDGE-001', {})` returned `verdict=NOT_REQUIRED`/0 files on unmodified `main`, despite `database/migrations/20251015_add_retrospective_quality_score_constraint.sql` (already inside `migrationPaths`) genuinely containing that exact SD ID.
+  - **What shipped**: `promisify(glob)` with `cwd:getRepoRoot()`+`absolute:true`, plus the originally-requested fourth `database/chairman-gated/*.sql` pattern — both proven independently load-bearing by mutation testing (reverting either one turns tests red). Live check post-fix: 1579 migration files now discoverable (was 0, always).
+  - **A previously-dead code path goes live**: `lib/sub-agents/database/index.js:219-225` early-returns `PASS`/confidence 100 whenever the file-discovery phase reports `NOT_REQUIRED` — since that was every call, ever, the contract-compliance and Phase-2 DB-verification branches had been unreachable for the DATABASE sub-agent's entire lifetime. Assessed as a scoped, acceptable change (the sub-agent is only required for `sd_type='database'`, not universal blast radius) rather than blocking on it.
+  - **Deliberately kept out of scope, reported separately**: the identical broken-`await-glob` pattern was independently confirmed live in 5+ other files (`lib/sub-agents/database/migration-handler.js`, `scripts/modules/pre-exec/file-discovery.js`, `lib/self-audit/routines/orphanRules.js` and `specDrift.js`, `lib/sub-agents/modules/stories/codebase-analysis.js`) — flagged to the coordinator as a systemic follow-up rather than expanding this bugfix's diff. A pre-existing, unrelated MEDIUM-severity shell-interpolation shape (`schema-validator.js:271`) and a naive quote-parity syntax heuristic that will now execute against real content for the first time were also flagged, not fixed here.
+  - **Verification**: RED-first (2 new tests fail against unmodified code via `git stash`, pass against the fix) plus an independent TESTING sub-agent re-verification with mutation testing and a 120/120 regression sweep across `lib/sub-agents/`; independent SECURITY sub-agent review (PASS, confidence 92) found no path-traversal/injection risk and confirmed the newly-live code paths only ever regex-match file content, never `eval`/`exec` it. LEAD-TO-PLAN 95%, PLAN-TO-EXEC 93%, EXEC-TO-PLAN 90%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 93%.
 
 ## 2026-08-22
 
