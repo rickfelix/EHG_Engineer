@@ -24,11 +24,37 @@ chairman's `--issue-token`. **A worker cannot place chairman-gated DDL in an aut
 still call it gated.** This directory is outside all three scanned paths, so the file waits here
 until a human applies it deliberately.
 
+## Ceremony guard order (read this before running any command below)
+
+`--issue-token` is a MODE SWITCH, not a flag you combine with `--prod-deploy` — passing it
+alongside a migration path still just mints a fresh token and exits without applying
+(`scripts/apply-migration.js` checks `args.flags.has('issue-token')` before it even looks at
+the migration path). Every ceremony below is always **two separate invocations**, and every
+file in this directory also needs `--allow-any-path` (it lives outside `database/migrations/`,
+the only path `apply-migration.js` accepts by default):
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/<file>.sql" --prod-deploy --allow-any-path
+```
+
+`--prod-deploy` then runs these guards in order (`scripts/apply-migration.js` /
+`scripts/lib/migration-guards.js`) — any failure aborts before touching the DB:
+1. **path** — resolves inside this directory only with `--allow-any-path` passed.
+2. **git_committed** — the `.sql` file must be tracked by git with no uncommitted changes.
+3. **approver** — the file's `-- @approved-by: <email>` header must match `git config user.email`.
+4. **token** — `MIGRATION_APPLY_TOKEN` must be the value from a separate `--issue-token` call, unconsumed and <1h old.
+
+Then, per-file DDL post-conditions (the acceptance/verify scripts named in each entry below).
+
 ## Applying `20260802_sd_mutation_audit_trigger.sql`
 
 ```
-node scripts/apply-migration.js "database/chairman-gated/20260802_sd_mutation_audit_trigger.sql" \
-  --prod-deploy --issue-token <token>
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260802_sd_mutation_audit_trigger.sql" \
+  --prod-deploy --allow-any-path
 ```
 
 Rollback is in the file header:
@@ -54,8 +80,10 @@ for updates touching none of the three fields.
 ## Applying `20260803_bound_anon_ingress_source_type_qualifier.sql`
 
 ```
-node scripts/apply-migration.js "database/chairman-gated/20260803_bound_anon_ingress_source_type_qualifier.sql" \
-  --prod-deploy --issue-token <token>
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260803_bound_anon_ingress_source_type_qualifier.sql" \
+  --prod-deploy --allow-any-path
 ```
 
 Chairman-approved 2026-08-03 (Option A, SMS 10:13:53Z, on record via Adam). **Approval to author is
@@ -123,9 +151,7 @@ MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
 ```
 
 (SD-LEO-INFRA-VENTURE-BURN-RLS-TENANT-PREDICATE-001, SECURITY review finding S-7 — evidence row
-`8d2a6a6f-dd80-43af-9ddf-17a7c4ad48ee`. Note: the `20260803` entry above uses the older
-`--issue-token <token> --prod-deploy` combined form, which has the same defect — read against the
-live `apply-migration.js` source before running it, not against either README entry verbatim.)
+`8d2a6a6f-dd80-43af-9ddf-17a7c4ad48ee`.)
 
 Chairman-approved 2026-08-12 (S1 'A', SMS 11:43:53Z, Adam packet item 3). Fixes
 `venture_operating_burn_auth_read`, which was `USING (true)` for `authenticated` — any tenant could
