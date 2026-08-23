@@ -23,6 +23,9 @@ import {
 } from './auto-proceed-resolver.js';
 import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
 import { runPrerequisitePreflight } from './pre-checks/prerequisite-preflight.js';
+// SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 (FR-2, flag-gated OFF by default)
+import { isAutoInvokeEnabled, autoInvokeMissingSubAgents } from '../../../lib/handoff/preflight-auto-invoke.js';
+import { executeSubAgent } from '../../../lib/sub-agent-executor.js';
 
 /**
  * QF-20260525-378: fold a FAILED prerequisite preflight into a precheck verdict
@@ -48,6 +51,24 @@ export function applyPreflightToVerdict(result, preflight) {
       ...((result && result.failedGates) || [])
     ]
   };
+}
+
+/**
+ * SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-2 / TR-7: decide whether a failed
+ * preflight is eligible for auto-invoke. Eligible ONLY when every blocking issue
+ * is SUBAGENT_EVIDENCE_MISSING (never a mix with BAD_VERDICT/NOT_RUN) and at
+ * least one missing agent code was actually enumerated. Pure + exported for
+ * unit testing without instantiating the orchestrator.
+ * @param {{passed?:boolean, issues?:{code:string, missingAgents?:string[]}[]}} preflight
+ * @returns {string[]} deduped missing agent codes eligible for auto-invoke, or [] if ineligible
+ */
+export function resolveMissingAgentsForAutoInvoke(preflight) {
+  if (!preflight || preflight.passed !== false || !Array.isArray(preflight.issues) || preflight.issues.length === 0) {
+    return [];
+  }
+  const allMissingClass = preflight.issues.every(i => i.code === 'SUBAGENT_EVIDENCE_MISSING');
+  if (!allMissingClass) return [];
+  return [...new Set(preflight.issues.flatMap(i => i.missingAgents || []))];
 }
 
 export class HandoffOrchestrator {
@@ -155,7 +176,30 @@ export class HandoffOrchestrator {
 
       // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-078: Quick prerequisite preflight
       // Catches common 0% gate causes before running expensive full validation
-      const preflight = await runPrerequisitePreflight(this.supabase, normalizedType, sdId);
+      let preflight = await runPrerequisitePreflight(this.supabase, normalizedType, sdId);
+
+      // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-2 (flag-gated OFF by default — see
+      // lib/handoff/preflight-auto-invoke.js header for the gating decision). When enabled
+      // AND every blocking issue is SUBAGENT_EVIDENCE_MISSING (never failing/non_evidence —
+      // TR-7's structural restriction), attempt one bounded auto-invoke round, then re-run
+      // preflight once. Any other shape (flag off, mixed/other issue codes, no missing
+      // agents) leaves `preflight` untouched — byte-for-byte identical to pre-SD behavior.
+      if (!preflight.passed && isAutoInvokeEnabled()) {
+        const missingAgents = resolveMissingAgentsForAutoInvoke(preflight);
+        if (missingAgents.length > 0) {
+          console.log('');
+          console.log(`   🤖 [FR-2 auto-invoke] Attempting to auto-invoke missing sub-agent evidence: ${missingAgents.join(', ')}`);
+          const autoInvokeResult = await autoInvokeMissingSubAgents({
+            missing: missingAgents,
+            sdId,
+            handoffType: normalizedType,
+            executeSubAgentFn: executeSubAgent
+          });
+          console.log(`   🤖 [FR-2 auto-invoke] Attempted ${autoInvokeResult.attempted.length}: ${autoInvokeResult.results.map(r => `${r.code}=${r.verdict || r.error || 'unknown'}`).join(', ')}`);
+          preflight = await runPrerequisitePreflight(this.supabase, normalizedType, sdId);
+        }
+      }
+
       if (!preflight.passed) {
         console.log('');
         console.log('🚫 PREREQUISITE PREFLIGHT FAILED');

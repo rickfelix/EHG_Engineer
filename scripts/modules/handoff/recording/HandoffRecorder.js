@@ -21,6 +21,9 @@ import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
 import { withRetry, isRetryable, RETRY_PRESETS } from '../../resilience/retry-executor.js';
 import { captureFailurePattern } from '../failure-pattern-capture.js';
 import { NOT_MEASURED_SCORE } from '../gates/fr-delivery-classifier.js';
+// SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 (FR-1/FR-3)
+import { buildPreflightRemediation, truncateValidationDetails, findPriorSaemRemediation } from './preflight-remediation.js';
+import { resolveClaimIdentity } from '../../../../lib/claim/claim-identity.js';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -449,23 +452,38 @@ export class HandoffRecorder {
       validation_score: normalizedScore,
       validation_passed: false,
       // FIX: Store validation summary instead of full result to prevent bloat
-      validation_details: {
-        summary: {
-          passed: false,
-          score: result.normalizedScore || result.actualScore || 0,
-          gate_count: result.gateCount,
-          failed_gate: result.failedGate || null,
-          issue_count: (result.issues || []).length,
-          warning_count: (result.warnings || []).length,
-          // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): full per-field error
-          // list + required score, queryable without joining leo_handoff_rejections.
-          ...(requiredImprovements ? { required_improvements: requiredImprovements } : {}),
-          ...(requiredScore != null ? { required_score: requiredScore } : {})
-        },
-        rejected_at: new Date().toISOString(),
-        reason: result.reasonCode,
-        message: result.message
-      },
+      validation_details: (() => {
+        // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-1/FR-3: thread the already-computed
+        // preflight remediation list (previously stashed on result.preflightIssues /
+        // .preflightViolations but never read here) into the persisted row, and stamp the
+        // rejecting identity for FR-3's later acceptance-side lookup. Defensively truncated
+        // before insert — an untruncated write that trips the 102400-char CHECK constraint
+        // currently causes this whole rejection row to silently vanish.
+        const preflightRemediation = buildPreflightRemediation(result);
+        const identity = resolveClaimIdentity();
+        const details = {
+          summary: {
+            passed: false,
+            score: result.normalizedScore || result.actualScore || 0,
+            gate_count: result.gateCount,
+            failed_gate: result.failedGate || null,
+            issue_count: (result.issues || []).length,
+            warning_count: (result.warnings || []).length,
+            // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): full per-field error
+            // list + required score, queryable without joining leo_handoff_rejections.
+            ...(requiredImprovements ? { required_improvements: requiredImprovements } : {}),
+            ...(requiredScore != null ? { required_score: requiredScore } : {})
+          },
+          rejected_at: new Date().toISOString(),
+          reason: result.reasonCode,
+          message: result.message,
+          ...(preflightRemediation.length > 0 ? {
+            preflight_remediation: preflightRemediation,
+            rejecting_identity: { sessionId: identity.sessionId, source: identity.source },
+          } : {}),
+        };
+        return truncateValidationDetails(details);
+      })(),
       rejection_reason: enrichedRejectionReason,
       created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
     };
@@ -1035,6 +1053,46 @@ export class HandoffRecorder {
       }
 
       console.log('✅ Handoff accepted and stored in sd_phase_handoffs');
+
+      // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-3: stamp this accepted row with any
+      // prior SAEM (preflight) rejection(s) it resolves, for auditability. Fail-open and
+      // non-blocking — never let this lookup/stamp affect the accept path's success.
+      try {
+        const acceptingIdentity = resolveClaimIdentity();
+        const priorRemediation = await findPriorSaemRemediation(this.supabase, {
+          sdId: sdUuid,
+          toPhase,
+          acceptingIdentity
+        });
+        if (priorRemediation.found) {
+          // SECURITY review (SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001): re-select the row's
+          // CURRENT metadata rather than reusing the in-memory `metadata` var captured before
+          // the INSERT above — sd_phase_handoffs has BEFORE INSERT triggers (e.g.
+          // enforce_handoff_creation) that write their own metadata keys (circuit_breaker_blocked,
+          // blocked_at, etc.) on the just-inserted row. Overwriting from the pre-insert snapshot
+          // would silently erase that trigger-written state.
+          const { data: currentRow } = await this.supabase
+            .from('sd_phase_handoffs')
+            .select('metadata')
+            .eq('id', handoffId)
+            .single();
+          await this.supabase
+            .from('sd_phase_handoffs')
+            .update({
+              metadata: {
+                ...((currentRow && currentRow.metadata) || metadata || {}),
+                preflight_remediation: {
+                  rejectionIds: priorRemediation.rejectionIds,
+                  stamped_at: new Date().toISOString()
+                }
+              }
+            })
+            .eq('id', handoffId);
+        }
+      } catch (remediationError) {
+        console.error('⚠️  Could not stamp preflight_remediation (non-blocking):', remediationError.message);
+      }
+
       return handoffId;
 
     } catch (error) {
