@@ -123,29 +123,48 @@ function categorizeIssue(text) {
 }
 
 /**
- * Determine severity based on impact keywords
+ * Determine severity based on impact keywords.
+ *
+ * QF-20260823-174: bare .includes() matched inside unrelated words --
+ * "production" inside "reproduction", "high" inside "highlight", "low" inside
+ * "follow" -- silently mis-scoring severity. Word-boundary regexes fix that.
  */
-function determineSeverity(text, impact) {
+export function determineSeverity(text, impact) {
   const lowerText = text.toLowerCase();
   const lowerImpact = impact?.toLowerCase() || '';
 
-  if (lowerText.includes('critical') || lowerText.includes('blocker') ||
-      lowerText.includes('production') || lowerText.includes('data loss') ||
-      lowerImpact.includes('critical')) {
+  if (/\bcritical\b/.test(lowerText) || /\bblocker\b/.test(lowerText) ||
+      /\bproduction\b/.test(lowerText) || /\bdata loss\b/.test(lowerText) ||
+      /\bcritical\b/.test(lowerImpact)) {
     return 'critical';
   }
 
-  if (lowerText.includes('high') || lowerText.includes('delayed') ||
-      lowerText.includes('blocked') || lowerImpact.includes('high')) {
+  if (/\bhigh\b/.test(lowerText) || /\bdelayed\b/.test(lowerText) ||
+      /\bblocked\b/.test(lowerText) || /\bhigh\b/.test(lowerImpact)) {
     return 'high';
   }
 
-  if (lowerText.includes('low') || lowerText.includes('minor') ||
-      lowerImpact.includes('standard')) {
+  if (/\blow\b/.test(lowerText) || /\bminor\b/.test(lowerText) ||
+      /\bstandard\b/.test(lowerImpact)) {
     return 'low';
   }
 
   return 'medium';
+}
+
+/**
+ * QF-20260823-174: skip items that are too short, exact boilerplate, or a
+ * mechanically-generated "Risk managed: <label>" restatement of an sd.risks[]
+ * entry (scripts/generate-comprehensive-retrospective.js's
+ * insights.challenges.push) -- that text describes a risk the ORIGINATING SD
+ * already avoided by design, not an open defect, and should never itself
+ * become a new issue_patterns row.
+ */
+export function isBoilerplateImprovement(text) {
+  if (!text || text.length < 20) return true;
+  if (text === 'No significant challenges documented') return true;
+  if (/^Risk managed:/i.test(text)) return true;
+  return false;
 }
 
 /**
@@ -174,9 +193,8 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
   const failures = [];
 
   for (const improvement of retro.what_needs_improvement) {
-    // Skip generic items
-    if (improvement.length < 20 ||
-        improvement === 'No significant challenges documented') {
+    // Skip generic/boilerplate items
+    if (isBoilerplateImprovement(improvement)) {
       continue;
     }
     try {
