@@ -364,6 +364,43 @@ describe('_advanceStage path-integrity choke-point (FR-1) — real method', () =
     expect(warnCalls).toMatch(/gate_debt/);
   });
 
+  // TESTING EXEC-TO-PLAN finding R4: flag OFF + an evaluator error where NO sibling limb fires
+  // previously produced nothing in system_events at all -- only a per-limb logger.warn. A period
+  // full of evaluator errors with no sibling firing would read as "clean, nothing would have
+  // blocked" to whoever later aggregates PATH_INTEGRITY_WOULD_BLOCK to decide on promoting the
+  // flag -- the same undercounting class SEC-PATH-007 closed for a failed insert, applied here to
+  // a failed evaluation instead.
+  it('R4: flag OFF + a throwing limb with NO sibling firing still writes a queryable system_events row naming the errored limb', async () => {
+    const supabase = makeSupabase({
+      gateResultRows: [], // no failed blocking gate -- gate_debt limb never fires
+      chairmanDecisionRows: [],
+      flagRow: { is_enabled: false },
+    });
+    const realFrom = supabase.from;
+    let ventureStagesCalls = 0;
+    supabase.from = (table) => {
+      if (table === 'venture_stages') {
+        ventureStagesCalls += 1;
+        if (ventureStagesCalls > 1) {
+          return { select: () => { throw new Error('injected evaluator throw (R4 repro)'); } };
+        }
+      }
+      return realFrom(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 5, 6, {});
+
+    expect(result?.blocked).not.toBe(true);
+    expect(supabase.calls.venturesUpdate).toBe(1);
+    const ev = supabase.calls.systemEvents.find((e) => e.event_type === 'PATH_INTEGRITY_WOULD_BLOCK');
+    expect(ev).toBeDefined();
+    expect(ev.payload.errorLimbs).toMatch(/exit_gates/);
+    expect(ev.payload.limbs).toBe(''); // no limb actually fired -- only the error is recorded
+    const warnCalls = logger.warn.mock.calls.map((c) => c[0]).join('\n');
+    expect(warnCalls).toMatch(/evaluator error on limb\(s\) exit_gates/);
+  });
+
   it('does not run for a venture/stage with no failed blocking gate at all (zero-noise control)', async () => {
     const supabase = makeSupabase({ flagRow: { is_enabled: true } });
     const worker = makeWorker(supabase);
