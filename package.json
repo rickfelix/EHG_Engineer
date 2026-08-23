@@ -126,6 +126,7 @@
     "lint:session-coordination-insert": "node scripts/lint/session-coordination-insert-classguard-lint.mjs",
     "lint:count-truncation-diff": "node scripts/lint/count-truncation-diff-lint.mjs",
     "lint:no-connection-string-literals": "node scripts/lint/no-connection-string-literals-lint.mjs",
+    "lint:gate-stage-hardcoded-literal": "node scripts/lint/gate-stage-hardcoded-literal-lint.mjs",
     "lint:progress-column": "node scripts/lint/progress-column-lint.mjs",
     "lint:repo-resolution-drift": "node scripts/lint-repo-resolution-drift.mjs",
     "flags:review": "node scripts/flag-governance-review.mjs",
