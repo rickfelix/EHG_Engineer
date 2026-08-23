@@ -421,6 +421,15 @@ async function generateComprehensiveRetrospective(sdId) {
   const subAgentAnalysis = await analyzeSubAgents(sdId);
   console.log('   ✅ Analyzed sub-agent executions');
 
+  // QF-20260822-453: refuse to fabricate a fully generic retrospective when there is zero
+  // real per-SD signal anywhere (same posture as QF-20260821-118's generate-retrospective.js fix).
+  const hasRealSignal = handoffInsights.achievements.length > 0 || handoffInsights.challenges.length > 0 ||
+    handoffInsights.learnings.length > 0 || handoffInsights.actions.length > 0 ||
+    prdAnalysis !== null || subAgentAnalysis.consulted > 0;
+  if (!hasRealSignal) {
+    throw new Error(`Cannot derive retrospective for ${sd.sd_key}: no handoffs, PRD, or sub-agent execution results found — refusing to fabricate a generic retrospective.`);
+  }
+
   // Aggregate captured learning signals (SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001)
   let signalAggregation = { hasSignals: false, content: {}, metadata: {} };
   try {
@@ -449,14 +458,15 @@ async function generateComprehensiveRetrospective(sdId) {
     'All deliverables tracked and completed'
   ].filter(Boolean);
 
-  // Ensure at least 5 achievements for quality threshold (trigger requires 5+ for 20 points)
-  // UPDATED: Mark filler achievements as boilerplate for filtering (SD-CAPABILITY-LIFECYCLE-001)
-  const BOILERPLATE_ACHIEVEMENTS = [
-    'LEO Protocol phases completed systematically',
-    'Quality gates enforced at each transition',
-    'Sub-agent orchestration provided comprehensive coverage',
-    'Handoff documents created with detailed context',
-    'Implementation completed within scope'
+  // Ensure at least 5 achievements for quality threshold (trigger requires 5+ for 20 points).
+  // QF-20260822-453: filler must cite THIS SD's real context, never a fixed phrase repeated
+  // identically across every SD (same fabrication class as QF-20260821-118).
+  const achievementFiller = () => [
+    subAgentAnalysis.consulted > 0 ? `${subAgentAnalysis.consulted} sub-agent(s) consulted (verdicts: ${subAgentAnalysis.verdicts.map(v => v.verdict).join(', ')})` : `No sub-agent evidence recorded for ${sd.sd_key}`,
+    prdAnalysis ? `PRD carried ${prdAnalysis.acceptance_criteria} acceptance criteria and ${prdAnalysis.test_scenarios} test scenario(s)` : `No PRD found for ${sd.sd_key}`,
+    `${handoffInsights.patterns.length} handoff pattern(s) recorded across the phase chain`,
+    `SD priority ${sd.priority ?? 'unset'}, category ${sd.category || 'uncategorized'}`,
+    `${sd.sd_key} reached ${sd.progress_percentage}% progress at retrospective generation time`
   ];
 
   let whatWentWell;
@@ -471,7 +481,7 @@ async function generateComprehensiveRetrospective(sdId) {
       is_boilerplate: false
     }));
     const fillerNeeded = 5 - realAchievements.length;
-    const fillerAchievements = BOILERPLATE_ACHIEVEMENTS.slice(0, fillerNeeded).map(a => ({
+    const fillerAchievements = achievementFiller().slice(0, fillerNeeded).map(a => ({
       achievement: a,
       is_boilerplate: true
     }));
@@ -488,14 +498,15 @@ async function generateComprehensiveRetrospective(sdId) {
         'Performance benchmarks could be added for future comparison'
       ].slice(0, 10);
 
-  // Ensure at least 5 learnings for quality threshold (trigger requires 5+ for 30 points)
-  // UPDATED: Mark filler lessons as boilerplate for filtering (SD-CAPABILITY-LIFECYCLE-001)
-  const BOILERPLATE_LEARNINGS = [
-    'LEO Protocol phases (LEAD → PLAN → EXEC) followed systematically',
-    'Database-first architecture maintained throughout implementation',
-    'Sub-agent orchestration provided comprehensive verification',
-    'Quality gates enforced at each phase transition',
-    'Deliverable tracking ensured implementation completeness'
+  // Ensure at least 5 learnings for quality threshold (trigger requires 5+ for 30 points).
+  // QF-20260822-453: filler must cite THIS SD's real context, never a fixed phrase repeated
+  // identically across every SD (same fabrication class as QF-20260821-118).
+  const learningFiller = () => [
+    `Quality score computed at ${qualityScore}/100 (satisfaction ${satisfactionScore}/10) for ${sd.sd_key}`,
+    `${handoffInsights.achievements.length} real achievement(s) and ${handoffInsights.challenges.length} challenge(s) extracted from ${sd.sd_key}'s handoffs`,
+    prdAnalysis ? `PRD complexity scored '${prdAnalysis.complexity_score}' with ${prdAnalysis.functional_requirements} functional requirement(s)` : `No PRD found for ${sd.sd_key}`,
+    `${subAgentAnalysis.consulted} sub-agent execution(s) logged for ${sd.sd_key}`,
+    `${whatNeedsImprovement.length} improvement area(s) identified from real handoff challenges`
   ];
 
   let keyLearnings;
@@ -506,13 +517,13 @@ async function generateComprehensiveRetrospective(sdId) {
       is_boilerplate: false
     }));
   } else {
-    // Mix real learnings with boilerplate filler
+    // Mix real learnings with per-SD-derived filler
     const realLearnings = handoffInsights.learnings.map(l => ({
       learning: l,
       is_boilerplate: false
     }));
     const fillerNeeded = 5 - realLearnings.length;
-    const fillerLearnings = BOILERPLATE_LEARNINGS.slice(0, fillerNeeded).map(l => ({
+    const fillerLearnings = learningFiller().slice(0, fillerNeeded).map(l => ({
       learning: l,
       is_boilerplate: true
     }));
@@ -523,12 +534,13 @@ async function generateComprehensiveRetrospective(sdId) {
     }
   }
 
-  // Ensure at least 3 action items for quality threshold (trigger requires 3+ for 20 points)
-  // UPDATED: Mark filler action items as boilerplate for filtering (SD-CAPABILITY-LIFECYCLE-001)
-  const BOILERPLATE_ACTIONS = [
-    'Continue following LEO Protocol best practices for future SDs',
-    'Apply learnings from this implementation to similar database enhancement tasks',
-    'Maintain quality standards established in this SD for retrospective completeness'
+  // Ensure at least 3 action items for quality threshold (trigger requires 3+ for 20 points).
+  // QF-20260822-453: filler must cite THIS SD's real context, never a fixed phrase repeated
+  // identically across every SD (same fabrication class as QF-20260821-118).
+  const actionFiller = () => [
+    `Review ${sd.sd_key}'s ${handoffInsights.patterns.length} recorded handoff pattern(s) for reuse`,
+    subAgentAnalysis.consulted > 0 ? `Follow up on ${subAgentAnalysis.consulted} sub-agent verdict(s) logged for ${sd.sd_key}` : `No sub-agent follow-up items for ${sd.sd_key} — none were consulted`,
+    prdAnalysis ? `Verify ${prdAnalysis.acceptance_criteria} acceptance criteria remain satisfied post-completion` : `Backfill PRD acceptance criteria for ${sd.sd_key} if scope expands`
   ];
 
   let actionItems;
@@ -543,7 +555,7 @@ async function generateComprehensiveRetrospective(sdId) {
       is_boilerplate: false
     }));
     const fillerNeeded = 3 - realActions.length;
-    const fillerActions = BOILERPLATE_ACTIONS.slice(0, fillerNeeded).map(a => ({
+    const fillerActions = actionFiller().slice(0, fillerNeeded).map(a => ({
       action: a,
       is_boilerplate: true
     }));
