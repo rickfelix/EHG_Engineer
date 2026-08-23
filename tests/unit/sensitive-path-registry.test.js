@@ -46,6 +46,33 @@ describe('isSensitivePath — TS-8: same fixtures, Windows backslash separators'
   });
 });
 
+describe('isSensitivePath — SEC-01 (EXEC-phase SECURITY evidence 59bc9c16): git-enforced hooks root', () => {
+  // core.hooksPath=.husky/_ in this repo — the ACTUAL git-invoked hooks path, distinct from
+  // the .claude/hooks/** and scripts/hooks/** conventions already covered. Pre-fix, a QF
+  // modifying .husky/pre-commit passed the preflight and could be autonomously merged.
+  const mustRefuse = [
+    '.husky/pre-commit',
+    '.husky/_/husky.sh',
+    '.githooks/pre-push',
+    'hooks/wrappers/lint.sh',
+    'lib/hooks/pre-tool-enforce.cjs'
+  ];
+
+  it.each(mustRefuse)('refuses %s', (file) => {
+    expect(isSensitivePath(file)).toBe(true);
+  });
+});
+
+describe('isSensitivePath — SEC-02 (EXEC-phase SECURITY evidence 59bc9c16): case-insensitive matching', () => {
+  // Pre-fix, minimatch ran without {nocase:true}; a tracked file with different casing than
+  // the glob's literal segment (e.g. docs/SECRETS-SETUP-CHECKLIST.txt vs **/*secret*) silently
+  // evaded the blocklist on this win32 repo's case-insensitive working tree.
+  it('refuses a differently-cased secret-named file', () => {
+    expect(isSensitivePath('docs/SECRETS-SETUP-CHECKLIST.txt')).toBe(true);
+    expect(isSensitivePath('DATABASE/MIGRATIONS/x.sql')).toBe(true);
+  });
+});
+
 describe('isSensitivePath — TS-9: adversarial false-positive traps must NOT refuse', () => {
   const mustNotRefuse = [
     'docs/migrations-guide.md',
