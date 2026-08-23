@@ -9,7 +9,7 @@
  *   node scripts/classify-quick-fix.js QF-20251117-001 --auto-escalate  (auto-escalate if doesn't qualify)
  *
  * Classification Criteria (ALL must be true for quick-fix):
- * - Estimated LOC ≤ 50
+ * - Estimated LOC ≤ governed Tier 2 cap (work_item_thresholds.tier2_max_loc, default 75)
  * - Type: bug, polish, typo, or documentation (NOT feature)
  * - No database schema changes
  * - No authentication/security changes
@@ -23,6 +23,9 @@ import { pathToFileURL } from 'url';
 import { analyzePatterns, createPatternRetrospective } from '../lib/utils/quickfix-rca-integration.js';
 // SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-2): session-aware QF adoption.
 import { claimQuickFix } from '../lib/quick-fix-claim.mjs';
+// QF-20260822-796: single-representation LOC cap — read from the governed
+// work_item_thresholds source (tier2_max_loc) instead of a hardcoded duplicate.
+import { getActiveThresholds } from '../lib/utils/work-item-router.js';
 
 dotenv.config();
 
@@ -31,7 +34,6 @@ export { matchesKeyword, analyzeDescription, CLASSIFICATION_RULES };
 
 // Classification rules
 const CLASSIFICATION_RULES = {
-  maxLoc: 50,
   allowedTypes: ['bug', 'polish', 'typo', 'documentation'],
   forbiddenKeywords: [
     'migration',
@@ -146,19 +148,24 @@ async function classifyQuickFix(qfId, options = {}) {
   const checks = [];
   let qualifies = true;
 
+  // QF-20260822-796: read the LOC cap from the governed threshold source
+  // (Tier 2 = 31-75 LOC per CLAUDE.md Work Item Routing) instead of a
+  // hardcoded duplicate that had drifted to 50.
+  const { tier2_max_loc: maxLoc } = await getActiveThresholds(supabase);
+
   // Check 1: LOC threshold
-  if (qf.estimated_loc && qf.estimated_loc > CLASSIFICATION_RULES.maxLoc) {
+  if (qf.estimated_loc && qf.estimated_loc > maxLoc) {
     checks.push({
       pass: false,
       rule: 'LOC Threshold',
-      message: `Estimated LOC (${qf.estimated_loc}) exceeds limit (${CLASSIFICATION_RULES.maxLoc})`
+      message: `Estimated LOC (${qf.estimated_loc}) exceeds limit (${maxLoc})`
     });
     qualifies = false;
   } else {
     checks.push({
       pass: true,
       rule: 'LOC Threshold',
-      message: `Estimated LOC (${qf.estimated_loc || 'unspecified'}) ≤ ${CLASSIFICATION_RULES.maxLoc}`
+      message: `Estimated LOC (${qf.estimated_loc || 'unspecified'}) ≤ ${maxLoc}`
     });
   }
 
@@ -280,7 +287,7 @@ async function classifyQuickFix(qfId, options = {}) {
     console.log('📍 Next steps:');
     console.log(`   1. Read details: node scripts/read-quick-fix.js ${qfId}`);
     console.log(`   2. Create branch: git checkout -b qf/${qfId}`);
-    console.log(`   3. Implement fix (≤${CLASSIFICATION_RULES.maxLoc} LOC)`);
+    console.log(`   3. Implement fix (≤${maxLoc} LOC)`);
     console.log('   4. Run tests: npm run test:unit && npm run test:e2e');
     console.log(`   5. Complete: node scripts/complete-quick-fix.js ${qfId}\n`);
 
@@ -340,7 +347,7 @@ Options:
   --help, -h            Show this help
 
 Classification Criteria (ALL must pass):
-  - Estimated LOC ≤ 50
+  - Estimated LOC ≤ governed Tier 2 cap (see work_item_thresholds; default 75)
   - Type: bug, polish, typo, or documentation
   - No database schema changes
   - No auth/security changes
