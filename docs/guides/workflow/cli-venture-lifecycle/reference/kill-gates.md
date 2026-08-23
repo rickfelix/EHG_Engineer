@@ -448,16 +448,22 @@ Distinct from the four fixed Kill Gates above (Mechanism A -- generic, hardcoded
 ### Current status and known gaps
 
 - **Shipped observe-only.** Promotion to `binding` is a separate, later decision, gated on a chairman-run calibration probe (the PROBE-BETA teeth-proof spec) confirming the mechanism doesn't kill control-class ventures.
-- **No gauge source wired yet.** The default resolver returns no observation for any metric, so every armed criterion currently classifies `HOLD` -- the mechanism is a logging-only no-op in production until a real gauge-resolution source is wired (follow-on work).
+- **Real gauges wired (SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001).** `createMetadataResolver()` (in the evaluator module) reads real venture.metadata for K1 (`demand_test_conversion_rate`, percentage scale), K2 (`card_verified_preorders`), K3 (`ltv_cac_ratio`), with source provenance on every reading and a floor-gating guard -- a finite reading computed from a sample below the criterion's registered floor (`ventures.metadata.demand_test_plan.floors`) never fires a kill. Criteria for a metric with no matching data still classify `HOLD`, honestly.
+- **Per-criterion fault isolation (SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001).** A prior defect (risk-agent finding R2) had the whole evaluation loop wrapped in one `try/catch` in `thesis-kill-gate.js` -- a single throwing resolver silently discarded verdicts for EVERY criterion on a venture, with zero `system_events` emitted (a real kill-bypass risk once binding mode is reached). Fixed: resolver errors are now caught per-criterion inside `evaluateThesisKillCriteria`, so a broken resolver for one metric never masks a sibling criterion's real verdict. Every `HOLD`/cannot-evaluate outcome (including a resolver throw) now emits a `THESIS_KILL_CANNOT_EVALUATE` `system_events` row (renamed from `THESIS_KILL_HOLD`) tagged with `error_class` (`unobservable_input` | `resolver_error` | `floor_unmet`).
+- **Kill-fire-readiness precondition (SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001).** `validateKillFireReadiness()` (`lib/eva/stage-zero/thesis-contract.js`) gates a `FIRED` verdict on shape-valid criteria + a real canonical stage (via `lib/eva/stage-governance.js` -- never a hardcoded stage list, and never conflated with the separate `stage_by <= toStage` due-date filter) + no open blocking finding, before it can mint a `chairman_decisions` row. A verdict failing this precondition is downgraded to `cannot_evaluate` in-memory, upstream of persistence.
+- **New findings taxonomy (SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001).** `lib/eva/findings/gap-class.js` documents the ratified 8-value `gap_class` finding-code enum (previously design-only, zero code references); `lib/eva/findings/factory-defect-recorder.js` (sibling to `lib/eva/corrective-finding-recorder.js`) records a `feedback.category='factory_defect'` finding whenever a resolver throws (`gap_class=INSTRUMENT_LIE`) or the fire-readiness precondition fails for an operational reason (`gap_class=GATE_CANNOT_FAIL`/`GATE_BYPASSED`). A legitimate no-data or floor-unmet `HOLD` mints nothing -- only a broken-instrument cause does.
+- **Live evidence-row demonstration is DDL-tier only.** `eva_stage_gate_attempts` (the durable per-attempt evidence table `recordGateAttempt()` writes to) is chairman-gated and not yet applied to the live database. `tests/ddl/thesis-kill-instrument-ddl.db.test.js` demonstrates the full open/finalize/immutability flow against an ephemeral Postgres; a live evidence row cannot exist until that migration is chairman-applied.
 - **Coverage gap (documented, not silent).** This wiring covers the primary general-advance call path (`advanceStage()`/`fn_advance_venture_stage`) only. The direct-RPC chairman-approval path and `handoff-operations.js`'s `approveHandoff` (which uses the Mechanism-A `validateStageGate` instead) are not covered -- tracked as a follow-on scope item.
 - **Immutability-once-armed is out of scope for this SD** -- nothing currently prevents an armed criterion's threshold from being edited after registration. Raised in a prior design review as a related but separately-scoped concern.
 
 ### Implementation
 
-- Evaluator: `lib/eva/lifecycle/thesis-kill-evaluator.js`
+- Evaluator: `lib/eva/lifecycle/thesis-kill-evaluator.js` (`evaluateThesisKillCriteria`, `createMetadataResolver`)
 - Orchestration + flag: `lib/eva/lifecycle/thesis-kill-gate.js`
-- Wiring: `lib/eva/artifact-persistence-service.js` (`advanceStage()`)
-- Criteria source: `lib/eva/stage-zero/thesis-contract.js` (`validateKillCriteria`, `evaluateKillCriterion`)
+- Wiring: `lib/eva/artifact-persistence-service.js` (`advanceStage()`, `recordGateAttempt()`)
+- Criteria source + fire-readiness: `lib/eva/stage-zero/thesis-contract.js` (`validateKillCriteria`, `evaluateKillCriterion`, `validateKillFireReadiness`)
+- Canonical stage governance: `lib/eva/stage-governance.js`
+- Findings: `lib/eva/findings/gap-class.js`, `lib/eva/findings/factory-defect-recorder.js`
 - Override path (shared with Mechanism A): `scripts/eva-decisions.js`, `lib/eva/kill-override-guard.js`
 
 ---
