@@ -508,6 +508,32 @@ export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
   return out;
 }
 
+// QF-20260823-131: the ONLY heartbeat cadence check ran once/hour (the durable 'heartbeat-sms'
+// ADAM_LOOPS entry, cron '14 * * * *', which itself measures the gap against this SAME 55min
+// bar), so a send just after :14 (e.g. :44) left the hourly cadence contract unenforceable until
+// the NEXT hour's :14 tick -- worst case 90min, witnessed live as a chairman "are you still
+// there" ping. Quiet-tick already runs every 15min and reads sms_outbound_obligations for the
+// oversight/self-score staleness check above; this reuses that SAME instrument-first pattern so
+// a breach is caught within one quiet-tick cycle instead of waiting up to 46 more minutes for the
+// next hourly check. Fail-soft: a read error or a heartbeat that has never been sent reports
+// nothing (never a false alarm) -- mirrors checkOversightStaleness's contract exactly.
+export const HEARTBEAT_OVERDUE_THRESHOLD_MS = 55 * 60 * 1000;
+export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
+  try {
+    const { data } = await sb
+      .from('sms_outbound_obligations')
+      .select('created_at')
+      .eq('kind', 'heartbeat_status')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const last = data && data[0] && Date.parse(data[0].created_at);
+    if (Number.isFinite(last) && nowMs - last >= HEARTBEAT_OVERDUE_THRESHOLD_MS) {
+      return { overdueMin: Math.round((nowMs - last) / 60000) };
+    }
+  } catch { /* fail-soft */ }
+  return { overdueMin: null };
+}
+
 /** QF-20260808-673: how far back to look for an unanswered chairman inbound. */
 export const SMS_ANSWER_WINDOW_MIN = 60;
 
@@ -1025,6 +1051,12 @@ async function main() {
     }
     if (oversightStale.selfScoreOverdueH) {
       console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
+    }
+    // QF-20260823-131: closes the up-to-90min hourly-heartbeat cadence gap by re-checking the
+    // SAME >=55min measured-gap bar the durable hourly cron uses, but every 15min via this tick.
+    const heartbeatCadence = await checkHeartbeatCadence(sb);
+    if (heartbeatCadence.overdueMin) {
+      console.log(`QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${heartbeatCadence.overdueMin} — hourly heartbeat cadence contract breached (>=55min since last send); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`);
     }
     // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: THE STANDING PRIORITY IS PRINTED HERE, ABOVE THE
     // INBOX LOOP BELOW, AND THE POSITION IS THE POINT. The measured failure was the queue setting
