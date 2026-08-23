@@ -116,7 +116,7 @@ describe('checkGateDebt — enforcement matrix', () => {
 describe('checkGateDebt — FR-2 decision-value filter (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001)', () => {
   it('TR-3: ADVANCE_INTENT_VERBS is an exported, named allow-list constant', () => {
     expect(ADVANCE_INTENT_VERBS).toBeDefined();
-    expect([...ADVANCE_INTENT_VERBS].sort()).toEqual(['approve', 'go', 'override', 'proceed']);
+    expect([...ADVANCE_INTENT_VERBS].sort()).toEqual(['approve', 'conditional_pass', 'go', 'override', 'proceed']);
   });
 
   it('TS-3: a failed BLOCKING gate + approved decision=\'sunset\' (non-allow-listed verb) remains blocked (debt UNRESOLVED)', async () => {
@@ -153,6 +153,33 @@ describe('checkGateDebt — FR-2 decision-value filter (SD-LEO-INFRA-MINUS-PATH-
     });
     const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
     expect(debt.blocked).toBe(false);
+  });
+
+  // REGRESSION EXEC-TO-PLAN finding C1 (2026-08-23): the original ADVANCE_INTENT_VERBS blast-
+  // radius measurement was a live-row census (287 approved rows), which cannot see a verb no
+  // venture has hit YET even though production code actively writes it.
+  // recordProductReviewVerdict()'s 'approve_with_notes' verdict
+  // (lib/eva/chairman-product-review.js:349) writes exactly {status:'approved',
+  // decision:'conditional_pass'} -- confirmed by direct code read, not assumed from the report.
+  it('TS-4 (REGRESSION C1): same blocking-gate precondition, decision=\'conditional_pass\' resolves debt (chairman-product-review.js\'s approve_with_notes verdict, no silent regression)', async () => {
+    const db = mockDb({
+      gateRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      decisions: [{ id: 'd1', decision: 'conditional_pass', status: 'approved' }],
+    });
+    const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
+    expect(debt.blocked).toBe(false);
+  });
+
+  // REGRESSION C1's other half: 'advisory' (lib/eva/chairman-decision-watcher.js:650,
+  // {status:'approved', decision:'advisory', blocking:false}) is DELIBERATELY excluded, not an
+  // oversight -- pinned here so a future edit adding it back is a conscious, reviewed choice.
+  it('TS-3 (REGRESSION C1 control): same blocking-gate precondition, decision=\'advisory\' does NOT resolve debt (deliberately excluded -- non-binding FYI, not a deliberate gate-clearing act)', async () => {
+    const db = mockDb({
+      gateRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      decisions: [{ id: 'd1', decision: 'advisory', status: 'approved' }],
+    });
+    const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
+    expect(debt.blocked).toBe(true);
   });
 });
 
