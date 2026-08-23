@@ -128,12 +128,36 @@
       "registered_at": "2026-07-26T01:12:17.218Z",
       "registered_by": "venture-provisioner",
       "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784286487799"
+    },
+    "APP011": {
+      "id": "APP011",
+      "name": "altifyai",
+      "github_repo": "rickfelix/altifyai",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-08-11T16:55:12.457Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/altifyai"
+    },
+    "APP012": {
+      "id": "APP012",
+      "name": "full-lifecycle-journey-venture-1786919223461",
+      "github_repo": "rickfelix/full-lifecycle-journey-venture-1786919223461",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-08-16T22:27:15.238Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/full-lifecycle-journey-venture-1786919223461"
     }
   },
   "metadata": {
-    "total_apps": 10,
-    "active_apps": 10,
-    "last_updated": "2026-07-26T01:12:17.218Z",
+    "total_apps": 12,
+    "active_apps": 12,
+    "last_updated": "2026-08-16T22:27:15.238Z",
     "last_sync": null
   },
   "settings": {
