@@ -1129,7 +1129,15 @@ async function main() {
         console.log(`QUIET_TICK_SMS_PARKED_STALE=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m — parked >=24h unresolved, chairman-channel integrity risk; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
       }
     }
-    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3.
+    for (const p of outboundSilence.probed) {
+      console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
+    }
+    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3. Deliberately placed AFTER the
+    // outboundSilence.probed loop above, not between the smsInbound.rows loop and it —
+    // tests/unit/sms-count-render-invariant.test.js slices exactly that gap as "the SMS per-row
+    // loop" and asserts a 1:1 console.log-to-QUIET_TICK-token ratio inside it; inserting an
+    // unrelated loop there breaks that invariant's own accounting (this loop's token is emitted
+    // by formatRatificationStaleLine, not inlined in this file's source text).
     for (const r of staleRatifications.rows) {
       console.log(formatRatificationStaleLine('adam', r, r.ageHours));
     }
@@ -1139,9 +1147,6 @@ async function main() {
     for (const r of regressedRatifications.rows) {
       const sectionId = r.encoded_ref && r.encoded_ref.section_id;
       console.log(`QUIET_TICK_RATIFICATION_STALE=adam id=${r.id} REGRESSED stage1_section_removed=${r.stage1} stage2_marker_missing=${r.stage2} section=${sectionId} — an already-encoded chairman ratification's clause was silently reverted; re-encode via lib/chairman/ratification-writer.mjs markRatificationEncoded().`);
-    }
-    for (const p of outboundSilence.probed) {
-      console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
     }
   }
   return result;
