@@ -216,29 +216,40 @@ BEGIN
     END IF;
 
     -- A second re-encode attempt on the SAME row must now be rejected.
+    --
+    -- BUG FIX (TESTING finding D1, EXEC-phase adversarial review): a bare RAISE EXCEPTION
+    -- defaults to SQLSTATE P0001 ('raise_exception') -- the SAME class the trigger's own
+    -- rejection raises, and the SAME class the sibling `WHEN raise_exception THEN NULL`
+    -- handler below catches. Without a distinct ERRCODE here, a broken guard (the UPDATE
+    -- silently SUCCEEDS) would let this GUARD-DID-NOT-FIRE assertion fire, get caught by
+    -- its own handler as if it were the expected trigger rejection, and report success.
+    -- Exactly the trap this migration's header already names and the P0100 cleanup exit
+    -- below already avoids -- this reapplies the same fix to the three assertions that
+    -- were missed. Each assertion gets its OWN distinct code so a future failure is
+    -- unambiguous about which probe tripped.
     BEGIN
       UPDATE public.chairman_ratifications
       SET encoded_at = now(), encoded_ref = '{"section_id":"probe2"}'::jsonb, marker_text = 'probe marker 2'
       WHERE id = probe_id;
-      RAISE EXCEPTION 'chairman_ratifications: GUARD DID NOT FIRE -- a second re-encode UPDATE was ACCEPTED.';
+      RAISE EXCEPTION 'chairman_ratifications: GUARD DID NOT FIRE -- a second re-encode UPDATE was ACCEPTED.' USING ERRCODE = 'P0102';
     EXCEPTION
-      WHEN raise_exception THEN NULL; -- expected
+      WHEN raise_exception THEN NULL; -- expected (the trigger's own P0001 rejection)
     END;
 
-    -- An UPDATE touching a non-encoding column must be rejected.
+    -- An UPDATE touching a non-encoding column must be rejected. Same D1 fix as above.
     BEGIN
       UPDATE public.chairman_ratifications SET quote = 'tampered' WHERE id = probe_id;
-      RAISE EXCEPTION 'chairman_ratifications: GUARD DID NOT FIRE -- a quote UPDATE was ACCEPTED.';
+      RAISE EXCEPTION 'chairman_ratifications: GUARD DID NOT FIRE -- a quote UPDATE was ACCEPTED.' USING ERRCODE = 'P0103';
     EXCEPTION
-      WHEN raise_exception THEN NULL; -- expected
+      WHEN raise_exception THEN NULL; -- expected (the trigger's own P0001 rejection)
     END;
 
-    -- DELETE must be rejected.
+    -- DELETE must be rejected. Same D1 fix as above.
     BEGIN
       DELETE FROM public.chairman_ratifications WHERE id = probe_id;
-      RAISE EXCEPTION 'chairman_ratifications: GUARD DID NOT FIRE -- DELETE was ACCEPTED.';
+      RAISE EXCEPTION 'chairman_ratifications: GUARD DID NOT FIRE -- DELETE was ACCEPTED.' USING ERRCODE = 'P0104';
     EXCEPTION
-      WHEN raise_exception THEN NULL; -- expected
+      WHEN raise_exception THEN NULL; -- expected (the trigger's own P0001 rejection)
     END;
 
     -- Deliberate cleanup abort -- a custom SQLSTATE distinct from the generic 'raise_exception'

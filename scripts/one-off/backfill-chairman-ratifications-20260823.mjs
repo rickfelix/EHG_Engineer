@@ -62,8 +62,12 @@ function makeClient() {
 }
 
 // ratifiedAt: the chairman's verbal commission timestamp from the packet header
-// ("chairman verbal 2026-08-22 ~22:5xZ"). Approximated to 22:55Z pending an exact-minute source.
+// ("chairman verbal 2026-08-22 ~22:5xZ"). APPROXIMATED to 22:55Z pending an exact-minute source
+// -- table is append-only (no correcting this after insert), so RATIFIED_AT_CONFIRMED below is a
+// SEPARATE, deliberate guard from the SPECIMENS TODOs (TESTING finding D2): confirm the exact
+// minute against the source before flipping it, do not silently accept the approximation.
 const RATIFIED_AT = '2026-08-22T22:55:00.000Z';
+const RATIFIED_AT_CONFIRMED = false;
 
 const SPECIMENS = [
   { quote: 'TODO — verbatim source: chairman verbal 2026-08-22 ~22:5xZ, drive-the-workers directive', source: 'terminal:783ac23f7f5', targetContracts: ['adam'], scribeSeat: 'adam', sectionId: 'TODO-adam-5b', markerText: 'TODO', manifestHash: 'TODO' },
@@ -102,6 +106,13 @@ async function main() {
       'Resolve each against the live CLAUDE_ADAM.md / CLAUDE_SOLOMON.md content and the ' +
       'claude-generation-manifest.json content_hash as of the "9 encodings landed tonight" commit ' +
       'before running — do not fabricate quote text.');
+    process.exit(1);
+  }
+
+  if (!RATIFIED_AT_CONFIRMED) {
+    console.error(`REFUSING TO RUN: RATIFIED_AT (${RATIFIED_AT}) is an APPROXIMATION ("~22:5xZ" in the source ` +
+      'packet), not a confirmed exact minute. This table is append-only — an approximated timestamp ' +
+      'inserted now can never be corrected. Confirm the exact minute, then set RATIFIED_AT_CONFIRMED = true.');
     process.exit(1);
   }
 
