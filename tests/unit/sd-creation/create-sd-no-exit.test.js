@@ -130,7 +130,14 @@ describe('SD-ARCH-HOTSPOT-LEO-CREATE-001: createSD returns {ok:false} instead of
     expect(capturedInserts).toHaveLength(1);
     const inserted = capturedInserts[0];
     expect(inserted.metadata.sd_authoring_validated_at).toEqual(expect.any(String));
-    expect(inserted.metadata.sd_authoring_validation_summary).toMatchObject({ violation_count: expect.any(Number) });
+    // PLAN-phase VALIDATION review (evidence 1fca1318-5f6a-490f-b740-77867f00a834, finding V1):
+    // an exact-count assertion is load-bearing -- {violation_count: expect.any(Number)} stayed
+    // GREEN even when validateArtifact was mutation-tested to run BEFORE validateSDFields's
+    // enrichment (TR-2's sequencing invariant silently broken, still producing *some* positive
+    // violation_count from the pre-enrichment string-array shape mismatches). Pinning the exact
+    // {1, 3} this payload produces post-enrichment makes a sequencing regression change this
+    // count and fail the test, instead of merely changing which violations fired.
+    expect(inserted.metadata.sd_authoring_validation_summary).toEqual({ violation_count: 1, warning_count: 3 });
     // FR-6: prior metadata keys survive the spread-merge stamp (source: 'leo' set above).
     expect(inserted.metadata.source).toBe('leo');
 
