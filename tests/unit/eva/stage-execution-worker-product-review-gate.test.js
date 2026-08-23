@@ -32,12 +32,16 @@ const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), deb
 
 /**
  * Thenable chainable supabase fake — same shape as stage-execution-worker-s19-harden.test.js,
- * with a chairman_decisions branch added for the product-review lookup.
+ * with a chairman_decisions branch added for the product-review lookup, and a leo_feature_flags
+ * branch (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 FR-4) for the fail-open kill-switch read.
+ * killSwitchRow: undefined = no row (absent, must resolve to disabled per TS-12); an object =
+ * the row content (e.g. { is_enabled: true }).
  */
-function makeSupabase({ productReviewDecision = null } = {}) {
+function makeSupabase({ productReviewDecision = null, killSwitchRow = undefined } = {}) {
   const calls = { venturesUpdate: 0, systemEvents: [] };
   const from = (table) => {
-    const terminalData = table === 'chairman_decisions' ? productReviewDecision : null;
+    let terminalData = table === 'chairman_decisions' ? productReviewDecision : null;
+    if (table === 'leo_feature_flags') terminalData = killSwitchRow === undefined ? null : killSwitchRow;
     const chain = {
       select: () => chain,
       eq: () => chain,
@@ -102,8 +106,11 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     expect(supabase.calls.venturesUpdate).toBe(0);
   });
 
-  it('fails OPEN (advances) when the choke-point evaluator throws', async () => {
-    const supabase = makeSupabase();
+  // SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 (FR-4, TS-7): flipped from the pre-fix "fails OPEN"
+  // baseline (TS-0c, confirmed green against unmodified code before this fix landed) to fail-
+  // CLOSED. An evaluator error must now BLOCK the advance, not silently approve it.
+  it('fails CLOSED (blocks) when the choke-point evaluator throws, with no kill-switch flag set', async () => {
+    const supabase = makeSupabase(); // killSwitchRow undefined -> absent row -> disabled (TS-12)
     supabase.from = (table) => {
       if (table === 'chairman_decisions') {
         return { select: () => { throw new Error('db down'); } };
@@ -114,8 +121,62 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
 
     const result = await worker._advanceStage('v-1', 23, 24, {});
 
+    expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
+    // block log must distinguish an evaluator-error case from a genuine no-approval
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Product-review choke-point eval error'));
+    expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('evaluator error'));
+  });
+
+  // TS-8: the kill-switch flag, when enabled, restores the pre-fix fail-open escape hatch.
+  it('restores fail-OPEN (advances) when the kill-switch flag is enabled, on evaluator error', async () => {
+    const supabase = makeSupabase({ killSwitchRow: { is_enabled: true } });
+    supabase.from = (table) => {
+      if (table === 'chairman_decisions') {
+        return { select: () => { throw new Error('db down'); } };
+      }
+      return makeSupabase({ killSwitchRow: { is_enabled: true } }).from(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 23, 24, {});
+
     expect(result?.blocked).not.toBe(true);
-    expect(requestProductReview).not.toHaveBeenCalled(); // fail-open path never blocked, nothing to ask for
+    expect(requestProductReview).not.toHaveBeenCalled();
+  });
+
+  // TS-12 (D5 safety invariant): a DEDICATED assertion that an ABSENT kill-switch row resolves to
+  // disabled (fail-closed stays active) -- not inferred from TS-7 passing, which would pass
+  // identically with the kill-switch seeded ON and force-disabled elsewhere in the fixture.
+  it('treats an ABSENT kill-switch flag row as disabled -- fail-closed is the active default', async () => {
+    const supabase = makeSupabase({ killSwitchRow: undefined });
+    supabase.from = (table) => {
+      if (table === 'chairman_decisions') {
+        return { select: () => { throw new Error('db down'); } };
+      }
+      return makeSupabase({ killSwitchRow: undefined }).from(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 23, 24, {});
+
+    expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
+  });
+
+  // TS-12 (explicit is_enabled=false row -- the merge-time state per FR-4 AC#4): same outcome as
+  // the absent-row case, asserted separately so a future flip of the column default cannot mask it.
+  it('treats an explicit is_enabled=false kill-switch row as disabled -- fail-closed is the active default', async () => {
+    const supabase = makeSupabase({ killSwitchRow: { is_enabled: false } });
+    supabase.from = (table) => {
+      if (table === 'chairman_decisions') {
+        return { select: () => { throw new Error('db down'); } };
+      }
+      return makeSupabase({ killSwitchRow: { is_enabled: false } }).from(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 23, 24, {});
+
+    expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
   });
 
   // QF-20260703-236-class: a fixture/demo venture can never earn a real product_review decision
