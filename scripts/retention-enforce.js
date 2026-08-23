@@ -86,10 +86,14 @@ export async function enforcePolicy(supabase, policy, { apply = false, runId = n
   try {
     // QF-20260823-655: countMode: 'estimated' (planner row-estimate, near-instant) opts a table
     // out of the exact COUNT(*) sequential scan that timed out on eva_scheduler_metrics's ~3.4M
-    // rows. Every other policy is unset and keeps the exact count, unchanged.
-    const { count, error: cntErr } = await supabase
-      .from(policy.table).select('*', { count: policy.countMode === 'estimated' ? 'estimated' : 'exact', head: true })
-      .lt(policy.timestampColumn, cutoff);
+    // rows. Every other policy is unset and keeps the exact count, unchanged. Branched (rather
+    // than a computed ternary in one call) so each call site keeps a static, literal
+    // { count: 'exact' | 'estimated' } shape that count-truncation-diff-lint can prove bounded
+    // (QF-20260823-555 taught classifyChain to recognize both literals).
+    const countQuery = policy.countMode === 'estimated'
+      ? supabase.from(policy.table).select('*', { count: 'estimated', head: true })
+      : supabase.from(policy.table).select('*', { count: 'exact', head: true });
+    const { count, error: cntErr } = await countQuery.lt(policy.timestampColumn, cutoff);
     // QF-20260823-655: cntErr.message was blank on the failures this fixes (some PostgREST/PG
     // timeout errors carry no .message), producing an unclassifiable "count failed: " log line.
     // Fall back through code/details/the stringified object so a real failure is never silent.
