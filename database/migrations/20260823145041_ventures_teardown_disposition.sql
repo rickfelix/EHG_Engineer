@@ -5,6 +5,22 @@
 -- Sub-agent evidence:
 --   - LEAD EXPLORE 3194859e-dd64-455f-8550-05479465cb79, VALIDATION bfd1beef-366e-4918-891b-50b088ff8d93
 --   - PLAN TESTING dbd754fd-8135-4fa3-9010-b3bc197767c0
+-- @chairman-gated
+--
+-- ⚠ THERE IS DELIBERATELY NO `-- @approved-by:` LINE IN THIS FILE.
+--   This migration modifies two existing SECURITY DEFINER RPCs (CREATE OR REPLACE FUNCTION),
+--   which scripts/lib/migration-tier-classifier.mjs's allow-list design intentionally does
+--   NOT cover -- function bodies can contain arbitrary logic, so any CREATE/REPLACE FUNCTION
+--   fails closed to TIER-2 regardless of content (confirmed live: removing the migration's
+--   GRANT/UPDATE/DO statements did not change the classification -- the FUNCTION statements
+--   alone are sufficient). The builder that authored this file holds none of the 3-factor
+--   chairman-gate credentials and MUST NOT forge the attestation. The chairman adds the
+--   `@approved-by` line and runs:
+--       node scripts/apply-migration.js database/migrations/20260823145041_ventures_teardown_disposition.sql --prod-deploy
+--   Observable proof of application:
+--       SELECT column_name FROM information_schema.columns
+--       WHERE table_name = 'ventures' AND column_name LIKE 'teardown_disposition%';
+--       -- Expected: 4 rows (previously 0).
 --
 -- A chairman-commissioned architecture evaluation (Solomon eval S5-1/R4) found that when a
 -- venture transitions to a terminal status (cancelled/killed), its deployment is neither
