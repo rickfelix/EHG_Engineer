@@ -1,0 +1,142 @@
+{
+  "executive_summary": "lib/sub-agents/database/schema-validator.js's staticFileValidation() has never found any migration file for any SD: line 107's `await glob(pattern)` uses glob@7.2.3's callback/EventEmitter API, which is not thenable, so allFiles was always empty regardless of pattern. This delivered a fix that (1) promisifies the glob call and adds cwd:getRepoRoot()+absolute:true for correctness across worktrees, (2) adds 'database/chairman-gated/*.sql' as the originally-requested fourth migrationPaths entry, and (3) adds a RED-first regression test suite (lib/sub-agents/database/database.test.js) that fails against the original code and passes against the fix, using disposable fixture files under both database/migrations/ and database/chairman-gated/ with proper afterEach cleanup.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "staticFileValidation() actually discovers existing migration files",
+      "description": "lib/sub-agents/database/schema-validator.js:98-114: replace the broken `await glob(pattern)` (glob@7.2.3 callback API misused as a Promise, always resolving to the Glob EventEmitter instance rather than the match array) with `await globAsync(pattern, { cwd: getRepoRoot(), absolute: true })` where globAsync = promisify(glob). Verified live: staticFileValidation('SD-KNOWLEDGE-001', {}) went from verdict=NOT_REQUIRED/0 files (on unmodified main, despite 3 real files in database/migrations/*.sql genuinely referencing that SD ID) to verdict=INVALID/5 files found.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "staticFileValidation('SD-KNOWLEDGE-001', {}) returns a non-empty migration_files array on the fixed code",
+        "The three pre-existing migrationPaths entries (database/migrations, supabase/migrations, migrations) all resolve correctly"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "chairman-gated migrations are scanned (the originally-scoped QF-20260822-945 request)",
+      "description": "Add 'database/chairman-gated/*.sql' as a fourth entry in migrationPaths. This directory holds 56 real, live .sql migration files (grep-verified) that were previously invisible to staticFileValidation() regardless of the glob-await bug fix in FR-1 -- both defects had to be fixed together for this directory to actually be covered.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A fixture *.sql file placed under database/chairman-gated/ that mentions a test SD ID is found by staticFileValidation() for that SD ID"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression coverage proves behavior, not the array literal",
+      "description": "lib/sub-agents/database/database.test.js previously only asserted `typeof staticFileValidation === 'function'` (PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001 -- would stay green against a fully broken implementation). Added 3 behavioral tests using disposable fixture files (created via writeFile, cleaned up via afterEach/unlink) under database/migrations/ and database/chairman-gated/, plus a negative case confirming NOT_REQUIRED is still correctly returned when no file mentions the SD ID.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "RED-first proof: the new tests fail (2/2) when run against the original (unfixed) schema-validator.js",
+        "GREEN: all tests pass (10/10 in lib/sub-agents/database/database.test.js) against the fixed code",
+        "No residual fixture files left in the repo after a test run"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Single-file production change",
+      "description": "Only lib/sub-agents/database/schema-validator.js is modified in production code; the sibling migration-handler.js defect (same await-glob bug, confirmed by testing-agent + validation-agent) is explicitly out of scope and reported separately via /signal (harness-bug, critical) rather than expanding this PR."
+    },
+    {
+      "id": "TR-2",
+      "title": "Worktree-safe path resolution",
+      "description": "The glob call must use cwd:getRepoRoot() (from lib/repo-paths.js), matching the existing pattern already used by the sibling loadSchemaDocumentation() function in the same file, so the fix works correctly whether invoked from the main repo root or a .worktrees/<sd> checkout."
+    },
+    {
+      "id": "TR-3",
+      "title": "No schema/database changes",
+      "description": "Pure application-code fix; no migrations, no schema changes, no data changes. sd_type=bugfix is correct."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Real migration file discovery via database/migrations",
+      "type": "unit",
+      "expected": "staticFileValidation() finds a disposable fixture file placed in database/migrations/ that mentions the test SD ID; verdict is not NOT_REQUIRED"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Chairman-gated migration file discovery (originally-scoped gap)",
+      "type": "unit",
+      "expected": "staticFileValidation() finds a disposable fixture file placed in database/chairman-gated/ that mentions the test SD ID; verdict is not NOT_REQUIRED"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Negative case: no matching file",
+      "type": "unit",
+      "expected": "staticFileValidation() with an SD ID that appears nowhere on disk returns verdict=NOT_REQUIRED and an empty migration_files array"
+    }
+  ],
+  "acceptance_criteria": [
+    "migrationPaths in lib/sub-agents/database/schema-validator.js includes database/chairman-gated/*.sql",
+    "staticFileValidation() actually finds real, pre-existing migration files (was: 0, always, for every SD)",
+    "10/10 tests pass in lib/sub-agents/database/database.test.js, including the 3 new behavioral tests",
+    "No regressions to lint, typecheck, or any other existing test suite"
+  ],
+  "risks": [
+    {
+      "risk": "Downstream consumers of staticFileValidation() (lib/sub-agents/database/index.js:216) currently only ever received verdict=NOT_REQUIRED and short-circuit to PASS/confidence=100 at line 219-225 -- fixing the glob call means, for the FIRST TIME, index.js's contract-compliance validation (line 258) and Phase-2 DB verification will actually execute for database-type SDs with real migration files. This could surface previously-hidden migration content issues that were never checked.",
+      "mitigation": "Grepped and confirmed index.js:216 is the ONLY production call site; its downstream handling (contractValidation, databaseVerification) already has defined branches for VALID/INVALID/INCOMPLETE verdicts that were simply dead code before -- no new code path is introduced, only previously-unreachable existing code becomes reachable. Blast radius is scoped to sd_type='database' SDs (per CLAUDE_LEAD.md's SD Type-Specific Requirements table, the DATABASE sub-agent is required for that type specifically), not universal.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The syntax-validation heuristic later in the same function (naive odd/even single-quote counting, lines 176-189) will now actually execute against real file content for the first time, and can false-positive on legitimate SQL (e.g. dollar-quoted PL/pgSQL bodies containing an apostrophe in a comment). Observed live: it flagged one 2025-10-15 migration file as INVALID (Unclosed single quotes) during manual verification.",
+      "mitigation": "This is a separate, pre-existing heuristic bug in a different code block than the one this SD fixes -- not touched here, not caused by this fix, and out of scope for a bugfix-type SD targeting the file-discovery defect specifically. Noted for awareness; not blocking.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/sub-agents/database/index.js:216 (the only production call site, via the DATABASE sub-agent's Phase 1 static validation step)"
+    ],
+    "dependencies": [
+      "glob@7.2.3 (already an installed transitive dependency)",
+      "lib/repo-paths.js getRepoRoot() (already used elsewhere in the same file)"
+    ],
+    "data_contracts": ["none"],
+    "runtime_config": ["none"],
+    "observability_rollout": [
+      "Live control experiment (staticFileValidation('SD-KNOWLEDGE-001', {})) run before and after the fix, output compared directly",
+      "sub_agent_execution_results evidence rows from prospective TESTING (4b38649c) and VALIDATION (d14d22e8) sub-agent runs document the defect and the fix independently"
+    ]
+  },
+  "system_architecture": {
+    "summary": "No architectural change -- a bug fix inside an existing pure function's file-discovery loop.",
+    "components": [
+      { "name": "lib/sub-agents/database/schema-validator.js", "change": "Fix broken async glob call; add 4th migrationPaths entry" },
+      { "name": "lib/sub-agents/database/database.test.js", "change": "Add 3 new behavioral regression tests with fixture files" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Promisify the glob call, add the missing directory pattern, prove it with RED-first tests.",
+    "steps": [
+      "Add globAsync = promisify(glob) alongside the existing execAsync = promisify(exec) pattern already in the file",
+      "Replace `await glob(pattern)` with `await globAsync(pattern, { cwd: getRepoRoot(), absolute: true })`",
+      "Add 'database/chairman-gated/*.sql' to the migrationPaths array",
+      "Add 3 behavioral tests to database.test.js using disposable fixture files with afterEach cleanup",
+      "Verify RED (tests fail against original code via git stash) then GREEN (tests pass against the fix)"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run: node -e \"(async()=>{const {staticFileValidation}=await import('./lib/sub-agents/database/schema-validator.js');console.log(await staticFileValidation('SD-KNOWLEDGE-001',{}))})()\"",
+      "expected_outcome": "verdict is not NOT_REQUIRED; migration_files contains real database/migrations/*.sql paths"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run: npx vitest run lib/sub-agents/database/database.test.js",
+      "expected_outcome": "10/10 tests pass"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run: git status --porcelain database/",
+      "expected_outcome": "No leftover fixture files (test cleanup verified)"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-DATABASE-SCHEMA-VALIDATOR-001"
+  }
+}
