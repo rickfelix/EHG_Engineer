@@ -266,6 +266,21 @@
     "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section, not the output of a keyword scan. The scan is only a TRIPWIRE that prompts the review: the LEAD precedent recorded that /BLOCKING|MUST NOT|NEVER|MANDATORY|PROHIBITED/ scored 'PLAN Phase Negative Constraints' at ZERO despite that section being nothing but NC-PLAN-001..005. Here the tripwire fired 24 times across the move-set and each hit was dispositioned individually; two hits were promoted to retained clauses in the gated file. Adding a section here requires a written justification above.",
     "_acceptance": "Harness-measured, never computed: a no-offset Read of CLAUDE_SOLOMON.md must return ALL lines with NO 'PARTIAL view' notice. Baseline before this split: 'showing lines 1-301 of 371 total (26138 tokens, cap 25000)'. Byte counts and general-purpose tokenizers cannot verify this — the repo's own calibrated instrument read this file ~23% high."
   },
+  "CLAUDE_SOLOMON_PROVENANCE.md": {
+    "description": "Solomon provenance companion (SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001, FR-6). Dated rationale, originating-incident narratives, and measurement citations lifted out of CLAUDE_SOLOMON.md so the gated contract stays under the Read tool's 25k single-call cap (CLAUDE_SOLOMON.md is on MUST_FIT_SINGLE_READ as of this SD). RULES, PROHIBITIONS AND DURABLE DUTIES DO NOT LIVE HERE — they stay in CLAUDE_SOLOMON.md and bind whether or not this file is read.",
+    "sections": [
+      "solomon_provenance"
+    ],
+    "_move_justification": {
+      "Mode C evidence basis": "The ~70% Fable-window-spend measurement supporting why Mode C was added — historical justification, not itself an admission rule (the rule stays in CLAUDE_SOLOMON.md).",
+      "P1a full measurement basis": "The fable_suitability_map liveness-test finding and the bounded N=10 supporting-evidence citation — the operative PARKED status and unpark trigger stay in the gated file.",
+      "Failure-class incident narratives (grounding-completeness, autonomy-oversight)": "The originating-incident detail motivating each duty — the duty's Procedure/Silence-rule/Anti-overlap clauses all stay in CLAUDE_SOLOMON.md.",
+      "DECISION_REQUESTED restoration history + measurement basis": "The regen-drop incident history and the two-prior-signals measurement — the operative --informational rule stays in the gated file.",
+      "Self-score cadence rationale/citations": "QF citation elaboration and the live-enablement blast-radius detail — the three operative facts (scorer ships inert, --force is the operating path, leo_feature_flags is a gauge not a gate) all stay in CLAUDE_SOLOMON.md.",
+      "HIGHER-ORDER duty comms/partnership design pointer": "Restated detail already covered by CLAUDE_SOLOMON.md §8 Comms 'Higher-order-tier comms' — kept as a cross-reference, not duplicated."
+    },
+    "_acceptance": "Companion is additive only: every item listed above has its operative counterpart verified still present and unchanged in CLAUDE_SOLOMON.md."
+  },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",
     "sections": [

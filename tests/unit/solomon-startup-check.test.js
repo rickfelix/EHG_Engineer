@@ -323,3 +323,22 @@ describe('QF-20260720-072 — plan-alignment review durability entry', () => {
     expect(missingDurableDuties(md, without)).toEqual(['plan-alignment-review']);
   });
 });
+
+describe('PROTOCOL_FILES tracking prerequisite (SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001)', () => {
+  it('the tracker knows about the solomon manual + provenance companions', async () => {
+    // Mirrors the equivalent Coordinator assertion (tests/unit/coordinator/coordinator-contract-read.test.js
+    // "PROTOCOL_FILES tracking prerequisite"). Without an entry here, a seat that reads only
+    // CLAUDE_SOLOMON.md post-split is indistinguishable from one that read the full
+    // charter+manual+provenance contract — scripts/hooks/protocol-file-tracker.cjs's hook has nothing
+    // to consult either way, so the companion's read is invisible to session state entirely. Found by
+    // TESTING sub-agent review at EXEC-TO-PLAN: the provenance companion was wired into every WRITER
+    // surface (generator, section mapping, docmon allowlist, pipeline test) but not this reader surface.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../../scripts/hooks/protocol-file-tracker.cjs', import.meta.url), 'utf8');
+    expect(src).toContain("'CLAUDE_SOLOMON.md'");
+    expect(src).toContain("'CLAUDE_SOLOMON_MANUAL.md'");
+    expect(src).toContain("'CLAUDE_SOLOMON_PROVENANCE.md'");
+
+    // MUTATION: remove any of the three from PROTOCOL_FILES -> its reads go untracked.
+  });
+});

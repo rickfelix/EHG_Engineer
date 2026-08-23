@@ -456,6 +456,38 @@ INSERT happens in a different, not-yet-located call path) — see
 `docs/reference/eva-stage-gate-tables-reader-census.md` for the full reader/writer census and the
 list of what a follow-up SD should pick up.
 
+## Applying `20260823_chairman_ratifications.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260823_chairman_ratifications.sql" --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001.) Creates `chairman_ratifications`, an append-only
+ledger (`freeze`/`no_delete`/`no_truncate` triggers, `ENABLE ALWAYS TRIGGER` so `SET LOCAL
+session_replication_role = 'replica'` cannot suppress them) recording chairman verbal directives
+that change a standing duty — closes the "ratified-never-encoded" gap: a chairman decision that
+changes contract behavior is lost if the receiving seat dies/restarts before scribing it into the
+DB-generated CLAUDE_*.md contract docs (D4, source packet `783ac23f7f5`). No separate acceptance
+script — post-condition verification is the migration's own inline `DO $verify$` block (sanctioned
+NULL->encoded transition, rejected re-encode/tamper/DELETE/TRUNCATE/invalid-target_contracts, all
+via distinct custom SQLSTATEs so a broken guard cannot be silently swallowed by a sibling handler).
+
+**After applying**, two follow-ups depend on this migration landing, neither automatic:
+1. `scripts/one-off/backfill-chairman-ratifications-20260823.mjs` — seeds the week's already-
+   ratified-and-encoded specimens. Currently refuses to run (by design): the specimen quote text,
+   section IDs, and manifest hashes are placeholder TODOs pending a human reconciliation of a
+   genuine 7-vs-9 count ambiguity in the source packet (documented in the script's own header) —
+   do not fill them in by guessing.
+2. The FR-3 staleness gauge (Adam/coordinator/Solomon quiet-ticks) and FR-4 regression detector
+   (wired into Adam's quiet-tick) both degrade to a silent no-op until this table exists — expected,
+   not a defect; both were runtime-verified against the live (then-missing) table during EXEC.
+
+`scripts/one-off/chairman-ratification-ledger-operator-contract-waiver-001.mjs` recorded an
+OPERATOR_CONTRACT gate waiver (armed_cadence/reaper, expires 2026-11-23) on `metadata` for exactly
+this reason: nothing to arm a cadence against or reap until this table is live.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert

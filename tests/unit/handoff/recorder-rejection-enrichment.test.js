@@ -134,11 +134,63 @@ describe('QF-20260720-851 (P1): rejection_reason is never NULL', () => {
     expect(row.rejection_reason).toBe('Claim guard rejected: sd_terminal_status (status=completed)');
   });
 
-  it('falls back to a labeled placeholder when neither .message, .error, nor .reasonCode is set', async () => {
+  it('falls back to a labeled placeholder when neither .message, .error, .reasonCode, nor .failedGate is set', async () => {
     const captured = [];
     const recorder = buildRecorder(captured);
     await recorder.recordFailure('PLAN-TO-EXEC', 'SD-TEST-004', { success: false });
     const row = captured.find(r => r.status === 'rejected');
     expect(row.rejection_reason).toBe('UNSPECIFIED_REJECTION (see validation_details)');
+  });
+});
+
+// QF-20260823-271: 34/673 non-accepted sd_phase_handoffs in a 30d window carried
+// rejection_reason='UNSPECIFIED_REJECTION' or NULL even though validation_details named a
+// failed_gate — the QF-20260720-851 fallback chain never looked at .failedGate/.gateResults
+// before landing on the generic marker. A rejection row can no longer persist unnamed while
+// validation_details carries a named failed gate.
+describe('QF-20260823-271: rejection_reason never lands on the generic marker while a gate is named', () => {
+  it('synthesizes VALIDATOR:<name> - <issue> from failedGate + that gate\'s own issues', async () => {
+    const captured = [];
+    const recorder = buildRecorder(captured);
+    await recorder.recordFailure('PLAN-TO-EXEC', 'SD-TEST-005', {
+      success: false,
+      failedGate: 'TESTING',
+      gateResults: { TESTING: { passed: false, issues: ['Coverage below 80% threshold\nSee report for detail'] } },
+      issues: ['Coverage below 80% threshold\nSee report for detail'],
+    });
+    const row = captured.find(r => r.status === 'rejected');
+    expect(row.rejection_reason).toBe('VALIDATOR:TESTING - Coverage below 80% threshold');
+  });
+
+  it('falls back to the top-level issues array when the named gate has no issues of its own', async () => {
+    const captured = [];
+    const recorder = buildRecorder(captured);
+    await recorder.recordFailure('PLAN-TO-EXEC', 'SD-TEST-006', {
+      success: false,
+      failedGate: 'SECURITY',
+      issues: ['RLS policy missing on new table'],
+    });
+    const row = captured.find(r => r.status === 'rejected');
+    expect(row.rejection_reason).toBe('VALIDATOR:SECURITY - RLS policy missing on new table');
+  });
+
+  it('_recordCompletionActionFailure (LEAD-FINAL-APPROVAL) synthesizes the same way', async () => {
+    const captured = [];
+    const recorder = buildRecorder(captured);
+    await recorder.recordFailure('LEAD-FINAL-APPROVAL', 'SD-TEST-007', {
+      success: false,
+      failedGate: 'OIV',
+      issues: ['Operator invariant violated: missing rollback plan'],
+    });
+    const row = captured.find(r => r.rejection_reason != null);
+    expect(row.rejection_reason).toBe('VALIDATOR:OIV - Operator invariant violated: missing rollback plan');
+  });
+
+  it('still falls back to the generic marker when failedGate names a gate with no recorded issue anywhere', async () => {
+    const captured = [];
+    const recorder = buildRecorder(captured);
+    await recorder.recordFailure('PLAN-TO-EXEC', 'SD-TEST-008', { success: false, failedGate: 'SCHEMA' });
+    const row = captured.find(r => r.status === 'rejected');
+    expect(row.rejection_reason).toBe('VALIDATOR:SCHEMA - no issue detail recorded');
   });
 });

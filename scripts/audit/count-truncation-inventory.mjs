@@ -89,7 +89,13 @@ export function isNonLivePath(rel) {
 }
 
 export function classifyChain(win) {
-  if (/count:\s*['"]exact['"]/.test(win)) return 'already-exact';
+  // QF-20260823-555: 'planned'/'estimated' are PostgREST's other two `count` enum values
+  // alongside 'exact' -- all three are HEAD-count requests (no rows returned), so none of
+  // them carry the row-truncation risk this classifier exists to catch. Recognizing only
+  // 'exact' left 'estimated'/'planned' as latent false-positives on any future head-count
+  // site that opts out of the exact-count sequential scan for a large table (as
+  // eva_scheduler_metrics's retention policy does per QF-20260823-655).
+  if (/count:\s*['"](?:exact|planned|estimated)['"]/.test(win)) return 'already-exact';
   if (/\.single\(\)|\.maybeSingle\(\)/.test(win)) return 'bounded-by-design';
   if (/\.limit\(\s*(\d+)\s*\)/.test(win) && Number(RegExp.$1) < 1000) return 'bounded-by-design';
   if (/\.range\(|fetchAllPaginated|fapPaginate/.test(win)) return 'paginated'; // fapPaginate: CJS call sites' local ESM-bridge wrapper

@@ -297,7 +297,6 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
   const decisionAt = new Date().toISOString();
   try {
     const row = {
-      correlation_id: correlationId,
       decision: disposition,
       decision_by: normalizeDecisionBy(decidedBy),
       decision_at: decisionAt,
@@ -335,10 +334,26 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
       row.outcome_sd_key = resolvedOutcomeRef;
     }
     if (disposition === 'deferred') row.defer_trigger = deferTrigger;
-    const { error } = await supabase
+    // QF-20260823-366: an upsert here always attempts the INSERT branch first, and this payload
+    // never carries proposal_summary (NOT NULL, no default) — Postgres evaluates that constraint
+    // BEFORE ON CONFLICT arbitration, so the write 23502'd even when the row already existed.
+    // This function only ever decides an EXISTING row (captureLedgerRow in solomon-advisory.cjs is
+    // the sole creator, always with proposal_summary set), so a plain UPDATE guarded on
+    // decision='pending' — the same pattern inheritTailDecisions already uses below — never
+    // reaches an insert branch at all. maybeSingle() (not select('id'), an unbounded read per
+    // count-truncation-diff-lint): correlation_id carries a UNIQUE constraint (see the 20260701
+    // migration), so this update can only ever affect 0 or 1 row.
+    const { data, error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
-      .upsert(row, { onConflict: 'correlation_id' });
+      .update(row)
+      .eq('correlation_id', correlationId)
+      .eq('decision', 'pending')
+      .select('id')
+      .maybeSingle();
     if (error) return { recorded: false, reason: error.message };
+    if (!data) {
+      return { recorded: false, reason: 'no pending ledger row found for correlation_id (already decided, or never captured)' };
+    }
   } catch (e) {
     return { recorded: false, reason: (e && e.message) || String(e) };
   }

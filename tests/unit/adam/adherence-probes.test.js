@@ -283,6 +283,14 @@ describe('probePmBoard finding-closure (QF-20260725-469)', () => {
     expect(classifyFindingRow({ source_ref: 'x-2026-07-25', blocker: 'NOT-SOURCED: superseded by the venture-line diagnosis' })).toBe('deferred');
   });
 
+  it('QF-20260823-016: a plan-check forward-list anchor row is never an orphan — it never advances by design', () => {
+    expect(classifyFindingRow({ source_ref: 'plan-check-forward-list-2026-08-22', blocker: '' })).toBe('anchor');
+    const r = probePmBoard({ ...clean, pmBoardFindings: [
+      { id: 'bfbf43a5', source_ref: 'plan-check-forward-list-2026-08-22', blocker: '' },
+    ] });
+    expect(r.verdict).toBe('pass');
+  });
+
   it('is reachable on an EMPTY board — the orphan check must not sit behind the clean-board early return', () => {
     const r = probePmBoard({ pmBoardSnapshot: [], pmBoardPriorSnapshot: new Map(), pmBoardFindings: [
       { id: 'orphan-1', source_ref: 'anchor-stall-false-positive-2026-07-25', blocker: 'DO NOT simply flip their status' },

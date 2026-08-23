@@ -240,6 +240,20 @@ describe('detectStalledLoop', () => {
     expect(detectStalledLoop({ sessions, unclaimedItems: 5, now: NOW }).matched).toBe(false);
   });
 
+  // QF-20260728-112: the coordinator never claims an SD by design, so once loop_state started
+  // reflecting live coordinators too it permanently satisfied every remaining condition — an
+  // un-actionable false positive on a process behaving correctly, every sweep.
+  it('excludes a live coordinator session (never claims, so was permanently flagged)', () => {
+    const coordinator = { ...stalled, session_id: 'coord-1', metadata: { is_coordinator: 'true' } };
+    expect(detectStalledLoop({ sessions: [coordinator], unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+  it('CONTROL: a worker session with the same shape (no is_coordinator) still matches', () => {
+    const worker = { ...stalled, session_id: 'worker-1', metadata: { role: 'worker' } };
+    const r = detectStalledLoop({ sessions: [worker], unclaimedItems: 5, now: NOW });
+    expect(r.matched).toBe(true);
+    expect(r.evidence.samples[0].session_id).toBe('worker-1');
+  });
+
   // SD-LEO-INFRA-STALLED-POSTCOMPLETION-TAIL-FP-001: post-completion-tail exclusion
   it('excludes a worker running its post-completion tail (completed + recent released_at)', () => {
     const tail = { ...stalled, session_id: 'tail', released_reason: 'completed', released_at: minsAgo(3) };

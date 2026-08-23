@@ -66,4 +66,11 @@ describe('classification wiring this driver relies on', () => {
     const lines = ['const { data } = await supabase.from("claude_sessions").select("*").limit(50);'];
     expect(classifyChain(chainWindow(lines, 0))).toBe('bounded-by-design');
   });
+
+  it("QF-20260823-555: count: 'estimated'/'planned' classify as already-exact, same as 'exact' (all three are HEAD-count-only, no rows returned)", () => {
+    const est = ['const { count } = await supabase.from("t").select("*", { count: "estimated", head: true }).lt("c", x);'];
+    const planned = ['const { count } = await supabase.from("t").select("*", { count: "planned", head: true }).lt("c", x);'];
+    expect(classifyChain(chainWindow(est, 0))).toBe('already-exact');
+    expect(classifyChain(chainWindow(planned, 0))).toBe('already-exact');
+  });
 });

@@ -128,12 +128,50 @@
       "registered_at": "2026-07-26T01:12:17.218Z",
       "registered_by": "venture-provisioner",
       "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784286487799"
+    },
+    "APP011": {
+      "id": "APP011",
+      "name": "altifyai",
+      "github_repo": "rickfelix/altifyai",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-08-11T16:55:12.457Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/altifyai"
+    },
+    "APP012": {
+      "id": "APP012",
+      "name": "full-lifecycle-journey-venture-1786919223461",
+      "github_repo": "rickfelix/full-lifecycle-journey-venture-1786919223461",
+      "supabase_project_id": "pending",
+      "supabase_url": "pending",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-08-16T22:27:15.238Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/full-lifecycle-journey-venture-1786919223461"
+    },
+    "APP013": {
+      "id": "APP013",
+      "name": "ApexNiche AI",
+      "github_repo": "rickfelix/apexniche-ai",
+      "supabase_project_id": "consolidated",
+      "supabase_url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-08-23T13:23:56.242Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/apexniche-ai",
+      "note": "QF-20260823-203 -- past S19, live, had NO registry entry (chairman-commissioned architecture eval, S5 finding 2, 2026-08-23); its feedback widget was stranded by the 08-15/16 anon-policy cutover that dropped venture_user_insert_feedback",
+      "venture_id": "809ec7e7-f688-4a0c-b9f8-c8a8291cf94d"
     }
   },
   "metadata": {
-    "total_apps": 10,
-    "active_apps": 10,
-    "last_updated": "2026-07-26T01:12:17.218Z",
+    "total_apps": 13,
+    "active_apps": 13,
+    "last_updated": "2026-08-23T13:23:56.242Z",
     "last_sync": null
   },
   "settings": {

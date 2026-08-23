@@ -8,6 +8,7 @@
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-LEO-FIX-ENF-TRUSTS-FILE-001';
 
@@ -39,4 +40,6 @@ async function main() {
   console.log('Stored:', JSON.stringify({ id: stored?.id, verdict: results.verdict }));
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

@@ -46,6 +46,7 @@ import {
   generateCoordinatorProvenance,
   generateLeadManual,
   generateSolomonManual,
+  generateSolomonProvenance,
   generatePlanManual,
   assertSharedSectionsNotCopied
 } from './file-generators.js';
@@ -216,6 +217,11 @@ class CLAUDEMDGeneratorV3 {
       // durable duties stay in the gated file — including the two the tripwire caught on the way
       // out (the web-research HARD security stop, and ACCURACY REVIEW DUTY).
       ['CLAUDE_SOLOMON_MANUAL.md', (d) => generateSolomonManual(d, this.fileMapping), 'full'],
+      // SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 FR-6: the dated-rationale companion that keeps
+      // CLAUDE_SOLOMON.md under the single-read cap. Rules, prohibitions and durable duties stay
+      // in the gated file — this carries WHY (originating-incident narratives, measurement
+      // citations), never governing content.
+      ['CLAUDE_SOLOMON_PROVENANCE.md', (d) => generateSolomonProvenance(d, this.fileMapping), 'full'],
     ];
     if (this.options.generateDigest) {
       specs.push(
@@ -616,11 +622,12 @@ export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 // THROW only for files a shipped SD has actually made fit; WARN for the rest.
 //
 // This is not timidity, it is the difference between a guard and a blockade. CLAUDE_CORE.md
-// (39,750 tokens), CLAUDE_EXEC.md (37,056) and CLAUDE_SOLOMON.md are over cap TODAY and their fixes
-// are separate SDs. A guard that throws on every FULL file would fail the very first regeneration
-// after this ships and block the whole family — punishing everyone for a defect nobody has been
-// given the chance to fix yet. Add a file here when its SD lands, not before.
-export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md'];
+// (39,750 tokens) and CLAUDE_EXEC.md (37,056) are over cap TODAY and their fixes are separate SDs.
+// A guard that throws on every FULL file would fail the very first regeneration after this ships
+// and block the whole family — punishing everyone for a defect nobody has been given the chance
+// to fix yet. Add a file here when its SD lands, not before.
+// CLAUDE_SOLOMON.md added by SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6) — that SD landed.
+export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md'];
 
 /**
  * Fail generation when a file that is REQUIRED to fit no longer does.
@@ -666,7 +673,7 @@ export function assertSingleReadFit(files, opts = {}) {
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md', 'CLAUDE_SOLOMON_PROVENANCE.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 
