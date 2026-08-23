@@ -50,6 +50,18 @@ governance:
 
 ### Explicitly NOT wired in this SD (documented gap, not a silent omission)
 
+- **"Interrupted attempts stay NULL-visible" (PRD FR-4) is NOT achieved at ANY of the 4 current
+  write call sites.** The schema and RPCs make it reachable (`open_eva_gate_attempt` genuinely
+  creates a NULL-outcome row, `finalize_eva_gate_attempt` genuinely does a separate NULL→final
+  UPDATE), and the migration's own `DO $verify$` block behaviourally proves both halves work — but
+  every real caller (`eva-orchestrator.js`'s two call sites, `stage-17-blueprint-review.js`,
+  `recordGateOverride`) calls `recordGateAttempt`, which opens and finalizes back-to-back in one
+  function call, AFTER the verdict is already known. A crash DURING evaluation (before
+  `recordGateAttempt` is ever reached) is never represented as an in-flight row today. What IS
+  delivered: durable, attributable, immutable-once-finalized attempt history, with a genuine
+  `attempt_number` per retry/re-evaluation cycle — just not the in-flight-visibility half of FR-4.
+  A future SD wiring true pre-evaluation `openAttempt()` calls at the 3-4 evaluation call sites
+  (not just the persist call sites) would close this (EXEC-TO-PLAN TESTING finding, row `7910c783`).
 - **`chairman_decisions.context` / `venture_artifacts.metadata` stamping (PRD FR-6).** The intent
   is that an `override`/`chairman_adjudicated` attempt's `attempt_id` gets stamped onto the
   corresponding `chairman_decisions` row so a reader can join a chairman decision back to the
@@ -65,3 +77,17 @@ governance:
 - **Migrating the 10 existing `eva_stage_gate_results` readers/enumerations above onto
   `eva_stage_gate_attempts`** is explicitly out of scope (PRD FR-7) — this SD's dual-write leaves
   all of them reading exactly what they read today.
+
+### Known limitation carried into the new table (EXEC-TO-PLAN TESTING finding, row `7910c783`)
+
+`eva_stage_gate_attempts.gate_type` reuses `eva_stage_gate_results`' collapsed vocabulary
+(`entry`/`exit`/`kill`) for schema-consistency with the CHECK constraint on the sibling table.
+At stages 10/13/16 (the live-enabled `TASTE_GATE_STAGES`), a `stage_gate` evaluation and a
+`taste_gate_sN` evaluation both map to `gate_type='exit'` and land in the SAME
+`(venture_id, stage_number, gate_type)` bucket — they get sequential `attempt_number`s, and
+"authoritative = highest finalized attempt_number" therefore returns whichever of the two ran
+LAST as if it were the single authoritative result for that gate_type, losing the distinction
+between the two underlying checks. A follow-up should add a `source_gate_type` column (the
+raw, pre-`GATE_TYPE_MAP` code-level type — `stage_gate`, `reality_gate`, `taste_gate_s17`, etc.)
+and extend the unique key / advisory-lock key to include it, so each check's attempt sequence is
+independent.

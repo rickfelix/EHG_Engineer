@@ -140,9 +140,19 @@ LANGUAGE plpgsql
 AS $freeze$
 BEGIN
   IF OLD.resolved_outcome IS NOT NULL THEN
+    -- TESTING F-A: a plain RAISE EXCEPTION defaults to SQLSTATE P0001 ('raise_exception') --
+    -- IDENTICAL to the verify block's own "GUARD DID NOT FIRE" failure sentinel below. A
+    -- WHEN raise_exception handler around the probe therefore catches BOTH the trigger firing
+    -- correctly AND the verify block's own failure message, making the proof pass whether or not
+    -- the trigger actually works. A custom ERRCODE distinguishes "the guard fired" from "the
+    -- probe itself is reporting failure" so the two can never be confused by a generic handler.
     RAISE EXCEPTION
-      'eva_stage_gate_attempts is immutable once finalized: attempt % (venture %, stage %, %) already resolved as % at %. Recovery is a NEW attempt (attempt_number+1), not an edit to this row.',
-      OLD.attempt_id, OLD.venture_id, OLD.stage_number, OLD.gate_type, OLD.resolved_outcome, OLD.finalized_at;
+      USING
+        ERRCODE = 'EV001',
+        MESSAGE = format(
+          'eva_stage_gate_attempts is immutable once finalized: attempt %s (venture %s, stage %s, %s) already resolved as %s at %s. Recovery is a NEW attempt (attempt_number+1), not an edit to this row.',
+          OLD.attempt_id, OLD.venture_id, OLD.stage_number, OLD.gate_type, OLD.resolved_outcome, OLD.finalized_at
+        );
   END IF;
   NEW.updated_at := now();
   RETURN NEW;
@@ -323,9 +333,13 @@ BEGIN
 
   BEGIN
     UPDATE public.eva_stage_gate_attempts SET reasoning = 'tampered' WHERE attempt_id = v_attempt_1;
+    -- Reached ONLY if the trigger failed to fire (the UPDATE above would otherwise have raised
+    -- SQLSTATE EV001 and jumped straight to the handler). Deliberately left at the GENERIC
+    -- default SQLSTATE (P0001) so it is NOT caught by the SQLSTATE-EV001-scoped handler below --
+    -- it must propagate and abort the whole deploy, not be swallowed as if it were success.
     RAISE EXCEPTION 'eva_stage_gate_attempts: GUARD DID NOT FIRE — a finalized attempt was updated. The immutability guarantee is decorative; refusing to deploy.';
   EXCEPTION
-    WHEN raise_exception THEN v_reject_finalized := true;
+    WHEN SQLSTATE 'EV001' THEN v_reject_finalized := true;
   END;
   IF NOT v_reject_finalized THEN
     RAISE EXCEPTION 'eva_stage_gate_attempts: finalize-immutability behavioural proof did not run as expected';
