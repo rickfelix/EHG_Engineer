@@ -295,10 +295,13 @@ describe('QF-20260719-072 — weekly-program + forecast-triggers durability entr
 });
 
 describe('QF-20260720-072 — plan-alignment review durability entry', () => {
-  it('registers the agent-judgment loop with the ratified ~48h-baseline cron', () => {
+  it('registers the agent-judgment loop with the ratified 24-48h daily-baseline cron', () => {
+    // QF-20260822-347: chairman tightened the ratified baseline from every-2-days to daily
+    // (Solomon relay e3288428) — this test previously locked in the SUPERSEDED '0 8 */2 * *'
+    // spec, which is exactly the stale-spec-resurrects-old-cadence class this fix corrects.
     const pa = SOLOMON_LOOPS.find((l) => l.key === 'plan-alignment');
     expect(pa).toBeTruthy();
-    expect(pa.cron).toBe('0 8 */2 * *');
+    expect(pa.cron).toBe('3 8 * * *');
     expect(pa.script).toBeNull();
     expect(pa.covers).toContain('plan-alignment-review');
   });
