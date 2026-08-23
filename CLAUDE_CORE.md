@@ -1,8 +1,8 @@
-<!-- file_content_hash: 6dc1dd644f401317 -->
+<!-- file_content_hash: bb72619badbdf461 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-17 4:17:22 AM
+**Generated**: 2026-08-23 12:18:25 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1591,16 +1591,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-PLANTOLEAD-27a62713 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOLEAD-27a62713 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-HF-LEADTOPLAN-90e39736 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001 | testing | [HIGH] high | 6 | [STABLE] | Assert the RULE, not today's answer. The |
+| PAT-HF-LEADTOPLAN-ded32ff4 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 
 ### Prevention Checklists
-
-**testing**:
-- [ ] For every assertion, ask: does this state a RULE the system must obey, or a MEASUREMENT of the system as it currently stands? Rules belong in tests; measurements belong in the code that measures.
-- [ ] Would this assertion fail if a known in-flight sibling SD SUCCEEDED? If yes it is a fact-pin, not a requirement — and it imposes a stricter bar than the production condition it claims to guard.
-- [ ] A green test asserting a false fact is worse than no test: it makes the correct fix look like a regression. When a measurement must change, expect to change a PASSING test and treat that as the signal, not the obstacle.
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1608,7 +1603,14 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 ## Known Friction Points
 
-*(No widespread friction signals tracked currently — workers can /signal to surface recurring issues.)*
+**From Worker Signals** — recurring friction observed by 3+ workers via `/signal`. Aggregated into harness-backlog by `lib/coordinator/signal-router.cjs` on every sweep cycle. Triage via `node scripts/sd-from-feedback.js`.
+
+| Signal Type | Workers | Severity | Title |
+|-------------|---------|----------|-------|
+| feedback | 4 | medium | online |
+| feedback | 3 | medium | model-stamped claude-sonnet-5 |
+
+*Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
 
 
 
@@ -1736,7 +1738,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-08-17*
+*Generated from database: 2026-08-23*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

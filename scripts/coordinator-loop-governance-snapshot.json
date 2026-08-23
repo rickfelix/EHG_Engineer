@@ -1,0 +1,22 @@
+{
+  "_comment": "SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 (FR-2, TR-6). Checked-in snapshot of scripts/coordinator-startup-check.mjs's STANDARD_LOOPS registry, drift-checked (never generated-from) by tests/unit/coordinator/coordinator-loop-governance-drift.test.js. When STANDARD_LOOPS changes, update THIS file AND the coordinator_role_contract DB row that cites these numbers (leo_protocol_sections, title 'Coordinator loop-registry governance (STANDARD_LOOPS)') in the SAME PR -- the test only proves this file matches the live array, not that the charter prose was updated to match this file.",
+  "total_loops": 34,
+  "gha_backed_count": 16,
+  "session_arm_false_keys": [
+    "sweep",
+    "unranked-gauge",
+    "singleton-relaunch",
+    "relay-drop-gauge",
+    "fleet-retro",
+    "row-growth",
+    "gauge-runner",
+    "feedback-sla"
+  ],
+  "gha_only_carve_out_keys": [
+    "relay-drain",
+    "sms-relay-drain"
+  ],
+  "reversal_condition_through": "2026-08-25T22:00:00Z",
+  "reversal_condition": "If any dropped loop's artifact goes stale beyond 2x its GHA cadence before this date, revert its session_arm to true (re-arm it as a session-owned loop) pending re-review.",
+  "ruling_reference": "Operator commission 60153bf2, encoded QF-20260822-510"
+}

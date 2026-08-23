@@ -1,179 +1,195 @@
 {
-  "generated_at": "2026-08-17T08:17:22.422Z",
-  "git_commit": "da2f543f",
-  "db_snapshot_hash": "aedadee082b7a7a8",
+  "generated_at": "2026-08-23T04:18:25.727Z",
+  "git_commit": "42e990d0",
+  "db_snapshot_hash": "a9dcd7a2e7939fe0",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19564,
-      "bytes": 19703,
-      "estimated_tokens": 4891,
+      "chars": 19565,
+      "bytes": 19704,
+      "estimated_tokens": 4892,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 94084,
-      "bytes": 94669,
-      "estimated_tokens": 23521,
-      "content_hash": "6dc1dd644f401317",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_CORE.md"
+      "chars": 93828,
+      "bytes": 94413,
+      "estimated_tokens": 23457,
+      "content_hash": "bb72619badbdf461",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 58425,
-      "bytes": 58621,
+      "chars": 58426,
+      "bytes": 58622,
       "estimated_tokens": 14607,
-      "content_hash": "94b9a2c79e9d7021",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_LEAD.md"
+      "content_hash": "7726ac30e5d1344b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
-      "chars": 8818,
-      "bytes": 8862,
+      "chars": 8819,
+      "bytes": 8863,
       "estimated_tokens": 2205,
-      "content_hash": "bd4cf2ba1ab9fda7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_LEAD_MANUAL.md"
+      "content_hash": "cc66ad67987e6c33",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 54854,
-      "bytes": 55111,
+      "chars": 54855,
+      "bytes": 55112,
       "estimated_tokens": 13714,
-      "content_hash": "717232de9abdd96a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_PLAN.md"
+      "content_hash": "bfcc116b18eeebe0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
-      "chars": 38353,
-      "bytes": 38460,
+      "chars": 38354,
+      "bytes": 38461,
       "estimated_tokens": 9589,
-      "content_hash": "fbd5a48e77b620cf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_PLAN_MANUAL.md"
+      "content_hash": "51819b6275a9bf4e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 92809,
-      "bytes": 93243,
+      "chars": 92810,
+      "bytes": 93244,
       "estimated_tokens": 23203,
-      "content_hash": "6cd7cbcf1860280b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_EXEC.md"
+      "content_hash": "1b3e015ba6db04be",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 48444,
-      "bytes": 48974,
-      "estimated_tokens": 12111,
-      "content_hash": "56173e8c11a02e54",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM.md"
+      "chars": 53446,
+      "bytes": 54018,
+      "estimated_tokens": 13362,
+      "content_hash": "98934109de2bca66",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 15698,
-      "bytes": 15842,
+      "chars": 15699,
+      "bytes": 15843,
       "estimated_tokens": 3925,
-      "content_hash": "ef54c295d84a65f8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM_MANUAL.md"
+      "content_hash": "de148bf7b2dbb02d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 6924,
-      "bytes": 6988,
-      "estimated_tokens": 1731,
-      "content_hash": "c954ee9d24a0f849",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM_PROVENANCE.md"
+      "chars": 6925,
+      "bytes": 6989,
+      "estimated_tokens": 1732,
+      "content_hash": "46ce6f846311e0b0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 26376,
-      "bytes": 26580,
-      "estimated_tokens": 6594,
-      "content_hash": "5eb5fe1edac57cdb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_COORDINATOR.md"
+      "chars": 25336,
+      "bytes": 25528,
+      "estimated_tokens": 6334,
+      "content_hash": "5e3c5545362ced58",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR.md"
+    },
+    "CLAUDE_COORDINATOR_MANUAL.md": {
+      "type": "full",
+      "chars": 4558,
+      "bytes": 4594,
+      "estimated_tokens": 1140,
+      "content_hash": "b8947bb3616d3d86",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_MANUAL.md"
+    },
+    "CLAUDE_COORDINATOR_PROVENANCE.md": {
+      "type": "full",
+      "chars": 2127,
+      "bytes": 2139,
+      "estimated_tokens": 532,
+      "content_hash": "112b0b96ed33271a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 61308,
-      "bytes": 61853,
-      "estimated_tokens": 15327,
-      "content_hash": "3790921c6fc71d68",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_SOLOMON.md"
+      "chars": 62769,
+      "bytes": 63324,
+      "estimated_tokens": 15693,
+      "content_hash": "abcf7c48225fc423",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 11227,
-      "bytes": 11324,
+      "chars": 11228,
+      "bytes": 11325,
       "estimated_tokens": 2807,
-      "content_hash": "d9866bd724912597",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_SOLOMON_MANUAL.md"
+      "content_hash": "c75804cd89ab0475",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
-      "bytes": 9653,
+      "chars": 9612,
+      "bytes": 9654,
       "estimated_tokens": 2403,
-      "content_hash": "4e7b7bc1408ca477",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_DIGEST.md"
+      "content_hash": "4194c5a76104a8db",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 13747,
-      "bytes": 13861,
+      "chars": 13748,
+      "bytes": 13862,
       "estimated_tokens": 3437,
-      "content_hash": "46ec1cb46e6d1e7b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "7008a402d42f31a3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5551,
-      "bytes": 5571,
+      "chars": 5552,
+      "bytes": 5572,
       "estimated_tokens": 1388,
-      "content_hash": "5c1f0556f4b097df",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "43cb66e9d3a6269b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8541,
-      "bytes": 8581,
+      "chars": 8542,
+      "bytes": 8582,
       "estimated_tokens": 2136,
-      "content_hash": "491085f760ed32b0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "79e2da0df59e43aa",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10964,
-      "bytes": 11046,
-      "estimated_tokens": 2741,
-      "content_hash": "4eae0ff443121aec",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10965,
+      "bytes": 11047,
+      "estimated_tokens": 2742,
+      "content_hash": "47204356635fad2f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 17736,
+      "chars": 17754,
       "bytes": 18068,
-      "estimated_tokens": 4434,
-      "content_hash": "904e2c222e88d3af",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_ADAM_DIGEST.md"
+      "estimated_tokens": 4439,
+      "content_hash": "9e2217e20ae4327d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
-      "chars": 6091,
-      "bytes": 6161,
-      "estimated_tokens": 1523,
-      "content_hash": "7d21c047483fa3c0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_COORDINATOR_DIGEST.md"
+      "chars": 8301,
+      "bytes": 8367,
+      "estimated_tokens": 2076,
+      "content_hash": "9390d9eba748ce95",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 3969,
       "bytes": 4011,
       "estimated_tokens": 993,
-      "content_hash": "a3af841079bc8618",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260816-269\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "d44dcdb84628e231",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "06346b339117295e",
+    "global": "2dae056ae434de57",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -427,14 +443,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "2a1457d7f0b96c27",
+      "601": "c81f7dc101e9ed08",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
-      "605": "a374b16fd546f8bd",
+      "605": "44bc3efdff5b9875",
       "608": "7f99a4321502367e",
-      "609": "9790a74a362ff0ca",
+      "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "f65ce46a919dbf66",
+      "611": "389d54bc60160386",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -446,7 +462,11 @@
       "626": "f9a040104b9c6234",
       "627": "c1f5247af6cc9d08",
       "629": "fbba3f3dba64e4a4",
-      "630": "7851b31f692ec87c"
+      "630": "7851b31f692ec87c",
+      "632": "f3ebf4de6f9fefbe",
+      "633": "12cf4526e9c9fd09",
+      "634": "4b9e7014c2db98f2",
+      "635": "4d256bd4f129b597"
     },
     "meta": {
       "94": {
@@ -1808,6 +1828,26 @@
         "section_type": "sanctioned_ci_wait_pattern",
         "target_file": "CLAUDE_EXEC.md",
         "title": "Sanctioned Read-Only CI-Wait Pattern"
+      },
+      "632": {
+        "section_type": "coordinator_manual",
+        "target_file": null,
+        "title": "Coordinator Manual — Blocked-claim resolution & gauge-integrity procedures"
+      },
+      "633": {
+        "section_type": "coordinator_provenance",
+        "target_file": null,
+        "title": "Coordinator Provenance — index (initial)"
+      },
+      "634": {
+        "section_type": "coordinator_role_contract",
+        "target_file": null,
+        "title": "Coordinator — Never-Do Boundaries (top-of-charter)"
+      },
+      "635": {
+        "section_type": "coordinator_role_contract",
+        "target_file": null,
+        "title": "Coordinator loop-registry governance (STANDARD_LOOPS)"
       }
     }
   }
