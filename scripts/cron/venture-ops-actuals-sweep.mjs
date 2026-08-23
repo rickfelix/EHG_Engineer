@@ -33,7 +33,9 @@
  *   node scripts/cron/venture-ops-actuals-sweep.mjs --once --dry-run
  */
 import 'dotenv/config';
-import { pathToFileURL } from 'url';
+import { pathToFileURL, fileURLToPath } from 'url';
+import path from 'node:path';
+import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { collectProductHealth } from '../../lib/eva/services/ops-health-monitor.js';
 import { collectRevenueMetrics } from '../../lib/eva/services/ops-revenue-collector.js';
@@ -54,7 +56,50 @@ const JOBS = [
   { key: 'venture-uptime-probe', owner: 'venture-uptime-probe' },
   { key: 'venture-crack-gate-sweep', owner: 'venture-crack-gate-sweep' },
   { key: 'venture-pbn-auto-score-sweep', owner: 'venture-pbn-auto-score-sweep' },
+  { key: 'venture-zombie-report', owner: 'venture-zombie-report' },
+  { key: 'venture-divergence-report', owner: 'venture-divergence-report' },
 ];
+
+// SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-2/FR-4: 'terminal' is defined on ventures.status
+// (cancelled/killed), NOT workflow_status -- live-measured (TESTING F3) to include TWO
+// zombies (MarketLens id=ecbba50e AND CronGenius id=6e23ad2b) today, not a single specimen.
+const TERMINAL_STATUSES = ['cancelled', 'killed'];
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REGISTRY_PATH = path.join(__dirname, '..', '..', 'applications', 'registry.json');
+
+// SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-4 / TESTING F6: applications/registry.json has its
+// own noise -- 8 of its 10 entries today are test/fixture registrations (test-leo-project,
+// test-venture, test-cicd, four e2e-verdict-engine-178* entries) or the EHG platform's own
+// repo entry ('ehg' -- not itself a venture), not real venture apps. Mirrors is_demo=false on
+// the ventures side; without this filter divergence output is ~80% noise.
+const FIXTURE_REGISTRY_NAME_PATTERN = /^(test-|e2e-)/i;
+const PLATFORM_REGISTRY_NAMES = new Set(['ehg']);
+
+/** .applications is an OBJECT keyed by APP id (TESTING F6) -- Object.values(), not .forEach(). */
+function loadRegistryApplications(logger) {
+  try {
+    const raw = fs.readFileSync(REGISTRY_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Object.values(parsed.applications || {});
+  } catch (err) {
+    logger.warn?.(`[ops-actuals-sweep] registry.json read/parse failed (non-fatal, divergence job will report 0): ${err.message}`);
+    return [];
+  }
+}
+
+function isRealRegistryEntry(app) {
+  const name = String(app?.name || '');
+  if (PLATFORM_REGISTRY_NAMES.has(name)) return false;
+  if (FIXTURE_REGISTRY_NAME_PATTERN.test(name)) return false;
+  return true;
+}
+
+/** True when a query error means "the column does not exist yet" (schema-cache/42703 shape). */
+function isMissingColumnError(err) {
+  const message = String(err?.message || '');
+  return /column .* does not exist/i.test(message) || /schema cache/i.test(message);
+}
 
 // Job 5 (adversarial review finding, /ship Deep-tier gate): retroactivelyScoreVenture's
 // already-scored check (scripts/eva/retroactive-pbn-score.mjs) is a cheap pre-LLM read,
@@ -139,7 +184,7 @@ async function fetchLiveDeploymentVentures(supabase) {
   try {
     return await fetchAllPaginated(() => supabase
       .from('ventures')
-      .select('id, deployment_url')
+      .select('id, name, status, deployment_url, killed_at, is_demo')
       .not('deployment_url', 'is', null)
       .neq('deployment_url', '')
       .order('id', { ascending: true }));
@@ -157,9 +202,12 @@ async function fetchLiveDeploymentVentures(supabase) {
  */
 async function fetchAllVentureIds(supabase) {
   try {
+    // SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-4: reuse this same broad, whole-portfolio fetch
+    // (already needed by job 5's PBN sweep below) for the duplicate-name + registry-divergence
+    // report rather than issuing a second full-table query. Job 5 itself only reads `.id`.
     return await fetchAllPaginated(() => supabase
       .from('ventures')
-      .select('id')
+      .select('id, name, status, is_demo')
       .order('id', { ascending: true }));
   } catch (err) {
     throw new Error(`ventures query failed: ${err.message}`);
@@ -258,6 +306,71 @@ export async function main(argv = process.argv, deps = {}) {
     }
   }
 
+  // Job 6 (numbered after job 3 for docstring order, runs here so it reads job 3's fresh
+  // probe result): zombie report (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-2) -- terminal-status
+  // (cancelled/killed), is_demo=false ventures whose deployment_url is STILL reachable per the
+  // probe job that just ran. A strict subset of `ventures` above -- no new probe infrastructure;
+  // this reads venture_deployments.metadata.probe that job 3 just wrote.
+  {
+    const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[5], logger);
+    const zombies = [];
+    const errors = [];
+    let checked = 0;
+    if (!args.dryRun) {
+      const terminalDeployed = ventures.filter((v) => TERMINAL_STATUSES.includes(v.status) && v.is_demo === false);
+      checked = terminalDeployed.length;
+
+      // teardown_disposition is a TOLERANT, separate read: database/migrations/
+      // 20260823145041_ventures_teardown_disposition.sql is still @chairman-gated as of this
+      // SD, so the column may not exist on this DB yet -- never let that break jobs 1-5's
+      // core `ventures` select above.
+      let teardownDispositionById = new Map();
+      if (terminalDeployed.length > 0) {
+        try {
+          const rows = await fetchAllPaginated(() => supabase
+            .from('ventures')
+            .select('id, teardown_disposition') // schema-lint-disable-line: chairman-gated migration 20260823145041 not yet applied; isMissingColumnError() below handles the pre-apply 42703 tolerantly
+            .in('id', terminalDeployed.map((v) => v.id)));
+          teardownDispositionById = new Map(rows.map((r) => [r.id, r.teardown_disposition]));
+        } catch (err) {
+          if (!isMissingColumnError(err)) throw err;
+          logger.warn?.(`[ops-actuals-sweep] ${JOBS[5].key}: teardown_disposition column not found (migration 20260823145041 not yet applied) — zombie rows will report teardown_disposition=null this cycle.`);
+        }
+      }
+
+      for (const v of terminalDeployed) {
+        try {
+          const { data: dep, error } = await supabase
+            .from('venture_deployments')
+            .select('metadata')
+            .eq('venture_id', v.id)
+            .eq('url', v.deployment_url)
+            .maybeSingle();
+          if (error) { errors.push(`${v.id}: ${error.message}`); continue; }
+          if (dep?.metadata?.probe?.reachable === true) {
+            const daysSinceKill = v.killed_at
+              ? Math.floor((Date.now() - new Date(v.killed_at).getTime()) / 86_400_000)
+              : null;
+            zombies.push({
+              id: v.id,
+              name: v.name,
+              deployment_url: v.deployment_url,
+              killed_at: v.killed_at,
+              days_since_kill: daysSinceKill,
+              teardown_disposition: teardownDispositionById.get(v.id) ?? null,
+            });
+          }
+        } catch (err) { errors.push(`${v.id}: ${err.message}`); }
+      }
+      try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
+      catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[5].key} (non-fatal): ${err.message}`); }
+    }
+    summary.jobs[JOBS[5].key] = { checked, zombies, errors };
+    if (zombies.length > 0) {
+      logger.warn?.(`[ops-actuals-sweep] ${JOBS[5].key}: ${zombies.length} zombie venture(s) found this cycle (terminal status + still-reachable deployment): ${zombies.map((z) => z.id).join(', ')}.`);
+    }
+  }
+
   // Job 4: venture crack-gate sweep (SD-FDBK-FIX-VENTURE-CRACK-GATE-001 FR-4)
   {
     const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[3], logger);
@@ -314,6 +427,10 @@ export async function main(argv = process.argv, deps = {}) {
     }
   }
 
+  // Whole-portfolio fetch, hoisted out of job 5's block so job 7 (FR-4 divergence report,
+  // below) can reuse it rather than issuing a second full-table query.
+  const allVentures = args.dryRun ? [] : await fetchAllVentureIds(supabase);
+
   // Job 5: PBN auto-score sweep (SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1)
   {
     const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[4], logger);
@@ -324,7 +441,6 @@ export async function main(argv = process.argv, deps = {}) {
     let attempted = 0;
     let capReached = false;
     const errors = [];
-    const allVentures = args.dryRun ? [] : await fetchAllVentureIds(supabase);
     if (!args.dryRun) {
       for (const v of allVentures) {
         if (scored >= MAX_SCORED_PER_CYCLE) { capReached = true; break; }
@@ -386,6 +502,76 @@ export async function main(argv = process.argv, deps = {}) {
       const msg = `${JOBS[4].key}: ALL ${attempted} attempted venture(s) failed with scoring_error this cycle -- a systemic scorer failure (e.g. missing/invalid LLM credential in this workflow's env, or a total provider outage), not isolated noise. Zero verdicts written.`;
       logger.error?.(`[ops-actuals-sweep] SYSTEMIC ESCALATION: ${msg}`);
       errors.push(msg); // same array reference already assigned to summary.jobs[...].errors above
+    }
+  }
+
+  // Job 7: duplicate-name + registry.json divergence report (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-4)
+  {
+    const processKey = args.dryRun ? null : await ensureArmedRegistration(supabase, JOBS[6], logger);
+    const report = {
+      duplicate_names: [],
+      dead_but_registered: [],
+      live_unregistered_by_status: [],
+      live_unregistered_by_deployment_url: [],
+    };
+    if (!args.dryRun) {
+      const realVentures = allVentures.filter((v) => v.is_demo === false);
+      const registryApps = (deps.loadRegistryApplications || loadRegistryApplications)(logger).filter(isRealRegistryEntry);
+      const registeredVentureIds = new Set(registryApps.map((a) => a.venture_id).filter(Boolean));
+
+      // (a) duplicate names with >=2 terminal-status rows among is_demo=false ventures
+      // (specimen: two MarketLens rows -- id=4e710bb2 and id=ecbba50e -- both cancelled, a
+      // name collision, NOT a shared deployment_url which they measurably do not have).
+      const byName = new Map();
+      for (const v of realVentures) {
+        if (!TERMINAL_STATUSES.includes(v.status)) continue;
+        if (!byName.has(v.name)) byName.set(v.name, []);
+        byName.get(v.name).push({ id: v.id, status: v.status });
+      }
+      for (const [name, rows] of byName) {
+        if (rows.length >= 2) report.duplicate_names.push({ name, ventures: rows });
+      }
+
+      // (b) dead-but-registered: a registry entry's venture_id points at a terminal-status
+      // venture (specimen: APP006/MarketLens).
+      const ventureById = new Map(allVentures.map((v) => [v.id, v]));
+      for (const app of registryApps) {
+        if (!app.venture_id) continue;
+        const v = ventureById.get(app.venture_id);
+        if (v && TERMINAL_STATUSES.includes(v.status)) {
+          report.dead_but_registered.push({ app_id: app.id, app_name: app.name, venture_id: v.id, venture_status: v.status });
+        }
+      }
+
+      // (c) live-but-unregistered, status/is_demo-based: whole-portfolio scan (TESTING F4 --
+      // catches ApexNiche AI id=809ec7e7, which has deployment_url=NULL, so a deployment_url
+      // join could never surface it).
+      for (const v of realVentures) {
+        if (TERMINAL_STATUSES.includes(v.status)) continue;
+        if (registeredVentureIds.has(v.id)) continue;
+        report.live_unregistered_by_status.push({ id: v.id, name: v.name, status: v.status });
+      }
+
+      // (d) live-but-unregistered, deployment-url-based: a SEPARATE, narrower scan over just
+      // the deployment_url-filtered `ventures` set jobs 1-3 already use (specimen: AltifyAI
+      // id=50763b6a -- "reported separately where deployment_url is the join key", per FR-4).
+      for (const v of ventures) {
+        if (v.is_demo !== false) continue;
+        if (TERMINAL_STATUSES.includes(v.status)) continue;
+        if (registeredVentureIds.has(v.id)) continue;
+        report.live_unregistered_by_deployment_url.push({ id: v.id, name: v.name, deployment_url: v.deployment_url });
+      }
+
+      try { await (deps.stampLastFired || stampLastFired)(supabase, processKey); }
+      catch (err) { logger.warn?.(`[ops-actuals-sweep] liveness stamp failed for ${JOBS[6].key} (non-fatal): ${err.message}`); }
+    }
+    summary.jobs[JOBS[6].key] = report;
+    const totalFindings = report.duplicate_names.length
+      + report.dead_but_registered.length
+      + report.live_unregistered_by_status.length
+      + report.live_unregistered_by_deployment_url.length;
+    if (totalFindings > 0) {
+      logger.warn?.(`[ops-actuals-sweep] ${JOBS[6].key}: ${totalFindings} divergence finding(s) this cycle (${report.duplicate_names.length} duplicate-name, ${report.dead_but_registered.length} dead-but-registered, ${report.live_unregistered_by_status.length} live-unregistered/status, ${report.live_unregistered_by_deployment_url.length} live-unregistered/deployment_url).`);
     }
   }
 

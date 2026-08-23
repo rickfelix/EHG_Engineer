@@ -70,6 +70,11 @@ on:
       # migration and its ddl test would otherwise trigger nothing.
       - 'database/migrations/20260821_stamp_plan_of_record_remainder_v2.sql'
       - 'tests/ddl/plan-of-record-remainder-v2-ddl.db.test.js'
+      # SD-LEO-INFRA-VENTURE-KILL-CANCEL-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing.
+      - 'database/migrations/20260823145041_ventures_teardown_disposition.sql'
+      - 'tests/ddl/venture-teardown-disposition-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

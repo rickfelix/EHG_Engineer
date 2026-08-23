@@ -1,3 +1,9 @@
 {
-  "_comment": "SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6. Functions exempted from secdef-execute-revoke-lint.mjs, each with a mandatory non-empty reason. Add an entry only when a SECURITY DEFINER function genuinely does not need a same-file REVOKE (e.g. it's intentionally PUBLIC-callable by design, documented and reviewed) -- do not use this to silence a real gap."
+  "_comment": "SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6. Functions exempted from secdef-execute-revoke-lint.mjs, each with a mandatory non-empty reason. Add an entry only when a SECURITY DEFINER function genuinely does not need a same-file REVOKE (e.g. it's intentionally PUBLIC-callable by design, documented and reviewed) -- do not use this to silence a real gap.",
+  "kill_venture": {
+    "reason": "SD-LEO-INFRA-VENTURE-KILL-CANCEL-001: this migration only CREATE OR REPLACEs the body (adds a teardown_disposition COALESCE clause to an existing UPDATE) -- it contains no GRANT/REVOKE and does not touch the ACL. Live pg_proc.proacl verified directly (2026-08-23): {postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres} -- no bare PUBLIC (=X) entry, no anon entry. The lint's text scan can't distinguish a body-only CREATE OR REPLACE from a fresh CREATE; this is the former against an already-correctly-scoped function."
+  },
+  "reject_chairman_decision": {
+    "reason": "SD-LEO-INFRA-VENTURE-KILL-CANCEL-001: same as kill_venture -- body-only CREATE OR REPLACE (adds the same COALESCE clause to the kill-gate UPDATE branch), no GRANT/REVOKE, ACL untouched. Live pg_proc.proacl verified directly (2026-08-23): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres} -- no PUBLIC, no anon. Additionally defense-in-depth at the SQL level: the function body itself raises 42501 for any caller that is not auth.role()='service_role' or fn_is_chairman(), independent of GRANT-level ACL."
+  }
 }
