@@ -82,4 +82,38 @@ describe('resolveDecisionVerb — FR-3 canonical verb mapping', () => {
     expect(await resolveDecisionVerb(supabase, 'thesis_kill_tier_b', 'rejected')).toBe('kill');
     expect(rpcCalled).toBe(false);
   });
+
+  // SECURITY EXEC-TO-PLAN finding SEC-PATH-002: distribution_skip is ALSO unmapped live; its
+  // S21 consumer (stage-22-distribution-setup.js's APPROVED_DECISIONS allowlist) accepts
+  // 'proceed', matching its already-mapped sibling 'distribution_block'.
+  it('distribution_skip is bridged JS-side to proceed/kill WITHOUT calling the RPC (pending the staged migration)', async () => {
+    let rpcCalled = false;
+    const supabase = { rpc: async () => { rpcCalled = true; return { data: null, error: null }; } };
+
+    expect(await resolveDecisionVerb(supabase, 'distribution_skip', 'approved')).toBe('proceed');
+    expect(await resolveDecisionVerb(supabase, 'distribution_skip', 'rejected')).toBe('kill');
+    expect(rpcCalled).toBe(false);
+  });
+
+  // SEC-PATH-002 drift-prevention: JS_SIDE_VERB_BRIDGE is consulted BEFORE the RPC, so if the
+  // staged migration is ever edited (verb pair changed, or a bridged type removed from its
+  // IN-list) without updating the bridge, the bridge would silently shadow the SQL mapping
+  // forever. Pin both against each other so an out-of-sync edit fails a test, not a live
+  // divergence.
+  it('the JS bridge and the staged migration agree on every bridged type\'s verb pair', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const migration = fs.readFileSync(
+      path.resolve(process.cwd(), 'database/migrations/20260823_add_thesis_kill_tier_b_to_decision_value.sql'),
+      'utf8'
+    );
+    const supabase = { rpc: async () => ({ data: null, error: null }) }; // must never be reached
+    const bridgedTypes = ['thesis_kill_tier_b', 'distribution_skip'];
+    for (const decisionType of bridgedTypes) {
+      // Both bridged types are VENTURE-SCOPED (proceed/kill) and must appear in that IN-list.
+      expect(migration).toMatch(new RegExp(`'${decisionType}'`));
+      expect(await resolveDecisionVerb(supabase, decisionType, 'approved')).toBe('proceed');
+      expect(await resolveDecisionVerb(supabase, decisionType, 'rejected')).toBe('kill');
+    }
+  });
 });

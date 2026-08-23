@@ -257,10 +257,16 @@ function buildDecisionStamp(lifecycleStage) {
 //
 // A NULL result means decision_type is outside the function's 18-type mapping (live examples,
 // 2026-08-23: plan_go, security_ratification, platform_ruling). fn_chairman_decide -- the SQL-
-// side caller the function's own comment says should raise on NULL -- is NOT applied live
-// (PGRST202), so this JS call site owns the raise: it must NEVER let a NULL mapping flow into a
-// decision=NULL write (0 of 718 live rows have decision IS NULL; a NULL write is a novel state
-// and would likely violate chairman_decisions_decision_check).
+// side caller the function's own comment says should raise on NULL -- IS applied live (confirmed
+// via normalized pg_get_functiondef diff, correcting an earlier PGRST202 false-absence signal
+// caused by a named-argument mismatch, not true absence), but eva-decisions.js never calls it --
+// it calls fn_chairman_decision_value directly -- so this JS call site owns the raise regardless.
+// It must NEVER let a NULL mapping flow into a decision=NULL write. SECURITY EXEC-TO-PLAN
+// correction (SEC-PATH-003): the real backstop against decision=NULL is the column's NOT NULL
+// constraint (23502), not chairman_decisions_decision_check -- a plain `= ANY(ARRAY[...])` CHECK
+// passes on NULL per SQL three-valued logic (0 of 718 live rows have decision IS NULL because
+// nothing has ever attempted the write, not because a CHECK would catch it). The JS raise above
+// is the correct primary protection either way.
 //
 // OUT OF SCOPE (documented, not silently dropped): (i) the eva_stage_gate_attempts
 // resolved_outcome 7-term enum / JS-emission gap is FR-2-follow-on scope, blocked on that
@@ -270,16 +276,41 @@ function buildDecisionStamp(lifecycleStage) {
 // unmapped types the PLAN-phase review measured): 'thesis_kill_tier_b' (exit-wiring.js's
 // THESIS_KILL_DECISION_TYPE, the trigger for SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-H's exit-
 // init marker) is ALSO outside fn_chairman_decision_value's mapping -- it returns NULL for both
-// actions. fn_chairman_decision_value is a Tier-2 SECURITY-DEFINER-adjacent RPC gated behind the
-// chairman's 3-factor apply ceremony (database/chairman-gated/20260803_chairman_decide_null_safe_
-// and_type_honest.sql's own header), so the proper fix (adding this type to the SQL mapping) is
-// staged in database/migrations/20260823_add_thesis_kill_tier_b_to_decision_value.sql but cannot
-// be applied by this SD. Bridging it here -- with the SAME proceed/kill pair every decision_type
-// got unconditionally pre-fix -- so FR-3's fail-loud-on-unmapped behavior does not regress this
-// live, tested capability (0 live rows today, but the capability is shipped and exercised by
-// tests/unit/eva-decisions-exit-wiring.test.js). Remove once the staged migration is applied.
+// actions. fn_chairman_decision_value is a Tier-2 RPC (CREATE OR REPLACE requires the chairman's
+// 3-factor apply ceremony; SECURITY EXEC-TO-PLAN review corrected an earlier "SECURITY-DEFINER-
+// adjacent" framing -- the live function is actually SECURITY INVOKER, prosecdef=false; Tier-2
+// status is about the shared-RPC apply policy, not a DEFINER privilege boundary) gated behind
+// that ceremony (database/chairman-gated/20260803_chairman_decide_null_safe_and_type_honest.sql's
+// own header), so the proper fix (adding this type to the SQL mapping) is staged in
+// database/migrations/20260823_add_thesis_kill_tier_b_to_decision_value.sql but cannot be applied
+// by this SD. Bridging it here -- with the SAME proceed/kill pair every decision_type got
+// unconditionally pre-fix -- so FR-3's fail-loud-on-unmapped behavior does not regress this live,
+// tested capability (0 live rows today, but the capability is shipped and exercised by
+// tests/unit/eva-decisions-exit-wiring.test.js).
+//
+// SECURITY EXEC-TO-PLAN finding SEC-PATH-002 (2026-08-23): the fail-loud blast radius above was
+// measured only against 3 live-pending-row types + this one EXEC-discovered gap -- SECURITY's own
+// census found the codebase mints ~19 MORE decision_types into chairman_decisions (directly, or
+// via lib/chairman/record-pending-decision.mjs's shared helper) that are ALSO unmapped: gate,
+// stage_failure_review, budget_override, gate_escalation, guardrail_override, roadmap_approval,
+// cascade_override, chairman_approval, model_tier_retier_recommendation (direct-insert, verified
+// verb-agnostic downstream for chairman_approval only), plus venture_health_alert, dispatch_auth,
+// schedule, regen, tier, anomaly, tune, consult_answer, ratification, inbound_message_quarantine,
+// plan_ratification (via the shared helper, individual downstream verbs NOT verified). Of these,
+// ONLY 'distribution_skip' (added to the bridge below + the staged migration) had a verified
+// downstream-consumer expectation (S21's APPROVED_DECISIONS allowlist). The rest are NOT bridged
+// or mapped here -- guessing a verb for an un-investigated type is exactly the class of error
+// FR-3 exists to prevent (the pre-fix incident this SD's parent migration fixed: "every reject
+// wrote 'kill' regardless of decision_type"). Each is LATENT today (0 live pending rows carry any
+// of them), but a real approve/reject on one now fails loudly where it silently succeeded before
+// -- documented here as an explicit, named follow-on requiring the same "vocabulary the system
+// already speaks" analysis fn_chairman_decision_value's original 18-type mapping went through,
+// not silently fixed and not silently dropped.
 const JS_SIDE_VERB_BRIDGE = {
   thesis_kill_tier_b: { approved: 'proceed', rejected: 'kill' },
+  // SEC-PATH-002: sibling of the already-mapped 'distribution_block' (same file, same S21
+  // consumer -- stage-22-distribution-setup.js's APPROVED_DECISIONS allowlist accepts 'proceed').
+  distribution_skip: { approved: 'proceed', rejected: 'kill' },
 };
 
 async function resolveDecisionVerb(supabase, decisionType, action) {

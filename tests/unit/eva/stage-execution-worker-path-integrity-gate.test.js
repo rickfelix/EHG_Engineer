@@ -201,6 +201,36 @@ describe('_advanceStage path-integrity choke-point (FR-1) — real method', () =
     expect(supabase.calls.venturesUpdate).toBe(1);
   });
 
+  // SECURITY EXEC-TO-PLAN finding SEC-PATH-001: checkExitGates dispatches to the growable
+  // GATE_VERIFIERS registry; an uncaught throw from any of the 3 composed checks must NEVER
+  // escape _advanceStage() (proved empirically by SECURITY: it previously did, with
+  // venturesUpdate=0 and no result object -- the exact D1 polarity violation this test pins).
+  it('SEC-PATH-001: a throw from a composed check (e.g. checkExitGates) never escapes -- falls through to advance, matching flag-OFF "zero behavior change"', async () => {
+    const supabase = makeSupabase({ flagRow: undefined });
+    const realFrom = supabase.from;
+    // venture_stages is read TWICE: once by the pre-existing (out-of-scope) checkStageArtifactPrecondition
+    // backstop, once by FR-1's checkExitGates -- only the SECOND (FR-1's own composed check) should throw,
+    // so this test isolates SEC-PATH-001's exact repro without tripping an unrelated earlier backstop.
+    let ventureStagesCalls = 0;
+    supabase.from = (table) => {
+      if (table === 'venture_stages') {
+        ventureStagesCalls += 1;
+        if (ventureStagesCalls > 1) {
+          return { select: () => { throw new Error('injected evaluator throw (SEC-PATH-001 repro)'); } };
+        }
+      }
+      return realFrom(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 5, 6, {});
+
+    expect(result?.blocked).not.toBe(true);
+    expect(supabase.calls.venturesUpdate).toBe(1);
+    const warnCalls = logger.warn.mock.calls.map((c) => c[0]).join('\n');
+    expect(warnCalls).toMatch(/composed-check evaluator error/);
+  });
+
   it('does not run for a venture/stage with no failed blocking gate at all (zero-noise control)', async () => {
     const supabase = makeSupabase({ flagRow: { is_enabled: true } });
     const worker = makeWorker(supabase);
