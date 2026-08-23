@@ -262,6 +262,37 @@ describe('enforcement invariants (TS-3/TS-4)', () => {
     const r = await enforcePolicy(supabase, policy, { apply: false, env: {} });
     expect(r.error).toMatch(/count failed/);
   });
+
+  // QF-20260823-655: eva_scheduler_metrics's exact COUNT(*) timed out on the shared weekly cron
+  // (2 consecutive fails), and the resulting error had no .message, printing an unclassifiable
+  // blank "count failed: " line.
+  it("countMode: 'estimated' requests an estimated count (opt-in per policy)", async () => {
+    let seenCountOpt;
+    const supabase = { from: vi.fn(() => ({ select: vi.fn((_cols, opts) => { seenCountOpt = opts.count; return { lt: vi.fn(async () => ({ count: 3, error: null })) }; }) })) };
+    await enforcePolicy(supabase, { ...policy, countMode: 'estimated' }, { apply: false, env: {} });
+    expect(seenCountOpt).toBe('estimated');
+  });
+
+  it('every other policy (countMode unset) keeps the exact count, unchanged', async () => {
+    let seenCountOpt;
+    const supabase = { from: vi.fn(() => ({ select: vi.fn((_cols, opts) => { seenCountOpt = opts.count; return { lt: vi.fn(async () => ({ count: 3, error: null })) }; }) })) };
+    await enforcePolicy(supabase, policy, { apply: false, env: {} });
+    expect(seenCountOpt).toBe('exact');
+  });
+
+  it('a count error with NO .message (the exact shape that timed out) still reports something non-blank, via .code', async () => {
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ lt: vi.fn(async () => ({ count: null, error: { code: '57014' } })) })) })) };
+    const r = await enforcePolicy(supabase, policy, { apply: false, env: {} });
+    expect(r.error).toMatch(/count failed: 57014/);
+    expect(r.error).not.toMatch(/count failed: $/);
+  });
+
+  it('a count error with NEITHER .message NOR .code still reports the raw object, never a blank tail', async () => {
+    const supabase = { from: vi.fn(() => ({ select: vi.fn(() => ({ lt: vi.fn(async () => ({ count: null, error: { unexpected: 'shape' } })) })) })) };
+    const r = await enforcePolicy(supabase, policy, { apply: false, env: {} });
+    expect(r.error).toMatch(/unexpected/);
+    expect(r.error).not.toMatch(/count failed: $/);
+  });
 });
 
 describe('migration parity (TS-2 static)', () => {
