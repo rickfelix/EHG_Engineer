@@ -540,6 +540,13 @@ export async function surfaceSmsInbound(sb) {
       .select('id, from_phone, body_raw, signature_valid, received_at')
       // WINDOW, deliberately NOT `drained_at IS NULL` — see above.
       .gte('received_at', sinceIso)
+      // QF-20260823-384: resolved_at is a distinct, EXPLICIT disposition signal (stamped only by
+      // scripts/resolve-parked-chairman-sms.cjs) -- unlike drained_at (an automatic drain event
+      // QF-20260808-673 already ruled out gating on), a resolved row was terminally dispositioned
+      // by an operator and must never re-fire the hard interrupt. Measured: a row drained+parked+
+      // resolved 27min earlier still surfaced QUIET_TICK_SMS_INBOUND because this predicate never
+      // read resolved_at at all.
+      .is('resolved_at', null)
       .order('received_at', { ascending: true })
       .limit(SMS_INBOUND_CAP);
     if (error) return { rows: [], count: 0, error: error.message };
