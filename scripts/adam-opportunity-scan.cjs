@@ -96,17 +96,41 @@ function usage() {
   ].join('\n');
 }
 
-/** Append one verdict entry to the local ledger (bounded, best-effort). */
-function appendLedger(entry) {
-  let arr = [];
+/** Read the local ledger array (bounded, best-effort; [] on any missing/malformed file). */
+function readLedger() {
   try {
     if (fs.existsSync(LEDGER_PATH)) {
       const parsed = JSON.parse(fs.readFileSync(LEDGER_PATH, 'utf8'));
-      if (Array.isArray(parsed)) arr = parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {
-    arr = [];
+    // fall through to []
   }
+  return [];
+}
+
+/**
+ * QF-20260823-017: two invocations of --scan whose SURFACED verdict carries the SAME
+ * dedup_key (same opportunity re-detected, not a distinct one) sent byte-identical advisories
+ * (measured live: rows 2d924ed8/67827066, coordinator-flagged 9ef97730). `entries` must be the
+ * ledger state BEFORE today's own new entry is appended, or a scan would trivially dedupe
+ * against itself. A null/undefined dedupKey never suppresses -- there is nothing to compare.
+ * @param {Array} entries prior ledger rows
+ * @param {string|null} dedupKey today's candidate's dedup_key
+ * @param {Date} [now]
+ * @returns {boolean}
+ */
+function alreadySurfacedToday(entries, dedupKey, now = new Date()) {
+  if (!dedupKey) return false;
+  const todayUtc = now.toISOString().slice(0, 10);
+  return (entries || []).some((e) =>
+    e && e.verdict === 'SURFACED' && e.detail === dedupKey && typeof e.ts === 'string' && e.ts.slice(0, 10) === todayUtc
+  );
+}
+
+/** Append one verdict entry to the local ledger (bounded, best-effort). */
+function appendLedger(entry) {
+  let arr = readLedger();
   arr.push(entry);
   if (arr.length > LEDGER_MAX_ENTRIES) arr = arr.slice(-LEDGER_MAX_ENTRIES);
   try {
@@ -386,6 +410,9 @@ async function main() {
     // scanOutcome(); what remains below is side effects. See its docblock for the one hop this
     // still cannot cover and why.
     const outcome = scanOutcome({ result, scope, flagEnabled: gateEnabled });
+    // QF-20260823-017: check BEFORE appending -- appendLedger below would otherwise make this
+    // scan's own new entry indistinguishable from the prior one it needs to dedupe against.
+    const duplicate = outcome.verdict === 'SURFACED' && alreadySurfacedToday(readLedger(), outcome.entry.detail);
     const entry = appendLedger(outcome.entry);
 
     if (outcome.verdict === 'ADAM_OK') {
@@ -404,6 +431,13 @@ async function main() {
       process.exit(0);
     }
 
+    // QF-20260823-017: an identical advisory (same dedup_key) already went out today --
+    // no-op instead of sending a byte-identical duplicate.
+    if (duplicate) {
+      process.stdout.write(`ALREADY_SENT_TODAY scope=${scope.scope_key} dedup_key=${outcome.entry.detail}\n`);
+      process.exit(0);
+    }
+
     // gate ON (env AND registry): emit exactly ONE advisory via the existing lane.
     const r = spawnSync('node', [ADVISORY_CLI, 'send', body], { stdio: 'inherit' });
     process.exit(r.status == null ? 0 : r.status);
@@ -414,7 +448,7 @@ async function main() {
   }
 }
 
-module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, formatGuardHealth, guardHealthForLedger, advisoryLedgerEntry, adamOkLine, scanOutcome, usage, LEDGER_PATH };
+module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, formatGuardHealth, guardHealthForLedger, advisoryLedgerEntry, adamOkLine, scanOutcome, alreadySurfacedToday, usage, LEDGER_PATH };
 
 if (require.main === module) {
   main();
