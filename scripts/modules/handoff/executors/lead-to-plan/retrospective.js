@@ -131,21 +131,17 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
 
     const qualityScore = Math.round((avgRating / 5) * 100);
 
-    // Build retrospective data
+    // Build retrospective data (QF-20260822-949: derive from real per-handoff context,
+    // mirroring exec-to-plan/retrospective.js, instead of a fixed string set gated by a
+    // rating that defaults to 4 in non-interactive mode)
+    const sdRef = sd.sd_key || sdId;
     const whatWentWell = [];
-    if (parseInt(clarityRating) >= 4) whatWentWell.push({ achievement: 'SD was clear and well-defined for planning', is_boilerplate: false });
-    if (parseInt(criteriaRating) >= 4) whatWentWell.push({ achievement: 'Acceptance criteria were comprehensive and actionable', is_boilerplate: false });
-    if (parseInt(depsRating) >= 4) whatWentWell.push({ achievement: 'Dependencies were correctly identified upfront', is_boilerplate: false });
-    if (parseInt(simplicityRating) >= 4) whatWentWell.push({ achievement: 'Simplicity assessment was accurate and helpful', is_boilerplate: false });
-    if (handoffResult.success) whatWentWell.push({ achievement: 'Handoff validation passed all gates successfully', is_boilerplate: false });
-
-    // Only add contextual achievements if we have few (avoid boilerplate padding)
-    if (whatWentWell.length === 0) {
-      whatWentWell.push({ achievement: 'LEAD phase completed - handoff executed', is_boilerplate: false });
-    }
-    if (whatWentWell.length === 1 && handoffResult.success) {
-      whatWentWell.push({ achievement: 'All validation gates passed', is_boilerplate: false });
-    }
+    whatWentWell.push({ achievement: `LEAD-TO-PLAN handoff for "${sd.title}" (${sdRef}) landed at quality score ${qualityScore}%`, is_boilerplate: false });
+    if (parseInt(clarityRating) >= 4) whatWentWell.push({ achievement: `SD scope for ${sdRef} was legible enough to plan directly from`, is_boilerplate: false });
+    if (parseInt(criteriaRating) >= 4) whatWentWell.push({ achievement: `Acceptance criteria for ${sdRef} gave PLAN concrete targets to build against`, is_boilerplate: false });
+    if (parseInt(depsRating) >= 4) whatWentWell.push({ achievement: `Dependencies for ${sdRef} surfaced before planning began`, is_boilerplate: false });
+    if (parseInt(simplicityRating) >= 4) whatWentWell.push({ achievement: `Simplicity check for "${sd.title}" held up through the handoff`, is_boilerplate: false });
+    if (handoffResult.success) whatWentWell.push({ achievement: `${sdRef} cleared LEAD-TO-PLAN review without a single validation failure`, is_boilerplate: false });
 
     const whatNeedsImprovement = [];
     if (parseInt(clarityRating) <= 3) whatNeedsImprovement.push('SD clarity could be improved for better planning');
