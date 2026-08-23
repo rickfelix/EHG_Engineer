@@ -17,6 +17,15 @@
  * scripts/audit/count-truncation-inventory.mjs — one classifier, not a second heuristic.
  * Exemptions flow through the same scripts/audit/count-truncation-overrides.json.
  *
+ * SD-LEO-INFRA-SWEEP-REPO-SCANNERS-001 (FR-3, scanner-convention-lint): this reads `git diff -U0`
+ * output, but ONLY to count +/- lines and resolve hunk-header line numbers
+ * (parseAddedLineNumbers) — it never regex-matches the diff's ADDED-LINE TEXT itself. The actual
+ * .select( pattern check always runs against whole-file content via chainWindow() (imported from
+ * count-truncation-inventory.mjs) on the real file, never an isolated diff fragment, so the
+ * mid-comment fragment-truncation hazard added-line-text.mjs exists to prevent cannot occur here.
+ * isFixturePath is still adopted below as real defense-in-depth (closes a gap the plain
+ * scripts/lib top-level + basename filters below leave open: a nested __tests__/ or tests/ dir).
+ *
  * Usage: node scripts/lint/count-truncation-diff-lint.mjs [--all]
  *        npm run lint:count-truncation-diff
  */
@@ -25,6 +34,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { classifyChain, isNonLivePath, chainWindow, buildInventory } from '../audit/count-truncation-inventory.mjs';
+import { isFixturePath } from '../../lib/lint/added-line-text.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -41,7 +51,8 @@ function candidateFiles(base) {
   return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
     .filter((f) => SCAN_EXTENSIONS.has(path.extname(f)))
     .filter((f) => f.split('/')[0] === 'scripts' || f.split('/')[0] === 'lib')
-    .filter((f) => !EXCLUDE_FILE_RE.test(path.basename(f)));
+    .filter((f) => !EXCLUDE_FILE_RE.test(path.basename(f)))
+    .filter((f) => !isFixturePath(f));
 }
 
 /**
