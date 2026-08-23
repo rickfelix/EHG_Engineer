@@ -652,6 +652,64 @@ export async function surfaceStaleRatifications(sb) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: production I/O wrapper around the pure
+ * lib/chairman/ratification-regression-detector.mjs (which is deliberately DB/fs-free per its own
+ * docblock — this is the only call site that feeds it live data, mirroring how
+ * surfaceStaleRatifications above wraps lib/governance/ratification-stall.mjs's pure predicate).
+ *
+ * Sources the two most recent claude-generation-manifest.json snapshots from git history (per the
+ * PRD's own implementation guidance) for Stage 1; reads each already-encoded row's live
+ * target_file from disk for Stage 2. Fail-soft throughout: a missing table, missing manifest,
+ * missing prior commit, or missing file never throws — it only narrows what can be checked, never
+ * crashes the tick (matching TS-8a/TS-8b's "first-ever manifest is a structural no-op" contract).
+ */
+export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } = {}) {
+  const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
+  try {
+    const { data, error } = await sb
+      .from('chairman_ratifications')
+      .select('id, encoded_at, encoded_ref, marker_text')
+      .not('encoded_at', 'is', null);
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
+      return { rows: [], count: 0, error: error.message };
+    }
+
+    let newerManifest = null;
+    try {
+      const parsed = JSON.parse(readFileSync(join(repoRoot, 'claude-generation-manifest.json'), 'utf8'));
+      newerManifest = parsed.section_digests || null;
+    } catch { /* no manifest on disk -- nothing to check against */ }
+    if (!newerManifest) return { rows: [], count: 0 };
+
+    let olderManifest = null;
+    try {
+      const log = (await execFileAsync('git', ['log', '--format=%H', '-n', '2', '--', 'claude-generation-manifest.json'], { cwd: repoRoot, timeout: 5000 })).stdout.trim();
+      const priorHash = log.split('\n').filter(Boolean)[1]; // the SECOND most recent commit touching the file
+      if (priorHash) {
+        const raw = (await execFileAsync('git', ['show', `${priorHash}:claude-generation-manifest.json`], { cwd: repoRoot, timeout: 5000, maxBuffer: 8 * 1024 * 1024 })).stdout;
+        olderManifest = JSON.parse(raw).section_digests || null;
+      }
+    } catch { /* fewer than 2 commits touched the manifest yet -- Stage 1 becomes a structural no-op */ }
+
+    const regressed = [];
+    for (const row of data || []) {
+      const sectionId = row.encoded_ref && row.encoded_ref.section_id;
+      const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
+      let liveFileContent;
+      if (targetFile) {
+        try { liveFileContent = readFileSync(join(repoRoot, targetFile), 'utf8'); } catch { /* file gone/unreadable -- detectMarkerMissing treats this as the marker being gone */ }
+      }
+      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent });
+      if (result.regressed) regressed.push({ ...row, ...result });
+    }
+    return { rows: regressed, count: regressed.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -762,6 +820,10 @@ async function main() {
   // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: chairman ratifications unencoded >=24h.
   // Fail-soft no-op until the chairman-gated migration is applied (surfaceStaleRatifications).
   const staleRatifications = await surfaceStaleRatifications(sb);
+
+  // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: already-encoded ratifications whose
+  // clause was silently reverted (whole-section removal or within-section marker-text deletion).
+  const regressedRatifications = await checkRatificationRegressions(sb);
 
   // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: evaluate the durable standing priority. Fail-soft like
   // its siblings above — and fail QUIET: a detector that cannot read its store reports 'unknown'
@@ -1054,6 +1116,13 @@ async function main() {
     // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3.
     for (const r of staleRatifications.rows) {
       console.log(formatRatificationStaleLine('adam', r, r.ageHours));
+    }
+    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: both stages feed the SAME
+    // QUIET_TICK_RATIFICATION_STALE token as FR-3 (a regression IS a staleness case — the
+    // encoding was reverted), per the PRD's own wiring instruction.
+    for (const r of regressedRatifications.rows) {
+      const sectionId = r.encoded_ref && r.encoded_ref.section_id;
+      console.log(`QUIET_TICK_RATIFICATION_STALE=adam id=${r.id} REGRESSED stage1_section_removed=${r.stage1} stage2_marker_missing=${r.stage2} section=${sectionId} — an already-encoded chairman ratification's clause was silently reverted; re-encode via lib/chairman/ratification-writer.mjs markRatificationEncoded().`);
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
