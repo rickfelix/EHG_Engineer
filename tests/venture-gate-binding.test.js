@@ -12,25 +12,36 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
 const { GATE_ENFORCEMENT, classifyGateRow } = await import('../lib/eva/gate-enforcement.js');
-const { checkGateDebt, recordGateResult } = await import('../lib/eva/artifact-persistence-service.js');
+const { checkGateDebt, recordGateResult, ADVANCE_INTENT_VERBS } = await import('../lib/eva/artifact-persistence-service.js');
 
-/** Minimal mock: gateRows returned for eva_stage_gate_results, decisions for chairman_decisions. */
+/**
+ * Minimal mock: gateRows returned for eva_stage_gate_results, decisions for chairman_decisions.
+ * .in(column, values) is tracked and applied against `decisions` in then() -- FR-2's
+ * checkGateDebt fix filters server-side via .in('decision', ADVANCE_INTENT_VERBS), so the mock
+ * must actually simulate that filtering for TS-3/TS-4 to be meaningful (a mock that ignores the
+ * filter and always returns the seeded rows would pass identically before and after the fix).
+ */
 function mockDb({ gateRows = [], decisions = [], gateErr = null } = {}) {
   return {
     from(table) {
-      const ctx = {};
+      const inFilters = [];
       const b = {
         select() { return b; },
         eq() { return b; },
+        in(column, values) { inFilters.push({ column, values }); return b; },
         limit() { return b; },
         upsert(row) {
-          ctx.upserted = row;
           calls.upserts.push({ table, row });
           return { select: () => ({ single: async () => ({ data: { id: 'row-1' }, error: null }) }) };
         },
         then(resolve) {
           if (table === 'eva_stage_gate_results') return resolve({ data: gateRows, error: gateErr });
-          if (table === 'chairman_decisions') return resolve({ data: decisions, error: null });
+          if (table === 'chairman_decisions') {
+            const filtered = decisions.filter((row) =>
+              inFilters.every(({ column, values }) => values.includes(row[column]))
+            );
+            return resolve({ data: filtered, error: null });
+          }
           return resolve({ data: [], error: null });
         },
       };
@@ -98,6 +109,49 @@ describe('checkGateDebt — enforcement matrix', () => {
 
   it('no gate rows at all → not blocked', async () => {
     const debt = await checkGateDebt(mockDb(), { ventureId: 'v1', fromStage: 2 });
+    expect(debt.blocked).toBe(false);
+  });
+});
+
+describe('checkGateDebt — FR-2 decision-value filter (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001)', () => {
+  it('TR-3: ADVANCE_INTENT_VERBS is an exported, named allow-list constant', () => {
+    expect(ADVANCE_INTENT_VERBS).toBeDefined();
+    expect([...ADVANCE_INTENT_VERBS].sort()).toEqual(['approve', 'go', 'override', 'proceed']);
+  });
+
+  it('TS-3: a failed BLOCKING gate + approved decision=\'sunset\' (non-allow-listed verb) remains blocked (debt UNRESOLVED)', async () => {
+    const db = mockDb({
+      gateRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      decisions: [{ id: 'd1', decision: 'sunset', status: 'approved' }],
+    });
+    const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
+    expect(debt.blocked).toBe(true);
+  });
+
+  it('TS-4: same blocking-gate precondition, decision=\'proceed\' resolves debt (no regression)', async () => {
+    const db = mockDb({
+      gateRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      decisions: [{ id: 'd1', decision: 'proceed', status: 'approved' }],
+    });
+    const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
+    expect(debt.blocked).toBe(false);
+  });
+
+  it('TS-4: same blocking-gate precondition, decision=\'override\' resolves debt (the chairman escape hatch, no regression)', async () => {
+    const db = mockDb({
+      gateRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      decisions: [{ id: 'd1', decision: 'override', status: 'approved' }],
+    });
+    const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
+    expect(debt.blocked).toBe(false);
+  });
+
+  it('TS-4: same blocking-gate precondition, decision=\'go\' resolves debt (45 live legacy rows, no regression)', async () => {
+    const db = mockDb({
+      gateRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      decisions: [{ id: 'd1', decision: 'go', status: 'approved' }],
+    });
+    const debt = await checkGateDebt(db, { ventureId: 'v1', fromStage: 5 });
     expect(debt.blocked).toBe(false);
   });
 });
