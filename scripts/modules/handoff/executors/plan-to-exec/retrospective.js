@@ -138,7 +138,7 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
     const qualityScore = Math.round((avgRating / 5) * 100);
 
     // Build retrospective data (PAT-RETRO-BOILERPLATE-001 fix: pass allIssues)
-    const whatWentWell = buildWhatWentWell(prdRating, storiesRating, validationRating, testPlanRating, handoffResult);
+    const whatWentWell = buildWhatWentWell(prdRating, storiesRating, validationRating, testPlanRating, handoffResult, sd, sdId);
     const whatNeedsImprovement = buildWhatNeedsImprovement(prdRating, storiesRating, validationRating, testPlanRating, gapsFound, allIssues);
     const keyLearnings = buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues, sdIssues, sd);
     const rawActionItems = buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, allIssues);
@@ -295,23 +295,19 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
 
 /**
  * Build "what went well" array for retrospective
- * PAT-RETRO-BOILERPLATE-001 fix: Remove boilerplate padding
+ * QF-20260822-949: derive from real per-handoff context, mirroring
+ * exec-to-plan/retrospective.js, instead of a fixed string set gated by a
+ * rating that defaults to 4 in non-interactive mode.
  */
-function buildWhatWentWell(prdRating, storiesRating, validationRating, testPlanRating, handoffResult) {
+function buildWhatWentWell(prdRating, storiesRating, validationRating, testPlanRating, handoffResult, sd, sdId) {
+  const sdRef = sd.sd_key || sdId;
   const whatWentWell = [];
-  if (parseInt(prdRating) >= 4) whatWentWell.push({ achievement: 'PRD was comprehensive and complete for implementation', is_boilerplate: false });
-  if (parseInt(storiesRating) >= 4) whatWentWell.push({ achievement: 'User stories were actionable with clear acceptance criteria', is_boilerplate: false });
-  if (parseInt(validationRating) >= 4) whatWentWell.push({ achievement: 'Validation criteria were clear and testable', is_boilerplate: false });
-  if (parseInt(testPlanRating) >= 4) whatWentWell.push({ achievement: 'Test plan was adequate and comprehensive', is_boilerplate: false });
-  if (handoffResult.success) whatWentWell.push({ achievement: 'Handoff validation passed all gates successfully', is_boilerplate: false });
-
-  // Only add contextual achievements if we have few (avoid boilerplate padding)
-  if (whatWentWell.length === 0) {
-    whatWentWell.push({ achievement: 'PLAN phase completed - handoff executed', is_boilerplate: false });
-  }
-  if (whatWentWell.length === 1 && handoffResult.success) {
-    whatWentWell.push({ achievement: 'All validation gates passed', is_boilerplate: false });
-  }
+  whatWentWell.push({ achievement: `PLAN-TO-EXEC handoff for "${sd.title}" (${sdRef}) was ready to build from`, is_boilerplate: false });
+  if (parseInt(prdRating) >= 4) whatWentWell.push({ achievement: `PRD for ${sdRef} covered what EXEC needed to implement`, is_boilerplate: false });
+  if (parseInt(storiesRating) >= 4) whatWentWell.push({ achievement: `User stories for ${sdRef} were actionable with clear acceptance criteria`, is_boilerplate: false });
+  if (parseInt(validationRating) >= 4) whatWentWell.push({ achievement: `Validation criteria for "${sd.title}" were testable as written`, is_boilerplate: false });
+  if (parseInt(testPlanRating) >= 4) whatWentWell.push({ achievement: `Test plan for ${sdRef} covered the implementation surface`, is_boilerplate: false });
+  if (handoffResult.success) whatWentWell.push({ achievement: `${sdRef} cleared PLAN-TO-EXEC review without a single validation failure`, is_boilerplate: false });
 
   return whatWentWell;
 }
