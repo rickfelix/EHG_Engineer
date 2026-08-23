@@ -1,0 +1,49 @@
+name: Count-Truncation Diff Lint
+
+# QF-20260728-427.
+#
+# Blocks a PR that introduces a NEW unbounded `.select(` read classified `needs-review` by the
+# SAME classifier SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 built
+# (scripts/audit/count-truncation-inventory.mjs's classifyChain/isNonLivePath/chainWindow) —
+# that classifier's own inventory run is advisory-only ("Exit 0 always (audit, not gate)"), and
+# the narrower fleet-liveness lint from SD-LEO-INFRA-LIVE-FLEET-SESSIONS-ROWCAP-CANONICAL-001
+# runs with continue-on-error: true and was never flipped to blocking. Neither stops NEW sites
+# from landing, which is why this defect class recurred 5x in one day after two "completed"
+# sweep SDs. This workflow is genuinely blocking; scoped to added lines only (git diff vs
+# origin/main) so the pre-existing needs-review backlog never blocks an unrelated PR.
+#
+# LITERAL per-extension path globs, not a brace-glob: GitHub Actions path filters do not expand
+# `{js,mjs,cjs}` alternation (a real, previously-shipped bug in a sibling lint's workflow —
+# session-coordination-insert-classguard-lint.yml's own header documents the incident).
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'scripts/audit/count-truncation-inventory.mjs'
+      - 'scripts/audit/count-truncation-overrides.json'
+      - 'scripts/lint/count-truncation-diff-lint.mjs'
+      - '.github/workflows/count-truncation-diff-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  count-truncation-diff-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect NEW unbounded .select( reads introduced by this PR
+        run: node scripts/lint/count-truncation-diff-lint.mjs

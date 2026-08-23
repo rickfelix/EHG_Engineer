@@ -231,6 +231,36 @@
     }
   },
   {
+    "name": "count-truncation-diff-lint",
+    "script": "scripts/lint/count-truncation-diff-lint.mjs",
+    "seedTest": "tests/unit/lint/count-truncation-diff-lint.test.js",
+    "note": "QF-20260728-427. A fixture trial is impractical here: this control's REPO_ROOT is resolved from __dirname (path.resolve(__dirname,'..','..')) and every git call is explicitly cwd-pinned to it, so neither --root nor cwdScope can point it at a scratch tree — a seeded fixture in a temp dir would never appear in its origin/main...HEAD diff. The committed test instead exercises parseAddedLineNumbers (the pure diff-hunk parser this control's whole added-line-scoping depends on) directly against synthetic diff text.",
+    "neuter": {
+      "find": "if (line.startsWith('+')) { added.add(cur); cur += 1; }",
+      "replace": "if (line.startsWith('+')) { cur += 1; }",
+      "why": "parseAddedLineNumbers stops recording any line as added (cur still advances, so downstream indices stay correct, but the returned Set is always empty) -- the 'collects new-file line numbers from + lines in a single hunk' assertion (expects Set([11,12,13])) goes RED against an empty Set instead of a load crash"
+    },
+    "observability_proof": {
+      "input": "git diff -U0 <base>...HEAD (added-line numbers only, via parseAddedLineNumbers) intersected with .select( sites found by re-reading the REAL file content on disk and classified via classifyChain(chainWindow(...)) (imported from count-truncation-inventory.mjs) -- scoped to files under scripts/ or lib/, changed vs origin/main, excluding fixture/test paths (isFixturePath)",
+      "seen": "live manual smoke-test 2026-08-23 (this control's own introducing PR, QF-20260728-427): a throwaway fixture file (scripts/smoke-test-truncation-fixture.mjs) containing an unbounded sb.from('claude_sessions').select('*') was staged and the control was invoked directly -- it exited 1 and reported the exact file:line before the fixture was removed; separately, running it against this PR's own real diff (0 genuine sites) exits 0"
+    }
+  },
+  {
+    "name": "count-truncation-inventory",
+    "script": "scripts/audit/count-truncation-inventory.mjs",
+    "seedTest": "tests/unit/lint/count-truncation-diff-lint.test.js",
+    "note": "QF-20260728-427 (retroactive spec for a pre-existing control, first touched by this PR -- SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 shipped it before this gate existed). A fixture trial is impractical: buildInventory()'s ROOT is resolved from import.meta.url with no --root/cwd override, and it walks the WHOLE repo (scripts/+lib/), not a scoped path, so a scratch-dir fixture cannot be isolated from (or reliably distinguished within) 10000+ real repo sites. The committed test exercises classifyChain(chainWindow(...)) directly -- the exact classification core buildInventory calls per site -- against a minimal fixture line, matching the shared-seedTest precedent already used by schema-reference-lint/stage-advancement-chokepoint-lint above.",
+    "neuter": {
+      "find": "return 'needs-review';",
+      "replace": "return 'bounded-by-design';",
+      "why": "classifyChain's fallback now reports every unclassified .select( as bounded-by-design instead of needs-review -- the exact silent-miss this control exists to prevent -- so the 'a bare unbounded .select( classifies as needs-review' assertion goes RED instead of a load crash"
+    },
+    "observability_proof": {
+      "input": "supabase .select( call sites found by walking scripts/ and lib/ (readdirSync recursion, skipping node_modules/.git/.worktrees/tests fixtures), each classified via classifyChain over a chainWindow of surrounding lines; per-site overrides read from scripts/audit/count-truncation-overrides.json keyed 'path:line'",
+      "seen": "live run 2026-08-23 (QF-20260728-427): node scripts/audit/count-truncation-inventory.mjs measured 10025 total .select( sites, 500 classified needs-review, written to docs/audits/count-truncation-inventory.json -- the checked-in artifact is the committed record of that population as of the SD that built it"
+    }
+  },
+  {
     "name": "fixture-producer-guard-lint",
     "script": "scripts/lint/fixture-producer-guard-lint.mjs",
     "rootFlag": "--root",
