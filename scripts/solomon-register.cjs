@@ -41,7 +41,7 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fetchAllSolomonsStrict (not fetchFreshSolomons) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
-const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh } = require('../lib/coordinator/solomon-identity.cjs');
+const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh, SOLOMON_FRESH_MS } = require('../lib/coordinator/solomon-identity.cjs');
 // Phase E (not yet shipped): drainSolomonOutbound will live in scripts/solomon-advisory.cjs.
 // Loaded lazily at the call site so this module loads without solomon-advisory.cjs present.
 
@@ -188,7 +188,10 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   // does not exist.
   const retired = [];
   if (decision.retire.length) {
-    const nowMs2 = Date.now();
+    // Injectable (defaults to a fresh Date.now() read, unchanged production behavior) so tests can
+    // control the elapsed-time gap between the initial decision and this re-validation, mirroring
+    // adam-register.cjs's opts.nowMs2 (ADVERSARIAL REVIEW, PR #7369).
+    const nowMs2 = (opts && Number.isFinite(opts.nowMs2)) ? opts.nowMs2 : Date.now();
     // STRICT re-check (FR-6): if the freshness re-validation read fails, SKIP retiring — clearing
     // a prior based on a failed read could kill a legitimately-restarting Solomon. Priors left
     // tagged are swept later (same best-effort posture as a failed clear below).
@@ -196,7 +199,9 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
     if (currentRead.error) {
       console.warn(`GUARD_UNAVAILABLE: stale-prior Solomon retire skipped — freshness re-check failed (${currentRead.error})`);
     } else {
-      const freshNow = new Set(currentRead.rows.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
+      // QF-20260822-719: isFresh(heartbeatAt, nowMs, freshMs) has no default for freshMs — the
+      // missing 3rd arg made this always false (identical class fixed in adam-register.cjs).
+      const freshNow = new Set(currentRead.rows.filter((a) => isFresh(a.heartbeat_at, nowMs2, SOLOMON_FRESH_MS)).map((a) => a.session_id));
       for (const sid of decision.retire) {
         if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
         const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
