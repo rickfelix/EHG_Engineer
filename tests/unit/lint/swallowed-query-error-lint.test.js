@@ -114,7 +114,13 @@ describe('the advisory-first claim is TESTED, not just asserted (TESTING 4118666
     const r = spawnSync(process.execPath, [LINT], { encoding: 'utf8' });
     expect(r.stdout).toMatch(/ungoverned/);
     // The load-bearing assertion: findings exist AND the exit code is still 0.
-    expect(r.stdout).not.toMatch(/0 ungoverned/);
+    // SD-LEO-INFRA-PLAN-LEAD-RETRO-001: the un-anchored /0 ungoverned/ coincidentally matches
+    // ANY total ending in the digit 0 (e.g. "230 ungoverned." contains the substring "0
+    // ungoverned."), not just the genuine all-clear "0 ungoverned." message — a baseline that
+    // naturally drifts as code changes (232 at authoring time, per the comment above) will
+    // spuriously fail this assertion every time it lands on a multiple of 10. \b anchors to a
+    // standalone "0", which only the real all-clear message produces.
+    expect(r.stdout).not.toMatch(/\b0 ungoverned\b/);
     expect(r.status).toBe(0);
   });
 

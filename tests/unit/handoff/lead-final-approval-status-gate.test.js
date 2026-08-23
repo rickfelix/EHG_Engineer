@@ -14,15 +14,46 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LeadFinalApprovalExecutor } from '../../../scripts/modules/handoff/executors/lead-final-approval/index.js';
 
+// SD-LEO-INFRA-PLAN-LEAD-RETRO-001: setup() now also calls runPreflightRetroCheck for
+// pending_approval/completed SDs (retro-filters.js's getFilteredRetrospective), which queries
+// sd_phase_handoffs (for the LEAD-TO-PLAN acceptance boundary) and retrospectives. The chain
+// below is a generic, table-routed, awaitable-and-chainable stub (mirrors retro-filters.test.js's
+// buildSupabase) so those calls resolve instead of throwing — and the retrospectives table
+// resolves to an already-qualifying row so generateFn (a REAL spawnSync in
+// generateProgrammaticRetrospective) is never invoked from a unit test.
+function makeChain(resolvedValue) {
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    or: () => chain,
+    gt: () => chain,
+    is: () => chain,
+    order: () => chain,
+    limit: () => chain,
+    maybeSingle: () => Promise.resolve(resolvedValue),
+    single: () => Promise.resolve(resolvedValue),
+    then: (resolve, reject) => Promise.resolve(resolvedValue).then(resolve, reject),
+  };
+  return chain;
+}
+
 function makeExecutor({ completedHandoffs = [] } = {}) {
+  const qualifyingRetro = {
+    id: 'retro-preexisting',
+    retro_type: 'SD_COMPLETION',
+    retrospective_type: null,
+    created_at: '2099-01-01T00:00:00.000Z',
+  };
   const supabase = {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: async () => ({ data: completedHandoffs, error: null })
-        })
-      })
-    })
+    from: (table) => {
+      if (table === 'retrospectives') return makeChain({ data: qualifyingRetro, error: null });
+      if (table === 'strategic_directives_v2') return makeChain({ data: null, error: null });
+      // sd_phase_handoffs: serves both the missingHandoffs diagnostic (awaited directly after
+      // two .eq() calls) and resolveLeadToPlanAcceptedAt (.maybeSingle() after four .eq()s +
+      // order/limit) — completedHandoffs is an array, so `.accepted_at` reads as undefined there,
+      // which resolveLeadToPlanAcceptedAt already falls back from safely.
+      return makeChain({ data: completedHandoffs, error: null });
+    },
   };
   return new LeadFinalApprovalExecutor({
     supabase,
@@ -63,7 +94,7 @@ describe('LEAD-FINAL-APPROVAL setup() status pre-gate (FR-4)', () => {
     const result = await executor.setup('SD-TEST-002', sd, {});
 
     expect(result.message).toContain("current: 'draft'");
-    expect(result.message).toContain("pending_approval");
+    expect(result.message).toContain('pending_approval');
     expect(result.message).toContain('PLAN-TO-LEAD');
     expect(result.details.currentStatus).toBe('draft');
     expect(result.details.requiredStatus).toBe('pending_approval');
