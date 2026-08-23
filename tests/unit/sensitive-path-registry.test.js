@@ -61,6 +61,19 @@ describe('isSensitivePath — TS-9: adversarial false-positive traps must NOT re
   });
 });
 
+describe('isSensitivePath — TS-9 addendum: .env template files are NOT secrets (C5 fix)', () => {
+  const templates = ['.env.example', '.env.sample', '.env.template', 'config/.env.example'];
+
+  it.each(templates)('does not refuse %s', (file) => {
+    expect(isSensitivePath(file)).toBe(false);
+  });
+
+  it('still refuses a real .env file', () => {
+    expect(isSensitivePath('.env')).toBe(true);
+    expect(isSensitivePath('.env.production')).toBe(true);
+  });
+});
+
 describe('isSensitivePath — defensive edges', () => {
   it('returns false for empty/null/non-string input', () => {
     expect(isSensitivePath('')).toBe(false);
