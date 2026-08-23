@@ -19,24 +19,32 @@
 --     bodies from pg_get_functiondef(oid) run against the live database (verified
 --     independently by both SECURITY and the author, 2026-08-23) and adds ONLY the
 --     teardown_disposition COALESCE clause on top -- everything else is copied verbatim.
+--   - PLAN_VERIFICATION VALIDATION fb708e20-02dd-4e27-9da6-bf5b8dd20223 (V1): kill_venture()
+--     and reject_chairman_decision() are not the only live paths that terminalize a venture --
+--     fn_chairman_decide() (the PRIMARY programmatic chairman-decision path) has its own
+--     independent kill-gate UPDATE branch, added below (section 4) via the same
+--     verbatim-from-live methodology, so the disposition-default logic is not silently
+--     bypassed by most real chairman decisions.
 -- @chairman-gated
 --
 -- ⚠ THERE IS DELIBERATELY NO `-- @approved-by:` LINE IN THIS FILE.
---   This migration modifies two existing SECURITY DEFINER RPCs (CREATE OR REPLACE FUNCTION),
---   which scripts/lib/migration-tier-classifier.mjs's allow-list design intentionally does
---   NOT cover -- function bodies can contain arbitrary logic, so any CREATE/REPLACE FUNCTION
---   fails closed to TIER-2 regardless of content. The builder that authored this file holds
---   none of the 3-factor chairman-gate credentials and MUST NOT forge the attestation. The
---   chairman adds the `@approved-by` line and runs:
+--   This migration modifies three existing RPCs (CREATE OR REPLACE FUNCTION; two are SECURITY
+--   DEFINER, fn_chairman_decide is not), which scripts/lib/migration-tier-classifier.mjs's
+--   allow-list design intentionally does NOT cover -- function bodies can contain arbitrary
+--   logic, so any CREATE/REPLACE FUNCTION fails closed to TIER-2 regardless of content. The
+--   builder that authored this file holds none of the 3-factor chairman-gate credentials and
+--   MUST NOT forge the attestation. The chairman adds the `@approved-by` line and runs:
 --       node scripts/apply-migration.js database/migrations/20260823145041_ventures_teardown_disposition.sql --prod-deploy
 --   Observable proof of application:
 --       SELECT column_name FROM information_schema.columns
 --       WHERE table_name = 'ventures' AND column_name LIKE 'teardown_disposition%';
 --       -- Expected: 4 rows (previously 0).
---       SELECT proname, pronargs FROM pg_proc WHERE proname IN ('kill_venture', 'reject_chairman_decision');
---       -- Expected: kill_venture pronargs=2, reject_chairman_decision pronargs=4 (both unchanged
---       -- from their pre-migration live signatures -- verify against pg_get_functiondef BEFORE
---       -- applying, not against this migration's own comments, in case of further drift).
+--       SELECT proname, pronargs FROM pg_proc
+--       WHERE proname IN ('kill_venture', 'reject_chairman_decision', 'fn_chairman_decide');
+--       -- Expected: kill_venture pronargs=2, reject_chairman_decision pronargs=4,
+--       -- fn_chairman_decide pronargs=5 (all unchanged from their pre-migration live
+--       -- signatures -- verify against pg_get_functiondef BEFORE applying, not against this
+--       -- migration's own comments, in case of further drift).
 --
 -- A chairman-commissioned architecture evaluation (Solomon eval S5-1/R4) found that when a
 -- venture transitions to a terminal status (cancelled/killed), its deployment is neither
@@ -300,6 +308,142 @@ $function$;
 -- regardless of how narrowly scoped the WHERE clause is. See the companion
 -- migration 20260823145530_marketlens_teardown_disposition_CHAIRMAN_GATED.sql.
 
+-- ──────────────────────────────────────────────────────────────────────────
+-- 4. fn_chairman_decide(): PLAN_VERIFICATION finding V1 (VALIDATION, fb708e20) -- kill_venture()
+--    and reject_chairman_decision() are not the only live paths that terminalize a venture.
+--    fn_chairman_decide() is the PRIMARY programmatic chairman-decision path (called from
+--    lib/chairman/decision-queue.mjs, scripts/chairman-decisions.mjs decide, and
+--    lib/eva/eva-orchestrator.js) and has its own, independent kill-gate UPDATE branch that
+--    this SD's earlier drafts missed entirely -- without this, most real chairman decisions
+--    would silently bypass the disposition mechanism this SD exists to add. Regenerated
+--    verbatim from LIVE pg_get_functiondef(oid) (same methodology as sections 2/3 above,
+--    following the S1 lesson), with only the same teardown_disposition COALESCE clause added
+--    to its kill-gate UPDATE branch. Signature UNCHANGED (5 params, defaults preserved on
+--    p_rationale/p_force_stale). NOT SECURITY DEFINER in the live definition -- unchanged here.
+-- ──────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.fn_chairman_decide(p_decision_id uuid, p_action text, p_decided_by text, p_rationale text DEFAULT NULL::text, p_force_stale boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_decision RECORD;
+  v_rows_updated INT;
+  v_decision_value TEXT;
+  v_is_kill_gate BOOLEAN;
+  v_has_venture BOOLEAN;
+BEGIN
+  IF p_action NOT IN ('approved', 'rejected') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Invalid action. Must be approved or rejected.', 'code', 'INVALID_ACTION');
+  END IF;
+
+  -- FR-1: LEFT JOIN. This is the whole null-safety fix; everything below is making the
+  -- consequences of a NULL venture EXPLICIT rather than incidental.
+  SELECT cd.*, v.updated_at AS venture_updated_at, v.name AS venture_name
+  INTO v_decision
+  FROM chairman_decisions cd
+  LEFT JOIN ventures v ON v.id = cd.venture_id
+  WHERE cd.id = p_decision_id
+  FOR UPDATE OF cd;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Decision not found.', 'code', 'NOT_FOUND');
+  END IF;
+
+  v_has_venture := v_decision.venture_id IS NOT NULL;
+
+  IF v_decision.status != 'pending' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', format('Decision already %s by %s at %s.', v_decision.status, COALESCE(v_decision.decided_by, 'unknown'), v_decision.updated_at),
+      'code', 'ALREADY_DECIDED',
+      'current_status', v_decision.status,
+      'decided_by', v_decision.decided_by,
+      'decided_at', v_decision.updated_at
+    );
+  END IF;
+
+  -- FR-2: semantics from TYPE, never from nullability. Unmapped raises rather than defaulting.
+  v_decision_value := public.fn_chairman_decision_value(v_decision.decision_type, p_action);
+  IF v_decision_value IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', format('decision_type "%s" has no semantic mapping. Add it to fn_chairman_decision_value rather than letting it inherit another type''s meaning.', v_decision.decision_type),
+      'code', 'UNMAPPED_DECISION_TYPE',
+      'decision_type', v_decision.decision_type
+    );
+  END IF;
+
+  -- STALE_CONTEXT is a VENTURE-state check, so it is now gated on venture presence EXPLICITLY.
+  -- Previously it read `venture_updated_at > created_at`, which under a LEFT JOIN evaluates to
+  -- NULL for a venture-less row and is therefore not TRUE — the right outcome by accident. Relying
+  -- on three-valued logic for a guard means the next reader must re-derive it to trust it.
+  IF v_has_venture AND NOT p_force_stale AND v_decision.venture_updated_at > v_decision.created_at THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', format('Venture "%s" state has changed since this decision was created. Review updated state before deciding.', v_decision.venture_name),
+      'code', 'STALE_CONTEXT',
+      'decision_created_at', v_decision.created_at,
+      'venture_updated_at', v_decision.venture_updated_at,
+      'venture_name', v_decision.venture_name
+    );
+  END IF;
+
+  -- Write the COMPLETE triple — status AND decision AND blocking (preserved from the live version).
+  UPDATE chairman_decisions
+  SET status = p_action, decision = v_decision_value, blocking = false, decided_by = p_decided_by, rationale = COALESCE(p_rationale, rationale)
+  WHERE id = p_decision_id AND status = 'pending';
+  GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  IF v_rows_updated = 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Decision was modified by another session.', 'code', 'CONCURRENT_MODIFICATION');
+  END IF;
+
+  -- The reject path touches ventures THREE times, and only the third genuinely needed a guard.
+  -- The two UPDATEs are NULL-predicate no-ops, but PERFORM fn_write_kill_audit_trail(NULL, ...)
+  -- would pass a NULL venture into the audit helper — either a constraint failure or a meaningless
+  -- kill-audit row. The whole block is therefore branched on venture presence rather than left to
+  -- no-op its way through.
+  IF p_action = 'rejected' AND v_has_venture THEN
+    v_is_kill_gate := v_decision.lifecycle_stage = ANY (ARRAY[3, 5, 13, 23]);
+    IF v_is_kill_gate THEN
+      UPDATE ventures
+      SET status = 'cancelled',
+          workflow_status = 'killed',
+          killed_at = now(),
+          kill_reason = p_rationale,
+          -- SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-1 (PLAN_VERIFICATION V1): same
+          -- disposition-default clause as kill_venture() and reject_chairman_decision(),
+          -- kept in sync -- all three are terminal-status disposition writers.
+          teardown_disposition = COALESCE(
+            teardown_disposition,
+            CASE WHEN deployment_url IS NOT NULL THEN 'pending_teardown' END
+          ),
+          updated_at = now()
+      WHERE id = v_decision.venture_id;
+    ELSE
+      UPDATE ventures
+      SET status = 'cancelled', updated_at = now()
+      WHERE id = v_decision.venture_id;
+    END IF;
+
+    PERFORM public.fn_write_kill_audit_trail(
+      v_decision.venture_id, v_decision.lifecycle_stage, p_rationale, auth.uid(), 'fn_chairman_decide', p_decision_id
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'decision_id', p_decision_id,
+    'action', p_action,
+    'decision', v_decision_value,
+    'blocking', false,
+    'decided_by', p_decided_by,
+    'venture_name', v_decision.venture_name,   -- NULL for venture-less rows, truthfully
+    'venture_less', NOT v_has_venture
+  );
+END;
+$function$;
+
 COMMIT;
 
 -- ──────────────────────────────────────────────────────────────────────────
@@ -313,8 +457,10 @@ COMMIT;
 --
 -- 2. RPC signatures unchanged (no new overload -- re-verify against pg_get_functiondef
 --    immediately before applying, in case of further drift since this migration was authored):
---   SELECT proname, pronargs FROM pg_proc WHERE proname IN ('kill_venture', 'reject_chairman_decision');
---   -- Expected: kill_venture pronargs=2, reject_chairman_decision pronargs=4 (unchanged)
+--   SELECT proname, pronargs FROM pg_proc
+--   WHERE proname IN ('kill_venture', 'reject_chairman_decision', 'fn_chairman_decide');
+--   -- Expected: kill_venture pronargs=2, reject_chairman_decision pronargs=4,
+--   -- fn_chairman_decide pronargs=5 (all unchanged)
 --
 -- 3. Re-run note: ADD COLUMN uses IF NOT EXISTS (idempotent); ADD CONSTRAINT does NOT
 --    (Postgres has no ADD CONSTRAINT IF NOT EXISTS) -- a second run will fail loudly on the

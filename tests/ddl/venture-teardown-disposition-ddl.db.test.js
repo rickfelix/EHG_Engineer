@@ -5,8 +5,10 @@
 // WHAT A GREEN RUN OF THIS FILE DOES **NOT** MEAN
 //
 // This runs against an EPHEMERAL vanilla PostgreSQL 16 with a hand-stubbed schema. It proves
-// this migration's OWN new logic (the teardown_disposition COALESCE-default in kill_venture()
-// and reject_chairman_decision()'s kill-gate branch) does what it claims. It does NOT prove:
+// this migration's OWN new logic (the teardown_disposition COALESCE-default in kill_venture(),
+// reject_chairman_decision()'s kill-gate branch, and fn_chairman_decide()'s kill-gate branch --
+// PLAN_VERIFICATION V1, the PRIMARY programmatic chairman-decision path) does what it claims.
+// It does NOT prove:
 //   - authorization: public.fn_is_chairman() is STUBBED to always return TRUE here, and
 //     auth.role() is stubbed to NULL (so reject_chairman_decision's OR falls through to the
 //     fn_is_chairman() stub). The real kill_venture()/reject_chairman_decision() are gated by
@@ -75,6 +77,40 @@ CREATE OR REPLACE FUNCTION public.fn_verify_and_consume_stepup_token(p_token UUI
 CREATE OR REPLACE FUNCTION public.fn_write_kill_audit_trail(
   p_venture_id UUID, p_lifecycle_stage INTEGER, p_rationale TEXT, p_decided_by UUID, p_source TEXT, p_decision_id UUID
 ) RETURNS UUID LANGUAGE sql AS $$ SELECT NULL::uuid; $$;
+
+-- REAL definition (copied verbatim, IMMUTABLE, no external dependencies) -- fn_chairman_decide()
+-- calls this to resolve decision_type + action into a semantic outcome; a stub returning a
+-- constant would let an UNMAPPED_DECISION_TYPE bug in the real function pass silently.
+CREATE OR REPLACE FUNCTION public.fn_chairman_decision_value(p_decision_type TEXT, p_action TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF p_action NOT IN ('approved', 'rejected') THEN
+    RAISE EXCEPTION 'fn_chairman_decision_value: invalid action %', p_action
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  RETURN CASE
+    WHEN p_decision_type IN (
+      'venture_disposition', 'stage_gate', 'launch_gate', 'gate_decision',
+      'vision_approval', 'strategy_selection', 'product_review', 'distribution_block'
+    ) THEN CASE p_action WHEN 'approved' THEN 'proceed' ELSE 'kill' END
+    WHEN p_decision_type IN (
+      'ddl_approval', 'gate_approval', 'outbound_publish_approval', 'ratified_deviation'
+    ) THEN CASE p_action WHEN 'approved' THEN 'approve' ELSE 'reject' END
+    WHEN p_decision_type = 'gate_override'
+      THEN CASE p_action WHEN 'approved' THEN 'override' ELSE 'reject' END
+    WHEN p_decision_type IN (
+      'session_question', 'review', 'portfolio_review',
+      'framing_escalation', 'gate_failure_escalation'
+    ) THEN CASE p_action WHEN 'approved' THEN 'proceed' ELSE 'cancel' END
+    ELSE NULL
+  END;
+END;
+$$;
 
 -- TESTING F-EXEC-1 (EXEC-phase review): tests/ddl/*.db.test.js all share ONE ephemeral
 -- database (fileParallelism: false, no per-file schema isolation) -- whichever file's
@@ -159,8 +195,8 @@ CREATE TABLE IF NOT EXISTS public.eva_ventures (
 
 -- Matches live column set (verified via information_schema.columns, 2026-08-23): id,
 -- venture_id, lifecycle_stage, consequence_level, status, decision, rationale, decided_by,
--- decided_by_user_id, blocking, updated_at -- NOT the decision_outcome/decision_rationale/
--- decided_at shape an earlier draft of this file guessed at.
+-- decided_by_user_id, blocking, updated_at, decision_type, created_at -- NOT the
+-- decision_outcome/decision_rationale/decided_at shape an earlier draft of this file guessed at.
 CREATE TABLE IF NOT EXISTS public.chairman_decisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   venture_id UUID,
@@ -168,10 +204,12 @@ CREATE TABLE IF NOT EXISTS public.chairman_decisions (
   consequence_level TEXT,
   status TEXT,
   decision TEXT,
+  decision_type TEXT,
   rationale TEXT,
   decided_by TEXT,
   decided_by_user_id UUID,
   blocking BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 `;
@@ -229,13 +267,15 @@ describe('the migration applied', () => {
   // SECURITY S1 CRITICAL regression guard: pins BOTH functions' argument counts so a future
   // signature drift (this migration authored against a stale copy of either function) creates
   // a visibly-failing count, not a silent second overload.
-  it('kill_venture() and reject_chairman_decision() keep their live signatures (2 and 4 params) -- no new overload', async () => {
+  it('all three RPCs keep their live signatures (2, 4, and 5 params) -- no new overload', async () => {
     const { rows } = await client.query(`
       SELECT proname, pronargs FROM pg_proc
-      WHERE proname IN ('kill_venture', 'reject_chairman_decision') AND pronamespace = 'public'::regnamespace
+      WHERE proname IN ('kill_venture', 'reject_chairman_decision', 'fn_chairman_decide')
+        AND pronamespace = 'public'::regnamespace
       ORDER BY proname
     `);
     expect(rows).toEqual([
+      { proname: 'fn_chairman_decide', pronargs: 5 },
       { proname: 'kill_venture', pronargs: 2 },
       { proname: 'reject_chairman_decision', pronargs: 4 },
     ]);
@@ -329,6 +369,60 @@ describe("reject_chairman_decision()'s kill-gate branch gets the same dispositio
       decisionRows[0].id,
       'DDL-tier fixture non-gate rejection, 20+ chars',
     ]);
+    const v = await getVenture(ventureId);
+    expect(v.teardown_disposition).toBeNull();
+  });
+});
+
+// PLAN_VERIFICATION V1 (VALIDATION fb708e20): fn_chairman_decide() is the PRIMARY programmatic
+// chairman-decision path (lib/chairman/decision-queue.mjs, scripts/chairman-decisions.mjs
+// decide, lib/eva/eva-orchestrator.js) -- kill_venture()/reject_chairman_decision() alone would
+// have left most real chairman decisions silently bypassing the disposition mechanism.
+describe("fn_chairman_decide()'s kill-gate branch gets the same disposition-default logic", () => {
+  // p_force_stale=true bypasses the STALE_CONTEXT guard deterministically (both
+  // chairman_decisions.created_at and ventures.updated_at default to now() at INSERT time --
+  // relying on their exact ordering would be a real, if narrow, source of test flakiness).
+  it('a kill-gate stage (5) decision, action=rejected, on a venture with a live deployment_url defaults teardown_disposition to pending_teardown', async () => {
+    const ventureId = await makeVenture({ deploymentUrl: 'https://example-fn-decide-gate.run.app' });
+    const { rows: decisionRows } = await client.query(
+      "INSERT INTO public.chairman_decisions (venture_id, lifecycle_stage, decision_type, status) VALUES ($1, 5, 'gate_decision', 'pending') RETURNING id",
+      [ventureId],
+    );
+    const { rows } = await client.query(
+      'SELECT public.fn_chairman_decide($1, $2, $3, $4, $5) AS result',
+      [decisionRows[0].id, 'rejected', 'ddl-fixture-user', 'DDL-tier fixture fn_chairman_decide kill-gate, 20+ chars', true],
+    );
+    expect(rows[0].result.success).toBe(true);
+    const v = await getVenture(ventureId);
+    expect(v.teardown_disposition).toBe('pending_teardown');
+  });
+
+  it('a non-kill-gate stage (7) decision, action=rejected, does NOT touch teardown_disposition', async () => {
+    const ventureId = await makeVenture({ deploymentUrl: 'https://example-fn-decide-nongate.run.app' });
+    const { rows: decisionRows } = await client.query(
+      "INSERT INTO public.chairman_decisions (venture_id, lifecycle_stage, decision_type, status) VALUES ($1, 7, 'gate_decision', 'pending') RETURNING id",
+      [ventureId],
+    );
+    const { rows } = await client.query(
+      'SELECT public.fn_chairman_decide($1, $2, $3, $4, $5) AS result',
+      [decisionRows[0].id, 'rejected', 'ddl-fixture-user', 'DDL-tier fixture fn_chairman_decide non-gate, 20+ chars', true],
+    );
+    expect(rows[0].result.success).toBe(true);
+    const v = await getVenture(ventureId);
+    expect(v.teardown_disposition).toBeNull();
+  });
+
+  it('an approved (non-rejected) decision never reaches the kill-gate branch at all', async () => {
+    const ventureId = await makeVenture({ deploymentUrl: 'https://example-fn-decide-approved.run.app' });
+    const { rows: decisionRows } = await client.query(
+      "INSERT INTO public.chairman_decisions (venture_id, lifecycle_stage, decision_type, status) VALUES ($1, 5, 'gate_decision', 'pending') RETURNING id",
+      [ventureId],
+    );
+    const { rows } = await client.query(
+      'SELECT public.fn_chairman_decide($1, $2, $3, $4, $5) AS result',
+      [decisionRows[0].id, 'approved', 'ddl-fixture-user', 'DDL-tier fixture fn_chairman_decide approval', true],
+    );
+    expect(rows[0].result.success).toBe(true);
     const v = await getVenture(ventureId);
     expect(v.teardown_disposition).toBeNull();
   });
