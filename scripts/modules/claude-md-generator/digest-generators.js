@@ -564,7 +564,13 @@ function generateCoordinatorDigest(data, fileMapping, metadata) {
   const sections = protocol.sections;
 
   const coordinatorSections = getSectionsByMapping(sections, 'CLAUDE_COORDINATOR_DIGEST.md', fileMapping);
-  const coordinatorContent = coordinatorSections.map(s => formatSectionCompact(s)).join('\n\n');
+  // SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002: the standing-responsibilities section (row 605,
+  // ~18.6k chars) exceeded the 3,000 default and was silently authority-elided, dropping duties
+  // 4-6 and the Adam-governance clause from the digest a context-pressured session actually loads
+  // — the same failure class SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 fixed for Adam. Mirrors that
+  // fix's methodology: 20,000 is the measured saturation point (larger budgets produce a
+  // byte-identical file) rather than a round number.
+  const coordinatorContent = coordinatorSections.map(s => formatSectionCompact(s, { maxChars: 20000 })).join('\n\n');
 
   const header = generateDigestHeader('CLAUDE_COORDINATOR_DIGEST.md', metadata);
   const fullLoadInstr = generateFullLoadInstructions('CLAUDE_COORDINATOR.md');
