@@ -336,11 +336,16 @@ function deriveFailureSignature(row, evaluation) {
 // permanently suppressed retries on a failed insert).
 async function emitOverdueSignal(row, evaluation) {
   const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
+  // QF-20260823-965: a multi-section CLI's registry row names which invocation actually proves
+  // liveness -- surface it here so the FIRST escalation surface an owner sees is actionable
+  // ("run all"), not a bare threshold_exceeded that reads as a dead process when it may not be.
+  const requiredInvocation = row.liveness_source_ref?.required_invocation;
+  const invocationNote = requiredInvocation ? ` (requires invocation: '${requiredInvocation}')` : '';
 
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
-    subject: `[PERIODIC-LIVENESS] ${row.display_name || row.process_key} is OVERDUE`,
+    subject: `[PERIODIC-LIVENESS] ${row.display_name || row.process_key} is OVERDUE${invocationNote}`,
     sender_type: 'periodic-liveness-watcher',
     payload: {
       kind: 'periodic_liveness_flag',
@@ -539,7 +544,12 @@ async function main({ includeFixtures = false } = {}) {
       try {
         const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
         const climb = await climbLadder({ supabase, row, ownerTarget });
-        if (climb.laddered) ladderCandidates.push({ process_key: row.process_key, display_name: row.display_name, signature: deriveFailureSignature(row, evaluation) });
+        if (climb.laddered) ladderCandidates.push({
+          process_key: row.process_key,
+          display_name: row.display_name,
+          signature: deriveFailureSignature(row, evaluation),
+          required_invocation: row.liveness_source_ref?.required_invocation || null,
+        });
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
