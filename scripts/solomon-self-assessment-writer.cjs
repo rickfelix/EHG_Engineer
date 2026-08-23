@@ -108,6 +108,11 @@ async function gatherSignals(sb) {
   // have refused had anything been calling it. Reusing checkConsultQuota's own count is
   // deliberate: re-querying independently would drop its cc_originator dedup exclusion and
   // D3's volume would silently diverge from the volume FR-1 records at send time.
+  //
+  // QF-20260822-623 (D3 quota ruling, flag 1d971fd3 / correlation b748d8e5): routed-lane
+  // consults (payload.reply_to set) are exempt from the ceiling -- this denominator inherits
+  // that exemption automatically because it is checkConsultQuota's own count, never a
+  // separate D3-only recomputation that could drift from the send-path's own exclusions.
   signals.quota_breach_count = await (async () => {
     try {
       const q = await checkConsultQuota(sb);
