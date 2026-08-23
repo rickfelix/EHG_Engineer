@@ -76,14 +76,27 @@ describe('FR-2: normalizeDecisionBy — pure identity-prefix extraction', () => 
   });
 });
 
+// QF-20260823-366: recordLedgerDecision's own write now chains .select('id').maybeSingle()
+// (correlation_id is UNIQUE, so it can only ever affect 0 or 1 row) while inheritTailDecisions's
+// tail-fanout .select('id') still resolves directly (it can affect several sibling rows). A shared
+// mock `chain` serves both call sites: select() returns an already-resolved Promise (so a bare
+// `await select()` works for the tail path) with a `.maybeSingle()` escape hatch attached for the
+// primary path.
+function selectResult(data) {
+  const p = Promise.resolve({ data, error: null });
+  p.maybeSingle = () => Promise.resolve({ data: Array.isArray(data) ? (data[0] ?? null) : data, error: null });
+  return p;
+}
+
 describe('FR-2: recordLedgerDecision writes normalized decision_by, never rejects the decision', () => {
-  it('truncates prose decision_by to its identity prefix in the upserted row', async () => {
-    let upsertedRow = null;
-    const sb = {
-      from: () => ({
-        upsert: (row) => { upsertedRow = row; return Promise.resolve({ error: null }); },
-      }),
+  it('truncates prose decision_by to its identity prefix in the updated row', async () => {
+    let updatedRow = null;
+    const chain = {
+      update: (row) => { updatedRow = row; return chain; },
+      eq: () => chain,
+      select: () => selectResult([{ id: 'row-1' }]),
     };
+    const sb = { from: () => chain };
     const result = await m.recordLedgerDecision(sb, {
       correlationId: 'corr-1',
       disposition: 'accepted',
@@ -91,16 +104,51 @@ describe('FR-2: recordLedgerDecision writes normalized decision_by, never reject
       outcomeRef: 'SD-TEST-001',
     });
     expect(result.recorded).toBe(true);
-    expect(upsertedRow.decision_by).toBe('adam:d02c9e34');
+    expect(updatedRow.decision_by).toBe('adam:d02c9e34');
   });
 
   it('never rejects a decision for having a prose decidedBy — truncate, not reject', async () => {
-    const sb = { from: () => ({ upsert: () => Promise.resolve({ error: null }) }) };
+    const chain = { update: () => chain, eq: () => chain, select: () => selectResult([{ id: 'row-2' }]) };
+    const sb = { from: () => chain };
     const result = await m.recordLedgerDecision(sb, {
       correlationId: 'corr-2', disposition: 'rejected',
       decidedBy: 'a very long prose explanation of why this was rejected in full detail',
     });
     expect(result.recorded).toBe(true);
+  });
+});
+
+describe('QF-20260823-366: recordLedgerDecision UPDATEs an existing pending row, never upserts', () => {
+  it('records a decision against a pre-existing pending row (count=1), no proposal_summary in the payload', async () => {
+    let updatedRow = null;
+    const eqCalls = [];
+    const chain = {
+      update: (row) => { updatedRow = row; return chain; },
+      eq: (col, val) => { eqCalls.push([col, val]); return chain; },
+      select: () => selectResult([{ id: 'row-3' }]),
+    };
+    const sb = { from: () => chain };
+    const result = await m.recordLedgerDecision(sb, {
+      correlationId: 'corr-3',
+      disposition: 'accepted',
+      decidedBy: 'adam',
+      outcomeRef: 'SD-TEST-002',
+    });
+    expect(result.recorded).toBe(true);
+    expect(updatedRow).not.toHaveProperty('proposal_summary');
+    expect(updatedRow).not.toHaveProperty('correlation_id');
+    expect(eqCalls).toContainEqual(['correlation_id', 'corr-3']);
+    expect(eqCalls).toContainEqual(['decision', 'pending']);
+  });
+
+  it('reports failure (not a silent no-op) when no pending row matches the correlation_id', async () => {
+    const chain = { update: () => chain, eq: () => chain, select: () => selectResult([]) };
+    const sb = { from: () => chain };
+    const result = await m.recordLedgerDecision(sb, {
+      correlationId: 'corr-missing', disposition: 'accepted', decidedBy: 'adam', outcomeRef: 'SD-TEST-003',
+    });
+    expect(result.recorded).toBe(false);
+    expect(result.reason).toMatch(/no pending ledger row/);
   });
 });
 
