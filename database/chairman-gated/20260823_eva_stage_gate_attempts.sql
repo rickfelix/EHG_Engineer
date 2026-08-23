@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS public.eva_stage_gate_attempts (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   -- ── CONSTRAINTS ──────────────────────────────────────────────────────────────────────────────
+  -- VALIDATION (VERIFY phase): the PRD's acceptance criterion for this key listed `attempt_id`
+  -- alongside the other three columns. Deliberately NOT included here: attempt_id is this row's
+  -- own per-row UUID primary key, so a 4-column key that already contains it would be trivially
+  -- unique on attempt_id alone -- both the duplicate-attempt-number rejection this constraint
+  -- exists to prove (BEHAVIOURAL PROOF 2 below) and the "authoritative = highest finalized
+  -- attempt_number for this (venture,stage,gate_type)" read pattern (PRD FR-3) depend on
+  -- attempt_number being unique WITHOUT attempt_id in the key. The PRD's own criteria conflict on
+  -- this point; the key as shipped is the one that makes both other criteria satisfiable.
   CONSTRAINT esga_unique_attempt UNIQUE (venture_id, stage_number, gate_type, attempt_number),
 
   -- A finalized row must carry finalized_at; an in-flight row must not.

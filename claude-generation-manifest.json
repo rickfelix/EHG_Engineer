@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T14:47:49.629Z",
-  "git_commit": "0b5b9b5f",
+  "generated_at": "2026-08-23T12:34:07.851Z",
+  "git_commit": "021daef5",
   "db_snapshot_hash": "30d313ecbc99265b",
   "files": {
     "CLAUDE.md": {
@@ -9,15 +9,15 @@
       "bytes": 19704,
       "estimated_tokens": 4892,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 94500,
-      "bytes": 95087,
-      "estimated_tokens": 23625,
-      "content_hash": "a689a575fbf9e1a3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_CORE.md"
+      "chars": 93828,
+      "bytes": 94413,
+      "estimated_tokens": 23457,
+      "content_hash": "bb72619badbdf461",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
@@ -25,7 +25,7 @@
       "bytes": 58622,
       "estimated_tokens": 14607,
       "content_hash": "7726ac30e5d1344b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_LEAD.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
@@ -33,7 +33,7 @@
       "bytes": 8863,
       "estimated_tokens": 2205,
       "content_hash": "cc66ad67987e6c33",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_LEAD_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
@@ -41,7 +41,7 @@
       "bytes": 55112,
       "estimated_tokens": 13714,
       "content_hash": "bfcc116b18eeebe0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_PLAN.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
@@ -49,7 +49,7 @@
       "bytes": 38461,
       "estimated_tokens": 9589,
       "content_hash": "51819b6275a9bf4e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_PLAN_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
@@ -57,7 +57,7 @@
       "bytes": 93244,
       "estimated_tokens": 23203,
       "content_hash": "1b3e015ba6db04be",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_EXEC.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
@@ -65,7 +65,7 @@
       "bytes": 54018,
       "estimated_tokens": 13362,
       "content_hash": "98934109de2bca66",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_ADAM.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -73,7 +73,7 @@
       "bytes": 15843,
       "estimated_tokens": 3925,
       "content_hash": "de148bf7b2dbb02d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_ADAM_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
@@ -81,7 +81,7 @@
       "bytes": 6989,
       "estimated_tokens": 1732,
       "content_hash": "46ce6f846311e0b0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_ADAM_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
@@ -89,7 +89,7 @@
       "bytes": 25727,
       "estimated_tokens": 6384,
       "content_hash": "a118c322d777d4b0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_COORDINATOR.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
@@ -97,7 +97,7 @@
       "bytes": 4594,
       "estimated_tokens": 1140,
       "content_hash": "b8947bb3616d3d86",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_COORDINATOR_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
       "type": "full",
@@ -105,87 +105,79 @@
       "bytes": 2139,
       "estimated_tokens": 532,
       "content_hash": "112b0b96ed33271a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_COORDINATOR_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 56477,
-      "bytes": 56988,
-      "estimated_tokens": 14120,
-      "content_hash": "20c9520467378a42",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_SOLOMON.md"
+      "chars": 55523,
+      "bytes": 56030,
+      "estimated_tokens": 13881,
+      "content_hash": "84ae175b9d854ddd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 11228,
-      "bytes": 11325,
+      "chars": 11227,
+      "bytes": 11324,
       "estimated_tokens": 2807,
       "content_hash": "c75804cd89ab0475",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_SOLOMON_MANUAL.md"
-    },
-    "CLAUDE_SOLOMON_PROVENANCE.md": {
-      "type": "full",
-      "chars": 11728,
-      "bytes": 11839,
-      "estimated_tokens": 2932,
-      "content_hash": "a46ec5fcade91deb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_SOLOMON_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9612,
       "bytes": 9654,
       "estimated_tokens": 2403,
-      "content_hash": "61728db3f5986c74",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_DIGEST.md"
+      "content_hash": "4194c5a76104a8db",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 13748,
       "bytes": 13862,
       "estimated_tokens": 3437,
-      "content_hash": "619b4d916e55781c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "7008a402d42f31a3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5552,
       "bytes": 5572,
       "estimated_tokens": 1388,
-      "content_hash": "a71a4e18fd07130d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "43cb66e9d3a6269b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8542,
       "bytes": 8582,
       "estimated_tokens": 2136,
-      "content_hash": "f674ce4a8c9bdbfc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "79e2da0df59e43aa",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10965,
       "bytes": 11047,
       "estimated_tokens": 2742,
-      "content_hash": "328292eff8f0f8cf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "47204356635fad2f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 17754,
       "bytes": 18068,
       "estimated_tokens": 4439,
-      "content_hash": "cad87cced1c8da62",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "9e2217e20ae4327d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 8498,
       "bytes": 8566,
       "estimated_tokens": 2125,
-      "content_hash": "ce7245ca4bbc4233",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "98e634fb7dd424ad",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
@@ -193,11 +185,19 @@
       "bytes": 3997,
       "estimated_tokens": 990,
       "content_hash": "ebc45b02958ab9f4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON_DIGEST.md"
+    },
+    "CLAUDE_SOLOMON_PROVENANCE.md": {
+      "type": "full",
+      "chars": 11727,
+      "bytes": 11838,
+      "estimated_tokens": 2932,
+      "content_hash": "a46ec5fcade91deb",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON_PROVENANCE.md"
     }
   },
   "section_digests": {
-    "global": "3fc6b49c6de06653",
+    "global": "73fccd657c043073",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -458,7 +458,7 @@
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "a2a538ee3b5fe726",
+      "611": "5bec663e666e4825",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",

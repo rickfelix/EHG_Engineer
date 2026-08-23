@@ -14,6 +14,7 @@ function createMockSupabase(responses = {}) {
     eq: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue(responses.venture || { data: null, error: null }),
   };
 
@@ -37,17 +38,24 @@ function createMockSupabase(responses = {}) {
       };
     }
     if (table === 'eva_stage_gate_results') {
+      // SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001 (VALIDATION VAL-B1): the real queries now end in
+      // .limit(100) (count-truncation-diff-lint bounded-by-design requirement) -- .order() no
+      // longer resolves directly, it returns a chain ending in .limit().
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             gte: vi.fn().mockReturnValue({
-              order: vi.fn().mockResolvedValue(
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(
+                  responses.gates || { data: [], error: null }
+                ),
+              }),
+            }),
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(
                 responses.gates || { data: [], error: null }
               ),
             }),
-            order: vi.fn().mockResolvedValue(
-              responses.gates || { data: [], error: null }
-            ),
           }),
         }),
       };

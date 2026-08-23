@@ -135,4 +135,26 @@ describe('recordGateAttempt', () => {
       recordGateAttempt(supabase, { ventureId: 'v1', stageNumber: 5, gateType: 'entry', passed: true })
     ).rejects.toThrow(/did not update attempt/);
   });
+
+  it('names the pending-migration cause distinctly on a PGRST202 (function not found) error (VALIDATION VAL-B2)', async () => {
+    const supabase = mockSupabase({
+      openResult: { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.open_eva_gate_attempt' } },
+      finalizeResult: FINALIZE_OK,
+    });
+
+    await expect(
+      recordGateAttempt(supabase, { ventureId: 'v1', stageNumber: 5, gateType: 'entry', passed: true })
+    ).rejects.toThrow(/migration not yet applied/);
+  });
+
+  it('does not relabel a genuine (non-PGRST202) error as a pending-migration issue', async () => {
+    const supabase = mockSupabase({
+      openResult: OPEN_OK,
+      finalizeResult: { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } },
+    });
+
+    await expect(
+      recordGateAttempt(supabase, { ventureId: 'v1', stageNumber: 5, gateType: 'entry', passed: true })
+    ).rejects.toThrow(/duplicate key value/);
+  });
 });
