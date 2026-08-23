@@ -3,15 +3,13 @@
  * implementation (collectGitMetrics -> `git log --since=<claimed_at>`, no
  * --author, no branch restriction) measures repository-wide commits instead.
  *
- * Negative test: construct the false state (this seat made ZERO commits since
- * claiming, but ANOTHER author committed in the same window) and assert the
- * field does not claim work this seat did not do. A field with no negative
- * test is a check that cannot fail at the storage layer — see
- * docs/reference/field-name-is-a-claim.md.
- *
- * A companion fix is tracked separately at QF-20260728-430 (open as of this
- * writing) — this test is expected to FAIL until that fix lands, and is the
- * regression pin that proves it when it does.
+ * QF-20260728-430 (this fix): collectGitMetrics now accepts a worktreeBranch
+ * argument and, when it is a valid branch name, scopes to commits reachable
+ * from that branch but NOT from origin/main (`git log <branch> --not
+ * origin/main`) — immune to another seat's merge to main, since `--author`
+ * cannot substitute (every fleet seat commits under the same git identity).
+ * Converted from `it.fails` to a plain `it` now that the fix lands, per this
+ * file's own prior instruction — do not weaken the assertion back.
  */
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -59,43 +57,83 @@ function makeTempRepo() {
   return dir;
 }
 
-describe('commits_since_claim negative test (QF-20260728-720)', () => {
-  // it.fails: this pins a LIVE, currently-true defect (companion fix tracked
-  // at QF-20260728-430, open). Under it.fails, vitest reports GREEN while the
-  // assertion inside keeps failing (the honest state today) and reports RED
-  // the moment it starts passing — i.e. this test alerts, rather than stays
-  // silently green, the moment someone fixes the field. Do not "fix" this
-  // test by weakening the assertion; when QF-20260728-430 lands, convert
-  // this to a plain `it` instead.
-  it.fails('reads 0 when THIS SEAT made no commits since claiming, even though another author committed in the window', () => {
-    tmpDir = makeTempRepo();
+/**
+ * A repo shaped like a real worktree: `origin/main` is a plain local ref (git does not
+ * distinguish a manually-created ref named "origin/main" from a real remote-tracking one for
+ * `git log`/`git diff` purposes) pinned at the baseline commit, and the seat works on a
+ * genuinely separate branch — the shape collectGitMetrics' scoped path expects.
+ */
+function makeTempRepoWithBranch(branchName) {
+  const dir = makeTempRepo();
+  execSync('git branch origin/main', { cwd: dir }); // mimic a fetched remote-tracking ref
+  execSync(`git checkout -q -b ${branchName}`, { cwd: dir });
+  return dir;
+}
 
-    // Simulate a DIFFERENT worker landing a commit in the SAME repo/branch
-    // window, after claimed_at — this is work the current seat did not do.
+describe('commits_since_claim negative test (QF-20260728-720 / fixed by QF-20260728-430)', () => {
+  it('reads 0 when THIS SEAT made no commits since claiming, even though another author committed directly to origin/main in the window', () => {
+    tmpDir = makeTempRepoWithBranch('feat/this-seat');
+
+    // Simulate a DIFFERENT worker landing a commit on main (fetched into this worktree's
+    // origin/main ref) in the SAME window — work the current seat did not do, and which the
+    // seat's own branch never merged/rebased onto.
+    execSync('git checkout -q origin/main', { cwd: tmpDir });
     commitAt({
       cwd: tmpDir, dateIso: AFTER_CLAIM_DATE, email: 'other@example.com', name: 'Other Worker',
       file: 'other-worker.txt', message: 'other worker commit',
     });
+    execSync('git checkout -q feat/this-seat', { cwd: tmpDir });
 
-    const metrics = collectGitMetrics(tmpDir, CLAIMED_AT);
+    const metrics = collectGitMetrics(tmpDir, CLAIMED_AT, 'feat/this-seat');
 
-    // TRUE state: this seat's own commit count since claiming is 0.
-    // collectGitMetrics has no --author filter, so it currently reports the
-    // OTHER worker's commit as if it were this seat's — the false claim the
-    // field's name makes. This assertion documents the honest value and is
-    // expected to fail until QF-20260728-430 adds author scoping.
+    // TRUE state: this seat's own commit count since claiming is 0. Scoped to
+    // feat/this-seat excluding origin/main, the other worker's commit (which never touched
+    // this branch) is correctly invisible.
     expect(metrics.commits).toBe(0);
   });
 
-  it('correctly reads 1 when this seat itself is the sole committer since claiming (sanity check, should pass today)', () => {
-    tmpDir = makeTempRepo();
+  it('correctly reads 1 when this seat itself is the sole committer since claiming (sanity check)', () => {
+    tmpDir = makeTempRepoWithBranch('feat/this-seat');
 
     commitAt({
       cwd: tmpDir, dateIso: AFTER_CLAIM_DATE, email: 'seat@example.com', name: 'This Seat',
       file: 'this-seat.txt', message: 'this seat commit',
     });
 
-    const metrics = collectGitMetrics(tmpDir, CLAIMED_AT);
+    const metrics = collectGitMetrics(tmpDir, CLAIMED_AT, 'feat/this-seat');
     expect(metrics.commits).toBe(1);
+  });
+
+  it('a seat whose worktree branch IS main reads 0 once origin/main has caught up to the same commits (the literal measured incident: a static seat tracking main)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qf720-commits-'));
+    execSync('git init -q -b main', { cwd: dir });
+    tmpDir = dir;
+    commitAt({
+      cwd: dir, dateIso: BASELINE_DATE, email: 'seat@example.com', name: 'This Seat',
+      file: 'baseline.txt', message: 'baseline',
+    });
+
+    // Other workers merge to main; this worktree's own branch IS main, so it advances too —
+    // exactly Charlie's measured scenario (worktree tracked main, 22 commits from others read
+    // as 23 "since claim"). origin/main is created pointing at the SAME HEAD main has already
+    // reached, mimicking a fetch that caught up — `--not origin/main` then reports 0 rather
+    // than counting those commits as this seat's own work.
+    execSync('git branch origin/main HEAD', { cwd: dir });
+
+    const metrics = collectGitMetrics(dir, CLAIMED_AT, 'main');
+    expect(metrics.commits).toBe(0);
+  });
+
+  it('falls back to the unscoped whole-HEAD query when no valid branch name is supplied (legacy/non-worktree seats) — old behavior, unchanged and still a fleet-wide proxy', () => {
+    tmpDir = makeTempRepo();
+    commitAt({
+      cwd: tmpDir, dateIso: AFTER_CLAIM_DATE, email: 'other@example.com', name: 'Other Worker',
+      file: 'other-worker.txt', message: 'other worker commit',
+    });
+
+    expect(collectGitMetrics(tmpDir, CLAIMED_AT, undefined).commits).toBe(1);
+    expect(collectGitMetrics(tmpDir, CLAIMED_AT, '').commits).toBe(1);
+    // Rejects an unsafe branch string (shell-metacharacter fail-closed) by falling back too.
+    expect(collectGitMetrics(tmpDir, CLAIMED_AT, 'main; rm -rf /').commits).toBe(1);
   });
 });
