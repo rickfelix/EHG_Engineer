@@ -1,10 +1,10 @@
 ---
 category: Reference
 status: Draft
-version: 1.2.0
+version: 1.3.0
 author: Claude Code
-last_updated: 2026-07-10
-tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness, reservation-fence]
+last_updated: 2026-08-22
+tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness, reservation-fence, dispatch-suggestions]
 ---
 
 # Fleet Coordination System
@@ -215,6 +215,47 @@ Claims are tracked via `claude_sessions.sd_id`. A partial unique index enforces 
 | Release claim | `UPDATE claude_sessions SET sd_id = NULL, released_at = NOW()` |
 | Check claims | `SELECT * FROM claude_sessions WHERE sd_id IS NOT NULL AND status != 'terminated'` |
 | Fix stuck | `UPDATE claude_sessions SET sd_id=NULL, status='idle', released_at=NOW() WHERE session_id='...'` |
+
+## Dispatch Suggestions (Advisory Rank Fit)
+
+SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001: an advisory-only ranking layer that
+suggests which live worker (model, effort) best fits a dispatchable SD — it never
+claims or auto-assigns. Lives in `lib/fleet/dispatch-suggestions.cjs`.
+
+- **Ranking**: `rankCandidatesForItem()` scores each live worker's fit against an
+  item's `metadata.min_tier_rank` floor using `rankForModelEffort()`'s STATIC 4-rung
+  rank space from `lib/fleet/tier-ladder.cjs` — the same space `min_tier_rank` is
+  calibrated in — not a live-relative dense rank, which would silently disagree with
+  that floor as fleet composition changes. Below-floor candidates are dropped;
+  exact-floor fit outranks over-qualified.
+- **Quota posture**: `fetchQuotaPosture()` folds in `LEAN_ACCOUNT_WEEKLY_PCT` so a
+  Fable candidate is penalized only when the fleet's weekly usage posture is lean on
+  that account, not unconditionally.
+- **Persistence**: `writeSuggestionRow()` writes a `session_coordination` row
+  (`payload.kind='dispatch_suggestion'`, broadcast target) via the canonical
+  `insertCoordinationRow()` choke point in `lib/coordinator/dispatch.cjs` — never a
+  raw `.from('session_coordination').insert()` (fails both the `no-raw-session-
+  coordination-insert` ESLint rule and the table's `subject`/`valid_target`
+  constraints).
+- **Overrule logging**: `scripts/dispatch-suggestion-override.mjs` lets a
+  coordinator record *why* it dispatched against a suggestion's top candidate
+  (`payload.kind='dispatch_override'`, references the original suggestion row by
+  UUID). `scripts/dispatch-suggestion-report.mjs` reads back the
+  suggestion-followed-vs-override ratio and top override reasons so the table isn't
+  write-only.
+- **Reading suggestions**: `node scripts/fleet-dashboard.cjs suggestions` (not
+  included in the `all` section, to avoid dashboard noise).
+- **Sourcing-side consumption**: `lib/sourcing-engine/refill-auto-promote.js`'s
+  `reorderByQuotaPosture()` reuses the same quota-posture signal to reorder (not
+  filter) the sourcing refill batch — pure, no new scoring formula.
+- **Scope note**: an earlier iteration of this SD also wired a worker
+  self-claim "pickup fit" defer mechanism into
+  `lib/checkin/steps/merged-pool-self-claim.cjs`. That was descoped after
+  discovering `lib/fleet/tier-backlog.cjs`'s `lowerTierBacklog()` +
+  `lib/fleet/claim-eligibility.cjs`'s `tierAxes` `reserved_no_lower_backlog` branch
+  (from SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E) already implement the same
+  work-down-only-when-lower-tier-backlogged intent — see
+  `dispatch-suggestions.cjs`'s header comment for the full account.
 
 ## Adam-Sourced Metadata Gates
 
