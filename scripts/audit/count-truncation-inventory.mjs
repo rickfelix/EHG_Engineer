@@ -49,8 +49,12 @@ function* walk(dir) {
   }
 }
 
-/** The statement window: the .select( line plus the rest of its chain (heuristic: until a line ending in ';' or blank). */
-function chainWindow(lines, idx) {
+/**
+ * The statement window: the .select( line plus the rest of its chain (heuristic: until a line
+ * ending in ';' or blank). Exported (QF-20260728-427) so a diff-scoped blocking lint can reuse
+ * the SAME window heuristic classifyChain expects, rather than re-deriving a second one.
+ */
+export function chainWindow(lines, idx) {
   // BACKWARD context, scoped to the CURRENT statement: a paginated site wraps the builder
   // in a callback (fetchAllPaginated(() => sb.from(...)) with .select( on a later line), so
   // the pagination marker sits above the .select line. The walk stops at a statement
