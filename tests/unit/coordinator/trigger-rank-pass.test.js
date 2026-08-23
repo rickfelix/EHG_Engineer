@@ -96,6 +96,39 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: trigger-rank-pass', 
     });
   });
 
+  // QF-20260823-561: env inheritance leaked the TRIGGERING session's identity into the spawned
+  // ranker, which stamped it onto dispatch_rank_by for the whole belt (live-measured: an
+  // Adam-originated SD mint stamped an Adam session id as the "writer" of every rank on that pass).
+  describe('triggerRankPass — QF-20260823-561: never leaks the triggering session\'s CLAUDE_SESSION_ID', () => {
+    it('strips CLAUDE_SESSION_ID from the spawned child env even when the caller process has one set', () => {
+      const calls = [];
+      const spawnFn = fakeSpawn(calls);
+      const original = process.env.CLAUDE_SESSION_ID;
+      process.env.CLAUDE_SESSION_ID = 'adam-0549d739';
+      try {
+        triggerRankPass({ reason: 'sd_created', sdKey: 'SD-TEST-002', spawnFn, lockPath });
+        expect(calls[0].options.env.CLAUDE_SESSION_ID).toBeUndefined();
+        expect(calls[0].options.env.RANK_TRIGGERED_BY).toBe('adam-0549d739');
+      } finally {
+        if (original === undefined) delete process.env.CLAUDE_SESSION_ID;
+        else process.env.CLAUDE_SESSION_ID = original;
+      }
+    });
+
+    it('sets RANK_TRIGGERED_BY to an empty string (never undefined) when the caller has no session id', () => {
+      const calls = [];
+      const spawnFn = fakeSpawn(calls);
+      const original = process.env.CLAUDE_SESSION_ID;
+      delete process.env.CLAUDE_SESSION_ID;
+      try {
+        triggerRankPass({ spawnFn, lockPath });
+        expect(calls[0].options.env.RANK_TRIGGERED_BY).toBe('');
+      } finally {
+        if (original !== undefined) process.env.CLAUDE_SESSION_ID = original;
+      }
+    });
+  });
+
   describe('triggerRankPass — fail-soft (TR-3)', () => {
     it('does not throw when spawnFn itself throws', () => {
       const spawnFn = () => { throw new Error('ENOENT: node not found'); };

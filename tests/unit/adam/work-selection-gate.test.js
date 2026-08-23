@@ -96,7 +96,9 @@ describe('FR-3 / TS-5: the evaluation is PERSISTED, not just logged', () => {
     // 5-argument shape means deleting or truncating the wiring turns this red — which is the
     // property the mutation showed was missing.
     const src = readFileSync(new URL('../../../scripts/coordinator-backlog-rank.mjs', import.meta.url), 'utf8');
-    expect(src).toMatch(/buildRankPatch\(\s*rank,\s*now,[^)]*deriveReasonBand\(d\),\s*gateByKey\.get\(d\.sd_key\)\s*\|\|\s*null\s*\)/);
+    // QF-20260823-561 added a 6th arg (RANK_TRIGGERED_BY) after this one — updated to match the
+    // new call shape while still pinning that gateByKey's lookup is wired in as the 5th arg.
+    expect(src).toMatch(/buildRankPatch\(\s*rank,\s*now,[^)]*deriveReasonBand\(d\),\s*gateByKey\.get\(d\.sd_key\)\s*\|\|\s*null,\s*RANK_TRIGGERED_BY\s*\)/);
     // ...and that the map it reads from is actually built from the gate's evaluations.
     expect(src).toMatch(/gateByKey\s*=\s*new Map\(\(selectionGate\?\.evaluations \|\| \[\]\)/);
   });
