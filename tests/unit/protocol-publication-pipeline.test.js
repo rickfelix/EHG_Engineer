@@ -157,7 +157,11 @@ describe('FR-4: --only scoped regeneration', () => {
     // still stated — truncation kept the superseded rule and discarded its repeal.)
     // -> 23 (SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002: CLAUDE_COORDINATOR_MANUAL.md +
     // CLAUDE_COORDINATOR_PROVENANCE.md, mirroring the Adam companion pattern.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(23);
+    // -> 24 (SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 FR-6: CLAUDE_SOLOMON_PROVENANCE.md. The
+    // restructure that fixed the above regression (26,029 -> 14,971 tokens) needed somewhere to
+    // put the historical/rationale prose it moved out of the gated file, without reopening the
+    // same over-cap problem the manual companion above was created to close.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(24);
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');
@@ -182,6 +186,10 @@ describe('FR-4: --only scoped regeneration', () => {
     // the Adam companions above — a future edit that drops them fails HERE, not silently.
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_MANUAL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_PROVENANCE.md');
+    // Same reasoning again: if CLAUDE_SOLOMON_PROVENANCE.md is ever dropped from the generated
+    // set, the historical/rationale prose it holds becomes an unread, unregenerated file nobody
+    // notices went stale — same class of harm as the CLAUDE_SOLOMON_MANUAL.md case above.
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_PROVENANCE.md');
   });
 });
 

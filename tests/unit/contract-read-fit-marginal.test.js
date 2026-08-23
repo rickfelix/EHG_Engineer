@@ -62,8 +62,16 @@ function makeProjectDir(contractBytes, status) {
 }
 
 describe('FR-1: the fit predictor margin-bands near-cap predictions to fits:null', () => {
-  it('CLAUDE_SOLOMON.md (near-cap) reads fits:null with basis predicted_marginal, not a confident boolean', () => {
-    const r = singleReadFit(repoRoot, 'CLAUDE_SOLOMON.md');
+  it('a near-cap contract (the original 25,236-token defect size) reads fits:null with basis predicted_marginal, not a confident boolean', () => {
+    // SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6, second pass): this used to read the LIVE repo's
+    // CLAUDE_SOLOMON.md directly — a fact-pin on that file's then-current size, not a test of the
+    // predictor's behavior (PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001: would fail the moment the file it
+    // pins moved, on EITHER side of the band, whether or not the predictor still behaves correctly).
+    // Switched to the same synthetic-fixture pattern the rest of this file already uses, sized to the
+    // file's own documented defect value (61013 B ~ 25,236 tokens, matching line ~140 below) so the
+    // marginal band is exercised deterministically regardless of the live contract's real size.
+    const dir = makeProjectDir(61013, { readCount: 1, lastReadWasPartial: false });
+    const r = singleReadFit(dir, 'CLAUDE_SOLOMON.md');
     expect(r.fits).toBeNull();
     expect(r.basis).toBe('predicted_marginal');
     expect(r.evidence).toBe('predicted');
