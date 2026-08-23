@@ -93,14 +93,26 @@ describe('createRCAGate — warn-only by default (LEO_RCA_GATE_ENFORCE unset)', 
   });
 
   it('STALE status does not block (excluded from the blocking set)', async () => {
-    // The gate's own query filters .in('status', ['OPEN','IN_REVIEW','CAPA_PENDING']), so a
-    // STALE-only backing table yields no rows back from a correctly-scoped query.
+    // The gate's own query filters .in('status', ['OPEN','IN_REVIEW','CAPA_PENDING','CAPA_APPROVED']),
+    // so a STALE-only backing table yields no rows back from a correctly-scoped query.
     const chain = createSupabaseChainMock({ result: { data: [], error: null } });
 
     const gate = createRCAGate(chain);
     const result = await gate.validator({ sdId: 'SD-TEST-005' });
 
     expect(result.gate_status).toBe('PASS');
+  });
+
+  it('CAPA_APPROVED status DOES block (explicit inclusion decision, PLAN-VERIFICATION VALIDATION c7ce2e04)', async () => {
+    const chain = createSupabaseChainMock({
+      result: { data: [{ id: 'rcr-approved', severity_priority: 'P0', status: 'CAPA_APPROVED' }], error: null }
+    });
+
+    const gate = createRCAGate(chain);
+    const result = await gate.validator({ sdId: 'SD-TEST-006' });
+
+    expect(result.gate_status).toBe('WARN');
+    expect(result.blocking_rcr_ids).toEqual(['rcr-approved']);
   });
 });
 

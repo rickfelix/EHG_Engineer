@@ -17,6 +17,16 @@
  *
  * @requires @supabase/supabase-js
  * @requires vitest
+ *
+ * SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 FR-2b note: this suite lives under
+ * tests/integration/**, which vitest.config.js excludes from the CI-blocking `unit` project —
+ * it exercises a genuinely different, CAPA-manifest-aware blocking semantic (its own query
+ * joins remediation_manifests) than the production RCA_GATE, which checks status membership
+ * only. The CI-blocking proof that the REAL production gate function (createRCAGate) behaves
+ * correctly lives at tests/unit/rca-gate-error-binding.test.js, which imports and calls it
+ * directly rather than reimplementing its query. This file's own "Gate Enforcement" describe
+ * block below intentionally tests a superset check and is not expected to track the production
+ * gate's exact blocking-status list 1:1.
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';

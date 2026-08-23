@@ -591,6 +591,17 @@ export async function completeQuickFix(qfId, options = {}) {
   // legitimately needing to touch one of these paths should be escalated to a full SD
   // (Work Item Routing risk-keyword rule already forces Tier 3 for these classes),
   // not force-completed autonomously.
+  //
+  // Residual risk (REGRESSION evidence, 62ea34ab): a working-tree-fallback diffSourceTier
+  // could in principle attribute unrelated dirty files to this QF (QF-20260706-632 near-miss).
+  // That specific incident is already fenced upstream at analyzeGitDiff's fallback (isInQFWorktree
+  // + a 30-file sanity cap, ~line 640-660 above) — the fallback only ever fires inside an
+  // ISOLATED QF worktree, so it cannot see a foreign session's files the way the original
+  // near-miss did (a shared main-tree run). A false-positive refusal here is still possible
+  // from stray uncommitted files WITHIN the QF's own worktree, but that is a bounded,
+  // conservative-direction failure (over-refusal, never under-refusal) — accepted rather than
+  // further filtered, since a stricter intersection would need a reference "intended scope" set
+  // this preflight has no way to know independently of the diff itself.
   const qfPreflight = evaluateQfEligibilityPreflight({
     filesChanged,
     diffSourceTier: diffAnalysis.diffSourceTier

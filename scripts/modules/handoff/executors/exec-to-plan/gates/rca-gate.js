@@ -2,7 +2,9 @@
  * RCA Gate Validation for EXEC-TO-PLAN
  * Part of SD-LEO-REFACTOR-EXECTOPLAN-001
  *
- * Validates that P0/P1 RCRs have verified CAPAs.
+ * Validates that no P0/P1 root_cause_reports rows sit in a blocking status
+ * (OPEN/IN_REVIEW/CAPA_PENDING/CAPA_APPROVED) for this SD. This checks status membership
+ * only — it does not join remediation_manifests or check any CAPA-verification field.
  *
  * SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 FR-2/FR-2b: this gate previously destructured
  * only `{ data }` from the Supabase response, never `error`. supabase-js does not throw on
@@ -23,7 +25,12 @@
 // Blocking statuses, per the existing precedent at lib/rca/rca-orchestrator.js:81
 // (['OPEN', 'IN_REVIEW', 'CAPA_PENDING']). STALE is explicitly EXCLUDED — a stale RCR has
 // gone dormant and re-litigating it at every EXEC-TO-PLAN is not this gate's job.
-const BLOCKING_STATUSES = ['OPEN', 'IN_REVIEW', 'CAPA_PENDING'];
+// CAPA_APPROVED is explicitly INCLUDED (PLAN-VERIFICATION VALIDATION evidence, c7ce2e04):
+// an approved-but-not-yet-verified corrective action is still unresolved from this gate's
+// perspective, same as CAPA_PENDING — the measured distribution (OPEN 633, IN_REVIEW 404,
+// STALE 228, CAPA_PENDING 4, RESOLVED 2) recorded zero CAPA_APPROVED rows at measurement
+// time, so this is a forward-looking decision, not one contradicted by observed data.
+const BLOCKING_STATUSES = ['OPEN', 'IN_REVIEW', 'CAPA_PENDING', 'CAPA_APPROVED'];
 
 /** True when hard enforcement is requested; default (unset/anything else) is warn-only. */
 function isEnforceEnabled() {
@@ -82,14 +89,14 @@ export function createRCAGate(supabase) {
             passed: false,
             score: 0,
             max_score: 100,
-            issues: [`${openRCRs.length} P0/P1 RCRs without verified CAPAs`],
+            issues: [`${openRCRs.length} P0/P1 RCR(s) in a blocking status (${BLOCKING_STATUSES.join('/')})`],
             warnings: [],
             gate_status: 'BLOCKED',
             open_rcr_count: openRCRs.length,
             blocking_rcr_ids: blockingIds
           };
         }
-        const warnMsg = `RCA_GATE_WARN: ${openRCRs.length} P0/P1 RCR(s) without verified CAPAs (ids: ${blockingIds.join(', ')}) — warn-only, LEO_RCA_GATE_ENFORCE is not set`;
+        const warnMsg = `RCA_GATE_WARN: ${openRCRs.length} P0/P1 RCR(s) in a blocking status (${BLOCKING_STATUSES.join('/')}) (ids: ${blockingIds.join(', ')}) — warn-only, LEO_RCA_GATE_ENFORCE is not set`;
         console.warn(`[RCAGate] ${warnMsg}`);
         return {
           passed: true,

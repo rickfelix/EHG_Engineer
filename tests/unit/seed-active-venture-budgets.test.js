@@ -1,9 +1,10 @@
 /**
  * SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 FR-1.
  * TS-1: seed covers active ventures only (88 of 152, excluding 62 cancelled + 2 paused).
- * TS-2/TS-12: seeded-then-exhausted still halts; seeded-adequate does not halt (covered by
- * budget-check.js's own pre-existing behavior — not re-tested here, this file tests the
- * SEEDING decision/shape only).
+ * TS-2/TS-12: seeded-then-exhausted still halts; seeded-adequate does not halt — covered
+ * directly at tests/unit/budget-check.test.js (no pre-existing test covered this before this
+ * SD; a prior version of this comment claimed otherwise and was corrected). This file tests
+ * the SEEDING decision/shape only.
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
