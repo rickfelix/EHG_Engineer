@@ -90,6 +90,28 @@ describe('the measurement carries real numbers', () => {
   });
 });
 
+describe('routed-lane exemption (QF-20260822-623, ruling flag 1d971fd3 / correlation b748d8e5)', () => {
+  it('excludes rows answering a fresh correlation (payload.reply_to set) from the count', async () => {
+    const rows = [oracleRow(), oracleRow({ reply_to: 'corr-1' }), oracleRow({ reply_to: 'corr-2' })];
+    const r = await checkConsultQuota(supabaseReturning({ rows }), { perDayMax: 20 });
+    expect(r.count).toBe(1); // only the self-initiated send counts
+  });
+
+  it('a day of only routed replies never trips the per-day ceiling', async () => {
+    const rows = Array.from({ length: 10 }, () => oracleRow({ reply_to: 'corr' }));
+    const r = await checkConsultQuota(supabaseReturning({ rows }), { perDayMax: 3 });
+    expect(r.allowed).toBe(true);
+    expect(r.count).toBe(0);
+  });
+
+  it('self-initiated sends still count toward the ceiling', async () => {
+    const rows = Array.from({ length: 4 }, () => oracleRow());
+    const r = await checkConsultQuota(supabaseReturning({ rows }), { perDayMax: 3 });
+    expect(r.allowed).toBe(false);
+    expect(r.count).toBe(4);
+  });
+});
+
 describe('measurement did not become enforcement', () => {
   it('an over-cap verdict is reported, not acted on — allowed:false is advisory here', async () => {
     // The caller in solomon-advisory.cjs logs this and proceeds to insert. This

@@ -342,7 +342,11 @@ async function checkConsultQuota(supabase, { sdKey = null, perSdMax = SOLOMON_PE
     // QF-20260705-488 (adversarial-review W2): an answer's originator CC copy also carries
     // payload.oracle=true — exclude via='cc_originator' rows so a CC'd answer consumes ONE
     // quota slot, not two (the per-day ceiling would otherwise halve in practice).
-    const rows = (data || []).filter((r) => !(r.payload && r.payload.via === 'cc_originator'));
+    // QF-20260822-623 (D3 quota ruling, flag 1d971fd3 / correlation b748d8e5): the quota counts
+    // SELF-INITIATED consults only. A row answering a fresh correlation (payload.reply_to set —
+    // pre-send reviews, chairman-bound TRUE-HOLDs, ratified completeness lanes) is a ROUTED
+    // reply, not a proactive send, and is exempt from both the per-day and per-SD ceilings.
+    const rows = (data || []).filter((r) => !(r.payload && r.payload.via === 'cc_originator') && !(r.payload && r.payload.reply_to));
     // FR-1: every REAL-SIGNAL return now carries available:true plus the observed count
     // and the ceiling it was compared against, so a caller can record what the gate WOULD
     // have refused without the gate refusing anything. `count` is the same post-dedup
