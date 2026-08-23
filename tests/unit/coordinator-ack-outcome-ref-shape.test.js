@@ -99,8 +99,12 @@ describe('FR-6 — outcome_sd_key is derived when the artifact is an SD/QF key',
       rows,
       from() {
         return {
-          upsert(row) { rows.push(row); return Promise.resolve({ error: null }); },
-          update() { return { in: () => Promise.resolve({ error: null }), eq: () => Promise.resolve({ error: null }) }; },
+          // QF-20260823-366: recordLedgerDecision now UPDATEs (never upserts) the existing pending
+          // row; captured here the same way the old upsert mock captured its row.
+          update(row) {
+            rows.push(row);
+            return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: [{ id: 'row-1' }], error: null }) }) }) };
+          },
           select() { return { eq: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) }; },
         };
       },
@@ -219,8 +223,10 @@ describe('FR-6 — only SD keys, only uppercase', () => {
   function capture() {
     const rows = [];
     return { rows, from: () => ({
-      upsert(r) { rows.push(r); return Promise.resolve({ error: null }); },
-      update: () => ({ in: () => Promise.resolve({ error: null }), eq: () => Promise.resolve({ error: null }) }),
+      update(r) {
+        rows.push(r);
+        return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: [{ id: 'row-1' }], error: null }) }) }) };
+      },
       select: () => ({ eq: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) }),
     }) };
   }
