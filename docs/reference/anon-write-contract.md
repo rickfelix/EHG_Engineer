@@ -2,9 +2,9 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.6.0
-**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, QF-20260817-752, SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001
-**Last Updated**: 2026-08-17
+**Version**: 1.7.0
+**Author**: SD-LEO-INFRA-DEAD-VENTURE-USER-001, SD-LEO-FIX-CLOSE-ANON-VENTURE-001, SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-001-E1, SD-FDBK-FIX-CRITICAL-PUBLIC-FEEDBACK-001, QF-20260817-752, SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001, QF-20260823-203
+**Last Updated**: 2026-08-23
 **Tags**: rls, postgres, anon, feedback, ingress
 
 ## 2026-08-17 update (SD-FDBK-FIX-EHG-ERRORCAPTUREPROVIDER-SENDS-001): the ErrorCaptureProvider caller is RESOLVED — retired, not repaired
@@ -511,3 +511,31 @@ secret, per the ownership migration above) or are refused; re-run
 policy set (see [The contract](#the-contract) for why that probe will now find nothing to measure).
 This closed an unbounded carve-out, not venture-ID spoofing on its own — but combined with the
 ownership migration above, ownership is now enforced for every remaining anon path.
+
+## Platform-change procedure: fleet-consumer census (QF-20260823-203)
+
+**The incident this closes:** the 08-15/16 anon-policy cutover (dropping `venture_user_insert_
+feedback`) was executed against `altifyai` only — the venture whose cutover happened to be
+in flight at the time. `apexniche-ai`'s widget was a second live caller of the SAME dropped
+policy (`apexniche-ai/src/ui/api/feedbackClient.ts`), stranded silently: its writes started
+42501-ing and its own error mapping misreported the total failure as ordinary rate-limiting,
+so nothing paged anyone. It took a separate architecture evaluation (2026-08-23) to notice.
+
+**The rule, going forward:** before applying any chairman-gated migration that narrows, drops,
+or replaces a policy/RPC signature on a table or function reachable by more than one venture
+(this contract's `feedback`/`venture_ingest_keys` family is the canonical example, but the rule
+is general), enumerate every known LIVE consumer first:
+
+1. `applications/registry.json` for every registered venture with a `local_path` — this is a
+   partial list only (registry drift is real; ApexNiche itself had NO entry until QF-20260823-203
+   added one, precisely because a missing registry row is invisible to this exact census step).
+2. A grep across each venture's own repo (not just this one) for the call site being changed —
+   e.g. `grep -rn "rest/v1/feedback\|venture_user_insert_feedback" <venture>/src` — since the
+   registry only proves a venture EXISTS, not which write paths it actually calls.
+3. For each live consumer found, either cut it over in the SAME change (as this migration did for
+   `altifyai`) or explicitly name it as a KNOWN, deliberately-deferred gap in the migration's own
+   header (the way `20260815_venture_user_feedback_ownership_rpc.sql` should have named
+   `apexniche-ai` alongside `altifyai`, and did not).
+
+A platform-side contract change that identifies only ONE consumer when more exist is not a
+smaller, safer change — it is the same defect class as this incident, just not yet discovered.
