@@ -665,8 +665,12 @@ export async function surfaceStaleRatifications(sb) {
  * crashes the tick (matching TS-8a/TS-8b's "first-ever manifest is a structural no-op" contract).
  */
 export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } = {}) {
-  const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
   try {
+    // REGRESSION finding (PLAN_VERIFICATION evidence row db85362a): moved inside the try so the
+    // docblock's "Fail-soft throughout" claim is literally true for every statement in this
+    // function, not just the ones after this line.
+    const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
+
     const { data, error } = await sb
       .from('chairman_ratifications')
       .select('id, encoded_at, encoded_ref, marker_text')
@@ -675,6 +679,10 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
       return { rows: [], count: 0, error: error.message };
     }
+    // REGRESSION finding: skip the manifest read + git subprocess spawns entirely when there is
+    // nothing encoded yet — avoids a standing per-tick cost once the migration lands and the
+    // table is legitimately empty or all-unencoded.
+    if (!data || data.length === 0) return { rows: [], count: 0 };
 
     let newerManifest = null;
     try {
