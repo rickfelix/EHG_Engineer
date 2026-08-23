@@ -329,7 +329,7 @@ export async function main(argv = process.argv, deps = {}) {
         try {
           const rows = await fetchAllPaginated(() => supabase
             .from('ventures')
-            .select('id, teardown_disposition')
+            .select('id, teardown_disposition') // schema-lint-disable-line: chairman-gated migration 20260823145041 not yet applied; isMissingColumnError() below handles the pre-apply 42703 tolerantly
             .in('id', terminalDeployed.map((v) => v.id)));
           teardownDispositionById = new Map(rows.map((r) => [r.id, r.teardown_disposition]));
         } catch (err) {
