@@ -1,5 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import { getFilteredRetrospective, resolveLeadToPlanAcceptedAt } from './retro-filters.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import {
+  getFilteredRetrospective,
+  resolveLeadToPlanAcceptedAt,
+  normalizePreflightRetroError,
+  isValidPreflightRetro,
+  runPreflightRetroCheck,
+} from './retro-filters.js';
 
 /**
  * SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001 — helper-level unit tests for the
@@ -447,5 +453,266 @@ describe('getFilteredRetrospective — naive timestamp UTC normalization (SD-LEO
     });
     const { retrospective } = await getFilteredRetrospective(sdUuid, null, supabase);
     expect(retrospective).toBeNull();
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PLAN-LEAD-RETRO-001 — normalizePreflightRetroError (FR-3).
+ */
+describe('normalizePreflightRetroError', () => {
+  it('extracts and collapses whitespace from an Error message', () => {
+    const err = new Error('line one\n  line two\ttabbed');
+    expect(normalizePreflightRetroError(err)).toBe('line one line two tabbed');
+  });
+
+  it('stringifies a non-Error value', () => {
+    expect(normalizePreflightRetroError('plain string error')).toBe('plain string error');
+  });
+
+  it('returns an empty string for null/undefined', () => {
+    expect(normalizePreflightRetroError(null)).toBe('');
+    expect(normalizePreflightRetroError(undefined)).toBe('');
+  });
+
+  it('truncates to 200 chars', () => {
+    const long = new Error('x'.repeat(500));
+    const result = normalizePreflightRetroError(long);
+    expect(result.length).toBe(200);
+    expect(result).toBe('x'.repeat(200));
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PLAN-LEAD-RETRO-001 — isValidPreflightRetro (FR-1).
+ * Must reject a stashed candidate on any mismatch against the SAME invariants
+ * getFilteredRetrospective enforces, falling back to "unset" behavior.
+ */
+describe('isValidPreflightRetro', () => {
+  const sdUuid = 'sd-uuid';
+  const cutoff = '2026-04-01T00:00:00.000Z';
+  const validCandidate = {
+    id: 'r1',
+    sd_id: sdUuid,
+    retro_type: 'SD_COMPLETION',
+    retrospective_type: null,
+    created_at: '2026-04-10T00:00:00.000Z',
+  };
+
+  it('accepts a fully-matching candidate', () => {
+    expect(isValidPreflightRetro(validCandidate, sdUuid, cutoff)).toBe(true);
+  });
+
+  it('accepts retrospective_type="SD_COMPLETION" (retro-agent enhance shape)', () => {
+    expect(isValidPreflightRetro({ ...validCandidate, retrospective_type: 'SD_COMPLETION' }, sdUuid, cutoff)).toBe(true);
+  });
+
+  it('rejects null/undefined/non-object candidates', () => {
+    expect(isValidPreflightRetro(null, sdUuid, cutoff)).toBe(false);
+    expect(isValidPreflightRetro(undefined, sdUuid, cutoff)).toBe(false);
+    expect(isValidPreflightRetro('not-an-object', sdUuid, cutoff)).toBe(false);
+  });
+
+  it('rejects a candidate missing an id', () => {
+    expect(isValidPreflightRetro({ ...validCandidate, id: undefined }, sdUuid, cutoff)).toBe(false);
+  });
+
+  it('rejects a candidate for the wrong SD (sd_id mismatch)', () => {
+    expect(isValidPreflightRetro({ ...validCandidate, sd_id: 'other-sd-uuid' }, sdUuid, cutoff)).toBe(false);
+  });
+
+  it('rejects a non-SD_COMPLETION retro_type', () => {
+    expect(isValidPreflightRetro({ ...validCandidate, retro_type: 'HANDOFF' }, sdUuid, cutoff)).toBe(false);
+  });
+
+  it('rejects a mismatched retrospective_type', () => {
+    expect(isValidPreflightRetro({ ...validCandidate, retrospective_type: 'PLAN_TO_EXEC' }, sdUuid, cutoff)).toBe(false);
+  });
+
+  it('rejects a stale candidate (created_at <= cutoff)', () => {
+    expect(isValidPreflightRetro({ ...validCandidate, created_at: cutoff }, sdUuid, cutoff)).toBe(false);
+    expect(isValidPreflightRetro({ ...validCandidate, created_at: '2026-03-01T00:00:00.000Z' }, sdUuid, cutoff)).toBe(false);
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PLAN-LEAD-RETRO-001 — runPreflightRetroCheck (FR-1/FR-2/FR-3 + rollback).
+ * A stateful Supabase mock so the second getFilteredRetrospective call (post-generateFn)
+ * can return a different row than the first — proving the re-query, not generateFn's own
+ * return value, is what the gate ends up trusting.
+ */
+function buildPreflightSupabase({ handoffRow = { accepted_at: '2026-04-01T00:00:00.000Z' }, retrospectiveSequence = [null] } = {}) {
+  let call = 0;
+  const updateSpy = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }));
+  const makeChainable = (resolveValue) => {
+    const c = {
+      select: () => c, eq: () => c, or: () => c, gt: () => c, is: () => c, order: () => c, limit: () => c,
+      maybeSingle: () => Promise.resolve(resolveValue),
+      single: () => Promise.resolve(resolveValue),
+    };
+    return c;
+  };
+  const supabase = {
+    from: vi.fn((table) => {
+      if (table === 'sd_phase_handoffs') {
+        return { select: () => makeChainable({ data: handoffRow, error: null }) };
+      }
+      if (table === 'retrospectives') {
+        return {
+          select: () => makeChainable({
+            data: retrospectiveSequence[Math.min(call, retrospectiveSequence.length - 1)],
+            error: null,
+          }),
+          update: updateSpy,
+        };
+      }
+      return { select: () => makeChainable({ data: null, error: null }) };
+    }),
+  };
+  return { supabase, updateSpy, advanceCall: () => { call += 1; } };
+}
+
+describe('runPreflightRetroCheck', () => {
+  const sdUuid = 'sd-uuid';
+  const sdCreatedAt = '2026-03-01T00:00:00.000Z';
+
+  afterEach(() => {
+    delete process.env.LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN;
+    vi.restoreAllMocks();
+  });
+
+  it('skips generation and stashes options._preflightRetro when a qualifying retro already exists', async () => {
+    const existing = { id: 'r1', sd_id: sdUuid, retro_type: 'SD_COMPLETION', retrospective_type: null, created_at: '2026-04-10T00:00:00.000Z' };
+    const { supabase } = buildPreflightSupabase({ retrospectiveSequence: [existing] });
+    const generateFn = vi.fn();
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(generateFn).not.toHaveBeenCalled();
+    expect(options._preflightRetro).toBe(existing);
+    expect(options._preflightRetroError).toBeUndefined();
+  });
+
+  it('could-not-check path: a query error on the FIRST check skips generation entirely and stashes nothing (INV-001)', async () => {
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'sd_phase_handoffs') {
+          return { select: () => ({ eq: function () { return this; }, order: function () { return this; }, limit: function () { return this; }, maybeSingle: () => Promise.resolve({ data: { accepted_at: '2026-04-01T00:00:00.000Z' }, error: null }) }) };
+        }
+        if (table === 'retrospectives') {
+          const c = { select: () => c, eq: () => c, or: () => c, gt: () => c, is: () => c, order: () => c, limit: () => c, maybeSingle: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }) };
+          return c;
+        }
+        return { select: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) };
+      }),
+    };
+    const generateFn = vi.fn();
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(generateFn).not.toHaveBeenCalled();
+    expect(options._preflightRetro).toBeUndefined();
+    expect(options._preflightRetroError).toBeUndefined();
+  });
+
+  it('generates, re-queries (not generateFn\'s own return), stashes the fresh retro, and best-effort stamps it (FR-1/FR-2)', async () => {
+    const generated = { id: 'r2', sd_id: sdUuid, retro_type: 'SD_COMPLETION', retrospective_type: null, created_at: '2026-04-10T00:00:00.000Z', metadata: { foo: 'bar' } };
+    const { supabase, updateSpy, advanceCall } = buildPreflightSupabase({ retrospectiveSequence: [null, generated] });
+    const generateFn = vi.fn(async () => {
+      advanceCall();
+      return { thisReturnValue: 'must be ignored' };
+    });
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(generateFn).toHaveBeenCalledTimes(1);
+    expect(options._preflightRetro).toBe(generated);
+    expect(options._preflightRetroError).toBeUndefined();
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ foo: 'bar', generated_by: 'preflight_autogen', preflight_generated_at: expect.any(String) }),
+      })
+    );
+  });
+
+  it('a stamp-write failure after successful generation is non-blocking — _preflightRetro stays stashed', async () => {
+    const generated = { id: 'r3', sd_id: sdUuid, retro_type: 'SD_COMPLETION', retrospective_type: null, created_at: '2026-04-10T00:00:00.000Z' };
+    const { supabase } = buildPreflightSupabase({ retrospectiveSequence: [null, generated] });
+    // Override retrospectives.update() to throw synchronously (stamp-write failure).
+    // `call` lives OUTSIDE supabase.from so it survives across the two separate
+    // .from('retrospectives') invocations (one per getFilteredRetrospective call).
+    let call = 0;
+    supabase.from = vi.fn((table) => {
+      if (table === 'sd_phase_handoffs') {
+        return { select: () => ({ eq: function () { return this; }, order: function () { return this; }, limit: function () { return this; }, maybeSingle: () => Promise.resolve({ data: { accepted_at: '2026-04-01T00:00:00.000Z' }, error: null }) }) };
+      }
+      if (table === 'retrospectives') {
+        return {
+          select: () => {
+            const data = call === 0 ? null : generated;
+            call += 1;
+            const chain = { eq: () => chain, or: () => chain, gt: () => chain, is: () => chain, order: () => chain, limit: () => chain, maybeSingle: () => Promise.resolve({ data, error: null }) };
+            return chain;
+          },
+          update: () => { throw new Error('stamp write failed'); },
+        };
+      }
+      return { select: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) };
+    });
+    const generateFn = vi.fn(async () => {});
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(options._preflightRetro).toBe(generated);
+    expect(options._preflightRetroError).toBeUndefined();
+  });
+
+  it('generateFn throws — stashes a normalized options._preflightRetroError, never options._preflightRetro', async () => {
+    const { supabase } = buildPreflightSupabase({ retrospectiveSequence: [null] });
+    const generateFn = vi.fn(async () => { throw new Error('RETRO sub-agent returned FAIL: thin analysis\n  section missing'); });
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(options._preflightRetro).toBeUndefined();
+    expect(options._preflightRetroError).toBe('RETRO sub-agent returned FAIL: thin analysis section missing');
+  });
+
+  it('generation ran but the re-query still finds nothing qualifying — stashes neither field', async () => {
+    const { supabase } = buildPreflightSupabase({ retrospectiveSequence: [null, null] });
+    const generateFn = vi.fn(async () => {});
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(options._preflightRetro).toBeUndefined();
+    expect(options._preflightRetroError).toBeUndefined();
+  });
+
+  it('LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN: always calls generateFn and never stashes anything (rollback contract)', async () => {
+    process.env.LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN = '1';
+    const existing = { id: 'r1', sd_id: sdUuid, retro_type: 'SD_COMPLETION', retrospective_type: null, created_at: '2026-04-10T00:00:00.000Z' };
+    const { supabase } = buildPreflightSupabase({ retrospectiveSequence: [existing] });
+    const generateFn = vi.fn(async () => {});
+    const options = {};
+
+    await runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' });
+
+    expect(generateFn).toHaveBeenCalledTimes(1);
+    expect(options._preflightRetro).toBeUndefined();
+    expect(options._preflightRetroError).toBeUndefined();
+  });
+
+  it('LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN: a generateFn failure is swallowed (non-blocking)', async () => {
+    process.env.LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN = '1';
+    const { supabase } = buildPreflightSupabase({ retrospectiveSequence: [null] });
+    const generateFn = vi.fn(async () => { throw new Error('boom'); });
+    const options = {};
+
+    await expect(runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey: null, options, generateFn, label: 'TEST' })).resolves.toBeUndefined();
+    expect(options._preflightRetroError).toBeUndefined();
   });
 });

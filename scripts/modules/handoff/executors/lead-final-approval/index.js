@@ -10,6 +10,7 @@
 
 import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
+import { runPreflightRetroCheck } from '../../retro-filters.js';
 
 /**
  * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
@@ -243,53 +244,61 @@ async function rescoreOriginalSD(sd, supabase) {
 }
 
 /**
+ * Runs retrospective-generator.js for the completing SD (SD-LEO-INFRA-PROGRAMMATIC-TOOL-
+ * CALLING-001), generating SD-specific key_learnings, action_items, and improvement_areas
+ * that reference actual changed files. THROWS on a non-zero exit / missing stdout — this is
+ * the shared, throwing core both call sites below build on; it is not itself fail-safe.
+ *
+ * @param {Object} sd - The completing SD
+ * @returns {Promise<void>}
+ */
+async function generateProgrammaticRetrospective(sd) {
+  const sdKey = sd.sd_key || sd.id;
+  const branch = `feat/${sdKey}`;
+
+  const { spawnSync } = await import('child_process');
+  const { fileURLToPath } = await import('url');
+
+  const scriptUrl = new URL(
+    '../../../../programmatic/retrospective-generator.js',
+    import.meta.url
+  );
+  const scriptPath = fileURLToPath(scriptUrl);
+
+  const result = spawnSync(
+    process.execPath,
+    [scriptPath, '--sd-id', sdKey, '--branch', branch],
+    { encoding: 'utf8', timeout: 60000, env: process.env }
+  );
+
+  if (result.status !== 0 || !result.stdout) {
+    const detail = result.stderr ? result.stderr.substring(0, 200) : `exit ${result.status}`;
+    throw new Error(`retrospective-generator.js failed: ${detail}`);
+  }
+}
+
+/**
  * Auto-populate retrospective via programmatic retrospective generator.
  * SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001
  *
- * Runs retrospective-generator.js for the completing SD, generating
- * SD-specific key_learnings, action_items, and improvement_areas that
- * reference actual changed files. Prevents RETROSPECTIVE_QUALITY_GATE failures.
- *
- * Fail-safe: all errors caught and logged; never blocks SD completion.
+ * POST-COMPLETION enrichment only (called after gates already passed, see call site below) —
+ * re-populates a retrospective that already satisfied RETROSPECTIVE_EXISTS with richer,
+ * SD-specific content. Fail-safe: all errors caught and logged; never blocks SD completion.
+ * Distinct from the PRE-GATE preflight in setup() below (SD-LEO-INFRA-PLAN-LEAD-RETRO-001),
+ * which is what actually prevents RETROSPECTIVE_EXISTS from hard-rejecting a missing retro —
+ * this post-completion call runs too late to ever unblock that gate.
  *
  * @param {Object} sd - The completing SD
  */
 async function runProgrammaticRetrospective(sd) {
   const sdKey = sd.sd_key || sd.id;
-  const branch = `feat/${sdKey}`;
-
   console.log('\n📝 PROGRAMMATIC RETROSPECTIVE: Auto-populating retrospective');
   console.log('-'.repeat(50));
-  console.log(`   SD: ${sdKey} | Branch: ${branch}`);
+  console.log(`   SD: ${sdKey}`);
 
   try {
-    const { spawnSync } = await import('child_process');
-    const { fileURLToPath } = await import('url');
-
-    const scriptUrl = new URL(
-      '../../../../programmatic/retrospective-generator.js',
-      import.meta.url
-    );
-    const scriptPath = fileURLToPath(scriptUrl);
-
-    const result = spawnSync(
-      process.execPath,
-      [scriptPath, '--sd-id', sdKey, '--branch', branch],
-      { encoding: 'utf8', timeout: 60000, env: process.env }
-    );
-
-    if (result.status === 0 && result.stdout) {
-      try {
-        const retroData = JSON.parse(result.stdout.trim());
-        console.log(`   ✅ Retrospective generated: ID=${retroData.retrospective_id}, quality=${retroData.quality_score}/100`);
-      } catch (e) {
-        console.log('   ✅ Retrospective generator ran (output parse skipped)');
-        console.debug('[LeadFinalApproval] retrospective JSON parse suppressed:', e?.message || e);
-      }
-    } else {
-      console.log(`   ⚠️  Retrospective generator exited ${result.status} (non-blocking)`);
-      if (result.stderr) console.log(`   Stderr: ${result.stderr.substring(0, 200)}`);
-    }
+    await generateProgrammaticRetrospective(sd);
+    console.log('   ✅ Retrospective generator ran');
   } catch (retroError) {
     console.log(`   ⚠️  Programmatic retrospective failed (non-blocking): ${retroError.message}`);
   }
@@ -391,6 +400,22 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     // Store SD for use in gates
     options._sd = sd;
+
+    // SD-LEO-INFRA-PLAN-LEAD-RETRO-001 FR-1: preflight-generate a qualifying retrospective
+    // before RETROSPECTIVE_EXISTS (gates.js) runs, using the SAME shared check/generate/
+    // stash contract as PLAN-TO-LEAD's setup() — this is the actual pre-gate hook for this
+    // handoff type; runProgrammaticRetrospective (below) only runs POST-completion and can
+    // never prevent RETROSPECTIVE_EXISTS from hard-rejecting a missing retro.
+    await runPreflightRetroCheck({
+      supabase: this.supabase,
+      sdUuid: sd.id || sdId,
+      sdCreatedAt: sd.created_at || null,
+      sdKey: sd.sd_key || null,
+      options,
+      label: 'LEAD-FINAL-APPROVAL',
+      generateFn: () => generateProgrammaticRetrospective(sd),
+    });
+
     return null;
   }
 

@@ -6,7 +6,7 @@
  */
 
 import { isInfrastructureSDSync, getThresholdProfile } from '../../../../sd-type-checker.js';
-import { getFilteredRetrospective } from '../../../retro-filters.js';
+import { getFilteredRetrospective, isValidPreflightRetro } from '../../../retro-filters.js';
 
 /**
  * Create the RETROSPECTIVE_QUALITY_GATE validator
@@ -53,8 +53,21 @@ export function createRetrospectiveQualityGate(supabase) {
       // retro_type='SD_COMPLETION') are correctly excluded by the timestamp filter.
       const sdUuid = ctx.sd?.id || ctx.sdId;
       const sdCreatedAt = ctx.sd?.created_at || null;
-      const { retrospective, leadToPlanAcceptedAt, error: retroError } =
-        await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, ctx.sd?.sd_key || null);
+      const sdKey = ctx.sd?.sd_key || null;
+
+      // SD-LEO-INFRA-PLAN-LEAD-RETRO-001 FR-1: the gate still runs its own authoritative
+      // getFilteredRetrospective query every time (unchanged) — it only additionally trusts
+      // ctx.options._preflightRetro when present AND re-validated against this SAME query's
+      // own cutoff/invariants (not merely "has an id"): a stale, wrong-SD, or wrong-type
+      // object is treated identically to "unset" and this query's own result is used
+      // instead. Skipped entirely under the rollback env var, which restores this gate's
+      // pre-SD behavior (its own query only, never trusting ctx).
+      const queried = await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, sdKey);
+      const { leadToPlanAcceptedAt, error: retroError } = queried;
+      const stashed = ctx.options?._preflightRetro;
+      const trustStash = !process.env.LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN
+        && isValidPreflightRetro(stashed, sdUuid, leadToPlanAcceptedAt);
+      const retrospective = trustStash ? stashed : queried.retrospective;
 
       if (retroError && retroError.code !== 'PGRST116') {
         console.log(`   ⚠️  Retrospective query error: ${retroError.message}`);
@@ -63,14 +76,26 @@ export function createRetrospectiveQualityGate(supabase) {
       // Zero-rows HARD-FAIL: never fall through to validateSDCompletionReadiness(sd, null),
       // which would score on SD quality alone and silently pass the gate.
       if (!retrospective) {
-        const sdKey = ctx.sd?.sd_key || ctx.sdId || 'unknown';
+        const displaySdKey = sdKey || ctx.sdId || 'unknown';
         console.log('   ❌ No qualifying SD-completion retrospective found');
         console.log(`      leadToPlanAcceptedAt cutoff: ${leadToPlanAcceptedAt}`);
+        // SD-LEO-INFRA-PLAN-LEAD-RETRO-001 FR-3: append the normalized preflight-generation
+        // error (when the preflight actually attempted and failed) to this SAME issues[0]
+        // string, after the UNCHANGED prefix — never to remediation, never duplicated — so
+        // the 43/30d baseline's counting query (which matches on this stable prefix) keeps
+        // matching post-ship.
+        const preflightError = process.env.LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN
+          ? null
+          : ctx.options?._preflightRetroError;
+        const baseIssue = `No SD-completion retrospective found for SD ${displaySdKey} (must be retro_type=SD_COMPLETION with created_at > ${leadToPlanAcceptedAt})`;
+        const issue = preflightError
+          ? `${baseIssue} -- preflight auto-generation was attempted and failed: ${preflightError}`
+          : baseIssue;
         return {
           passed: false,
           score: 0,
           max_score: 100,
-          issues: [`No SD-completion retrospective found for SD ${sdKey} (must be retro_type=SD_COMPLETION with created_at > ${leadToPlanAcceptedAt})`],
+          issues: [issue],
           warnings: [],
           remediation: `Run: node scripts/generate-retrospective.js ${sdUuid}\n`
             + '   A handoff-time retrospective does not satisfy this gate — you must create a proper SD-completion retrospective authored after the LEAD-TO-PLAN acceptance timestamp.'
