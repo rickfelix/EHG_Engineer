@@ -404,6 +404,58 @@ staged separately in `docs/audits/sensitive-table-write-grant-audit.md`
 (SD-LEO-INFRA-GOV-TABLE-WRITE-GRANT-REVOKE-001). Both remain unapplied; applying either first makes
 the other's `REVOKE TRUNCATE` on those 6 tables a harmless no-op. Apply both for full closure.
 
+## Applying `20260823_eva_stage_gate_attempts.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260823_eva_stage_gate_attempts.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001, T-minus P1 evidence layer.) Adds `eva_stage_gate_attempts`
+— a durable, attributable, immutable-once-finalized record per gate-evaluation ATTEMPT — as a NEW
+side table, not a retrofit of `eva_stage_gate_results`. LEAD-phase premise verification found the
+originally-chartered retrofit non-executable (930 legacy `venture_id`-NULL rows collapse into 46
+duplicate groups; the proposed unique key omitted `venture_id`), and a prospective TESTING pass
+found the "run_id" concept has no production analog (the only traversal-scoped function is dead
+code; every real gate-writing path is per-stage). See the migration file's own header for the full
+reasoning.
+
+**Purely additive.** No ALTER/DROP against `eva_stage_gate_results` in either direction; that
+table's 1,796 existing rows, schema, indexes, and trigger are untouched. Application code
+dual-writes to both tables going forward (`recordGateAttempt` in
+`lib/eva/artifact-persistence-service.js`) — already merged and live in code, inert until this
+migration is applied (the RPC calls will 42883 until then, caught and logged loudly, never
+silently swallowed).
+
+**Run the proof sequence — both are transactional, ROLLBACK-guarded, safe to re-run any time:**
+
+```
+node database/chairman-gated/20260823_eva_stage_gate_attempts_dry_run.mjs
+node database/chairman-gated/20260823_eva_stage_gate_attempts_updown_roundtrip.mjs
+```
+
+The dry-run executes the real UP body (table, indexes, trigger, functions, RLS) plus its own
+`DO $verify$` block's behavioural proofs (finalize-immutability rejection, duplicate-attempt-number
+rejection, atomic allocation) against the real database inside a transaction that always
+`ROLLBACK`s. The round-trip proof additionally runs the real DOWN body afterward and asserts the
+table and all 3 functions are gone, proving the DOWN file is a genuine inverse rather than
+`IF EXISTS` no-ops that would "pass" even if its object names had drifted from the UP file's.
+
+**Also fixed while wiring the dual-write (TESTING F11):** the taste-gate call site in
+`eva-orchestrator.js` passed `details:` where `recordGateResult` destructures `criteria:` — an
+unrecognized key silently dropped, so every taste-gate row wrote `gate_criteria=null` despite real
+evidence being available. Corrected to the recognized param name for both the existing and the new
+write path.
+
+**Deliberately not wired in this SD, documented as a follow-up (FR-6 partial):** stamping a
+chairman-override attempt's `attempt_id` into `chairman_decisions.context` /
+`venture_artifacts.metadata`. `recordGateOverride` does not itself write `chairman_decisions` (that
+INSERT happens in a different, not-yet-located call path) — see
+`docs/reference/eva-stage-gate-tables-reader-census.md` for the full reader/writer census and the
+list of what a follow-up SD should pick up.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
