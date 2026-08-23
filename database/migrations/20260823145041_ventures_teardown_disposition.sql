@@ -59,8 +59,16 @@
 -- TESTING F2: kill_venture()'s signature is UNCHANGED -- CREATE OR REPLACE preserves it; the
 -- existing UPDATE gains a COALESCE-style "set only if currently NULL" clause so a disposition
 -- set by an earlier, separate action (e.g. a pre-emptive 'retained') is never overwritten.
-
-BEGIN;
+--
+-- PLAN_VERIFICATION VALIDATION V2 (fb708e20): NO EXPLICIT BEGIN/COMMIT -- scripts/apply-
+-- migration.js already wraps the whole apply (advisory locks, before/after object-definition
+-- capture, this SQL, the audit-row write, and the apply-token consumption UPDATE) in ONE outer
+-- transaction on a single connection. An embedded BEGIN here is a harmless no-op warning, but
+-- an embedded COMMIT would prematurely end that outer transaction -- everything after it
+-- (the audit write, the token-consumption UPDATE) would then run outside the transaction the
+-- error-path ROLLBACK assumes still covers them, silently breaking the atomicity the apply
+-- tooling's audit trail depends on. Matches the companion migration's own explicit convention
+-- (20260823145530_marketlens_teardown_disposition_CHAIRMAN_GATED.sql).
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- 1. New columns on ventures
@@ -443,8 +451,6 @@ BEGIN
   );
 END;
 $function$;
-
-COMMIT;
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- Verification queries (run separately after applying)
