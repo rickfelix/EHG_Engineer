@@ -54,6 +54,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { recordHistoricalRatification, markRatificationEncoded } from '../../lib/chairman/ratification-writer.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 function makeClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -130,4 +131,7 @@ async function main() {
   console.log(`Backfilled ${inserted} chairman_ratifications rows (all encoded_at populated).`);
 }
 
-main().catch((e) => { console.error('BACKFILL FAILED:', e && e.message); process.exit(1); });
+// Only run when invoked directly — importing for tests must not execute a live backfill.
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('BACKFILL FAILED:', e && e.message); process.exit(1); });
+}

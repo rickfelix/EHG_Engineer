@@ -634,10 +634,15 @@ export async function surfaceParkedChairmanSms(sb) {
 export async function surfaceStaleRatifications(sb) {
   try {
     const { data, error } = await sb
-      .from('chairman_ratifications')
+      .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
       .select('id, ratified_at, target_contracts')
       .is('encoded_at', null)
-      .order('ratified_at', { ascending: true });
+      .order('ratified_at', { ascending: true })
+      // .limit(999): a chairman ratification ledger, expected cardinality in the dozens over
+      // years — explicit bound (count-truncation-diff-lint) rather than fetchAllPaginated, which
+      // would lose the error.code-based 42P01/PGRST205 branch below (it re-throws with only
+      // .message preserved).
+      .limit(999);
     if (error) {
       if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
       return { rows: [], count: 0, error: error.message };
@@ -672,9 +677,12 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
 
     const { data, error } = await sb
-      .from('chairman_ratifications')
+      .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
       .select('id, encoded_at, encoded_ref, marker_text')
-      .not('encoded_at', 'is', null);
+      .not('encoded_at', 'is', null)
+      // .limit(999): same bounded-ledger rationale as surfaceStaleRatifications above
+      // (count-truncation-diff-lint).
+      .limit(999);
     if (error) {
       if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
       return { rows: [], count: 0, error: error.message };

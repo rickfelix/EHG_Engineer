@@ -12,6 +12,7 @@
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = 'd1b8f30e-de76-4932-9c35-8745542cd716';
 const SD_KEY = 'SD-LEO-FIX-ENF-TRUSTS-FILE-001';
@@ -194,4 +195,6 @@ async function main() {
   console.log('TESTING row:', testing.id, '| verdict:', testing.verdict, '| confidence:', testing.confidence, '| phase:', testing.phase);
 }
 
-main().catch((e) => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+}
