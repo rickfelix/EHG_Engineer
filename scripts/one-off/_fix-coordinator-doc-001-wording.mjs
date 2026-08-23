@@ -15,6 +15,7 @@
 // drift check. Dry-run by default; pass --apply to write.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const APPLY = process.argv.includes('--apply');
 const ROW_ID = 634;
@@ -70,4 +71,6 @@ async function main() {
   console.log('[APPLIED] Row 634 updated.');
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}
