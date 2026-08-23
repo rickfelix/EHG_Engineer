@@ -177,16 +177,25 @@ CREATE TABLE IF NOT EXISTS public.operations_audit_log (
   performed_at TIMESTAMP DEFAULT now()
 );
 
--- kill_venture()'s SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001 cascade-cancel step. Minimal --
--- only the columns that UPDATE statement touches.
+-- kill_venture()'s SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001 cascade-cancel step.
+-- CI FAILURE (same shared-database race class as F-EXEC-1, different table): this file shares
+-- the ephemeral DB with tests/ddl/plan-of-record-remainder-v2-ddl.db.test.js, which ALSO
+-- declares public.strategic_directives_v2 -- with sd_key TEXT PRIMARY KEY, a genuinely
+-- different primary key (column AND type) than an id UUID PRIMARY KEY declaration here would
+-- be. Converging on ITS shape (this SD's own kill_venture() UPDATE never references id or
+-- sd_key -- only venture_id -- so this is a pure compatibility choice, not a functional one)
+-- and adding this file's own columns via ADD COLUMN IF NOT EXISTS makes the pair
+-- order-independent, same fix pattern as the ventures table above.
 CREATE TABLE IF NOT EXISTS public.strategic_directives_v2 (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  venture_id UUID,
-  status TEXT,
-  cancellation_reason TEXT,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  updated_at TIMESTAMPTZ DEFAULT now()
+  sd_key TEXT PRIMARY KEY,
+  status TEXT
 );
+
+ALTER TABLE public.strategic_directives_v2
+  ADD COLUMN IF NOT EXISTS venture_id UUID,
+  ADD COLUMN IF NOT EXISTS cancellation_reason TEXT,
+  ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
 -- kill_venture()'s guarded eva_events insert: WHERE EXISTS (SELECT 1 FROM eva_ventures WHERE id = p_venture_id).
 CREATE TABLE IF NOT EXISTS public.eva_ventures (

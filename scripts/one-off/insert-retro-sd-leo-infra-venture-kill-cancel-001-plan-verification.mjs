@@ -44,6 +44,7 @@ import { getFilteredRetrospective } from '../modules/handoff/retro-filters.js';
 import { RetrospectiveQualityRubric } from '../modules/rubrics/retrospective-quality-rubric.js';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -469,4 +470,6 @@ async function main() {
   console.log('SUPERSEDED_PRIOR_SD_COMPLETION', AUTO_RETRO_ID, '(left unmutated)');
 }
 
-main().catch((e) => { console.error('ERROR:', e); process.exitCode = 1; });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('ERROR:', e); process.exitCode = 1; });
+}
