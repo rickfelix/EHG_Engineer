@@ -8,13 +8,29 @@
  * facts and that the full audit detects a seeded drift condition while leaving genuinely
  * unmeasurable facts as 'unknown'.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+// QF-20260728-818: resolveFacts now calls computeBuildGauge (lib/vision/vdr-registry.js) to
+// determine visionGaugeInputAvailable. Its real implementation gates on assertRegistryCoherence
+// matching the live VDR_REGISTRY exactly, which a fixture row can't satisfy — mock it directly
+// so each test controls availability without depending on that registry's contents. Default
+// (unset) resolves available:false, matching this file's pre-existing behavior (no test here
+// previously modeled a resolvable vision-ladder DB source).
+vi.mock('../../../lib/vision/vdr-registry.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, computeBuildGauge: vi.fn() };
+});
+import { computeBuildGauge } from '../../../lib/vision/vdr-registry.js';
 import {
   resolveFacts,
   runSelfAdherenceReview,
   recordVisionGaugeRead,
 } from '../../../scripts/adam-self-adherence-review.mjs';
 import { runAdherenceProbes, hasDrift } from '../../../lib/adam/adherence-probes.js';
+
+beforeEach(() => {
+  computeBuildGauge.mockReset();
+  computeBuildGauge.mockResolvedValue({ available: false, measured_at_note: 'mock default: unavailable' });
+});
 
 /**
  * Build a chainable supabase mock. `spec` maps table name -> a handler that returns the
@@ -212,6 +228,13 @@ describe('resolveFacts (FR-1b/2/3/4) — measured vs honestly-unknown', () => {
       issue_patterns: ROWS([]),
       audit_log: COUNT(0), // no Adam vision-read marker in the window (a MEASURED absence)
     });
+    // QF-20260728-818: this test models a READABLE gauge that simply wasn't read — force
+    // computeBuildGauge available:true so the new visionGaugeInputAvailable===false branch does
+    // not misclassify this as unmeasurable instead of the measured FAIL under test. Mocked (not
+    // seeded via vision_ladder_* tables) because assertRegistryCoherence gates on an exact-set
+    // match against the real VDR_REGISTRY, which a fixture row can't satisfy without duplicating
+    // that registry here.
+    computeBuildGauge.mockResolvedValueOnce({ available: true });
     const facts = await resolveFacts(sb, { windowDays: 1 });
     // Post-FR-1: a measured absence of the durable read-marker is a falsifiable FAIL, not an
     // unknown-forever gauge. ("An unknown-forever probe is worse than none.")
