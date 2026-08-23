@@ -51,6 +51,9 @@ import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm
 // SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive STALE escalation for a parked chairman
 // SMS row unresolved >=24h, layered onto the existing QUIET_TICK_SMS_PARKED line below.
 import { isStaleParkedSms } from '../lib/governance/parked-sms-stall.mjs';
+// SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: additive STALE escalation for a chairman
+// ratification unencoded >=24h, mirroring the parked-SMS-STALE pattern immediately above.
+import { isStaleRatification, formatRatificationStaleLine } from '../lib/governance/ratification-stall.mjs';
 // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: the durable standing priority. Surfaced ABOVE the inbox
 // below, because the measured failure was the queue setting the agenda — a priority printed beneath
 // a dozen inbound rows has been filed, not surfaced.
@@ -621,6 +624,108 @@ export async function surfaceParkedChairmanSms(sb) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: chairman ratifications unencoded >=24h.
+ * FAIL-SOFT on a table-absent error (42P01/PGRST205) -- the chairman-gated migration is STAGED
+ * NOT APPLIED until the chairman signs it, so this degrades to a no-op until then, never a
+ * crash. Any OTHER error is surfaced via the `error` field (same discard-class fix applied to
+ * QF-20260822-215 this session: table-absent and genuine-failure must never be conflated).
+ */
+export async function surfaceStaleRatifications(sb) {
+  try {
+    const { data, error } = await sb
+      .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
+      .select('id, ratified_at, target_contracts')
+      .is('encoded_at', null)
+      .order('ratified_at', { ascending: true })
+      // .limit(999): a chairman ratification ledger, expected cardinality in the dozens over
+      // years — explicit bound (count-truncation-diff-lint) rather than fetchAllPaginated, which
+      // would lose the error.code-based 42P01/PGRST205 branch below (it re-throws with only
+      // .message preserved).
+      .limit(999);
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
+      return { rows: [], count: 0, error: error.message };
+    }
+    const nowMs = Date.now();
+    const rows = (data || [])
+      .map((r) => ({ ...r, ageHours: (nowMs - new Date(r.ratified_at).getTime()) / 3_600_000 }))
+      .filter((r) => isStaleRatification(r.ageHours, null));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
+/**
+ * SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: production I/O wrapper around the pure
+ * lib/chairman/ratification-regression-detector.mjs (which is deliberately DB/fs-free per its own
+ * docblock — this is the only call site that feeds it live data, mirroring how
+ * surfaceStaleRatifications above wraps lib/governance/ratification-stall.mjs's pure predicate).
+ *
+ * Sources the two most recent claude-generation-manifest.json snapshots from git history (per the
+ * PRD's own implementation guidance) for Stage 1; reads each already-encoded row's live
+ * target_file from disk for Stage 2. Fail-soft throughout: a missing table, missing manifest,
+ * missing prior commit, or missing file never throws — it only narrows what can be checked, never
+ * crashes the tick (matching TS-8a/TS-8b's "first-ever manifest is a structural no-op" contract).
+ */
+export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } = {}) {
+  try {
+    // REGRESSION finding (PLAN_VERIFICATION evidence row db85362a): moved inside the try so the
+    // docblock's "Fail-soft throughout" claim is literally true for every statement in this
+    // function, not just the ones after this line.
+    const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
+
+    const { data, error } = await sb
+      .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
+      .select('id, encoded_at, encoded_ref, marker_text')
+      .not('encoded_at', 'is', null)
+      // .limit(999): same bounded-ledger rationale as surfaceStaleRatifications above
+      // (count-truncation-diff-lint).
+      .limit(999);
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
+      return { rows: [], count: 0, error: error.message };
+    }
+    // REGRESSION finding: skip the manifest read + git subprocess spawns entirely when there is
+    // nothing encoded yet — avoids a standing per-tick cost once the migration lands and the
+    // table is legitimately empty or all-unencoded.
+    if (!data || data.length === 0) return { rows: [], count: 0 };
+
+    let newerManifest = null;
+    try {
+      const parsed = JSON.parse(readFileSync(join(repoRoot, 'claude-generation-manifest.json'), 'utf8'));
+      newerManifest = parsed.section_digests || null;
+    } catch { /* no manifest on disk -- nothing to check against */ }
+    if (!newerManifest) return { rows: [], count: 0 };
+
+    let olderManifest = null;
+    try {
+      const log = (await execFileAsync('git', ['log', '--format=%H', '-n', '2', '--', 'claude-generation-manifest.json'], { cwd: repoRoot, timeout: 5000 })).stdout.trim();
+      const priorHash = log.split('\n').filter(Boolean)[1]; // the SECOND most recent commit touching the file
+      if (priorHash) {
+        const raw = (await execFileAsync('git', ['show', `${priorHash}:claude-generation-manifest.json`], { cwd: repoRoot, timeout: 5000, maxBuffer: 8 * 1024 * 1024 })).stdout;
+        olderManifest = JSON.parse(raw).section_digests || null;
+      }
+    } catch { /* fewer than 2 commits touched the manifest yet -- Stage 1 becomes a structural no-op */ }
+
+    const regressed = [];
+    for (const row of data || []) {
+      const sectionId = row.encoded_ref && row.encoded_ref.section_id;
+      const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
+      let liveFileContent;
+      if (targetFile) {
+        try { liveFileContent = readFileSync(join(repoRoot, targetFile), 'utf8'); } catch { /* file gone/unreadable -- detectMarkerMissing treats this as the marker being gone */ }
+      }
+      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent });
+      if (result.regressed) regressed.push({ ...row, ...result });
+    }
+    return { rows: regressed, count: regressed.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -727,6 +832,14 @@ async function main() {
   // window-bound smsInbound above (drained_at is already set on these rows; only parked_at/
   // resolved_at gate this queue), so it is read and surfaced separately every tick.
   const smsParked = await surfaceParkedChairmanSms(sb);
+
+  // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: chairman ratifications unencoded >=24h.
+  // Fail-soft no-op until the chairman-gated migration is applied (surfaceStaleRatifications).
+  const staleRatifications = await surfaceStaleRatifications(sb);
+
+  // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: already-encoded ratifications whose
+  // clause was silently reverted (whole-section removal or within-section marker-text deletion).
+  const regressedRatifications = await checkRatificationRegressions(sb);
 
   // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: evaluate the durable standing priority. Fail-soft like
   // its siblings above — and fail QUIET: a detector that cannot read its store reports 'unknown'
@@ -1018,6 +1131,22 @@ async function main() {
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
+    }
+    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3. Deliberately placed AFTER the
+    // outboundSilence.probed loop above, not between the smsInbound.rows loop and it —
+    // tests/unit/sms-count-render-invariant.test.js slices exactly that gap as "the SMS per-row
+    // loop" and asserts a 1:1 console.log-to-QUIET_TICK-token ratio inside it; inserting an
+    // unrelated loop there breaks that invariant's own accounting (this loop's token is emitted
+    // by formatRatificationStaleLine, not inlined in this file's source text).
+    for (const r of staleRatifications.rows) {
+      console.log(formatRatificationStaleLine('adam', r, r.ageHours));
+    }
+    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: both stages feed the SAME
+    // QUIET_TICK_RATIFICATION_STALE token as FR-3 (a regression IS a staleness case — the
+    // encoding was reverted), per the PRD's own wiring instruction.
+    for (const r of regressedRatifications.rows) {
+      const sectionId = r.encoded_ref && r.encoded_ref.section_id;
+      console.log(`QUIET_TICK_RATIFICATION_STALE=adam id=${r.id} REGRESSED stage1_section_removed=${r.stage1} stage2_marker_missing=${r.stage2} section=${sectionId} — an already-encoded chairman ratification's clause was silently reverted; re-encode via lib/chairman/ratification-writer.mjs markRatificationEncoded().`);
     }
   }
   return result;
