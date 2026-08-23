@@ -547,14 +547,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/unit/eva/data-contract-scorer.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected 26 to be 25 // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/unit/eva/dead-code-scanner.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected 0 to be greater than 0",
@@ -1162,14 +1154,6 @@
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/stage-gates-ext.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected { isGated: true, gateType: 'TASTE' } to deeply equal { isGated: false, gateType: null } (production added TASTE gate SD-LEO-ORCH-GSTACK-TASTE-GATE-001-A + promotion severity logic changed; out-of-class for supabase-mock-chain sweep SD-REFILL-002XLOD1)",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-22T17:48:33.555Z",
-      "quarantined_by": "SD-REFILL-002XLOD1"
     },
     {
       "file": "tests/unit/protocol-file-read-gate.test.js",

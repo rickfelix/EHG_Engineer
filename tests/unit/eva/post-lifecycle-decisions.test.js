@@ -37,8 +37,17 @@ vi.mock('../../../lib/governance/emit-feedback.js', () => ({
   emitFeedback: vi.fn().mockResolvedValue({ id: 'feedback-id', deduped: false }),
 }));
 
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-5): handlePostLifecycleDecision now checks
+// artifact-existence for the terminal stage before executing any decision. Default to
+// not-blocked so every pre-existing test below (none of which concern this new check) keeps
+// exercising its own decision-handler behavior unchanged.
+vi.mock('../../../lib/eva/stage-artifact-precondition.js', () => ({
+  checkStageArtifactPrecondition: vi.fn().mockResolvedValue({ blocked: false, missingArtifacts: [], deviatedArtifacts: [], source: 'test-mock' }),
+}));
+
 import { routeException } from '../../../lib/crm/spine-consumption-client.js';
 import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
+import { checkStageArtifactPrecondition } from '../../../lib/eva/stage-artifact-precondition.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
@@ -178,6 +187,45 @@ describe('handlePostLifecycleDecision', () => {
     expect(result.handled).toBe(true);
     expect(result.result.success).toBe(false);
     expect(result.result.error).toContain('Invalid pivot stage');
+  });
+
+  // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-5): entry-point artifact-existence check
+  // (stage-advancement-path-census.md row #17) — checked once for every decision type,
+  // NOT inside handlePivot itself (which remains functionally unguarded per its own
+  // acceptance criteria, since it is a distinct backward re-entry operation, not a
+  // forward stage-completion advance).
+  describe('FR-5 artifact-existence check (SD-LEO-INFRA-MINUS-GATE-SSOT-001)', () => {
+    it('refuses ANY decision (including pivot) when the terminal stage is missing required artifacts', async () => {
+      checkStageArtifactPrecondition.mockResolvedValueOnce({
+        blocked: true, missingArtifacts: ['ops_cycle_metrics'], deviatedArtifacts: [], source: 'canonical',
+      });
+      const supabase = makeMockSupabase();
+      const result = await handlePostLifecycleDecision(
+        { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'pivot' } },
+        { supabase, logger: silentLogger },
+      );
+
+      expect(checkStageArtifactPrecondition).toHaveBeenCalledWith(supabase, 'venture-1', MAX_LIFECYCLE_STAGE);
+      expect(result.handled).toBe(false);
+      expect(result.blocked).toBe(true);
+      expect(result.reason).toBe('artifact_precondition_unmet');
+      expect(result.missingArtifacts).toEqual(['ops_cycle_metrics']);
+    });
+
+    it('a pivot decision still succeeds when the terminal stage artifacts are present (handlePivot itself stays unguarded)', async () => {
+      // Default mock (module-level) already resolves blocked:false -- this test just makes
+      // that explicit and asserts the pivot completes normally.
+      const supabase = makeMockSupabase();
+      const result = await handlePostLifecycleDecision(
+        { ventureId: 'venture-1', ventureContext, stageOutput, artifacts: [], decision: { type: 'pivot', pivotStage: 12 } },
+        { supabase, logger: silentLogger },
+      );
+
+      expect(result.handled).toBe(true);
+      expect(result.result.action).toBe('pivot');
+      expect(result.result.success).toBe(true);
+      expect(result.result.pivotStage).toBe(12);
+    });
   });
 
   it('should handle EXPAND decision', async () => {

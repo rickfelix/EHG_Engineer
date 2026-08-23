@@ -165,6 +165,48 @@ describe('stage-governance — canonical sets derived from work_type', () => {
   });
 });
 
+describe('stage-governance — raw gate_type-derived sets (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-3/TR-1)', () => {
+  it('killStagesRaw matches killStages exactly (S3, S5, S13, S23) — the kill set is identical under both derivations', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect([...gov.killStagesRaw].sort((a, b) => a - b)).toEqual([3, 5, 13, 23]);
+    expect([...gov.killStagesRaw].sort()).toEqual([...gov.killStages].sort());
+  });
+
+  it('promotionStagesRaw includes ALL 7 gate_type=promotion stages regardless of work_type (S10, S16, S17, S18, S19, S24, S25)', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect([...gov.promotionStagesRaw].sort((a, b) => a - b)).toEqual([10, 16, 17, 18, 19, 24, 25]);
+  });
+
+  it('promotionStagesRaw includes stage 19 (sd_required, forensically-damaged) even though promotionStages (decision_gate-filtered) excludes it', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect(gov.isPromotionRaw(19)).toBe(true);
+    expect(gov.isPromotion(19)).toBe(false);
+  });
+
+  it('blockingStagesRaw is the union of killStagesRaw + promotionStagesRaw', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect([...gov.blockingStagesRaw].sort((a, b) => a - b)).toEqual([3, 5, 10, 13, 16, 17, 18, 19, 23, 24, 25]);
+  });
+
+  // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-6): totalStages is the SSOT-derived pipeline stage
+  // count, replacing a pinned literal (25) that had silently diverged from the live 26-row table.
+  it('totalStages reflects the live row count, not a pinned literal', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect(gov.totalStages).toBe(26);
+    expect(gov.totalStages).toBe(STAGE_FIXTURE.length);
+  });
+});
+
 describe('stage-governance — defensive behavior', () => {
   it('empty data yields empty sets (degrades safely)', async () => {
     const mod = await import('../../../lib/eva/stage-governance.js');

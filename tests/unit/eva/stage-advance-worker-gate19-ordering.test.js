@@ -6,11 +6,17 @@
  *         workflow_executions.current_stage is mutated, so a blocked/failed
  *         advance leaves the observability pointer untouched.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({
   advanceStage: vi.fn(),
 }));
+
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-4): later describe block asserts advanceStage was NOT
+// called -- without a per-test reset, mock.calls would accumulate across the whole file.
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 vi.mock('../../../lib/eva/venture-capture-forward.js', () => ({
   captureVentureStage: vi.fn().mockResolvedValue(undefined),
@@ -65,6 +71,18 @@ function createMockSupabase({ currentStage }) {
       };
       return chain;
     }
+    // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-4): GATE_STAGES is now SSOT-derived
+    // (blockingStagesRaw + an explicit 21/22 carve-out) via lib/eva/stage-governance.js.
+    if (table === 'venture_stages') {
+      const rows = Array.from({ length: 26 }, (_, i) => {
+        const stage_number = i + 1;
+        const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+          : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+          : 'none';
+        return { stage_number, gate_type, work_type: 'decision_gate', review_mode: 'auto', is_high_consequence: false };
+      });
+      return { select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) };
+    }
     throw new Error(`unexpected table: ${table}`);
   });
 
@@ -114,5 +132,32 @@ describe('StageAdvanceWorker GATE_STAGES + advance-before-mutate ordering (SD-LE
     );
     expect(supabase.workflowUpdates).toHaveLength(1);
     expect(supabase.workflowUpdates[0]).toMatchObject({ current_stage: 20 });
+  });
+});
+
+describe('StageAdvanceWorker GATE_STAGES is now SSOT-derived (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-4/TR-8)', () => {
+  // Stages 10/18/25 (gate_type='promotion' in the SSOT) were OMITTED from the old hardcoded
+  // set -- an active bypass this SD's raw-gate_type SSOT derivation now closes.
+  it.each([10, 18, 25])('newly gates promotion stage %i (was omitted from the old hardcoded set)', async (gateStage) => {
+    const supabase = createMockSupabase({ currentStage: gateStage - 1 });
+    const worker = new StageAdvanceWorker({ supabase });
+
+    await worker.execute();
+
+    expect(advanceStage).not.toHaveBeenCalled();
+    expect(supabase.workflowUpdates).toHaveLength(0);
+  });
+
+  // Stages 21/22 (gate_type='none', review_mode='review') remain gated via an EXPLICIT
+  // carve-out -- not derived from the SSOT, since deriving from review_mode generically
+  // would also sweep in stages 7/8/9/11 (out of this SD's investigated scope).
+  it.each([21, 22])('keeps carve-out stage %i gated (review_mode stage, not gate_type-derived)', async (gateStage) => {
+    const supabase = createMockSupabase({ currentStage: gateStage - 1 });
+    const worker = new StageAdvanceWorker({ supabase });
+
+    await worker.execute();
+
+    expect(advanceStage).not.toHaveBeenCalled();
+    expect(supabase.workflowUpdates).toHaveLength(0);
   });
 });
