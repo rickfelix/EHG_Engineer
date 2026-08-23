@@ -153,22 +153,24 @@ async function generateRetrospective(sdInput) {
   const acceptedHandoffs = (handoffs || []).filter(h => h.status === 'accepted');
   const passingSubAgents = (subAgentResults || []).filter(r => ['PASS', 'CONDITIONAL_PASS'].includes(r.verdict));
 
+  // DB check constraints (20251223_add_jsonb_array_size_constraints.sql) cap each array —
+  // an SD with many handoffs/sub-agent runs can otherwise exceed them and fail the insert.
   const wellRaw = [
     ...acceptedHandoffs.map(h => `${h.handoff_type} handoff accepted with validation score ${h.validation_score}/100 (${h.from_agent}→${h.to_agent})`),
     ...passingSubAgents.map(r => `${r.sub_agent_name} sub-agent verdict: ${r.verdict} (confidence ${r.confidence ?? 'n/a'})`)
-  ];
+  ].slice(0, 25);
   const what_went_well_array = wellRaw.length ? wellRaw : [`${sd.sd_key} reached completion with ${(handoffs || []).length} handoff(s) recorded and ${(subAgentResults || []).length} sub-agent execution(s) logged`];
 
-  const learningsRaw = (subAgentResults || []).flatMap(r => (r.recommendations || []).map(rec => `${r.sub_agent_name} (${r.phase}): ${describe(rec)}`));
+  const learningsRaw = (subAgentResults || []).flatMap(r => (r.recommendations || []).map(rec => `${r.sub_agent_name} (${r.phase}): ${describe(rec)}`)).slice(0, 30);
   const key_learnings_array = learningsRaw.length ? learningsRaw : [`${sd.sd_key} progressed through ${acceptedHandoffs.length} accepted handoff(s) evaluated by ${new Set((subAgentResults || []).map(r => r.sub_agent_name)).size} sub-agent(s) with no additional recommendations logged`];
 
-  const actionsRaw = (subAgentResults || []).flatMap(r => (r.warnings || []).map(w => `${r.sub_agent_name}: follow up on — ${describe(w)}`));
+  const actionsRaw = (subAgentResults || []).flatMap(r => (r.warnings || []).map(w => `${r.sub_agent_name}: follow up on — ${describe(w)}`)).slice(0, 25);
   const action_items_array = actionsRaw.length ? actionsRaw : [`Monitor ${sd.sd_key} in production; no sub-agent warnings were raised during ${(subAgentResults || []).length} execution(s)`];
 
   const improveRaw = [
     ...(subAgentResults || []).flatMap(r => (r.critical_issues || []).map(ci => `${r.sub_agent_name}: ${describe(ci)}`)),
     ...(handoffs || []).filter(h => h.status !== 'accepted').map(h => `${h.handoff_type} handoff status=${h.status} — did not reach accepted state`)
-  ];
+  ].slice(0, 20);
   const what_needs_improvement_array = improveRaw.length ? improveRaw : [`No critical issues surfaced across ${(subAgentResults || []).length} sub-agent review(s) for ${sd.sd_key}`];
 
   // Generate high-quality retrospective content
