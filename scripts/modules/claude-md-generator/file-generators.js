@@ -800,6 +800,25 @@ function generateSolomonManual(data, fileMapping) {
   });
 }
 
+/**
+ * CLAUDE_SOLOMON_PROVENANCE.md — SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 FR-6.
+ *
+ * CLAUDE_SOLOMON.md was over the single-read cap; FR-1/FR-3/FR-4's restructuring added bytes
+ * faster than FR-2's dedup removed them. Rather than growing the gated file further, net-new
+ * explanatory/historical prose (originating-incident narratives, measurement citations, dated
+ * rationale) moves here, following the proven CLAUDE_ADAM_PROVENANCE.md pattern (generateAdamCompanion
+ * reused unchanged, same as generateSolomonManual above). Every duty/rule/precondition/silence-rule
+ * stays in CLAUDE_SOLOMON.md and is in force whether or not this file is read.
+ */
+function generateSolomonProvenance(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_SOLOMON_PROVENANCE.md', {
+    heading: 'Solomon Provenance (dated rationale)',
+    purpose: 'Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6',
+    loadWhen: 'When you need to know WHY a rule exists, or before proposing to change one',
+    note: 'Every rule in CLAUDE_SOLOMON.md is IN FORCE regardless of whether its history is read here. This file explains; it does not govern.',
+  });
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
@@ -817,6 +836,7 @@ export {
   generateCoordinatorProvenance,
   generateSolomon,
   generateSolomonManual,
+  generateSolomonProvenance,
   findCopiedSharedSections,
   assertSharedSectionsNotCopied
 };

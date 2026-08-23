@@ -66,7 +66,13 @@ describe('FR-4: single-read cap enforcement', () => {
   it('enforces exactly the files a shipped SD has made fit', () => {
     // If this list grows without an SD behind it, the guard becomes a blockade. Pinned so that
     // adding a name is a deliberate act with a test diff attached.
-    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md']);
+    // CLAUDE_SOLOMON.md added by SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6) — that SD landed.
+    // The display estimator here (chars/4, this file's own generation-time print) undercounts; the
+    // load-bearing measure is the coordinator's harness-calibrated bytes/2.4177 predictor
+    // (lib/protocol/contract-read-coverage.cjs contractTokenCount), which must clear the marginal
+    // band around the cap (SD-LEO-INFRA-CONTRACT-READ-FIT-001), not just the raw 25,000 ceiling —
+    // measured 23,175 tokens by that predictor post-restructure, clear of both.
+    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md']);
   });
 
   it('uses the MEASURED bytes-per-token, not a borrowed or estimated one', () => {

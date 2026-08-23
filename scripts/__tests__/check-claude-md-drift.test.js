@@ -6,15 +6,21 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import crypto from 'node:crypto';
 import {
   CLAUDEMDGeneratorV3,
   KNOWN_GENERATED_FILES,
   computeSectionDigests,
   GENERATED_BANNER,
+  verifyFileContentHash,
 } from '../modules/claude-md-generator/index.js';
 
+const sha16 = (s) => crypto.createHash('sha256').update(s).digest('hex').substring(0, 16);
+
 const require = createRequire(import.meta.url);
-const { diffSectionDigests } = require(path.resolve(__dirname, '../check-claude-md-drift.cjs'));
+const { diffSectionDigests, findOrphanFiles } = require(path.resolve(__dirname, '../check-claude-md-drift.cjs'));
 
 const SECTIONS = [
   { id: 1, section_type: 'core_a', title: 'Core A', content: 'alpha', order_index: 1, target_file: 'CLAUDE_CORE.md', context_tier: 'CORE', updated_at: '2026-01-01' },
@@ -144,5 +150,78 @@ describe('getFileSpecs single-source list (FR-1b — write path == render path c
     const names = gen.getFileSpecs({}).map(([f]) => f);
     expect(names.every((n) => !n.includes('DIGEST'))).toBe(true);
     expect(names).toContain('CLAUDE.md');
+  });
+});
+
+describe('findOrphanFiles (SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 FR-5 — hand-edited/orphan content detection)', () => {
+  // diffSectionDigests/computeSectionDigests above can only ever compare DB-live vs manifest-stored
+  // digests, both derived FROM THE DB — a hand-edit to a generated file's on-disk body, with no
+  // corresponding leo_protocol_sections change, is invisible to that comparison (the exact
+  // 2026-08-21 DECISION_REQUESTED incident: a hand-edit silently dropped by the next regeneration).
+  // findOrphanFiles reuses verifyFileContentHash (unit-tested for mutation-detection in
+  // tests/unit/protocol-publication-pipeline.test.js:84) against each KNOWN_GENERATED_FILES entry.
+
+  it('is pure and injectable — a stubbed verify fn needs no real filesystem', () => {
+    const orphans = findOrphanFiles(['a.md', 'b.md'], {
+      baseDir: '/does/not/exist',
+      verify: () => ({ ok: false, expected: 'ee', actual: 'aa' }),
+    });
+    // baseDir does not exist, so fs.existsSync gates every candidate out before verify() is ever
+    // consulted — proves the "skip files not present on disk" guard fires before the real check.
+    expect(orphans).toEqual([]);
+  });
+
+  it('flags a file whose verify() reports ok:false, carrying expected/actual for the report', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-find-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'stale.md'), 'anything — verify() below is stubbed');
+      const orphans = findOrphanFiles(['stale.md'], {
+        baseDir: dir,
+        verify: () => ({ ok: false, expected: 'ee', actual: 'aa' }),
+      });
+      expect(orphans).toEqual([{ file: 'stale.md', expected: 'ee', actual: 'aa' }]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not flag a file whose verify() reports ok:true', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-find-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'fine.md'), 'anything — verify() below is stubbed');
+      const orphans = findOrphanFiles(['fine.md'], { baseDir: dir, verify: () => ({ ok: true, expected: 'ee', actual: 'ee' }) });
+      expect(orphans).toEqual([]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // TS-5 (PRD test scenario): the end-to-end seed/negative test, wired through the REAL
+  // verifyFileContentHash — proving the actual production check catches a hand-edit, not just a
+  // stub. Runs against a TEMPORARY COPY, never the tracked repo file (a mid-test failure leaving a
+  // dirty tracked file breaks shared-root freshness / tree-currency spawn guards fleet-wide).
+  it('TS-5: catches a real hand-edit via the production verifyFileContentHash, on a temp copy only', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-ts5-'));
+    try {
+      const body = '# CLAUDE_SOLOMON.md (temp copy)\nsome duty text\n';
+      const file = path.join(dir, 'CLAUDE_SOLOMON.md');
+      // A clean, freshly-"generated" file: header hash matches the body — verifyFileContentHash
+      // passes, so findOrphanFiles must NOT flag it.
+      fs.writeFileSync(file, `<!-- file_content_hash: ${sha16(body)} -->\n${body}`);
+      expect(findOrphanFiles(['CLAUDE_SOLOMON.md'], { baseDir: dir, verify: verifyFileContentHash })).toEqual([]);
+
+      // Seed the exact defect class: hand-edit the BODY directly, leaving the header hash
+      // untouched (no corresponding leo_protocol_sections change — nothing regenerated this).
+      fs.writeFileSync(file, `<!-- file_content_hash: ${sha16(body)} -->\n# CLAUDE_SOLOMON.md (temp copy)\nHAND-EDITED, never regenerated\n`);
+      const orphans = findOrphanFiles(['CLAUDE_SOLOMON.md'], { baseDir: dir, verify: verifyFileContentHash });
+      expect(orphans).toHaveLength(1);
+      expect(orphans[0].file).toBe('CLAUDE_SOLOMON.md');
+      expect(orphans[0].actual).toBe(sha16(body)); // the stale header claim
+      expect(orphans[0].expected).not.toBe(orphans[0].actual); // what the (edited) body actually hashes to
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('skips a candidate file that does not exist on disk (not this check\'s concern)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orphan-find-'));
+    try {
+      const verify = () => { throw new Error('verify() must not be called for a missing file'); };
+      expect(findOrphanFiles(['nope.md'], { baseDir: dir, verify })).toEqual([]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

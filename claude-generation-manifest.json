@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-23T04:58:20.373Z",
-  "git_commit": "b6930e11",
-  "db_snapshot_hash": "a9dcd7a2e7939fe0",
+  "generated_at": "2026-08-23T12:34:07.851Z",
+  "git_commit": "021daef5",
+  "db_snapshot_hash": "30d313ecbc99265b",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -109,19 +109,19 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 62769,
-      "bytes": 63324,
-      "estimated_tokens": 15693,
-      "content_hash": "abcf7c48225fc423",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_SOLOMON.md"
+      "chars": 55523,
+      "bytes": 56030,
+      "estimated_tokens": 13881,
+      "content_hash": "84ae175b9d854ddd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 11228,
-      "bytes": 11325,
+      "chars": 11227,
+      "bytes": 11324,
       "estimated_tokens": 2807,
       "content_hash": "c75804cd89ab0475",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_SOLOMON_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
@@ -181,15 +181,23 @@
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
-      "chars": 3969,
-      "bytes": 4011,
-      "estimated_tokens": 993,
-      "content_hash": "d44dcdb84628e231",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002\\CLAUDE_SOLOMON_DIGEST.md"
+      "chars": 3959,
+      "bytes": 3997,
+      "estimated_tokens": 990,
+      "content_hash": "ebc45b02958ab9f4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON_DIGEST.md"
+    },
+    "CLAUDE_SOLOMON_PROVENANCE.md": {
+      "type": "full",
+      "chars": 11727,
+      "bytes": 11838,
+      "estimated_tokens": 2932,
+      "content_hash": "a46ec5fcade91deb",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001\\CLAUDE_SOLOMON_PROVENANCE.md"
     }
   },
   "section_digests": {
-    "global": "95dadf3cab63b4f0",
+    "global": "73fccd657c043073",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -450,7 +458,7 @@
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "389d54bc60160386",
+      "611": "5bec663e666e4825",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -466,7 +474,8 @@
       "632": "f3ebf4de6f9fefbe",
       "633": "12cf4526e9c9fd09",
       "634": "6518b5f83a72be9e",
-      "635": "4d256bd4f129b597"
+      "635": "4d256bd4f129b597",
+      "636": "31efdc24eea9e73c"
     },
     "meta": {
       "94": {
@@ -1848,6 +1857,11 @@
         "section_type": "coordinator_role_contract",
         "target_file": null,
         "title": "Coordinator loop-registry governance (STANDARD_LOOPS)"
+      },
+      "636": {
+        "section_type": "solomon_provenance",
+        "target_file": null,
+        "title": "Solomon Provenance — dated rationale and originating incidents (companion)"
       }
     }
   }
