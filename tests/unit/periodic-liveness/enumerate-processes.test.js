@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import {
   cronToIntervalSeconds,
   parseStandardLoops,
+  deriveRequiredInvocation,
   discoverAllProcesses,
   discoverGhaCrons,
   discoverCronScripts,
@@ -35,13 +36,15 @@ export const STANDARD_LOOPS = [
   { key: 'sweep', label: 'Stale-session sweep', script: 'sweep.cjs', cron: '*/20 * * * *',
     prompt: 'node scripts/sweep.cjs' },
   { key: 'folded-thing', label: 'Folded loop', script: 'folded.cjs', folded: true },
+  { key: 'dashboard', label: 'Fleet dashboard', script: 'fleet-dashboard.cjs', cron: '*/5 * * * *',
+    prompt: 'node scripts/fleet-dashboard.cjs all' },
 ];
 export function other() {}
 `;
 
   it('extracts every entry with key, cron-derived interval, and session_bound=true', () => {
     const loops = parseStandardLoops(fixture);
-    expect(loops.map((l) => l.process_key)).toEqual(['standard_loop:sweep', 'standard_loop:folded-thing']);
+    expect(loops.map((l) => l.process_key)).toEqual(['standard_loop:sweep', 'standard_loop:folded-thing', 'standard_loop:dashboard']);
     expect(loops[0].expected_interval_seconds).toBe(1200);
     expect(loops[1].expected_interval_seconds).toBe(3600); // no cron -> hourly default
     expect(loops.every((l) => l.session_bound === true)).toBe(true);
@@ -49,6 +52,29 @@ export function other() {}
 
   it('returns empty on text without the export (never throws on drift)', () => {
     expect(parseStandardLoops('const x = 1;')).toEqual([]);
+  });
+
+  // QF-20260823-965: a multi-section CLI (fleet-dashboard.cjs all/inbox/workers/...) is only
+  // proven alive by the ONE section its liveness stamp is wired to. A single-purpose script's
+  // prompt has no trailing section argument, so it has nothing ambiguous to name.
+  it('names the required trailing invocation arg for a multi-section prompt, null for a bare script prompt', () => {
+    const loops = parseStandardLoops(fixture);
+    expect(loops.find((l) => l.process_key === 'standard_loop:dashboard').required_invocation).toBe('all');
+    expect(loops.find((l) => l.process_key === 'standard_loop:sweep').required_invocation).toBeNull();
+    expect(loops.find((l) => l.process_key === 'standard_loop:folded-thing').required_invocation).toBeNull();
+  });
+});
+
+describe('deriveRequiredInvocation', () => {
+  it('returns the trailing arg when the prompt carries one beyond the script path', () => {
+    expect(deriveRequiredInvocation('node scripts/fleet-dashboard.cjs all')).toBe('all');
+    expect(deriveRequiredInvocation('node scripts/fleet-dashboard.cjs inbox')).toBe('inbox');
+  });
+
+  it('returns null for a bare "node <script>" prompt or no prompt at all', () => {
+    expect(deriveRequiredInvocation('node scripts/sweep.cjs')).toBeNull();
+    expect(deriveRequiredInvocation(null)).toBeNull();
+    expect(deriveRequiredInvocation('')).toBeNull();
   });
 });
 

@@ -180,7 +180,14 @@ async function seedStandaloneCrons() {
     process_type: 'standalone_cron',
     expected_interval_seconds: proc.expected_interval_seconds,
     liveness_source: 'self_stamped',
-    liveness_source_ref: proc.cron ? { cron: proc.cron, discovered_from: proc.source } : { discovered_from: proc.source },
+    liveness_source_ref: {
+      ...(proc.cron ? { cron: proc.cron } : {}),
+      discovered_from: proc.source,
+      // QF-20260823-965: names the ONE invocation that proves this loop alive, when its script
+      // is a multi-section CLI (e.g. 'all' for fleet-dashboard.cjs) -- null for single-purpose
+      // scripts, where no section choice exists to be ambiguous about.
+      ...(proc.required_invocation ? { required_invocation: proc.required_invocation } : {}),
+    },
     session_bound: proc.session_bound,
     currently_expected_active: true,
     updated_at: new Date().toISOString(),
