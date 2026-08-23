@@ -12,11 +12,14 @@ import { describe, it, expect } from 'vitest';
 import { buildRankClearQuery } from '../../scripts/coordinator-backlog-rank.mjs';
 
 describe('FR-3: buildRankClearQuery', () => {
-  it('removes exactly the 3 dispatch_rank* keys via the jsonb `-` operator', () => {
+  it('removes exactly the 4 dispatch_rank* keys via the jsonb `-` operator', () => {
     const { sql, params } = buildRankClearQuery('SD-TEST-001');
     expect(sql).toMatch(/-\s*'dispatch_rank'/);
     expect(sql).toMatch(/-\s*'dispatch_rank_at'/);
     expect(sql).toMatch(/-\s*'dispatch_rank_by'/);
+    // QF-20260823-561: clears with its siblings — an orphaned dispatch_rank_triggered_by on a
+    // no-longer-ranked row would misattribute a stale mint/clearance event to a row's current state.
+    expect(sql).toMatch(/-\s*'dispatch_rank_triggered_by'/);
     expect(params).toEqual(['SD-TEST-001']);
   });
 

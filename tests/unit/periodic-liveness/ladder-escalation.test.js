@@ -164,6 +164,32 @@ describe('emitLadderDigest', () => {
     expect(result).toEqual({ emitted: true, decisionId: 'decision-1', refreshed: false, escalated: true, suppressedKeys: [] });
   });
 
+  // QF-20260823-965: the digest is what reaches the chairman queue -- a solo escalation for a
+  // row that names a required invocation must say "run all" in the title text itself, since
+  // brief_data/context is not necessarily what a reviewer reads first.
+  it('names the required invocation in a solo escalation title when the candidate carries one', async () => {
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map());
+    const candidates = [{ process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded', required_invocation: 'all' }];
+    await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
+    expect(recordPending).toHaveBeenCalledWith({}, expect.objectContaining({
+      title: "Periodic-liveness ladder: P1 (requires invocation: 'all')",
+    }));
+  });
+
+  it('does not append an invocation note for a multi-candidate digest even if one candidate has it', async () => {
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map());
+    const candidates = [
+      { process_key: 'p1', display_name: 'P1', signature: 'threshold_exceeded', required_invocation: 'all' },
+      { process_key: 'p2', display_name: 'P2', signature: 'threshold_exceeded' },
+    ];
+    await emitLadderDigest({}, candidates, { findExisting, findDismissedSignatures, recordPending, escalate });
+    expect(recordPending).toHaveBeenCalledWith({}, expect.objectContaining({
+      title: 'Periodic-liveness ladder: 2 processes escalated',
+    }));
+  });
+
   it('refreshes an existing pending digest in place instead of creating a new row', async () => {
     const updateEq = vi.fn().mockResolvedValue({ error: null });
     const update = vi.fn(() => ({ eq: updateEq }));

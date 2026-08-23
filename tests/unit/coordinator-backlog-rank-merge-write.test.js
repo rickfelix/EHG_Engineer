@@ -9,7 +9,7 @@
  * that structural proof is what the "simulated concurrency" test below encodes.
  */
 import { describe, it, expect } from 'vitest';
-import { buildRankPatch, buildRankMergeQuery } from '../../scripts/coordinator-backlog-rank.mjs';
+import { buildRankPatch, buildRankMergeQuery, resolveRankWriter } from '../../scripts/coordinator-backlog-rank.mjs';
 import { buildClearReviewQuery } from '../../lib/coordinator/clear-coordinator-review.js';
 
 describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: buildRankPatch/buildRankMergeQuery', () => {
@@ -35,6 +35,49 @@ describe('SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: buildRankPatch/build
   it('buildRankMergeQuery guards against NULL metadata via COALESCE (Postgres NULL || jsonb = NULL)', () => {
     const { sql } = buildRankMergeQuery({ dispatch_rank: 1, dispatch_rank_at: 'now', dispatch_rank_by: 'x' }, 'SD-TEST-001');
     expect(sql).toMatch(/COALESCE\(metadata,\s*'\{\}'::jsonb\)\s*\|\|/);
+  });
+
+  it('buildRankPatch stamps dispatch_rank_triggered_by only when a triggeredBy is supplied', () => {
+    const withTrigger = buildRankPatch(1, '2026-08-23T00:00:00.000Z', 'coordinator', null, null, 'adam-0549d739');
+    expect(withTrigger.dispatch_rank_triggered_by).toBe('adam-0549d739');
+    const withoutTrigger = buildRankPatch(1, '2026-08-23T00:00:00.000Z', 'coordinator');
+    expect(withoutTrigger).not.toHaveProperty('dispatch_rank_triggered_by');
+  });
+});
+
+// QF-20260823-561: 2026-08-23 live measurement — an event-triggered rank pass (spawned by
+// trigger-rank-pass.mjs at SD-mint/review-clearance/completion) inherited the TRIGGERING session's
+// env, so dispatch_rank_by was stamped with an Adam/Solomon/worker session id on every row the pass
+// re-ranked (SD-LEO-FEAT-EVA-VENTURE-IDEATION-001 read dispatch_rank_by=<Adam session> at mint
+// time). Downstream governance gauges (detectRoleDispatched) read a role session id there as
+// self-dispatch, producing belt-wide false positives. resolveRankWriter never lets an
+// event-triggered pass attribute to anything but 'coordinator'; the actual triggering session is
+// preserved separately (never silently dropped, never laundered into the writer-identity column).
+describe('QF-20260823-561: resolveRankWriter never launders a triggering session into dispatch_rank_by', () => {
+  it('an interactive/cron pass (no RANK_EVENT_TRIGGER) attributes to its own CLAUDE_SESSION_ID', () => {
+    const r = resolveRankWriter({ CLAUDE_SESSION_ID: 'coordinator-session-abc' });
+    expect(r).toEqual({ eventTriggered: false, writer: 'coordinator-session-abc', triggeredBy: null });
+  });
+
+  it('an interactive pass with no CLAUDE_SESSION_ID at all falls back to the literal "coordinator"', () => {
+    const r = resolveRankWriter({});
+    expect(r).toEqual({ eventTriggered: false, writer: 'coordinator', triggeredBy: null });
+  });
+
+  it('an event-triggered pass ALWAYS writes "coordinator", never the inherited CLAUDE_SESSION_ID', () => {
+    const r = resolveRankWriter({ RANK_EVENT_TRIGGER: '1', CLAUDE_SESSION_ID: 'adam-0549d739' });
+    expect(r.eventTriggered).toBe(true);
+    expect(r.writer).toBe('coordinator');
+  });
+
+  it('an event-triggered pass records the triggering session via RANK_TRIGGERED_BY, not silently', () => {
+    const r = resolveRankWriter({ RANK_EVENT_TRIGGER: '1', RANK_TRIGGERED_BY: 'adam-0549d739' });
+    expect(r.triggeredBy).toBe('adam-0549d739');
+  });
+
+  it('an event-triggered pass with no RANK_TRIGGERED_BY (spawn-env stripped it) records null, not undefined/blank', () => {
+    const r = resolveRankWriter({ RANK_EVENT_TRIGGER: '1' });
+    expect(r.triggeredBy).toBeNull();
   });
 });
 

@@ -61,4 +61,36 @@ describe('emitOverdueSignal (owner-first routing, latch-only-after-success)', ()
     expect(result.emitted).toBe(false);
     expect(result.error).toEqual({ message: 'insert failed: check constraint' });
   });
+
+  // QF-20260823-965: a multi-section CLI's registry row names which invocation actually proves
+  // liveness -- the owner's FIRST escalation surface must say "run all", not a bare OVERDUE that
+  // reads as a dead process when a differently-invoked-but-alive run is the real state.
+  it('names the required invocation in the subject when the row declares one', async () => {
+    insertMock.mockResolvedValue({ error: null });
+    const row = {
+      process_key: 'standard_loop:dashboard',
+      display_name: 'coordinator loop: Fleet dashboard',
+      owner: 'coordinator-fleet',
+      liveness_source_ref: { cron: '2,7,12 * * * *', discovered_from: 'standard_loop', required_invocation: 'all' },
+    };
+    const evaluation = { last_fired_at: '2026-01-01T00:00:00Z', age_ms: 9999 };
+
+    await emitOverdueSignal(row, evaluation);
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      subject: expect.stringContaining("requires invocation: 'all'"),
+    }));
+  });
+
+  it('omits the invocation note when the row has no required_invocation', async () => {
+    insertMock.mockResolvedValue({ error: null });
+    const row = { process_key: 'p3', display_name: 'P3', owner: 'coordinator-fleet' };
+    const evaluation = { last_fired_at: '2026-01-01T00:00:00Z', age_ms: 9999 };
+
+    await emitOverdueSignal(row, evaluation);
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      subject: '[PERIODIC-LIVENESS] P3 is OVERDUE',
+    }));
+  });
 });
