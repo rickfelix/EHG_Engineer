@@ -241,5 +241,8 @@ if (process.argv[1] && process.argv[1] === __filename) {
   const { createSupabaseServiceClient } = await import('../lib/supabase-connection.js');
   const supabase = await createSupabaseServiceClient();
   const result = await runOrchestrator({ sdKey, supabase, mergedBranch });
-  process.exit(result.exitCode);
+  // QF-20260822-539: process.exit() right after a Supabase/undici query crashes on
+  // Windows (UV_HANDLE_CLOSING). Drain instead of exit — see lib/cli-graceful-exit.js.
+  const { armCliTeardown } = await import('../lib/cli-graceful-exit.js');
+  await armCliTeardown(result.exitCode);
 }
