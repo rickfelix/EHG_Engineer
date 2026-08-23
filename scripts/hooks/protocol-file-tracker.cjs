@@ -64,6 +64,10 @@ const PROTOCOL_FILES = [
   // of a file absent from this list is invisible to session state entirely, so a companion nothing
   // records is a companion nobody can prove was read.
   'CLAUDE_SOLOMON_MANUAL.md',
+  // SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6): same reason as CLAUDE_SOLOMON_MANUAL.md above —
+  // the charter was split into charter + manual + provenance, and a seat that reads only the charter
+  // must not be falsely recorded as having read its full contract. Mirrors the Coordinator fix below.
+  'CLAUDE_SOLOMON_PROVENANCE.md',
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. Originally the coordinator was
   // the ONLY role whose contract was small enough to read in one call, and the ONLY role with no
   // verifier of any kind — its priming requirement terminated in a self-attestation nothing
