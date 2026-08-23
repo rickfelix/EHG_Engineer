@@ -6,6 +6,10 @@ vi.mock('../../../../sd-type-checker.js', () => ({
 }));
 vi.mock('../../../retro-filters.js', () => ({
   getFilteredRetrospective: vi.fn(),
+  // SD-LEO-INFRA-PLAN-LEAD-RETRO-001: none of the tests below stash ctx.options._preflightRetro,
+  // so this is never invoked with a truthy candidate — false keeps the gate on its
+  // queried-retrospective path unchanged, preserving every existing test's intent.
+  isValidPreflightRetro: vi.fn(() => false),
 }));
 // SD-LEO-INFRA-RETRO-INTEGRITY-RUN-001 FR-3 — CROSS-AUTHOR EDIT, ANNOUNCED.
 // The tier-3 arm no longer gates on retrospectives.quality_score (a diagnostic gauge that a lint

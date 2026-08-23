@@ -134,3 +134,132 @@ export async function getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, sd
 
   return { retrospective: retrospective || null, leadToPlanAcceptedAt, error: error || null };
 }
+
+/**
+ * SD-LEO-INFRA-PLAN-LEAD-RETRO-001 FR-3: single shared error-normalization contract for
+ * BOTH preflight call sites (PLAN-TO-LEAD setup(), LEAD-FINAL-APPROVAL's
+ * runProgrammaticRetrospective()) — the two generators (RETRO sub-agent, retrospective-
+ * generator.js) fail with different shapes (thrown Error vs spawnSync stderr/exit code),
+ * so callers pass whatever raw value they have and this collapses it to one line,
+ * truncated to 200 chars (matches the existing stderr.substring(0,200) convention already
+ * used in lead-final-approval/index.js) so the appended gate text is consistent and
+ * test-assertable.
+ *
+ * @param {Error|string|null|undefined} rawError
+ * @returns {string}
+ */
+export function normalizePreflightRetroError(rawError) {
+  const raw = rawError instanceof Error ? rawError.message : String(rawError ?? '');
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
+/**
+ * SD-LEO-INFRA-PLAN-LEAD-RETRO-001 FR-1: validates a same-call ctx._preflightRetro stash
+ * against the SAME invariants getFilteredRetrospective enforces (sd_id, retro_type,
+ * freshness) before RETROSPECTIVE_QUALITY_GATE trusts it in place of re-querying. An
+ * object with a truthy id but a mismatched sd_id/retro_type, or a created_at at or before
+ * leadToPlanAcceptedAt, is NOT trusted — treated identically to "unset" so the gate falls
+ * back to its own authoritative query rather than skipping validation on a bad stash.
+ *
+ * @param {Object|null|undefined} candidate - ctx._preflightRetro
+ * @param {string} sdUuid - the canonical SD id being validated
+ * @param {string} leadToPlanAcceptedAt - ISO timestamp, the same freshness cutoff getFilteredRetrospective used
+ * @returns {boolean}
+ */
+export function isValidPreflightRetro(candidate, sdUuid, leadToPlanAcceptedAt) {
+  if (!candidate || typeof candidate !== 'object' || !candidate.id) return false;
+  if (candidate.sd_id !== sdUuid) return false;
+  if (candidate.retro_type !== 'SD_COMPLETION') return false;
+  if (candidate.retrospective_type != null && candidate.retrospective_type !== 'SD_COMPLETION') return false;
+  const createdAt = parseAsUTC(candidate.created_at);
+  const cutoff = parseAsUTC(leadToPlanAcceptedAt);
+  if (!createdAt || !cutoff || createdAt <= cutoff) return false;
+  return true;
+}
+
+/**
+ * SD-LEO-INFRA-PLAN-LEAD-RETRO-001: shared preflight orchestration for BOTH call sites
+ * (PLAN-TO-LEAD setup(), LEAD-FINAL-APPROVAL) — one control flow, not two forks, per TR-1.
+ *
+ * 1. LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN set: full pre-SD behavior restored —
+ *    always calls generateFn(), never stashes options._preflightRetro or
+ *    options._preflightRetroError (the gate falls back to its own query and its own
+ *    unmodified message), matching the RISKS rollback contract exactly.
+ * 2. Otherwise: check getFilteredRetrospective first.
+ *    - Query itself errors (could-not-check): log and return WITHOUT attempting generation,
+ *      so the gate's own (identical) query reports the same error consistently (INV-001).
+ *    - A qualifying retrospective already exists: stash it, skip generation entirely (this is
+ *      what stops LEAD-FINAL-APPROVAL's old unconditional re-run/re-score).
+ *    - Nothing qualifies: call generateFn(), then RE-QUERY via getFilteredRetrospective
+ *      (not generateFn's own return value, which differs in shape per site) so the SAME
+ *      execute() call's gate evaluates the freshly-generated row (FR-1, no retry). On success,
+ *      best-effort stamp the row (FR-2, failure here never blocks the handoff). On failure,
+ *      normalize the error (FR-3) and stash it for the gate to surface.
+ *
+ * @param {Object} args
+ * @param {Object} args.supabase
+ * @param {string} args.sdUuid - canonical SD id
+ * @param {string|null} args.sdCreatedAt
+ * @param {string|null} args.sdKey
+ * @param {Object} args.options - the handoff options object; mutated in place with
+ *   _preflightRetro / _preflightRetroError so BaseExecutor's ctx.options carries them to gates.
+ * @param {() => Promise<any>} args.generateFn - site-specific generation call (RETRO sub-agent
+ *   invocation or retrospective-generator.js spawnSync) — its return value is intentionally
+ *   NOT relied upon; the re-query below is the single source of truth for what it wrote.
+ * @param {string} args.label - short prefix for log lines (e.g. 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL')
+ */
+export async function runPreflightRetroCheck({ supabase, sdUuid, sdCreatedAt, sdKey, options, generateFn, label }) {
+  if (process.env.LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN) {
+    try {
+      await generateFn();
+    } catch (err) {
+      console.warn(`   ⚠️  ${label} generation failed (non-blocking, LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN mode): ${err.message}`);
+    }
+    return;
+  }
+
+  const first = await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, sdKey);
+  if (first.error) {
+    console.warn(`   ⚠️  ${label} preflight retro check errored (could-not-check — proceeding to gate's own query): ${first.error.message}`);
+    return;
+  }
+  if (first.retrospective) {
+    options._preflightRetro = first.retrospective;
+    return;
+  }
+
+  console.log(`   🔄 ${label}: no qualifying retrospective found — generating...`);
+  try {
+    await generateFn();
+    const after = await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, sdKey);
+    if (after.error) {
+      console.warn(`   ⚠️  ${label} post-generation re-check errored: ${after.error.message}`);
+      return;
+    }
+    if (after.retrospective && isValidPreflightRetro(after.retrospective, sdUuid, after.leadToPlanAcceptedAt)) {
+      options._preflightRetro = after.retrospective;
+      console.log(`   ✅ ${label}: retrospective generated and re-validated in the same call`);
+      try {
+        await supabase
+          .from('retrospectives')
+          .update({
+            metadata: {
+              ...(after.retrospective.metadata || {}),
+              generated_by: 'preflight_autogen',
+              preflight_generated_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', after.retrospective.id);
+      } catch (stampErr) {
+        // FR-2 is best-effort: a stamp-write failure must never block a handoff whose
+        // underlying retrospective already qualifies.
+        console.warn(`   ⚠️  ${label} preflight-generated stamp write failed (non-blocking): ${stampErr.message}`);
+      }
+    } else {
+      console.warn(`   ⚠️  ${label}: generation ran but no qualifying retrospective was found afterward`);
+    }
+  } catch (genErr) {
+    options._preflightRetroError = normalizePreflightRetroError(genErr);
+    console.warn(`   ⚠️  ${label} generation failed (non-blocking): ${options._preflightRetroError}`);
+  }
+}

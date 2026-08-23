@@ -10,6 +10,7 @@ import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
 import { enrichRetrospectivePreGate } from '../../retrospective-enricher.js';
+import { runPreflightRetroCheck } from '../../retro-filters.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -168,30 +169,30 @@ export class PlanToLeadExecutor extends BaseExecutor {
     options._appPath = appPath;
     options._sd = sd;
 
-    // RCA-PAT-WORKFLOW-GAP-001: Auto-generate retrospective if missing
-    // Gates validate retrospective existence but workflow never generated one.
-    // Generate here (before gates run) to prevent "Validation Without Generation" gap.
-    const { data: existingRetro } = await this.supabase
-      .from('retrospectives')
-      .select('id')
-      .eq('sd_id', sd.id || sdId)
-      .limit(1);
-
-    if (!existingRetro || existingRetro.length === 0) {
-      console.log('   🔄 No retrospective found - invoking RETRO sub-agent...');
-      try {
+    // RCA-PAT-WORKFLOW-GAP-001 / SD-LEO-INFRA-PLAN-LEAD-RETRO-001: preflight-generate a
+    // qualifying retrospective if none exists, using the SAME filtered existence check
+    // RETROSPECTIVE_QUALITY_GATE itself uses (getFilteredRetrospective) instead of a naive
+    // any-row check — a stale HANDOFF-type or pre-acceptance row used to satisfy the naive
+    // check and skip generation, while the properly-filtered gate still found nothing and
+    // hard-rejected (the root cause of 43 missing-retro rejections/30d). Stashes
+    // options._preflightRetro / options._preflightRetroError for the gate to consume in the
+    // SAME execute() call (no retry) — see runPreflightRetroCheck's own header for the full
+    // could-not-check / stamp / rollback contract.
+    await runPreflightRetroCheck({
+      supabase: this.supabase,
+      sdUuid: sd.id || sdId,
+      sdCreatedAt: sd.created_at || null,
+      sdKey: sd.sd_key || null,
+      options,
+      label: 'PLAN-TO-LEAD',
+      generateFn: async () => {
         const { executeSubAgent } = await import('../../../../lib/sub-agent-executor.js');
         const retroResult = await executeSubAgent('RETRO', sd.id || sdId, { mode: 'completion' });
         if (retroResult?.verdict === 'FAIL') {
-          console.warn(`   ⚠️  RETRO sub-agent returned FAIL: ${retroResult.findings?.[0]?.detail || 'unknown'}`);
-        } else {
-          console.log('   ✅ Retrospective generated via RETRO sub-agent');
+          throw new Error(retroResult.findings?.[0]?.detail || 'RETRO sub-agent returned FAIL');
         }
-      } catch (retroErr) {
-        console.warn(`   ⚠️  RETRO sub-agent invocation failed (non-fatal): ${retroErr.message}`);
-        console.warn('   📝 Run manually: node scripts/execute-subagent.js --code RETRO --sd-id <SD_UUID>');
-      }
-    }
+      },
+    });
 
     // PAT-AUTO-19335057: Pre-gate retrospective enrichment
     // Re-enrich the newest retrospective with git context, handoff scores,
