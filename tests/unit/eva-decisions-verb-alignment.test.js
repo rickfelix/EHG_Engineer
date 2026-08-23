@@ -100,6 +100,12 @@ describe('resolveDecisionVerb — FR-3 canonical verb mapping', () => {
   // IN-list) without updating the bridge, the bridge would silently shadow the SQL mapping
   // forever. Pin both against each other so an out-of-sync edit fails a test, not a live
   // divergence.
+  //
+  // SECURITY EXEC-TO-PLAN round-2 finding SEC-PATH-006: the original version of this test
+  // matched a bridged type's name against the WHOLE migration file, and both names also appear
+  // quoted in the file's header/prose comments -- so removing either from the actual IN-list
+  // would still pass. Extract the VENTURE-SCOPED CASE branch's own IN(...) clause specifically
+  // (the only place membership is semantically meaningful) and assert within THAT substring.
   it('the JS bridge and the staged migration agree on every bridged type\'s verb pair', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
@@ -107,11 +113,21 @@ describe('resolveDecisionVerb — FR-3 canonical verb mapping', () => {
       path.resolve(process.cwd(), 'database/migrations/20260823_add_thesis_kill_tier_b_to_decision_value.sql'),
       'utf8'
     );
+    // Isolate the VENTURE-SCOPED branch's IN (...) list -- the actual executable membership set,
+    // not prose. Anchored on the branch's own distinguishing comment + its CASE p_action pair, so
+    // an edit elsewhere in the file can't accidentally satisfy this extraction.
+    const branchMatch = migration.match(
+      /-- VENTURE-SCOPED types:[\s\S]*?WHEN p_decision_type IN \(([\s\S]*?)\)\s*THEN CASE p_action WHEN 'approved' THEN 'proceed' ELSE 'kill' END/
+    );
+    expect(branchMatch, 'VENTURE-SCOPED IN(...) clause not found in migration -- extraction regex is stale').toBeTruthy();
+    const inListText = branchMatch[1];
+
     const supabase = { rpc: async () => ({ data: null, error: null }) }; // must never be reached
     const bridgedTypes = ['thesis_kill_tier_b', 'distribution_skip'];
     for (const decisionType of bridgedTypes) {
-      // Both bridged types are VENTURE-SCOPED (proceed/kill) and must appear in that IN-list.
-      expect(migration).toMatch(new RegExp(`'${decisionType}'`));
+      // Both bridged types are VENTURE-SCOPED (proceed/kill) and must appear in THIS IN-list
+      // specifically -- not merely somewhere in the file.
+      expect(inListText).toMatch(new RegExp(`'${decisionType}'`));
       expect(await resolveDecisionVerb(supabase, decisionType, 'approved')).toBe('proceed');
       expect(await resolveDecisionVerb(supabase, decisionType, 'rejected')).toBe('kill');
     }

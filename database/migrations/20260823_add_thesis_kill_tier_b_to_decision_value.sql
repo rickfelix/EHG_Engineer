@@ -88,12 +88,12 @@ BEGIN
 
   RETURN CASE
     -- VENTURE-SCOPED types: 'kill' is honest here because a venture is what gets killed.
-    -- 'thesis_kill_tier_b' added 2026-08-23 (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 FR-3) -- see
-    -- this migration's header for why.
+    -- 'thesis_kill_tier_b' and 'distribution_skip' added 2026-08-23
+    -- (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 FR-3) -- see this migration's header for why.
     WHEN p_decision_type IN (
       'venture_disposition', 'stage_gate', 'launch_gate', 'gate_decision',
       'vision_approval', 'strategy_selection', 'product_review', 'distribution_block',
-      'thesis_kill_tier_b'
+      'thesis_kill_tier_b', 'distribution_skip'
     ) THEN CASE p_action WHEN 'approved' THEN 'proceed' ELSE 'kill' END
 
     -- APPROVAL-SHAPED types: the chairman is granting or withholding permission, not ending a

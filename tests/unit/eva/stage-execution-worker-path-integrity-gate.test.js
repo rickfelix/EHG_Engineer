@@ -294,7 +294,74 @@ describe('_advanceStage path-integrity choke-point (FR-1) — real method', () =
     expect(result?.blocked).not.toBe(true);
     expect(supabase.calls.venturesUpdate).toBe(1);
     const warnCalls = logger.warn.mock.calls.map((c) => c[0]).join('\n');
-    expect(warnCalls).toMatch(/composed-check evaluator error/);
+    expect(warnCalls).toMatch(/checkExitGates evaluator error/);
+  });
+
+  // SECURITY EXEC-TO-PLAN round-2 finding SEC-PATH-005: the FIRST fix for SEC-PATH-001 wrapped
+  // all 3 composed checks in ONE shared try/catch -- proved by SECURITY to introduce a WORSE bug
+  // under enforcement: a throw in limb 1 aborted the whole block, so a genuinely-failing limb 3
+  // (checkGateDebt) never even ran, and the catch's "nothing fired" default let the advance
+  // proceed even with the flag ON -- silently defeating the very gate this SD exists to install.
+  it('SEC-PATH-005: flag ON + a throwing limb fails CLOSED on the error itself (never a silent bypass), and a throw in one limb does not suppress evaluation of the others', async () => {
+    const supabase = makeSupabase({
+      // checkGateDebt WOULD genuinely block here (failed kill gate, no resolving decision) --
+      // proving this limb still gets evaluated even though checkExitGates throws first.
+      gateResultRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      chairmanDecisionRows: [],
+      flagRow: { is_enabled: true },
+    });
+    const realFrom = supabase.from;
+    let ventureStagesCalls = 0;
+    supabase.from = (table) => {
+      if (table === 'venture_stages') {
+        ventureStagesCalls += 1;
+        if (ventureStagesCalls > 1) {
+          return { select: () => { throw new Error('injected evaluator throw (SEC-PATH-005 repro)'); } };
+        }
+      }
+      return realFrom(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 5, 6, {});
+
+    // Fails CLOSED on the evaluator error itself -- distinct reason from a genuine gate finding,
+    // never a silent advance.
+    expect(result).toEqual({ advanced: false, blocked: true, reason: expect.stringContaining('path_integrity_check_error') });
+    expect(result.reason).toMatch(/exit_gates/);
+    expect(supabase.calls.venturesUpdate).toBe(0);
+    const ev = supabase.calls.systemEvents.find((e) => e.event_type === 'PATH_INTEGRITY_BLOCKED');
+    expect(ev).toBeDefined();
+    expect(ev.payload.limbs).toMatch(/exit_gates/);
+  });
+
+  it('SEC-PATH-005 control: flag OFF + a throwing limb still falls through to advance (fail-open unchanged for the observe-only path), and the sibling checkGateDebt limb still runs and still logs', async () => {
+    const supabase = makeSupabase({
+      gateResultRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
+      chairmanDecisionRows: [],
+      flagRow: { is_enabled: false },
+    });
+    const realFrom = supabase.from;
+    let ventureStagesCalls = 0;
+    supabase.from = (table) => {
+      if (table === 'venture_stages') {
+        ventureStagesCalls += 1;
+        if (ventureStagesCalls > 1) {
+          return { select: () => { throw new Error('injected evaluator throw (SEC-PATH-005 control)'); } };
+        }
+      }
+      return realFrom(table);
+    };
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 5, 6, {});
+
+    expect(result?.blocked).not.toBe(true);
+    expect(supabase.calls.venturesUpdate).toBe(1);
+    // gate_debt still fired and was logged even though exit_gates threw -- sibling limbs are not
+    // suppressed by one another's error.
+    const warnCalls = logger.warn.mock.calls.map((c) => c[0]).join('\n');
+    expect(warnCalls).toMatch(/gate_debt/);
   });
 
   it('does not run for a venture/stage with no failed blocking gate at all (zero-noise control)', async () => {
