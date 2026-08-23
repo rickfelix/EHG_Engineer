@@ -120,6 +120,12 @@ export function buildInventory({ root = ROOT } = {}) {
         // An override with a `match` content-anchor is ignored when the line no longer
         // contains it — line-number keys drift as files are edited, and a drifted override
         // must fail SAFE (back to auto-classification), never re-target a different site.
+        // KNOWN LIMITATION: a cosmetically reformatted overridden line (e.g. re-wrapped, quote
+        // style changed) that no longer contains the exact `match` substring falls back to
+        // auto-classification with NO distinct signal from "the exemption's justification no
+        // longer applies because the code genuinely changed" — both look identical (the site
+        // simply re-appears in needs-review), so a reviewer cannot tell drift from regression
+        // from this output alone.
         const raw = overrides[key];
         const anchored = raw && (!raw.match || line.includes(raw.match));
         const ov = raw && raw.note && anchored ? raw : undefined;

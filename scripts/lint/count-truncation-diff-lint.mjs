@@ -94,6 +94,15 @@ function isUntracked(relFile) {
   } catch { return true; }
 }
 
+/**
+ * KNOWN LIMITATION: only the `.select(` line's OWN line number needs to be in `addedLines` for a
+ * site to be checked — a PR that widens an EXISTING, unmodified `.select(...).limit(50)` chain by
+ * changing only the `.limit(50)` line to `.limit(5000)` (or deletes the `.limit(` line entirely)
+ * does not re-trigger classification of the untouched `.select(` line above it, since this control
+ * does not walk the chain backward from a changed continuation line to find its owning `.select(`.
+ * That class of edit is invisible to this control; the pre-existing inventory (advisory) is the
+ * only mechanism that would eventually re-surface it on its own periodic re-run.
+ */
 function scanFile(relFile, addedLines) {
   const abs = path.join(REPO_ROOT, relFile);
   if (!fs.existsSync(abs)) return [];
