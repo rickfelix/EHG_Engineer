@@ -100,6 +100,33 @@ describe('surfaceSmsInbound', () => {
     expect(res.rows[0].body).not.toContain('\n');
   });
 
+  // QF-20260823-384: measured live 2026-08-23 -- a row with drained_at+parked_at+resolved_at all
+  // set (chairman ack "All good!", disposed 27min earlier) still fired QUIET_TICK_SMS_INBOUND
+  // because the predicate never read resolved_at at all. resolved_at is an EXPLICIT operator
+  // disposition (scripts/resolve-parked-chairman-sms.cjs), unlike drained_at which QF-673 already
+  // established is not a safe "answered" signal -- so gating on it here does not reintroduce that
+  // regression.
+  it('excludes a row already terminal-resolved, even though it was never answered via an outbound reply', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const now = Date.now();
+    const sb = makeSupabase(smsBuilder([
+      {
+        id: 'g', from_phone: CHAIR, body_raw: 'All good!', signature_valid: true,
+        received_at: new Date(now - 27 * 60000).toISOString(),
+        drained_at: new Date(now - 25 * 60000).toISOString(),
+        parked_at: new Date(now - 25 * 60000).toISOString(),
+        resolved_at: new Date(now - 20 * 60000).toISOString(),
+      },
+      {
+        id: 'h', from_phone: CHAIR, body_raw: 'still waiting', signature_valid: true,
+        received_at: new Date(now - 10 * 60000).toISOString(), resolved_at: null,
+      },
+    ]));
+    const res = await surfaceSmsInbound(sb);
+    expect(res.count).toBe(1);
+    expect(res.rows.map((r) => r.id)).toEqual(['h']);
+  });
+
   it('is fail-soft on a query error: returns rows:[] with the error, never throws', async () => {
     const sb = makeSupabase(errorBuilder('relation "sms_relay_staging" does not exist'));
     const res = await surfaceSmsInbound(sb);

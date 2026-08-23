@@ -77,6 +77,15 @@ describe('QF-673 chairman inbound is surfaced by ANSWERED, not by drained_at', (
     expect(sb.used('sms_relay_staging', 'is', 'drained_at')).toBe(false);
   });
 
+  // QF-20260823-384: resolved_at was never read by this query at all -- an explicitly-dispositioned
+  // row kept re-firing the hard interrupt. Distinct from the drained_at assertion above: resolved_at
+  // IS a safe gate (an explicit operator action), where drained_at is not (an automatic event).
+  it('QUERIES resolved_at IS NULL — a terminal-resolved row must never re-surface', async () => {
+    const sb = makeSb({ staging: [inbound()], outbound: [] });
+    await surfaceSmsInbound(sb);
+    expect(sb.used('sms_relay_staging', 'is', 'resolved_at')).toBe(true);
+  });
+
   it('cross-references the ANSWERED signal in sms_outbound_obligations', async () => {
     // The store the ticket said did not exist. If this read is ever dropped, "answered" silently
     // becomes unknowable and the alarm degrades to the old always/never behaviour.
