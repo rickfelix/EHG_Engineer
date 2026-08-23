@@ -457,5 +457,28 @@
       "input": "scripts/one-off/**/*.{mjs,cjs} file TEXT (enumerated via fs.readdirSync directory walk, not git ls-files), each parsed through ESLint's Linter API against eslint-rules/require-main-guard-in-one-off.js -- an unconditional top-level main()/run() CallExpression with no isMainModule(...) call or fileURLToPath(import.meta.url)===process.argv[1] comparison anywhere in the file -- filtered against scripts/lint/require-main-guard-in-one-off-allowlist.json by repo-relative path. Consumes no DB columns and no environment variables.",
       "seen": "Real positive observed in this PR's own CI (GitHub Actions run 32548280401, job require-main-guard-in-one-off-lint, PR #7376, 2026-08-22): found 6 real un-allowlisted violations by exact file:line -- scripts/one-off/fix-fleet-down-alert-sd-scope-v2.mjs:72, fix-fleet-down-alert-sd-scope.mjs:91, fix-prd-fleet-down-alert-v2.mjs:297, fix-user-stories-fleet-down-alert-v2.mjs:100, insert-prd-fleet-down-alert-v2.mjs:368, insert-user-stories-fleet-down-alert-v2.mjs:151 -- six SUPABASE_SERVICE_ROLE_KEY-holding files that landed on origin/main after this branch's base and were genuinely unguarded (exit 1, a live CI block, not a fixture trial). All six were retrofitted with the recognized isMainModule(import.meta.url) guard in this same PR immediately after that run; a local re-run then reported 0 ungoverned violations."
     }
+  },
+  {
+    "name": "gate-stage-hardcoded-literal-lint",
+    "script": "scripts/lint/gate-stage-hardcoded-literal-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [
+      "--all"
+    ],
+    "note": "SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-7). Name-based (not file-based) -- flags a hardcoded literal assigned to KILL_GATE_STAGES/PROMOTION_GATE_STAGES/KILL_GATES/PROMOTION_GATES anywhere outside scripts/lint/gate-stage-hardcoded-literal-allowlist.json, cloned from stage-advancement-chokepoint-lint.mjs's proven template per TR-8. See docs/architecture/stage-advancement-fr4-tr8-triage.md for the full disposition table this lint enforces going forward.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-gate-stage-literal-defect.js",
+        "content": "// SEEDED DEFECT: reintroduces a hardcoded kill-gate literal outside the SSOT.\nexport const KILL_GATE_STAGES = new Set([3, 5, 13]);\n"
+      }
+    ],
+    "detectTokens": [
+      "KILL_GATE_STAGES"
+    ],
+    "observability_proof": {
+      "input": "Every *.js/*.cjs/*.mjs file TEXT under scripts/, lib/, and tests/ (enumerated via fs.readdirSync directory walk in --all mode, or git diff/ls-files in the default --diff mode), read via readFileSync -- matches a line where KILL_GATE_STAGES, PROMOTION_GATE_STAGES, KILL_GATES, or PROMOTION_GATES is assigned an array literal ('[') or a Set literal ('new Set('), excluding comment lines and lines carrying the gate-stage-lint-disable-line pragma, filtered against scripts/lint/gate-stage-hardcoded-literal-allowlist.json by repo-relative path. Consumes no DB columns and no environment variables.",
+      "seen": "EXEC run (2026-08-23) of 'node scripts/lint/gate-stage-hardcoded-literal-lint.mjs --all' against the live repo reported 0 violations across 4049 files, immediately after this SD's FR-1/FR-4 changes removed the last live KILL_GATE_STAGES/PROMOTION_GATE_STAGES/KILL_GATES/PROMOTION_GATES literal assignments from lib/agents/modules/venture-state-machine/stage-gates.js and lib/eva/devils-advocate.js (proving the scan reads real, current file content, not a stale/stubbed list). The same command run against a tmp-dir fixture carrying the seeded defect above reported exactly that violation by file:line:identifier and exited 1 (tests/unit/lint/gate-stage-hardcoded-literal-lint.test.js, TS-6 RED-first proof), and reported 0 violations again once the fixture literal was removed."
+    }
   }
 ]

@@ -516,6 +516,32 @@ via distinct custom SQLSTATEs so a broken guard cannot be silently swallowed by 
 OPERATOR_CONTRACT gate waiver (armed_cadence/reaper, expires 2026-11-23) on `metadata` for exactly
 this reason: nothing to arm a cadence against or reap until this table is live.
 
+## Dry-run proof for `database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql`
+
+Authored by SD-LEO-INFRA-RECONCILE-EHG-REPO-001, re-verified here for SD-LEO-INFRA-MINUS-GATE-SSOT-001
+(T-minus P2, FR-2). Note the unusual split: **the migration itself lives in `database/migrations/`**
+(not this directory) — the TIER-2 default-deny gate (`SD-LEO-INFRA-TIER-GATE-FLAG-001`) already
+protects it there because `CREATE OR REPLACE FUNCTION` is not provably additive, so it is not
+auto-applied by the handoff pipeline. Its own header carries the full `@chairman-gated` / `STATUS:
+STAGED` / `NEVER self-apply` markers. Only the dry-run proof script lives here.
+
+```
+node database/chairman-gated/20260722_stage_advancement_advance_venture_stage_gate_type_ssot_dry_run.mjs
+```
+
+Runs the migration body — `CREATE OR REPLACE FUNCTION advance_venture_stage(...)` plus its own `DO
+$verify$` block (10 ASSERTs: hardcoded `v_kill_gates`/`v_promotion_gates`/`v_all_gates` arrays gone,
+the `venture_stages` SSOT read landed, all preserved behavior intact) — inside a transaction that
+always `ROLLBACK`s, against live data. Re-run confirms the staged migration still applies cleanly and
+its self-verification still passes with no drift since 2026-07-24 authoring.
+
+**This SD's completion does NOT include applying this migration.** The apply ceremony (`--issue-token`
+then `--prod-deploy`, no `--allow-any-path` needed since the file already resolves inside
+`database/migrations/`) remains a separate, explicit chairman GO decision — the file has no
+`@approved-by:` marker and this SD does not add one. See the migration file's own header for the full
+behavior-delta analysis (S10/S16/S19/S25 promotion-gate enforcement begins; S23/S24 kill/promotion
+labels correct) and its documented deploy-time blast radius / pre-deploy census requirement.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert

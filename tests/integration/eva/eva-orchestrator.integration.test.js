@@ -11,7 +11,7 @@
  *   - convertSprintToSDs (lifecycle SD bridge, Stage 18)
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock sd-key-generator (has shebang that vitest can't transform)
 vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({
@@ -24,8 +24,16 @@ import { processStage, _internal } from '../../../lib/eva/eva-orchestrator.js';
 import { evaluateDecision, DEFAULTS } from '../../../lib/eva/decision-filter-engine.js';
 import { evaluateRealityGate, BOUNDARY_CONFIG } from '../../../lib/eva/reality-gates.js';
 import { isDevilsAdvocateGate } from '../../../lib/eva/devils-advocate.js';
+import { _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
 
 const { STATUS, FILTER_ACTION } = _internal;
+
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): stage-governance's 60s TTL cache must not leak
+// SSOT data between tests using different mock supabase clients (some with empty venture_stages,
+// some with real fixture data).
+beforeEach(() => {
+  _resetCacheForTest();
+});
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
 
@@ -325,20 +333,36 @@ describe('Eva Orchestrator Integration', () => {
   });
 
   describe('processStage at devil\'s advocate gate stages', () => {
-    it('should identify kill gate at stage 3', () => {
-      const { isGate, gateType } = isDevilsAdvocateGate(3);
+    // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): isDevilsAdvocateGate is now SSOT-derived (async,
+    // requires supabase) rather than a hardcoded-literal lookup.
+    function ssotMockSupabase() {
+      const rows = Array.from({ length: 26 }, (_, i) => {
+        const stage_number = i + 1;
+        const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+          : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+          : 'none';
+        return { stage_number, gate_type, work_type: 'decision_gate', review_mode: 'auto', is_high_consequence: false };
+      });
+      return {
+        from: () => ({ select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) }),
+        channel: () => ({ on: function () { return this; }, subscribe: function () { return this; } }),
+      };
+    }
+
+    it('should identify kill gate at stage 3', async () => {
+      const { isGate, gateType } = await isDevilsAdvocateGate(ssotMockSupabase(), 3);
       expect(isGate).toBe(true);
       expect(gateType).toBe('kill');
     });
 
-    it('should identify promotion gate at stage 17', () => {
-      const { isGate, gateType } = isDevilsAdvocateGate(17);
+    it('should identify promotion gate at stage 17', async () => {
+      const { isGate, gateType } = await isDevilsAdvocateGate(ssotMockSupabase(), 17);
       expect(isGate).toBe(true);
       expect(gateType).toBe('promotion');
     });
 
-    it('should skip devil\'s advocate for non-gate stages', () => {
-      const { isGate } = isDevilsAdvocateGate(1);
+    it('should skip devil\'s advocate for non-gate stages', async () => {
+      const { isGate } = await isDevilsAdvocateGate(ssotMockSupabase(), 1);
       expect(isGate).toBe(false);
     });
   });

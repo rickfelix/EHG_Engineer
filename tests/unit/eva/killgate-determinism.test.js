@@ -11,7 +11,28 @@ import {
   hasKillGateRecompute,
   recomputeKillGateVerdict,
 } from '../../../lib/eva/kill-gate-recompute.js';
-import { KILL_GATES, isStrongDevilsAdvocateChallenge, loadPersistedDevilsAdvocate } from '../../../lib/eva/devils-advocate.js';
+import { getKillGates, isStrongDevilsAdvocateChallenge, loadPersistedDevilsAdvocate } from '../../../lib/eva/devils-advocate.js';
+
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): getKillGates is now SSOT-derived (async, requires
+// supabase) rather than a hardcoded literal — top-level await preserves this file's
+// "stays in sync with the live set" property.
+function mockSupabase() {
+  const rows = Array.from({ length: 26 }, (_, i) => {
+    const stage_number = i + 1;
+    const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+      : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+      : 'none';
+    return { stage_number, gate_type, work_type: 'decision_gate', review_mode: 'auto', is_high_consequence: false };
+  });
+  return {
+    from: () => ({
+      select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }),
+    }),
+    channel: () => ({ on: function () { return this; }, subscribe: function () { return this; } }),
+  };
+}
+
+const KILL_GATES = await getKillGates(mockSupabase());
 
 // ── Fixtures: persisted artifacts shaped like each stage's locked output ─────
 const s3Pass = [{ artifactType: 'stage_3_analysis', payload: { overallScore: 82, metrics: { a: 80, b: 75, c: 70 } } }];
@@ -89,9 +110,10 @@ describe('S3 recompute from persisted scorecard artifact', () => {
 
 // ── TS-3: kill-gate predicates broadened to the full KILL_GATES set ──────────
 describe('KILL_GATES (single source of truth)', () => {
+  // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): corrected SSOT set is [3,5,13,23] (was [3,5,13,24]).
   it('covers all four kill gates', () => {
-    expect(KILL_GATES).toEqual([3, 5, 13, 24]);
-    for (const g of [3, 5, 13, 24]) expect(KILL_GATES.includes(g)).toBe(true);
+    expect(KILL_GATES).toEqual([3, 5, 13, 23]);
+    for (const g of [3, 5, 13, 23]) expect(KILL_GATES.includes(g)).toBe(true);
     expect(KILL_GATES.includes(7)).toBe(false);
   });
 });
