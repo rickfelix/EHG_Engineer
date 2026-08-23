@@ -34,7 +34,13 @@ function makeSupabase({ sdRows = [{ id: 'sd1', status: 'draft' }], ventureRow = 
     const terminalData =
       table === 'strategic_directives_v2' ? sdRows :
       table === 'ventures' ? ventureRow :
-      table === 'venture_stage_work' ? stageWork : null;
+      table === 'venture_stage_work' ? stageWork :
+      // SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 (FR-1): _advanceStage now also composes
+      // checkExitGates, which fail-CLOSES (+ writes an EXIT_GATE_ANOMALY system_events row) on a
+      // MISSING venture_stages row by design. A real venture_stages row exists for every stage in
+      // production; fake one here with no declared exit gates so this file's S19-build-completion
+      // assertions aren't contaminated by an unrelated exit-gate anomaly write.
+      table === 'venture_stages' ? { metadata: { gates: {} }, required_artifacts: [] } : null;
     const chain = {
       select: () => chain,
       eq: () => chain,

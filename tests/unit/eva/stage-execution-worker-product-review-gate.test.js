@@ -36,21 +36,44 @@ const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), deb
  * branch (SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 FR-4) for the fail-open kill-switch read.
  * killSwitchRow: undefined = no row (absent, must resolve to disabled per TS-12); an object =
  * the row content (e.g. { is_enabled: true }).
+ *
+ * leo_feature_flags is keyed by the .eq('flag_key', ...) filter actually applied — WITHOUT this,
+ * a single shared terminalData would leak killSwitchRow into every leo_feature_flags read on this
+ * fake, including FR-1's unrelated PATH_INTEGRITY_EXIT_GATE_ENFORCE read (now also composed into
+ * _advanceStage() for every fromStage/toStage pair, not just 23->24), silently "enabling" FR-1
+ * enforcement whenever a test only meant to enable FR-4's kill-switch.
+ *
+ * venture_stages defaults to a row with no declared exit gates so FR-1's checkExitGates call
+ * (also unconditional now) doesn't fail-closed on a missing-row anomaly unrelated to this file's
+ * product-review-specific assertions (mirrors the same fix applied to
+ * stage-execution-worker-s19-harden.test.js).
  */
 function makeSupabase({ productReviewDecision = null, killSwitchRow = undefined } = {}) {
   const calls = { venturesUpdate: 0, systemEvents: [] };
   const from = (table) => {
-    let terminalData = table === 'chairman_decisions' ? productReviewDecision : null;
-    if (table === 'leo_feature_flags') terminalData = killSwitchRow === undefined ? null : killSwitchRow;
+    const eqFilters = [];
+    const terminalData =
+      table === 'chairman_decisions' ? productReviewDecision :
+      table === 'venture_stages' ? { metadata: { gates: {} }, required_artifacts: [] } :
+      null;
     const chain = {
       select: () => chain,
-      eq: () => chain,
+      eq: (column, value) => { eqFilters.push({ column, value }); return chain; },
       neq: () => chain,
       in: () => chain,
       gt: () => chain,
       order: () => chain,
       limit: () => chain,
-      maybeSingle: async () => ({ data: terminalData, error: null }),
+      maybeSingle: async () => {
+        if (table === 'leo_feature_flags') {
+          const flagKey = eqFilters.find((f) => f.column === 'flag_key')?.value;
+          const data = flagKey === 'PATH_INTEGRITY_PRODUCT_REVIEW_KILL_SWITCH' && killSwitchRow !== undefined
+            ? killSwitchRow
+            : null; // any other flag_key (e.g. PATH_INTEGRITY_EXIT_GATE_ENFORCE) defaults absent/disabled
+          return { data, error: null };
+        }
+        return { data: terminalData, error: null };
+      },
       single: async () => ({ data: terminalData, error: null }),
       upsert: async () => ({ data: null, error: null }),
       insert: async (row) => { if (table === 'system_events') calls.systemEvents.push(row); return { data: null, error: null }; },
