@@ -94,24 +94,19 @@ function makeWorker(supabase) {
 describe('_advanceStage path-integrity choke-point (FR-1) — real method', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('TS-0a BASELINE (pre-fix behavior, must still hold): a failed BLOCKING gate + no decision advances anyway with no would-have-REFUSED log, when the flag row is absent', async () => {
-    // NOTE: this is deliberately the SAME scenario as TS-1's flag-OFF case below -- it exists
-    // separately so the flag-absent default (TS-11-adjacent) and the "still advances, still logs"
-    // behavior are each independently pinned.
-    const supabase = makeSupabase({
-      gateResultRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
-      chairmanDecisionRows: [],
-      flagRow: undefined,
-    });
-    const worker = makeWorker(supabase);
-
-    const result = await worker._advanceStage('v-1', 5, 6, {});
-
-    expect(result?.blocked).not.toBe(true);
-    expect(supabase.calls.venturesUpdate).toBe(1);
-  });
-
-  it('TS-1: flag OFF -- advances exactly as before (no regression) AND logs a would-have-REFUSED warning naming the fired limb', async () => {
+  // TS-0a (pre_fix_baseline, TR-7): originally shipped as a SEPARATE, permanently-passing test
+  // asserting only "advances, doesn't block" -- TESTING EXEC-TO-PLAN finding C1 correctly flagged
+  // this as HOLLOW: that assertion is identically true on origin/main and on HEAD, so it measures
+  // nothing and TR-7 requires such a baseline be rejected. TR-7's actual intent is that the
+  // BASELINE SCENARIO run green pre-fix (confirmed manually during EXEC: this whole file's
+  // TS-1/TS-2/doc-consistency assertions were RED against unmodified stage-execution-worker.js
+  // before FR-1 was implemented, while a weaker "still advances" assertion was green) and then be
+  // INVERTED into a permanent regression test once the fix lands -- not retained twice in both
+  // forms. TS-1 immediately below IS that inverted form (same scenario: flag absent/OFF, failed
+  // blocking gate) with the actual discriminating clauses (would-have-REFUSED log AND the
+  // queryable system_events row, C2) that are false pre-fix and true post-fix. Per TESTING's
+  // offered alternative, withdrawing the redundant hollow duplicate rather than keeping both.
+  it('TS-1: flag OFF -- advances exactly as before (no regression), logs a would-have-REFUSED warning naming the fired limb, AND writes a QUERYABLE system_events row (AC#5)', async () => {
     const supabase = makeSupabase({
       gateResultRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
       chairmanDecisionRows: [],
@@ -127,9 +122,17 @@ describe('_advanceStage path-integrity choke-point (FR-1) — real method', () =
     expect(warnCalls).toMatch(/PATH-INTEGRITY CHOKE-POINT/);
     expect(warnCalls).toMatch(/would have REFUSED/);
     expect(warnCalls).toMatch(/gate_debt/);
+    // C2: a log line alone isn't queryable -- AC#5 requires a real, aggregable record so a future
+    // promotion decision can be made from data, not guesswork.
+    const ev = supabase.calls.systemEvents.find((e) => e.event_type === 'PATH_INTEGRITY_WOULD_BLOCK');
+    expect(ev).toBeDefined();
+    expect(ev.venture_id).toBe('v-1');
+    expect(ev.payload.enforced).toBe(false);
+    expect(ev.payload.limbs).toMatch(/gate_debt/);
+    expect(ev.payload).toEqual(ev.details); // dual-write, no event_data column
   });
 
-  it('TS-2: flag ON -- BLOCKS with the exact { advanced:false, blocked:true, reason } shape, never throws, and the checkGateDebt limb fires specifically (exit-gates/thesis-kill trivially pass)', async () => {
+  it('TS-2: flag ON -- BLOCKS with the exact { advanced:false, blocked:true, reason } shape, never throws, the checkGateDebt limb fires specifically (exit-gates/thesis-kill trivially pass), AND writes the same queryable system_events shape', async () => {
     const supabase = makeSupabase({
       gateResultRows: [{ gate_type: 'kill', passed: false, overall_score: 42 }],
       chairmanDecisionRows: [],
@@ -144,6 +147,69 @@ describe('_advanceStage path-integrity choke-point (FR-1) — real method', () =
     expect(supabase.calls.venturesUpdate).toBe(0);
     // D8: must name WHICH limb fired -- exit_gates/thesis_kill must NOT appear (they trivially pass).
     expect(result.reason).not.toMatch(/exit_gates|thesis_kill/);
+    // TR-2: "both [OFF logging and ON block] write to the SAME observable shape."
+    const ev = supabase.calls.systemEvents.find((e) => e.event_type === 'PATH_INTEGRITY_BLOCKED');
+    expect(ev).toBeDefined();
+    expect(ev.payload.enforced).toBe(true);
+  });
+
+  // TESTING EXEC-TO-PLAN finding C3: TS-2 above only exercises the checkGateDebt limb (by design,
+  // per D8) -- the exit_gates limb was reachable through this new choke-point but had no
+  // committed test proving it. Seeds a BINDING gates.exit entry with NO registered verifier,
+  // which exit-gate-enforcer.js's own HP-1 fail-closed contract turns into blocked_by (no gate
+  // string needs to be "real" to test that this choke-point correctly surfaces the limb).
+  it('TS-2 limb coverage: the checkExitGates limb (not just checkGateDebt) also fires and blocks when flag ON', async () => {
+    const supabase = makeSupabase({
+      ventureStagesRow: { metadata: { gates: { exit: ['a-totally-unregistered-gate-string'] } }, required_artifacts: [] },
+      gateResultRows: [], // no failed blocking gate -- isolates the exit_gates limb specifically
+      chairmanDecisionRows: [],
+      flagRow: { is_enabled: true },
+    });
+    const worker = makeWorker(supabase);
+
+    const result = await worker._advanceStage('v-1', 5, 6, {});
+
+    expect(result).toEqual({ advanced: false, blocked: true, reason: expect.stringContaining('exit_gates') });
+    expect(result.reason).not.toMatch(/gate_debt|thesis_kill/);
+    expect(supabase.calls.venturesUpdate).toBe(0);
+  });
+
+  // TESTING EXEC-TO-PLAN finding C3 (documented, not silently omitted): unlike checkExitGates and
+  // checkGateDebt, the thesis_kill limb cannot be driven to FIRED through _advanceStage()'s call
+  // path AT ALL today, in EITHER mode -- not just "dead by construction of the default observe
+  // config" as originally flagged, but structurally: checkThesisKillGate({ supabase, ventureId,
+  // fromStage, toStage }) is called here WITHOUT the optional resolveObservedValue override, so it
+  // always falls back to defaultResolveObservedValue (thesis-kill-evaluator.js), which returns
+  // undefined for every metric by design ("no gauge source is wired for any thesis-kill metric
+  // today... this default must never be replaced with a guess"). Every due criterion therefore
+  // classifies as HOLD, never FIRED, regardless of LEO_THESIS_KILL_GATE mode -- this is a
+  // pre-existing gap from SD-LEO-INFRA-KILL-GATE-TIER-001 (wiring a real gauge source), out of
+  // scope for this SD to fix. Proven here rather than asserted: even with an armed, due criterion
+  // AND binding mode, the limb never fires.
+  it('TS-2 limb coverage: the thesis_kill limb structurally cannot fire via this call path today (no gauge source wired, any mode)', async () => {
+    const originalFlag = process.env.LEO_THESIS_KILL_GATE;
+    process.env.LEO_THESIS_KILL_GATE = 'binding';
+    vi.resetModules();
+    try {
+      const { StageExecutionWorker: FreshWorker } = await import('../../../lib/eva/stage-execution-worker.js');
+      const supabase = makeSupabase({
+        ventureRow: { metadata: { kill_criteria: [{ stage_by: 1, metric: 'mrr', comparator: 'lt', threshold: 100, criterion_id: 'c1' }] } },
+        gateResultRows: [],
+        chairmanDecisionRows: [],
+        flagRow: { is_enabled: true },
+      });
+      const worker = new FreshWorker({ supabase, logger, pollIntervalMs: 999999 });
+      worker._logStageTransition = vi.fn().mockResolvedValue(undefined);
+      worker._runPostStageHooks = vi.fn().mockResolvedValue(undefined);
+
+      const result = await worker._advanceStage('v-1', 5, 6, {});
+
+      expect(result?.blocked).not.toBe(true); // HOLD, never FIRED -- advances (no other limb fires either)
+    } finally {
+      if (originalFlag === undefined) delete process.env.LEO_THESIS_KILL_GATE;
+      else process.env.LEO_THESIS_KILL_GATE = originalFlag;
+      vi.resetModules();
+    }
   });
 
   it('TS-2 regression control: flag ON, gate PASSED (no failed blocking gate) -- advances normally, checkGateDebt never fires', async () => {
