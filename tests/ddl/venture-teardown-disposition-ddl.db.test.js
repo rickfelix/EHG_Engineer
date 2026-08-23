@@ -52,16 +52,30 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$ SEL
 -- authorization (see file header) so it is stubbed to always authorize.
 CREATE OR REPLACE FUNCTION public.fn_is_chairman() RETURNS BOOLEAN LANGUAGE sql STABLE AS $$ SELECT true; $$;
 
+-- TESTING F-EXEC-1 (EXEC-phase review): tests/ddl/*.db.test.js all share ONE ephemeral
+-- database (fileParallelism: false, no per-file schema isolation) -- whichever file's
+-- beforeAll runs first wins this CREATE TABLE, and 3 sibling files (telegram-bot-insert-
+-- feedback-drop, venture-ingest-key-binding, venture-user-feedback-ownership-rpc) already
+-- converged on a compatible shape (id, name, deleted_at, metadata) specifically to survive
+-- that race regardless of ordering. This file's own needed columns are disjoint from that
+-- shape, so declaring them ONLY here would make every test order-dependent: red if this
+-- file loses the CREATE TABLE race, and it would break the 3 siblings if it wins. Declaring
+-- the converged shape here too, THEN adding this file's own columns via ADD COLUMN IF NOT
+-- EXISTS (idempotent, runs regardless of who won CREATE TABLE), makes both directions safe.
 CREATE TABLE IF NOT EXISTS public.ventures (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT,
-  status TEXT,
-  workflow_status TEXT DEFAULT 'pending',
-  deployment_url TEXT,
-  killed_at TIMESTAMPTZ,
-  kill_reason TEXT,
-  updated_at TIMESTAMPTZ DEFAULT now()
+  deleted_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::jsonb
 );
+
+ALTER TABLE public.ventures
+  ADD COLUMN IF NOT EXISTS status TEXT,
+  ADD COLUMN IF NOT EXISTS workflow_status TEXT DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS deployment_url TEXT,
+  ADD COLUMN IF NOT EXISTS killed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS kill_reason TEXT,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS public.eva_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -156,6 +170,17 @@ describe('the migration applied', () => {
     await expect(
       client.query('UPDATE public.ventures SET teardown_disposition = \'not_a_real_value\' WHERE id = $1', [ventureId]),
     ).rejects.toMatchObject({ code: '23514' });
+  });
+
+  // FR-1 AC#4 (TESTING F-EXEC-6): CREATE OR REPLACE FUNCTION preserves an existing GRANT EXECUTE
+  // ACL (unlike DROP + CREATE, which would reset it) -- this migration deliberately has no
+  // top-level GRANT statement (see the migration's own header), so a regression that silently
+  // reset the ACL would only show up here, not in any assertion about the function's own logic.
+  it('kill_venture() keeps its existing GRANT EXECUTE TO authenticated after CREATE OR REPLACE', async () => {
+    const { rows } = await client.query(
+      "SELECT has_function_privilege('authenticated', 'public.kill_venture(uuid, text)', 'EXECUTE') AS can_execute",
+    );
+    expect(rows[0].can_execute).toBe(true);
   });
 });
 

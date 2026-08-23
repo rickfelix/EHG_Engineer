@@ -492,22 +492,25 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
 /**
  * Purpose-built fake, deliberately NOT the shared makeSupabase() above (TESTING F7: the rigid
  * shared fake only speaks `ventures`/`periodic_process_registry`, doesn't filter, and doesn't
- * differentiate the SAME table queried two different ways in one job -- job 6 below queries
- * `ventures` once via the standard select/not/neq/order/range chain (jobs 1-3's shape) and
- * again via select/in/range (the tolerant teardown_disposition read)). `deploymentsByVentureId`
- * stands in for `venture_deployments.metadata.probe` that job 3 already wrote this cycle.
+ * differentiate the SAME table queried three different ways in these two jobs:
+ *   - fetchLiveDeploymentVentures (jobs 1-3's set, also job 7's narrower `ventures` var):
+ *     select/not/neq/order/range -- TESTING F-EXEC-2: must actually apply the real
+ *     `.not(deployment_url, is, null)` predicate, or a test asserting "the deployment_url-based
+ *     check uses the NARROWER set" can't distinguish it from the whole-portfolio set.
+ *   - fetchAllVentureIds (job 7's `allVentures`, whole portfolio): select/order/range, no filter.
+ *   - job 6's tolerant teardown_disposition read: select/in/range.
+ * `deploymentsByVentureId` stands in for `venture_deployments.metadata.probe` job 3 already wrote.
  */
 function makeSupabaseForJobs6And7({ ventures, deploymentsByVentureId = {}, teardownDispositionByVentureId = null }) {
   return {
     from(table) {
       if (table === 'ventures') {
-        // Fresh per-.from() state: the teardown_disposition-missing-column simulation must apply
-        // ONLY to job 6's own select/in/range chain -- NOT to fetchLiveDeploymentVentures' or
-        // fetchAllVentureIds' select/not-or-order/range chains, which never call .in().
+        // Fresh per-.from() state -- each call site's chain shape decides what .range() returns.
+        let usedNot = false;
         let usedIn = false;
         return {
           select() { return this; },
-          not() { return this; },
+          not() { usedNot = true; return this; },
           neq() { return this; },
           in() { usedIn = true; return this; },
           order() { return this; },
@@ -515,7 +518,10 @@ function makeSupabaseForJobs6And7({ ventures, deploymentsByVentureId = {}, teard
             if (usedIn && teardownDispositionByVentureId === 'MISSING_COLUMN') {
               return { data: null, error: { message: 'column ventures.teardown_disposition does not exist' } };
             }
-            return { data: ventures, error: null };
+            // Mirrors fetchLiveDeploymentVentures' real .not('deployment_url','is',null)
+            // .neq('deployment_url','') predicate -- fetchAllVentureIds (no .not()) sees every row.
+            const data = usedNot ? ventures.filter((v) => v.deployment_url) : ventures;
+            return { data, error: null };
           },
           then: (resolve) => resolve({ data: ventures, error: null }),
         };
@@ -721,6 +727,12 @@ describe('venture-ops-actuals-sweep Job 7: duplicate-name + registry divergence 
     const report = result.summary.jobs['venture-divergence-report'];
     expect(report.live_unregistered_by_status).toHaveLength(1);
     expect(report.live_unregistered_by_status[0].id).toBe('apex');
+    // TESTING F-EXEC-2: the genuine discriminator -- a deployment_url=NULL venture must NOT
+    // appear in the narrower deployment_url-based check (it's filtered out of `ventures` by
+    // fetchLiveDeploymentVentures' real .not(deployment_url, is, null) predicate before job 7
+    // ever sees it), proving the two checks read from actually-different sets, not the same
+    // unfiltered data twice.
+    expect(report.live_unregistered_by_deployment_url).toHaveLength(0);
   });
 
   it('surfaces live-but-unregistered (deployment_url-based) as a SEPARATE report key for an active, deployed, is_demo=false venture with no matching registry entry', async () => {

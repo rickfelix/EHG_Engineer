@@ -341,11 +341,13 @@ describe.skipIf(!HAS_REAL_DB)('reject_chairman_decision kill-gate: teardown_disp
   let ventureId = null;
   let decisionId = null;
   let originalDeploymentUrl = null;
+  let originalStatus = null;
+  let originalWorkflowStatus = null;
 
   beforeAll(async () => {
     const { data: venture } = await supabase
       .from('ventures')
-      .select('id, deployment_url')
+      .select('id, deployment_url, status, workflow_status')
       .is('killed_at', null)
       .neq('workflow_status', 'killed')
       .limit(1)
@@ -354,6 +356,12 @@ describe.skipIf(!HAS_REAL_DB)('reject_chairman_decision kill-gate: teardown_disp
     if (!venture) return;
     ventureId = venture.id;
     originalDeploymentUrl = venture.deployment_url;
+    // TESTING F-EXEC-3 (EXEC-phase review): the borrowed venture is arbitrary (2 of 152 live
+    // ventures are 'paused', not 'active') -- capture its real status/workflow_status here and
+    // restore those exact values in afterAll below, instead of hardcoding a guessed restore
+    // value that could silently leave a live venture's status wrong once this is un-skipped.
+    originalStatus = venture.status;
+    originalWorkflowStatus = venture.workflow_status;
 
     await supabase
       .from('ventures')
@@ -382,8 +390,8 @@ describe.skipIf(!HAS_REAL_DB)('reject_chairman_decision kill-gate: teardown_disp
       await supabase
         .from('ventures')
         .update({
-          status: 'active',
-          workflow_status: 'pending',
+          status: originalStatus,
+          workflow_status: originalWorkflowStatus,
           killed_at: null,
           kill_reason: null,
           teardown_disposition: null,
