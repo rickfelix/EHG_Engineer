@@ -186,7 +186,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
       options,
       label: 'PLAN-TO-LEAD',
       generateFn: async () => {
-        const { executeSubAgent } = await import('../../../../lib/sub-agent-executor.js');
+        // SD-LEO-INFRA-PLAN-LEAD-RETRO-001: pre-existing path was one level short
+        // (scripts/lib/... instead of <root>/lib/...) — MODULE_NOT_FOUND was silently
+        // swallowed by the old catch-and-warn, so preflight generation never actually ran.
+        const { executeSubAgent } = await import('../../../../../lib/sub-agent-executor.js');
         const retroResult = await executeSubAgent('RETRO', sd.id || sdId, { mode: 'completion' });
         if (retroResult?.verdict === 'FAIL') {
           throw new Error(retroResult.findings?.[0]?.detail || 'RETRO sub-agent returned FAIL');
