@@ -164,6 +164,17 @@ CREATE TRIGGER eva_stage_gate_attempts_no_update_after_final
   BEFORE UPDATE ON public.eva_stage_gate_attempts
   FOR EACH ROW EXECUTE FUNCTION public.eva_stage_gate_attempts_freeze();
 
+-- SECURITY (EXEC-TO-PLAN, SEC-M1): a default (ORIGIN-mode) trigger is suppressed by
+-- `SET LOCAL session_replication_role = 'replica'` -- measured live: only `postgres` can set that
+-- GUC (service_role/authenticated/anon all get 42501), so this is not an anon-writable path, but
+-- `postgres` is the role every migration and one-off script in this harness connects as, and
+-- restore/bulk-load tooling sets replica mode routinely and SILENTLY (no catalog trace -- measured
+-- `has_parameter_privilege` and `pg_parameter_acl` both wrongly report this as already closed).
+-- ENABLE ALWAYS makes the guard fire regardless of replication role, matching the identical fix
+-- already applied and behaviourally verified on the sibling ledger table
+-- (20260823_chairman_ratifications.sql:165-167).
+ALTER TABLE public.eva_stage_gate_attempts ENABLE ALWAYS TRIGGER eva_stage_gate_attempts_no_update_after_final;
+
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- ATOMIC WRITE FUNCTIONS. Both wrap their work in the calling transaction (no internal COMMIT),
 -- so a caller that wraps open+finalize in one transaction gets a real atomic unit, and a caller
@@ -252,8 +263,17 @@ CREATE POLICY eva_stage_gate_attempts_service_role
 REVOKE ALL ON public.eva_stage_gate_attempts FROM anon, authenticated, PUBLIC;
 GRANT ALL ON public.eva_stage_gate_attempts TO service_role;
 
-REVOKE ALL ON FUNCTION public.open_eva_gate_attempt(UUID, INTEGER, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.finalize_eva_gate_attempt(UUID, TEXT, BOOLEAN, TEXT, JSONB, JSONB) FROM PUBLIC;
+-- SECURITY (EXEC-TO-PLAN, SEC-M2): `REVOKE ... FROM PUBLIC` alone does NOT remove a NAMED-role
+-- grant. `pg_default_acl` grants `anon=X/postgres` (EXECUTE) on every newly created function by
+-- default -- measured live post-apply: `has_function_privilege('anon', ...)` was TRUE for both
+-- RPCs before this fix. Both functions are SECURITY INVOKER (confirmed via `SET LOCAL ROLE anon`:
+-- calls die at 42501 on the underlying table, not at the function boundary), so this was not an
+-- exploitable write path today -- but it left two unauthenticated PostgREST RPC endpoints
+-- discoverable, and collapses the defense to a single layer (any future table-grant change or a
+-- flip to SECURITY DEFINER turns this into a live write path with no new review). Revoke the named
+-- roles explicitly, matching the table-level REVOKE two lines above.
+REVOKE ALL ON FUNCTION public.open_eva_gate_attempt(UUID, INTEGER, TEXT, TEXT) FROM anon, authenticated, PUBLIC;
+REVOKE ALL ON FUNCTION public.finalize_eva_gate_attempt(UUID, TEXT, BOOLEAN, TEXT, JSONB, JSONB) FROM anon, authenticated, PUBLIC;
 GRANT EXECUTE ON FUNCTION public.open_eva_gate_attempt(UUID, INTEGER, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.finalize_eva_gate_attempt(UUID, TEXT, BOOLEAN, TEXT, JSONB, JSONB) TO service_role;
 
@@ -310,6 +330,31 @@ BEGIN
       AND grantee IN ('anon', 'authenticated', 'PUBLIC')
   ) THEN
     RAISE EXCEPTION 'eva_stage_gate_attempts: a non-service grant is present on the new table';
+  END IF;
+
+  -- SECURITY (EXEC-TO-PLAN, SEC-M1 regression guard): a bare `REVOKE ... FROM PUBLIC` does not
+  -- remove `pg_default_acl`'s named-role grant -- this check would have caught the pre-fix state,
+  -- where `has_function_privilege('anon', ...)` measured TRUE on both RPCs despite the table-level
+  -- REVOKE above being correct.
+  IF has_function_privilege('anon', 'public.open_eva_gate_attempt(uuid,integer,text,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.open_eva_gate_attempt(uuid,integer,text,text)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.finalize_eva_gate_attempt(uuid,text,boolean,text,jsonb,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.finalize_eva_gate_attempt(uuid,text,boolean,text,jsonb,jsonb)', 'EXECUTE')
+  THEN
+    RAISE EXCEPTION 'eva_stage_gate_attempts: anon/authenticated retain EXECUTE on the RPC functions';
+  END IF;
+
+  -- SECURITY (EXEC-TO-PLAN, SEC-M2 regression guard): `pg_parameter_acl` cannot see this setting
+  -- (measured: it reports empty even when the freeze trigger's ORIGIN mode is bypassable), so
+  -- `pg_trigger.tgenabled` is the only reliable catalog check that the guard survives
+  -- `SET LOCAL session_replication_role = 'replica'`.
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.eva_stage_gate_attempts'::regclass
+      AND tgname = 'eva_stage_gate_attempts_no_update_after_final'
+      AND tgenabled <> 'A'
+  ) THEN
+    RAISE EXCEPTION 'eva_stage_gate_attempts: the finalize-immutability trigger is not ENABLE ALWAYS (replica-mode bypassable)';
   END IF;
 
   SELECT id INTO v_venture_id FROM public.ventures LIMIT 1;

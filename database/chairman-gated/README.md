@@ -438,16 +438,44 @@ node database/chairman-gated/20260823_eva_stage_gate_attempts_updown_roundtrip.m
 
 The dry-run executes the real UP body (table, indexes, trigger, functions, RLS) plus its own
 `DO $verify$` block's behavioural proofs (finalize-immutability rejection, duplicate-attempt-number
-rejection, atomic allocation) against the real database inside a transaction that always
+rejection, atomic allocation, and — since the SECURITY pass below — function-grant and
+trigger-enable-mode existential checks) against the real database inside a transaction that always
 `ROLLBACK`s. The round-trip proof additionally runs the real DOWN body afterward and asserts the
 table and all 3 functions are gone, proving the DOWN file is a genuine inverse rather than
 `IF EXISTS` no-ops that would "pass" even if its object names had drifted from the UP file's.
 
-**Also fixed while wiring the dual-write (TESTING F11):** the taste-gate call site in
-`eva-orchestrator.js` passed `details:` where `recordGateResult` destructures `criteria:` — an
-unrecognized key silently dropped, so every taste-gate row wrote `gate_criteria=null` despite real
-evidence being available. Corrected to the recognized param name for both the existing and the new
-write path.
+**SECURITY (EXEC-TO-PLAN) found and this file fixes, pre-apply, three gaps a sibling migration
+(`20260823_chairman_ratifications.sql`) had already hit and fixed on its own table:**
+- **SEC-M1**: the freeze trigger was default ORIGIN-mode — measured live (apply + rollback) that
+  `SET LOCAL session_replication_role = 'replica'` suppresses it, allowing a finalized row to be
+  silently rewritten. Only `postgres` can set that GUC (service_role/authenticated/anon all get
+  `42501`), so this was never anon-writable, but `postgres` is the role every migration and
+  one-off script in this harness connects as, and restore/bulk-load tooling sets replica mode
+  routinely with no catalog trace. Fixed with `ALTER TABLE ... ENABLE ALWAYS TRIGGER ...`, mirroring
+  the sibling table's own fix, and mutation-verified (neutering the fix makes the migration's own
+  verify block correctly abort).
+- **SEC-M2**: `REVOKE ALL ... FROM PUBLIC` on both RPC functions did not remove the named-role
+  EXECUTE grant `pg_default_acl` places on every new function by default — measured live that
+  `anon`/`authenticated` retained EXECUTE on both. Not exploitable today (both functions are
+  `SECURITY INVOKER`; the underlying table REVOKE still applies), but it left two unauthenticated
+  PostgREST RPC endpoints reachable and removed a layer of defense-in-depth. Fixed by revoking the
+  named roles explicitly, matching the table-level REVOKE.
+- **SEC-M3**: the migration's own verify block asserted its security posture in prose but didn't
+  mechanically check either of the above — both SEC-M1 and SEC-M2's pre-fix states would have
+  passed the original `DO $verify$` block cleanly. Both are now asserted (function-ACL check,
+  `pg_trigger.tgenabled='A'` check) so a future regression on either fails the dry-run, not just a
+  human reading the file.
+
+**Also found while wiring the dual-write (TESTING F11), corrected only on the new table (TESTING
+F-B):** the taste-gate call site in `eva-orchestrator.js` passed `details:` where `recordGateResult`
+destructures `criteria:` — an unrecognized key silently dropped, so every taste-gate row wrote
+`gate_criteria=null` on `eva_stage_gate_results` despite real evidence being available. Fixing that
+call's param name was reverted: `taste_gate_sN` shares `eva_stage_gate_results`' upsert key
+(`gate_type='exit'`) with the earlier `stage_gate` write at stages 10/13/16, so populating
+`gate_criteria` there would clobber that write's own evidence via Supabase's column-present-only
+UPDATE semantics. The fix landed only on the new `recordGateAttempt` write to
+`eva_stage_gate_attempts` (a fresh INSERT per attempt, no shared-key collision) — see the "Known
+limitation carried into the new table" section of the reader census below.
 
 **Deliberately not wired in this SD, documented as a follow-up (FR-6 partial):** stamping a
 chairman-override attempt's `attempt_id` into `chairman_decisions.context` /
