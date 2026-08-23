@@ -101,6 +101,20 @@ const RETURN_TYPE_OVERRIDES = {
   venture_exists_and_active: { returns: 'boolean', body: 'SELECT true' }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl / telegram-bot-insert-feedback-drop-ddl
   fn_anon_ingress_prior_hour_count: { returns: 'bigint', body: 'SELECT 0::bigint' }, // matches venture-ingest-key-binding-ddl / venture-user-feedback-ownership-rpc-ddl
   check_feedback_rate_limit: { returns: 'boolean', body: 'SELECT true' }, // matches venture-user-feedback-ownership-rpc-ddl / telegram-bot-insert-feedback-drop-ddl
+  fn_verify_and_consume_stepup_token: { returns: 'boolean', body: 'SELECT true' }, // matches venture-teardown-disposition-ddl (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001), real return type per live pg_get_function_result
+  fn_write_kill_audit_trail: { returns: 'uuid', body: 'SELECT NULL::uuid' }, // matches venture-teardown-disposition-ddl (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001), real return type per live pg_get_function_result
+  fn_is_chairman: { returns: 'boolean', body: 'SELECT true' }, // matches venture-teardown-disposition-ddl (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001), real return type per live pg_get_function_result
+  // reject_chairman_decision: venture-teardown-disposition-ddl's own CREATE OR REPLACE declares
+  // DEFAULT NULL on p_decided_by/p_stepup_token (matching the real live signature). If that file
+  // runs first in this shared job, a CREATE OR REPLACE here using the plain (default-free)
+  // BUCKET_B args would attempt to REMOVE those defaults -- also 42P13, same class as
+  // record_venture_error above. createArgs carries the defaults for the CREATE statement only;
+  // GRANT/REVOKE below still resolves by name+TYPES via the plain, default-free args.
+  reject_chairman_decision: {
+    returns: 'jsonb',
+    body: "SELECT '{}'::jsonb",
+    createArgs: 'p_decision_id uuid, p_rationale text, p_decided_by text DEFAULT NULL::text, p_stepup_token uuid DEFAULT NULL::uuid',
+  }, // matches venture-teardown-disposition-ddl (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001), real return type per live pg_get_function_result
 };
 
 function stubFunctionSql([name, args]) {
