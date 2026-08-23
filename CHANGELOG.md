@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-08-23](#2026-08-23)
+  - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-08-22](#2026-08-22)
   - [Security](#security)
@@ -138,6 +139,15 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-08-23
+
+### Infrastructure
+- **The coordinator's role-contract file had grown into a monolith mixing rules, how-to procedures, and dated historical rationale — split 3 ways, mirroring the Adam-role precedent** - PR #7423 (SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002)
+  - **What shipped**: `CLAUDE_COORDINATOR.md` (rules, DB-generated) is now paired with new `CLAUDE_COORDINATOR_MANUAL.md` (how-to procedures — Blocked-claim resolution, Gauge-integrity challenge checklist) and `CLAUDE_COORDINATOR_PROVENANCE.md` (dated rationale seed), via a new `generateCoordinatorManual`/`generateCoordinatorProvenance` pair mirroring the existing Adam companion generators; `KNOWN_GENERATED_FILES` grows 21→23. The coordinator's 34-entry `STANDARD_LOOPS` cron registry is now a governed, drift-checked contract surface (`tests/unit/coordinator/coordinator-loop-governance-drift.test.js` against a checked-in snapshot, not generated from the array itself — a prospective PLAN-phase TESTING review caught that a naive generate-from-source approach would be vacuously green). The `/coordinator` skill file and `docs/protocol/fleet-coordinator-and-worker-behavior.md` now explicitly declare themselves subordinate to the DB-generated charter, with drift detection on the sourcing-doctrine flag enumeration. A compact never-do block now sits at the top of the charter alongside the existing duty list.
+  - **A concurrent-session DB race surfaced mid-EXEC**: regenerating all 23 `CLAUDE_*.md` files produced substantive diffs in ~19 unrelated files (e.g. a new "WEIGHTED DUTY INDEX" section in `CLAUDE_ADAM.md`) that did not exist on `origin/main` — another live session was concurrently editing `leo_protocol_sections` rows. `check-claude-md-drift.cjs`'s `global` digest spans ALL sections fleet-wide, so a surgical patch isolating "this SD's rows" from a concurrent session's rows is not possible by the generator's own design; shipped the full, accurate regeneration reflecting current DB truth rather than a misleadingly partial revert.
+  - **A SECURITY sub-agent (EXEC-TO-PLAN) found the never-do block's DOC-001 clause self-contradicted the charter's own text**: "never create SDs/QFs yourself" read as absolute, while the same file explicitly authorizes the coordinator to run the canonical materialization script against an Adam-authored spec. Reworded to scope DOC-001 correctly — no hand-authored creation, no asking a *worker* to create one; materializing FROM Adam's spec via canonical scripts is authorized.
+  - **A TESTING sub-agent (EXEC-TO-PLAN) found the protocol-file-read tracker didn't know about the 2 new companion files** (a read-observability gap for the exact files this SD introduced), and separately caught a confirmed-dead test file (`tests/unit/coordinator-startup-check.test.mjs`, a `.test.mjs` outside vitest's include globs, never executed by any runner) pinned at a stale `STANDARD_LOOPS.length` of 23 against a live 34 — both corrected; the dead file's numeric fix also surfaced a second, pre-existing, out-of-scope logic gap (documented via comment, not repaired, since the file has zero CI consequence either way).
+  - **Deliberately deferred, signaled to the coordinator rather than fixed inline**: 3 pre-existing `scripts/one-off/*` files from the unrelated, already-completed SD-LEO-FIX-ENF-TRUSTS-FILE-001 fail the `require-main-guard-in-one-off-lint` CI check on every PR touching `main` — confirmed non-blocking (not a required status check) but noisy; needs its own follow-up QF.
+  - **Verification**: EXEC-TO-PLAN 87%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 96%.
 
 ### Bugfix
 - **The DATABASE sub-agent's migration file discovery had never found a single file, for any SD, ever — a fixture-blind PASS on every migration-related check** - PR #7420 (SD-LEO-FIX-DATABASE-SCHEMA-VALIDATOR-001, escalated from QF-20260822-945)
