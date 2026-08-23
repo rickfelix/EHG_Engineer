@@ -130,9 +130,19 @@ export const RESPONSIBILITIES = [
 // on). The two later rows are each verified in their own entry: sms-relay-drain (QF-20260727-064,
 // pre-existing drained_at stamping) and hourly-review (SD-LEO-INFRA-ALARM-HONESTY-001, which
 // BUILT the dedup — the one row whose SAFE verdict is a deliverable, not a discovery).
+// QF-20260822-510 — joint Adam+Solomon ruling (operator commission 60153bf2, executed by the
+// coordinator 2026-08-22 ~22:5xZ): drop the session-armed leg on the 8 gha_backed loops below
+// (sweep, unranked-gauge, singleton-relaunch, relay-drop-gauge, fleet-retro, row-growth,
+// gauge-runner, feedback-sla) — their GHA workflow is trusted as the sole cadence going forward,
+// so a coordinator restart must NOT re-arm the session copy (session_arm: false). relay-drain
+// and sms-relay-drain are DELIBERATELY EXCLUDED from this drop (chairman-lane carve-out): their
+// GHA copies are measured degraded (see the sms-relay-drain entry below), so those two keep the
+// "harmless redundant backup" posture. REVERSAL CONDITION (post-drop watch through
+// 2026-08-25T22Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, same-day
+// re-arm the session copy (flip session_arm back to true) and log the reversal.
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false,
     prompt: 'node scripts/stale-session-sweep.cjs' },
   // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: the quiet-tick cutover (docs/protocol/
   // fleet-hibernation-quiet-tick.md). ONE self-pacing LLM tick composes the folded loops below
@@ -212,7 +222,7 @@ export const STANDARD_LOOPS = [
   // (reuses backlog-rank's own claimable computation); offset from backlog-rank's own cadence so it
   // always observes a just-refreshed rank rather than racing it.
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
   // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4): the coordinator's forced-capture obligation,
   // evaluated at a recurring operating choke rather than at turn end (a wedged session never
@@ -234,7 +244,7 @@ export const STANDARD_LOOPS = [
   // and the human-gated spawn step). Cheap (git + a few DB reads); offset from the other */15-ish
   // loops so it doesn't cluster.
   { key: 'singleton-relaunch', label: 'Singleton-relaunch quiescent-window scheduler (detection + scheduling only)', script: 'singleton-relaunch-scheduler.mjs', cron: '7,22,37,52 * * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'npm run singleton-relaunch:run' },
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: drains
   // the tracked relay-request queue deliberately (never processed inline in the active
@@ -273,14 +283,14 @@ export const STANDARD_LOOPS = [
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.
   { key: 'relay-drop-gauge', label: 'Unactioned relay/decision/review drop gauge', script: 'coordinator-relay-drop-gauge.cjs', cron: '11,26,41,56 * * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'node scripts/coordinator-relay-drop-gauge.cjs' },
   // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
   // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
   // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).
   // Cheap read+insert; */30 captures session_coordination FLEET-RETRO signals before they are swept.
   { key: 'fleet-retro',  label: 'Worker fleet-retro (periodic capture/synthesis)', script: 'coordinator-fleet-retro.mjs', cron: '*/30 * * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'node scripts/coordinator-fleet-retro.mjs' },
   // SD-LEO-INFRA-STANDING-ROW-GROWTH-001: daily governance-table row-growth gauge.
   // Snapshots estimated row counts (PostgREST head+estimated — pg statistics, no COUNT(*))
@@ -289,7 +299,7 @@ export const STANDARD_LOOPS = [
   // due-gated (~22h), so an extra arm or manual run is a cheap no-op. Catches the
   // management_reviews-45k / sd_baseline_items-13k class within a day, not by accident.
   { key: 'row-growth',  label: 'Governance row-growth gauge (daily)', script: 'row-growth-snapshot.cjs', cron: '30 8 * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'node scripts/row-growth-snapshot.cjs' },
   // SD-LEO-INFRA-CODIFY-SUBSYSTEM-REVIEW-001: weekly subsystem-review rotation.
   // Stateless (registry = completed SDs stamping metadata.subsystem_review); posts ONE
@@ -331,7 +341,7 @@ export const STANDARD_LOOPS = [
   // for unwired machinery was itself unwired. Hourly cadence — cheap, and the gauges'
   // detector functions are internally due-gated/idempotent, so an extra run is a no-op.
   { key: 'gauge-runner', label: 'Invariant-gauges execution surface (hourly, durable)', script: 'gauge-runner.mjs', cron: '0 * * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'node scripts/gauge-runner.mjs --json' },
   // QF-20260719-720 (operator directive: duty adherence must be schedule-driven, not memory-driven):
   // three duties proven necessary by 2026-07-19 live incidents existed only as the incumbent
@@ -383,7 +393,7 @@ export const STANDARD_LOOPS = [
   // coordinator_review, harness_backlog escalations) had no consumption deadline. Internally
   // rate-limited/deduped per category per day (metadata.sla_key), so an extra run is a no-op.
   { key: 'feedback-sla', label: 'Feedback-consumption SLA breach reminder (daily)', script: 'coordinator-feedback-sla-gauge.cjs', cron: '45 9 * * *',
-    gha_backed: true,
+    gha_backed: true, session_arm: false, // QF-20260822-510
     prompt: 'node scripts/coordinator-feedback-sla-gauge.cjs' },
   // QF-20260705-533 (J1 adversarial sweep REFUTED-DORMANT): the watcher-of-watchers
   // (periodic-liveness-watcher.mjs, SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001) shipped with NO
@@ -499,6 +509,7 @@ export function renderLoops(armed) {
   }
   const toArm = [];
   const toTearDown = [];
+  const toTearDownGhaOnly = [];
   for (const loop of STANDARD_LOOPS) {
     // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: folded loops stay in the registry (the quiet-tick
     // cores + loop-parity guard reference their scripts) but are NEVER armed as standalone crons —
@@ -507,6 +518,14 @@ export function renderLoops(armed) {
       const live = loopStatus(loop, armed) === 'armed';
       lines.push(`  [⏸ folded ] ${loop.key.padEnd(10)} ${loop.label} — composed by quiet-tick; do NOT arm standalone${live ? ' (LIVE cron found — tear down below)' : ''}`);
       if (live) toTearDown.push(loop);
+      continue;
+    }
+    // QF-20260822-510: session_arm:false loops are gha_backed-only by joint Adam+Solomon ruling —
+    // never recommend (re-)arming a session copy, and tear down a leftover session cron if found.
+    if (loop.session_arm === false) {
+      const live = loopStatus(loop, armed) === 'armed';
+      lines.push(`  [⏸ gha-only] ${loop.key.padEnd(10)} ${loop.label} [GHA-backed]${live ? ' (LIVE session cron found — tear down below)' : ''}`);
+      if (live) toTearDownGhaOnly.push(loop);
       continue;
     }
     const status = loopStatus(loop, armed);
@@ -520,6 +539,11 @@ export function renderLoops(armed) {
     lines.push('');
     lines.push(`  → TEAR DOWN ${toTearDown.length} standalone cron(s) now folded into the quiet-tick (CronDelete the CronList entry whose prompt matches):`);
     for (const loop of toTearDown) lines.push(`     CronDelete <prompt: ${JSON.stringify(loop.prompt)}>`);
+  }
+  if (toTearDownGhaOnly.length) {
+    lines.push('');
+    lines.push(`  → TEAR DOWN ${toTearDownGhaOnly.length} standalone cron(s) dropped by QF-20260822-510 (GHA-only now; CronDelete the CronList entry whose prompt matches):`);
+    for (const loop of toTearDownGhaOnly) lines.push(`     CronDelete <prompt: ${JSON.stringify(loop.prompt)}>`);
   }
   lines.push('');
   if (toArm.length === 0 && armed.provided) {
