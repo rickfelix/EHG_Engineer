@@ -32,17 +32,9 @@ ALTER TABLE public.ventures
   ADD COLUMN IF NOT EXISTS teardown_disposition_by TEXT,
   ADD COLUMN IF NOT EXISTS teardown_disposition_at TIMESTAMPTZ;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'ventures_teardown_disposition_check'
-  ) THEN
-    ALTER TABLE public.ventures
-      ADD CONSTRAINT ventures_teardown_disposition_check
-      CHECK (teardown_disposition IS NULL OR teardown_disposition IN ('pending_teardown', 'retained', 'torn_down'));
-  END IF;
-END $$;
+ALTER TABLE public.ventures
+  ADD CONSTRAINT ventures_teardown_disposition_check
+  CHECK (teardown_disposition IS NULL OR teardown_disposition IN ('pending_teardown', 'retained', 'torn_down'));
 
 CREATE INDEX IF NOT EXISTS idx_ventures_teardown_disposition
   ON public.ventures (teardown_disposition)
@@ -134,7 +126,12 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.kill_venture(UUID, TEXT) TO authenticated;
+-- No GRANT statement here: CREATE OR REPLACE FUNCTION preserves the existing
+-- GRANT EXECUTE ... TO authenticated already established by
+-- 20260505224113_ventures_kill_log_and_rpc.sql:141 -- re-asserting it would be
+-- both redundant and would push this migration into TIER-2 chairman-gated
+-- classification (GRANT is unconditionally forbidden top-level per
+-- scripts/lib/migration-tier-classifier.mjs).
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- 3. reject_chairman_decision(): same disposition-default clause added to the
@@ -258,24 +255,12 @@ BEGIN
 END;
 $$;
 
--- ──────────────────────────────────────────────────────────────────────────
--- 4. First execution against the measured backlog: MarketLens (id=ecbba50e)
---    is the only real (non-demo) Cloud Run zombie of the 2 non-demo terminal+
---    deployed ventures (CronGenius is replit.dev, AltifyAI is Cloudflare
---    Workers). Pre-fix probe: HTTP 200, confirmed live by both LEAD Explore
---    and PLAN VALIDATION passes (2026-08-23). Actual gcloud teardown
---    execution is deferred to a credentialed follow-up SD -- this records
---    the explicit, chairman-reviewable disposition only.
--- ──────────────────────────────────────────────────────────────────────────
-
-UPDATE public.ventures
-SET
-  teardown_disposition = 'pending_teardown',
-  teardown_disposition_reason = 'SD-LEO-INFRA-VENTURE-KILL-CANCEL-001: live Cloud Run zombie, probed HTTP 200 2026-08-23 (46 days after 2026-07-08 kill). Actual gcloud teardown deferred to a credentialed follow-up SD (no GCP admin credentials exist in this repo/session).',
-  teardown_disposition_by = 'SD-LEO-INFRA-VENTURE-KILL-CANCEL-001',
-  teardown_disposition_at = now()
-WHERE id = 'ecbba50e-3c98-4493-9e77-1719cf6b6f00'
-  AND teardown_disposition IS NULL;
+-- FR-3 (recording MarketLens's explicit pending_teardown disposition) is
+-- DELIBERATELY NOT in this migration -- it is a live-data UPDATE on a
+-- specific production row, which is unconditionally TIER-2 chairman-gated
+-- per scripts/lib/migration-tier-classifier.mjs's FORBIDDEN_TOPLEVEL set,
+-- regardless of how narrowly scoped the WHERE clause is. See the companion
+-- migration 20260823145530_marketlens_teardown_disposition_CHAIRMAN_GATED.sql.
 
 COMMIT;
 
@@ -288,11 +273,11 @@ COMMIT;
 --   WHERE table_name = 'ventures' AND column_name LIKE 'teardown_disposition%';
 --   SELECT conname FROM pg_constraint WHERE conname = 'ventures_teardown_disposition_check';
 --
--- 2. MarketLens disposition recorded:
---   SELECT id, status, deployment_url, teardown_disposition, teardown_disposition_reason
---   FROM public.ventures WHERE id = 'ecbba50e-3c98-4493-9e77-1719cf6b6f00';
---   -- Expected: teardown_disposition='pending_teardown', non-null reason
+-- 2. RPC signatures unchanged (no new overload):
+--   SELECT proname, pronargs FROM pg_proc WHERE proname IN ('kill_venture', 'reject_chairman_decision');
+--   -- Expected: kill_venture pronargs=2, reject_chairman_decision pronargs=3 (unchanged)
 --
--- 3. Idempotency check (re-run migration): should report no errors, no column/constraint
---    duplication (IF NOT EXISTS guards), and the MarketLens UPDATE is a no-op the second
---    time (teardown_disposition IS NULL guard in the WHERE clause).
+-- 3. Re-run note: ADD COLUMN uses IF NOT EXISTS (idempotent); ADD CONSTRAINT does NOT
+--    (Postgres has no ADD CONSTRAINT IF NOT EXISTS) -- a second run will fail loudly on the
+--    constraint with a clear "already exists" error rather than silently duplicating it.
+--    This migration is intended as a one-shot apply, matching this repo's general convention.
