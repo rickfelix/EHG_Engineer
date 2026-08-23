@@ -773,6 +773,38 @@ async function checkLedgerCaptureHealth(supabase) {
 }
 
 /**
+ * SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: Solomon's own always-loud staleness gauge,
+ * mirroring checkLedgerCaptureHealth's call shape immediately above (invoked at the top of `inbox`,
+ * never suppressed by --quiet — an unencoded ratification is a genuine actionable item, not routine
+ * tick noise). Reuses the SAME pure predicate as the Adam/coordinator legs
+ * (lib/governance/ratification-stall.mjs) so the >=24h definition lives in exactly one place.
+ * Fail-soft: never throws.
+ */
+async function checkStaleChairmanRatifications(supabase) {
+  let isStaleRatification;
+  try { ({ isStaleRatification } = require('../lib/governance/ratification-stall.mjs')); }
+  catch { return { rows: [], count: 0 }; }
+  try {
+    const { data, error } = await supabase
+      .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, may not be applied yet
+      .select('id, ratified_at, target_contracts')
+      .is('encoded_at', null)
+      .order('ratified_at', { ascending: true });
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
+      return { rows: [], count: 0, error: error.message };
+    }
+    const nowMs = Date.now();
+    const rows = (data || [])
+      .map((r) => ({ ...r, ageHours: (nowMs - new Date(r.ratified_at).getTime()) / 3_600_000 }))
+      .filter((r) => isStaleRatification(r.ageHours, null));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: (e && e.message) || String(e) };
+  }
+}
+
+/**
  * On a Solomon (re)register/restart, re-target UNREAD rows destined for an OLD Solomon session to the
  * NEW one (comms survive the handoff). Mirrors drainAdamOutbound: idempotent (read_at IS NULL gate),
  * fail-open (never throws). Required by solomon-register.cjs's lazy-require. Exported.
@@ -922,6 +954,12 @@ async function main() {
       console.error(`WARN: solomon_advice_outcome_ledger decision_requested column not yet migrated — capture is DEGRADED, not stopped (fallback keeps writing rows without decision_requested; apply database/migrations/20260821_solomon_ledger_decision_requested.sql to restore full capture; ${ledgerHealth.reason})`);
     } else if (!ledgerHealth.healthy) {
       console.error(`WARN: solomon_advice_outcome_ledger capture gauge UNHEALTHY — ${ledgerHealth.reason} (advisories are NOT being captured; QF-20260701-289)`);
+    }
+    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: unencoded ratifications aged >=24h.
+    const staleRatifications = await checkStaleChairmanRatifications(supabase);
+    if (staleRatifications.count > 0) {
+      const ids = staleRatifications.rows.map((r) => r.id).join(', ');
+      console.warn(`⚠ RATIFICATION_STALE: ${staleRatifications.count} chairman ratification(s) unencoded >=24h (ids: ${ids}) — encode the contract change and call lib/chairman/ratification-writer.mjs markRatificationEncoded() to clear (SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001)`);
     }
     // FR-1: surface broadcast chairman directives FIRST-CLASS (above consults) with Solomon's per-directive
     // ack status, BEFORE the normal target_session-scoped drain — the Solomon-last-hop compliance fix.

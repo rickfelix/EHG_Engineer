@@ -27,6 +27,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { renderCount, fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: coordinator leg reuses the SAME pure
+// staleness predicate as the Adam leg (scripts/adam-quiet-tick.mjs) so the >=24h definition
+// lives in exactly one place.
+import { isStaleRatification } from '../lib/governance/ratification-stall.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
@@ -245,6 +249,32 @@ export async function readSalientState(sb) {
   return state;
 }
 
+/**
+ * SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: count unencoded chairman_ratifications
+ * rows stale (>=24h since ratified_at). Fail-soft on a missing table (42P01/PGRST205, matching
+ * the migration's chairman-gated STAGED-NOT-APPLIED state) and on any other query error.
+ */
+export async function surfaceStaleRatifications(sb) {
+  try {
+    const { data, error } = await sb
+      .from('chairman_ratifications')
+      .select('id, ratified_at, target_contracts')
+      .is('encoded_at', null)
+      .order('ratified_at', { ascending: true });
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
+      return { rows: [], count: 0, error: error.message };
+    }
+    const nowMs = Date.now();
+    const rows = (data || [])
+      .map((r) => ({ ...r, ageHours: (nowMs - new Date(r.ratified_at).getTime()) / 3_600_000 }))
+      .filter((r) => isStaleRatification(r.ageHours, null));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
 function loadLastState() {
   try { return JSON.parse(readFileSync(LAST_STATE_FILE, 'utf8')); } catch { return null; }
 }
@@ -418,6 +448,9 @@ async function main() {
     lanePending = summarizePendingLane(laneRows || [], { nowMs: Date.now() });
   } catch { /* fail-soft: neither count ever blocks the tick */ }
 
+  // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: unencoded ratifications aged >=24h.
+  const staleRatifications = await surfaceStaleRatifications(sb);
+
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): fail-safe — null/unavailable prints 'unknown'
   // rather than crashing the tick.
   const currentIdentity = getAccountIdentity();
@@ -473,6 +506,10 @@ async function main() {
     // instead of silently NO-OPing past a pending chairman decision.
     if (unactionedAdamAdvisories > 0) {
       console.log(`QUIET_TICK_PING=adam-advisories-pending count=${unactionedAdamAdvisories} (unactioned adam_advisory rows targeting the coordinator — ACTION each now, then stamp payload.actioned_at; read_at is NOT the retirement stamp)`);
+    }
+    if (staleRatifications.count > 0) {
+      const ids = staleRatifications.rows.map((r) => r.id).join(',');
+      console.log(`QUIET_TICK_PING=ratification-stale count=${staleRatifications.count} ids=${ids} (SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 — chairman ratification(s) unencoded >=24h; encode the contract change and call lib/chairman/ratification-writer.mjs markRatificationEncoded() to clear)`);
     }
     if (delta.changed) {
       console.log(`QUIET_TICK_PING=coordinator->adam reason=${delta.fields.join(',')} sent=${pingSent} (cross_party_ping row emitted by the tick — record of sent, not an instruction)`);

@@ -51,6 +51,9 @@ import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm
 // SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive STALE escalation for a parked chairman
 // SMS row unresolved >=24h, layered onto the existing QUIET_TICK_SMS_PARKED line below.
 import { isStaleParkedSms } from '../lib/governance/parked-sms-stall.mjs';
+// SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: additive STALE escalation for a chairman
+// ratification unencoded >=24h, mirroring the parked-SMS-STALE pattern immediately above.
+import { isStaleRatification, formatRatificationStaleLine } from '../lib/governance/ratification-stall.mjs';
 // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: the durable standing priority. Surfaced ABOVE the inbox
 // below, because the measured failure was the queue setting the agenda — a priority printed beneath
 // a dozen inbound rows has been filed, not surfaced.
@@ -621,6 +624,34 @@ export async function surfaceParkedChairmanSms(sb) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: chairman ratifications unencoded >=24h.
+ * FAIL-SOFT on a table-absent error (42P01/PGRST205) -- the chairman-gated migration is STAGED
+ * NOT APPLIED until the chairman signs it, so this degrades to a no-op until then, never a
+ * crash. Any OTHER error is surfaced via the `error` field (same discard-class fix applied to
+ * QF-20260822-215 this session: table-absent and genuine-failure must never be conflated).
+ */
+export async function surfaceStaleRatifications(sb) {
+  try {
+    const { data, error } = await sb
+      .from('chairman_ratifications')
+      .select('id, ratified_at, target_contracts')
+      .is('encoded_at', null)
+      .order('ratified_at', { ascending: true });
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return { rows: [], count: 0 };
+      return { rows: [], count: 0, error: error.message };
+    }
+    const nowMs = Date.now();
+    const rows = (data || [])
+      .map((r) => ({ ...r, ageHours: (nowMs - new Date(r.ratified_at).getTime()) / 3_600_000 }))
+      .filter((r) => isStaleRatification(r.ageHours, null));
+    return { rows, count: rows.length };
+  } catch (e) {
+    return { rows: [], count: 0, error: e && e.message };
+  }
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -727,6 +758,10 @@ async function main() {
   // window-bound smsInbound above (drained_at is already set on these rows; only parked_at/
   // resolved_at gate this queue), so it is read and surfaced separately every tick.
   const smsParked = await surfaceParkedChairmanSms(sb);
+
+  // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: chairman ratifications unencoded >=24h.
+  // Fail-soft no-op until the chairman-gated migration is applied (surfaceStaleRatifications).
+  const staleRatifications = await surfaceStaleRatifications(sb);
 
   // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: evaluate the durable standing priority. Fail-soft like
   // its siblings above — and fail QUIET: a detector that cannot read its store reports 'unknown'
@@ -1015,6 +1050,10 @@ async function main() {
       if (isStaleParkedSms(s.ageMin)) {
         console.log(`QUIET_TICK_SMS_PARKED_STALE=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m — parked >=24h unresolved, chairman-channel integrity risk; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
       }
+    }
+    // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3.
+    for (const r of staleRatifications.rows) {
+      console.log(formatRatificationStaleLine('adam', r, r.ageHours));
     }
     for (const p of outboundSilence.probed) {
       console.log(`QUIET_TICK_OUTBOUND_PROBE=adam target=${p.target} row=${p.rowId}`);
