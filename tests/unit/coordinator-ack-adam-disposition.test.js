@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 const m = require('../../scripts/coordinator-ack-adam.cjs');
 
 /** Mock supabase supporting the primary decision UPDATE + the tail-inheritance UPDATE. */
-function makeStubSupabase({ primaryError = null, primaryData = [{ id: 'row-1' }], updateError = null, updatedTailIds = [] } = {}) {
+function makeStubSupabase({ primaryError = null, primaryData = { id: 'row-1' }, updateError = null, updatedTailIds = [] } = {}) {
   const primaryUpdates = [];
   const tailUpdates = [];
   return {
@@ -30,9 +30,15 @@ function makeStubSupabase({ primaryError = null, primaryData = [{ id: 'row-1' }]
         eq: (col1, val1) => ({
           eq: (col2, val2) => ({
             select: () => {
+              // Primary path (col1='correlation_id', UNIQUE): chains .maybeSingle(), a single row.
+              // Tail path (col1='parent_correlation_id'): resolves select() directly, several rows.
               if (col1 === 'correlation_id') {
-                primaryUpdates.push({ row: patch, col1, val1, col2, val2 });
-                return Promise.resolve({ data: primaryError ? null : primaryData, error: primaryError });
+                return {
+                  maybeSingle: () => {
+                    primaryUpdates.push({ row: patch, col1, val1, col2, val2 });
+                    return Promise.resolve({ data: primaryError ? null : primaryData, error: primaryError });
+                  },
+                };
               }
               tailUpdates.push({ patch, col1, val1, col2, val2 });
               return Promise.resolve({ data: updateError ? null : updatedTailIds.map((id) => ({ id })), error: updateError });
@@ -69,16 +75,18 @@ describe('FR-3: recordLedgerDecision — decision update guarded on decision=pen
     let decided = false;
     const sb = {
       from: () => ({
-        update: (patch) => ({
+        update: () => ({
           eq: () => ({
             eq: (col2, val2) => ({
-              select: () => {
-                if (col2 === 'decision' && val2 === 'pending' && !decided) {
-                  decided = true;
-                  return Promise.resolve({ data: [{ id: 'row-1' }], error: null });
-                }
-                return Promise.resolve({ data: [], error: null });
-              },
+              select: () => ({
+                maybeSingle: () => {
+                  if (col2 === 'decision' && val2 === 'pending' && !decided) {
+                    decided = true;
+                    return Promise.resolve({ data: { id: 'row-1' }, error: null });
+                  }
+                  return Promise.resolve({ data: null, error: null });
+                },
+              }),
             }),
           }),
         }),

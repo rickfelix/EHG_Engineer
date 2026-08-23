@@ -76,13 +76,25 @@ describe('FR-2: normalizeDecisionBy — pure identity-prefix extraction', () => 
   });
 });
 
+// QF-20260823-366: recordLedgerDecision's own write now chains .select('id').maybeSingle()
+// (correlation_id is UNIQUE, so it can only ever affect 0 or 1 row) while inheritTailDecisions's
+// tail-fanout .select('id') still resolves directly (it can affect several sibling rows). A shared
+// mock `chain` serves both call sites: select() returns an already-resolved Promise (so a bare
+// `await select()` works for the tail path) with a `.maybeSingle()` escape hatch attached for the
+// primary path.
+function selectResult(data) {
+  const p = Promise.resolve({ data, error: null });
+  p.maybeSingle = () => Promise.resolve({ data: Array.isArray(data) ? (data[0] ?? null) : data, error: null });
+  return p;
+}
+
 describe('FR-2: recordLedgerDecision writes normalized decision_by, never rejects the decision', () => {
   it('truncates prose decision_by to its identity prefix in the updated row', async () => {
     let updatedRow = null;
     const chain = {
       update: (row) => { updatedRow = row; return chain; },
       eq: () => chain,
-      select: () => Promise.resolve({ data: [{ id: 'row-1' }], error: null }),
+      select: () => selectResult([{ id: 'row-1' }]),
     };
     const sb = { from: () => chain };
     const result = await m.recordLedgerDecision(sb, {
@@ -96,7 +108,7 @@ describe('FR-2: recordLedgerDecision writes normalized decision_by, never reject
   });
 
   it('never rejects a decision for having a prose decidedBy — truncate, not reject', async () => {
-    const chain = { update: () => chain, eq: () => chain, select: () => Promise.resolve({ data: [{ id: 'row-2' }], error: null }) };
+    const chain = { update: () => chain, eq: () => chain, select: () => selectResult([{ id: 'row-2' }]) };
     const sb = { from: () => chain };
     const result = await m.recordLedgerDecision(sb, {
       correlationId: 'corr-2', disposition: 'rejected',
@@ -113,7 +125,7 @@ describe('QF-20260823-366: recordLedgerDecision UPDATEs an existing pending row,
     const chain = {
       update: (row) => { updatedRow = row; return chain; },
       eq: (col, val) => { eqCalls.push([col, val]); return chain; },
-      select: () => Promise.resolve({ data: [{ id: 'row-3' }], error: null }),
+      select: () => selectResult([{ id: 'row-3' }]),
     };
     const sb = { from: () => chain };
     const result = await m.recordLedgerDecision(sb, {
@@ -130,7 +142,7 @@ describe('QF-20260823-366: recordLedgerDecision UPDATEs an existing pending row,
   });
 
   it('reports failure (not a silent no-op) when no pending row matches the correlation_id', async () => {
-    const chain = { update: () => chain, eq: () => chain, select: () => Promise.resolve({ data: [], error: null }) };
+    const chain = { update: () => chain, eq: () => chain, select: () => selectResult([]) };
     const sb = { from: () => chain };
     const result = await m.recordLedgerDecision(sb, {
       correlationId: 'corr-missing', disposition: 'accepted', decidedBy: 'adam', outcomeRef: 'SD-TEST-003',

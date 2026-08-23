@@ -100,10 +100,11 @@ describe('FR-6 — outcome_sd_key is derived when the artifact is an SD/QF key',
       from() {
         return {
           // QF-20260823-366: recordLedgerDecision now UPDATEs (never upserts) the existing pending
-          // row; captured here the same way the old upsert mock captured its row.
+          // row, chaining .select('id').maybeSingle() (correlation_id is UNIQUE); captured here the
+          // same way the old upsert mock captured its row.
           update(row) {
             rows.push(row);
-            return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: [{ id: 'row-1' }], error: null }) }) }) };
+            return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'row-1' }, error: null }) }) }) }) };
           },
           select() { return { eq: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) }; },
         };
@@ -225,7 +226,7 @@ describe('FR-6 — only SD keys, only uppercase', () => {
     return { rows, from: () => ({
       update(r) {
         rows.push(r);
-        return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: [{ id: 'row-1' }], error: null }) }) }) };
+        return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'row-1' }, error: null }) }) }) }) };
       },
       select: () => ({ eq: () => ({ is: () => Promise.resolve({ data: [], error: null }) }) }),
     }) };
