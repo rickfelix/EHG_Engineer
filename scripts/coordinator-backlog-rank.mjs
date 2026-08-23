@@ -89,7 +89,25 @@ export function productPivotCompare(a, b) {
 }
 // SD-LEO-INFRA-GUARANTEE-CLAIMABLE-SD-RANKED-001-C: pure helpers for the atomic JSONB merge
 // write path. Extracted so the query shape is unit-testable without a live pg connection.
-export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null, selectionEval = null) {
+// QF-20260823-561: pure derivation of the rank-write identity, extracted so it is unit-testable
+// without spawning main() end-to-end. trigger-rank-pass.mjs spawns this script with the TRIGGERING
+// session's env inherited (env.CLAUDE_SESSION_ID = whichever Adam/Solomon/worker session minted an
+// SD, cleared a review, or completed one), so an event-triggered pass must NEVER stamp that
+// inherited id into dispatch_rank_by — downstream governance gauges (detectRoleDispatched,
+// lib/governance/work-boundary-gauges.js) read a role session id there as "this role dispatched
+// itself," producing belt-wide false positives (live-measured: SD-LEO-FEAT-EVA-VENTURE-IDEATION-001
+// stamped dispatch_rank_by=<Adam session> at mint time). An event-triggered pass always writes
+// 'coordinator'; the actual triggering session is recorded separately, never laundered into the
+// writer-identity column.
+export function resolveRankWriter(env = process.env) {
+  const eventTriggered = env.RANK_EVENT_TRIGGER === '1';
+  return {
+    eventTriggered,
+    writer: eventTriggered ? 'coordinator' : (env.CLAUDE_SESSION_ID || 'coordinator'),
+    triggeredBy: eventTriggered ? (env.RANK_TRIGGERED_BY || null) : null,
+  };
+}
+export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null, selectionEval = null, triggeredBy = null) {
   const patch = { dispatch_rank: rank, dispatch_rank_at: nowIso, dispatch_rank_by: sessionId };
   // SD-LEO-INFRA-ADAM-WORK-SELECTION-001 FR-3: persist the roadmap evaluation ALONGSIDE the rank,
   // so the selection decision carries its own justification. A log line is not a record — it is
@@ -110,6 +128,8 @@ export function buildRankPatch(rank, nowIso, sessionId, reasonBand = null, selec
   // buildRankClearQuery: the band records why the SD was put on the belt and must
   // SURVIVE the claim (rank fields clear on claim; the band persists for the probe).
   if (reasonBand) patch.dispatch_reason_band = reasonBand;
+  // QF-20260823-561: the triggering session (event-triggered passes only) — see resolveRankWriter.
+  if (triggeredBy) patch.dispatch_rank_triggered_by = triggeredBy;
   return patch;
 }
 // QF-20260719-365: derive the dispatch reason-band from SD provenance. Pure; the vocabulary
@@ -171,7 +191,7 @@ export function buildRankMergeQuery(rankPatch, sdKey) {
 export function buildRankClearQuery(sdKey) {
   return {
     sql: `UPDATE strategic_directives_v2
-          SET metadata = COALESCE(metadata, '{}'::jsonb) - 'dispatch_rank' - 'dispatch_rank_at' - 'dispatch_rank_by'
+          SET metadata = COALESCE(metadata, '{}'::jsonb) - 'dispatch_rank' - 'dispatch_rank_at' - 'dispatch_rank_by' - 'dispatch_rank_triggered_by'
           WHERE sd_key = $1`,
     params: [sdKey],
   };
@@ -408,7 +428,7 @@ async function main() {
   // blocked whenever ANY coordinator is live — the normal fleet state, not an edge case
   // (prospective testing-agent finding, PLAN phase).
   const me = resolveOwnSessionId();
-  const eventTriggered = process.env.RANK_EVENT_TRIGGER === '1';
+  const { eventTriggered, writer: RANK_WRITER, triggeredBy: RANK_TRIGGERED_BY } = resolveRankWriter();
   if (!DRY) {
     if (eventTriggered) {
       console.log('[BACKLOG-RANK] event-triggered invocation (RANK_EVENT_TRIGGER=1) — bypassing coordinator mutation guard.');
@@ -439,6 +459,29 @@ async function main() {
       pgClient = await createDatabaseClient('engineer', { verify: false });
     } catch (connErr) {
       console.error(`[BACKLOG-RANK] ! atomic-merge DB client unavailable, writes will be skipped this pass: ${connErr.message}`);
+    }
+  }
+
+  // QF-20260823-561: serialize the renumber against concurrent passes. Cron ticks (coordinator-
+  // quiet-tick, coordinator-startup-check, backlog-rank-cron.yml) and event-triggered spawns all
+  // race on this same script with no shared mutex — the per-worktree debounce lockfile in
+  // trigger-rank-pass.mjs serializes nothing across worktrees or CI. Without this, two overlapping
+  // passes can each write a PARTIAL, differently-numbered rank set before either finishes, leaving
+  // a torn belt (live-measured: ranks {1,2,9} from two write cohorts 48s apart). Session-scoped —
+  // releases automatically at pgClient.end() below. A pass that cannot acquire the lock skips
+  // writes entirely (fail-soft, reuses the existing no-pgClient code paths below) rather than
+  // racing; the next pass re-ranks cleanly (the algorithm is deterministic/idempotent).
+  const RANK_RENUMBER_LOCK = 561082326; // stable advisory-lock key for this QF
+  if (pgClient) {
+    try {
+      const { rows: [lockRow] } = await pgClient.query('SELECT pg_try_advisory_lock($1) AS ok', [RANK_RENUMBER_LOCK]);
+      if (!lockRow?.ok) {
+        console.log('[BACKLOG-RANK] another rank pass holds the renumber lock — skipping writes this pass (idempotent; next pass re-ranks).');
+        try { await pgClient.end(); } catch { /* best-effort */ }
+        pgClient = null;
+      }
+    } catch (lockErr) {
+      console.error(`[BACKLOG-RANK] ! advisory lock check failed (non-blocking, proceeding without lock): ${lockErr.message}`);
     }
   }
 
@@ -478,7 +521,7 @@ async function main() {
     const rank = i + 1;
     console.log(`  #${String(rank).padStart(2)}  unlocks=${String(unlockScore(d.sd_key)).padStart(2)}  ${String(d.priority || '-').padEnd(8)} ${d.sd_key}`);
     if (DRY) continue;
-    const rankPatch = buildRankPatch(rank, now, process.env.CLAUDE_SESSION_ID || 'coordinator', deriveReasonBand(d), gateByKey.get(d.sd_key) || null);
+    const rankPatch = buildRankPatch(rank, now, RANK_WRITER, deriveReasonBand(d), gateByKey.get(d.sd_key) || null, RANK_TRIGGERED_BY);
     try {
       if (pgClient) {
         const { sql, params } = buildRankMergeQuery(rankPatch, d.sd_key);
