@@ -472,7 +472,7 @@ function displayChildWorkflowGuidance(sd, parent, _currentPhase) {
 /**
  * Format and display results
  */
-function displayResults(sd, phase, strategy, patterns, retrospectives) {
+async function displayResults(sd, phase, strategy, patterns, retrospectives) {
   console.log('\n╔═══════════════════════════════════════════════════════════════════════╗');
   console.log('║          🔍 PHASE PREFLIGHT - Knowledge Retrieval Results            ║');
   console.log('╚═══════════════════════════════════════════════════════════════════════╝\n');
@@ -568,6 +568,27 @@ function displayResults(sd, phase, strategy, patterns, retrospectives) {
     });
   } else {
     console.log('\n  ℹ️  No retrospectives found for this category\n');
+  }
+
+  // SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (FR-4, TS-6): surface dispatch-suggestion override
+  // reasons as an additional PLAN-phase pattern source, so a coordinator's recorded overrule
+  // reasoning is not write-only. Advisory only — never blocks preflight, and silent when there is
+  // no override activity in the lookback window.
+  if (phase === 'PLAN') {
+    try {
+      const { fetchSuggestionActivity, summarizeSuggestionActivity } = await import('./dispatch-suggestion-report.mjs');
+      const rows = await fetchSuggestionActivity(supabase, { days: 30 });
+      const summary = summarizeSuggestionActivity(rows);
+      if (summary.overrides > 0) {
+        console.log('─'.repeat(75));
+        console.log('\n🔁 DISPATCH-SUGGESTION OVERRIDE SIGNAL (last 30d):\n');
+        console.log(`   ${summary.overrides} override(s) recorded against ${summary.suggestions} suggestion(s) (${(summary.overrideRatio * 100).toFixed(1)}% override rate)`);
+        for (const { reason, count } of summary.topReasons.slice(0, 3)) {
+          console.log(`   ${count}x  ${reason}`);
+        }
+        console.log('');
+      }
+    } catch { /* advisory only: a fault here must never block phase preflight */ }
   }
 
   // Summary and next steps
@@ -710,7 +731,7 @@ async function main() {
     const retrospectives = await searchRetrospectives(supabase, sd.category || sd.title, strategy);
 
     // Display results
-    displayResults(sd, phase, strategy, patterns, retrospectives);
+    await displayResults(sd, phase, strategy, patterns, retrospectives);
 
     process.exit(0);
 

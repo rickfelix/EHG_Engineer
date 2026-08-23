@@ -2760,6 +2760,40 @@ async function printFeedback(d, deps = {}) {
   console.log('');
 }
 
+// SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (FR-1/FR-4): the named READER for dispatch
+// suggestions — without this, generateAndPersistSuggestions writes rows nobody looks at, the
+// exact door_routing_ledger dead-table pattern this SD was built to avoid. Generates a FRESH
+// batch on every call (advisory, cheap, no claim side effect) rather than reading stale rows, so
+// the coordinator always sees current live-fleet fit.
+async function printSuggestions() {
+  console.log('\n📋 DISPATCH SUGGESTIONS (advisory — never auto-dispatch)');
+  console.log('─'.repeat(70));
+  try {
+    const { generateAndPersistSuggestions } = require('../lib/fleet/dispatch-suggestions.cjs');
+    const { items_considered, suggestions_written, results } = await generateAndPersistSuggestions(supabase, { limit: 20 });
+    if (items_considered === 0) {
+      console.log('  (no dispatchable items right now)');
+      return;
+    }
+    for (const r of results) {
+      const top = r.ranked && r.ranked[0];
+      if (!top) {
+        console.log(`  ${r.sd_key}: no live-fleet fit available`);
+        continue;
+      }
+      const why = top.why || {};
+      console.log(`  ${r.sd_key} -> ${top.model || '?'}/${top.effort || '?'} (score=${Number.isFinite(top.score) ? top.score.toFixed(2) : 'n/a'})`);
+      console.log(`      why: over_qualification=${why.over_qualification} lean_fable=${why.lean_fable} class_familiarity=${Number.isFinite(why.class_familiarity) ? why.class_familiarity.toFixed(2) : 0}`);
+      if (r.ranked.length > 1) {
+        console.log(`      +${r.ranked.length - 1} more candidate(s) ranked below`);
+      }
+    }
+    console.log(`\n  ${items_considered} item(s) considered, ${suggestions_written} suggestion row(s) written.`);
+  } catch (e) {
+    console.log(`  (suggestion engine unavailable: ${e.message})`);
+  }
+}
+
 // ── Main ──
 
 // SD-LEO-INFRA-LEO-COMPLETION-001-E (FR-1): session-scoped actions take a 2nd positional arg
@@ -2835,6 +2869,7 @@ async function main() {
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     chairmanemail: async () => await printChairmanEmailChannelHealth(), // SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001
     periodic:      async () => await printPeriodicLiveness(), // SD-LEO-INFRA-PERIODIC-PROCESS-LIVENESS-001 (FR-5)
+    suggestions:   async () => await printSuggestions(), // SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (FR-1/FR-4 reader)
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
       if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);

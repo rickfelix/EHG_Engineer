@@ -139,7 +139,14 @@ export async function gatedSelectRefillBatch(supabase, rows, opts = {}, env = pr
     // it guards — selecting with demand undefined — is SILENT and indistinguishable from success.
     throw new Error('refill-cron: refusing to select a batch without a demand decision');
   }
-  return { sel: selectRefillBatch(rows, { ...opts, demand }), demand };
+  // SD-LEO-INFRA-INTELLIGENT-ROUTING-RANK-001 (FR-3): quota posture is OPTIONAL and fail-open — a
+  // read fault here must never block or distort refill, only skip the (optional) reordering.
+  let quotaPosture;
+  try {
+    const { fetchQuotaPosture } = await import('../../lib/fleet/dispatch-suggestions.cjs');
+    quotaPosture = await fetchQuotaPosture(supabase);
+  } catch { /* fail-open: selectRefillBatch treats undefined exactly like today's pre-FR-3 behavior */ }
+  return { sel: selectRefillBatch(rows, { ...opts, demand, quotaPosture }), demand };
 }
 
 async function main() {
