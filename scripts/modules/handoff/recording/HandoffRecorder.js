@@ -57,6 +57,26 @@ export function recorderIdentities() {
   return id === HANDOFF_SYSTEM_TAG ? [HANDOFF_SYSTEM_TAG] : [HANDOFF_SYSTEM_TAG, id];
 }
 
+/**
+ * QF-20260823-271: some rejecting callers set none of `.message`/`.error`/`.reasonCode`, so the
+ * QF-20260720-851 fallback landed on the generic 'UNSPECIFIED_REJECTION' marker even when
+ * `result.failedGate` + that gate's own issues named the failure plainly — 34/673 non-accepted
+ * sd_phase_handoffs rows in a 30d window, diagnosis-resistant without reading validation_details
+ * JSON by hand. Mines the gate-level failure BEFORE falling back to the generic marker, so a
+ * rejection can never persist as unnamed while validation_details carries a named failed_gate.
+ * @param {object} result
+ * @returns {string}
+ */
+export function synthesizeRejectionReason(result) {
+  const direct = result.message || result.error || result.reasonCode;
+  if (direct) return direct;
+  const failedGateName = result.failedGate || null;
+  if (!failedGateName) return 'UNSPECIFIED_REJECTION (see validation_details)';
+  const gateIssue = result.gateResults?.[failedGateName]?.issues?.[0] || result.issues?.[0];
+  const firstLine = gateIssue ? String(gateIssue).split('\n')[0].slice(0, 300) : 'no issue detail recorded';
+  return `VALIDATOR:${failedGateName} - ${firstLine}`;
+}
+
 export class HandoffRecorder {
   constructor(supabase, options = {}) {
     if (!supabase) {
@@ -396,7 +416,7 @@ export class HandoffRecorder {
     // return) set only `.error`/`.reasonCode`, never `.message` — that silently wrote
     // rejection_reason=NULL (40% of rejections over a 48h Solomon sweep, diagnosis-resistant
     // by construction). Every rejection writer now stamps SOME reason.
-    let enrichedRejectionReason = result.message || result.error || result.reasonCode || 'UNSPECIFIED_REJECTION (see validation_details)';
+    let enrichedRejectionReason = synthesizeRejectionReason(result);
     if (requiredImprovements) {
       const scoreSuffix = (actualScore != null && requiredScore != null)
         ? ` (score ${actualScore}%, required ${requiredScore}%)`
@@ -550,7 +570,7 @@ export class HandoffRecorder {
       },
       // QF-20260720-851 (P1): same NULL-reason fix as recordFailure — some rejecting
       // callers (e.g. the claim-guard early return) set only `.error`/`.reasonCode`.
-      rejection_reason: result.message || result.error || result.reasonCode || 'UNSPECIFIED_REJECTION (see validation_details)',
+      rejection_reason: synthesizeRejectionReason(result),
       created_by: recorderIdentity()
     };
 
