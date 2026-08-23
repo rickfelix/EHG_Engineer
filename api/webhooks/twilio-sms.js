@@ -112,8 +112,9 @@ const VALID_MESSAGE_SID = /^[A-Za-z0-9-]+$/;
  * guard on the Pass-2 send-outcome update in lib/chairman/sms-outbound-worker.js).
  *
  * FAIL-SOFT: while the STAGED sms_outbound_obligations migration is unapplied the table is
- * absent and supabase-js resolves the update to {data:null,error} (or throws in a fake) — either
- * way this degrades to a no-op and never crashes the callback path. Runs AFTER the 401 signature
+ * absent (42P01/PGRST205) and this degrades to a no-op and never crashes the callback path. Any
+ * OTHER error (QF-20260822-215 — same discard class as SD-LEO-FIX-SMS-OUTBOUND-WORKER-002) is a
+ * genuine write failure and must be visible, not silently swallowed. Runs AFTER the 401 signature
  * reject, so a forged callback can never reach it.
  */
 async function applyOwedDeliveryTruth(supabase, { messageSid, status }) {
@@ -124,14 +125,16 @@ async function applyOwedDeliveryTruth(supabase, { messageSid, status }) {
   const matchFilter = patch.status === 'delivered'
     ? `provider_message_id.eq.${messageSid},prior_provider_message_ids.cs.{${messageSid}}`
     : `provider_message_id.eq.${messageSid}`;
-  try {
-    await supabase
-      .from('sms_outbound_obligations')
-      .update(patch)
-      .not('status', 'in', '(delivered,canceled)')
-      .or(matchFilter);
-  } catch {
-    /* table absent (STAGED) — fail-soft no-op */
+  const { data, error } = await supabase
+    .from('sms_outbound_obligations')
+    .update(patch)
+    .not('status', 'in', '(delivered,canceled)')
+    .or(matchFilter)
+    .select('id');
+  // A zero-row match with no error is expected (most status callbacks have no owed-state row
+  // at all) and stays silent, matching sms-outbound-worker.js's established idiom.
+  if (error && error.code !== '42P01' && error.code !== 'PGRST205') {
+    console.warn(`[twilio-sms] applyOwedDeliveryTruth UPDATE failed for SID ${messageSid} (status=${status}, matched=${data?.length ?? 0}): ${error.message}`);
   }
 }
 
