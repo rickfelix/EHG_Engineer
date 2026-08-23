@@ -358,6 +358,36 @@ describe('evaluateRow', () => {
     const result = await evaluateRow(row, { ghaDecisions });
     expect(result.state).toBe(STATE.OVERDUE);
   });
+
+  // QF-20260823-631: GitHub delivers a declared */5 workflow's scheduled runs 5-6x slower than
+  // declared (measured 23-30min gaps against a 300s/grace=3 => 900s/15min threshold), so the
+  // generic age check false-OVERDUEs a healthy workflow. github_actions_api rows must floor the
+  // effective grace multiplier at 6x regardless of the declared value.
+  it('github_actions_api: a 20-min-old "stamp" with declared grace=3 (900s/15min threshold) does NOT breach -- measured-delivery floor applies', async () => {
+    const ranAt = new Date('2026-08-23T15:00:00Z');
+    const now = new Date(ranAt.getTime() + 20 * 60 * 1000); // 20 minutes later
+    const row = ghaCronRow({ expected_interval_seconds: 300, grace_multiplier: 3 });
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'stamp', ranAtIso: ranAt.toISOString() }]]);
+    const result = await evaluateRow(row, { ghaDecisions, now: now.getTime() });
+    expect(result.state).toBe(STATE.OK);
+  });
+
+  it('github_actions_api: a declared grace_multiplier ABOVE the floor (e.g. 10) is not weakened by the floor', async () => {
+    const ranAt = new Date('2026-08-23T15:00:00Z');
+    const now = new Date(ranAt.getTime() + 45 * 60 * 1000); // 45 minutes later -- within 10x(300s)=50min, beyond 6x(300s)=30min
+    const row = ghaCronRow({ expected_interval_seconds: 300, grace_multiplier: 10 });
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'stamp', ranAtIso: ranAt.toISOString() }]]);
+    const result = await evaluateRow(row, { ghaDecisions, now: now.getTime() });
+    expect(result.state).toBe(STATE.OK);
+  });
+
+  it('self_stamped: the github_actions_api measured-delivery floor does NOT apply to other liveness sources', async () => {
+    const firedAt = new Date('2026-08-23T15:00:00Z');
+    const now = new Date(firedAt.getTime() + 20 * 60 * 1000); // 20 minutes later -- beyond 300s*3=15min, would false-OK if floored to 6x
+    const row = selfStampedRow({ last_fired_at: firedAt.toISOString(), expected_interval_seconds: 300, grace_multiplier: 3 });
+    const result = await evaluateRow(row, { now: now.getTime() });
+    expect(result.state).toBe(STATE.OVERDUE);
+  });
 });
 
 // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-5) -- hasCrossedUnverifiedThreshold (TS-6/TS-8).

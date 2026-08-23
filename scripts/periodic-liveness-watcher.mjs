@@ -52,8 +52,22 @@ const STATE = Object.freeze({ OK: 'OK', OVERDUE: 'OVERDUE', UNVERIFIED: 'UNVERIF
 // lib/periodic-liveness/class-split.mjs for the venue rationale (CI must never evaluate
 // role_session rows; hasPidAlive is host-local).
 
+// QF-20260823-631: measured 2026-08-23, GitHub delivered a declared */5 workflow's last 5
+// scheduled runs 23-30min apart (all successful) -- 5-6x slower than the declared cron implies.
+// A declared grace_multiplier tuned against the CRON STRING (not measured delivery) ladder-
+// escalated a healthy workflow twice in one day. Never trust the declared multiplier alone for
+// this source; floor it at the measured worst case so a healthy gha_cron row can't breach on
+// GitHub's own scheduling jitter. The declared value stays in the row untouched (metadata only).
+const GHA_GRACE_MULTIPLIER_FLOOR = 6;
+
 function overdueThresholdMs(row) {
-  return row.expected_interval_seconds * Number(row.grace_multiplier) * 1000;
+  const declaredGrace = Number(row.grace_multiplier);
+  // Math.max(NaN, N) is NaN -- a row with a missing grace_multiplier must not silently disable
+  // the floor for this source (0, not NaN, preserves Math.max's usual behavior everywhere else).
+  const grace = row.liveness_source === 'github_actions_api'
+    ? Math.max(Number.isFinite(declaredGrace) ? declaredGrace : 0, GHA_GRACE_MULTIPLIER_FLOOR)
+    : declaredGrace;
+  return row.expected_interval_seconds * grace * 1000;
 }
 
 // Adversarial-review finding (PR #5562, WARNING): liveness_source_ref.metadata_filter is stored
