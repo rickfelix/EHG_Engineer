@@ -16,7 +16,6 @@ import { validateMetricsSufficiency } from '../../../scripts/modules/handoff/ver
 // ─── Legacy reference implementation (pre-inversion, verbatim semantics) ───
 function legacyShapeErrors(payload) {
   const errors = [];
-  const typeOf = (v) => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
   const expectArray = (key) => {
     if (!(key in payload)) return;
     if (!Array.isArray(payload[key])) errors.push(key);
@@ -166,6 +165,36 @@ describe('authoring mode (strict, what contract:check runs)', () => {
     const sd = { ...scaffold('sd'), key_changes: ['a string change'] };
     const r = validateArtifact('sd', sd, { mode: 'authoring' });
     expect(r.violations.some((x) => x.field === 'key_changes[0]')).toBe(true);
+  });
+
+  // SD-LEO-INFRA-SHIFT-LEFT-PRD-001 (FR-4): boilerplate success_metrics text is unique-by-text
+  // (3 distinct strings), so validateMetricsSufficiency's dedup-based check alone cannot see it --
+  // this is a separate, content-quality dimension.
+  it('boilerplate success_metrics (buildDefaultSuccessMetrics\' own output) produce ADVISORY warnings, not violations', () => {
+    const sd = {
+      ...scaffold('sd'),
+      success_metrics: [
+        { metric: 'Implementation completeness', target: '100% of scope items implemented', actual: '0' },
+        { metric: 'Test coverage', target: '≥80% code coverage for new code', actual: '0' },
+        { metric: 'Zero regressions', target: '0 existing tests broken', actual: '0' },
+      ],
+    };
+    const r = validateArtifact('sd', sd, { mode: 'authoring' });
+    expect(r.warnings.filter((w) => w.field.startsWith('success_metrics[')).length).toBe(3);
+    expect(r.violations.some((v) => v.field.startsWith('success_metrics'))).toBe(false);
+  });
+
+  it('concrete, SD-specific success_metrics produce no boilerplate warning', () => {
+    const sd = {
+      ...scaffold('sd'),
+      success_metrics: [
+        { metric: 'QF-561 duplicate-dispatch collisions', target: '0 per 30d', actual: '4 -- pre-fix baseline' },
+        { metric: 'Rank-write attribution accuracy', target: '100% coordinator-attributed on event-triggered passes', actual: '0%' },
+        { metric: 'dispatch_rank_triggered_by coverage', target: '100% of event-triggered rank writes', actual: '0%' },
+      ],
+    };
+    const r = validateArtifact('sd', sd, { mode: 'authoring' });
+    expect(r.warnings.filter((w) => w.field.startsWith('success_metrics['))).toEqual([]);
   });
 });
 
