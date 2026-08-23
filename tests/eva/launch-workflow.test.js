@@ -78,14 +78,14 @@ describe('Launch Workflow Module', () => {
         venture: {
           data: {
             id: 'v1', name: 'Test Venture', status: 'active',
-            current_stage: 23, created_at: '2026-01-01', updated_at: '2026-03-01',
+            current_lifecycle_stage: 23, created_at: '2026-01-01', updated_at: '2026-03-01',
           },
           error: null,
         },
         gates: {
           data: [
-            { stage_number: 22, passed: true, gate_type: 'chairman', reasoning: 'Good', created_at: '2026-02-01' },
-            { stage_number: 24, passed: false, gate_type: 'chairman', reasoning: 'Needs work', created_at: '2026-03-01' },
+            { stage_number: 21, passed: true, gate_type: 'chairman', notes: 'Good', created_at: '2026-02-01' },
+            { stage_number: 24, passed: false, gate_type: 'chairman', notes: 'Needs work', created_at: '2026-03-01' },
           ],
           error: null,
         },
@@ -95,6 +95,23 @@ describe('Launch Workflow Module', () => {
       expect(result.inLaunchPhase).toBe(true);
       expect(result.ventureName).toBe('Test Venture');
       expect(result.currentStage).toBe(23);
+      expect(result.launchReadiness.stage21Gate.reasoning).toBe('Good');
+      expect(result.launchReadiness.allGatesPassed).toBe(false);
+    });
+
+    it('fails loud on a real column-mismatch error (SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001 / FR-1)', async () => {
+      const supabase = createMockSupabase({
+        venture: {
+          data: { id: 'v1', name: 'Test Venture', status: 'active', current_lifecycle_stage: 23 },
+          error: null,
+        },
+        gates: {
+          data: null,
+          error: { code: '42703', message: 'column eva_stage_gate_results.reasoning does not exist' },
+        },
+      });
+
+      await expect(getLaunchStatus('v1', { supabase })).rejects.toThrow(/42703|gate query failed/);
     });
   });
 
@@ -108,8 +125,8 @@ describe('Launch Workflow Module', () => {
       const supabase = createMockSupabase({
         gates: {
           data: [
-            { stage_number: 22, passed: true, gate_type: 'chairman', reasoning: 'OK', score: 90, created_at: '2026-02-01' },
-            { stage_number: 23, passed: true, gate_type: 'advisory', reasoning: 'Good', score: 85, created_at: '2026-02-15' },
+            { stage_number: 21, passed: true, gate_type: 'chairman', notes: 'OK', overall_score: 90, created_at: '2026-02-01' },
+            { stage_number: 23, passed: true, gate_type: 'advisory', notes: 'Good', overall_score: 85, created_at: '2026-02-15' },
           ],
           error: null,
         },
@@ -118,6 +135,20 @@ describe('Launch Workflow Module', () => {
       const result = await getChecklist('v1', { supabase });
       expect(result.evaluatedCount).toBe(2);
       expect(result.items.length).toBe(2);
+      expect(result.items[0].reasoning).toBe('OK');
+      expect(result.items[0].score).toBe(90);
+      expect(result.ready).toBe(true);
+    });
+
+    it('fails loud on a real column-mismatch error (SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001 / FR-1)', async () => {
+      const supabase = createMockSupabase({
+        gates: {
+          data: null,
+          error: { code: '42703', message: 'column eva_stage_gate_results.score does not exist' },
+        },
+      });
+
+      await expect(getChecklist('v1', { supabase })).rejects.toThrow(/42703|gate query failed/);
     });
   });
 
@@ -130,14 +161,14 @@ describe('Launch Workflow Module', () => {
     it('maps phase correctly for stage numbers', async () => {
       const supabase = createMockSupabase({
         venture: {
-          data: { current_stage: 5, created_at: '2026-01-01' },
+          data: { current_lifecycle_stage: 5, created_at: '2026-01-01' },
           error: null,
         },
         gates: {
           data: [
-            { stage_number: 1, passed: true, gate_type: 'auto', score: 80, created_at: '2026-01-05' },
-            { stage_number: 5, passed: true, gate_type: 'auto', score: 75, created_at: '2026-01-20' },
-            { stage_number: 23, passed: false, gate_type: 'chairman', score: 50, created_at: '2026-02-01' },
+            { stage_number: 1, passed: true, gate_type: 'auto', overall_score: 80, created_at: '2026-01-05' },
+            { stage_number: 5, passed: true, gate_type: 'auto', overall_score: 75, created_at: '2026-01-20' },
+            { stage_number: 23, passed: false, gate_type: 'chairman', overall_score: 50, created_at: '2026-02-01' },
           ],
           error: null,
         },
@@ -148,6 +179,18 @@ describe('Launch Workflow Module', () => {
       expect(result.events[0].phase).toBe('EVALUATION');
       expect(result.events[1].phase).toBe('STRATEGY');
       expect(result.events[2].phase).toBe('LAUNCH');
+      expect(result.events[0].score).toBe(80);
+    });
+
+    it('fails loud on a real column-mismatch error (SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001 / FR-1)', async () => {
+      const supabase = createMockSupabase({
+        gates: {
+          data: null,
+          error: { code: '42703', message: 'column eva_stage_gate_results.score does not exist' },
+        },
+      });
+
+      await expect(getTimeline('v1', { supabase })).rejects.toThrow(/42703|gate query failed/);
     });
   });
 });

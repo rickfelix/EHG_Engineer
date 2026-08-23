@@ -244,14 +244,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "tests/eva/launch-workflow.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected false to be true // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/eva/operations.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected \"vi.fn()\" to be called 6 times, but got 8 times",
