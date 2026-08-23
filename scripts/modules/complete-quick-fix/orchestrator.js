@@ -28,6 +28,7 @@ import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, r
 // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: merge-verification witness so a
 // quick_fixes row cannot reach status=completed while its change is absent from origin/main.
 import { verifyQFMergeWitness } from './merge-witness.js';
+import { evaluateQfEligibilityPreflight } from '../../../lib/quick-fix/sensitive-path-registry.js';
 import {
   validateLOC,
   validateTests,
@@ -580,6 +581,24 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log('   A documentation QF that changes code can bypass LEAD + SECURITY/GITHUB review');
     console.log('   (it was routed under the documentation Tier-2 floor). Self-verifier confidence');
     console.log('   will be reduced — re-classify the QF type or split out the code change.\n');
+  }
+
+  // SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 FR-5: QF eligibility preflight — refuse
+  // autonomous completion when the diff touches a sensitive path (migrations, gate-criteria,
+  // policy, hooks, lifecycle-history, secrets, publish/deploy, database/chairman-gated).
+  // Isolated registry (lib/quick-fix/sensitive-path-registry.js) — NOT the shared
+  // config/high-risk-files.json used by 2 other live handoff gates. No bypass flag: a QF
+  // legitimately needing to touch one of these paths should be escalated to a full SD
+  // (Work Item Routing risk-keyword rule already forces Tier 3 for these classes),
+  // not force-completed autonomously.
+  const qfPreflight = evaluateQfEligibilityPreflight({
+    filesChanged,
+    diffSourceTier: diffAnalysis.diffSourceTier
+  });
+  if (qfPreflight.refused) {
+    console.error(`\n🚫 ${qfPreflight.reason}\n`);
+    console.error('   Escalate this fix to a full SD instead of completing it as a QF.\n');
+    process.exit(1);
   }
 
   // Test verification - PROGRAMMATIC (not self-reported)
