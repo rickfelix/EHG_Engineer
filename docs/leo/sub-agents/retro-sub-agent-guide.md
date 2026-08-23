@@ -1017,6 +1017,42 @@ Quality is scored separately (`quality_score >= 60%`, ≥70 for infrastructure S
 
 > The canonical table is **`retrospectives`** (NOT `sd_retrospectives`).
 
+### Preflight Auto-Generation (SD-LEO-INFRA-PLAN-LEAD-RETRO-001)
+
+Both `PlanToLeadExecutor.setup()` and `LeadFinalApprovalExecutor.setup()` call a single shared
+helper, `runPreflightRetroCheck` (`scripts/modules/handoff/retro-filters.js`), before their
+respective gate runs:
+
+1. Query via `getFilteredRetrospective` (the same four invariants above). A query **error**
+   (could-not-check) is logged and the function returns WITHOUT attempting generation — the
+   gate then runs its own identical query and reports the same error consistently.
+2. A qualifying retrospective already exists → stash it on `ctx.options._preflightRetro` and
+   skip generation entirely. This is what stops LEAD-FINAL-APPROVAL's retrospective generator
+   from re-running on every single attempt.
+3. Nothing qualifies → invoke the site-specific generator (RETRO sub-agent for PLAN-TO-LEAD,
+   `retrospective-generator.js` via `spawnSync` for LEAD-FINAL-APPROVAL), then **re-query**
+   (never trust the generator's own return shape) so the SAME handoff `execute()` call's gate
+   sees the fresh row — no retry needed. On success the row is best-effort stamped
+   (`metadata.generated_by='preflight_autogen'`, `metadata.preflight_generated_at`); a
+   stamp-write failure never blocks the handoff. On generator failure, the normalized error
+   (`normalizePreflightRetroError`, truncated to 200 chars) is stashed on
+   `ctx.options._preflightRetroError` and appended to the gate's rejection message.
+
+The gate itself never blindly trusts the stash — `isValidPreflightRetro` re-validates it
+against the SAME freshness cutoff the gate's own query would use before substituting it for a
+fresh `getFilteredRetrospective` call, which always runs regardless.
+
+**Rollback**: setting `LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN` (any truthy value)
+restores the pre-fix behavior at all four call sites — the generator runs unconditionally on
+every attempt, no `ctx.options` stash, no error propagation to the gate message.
+
+**Known gap (filed as a harness-bug signal, not fixed by this SD)**: the RETRO sub-agent's own
+enhance-path (`lib/sub-agents/retro/db-operations.js`) can correctly identify an existing retro
+as non-qualifying yet still refuse to promote it to `SD_COMPLETION`, because
+`enhanceRetrospective`'s internal clobber guard (`isSafeToWriteRetro`) can refuse with
+`reason=rich_existing_content`. `scripts/generate-retrospective.js`'s fresh-INSERT path bypasses
+that guard and is the fallback when this occurs.
+
 ## Related Documentation
 
 - [Sub-Agent Patterns Guide](../../reference/agent-patterns-guide.md) - Base patterns
@@ -1031,6 +1067,7 @@ Quality is scored separately (`quality_score >= 60%`, ≥70 for infrastructure S
 
 | Version | SD | Date | Changes |
 |---------|-----|------|---------|
+| 3.2.0 | SD-LEO-INFRA-PLAN-LEAD-RETRO-001 | 2026-08-23 | Preflight auto-generation section: shared `runPreflightRetroCheck`, same-call re-validation, generation-error surfacing, `LEO_RETRO_PREFLIGHT_GATE_UNCONDITIONAL_REGEN` rollback switch |
 | 3.1.0 | QF-20260201-963/371 | 2026-02-01 | Future enhancements capture (Section 8: dual-storage approach, feedback table insertion) |
 | 3.0.0 | SD-LEO-INFRA-ENHANCE-RETRO-SUB-001 | 2026-01-24 | Enhanced quality and specificity (FR-1: 37 boilerplate patterns, FR-2: 5-Whys validation, FR-3: success_metrics integration) |
 | 2.0.0 | SD-LEO-REFAC-TESTING-INFRA-001 | 2026-01-23 | Quality improvements (SMART action items, SD-specific insights) |
@@ -1038,4 +1075,4 @@ Quality is scored separately (`quality_score >= 60%`, ≥70 for infrastructure S
 
 ---
 
-*Last Updated: 2026-02-01 | LEO Protocol v4.3.3*
+*Last Updated: 2026-08-23 | LEO Protocol v4.4.1*
