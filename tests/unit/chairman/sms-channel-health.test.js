@@ -16,7 +16,7 @@ const NOW = Date.parse('2026-07-20T12:00:00Z');
 const iso = (msAgo) => new Date(NOW - msAgo).toISOString();
 
 /** Table-aware supabase mock: per-table select rows + recorded upserts/updates. */
-function makeMock({ obligations = [], selectError = null, registryError = null, insertError = null } = {}) {
+function makeMock({ obligations = [], selectError = null, registryError = null, insertError = null, stampError = null, stampZeroRows = false } = {}) {
   // QF-20260816-173: selectError may be a bare string (message-only, no .code — an
   // operational fault with no PostgREST error code) or a full {code, message} object
   // (e.g. {code: 'PGRST205', ...} for a genuine table-absent signature).
@@ -63,7 +63,13 @@ function makeMock({ obligations = [], selectError = null, registryError = null, 
           lastObligationsQuery = { notFilters: state.notFilters, orderCol: state.orderCol, orderOpts: state.orderOpts, limitN: state.limitN };
         }
         if (selectErrorObj && state.op === 'select') return { data: null, error: selectErrorObj };
-        if (state.op === 'update') { updates.push({ table, payload: state.payload }); return { data: [], error: null }; }
+        if (state.op === 'update') {
+          updates.push({ table, payload: state.payload });
+          // QF-20260822-404: models a real .select('id') readback so the escalate-stamp
+          // fix's error/zero-rows branches are exercised, not just the happy path.
+          if (stampError) return { data: null, error: { message: stampError } };
+          return { data: stampZeroRows ? [] : [{ id: 'stamped' }], error: null };
+        }
         return { data: obligations, error: null };
       }
       if (state.op === 'update') { updates.push({ table, payload: state.payload }); return { data: [], error: null }; }
@@ -285,6 +291,22 @@ describe('FR-3 / TS-3: carrier-filter email-fallback escalation', () => {
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toMatch(/CANARY/);
     expect(warn.mock.calls[0][0]).toMatch(/42501/);
+  });
+
+  it('QF-20260822-404: a failed escalate-stamp UPDATE logs a warning and does NOT increment escalated', async () => {
+    const m = makeMock({ obligations: [{ id: 'ob4', last_error: 'Twilio 30007', status: 'undelivered', body: 'x' }], stampError: 'permission denied' });
+    const warn = vi.fn();
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: { warn } });
+    expect(res.escalated).toBe(0);
+    expect(warn.mock.calls[0][0]).toMatch(/escalate-stamp UPDATE failed/);
+  });
+
+  it('QF-20260822-404: a zero-rows escalate-stamp match (lost race) is silently absorbed, no warning, no increment', async () => {
+    const m = makeMock({ obligations: [{ id: 'ob5', last_error: 'Twilio 30007', status: 'undelivered', body: 'x' }], stampZeroRows: true });
+    const warn = vi.fn();
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: { warn } });
+    expect(res.escalated).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('email-send failure: logged non-escalation, NO stamp (retryable next sweep)', async () => {
