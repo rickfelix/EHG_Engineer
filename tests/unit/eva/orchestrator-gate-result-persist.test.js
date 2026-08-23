@@ -44,6 +44,12 @@ vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({
   writeArtifact: vi.fn().mockResolvedValue('art-001'),
   writeArtifactBatch: vi.fn().mockResolvedValue(['art-001']),
   recordGateResult: vi.fn().mockResolvedValue('gate-result-001'),
+  // SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001: this mock factory must list every named import
+  // eva-orchestrator.js actually uses. Before this fix it omitted recordGateAttempt entirely --
+  // if this quarantined, source-inspection-only file were ever un-quarantined without this entry,
+  // every dual-write call site would hit `undefined(...)`, get swallowed by that call site's own
+  // try/catch, and the suite would stay green regardless (TESTING F-D, EXEC-TO-PLAN row 7910c783).
+  recordGateAttempt: vi.fn().mockResolvedValue('attempt-001'),
   advanceStage: vi.fn().mockResolvedValue({ success: true, wasDuplicate: false, result: {} }),
 }));
 
@@ -79,14 +85,28 @@ describe('Gate Result Persistence (SD-EVA-INFRA-GATE-RESULT-PERSIST-001)', () =>
     expect(typeof mod.recordGateResult).toBe('function');
   });
 
-  it('should import recordGateResult in eva-orchestrator (via source inspection)', async () => {
+  it('should import recordGateResult and recordGateAttempt in eva-orchestrator (via source inspection)', async () => {
     const fs = await import('fs');
     const path = await import('path');
     const orchestratorPath = path.resolve('lib/eva/eva-orchestrator.js');
     const source = fs.readFileSync(orchestratorPath, 'utf-8');
 
-    // Verify the import includes recordGateResult
-    expect(source).toContain("import { writeArtifact, recordGateResult } from './artifact-persistence-service.js'");
+    // SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001: this exact-string assertion is inherently brittle
+    // (it broke the moment recordGateAttempt was added to the same import) -- kept as a coarse
+    // canary, not a substitute for behavioural coverage of the actual call sites.
+    expect(source).toContain("import { writeArtifact, recordGateResult, recordGateAttempt, advanceStage } from './artifact-persistence-service.js'");
+  });
+
+  it('calls recordGateAttempt alongside recordGateResult at both known gate-writing call sites (source inspection, SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001)', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const orchestratorPath = path.resolve('lib/eva/eva-orchestrator.js');
+    const source = fs.readFileSync(orchestratorPath, 'utf-8');
+
+    const recordGateResultCalls = source.split('await recordGateResult(supabase').length - 1;
+    const recordGateAttemptCalls = source.split('await recordGateAttempt(supabase').length - 1;
+    expect(recordGateResultCalls).toBe(2); // gate-persist loop + taste-gate block
+    expect(recordGateAttemptCalls).toBe(2);
   });
 
   it('should have gate result persistence block after gate evaluation', async () => {
