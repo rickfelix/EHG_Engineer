@@ -20,8 +20,14 @@ vi.mock('../../../../lib/claim/claim-identity.js', () => ({
 
 const { HandoffRecorder } = await import('./HandoffRecorder.js');
 
-/** Minimal in-memory Supabase-like mock supporting the query shapes this file uses. */
-function createMockSupabase(seed = {}) {
+/**
+ * Minimal in-memory Supabase-like mock supporting the query shapes this file uses.
+ * `triggers[table]` optionally simulates a BEFORE INSERT trigger (mutates the row
+ * in place right after insert, before it's returned) — used to reproduce the
+ * SECURITY-review lost-update scenario (real BEFORE INSERT triggers on
+ * sd_phase_handoffs write their own metadata keys).
+ */
+function createMockSupabase(seed = {}, triggers = {}) {
   const tables = { ...seed };
   function ensure(table) {
     if (!tables[table]) tables[table] = [];
@@ -61,8 +67,13 @@ function createMockSupabase(seed = {}) {
       const rows = ensure(this.table);
       if (this.op === 'insert') {
         const inserted = Array.isArray(this.payload) ? this.payload : [this.payload];
-        inserted.forEach(r => rows.push({ ...r }));
-        return { data: inserted, error: null };
+        const stored = inserted.map(r => {
+          const row = { ...r };
+          if (typeof triggers[this.table] === 'function') triggers[this.table](row);
+          return row;
+        });
+        stored.forEach(r => rows.push(r));
+        return { data: stored, error: null };
       }
       if (this.op === 'update') {
         const matched = rows.filter(r => this.filters.every(f => f(r)));
@@ -178,6 +189,33 @@ describe('HandoffRecorder — FR-1/FR-2/FR-3 wiring', () => {
     expect(acceptedRow.status).toBe('accepted');
     expect(acceptedRow.metadata.preflight_remediation).toBeTruthy();
     expect(acceptedRow.metadata.preflight_remediation.rejectionIds).toEqual([rejectedId]);
+  });
+
+  it('SECURITY regression: FR-3 stamping preserves trigger-written metadata keys instead of clobbering them', async () => {
+    // Simulate a BEFORE INSERT trigger (e.g. enforce_handoff_creation) writing its
+    // own metadata key on the row at insert time, AFTER the in-memory `metadata`
+    // variable was already captured in createArtifact(). The FR-3 stamp must not
+    // overwrite it with the stale pre-insert snapshot.
+    const supabase = createMockSupabase(
+      { strategic_directives_v2: [{ id: 'SD-T-007', sd_key: 'SD-T-007' }] },
+      { sd_phase_handoffs: (row) => {
+        if (row.status === 'pending_acceptance') {
+          row.metadata = { ...(row.metadata || {}), circuit_breaker_blocked: true, blocked_at: '2026-08-23T00:00:00.000Z' };
+        }
+      } }
+    );
+    const recorder = new HandoffRecorder(supabase, fakeDeps());
+
+    await recorder.recordFailure('EXEC-TO-PLAN', 'SD-T-007', {
+      reasonCode: 'PREREQUISITE_PREFLIGHT_FAILED',
+      preflightIssues: [{ code: 'SUBAGENT_EVIDENCE_MISSING', message: 'x', remediation: 'y', missingAgents: ['TESTING'] }]
+    }, null);
+
+    const acceptedId = await recorder.createArtifact('EXEC-TO-PLAN', 'SD-T-007', { gateResults: {} }, 'exec-id-3');
+    const acceptedRow = supabase.tables.sd_phase_handoffs.find(r => r.id === acceptedId);
+
+    expect(acceptedRow.metadata.circuit_breaker_blocked).toBe(true);
+    expect(acceptedRow.metadata.preflight_remediation).toBeTruthy();
   });
 
   it('TS-6: an accepted handoff with no prior SAEM rejection carries no stamp', async () => {

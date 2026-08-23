@@ -76,6 +76,30 @@ describe('truncateValidationDetails (TS-8)', () => {
     expect(() => truncateValidationDetails(null)).not.toThrow();
     expect(() => truncateValidationDetails(undefined)).not.toThrow();
   });
+
+  it('never throws on a circular reference (falls back to a minimal safe object)', () => {
+    const circular = { summary: { passed: false } };
+    circular.self = circular;
+    let out;
+    expect(() => { out = truncateValidationDetails(circular); }).not.toThrow();
+    expect(out.preflight_remediation_truncated).toBe(true);
+    expect(() => JSON.stringify(out)).not.toThrow();
+  });
+
+  it('TESTING/SECURITY regression: a huge summary.required_improvements no longer escapes the size cap', () => {
+    const details = {
+      summary: {
+        passed: false,
+        score: 0,
+        required_improvements: Array.from({ length: 20000 }, (_, i) => `deficit number ${i} `.repeat(10))
+      },
+      rejected_at: '2026-08-23T00:00:00.000Z',
+      reason: 'GATE_FAILED',
+      message: 'huge deficit list'
+    };
+    const out = truncateValidationDetails(details, VALIDATION_DETAILS_MAX_CHARS);
+    expect(JSON.stringify(out).length).toBeLessThanOrEqual(VALIDATION_DETAILS_MAX_CHARS);
+  });
 });
 
 describe('findPriorSaemRemediation (TS-5/TS-6)', () => {

@@ -1065,11 +1065,22 @@ export class HandoffRecorder {
           acceptingIdentity
         });
         if (priorRemediation.found) {
+          // SECURITY review (SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001): re-select the row's
+          // CURRENT metadata rather than reusing the in-memory `metadata` var captured before
+          // the INSERT above — sd_phase_handoffs has BEFORE INSERT triggers (e.g.
+          // enforce_handoff_creation) that write their own metadata keys (circuit_breaker_blocked,
+          // blocked_at, etc.) on the just-inserted row. Overwriting from the pre-insert snapshot
+          // would silently erase that trigger-written state.
+          const { data: currentRow } = await this.supabase
+            .from('sd_phase_handoffs')
+            .select('metadata')
+            .eq('id', handoffId)
+            .single();
           await this.supabase
             .from('sd_phase_handoffs')
             .update({
               metadata: {
-                ...(metadata || {}),
+                ...((currentRow && currentRow.metadata) || metadata || {}),
                 preflight_remediation: {
                   rejectionIds: priorRemediation.rejectionIds,
                   stamped_at: new Date().toISOString()

@@ -62,6 +62,21 @@ export function buildPreflightRemediation(result) {
  * @returns {object}
  */
 export function truncateValidationDetails(details, maxChars = VALIDATION_DETAILS_MAX_CHARS) {
+  try {
+    return _truncateValidationDetails(details, maxChars);
+  } catch (err) {
+    // Absolute safety net (e.g. a circular-reference `details` breaking JSON.stringify
+    // itself): this function's whole purpose is to never let a malformed/oversized
+    // payload silently drop the rejection row, so it must not throw either.
+    return {
+      preflight_remediation_truncated: true,
+      summary_truncated: true,
+      truncation_error: safeTruncate(err?.message || String(err), 200)
+    };
+  }
+}
+
+function _truncateValidationDetails(details, maxChars) {
   if (!details) return details;
   let serialized = JSON.stringify(details);
   if (serialized.length <= maxChars) return details;
@@ -82,18 +97,53 @@ export function truncateValidationDetails(details, maxChars = VALIDATION_DETAILS
       serialized = JSON.stringify(result);
     }
   }
-  if (serialized.length > maxChars) {
-    // Pathological case: even the trimmed shape doesn't fit. Fall back to a minimal
-    // safe summary rather than let the insert fail and silently drop the row.
-    return {
-      summary: details.summary,
-      rejected_at: details.rejected_at,
-      reason: details.reason,
-      message: safeTruncate(details.message || '', 500),
-      preflight_remediation_truncated: true,
-    };
-  }
-  return result;
+  if (serialized.length <= maxChars) return result;
+
+  // Pathological case: even the trimmed shape doesn't fit — typically because
+  // summary.required_improvements (an UNBOUNDED array threaded in from upstream
+  // validators, unlike the capped fields above) is itself huge. TESTING/SECURITY
+  // review (SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001) measured the earlier version of
+  // this fallback — which returned details.summary/.reason VERBATIM — still exceeding
+  // the 102400-char CHECK constraint on a >1M-char summary, silently dropping the row.
+  // Cap summary.required_improvements before falling back.
+  const cappedSummary = details.summary ? {
+    ...details.summary,
+    ...(Array.isArray(details.summary.required_improvements) ? {
+      required_improvements: details.summary.required_improvements
+        .slice(0, 10)
+        .map((s) => safeTruncate(String(s), 200)),
+      required_improvements_truncated: details.summary.required_improvements.length > 10,
+    } : {}),
+  } : details.summary;
+
+  const fallback = {
+    summary: cappedSummary,
+    rejected_at: details.rejected_at,
+    reason: safeTruncate(String(details.reason || ''), 200),
+    message: safeTruncate(details.message || '', 500),
+    preflight_remediation_truncated: true,
+  };
+  serialized = JSON.stringify(fallback);
+  if (serialized.length <= maxChars) return fallback;
+
+  // Absolute last resort: even the capped summary doesn't fit. Drop to scalar
+  // summary fields only — this branch guarantees a fit for any realistic input,
+  // since every field left is either a primitive or already safeTruncate()-capped.
+  return {
+    summary: details.summary ? {
+      passed: details.summary.passed,
+      score: details.summary.score,
+      gate_count: details.summary.gate_count,
+      failed_gate: safeTruncate(String(details.summary.failed_gate ?? ''), 100) || null,
+      issue_count: details.summary.issue_count,
+      warning_count: details.summary.warning_count,
+    } : undefined,
+    rejected_at: details.rejected_at,
+    reason: safeTruncate(String(details.reason || ''), 200),
+    message: safeTruncate(details.message || '', 500),
+    preflight_remediation_truncated: true,
+    summary_truncated: true,
+  };
 }
 
 /**
