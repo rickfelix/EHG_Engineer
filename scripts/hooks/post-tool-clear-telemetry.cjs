@@ -84,7 +84,7 @@ async function main() {
     const THROTTLE_MS = 30 * 1000;
 
     if (nowMs - lastGitMetricAtMs >= THROTTLE_MS) {
-      const gitMetrics = collectGitMetrics(state.worktree_path, state.claimed_at);
+      const gitMetrics = collectGitMetrics(state.worktree_path, state.claimed_at, state.worktree_branch);
       if (gitMetrics) {
         patch.commits_since_claim = gitMetrics.commits;
         patch.files_modified_since_claim = gitMetrics.files;
@@ -129,7 +129,7 @@ async function readSessionState(sessionId) {
     const url =
       `${cfg.url.replace(/\/$/, '')}/rest/v1/claude_sessions` +
       `?session_id=eq.${encodeURIComponent(sessionId)}` +
-      `&select=metadata,claimed_at,worktree_path`;
+      `&select=metadata,claimed_at,worktree_path,worktree_branch`;
     const res = await fetchWithTimeout(url, {
       method: 'GET',
       headers: authHeaders(cfg.key),
@@ -179,33 +179,64 @@ async function clearToolState(sessionId, nowMs) {
 // it reaches execSync.
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
 
-function collectGitMetrics(worktreePath, claimedAtIso) {
+// QF-20260728-430: same fail-closed shape as ISO_TIMESTAMP_RE above, for worktree_branch —
+// a DB-sourced value now interpolated into a shell command too. Matches the naming convention
+// every branch created by this repo's own tooling actually uses (feat/, qf/, docs/, drill/,
+// etc. — slashes, alphanumerics, dots, underscores, hyphens); anything else fails closed to
+// the whole-HEAD fallback below rather than reaching execSync.
+const SAFE_BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+
+function collectGitMetrics(worktreePath, claimedAtIso, worktreeBranch) {
   if (!claimedAtIso || !ISO_TIMESTAMP_RE.test(claimedAtIso)) return null;
   const cwd = worktreePath && isAbsolute(worktreePath) ? worktreePath : process.cwd();
   const opts = { cwd, timeout: 2000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] };
+
+  // QF-20260728-430: `git log --since=<claimed_at>` on the worktree HEAD counts every commit
+  // reachable from HEAD, including commits OTHER seats merged to origin/main during this
+  // seat's claim window — measured live as a 23x and a 131x overstatement on two real seats
+  // (one frozen the whole window). Scope to commits reachable from the seat's OWN claim
+  // branch but excluded from origin/main, so another worker's merge can never inflate this
+  // seat's count. `--author` cannot substitute: every fleet seat commits under the same git
+  // identity. Falls back to the OLD whole-HEAD-since-claim query only when no valid branch
+  // name is available (legacy/non-worktree seats) — that fallback is still a fleet-wide
+  // proxy, not a per-seat measurement, and callers must not treat it as equivalent.
+  const branch = typeof worktreeBranch === 'string' ? worktreeBranch.trim() : '';
+  const scoped = SAFE_BRANCH_RE.test(branch);
 
   let commits = 0;
   let files = 0;
 
   try {
-    // git log --since respects ISO timestamps
-    const out = execSync(`git log --since="${claimedAtIso}" --oneline`, opts);
-    commits = out.split('\n').filter(Boolean).length;
+    if (scoped) {
+      // Commits on this seat's branch, excluding anything already reachable from main —
+      // equivalent to `git log origin/main..<branch>`, immune to unrelated main-branch churn.
+      const out = execSync(`git log --oneline "${branch}" --not origin/main`, opts);
+      commits = out.split('\n').filter(Boolean).length;
+    } else {
+      // git log --since respects ISO timestamps
+      const out = execSync(`git log --since="${claimedAtIso}" --oneline`, opts);
+      commits = out.split('\n').filter(Boolean).length;
+    }
   } catch {
     return null;
   }
 
   try {
-    // Count unique files in the diff since claimed_at. `git diff --stat` last
-    // line is "N files changed"; we parse it. Fall back to name-only if needed.
-    const nameOnly = execSync(
-      `git log --since="${claimedAtIso}" --name-only --pretty=format: -- .`,
-      opts
-    );
-    const unique = new Set(
-      nameOnly.split('\n').map(s => s.trim()).filter(Boolean)
-    );
-    files = unique.size;
+    if (scoped) {
+      const out = execSync(`git diff --name-only "origin/main...${branch}"`, opts);
+      files = out.split('\n').map(s => s.trim()).filter(Boolean).length;
+    } else {
+      // Count unique files in the diff since claimed_at. `git diff --stat` last
+      // line is "N files changed"; we parse it. Fall back to name-only if needed.
+      const nameOnly = execSync(
+        `git log --since="${claimedAtIso}" --name-only --pretty=format: -- .`,
+        opts
+      );
+      const unique = new Set(
+        nameOnly.split('\n').map(s => s.trim()).filter(Boolean)
+      );
+      files = unique.size;
+    }
   } catch {
     // leave files = 0
   }
