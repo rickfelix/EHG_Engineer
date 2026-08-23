@@ -118,9 +118,10 @@ describe('venture-ops-actuals-sweep main()', () => {
     expect(runVentureUptimeProbe).toHaveBeenCalledTimes(1);
     // SD-FDBK-ENH-CENTRAL-LIVENESS-STAMPER-001 (FR-3): a whole-tick stamp
     // ('cron_script:venture-ops-actuals-sweep.mjs') was added before the per-job stamps, distinct
-    // from the five per-job ARMED-machinery keys asserted below (jobs 1-4 plus
-    // SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-1's Job 5, venture-pbn-auto-score-sweep).
-    expect(stampLastFired).toHaveBeenCalledTimes(6);
+    // from the seven per-job ARMED-machinery keys asserted below (jobs 1-4, SD-MAN-INFRA-
+    // VENTURE-CRACK-GATE-001 FR-1's Job 5, and SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-2/FR-4's
+    // Jobs 6-7, venture-zombie-report + venture-divergence-report).
+    expect(stampLastFired).toHaveBeenCalledTimes(8);
     expect(stampLastFired.mock.calls.some(([, key]) => key === 'cron_script:venture-ops-actuals-sweep.mjs')).toBe(true);
     expect(result.summary.jobs['ops-product-health-collector'].written).toBe(2);
     expect(result.summary.jobs['ops-revenue-metrics-collector'].written).toBe(2);
@@ -485,5 +486,285 @@ describe('venture-ops-actuals-sweep Job 5: PBN auto-score sweep (SD-MAN-INFRA-VE
 
     expect(retroactivelyScoreVenture).not.toHaveBeenCalled();
     expect(result.action).toBe('dry_run');
+  });
+});
+
+/**
+ * Purpose-built fake, deliberately NOT the shared makeSupabase() above (TESTING F7: the rigid
+ * shared fake only speaks `ventures`/`periodic_process_registry`, doesn't filter, and doesn't
+ * differentiate the SAME table queried two different ways in one job -- job 6 below queries
+ * `ventures` once via the standard select/not/neq/order/range chain (jobs 1-3's shape) and
+ * again via select/in/range (the tolerant teardown_disposition read)). `deploymentsByVentureId`
+ * stands in for `venture_deployments.metadata.probe` that job 3 already wrote this cycle.
+ */
+function makeSupabaseForJobs6And7({ ventures, deploymentsByVentureId = {}, teardownDispositionByVentureId = null }) {
+  return {
+    from(table) {
+      if (table === 'ventures') {
+        // Fresh per-.from() state: the teardown_disposition-missing-column simulation must apply
+        // ONLY to job 6's own select/in/range chain -- NOT to fetchLiveDeploymentVentures' or
+        // fetchAllVentureIds' select/not-or-order/range chains, which never call .in().
+        let usedIn = false;
+        return {
+          select() { return this; },
+          not() { return this; },
+          neq() { return this; },
+          in() { usedIn = true; return this; },
+          order() { return this; },
+          range: async () => {
+            if (usedIn && teardownDispositionByVentureId === 'MISSING_COLUMN') {
+              return { data: null, error: { message: 'column ventures.teardown_disposition does not exist' } };
+            }
+            return { data: ventures, error: null };
+          },
+          then: (resolve) => resolve({ data: ventures, error: null }),
+        };
+      }
+      if (table === 'venture_deployments') {
+        let filters = {};
+        return {
+          select() { return this; },
+          eq(col, val) { filters[col] = val; return this; },
+          maybeSingle: async () => {
+            const probe = deploymentsByVentureId[filters.venture_id];
+            return { data: probe ? { metadata: { probe } } : null, error: null };
+          },
+        };
+      }
+      if (table === 'periodic_process_registry') {
+        return {
+          select() { return this; },
+          eq() { return this; },
+          maybeSingle: async () => ({ data: { process_key: 'existing' }, error: null }),
+          upsert: async () => ({ error: null }),
+        };
+      }
+      throw new Error(`unexpected table in test fake: ${table}`);
+    },
+  };
+}
+
+/** Job 6/7 tests don't care about jobs 1-5's own behavior -- silence them uniformly. */
+function noopJobs1Through5Deps() {
+  return {
+    collectProductHealth: vi.fn().mockResolvedValue({ venture_id: 'x' }),
+    collectRevenueMetrics: vi.fn().mockResolvedValue({ venture_id: 'x' }),
+    runVentureUptimeProbe: vi.fn().mockResolvedValue({ checked: 0, reachable: 0, unreachable: 0, newly_surfaced: 0, errors: [] }),
+    ...noopCrackGateDeps(),
+    ...noopPbnDeps(),
+    stampLastFired: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe('venture-ops-actuals-sweep Job 6: zombie report (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-2)', () => {
+  it('reports a terminal-status, is_demo=false venture with a reachable probe as a zombie, with days_since_kill computed from killed_at', async () => {
+    const ventures = [
+      { id: 'zombie-1', name: 'MarketLens', status: 'cancelled', deployment_url: 'https://ml.example', killed_at: '2026-07-08T12:45:28.941Z', is_demo: false },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({
+        ventures,
+        deploymentsByVentureId: { 'zombie-1': { reachable: true, status_code: 200 } },
+        teardownDispositionByVentureId: {},
+      }),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    const zombies = result.summary.jobs['venture-zombie-report'].zombies;
+    expect(zombies).toHaveLength(1);
+    expect(zombies[0]).toMatchObject({ id: 'zombie-1', name: 'MarketLens', deployment_url: 'https://ml.example' });
+    expect(zombies[0].days_since_kill).toBeGreaterThan(0);
+  });
+
+  it('does NOT report a terminal-status venture whose probe is unreachable', async () => {
+    const ventures = [
+      { id: 'v1', name: 'Dead', status: 'cancelled', deployment_url: 'https://dead.example', killed_at: '2026-07-08T00:00:00Z', is_demo: false },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures, deploymentsByVentureId: { v1: { reachable: false } }, teardownDispositionByVentureId: {} }),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(result.summary.jobs['venture-zombie-report'].zombies).toHaveLength(0);
+  });
+
+  it('does NOT report an is_demo=true venture even if terminal and reachable (demo-filtered)', async () => {
+    const ventures = [
+      { id: 'v1', name: 'DemoFixture', status: 'cancelled', deployment_url: 'https://demo.example', killed_at: null, is_demo: true },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures, deploymentsByVentureId: { v1: { reachable: true } }, teardownDispositionByVentureId: {} }),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(result.summary.jobs['venture-zombie-report'].zombies).toHaveLength(0);
+    expect(result.summary.jobs['venture-zombie-report'].checked).toBe(0);
+  });
+
+  it('does NOT report a non-terminal (active) venture even if its deployment is reachable', async () => {
+    const ventures = [
+      { id: 'v1', name: 'Alive', status: 'active', deployment_url: 'https://alive.example', killed_at: null, is_demo: false },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures, deploymentsByVentureId: { v1: { reachable: true } }, teardownDispositionByVentureId: {} }),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(result.summary.jobs['venture-zombie-report'].zombies).toHaveLength(0);
+  });
+
+  it('tolerates the teardown_disposition column not existing yet (migration not yet applied): zombie still reported with teardown_disposition=null and a warning logged, no throw', async () => {
+    const warnLog = vi.fn();
+    const ventures = [
+      { id: 'v1', name: 'MarketLens', status: 'cancelled', deployment_url: 'https://ml.example', killed_at: '2026-07-08T00:00:00Z', is_demo: false },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({
+        ventures,
+        deploymentsByVentureId: { v1: { reachable: true } },
+        teardownDispositionByVentureId: 'MISSING_COLUMN',
+      }),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn: warnLog, error() {} },
+    });
+
+    const zombies = result.summary.jobs['venture-zombie-report'].zombies;
+    expect(zombies).toHaveLength(1);
+    expect(zombies[0].teardown_disposition).toBeNull();
+    expect(warnLog).toHaveBeenCalledWith(expect.stringContaining('teardown_disposition column not found'));
+  });
+});
+
+describe('venture-ops-actuals-sweep Job 7: duplicate-name + registry divergence report (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-4)', () => {
+  const FIXTURE_REGISTRY = [
+    { id: 'APP002', name: 'test-leo-project', venture_id: 'noise-1' },
+    { id: 'APP007', name: 'e2e-verdict-engine-178', venture_id: 'noise-2' },
+    { id: 'APP001', name: 'ehg' }, // platform's own repo entry, not a venture
+  ];
+
+  it('surfaces a duplicate-name pair when >=2 is_demo=false ventures share a name and are both terminal', async () => {
+    const ventures = [
+      { id: 'a', name: 'MarketLens', status: 'cancelled', is_demo: false },
+      { id: 'b', name: 'MarketLens', status: 'cancelled', is_demo: false },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue(FIXTURE_REGISTRY),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    const report = result.summary.jobs['venture-divergence-report'];
+    expect(report.duplicate_names).toHaveLength(1);
+    expect(report.duplicate_names[0].name).toBe('MarketLens');
+    expect(new Set(report.duplicate_names[0].ventures.map((v) => v.id))).toEqual(new Set(['a', 'b']));
+  });
+
+  it('does NOT surface a duplicate-name pair when only one of the two rows is terminal', async () => {
+    const ventures = [
+      { id: 'a', name: 'MarketLens', status: 'cancelled', is_demo: false },
+      { id: 'b', name: 'MarketLens', status: 'active', is_demo: false },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue([]),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(result.summary.jobs['venture-divergence-report'].duplicate_names).toHaveLength(0);
+  });
+
+  it('does NOT surface a duplicate-name pair when one of the two is is_demo=true (demo-filtered)', async () => {
+    const ventures = [
+      { id: 'a', name: 'MarketLens', status: 'cancelled', is_demo: false },
+      { id: 'b', name: 'MarketLens', status: 'cancelled', is_demo: true },
+    ];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue([]),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(result.summary.jobs['venture-divergence-report'].duplicate_names).toHaveLength(0);
+  });
+
+  it('surfaces dead-but-registered: a real (non-fixture) registry entry whose venture_id points at a terminal-status venture', async () => {
+    const ventures = [{ id: 'ecbba50e', name: 'MarketLens', status: 'cancelled', is_demo: false }];
+    const registry = [...FIXTURE_REGISTRY, { id: 'APP006', name: 'MarketLens', venture_id: 'ecbba50e' }];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue(registry),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    const report = result.summary.jobs['venture-divergence-report'];
+    expect(report.dead_but_registered).toHaveLength(1);
+    expect(report.dead_but_registered[0]).toMatchObject({ app_id: 'APP006', venture_id: 'ecbba50e' });
+  });
+
+  it('surfaces live-but-unregistered (status-based) for an active, is_demo=false venture with no matching registry venture_id -- catches a deployment_url=NULL specimen a URL-join could never find', async () => {
+    const ventures = [{ id: 'apex', name: 'ApexNiche AI', status: 'active', is_demo: false, deployment_url: null }];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue(FIXTURE_REGISTRY),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    const report = result.summary.jobs['venture-divergence-report'];
+    expect(report.live_unregistered_by_status).toHaveLength(1);
+    expect(report.live_unregistered_by_status[0].id).toBe('apex');
+  });
+
+  it('surfaces live-but-unregistered (deployment_url-based) as a SEPARATE report key for an active, deployed, is_demo=false venture with no matching registry entry', async () => {
+    const ventures = [{ id: 'altify', name: 'AltifyAI', status: 'active', is_demo: false, deployment_url: 'https://altifyai.example' }];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue(FIXTURE_REGISTRY),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    const report = result.summary.jobs['venture-divergence-report'];
+    expect(report.live_unregistered_by_deployment_url).toHaveLength(1);
+    expect(report.live_unregistered_by_deployment_url[0]).toMatchObject({ id: 'altify', deployment_url: 'https://altifyai.example' });
+    // it also (harmlessly) appears in the broader status-based check -- both keys, not a substitute
+    expect(report.live_unregistered_by_status.map((v) => v.id)).toContain('altify');
+  });
+
+  it('registry noise filter (TESTING F6): a test-/e2e-named or the platform "ehg" registry entry never counts as a real registration', async () => {
+    // Same venture_id as one of the fixture (noise) registry rows -- if the filter were absent,
+    // this venture would wrongly be excluded from live_unregistered_by_status.
+    const ventures = [{ id: 'noise-1', name: 'ShouldStillSurface', status: 'active', is_demo: false }];
+    const result = await main(['node', 's', '--once'], {
+      supabase: makeSupabaseForJobs6And7({ ventures }),
+      loadRegistryApplications: vi.fn().mockReturnValue(FIXTURE_REGISTRY),
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(result.summary.jobs['venture-divergence-report'].live_unregistered_by_status.map((v) => v.id)).toContain('noise-1');
+  });
+
+  it('--dry-run performs zero divergence computation (empty report, no registry load)', async () => {
+    const loadRegistryApplications = vi.fn();
+    const result = await main(['node', 's', '--once', '--dry-run'], {
+      supabase: makeSupabaseForJobs6And7({ ventures: [] }),
+      loadRegistryApplications,
+      ...noopJobs1Through5Deps(),
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    expect(loadRegistryApplications).not.toHaveBeenCalled();
+    expect(result.summary.jobs['venture-divergence-report']).toEqual({
+      duplicate_names: [], dead_but_registered: [], live_unregistered_by_status: [], live_unregistered_by_deployment_url: [],
+    });
   });
 });

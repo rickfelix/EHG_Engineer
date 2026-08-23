@@ -324,3 +324,96 @@ describe.skipIf(!HAS_REAL_DB)('reject_chairman_decision A-4 reconciliation', () 
     expect(killLogs[killLogs.length - 1].metadata.source).toBe('reject_chairman_decision');
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-1: reject_chairman_decision's kill-gate
+// branch gets the same teardown_disposition default-if-NULL logic as kill_venture.
+// Skipped here: database/migrations/20260823145041_ventures_teardown_disposition.sql
+// is @chairman-gated and has NOT been applied to this live DB yet (no @approved-by
+// header — see the migration's own header for why CREATE OR REPLACE FUNCTION on a
+// SECURITY DEFINER RPC is unconditionally TIER-2). Running this against the live DB
+// right now would fail on the column/RPC not existing, not on this SD's logic — the
+// SQL logic itself is proven today by tests/ddl/venture-teardown-disposition-ddl.db.test.js
+// against an ephemeral Postgres where the migration IS applied. Un-skip once the
+// chairman approves and applies that migration.
+// ────────────────────────────────────────────────────────────────────
+describe.skipIf(!HAS_REAL_DB)('reject_chairman_decision kill-gate: teardown_disposition default (SD-LEO-INFRA-VENTURE-KILL-CANCEL-001)', () => {
+  let ventureId = null;
+  let decisionId = null;
+  let originalDeploymentUrl = null;
+
+  beforeAll(async () => {
+    const { data: venture } = await supabase
+      .from('ventures')
+      .select('id, deployment_url')
+      .is('killed_at', null)
+      .neq('workflow_status', 'killed')
+      .limit(1)
+      .single();
+
+    if (!venture) return;
+    ventureId = venture.id;
+    originalDeploymentUrl = venture.deployment_url;
+
+    await supabase
+      .from('ventures')
+      .update({ deployment_url: 'https://kill-cancel-001-fixture.invalid' })
+      .eq('id', ventureId);
+
+    const { data: decision } = await supabase
+      .from('chairman_decisions')
+      .insert({
+        venture_id: ventureId,
+        lifecycle_stage: 3, // kill-gate stage (ARRAY[3, 5, 13, 23])
+        summary: 'SD-LEO-INFRA-VENTURE-KILL-CANCEL-001: teardown_disposition default test',
+        decision_type: 'gate_review'
+      })
+      .select('id')
+      .single();
+
+    if (decision) decisionId = decision.id;
+  });
+
+  afterAll(async () => {
+    if (decisionId) {
+      await supabase.from('chairman_decisions').delete().eq('id', decisionId);
+    }
+    if (ventureId) {
+      await supabase
+        .from('ventures')
+        .update({
+          status: 'active',
+          workflow_status: 'pending',
+          killed_at: null,
+          kill_reason: null,
+          teardown_disposition: null,
+          teardown_disposition_reason: null,
+          teardown_disposition_by: null,
+          teardown_disposition_at: null,
+          deployment_url: originalDeploymentUrl,
+        })
+        .eq('id', ventureId);
+      await supabase.from('ventures_kill_log').delete().eq('venture_id', ventureId);
+    }
+  });
+
+  it.skip('kill-gate stage 3 reject on a venture with a live deployment_url defaults teardown_disposition to pending_teardown (blocked pending chairman approval of 20260823145041_ventures_teardown_disposition.sql)', async () => {
+    if (!decisionId || !ventureId) return;
+
+    const { data, error } = await supabase.rpc('reject_chairman_decision', {
+      p_decision_id: decisionId,
+      p_rationale: 'SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 integration test: kill-gate teardown_disposition default',
+      p_decided_by: 'integration-test'
+    });
+
+    expect(error).toBeNull();
+    expect(data?.is_kill_gate).toBe(true);
+
+    const { data: venture } = await supabase
+      .from('ventures')
+      .select('teardown_disposition')
+      .eq('id', ventureId)
+      .single();
+    expect(venture.teardown_disposition).toBe('pending_teardown');
+  });
+});
