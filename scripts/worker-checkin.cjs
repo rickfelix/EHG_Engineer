@@ -1992,6 +1992,14 @@ async function main() {
   }
   const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort });
   console.log(JSON.stringify(result, null, 2));
+  // QF-20260822-955: standalone owed-row SMS dispatch tick, piggybacked on the
+  // check-in every worker already runs — see lib/checkin/sms-outbound-tick.cjs
+  // for why (no new CI Twilio secrets; reuses this session's own local env).
+  // Strictly fail-soft/bounded: must never affect checkin's own result or exit code.
+  try {
+    const { tickSmsOutboundSweep } = require('../lib/checkin/sms-outbound-tick.cjs');
+    await tickSmsOutboundSweep({ supabase: sb });
+  } catch { /* non-fatal — the real checkin result above already printed */ }
   // SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the
   // harness Bash timeout after the checkin result had already printed (exit 143), so
   // callers misread a completed run as a failure. armCliTeardown (lib/cli-graceful-exit.js)
