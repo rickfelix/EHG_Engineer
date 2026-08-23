@@ -64,13 +64,20 @@ const PROTOCOL_FILES = [
   // of a file absent from this list is invisible to session state entirely, so a companion nothing
   // records is a companion nobody can prove was read.
   'CLAUDE_SOLOMON_MANUAL.md',
-  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. The coordinator was the ONLY role
-  // whose contract is small enough to read in one call (CLAUDE_COORDINATOR.md is ~25.5KB, under the
-  // 25k-token cap for any real tokenizer) and the ONLY role with no verifier of any kind — its
-  // priming requirement terminated in a self-attestation nothing checked. Adding it here is the
-  // prerequisite for checking it at all: until now a coordinator READING its contract produced no
-  // session-state record, so there was nothing for a check to consult.
-  'CLAUDE_COORDINATOR.md'
+  // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. Originally the coordinator was
+  // the ONLY role whose contract was small enough to read in one call, and the ONLY role with no
+  // verifier of any kind — its priming requirement terminated in a self-attestation nothing
+  // checked. Adding it here is the prerequisite for checking it at all: until then a coordinator
+  // READING its contract produced no session-state record, so there was nothing for a check to
+  // consult.
+  // SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 (FR-7): the "small enough to read in one call"
+  // framing above is now PARTIAL — the contract was split into charter + manual + provenance
+  // (mirroring Adam), and the two companions below must be tracked too, or a seat that reads only
+  // the charter is falsely recorded as having read its full contract, the same demotion the Adam
+  // companions (line 55 above) were added to prevent.
+  'CLAUDE_COORDINATOR.md',
+  'CLAUDE_COORDINATOR_MANUAL.md',
+  'CLAUDE_COORDINATOR_PROVENANCE.md'
 ];
 
 // SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Equivalence mapping for gate compatibility

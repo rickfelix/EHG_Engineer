@@ -25,6 +25,35 @@ describe('probeVisionMonitoring (P2)', () => {
     expect(probeVisionMonitoring({ visionGaugeReadInWindow: false }).verdict).toBe('fail');
     expect(probeVisionMonitoring({ visionGaugeReadInWindow: null }).verdict).toBe('unknown');
   });
+
+  // QF-20260728-818: the probe was structurally unpassable when its own input (the vision doc /
+  // DB source) never existed — a zero read-count measured a gauge that could never compute, not
+  // a diligence lapse. This is what actually happened live: docs/strategy/EHG-VISION.md never
+  // existed, so visionGaugeReadInWindow was always a measured `false`, never `null`.
+  it('unknown, with a named cause, when the gauge input itself is unavailable — even though a naive read-count would measure false (the live defect)', () => {
+    const result = probeVisionMonitoring({
+      visionGaugeReadInWindow: false, // this is what was ACTUALLY measured live — a real 0, not null
+      visionGaugeInputAvailable: false,
+      visionGaugeUnavailableNote: 'vision doc unavailable at docs/strategy/EHG-VISION.md',
+    });
+    expect(result.verdict).toBe('unknown');
+    expect(result.detail).toMatch(/vision gauge input unavailable/);
+    expect(result.detail).toMatch(/docs\/strategy\/EHG-VISION\.md/);
+  });
+
+  // Negative test (QF's own recommendation): construct a state where the duty IS discharged and
+  // assert the probe passes — proves this fix doesn't just suppress the FAIL, it still lets a
+  // genuinely-available, genuinely-read gauge pass.
+  it('still passes when the gauge input IS available and it was read (duty genuinely discharged)', () => {
+    expect(probeVisionMonitoring({
+      visionGaugeReadInWindow: true,
+      visionGaugeInputAvailable: true,
+    }).verdict).toBe('pass');
+  });
+
+  it('backward-compat: omitting the new facts entirely behaves exactly as before (undefined !== false)', () => {
+    expect(probeVisionMonitoring({ visionGaugeReadInWindow: false }).verdict).toBe('fail');
+  });
 });
 
 describe('probeFrictionSignaling (P3)', () => {
@@ -252,6 +281,14 @@ describe('probePmBoard finding-closure (QF-20260725-469)', () => {
     // including both orphans. A non-empty-blocker test would have passed every one of them.
     expect(classifyFindingRow({ source_ref: 'x-2026-07-25', blocker: 'Root cause not yet diagnosed' })).toBe('orphan');
     expect(classifyFindingRow({ source_ref: 'x-2026-07-25', blocker: 'NOT-SOURCED: superseded by the venture-line diagnosis' })).toBe('deferred');
+  });
+
+  it('QF-20260823-016: a plan-check forward-list anchor row is never an orphan — it never advances by design', () => {
+    expect(classifyFindingRow({ source_ref: 'plan-check-forward-list-2026-08-22', blocker: '' })).toBe('anchor');
+    const r = probePmBoard({ ...clean, pmBoardFindings: [
+      { id: 'bfbf43a5', source_ref: 'plan-check-forward-list-2026-08-22', blocker: '' },
+    ] });
+    expect(r.verdict).toBe('pass');
   });
 
   it('is reachable on an EMPTY board — the orphan check must not sit behind the clean-board early return', () => {

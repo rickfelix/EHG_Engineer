@@ -29,6 +29,9 @@ import { runAdherenceProbes, hasDrift, parseFingerprintsTail, parseSnapshotTail 
 // feedback) with no bound — paginate so a filtered count/set is never silently truncated at
 // the PostgREST cap (the exact live-incident shape this SD exists to close).
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+// QF-20260728-818: same gauge the duty is actually about (adam-exec-summary.mjs's visPct),
+// reused here (not reinvented) purely to read its honest `available` flag.
+import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
 
 const WINDOW_DAYS = 1;
 const REMEDIATION_CATEGORY = 'adam_adherence_drift';
@@ -48,6 +51,8 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     windowDays,
     sourcedInWindow: null,
     visionGaugeReadInWindow: null,
+    visionGaugeInputAvailable: null,
+    visionGaugeUnavailableNote: null,
     recurrencesInWindow: null,
     signalsInWindow: null,
     adamAuthoredBuildsInWindow: null,
@@ -184,6 +189,19 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     // >=1 event -> PASS (read). Successful 0 -> measured FALSE -> FAIL (lapsed). Error -> null/unknown.
     if (Number.isFinite(count)) facts.visionGaugeReadInWindow = count >= 1;
   } catch { /* leave null -> unknown (query error only) */ }
+
+  // QF-20260728-818: the FR-1 measured-FAIL above is correct when the gauge is READABLE but
+  // wasn't checked — it is NOT correct when the gauge's own input (docs/strategy/EHG-VISION.md /
+  // the DB vision source) does not exist, because NO amount of Adam diligence can produce a read
+  // marker for a gauge that structurally cannot compute. Reuses computeBuildGauge (the same gauge
+  // adam-exec-summary.mjs's visPct comes from) purely for its honest `available` flag — never
+  // reinvents the availability check. A query/computation error here also degrades to null
+  // (unknown), matching every other fact above; it does NOT downgrade the FAIL already measured.
+  try {
+    const gauge = await computeBuildGauge({ io: { supabase }, visionSource: true });
+    facts.visionGaugeInputAvailable = gauge.available === true;
+    if (!facts.visionGaugeInputAvailable) facts.visionGaugeUnavailableNote = gauge.measured_at_note || null;
+  } catch { /* leave null -> unknown (does not affect the measured read-count fact above) */ }
 
   // P7 decision-rubric (FR-1): the Adam->chairman decision-questions in the window. Adam's outward
   // advisory channel is session_coordination sender_type='adam', payload.kind='adam_advisory'

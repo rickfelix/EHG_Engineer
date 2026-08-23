@@ -40,9 +40,15 @@ test('STANDARD_LOOPS has the expected standard loops with the expected keys', ()
   // QF-20260704-493 added the daily 'feedback-sla' reminder (after 'gauge-runner') — actionable
   // feedback categories (adam_adherence_drift, completion_flag, coordinator_review,
   // harness_backlog escalations) had no consumption deadline.
-  assert.equal(STANDARD_LOOPS.length, 23);
+  // NOTE (SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002): this file is DEAD -- a node:test .test.mjs
+  // outside vitest's include globs, so no runner ever executes it (confirmed by TESTING sub-agent,
+  // EXEC-TO-PLAN row 1db3ec14). It had drifted to pin 23 against a live count of 34. Corrected here
+  // so a future accidental revival does not immediately assert a falsehood; the LIVE, RUNNING
+  // equivalent check is tests/unit/coordinator/coordinator-loop-governance-drift.test.js, which
+  // compares against a checked-in snapshot rather than a hand-maintained array (TR-6/TR-7).
+  assert.equal(STANDARD_LOOPS.length, 34);
   const keys = STANDARD_LOOPS.map((l) => l.key);
-  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'charter-audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'unranked-gauge', 'singleton-relaunch', 'relay-drain', 'relay-drop-gauge', 'fleet-retro', 'row-growth', 'review-rotation', 'scripts-reachability', 'retention', 'roles-review', 'gauge-runner', 'feedback-sla']);
+  assert.deepEqual(keys, ['sweep', 'quiet-tick', 'dashboard', 'identity', 'inbox', 'audit', 'unrouted-branches', 'drive-report-consume', 'charter-audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'unranked-gauge', 'capture-gate', 'singleton-relaunch', 'relay-drain', 'sms-relay-drain', 'relay-drop-gauge', 'fleet-retro', 'row-growth', 'review-rotation', 'scripts-reachability', 'retention', 'roles-review', 'gauge-runner', 'advisory-drain', 'silent-holder-audit', 'shared-root-freshness', 'feedback-sla', 'liveness-watcher', 'solomon-ledger-resurface', 'idle-qf-hint']);
 });
 
 test('every loop carries a non-empty label, script, cron, and CronCreate prompt', () => {
@@ -110,7 +116,7 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
 test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
   const none = parseArmedSet([], {});
   const out = renderLoops(none);
-  assert.match(out, /STANDARD CRON LOOPS \(23\)/);
+  assert.match(out, /STANDARD CRON LOOPS \(34\)/);
   // All prompts emitted as CronCreate specs when nothing is armed
   for (const loop of STANDARD_LOOPS) {
     assert.ok(out.includes(loop.prompt), `expected CronCreate prompt for ${loop.key}`);
@@ -122,13 +128,21 @@ test('renderLoops reports all-armed cleanly when every loop is armed', () => {
   // Build the armed set from loop SCRIPTS (basename match) + the shared fleet-dashboard.cjs full prompts
   // (loopStatus requires a full-prompt match for the shared script). Using scripts avoids the comma-in-prompt
   // shredding the prior join(',') approach suffered (retention + charter-audit prompts contain commas).
+  // NOTE (SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002): manually running this dead file with `node --test`
+  // shows this assertion ALSO fails independent of the 23->34 count fix above -- some loops now carry
+  // folded/gha-only/session_arm:false shapes that this armedTokens construction does not mark "armed",
+  // so renderLoops emits per-loop MISSING/gha-only/folded status lines instead of the "All N armed" summary.
+  // This is a pre-existing logic gap (not introduced or fixed here) left unrepaired because the file is
+  // confirmed dead (no runner executes .test.mjs outside the two allowlisted dirs) -- see the note on the
+  // first test above. A future revival needs armedTokens to account for folded/gha_backed/session_arm
+  // loop shapes, not just script+prompt matching.
   const armedTokens = [
     ...STANDARD_LOOPS.map((l) => l.script),
     ...STANDARD_LOOPS.filter((l) => l.script === 'fleet-dashboard.cjs').map((l) => l.prompt),
   ];
   const armed = parseArmedSet(['--armed', armedTokens.join(',')], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 23 standard loops armed/);
+  assert.match(out, /All 34 standard loops armed/);
 });
 
 test('buildReport combines responsibilities + loop sections', () => {

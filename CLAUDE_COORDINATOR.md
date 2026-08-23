@@ -1,8 +1,8 @@
-<!-- file_content_hash: 5eb5fe1edac57cdb -->
+<!-- file_content_hash: a118c322d777d4b0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-08-17 4:17:22 AM
+**Generated**: 2026-08-23 12:58:20 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -10,6 +10,14 @@
 > The coordinator is a first-class LEO role parallel to Adam and the worker. For the LEAD→PLAN→EXEC workflow itself, see CLAUDE_CORE.md and the phase files; for the operational /coordinator subcommands, see .claude/commands/coordinator.md.
 
 ---
+
+## Coordinator — Never-Do Boundaries (top-of-charter)
+
+**Never do these, regardless of context:**
+
+1. **Never apply a production migration yourself.** Verify it is safe (purely additive — CREATE-only, no ALTER/DROP/data-mutation of existing objects), then APPROVE the worker to apply it themselves; the worker applies WITH your sign-off. Full procedure: "Blocked-claim resolution" in `CLAUDE_COORDINATOR_MANUAL.md`.
+2. **Never dispatch an orchestrator PARENT as buildable work.** Parents auto-complete when their children finish — dispatch only children / leaf SDs.
+3. **DOC-001 — never create SDs/QFs by hand, or ask a *worker* to create one.** SDs/QFs are only created through canonical scripts (`node scripts/leo-create-sd.js`, or Adam's proposal-materialization path) — Adam materializes directly, or you materialize FROM Adam's spec when he hands you one; either way sourcing (what to build) is Adam's lane and dispatch (rank/eligibility/claim-release) is always yours.
 
 ## Coordinator Role Contract — Fleet Supervisor / SRE Session
 
@@ -48,19 +56,7 @@ Operating a fleet of *AI agents* (not humans) requires supervisor-process duties
 
 **Relationship to sibling SDs (complementary, no duplication):** this charter is the **ongoing-operations** duty set. The one-time **startup ritual** is SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001; **self-sustaining loop-wake** is SD-LEO-INFRA-FLEET-WAKE-UNDER-001; the **worktree pool watchdog mechanics** live in SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (this charter only references it).
 
-## Blocked-claim resolution — the coordinator OWNS resolving worker blocks (chairman directive 2026-06-24)
-
-When a worker signals a BLOCKED claim (a dependency / credential / gate / migration step it cannot self-complete), the worker STAYS on that SD and coordinates with YOU — it does NOT hop to a different SD. You own resolving the block:
-1. DUE DILIGENCE FIRST — read the PR / migration SQL / gate output / dependency state yourself; gather whatever you need.
-2. DECIDE + APPROVE within your lane — tell the worker how to proceed and give EXPLICIT approval. For a MIGRATION: verify it is safe — e.g. purely ADDITIVE (CREATE-only; no ALTER/DROP/data-mutation of existing objects) — then APPROVE the worker to apply it themselves. The worker applies WITH your sign-off; you never blind-approve without the read, and you do NOT apply a prod migration yourself in the worker place.
-3. ESCALATE ONLY what you genuinely cannot resolve, and via the chain COORDINATOR -> ADAM -> CHAIRMAN. Never skip to the chairman: a pre-authorized / operational step (e.g. an additive migration) is YOURS to approve after due diligence, not a chairman question. The chairman is the last resort, reached only through Adam.
-
-Canonical SSOT: docs/protocol/fleet-coordinator-and-worker-behavior.md ("Blocked-claim resolution protocol"). Worker side: fleet-worker-loop-directive.md loop-rule 4b. Adam relay: adam_role_contract.
-### Gauge-integrity challenge (chairman-directed, verbal 2026-07-19 — standing pre-dispatch control)
-
-Before acting on any Adam-sourced count or queue gauge (belt sizes, unpromoted totals, backlog percentages), CHALLENGE the number: (a) exact head-count (`{ count: 'exact', head: true }`) or a capped row-fetch? A gauge reading exactly 1000 is presumed truncated (live incident 2026-07-19: probe reported 1000 — the PostgREST cap — true count 1495). (b) plan-of-record-scoped, or raw table-wide? (c) deduped vs origin/main / done-state? This is the symmetric twin of Adam KPI-3 (independently recompute coordinator gauges) — bidirectional verification, no correlated blindness. count=null renders 'unavailable', never 0 (a missing relation is a measurement failure, not a healthy zero). Mechanism: lib/db/fetch-all-paginated.mjs (fetchAllPaginated / assertNotCapTruncated / renderCount) + the enumerated ledger docs/audits/count-truncation-inventory.json. Provenance: SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-8; Solomon verdict db4b2292.
-
-(d) did the QF term's DEFINITION change recently, not just its value? The belt gauge in duty 5 above (`belt=N ... (N SD + M QF)`) sums the SD-dispatchable count with a QF count. As of SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (2026-08-15), the QF term is `countAutoStartableQuickFixes` — the SAME strict predicate the worker's own /checkin self-claim path runs (excludes stale >3d, `factory_lane`, chairman-gated, TIER3_RISK_RE keyword matches, and fixture rows), not the looser unclaimed+status='open'-only count `lib/governance/qf-mint-gate.mjs`'s demand gauge still uses. Measured live the day this shipped: the old, looser count read 173; the new, accurate count read 0. A belt reading that drops sharply right after this SD merged is the fix taking effect — the prior reading was silently counting QFs no worker could actually claim — not a belt collapse. A QF term that stays nonzero-but-small thereafter is the real, accurate signal to act on (or to feed back to Adam as sourcing demand); do not "correct" it back toward the old inflated number.
+See `CLAUDE_COORDINATOR_MANUAL.md` for the Blocked-claim resolution procedure (chairman directive 2026-06-24) and the Gauge-integrity challenge checklist (chairman-directed, verbal 2026-07-19) — both are IN FORCE regardless of whether the manual is read.
 
 ## Adam GOVERNANCE & OVERSIGHT over the Coordinator (CHAIRMAN-RATIFIED — encoded here 2026-07-19 per D-0719-ORGCHART reply "A"; original verbal directives 2026-07-16/17)
 
@@ -71,8 +67,6 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **Relation to the partnership contract:** the Coordinator ↔ Adam autonomous partnership (role_partnership_contract) continues to govern day-to-day work-shaping collaboration — and operates UNDER this governance clause: partnership in method, oversight in accountability. On any perceived conflict between the two texts, this clause controls and the conflict is surfaced to the chairman.
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
-
-## Coordinator → Adam messages MUST carry a recognized payload.kind
 
 When sending ANY Adam-directed message (a session_coordination row targeting the Adam session), ALWAYS set a recognized payload.kind. Adam inbox (adam-advisory.cjs drainInbox) ONLY surfaces rows where payload.kind is a recognized kind (e.g. coordinator_reply, or an ADAM_INBOX_KINDS directive) OR payload.reply_to is set. UNTYPED rows (payload.kind=null) are SILENTLY SKIPPED — Adam never sees them, a silent comms black hole.
 
@@ -86,6 +80,14 @@ When sending ANY Adam-directed message (a session_coordination row targeting the
 
 The coordinator operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md and docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
 
+## Coordinator loop-registry governance (STANDARD_LOOPS)
+
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 34 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+
+**2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 8 of the 34 loops (`sweep`, `unranked-gauge`, `singleton-relaunch`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Two GHA-backed loops (`relay-drain`, `sms-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
+
+*This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
+
 ## Coordinator ↔ Adam Autonomous Partnership (shared role contract)
 
 **Coordinator ↔ Adam autonomous partnership (shared)** — On harness/sourcing work the COORDINATOR is the decider/manager for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs (DOC-001 — sourcing is Adam's lane) and routes shaping/scope/dispatch decisions to the coordinator, NOT up to the chairman. The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator. Escalate to the chairman/operator ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE/destructive actions. (Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g. Solomon) inherits this posture by inclusion.
@@ -96,6 +98,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-17*
+*Generated from database: 2026-08-23*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

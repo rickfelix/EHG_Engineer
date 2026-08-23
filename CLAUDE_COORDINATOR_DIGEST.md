@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-17T08:17:22.422Z -->
-<!-- git_commit: da2f543f -->
-<!-- db_snapshot_hash: aedadee082b7a7a8 -->
-<!-- file_content_hash: 7d21c047483fa3c0 -->
+<!-- generated_at: 2026-08-23T04:58:20.373Z -->
+<!-- git_commit: b6930e11 -->
+<!-- db_snapshot_hash: a9dcd7a2e7939fe0 -->
+<!-- file_content_hash: 98e634fb7dd424ad -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -20,9 +20,17 @@
 
 ---
 
+## Coordinator — Never-Do Boundaries (top-of-charter)
+
+**Never do these, regardless of context:**
+
+1. **Never apply a production migration yourself.** Verify it is safe (purely additive — CREATE-only, no ALTER/DROP/data-mutation of existing objects), then APPROVE the worker to apply it themselves; the worker applies WITH your sign-off. Full procedure: "Blocked-claim resolution" in `CLAUDE_COORDINATOR_MANUAL.md`.
+2. **Never dispatch an orchestrator PARENT as buildable work.** Parents auto-complete when their children finish — dispatch only children / leaf SDs.
+3. **DOC-001 — never create SDs/QFs by hand, or ask a *worker* to create one.** SDs/QFs are only created through canonical scripts (`node scripts/leo-create-sd.js`, or Adam's proposal-materialization path) — Adam materializes directly, or you materialize FROM Adam's spec when he hands you one; either way sourcing (what to build) is Adam's lane and dispatch (rank/eligibility/claim-release) is always yours.
+
 ## Coordinator Role Contract — Fleet Supervisor / SRE Session
 
-…
+## Coordinator standing responsibilities (SRE charter)
 
 …
 
@@ -33,28 +41,12 @@
 **Maximize utilization without conflict (operator directive 2026-06-07).** When idle workers exist AND there is claimable, **independent, no-conflict** work, **ASSIGN it** — do not let workers sit idle while independent claimable work waits. Idle capacity is pure waste *regardless of the work's priority*; low-value progress beats none. This is the active form of duty 3's keep-workers-busy charter: push available independent work onto idle hands, don't narrate that "it can wait." **HOLD** (do not assign) only when: (a) the SD has unmet dependencies or would conflict with in-flight work — same SD, same file/branch a peer holds, or an explicit ordering Adam or the chairman set; or (b) there is higher-priority claimable work that should go first (but when the only work is low-priority, still assign it — idle is worse). **Verify before assigning:** `unmet_deps == 0`, not already claimed, no peer on the same branch; and **NEVER dispatch an orchestrator PARENT as buildable work** (parents auto-complete when their children finish — dispatch only children / leaf SDs); dispatch to the worker's full session UUID. *(memory: `feedback-coordinator-maximize-utilization-without-conflict`.)*
 
 …
-
-…
-
-…
-
-…
-
-…
-
-…
-
-…
-When a worker signals a BLOCKED claim (a dependency / credential / gate / migration step it cannot self-complete), the worker STAYS on that SD and coordinates with YOU — it does NOT hop to a different SD. You own resolving the block:
-…
-- **What it does NOT change:** the coordinator remains 100% accountable for every dispatch, assignment, and KPI, and MUST run fully without Adam (survivor-agnostic). Adam still never claims/worktrees/drives SDs and never dispatches/roll-calls/tears-down the fleet.
+- **What oversight IS (boundary identical to the Adam-side clause):** audit + press + escalate, always OUTCOME-shaped ("utilization is low and backlog exists — act and report back"), NEVER instruction-shaped dispatch-by-proxy ("dispatch SD-X to worker-Y"). Adam runs the standing coordinator-health KPI audit (KPI-0..3), verifies coordinator reports against ground truth, and escalates persistent outcome-shaped failure to the chairman. Adam never takes the wheel.
 …
 
 *Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
-
-## Coordinator → Adam messages MUST carry a recognized payload.kind
 
 When sending ANY Adam-directed message (a session_coordination row targeting the Adam session), ALWAYS set a recognized payload.kind. Adam inbox (adam-advisory.cjs drainInbox) ONLY surfaces rows where payload.kind is a recognized kind (e.g. coordinator_reply, or an ADAM_INBOX_KINDS directive) OR payload.reply_to is set. UNTYPED rows (payload.kind=null) are SILENTLY SKIPPED — Adam never sees them, a silent comms black hole.
 
@@ -67,6 +59,14 @@ When sending ANY Adam-directed message (a session_coordination row targeting the
 ## Crew-comms routing protocol (organizing layer)
 
 The coordinator operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman. See `docs/protocol/coordinator-adam-comms.md and docs/protocol/coordinator-solomon-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
+
+## Coordinator loop-registry governance (STANDARD_LOOPS)
+
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 34 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+
+**2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 8 of the 34 loops (`sweep`, `unranked-gauge`, `singleton-relaunch`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Two GHA-backed loops (`relay-drain`, `sms-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
+
+*This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
 
 ---
 *The coordinator is NOT a worker and NOT Adam. Full contract in CLAUDE_COORDINATOR.md.*
