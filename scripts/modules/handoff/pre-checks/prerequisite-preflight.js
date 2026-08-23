@@ -225,7 +225,12 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
             // a worker who follows it is blocked identically on the next attempt. Fall back to the
             // gate's published contract instead of a second, weaker statement of it.
             remediation: evidenceResult.remediation
-              || `Produce evidence for the required sub-agent(s) before re-running the handoff. ${EVIDENCE_WRITER_CONTRACT}`
+              || `Produce evidence for the required sub-agent(s) before re-running the handoff. ${EVIDENCE_WRITER_CONTRACT}`,
+            // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-2: expose the raw MISSING-class agent
+            // codes (only this class, never failing/non_evidence) so an opt-in, flag-gated
+            // auto-invoke can target exactly the agents that never ran. Additive — does not
+            // change the three-class separation this file's own comments argue for above.
+            missingAgents: missing
           });
         }
       }
