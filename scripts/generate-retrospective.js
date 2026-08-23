@@ -92,11 +92,21 @@ async function generateRetrospective(sdInput) {
     .eq('strategic_directive_id', sdId)
     .single();
 
-  // Get handoffs (data fetched for context availability)
-  const { data: _handoffs } = await supabase
+  // QF-20260821-118: handoffs + sub-agent evidence are the real per-SD artifacts
+  // the retro content is derived from below (previously fetched and discarded).
+  const { data: handoffs } = await supabase
     .from('v_handoff_chain')
     .select('*')
     .eq('sd_id', sdId);
+
+  const { data: subAgentResults } = await supabase
+    .from('sub_agent_execution_results')
+    .select('sub_agent_name, verdict, confidence, critical_issues, warnings, recommendations, phase')
+    .eq('sd_id', sdId);
+
+  if ((handoffs || []).length === 0 && (subAgentResults || []).length === 0) {
+    throw new Error(`Cannot derive retrospective for ${sd.sd_key}: no handoffs and no sub-agent execution results found — refusing to fabricate a generic retrospective.`);
+  }
 
   // Determine appropriate learning category based on SD type
   const determinelearning_category = (sd) => {
@@ -128,37 +138,38 @@ async function generateRetrospective(sdInput) {
   // but normalization guarantees no insert ever fails on check_learning_category). SD-FDBK-INFRA-RETROSPECTIVES-CHECK-LEARNING-001.
   const learning_category = normalizeLearningCategory(determinelearning_category(sd));
 
-  // High-quality content arrays (will be converted to JSONB)
-  const what_went_well_array = [
-    `${sd.sd_key} completed successfully with ${sd.progress_percentage}% progress achieved`,
-    'LEO Protocol validation gates passed with comprehensive testing coverage',
-    'Clear handoffs maintained between LEAD→PLAN→EXEC phases with proper documentation',
-    'Database schema changes validated through Database Architect sub-agent review',
-    'Code quality maintained through automated testing and code review processes',
-    'Stakeholder communication maintained throughout implementation lifecycle'
-  ];
+  // QF-20260821-118: derive content from this SD's real handoffs + sub-agent evidence.
+  // Fallbacks below still cite real per-SD counts/names — never a copy-pasted template.
+  // Sub-agent recommendations/warnings/critical_issues are sometimes structured objects
+  // ({issue, recommendation} or {title, description}) rather than plain strings.
+  const describe = (item) => {
+    if (typeof item === 'string') return item;
+    if (item && typeof item === 'object') {
+      if (item.issue) return item.recommendation ? `${item.issue} — ${item.recommendation}` : item.issue;
+      if (item.title) return item.description ? `${item.title}: ${item.description}` : item.title;
+    }
+    return JSON.stringify(item);
+  };
+  const acceptedHandoffs = (handoffs || []).filter(h => h.status === 'accepted');
+  const passingSubAgents = (subAgentResults || []).filter(r => ['PASS', 'CONDITIONAL_PASS'].includes(r.verdict));
 
-  const key_learnings_array = [
-    'Automated quality validation triggers enforce minimum content standards for retrospectives, requiring 5+ items per section',
-    'Database constraints work in tandem with trigger functions to ensure data quality at insert time',
-    'Clear separation between constraint validation (schema level) and business logic validation (trigger level) improves maintainability',
-    'Comprehensive retrospective content provides better insights for continuous improvement than generic template responses',
-    'Quality score calculation considers both quantity (number of items) and quality (avoiding generic phrases, including metrics)'
+  const wellRaw = [
+    ...acceptedHandoffs.map(h => `${h.handoff_type} handoff accepted with validation score ${h.validation_score}/100 (${h.from_agent}→${h.to_agent})`),
+    ...passingSubAgents.map(r => `${r.sub_agent_name} sub-agent verdict: ${r.verdict} (confidence ${r.confidence ?? 'n/a'})`)
   ];
+  const what_went_well_array = wellRaw.length ? wellRaw : [`${sd.sd_key} reached completion with ${(handoffs || []).length} handoff(s) recorded and ${(subAgentResults || []).length} sub-agent execution(s) logged`];
 
-  const action_items_array = [
-    'Review retrospective quality scoring algorithm to ensure it aligns with team\'s definition of valuable retrospectives',
-    'Update retrospective generation templates to include specific prompts for metrics and measurable outcomes',
-    'Consider adding retrospective quality trends dashboard to track improvement over time',
-    'Document the quality scoring rubric in developer guidelines for manual retrospective creation'
-  ];
+  const learningsRaw = (subAgentResults || []).flatMap(r => (r.recommendations || []).map(rec => `${r.sub_agent_name} (${r.phase}): ${describe(rec)}`));
+  const key_learnings_array = learningsRaw.length ? learningsRaw : [`${sd.sd_key} progressed through ${acceptedHandoffs.length} accepted handoff(s) evaluated by ${new Set((subAgentResults || []).map(r => r.sub_agent_name)).size} sub-agent(s) with no additional recommendations logged`];
 
-  const what_needs_improvement_array = [
-    'Initial retrospective template was too generic, triggering quality validation failures',
-    'Documentation could better explain the relationship between constraints and trigger functions',
-    'Error messages from constraint violations should hint at trigger-based recalculation of quality scores',
-    'Automated retrospective generation should query actual handoff data for richer content'
+  const actionsRaw = (subAgentResults || []).flatMap(r => (r.warnings || []).map(w => `${r.sub_agent_name}: follow up on — ${describe(w)}`));
+  const action_items_array = actionsRaw.length ? actionsRaw : [`Monitor ${sd.sd_key} in production; no sub-agent warnings were raised during ${(subAgentResults || []).length} execution(s)`];
+
+  const improveRaw = [
+    ...(subAgentResults || []).flatMap(r => (r.critical_issues || []).map(ci => `${r.sub_agent_name}: ${describe(ci)}`)),
+    ...(handoffs || []).filter(h => h.status !== 'accepted').map(h => `${h.handoff_type} handoff status=${h.status} — did not reach accepted state`)
   ];
+  const what_needs_improvement_array = improveRaw.length ? improveRaw : [`No critical issues surfaced across ${(subAgentResults || []).length} sub-agent review(s) for ${sd.sd_key}`];
 
   // Generate high-quality retrospective content
   // Note: quality_score will be auto-calculated by trigger based on content quality
