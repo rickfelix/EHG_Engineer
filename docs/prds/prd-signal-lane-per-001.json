@@ -1,0 +1,733 @@
+{
+  "executive_summary": "Worker /signal rows (session_coordination, signal lane) can look dispositioned while remaining structurally open: 153 live rows carry a hand-written payload.disposition yet acknowledged_at is still NULL -- the only field fleet-dashboard.cjs's inbox actually checks -- and a validated critical escalation (signal 26318f2b) sat undispositioned for ~4.4h before a one-off manual batch closed it. This SD extends the existing thin ack mechanism (coordinator-ack-signal.cjs + receipt-ledger.cjs) with a real 5-value disposition vocabulary and single canonical writer (FR-1), surfaces undispositioned age at the coordinator tick (FR-2), backfills the current 262 open rows without corrupting the answered-rate ledger's measurement integrity (FR-3), and gives lone (non-promoted) dispositioned signals a path into the existing SIGNAL_RESOLVED notify-back loop, which today only fires for promotion-derived signals (FR-4). Two LEAD-phase VALIDATION findings are load-bearing constraints here, not afterthoughts: a naive backfill would flatten 10 distinct hand-stamped dispositions into 262 fake 'ACTIONED' answered-rate-ledger rows (~9% numerator inflation), and a dormant third acknowledged_at writer (signal-router.cjs's ackAndRouteLoneSignal, 0 rows ever produced) is the most likely place FR-4 gets wired and must not become a second silent-close path.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Extend coordinator-ack-signal.cjs + receipt-ledger.cjs with a real disposition vocabulary and single canonical writer",
+      "priority": "critical",
+      "description": "Widen receipt-ledger.cjs's existing 3-value DISPOSITIONS enum (ACTIONED/DECLINED/SUPERSEDED, lib/coordination/receipt-ledger.cjs:70-74) to the signal-lane's 5-value vocabulary (actioned/promoted/duplicate-of/rejected-with-reason/deferred-with-trigger) OR define an explicit mapping from the 5 signal-lane values onto the 3 existing ledger values -- buildReceipt() at receipt-ledger.cjs:89 currently silently drops any value not in its enum, so an unmapped 5th value would vanish from the ledger with no error. coordinator-ack-signal.cjs becomes the SOLE writer of a disposition onto a signal row (stamping both acknowledged_at, the existing retirement signal fleet-dashboard.cjs checks, and the new disposition value with writer identity) -- extend this file, do not create a second parallel writer. Mirror coordinator-ack-adam.cjs's mandatory-linkage pattern: 'rejected-with-reason' requires a non-empty reason string or the write is rejected before touching the DB (same shape as coordinator-ack-adam.cjs:226-248's LINKAGE_REQUIRED_DISPOSITIONS check); 'deferred-with-trigger' requires an explicit trigger condition or is rejected (mirrors coordinator-ack-adam.cjs:285-287). CORRECTION (TESTING, fd168314): receipt-ledger.cjs:89's buildReceipt() returns null for the WHOLE receipt object when a disposition is unmapped, not a single dropped field -- so an unmapped value stamps acknowledged_at while ZERO ledger rows are written, removing the signal from both the answered-rate numerator AND denominator. TS-3 must assert the receipt is non-null before any field-level check (a null-check-then-throw ordering bug would otherwise mask this as a TypeError, not a failed assertion).",
+      "acceptance_criteria": [
+        "Calling the extended writer with disposition='actioned' on a fixture signal row sets BOTH acknowledged_at (non-null) and a disposition value with writer identity recorded, verified by re-reading the row.",
+        "Calling the writer with disposition='deferred-with-trigger' and no trigger argument is rejected before any DB write occurs (verified: row's acknowledged_at remains NULL).",
+        "A vocabulary-reconciliation test proves all 5 signal-lane disposition values map to a receipt-ledger DISPOSITIONS entry with no silent drop -- inject each of the 5 values and assert buildReceipt() does not omit any of them from the resulting receipt."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Surface undispositioned signal age at the coordinator tick, oldest-first",
+      "priority": "high",
+      "description": "CORRECTED (TESTING, fd168314): lib/fleet/outstanding-signals.cjs already implements the acknowledged_at IS NULL filter, oldest-first ordering, age reporting, truncation-honesty, and a read-only guarantee, with a named threshold DEFAULT_ALERT_AGE_MIN=30 and 20+ passing tests -- the original FR-2 (pointing at fleet-dashboard.cjs, inventing a new SIGNAL_DISPOSITION_SLA_MINUTES constant) would have duplicated this and reintroduced the exact vocabulary-drift class FR-1 exists to eliminate. EXEC must EXTEND outstanding-signals.cjs: widen its current single-session .eq('sender_session', sessionId) filter to a coordinator-wide view, and REUSE DEFAULT_ALERT_AGE_MIN as the SLA threshold (or rename it in place if a signal-lane-specific name is truly needed -- do not add a second, parallel constant for the same concept).",
+      "acceptance_criteria": [
+        "A fixture signal row older than DEFAULT_ALERT_AGE_MIN appears in the widened (coordinator-wide, not single-session) surfaced oldest-first list with an explicit overdue marker.",
+        "A fixture signal row younger than DEFAULT_ALERT_AGE_MIN does NOT appear as overdue.",
+        "No new SLA constant is introduced; the existing DEFAULT_ALERT_AGE_MIN (or an explicit rename of it) is the single source of truth for this threshold."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Live-queried backfill for the current open signal population, WITHOUT corrupting the answered-rate ledger",
+      "priority": "critical",
+      "description": "MUST run AFTER FR-1 lands (ordering dependency -- the backfill needs FR-1's canonical writer/vocabulary to exist first). Query session_coordination live at run time (WHERE payload.signal_type IS NOT NULL AND acknowledged_at IS NULL), not a hardcoded row-id list or frozen count -- the 'as of 2026-08-24' figure of 262 open (109 never-touched + 153 already hand-stamped with a payload.disposition while acknowledged_at is still NULL) is a snapshot, and hand-stamping is confirmed still ongoing. CRITICAL CONSTRAINT (VALIDATION finding, sub_agent_execution_results eb009c8e-0ec1-49ec-bef7-b8cc2ff20d01): backfilled rows MUST NOT be written through FR-1's writer unmodified, because that writer hardcodes disposition:'ACTIONED' and isRetention:false unconditionally (coordinator-ack-signal.cjs:99,102) -- doing so would flatten the 153 rows' 10 distinct hand-stamped disposition texts into a single generic 'ACTIONED' value AND inject 262 rows indistinguishable from genuine coordinator answers into the answered-rate ledger (a ~9% numerator inflation on today's 2,864-row ledger, 610 of which are signal receipts). Backfilled rows MUST either (a) go through a distinct isRetention:true path that preserves the original hand-stamped disposition text verbatim, or (b) be excluded from the answered-rate ledger's receipt insert entirely. Pick one and document the choice; do not leave it ambiguous for EXEC to guess.",
+      "acceptance_criteria": [
+        "Running the backfill against a fixture DB state (mix of never-touched and already-hand-stamped rows) leaves zero signal-lane rows with acknowledged_at NULL afterward.",
+        "The answered-rate ledger's row count and its is_retention=false (genuine-answer) subset are BYTE-IDENTICAL before and after a backfill run against a fixture population -- this is the primary regression test for the VALIDATION HIGH finding.",
+        "Each of the 153 already-hand-stamped rows' original disposition text is preserved (not flattened to a generic value) somewhere queryable after backfill -- verified by comparing pre/post text for a sample of the 10 distinct hand-stamped texts.",
+        "Re-running the backfill script a second time against an already-backfilled fixture is a no-op (idempotent) -- no duplicate ledger rows, no re-processing of already-closed rows."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Widen SIGNAL_RESOLVED to cover lone (non-promoted) dispositioned signals, resolving the dormant third writer",
+      "priority": "high",
+      "description": "The existing SIGNAL_RESOLVED loop (scripts/stale-session-sweep.cjs's runCoordinatorHousekeeping, lines ~1945-2026) fires ONLY when payload.routed_to_sd_key is set, which scripts/sd-from-feedback.js:386-394 stamps ONLY on promotion (3+ same-fingerprint aggregation) -- it has NEVER fired in production (0 rows with routed_to_sd_key, 0 notification_sent, 0 SIGNAL_RESOLVED messages ever sent), so this is zero-yield, not merely narrow. CRITICAL CONSTRAINT (VALIDATION finding): a dormant third acknowledged_at writer already exists at lib/coordinator/signal-router.cjs:337-432 (shouldRouteLone/stampRoutedToCoordinator/ackAndRouteLoneSignal, from SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001) -- self-documented as unreachable, 0 rows ever produced, stamps acknowledged_at with NO receipt-ledger call (the same 'invisible to measurement' defect FR-1 exists to fix), and has a fixture-blind bug where loadRecentSignals doesn't select acknowledged_at but branches on it (so in production the idempotency guard can never fire -- its tests pass only because every mock hand-supplies the field). EXEC must explicitly decide: either wire FR-1's canonical writer through this path (fixing the missing receipt-ledger call and the select-list gap) and widen SIGNAL_RESOLVED to trigger on FR-1's new disposition field directly (not routed_to_sd_key), or retire the dormant path entirely if superseded. Never leave both a fixed FR-1 path and an unfixed dormant path live simultaneously. Also add an explicit ORDER BY (created_at ASC) to the SIGNAL_RESOLVED candidate query, currently .limit(50) with no ordering -- invisible today at 0 candidates, a starvation risk once widened against 262 rows. CORRECTION (TESTING, fd168314): the fixture-blind bug is worse than initially scoped -- loadRecentSignals's missing acknowledged_at in its select list breaks TWO downstream branches in opposite directions: signal-router.cjs:414 degrades a guard (partially masked, since routed_to_coordinator lives inside the selected payload), but :379's idempotency check (`if (r.payload?.routed_to_coordinator && r.acknowledged_at) continue;`) is unconditionally false when acknowledged_at is undefined, making the `continue` UNREACHABLE in production -- an already-acked row gets RE-STAMPED with a fresh acknowledged_at on every tick, which also corrupts source_age_ms (computed at write time, unrecoverable later). Confirmed there is no recordReceipt() call at the :384-387 update either. ALSO: tests/helpers/postgrest-fixture-store.js's select() ignores its column-list argument and returns whole seeded rows -- seeding a 'real' row into this fixture is behaviourally IDENTICAL to the current hand-supplied mocks and cannot observe the projection bug. FR-4's tests for this specific defect need either (a) projection support added to the fixture, (b) a db-tier test against the real schema, or (c) a static source-pin test on the actual select() string (precedent: tests matching the ack-paths-explicit-id-source-pins.test.js pattern) -- a plain unit test with a mock client cannot catch this class of bug.",
+      "acceptance_criteria": [
+        "POSITIVE CONTROL (resolves the VALIDATION finding that the existing negative-only test would be vacuous): disposing a lone, non-promoted fixture signal via FR-1's writer results in an actual SIGNAL_RESOLVED message reaching the sender's session -- not just the absence of a false trigger.",
+        "NEGATIVE CONTROL: promoting a fixture signal (3+ same-fingerprint) WITHOUT giving it an individual disposition does NOT fire SIGNAL_RESOLVED -- regression guard against reintroducing the prior defect where 9 critical signals silently vanished when stampRouted() disposed rows purely on promotion.",
+        "The dormant signal-router.cjs:337-432 path's fixture-blind bug is either fixed (loadRecentSignals selects acknowledged_at) with a test using a REAL row shape (not hand-supplied mock fields), or the path is retired -- one or the other, verified by which files exist/are called after EXEC.",
+        "The candidate query has an explicit ORDER BY; a test with >50 candidate rows confirms the oldest, not an arbitrary subset, is processed first."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No DB migration required",
+      "description": "coordination_receipts.disposition is a bare text column with no CHECK constraint (confirmed by VALIDATION) -- widening the vocabulary from 3 to 5 values is JS-only (receipt-ledger.cjs's DISPOSITIONS constant + buildReceipt() mapping logic), not a schema change."
+    },
+    {
+      "id": "TR-2",
+      "title": "FR-1 must land and be verified before FR-3 executes",
+      "description": "FR-3's backfill depends on FR-1's canonical writer and vocabulary existing; sequence commits/PRs so FR-1 is testable in isolation first."
+    },
+    {
+      "id": "TR-3",
+      "title": "Backfill is idempotent and live-queried, never a frozen ID list",
+      "description": "The 262-row figure is a point-in-time snapshot and manual hand-stamping is confirmed ongoing; the backfill script must re-derive its target row set from a live query every run, and be safe to re-run without side effects on already-processed rows."
+    },
+    {
+      "id": "TR-4",
+      "title": "Single canonical writer invariant preserved end to end",
+      "description": "After EXEC, exactly one code path may stamp a signal-lane disposition + acknowledged_at together (FR-1's extended writer). Any pre-existing or newly-discovered second path (including the dormant signal-router.cjs:337-432 writer) must be either routed through FR-1's writer or explicitly retired -- never left as a silent alternate closer."
+    },
+    {
+      "id": "TR-5",
+      "title": "TR-4 (single canonical writer) requires an explicit census-style test",
+      "description": "TR-4 states the invariant but the PRD had no test verifying it. EXEC must add a census test (precedent: ack-paths-explicit-id-source-pins.test.js) that enumerates every code path capable of writing acknowledged_at + a disposition value together and asserts exactly one (FR-1's canonical writer) exists post-EXEC -- this is the SD's core architectural guarantee and the one thing that, if violated, silently reintroduces the whole defect class."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "type": "unit",
+      "expected": "Row is closed by the same check fleet-dashboard.cjs already uses, and hand-stamp detection can distinguish this write from an out-of-band one. Must include a NEGATIVE arm: a hand-stamped (non-canonical-writer) disposition on a fixture row must be detected as such, not just \"clean\" asserted unconditionally by a detector that could return true regardless of input.",
+      "scenario": "Canonical writer stamps both acknowledged_at and disposition+writer-identity atomically"
+    },
+    {
+      "id": "TS-2",
+      "type": "unit",
+      "expected": "No DB write occurs; row state unchanged.",
+      "scenario": "rejected-with-reason and deferred-with-trigger reject writes missing their mandatory linkage field"
+    },
+    {
+      "id": "TS-3",
+      "type": "unit",
+      "expected": "Each value maps to a real, non-null receipt object (assert non-null BEFORE any field-level check, since buildReceipt() returns null for the whole receipt on an unmapped value, per the corrected FR-1 AC-3) that is distinguishable per disposition value.",
+      "scenario": "All 5 signal-lane disposition values survive buildReceipt() with no silent drop"
+    },
+    {
+      "id": "TS-4",
+      "type": "unit-or-db-tier (see note)",
+      "expected": "Zero rows remain open; answered-rate ledger row count and is_retention=false subset unchanged from pre-backfill baseline; original hand-stamped disposition text preserved for a sample of rows. TIER CORRECTION (TESTING, fd168314): originally typed 'integration', which vitest.config.js routes to the 'db' project -- excluded from the default 'unit' project and from plain `npm test`, meaning both HIGH-severity guards (answered-rate ledger integrity, SIGNAL_RESOLVED positive/negative control) would be green-over-unrun. Prefer a pure-unit form where possible (e.g. TS-4 should assert on lib/coordination/answered-rate.cjs's computeAnsweredRate() output using the existing fakeClient() pattern from advisory-receipt-lane.test.js:19-33, not a live-DB row count); only fall back to a genuinely-run db-tier test (VITEST_DB_ALLOW_REF set) where a pure-unit fixture cannot observe the behavior (e.g. the projection-dependent parts of TS-6/TS-7). Must also assert source_age_ms is NOT computed from a fake write-time timestamp for backfilled rows (the LEAD-phase scope correction flagged up-to-38h fake latencies as a distinct failure mode from raw ledger-count corruption).",
+      "scenario": "Backfill run against a fixture with never-touched AND already-hand-stamped rows"
+    },
+    {
+      "id": "TS-5",
+      "type": "unit-or-db-tier (see note)",
+      "expected": "No duplicate ledger rows, no re-processing. TIER CORRECTION (TESTING, fd168314): originally typed 'integration', which vitest.config.js routes to the 'db' project -- excluded from the default 'unit' project and from plain `npm test`, meaning both HIGH-severity guards (answered-rate ledger integrity, SIGNAL_RESOLVED positive/negative control) would be green-over-unrun. Prefer a pure-unit form where possible (e.g. TS-4 should assert on lib/coordination/answered-rate.cjs's computeAnsweredRate() output using the existing fakeClient() pattern from advisory-receipt-lane.test.js:19-33, not a live-DB row count); only fall back to a genuinely-run db-tier test (VITEST_DB_ALLOW_REF set) where a pure-unit fixture cannot observe the behavior (e.g. the projection-dependent parts of TS-6/TS-7).",
+      "scenario": "Backfill re-run is a no-op on an already-backfilled fixture"
+    },
+    {
+      "id": "TS-6",
+      "type": "unit-or-db-tier (see note)",
+      "expected": "Sender's session receives the SIGNAL_RESOLVED message. TIER CORRECTION (TESTING, fd168314): originally typed 'integration', which vitest.config.js routes to the 'db' project -- excluded from the default 'unit' project and from plain `npm test`, meaning both HIGH-severity guards (answered-rate ledger integrity, SIGNAL_RESOLVED positive/negative control) would be green-over-unrun. Prefer a pure-unit form where possible (e.g. TS-4 should assert on lib/coordination/answered-rate.cjs's computeAnsweredRate() output using the existing fakeClient() pattern from advisory-receipt-lane.test.js:19-33, not a live-DB row count); only fall back to a genuinely-run db-tier test (VITEST_DB_ALLOW_REF set) where a pure-unit fixture cannot observe the behavior (e.g. the projection-dependent parts of TS-6/TS-7).",
+      "scenario": "SIGNAL_RESOLVED positive control for a lone dispositioned signal"
+    },
+    {
+      "id": "TS-7",
+      "type": "unit-or-db-tier (see note)",
+      "expected": "No SIGNAL_RESOLVED fires; regression guard against the prior silent-vanish defect holds. TIER CORRECTION (TESTING, fd168314): originally typed 'integration', which vitest.config.js routes to the 'db' project -- excluded from the default 'unit' project and from plain `npm test`, meaning both HIGH-severity guards (answered-rate ledger integrity, SIGNAL_RESOLVED positive/negative control) would be green-over-unrun. Prefer a pure-unit form where possible (e.g. TS-4 should assert on lib/coordination/answered-rate.cjs's computeAnsweredRate() output using the existing fakeClient() pattern from advisory-receipt-lane.test.js:19-33, not a live-DB row count); only fall back to a genuinely-run db-tier test (VITEST_DB_ALLOW_REF set) where a pure-unit fixture cannot observe the behavior (e.g. the projection-dependent parts of TS-6/TS-7).",
+      "scenario": "SIGNAL_RESOLVED negative control for promotion-without-disposition"
+    },
+    {
+      "id": "TS-8",
+      "type": "unit",
+      "expected": "A fixture row past SLA is flagged overdue; a fixture row under SLA is not.",
+      "scenario": "Coordinator inbox surfaces oldest-first overdue signals against the named SLA constant"
+    },
+    {
+      "id": "TS-9",
+      "type": "unit",
+      "expected": "A fixture row already carrying acknowledged_at + payload.routed_to_coordinator=true, when re-processed by the FIXED loadRecentSignals (selecting acknowledged_at), is correctly skipped (continue fires) and its acknowledged_at/source_age_ms are NOT overwritten. Against the CURRENT unfixed code, this test must fail, proving it actually observes the bug rather than passing vacuously.",
+      "scenario": "signal-router.cjs's idempotency guard at :379 is unconditionally unreachable due to the missing acknowledged_at column in loadRecentSignals's select list"
+    }
+  ],
+  "acceptance_criteria": [
+    "A signal row cannot sit past the named SLA constant without either a recorded disposition or an explicit surfaced-overdue line at the coordinator tick.",
+    "Hand-stamping a disposition outside the canonical writer is detectable via missing/mismatched writer identity.",
+    "The 26318f2b-class replay (a critical signal) reaches dispositioned state within one coordinator tick cycle in fixture.",
+    "The answered-rate ledger's measurement integrity is provably unchanged by the FR-3 backfill (byte-identical row count and is_retention=false subset pre/post).",
+    "SIGNAL_RESOLVED fires for a genuinely lone-dispositioned signal (positive control) and does not fire for promotion alone (negative control)."
+  ],
+  "risks": [
+    {
+      "risk": "A naive FR-3 backfill reusing FR-1's writer unmodified corrupts the answered-rate ledger by ~9% (VALIDATION HIGH finding).",
+      "mitigation": "FR-3 explicitly requires a distinct isRetention:true / ledger-excluded path; TS-4 is the primary regression test.",
+      "severity": "high"
+    },
+    {
+      "risk": "FR-4 wires into the dormant signal-router.cjs:337-432 path without fixing its missing receipt-ledger call or its fixture-blind loadRecentSignals bug, creating a second silent-close mechanism (VALIDATION HIGH finding).",
+      "mitigation": "FR-4 requires an explicit fix-or-retire decision for that path, verified by TS-6/TS-7 using real (not hand-supplied) row shapes.",
+      "severity": "high"
+    },
+    {
+      "risk": "Widening SIGNAL_RESOLVED's trigger reintroduces the prior regression where promotion alone disposed 9 critical signals silently.",
+      "mitigation": "TS-7 is a dedicated negative control asserting promotion-without-disposition never fires SIGNAL_RESOLVED.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Vocabulary mismatch: the 5-value signal-lane set vs receipt-ledger's existing 3-value DISPOSITIONS enum could silently drop values via buildReceipt()'s unlisted-value behavior.",
+      "mitigation": "FR-1 requires an explicit mapping/extension, verified by TS-3.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Coordinator inbox tick (fleet-dashboard.cjs)",
+      "Worker sessions awaiting SIGNAL_RESOLVED outcomes (worker-checkin.cjs, hooks/coordination-inbox.cjs)",
+      "Answered-rate ledger reporting (coordination_receipts consumers)"
+    ],
+    "dependencies": [
+      "scripts/coordinator-ack-signal.cjs",
+      "lib/coordination/receipt-ledger.cjs",
+      "lib/coordinator/signal-router.cjs",
+      "scripts/stale-session-sweep.cjs",
+      "scripts/sd-from-feedback.js"
+    ],
+    "data_contracts": [
+      "session_coordination.payload (JSONB, no schema change)",
+      "coordination_receipts.disposition (bare text, no CHECK constraint -- no migration needed per TR-1)"
+    ],
+    "runtime_config": [
+      "SIGNAL_DISPOSITION_SLA_MINUTES (new named constant, FR-2)"
+    ],
+    "observability_rollout": [
+      "Answered-rate ledger row count + is_retention=false subset compared pre/post backfill as the primary safety check (TS-4)",
+      "SIGNAL_RESOLVED message delivery counted before/after FR-4 to confirm it moves off zero"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Extend the existing thin signal-ack chain (coordinator-ack-signal.cjs -> receipt-ledger.cjs) with a real disposition vocabulary; extend or retire the dormant lone-signal writer in signal-router.cjs; widen the existing SIGNAL_RESOLVED sweep in stale-session-sweep.cjs to key off the new disposition field instead of promotion-only routed_to_sd_key.",
+    "components": [
+      {
+        "name": "scripts/coordinator-ack-signal.cjs",
+        "change": "Extended: 5-value disposition vocabulary, mandatory-linkage checks for rejected-with-reason/deferred-with-trigger, writer-identity stamp."
+      },
+      {
+        "name": "lib/coordination/receipt-ledger.cjs",
+        "change": "Extended: DISPOSITIONS enum widened or explicitly mapped; buildReceipt() no longer silently drops unlisted values."
+      },
+      {
+        "name": "lib/coordinator/signal-router.cjs",
+        "change": "Fixed (missing receipt-ledger call, fixture-blind loadRecentSignals select-list gap) OR retired -- explicit EXEC decision, not both left live."
+      },
+      {
+        "name": "scripts/stale-session-sweep.cjs",
+        "change": "runCoordinatorHousekeeping's SIGNAL_RESOLVED trigger widened beyond routed_to_sd_key; candidate query gains explicit ORDER BY."
+      },
+      {
+        "name": "scripts/one-off/signal-lane-backfill-001.mjs (new)",
+        "change": "NEW: live-queried, idempotent backfill for open signal-lane rows, routed through the isRetention-safe path (FR-3), never through FR-1's writer unmodified."
+      },
+      {
+        "name": "Coordinator inbox surface (fleet-dashboard.cjs)",
+        "change": "Extended: oldest-first undispositioned-age surfacing against a named SLA constant."
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Sequential: FR-1 (extend writer+vocabulary) first and independently testable, then FR-2 (surfacing) and FR-3 (backfill, depends on FR-1) in parallel, then FR-4 (widen SIGNAL_RESOLVED, depends on FR-1's disposition field existing) last.",
+    "steps": [
+      "FR-1: extend coordinator-ack-signal.cjs + receipt-ledger.cjs; land and unit-test in isolation before proceeding.",
+      "FR-2: add oldest-first overdue surfacing to the coordinator inbox against a new named SLA constant.",
+      "FR-3: build the live-queried, idempotent backfill with the answered-rate-ledger-safe path; verify TS-4/TS-5 against a fixture mirroring the real 262-row mixed population before running against production data.",
+      "FR-4: decide fix-vs-retire for the dormant signal-router.cjs lone-signal path; widen SIGNAL_RESOLVED's trigger; verify TS-6 (positive) and TS-7 (negative) both hold.",
+      "Run the FR-3 backfill against live production session_coordination only after FR-1/FR-3 test suites are green."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run the FR-1 disposition writer against a fixture signal row and confirm it stamps BOTH acknowledged_at AND a canonical disposition value with writer identity, not a payload.disposition hand-stamp.",
+      "expected_outcome": "Row transitions from open to genuinely closed by the acknowledged_at IS NULL check fleet-dashboard.cjs already uses."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run the FR-3 backfill against a fixture mixing never-touched and already-hand-stamped rows, then diff the answered-rate ledger's row count and is_retention=false subset before/after.",
+      "expected_outcome": "Zero open rows remain; ledger counts are byte-identical pre/post; original hand-stamped disposition text is preserved and queryable."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Dispose a lone (non-promoted) fixture signal via the FR-1 writer and run the FR-4-widened SIGNAL_RESOLVED check.",
+      "expected_outcome": "The sender receives a SIGNAL_RESOLVED notification even though no routed_to_sd_key/promotion ever occurred."
+    },
+    {
+      "step_number": 4,
+      "instruction": "Promote a fixture signal via the existing aggregation path (3+ same-fingerprint) WITHOUT giving it an individual disposition, then run the FR-4-widened SIGNAL_RESOLVED check.",
+      "expected_outcome": "No SIGNAL_RESOLVED fires from promotion alone -- regression guard against reintroducing the prior 'critical signals silently vanish' defect."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SIGNAL-LANE-PER-001",
+    "created_via": "content_arg",
+    "validated_at": "2026-08-24T12:47:32.691Z",
+    "risk_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 85,
+      "sd_context": "944affe5-227f-453a-830b-8cc296b8fe4e",
+      "executed_at": "2026-08-24T12:47:38.916Z",
+      "execution_id": "a8cd6e31-3dc6-4610-9419-730c1f84e2b1",
+      "generated_at": "2026-08-24T12:47:38.916Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        {
+          "title": "Standard Implementation Approach",
+          "priority": "LOW",
+          "description": "Low risk profile. Proceed with standard LEO workflow. Maintain test coverage and follow existing patterns."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "content_quality": {
+      "mode": "off",
+      "score": 58,
+      "passed": false,
+      "threshold": 70
+    },
+    "design_analysis": {
+      "sd_context": {
+        "id": "SD-LEO-INFRA-SIGNAL-LANE-PER-001",
+        "scope": "Signal-lane per-item disposition machinery, EXTENDING (not replacing) the existing thin ack mechanism.\n\n## FR-1: Disposition writer extending coordinator-ack-signal.cjs + receipt-ledger.cjs\nA signal-lane disposition vocabulary (actioned / promoted / duplicate-of / rejected-with-reason / deferred-with-trigger) stamped via a single canonical writer, mirroring coordinator-ack-adam.cjs's contract shape (ack retires the row via acknowledged_at; disposition is a separate, mandatory-linkage-checked stage; deferred requires a trigger). This is an EXTENSION of scripts/coordinator-ack-signal.cjs + lib/coordination/receipt-ledger.cjs, not a parallel mechanism -- a second, conflicting disposition writer would recreate the exact \"drained visually, still open\" defect this SD exists to close. Writer identity recorded (never a hand-stamp).\n\n## FR-2: Coordinator inbox surfaces undispositioned signal age\nOldest-first undispositioned-signal age surfaced at the coordinator tick (fleet-dashboard.cjs's existing acknowledged_at IS NULL gate is the correct retirement signal to build on).\n\n## FR-3: Backfill path for the current open signal population, DYNAMIC not a frozen count\nThe \"162-row\" figure named in the mint plan was a snapshot of one 2026-08-23T18:48:15Z remediation event and is already stale (262 open as of LEAD enrichment: 109 rows with acknowledged_at NULL and no payload.disposition at all, PLUS 153 rows carrying a hand-stamped payload.disposition while acknowledged_at is still NULL -- i.e. dispositioned-looking but structurally still open by the only mechanism the codebase actually checks). Manual hand-stamping is confirmed STILL ONGOING (5 more hand-stamps landed after the original batch, at 22:46:17Z and 01:41:25Z) -- the backfill must query live at run time, not target a hardcoded row count, and must canonicalize the 153 already-hand-stamped rows (retroactive writer-identity backfill) rather than only handling the 109 untouched ones.\n\n## FR-4: SIGNAL_RESOLVED notify-back loop widened beyond the promotion-only path\nThe existing SIGNAL_RESOLVED loop (stale-session-sweep.cjs runCoordinatorHousekeeping) fires ONLY when payload.routed_to_sd_key is set, which is stamped ONLY when an aggregated/promoted feedback row (3+ same-fingerprint) becomes an SD (scripts/sd-from-feedback.js). A lone signal that receives an individual disposition (FR-1, never promoted) has NO path into this notify-back loop today. FR-4 must widen the trigger surface to also fire on a per-item terminal disposition, not just rename the field it keys off.\n\n## Out of scope\nChanging the aggregation/promotion threshold (lib/coordinator/signal-router.cjs's THRESHOLD=3/WINDOW_MIN=60); the /signal CLI's send side (scripts/worker-signal.cjs); stampRouted()'s deliberate non-disposing-on-promotion design (a prior fix for 9 critical signals silently vanishing -- do not reintroduce that regression by disposing a row purely because it was promoted).\n\n## LEAD round-2 correction (VALIDATION sub_agent_execution_results eb009c8e-0ec1-49ec-bef7-b8cc2ff20d01, CONDITIONAL_PASS 88)\nIndependent re-verification confirmed all 7 mechanism_verifications citations accurate and the corrected 262-row live count exact, but surfaced 2 additional HIGH findings the LEAD-phase Explore pass missed (see risks): FR-3's naive backfill would corrupt the answered-rate ledger by ~9%, and a dormant third acknowledged_at writer (signal-router.cjs:337-432, 0 rows ever produced, no receipt-ledger call, fixture-blind idempotency bug) is the most likely place FR-4 gets wired and must not be left as a second silent-close path. PLAN's PRD MUST resolve both before EXEC -- also address: vocabulary reconciliation (this SD's proposed 5-value set vs the existing 3-value ACTIONED/DECLINED/SUPERSEDED enum, noting buildReceipt:89 silently drops unlisted values), an explicit FR-1-before-FR-3 ordering dependency, a concrete success criterion for FR-3, and a bound numeric SLA value for success_criteria[0] (currently unbound prose).",
+        "title": "Signal-lane per-item disposition machinery"
+      },
+      "generated_at": "2026-08-24T12:47:32.922Z",
+      "raw_analysis": "DESIGN Analysis Results:\nVerdict: CONDITIONAL_PASS\nConfidence: 60%\n\nRecommendations:\n  1. Validate infrastructure concerns: deployment, monitoring, rollback, CI/CD integration\n\nwarnings: [\n  {\n    \"severity\": \"HIGH\",\n    \"issue\": \"Sub-agent scanned an unresolved or empty repo (repo_resolved=true, probe_exists=false)\",\n    \"recommendation\": \"Verify the SD target_application resolves to the correct repo; an empty/wrong tree yields zero violations and must not pass as green\"\n  }\n]\n\ndetailed_analysis: {\n  \"sd_type\": \"infrastructure\",\n  \"sd_type_source\": \"declared\",\n  \"skip_reason\": \"Non-UI SD type (infrastructure) - UI/UX design validation not applicable\",\n  \"validation_approach\": \"Infrastructure design review: deployment, CI/CD, monitoring, rollback, config management\",\n  \"infra_checklist\": [\n    \"Deployment strategy documented\",\n    \"CI/CD pipeline integration verified\",\n    \"Monitoring and alerting configured\",\n    \"Rollback procedure defined\",\n    \"Configuration management approach specified\"\n  ]\n}\n\nfindings: {\n  \"design_system_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"component_analysis\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"accessibility_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"responsive_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"consistency_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"workflow_review\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no user-facing workflows\"\n  }\n}\n\nmetadata: {\n  \"repo_path\": \"C:/Users/rickf/Projects/_EHG/EHG_Engineer\",\n  \"repo_resolved\": true,\n  \"components_dir_exists\": true,\n  \"skip_reason\": \"non_ui_sd_type:infrastructure\",\n  \"registry_source\": \"db\",\n  \"executed_from_cwd\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-SIGNAL-LANE-PER-001\",\n  \"probe_exists\": false,\n  \"verdict_chain\": [\n    {\n      \"from\": \"PASS\",\n      \"to\": \"CONDITIONAL_PASS\",\n      \"mutator\": \"lib/sub-agents/resolve-repo.js:applySubAgentRepoVerdict\",\n      \"reason\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\"\n    }\n  ]\n}\n\noptions: {\n  \"timeout\": 120000,\n  \"repo_path\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-SIGNAL-LANE-PER-001\",\n  \"target_application\": \"EHG_Engineer\",\n  \"_injectedBrief\": \"--- Five-Point Brief ---\\nSymptom: <describe what IS happening>\\nLocation: <file/endpoint/table>\\nFrequency: <pattern/timing>\\nPrior Attempts: <what you already tried>\\nDesired Outcome: <clear success criteria>\\nContext: SD SD-LEO-INFRA-SIGNAL-LANE-PER-001\\n--- End Brief ---\",\n  \"taskContract\": {\n    \"contract_id\": \"35370f35-8c45-4f2d-8aa8-d6b3a1ebe1b6\",\n    \"summary\": \"Contract 35370f35-8c45-4f2d-8aa8-d6b3a1ebe1b6: LEO_EXECUTOR → DESIGN | Execute Senior Design Sub-Agent analysis for SD SD...\"\n  },\n  \"inputArtifacts\": [\n    \"4a6abb43-0d84-43df-896a-a6c92bea7b84\"\n  ],\n  \"sdKey\": \"SD-LEO-INFRA-SIGNAL-LANE-PER-001\",\n  \"sdUUID\": \"944affe5-227f-453a-830b-8cc296b8fe4e\"\n}\n\nsub_agent: {\n  \"id\": \"2ebfbd8a-5aa0-4907-bb47-33a2dd04254f\",\n  \"code\": \"DESIGN\",\n  \"name\": \"Senior Design Sub-Agent\",\n  \"description\": \"## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition\\n\\n**🆕 NEW in v6.0.0**: Proactive learning, accessibility-first patterns, scope estimation protocol\\n\\n### Overview\\n**Mission**: Ensure design compliance, accessibility (WCAG 2.1 AA), and consistent UX across all implementations.\\n\\n**Philosophy**: **Accessibility-first design prevents technical debt.**\\n\\n**Tech Stack**: Vite + React + Shadcn UI + TypeScript + Tailwind CSS\\n\\n**Component Sizing Sweet Spot**: 300-600 lines of code (optimal for testing and maintenance)\\n\\n---\\n\\n## 🔍 PROACTIVE LEARNING INTEGRATION (SD-LEO-LEARN-001)\\n\\n### Before Starting ANY Design/UI Work\\n\\n**MANDATORY**: Query issue_patterns table for proven solutions:\\n\\n```bash\\n# Check for known UI/UX issue patterns\\nnode scripts/search-prior-issues.js \\\"UI component design\\\"\\n\\n# Query issue_patterns table\\nnode -e \\\"\\nimport { createDatabaseClient } from './lib/supabase-connection.js';\\n(async () => {\\n  const client = await createDatabaseClient('engineer', { verify: false });\\n  const result = await client.query(\\\\`\\n    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist\\n    FROM issue_patterns\\n    WHERE category IN ('design', 'ui', 'ux', 'accessibility', 'component')\\n      AND status = 'active'\\n    ORDER BY occurrence_count DESC\\n    LIMIT 5\\n  \\\\`);\\n  console.log('Known Design Patterns:');\\n  result.rows.forEach(p => {\\n    console.log(\\\\`\\\\n\\\\${p.pattern_id}: \\\\${p.issue_summary}\\\\`);\\n    if (p.proven_solutions) console.log('Solutions:', JSON.stringify(p.proven_solutions, null, 2));\\n  });\\n  await client.end();\\n})();\\n\\\"\\n```\\n\\n**Known Patterns**:\\n- **PAT-0"
+    },
+    "stories_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 95,
+      "sd_context": "944affe5-227f-453a-830b-8cc296b8fe4e",
+      "executed_at": "2026-08-24T12:47:47.050Z",
+      "execution_id": "c0766d86-416d-4638-9cc7-f2a84b3fd7fc",
+      "generated_at": "2026-08-24T12:47:47.050Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        {
+          "title": "Stories Already Complete",
+          "description": "4 stories already have implementation context. This is a success - no additional work needed."
+        },
+        {
+          "title": "EXEC Phase Guidance",
+          "description": "User stories now include: implementation_context (architecture patterns, component locations), architecture_references (existing code to reference), example_code_patterns (code snippets), and testing_scenarios (test cases)."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "database_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 100,
+      "sd_context": "944affe5-227f-453a-830b-8cc296b8fe4e",
+      "executed_at": "2026-08-24T12:47:43.220Z",
+      "execution_id": "fff116da-8c71-477b-8d56-bd0a604a65ae",
+      "generated_at": "2026-08-24T12:47:43.220Z",
+      "raw_analysis": {},
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        "No database migrations needed for this SD"
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "security_analysis": {
+      "verdict": "CONDITIONAL_PASS",
+      "warnings": [
+        {
+          "issue": "RLS table census did not run: RLS table census unavailable: Could not find the function public.get_tables_without_rls without parameters in the schema cache",
+          "severity": "HIGH",
+          "recommendation": "An unrun census is not a clean census. Restore the authoritative catalog query before treating RLS posture as verified."
+        },
+        {
+          "issue": "56 SECURITY DEFINER function(s) run as a BYPASSRLS owner and are EXECUTE-able by anon or authenticated",
+          "severity": "CRITICAL",
+          "functions": [
+            "governance.register_cross_schema_fk(p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_on_delete text) owner=postgres anon=true authenticated=true",
+            "governance.rls_governance_read_policy() owner=postgres anon=true authenticated=true",
+            "governance.rls_portfolio_venture_policy(p_venture_id uuid) owner=postgres anon=true authenticated=true",
+            "governance.rls_runtime_policy(p_venture_id uuid) owner=postgres anon=true authenticated=true",
+            "governance.trigger_validate_portfolio_to_governance() owner=postgres anon=true authenticated=true",
+            "governance.trigger_validate_runtime_to_governance() owner=postgres anon=true authenticated=true",
+            "governance.trigger_validate_runtime_to_portfolio() owner=postgres anon=true authenticated=true",
+            "governance.trigger_validate_to_portfolio_ventures() owner=postgres anon=true authenticated=true",
+            "governance.validate_cross_schema_ref(p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_ref_value uuid) owner=postgres anon=true authenticated=true",
+            "governance.validate_cross_schema_ref_text(p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_ref_value text) owner=postgres anon=true authenticated=true",
+            "portfolio.current_venture() owner=postgres anon=true authenticated=true",
+            "portfolio.has_venture_access(p_venture_id uuid) owner=postgres anon=true authenticated=true",
+            "portfolio.kill_switch(p_venture_id uuid, p_reason text, p_user_id uuid) owner=postgres anon=true authenticated=true",
+            "portfolio.log_kill_switch_event() owner=postgres anon=true authenticated=true",
+            "portfolio.reactivate_venture(p_venture_id uuid, p_reason text, p_user_id uuid) owner=postgres anon=true authenticated=true",
+            "public.advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_transition_type text) owner=postgres anon=false authenticated=true",
+            "public.advance_venture_to_stage(p_venture_id uuid, p_target_stage integer, p_build_method text, p_repo_url text) owner=postgres anon=false authenticated=true",
+            "public.approve_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_approval_type approval_type_enum, p_stepup_token uuid) owner=postgres anon=false authenticated=true",
+            "public.bootstrap_venture_workflow(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+            "public.can_auto_advance(p_stage_number integer) owner=postgres anon=false authenticated=true",
+            "public.check_feedback_duplicate(p_venture_id uuid, p_title text) owner=postgres anon=false authenticated=true",
+            "public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean, p_client_gate_version integer) owner=postgres anon=false authenticated=true",
+            "public.create_eva_conversation(p_user_id uuid, p_title text, p_metadata jsonb) owner=postgres anon=false authenticated=true",
+            "public.delete_venture(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+            "public.eva_circuit_allows_request(p_venture_id text) owner=postgres anon=false authenticated=true",
+            "public.export_blueprint_review(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+            "public.fn_advance_pipeline_stage(p_case_id uuid, p_from_stage text, p_to_stage text, p_provenance_event_id uuid, p_idempotency_key uuid) owner=postgres anon=true authenticated=true",
+            "public.fn_anon_ingress_prior_hour_count(p_source_type text) owner=postgres anon=true authenticated=true",
+            "public.fn_is_chairman() owner=postgres anon=true authenticated=true",
+            "public.fn_is_service_role() owner=postgres anon=false authenticated=true",
+            "public.fn_list_chairman_webauthn_credentials() owner=postgres anon=false authenticated=true",
+            "public.fn_relay_insert_sms_candidate(p_provider_message_id text, p_from_phone text, p_to_phone text, p_body_raw text, p_relay_secret text) owner=postgres anon=true authenticated=false",
+            "public.fn_submit_error_capture(p_message text, p_stack_trace text, p_page_url text, p_severity text, p_metadata jsonb) owner=postgres anon=true authenticated=true",
+            "public.fn_submit_internal_feedback(p_title text, p_description text, p_type text, p_severity text, p_page_url text) owner=postgres anon=false authenticated=true",
+            "public.fn_submit_venture_error(p_venture_id uuid, p_ingest_secret text, p_error_hash text, p_message text, p_context jsonb) owner=postgres anon=true authenticated=false",
+            "public.fn_submit_venture_feedback(p_venture_id uuid, p_ingest_secret text, p_source_type text, p_severity text, p_category text, p_message text) owner=postgres anon=true authenticated=false",
+            "public.fn_submit_venture_user_feedback(p_venture_id uuid, p_ingest_secret text, p_feedback_type text, p_title text, p_description text) owner=postgres anon=true authenticated=false",
+            "public.fn_user_has_venture_access(venture_uuid uuid) owner=postgres anon=false authenticated=true",
+            "public.fn_write_kill_audit_trail(p_venture_id uuid, p_lifecycle_stage integer, p_rationale text, p_decided_by uuid, p_source text, p_decision_id uuid) owner=postgres anon=false authenticated=true",
+            "public.get_gate_decision_status(p_venture_id uuid, p_stage integer) owner=postgres anon=false authenticated=true",
+            "public.is_chairman_role() owner=postgres anon=true authenticated=true",
+            "public.is_leo_admin() owner=postgres anon=true authenticated=true",
+            "public.kill_venture(p_venture_id uuid, p_rationale text) owner=postgres anon=false authenticated=true",
+            "public.lhe_pending_migration_applied() owner=postgres anon=true authenticated=true",
+            "public.log_stage_advance_override(p_venture_id uuid, p_reason text, p_verdict_snapshot jsonb) owner=postgres anon=false authenticated=true",
+            "public.park_venture_decision(p_decision_id uuid, p_park_type text, p_reason text, p_decided_by text) owner=postgres anon=false authenticated=true",
+            "public.record_eva_failure(p_venture_id text, p_error_message text, p_error_context jsonb) owner=postgres anon=false authenticated=true",
+            "public.record_eva_success(p_venture_id text) owner=postgres anon=false authenticated=true",
+            "public.record_venture_error(p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb) owner=postgres anon=true authenticated=true",
+            "public.reject_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_stepup_token uuid) owner=postgres anon=false authenticated=true",
+            "public.rescan_stage_20(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+            "public.reset_eva_circuit(p_venture_id text, p_reset_by text) owner=postgres anon=false authenticated=true",
+            "public.set_global_auto_proceed(p_enabled boolean) owner=postgres anon=false authenticated=true",
+            "public.set_session_working_context(p_session_id text, p_wc jsonb) owner=postgres anon=true authenticated=true",
+            "public.set_stage_override(p_stage_number integer, p_auto_proceed boolean, p_reason text) owner=postgres anon=false authenticated=true",
+            "public.upsert_operator_cash_burn(p_cash_usd numeric, p_ai_burn_usd numeric, p_other_burn_usd numeric, p_revenue_usd numeric) owner=postgres anon=false authenticated=true"
+          ],
+          "recommendation": "Revoke EXECUTE from anon/authenticated, or re-own the function to a non-BYPASSRLS role. Note that pinning search_path does NOT mitigate this class."
+        }
+      ],
+      "conditions": [
+        {
+          "action": "An unrun census is not a clean census. Restore the authoritative catalog query before treating RLS posture as verified.",
+          "blocking": false,
+          "priority": "medium"
+        },
+        {
+          "action": "Revoke EXECUTE from anon/authenticated, or re-own the function to a non-BYPASSRLS role. Note that pinning search_path does NOT mitigate this class.",
+          "blocking": false,
+          "priority": "medium"
+        }
+      ],
+      "confidence": 70,
+      "sd_context": "944affe5-227f-453a-830b-8cc296b8fe4e",
+      "executed_at": "2026-08-24T14:25:40.980Z",
+      "execution_id": "ce0bb875-20e2-41ce-91d8-cb5055247583",
+      "generated_at": "2026-08-24T14:25:40.980Z",
+      "raw_analysis": {},
+      "justification": "CONDITIONAL_PASS recorded by Chief Security Architect: An unrun census is not a clean census. Restore the authoritative catalog query before treating RLS posture as verified.. See the attached conditions, warnings, and recommendations for the specific follow-ups required before this verdict is treated as fully green.",
+      "critical_issues": [],
+      "recommendations": [],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "generation_pattern": "generate_first_then_insert",
+    "plan_prd_correction": {
+      "source": "TESTING sub_agent_execution_results fd168314-ba23-4d35-b201-bb186ff80870 (PLAN-TO-EXEC, CONDITIONAL_PASS 88)",
+      "summary": "Corrected FR-1 AC-3 blast radius, FR-2 to extend outstanding-signals.cjs instead of duplicating it, FR-4 to document the second (more severe) fixture-blind branch + the test-fixture projection gap, added TR-5 (canonical-writer census test), retyped TS-4/5/6/7 tier guidance to avoid green-over-unrun, added TS-9, added negative arms to TS-1/TS-3/TS-4.",
+      "performed_at": "2026-08-24T13:01:38.068Z"
+    },
+    "plan_prd_sub_agents": {
+      "agents": [
+        {
+          "code": "DATABASE",
+          "verdict": "PASS",
+          "confidence": 100,
+          "executed_at": "2026-08-24T12:47:48.402Z"
+        },
+        {
+          "code": "RISK",
+          "verdict": "PASS",
+          "confidence": 85,
+          "executed_at": "2026-08-24T12:47:48.402Z"
+        },
+        {
+          "code": "STORIES",
+          "verdict": "PASS",
+          "confidence": 95,
+          "executed_at": "2026-08-24T12:47:48.402Z"
+        }
+      ],
+      "all_passed": true,
+      "executed_at": "2026-08-24T12:47:48.402Z"
+    },
+    "grounding_validation": {
+      "note": "8 requirements have <50% confidence but this is expected for implementation-level PRDs. No hallucination detected.",
+      "sd_id": "944affe5-227f-453a-830b-8cc296b8fe4e",
+      "has_issues": false,
+      "all_results": [
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 16.145124716553287,
+              "detail": "20.2% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.4319526627218933,
+              "detail": "17.2% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.19577077379275182,
+          "is_flagged": true,
+          "explanation": "Low confidence (20%): This requirement may not be grounded in the SD source. 0/1 key phrases match SD. 17.2% alignment with strategic objectives",
+          "requirement_id": "FR-1",
+          "requirement_type": "functional",
+          "requirement_title": "Extend coordinator-ack-signal.cjs + receipt-ledger.cjs with a real disposition vocabulary and single canonical writer"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 7.663551401869158,
+              "detail": "9.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.459016393442623,
+              "detail": "12.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.1012256779531178,
+          "is_flagged": true,
+          "explanation": "Low confidence (10%): This requirement may not be grounded in the SD source. 9.6% semantic overlap with SD. 0/1 key phrases match SD. 12.3% alignment with strategic objectives",
+          "requirement_id": "FR-2",
+          "requirement_type": "functional",
+          "requirement_title": "Surface undispositioned signal age at the coordinator tick, oldest-first"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 18.823529411764707,
+              "detail": "23.5% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 10,
+              "detail": "1/4 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.383084577114428,
+              "detail": "16.9% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.32206613988879135,
+          "is_flagged": true,
+          "explanation": "Low confidence (32%): This requirement may not be grounded in the SD source. 16.9% alignment with strategic objectives",
+          "requirement_id": "FR-3",
+          "requirement_type": "functional",
+          "requirement_title": "Live-queried backfill for the current open signal population, WITHOUT corrupting the answered-rate ledger"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 20,
+              "detail": "25.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 5.7142857142857135,
+              "detail": "1/7 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.508771929824561,
+              "detail": "17.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.2922305764411028,
+          "is_flagged": true,
+          "explanation": "Low confidence (29%): This requirement may not be grounded in the SD source. 1/7 key phrases match SD. 17.5% alignment with strategic objectives",
+          "requirement_id": "FR-4",
+          "requirement_type": "functional",
+          "requirement_title": "Widen SIGNAL_RESOLVED to cover lone (non-promoted) dispositioned signals, resolving the dormant third writer"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 3.543123543123543,
+              "detail": "4.4% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.0909090909090908,
+              "detail": "5.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.04634032634032634,
+          "is_flagged": true,
+          "explanation": "Low confidence (5%): This requirement may not be grounded in the SD source. 4.4% semantic overlap with SD. 0/2 key phrases match SD. 5.5% alignment with strategic objectives",
+          "requirement_id": "TR-1",
+          "requirement_type": "technical",
+          "requirement_title": "No DB migration required"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 2.4355971896955504,
+              "detail": "3.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 0.18691588785046728,
+              "detail": "0.9% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.026225130775460178,
+          "is_flagged": true,
+          "explanation": "Low confidence (3%): This requirement may not be grounded in the SD source. 3.0% semantic overlap with SD. 0/1 key phrases match SD. 0.9% alignment with strategic objectives",
+          "requirement_id": "TR-2",
+          "requirement_type": "technical",
+          "requirement_title": "FR-1 must land and be verified before FR-3 executes"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 5.995316159250585,
+              "detail": "7.5% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 30,
+              "detail": "1/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 0.6504065040650407,
+              "detail": "3.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.3664572266331562,
+          "is_flagged": true,
+          "explanation": "Low confidence (37%): This requirement may not be grounded in the SD source. 7.5% semantic overlap with SD. 3.3% alignment with strategic objectives",
+          "requirement_id": "TR-3",
+          "requirement_type": "technical",
+          "requirement_title": "Backfill is idempotent and live-queried, never a frozen ID list"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 7.205542725173211,
+              "detail": "9.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 20,
+              "detail": "1/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.4,
+              "detail": "12.0% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.29605542725173206,
+          "is_flagged": true,
+          "explanation": "Low confidence (30%): This requirement may not be grounded in the SD source. 9.0% semantic overlap with SD. 12.0% alignment with strategic objectives",
+          "requirement_id": "TR-4",
+          "requirement_type": "technical",
+          "requirement_title": "Single canonical writer invariant preserved end to end"
+        }
+      ],
+      "issue_reason": null,
+      "validated_at": "2026-08-24T12:47:32.672Z",
+      "grounding_score": 0.20579640988455483,
+      "average_confidence": 0.20579640988455483,
+      "flagged_requirements": [
+        {
+          "id": "FR-1",
+          "type": "functional",
+          "title": "Extend coordinator-ack-signal.cjs + receipt-ledger.cjs with a real disposition vocabulary and single canonical writer",
+          "confidence": 0.19577077379275182,
+          "explanation": "Low confidence (20%): This requirement may not be grounded in the SD source. 0/1 key phrases match SD. 17.2% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-2",
+          "type": "functional",
+          "title": "Surface undispositioned signal age at the coordinator tick, oldest-first",
+          "confidence": 0.1012256779531178,
+          "explanation": "Low confidence (10%): This requirement may not be grounded in the SD source. 9.6% semantic overlap with SD. 0/1 key phrases match SD. 12.3% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-3",
+          "type": "functional",
+          "title": "Live-queried backfill for the current open signal population, WITHOUT corrupting the answered-rate ledger",
+          "confidence": 0.32206613988879135,
+          "explanation": "Low confidence (32%): This requirement may not be grounded in the SD source. 16.9% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-4",
+          "type": "functional",
+          "title": "Widen SIGNAL_RESOLVED to cover lone (non-promoted) dispositioned signals, resolving the dormant third writer",
+          "confidence": 0.2922305764411028,
+          "explanation": "Low confidence (29%): This requirement may not be grounded in the SD source. 1/7 key phrases match SD. 17.5% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-1",
+          "type": "technical",
+          "title": "No DB migration required",
+          "confidence": 0.04634032634032634,
+          "explanation": "Low confidence (5%): This requirement may not be grounded in the SD source. 4.4% semantic overlap with SD. 0/2 key phrases match SD. 5.5% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-2",
+          "type": "technical",
+          "title": "FR-1 must land and be verified before FR-3 executes",
+          "confidence": 0.026225130775460178,
+          "explanation": "Low confidence (3%): This requirement may not be grounded in the SD source. 3.0% semantic overlap with SD. 0/1 key phrases match SD. 0.9% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-3",
+          "type": "technical",
+          "title": "Backfill is idempotent and live-queried, never a frozen ID list",
+          "confidence": 0.3664572266331562,
+          "explanation": "Low confidence (37%): This requirement may not be grounded in the SD source. 7.5% semantic overlap with SD. 3.3% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-4",
+          "type": "technical",
+          "title": "Single canonical writer invariant preserved end to end",
+          "confidence": 0.29605542725173206,
+          "explanation": "Low confidence (30%): This requirement may not be grounded in the SD source. 9.0% semantic overlap with SD. 12.0% alignment with strategic objectives"
+        }
+      ],
+      "requirements_flagged": 8,
+      "implementation_context": "web",
+      "requirements_validated": 8,
+      "validation_duration_ms": 18
+    }
+  }
+}

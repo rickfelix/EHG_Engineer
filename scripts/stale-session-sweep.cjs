@@ -1934,6 +1934,113 @@ async function clearHalfReleasedSdClaims(supabase, actions, warnings) {
   return halfReleasedClaims;
 }
 
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): extracted from the promotion-path SIGNAL_RESOLVED
+// block below so the NEW disposition-path block (added by this SD) shares the identical
+// callsign→live-session resolution instead of growing a second, divergent copy of it.
+// Behavior-preserving extraction — same query, same 10-minute liveness cutoff, same match rule.
+async function resolveLiveSessionForCallsign(supabase, callsign) {
+  const liveCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+  let live = [];
+  try {
+    live = await fapPaginate(() => supabase
+      .from('claude_sessions')
+      .select('session_id, metadata')
+      .gte('heartbeat_at', liveCutoff)
+      .filter('metadata->>fleet_identity', 'not.is', null)
+      .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { live = []; } // prior behavior: read error ignored
+  return (live || []).find(s => s.metadata?.fleet_identity?.callsign === callsign) || null;
+}
+
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4) — SIGNAL_RESOLVED for a LONE, individually-
+// dispositioned signal. The pre-existing promotion-path block (inside runCoordinatorHousekeeping)
+// ONLY fires via payload.routed_to_sd_key, which is stamped exclusively by promotion (aggregation
+// of 3+ same-fingerprint signals into a harness_backlog row that later becomes an SD) — measured
+// to have NEVER fired in production (0 rows with routed_to_sd_key, 0 notification_sent, 0
+// SIGNAL_RESOLVED messages ever sent). A signal that gets an individual disposition via
+// coordinator-ack-signal.cjs's FR-1 canonical writer WITHOUT ever being promoted had NO path into
+// this notification at all. This is that path — keyed strictly off acknowledged_at (FR-1's own
+// retirement stamp), never off promotion alone, so it cannot regress
+// lib/coordinator/signal-router.cjs's stampRouted()/stampRoutedToCoordinator() fix (promotion and
+// routing-to-coordinator deliberately do NOT stamp acknowledged_at, after 9 critical signals
+// silently vanished when an earlier version disposed rows purely on promotion).
+async function notifySignalResolvedByDisposition(supabase) {
+  try {
+    // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction bfb24a47): a 24h recency window
+    // — bounding this against the 230 signal-lane rows that already carried acknowledged_at
+    // BEFORE this SD existed (acked by mechanisms this SD did not introduce). Without a bound,
+    // the first tick after this ships would notify about all of them at once, and since
+    // payload.sender_callsign is a recycled identifier (not a stable session), a currently-live
+    // seat holding a reused callsign could receive a resolution notice for a DIFFERENT session's
+    // old signal. Flood-guard, mirrors fleet-dashboard.cjs printInbox's own 7-day window for the
+    // same reason.
+    const recentCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Excludes the promotion path above (routed_to_sd_key rows), so a signal is never notified
+    // twice through two different trigger conditions for two different reasons.
+    //
+    // NULL-SAFE, NOT .neq(): in Postgres, `payload->>'notification_sent' <> 'true'` evaluates to
+    // NULL (not TRUE) when the key is absent, so PostgREST's .neq() SILENTLY EXCLUDES every row
+    // that has never been notified — which is every genuine candidate. Verified live against
+    // production: the naive .neq() form returned 0 rows where this null-safe form returns 16
+    // (TESTING evidence bfb24a47-3793-4260-af7f-92735fdf10fb). This is the SAME defect class that
+    // made the pre-existing promotion-path query below never fire either.
+    const { data: dispositionedCandidates } = await supabase
+      .from('session_coordination')
+      .select('id, sender_session, payload, body, acknowledged_at')
+      .not('acknowledged_at', 'is', null)
+      .gte('acknowledged_at', recentCutoff)
+      .not('payload->>signal_type', 'is', null)
+      .is('payload->>routed_to_sd_key', null)
+      .or('payload->>notification_sent.is.null,payload->>notification_sent.neq.true')
+      .order('acknowledged_at', { ascending: true })
+      .limit(50);
+
+    let dispositionNotified = 0;
+    let dispositionDropped = 0;
+    for (const sig of dispositionedCandidates || []) {
+      const callsign = sig.payload?.sender_callsign;
+      if (!callsign) { dispositionDropped++; continue; }
+
+      const owner = await resolveLiveSessionForCallsign(supabase, callsign);
+      if (!owner) {
+        const merged = { ...(sig.payload || {}), notification_sent: true, signal_resolved_dropped: true };
+        await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
+        dispositionDropped++;
+        continue;
+      }
+
+      await supabase.from('session_coordination').insert({
+        sender_session: null,
+        sender_type: 'coordinator',
+        target_session: owner.session_id,
+        message_type: 'INFO',
+        subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → dispositioned`,
+        body: `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator.`,
+        payload: {
+          signal_resolved: true,
+          signal_type: sig.payload?.signal_type,
+          original_body: (sig.body || '').slice(0, 500),
+          original_signal_id: sig.id,
+          resolution_kind: 'disposition',
+        },
+        expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      });
+
+      const merged = { ...(sig.payload || {}), notification_sent: true };
+      await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
+      dispositionNotified++;
+    }
+    if (dispositionNotified > 0 || dispositionDropped > 0) {
+      console.log('SIGNAL_RESOLVED (disposition): notified=' + dispositionNotified + ' dropped=' + dispositionDropped);
+    }
+    return { notified: dispositionNotified, dropped: dispositionDropped, error: null };
+  } catch (dispositionResolvedErr) {
+    const message = (dispositionResolvedErr && dispositionResolvedErr.message) || 'unknown';
+    console.log('SIGNAL_RESOLVED (disposition): ' + message);
+    return { notified: 0, dropped: 0, error: message };
+  }
+}
+
 // SD-ARCH-HOTSPOT-SWEEP-001 (main()-line-count acceptance criterion): the tail-of-tick
 // coordinator housekeeping block (SIGNAL_RESOLVED notification, pending-question
 // auto-proceed timer, Adam-action ACK escalation, CARDINAL action-time adherence probes,
@@ -1942,21 +2049,37 @@ async function clearHalfReleasedSdClaims(supabase, actions, warnings) {
 // state with the rest of main(), so this is a pure hoist, zero behavior change. Kept in
 // this file (not lib/sweep/passes/) for the same source-text-pinning reason documented on
 // runQaFixtureScan() above (this block isn't pinned today, but the convention is uniform).
-async function runCoordinatorHousekeeping(ctx) {
-  const { supabase } = ctx;
-
-  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
-  // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
-  // status is 'completed' AND payload.notification_sent is not yet true, look up
-  // sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
-  // Drops silently when callsign no longer maps to a live session. Sets
-  // payload.notification_sent=true to prevent re-send.
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
+// For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
+// status is 'completed' AND payload.notification_sent is not yet true, look up
+// sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
+// Drops silently when callsign no longer maps to a live session. Sets
+// payload.notification_sent=true to prevent re-send.
+//
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction 37018288): extracted to its
+// own function — mirroring notifySignalResolvedByDisposition()'s existing extraction —
+// so the null-safety fix below (TESTING evidence bfb24a47) is directly unit-testable with
+// a minimal fake client, instead of only reachable by mocking all of
+// runCoordinatorHousekeeping's other unrelated blocks. Behavior-preserving extraction.
+async function notifySignalResolvedByPromotion(supabase) {
   try {
+    // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction bfb24a47): this was ALSO the
+    // null-propagation bug fixed in notifySignalResolvedByDisposition() above — `.neq()` against a
+    // JSONB->>text column evaluates to NULL (not TRUE) when the key is absent, so a row that was
+    // never notified is SILENTLY EXCLUDED rather than included. This is very likely part of why
+    // this loop has measured 0 fires in production, independent of whatever else gated it.
+    //
+    // Explicit ordering — invisible today at 0 candidates (TESTING/VALIDATION measured this loop
+    // has NEVER fired in production), but a starvation risk once FR-2/FR-3's backfill makes the
+    // open population non-trivial and this .limit(50) starts actually truncating. Oldest first BY
+    // created_at — `id` is a random UUID v4 (not chronological; TESTING caught this via a live
+    // query), so ordering by it would not actually be oldest-first despite reading as such.
     const { data: candidates } = await supabase
       .from('session_coordination')
-      .select('id, payload, body')
+      .select('id, payload, body, created_at')
       .not('payload->>routed_to_sd_key', 'is', null)
-      .neq('payload->>notification_sent', 'true')
+      .or('payload->>notification_sent.is.null,payload->>notification_sent.neq.true')
+      .order('created_at', { ascending: true })
       .limit(50);
 
     let notified = 0;
@@ -1975,17 +2098,7 @@ async function runCoordinatorHousekeeping(ctx) {
       if (!sdRow || sdRow.status !== 'completed') continue;
 
       // Resolve callsign → current live session_id.
-      const liveCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
-      let live = [];
-      try {
-        live = await fapPaginate(() => supabase
-          .from('claude_sessions')
-          .select('session_id, metadata')
-          .gte('heartbeat_at', liveCutoff)
-          .filter('metadata->>fleet_identity', 'not.is', null)
-          .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
-      } catch { live = []; } // prior behavior: read error ignored
-      const owner = (live || []).find(s => s.metadata?.fleet_identity?.callsign === callsign);
+      const owner = await resolveLiveSessionForCallsign(supabase, callsign);
 
       if (!owner) {
         // Mark notification_sent=true with a "dropped" flag so we don't retry forever.
@@ -2024,6 +2137,18 @@ async function runCoordinatorHousekeeping(ctx) {
   } catch (resolvedErr) {
     console.log('SIGNAL_RESOLVED: ' + (resolvedErr && resolvedErr.message ? resolvedErr.message : 'unknown'));
   }
+}
+
+async function runCoordinatorHousekeeping(ctx) {
+  const { supabase } = ctx;
+
+  await notifySignalResolvedByPromotion(supabase);
+
+  // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4) — SIGNAL_RESOLVED for a LONE, individually-
+  // dispositioned signal. Extracted to its own function (rather than inlined here like the
+  // promotion-path block above) so it is directly unit-testable with a minimal fake client,
+  // without needing to also mock the four unrelated blocks in this tail-of-tick function.
+  await notifySignalResolvedByDisposition(supabase);
 
   // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — pending-question timer /
   // default-proceed. For an OPEN operator_question (category='operator_question',
@@ -4445,3 +4570,10 @@ module.exports.SWEEP_PASS_REGISTRY_RETIREMENT = SWEEP_PASS_REGISTRY_RETIREMENT;
 // QF-20260727-031: exported so the regression test drives the REAL SD-side half-released-claim
 // detector (fake client, real code path) rather than asserting against a re-implementation.
 module.exports.clearHalfReleasedSdClaims = clearHalfReleasedSdClaims;
+
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): exported so the positive/negative-control tests drive
+// the REAL SIGNAL_RESOLVED logic (fake client, real code path) against fixtures, not a
+// re-implementation of the trigger condition.
+module.exports.notifySignalResolvedByDisposition = notifySignalResolvedByDisposition;
+module.exports.notifySignalResolvedByPromotion = notifySignalResolvedByPromotion;
+module.exports.resolveLiveSessionForCallsign = resolveLiveSessionForCallsign;

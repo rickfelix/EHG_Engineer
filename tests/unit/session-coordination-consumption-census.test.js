@@ -34,7 +34,17 @@ const ALLOWED_WRITE_FILES = new Set([
   'scripts/stale-session-sweep.cjs',
   'scripts/hooks/coordination-inbox.cjs',
   'lib/coordinator/relay-queue.cjs',
-  'lib/coordinator/signal-router.cjs',
+  // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): lib/coordinator/signal-router.cjs REMOVED from this
+  // allowlist — its only acknowledged_at write (stampRoutedToCoordinator) was an automated sweep
+  // disposing a signal the instant it noticed it, the same defect class stampRouted() was fixed
+  // for (9 critical signals silently vanished when promotion alone disposed rows). It is now a
+  // non-disposing provenance marker only (routed_to_coordinator: true) with no
+  // read_at/acknowledged_at write left in the file at all. A genuine FR-1 disposition is written
+  // by coordinator-ack-signal.cjs alone (TR-4); the one narrow, explicitly-scoped exception is
+  // scripts/one-off/signal-lane-backfill-001.mjs (FR-3's historical backfill, always paired with
+  // disposition:null + isRetention:true, never a real FR-1 value) — this census's scan scope
+  // (scripts/*.cjs, scripts/hooks/*.cjs, lib/coordinator/*.cjs) does not cover scripts/one-off/
+  // or .mjs files, so that script is invisible to it by design, not by omission.
 ]);
 
 // Matches both the inline-literal style (.update({ read_at: now })) and the dynamic-assembly
