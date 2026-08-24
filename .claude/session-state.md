@@ -159,6 +159,61 @@ PASS, score 95. **SD is now in_progress/PLAN_PRD.**
 3. Follow CLAUDE_PLAN.md phase requirements (read it before authoring the PRD).
 4. Run PLAN-TO-EXEC once the PRD is ready.
 
+## Update 4 (2026-08-24) — PRD authored + inserted via canonical pipeline, PLAN-TO-EXEC precheck
+
+Read scripts/prd/prd-creator.js's createPRDWithValidatedContent + scripts/add-prd-to-database.js's
+`--content @file.json` override path (SD-FDBK-INFRA-ADD-PRD-DATABASE-001 — exactly built for
+inline-Claude-Code PRD authoring: skips LLM generation, still runs grounding + quality gates +
+DESIGN/DATABASE/RISK sub-agents + STORIES). Authored a full PRD JSON from the corrected FR-1..FR-5
+scope (Update 1/3), matching lib/artifact-contracts/prd-contract.js's FieldSpec shapes exactly
+(functional_requirements itemKeys id/title/description/priority/acceptance_criteria,
+integration_operationalization exact 5-key object, etc). Pre-validated with
+`npm run contract:check -- prd <file>` (0 warnings) before running the real pipeline. Ran
+`node scripts/add-prd-to-database.js SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 "..." --content @<file>`:
+PRD-SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 created, status=approved, progress=82%,
+DESIGN/DATABASE/RISK sub-agents PASS (93% orchestration confidence), STORIES auto-generated 5 user
+stories with 100% implementation_context coverage (verified directly via DB query, not trusted from
+console output alone).
+
+`handoff.js precheck PLAN-TO-EXEC`: 89%, single real blocker: GATE_SUBAGENT_EVIDENCE missing
+TESTING evidence for this phase (DESIGN/DATABASE/RISK auto-ran inside the PRD pipeline; TESTING
+does not — needs a separate Task-tool dispatch per CLAUDE.md rule 2).
+
+Dispatched testing-agent (agentId ac754addb21d833a3) with the corrected FR-1..FR-5 scope. It stored
+evidence (id 5d737643-109f-4da1-96d5-25842264bdbf, phase=PLAN, sub_agent_code=TESTING,
+verdict=CONDITIONAL_PASS, confidence=88) and surfaced two EXEC-critical corrections, BOTH
+independently verified directly against live code before trusting:
+
+1. **FR-2's target site doesn't exist as originally described.** coordinator-capacity-forecast.mjs
+   publishes NO deficit-formula text anywhere today (verified: header comment only says
+   "Verdict — SURPLUS/TIGHT/DEFICIT"; GAUGE line :249 and deficitFingerprint() :414 both print
+   `Math.max(0, deficit)` — legitimate, separate clamps, not the "incorrect clamp" my PRD's
+   acceptance criteria described). FR-2 is really "ADD explanatory formula text naming demandSoon /
+   BELT_BUFFER / beltDepth explicitly" (e.g. at the GAUGE line or reachAdam message), not "fix
+   existing wrong text". EXEC: do not go looking for wrong formula text to correct — there isn't
+   any; add new text instead, and don't touch the two legitimate Math.max(0,...) clamps at :249/:414.
+2. **FR-1 will break an already-green test on contact unless handled in the same commit.**
+   lib/fleet/claim-eligibility.cjs:856 derives `INELIGIBILITY_AXIS_NAMES` from `fn.name` over the
+   frozen INELIGIBILITY_AXES array (deliberate self-documenting-roster pattern — verified). 
+   tests/unit/fleet/released-mid-phase-two-sided-control.test.js:88 fails any axis with no
+   AXIS_FIXTURES entry (verified). EXEC MUST: (a) declare the new held-axis as a NAMED function
+   (an inline arrow has empty fn.name and gets silently dropped by `.filter(Boolean)` — it would
+   silently escape this exact coverage test rather than fail it), (b) add a matching AXIS_FIXTURES
+   entry in released-mid-phase-two-sided-control.test.js in the SAME commit.
+
+Also useful from the TESTING report (not independently re-verified, but from the same agent that
+got the two items above right): existing coverage is tests/unit/capacity-inputs.test.js +
+tests/unit/capacity-forecaster-belt-extent.test.js; recommended new test file
+tests/unit/fleet/claim-eligibility-scheduling-constraint-held.test.js for TS-1/TS-2; recommends a
+COMMITTED SNAPSHOT fixture (not a live DB replay) for the formula-invariant test — reasoning: a live
+replay is self-invalidating (a regressed formula writes rows that satisfy itself); belt_capacity_verdicts
+rows lack idleNow so the DEFICIT-URGENT branch can't be re-derived from stored rows, partition tests
+on the arithmetic identity only; existing bare-shell test is
+tests/unit/capacity-forecaster-belt-extent.test.js:109; reachAdam() is unexported + does I/O so TS-5
+needs a new exported pure `formatBeltHeaderLine(...)` (matches the file's own established
+extraction pattern for formatClaimableNow/deficitFingerprint/shouldPingAdam); captured a GREEN
+baseline (87 tests / 6 files) across the affected suites before any change.
+
 ## Notes carried from prior SD (VENTURE-SCAFFOLD-CODE-001, completed this session)
 - ENF-15 force-push allowlist does NOT include docs/* branches — relevant if this SD
   also needs a post-merge CHANGELOG PR later.
