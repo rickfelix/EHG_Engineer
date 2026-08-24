@@ -153,11 +153,22 @@ export async function isSafeToWriteRetro(supabase, sdId, options = {}) {
   }
 
   const columns = 'id, generated_by, auto_generated, key_learnings, status, retro_type, quality_score, created_at, updated_at, what_went_well, what_needs_improvement, action_items';
-  let query = supabase.from('retrospectives').select(columns);
-  query = options.targetRowId
-    ? query.eq('id', options.targetRowId)
-    : query.eq('sd_id', sdId).order('created_at', { ascending: false }).limit(1);
-  const { data: retro } = await query.maybeSingle();
+  let retro;
+  if (options.targetRowId) {
+    ({ data: retro } = await supabase
+      .from('retrospectives')
+      .select(columns)
+      .eq('id', options.targetRowId)
+      .maybeSingle());
+  } else {
+    ({ data: retro } = await supabase
+      .from('retrospectives')
+      .select(columns)
+      .eq('sd_id', sdId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle());
+  }
 
   const decision = classifyRetro(retro);
   const dryRun = process.env.LEO_RETRO_GUARD_DRY_RUN === '1';
