@@ -17,6 +17,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_UUID = '944affe5-227f-453a-830b-8cc296b8fe4e';
 const SD_KEY = 'SD-LEO-INFRA-SIGNAL-LANE-PER-001';
@@ -210,7 +211,9 @@ async function main() {
   console.log('Verified:', JSON.stringify(ver, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
