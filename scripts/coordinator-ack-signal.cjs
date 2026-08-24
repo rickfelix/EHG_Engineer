@@ -146,11 +146,18 @@ async function ackSignal({ supabase, signalId, disposition = 'actioned', reason,
     });
   }
 
+  const alreadyAcked = Boolean(sig.acknowledged_at);
   return {
     ok: true,
-    alreadyAcked: Boolean(sig.acknowledged_at),
+    alreadyAcked,
     acknowledgedAt: sig.acknowledged_at || nowIso,
-    disposition,
+    // Ship-gate adversarial review finding: when alreadyAcked, no write occurred, so `disposition`
+    // must NOT echo back the just-requested value as if it were applied -- this script cannot see
+    // the row's actual stored disposition (a hand-stamped legacy row has no receipt at all) without
+    // a coordination_receipts lookup out of scope here. requestedDisposition always reflects the
+    // call's argument; disposition is null unless this call itself performed the write.
+    disposition: alreadyAcked ? null : disposition,
+    requestedDisposition: disposition,
     signal: sig,
     receipt,
   };
@@ -195,10 +202,14 @@ async function main() {
   if (!result.receipt.ok && !result.alreadyAcked) {
     console.error('NOTE: receipt ledger write skipped (' + (result.receipt.error || result.receipt.skipped) + ') — ack still stands.');
   }
-  console.log('✓ Signal acknowledged (retired from inbox)');
+  console.log(result.alreadyAcked ? '✓ Signal already acknowledged (no write performed)' : '✓ Signal acknowledged (retired from inbox)');
   console.log('  signal_id:', signalId);
   console.log('  acknowledged_at:', result.acknowledgedAt);
-  console.log('  disposition:', result.disposition);
+  if (result.alreadyAcked) {
+    console.log('  requested disposition (NOT applied — signal was already closed):', result.requestedDisposition);
+  } else {
+    console.log('  disposition:', result.disposition);
+  }
 
   if (wantsReply) {
     if (!isTwoWayV2Enabled()) {

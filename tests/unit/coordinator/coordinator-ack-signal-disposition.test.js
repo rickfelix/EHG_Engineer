@@ -107,6 +107,11 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-1: ackSignal writes acknowledged_a
     expect(result.alreadyAcked).toBe(true);
     expect(c.updates).toHaveLength(0);
     expect(c.inserts).toHaveLength(0);
+    // Ship-gate adversarial finding: no write occurred, so `disposition` must NOT echo back the
+    // just-requested value as if it were applied (misleads an operator re-running with a different
+    // --disposition against an already-closed row into thinking a correction landed).
+    expect(result.disposition).toBeNull();
+    expect(result.requestedDisposition).toBe('actioned');
   });
 
   it('REJECTED-WITH-REASON without --reason is rejected BEFORE any DB write', async () => {

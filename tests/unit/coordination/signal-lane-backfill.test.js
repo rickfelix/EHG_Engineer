@@ -56,8 +56,27 @@ function fakeClient(rows) {
             const all = [...store.values()].filter((r) => filters.every((f) => f(r)));
             return { data: all.slice(from, to + 1), error: null };
           },
+          // Real shape: .update(patch).eq('id', val).is('acknowledged_at', null).select('id') --
+          // the .is() makes the write itself conditional, and .select() reports which rows actually
+          // matched, so a caller can detect a concurrent-write race (see backfillRow's TOCTOU fix).
           update(patch) {
-            return { eq: async (col, val) => { Object.assign(store.get(val), patch); return { error: null }; } };
+            let idVal;
+            return {
+              eq(col, val) { idVal = val; return this; },
+              is(col, val) {
+                return {
+                  async select() {
+                    const row = store.get(idVal);
+                    if (!row) return { data: [], error: null };
+                    const currentVal = readPath(row, col);
+                    const matches = val === null ? currentVal == null : currentVal === val;
+                    if (!matches) return { data: [], error: null };
+                    Object.assign(row, patch);
+                    return { data: [{ id: idVal }], error: null };
+                  },
+                };
+              },
+            };
           },
         };
         return builder;
@@ -154,6 +173,27 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-3: backfillRow (TS-4 primary regre
     expect(secondRunResults).toHaveLength(0); // nothing left open -- fetchOpenSignalRows returns []
     expect(c.receipts).toHaveLength(1); // no duplicate receipt
     expect(c.getRow('sig-1').acknowledged_at).toBe('2026-08-24T12:00:00Z'); // not re-stamped
+  });
+
+  it("SHIP-GATE ADVERSARIAL FINDING: a row genuinely dispositioned by another writer BETWEEN fetch and this row's write is NOT clobbered", async () => {
+    // Simulates the TOCTOU race: coordinator-ack-signal.cjs acks the row for real, changing its
+    // acknowledged_at out from under the backfill's stale in-memory snapshot, before backfillRow's
+    // own conditional update runs.
+    const c = fakeClient([NEVER_TOUCHED]);
+    const racedRow = c.getRow('sig-1');
+    racedRow.acknowledged_at = '2026-08-24T11:59:00Z'; // a genuine concurrent disposition landed
+    racedRow.payload = { ...racedRow.payload, disposition: 'actioned' };
+
+    const result = await backfillRow(c, NEVER_TOUCHED, { nowIso: '2026-08-24T12:00:00Z' });
+    expect(result.ok).toBe(true);
+    expect(result.raced).toBe(true);
+    // The real (raced-in) acknowledged_at must survive untouched -- not overwritten with the
+    // backfill's stale timestamp.
+    expect(c.getRow('sig-1').acknowledged_at).toBe('2026-08-24T11:59:00Z');
+    expect(c.getRow('sig-1').payload.disposition).toBe('actioned');
+    expect(c.receipts).toHaveLength(0); // no spurious retention receipt for a row this backfill didn't close
+    // MUTATION: drop the .is('acknowledged_at', null) conditional (revert to a bare .eq() update) ->
+    // this backfill blindly overwrites the real timestamp/payload and this test fails.
   });
 
   it('a row already canonically acknowledged before this backfill exists is untouched', async () => {

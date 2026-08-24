@@ -81,7 +81,14 @@ export async function backfillRow(sb, row, { nowIso, dryRun = false } = {}) {
 
   if (dryRun) return { ok: true, id: row.id, handStamped, receipt: { ok: false, skipped: 'dry_run' } };
 
-  const { error: updErr } = await sb
+  // Ship-gate adversarial review finding: fetchOpenSignalRows() snapshots the open population up
+  // front, then this function processes rows sequentially against that stale snapshot -- a TOCTOU
+  // race against coordinator-ack-signal.cjs genuinely dispositioning the SAME row mid-run (hand-
+  // stamping was confirmed still ongoing when this SD was written). `.is('acknowledged_at', null)`
+  // makes the write itself conditional (not just the initial SELECT), and `.select('id')` reports
+  // which rows actually matched -- an empty result means someone else closed it first, so this
+  // backfill must skip rather than clobber their real acknowledged_at/disposition with a stale one.
+  const { data: updated, error: updErr } = await sb
     .from('session_coordination')
     .update({
       acknowledged_at: now,
@@ -93,8 +100,14 @@ export async function backfillRow(sb, row, { nowIso, dryRun = false } = {}) {
       // every backfilled row from that query's candidate set by construction.
       payload: { ...(row.payload || {}), notification_sent: true },
     })
-    .eq('id', row.id);
+    .eq('id', row.id)
+    .is('acknowledged_at', null)
+    .select('id');
   if (updErr) return { ok: false, id: row.id, error: updErr.message };
+  if (!updated || updated.length === 0) {
+    // Raced with a genuine concurrent disposition -- not our row to close or ledger.
+    return { ok: true, id: row.id, handStamped, raced: true, receipt: { ok: false, skipped: 'raced_with_concurrent_disposition' } };
+  }
 
   const receipt = await recordReceipt(sb, {
     coordinationId: row.id,
