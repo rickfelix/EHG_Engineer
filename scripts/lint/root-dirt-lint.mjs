@@ -35,6 +35,14 @@
 // one day of normal fleet-session accumulation before firing, rather than going red on the
 // very next commit after a busy day. THRESHOLD = 2391, not a round number chosen independently
 // of any measurement.
+//
+// KNOWN LIMITATION: this control reports only an aggregate COUNT, not which files or
+// directories are driving it -- a single legitimate large batch (e.g. a generated artifact set
+// checked in as one commit's worth of untracked scratch) reads identically to the same number
+// of files from slow, unrelated organic accumulation. Diagnosing the SOURCE of a threshold
+// breach requires a human to run `git status --porcelain --untracked-files=all` themselves and
+// cross-reference docs/architecture/evidence-boundary.md -- this lint's signal is "the
+// aggregate crossed a threshold", not "here is what to fix".
 import { execFileSync } from 'node:child_process';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { getRepoRoot } from '../../lib/repo-paths.js';
@@ -52,6 +60,17 @@ export function countUntrackedFiles(cwd = process.cwd()) {
   return raw.split('\n').filter((l) => l.startsWith('?? ')).length;
 }
 
+// Pure comparison, split out from main() (SD-LEO-INFRA-REPO-HYGIENE-PATH-001, control-seed-test
+// merge gate): gives this control a seed-testable unit -- scripts/audit/control-seed-specs.json's
+// seedTest form neuters this exact comparison and requires
+// tests/unit/lint/root-dirt-lint.test.js to go from green to red, which is the observed-firing
+// proof the gate requires. A fixture trial doesn't work here: the gate's harness `git add -A`s
+// every planted fixture before running the control, which makes them TRACKED, not untracked --
+// the opposite of what this control measures.
+export function checkThreshold(count, threshold = THRESHOLD) {
+  return { exceeds: count > threshold, count, threshold };
+}
+
 function main() {
   const strict = process.argv.includes('--strict');
   // getRepoRoot() (not process.cwd()): most fleet commits run from a .worktrees/<SD>/ checkout,
@@ -60,8 +79,9 @@ function main() {
   // The debris this lint targets accumulates in the MAIN checkout, so that's what must be
   // measured regardless of which worktree the commit is actually happening in.
   const count = countUntrackedFiles(getRepoRoot());
+  const { exceeds } = checkThreshold(count);
 
-  if (count <= THRESHOLD) {
+  if (!exceeds) {
     console.log(`✅ root-dirt-lint: ${count} untracked file(s) (threshold ${THRESHOLD}, baseline ${BASELINE} + ${BUFFER} buffer)`);
     process.exitCode = 0;
     return;

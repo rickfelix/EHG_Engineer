@@ -105,24 +105,24 @@ export function evaluateFiles(files, { allow = {} } = {}) {
   return { violations, grandfathered, ok: violations.length === 0 };
 }
 
-function loadTrackedFiles() {
+function loadTrackedFiles(root = REPO_ROOT) {
   // -z: NUL-delimited output, sidesteps core.quotePath escaping non-ASCII paths.
-  // cwd: REPO_ROOT (SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24): without an
+  // cwd: root (SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24): without an
   // explicit cwd, `git ls-files` returns paths relative to whatever directory this script was
-  // INVOKED from, not the repo root. Every subsequent readFileSync(path.join(REPO_ROOT, p))
+  // INVOKED from, not the repo root. Every subsequent readFileSync(path.join(root, p))
   // then pointed at a nonexistent location, threw, and was silently swallowed by the catch
   // below -- producing a false "0 violations, 0 scanned" PASS when run from any subdirectory
   // (e.g. `cd lib && node ../scripts/lint/no-literal-home-path-lint.mjs`). Latent in practice
   // (CI and the npm script both invoke from repo root today), but a governance lint reporting a
   // clean scan after silently measuring nothing is exactly the class of hollow check this
   // codebase's own conventions warn against.
-  const raw = execFileSync('git', ['ls-files', '-z'], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const raw = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const paths = raw.split('\0').filter(Boolean);
   const files = [];
   for (const p of paths) {
     if (!SCAN_EXTENSIONS.has(path.extname(p)) || EXCLUDE_FILE_RE.test(p)) continue;
     try {
-      files.push({ path: p, content: fs.readFileSync(path.join(REPO_ROOT, p), 'utf8') });
+      files.push({ path: p, content: fs.readFileSync(path.join(root, p), 'utf8') });
     } catch {
       continue; // binary/deleted-since-ls-files/permission error -- not a violation
     }
@@ -133,16 +133,26 @@ function loadTrackedFiles() {
 function main() {
   const args = process.argv.slice(2);
   const jsonMode = args.includes('--json');
+  // --root <dir>: scan a different (git-tracked) tree instead of this repo. Exists so the
+  // control-seed-test-lint.mjs merge gate (scripts/audit/control-seed-specs.json) can point
+  // this lint at a throwaway fixture repo, proving it genuinely fires -- modeled on the
+  // identical flag in scripts/lint/require-main-guard-in-one-off-lint.mjs. The allowlist is
+  // NEVER re-rooted (ALLOWLIST_PATH is derived from this script's own __dirname): a --root
+  // trial is testing detection, not exercising the real grandfather list.
+  const rootIdx = args.indexOf('--root');
+  const root = rootIdx !== -1 && args[rootIdx + 1] ? path.resolve(args[rootIdx + 1]) : REPO_ROOT;
 
   const allow = loadAllowlist();
-  const files = loadTrackedFiles();
+  const files = loadTrackedFiles(root);
 
   // SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24: a total measurement failure
   // (e.g. the cwd bug this same review caught) must be a loud error, not a silent "0 scanned,
   // clean" pass indistinguishable from a genuinely small repo. This repo's own tracked *.js/
   // *.mjs/*.cjs population is in the thousands; a floor far below that catches the failure mode
-  // without hardcoding a brittle exact count.
-  if (files.length < 100) {
+  // without hardcoding a brittle exact count. Skipped under --root: a fixture trial tree is
+  // legitimately tiny, and the floor exists to catch THIS repo measuring itself as empty, not
+  // to reject an intentionally small scan target.
+  if (root === REPO_ROOT && files.length < 100) {
     console.error(`❌ no-literal-home-path-lint: only ${files.length} file(s) scanned -- this looks like a measurement failure (this repo's real *.js/*.mjs/*.cjs population is in the thousands), not a clean/small tree. Refusing to report a false pass.`);
     process.exitCode = 1;
     return;

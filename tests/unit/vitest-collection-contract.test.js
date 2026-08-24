@@ -1,6 +1,6 @@
 /**
  * SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-3 -- regression test for the invariant declared in
- * tests/collection-contract.md: any directory matched by a .gitignore pattern must never be
+ * docs/05_testing/collection-contract.md: any directory matched by a .gitignore pattern must never be
  * collectible by vitest.
  *
  * Creates a throwaway directory INSIDE the real repo tree (scratch/__test-fixture-<pid>/),

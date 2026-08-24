@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { countUntrackedFiles, BASELINE, BUFFER, THRESHOLD } from '../../../scripts/lint/root-dirt-lint.mjs';
+import { countUntrackedFiles, checkThreshold, BASELINE, BUFFER, THRESHOLD } from '../../../scripts/lint/root-dirt-lint.mjs';
 
 let repoDir;
 
@@ -31,6 +31,26 @@ describe('THRESHOLD', () => {
     expect(Number.isInteger(BUFFER)).toBe(true);
     expect(BASELINE).toBeGreaterThan(0);
     expect(BUFFER).toBeGreaterThan(0);
+  });
+});
+
+// SEED-TEST for scripts/audit/control-seed-specs.json's root-dirt-lint entry (seedTest form --
+// this control cannot be fixture-trialled, see checkThreshold()'s own doc comment for why).
+// The registered `neuter` mutates checkThreshold's comparison to `exceeds: false`; these
+// assertions must go RED under that neuter for the merge gate's PROVEN_RED requirement to hold.
+describe('checkThreshold (seed-tested: neutering this comparison must fail this suite)', () => {
+  it('reports exceeds:true when count is over threshold', () => {
+    expect(checkThreshold(THRESHOLD + 1).exceeds).toBe(true);
+  });
+
+  it('reports exceeds:false when count is at or under threshold', () => {
+    expect(checkThreshold(THRESHOLD).exceeds).toBe(false);
+    expect(checkThreshold(THRESHOLD - 1).exceeds).toBe(false);
+  });
+
+  it('respects an explicit threshold override', () => {
+    expect(checkThreshold(5, 10).exceeds).toBe(false);
+    expect(checkThreshold(15, 10).exceeds).toBe(true);
   });
 });
 

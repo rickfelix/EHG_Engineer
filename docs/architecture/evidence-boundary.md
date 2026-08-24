@@ -1,3 +1,12 @@
+---
+Category: Architecture
+Status: Approved
+Version: 1.0.0
+Author: Claude (SD-LEO-INFRA-REPO-HYGIENE-PATH-001)
+Last Updated: 2026-08-24
+Tags: [repo-hygiene, gitignore, evidence-boundary]
+---
+
 # Evidence Boundary: Durable Tracked Content vs. Ephemeral Scratch
 
 SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-2.

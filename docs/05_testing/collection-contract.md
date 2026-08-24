@@ -1,3 +1,12 @@
+---
+Category: Testing
+Status: Approved
+Version: 1.0.0
+Author: Claude (SD-LEO-INFRA-REPO-HYGIENE-PATH-001)
+Last Updated: 2026-08-24
+Tags: [testing, vitest, collection-contract]
+---
+
 # Vitest Collection Contract
 
 SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-3.
