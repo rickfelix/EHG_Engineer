@@ -131,9 +131,45 @@ unavailability, not caused by this pass.
 Committed all 5 fixes + their tests together (single commit, matches this SD's prior
 "resolve review findings" commit granularity).
 
+## Update 4 (2026-08-24, still same session)
+
+First auto-merge attempt on PR #7482 failed with "Required status check 'Run Unit Tier
+(quarantine-aware)' is in progress" — confirmed via `gh pr checks 7482` this is CI just
+having started (triggered by the fix-commit push), NOT a real failure; most checks show
+`pending`, a handful already `pass`. Not treating this as a hard failure — will retry
+the auto-merge sequence once CI completes rather than blocking/sleeping on it.
+
+## Update 5 (2026-08-24, still same session)
+
+`gh pr checks 7482` showed one REAL failure (not pending): `count-truncation-diff-lint`
+flagged `venture-provisioner.js:332`'s FR-4 collision probe
+(`sb.from('applications').select('id, name').is('deleted_at', null)`) as an unbounded
+read — PostgREST silently caps at 1000 rows, so a collision beyond the first page would
+be missed, resurrecting the exact ApexNiche-class bug this block exists to fix, at
+scale (currently harmless at ~15 live rows, per VALIDATION's own measurement, but not
+provably safe against growth). Fixed by switching to `fetchAllPaginated`
+(lib/db/fetch-all-paginated.mjs, an existing shared utility for exactly this class of
+bug — SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001). Updated the test mock to slice by
+real range offsets (so it behaves like genuinely paginated data) and added a new test
+forcing a 1001-row scenario where the real match is row 1001 — proving pagination
+actually merges across pages, not just returns page 1. Mutation-verified (reverted,
+confirmed the new test genuinely fails with a wrong INSERT instead of finding the
+match, restored). Confirmed clean via `node scripts/lint/count-truncation-diff-lint.mjs`
+locally. Full eva/bridge suite: 519 passed / 5 skipped, 0 failed.
+
+Also this pass: gave candid coordinator feedback (periodic review-request directive) —
+noted the silent-holder audit's prescribed remediation command was wrong for my SD's
+actual state (LEAD-FINAL-APPROVAL isn't runnable pre-merge), suggested it verify
+current_phase before prescribing a specific command.
+
 ## Next steps
-1. Merge PR #7482 via the hardened auto-merge sequence (lib/ship/auto-merge.mjs's
-   attemptAutoMerge). AUTO-PROCEED is ON — no user confirmation needed.
+1. Check `gh pr checks 7482` again; once all required checks are green, re-run the
+   hardened auto-merge sequence (lib/ship/auto-merge.mjs's attemptAutoMerge, same
+   invocation as before — repo owner/name already resolved in
+   .claude-work/ship-repo-resolved.json, reuse it). AUTO-PROCEED is ON — no user
+   confirmation needed. If a check genuinely FAILED (not pending), investigate before
+   retrying blindly (this already happened once this pass — count-truncation-diff-lint
+   was real and is now fixed).
 2. Worktree cleanup via post-merge-worktree-cleanup.js --sdKey.
 3. Continue LEAD-FINAL-APPROVAL → full post-completion tail (/document, /heal, /learn,
    capture-completion-flags).

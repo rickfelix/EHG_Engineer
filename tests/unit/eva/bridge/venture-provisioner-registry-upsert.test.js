@@ -41,7 +41,12 @@ vi.mock('../../../../lib/supabase-client.js', () => ({
         select: () => ({
           is: (col, val) => {
             isCalls.push({ col, val });
-            return Promise.resolve({ data: selectResult, error: null });
+            // fetchAllPaginated calls .range(from, to) on whatever the queryFactory
+            // returns (lib/db/fetch-all-paginated.mjs) -- slicing selectResult by the
+            // real offsets makes this mock behave like genuinely paginated data, so a
+            // multi-page test (selectResult longer than pageSize) exercises the real
+            // merge-across-pages path, not just a single short-page return.
+            return { range: (from, to) => Promise.resolve({ data: selectResult.slice(from, to + 1), error: null }) };
           },
         }),
         update: (payload) => ({
@@ -173,6 +178,29 @@ describe('venture-provisioner DEFAULT_STEPS: registry_updated DB write-through (
     // venture must take the INSERT branch, not silently match the tombstone.
     expect(insertPayloads.length).toBe(1);
     expect(updatePayloads).toEqual([]);
+  });
+
+  // count-truncation-diff-lint finding (CI, PR #7482): the collision probe was a bare
+  // .select() with no pagination, which PostgREST silently caps at 1000 rows -- a
+  // collision beyond the first page would be missed, resurrecting the ApexNiche-class
+  // bug at scale. Fixed with fetchAllPaginated (lib/db/fetch-all-paginated.mjs). This
+  // test proves it genuinely merges across pages: 1000 filler rows + a real match as
+  // row 1001 (past the default pageSize=1000, so it can only be found on page 2).
+  it('count-truncation regression: the collision probe finds a match past the 1000-row page boundary', async () => {
+    const filler = Array.from({ length: 1000 }, (_, i) => ({ id: `filler-${i}`, name: `Filler${i}` }));
+    selectResult = [...filler, { id: 'app-page2', name: 'AcmeVenture' }];
+    const ctx = {
+      ventureId: 'v1',
+      venture: { name: 'AcmeVenture', repoName: 'acme-venture', localPath: '/tmp/acme-venture' },
+      stepsCompleted: [],
+      log: () => {},
+    };
+    await registryStep().execute(ctx);
+
+    // A single-page (capped) read would never see row 1001 and would wrongly INSERT.
+    expect(insertPayloads).toEqual([]);
+    expect(updatePayloads.length).toBe(1);
+    expect(updatePayloads[0].id).toBe('app-page2');
   });
 
   it('the registry.json write (existing, correct behavior) is preserved unchanged alongside the new INSERT', async () => {
