@@ -105,6 +105,14 @@ it) — worked cleanly this time, gate passed 100% on the very first precheck.
 canonical writer (evidence dd2fd245-ee20-4c3d-9a57-eb379e836bef). Re-ran: 95%, PASSED.
 `handoff.js execute LEAD-TO-PLAN`: PASS, score 94. **SD is now in_progress/PLAN_PRD.**
 
+## Update 2 — housekeeping: prior SD's CHANGELOG PR #7494 merged
+Opportunistically checked and merged PR #7494 (the CHANGELOG entry for the just-completed
+FORECASTER-CLAIMABLE-PREDICATE-001, left pending CI at the end of that SD's tail) — CI cleared,
+merged cleanly. Both PRs from that SD (#7492 code, #7494 docs) are now fully merged. Attempted to
+remove the now-unneeded .worktrees/SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001-changelog
+worktree — got a Windows permission-denied (likely a lingering file handle), left for the reaper,
+non-blocking.
+
 ## Next steps
 1. Commit scripts/one-off/retro-promotion-path-001-lead-scope-correction.mjs + session-state.md.
 2. PLAN phase: author a proper PRD from the corrected 4-FR scope above (Update 1) — do NOT build
