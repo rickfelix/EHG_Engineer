@@ -1,0 +1,190 @@
+{
+  "executive_summary": "AltifyAI (venture-1, live site/auth/usage/PBN scoring) has 19 chairman-approved stage transitions on record but ZERO rows in eva_stage_gate_attempts (SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001's transition-evidence ledger, merged PR #7440) -- every chairman-adjudicated advance bypasses the ledger entirely, because the chairman-approval code path (_handleChairmanGate -> _advanceStage in lib/eva/stage-execution-worker.js) never calls the existing, generic, already-tested recordGateAttempt() wrapper that 4 other machine-gate call sites already use. LEAD-phase verification (Explore evidence 2a677465, VALIDATION evidence 0443c8b7) measurement-falsified this SD's original FR-1/FR-2 (launch_mode/launched_at reconciliation and retroactive guardrail seeding) as either a universal-default misattribution or gated behind a structurally-unreachable Stage-24 check for AltifyAI specifically -- both descoped. This PRD covers the confirmed, actionable remainder: wire AltifyAI's (and every other daemon-walked venture's) future chairman-adjudicated stage advances through the existing recordGateAttempt() mechanism, with the one hard technical constraint that the call must fire exactly once per genuine transition and never once per poll tick -- the same code shape that produced a live 1034-row runaway-retry backlog on a different venture (ApexNiche AI) when a gate-check branch was polled repeatedly while a downstream chokepoint stayed blocked.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Record a chairman-adjudicated attempt row on every real _advanceStage() transition",
+      "priority": "critical",
+      "description": "In lib/eva/stage-execution-worker.js's _advanceStage() (the daemon-walk's single side-effecting stage-advance function, ~line 2825), after the raw ventures.current_lifecycle_stage UPDATE succeeds and all of _advanceStage()'s own chokepoints (artifact precondition ~2962, high-consequence ~3027, product-review ~2935, path-integrity ~3193) have passed, call the existing recordGateAttempt(supabase, opts) wrapper (lib/eva/artifact-persistence-service.js:486-532) with {ventureId, stageNumber: <the FROM stage>, gateType: 'stage_gate' (maps to 'exit' via recordGateAttempt()'s GATE_TYPE_MAP), resolvedOutcome: 'chairman_adjudicated', passed: null, reasoning: <chairman_decisions row reference/summary>, evaluatedBy: 'chairman'}. resolvedOutcome='chairman_adjudicated' is an existing, already-reserved value in eva_stage_gate_attempts' CHECK constraint (database/chairman-gated/20260823_eva_stage_gate_attempts.sql:63) distinct from 'machine_pass'/'machine_fail'/'override' -- passed must be left NULL for this outcome (the table's own CHECK at line 115 requires passed IS NULL for any resolved_outcome other than machine_pass/machine_fail). This is a pure additive call to existing, tested infrastructure -- no new RPC, no schema change, no re-implementation of open_eva_gate_attempt/finalize_eva_gate_attempt. CORRECTION (TESTING, e7445772): the original gateType:'chairman_gate' is INVALID -- GATE_TYPE_MAP has no entry for it and it violates the table's CHECK(gate_type IN ('entry','exit','kill')). Use 'stage_gate' (maps to 'exit'). The new call must ALSO be wrapped in the same non-fatal try/catch pattern used at the 4 existing recordGateAttempt() call sites (lib/eva/eva-orchestrator.js:930,1316; stage-17-blueprint-review.js:471; artifact-persistence-service.js:636) -- a ledger-write failure must never block the real stage advance it is merely recording. CRITICAL: this call must fire ONLY when FR-1a's source tag confirms a genuine chairman decision (see FR-1a) -- NOT on every _gateApproved=true, which is also set by 3 other non-chairman auto-approval paths.",
+      "acceptance_criteria": [
+        "After a fixture venture successfully advances one stage via _advanceStage(), exactly one new eva_stage_gate_attempts row exists for that (venture_id, stage_number) with resolved_outcome='chairman_adjudicated' and passed=NULL.",
+        "The new call happens AFTER the raw UPDATE and all of _advanceStage()'s own chokepoints succeed -- a fixture where any chokepoint blocks the advance produces ZERO new attempt rows."
+      ]
+    },
+    {
+      "id": "FR-1a",
+      "title": "_handleChairmanGate() must tag its return value with the actual decision source",
+      "priority": "critical",
+      "description": "_handleChairmanGate() (lib/eva/stage-execution-worker.js:2357) has 5 distinct return points that all currently produce the identical {blocked:false,killed:false,approved:true} shape: (1) autonomy auto-approve (~line 2381), (2) governance auto-approve via _canAutoAdvance (~line 2388), (3) fixture-venture skip (~line 2460), (4) an already-resolved chairman_decisions row found on re-entry (~line 2473), (5) a freshly-resolved decision via waitForDecision (~line 2502). Only (4) and (5) represent a genuine chairman decision; (1)-(3) are automated bypasses. Add a `source` field to every returned object (e.g. 'autonomy_auto_approve' | 'governance_auto_approve' | 'fixture_venture_skip' | 'chairman_decision') so FR-1's new recordGateAttempt() call site can distinguish them. Without this, FR-1 as originally scoped would mislabel every autonomy/governance/fixture auto-approval fleet-wide (not just AltifyAI) as chairman_adjudicated -- a MORE dishonest instrumentation defect than the one this SD exists to fix. CORRECTION (TESTING re-review, 56dc6248): adding a source field is confirmed non-breaking for the one real production consumer (stage-execution-worker.js:1401, which only reads .blocked/.killed), but BREAKS two existing unit tests that pin the exact return shape via toEqual (rejects unexpected extra keys): tests/unit/eva/stage-execution-worker-high-consequence-mint.test.js:268 and tests/unit/eva/stage-execution-worker-fixture-venture-gate.test.js:98. Both must be updated (add the new source key to each expected object) in the SAME commit that implements this FR -- not a follow-up.",
+      "acceptance_criteria": [
+        "Each of the 5 return points in _handleChairmanGate() carries a distinct, correct `source` value, verified by a unit test exercising all 5 branches independently.",
+        "FR-1's new recordGateAttempt() call fires ONLY when source==='chairman_decision' -- a fixture exercising the other 4 sources produces ZERO new eva_stage_gate_attempts rows.",
+        "tests/unit/eva/stage-execution-worker-high-consequence-mint.test.js:268 and tests/unit/eva/stage-execution-worker-fixture-venture-gate.test.js:98 are updated to expect the new source key and still pass."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "The new call site must not reproduce the retry-amplification failure mode already observed in production",
+      "priority": "critical",
+      "description": "_handleChairmanGate() (lib/eva/stage-execution-worker.js:2357-2517) returns {approved:true} on EVERY poll tick once a chairman_decisions row is status='approved' (line 2471), not just the first time -- the daemon's main walk loop (~line 1401) re-invokes this on every poll interval for a venture still parked at an unresolved stage. If _advanceStage() itself then blocks on one of its own independent chokepoints (a real, observed condition), a naively-placed recordGateAttempt() call inside the approval-detection branch (rather than gated on the UPDATE's actual success) would fire once per poll tick indefinitely. This is not hypothetical: eva_stage_gate_attempts currently holds 1034 rows for a single OTHER venture (ApexNiche AI), attempt_number climbing past 518, new rows every ~30s since 2026-07-31, with open_eva_gate_attempt having zero idempotency/dedup by design (SELECT MAX(attempt_number)+1 then unconditional INSERT). FR-1's call site MUST be placed strictly after the successful UPDATE, gated on the transition actually having occurred in THIS invocation (not on the approval/gate-check branches, which can re-fire every poll cycle while downstream stays blocked).",
+      "acceptance_criteria": [
+        "A fixture venture polled/re-evaluated N times (N>=5) while genuinely blocked at a downstream chokepoint (never reaching the successful UPDATE) produces ZERO eva_stage_gate_attempts rows across all N polls.",
+        "The same fixture, once the chokepoint condition is cleared and the UPDATE succeeds exactly once, produces exactly ONE new attempt row -- not N, not zero."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fixture and regression coverage proving the wiring, not just its absence of a false trigger",
+      "priority": "high",
+      "description": "Add unit tests exercising the real _advanceStage() code path (or the smallest real function boundary that reaches recordGateAttempt(), per this repo's existing pattern in tests/unit/eva/artifact-persistence-service-gate-attempt.test.js which mocks supabase.rpc and asserts open/finalize call shape) proving both FR-1's positive case and FR-2's negative/regression case. Mirror the call-count regression-guard pattern already used in tests/unit/eva/orchestrator-gate-result-persist.test.js (grep source for a fixed recordGateAttempt() call count at the new call site) so a future edit that removes or duplicates the call is caught mechanically, not just by code review. CORRECTION (TESTING, e7445772): _advanceStage() is too large/entangled (7+ .from() table calls, 4 dynamic imports) to unit-test directly by mocking supabase.rpc alone. Split coverage into (a) an ISOLATED unit test on _handleChairmanGate()'s new source-tagging return shape (FR-1a's acceptance criteria) -- small, mockable, real function boundary -- and (b) TS-3's call-count regression guard as the integration-level check that the new recordGateAttempt() call site exists inside _advanceStage() and is gated on the source tag. Do NOT attempt a full behavioral unit test of _advanceStage() itself.",
+      "acceptance_criteria": [
+        "TS-1/TS-2 below (positive: one call on success; negative: zero calls across repeated polls while blocked) both pass against the REAL _advanceStage() function, not a reimplementation of its logic.",
+        "A call-count regression guard (grep-based or call-count assertion) exists for the new recordGateAttempt() call site, mirroring orchestrator-gate-result-persist.test.js's existing pattern."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Reuse recordGateAttempt() verbatim -- no new RPC or schema",
+      "description": "The new call site must use the existing lib/eva/artifact-persistence-service.js:486 recordGateAttempt(supabase, opts) wrapper unmodified. Do not call supabase.rpc('open_eva_gate_attempt'/'finalize_eva_gate_attempt') directly from stage-execution-worker.js -- that would create a second, divergent call shape for the same underlying mechanism, the exact vocabulary-drift class this SD's sibling SDs (signal-lane, receipt-ledger) have repeatedly had to correct this session. CORRECTION: gateType must be 'stage_gate' (maps to 'exit'), never 'chairman_gate' (unmapped, violates the DB CHECK constraint)."
+    },
+    {
+      "id": "TR-2",
+      "title": "Post-condition gating, not pre-condition/detection-branch gating",
+      "description": "The call must be placed strictly after _advanceStage()'s raw UPDATE has succeeded and all of its own chokepoints have passed for THIS invocation -- never inside _handleChairmanGate()'s approval-detection branch (which is idempotently re-true on every poll once approved, independent of whether the actual advance has happened yet)."
+    },
+    {
+      "id": "TR-3",
+      "title": "stageNumber records the FROM stage of the transition",
+      "description": "gate_type/stage_number semantics must match the existing 4 call sites' convention (verify against lib/eva/eva-orchestrator.js:930/1316 and stage-17-blueprint-review.js:471 at EXEC time) so a future cross-venture query over eva_stage_gate_attempts treats chairman-adjudicated rows consistently with machine-evaluated ones."
+    },
+    {
+      "id": "TR-4",
+      "title": "Non-fatal try/catch around the new recordGateAttempt() call, matching existing call sites",
+      "description": "The new call inside _advanceStage() must be wrapped in a try/catch that logs and continues on failure, never blocking or reverting the real stage advance it records -- matching the pattern at all 4 existing recordGateAttempt() call sites."
+    },
+    {
+      "id": "TR-5",
+      "title": "_handleChairmanGate()'s decision-source tag is the single source of truth for 'is this a genuine chairman decision'",
+      "description": "No other heuristic (e.g. re-deriving from chairman_decisions table state independently in _advanceStage()) should be used to decide whether to call recordGateAttempt() -- avoids a second, potentially-diverging classification of the same event."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "type": "unit",
+      "expected": "Each branch, exercised independently against a mocked supabase client, returns the correct `source` value; only the two genuine-chairman branches return source='chairman_decision'.",
+      "scenario": "_handleChairmanGate()'s new source tag is correct across all 5 return branches (autonomy auto-approve, governance auto-approve, fixture-venture skip, already-resolved chairman decision, freshly-resolved chairman decision)"
+    },
+    {
+      "id": "TS-2",
+      "type": "unit",
+      "expected": "A fixture asserting call count by source: 0 calls for autonomy_auto_approve/governance_auto_approve/fixture_venture_skip, 1 call for chairman_decision -- proving the mislabeling risk TESTING found is closed.",
+      "scenario": "NEGATIVE / PRIMARY REGRESSION TEST: recordGateAttempt() is called ZERO times for any of the 3 non-chairman auto-approval/skip sources, even though _gateApproved=true is set for all 5 -- and exactly ONCE for a genuine chairman decision"
+    },
+    {
+      "id": "TS-3",
+      "type": "unit",
+      "expected": "A static/grep-based assertion on stage-execution-worker.js's source confirms exactly one recordGateAttempt() call exists at the new site -- fails loudly if a future edit removes or duplicates it.",
+      "scenario": "Call-count regression guard at the new call site (mirrors orchestrator-gate-result-persist.test.js:107's existing pattern)"
+    },
+    {
+      "id": "TS-4",
+      "type": "smoke",
+      "expected": "Matches this SD's top-level smoke_test_steps -- verified against production after deploy, not fixture-only.",
+      "scenario": "Live smoke test: the NEXT real chairman-approved AltifyAI stage transition after this SD ships produces a matching eva_stage_gate_attempts row"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "The new recordGateAttempt() call uses gateType='stage_gate' (not the invalid 'chairman_gate') and is wrapped in a non-fatal try/catch",
+      "type": "unit",
+      "expected": "A mocked recordGateAttempt() throwing an error does not propagate out of _advanceStage() or block the real stage UPDATE; the call args include gateType:'stage_gate'."
+    }
+  ],
+  "acceptance_criteria": [
+    "eva_stage_gate_attempts gains a real, mechanically-tested write path for chairman-adjudicated advances that fires exactly once per genuine transition.",
+    "No new RPC, no schema migration, no re-implementation of open_eva_gate_attempt/finalize_eva_gate_attempt.",
+    "The retry-amplification failure mode already observed in production (ApexNiche AI, 1034 rows) is explicitly regression-tested against, not merely avoided by inspection."
+  ],
+  "risks": [
+    {
+      "risk": "Placing the new call in the wrong location within _advanceStage() (e.g. before all chokepoints resolve, or inside a branch that can re-fire on repeated polls) reproduces the exact runaway-retry pattern already observed in production on a different venture.",
+      "severity": "high",
+      "mitigation": "TR-2 + TS-2 explicitly test the negative case (repeated polling while blocked produces zero rows) as the PRIMARY regression test, not an afterthought."
+    },
+    {
+      "risk": "FR-1/FR-2 from the SD's original (coordinator-authored) scope -- launch_mode/launched_at reconciliation and retroactive guardrail seeding -- remain genuinely unaddressed; a future reader might assume this PRD's FR-1/FR-2/FR-3 numbering means the original SD's FR-1/FR-2 were delivered when they were explicitly descoped at LEAD.",
+      "severity": "low",
+      "mitigation": "This PRD's executive_summary and the SD's own metadata.plan_content addendum + metadata.mechanism_verifications explicitly document the descope and its reasons; a future SD re-attempting AltifyAI's launch_mode/guardrail honesty should read those first."
+    },
+    {
+      "risk": "TESTING's live-recheck found the migration comment '@approved-by: PENDING' and a code comment claiming recordGateAttempt() always fails with PGRST202 are themselves STALE -- a live RPC probe confirmed the function is callable (FK violation, not PGRST202) and the table holds 1182 live rows. A future reader trusting those comments without re-verifying would incorrectly believe this SD's dependency is unmet.",
+      "mitigation": "This PRD records the live-verified contradiction; EXEC should also correct or remove the stale comments while touching this code, as a small drive-by fix.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Any future dashboard/audit query over eva_stage_gate_attempts that expects chairman-adjudicated advances to be represented alongside machine-evaluated ones.",
+      "The venture-lifecycle stage-advancement daemon walk (lib/eva/stage-execution-worker.js) itself -- the new call is additive instrumentation inside its existing advance path, not a new consumer-facing surface."
+    ],
+    "dependencies": [
+      "eva_stage_gate_attempts table + open_eva_gate_attempt/finalize_eva_gate_attempt RPCs (SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001, PR #7440) -- already live, no dependency work needed.",
+      "recordGateAttempt() wrapper (lib/eva/artifact-persistence-service.js) -- already live and tested, reused verbatim."
+    ],
+    "data_contracts": [
+      "eva_stage_gate_attempts.resolved_outcome='chairman_adjudicated' -- an existing, already-reserved CHECK-constraint value, not a new one."
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Post-deploy smoke test (TS-4 / this SD's top-level smoke_test_steps): confirm the next real chairman-approved AltifyAI stage transition produces a matching attempt row.",
+      "Monitor eva_stage_gate_attempts row-growth rate for the daemon-walked venture population after rollout, given the explicit runaway-retry risk this SD is designed to avoid (not just for AltifyAI, but for every venture that flows through the now-instrumented _advanceStage() path)."
+    ]
+  },
+  "system_architecture": {
+    "summary": "One new, tightly-gated call to an existing, generic, already-tested wrapper function -- no new components.",
+    "components": [
+      {
+        "name": "lib/eva/stage-execution-worker.js::_advanceStage()",
+        "change": "Add a single recordGateAttempt() call after the raw UPDATE and all existing chokepoints succeed, resolvedOutcome='chairman_adjudicated'."
+      },
+      {
+        "name": "lib/eva/artifact-persistence-service.js::recordGateAttempt()",
+        "change": "REUSED UNMODIFIED -- no change to this file."
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Add one gated call site inside the daemon-walk's existing stage-advance function, reusing already-tested infrastructure.",
+    "steps": [
+      "Locate the exact post-UPDATE, post-chokepoint success point inside _advanceStage() (line ~2825 onward) where the transition is confirmed complete.",
+      "Add the recordGateAttempt() call there with resolvedOutcome='chairman_adjudicated', passed=null, stageNumber=<from-stage>, ventureId, evaluatedBy='chairman', reasoning referencing the chairman_decisions row.",
+      "Write TS-1 (positive) and TS-2 (negative/regression) unit tests against the real _advanceStage() function, mocking supabase.rpc per the artifact-persistence-service-gate-attempt.test.js pattern.",
+      "Add TS-3's call-count regression guard mirroring orchestrator-gate-result-persist.test.js.",
+      "Verify against origin/main's actual gate_type/stage_number convention (TR-3) before finalizing the exact call parameters."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Query eva_stage_gate_attempts for AltifyAI's venture_id before this SD ships.",
+      "expected_outcome": "0 rows -- matches the measured LEAD-phase finding."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Trigger a real chairman stage-gate decision for AltifyAI (or a fixture venture through the same wired _advanceStage() path) after this SD ships.",
+      "expected_outcome": "A matching eva_stage_gate_attempts row is written with resolved_outcome='chairman_adjudicated' via the real open_eva_gate_attempt/finalize_eva_gate_attempt RPCs."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Query eva_stage_gate_attempts for a venture that was polled but NOT actually advanced (still blocked at a chokepoint).",
+      "expected_outcome": "No spurious row is written -- the wiring only fires on a genuine, completed stage advance, never on a poll/approval-detection tick alone."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001"
+  }
+}

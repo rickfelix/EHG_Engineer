@@ -265,7 +265,7 @@ describe('_handleChairmanGate autonomy-bypass for high-consequence gates (FR-3 c
     const worker = makeWorker(makeSupabase());
     const result = await worker._handleChairmanGate('v-hc', 18);
 
-    expect(result).toEqual({ blocked: false, killed: false, approved: true });
+    expect(result).toEqual({ blocked: false, killed: false, approved: true, source: 'autonomy_auto_approve' });
     expect(createOrReusePendingDecision).not.toHaveBeenCalled();
   });
 
