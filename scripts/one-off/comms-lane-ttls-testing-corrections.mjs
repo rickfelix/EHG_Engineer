@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_KEY = 'SD-LEO-INFRA-COMMS-LANE-TTLS-001';
 const PRD_ID = 'PRD-SD-LEO-INFRA-COMMS-LANE-TTLS-001';
@@ -192,4 +193,4 @@ async function main() {
   console.log('SD key_changes corrected to match.');
 }
 
-main();
+if (isMainModule(import.meta.url)) main();

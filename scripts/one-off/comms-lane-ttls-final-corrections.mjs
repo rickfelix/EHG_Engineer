@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const PRD_ID = 'PRD-SD-LEO-INFRA-COMMS-LANE-TTLS-001';
 const SD_KEY = 'SD-LEO-INFRA-COMMS-LANE-TTLS-001';
@@ -74,4 +75,4 @@ async function main() {
   console.log('PRD FR-1/FR-2/FR-4 corrected per STORIES correction-pass findings.');
 }
 
-main();
+if (isMainModule(import.meta.url)) main();
