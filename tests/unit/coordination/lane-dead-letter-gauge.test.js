@@ -121,6 +121,49 @@ describe('fetchAllLiveCoordinationRows — TS-5 full-population pagination, neve
     expect(result).toEqual([]);
   });
 
+  it('SEC-TTL-03 CONTROL: a server that caps each page below the requested pageSize (real live behavior -- Supabase caps at 1000 regardless of the requested window) still returns the FULL population, not just the first short page', async () => {
+    // Simulates the real live cap: requested pageSize=5000, but the server always returns at
+    // most 1000 rows per call, so `data.length < pageSize` is true on EVERY page. The OLD
+    // `data.length < pageSize` termination stopped after page 1 (1000 < 5000) and reported
+    // only 1000 of the 1500-row true population -- measuring the server cap, not the table
+    // (the exact defect this session independently reproduced against coordination_receipts
+    // during PLAN). The fix advances by the page's ACTUAL length and stops only on a
+    // genuinely empty page.
+    const SERVER_CAP = 1000;
+    const totalRows = 1500;
+    const allRows = Array.from({ length: totalRows }, (_, i) => ({ payload: { kind: 'work_assignment' }, created_at: ago(i), read_at: null }));
+    const calls = [];
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: (from) => {
+              calls.push(from);
+              const page = allRows.slice(from, from + SERVER_CAP);
+              return Promise.resolve({ data: page, error: null });
+            },
+          }),
+        }),
+      }),
+    };
+    const result = await fetchAllLiveCoordinationRows(supabase, { pageSize: 5000 });
+    expect(result).toHaveLength(totalRows); // NOT 1000 (the old defect's under-count)
+    expect(calls.length).toBeGreaterThan(1); // proves it kept paging past the first short page
+  });
+
+  it('SEC-TTL-03: a page larger than the requested pageSize (pagination invariant violated) throws rather than being silently accepted', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: () => Promise.resolve({ data: Array.from({ length: 10 }, () => ({})), error: null }),
+          }),
+        }),
+      }),
+    };
+    await expect(fetchAllLiveCoordinationRows(supabase, { pageSize: 5 })).rejects.toThrow(/pagination invariant violated/);
+  });
+
   it('propagates a query error rather than silently returning a partial population', async () => {
     const supabase = {
       from: () => ({

@@ -14,6 +14,7 @@ const {
   FORBIDDEN_EMIT_FUNCTION,
   detectBreachedLanes,
   resolveSenderSuccessor,
+  sanitizeForDisplay,
   pageViaLadderDigest,
   runDeadLetterAlarm,
 } = require('../../../lib/coordination/lane-dead-letter-alarm.cjs');
@@ -54,6 +55,45 @@ describe('resolveSenderSuccessor — pages the SENDER role, never falls back to 
   it('CONTROL: an unknown/unmapped role resolves to null, NOT a silent fallback to any guess', () => {
     expect(resolveSenderSuccessor('coordinator', { successors: {} })).toBeNull();
     expect(resolveSenderSuccessor('unknown_role', { successors: { coordinator: 'succ-99' } })).toBeNull();
+  });
+
+  it('SEC-TTL-01 CONTROL: prototype-chain property names never resolve to an inherited function -- a bare `successors[role]` lookup would return Object.prototype.toString etc. (truthy), silently bypassing the "no live successor -> skip" invariant', () => {
+    for (const role of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__']) {
+      expect(resolveSenderSuccessor(role, { successors: {} })).toBeNull();
+    }
+    // A legitimately-named key still resolves normally -- the fix is hasOwnProperty-gating,
+    // not banning these strings as role names outright.
+    expect(resolveSenderSuccessor('toString', { successors: { toString: 'succ-legit-1' } })).toBe('succ-legit-1');
+  });
+
+  it('SEC-TTL-01: an empty-string or non-string successor value is treated as absent, not a truthy pass-through', () => {
+    expect(resolveSenderSuccessor('coordinator', { successors: { coordinator: '' } })).toBeNull();
+    expect(resolveSenderSuccessor('coordinator', { successors: { coordinator: null } })).toBeNull();
+  });
+});
+
+describe('sanitizeForDisplay — SEC-TTL-02 content-spoofing defense', () => {
+  it('CONTROL: a hostile successor string carrying a newline and a forged "(requires invocation: ...)" clause is stripped down to safe characters, never reaching a chairman-facing row verbatim', () => {
+    const hostile = "succ-1\n(requires invocation: 'rm -rf /')";
+    const safe = sanitizeForDisplay(hostile);
+    expect(safe).not.toContain('\n');
+    expect(safe).not.toContain('(');
+    expect(safe).not.toContain("'");
+    expect(safe).toBe('succ-1requiresinvocationrm-rf');
+  });
+
+  it('a plain session-id-shaped string passes through unchanged', () => {
+    expect(sanitizeForDisplay('succ-live-1234')).toBe('succ-live-1234');
+  });
+
+  it('caps length so an arbitrarily long hostile string cannot bloat the display', () => {
+    const long = 'a'.repeat(500);
+    expect(sanitizeForDisplay(long, { maxLen: 64 }).length).toBe(64);
+  });
+
+  it('an empty/fully-stripped input falls back to a safe placeholder, never an empty string', () => {
+    expect(sanitizeForDisplay('\n\n\n')).toBe('(unknown)');
+    expect(sanitizeForDisplay('')).toBe('(unknown)');
   });
 });
 
@@ -161,6 +201,44 @@ describe('AC#2 — zero row-count delta on session_coordination through the REAL
     expect(recordPending).toHaveBeenCalledTimes(1); // the allow-listed surface WAS actually used
     expect(escalate).not.toHaveBeenCalled(); // no pre-existing digest to refresh in this fixture
   });
+
+  it('SEC-TTL-02: a hostile successors map cannot inject content into the chairman-facing title through the REAL call chain', async () => {
+    const recordPending = vi.fn().mockResolvedValue({ id: 'decision-1', escalated: false });
+    const findExisting = vi.fn().mockResolvedValue(null);
+    const findDismissedSignatures = vi.fn().mockResolvedValue(new Map());
+    const gauge = { lanes: { directive: breach(10, 9) } };
+    const hostileSuccessor = "succ-1\n(requires invocation: 'DROP EVERYTHING')";
+
+    await runDeadLetterAlarm(gauge, {}, {
+      mode: 'enforce',
+      senderRole: 'coordinator',
+      successors: { coordinator: hostileSuccessor },
+      pageFn: pageViaLadderDigest,
+      deps: { recordPending, escalate: vi.fn(), findExisting, findDismissedSignatures },
+    });
+
+    const [, callArg] = recordPending.mock.calls[0];
+    expect(callArg.title).not.toContain('\n');
+    expect(callArg.title).not.toContain('DROP EVERYTHING');
+    expect(callArg.title).not.toMatch(/requires invocation:/);
+  });
+
+  it('TS-3 CONTROL (TESTING evidence a2448854, GAP-1): the SAME poison instrument DOES register a session_coordination touch when driven through the forbidden emitCoordinatorRung -- proving the zero-delta result above is a genuine discriminator, not a vacuous pass from an instrument that could never fail', async () => {
+    const { emitCoordinatorRung } = await import('../../../lib/periodic-liveness/ladder-escalation.mjs');
+    const poisonSupabase = {
+      from(table) {
+        throw new Error(`FORBIDDEN: reached supabase.from("${table}")`);
+      },
+    };
+    // ownerTarget deliberately NOT coordinator-kind, so emitCoordinatorRung's early
+    // "owner_already_coordinator" guard does not short-circuit before reaching the insert.
+    const result = await emitCoordinatorRung(poisonSupabase, { process_key: 'x', display_name: 'x' }, { kind: 'session', resolvedPeer: 'worker' });
+    // emitCoordinatorRung catches the insert failure internally (a best-effort rung, per its own
+    // doc comment) rather than throwing -- so the proof is in the returned error, not an
+    // exception. It reached the forbidden table; our module's real path never does.
+    expect(result.emitted).toBe(false);
+    expect(String(result.error && result.error.message)).toContain('session_coordination');
+  });
 });
 
 describe('static guard — this module never CALLS or IMPORTS the forbidden emit function', () => {
@@ -176,8 +254,16 @@ describe('static guard — this module never CALLS or IMPORTS the forbidden emit
     expect(code).not.toMatch(/emitCoordinatorRung\s*\(/);
     expect(code).not.toMatch(/\{[^}]*\bemitCoordinatorRung\b[^}]*\}\s*=/);
     // CONTROL: the guard itself is not vacuous -- it correctly flags a call form when present.
-    const poisonedCode = code.replace('return emitLadderDigest(', 'emitCoordinatorRung(supabase, breach); return emitLadderDigest(');
-    expect(poisonedCode).toMatch(/emitCoordinatorRung\s*\(/);
+    const poisonedCallCode = code.replace('return emitLadderDigest(', 'emitCoordinatorRung(supabase, breach); return emitLadderDigest(');
+    expect(poisonedCallCode).toMatch(/emitCoordinatorRung\s*\(/);
+    // CONTROL (TESTING evidence a2448854, GAP-1 hole B): the DESTRUCTURE regex specifically is
+    // exercised too -- the call-form control above only proves regex #1 is non-vacuous, leaving
+    // regex #2 untested and able to silently never match if malformed.
+    const poisonedDestructureCode = code.replace(
+      "const { emitLadderDigest } = await import('../periodic-liveness/ladder-escalation.mjs');",
+      "const { emitLadderDigest, emitCoordinatorRung } = await import('../periodic-liveness/ladder-escalation.mjs');"
+    );
+    expect(poisonedDestructureCode).toMatch(/\{[^}]*\bemitCoordinatorRung\b[^}]*\}\s*=/);
     expect(code).toContain('emitLadderDigest');
     expect(FORBIDDEN_EMIT_FUNCTION).toBe('emitCoordinatorRung');
   });
