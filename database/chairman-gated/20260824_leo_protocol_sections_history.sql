@@ -244,6 +244,12 @@ COMMENT ON FUNCTION public.log_leo_protocol_sections_history() IS
   'trusting caller input; Phase-B blocking enforcement is a separate, later chairman decision '
   '(FR-3), not implemented here.';
 
+-- CI's secdef-execute-revoke-lint requires an explicit REVOKE for every SECURITY DEFINER
+-- function -- PUBLIC's default EXECUTE grant on a new function is otherwise inherited silently
+-- by anon/authenticated. This function is invoked ONLY as a trigger (Postgres does not check the
+-- EXECUTE permission for trigger firing), so no role needs a direct-call grant back.
+REVOKE EXECUTE ON FUNCTION public.log_leo_protocol_sections_history() FROM PUBLIC, anon, authenticated;
+
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- THREE TRIGGER DEFINITIONS, ONE FUNCTION. See header for why a two-trigger split is rejected by
 -- Postgres (42P17).
@@ -289,6 +295,7 @@ BEGIN
   RAISE EXCEPTION 'leo_protocol_sections_history is append-only: row % cannot be updated.', OLD.id;
 END
 $nu$;
+REVOKE EXECUTE ON FUNCTION public.leo_protocol_sections_history_no_update() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS leo_protocol_sections_history_no_update_trg ON public.leo_protocol_sections_history;
 CREATE TRIGGER leo_protocol_sections_history_no_update_trg
@@ -301,6 +308,7 @@ BEGIN
   RAISE EXCEPTION 'leo_protocol_sections_history is append-only: row % cannot be deleted.', OLD.id;
 END
 $nd$;
+REVOKE EXECUTE ON FUNCTION public.leo_protocol_sections_history_no_delete() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS leo_protocol_sections_history_no_delete_trg ON public.leo_protocol_sections_history;
 CREATE TRIGGER leo_protocol_sections_history_no_delete_trg
@@ -313,6 +321,7 @@ BEGIN
   RAISE EXCEPTION 'leo_protocol_sections_history is append-only: TRUNCATE is not permitted.';
 END
 $nt$;
+REVOKE EXECUTE ON FUNCTION public.leo_protocol_sections_history_no_truncate() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS leo_protocol_sections_history_no_truncate_trg ON public.leo_protocol_sections_history;
 CREATE TRIGGER leo_protocol_sections_history_no_truncate_trg

@@ -14,6 +14,7 @@
  */
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { storeRetrospective } from '../../lib/sub-agents/retro/db-operations.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_UUID = 'fd4c283d-51ed-45f5-bdb7-aa4eeff9905f';
 const SD_KEY = 'SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001';
@@ -402,4 +403,4 @@ async function main() {
   console.log('Verify row:', JSON.stringify(verify, null, 2));
 }
 
-main();
+if (isMainModule(import.meta.url)) main();
