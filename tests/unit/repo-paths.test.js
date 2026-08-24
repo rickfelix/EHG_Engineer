@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'path';
-import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, getRepoRoot, isInsideWorktree, ENGINEER_ROOT } from '../../lib/repo-paths.js';
+import { existsSync } from 'fs';
+import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, getRepoRoot, isInsideWorktree, stripWorktreeSuffix, ENGINEER_ROOT } from '../../lib/repo-paths.js';
 
 describe('lib/repo-paths', () => {
   beforeEach(() => {
@@ -139,14 +140,30 @@ describe('lib/repo-paths', () => {
   });
 
   // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5)
+  //
+  // CORRECTED by SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (RCA finding, 2026-08-24): the original
+  // assertions here pinned getRepoRoot() === ENGINEER_ROOT unconditionally, which is only true
+  // when the test process itself is NOT running from inside a .worktrees/<SD>/ checkout. Nearly
+  // all real EXEC-phase work runs from exactly such a worktree, so these assertions were false
+  // most of the time this suite actually ran -- the file was quarantined as "assertion-drift" on
+  // 2026-06-11 rather than recognized as a genuine defect (a real, worktree-resolution bug in
+  // resolveLocalPath() went undetected as a direct result -- see lib/repo-paths.js's own doc
+  // comment on resolveLocalPath for the full incident). The correct, environment-INDEPENDENT
+  // invariant is that getRepoRoot() always equals stripWorktreeSuffix(ENGINEER_ROOT) -- true from
+  // main (a no-op) AND from any worktree (strips the suffix) -- and never itself contains a
+  // '/.worktrees/' segment.
   describe('getRepoRoot()', () => {
-    it('returns ENGINEER_ROOT', () => {
-      expect(getRepoRoot()).toBe(ENGINEER_ROOT);
+    it('equals stripWorktreeSuffix(ENGINEER_ROOT) -- true from main AND from a worktree', () => {
+      expect(getRepoRoot()).toBe(stripWorktreeSuffix(ENGINEER_ROOT));
+    });
+
+    it('never itself contains a /.worktrees/ segment, regardless of where the test runs', () => {
+      expect(getRepoRoot().replace(/\\/g, '/')).not.toContain('/.worktrees/');
     });
 
     it('is invariant regardless of options', () => {
-      expect(getRepoRoot({})).toBe(ENGINEER_ROOT);
-      expect(getRepoRoot({ cwd: '/totally/elsewhere' })).toBe(ENGINEER_ROOT);
+      expect(getRepoRoot({})).toBe(getRepoRoot());
+      expect(getRepoRoot({ cwd: '/totally/elsewhere' })).toBe(getRepoRoot());
     });
 
     it('returns an absolute path', () => {
@@ -156,7 +173,81 @@ describe('lib/repo-paths', () => {
     it('is exported from the default module export', async () => {
       const mod = await import('../../lib/repo-paths.js');
       expect(typeof mod.default.getRepoRoot).toBe('function');
-      expect(mod.default.getRepoRoot()).toBe(ENGINEER_ROOT);
+      expect(mod.default.getRepoRoot()).toBe(getRepoRoot());
+    });
+  });
+
+  // SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (RCA preventive control P2): pure-function coverage for
+  // resolveLocalPath's `base` parameter, proving the wrong-base and right-base arithmetic
+  // directly rather than only through the module's own default expression (which a test using
+  // only the default can never observe changing).
+  describe('resolveLocalPath() base parameter', () => {
+    it('an already-absolute value is returned unchanged regardless of base', async () => {
+      const { resolveLocalPath } = await import('../../lib/repo-paths.js');
+      // Platform-correct absolute literal: 'C:/abs/path' is only absolute on win32 --
+      // path.isAbsolute('C:/abs/path') is false on POSIX (no leading '/'), so a Windows-shaped
+      // literal silently exercises the WRONG branch on a Linux CI runner (CI-only failure caught
+      // 2026-08-24: both sides of the assertion differed from intent, for different reasons, on
+      // Linux vs Windows).
+      const absoluteInput = process.platform === 'win32' ? 'C:\\abs\\path' : '/abs/path';
+      expect(resolveLocalPath(absoluteInput, '/some/base')).toBe(path.resolve(absoluteInput));
+    });
+
+    it('a relative value resolves against the explicit base parameter, not ENGINEER_ROOT', async () => {
+      const { resolveLocalPath } = await import('../../lib/repo-paths.js');
+      const worktreeShaped = path.resolve(ENGINEER_ROOT, '.worktrees', 'FAKE-SD-FOR-TEST');
+      const mainShaped = path.resolve(ENGINEER_ROOT, '..', 'main-shaped-root');
+      // Same relative input, two different explicit bases -- proves resolution genuinely
+      // depends on the passed base, not a closed-over module constant.
+      expect(resolveLocalPath('../ehg', worktreeShaped)).toBe(path.resolve(worktreeShaped, '../ehg'));
+      expect(resolveLocalPath('../ehg', mainShaped)).toBe(path.resolve(mainShaped, '../ehg'));
+      expect(resolveLocalPath('../ehg', worktreeShaped)).not.toBe(resolveLocalPath('../ehg', mainShaped));
+    });
+
+    it('demonstrates the wrong-base vs right-base arithmetic that caused the regression', () => {
+      // Simulates the exact bug class without needing a real worktree directory: resolving a
+      // relative registry value against a worktree-shaped path (wrong) vs. its
+      // stripWorktreeSuffix()'d equivalent (right) must differ, proving the base choice is
+      // load-bearing, not cosmetic.
+      const worktreeShaped = path.resolve(ENGINEER_ROOT, '.worktrees', 'FAKE-SD-FOR-TEST');
+      const wrongBase = path.resolve(worktreeShaped, '../ehg');
+      const rightBase = path.resolve(stripWorktreeSuffix(worktreeShaped), '../ehg');
+      expect(wrongBase).not.toBe(rightBase);
+      expect(rightBase.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+    });
+
+    // TESTING sub-agent finding (mutation testing, 2026-08-24): every test above passes an
+    // EXPLICIT base parameter, so none of them ever evaluate the default expression
+    // `base = getRepoRoot()` -- reverting the default back to ENGINEER_ROOT (the original bug)
+    // survived all of them. This test calls resolveLocalPath with NO base argument at all, so it
+    // is the one assertion that actually exercises the default and would fail if it regressed.
+    it('LOAD-BEARING: with NO base argument, the default (getRepoRoot(), not ENGINEER_ROOT) is used', async () => {
+      const { resolveLocalPath } = await import('../../lib/repo-paths.js');
+      const resolved = resolveLocalPath('../ehg'); // no second argument -- exercises the default
+      expect(resolved).toBe(path.resolve(getRepoRoot(), '..', 'ehg'));
+      expect(resolved.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+    });
+
+    // Same load-bearing requirement, exercised through the real public API rather than the
+    // internal helper: resolveRepoPath('ehg') is what every consumer actually calls, and its
+    // result must both avoid /.worktrees/ AND point at a directory that genuinely exists --
+    // stronger than a string-shape assertion alone.
+    it('LOAD-BEARING: resolveRepoPath(\'ehg\') from THIS actual runtime location resolves to a real, existing directory', async () => {
+      const { resolveRepoPath } = await import('../../lib/repo-paths.js');
+      const resolved = resolveRepoPath('ehg');
+      expect(resolved).toBeTruthy();
+      // The /.worktrees/ shape check is what actually catches the regression class (a buggy
+      // default base produces a string containing /.worktrees/ regardless of environment) and
+      // runs everywhere. The existsSync check below is strictly stronger but environment-
+      // dependent: CI checks out only this repo, with no sibling `ehg` directory, so it cannot be
+      // asserted unconditionally without making every CI run fail on a fact about the checkout,
+      // not the resolver (CI failure caught 2026-08-24). It still runs, and still catches a
+      // regression, wherever the sibling repo is actually present (every local dev machine).
+      expect(resolved.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+      const siblingCheckedOut = existsSync(path.resolve(getRepoRoot(), '..', 'ehg'));
+      if (siblingCheckedOut) {
+        expect(existsSync(resolved)).toBe(true);
+      }
     });
   });
 

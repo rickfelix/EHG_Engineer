@@ -130,6 +130,8 @@
     "lint:gate-stage-hardcoded-literal": "node scripts/lint/gate-stage-hardcoded-literal-lint.mjs",
     "lint:progress-column": "node scripts/lint/progress-column-lint.mjs",
     "lint:repo-resolution-drift": "node scripts/lint-repo-resolution-drift.mjs",
+    "lint:no-literal-home-path": "node scripts/lint/no-literal-home-path-lint.mjs",
+    "lint:root-dirt": "node scripts/lint/root-dirt-lint.mjs",
     "flags:review": "node scripts/flag-governance-review.mjs",
     "flags:stale": "node scripts/flags-stale.mjs",
     "flags:enroll": "node scripts/enroll-env-var-feature-flags.mjs",

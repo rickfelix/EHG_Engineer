@@ -14,7 +14,7 @@
       "environment": "development",
       "registered_at": "2025-08-30T15:20:08.903Z",
       "note": "CONSOLIDATED: Now uses same DB as EHG_Engineer (SD-ARCH-EHG-006)",
-      "local_path": "C:/Users/rickf/Projects/_EHG/ehg"
+      "local_path": "../ehg"
     },
     "APP002": {
       "id": "APP002",
@@ -28,7 +28,7 @@
       "environment": "development",
       "registered_at": "2025-08-30T16:06:36.693Z",
       "registered_by": "ENV_REGISTRATION",
-      "local_path": "C:/Users/rickf/Projects/_EHG/test-leo-project"
+      "local_path": "../test-leo-project"
     },
     "APP003": {
       "id": "APP003",
@@ -64,7 +64,7 @@
       "environment": "development",
       "registered_at": "2026-03-29T00:17:06.529Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/commitcraft-ai",
+      "local_path": "../commitcraft-ai",
       "note": "CONSOLIDATED: Uses same DB as EHG_Engineer until production"
     },
     "APP006": {
@@ -77,7 +77,7 @@
       "environment": "development",
       "registered_at": "2026-07-02T22:00:00.000Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/marketlens",
+      "local_path": "../marketlens",
       "note": "MarketLens venture — canary pilot SD-MARKETLENS-LEO-ORCH-SPRINT-2026-001-A1",
       "venture_id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00"
     },
@@ -91,7 +91,7 @@
       "environment": "development",
       "registered_at": "2026-07-26T01:11:11.343Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784317172624"
+      "local_path": "../e2e-verdict-engine-1784317172624"
     },
     "APP008": {
       "id": "APP008",
@@ -103,7 +103,7 @@
       "environment": "development",
       "registered_at": "2026-07-26T01:11:19.957Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784582706454"
+      "local_path": "../e2e-verdict-engine-1784582706454"
     },
     "APP009": {
       "id": "APP009",
@@ -115,7 +115,7 @@
       "environment": "development",
       "registered_at": "2026-07-26T01:12:09.173Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784321045564"
+      "local_path": "../e2e-verdict-engine-1784321045564"
     },
     "APP010": {
       "id": "APP010",
@@ -127,7 +127,7 @@
       "environment": "development",
       "registered_at": "2026-07-26T01:12:17.218Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/e2e-verdict-engine-1784286487799"
+      "local_path": "../e2e-verdict-engine-1784286487799"
     },
     "APP011": {
       "id": "APP011",
@@ -139,7 +139,7 @@
       "environment": "development",
       "registered_at": "2026-08-11T16:55:12.457Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/altifyai"
+      "local_path": "../altifyai"
     },
     "APP012": {
       "id": "APP012",
@@ -151,7 +151,7 @@
       "environment": "development",
       "registered_at": "2026-08-16T22:27:15.238Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/full-lifecycle-journey-venture-1786919223461"
+      "local_path": "../full-lifecycle-journey-venture-1786919223461"
     },
     "APP013": {
       "id": "APP013",
@@ -163,7 +163,7 @@
       "environment": "development",
       "registered_at": "2026-08-23T13:23:56.242Z",
       "registered_by": "venture-provisioner",
-      "local_path": "C:/Users/rickf/Projects/_EHG/apexniche-ai",
+      "local_path": "../apexniche-ai",
       "note": "QF-20260823-203 -- past S19, live, had NO registry entry (chairman-commissioned architecture eval, S5 finding 2, 2026-08-23); its feedback widget was stranded by the 08-15/16 anon-policy cutover that dropped venture_user_insert_feedback",
       "venture_id": "809ec7e7-f688-4a0c-b9f8-c8a8291cf94d"
     }
