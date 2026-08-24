@@ -23,6 +23,17 @@ import {
 const PROCESS_KEY = 'standard_loop:drain-inventory';
 const UNDRAINED_STATUSES = ['new', 'triaged']; // canonical, per feedback-sla-gauge.cjs:20
 
+// SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 (FR-1/FR-2 follow-up, TESTING evidence 2467dbf1):
+// an explicit TERMINAL allow-list for the same-table drain, NOT the complement of
+// UNDRAINED_STATUSES. `status NOT IN (new, triaged)` silently counted `backlog` (deliberately
+// non-terminal -- "on the shelf", per lib/coordination/unified-inbox-builder.js's own status
+// mapping) and `in_progress` as closed, overstating completion_flag's live drain rate by ~19.6
+// points (66.1% true vs 85.7% reported). Live-measured statuses for these 2 categories: harness_
+// backlog {backlog, in_progress, invalid, new, resolved, triaged, wont_fix}; completion_flag
+// {backlog, invalid, new, resolved, wont_fix} -- only resolved/wont_fix/invalid are genuinely
+// terminal in either category.
+const TERMINAL_STATUSES = ['resolved', 'wont_fix', 'invalid'];
+
 // SEC-DRAIN-002: keep PAGE at ~1e3. paginateAll spreads a page into an accumulator, and a
 // six-figure page size would turn a tuning change into a RangeError rather than a slow query.
 const PAGE = 1000;
@@ -78,17 +89,19 @@ async function readDescriptor(supabase, descriptor, nowMs) {
 
     // SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 (FR-1): a same-table drain -- the channel closes
     // via a STATUS transition on the same feedback row, not a separate disposition table. Counts
-    // rows with a terminal status (NOT IN UNDRAINED_STATUSES) OR matching an optional
-    // closingPathExtraFilter (a JSONB metadata flag that closes the item WITHOUT changing status,
-    // e.g. feedback-fingerprint-promoter.mjs's promoted_to_qf). Deliberately does NOT widen
-    // CLOSING_PATH_TABLES -- this reads the SAME already-queried table/category, not a new relation.
+    // rows with a genuinely TERMINAL status (TERMINAL_STATUSES, an explicit allow-list -- NOT the
+    // complement of UNDRAINED_STATUSES, which would silently count non-terminal statuses like
+    // `backlog`/`in_progress` as closed) OR matching an optional closingPathExtraFilter (a JSONB
+    // metadata flag that closes the item WITHOUT changing status, e.g. feedback-fingerprint-
+    // promoter.mjs's promoted_to_qf). Deliberately does NOT widen CLOSING_PATH_TABLES -- this reads
+    // the SAME already-queried table/category, not a new relation.
     if (descriptor.closingPathSameTable) {
       let q = supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('category', src.category);
       const extra = descriptor.closingPathExtraFilter;
       if (extra?.jsonPath && extra?.op) {
-        q = q.or(`status.not.in.(${UNDRAINED_STATUSES.join(',')}),metadata->>${extra.jsonPath}.${extra.op}`);
+        q = q.or(`status.in.(${TERMINAL_STATUSES.join(',')}),metadata->>${extra.jsonPath}.${extra.op}`);
       } else {
-        q = q.not('status', 'in', `(${UNDRAINED_STATUSES.join(',')})`);
+        q = q.in('status', TERMINAL_STATUSES);
       }
       const { count, error } = await q;
       if (error) return { noData: true, reason: `same-table closing-path probe failed: ${error.message}` };

@@ -25,27 +25,38 @@
  *      completion_flag_witness marker string in the diff.
  *
  * Diffs against origin/main (not the local working tree) so an unrelated pre-existing local
- * modification never produces a false pass or false fail for this lint.
+ * modification never produces a false pass or false fail for this lint. Uses the repo's ONE
+ * hardened git runner (lib/git/hardened-runner.cjs, SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-A) --
+ * argv-array spawn, no shell, base-ref shape validated before any process spawn (SECURITY review
+ * evidence 40c35949: a hand-rolled execSync string-interpolation call here would have reproduced
+ * the exact shell-injection sink class 5 prior SDs/QFs already closed elsewhere in this repo).
  *
  * Usage: node scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs [--base <ref>]
  * Exit: 1 if any ceremony surface is touched, 0 otherwise.
  */
-import { execSync } from 'node:child_process';
+import { makeHardenedGitRunner, VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
 import { evaluateCeremonyScopeLock, WITNESS_CONTENT_FILE } from '../../lib/governance/ceremony-scope-lock.js';
+
+const runGit = makeHardenedGitRunner(process.cwd(), { timeout: 30000, maxBuffer: 32 * 1024 * 1024 });
 
 const args = process.argv.slice(2);
 const baseIdx = args.indexOf('--base');
 const base = baseIdx >= 0 ? args[baseIdx + 1] : (process.env.CEREMONY_LINT_BASE || 'origin/main');
 
+if (!VALID_BASE_REF.test(base)) {
+  console.error(`⚠️  ceremony-scope-lock-lint: refusing base ref with option-like or unsafe shape: ${JSON.stringify(base)}`);
+  process.exit(1);
+}
+
 function changedFiles(base) {
-  const out = execSync(`git diff --name-only --diff-filter=ACMRD ${base}...HEAD`, { encoding: 'utf8', timeout: 30000 });
+  const out = runGit(['diff', '--name-only', '--diff-filter=ACMRD', `${base}...HEAD`]);
   return out.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
 function witnessDiffText(base, files) {
   if (!files.includes(WITNESS_CONTENT_FILE)) return null;
   try {
-    return execSync(`git diff -U0 ${base}...HEAD -- ${WITNESS_CONTENT_FILE}`, { encoding: 'utf8', timeout: 30000 });
+    return runGit(['diff', '-U0', `${base}...HEAD`, '--', WITNESS_CONTENT_FILE]);
   } catch {
     return null;
   }
