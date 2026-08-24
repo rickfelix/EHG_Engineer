@@ -43,6 +43,34 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 FR-1/FR-2 (TS-3): c
   });
 });
 
+describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (VALIDATION c39db537 correction): the 3 non-_handleChairmanGate() advance paths that re-confirm an already-approved decision', () => {
+  it("THE VALIDATION REGRESSION TEST: pre_exec_skip_trigger, pre_exec_skip, and re_entry call sites all pass chairmanGateSource:'chairman_decision' explicitly, since they advance off a re-confirmed approvedDecision without ever calling _handleChairmanGate() in that tick", () => {
+    // MUTATION: VALIDATION found these 3 call sites (pre_exec_skip_trigger, pre_exec_skip,
+    // re_entry) each independently re-confirm chairman_decisions.status==='approved' just above,
+    // then previously called _advanceStage() with NO chairmanGateSource signal at all -- meaning
+    // AltifyAI's real approvals reaching this code path would still produce zero
+    // eva_stage_gate_attempts rows post-fix, reproducing the exact defect this SD exists to close.
+    const occurrences = source.split("chairmanGateSource: 'chairman_decision'").length - 1;
+    expect(occurrences).toBe(3);
+  });
+
+  it("_advanceStage()'s gate accepts EITHER result._chairmanGateSource OR the explicit top-level chairmanGateSource flag", () => {
+    expect(source).toContain("result?._chairmanGateSource === 'chairman_decision' || chairmanGateSource === 'chairman_decision'");
+  });
+
+  it('pre_exec_skip_trigger call site is tagged (DB-trigger-already-applied shortcut)', () => {
+    expect(source).toContain("{ advancementType: 'pre_exec_skip_trigger', chairmanGateSource: 'chairman_decision' }");
+  });
+
+  it('pre_exec_skip call site is tagged (approved + artifacts-exist shortcut)', () => {
+    expect(source).toContain("{ advancementType: 'pre_exec_skip', chairmanGateSource: 'chairman_decision' }");
+  });
+
+  it('re_entry call site is tagged (worker re-entry after approval)', () => {
+    expect(source).toContain("advancementType: 're_entry', chairmanGateSource: 'chairman_decision' }");
+  });
+});
+
 describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (TS-5): gateType and non-fatal try/catch', () => {
   it("uses gateType 'stage_gate' (maps to a valid CHECK-constraint value), never the invalid 'chairman_gate'", () => {
     expect(source).toContain("gateType: 'stage_gate'");
