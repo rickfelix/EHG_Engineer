@@ -1,0 +1,26 @@
+--- update_sd_after_plan_validation.before.sql
++++ update_sd_after_plan_validation.after.sql
+  CREATE OR REPLACE FUNCTION public.update_sd_after_plan_validation()
+   RETURNS trigger
+   LANGUAGE plpgsql
+   SET search_path TO 'public', 'extensions'
+  AS $function$
+  BEGIN
+      -- Update SD status based on PLAN validation decision
+      UPDATE strategic_directives_v2
+      SET
+          status = CASE
+              WHEN NEW.final_decision = 'APPROVE' THEN 'validated'
+              WHEN NEW.final_decision = 'REJECT' THEN 'technical_review_required'
+              WHEN NEW.final_decision IN ('CONDITIONAL', 'REDESIGN', 'RESEARCH') THEN 'plan_revision_required'
+              ELSE status -- Keep current status for DEFER
+          END,
++         lifecycle_write_token = 'update_sd_after_plan_validation',
+          updated_at = NOW()
+      WHERE id = NEW.sd_id;
+  
+      RETURN NEW;
+  END;
+  $function$
+  
+  

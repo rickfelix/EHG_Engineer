@@ -10,6 +10,7 @@
 import { execSync } from 'child_process';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
+import { CANONICAL_WRITER_STAMP } from '../lib/canonical-writer-stamp.js';
 import { createTaskHydrator } from '../../../../lib/tasks/index.js';
 import { validateBypassReason, extractBypassedGate } from '../bypass-rubric.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
@@ -82,6 +83,7 @@ async function reconcileSDStateAfterHandoff(handoffType, sdId, supabase) {
       .update({
         status: expected.status,
         current_phase: expected.current_phase,
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString(),
       })
       .eq('id', sd.id);

@@ -1,0 +1,126 @@
+{
+  "measured_at": "2026-08-24T04:21:50.505Z",
+  "f1_missing_column_zero_row_predicate": {
+    "data": null,
+    "error": {
+      "code": "PGRST204",
+      "message": "Could not find the 'lifecycle_write_token' column of 'strategic_directives_v2' in the schema cache",
+      "details": null,
+      "hint": null
+    }
+  },
+  "f1_control_existing_columns_only": {
+    "data": [],
+    "error": null
+  },
+  "f1_pgrst204_is_mistaken_for_sdcw1": false,
+  "f3_policies": [
+    {
+      "policyname": "service_role_all_strategic_directives_v2",
+      "permissive": "PERMISSIVE",
+      "roles": "{service_role}",
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "policyname": "strategic_directives_v2_service_role_access",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "fn_is_service_role()",
+      "with_check": "fn_is_service_role()"
+    },
+    {
+      "policyname": "venture_insert_strategic_directives_v2",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))"
+    },
+    {
+      "policyname": "anon_read_strategic_directives_v2",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "policyname": "authenticated_read_strategic_directives_v2",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "policyname": "venture_select_strategic_directives_v2",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))",
+      "with_check": null
+    },
+    {
+      "policyname": "venture_update_strategic_directives_v2",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))",
+      "with_check": "((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))"
+    }
+  ],
+  "f3_grants": [
+    {
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    }
+  ],
+  "f1_probe_row_created_by_accident": 0
+}

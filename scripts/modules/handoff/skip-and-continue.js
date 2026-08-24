@@ -14,6 +14,7 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { getNextReadyChild, getOrchestratorContext } from './child-sd-selector.js';
+import { CANONICAL_WRITER_STAMP } from './lib/canonical-writer-stamp.js';
 
 // Configuration constants
 const DEFAULT_MAX_RETRIES = 2;
@@ -138,6 +139,7 @@ export async function markAsBlocked(supabase, sdId, blockingInfo) {
       .update({
         status: 'blocked',
         metadata: blockedMetadata,
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq('id', sdId)

@@ -11,6 +11,7 @@
 import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
+import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 
 /**
  * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
@@ -630,6 +631,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       is_working_on: false,
       active_session_id: null,
       completion_date: new Date().toISOString(),
+      lifecycle_write_token: CANONICAL_WRITER_STAMP,
       updated_at: new Date().toISOString()
     });
 

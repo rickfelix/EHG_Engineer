@@ -6,6 +6,12 @@
  * SD remained in LEAD phase even after handoff was approved.
  */
 
+import {
+  CANONICAL_WRITER_STAMP,
+  CANONICAL_WRITE_SQLSTATE,
+  isCanonicalWriteRejection,
+} from '../../lib/canonical-writer-stamp.js';
+
 /**
  * Capture current SD state for rollback on handoff failure
  * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Defensive rollback
@@ -32,6 +38,11 @@ export function captureStateSnapshot(sd) {
 export async function rollbackSdState(sdId, snapshot, supabase) {
   console.log('\n⚠️  STATE ROLLBACK: Reverting SD phase/status');
   console.log('-'.repeat(50));
+  // SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 FR-4 (F8): a guard rejection here must NOT be
+  // swallowed like every other error. This path only runs when a handoff has ALREADY failed, so a
+  // dropped rejection leaves the forward transition half-applied with no automated way back —
+  // a recoverable failure silently turned into a stuck SD.
+  let guardRejection = null;
   try {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
     const queryField = isUUID ? 'id' : 'sd_key';
@@ -40,16 +51,29 @@ export async function rollbackSdState(sdId, snapshot, supabase) {
       .update({
         current_phase: snapshot.current_phase,
         status: snapshot.status,
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq(queryField, sdId);
     if (error) {
       console.log(`   ❌ Rollback failed: ${error.message}`);
+      if (isCanonicalWriteRejection(error)) guardRejection = error;
     } else {
       console.log(`   ✅ Rolled back to phase=${snapshot.current_phase}, status=${snapshot.status}`);
     }
   } catch (error) {
     console.log(`   ❌ Rollback error: ${error.message}`);
+    if (isCanonicalWriteRejection(error)) guardRejection = error;
+  }
+
+  if (guardRejection) {
+    throw new Error(
+      `LEAD-TO-PLAN rollback was REJECTED by the canonical-writer guard (${CANONICAL_WRITE_SQLSTATE}): ` +
+      `${guardRejection.message}. The SD is now stuck mid-handoff — the forward transition is applied ` +
+      'and its compensating write could not run. Restore this call site\'s lifecycle_write_token ' +
+      `before retrying; SD ${sdId} needs manual reconciliation to ` +
+      `phase=${snapshot.current_phase}, status=${snapshot.status}.`
+    );
   }
 }
 
@@ -102,6 +126,7 @@ export async function transitionSdToPlan(sdId, sd, supabase) {
       .update({
         current_phase: 'PLAN_PRD',
         status: 'in_progress',
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq(queryField, sdId);

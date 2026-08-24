@@ -1,0 +1,42 @@
+--- auto_transition_status.before.sql
++++ auto_transition_status.after.sql
+  CREATE OR REPLACE FUNCTION public.auto_transition_status()
+   RETURNS trigger
+   LANGUAGE plpgsql
+   SET search_path TO 'public', 'extensions'
+  AS $function$
+        BEGIN
++         -- SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 ceremony-packet amendment (Adam flag-review,
++         -- risk-agent live-measured): status_auto_transition is BEFORE UPDATE with no WHEN clause and this
++         -- function had no IS DISTINCT FROM guard, so it recomputed status on EVERY update to a row already
++         -- satisfying (current_phase, progress>=100) -- including metadata-only writes that never touched
++         -- either column. That silently reverted a row a human/handoff had deliberately moved to a DIFFERENT
++         -- status afterward (e.g. cancelled/completed) back to 'pending_approval'. Only recompute when THIS
++         -- write actually changed current_phase or progress. (Staged here, not a separate ceremony, per
++         -- coordinator packet-fragmentation call -- this trigger's table is already open in this migration.)
++         IF NEW.current_phase IS NOT DISTINCT FROM OLD.current_phase
++            AND NEW.progress IS NOT DISTINCT FROM OLD.progress THEN
++           RETURN NEW;
++         END IF;
++
+          -- Fix: Use current_phase instead of phase
+          IF NEW.current_phase = 'EXEC' AND NEW.progress >= 100 THEN
++           IF NEW.lifecycle_write_token IS NULL THEN
++             NEW.lifecycle_write_token = 'auto_transition_status';
++           END IF;
+            NEW.status = 'pending_approval';
+          END IF;
+  
+          -- FIX: Changed from 'pending_lead_approval' to 'pending_approval'
+          IF NEW.current_phase = 'PLAN' AND NEW.progress >= 100 THEN
++           IF NEW.lifecycle_write_token IS NULL THEN
++             NEW.lifecycle_write_token = 'auto_transition_status';
++           END IF;
+            NEW.status = 'pending_approval';
+          END IF;
+  
+          RETURN NEW;
+        END;
+        $function$
+  
+  
