@@ -16,6 +16,30 @@
       "files": [".github/workflows/playwright.yml"],
       "dependencies": [],
       "compatible_with": ["testing"]
+    },
+    "deploy": {
+      "name": "Deploy (Cloudflare Workers)",
+      "version": "1.0.0",
+      "description": "Hardened deploy workflow — concurrency guard, build-secret verification, DB migration, live-URL check, config-drift check, post-deploy signed-in UAT probe",
+      "files": [".github/workflows/deploy.yml"],
+      "dependencies": [],
+      "compatible_with": ["ci-cd", "feedback"]
+    },
+    "stack-scan": {
+      "name": "Stack Scan (CI)",
+      "version": "1.0.0",
+      "description": "Dependency vulnerability + committed-secret scan on push/PR",
+      "files": [".github/workflows/stack-scan.yml"],
+      "dependencies": [],
+      "compatible_with": ["ci-cd"]
+    },
+    "feedback": {
+      "name": "Feedback / Error Reporting",
+      "version": "1.0.0",
+      "description": "Client error/feedback reporter + minimal Worker-style server handler",
+      "files": ["feedback/client.js", "feedback/server.js"],
+      "dependencies": [],
+      "compatible_with": ["deploy"]
     }
   }
 }
