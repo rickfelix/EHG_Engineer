@@ -30,7 +30,7 @@ const QUARANTINE_EXCLUDE = loadQuarantineExclude();
 
 // SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-3): the pattern list, its per-entry rationale, and the
 // fail-safe (never fail-open) loading behavior now live in lib/collection-contract.js -- see
-// that module's own doc comment and tests/collection-contract.md for the full rationale.
+// that module's own doc comment and docs/05_testing/collection-contract.md for the full rationale.
 // Imported above (not defined inline) so tests/unit/vitest-collection-contract.test.js can
 // exercise the exact function this file calls.
 
@@ -70,7 +70,7 @@ function stripShebangPlugin() {
 // SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-3): the pattern list and its per-entry rationale
 // (including the QF-20260727-884 scratch/ and SD-LEO-INFRA-VITEST-TIER-REAL-001
 // .reaper-source/ incident writeups previously inlined here) now live in
-// tests/collection-contract.json / tests/collection-contract.md — this is a hand-maintained
+// tests/collection-contract.json / docs/05_testing/collection-contract.md — this is a hand-maintained
 // array no longer; see loadCollectionContractExclude() and SAFETY_FLOOR_EXCLUDE above.
 const SHARED_EXCLUDE = loadCollectionContractExclude();
 
