@@ -33,6 +33,9 @@ vi.mock('../../../lib/eva/devils-advocate.js', async (importOriginal) => ({
   isDevilsAdvocateGate: vi.fn().mockReturnValue({ isGate: false, gateType: null }),
   getDevilsAdvocateReview: vi.fn(),
   buildArtifactRecord: vi.fn().mockReturnValue({}),
+  // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): getKillGates is now SSOT-derived (async DB read) —
+  // mock it directly rather than making this file's supabase client mock support venture_stages.
+  getKillGates: vi.fn().mockResolvedValue([3, 5, 13, 23]),
 }));
 const { mintSpy } = vi.hoisted(() => ({ mintSpy: vi.fn() }));
 mintSpy.mockResolvedValue({ id: 'dec-hold-1', health_score: 'red' });

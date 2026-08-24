@@ -6,18 +6,17 @@
  * Filter Engine integration, and chairman summary generation.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   validateStageGate,
   getGateType,
-  KILL_GATE_STAGES,
   SOFT_KILL_STAGES,
-  PROMOTION_GATE_STAGES,
   GATE_TYPE,
   GATE_STATUS,
   FILTER_PREFERENCE_KEYS,
   _internal,
 } from '../../lib/agents/modules/venture-state-machine/stage-gates.js';
+import { _resetCacheForTest } from '../../lib/eva/stage-governance.js';
 
 const {
   evaluateKillGate,
@@ -35,22 +34,63 @@ const silentLogger = {
   info: () => {},
 };
 
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): validateStageGate/getGateType now read
+// lib/eva/stage-governance.js's SSOT (venture_stages) instead of hardcoded literals -- every
+// stage present with the raw gate_type the live SSOT carries (kill: 3,5,13,23;
+// promotion: 10,16,17,18,19,24,25; verified directly against the live DB during EXEC).
+const VENTURE_STAGES_FIXTURE = Array.from({ length: 26 }, (_, i) => {
+  const stage_number = i + 1;
+  const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+    : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+    : 'none';
+  return {
+    stage_number, gate_type,
+    stage_name: `Stage ${stage_number}`, stage_key: `stage_${stage_number}`,
+    review_mode: 'auto', chunk: null, description: null,
+    work_type: gate_type === 'none' ? 'artifact_only' : 'decision_gate',
+    is_high_consequence: stage_number === 19,
+  };
+});
+
 function createMockSupabase(overrides = {}) {
   const defaultChain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  };
+  const ventureStagesChain = {
+    select: vi.fn().mockReturnThis(),
+    order: vi.fn().mockResolvedValue({ data: VENTURE_STAGES_FIXTURE, error: null }),
+  };
+  const leoFeatureFlagsChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { is_enabled: true }, error: null }),
   };
 
   return {
     from: vi.fn((table) => {
       if (overrides[table]) return overrides[table];
+      if (table === 'venture_stages') return ventureStagesChain;
+      if (table === 'leo_feature_flags') return leoFeatureFlagsChain;
       return { ...defaultChain };
     }),
+    channel: vi.fn(() => ({
+      on: function () { return this; },
+      subscribe: function () { return this; },
+      unsubscribe: () => undefined,
+    })),
   };
 }
+
+beforeEach(() => {
+  _resetCacheForTest();
+});
 
 function createPreferenceRows(prefs) {
   return prefs.map(([key, value, valueType]) => ({
@@ -66,17 +106,33 @@ function createPreferenceRows(prefs) {
 // ── Configuration Tests ─────────────────────────────────────────────
 
 describe('Gate Configuration', () => {
-  it('defines correct kill gate stages', () => {
-    expect(KILL_GATE_STAGES).toEqual(new Set([3, 5, 13, 24]));
+  // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): kill/promotion sets are now SSOT-derived
+  // (lib/eva/stage-governance.js's raw gate_type view) rather than hardcoded module
+  // constants, so these assert through getGateType(supabase, stage) against a mocked SSOT.
+  it('defines correct kill gate stages', async () => {
+    const supabase = createMockSupabase();
+    for (const stage of [3, 5, 13, 23]) {
+      expect((await getGateType(supabase, stage)).gateType).toBe(GATE_TYPE.KILL);
+    }
   });
 
-  it('defines correct promotion gate stages', () => {
-    expect(PROMOTION_GATE_STAGES).toEqual(new Set([17, 18, 23]));
+  it('defines correct promotion gate stages', async () => {
+    const supabase = createMockSupabase();
+    for (const stage of [17, 18, 19, 24, 25]) {
+      expect((await getGateType(supabase, stage)).gateType).toBe(GATE_TYPE.PROMOTION);
+    }
   });
 
-  it('kill and promotion stages do not overlap', () => {
-    for (const stage of KILL_GATE_STAGES) {
-      expect(PROMOTION_GATE_STAGES.has(stage)).toBe(false);
+  it('kill, taste, and promotion gate stages do not overlap', async () => {
+    const supabase = createMockSupabase();
+    const kill = [3, 5, 13, 23];
+    const taste = [10, 16]; // stage 13 is also in TASTE_GATE_STAGES but kill shadows it first
+    const promotion = [17, 18, 19, 24, 25];
+    for (const stage of [...kill, ...taste, ...promotion]) {
+      const expected = kill.includes(stage) ? GATE_TYPE.KILL
+        : taste.includes(stage) ? GATE_TYPE.TASTE
+        : GATE_TYPE.PROMOTION;
+      expect((await getGateType(supabase, stage)).gateType).toBe(expected);
     }
   });
 
@@ -106,23 +162,36 @@ describe('Gate Configuration', () => {
 // ── getGateType Tests ───────────────────────────────────────────────
 
 describe('getGateType', () => {
-  it('returns KILL for kill gate stages', () => {
-    for (const stage of [3, 5, 13, 24]) {
-      const result = getGateType(stage);
+  it('returns KILL for kill gate stages', async () => {
+    const supabase = createMockSupabase();
+    for (const stage of [3, 5, 13, 23]) {
+      const result = await getGateType(supabase, stage);
       expect(result).toEqual({ isGated: true, gateType: GATE_TYPE.KILL });
     }
   });
 
-  it('returns PROMOTION for promotion gate stages', () => {
-    for (const stage of [17, 18, 23]) {
-      const result = getGateType(stage);
+  // Stages 10/16 are also gate_type='promotion' in the raw SSOT, but the unchanged
+  // TASTE_GATE_STAGES check runs before the promotion check, so they classify as TASTE.
+  it('returns TASTE for taste gate stages not shadowed by a kill classification', async () => {
+    const supabase = createMockSupabase();
+    for (const stage of [10, 16]) {
+      const result = await getGateType(supabase, stage);
+      expect(result).toEqual({ isGated: true, gateType: GATE_TYPE.TASTE });
+    }
+  });
+
+  it('returns PROMOTION for promotion gate stages', async () => {
+    const supabase = createMockSupabase();
+    for (const stage of [17, 18, 19, 24, 25]) {
+      const result = await getGateType(supabase, stage);
       expect(result).toEqual({ isGated: true, gateType: GATE_TYPE.PROMOTION });
     }
   });
 
-  it('returns not gated for other stages', () => {
-    for (const stage of [1, 2, 4, 6, 7, 8, 9, 10, 11, 14, 15, 16, 19, 20, 21, 25, 26]) {
-      const result = getGateType(stage);
+  it('returns not gated for other stages', async () => {
+    const supabase = createMockSupabase();
+    for (const stage of [1, 2, 4, 6, 7, 8, 9, 11, 12, 14, 15, 20, 21, 22, 26]) {
+      const result = await getGateType(supabase, stage);
       expect(result).toEqual({ isGated: false, gateType: null });
     }
   });
@@ -136,6 +205,9 @@ describe('validateStageGate routing', () => {
       venture_artifacts: {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
         single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
       },
     });
@@ -227,7 +299,8 @@ describe('Kill Gate (evaluateKillGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([
             ['filter.cost_max_usd', 50000, 'number'],
             ['filter.min_score', 5, 'number'],
@@ -256,7 +329,8 @@ describe('Kill Gate (evaluateKillGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([
             ['filter.cost_max_usd', 5000, 'number'],
           ]),
@@ -284,7 +358,8 @@ describe('Kill Gate (evaluateKillGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([['filter.cost_max_usd', 5000, 'number']]),
           error: null,
         }),
@@ -309,7 +384,8 @@ describe('Kill Gate (evaluateKillGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([['filter.cost_max_usd', 5000, 'number']]),
           error: null,
         }),
@@ -324,9 +400,10 @@ describe('Kill Gate (evaluateKillGate)', () => {
     expect(result.status).toBe(GATE_STATUS.REQUIRES_CHAIRMAN_DECISION);
   });
 
-  it('SOFT_KILL_STAGES is exactly {3}; S3 remains a KILL gate type', () => {
+  it('SOFT_KILL_STAGES is exactly {3}; S3 remains a KILL gate type', async () => {
     expect(SOFT_KILL_STAGES).toEqual(new Set([3]));
-    expect(getGateType(3).gateType).toBe(GATE_TYPE.KILL);
+    const supabase = createMockSupabase();
+    expect((await getGateType(supabase, 3)).gateType).toBe(GATE_TYPE.KILL);
   });
 
   it('returns REQUIRES_CHAIRMAN_DECISION when score is low', async () => {
@@ -335,7 +412,8 @@ describe('Kill Gate (evaluateKillGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([
             ['filter.min_score', 7, 'number'],
           ]),
@@ -407,7 +485,8 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([
             ['filter.cost_max_usd', 50000, 'number'],
             ['filter.min_score', 5, 'number'],
@@ -429,15 +508,21 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
     expect(result.gateType).toBe(GATE_TYPE.PROMOTION);
   });
 
+  // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1, un-quarantine): cost_threshold is now a
+  // permanent MEDIUM/advisory-only trigger (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070) — it
+  // can never produce HIGH severity, so a HIGH trigger must come from Rule 4 (low_score
+  // below min_score) instead, per lib/eva/decision-filter-engine.js.
   it('returns FAIL when HIGH-severity threshold fails', async () => {
     const supabase = createMockSupabase({
       chairman_preferences: {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([
-            ['filter.cost_max_usd', 5000, 'number'],
+            ['filter.min_score', 7, 'number'],
+            ['filter.chairman_review_score', 8, 'number'],
           ]),
           error: null,
         }),
@@ -446,7 +531,7 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
 
     const result = await evaluatePromotionGate(supabase, 'v1', 16, 17, {
       chairmanId: 'ch1',
-      stageOutput: { cost: 20000, score: 8 },
+      stageOutput: { cost: 1000, score: 2 }, // score(2) < min_score(7) -> HIGH (Rule 4)
       logger: silentLogger,
     });
 
@@ -461,19 +546,23 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
           data: createPreferenceRows([
-            ['filter.min_score', 7, 'number'],
-            ['filter.cost_max_usd', 50000, 'number'],
+            ['filter.cost_max_usd', 5000, 'number'],
+            ['filter.min_score', 2, 'number'],
+            ['filter.chairman_review_score', 3, 'number'],
           ]),
           error: null,
         }),
       },
     });
 
+    // score(8) clears chairman_review_score(3) -> no low_score trigger; cost_threshold
+    // is the sole (MEDIUM/advisory) trigger.
     const result = await evaluatePromotionGate(supabase, 'v1', 17, 18, {
       chairmanId: 'ch1',
-      stageOutput: { cost: 1000, score: 5 }, // Low score = MEDIUM severity
+      stageOutput: { cost: 20000, score: 8 },
       logger: silentLogger,
     });
 
@@ -582,7 +671,8 @@ describe('resolveGateContext', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: prefRows, error: null }),
+        in: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: prefRows, error: null }),
       },
     });
 
@@ -741,6 +831,9 @@ describe('Existing Gate Preservation (FR-4)', () => {
       venture_artifacts: {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
         single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
       },
     });

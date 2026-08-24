@@ -54,6 +54,18 @@ function createMockSupabase() {
         };
         return chain;
       }
+      // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-4): GATE_STAGES is now SSOT-derived via
+      // lib/eva/stage-governance.js.
+      if (table === 'venture_stages') {
+        const rows = Array.from({ length: 26 }, (_, i) => {
+          const stage_number = i + 1;
+          const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+            : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+            : 'none';
+          return { stage_number, gate_type, work_type: 'decision_gate', review_mode: 'auto', is_high_consequence: false };
+        });
+        return { select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }) };
+      }
       throw new Error(`unexpected table: ${table}`);
     }),
   };

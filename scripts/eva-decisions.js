@@ -249,6 +249,92 @@ function buildDecisionStamp(lifecycleStage) {
   };
 }
 
+// SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 (FR-3): resolve the decision-verb to write via the
+// canonical SQL mapping (fn_chairman_decision_value) instead of the old hardcoded
+// 'proceed'/'kill' pair used regardless of decision_type. p_action MUST be the past-tense form
+// ('approved'/'rejected') -- fn_chairman_decision_value raises SQLSTATE 22023 'invalid action'
+// on 'approve'/'reject' (verified live, 2026-08-23).
+//
+// A NULL result means decision_type is outside the function's 18-type mapping (live examples,
+// 2026-08-23: plan_go, security_ratification, platform_ruling). fn_chairman_decide -- the SQL-
+// side caller the function's own comment says should raise on NULL -- IS applied live (confirmed
+// via normalized pg_get_functiondef diff, correcting an earlier PGRST202 false-absence signal
+// caused by a named-argument mismatch, not true absence), but eva-decisions.js never calls it --
+// it calls fn_chairman_decision_value directly -- so this JS call site owns the raise regardless.
+// It must NEVER let a NULL mapping flow into a decision=NULL write. SECURITY EXEC-TO-PLAN
+// correction (SEC-PATH-003): the real backstop against decision=NULL is the column's NOT NULL
+// constraint (23502), not chairman_decisions_decision_check -- a plain `= ANY(ARRAY[...])` CHECK
+// passes on NULL per SQL three-valued logic (0 of 718 live rows have decision IS NULL because
+// nothing has ever attempted the write, not because a CHECK would catch it). The JS raise above
+// is the correct primary protection either way.
+//
+// OUT OF SCOPE (documented, not silently dropped): (i) the eva_stage_gate_attempts
+// resolved_outcome 7-term enum / JS-emission gap is FR-2-follow-on scope, blocked on that
+// table's migration actually being applied; (ii) the EHG-frontend's separate decide.ts (a
+// different repo/app, its own 28-verb CHECK) is an explicit, named, out-of-scope cross-repo gap.
+// EXEC-DISCOVERED GAP (2026-08-23, measured live via direct RPC probe -- independent of the 3
+// unmapped types the PLAN-phase review measured): 'thesis_kill_tier_b' (exit-wiring.js's
+// THESIS_KILL_DECISION_TYPE, the trigger for SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-H's exit-
+// init marker) is ALSO outside fn_chairman_decision_value's mapping -- it returns NULL for both
+// actions. fn_chairman_decision_value is a Tier-2 RPC (CREATE OR REPLACE requires the chairman's
+// 3-factor apply ceremony; SECURITY EXEC-TO-PLAN review corrected an earlier "SECURITY-DEFINER-
+// adjacent" framing -- the live function is actually SECURITY INVOKER, prosecdef=false; Tier-2
+// status is about the shared-RPC apply policy, not a DEFINER privilege boundary) gated behind
+// that ceremony (database/chairman-gated/20260803_chairman_decide_null_safe_and_type_honest.sql's
+// own header), so the proper fix (adding this type to the SQL mapping) is staged in
+// database/migrations/20260823_add_thesis_kill_tier_b_to_decision_value.sql but cannot be applied
+// by this SD. Bridging it here -- with the SAME proceed/kill pair every decision_type got
+// unconditionally pre-fix -- so FR-3's fail-loud-on-unmapped behavior does not regress this live,
+// tested capability (0 live rows today, but the capability is shipped and exercised by
+// tests/unit/eva-decisions-exit-wiring.test.js).
+//
+// SECURITY EXEC-TO-PLAN finding SEC-PATH-002 (2026-08-23): the fail-loud blast radius above was
+// measured only against 3 live-pending-row types + this one EXEC-discovered gap -- SECURITY's own
+// census found the codebase mints ~19 MORE decision_types into chairman_decisions (directly, or
+// via lib/chairman/record-pending-decision.mjs's shared helper) that are ALSO unmapped: gate,
+// stage_failure_review, budget_override, gate_escalation, guardrail_override, roadmap_approval,
+// cascade_override, chairman_approval, model_tier_retier_recommendation (direct-insert, verified
+// verb-agnostic downstream for chairman_approval only), plus venture_health_alert, dispatch_auth,
+// schedule, regen, tier, anomaly, tune, consult_answer, ratification, inbound_message_quarantine,
+// plan_ratification (via the shared helper, individual downstream verbs NOT verified). Of these,
+// ONLY 'distribution_skip' (added to the bridge below + the staged migration) had a verified
+// downstream-consumer expectation (S21's APPROVED_DECISIONS allowlist). The rest are NOT bridged
+// or mapped here -- guessing a verb for an un-investigated type is exactly the class of error
+// FR-3 exists to prevent (the pre-fix incident this SD's parent migration fixed: "every reject
+// wrote 'kill' regardless of decision_type"). Each is LATENT today (0 live pending rows carry any
+// of them), but a real approve/reject on one now fails loudly where it silently succeeded before
+// -- documented here as an explicit, named follow-on requiring the same "vocabulary the system
+// already speaks" analysis fn_chairman_decision_value's original 18-type mapping went through,
+// not silently fixed and not silently dropped.
+const JS_SIDE_VERB_BRIDGE = {
+  thesis_kill_tier_b: { approved: 'proceed', rejected: 'kill' },
+  // SEC-PATH-002: sibling of the already-mapped 'distribution_block' (same file, same S21
+  // consumer -- stage-22-distribution-setup.js's APPROVED_DECISIONS allowlist accepts 'proceed').
+  distribution_skip: { approved: 'proceed', rejected: 'kill' },
+};
+
+async function resolveDecisionVerb(supabase, decisionType, action) {
+  const bridged = JS_SIDE_VERB_BRIDGE[decisionType]?.[action];
+  if (bridged) return bridged;
+
+  const { data, error } = await supabase.rpc('fn_chairman_decision_value', {
+    p_decision_type: decisionType,
+    p_action: action,
+  });
+  if (error) {
+    throw new Error(`fn_chairman_decision_value(decision_type='${decisionType}', action='${action}') failed: ${error.message}`);
+  }
+  if (data === null || data === undefined) {
+    throw new Error(
+      `Cannot resolve a decision verb for decision_type='${decisionType}' (action='${action}') -- ` +
+      'this decision_type has no mapping in fn_chairman_decision_value. Refusing to write ' +
+      'decision=NULL. This decision_type needs an explicit verb mapping before it can be ' +
+      'approved/rejected via this CLI.'
+    );
+  }
+  return data;
+}
+
 async function approveDecision(supabase, decisionId) {
   const rationale = getArg('rationale');
   const overrideKill = hasFlag('override-kill');
@@ -293,9 +379,17 @@ async function approveDecision(supabase, decisionId) {
     process.exit(1);
   }
 
+  let decisionVerb;
+  try {
+    decisionVerb = await resolveDecisionVerb(supabase, existing.decision_type, 'approved');
+  } catch (verbErr) {
+    console.error(`Failed to approve: ${verbErr.message}`);
+    process.exit(1);
+  }
+
   const updatePayload = {
     status: 'approved',
-    decision: 'proceed',
+    decision: decisionVerb,
     rationale,
     updated_at: new Date().toISOString(),
     ...buildDecisionStamp(existing.lifecycle_stage),
@@ -349,7 +443,7 @@ async function rejectDecision(supabase, decisionId) {
   // Check current status
   const { data: existing, error: fetchErr } = await supabase
     .from('chairman_decisions')
-    .select('id, status, venture_id, lifecycle_stage')
+    .select('id, status, venture_id, lifecycle_stage, decision_type')
     .eq('id', decisionId)
     .single();
 
@@ -363,11 +457,19 @@ async function rejectDecision(supabase, decisionId) {
     process.exit(1);
   }
 
+  let decisionVerb;
+  try {
+    decisionVerb = await resolveDecisionVerb(supabase, existing.decision_type, 'rejected');
+  } catch (verbErr) {
+    console.error(`Failed to reject: ${verbErr.message}`);
+    process.exit(1);
+  }
+
   const { error } = await supabase
     .from('chairman_decisions')
     .update({
       status: 'rejected',
-      decision: 'kill',
+      decision: decisionVerb,
       rationale,
       updated_at: new Date().toISOString(),
       ...buildDecisionStamp(existing.lifecycle_stage),
@@ -457,4 +559,4 @@ if (isMainModule(import.meta.url)) {
   });
 }
 
-export { listDecisions, viewDecision, approveDecision, rejectDecision, buildDecisionStamp, DEFAULT_DECIDED_BY };
+export { listDecisions, viewDecision, approveDecision, rejectDecision, buildDecisionStamp, DEFAULT_DECIDED_BY, resolveDecisionVerb };

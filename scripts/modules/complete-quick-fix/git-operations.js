@@ -592,7 +592,14 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
   console.log('\n📊 Git Diff Auto-Analysis\n');
 
   let filesChanged = [];
-  let diffAnalysis = {};
+  // QF-20260823-098: default diffSourceTier to null (not undefined-via-missing-key) up
+  // front. If an execSync below throws AFTER filesChanged is already populated (e.g. the
+  // `git diff ${diffRange} --stat` call), the outer catch swallows it and this object is
+  // returned as-is — without this default, diffSourceTier would be undefined rather than
+  // an explicit "we don't know" null, and lib/quick-fix/sensitive-path-registry.js's
+  // preflight reason string would read as if the tier were simply omitted rather than
+  // unavailable.
+  let diffAnalysis = { diffSourceTier: null };
 
   // QF-20260509-779: refresh origin/main BEFORE computing the diff so the
   // 3-dot symmetric difference doesn't include commits already merged via

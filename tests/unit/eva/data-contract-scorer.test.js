@@ -1,9 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   scoreDataContracts,
   getContractCoverageSummary,
   getDimensionInfo,
 } from '../../../lib/eva/data-contract-scorer.js';
+import { _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
+
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-6): scoreDataContracts now reads stage-governance.js's
+// 60s-TTL-cached SSOT -- reset between tests so one test's venture_stages fixture (or lack
+// thereof) cannot leak into another via the module-level cache.
+beforeEach(() => {
+  _resetCacheForTest();
+});
 
 function mockSupabase(tableData = {}) {
   return {
@@ -115,17 +123,21 @@ describe('data-contract-scorer', () => {
       expect(result.gaps.some((g) => g.issue.includes('minLength'))).toBe(true);
     });
 
+    // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-6): expectedStages is now SSOT-derived (26 live rows),
+    // not a pinned literal -- a prior pinned "25" here silently diverged from the live 26-row
+    // venture_stages table and quarantined this file for 73 days.
     it('calculates stage coverage percent', async () => {
-      const supabase = mockSupabase();
-      const contracts = createTestContracts(); // 3 of 25 expected
+      const ventureStagesRows = Array.from({ length: 26 }, (_, i) => ({ stage_number: i + 1, gate_type: 'none', work_type: 'artifact_only', review_mode: 'auto', is_high_consequence: false }));
+      const supabase = mockSupabase({ venture_stages: { data: ventureStagesRows, error: null } });
+      const contracts = createTestContracts(); // 3 of 26 expected
 
       const result = await scoreDataContracts(supabase, {
         logger: silentLogger,
         stageContracts: contracts,
       });
 
-      expect(result.score.stageCoverage).toBe(12); // 3/25 = 12%
-      expect(result.score.expectedStages).toBe(25);
+      expect(result.score.stageCoverage).toBe(12); // round(3/26 * 100) = 12%
+      expect(result.score.expectedStages).toBe(26);
     });
 
     it('checks YAML parity when provided', async () => {
@@ -216,11 +228,14 @@ describe('data-contract-scorer', () => {
   });
 
   describe('getDimensionInfo', () => {
+    // getDimensionInfo() is synchronous with no supabase access (matches the sibling
+    // compute-posture-scorer.js/cli-authority-tracker.js convention) -- it uses the documented
+    // EXPECTED_STAGES fallback literal, not the SSOT-derived value scoreDataContracts() uses.
     it('returns V05 info', () => {
       const info = getDimensionInfo();
       expect(info.dimension).toBe('V05');
       expect(info.name).toBe('Data Contracts');
-      expect(info.expectedStages).toBe(25);
+      expect(info.expectedStages).toBe(26);
     });
   });
 });

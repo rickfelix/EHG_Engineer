@@ -21,7 +21,16 @@ vi.mock('../../../../lib/eva/chairman-decision-watcher.js', () => ({
   createOrReusePendingDecision: vi.fn(),
 }));
 
-function buildSupabaseMock({ killCriteria = null, ventureReadError = null, decisionStatus = 'pending', insertedEvents = [] } = {}) {
+// SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001 FR-4: checkThesisKillGate now checks kill-fire-
+// readiness (canonical stage + no open blocking finding) before a FIRED verdict can proceed.
+// Stub getStageGovernance so every pre-existing test's stage_by (12, or the caller's override)
+// resolves to a real stage by default — these tests are exercising decision-minting logic, not
+// FR-4's own readiness predicate (that has its own dedicated describe block below).
+vi.mock('../../../../lib/eva/stage-governance.js', () => ({
+  getStageGovernance: vi.fn().mockResolvedValue({ getStage: (n) => ({ stage_number: n }) }),
+}));
+
+function buildSupabaseMock({ killCriteria = null, ventureReadError = null, decisionStatus = 'pending', insertedEvents = [], openFeedbackFindings = [] } = {}) {
   return {
     from: vi.fn((table) => {
       if (table === 'ventures') {
@@ -52,6 +61,29 @@ function buildSupabaseMock({ killCriteria = null, ventureReadError = null, decis
               maybeSingle: vi.fn().mockResolvedValue({ data: { status: decisionStatus }, error: null }),
             })),
           })),
+        };
+      }
+      if (table === 'feedback') {
+        // FR-4's openBlockingFindings lookup + recordFactoryDefect's dedup lookup/insert.
+        // Fully chainable stub: every filter method (select/eq/in/limit) returns an object
+        // that is BOTH further-chainable AND thenable, resolving to the fixture data — avoids
+        // hand-matching each call site's exact method-chain shape.
+        // Three distinct terminal shapes, disambiguated by WHICH method ends the chain:
+        //   awaited directly / no terminal call -> array-shaped (FR-4's openBlockingFindings)
+        //   .maybeSingle() -> no existing dedup row (recordFactoryDefect proceeds to insert)
+        //   .single()      -> the inserted row (recordFactoryDefect's insert().select().single())
+        const chain = () => ({
+          select: () => chain(),
+          eq: () => chain(),
+          in: () => chain(),
+          limit: () => chain(),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          single: () => Promise.resolve({ data: { id: 'feedback-1' }, error: null }),
+          then: (onFulfilled, onRejected) => Promise.resolve({ data: openFeedbackFindings, error: null }).then(onFulfilled, onRejected),
+        });
+        return {
+          select: vi.fn(() => chain()),
+          insert: vi.fn(() => chain()),
         };
       }
       return { select: vi.fn() };
@@ -260,21 +292,112 @@ describe('checkThesisKillGate — binding mode', () => {
 
     expect(result.allowed).toBe(true);
     expect(result.held).toHaveLength(1);
-    expect(insertedEvents.some((e) => e.event_type === 'THESIS_KILL_HOLD')).toBe(true);
+    // SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001 FR-3: renamed from THESIS_KILL_HOLD to the
+    // more precise THESIS_KILL_CANNOT_EVALUATE (a HOLD verdict IS a cannot_evaluate outcome).
+    expect(insertedEvents.some((e) => e.event_type === 'THESIS_KILL_CANNOT_EVALUATE')).toBe(true);
   });
 
-  it('a throwing resolver fails OPEN (never propagates as an uncaught rejection that would block advancement)', async () => {
+  it('SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001 FR-3: a throwing resolver is isolated to its OWN criterion (HOLD/resolver_error), never propagates as an uncaught rejection, and never silently discards sibling criteria', async () => {
     const { checkThesisKillGate } = await importGateWithFlag('binding');
-    const supabase = buildSupabaseMock({ killCriteria: [dueCriterion()] });
+    const insertedEvents = [];
+    const supabase = buildSupabaseMock({ killCriteria: [dueCriterion()], insertedEvents });
 
     const result = await checkThesisKillGate({
       supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
       resolveObservedValue: () => { throw new Error('simulated resolver failure'); },
     });
 
+    // Amended per PRD FR-3 (was: fired.length===0 && held.length===0, i.e. the whole
+    // evaluation silently vanished). The corrected contract: never blocks (still allowed),
+    // but the failing criterion IS observable as a HOLD with a resolver_error cause — not a
+    // total blackout.
     expect(result.allowed).toBe(true);
     expect(result.fired).toHaveLength(0);
-    expect(result.held).toHaveLength(0);
+    expect(result.held).toHaveLength(1);
+    expect(result.held[0].errorClass).toBe('resolver_error');
+    expect(result.held[0].errorMessage).toContain('simulated resolver failure');
+    expect(insertedEvents.some((e) => e.event_type === 'THESIS_KILL_CANNOT_EVALUATE' && e.details?.errorClass === 'resolver_error')).toBe(true);
+  });
+
+  it('FR-3: a throwing resolver on ONE criterion does not discard a sibling criterion that resolves normally', async () => {
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const { createOrReusePendingDecision } = await import('../../../../lib/eva/chairman-decision-watcher.js');
+    createOrReusePendingDecision.mockResolvedValue({ id: 'dec-x', isNew: true, skipped: false });
+
+    const supabase = buildSupabaseMock({
+      killCriteria: [dueCriterion({ id: 'kill-throws', metric: 'metric_throws' }), dueCriterion({ id: 'kill-fires', metric: 'metric_fires' })],
+      decisionStatus: 'pending',
+    });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: (metric) => { if (metric === 'metric_throws') throw new Error('boom'); return 8; },
+    });
+
+    expect(result.held).toHaveLength(1);
+    expect(result.held[0].criterionId).toBe('kill-throws');
+    expect(result.fired).toHaveLength(1);
+    expect(result.fired[0].criterionId).toBe('kill-fires');
+    // The still-firing sibling still blocks in binding mode — a throwing resolver on ONE
+    // criterion must never be a kill-bypass for the others.
+    expect(result.allowed).toBe(false);
+    expect(result.blocked_by).toHaveLength(1);
+  });
+});
+
+describe('checkThesisKillGate — FR-4 kill-fire-readiness precondition', () => {
+  it('a FIRED verdict with an open blocking finding (INSTRUMENT_LIE) is downgraded to cannot_evaluate, never reaches would_kill_by/blocked_by', async () => {
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const { createOrReusePendingDecision } = await import('../../../../lib/eva/chairman-decision-watcher.js');
+    const insertedEvents = [];
+    const supabase = buildSupabaseMock({
+      killCriteria: [dueCriterion()],
+      insertedEvents,
+      openFeedbackFindings: [{ id: 'f1', metadata: { gap_class: 'INSTRUMENT_LIE' } }],
+    });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: () => 8,
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.would_kill_by).toHaveLength(0);
+    expect(result.blocked_by).toHaveLength(0);
+    expect(createOrReusePendingDecision).not.toHaveBeenCalled();
+    expect(insertedEvents.some((e) => e.event_type === 'THESIS_KILL_CANNOT_EVALUATE' && String(e.details?.errorMessage).startsWith('kill_validity_precondition_failed:'))).toBe(true);
+  });
+
+  it('a FIRED verdict referencing a non-canonical stage_by is downgraded (invalid_stage), never blocks', async () => {
+    const { getStageGovernance } = await import('../../../../lib/eva/stage-governance.js');
+    getStageGovernance.mockResolvedValueOnce({ getStage: () => null }); // no stage recognizes this criterion's stage_by
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const { createOrReusePendingDecision } = await import('../../../../lib/eva/chairman-decision-watcher.js');
+    const supabase = buildSupabaseMock({ killCriteria: [dueCriterion()] });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: () => 8,
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.blocked_by).toHaveLength(0);
+    expect(createOrReusePendingDecision).not.toHaveBeenCalled();
+  });
+
+  it('a FIRED verdict with a valid criterion, a real stage, and no blocking finding proceeds normally (readiness check is not a silent extra block)', async () => {
+    const { checkThesisKillGate } = await importGateWithFlag('binding');
+    const { createOrReusePendingDecision } = await import('../../../../lib/eva/chairman-decision-watcher.js');
+    createOrReusePendingDecision.mockResolvedValue({ id: 'dec-1', isNew: false, skipped: false });
+    const supabase = buildSupabaseMock({ killCriteria: [dueCriterion()], decisionStatus: 'pending' });
+
+    const result = await checkThesisKillGate({
+      supabase, ventureId: VENTURE_ID, fromStage: 11, toStage: 12,
+      resolveObservedValue: () => 8,
+    });
+
+    expect(result.blocked_by).toHaveLength(1);
+    expect(createOrReusePendingDecision).toHaveBeenCalled();
   });
 });
 

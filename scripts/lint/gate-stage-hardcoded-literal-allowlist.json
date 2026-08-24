@@ -1,0 +1,12 @@
+{
+  "_comment": "SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-7). Files with a pre-existing, individually-triaged use of a banned identifier name (KILL_GATE_STAGES / PROMOTION_GATE_STAGES / KILL_GATES / PROMOTION_GATES) assigned a hardcoded array/Set literal. Each entry's disposition is recorded in docs/architecture/stage-advancement-fr4-tr8-triage.md. A NEW file introducing one of these names is NOT pre-approved by being similar to an entry here -- add it only after the same individual-triage discipline FR-4/TR-8 established, with a matching triage-doc row.",
+  "files": [
+    "lib/proving-companion/gate-discipline-checker.js",
+    "lib/eva/experiments/gate-outcome-bridge.js",
+    "lib/eva/experiments/chairman-report.js",
+    "lib/eva/experiments/baseline-accuracy.js",
+    "scripts/monitor-venture-run.cjs",
+    "tests/uat/ventures-workflow-uat.spec.mjs",
+    "tests/unit/database/migrations/advance-venture-gate-type-ssot.db.test.js"
+  ]
+}
