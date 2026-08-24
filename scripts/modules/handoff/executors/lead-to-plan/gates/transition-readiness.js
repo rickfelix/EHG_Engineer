@@ -7,6 +7,7 @@
  */
 
 import { quickPreflightCheck } from '../../../../../lib/handoff-preflight.js';
+import { CANONICAL_WRITER_STAMP } from '../../../lib/canonical-writer-stamp.js';
 // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2a: recognise the explicit unpopulated marker so
 // an acknowledged-empty field is not silently counted as a valid metric.
 import { isUnpopulated } from '../../../../../../lib/sd-fields/unpopulated.js';
@@ -58,7 +59,7 @@ export async function validateTransitionReadiness(sd, supabase) {
     try {
       await supabase
         .from('strategic_directives_v2')
-        .update({ status: 'draft', is_active: true })
+        .update({ status: 'draft', is_active: true, lifecycle_write_token: CANONICAL_WRITER_STAMP })
         .eq('id', sd.id);
       warnings.push(`SD status was '${sd.status}' — auto-reactivated to 'draft' (LEAD-TO-PLAN intent detected)`);
       console.log(`   ⚠️  Auto-reactivated: ${sd.status} → draft (LEAD-TO-PLAN intent)`);

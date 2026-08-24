@@ -9,6 +9,7 @@
 import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
+import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 import { enrichRetrospectivePreGate } from '../../retrospective-enricher.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
 
@@ -498,6 +499,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
         .update({
           status: 'pending_approval',
           current_phase: 'LEAD',
+          lifecycle_write_token: CANONICAL_WRITER_STAMP,
           updated_at: new Date().toISOString()
         })
         .eq('id', sdCanonicalId || sdId);

@@ -5,5 +5,17 @@
   },
   "reject_chairman_decision": {
     "reason": "SD-LEO-INFRA-VENTURE-KILL-CANCEL-001: same as kill_venture -- body-only CREATE OR REPLACE (adds the same COALESCE clause to the kill-gate UPDATE branch), no GRANT/REVOKE, ACL untouched. Live pg_proc.proacl verified directly (2026-08-23): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres} -- no PUBLIC, no anon. Additionally defense-in-depth at the SQL level: the function body itself raises 42501 for any caller that is not auth.role()='service_role' or fn_is_chairman(), independent of GRANT-level ACL."
+  },
+  "fn_atomic_lead_to_plan_transition": {
+    "reason": "SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001: chairman-approved-and-HELD migration (database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql, ceremony/20260824-sitting, 2026-08-24T12:43Z) does a body-only CREATE OR REPLACE (adds the canonical-writer stamp assignment to an existing RPC body) -- no GRANT/REVOKE, ACL untouched. Live pg_proc.proacl verified directly (2026-08-24): {postgres=X/postgres,service_role=X/postgres} -- no PUBLIC, no anon, no authenticated. The lint's file-diff scope can't see the original creation migration where this grant posture actually lives; this PR's diff only ever touches the function body."
+  },
+  "fn_atomic_exec_to_plan_transition": {
+    "reason": "SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001: same as fn_atomic_lead_to_plan_transition -- body-only CREATE OR REPLACE from the same chairman-approved-and-HELD migration, no GRANT/REVOKE, ACL untouched. Live pg_proc.proacl verified directly (2026-08-24): {postgres=X/postgres,service_role=X/postgres} -- no PUBLIC, no anon, no authenticated."
+  },
+  "complete_orchestrator_sd": {
+    "reason": "SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001: same as fn_atomic_lead_to_plan_transition -- body-only CREATE OR REPLACE from the same chairman-approved-and-HELD migration (adds the canonical-writer stamp to the existing completion RPC), no GRANT/REVOKE, ACL untouched. Live pg_proc.proacl verified directly (2026-08-24): {postgres=X/postgres,service_role=X/postgres} -- no PUBLIC, no anon, no authenticated."
+  },
+  "sd_canonical_writer_policy": {
+    "reason": "SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001: GENUINELY NEW function (does not exist live -- verified 2026-08-24), part of the same chairman-approved-and-HELD migration, and this IS a real gap in that approved file rather than a lint false positive -- flagged to the coordinator (signal 2026-08-24) for a follow-up amendment rather than a worker unilaterally editing chairman-approved DDL. Interim justification for the allowlist entry: the function is a pure internal registry lookup called only from within enforce_canonical_lifecycle_write()'s own trigger body (same-schema direct call, never via .rpc()/PostgREST -- grepped scripts/**, zero .rpc('sd_canonical_writer_policy') call sites); it returns only the static writer-identity allowlist itself (which columns are protected, which writers may touch them), not sensitive data, and the PRD's own TR/FR sections already establish that a caller capable of reverse-engineering a registry stamp string gains nothing beyond privileges it already holds. The migration is HELD (not yet applied), so there is no live exposure window as of this entry; the correct REVOKE should still be added to the approved file (or a follow-up migration) before it applies."
   }
 }

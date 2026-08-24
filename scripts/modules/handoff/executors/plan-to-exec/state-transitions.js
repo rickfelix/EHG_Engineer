@@ -12,6 +12,10 @@
  * propagated exception; deleted rather than wired.
  */
 
+import {
+  CANONICAL_WRITER_STAMP,
+} from '../../lib/canonical-writer-stamp.js';
+
 /**
  * Transition PRD status to EXEC phase
  *
@@ -88,6 +92,7 @@ export async function transitionSdToExec(supabase, sdId, sd) {
         current_phase: 'EXEC',
         status: 'active',
         is_working_on: true,
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq(queryField, sdId);

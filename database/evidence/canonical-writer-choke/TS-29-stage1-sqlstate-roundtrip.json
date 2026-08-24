@@ -1,0 +1,90 @@
+{
+  "probe": "TS-29 Stage 1 — custom SQLSTATE round-trip through PostgREST + supabase-js",
+  "sd": "SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001",
+  "started_at": "2026-08-24T04:05:27.941Z",
+  "scratch_objects": {
+    "table": "public._sdcw1_roundtrip_probe",
+    "function": "public._sdcw1_roundtrip_probe_guard()",
+    "trigger": "aaa_sdcw1_roundtrip_probe_guard"
+  },
+  "touched_strategic_directives_v2": false,
+  "cases": {
+    "missing_stamp_via_supabase_js": {
+      "pattern": ".update({status}).eq('id', ...).select('id')",
+      "data": null,
+      "data_is_null": true,
+      "data_is_array": false,
+      "error": {
+        "code": "SDCW1",
+        "message": "missing canonical-writer stamp on protected-column write",
+        "details": "guard=aaa_sdcw1_roundtrip_probe_guard sd=probe-row-1 status:draft->changed",
+        "hint": "Set lifecycle_write_token to your registry identity in the SAME UPDATE statement.",
+        "own_keys": [
+          "code",
+          "details",
+          "hint",
+          "message"
+        ],
+        "constructor_name": "Object"
+      }
+    },
+    "invalid_stamp_via_supabase_js": {
+      "data": null,
+      "data_is_null": true,
+      "error": {
+        "code": "SDCW1",
+        "message": "stamp value not present in canonical-writer registry",
+        "details": "guard=aaa_sdcw1_roundtrip_probe_guard sd=probe-row-2 rejected_identity='not-a-real-writer'",
+        "hint": "Enumerate valid identities with: SELECT writer_identity FROM public.sd_canonical_writer_policy();",
+        "own_keys": [
+          "code",
+          "details",
+          "hint",
+          "message"
+        ],
+        "constructor_name": "Object"
+      }
+    },
+    "valid_stamp_succeeds": {
+      "data": [
+        {
+          "id": "probe-row-3"
+        }
+      ],
+      "error": null
+    },
+    "zero_row_predicate_is_not_an_error": {
+      "data": [],
+      "data_is_array": true,
+      "row_count": 0,
+      "error": null
+    },
+    "raw_http": {
+      "http_status": 400,
+      "content_type": "application/json; charset=utf-8",
+      "body_raw": "{\"code\":\"SDCW1\",\"details\":\"guard=aaa_sdcw1_roundtrip_probe_guard sd=probe-row-4 status:draft->changed\",\"hint\":\"Set lifecycle_write_token to your registry identity in the SAME UPDATE statement.\",\"message\":\"missing canonical-writer stamp on protected-column write\"}",
+      "body_parsed": {
+        "code": "SDCW1",
+        "details": "guard=aaa_sdcw1_roundtrip_probe_guard sd=probe-row-4 status:draft->changed",
+        "hint": "Set lifecycle_write_token to your registry identity in the SAME UPDATE statement.",
+        "message": "missing canonical-writer stamp on protected-column write"
+      },
+      "body_is_json": true
+    }
+  },
+  "ddl_applied_at": "2026-08-24T04:05:28.157Z",
+  "postgrest_schema_visible": true,
+  "checks": {
+    "case1 error.code === SDCW1": true,
+    "case1 message verbatim": true,
+    "case1 message has no \"0 rows\"": true,
+    "case2 error.code === SDCW1": true,
+    "case2 message verbatim": true,
+    "case3 valid stamp succeeds": true,
+    "case4 zero-row returns error:null": true,
+    "case4 zero-row returns an empty ARRAY, not null": true,
+    "rejection and CAS-miss are distinguishable by error!==null": true
+  },
+  "verdict": "ROUND_TRIP_HOLDS",
+  "finished_at": "2026-08-24T04:05:31.997Z"
+}

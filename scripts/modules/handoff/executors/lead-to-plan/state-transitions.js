@@ -12,6 +12,9 @@
  * executeSpecific cannot fail after a state mutation starts. There is no reachable
  * partial-state branch for rollback to protect; deleted rather than wired.
  */
+import {
+  CANONICAL_WRITER_STAMP,
+} from '../../lib/canonical-writer-stamp.js';
 
 /**
  * STATE TRANSITION: Update SD current_phase on successful LEAD-TO-PLAN handoff
@@ -62,6 +65,7 @@ export async function transitionSdToPlan(sdId, sd, supabase) {
       .update({
         current_phase: 'PLAN_PRD',
         status: 'in_progress',
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq(queryField, sdId);

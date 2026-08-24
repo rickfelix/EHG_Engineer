@@ -59,6 +59,7 @@ export const EVIDENCE_SCHEMAS = Object.freeze({
     canonical_imports: 'string[]',
     files_scanned: 'number',
     ms_elapsed: 'number',
+    advisory: 'boolean',
   },
 });
 
@@ -69,6 +70,14 @@ export const EVIDENCE_SCHEMAS = Object.freeze({
  */
 const DEFAULT_EXCLUDE_DIRS = ['tests', '__tests__', 'archived-prd-scripts', 'archived-sd-scripts', 'node_modules', '.worktrees', '.git'];
 const DEFAULT_EXCLUDE_FILE_SUFFIXES = ['.test.js', '.spec.js', '.test.mjs', '.spec.mjs', '.md', '.txt', '.json'];
+
+/**
+ * How far past a `.from('<table>')` the multi-line pass will look for a write verb.
+ * 1200 chars comfortably spans the longest real chain in this repo (SDRepository.js's
+ * payload-building block) while staying short enough that an unrelated later statement
+ * cannot be misattributed to it.
+ */
+const MULTILINE_CHAIN_WINDOW = 1200;
 
 /**
  * Classify a sample value into a shape category for histogram comparison.
@@ -288,12 +297,37 @@ export async function verifyJoinShape(args) {
  * upsert), CLEAR_NULL (.update({col: null})), or READ (.select / .from without
  * a write verb). Only WRITE_NOW and CLEAR_NULL are considered bypass sites.
  *
+ * ADVISORY ONLY — SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 / FR-8.
+ * This scanner flags CANDIDATE write sites for human review. It is NOT the
+ * enforcement mechanism for strategic_directives_v2's lifecycle columns — the DB-side
+ * canonical-writer choke (aaa_/zzz_enforce_canonical_lifecycle_write) is, and it is
+ * unconditional. Retiring this scanner entirely was considered and rejected: it still
+ * catches new writers to ANY registered table, which the SD-v2-specific trigger cannot.
+ * Do not re-promote its output to a blocking gate without re-deciding that.
+ *
+ * MEASURED RECALL DEFECT THIS REPAIRS (FR-8 / TS-20). The original implementation matched
+ * only `.from(TABLE_NAME).update(` on ONE physical line. In this codebase's dominant style the
+ * table name and the write verb land on DIFFERENT lines, so recall on real lifecycle writers
+ * was ZERO — scripts/modules/handoff/db/SDRepository.js (the declared canonical writer itself)
+ * and lib/sd-park.js were both invisible, while all 16 of its findings were metadata/scope
+ * writes nobody was worried about. Three passes now run:
+ *   PASS 1  single-line chain      (unchanged; keeps exact line numbers and the 3-axis label)
+ *   PASS 2  MULTI-LINE chain       (.from(table) ... .update( within a bounded window)
+ *   PASS 3  RAW SQL                (UPDATE / INSERT INTO / DELETE FROM <table>, e.g. lib/sd-park.js)
+ *   PASS 4  RPC                    (.rpc('name') for caller-supplied writer RPC names)
+ * PASS 3 is text-level and will also match SQL inside a comment or a doc string. That is
+ * acceptable for an advisory lint and is the reason this is not a blocking gate.
+ *
  * @param {Object} args
  * @param {string} args.helperFile - Repo-relative path of the canonical helper
  * @param {string} args.table - Supabase table name to scan for
  * @param {string} args.repoRoot - Absolute path to repo root
  * @param {string[]} [args.includeDirs=['lib','scripts']]
  * @param {string[]} [args.extraExcludeDirs] - Append to DEFAULT_EXCLUDE_DIRS
+ * @param {string[]} [args.rpcWriters=[]] - RPC names that write this table; `.rpc('<name>')`
+ *   call sites for these are reported with axis RPC_WRITE. Empty by default, so PASS 4 is
+ *   inert unless a caller names the RPCs — a generic `.rpc(` sweep would flag hundreds of
+ *   unrelated calls and train reviewers to ignore the output.
  * @param {number} [args.budgetMs=5000] - Soft scan budget
  * @returns {Promise<{ok: boolean, evidence: object}>}
  */
@@ -301,6 +335,7 @@ export async function verifyHelperCoverage(args) {
   const { helperFile, table, repoRoot } = args || {};
   const includeDirs = args?.includeDirs ?? ['lib', 'scripts'];
   const extraExcludes = args?.extraExcludeDirs ?? [];
+  const rpcWriters = args?.rpcWriters ?? [];
   const budgetMs = Number(args?.budgetMs ?? 5000);
   const excludeDirs = new Set([...DEFAULT_EXCLUDE_DIRS, ...extraExcludes]);
 
@@ -311,6 +346,7 @@ export async function verifyHelperCoverage(args) {
     canonical_imports: [],
     files_scanned: 0,
     ms_elapsed: 0,
+    advisory: true,
   };
   const start = Date.now();
 
@@ -322,11 +358,15 @@ export async function verifyHelperCoverage(args) {
   // Pre-build patterns. Use line-anchored regex per-call-site, NOT greedy
   // multi-line spans. Reference table name as a literal — dynamic table
   // names are detected separately and noted in axis evidence.
-  const escapedTable = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$1');
+  // `$&` (the whole match), not `$1` — there is no capture group here, so the original `\\$1`
+  // emitted a literal backslash-dollar-one instead of escaping anything. Inert for every table
+  // name in the registry today (none contains a regex metacharacter), but a scanner whose escape
+  // is silently broken is the same class of defect as the recall gap above.
+  const escapedTable = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Match `from('table').(insert|upsert|update)(` or  `from(`table`)`
   const writeNowRe = new RegExp(`\\.from\\(\\s*[\\'"\`]${escapedTable}[\\'"\`]\\s*\\)\\s*\\.(insert|upsert|update)\\s*\\(`);
   // Dynamic table fallback: capture from(`${var}`) at insert/upsert
-  const dynamicWriteRe = new RegExp(`\\.from\\(\\s*\`\\$\\{[^}]+\\}\`\\s*\\)\\s*\\.(insert|upsert|update)\\s*\\(`);
+  const dynamicWriteRe = new RegExp('\\.from\\(\\s*`\\$\\{[^}]+\\}`\\s*\\)\\s*\\.(insert|upsert|update)\\s*\\(');
   // Canonical helper import: by relative path or by exported function name.
   // Allow file extensions and additional path segments after basename.
   const helperBaseName = helperFile.replace(/^.*[\\/]/, '').replace(/\.[mc]?js$/, '');
@@ -367,11 +407,16 @@ export async function verifyHelperCoverage(args) {
       if (importRe.test(src)) {
         evidence.canonical_imports.push(relative(repoRoot, full).replaceAll(sep, '/'));
       }
+      const relPath = relative(repoRoot, full).replaceAll(sep, '/');
+      const lineAt = (charIndex) => src.slice(0, charIndex).split(/\r?\n/).length;
+      const recordedLines = new Set();
+
       // Per-line scan to compute accurate line numbers + 3-axis classification
       const lines = src.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (writeNowRe.test(line)) {
+          recordedLines.add(i + 1);
           // Determine axis: insert/upsert → WRITE_NOW; .update({col:null}) → CLEAR_NULL
           const verbMatch = line.match(/\.(insert|upsert|update)\s*\(/);
           const verb = verbMatch?.[1] ?? 'unknown';
@@ -390,6 +435,7 @@ export async function verifyHelperCoverage(args) {
             dynamic_table: false,
           });
         } else if (dynamicWriteRe.test(line)) {
+          recordedLines.add(i + 1);
           evidence.bypass_sites.push({
             path: relative(repoRoot, full).replaceAll(sep, '/'),
             line: i + 1,
@@ -397,6 +443,80 @@ export async function verifyHelperCoverage(args) {
             verb: 'unknown',
             snippet: line.trim().slice(0, 200),
             dynamic_table: true,
+          });
+        }
+      }
+
+      // PASS 2 — MULTI-LINE Supabase chains. The recall gap FR-8 exists to close: `.from(table)`
+      // and the write verb routinely land on different physical lines, so PASS 1's line-anchored
+      // regex could never see them.
+      const fromRe = new RegExp(`\\.from\\(\\s*['"\`]${escapedTable}['"\`]\\s*\\)`, 'g');
+      let fromMatch;
+      while ((fromMatch = fromRe.exec(src)) !== null) {
+        const window = src.slice(fromMatch.index, fromMatch.index + MULTILINE_CHAIN_WINDOW);
+        const verbMatch = window.match(/\.(insert|upsert|update)\s*\(/);
+        if (!verbMatch) continue;
+        // A second `.from(` between this one and the verb means the verb belongs to a DIFFERENT
+        // chain — attributing it here would be a false positive that erodes trust in the report.
+        if (/\.from\s*\(/.test(window.slice(1, verbMatch.index))) continue;
+        const line = lineAt(fromMatch.index);
+        if (recordedLines.has(line)) continue; // PASS 1 already has it, with a better snippet
+        recordedLines.add(line);
+        const verb = verbMatch[1];
+        let axis = 'WRITE_NOW';
+        if (verb === 'update' && /:\s*null/.test(window.slice(verbMatch.index, verbMatch.index + 200))) {
+          axis = 'CLEAR_NULL';
+        }
+        evidence.bypass_sites.push({
+          path: relPath,
+          line,
+          axis,
+          verb,
+          snippet: window.slice(0, 200).replace(/\s+/g, ' ').trim(),
+          dynamic_table: false,
+          multiline: true,
+        });
+      }
+
+      // PASS 3 — RAW SQL. lib/sd-park.js writes through a raw `pg` client, so no amount of
+      // Supabase-chain matching would ever have seen it.
+      const rawSqlRe = new RegExp(
+        `\\b(?:UPDATE|INSERT\\s+INTO|DELETE\\s+FROM)\\s+(?:public\\.)?${escapedTable}\\b`,
+        'gi',
+      );
+      let sqlMatch;
+      while ((sqlMatch = rawSqlRe.exec(src)) !== null) {
+        const line = lineAt(sqlMatch.index);
+        if (recordedLines.has(line)) continue;
+        recordedLines.add(line);
+        evidence.bypass_sites.push({
+          path: relPath,
+          line,
+          axis: 'RAW_SQL',
+          verb: sqlMatch[0].split(/\s+/)[0].toLowerCase(),
+          snippet: src.slice(sqlMatch.index, sqlMatch.index + 200).replace(/\s+/g, ' ').trim(),
+          dynamic_table: false,
+          raw_sql: true,
+        });
+      }
+
+      // PASS 4 — RPC call sites, only for RPC names the caller declares as writers of this table.
+      if (rpcWriters.length > 0) {
+        const escapedRpcs = rpcWriters.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        const rpcRe = new RegExp(`\\.rpc\\(\\s*['"\`](${escapedRpcs})['"\`]`, 'g');
+        let rpcMatch;
+        while ((rpcMatch = rpcRe.exec(src)) !== null) {
+          const line = lineAt(rpcMatch.index);
+          if (recordedLines.has(line)) continue;
+          recordedLines.add(line);
+          evidence.bypass_sites.push({
+            path: relPath,
+            line,
+            axis: 'RPC_WRITE',
+            verb: 'rpc',
+            snippet: src.slice(rpcMatch.index, rpcMatch.index + 200).replace(/\s+/g, ' ').trim(),
+            dynamic_table: false,
+            rpc_name: rpcMatch[1],
           });
         }
       }

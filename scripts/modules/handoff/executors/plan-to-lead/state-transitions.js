@@ -9,6 +9,7 @@
  */
 
 import { normalizeSDId } from '../../../sd-id-normalizer.js';
+import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 
 // Import orchestrator child completion for per-child post-completion handling
 // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
@@ -523,6 +524,7 @@ export async function completeStandardSD(supabase, sdId, prd, planValidation, ga
       .update({
         status: 'pending_approval',
         current_phase: 'LEAD',
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq('id', sdCanonicalId)

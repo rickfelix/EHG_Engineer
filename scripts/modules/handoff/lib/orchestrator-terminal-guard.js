@@ -17,6 +17,7 @@
  */
 
 import { getFilteredRetrospective } from '../retro-filters.js';
+import { CANONICAL_WRITER_STAMP } from './canonical-writer-stamp.js';
 
 /**
  * The command that genuinely completes an orchestrator parent.
@@ -72,6 +73,7 @@ export async function routeOrchestratorToLeadFinal(supabase, sd, { source = 'orc
     .from('strategic_directives_v2')
     .update({
       status: 'pending_approval',
+      lifecycle_write_token: CANONICAL_WRITER_STAMP,
       updated_at: new Date().toISOString()
     })
     .eq('id', sd.id)

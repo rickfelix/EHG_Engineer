@@ -1,0 +1,27 @@
+--- update_sd_after_exec_completion.before.sql
++++ update_sd_after_exec_completion.after.sql
+  CREATE OR REPLACE FUNCTION public.update_sd_after_exec_completion()
+   RETURNS trigger
+   LANGUAGE plpgsql
+   SET search_path TO 'public', 'extensions'
+  AS $function$
+  BEGIN
+      -- Update SD status when implementation is completed
+      IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
+          UPDATE strategic_directives_v2
+          SET
+              status = CASE
+                  WHEN NEW.quality_score >= 90 THEN 'implementation_complete'
+                  WHEN NEW.quality_score >= 75 THEN 'implementation_complete'
+                  ELSE 'implementation_review_required'
+              END,
++             lifecycle_write_token = 'update_sd_after_exec_completion',
+              updated_at = NOW()
+          WHERE id = NEW.sd_id;
+      END IF;
+  
+      RETURN NEW;
+  END;
+  $function$
+  
+  

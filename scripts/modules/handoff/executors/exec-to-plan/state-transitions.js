@@ -6,6 +6,7 @@
  */
 
 import { normalizeSDId } from '../../../sd-id-normalizer.js';
+import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 
 /**
  * STATE TRANSITION: Update user stories to validated status
@@ -141,6 +142,7 @@ export async function transitionSDToExecComplete(supabase, sdId) {
       .from('strategic_directives_v2')
       .update({
         current_phase: 'EXEC_COMPLETE',
+        lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
       })
       .eq('id', sdCanonicalId)

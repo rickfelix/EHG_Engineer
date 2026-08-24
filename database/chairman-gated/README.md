@@ -655,3 +655,114 @@ SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection
 repo-wide. Any worker adding non-additive DDL to `database/migrations/` today gets it auto-applied,
 gate or no gate. That is worth deciding on its own merits — either turn the gate on, or stop
 describing TIER-2 as deferred — and it is out of scope for this SD.
+
+## Applying SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 (THREE ordered steps, TWO migrations)
+
+The canonical-writer choke on `strategic_directives_v2` is **not one ceremony**. It is three ordered
+steps across two chairman-gated migrations with a code deploy between them, and every ordering here
+is load-bearing — running them out of order breaks the fleet in one direction or the other:
+
+| Step | File | What it is |
+|---|---|---|
+| 1 | `20260824_strategic_directives_lifecycle_write_token_column.sql` | The `lifecycle_write_token` column, alone. Additive, catalog-only, ~1-minute review. |
+| 2 | *(not a migration)* | Merge/deploy the code branch that stamps `scripts/modules/handoff/**`, and wire the 13 remaining registered writers. |
+| 3 | `20260824_strategic_directives_canonical_writer_choke.sql` | The registry, the two guard triggers, and eight amended function bodies. |
+
+**Why the split** (measured, not stylistic — see `database/evidence/canonical-writer-choke/deploy-order-and-role-surface.json`):
+PostgREST validates an UPDATE payload against its schema cache *before* matching any row, so a
+payload naming `lifecycle_write_token` while the column is absent returns `PGRST204` — every wired
+call site hard-fails on its first real call. And `PGRST204` is not `SDCW1`, so
+`isCanonicalWriteRejection()` returns false and the two compensation paths silently swallow it.
+Step 1 exists so the code branch can merge without waiting on step 3's much larger review.
+
+Step 3 **refuses to apply** if step 1 has not (its `$precondition$` block aborts before creating
+anything), so 3-before-1 is impossible. 3-before-2 is *not* machine-enforceable and is the one to
+watch: a live guard with unstamped writers rejects every lifecycle transition.
+
+### Step 1
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260824_strategic_directives_lifecycle_write_token_column.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Confirm before proceeding to step 2:
+
+```sql
+SELECT column_name, is_nullable, column_default
+  FROM information_schema.columns
+ WHERE table_schema='public' AND table_name='strategic_directives_v2'
+   AND column_name='lifecycle_write_token';
+```
+
+### Step 2 — code, not a migration
+
+Merge/deploy the branch that stamps `scripts/modules/handoff/**`, then wire the remaining registered
+writers. This SD's FR-4 scoped the wiring to the handoff pipeline, so 13 writers hold registry
+entries while their code still sends nothing. Applying step 3 with any of them unwired takes those
+tools offline. Enumerate what is outstanding:
+
+```sql
+SELECT writer_identity, capability_flags->>'surface', notes
+  FROM public.sd_canonical_writer_policy()
+ WHERE (capability_flags->>'stamp_wired')::boolean IS NOT TRUE
+ ORDER BY writer_identity;
+```
+
+That query only works once step 3 has applied (it creates the registry function). Before then the
+same list is in the migration file's registry VALUES clause, and step 3's `$verify$` block re-reports
+it as a WARNING at apply time.
+
+### Step 3
+
+**BEFORE the ceremony, in the applying session:**
+
+```sql
+SET lock_timeout = '3s';
+```
+
+Not optional. `CREATE TRIGGER` and `ADD COLUMN` both take an ACCESS EXCLUSIVE lock that blocks
+READS as well as writes, and `service_role`/`postgres` have no `lock_timeout` configured — a lock
+taken while the fleet is active queues indefinitely instead of failing fast.
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql" \
+  --prod-deploy --allow-any-path
+```
+
+⚠️ **PRE-APPLY BLOCKER.** The SD's FR-4 scoped stamp wiring to the handoff pipeline. Thirteen other
+writers hold registry entries but do NOT yet send the stamp, and applying before they are wired
+takes them offline (`npm run sd:cancel`, `sd:reactivate`, `sd:recover`, `sd:park`/`sd:unpark`, and
+several fleet libs). Enumerate what is outstanding:
+
+```sql
+SELECT writer_identity, capability_flags->>'surface', notes
+  FROM public.sd_canonical_writer_policy()
+ WHERE (capability_flags->>'stamp_wired')::boolean IS NOT TRUE
+ ORDER BY writer_identity;
+```
+
+The migration's own `$verify$` block RAISEs a WARNING naming every unwired writer at apply time, and
+fails CLOSED if a sibling trigger has landed outside the `aaa_`/`zzz_` sort bounds (FR-2 Stage 2).
+
+Rollback: `20260824_strategic_directives_canonical_writer_choke_DOWN.sql` — drops both triggers and
+both functions, and deliberately RETAINS the `lifecycle_write_token` column so every stamped writer
+keeps working with no code revert. **Step 1 has no down-migration on purpose**: dropping the column
+while the code branch is deployed is the exact `PGRST204` breakage the split exists to prevent.
+
+⚠️ **Re-applying step 3 after a MODE 1 rollback is not a plain re-run.** MODE 1 removes `zzz_` — the
+only thing that nulls the stamp at rest — while retaining the column and every stamping writer, so
+registry-valid stamps accumulate at rest for the whole rollback window. Re-arming `aaa_` over that
+state would let the next *unstamped* write inherit a valid stamp. Step 3's `$reset_at_rest$` block
+clears them and hard-fails if any survive, before either trigger is created; it is a genuine no-op
+on a first apply. Do not remove it believing otherwise — the DDL suite has a two-sided test showing
+the write is wrongly accepted without it.
+
+Behavioural proof:
+`tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js` (67 scenarios, ephemeral
+Postgres). Writer inventory:
+`database/evidence/SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001-writer-inventory.md`.
