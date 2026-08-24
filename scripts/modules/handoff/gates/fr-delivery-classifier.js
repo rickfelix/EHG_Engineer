@@ -420,13 +420,19 @@ export async function classifyFrDelivery(supabase, {
     frs = (prd && prd.functional_requirements) || [];
   }
 
-  // NOTE: user_stories has NO `description` column — selecting it errors the whole query
-  // (data -> null -> every FR wrongly flagged undelivered). Stick to real columns.
-  const { data: stories } = await supabase
+  // NOTE: user_stories has NO `description` column — selecting it errors the whole query.
+  // Bind `error` explicitly and surface it via stories_lookup_failed (mirrors the testingError /
+  // complianceError pattern below): an error means "no usable evidence", never "zero rows found
+  // by design" — this module's own header names exactly the silent-error class of bug this
+  // pre-existing instance was (found by testing-agent evidence e3437068-25eb-4922-b069-90bec988ff3f
+  // while reviewing SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001, fixed here as a standalone item).
+  // Stick to real columns.
+  const { data: stories, error: storiesError } = await supabase
     .from('user_stories')
     .select('id, title, user_want, acceptance_criteria, technical_notes, status, validation_status')
     .eq('sd_id', sdId);
-  const validated = (stories || []).filter(isValidatedStory);
+  const storiesLookupFailed = storiesError != null;
+  const validated = storiesLookupFailed ? [] : (stories || []).filter(isValidatedStory);
 
   // Second signal: TESTING sub_agent_execution_results evidence for this SD. Bind `error`
   // explicitly (do not repeat the pre-existing stories-query anti-pattern above, which this
@@ -602,6 +608,7 @@ export async function classifyFrDelivery(supabase, {
     rejected_phase_rows: rejectedPhaseRows,
     conflicting_signals: conflictingSignals,
     compliance_lookup_failed: complianceLookupFailed,
+    stories_lookup_failed: storiesLookupFailed,
   };
 }
 
@@ -658,6 +665,12 @@ export function projectGateResult(classification, {
     // lookup that would have let testing_evidence promote real work product failed, not that no
     // work product exists.
     warnings.push(`${gateName}: the repo-compliance lookup for testing_evidence failed — any UNDELIVERED verdict below may reflect a broken instrument, not confirmed absence.`);
+  }
+
+  if (classification.stories_lookup_failed) {
+    // Same principle as compliance_lookup_failed above, for the sibling user_stories query: a
+    // broken instrument must never be silently indistinguishable from "no validated story exists".
+    warnings.push(`${gateName}: the user_stories lookup failed — any UNDELIVERED/UNVERIFIABLE verdict below may reflect a broken instrument, not confirmed absence of a validated story.`);
   }
 
   if (undelivered > 0) {
