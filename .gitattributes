@@ -21,7 +21,12 @@
 # not apply .gitattributes merge drivers to its own conflict detection — this fix covers local
 # `git merge`/`git rebase` (the actual source of the reported pain: shipping prep, main-sync
 # before /ship), not the server-side path.
-CHANGELOG.md merge=union
+#
+# Anchored to root (`/CHANGELOG.md`, not a bare `CHANGELOG.md`) — an unanchored pattern matches
+# that basename at any depth (SECURITY review, EXEC-TO-PLAN). Today a no-op (this is the only
+# tracked CHANGELOG.md), but anchoring makes the intent explicit and avoids a future vendored or
+# sub-package CHANGELOG.md silently inheriting union merging.
+/CHANGELOG.md merge=union
 
 # SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D
 # Pin the generated stage-config.js to LF so its on-disk form matches the

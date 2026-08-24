@@ -51,9 +51,17 @@ const CHANGELOG_BASE = [
   '',
 ].join('\n');
 
-/** A fresh, isolated real git repo under a realpath'd temp dir. Never touches the live repo. */
+const dirsToClean = [];
+
+/**
+ * A fresh, isolated real git repo under a realpath'd temp dir. Never touches the live repo.
+ * Registers `dir` for cleanup IMMEDIATELY after mkdtempSync -- before any subsequent git call
+ * that could throw (missing git binary, an old git lacking `init -b`, disk full) -- so a leak
+ * cannot occur between directory creation and the caller's own cleanup registration.
+ */
 function initRepo(dirname) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), dirname)));
+  dirsToClean.push(dir);
   git(['init', '-q', '-b', 'trunk'], dir);
   git(['config', 'user.email', 'test@example.com'], dir);
   git(['config', 'user.name', 'test'], dir);
@@ -74,7 +82,6 @@ function commitAll(dir, message) {
   git(['commit', '-q', '-m', message], dir);
 }
 
-const dirsToClean = [];
 beforeEach(() => { dirsToClean.length = 0; });
 afterEach(() => {
   for (const d of dirsToClean) {
@@ -85,7 +92,6 @@ afterEach(() => {
 describe('CHANGELOG.md merge=union fix (FR-1/FR-2)', () => {
   it('TS-1: the DEFAULT merge strategy CONFLICTS on a concurrent same-date/same-category append (documents the problem)', () => {
     const dir = initRepo('changelog-union-ts1-');
-    dirsToClean.push(dir);
 
     fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), CHANGELOG_BASE);
     commitAll(dir, 'base, no .gitattributes at all');
@@ -113,7 +119,6 @@ describe('CHANGELOG.md merge=union fix (FR-1/FR-2)', () => {
 
   it('TS-2: merge=union present in the checked-out (ours) branch resolves CLEANLY with both entries, no fixed order asserted', () => {
     const dir = initRepo('changelog-union-ts2-');
-    dirsToClean.push(dir);
 
     fs.writeFileSync(path.join(dir, '.gitattributes'), 'CHANGELOG.md merge=union\n');
     fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), CHANGELOG_BASE);
@@ -141,7 +146,6 @@ describe('CHANGELOG.md merge=union fix (FR-1/FR-2)', () => {
 
   it('TS-3a: attribute present ONLY on the incoming (theirs) side STILL CONFLICTS -- ours-side presence is what matters', () => {
     const dir = initRepo('changelog-union-ts3a-');
-    dirsToClean.push(dir);
 
     fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), CHANGELOG_BASE);
     commitAll(dir, 'base, no .gitattributes');
@@ -176,7 +180,6 @@ describe('CHANGELOG.md merge=union fix (FR-1/FR-2)', () => {
 
   it('TS-3b: attribute present ONLY on the checked-out (ours) side, absent from the common ancestor AND theirs, resolves CLEANLY', () => {
     const dir = initRepo('changelog-union-ts3b-');
-    dirsToClean.push(dir);
 
     fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), CHANGELOG_BASE);
     commitAll(dir, 'base, no .gitattributes at all');
