@@ -40,12 +40,26 @@ describe('classifyRetro replay against a live retro_type=HANDOFF snapshot (FR-1,
     expect(snapshot.auto_generated_refused_count).toBe(0);
   });
 
-  it('the manual-content refusal rate is unaffected by this fix (non-auto rows still refuse when appropriate)', () => {
-    const manualRefusals = snapshot.rows.filter(
-      ({ expected }) => expected.reason === 'manual_retro' || expected.reason === 'manual_retro_null_inferred'
-    );
-    // The fixture's own tally records these; the replay must agree exactly.
-    const tallyManual = (snapshot.reason_tally.manual_retro || 0) + (snapshot.reason_tally.manual_retro_null_inferred || 0);
-    expect(manualRefusals.length).toBe(tallyManual);
+  it('the manual-content refusal path is unaffected by this fix, verified via a LIVE classifyRetro call per row -- not the fixture\'s own precomputed `expected`/`reason_tally` fields', () => {
+    // SD-LEO-INFRA-RETRO-PROMOTION-PATH-001 EXEC-phase TESTING finding F-7: the prior version of
+    // this assertion compared two fields both precomputed by the fixture generator, never calling
+    // the imported classifyRetro() -- it would have passed even against a broken/stubbed import.
+    // This version derives everything from `row` (raw DB columns only) through the live import.
+    let liveManualRefusals = 0;
+    let livelyAutoRows = 0;
+    const AUTO_GENERATED_TYPES = ['AUTO', 'AUTO_HOOK', 'NON_SD_MERGE', 'RETRO_SUB_AGENT', 'SUB_AGENT', 'system', 'non_interactive'];
+    for (const { row } of snapshot.rows) {
+      const result = classifyRetro(row);
+      if (!result.safe && (result.reason === 'manual_retro' || result.reason === 'manual_retro_null_inferred')) {
+        liveManualRefusals++;
+      }
+      if (row.generated_by && AUTO_GENERATED_TYPES.includes(row.generated_by)) livelyAutoRows++;
+    }
+    // The live sample contains at least one real manual specimen (the fix must not have swallowed it)...
+    expect(liveManualRefusals).toBeGreaterThan(0);
+    // ...and it must be strictly LESS than the total sample size, since the whole point of FR-1 is
+    // that the (majority, auto-generated) remainder of the sample is NOT refused via this path.
+    expect(liveManualRefusals).toBeLessThan(snapshot.rows.length);
+    expect(livelyAutoRows).toBeGreaterThan(0);
   });
 });
