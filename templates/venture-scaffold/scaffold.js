@@ -188,7 +188,17 @@ jobs:
 function generateDeployModule(ventureName, outputDir, options) {
   const buildSecretEnvVar = options.buildSecretEnvVar || 'VITE_CLERK_PUBLISHABLE_KEY';
   const buildSecretGrepPattern = options.buildSecretGrepPattern || 'pk_(test|live)_[A-Za-z0-9+/=]{20,}';
-  const d1DatabaseName = options.d1DatabaseName || ventureName;
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, WARNING):
+  // the writer (venture-scaffold-modules-writer.js SEC-2) sanitizes ventureName before
+  // calling generate(), but the CLI's main() (this file, below) passes CLI argv straight
+  // through unsanitized -- the CLI is a documented supported entry point, and this PR
+  // newly exports MODULE_REGISTRY, widening who can call generate() directly. Reproduced:
+  // an unsanitized name with shell metacharacters reaches this default and is interpolated
+  // unquoted into a `run:` line that executes with Cloudflare deploy credentials. Applying
+  // the SAME normalization here (not just at the writer) closes the gap for every caller,
+  // not only the ones that happen to go through the writer.
+  const safeVentureName = String(ventureName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venture';
+  const d1DatabaseName = options.d1DatabaseName || safeVentureName;
   const uatProbePath = options.uatProbePath || '/api/events';
   const uatWriteBody = options.uatWriteBody
     || '{"eventType":"page_view","eventName":"page_view","properties":{"path":"/ci-post-deploy-uat"}}';
@@ -262,7 +272,13 @@ jobs:
       - name: Verify ALLOWED_ORIGINS matches the live deploy URL
         run: |
           URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\\.workers\\.dev' deploy-output.txt | tail -1)
-          PINNED=$(grep -oE '^ALLOWED_ORIGINS\\s*=\\s*"[^"]+"' wrangler.toml | grep -oE 'https://[^"]+')
+          # A missing wrangler.toml or an absent/not-yet-configured ALLOWED_ORIGINS line
+          # is a legitimate, tolerated case (see the echo below) -- but under GitHub
+          # Actions' bash -e, a failed command-substitution ASSIGNMENT (both greps
+          # exiting 1 on no-match) aborts the script before the tolerance check on the
+          # next line ever runs. Same defect class as the already-fixed git-grep bug
+          # above; the trailing "|| true" here plays the same role "|| rc=$?" does there.
+          PINNED=$(grep -oE '^ALLOWED_ORIGINS\\s*=\\s*"[^"]+"' wrangler.toml 2>/dev/null | grep -oE 'https://[^"]+' || true)
           if [ -n "$PINNED" ] && [ "$URL" != "$PINNED" ]; then
             echo "::error::wrangler.toml's committed ALLOWED_ORIGINS ($PINNED) no longer matches the live deploy URL ($URL)."
             exit 1
@@ -295,7 +311,7 @@ jobs:
             "$URL${uatProbePath}")
           if [ "$STATUS" != "200" ]; then
             echo "::error::Signed-in GET ${uatProbePath} returned HTTP $STATUS (expected 200)."
-            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}if(t)out=out.split(t).join('[REDACTED]');console.log(out)"
+            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('response.json','utf8'));let m=j.error||j.message;if(typeof m==='string'){if(t)m=m.split(t).join('[REDACTED]');out=m.slice(0,300)}}catch{}console.log(out)"
             exit 1
           fi
           echo "Signed-in probe succeeded: GET ${uatProbePath} returned 200 against the live deploy."
@@ -306,7 +322,7 @@ jobs:
             "$URL${uatProbePath}")
           if [ "$WRITE_STATUS" != "201" ]; then
             echo "::error::Signed-in POST ${uatProbePath} returned HTTP $WRITE_STATUS (expected 201)."
-            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('write-response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}if(t)out=out.split(t).join('[REDACTED]');console.log(out)"
+            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('write-response.json','utf8'));let m=j.error||j.message;if(typeof m==='string'){if(t)m=m.split(t).join('[REDACTED]');out=m.slice(0,300)}}catch{}console.log(out)"
             exit 1
           fi
           echo "First-walk event recorded successfully."
@@ -365,10 +381,10 @@ jobs:
           # sk-proj- key is base64url-bodied, so a '-'/'_' can land anywhere in the
           # first 20 chars, which this alphanumeric-only tail then misses -- roughly
           # half of real project keys evade it. SECURITY's suggested fix, anchoring
-          # word-initial occurrences with \b instead of narrowing the class
-          # (\bsk-(proj-)?[A-Za-z0-9_-]{20,}), was independently re-verified here
+          # word-initial occurrences with \\b instead of narrowing the class
+          # (\\bsk-(proj-)?[A-Za-z0-9_-]{20,}), was independently re-verified here
           # with real grep -E against THIS FILE's OWN ordinary-code test fixtures and
-          # still matched all 5 (a leading "sk-" is itself a word boundary, so \b does
+          # still matched all 5 (a leading "sk-" is itself a word boundary, so \\b does
           # not distinguish "sk-a-real-key" from "sk-scheduler-configuration-manager")
           # -- adopting it would have reintroduced the exact false-positive class this
           # fix exists to close. Zero false positives was judged the safer trade-off:

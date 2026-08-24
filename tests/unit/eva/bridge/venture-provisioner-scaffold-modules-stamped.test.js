@@ -58,10 +58,24 @@ describe('venture-provisioner DEFAULT_STEPS: scaffold_modules_stamped', () => {
     expect(await scaffoldModulesStep().check(ctx)).toBe(true);
   });
 
-  it('check() short-circuits once stepsCompleted includes this step, without touching the repo', async () => {
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, WARNING):
+  // this used to be `check() short-circuits once stepsCompleted includes this step,
+  // without touching the repo` -- asserting a real bug as a feature. If execute() ever
+  // ran with no repoPath available (a clean no-op, not an error), the step-runner marks
+  // it 'completed' and persists that flag; the OLD check() then trusted the flag
+  // forever, even once the repo path became available and the manifest still didn't
+  // exist -- a silent-skip-forever. check() must always re-verify live, matching
+  // cicd_configured's own pattern (which never had this shortcut).
+  it('check() does NOT trust a stale stepsCompleted flag -- it always re-verifies the manifest against the live filesystem', async () => {
     const ctx = { ventureId: 'v1', venture: { name: 'AcmeVenture', localPath: repoPath }, ventureRepoPath: repoPath, stepsCompleted: ['scaffold_modules_stamped'], log: () => {} };
-    expect(await scaffoldModulesStep().check(ctx)).toBe(true);
+    // The flag CLAIMS this step is done, but no manifest was ever actually written --
+    // check() must not be fooled by the flag alone.
+    expect(await scaffoldModulesStep().check(ctx)).toBe(false);
     expect(existsSync(join(repoPath, 'scaffold-manifest.json'))).toBe(false);
+
+    // Once the manifest genuinely exists, check() reports true regardless of the flag.
+    await scaffoldModulesStep().execute(ctx);
+    expect(await scaffoldModulesStep().check(ctx)).toBe(true);
   });
 
   it('execute() no-ops gracefully when no local repo path is resolvable', async () => {

