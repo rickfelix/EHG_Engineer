@@ -124,17 +124,28 @@ async function main() {
   const repoRoot = path.resolve(__dirname, '..');
   const mappedTypes = loadMappedTypes(repoRoot);
 
-  // warnIfCapTruncated: leo_protocol_sections is a curated, operationally small
-  // (dozens-to-low-hundreds of rows) protocol-documentation config table, not a growing event
-  // stream -- a full-table read is correct by design (evaluateContentUniqueness needs every
-  // row's content). Tripwired rather than a bare unbounded select() so a future growth past the
-  // PostgREST page cap fails loudly instead of silently under-scanning.
+  // leo_protocol_sections is a curated, operationally small (dozens-to-low-hundreds of rows)
+  // protocol-documentation config table, not a growing event stream -- a full-table read is
+  // correct by design (evaluateContentUniqueness needs every row's content). .limit(999) is a
+  // real, honest bound (286 live rows today), not a truncation risk; warnIfCapTruncated below is
+  // the genuine safety net that fires loudly if the table ever actually approaches that cap,
+  // rather than silently under-scanning.
+  //
+  // PLAN_VERIFICATION correction: an earlier version of this fix wrapped the read in
+  // warnIfCapTruncated() as a SEPARATE statement below the select, believing that satisfied
+  // count-truncation-diff-lint.mjs's classifyChain(). It did not -- two independent sub-agents
+  // (VALIDATION evidence 5c939fde, REGRESSION evidence 4804e875) live-replayed chainWindow()'s
+  // exact 3-line-backward/12-line-forward, statement-boundary-terminated scan and proved the
+  // tripwire call landed outside it either way. The .limit(999) below is the fix that actually
+  // lands inside the window and passes the live lint (confirmed by re-running it after this
+  // edit, not by re-reading the classifier's source a third time).
   const { warnIfCapTruncated } = await import('../lib/db/fetch-all-paginated.mjs');
   const { data: rawRows, error } = await sb
     .from('leo_protocol_sections')
-    .select('id, section_type, target_file, content, metadata');
+    .select('id, section_type, target_file, content, metadata')
+    .limit(999);
   if (error) throw new Error(`leo_protocol_sections read failed: ${error.message}`);
-  const rows = warnIfCapTruncated(rawRows, 'protocol-publication-audit:leo_protocol_sections');
+  const rows = warnIfCapTruncated(rawRows, 'protocol-publication-audit:leo_protocol_sections', { cap: 999 });
 
   const result = evaluatePublicationInvariants(rows, mappedTypes);
   const uniqueness = evaluateContentUniqueness(rows);
