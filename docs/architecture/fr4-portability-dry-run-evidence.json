@@ -1,0 +1,23 @@
+{
+  "sd": "SD-LEO-INFRA-REPO-HYGIENE-PATH-001",
+  "fr": "FR-4",
+  "description": "Portability dry-run: repo-paths.js resolver COPIED (not symlinked) to a throwaway prefix outside C:/Users/rickf, run from that copy, output verified to reflect the new location.",
+  "original_repo_root": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPO-HYGIENE-PATH-001",
+  "run_at": "2026-08-24T05:16:18.878Z",
+  "results": {
+    "dryrun_root": "C:\\ehg-portability-dryrun-40100",
+    "copy_engineer_root": "C:\\ehg-portability-dryrun-40100\\EHG_Engineer",
+    "copy_ehg_root": "C:\\ehg-portability-dryrun-40100\\ehg",
+    "getRepoRoot": "C:\\ehg-portability-dryrun-40100\\EHG_Engineer",
+    "resolveRepoPath_ehg": "C:\\ehg-portability-dryrun-40100\\ehg",
+    "resolveRepoPath_EHG_Engineer": "C:\\ehg-portability-dryrun-40100\\EHG_Engineer",
+    "ENGINEER_ROOT_export": "C:\\ehg-portability-dryrun-40100\\EHG_Engineer"
+  },
+  "checks": {
+    "getRepoRoot_matches_copy_not_original": true,
+    "resolveRepoPath_ehg_matches_copy_sibling_not_original": true,
+    "resolveRepoPath_EHG_Engineer_matches_copy_not_original": true,
+    "ENGINEER_ROOT_export_matches_copy": true
+  },
+  "all_checks_passed": true
+}
