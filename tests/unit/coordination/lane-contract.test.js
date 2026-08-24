@@ -29,6 +29,7 @@ const {
   buildExpiredUnreadStampPatch,
 } = require('../../../lib/coordination/lane-contract.cjs');
 const { DIRECTIVE_KINDS, ADVISORY_KINDS } = require('../../../lib/fleet/worker-status.cjs');
+import { isPurgeEligible } from '../../../lib/coordination/dead-letter-drain.js';
 
 describe('resolveLaneContractMode — staged off/observe/enforce ladder (FR-1)', () => {
   it('resolves off when the base flag is disabled', async () => {
@@ -307,5 +308,30 @@ describe('buildExpiredUnreadStampPatch — FR-2 marker, payload-only', () => {
     const patch = buildExpiredUnreadStampPatch({ payload: { kind: 'roll_call' } }, { nowMs: Date.now() });
     expect(patch.payload.dead_letter_ttl.lane).toBe(UNTRACKED_LANE);
     expect(patch.payload.dead_letter_ttl.ttl_ms).toBeNull();
+  });
+});
+
+describe('FR-2 stamp survives cleanup_expired_coordination() unchanged (PRD acceptance criterion, two-armed)', () => {
+  const NOW = new Date('2026-08-23T12:00:00.000Z').getTime();
+  const farPastExpiresAt = new Date(NOW - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
+
+  it('MATCHING fixture: a row with expires_at in the past, stamped by FR-2 (payload-only, acknowledged_at/read_at both still null), is NOT purge-eligible -- the stamp never arms cleanup_expired_coordination()\'s purge predicate', () => {
+    const raw = { payload: { kind: 'work_assignment' }, expires_at: farPastExpiresAt, acknowledged_at: null, read_at: null };
+    const patch = buildExpiredUnreadStampPatch(raw, { nowMs: NOW });
+    const stamped = { ...raw, payload: patch.payload };
+    expect(stamped.payload.dead_letter_ttl).toBeDefined();
+    expect(isPurgeEligible(stamped, { nowMs: NOW })).toBe(false);
+  });
+
+  it('CONTROL: isPurgeEligible is NOT vacuously false -- an otherwise-identical row that IS acknowledged (a real purge candidate, never touched by FR-2\'s stamp) correctly IS purge-eligible, proving the matching fixture\'s false result is meaningful', () => {
+    const acknowledged = { payload: { kind: 'work_assignment' }, expires_at: farPastExpiresAt, acknowledged_at: new Date(NOW - 1000).toISOString(), read_at: null };
+    expect(isPurgeEligible(acknowledged, { nowMs: NOW })).toBe(true);
+  });
+
+  it('CONTROL fixture: a row whose expires_at is NOT in the past is not purge-eligible for the RIGHT reason (expires_at hasn\'t passed), independent of whether it carries the FR-2 stamp', () => {
+    const notYetExpired = { payload: { kind: 'work_assignment' }, expires_at: new Date(NOW + 60 * 60 * 1000).toISOString(), acknowledged_at: null, read_at: null };
+    expect(isPurgeEligible(notYetExpired, { nowMs: NOW })).toBe(false);
+    const stamped = buildExpiredUnreadStampPatch(notYetExpired, { nowMs: NOW });
+    expect(isPurgeEligible({ ...notYetExpired, payload: stamped.payload }, { nowMs: NOW })).toBe(false);
   });
 });
