@@ -105,6 +105,22 @@ describe('applyOwedDeliveryTruth', () => {
     expect(result.error).toBeTruthy();
   });
 
+  // TS-9: retryOrAlert's re-arm does NOT change provider_message_id, so a stale staged
+  // undelivered/failed callback could otherwise match a row that has since been re-armed to
+  // 'owed'. Scoping the terminal-fail write to status='sent' closes this without weakening
+  // delivered's broader prior-SID resolution.
+  it('TS-9: an undelivered/failed patch is scoped to status=sent, not just current-SID', async () => {
+    const supabase = makeSupabase({ data: [{ id: 'row-1' }], error: null });
+    await applyOwedDeliveryTruth(supabase, { messageSid: 'SM1', status: 'undelivered', deliveredAt: 'x', source: 'carrier_push' });
+    expect(supabase._builder.eq).toHaveBeenCalledWith('status', 'sent');
+  });
+
+  it('TS-9: a delivered patch does NOT add the status=sent restriction (prior-SID resolution stays broad)', async () => {
+    const supabase = makeSupabase({ data: [{ id: 'row-1' }], error: null });
+    await applyOwedDeliveryTruth(supabase, { messageSid: 'SM1', status: 'delivered', deliveredAt: 'x', source: 'carrier_push' });
+    expect(supabase._builder.eq).not.toHaveBeenCalledWith('status', 'sent');
+  });
+
   it('an invalid MessageSid short-circuits before any DB call', async () => {
     const supabase = makeSupabase({ data: [], error: null });
     const result = await applyOwedDeliveryTruth(supabase, { messageSid: '../etc/passwd', status: 'delivered', deliveredAt: 'x', source: 'carrier_push' });
