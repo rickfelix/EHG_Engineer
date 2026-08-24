@@ -4,9 +4,13 @@ import fs from 'node:fs';
 import {
   checkScriptLibWriters,
   checkDbFunctionWriters,
+  parseChokeRegistryIdentities,
+  assertRegistryMatchesHardcodedList,
   SCRIPT_LIB_WRITERS,
   DB_FUNCTION_WRITERS,
 } from '../../scripts/one-off/canonical-writer-preflight-follow-wire-registered-001.mjs';
+
+const CHOKE_FILE = 'database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql';
 
 describe('SD-LEO-INFRA-FOLLOW-WIRE-REGISTERED-001 FR-4: canonical-writer static preflight', () => {
   it('reports all 13 FR-1 script/lib writers as wired (regression guard: catches an accidental revert of any FR-1 stamp)', () => {
@@ -48,5 +52,36 @@ describe('SD-LEO-INFRA-FOLLOW-WIRE-REGISTERED-001 FR-4: canonical-writer static 
     // Restoration verified: re-running now reports wired again.
     const restored = checkScriptLibWriters().find((r) => r.identity === 'sd:cancel');
     expect(restored.wired).toBe(true);
+  });
+
+  it('parses exactly 27 writer_identity entries from the live choke file registry (regression guard for the parser itself)', () => {
+    const choke = fs.readFileSync(CHOKE_FILE, 'utf8').replace(/\r\n/g, '\n');
+    const ids = parseChokeRegistryIdentities(choke);
+    expect(ids).toHaveLength(27);
+    expect(new Set(ids).size).toBe(27); // no duplicates
+    expect(ids).toContain('handoff.js');
+    expect(ids).toContain('delete_venture');
+  });
+
+  it('does not throw for the current, real choke file (no undetected drift today)', () => {
+    const choke = fs.readFileSync(CHOKE_FILE, 'utf8').replace(/\r\n/g, '\n');
+    expect(() => assertRegistryMatchesHardcodedList(choke)).not.toThrow();
+  });
+
+  it('MUTATION (single-representation guard, TESTING finding F2): a registry entry naming an unwired writer this preflight does not know about is detected as drift, not silently ignored', () => {
+    const choke = fs.readFileSync(CHOKE_FILE, 'utf8').replace(/\r\n/g, '\n');
+    const injected = choke.replace(
+      '      -- ── OTHER protected-column DB FUNCTIONS (writer-inventory 1a, disposition=allowlist) ─────\n',
+      '      -- ── OTHER protected-column DB FUNCTIONS (writer-inventory 1a, disposition=allowlist) ─────\n' +
+        "      ('a_future_unwired_writer',\n" +
+        "       '{\"surface\":\"db_function\",\"protected_columns\":[\"status\"],\"stamp_wired\":false}'::jsonb,\n" +
+        "       'Injected by a test to prove the drift guard fires.'),\n",
+    );
+    expect(injected, 'injection anchor not found -- test is stale against the real file').not.toBe(choke);
+    expect(() => assertRegistryMatchesHardcodedList(injected)).toThrow(/REGISTRY DRIFT/);
+  });
+
+  it('MUTATION: a parser that finds zero identities refuses to trust the hardcoded list rather than silently reporting everything wired', () => {
+    expect(() => assertRegistryMatchesHardcodedList('not a real choke file at all')).toThrow(/REGISTRY PARSE FAILURE/);
   });
 });

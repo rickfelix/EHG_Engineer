@@ -96,7 +96,56 @@ function checkDbFunctionWriters() {
   return results;
 }
 
+/**
+ * Every writer_identity string named in the choke file's own registry VALUES clause, live-parsed
+ * from the source text rather than trusted as a hardcoded JS list -- CANNOT be re-derived by
+ * calling sd_canonical_writer_policy(NULL) pre-apply (TESTING F3: the function does not exist in
+ * pg_proc yet), so this is the only source-of-truth read available before the ceremony.
+ */
+function parseChokeRegistryIdentities(choke) {
+  const identities = [];
+  const re = /\(\s*'((?:[^'\\]|\\.)*)'::text\s*,|\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*\n\s*'\{"surface"/g;
+  let m;
+  while ((m = re.exec(choke)) !== null) {
+    identities.push(m[1] ?? m[2]);
+  }
+  return identities;
+}
+
+/**
+ * Single-representation guard (TESTING re-verification, evidence c7d16286, finding F2): the
+ * hardcoded SCRIPT_LIB_WRITERS/DB_FUNCTION_WRITERS lists above and the choke file's own registry
+ * are two representations of the same fact (which identities are registered) and could drift --
+ * e.g. a 19th writer added to the registry without a matching preflight entry would silently
+ * report "18/18 wired" and greenlight the ceremony. This cross-checks them and THROWS on any
+ * mismatch rather than silently trusting the hardcoded list.
+ */
+function assertRegistryMatchesHardcodedList(choke) {
+  if (!choke) return; // choke file unreadable -- checkDbFunctionWriters already reports this per-writer
+  const registryIdentities = new Set(parseChokeRegistryIdentities(choke));
+  if (registryIdentities.size === 0) {
+    throw new Error('REGISTRY PARSE FAILURE: parsed 0 writer_identity entries from the choke file -- the parser regex has drifted from the file\'s actual format. Refusing to trust a stale hardcoded list.');
+  }
+  const hardcoded = new Set([...SCRIPT_LIB_WRITERS.map((w) => w.identity), ...DB_FUNCTION_WRITERS]);
+  // Any registry identity marked stamp_wired:false that ISN'T in our hardcoded lists is a drift
+  // this preflight doesn't know about -- already-true entries are fine to be absent from our
+  // lists (they're the pre-existing, already-wired writers this SD didn't touch).
+  const unknownUnwired = [];
+  for (const id of registryIdentities) {
+    if (hardcoded.has(id)) continue;
+    const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const entryMatch = choke.match(new RegExp(`\\('${escaped}'[\\s\\S]{0,300}?"stamp_wired":(true|false)`));
+    if (entryMatch && entryMatch[1] === 'false') unknownUnwired.push(id);
+  }
+  if (unknownUnwired.length > 0) {
+    throw new Error(`REGISTRY DRIFT: the choke file names ${unknownUnwired.length} unwired writer(s) this preflight does not know about (${unknownUnwired.join(', ')}) -- update SCRIPT_LIB_WRITERS/DB_FUNCTION_WRITERS above before trusting this preflight's result.`);
+  }
+}
+
 function main() {
+  const choke = fs.existsSync(CHOKE_FILE) ? readLF(CHOKE_FILE) : '';
+  assertRegistryMatchesHardcodedList(choke);
+
   const scriptLibResults = checkScriptLibWriters();
   const dbFunctionResults = checkDbFunctionWriters();
 
@@ -120,4 +169,11 @@ if (isMainModule(import.meta.url)) {
   process.exit(main());
 }
 
-export { checkScriptLibWriters, checkDbFunctionWriters, SCRIPT_LIB_WRITERS, DB_FUNCTION_WRITERS };
+export {
+  checkScriptLibWriters,
+  checkDbFunctionWriters,
+  parseChokeRegistryIdentities,
+  assertRegistryMatchesHardcodedList,
+  SCRIPT_LIB_WRITERS,
+  DB_FUNCTION_WRITERS,
+};
