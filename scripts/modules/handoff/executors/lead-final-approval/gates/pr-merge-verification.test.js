@@ -28,6 +28,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('child_process', () => ({
   execSync: vi.fn(),
+  // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (SECURITY EXEC finding SEC-1): the local-branch
+  // diagnostic's `git ls-remote` call uses execFileSync (argv array, never a shell) instead of
+  // execSync, closing a confirmed command-injection sink.
+  execFileSync: vi.fn(),
 }));
 vi.mock('../../../../sd-type-checker.js', () => ({ getTierForSD: vi.fn(() => 3) }));
 vi.mock('../../../retro-filters.js', () => ({ getFilteredRetrospective: vi.fn() }));
@@ -37,12 +41,14 @@ vi.mock('../../../../../lib/repo-paths.js', () => ({
   ENGINEER_ROOT: '/fake/EHG_Engineer',
 }));
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { createPRMergeVerificationGate } from '../gates.js';
 
 const SD = 'SD-MAN-ORCH-TEST-001';
-const makeCtx = (sdKey = SD) => ({
-  sd: { id: 'test-uuid', sd_key: sdKey, sd_type: 'infrastructure' },
+// SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (TR-7): sdType parameterized (default preserves every
+// existing call site) so TS-2's documentation-type fixture is writable.
+const makeCtx = (sdKey = SD, sdType = 'infrastructure') => ({
+  sd: { id: 'test-uuid', sd_key: sdKey, sd_type: sdType },
   sdId: 'test-uuid',
 });
 
@@ -107,6 +113,13 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
       if (cmd === 'git branch -r') return `  origin/feat/${OTHER}-work\n  origin/main\n  origin/HEAD -> origin/main`;
       if (cmd.includes('rev-list --count')) return '9';
       if (cmd.includes('gh pr list --head')) return '[]';
+      // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1/FR-3): this SD has genuinely shipped code
+      // (a merged PR) — that positive evidence, not merely "no open PR / no unmerged branch", is
+      // why the verdict below is correctly PASS rather than never-pushed. Without this stub the
+      // new Scan C would find nothing and the third state would flip this to FAIL.
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) {
+        return JSON.stringify([{ number: 55, headRefName: `feat/${SD}`, url: 'u', mergedAt: '2026-01-01' }]);
+      }
       return '';
     });
     const result = await gateWith(keys(SD, OTHER)).validator(makeCtx());
@@ -160,10 +173,178 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
       if (cmd === 'git branch -r') return `  origin/feat/${CHILD}\n  origin/main`;
       if (cmd.includes('rev-list --count')) return '7';
       if (cmd.includes('gh pr list --head')) return '[]';
+      // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1/FR-3): the PARENT's own merged-PR
+      // evidence. The assertion below expects PASS because the parent has genuinely shipped, not
+      // merely because the child's open branch doesn't block it. The CHILD assertion never reaches
+      // this Scan C stub — its own branch is unmerged and blocks earlier in the gate.
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) {
+        return JSON.stringify([{ number: 77, headRefName: `feat/${SD}`, url: 'u', mergedAt: '2026-01-01' }]);
+      }
       return '';
     });
     expect((await gateWith(keys(SD, CHILD)).validator(makeCtx(SD))).passed).toBe(true);
     // Negative control: same branch, child under test, opposite verdict.
     expect((await gateWith(keys(SD, CHILD)).validator(makeCtx(CHILD))).passed).toBe(false);
+  });
+
+  // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1, TS-1). Asserts a structured discriminator, not
+  // merely passed===false — both test files fully mock sd-type-checker.js, so an unrelated crash in
+  // the outer catch (gates.js) would ALSO read as passed:false with zero never-pushed logic present.
+  it('TS-1: infrastructure-type SD with zero evidence anywhere FAILS with a structured reason', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) return '[]';
+      if (cmd.includes('git for-each-ref')) return '';
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(false);
+    expect(result.details?.reason).toBe('never_pushed');
+    expect(result.issues.join('\n')).toMatch(/no branch was ever pushed/i);
+    expect(result.issues.join('\n')).toContain(SD);
+  });
+
+  // TS-2: the corrected, narrow exemption (FR-2) still exempts genuinely no-code SD types — a
+  // documentation-type SD with the SAME zero-evidence fixture as TS-1 must PASS, not FAIL.
+  it('TS-2: documentation-type SD with zero evidence anywhere still PASSES (exemption)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) return '[]';
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'documentation'));
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+  });
+
+  // TS-5: the blocking false-positive control. Does NOT exist prior to this SD — the original FR-1
+  // design ("both remote scans zero => FAIL") was measured (TESTING PLAN-phase probe) to be
+  // byte-identical between this fixture and TS-1's never-pushed fixture. Scan C (merged-PR
+  // evidence) is what tells them apart.
+  it('TS-5: merged-and-branch-deleted SD (normal /ship --delete-branch outcome) PASSES', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n'; // branch deleted post-merge
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) {
+        return JSON.stringify([{ number: 88, headRefName: `feat/${SD}`, url: 'u', mergedAt: '2026-01-01' }]);
+      }
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+  });
+
+  // TESTING EXEC-phase finding (row d0b12eb8): Scan C without --search only sees the 100
+  // most-recently-merged PRs repo-wide and false-positives an aged-out SD as never_pushed. Locks
+  // in the fix by asserting the actual command carries --search "<sdId>" — a regression here would
+  // silently reintroduce the exact false-positive class TS-5 exists to prevent.
+  it('Scan C is search-scoped to the SD key, not an unbounded repo-wide list', async () => {
+    let scanCCommand = null;
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) {
+        scanCCommand = cmd;
+        return JSON.stringify([{ number: 99, headRefName: `feat/${SD}`, url: 'u', mergedAt: '2026-01-01' }]);
+      }
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(true);
+    expect(scanCCommand).toContain(`--search "${SD}"`);
+  });
+
+  // TESTING EXEC-phase coverage gap (medium): the localCandidate-populated branch of the
+  // diagnostic-only local-branch enumeration was previously only ever exercised in its EMPTY form.
+  it('names a local, never-pushed branch in the message when git for-each-ref finds one', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) return '[]';
+      if (cmd.includes('git for-each-ref')) return `feat/${SD}\nmain\n`;
+      return '';
+    });
+    // execFileSync('git', ['ls-remote', '--heads', 'origin', '--', branch], opts) — argv form, not
+    // a string command (SEC-1 fix). Empty output = branch not found on remote.
+    execFileSync.mockImplementation(() => '');
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(false);
+    expect(result.details?.localCandidate).toBe(`feat/${SD}`);
+    expect(result.issues.join('\n')).toContain(`Local branch found but never pushed to remote: feat/${SD}`);
+    expect(execFileSync).toHaveBeenCalledWith('git', ['ls-remote', '--heads', 'origin', '--', `feat/${SD}`], expect.any(Object));
+  });
+
+  // TESTING EXEC-phase finding (medium): a transient gh failure during Scan C must fail closed,
+  // not silently read as "no merge evidence" (which would mislabel an outage as never_pushed).
+  it('Scan C failure fails closed rather than reporting never_pushed', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) {
+        throw new Error('gh: rate limit exceeded');
+      }
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(false);
+    expect(result.details?.reason).toBe('scan_c_unreadable');
+    expect(result.details?.reason).not.toBe('never_pushed');
+  });
+
+  // SECURITY EXEC-phase finding SEC-9 (medium, self-referential): --search matches the SD key
+  // anywhere in a PR title/body/comments, not only the owning branch; --limit caps the RAW result
+  // set BEFORE branchBelongsToSd filtering. A saturated (100-item) raw set that filters to zero
+  // owned matches must be reported as "cannot conclude", not "never_pushed".
+  it('a saturated Scan C search window (100 raw hits, zero owned matches) fails closed as inconclusive, not never_pushed', async () => {
+    const saturatedResults = Array.from({ length: 100 }, (_, i) => ({
+      number: i, headRefName: `feat/SD-SOME-OTHER-KEY-${i}`, url: 'u', mergedAt: '2026-01-01',
+    }));
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) {
+        return JSON.stringify(saturatedResults);
+      }
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(false);
+    expect(result.details?.reason).toBe('scan_c_saturated');
+    expect(result.details?.reason).not.toBe('never_pushed');
+  });
+
+  // TESTING EXEC-phase finding (high): the live gate must actually CALL isNeverPushedSpecimen
+  // (not merely claim to share it) — a ship_review_findings row is one more chance for an SD Scan
+  // A/B/C's live git/gh state missed to avoid a false never_pushed verdict.
+  it('a ship_review_findings row (pr_number) saves an SD from a false never_pushed verdict', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return '  origin/main\n';
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) return '[]';
+      return '';
+    });
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            limit: async () => ({ data: [{ id: 'row-1', pr_number: 4242, sd_key: SD }] }),
+          }),
+        }),
+      }),
+    };
+    const gate = createPRMergeVerificationGate(fakeSupabase, { loadKeySet: keys(SD) });
+    const result = await gate.validator(makeCtx(SD, 'infrastructure'));
+    expect(result.passed).toBe(true);
   });
 });

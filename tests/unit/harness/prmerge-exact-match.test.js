@@ -20,7 +20,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('child_process', () => ({ execSync: vi.fn() }));
+vi.mock('child_process', () => ({ execSync: vi.fn(), execFileSync: vi.fn() }));
 
 import { execSync } from 'child_process';
 import {
@@ -39,14 +39,20 @@ const keysUnavailable = (error = 'simulated outage') => async () => ({
   ok: false, keys: new Set(), reason: 'key_set_unavailable', error,
 });
 
-/** Drive the gate with a given set of OPEN PRs and no local branches. */
-function mockGh({ openPrs = [] } = {}) {
+/**
+ * Drive the gate with a given set of OPEN PRs, MERGED PRs, and no local branches.
+ * SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1/FR-3): `mergedPrs` supplies Scan C's positive
+ * evidence — without it, an SD with no open PR and no unmerged branch is indistinguishable from
+ * one that was never pushed, and the third state (added by this SD) fails it.
+ */
+function mockGh({ openPrs = [], mergedPrs = [] } = {}) {
   execSync.mockImplementation((cmd) => {
     if (cmd.includes('gh pr list') && cmd.includes('--state open')) return JSON.stringify(openPrs);
-    if (cmd.includes('gh pr list') && cmd.includes('--state merged')) return '[]';
+    if (cmd.includes('gh pr list') && cmd.includes('--state merged')) return JSON.stringify(mergedPrs);
     if (cmd.includes('git branch -r')) return '  origin/main\n';
     if (cmd.includes('git fetch')) return '';
     if (cmd.includes('rev-list')) return '0';
+    if (cmd.includes('git for-each-ref')) return '';
     return '';
   });
 }
@@ -76,7 +82,13 @@ describe('PR_MERGE_VERIFICATION resolves branch OWNERSHIP (replaces anchored mat
   });
 
   it('does NOT block on a different SD whose key shares a prefix', async () => {
-    mockGh({ openPrs: [{ number: 2, title: 't', headRefName: 'feat/SD-LEO-FEAT-STAGE-POST-LAUNCH-003', url: 'u' }] });
+    // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1/FR-3): SD itself has genuinely shipped
+    // (mergedPrs below) — that positive evidence, not merely "no open PR for SD", is what makes
+    // this legitimately PASS rather than never-pushed.
+    mockGh({
+      openPrs: [{ number: 2, title: 't', headRefName: 'feat/SD-LEO-FEAT-STAGE-POST-LAUNCH-003', url: 'u' }],
+      mergedPrs: [{ number: 50, headRefName: `feat/${SD}`, url: 'u', mergedAt: '2026-01-01' }],
+    });
     const gate = createPRMergeVerificationGate(null, { loadKeySet: keys(SD, 'SD-LEO-FEAT-STAGE-POST-LAUNCH-003') });
     expect((await gate.validator(makeCtx(SD))).passed).toBe(true);
   });
@@ -84,8 +96,14 @@ describe('PR_MERGE_VERIFICATION resolves branch OWNERSHIP (replaces anchored mat
   it('does NOT block the PARENT when the open PR belongs to a CHILD key', async () => {
     // The K / K-x collision. A branch-name-only matcher cannot get this right, which is why the
     // gate resolves against the key set instead.
+    // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1/FR-3): the PARENT's own merged-PR evidence —
+    // the assertion below expects PASS because the parent has genuinely shipped, not merely
+    // because the child's open PR doesn't block it.
     const CHILD = `${SD}-A`;
-    mockGh({ openPrs: [{ number: 3, title: 't', headRefName: `feat/${CHILD}`, url: 'u' }] });
+    mockGh({
+      openPrs: [{ number: 3, title: 't', headRefName: `feat/${CHILD}`, url: 'u' }],
+      mergedPrs: [{ number: 51, headRefName: `feat/${SD}`, url: 'u', mergedAt: '2026-01-01' }],
+    });
     const gate = createPRMergeVerificationGate(null, { loadKeySet: keys(SD, CHILD) });
     expect((await gate.validator(makeCtx(SD))).passed).toBe(true);
   });
@@ -99,12 +117,24 @@ describe('PR_MERGE_VERIFICATION resolves branch OWNERSHIP (replaces anchored mat
     expect((await gate.validator(makeCtx(CHILD))).passed).toBe(false);
   });
 
-  it('ignores an unsupported branch type (chore/) — a known, visible coverage gap', async () => {
+  it('VERDICT CHANGED by SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001: an unsupported branch type (chore/) now FAILS, with an honest message', async () => {
     // Real instance: PR #6664 on chore/SD-LEO-INFRA-ACCOUNT-QUOTA-STRIP-001-approved-by-header.
-    // Pinned deliberately so widening the token set is a decision someone makes, not a silent drift.
+    // 'chore' is deliberately NOT a recognized branch-type token (pinned so widening the token set
+    // is a conscious decision, not silent drift) — that pre-existing, out-of-scope gap is untouched
+    // by this SD. What DOES change: before this SD, "not recognized" fell all the way through to an
+    // unconditional PASS. Now it reaches the never-pushed third state and FAILS instead — a
+    // deliberate, justified verdict change (FR-3 AC-4), NOT a regression. The false-diagnosis risk
+    // TESTING flagged (a message literally claiming "no branch was ever pushed" for a branch that
+    // WAS pushed and has an open PR) is mitigated by the message wording itself: it states only what
+    // was actually checked ("no open PR, no unmerged remote branch, and no merged PR evidence") and
+    // enumerates the recognized branch types, rather than asserting nothing exists at all.
     mockGh({ openPrs: [{ number: 6664, title: 't', headRefName: `chore/${SD}-approved-by-header`, url: 'u' }] });
     const gate = createPRMergeVerificationGate(null, { loadKeySet: keys(SD) });
-    expect((await gate.validator(makeCtx(SD))).passed).toBe(true);
+    const result = await gate.validator(makeCtx(SD));
+    expect(result.passed).toBe(false);
+    expect(result.details?.reason).toBe('never_pushed');
+    expect(result.issues.join('\n')).toMatch(/no open PR, no unmerged remote branch, and no merged PR evidence/);
+    expect(result.issues.join('\n')).not.toMatch(/6664/); // honest: we never actually found PR #6664
   });
 
   it('DELIBERATE REVERSAL: the 2026-05-07 branch now matches its own SD again', async () => {
