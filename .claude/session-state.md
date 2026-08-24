@@ -280,6 +280,30 @@ reachAdam already interpolates sd_key/callsign/session_id into its body — pred
 both now satisfied). `handoff.js execute EXEC-TO-PLAN`: PASS, score 87. **SD is now
 active/PLAN_VERIFICATION (VERIFY phase).**
 
+## Update 6 (2026-08-24) — PLAN-TO-LEAD PASSED (95%), PR #7492 shipped, awaiting CI merge
+
+Dispatched RETRO sub-agent (SD_COMPLETION, id 7ad9d80a-2de1-4844-89bc-0cebdf17ee86, verified
+against the actual gate logic by the sub-agent itself — validateSDCompletionReadiness() passed,
+blended 82%, AI judge scored specificity/applicability 9/10) — resolved the only real
+PLAN-TO-LEAD blocker (RETROSPECTIVE_QUALITY_GATE). `handoff.js precheck/execute PLAN-TO-LEAD`:
+95%, PASSED. **SD is now pending_approval/LEAD_FINAL.**
+
+Ran /ship: pushed branch, created PR #7492
+(https://github.com/rickfelix/EHG_Engineer/pull/7492). Risk score 0.86 -> DEEP tier (multi-agent
+adversarial required). Dispatched a general-purpose agent with the "read the full diff yourself,
+don't trust any truncated prompt" brief (known review-gate limitation documented in this session's
+carried notes). Result: PASS, one INFO-level docstring-accuracy nit (isSchedulingConstraintActive's
+comment overclaimed "mirrors isLeadBlockerActive exactly" — it deliberately doesn't, for the
+empty-object case). Fixed and pushed (commit b3c674d8c13). Logged findings to
+ship_review_findings, resolved repo once to .claude-work/ship-repo-resolved.json.
+
+Ran the hardened auto-merge sequence (lib/ship/auto-merge.mjs): failed with
+`GraphQL: Required status check "Run Unit Tier (quarantine-aware)" is in progress.` — verified via
+`gh pr checks 7492` directly: this and several other required checks (Gate 0-3, coverage,
+module-boundaries) are genuinely still `pending`, not failed. This is the known
+in-progress-not-failed pattern from this session's carried notes — correct response is
+ScheduleWakeup + retry, never blind hammer-retry. Scheduling a wakeup to retry the merge.
+
 ## Pending follow-up (route via capture-completion-flags at post-completion, NOT in this SD's
 ## scope — do not silently fold into this diff)
 - F9: scripts/coordinator-capacity-forecast.mjs's emitMaskedStallEscalation() (~line 355-357)
@@ -288,12 +312,13 @@ active/PLAN_VERIFICATION (VERIFY phase).**
   (~5 LOC, thread openQfCount through its call site at ~line 255, reuse formatBeltExtent). Good
   Tier-1 QF candidate.
 
-## Next steps
-1. VERIFY phase: dispatch VALIDATION + REGRESSION sub-agents (per task hydration from the
-   EXEC-TO-PLAN handoff), independently verify their findings, run PLAN-TO-LEAD precheck/execute.
-2. LEAD-FINAL-APPROVAL, PR, full post-completion tail (/document, /heal, /learn,
-   capture-completion-flags — including the F9 follow-up finding above).
-3. /checkin for the next SD.
+## Next steps (revised, Update 6)
+1. Retry the hardened auto-merge for PR #7492 once CI's required checks clear (`gh pr checks 7492`
+   to confirm, then re-run the lib/ship/auto-merge.mjs sequence from Update 6).
+2. LEAD-FINAL-APPROVAL, then full post-completion tail (/document, /heal, /learn,
+   capture-completion-flags — MUST include the F9 follow-up finding above as an incidental
+   finding, per CLAUDE.md's completion-flags reflective interrogation).
+3. /checkin for the next SD (same-turn next-claim discipline).
 
 ## Notes carried from prior SD (VENTURE-SCAFFOLD-CODE-001, completed this session)
 - ENF-15 force-push allowlist does NOT include docs/* branches — relevant if this SD
