@@ -34,7 +34,7 @@ import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolv
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
 import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
 import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
-import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows } from '../lib/periodic-liveness/gha-run-resolver.mjs';
+import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
@@ -60,13 +60,27 @@ const STATE = Object.freeze({ OK: 'OK', OVERDUE: 'OVERDUE', UNVERIFIED: 'UNVERIF
 // GitHub's own scheduling jitter. The declared value stays in the row untouched (metadata only).
 const GHA_GRACE_MULTIPLIER_FLOOR = 6;
 
-function overdueThresholdMs(row) {
+// QF-20260824-373: OBSERVED_GAP_MARGIN pads the observed-worst-case floor so a repeat of the
+// exact same gap sits inside the window rather than exactly on its boundary (strict `>` compare).
+const OBSERVED_GAP_MARGIN = 1.2;
+
+function overdueThresholdMs(row, ghaGapStats) {
   const declaredGrace = Number(row.grace_multiplier);
   // Math.max(NaN, N) is NaN -- a row with a missing grace_multiplier must not silently disable
   // the floor for this source (0, not NaN, preserves Math.max's usual behavior everywhere else).
-  const grace = row.liveness_source === 'github_actions_api'
+  let grace = row.liveness_source === 'github_actions_api'
     ? Math.max(Number.isFinite(declaredGrace) ? declaredGrace : 0, GHA_GRACE_MULTIPLIER_FLOOR)
     : declaredGrace;
+  // QF-20260824-373: also floor at this cycle's OBSERVED worst-case gap (self-adjusting -- never
+  // needs a manual bump the next time GitHub throttles further than today's worst case).
+  if (row.liveness_source === 'github_actions_api' && ghaGapStats && row.expected_interval_seconds > 0) {
+    const file = row.process_key?.startsWith('gha_cron:') ? row.process_key.slice('gha_cron:'.length) : row.process_key;
+    const observed = ghaGapStats.get(file);
+    if (observed && observed.sampleCount >= 2) {
+      const observedMultiple = (observed.maxGapMs / (row.expected_interval_seconds * 1000)) * OBSERVED_GAP_MARGIN;
+      grace = Math.max(grace, observedMultiple);
+    }
+  }
   return row.expected_interval_seconds * grace * 1000;
 }
 
@@ -292,7 +306,7 @@ async function evaluateRow(row, ctx = {}) {
     // that is unreachable because the only writer of armed_at also writes grace_multiplier, which
     // is precisely the kind of cross-file coupling a later edit breaks silently. Require a real
     // positive window.
-    const thresholdMs = overdueThresholdMs(row);
+    const thresholdMs = overdueThresholdMs(row, ctx.ghaGapStats);
     if (Number.isFinite(armedMs) && Number.isFinite(thresholdMs) && thresholdMs > 0) {
       // FR-1: gap-adjusted, not raw, elapsed time -- a declared cron gap between arming and the
       // process's first-ever fire must not count against "armed but never produced" any more than
@@ -318,7 +332,7 @@ async function evaluateRow(row, ctx = {}) {
   // time unchanged, so FR-2's stochastic-lag tolerance stays entirely in grace_multiplier, not a
   // second code path.
   const ageMs = gapAdjustedAgeMs(row.liveness_source_ref?.workflow_cron, new Date(lastFiredAt).getTime(), now);
-  const state = ageMs > overdueThresholdMs(row) ? STATE.OVERDUE : STATE.OK;
+  const state = ageMs > overdueThresholdMs(row, ctx.ghaGapStats) ? STATE.OVERDUE : STATE.OK;
   return { process_key: row.process_key, state, last_fired_at: lastFiredAt, age_ms: ageMs, reason: signalNote };
 }
 
@@ -488,6 +502,9 @@ async function main({ includeFixtures = false } = {}) {
   // FR-2: resolve all gha_cron:* rows in ONE paginated GitHub API fetch per watcher cycle (not
   // one call per row), and stamp successes before the per-row evaluation loop below.
   const ghaDecisions = new Map();
+  // QF-20260824-373: self-adjusting floor derived from this cycle's fetched run history --
+  // see observedGapStats()'s doc comment for why a fixed constant kept recurring.
+  let ghaGapStats = new Map();
   const ghaCronRows = evaluate.filter((r) => r.liveness_source === 'github_actions_api');
   if (ghaCronRows.length > 0) {
     const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
@@ -500,6 +517,7 @@ async function main({ includeFixtures = false } = {}) {
       try {
         const runs = await fetchScheduledRuns(repo, token);
         const latestByFile = latestRunPerWorkflow(runs);
+        ghaGapStats = observedGapStats(runs);
         const classified = classifyGhaCronRows(latestByFile, ghaCronRows.map((r) => r.process_key));
         for (const c of classified) {
           ghaDecisions.set(c.processKey, c);
@@ -518,7 +536,7 @@ async function main({ includeFixtures = false } = {}) {
   const results = [];
   const ladderCandidates = [];
   for (const row of evaluate) {
-    const evaluation = await evaluateRow(row, { ghaDecisions });
+    const evaluation = await evaluateRow(row, { ghaDecisions, ghaGapStats });
     results.push(evaluation);
 
     // Adversarial-review finding (PR #5562, CRITICAL): dedup must be a per-episode STATE
