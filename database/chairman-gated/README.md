@@ -542,6 +542,66 @@ then `--prod-deploy`, no `--allow-any-path` needed since the file already resolv
 behavior-delta analysis (S10/S16/S19/S25 promotion-gate enforcement begins; S23/S24 kill/promotion
 labels correct) and its documented deploy-time blast radius / pre-deploy census requirement.
 
+## Applying `20260824_ventures_rls_integrity_repair.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260824_ventures_rls_integrity_repair.sql" --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001.) Re-scoped after its original premise was falsified: a
+chairman-commissioned architecture eval claimed any venture-access client could UPDATE ANY
+`ventures` column, including `current_lifecycle_stage`. That finding came from an unqualified
+`pg_policies WHERE tablename='ventures'` query (no `schemaname` filter) that silently matched an
+abandoned `portfolio.ventures` decoy table (1 row, dead since 2025-11-30) instead of the real,
+live `public.ventures` — and this happened TWICE, independently, once in the eval and again in a
+same-day "consumer census" meant to correct it. Coordinator disposition (signal 83226336) accepted
+a worker's falsification finding in full; Adam ratified the re-scope 2026-08-24T01:48:25Z.
+
+**What it does:**
+1. Drops the `portfolio.ventures` decoy table + its 4 own policies + the 2 dependent FK
+   constraints on `portfolio.kill_switch_audit_log.venture_id` and
+   `governance.eva_authority_levels.venture_id` (those two tables themselves are NOT dropped,
+   only the FK to the decoy). `portfolio.has_venture_access(uuid)` is explicitly untouched — it
+   only calls `portfolio.current_venture()`, never queries the decoy, and is live-referenced by
+   ~9 other RLS policies and 17 migration files.
+2. Narrows `authenticated_read_ventures` from `qual=true` (every authenticated user can read all
+   152 ventures cross-tenant) to `portfolio.has_venture_access(id)`.
+3. Adds `ventures_content_update_policy` (UPDATE, scoped by `has_venture_access(id)`) plus a
+   `BEFORE UPDATE` guard trigger, `ventures_block_client_governance_write_trg`, that refuses a
+   direct client-role (`authenticated`/`anon`) write of `current_lifecycle_stage` specifically —
+   **not** the five other originally-classified "governance" columns (`status`,
+   `orchestrator_state`, `launched_at`, `workflow_status`, `recursion_state`). Those five were
+   narrowed OUT of the guard during EXEC: the only existing RPC with a matching write path
+   (`advance_venture_stage`) only models a stage transition
+   (`p_from_stage`/`p_to_stage`/`p_transition_type`) — it has no parameter for the other five, so
+   guarding them would have broken every legitimate write EVA's own automated state-machine/
+   recursion/orchestrator flows make today (they all use the same RLS-bound client). Closing
+   those five needs its own governed RPC path in a follow-up SD.
+4. `DO $verify$` proves both directions behaviourally: a trusted-context (`current_user NOT IN
+   ('authenticated','anon')`, e.g. inside `advance_venture_stage`, which runs as its owner
+   `postgres` during execution — a standard SECURITY DEFINER mechanism, not a new convention)
+   write of `current_lifecycle_stage` succeeds; a simulated client-role write of the same column
+   is refused (via a faked `request.jwt.claims` so `has_venture_access` genuinely selects the
+   probe row instead of denying at row-selection before the trigger ever fires); a client-role
+   content-class write still succeeds.
+
+**Companion app-code PR (separate repo, already merged): rickfelix/ehg#797.** Routes the 5 live
+client-side call sites in the EHG app that wrote `current_lifecycle_stage` directly
+(`evaStateMachines.ts`, `recursionEngine.ts`, `evaRollback.ts`, `pages/api/v2/chairman/decide.ts`,
+`pages/api/v2/ventures/[id]/promote.ts`) onto `advance_venture_stage` instead — merge/deploy that
+PR **before** this migration's ceremony apply, per the migration's own risk mitigation, so there
+is never a live window where the guard is active but a real call site still writes the column
+directly. `ventures.ts` and `useVentureData.ts` were deliberately left unchanged (no derivable
+from-stage / initialization-only writes); `automationEngine.ts`'s pre-existing unrelated
+camelCase-column bug was left untouched, flagged as follow-up.
+
+`scripts/one-off/ventures-client-write-001-operator-contract-waiver.mjs` recorded an
+OPERATOR_CONTRACT gate waiver (armed_cadence/reaper, expires 2026-11-24) on `metadata` — this
+migration creates no new data table, log, or queue; a stateless RLS/trigger policy change has
+nothing for a periodic cadence to arm against or a reaper to expire.
+
 ## The underlying finding, which outlives this SD
 
 SUPERSEDED (SD-LEO-INFRA-TIER-GATE-FLAG-001): the TIER-2 default-deny protection is now ACTIVE by default — the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag and fails CLOSED, so it holds unless a bypass is deliberately enabled. The text below described the prior state, in which the protection was inert
