@@ -274,10 +274,11 @@ jobs:
       # the token is a pre-minted session credential used only as a Bearer header.
       # SECURITY finding SEC-4 (EXEC-TO-PLAN review, evidence 6f9eabc9): on failure,
       # only a .error/.message field (truncated) is ever printed -- never the raw
-      # response body. A literal-token-substitution redaction (the prior approach)
-      # is bypassable by any JSON-escaped variant of the token and does nothing for
-      # OTHER secrets a misrouted response might echo; several active venture repos
-      # are PUBLIC, so CI logs are world-readable.
+      # response body. Re-verification (evidence 8eec89e0) found one residual: an
+      # .error field containing the token in prose ("token X is expired") still
+      # printed verbatim through the allowlist, since the allowlist only bounds
+      # WHICH field is read, not what it contains. Literal token substitution is
+      # now applied to the extracted excerpt too -- defense in depth, not either/or.
       - name: post-deploy-signed-in-uat
         env:
           CHAIRMAN_UAT_SESSION_TOKEN: \${{ secrets.CHAIRMAN_UAT_SESSION_TOKEN }}
@@ -294,7 +295,7 @@ jobs:
             "$URL${uatProbePath}")
           if [ "$STATUS" != "200" ]; then
             echo "::error::Signed-in GET ${uatProbePath} returned HTTP $STATUS (expected 200)."
-            node -e "const fs=require('fs');let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}console.log(out)"
+            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}if(t)out=out.split(t).join('[REDACTED]');console.log(out)"
             exit 1
           fi
           echo "Signed-in probe succeeded: GET ${uatProbePath} returned 200 against the live deploy."
@@ -305,7 +306,7 @@ jobs:
             "$URL${uatProbePath}")
           if [ "$WRITE_STATUS" != "201" ]; then
             echo "::error::Signed-in POST ${uatProbePath} returned HTTP $WRITE_STATUS (expected 201)."
-            node -e "const fs=require('fs');let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('write-response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}console.log(out)"
+            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('write-response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}if(t)out=out.split(t).join('[REDACTED]');console.log(out)"
             exit 1
           fi
           echo "First-walk event recorded successfully."
@@ -353,12 +354,23 @@ jobs:
           # Supabase/generic JWTs, GitHub fine-grained PATs and OAuth/app tokens, OpenAI's
           # current sk-proj- format, and Stripe's sk_live_) while still reporting "No
           # committed-secret-shaped patterns found" -- manufactured confidence. Expanded here.
-          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)'
-          # SEC-3 also flagged the exit-code handling as blind: git grep exit 1 (no match,
-          # the good case) and exit >1 (an actual scan ERROR) were treated identically,
-          # so a broken scan silently reported "clean" instead of failing loud.
-          git grep -InE "$PATTERN" -- . ':(exclude)*.lock' ':(exclude)node_modules'
-          rc=$?
+          # SECURITY re-verification (evidence 8eec89e0) caught two regressions in the
+          # first SEC-3 fix, both empirically reproduced before this correction:
+          # (A) widening the sk- tail to [A-Za-z0-9_-]{20,} (to reach sk-proj-) also
+          # matched ordinary kebab-case code containing "sk-" as a substring (task-,
+          # risk-, disk-, desk-, mask- style words) -- false-positived on 5/5 ordinary
+          # code samples tested. Reverted to an ENUMERATED prefix instead of a widened
+          # class: sk-(proj-)?[A-Za-z0-9]{20,} -- still catches all 7 target formats,
+          # zero false positives on ordinary code.
+          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)'
+          # (B) 'git grep ...' followed by a separate 'rc=$?' line runs under GitHub
+          # Actions' bash -e -- git grep's own exit 1 (no match, the CLEAN case) trips
+          # set -e and aborts BEFORE 'rc=$?' ever executes. Empirically reproduced: a
+          # secret-free repo exited 1 with zero output, so the step was red on every
+          # clean repo, indistinguishable from secrets-found. '|| rc=$?' is the standard
+          # fix -- it captures the exit code without letting -e see a bare non-zero exit.
+          rc=0
+          git grep -InE "$PATTERN" -- . ':(exclude)*.lock' ':(exclude)node_modules' || rc=$?
           if [ "$rc" -eq 0 ]; then
             echo "::error::Committed-secret-shaped pattern found in tracked files -- see matches above."
             exit 1
