@@ -23,9 +23,19 @@ function heldRow(overrides = {}) {
   };
 }
 
-/** Minimal fake supabase supporting the .from('session_coordination')/.from('chairman_held_sends') shapes this module needs. */
-function makeFakeSupabase({ selfAnswerRow = null, claimSucceeds = true } = {}) {
+/**
+ * Minimal fake supabase supporting the .from('session_coordination')/.from('chairman_held_sends')
+ * shapes this module needs. The chairman_held_sends `.update()` builder is a GENUINELY thenable
+ * object (a real .then(resolve,reject), not an object that merely LOOKS like the real chain) --
+ * a TESTING sub-agent (evidence 9cc5057d) found the prior version's non-thenable update() chain
+ * made `await` resolve to the raw builder object, so `error` always destructured to undefined and
+ * the audit-write-failure path was structurally unreachable. `writes` records every update call
+ * (vals + filters) so tests can assert exactly what was persisted, not just the returned outcome.
+ */
+function makeFakeSupabase({ selfAnswerRow = null, claimSucceeds = true, releaseUpdateError = null } = {}) {
+  const writes = [];
   return {
+    writes,
     from(table) {
       if (table === 'session_coordination') {
         return {
@@ -44,15 +54,26 @@ function makeFakeSupabase({ selfAnswerRow = null, claimSucceeds = true } = {}) {
       }
       if (table === 'chairman_held_sends') {
         return {
-          update: () => ({
-            eq: () => ({
-              eq: () => ({
-                is: () => ({
-                  select: async () => (claimSucceeds ? { data: [{ id: 'held-1' }], error: null } : { data: [], error: null }),
-                }),
-              }),
-            }),
-          }),
+          update(vals) {
+            const filters = [];
+            const builder = {
+              eq(col, val) { filters.push([col, val]); return builder; },
+              is(col, val) { filters.push([col, val]); return builder; },
+              // CLAIM shape only: .update().eq().eq().is().select()
+              select() {
+                writes.push({ vals, filters, terminal: 'select' });
+                return Promise.resolve(claimSucceeds ? { data: [{ id: 'held-1' }], error: null } : { data: [], error: null });
+              },
+              // RELEASE / UNCLAIM shape: .update().eq()... with no .select() -- must be a REAL
+              // thenable so `await builder` actually awaits this resolution.
+              then(resolve, reject) {
+                writes.push({ vals, filters, terminal: 'thenable' });
+                const result = releaseUpdateError ? { data: null, error: { message: releaseUpdateError } } : { data: null, error: null };
+                return Promise.resolve(result).then(resolve, reject);
+              },
+            };
+            return builder;
+          },
         };
       }
       throw new Error(`unexpected table: ${table}`);
@@ -160,5 +181,66 @@ describe('releaseHeldSend — FR-6 AC-1: three mandated refusal cases + success'
     const outcome = await releaseHeldSend(supabase, heldRow(), { resolveAnswerRows, checkSelfAnswered: checkSelfAnsweredFn, sendChairmanSMS });
     expect(outcome).toMatchObject({ action: 'skip', reason: 'claim_failed_or_already_claimed' });
     expect(sendChairmanSMS).not.toHaveBeenCalled();
+  });
+
+  it('D1 (TESTING sub-agent evidence 9cc5057d, HIGH): a claimed row whose dispatch did NOT succeed (sendResult.sent !== true) is NEVER marked released -- it is unclaimed back to held for retry', async () => {
+    const resolveAnswerRows = vi.fn(async () => new Map([['corr-1', { body: 'GO' }]]));
+    const checkSelfAnsweredFn = vi.fn(async () => ({ answerRowId: 'ans-9', selfAnswered: false }));
+    // sendChairmanSMS's own over-ask/rubric/quiet-hours/transport gates can all return sent:false
+    // even after the injected verdict is accepted -- this is one representative shape.
+    const sendChairmanSMS = vi.fn(async () => ({ sent: false, held: true, reason: 'over_ask_held' }));
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(supabase, heldRow(), { resolveAnswerRows, checkSelfAnswered: checkSelfAnsweredFn, sendChairmanSMS });
+    expect(outcome.action).toBe('dispatch_not_sent_unclaimed');
+    expect(outcome.sendResult).toEqual({ sent: false, held: true, reason: 'over_ask_held' });
+    // Never wrote status='released' anywhere -- the only chairman_held_sends write is the unclaim.
+    const finalWrite = supabase.writes[supabase.writes.length - 1];
+    expect(finalWrite.vals.status).toBe('held');
+    expect(finalWrite.vals.claimed_at).toBeNull();
+    expect(finalWrite.vals.attempts).toBe(1);
+    expect(finalWrite.vals.last_error).toContain('dispatch_not_sent');
+    expect(supabase.writes.some((w) => w.vals.status === 'released')).toBe(false);
+  });
+
+  it('D2 (TESTING sub-agent evidence 9cc5057d, MEDIUM-HIGH): a dispatch that THROWS after the row was claimed unclaims it rather than stranding it in status=releasing forever', async () => {
+    const resolveAnswerRows = vi.fn(async () => new Map([['corr-1', { body: 'GO' }]]));
+    const checkSelfAnsweredFn = vi.fn(async () => ({ answerRowId: 'ans-9', selfAnswered: false }));
+    const sendChairmanSMS = vi.fn(async () => { throw new Error('transport boom'); });
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(supabase, heldRow({ attempts: 2 }), { resolveAnswerRows, checkSelfAnswered: checkSelfAnsweredFn, sendChairmanSMS });
+    expect(outcome.action).toBe('dispatch_threw_unclaimed');
+    expect(outcome.error).toContain('transport boom');
+    const finalWrite = supabase.writes[supabase.writes.length - 1];
+    expect(finalWrite.vals.status).toBe('held');
+    expect(finalWrite.vals.claimed_at).toBeNull();
+    expect(finalWrite.vals.claimed_by).toBeNull();
+    // attempts increments from the row's own carried-forward count, not reset to 1 each time.
+    expect(finalWrite.vals.attempts).toBe(3);
+    expect(supabase.writes.some((w) => w.vals.status === 'released')).toBe(false);
+  });
+
+  it('a genuine audit-write failure after a successful send is surfaced, not silently swallowed (now reachable with a real thenable fake)', async () => {
+    const resolveAnswerRows = vi.fn(async () => new Map([['corr-1', { body: 'GO' }]]));
+    const checkSelfAnsweredFn = vi.fn(async () => ({ answerRowId: 'ans-9', selfAnswered: false }));
+    const sendChairmanSMS = vi.fn(async () => ({ sent: true, sid: 'SM-ok' }));
+    const supabase = makeFakeSupabase({ releaseUpdateError: 'deadlock detected' });
+    const outcome = await releaseHeldSend(supabase, heldRow(), { resolveAnswerRows, checkSelfAnswered: checkSelfAnsweredFn, sendChairmanSMS });
+    expect(outcome).toMatchObject({ action: 'released_but_audit_write_failed', error: 'deadlock detected' });
+    expect(outcome.sendResult).toEqual({ sent: true, sid: 'SM-ok' });
+  });
+
+  it('the hold-time insert (chairman-sms-gate) writes the exact fields the release path reads back -- consult_correlation_id and options shape', async () => {
+    // Not a chairman-sms-gate integration test (that lives in its own suite); this pins the
+    // CONTRACT releaseHeldSend depends on: options must already be a string[] when read off the
+    // held row (chairman-sms-gate's extractOptionLabels + the DB's options-is-array CHECK produce
+    // this; releaseHeldSend forwards heldRow.options verbatim to sendChairmanSMS without reshaping).
+    const resolveAnswerRows = vi.fn(async () => new Map([['corr-1', { body: 'GO' }]]));
+    const checkSelfAnsweredFn = vi.fn(async () => ({ answerRowId: 'ans-9', selfAnswered: false }));
+    const sendChairmanSMS = vi.fn(async () => ({ sent: true, sid: 'SM-ok' }));
+    const supabase = makeFakeSupabase();
+    await releaseHeldSend(supabase, heldRow({ options: ['A: approve', 'B: reject'] }), { resolveAnswerRows, checkSelfAnswered: checkSelfAnsweredFn, sendChairmanSMS });
+    const [message] = sendChairmanSMS.mock.calls[0];
+    expect(Array.isArray(message.options)).toBe(true);
+    expect(message.options).toEqual(['A: approve', 'B: reject']);
   });
 });
