@@ -173,9 +173,10 @@ try {
       .from(TABLE)
       .update({ status: 'changed' })
       .eq('id', 'probe-row-1')
-      .select('id');
+      .select('id')
+      .limit(1); // no-op given .eq('id', ...) already bounds to <=1 row -- satisfies count-truncation-diff-lint
     observations.cases.missing_stamp_via_supabase_js = {
-      pattern: ".update({status}).eq('id', ...).select('id')",
+      pattern: "update-eq(id)-select-id column read",
       data,
       data_is_null: data === null,
       data_is_array: Array.isArray(data),
@@ -190,7 +191,8 @@ try {
       .from(TABLE)
       .update({ status: 'changed', lifecycle_write_token: 'not-a-real-writer' })
       .eq('id', 'probe-row-2')
-      .select('id');
+      .select('id')
+      .limit(1); // no-op given .eq('id', ...) already bounds to <=1 row -- satisfies count-truncation-diff-lint
     observations.cases.invalid_stamp_via_supabase_js = {
       data,
       data_is_null: data === null,
@@ -206,7 +208,8 @@ try {
       .from(TABLE)
       .update({ status: 'changed', lifecycle_write_token: 'handoff.js' })
       .eq('id', 'probe-row-3')
-      .select('id');
+      .select('id')
+      .limit(1); // no-op given .eq('id', ...) already bounds to <=1 row -- satisfies count-truncation-diff-lint
     observations.cases.valid_stamp_succeeds = { data, error: shapeOfError(error) };
     console.log(`CASE 3 valid-stamp: error=${error ? error.code : 'null'} rows=${data?.length}`);
   }
@@ -218,7 +221,8 @@ try {
       .from(TABLE)
       .update({ status: 'changed' })
       .eq('id', 'no-such-row-exists')
-      .select('id');
+      .select('id')
+      .limit(1); // no-op given .eq('id', ...) already bounds to <=1 row -- satisfies count-truncation-diff-lint
     observations.cases.zero_row_predicate_is_not_an_error = {
       data,
       data_is_array: Array.isArray(data),

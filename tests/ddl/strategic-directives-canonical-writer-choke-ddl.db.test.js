@@ -420,9 +420,12 @@ describe('DEPLOY ORDER — the guard migration refuses to apply without the colu
     // On STATEMENTS, not prose — the guard migration's header legitimately explains where the
     // ADD COLUMN went, and a check that fired on that would push the explanation out of the file.
     expect(MIGRATION_SQL.split('\n').filter((l) => /^\s*ALTER TABLE/.test(l))).toEqual([]);
-    // Both are staged, neither is approved.
-    expect(COLUMN_MIGRATION_SQL).toMatch(/@approved-by: PENDING — INTENTIONALLY BLANK/);
-    expect(COLUMN_MIGRATION_SQL).not.toMatch(/@approved-by:\s*\S+@\S+/);
+    // POST-CEREMONY (2026-08-24T12:43Z, ceremony/20260824-sitting): the column migration is now
+    // chairman-approved AND APPLIED. This asserts the header carries a real, well-formed approval
+    // (matching git-config-email shape) rather than the pre-approval PENDING placeholder or a
+    // malformed/self-granted stand-in — never that it remains permanently unapproved.
+    expect(COLUMN_MIGRATION_SQL).not.toMatch(/@approved-by: PENDING/);
+    expect(COLUMN_MIGRATION_SQL).toMatch(/@approved-by:\s*\S+@\S+/);
   });
 });
 
@@ -1724,8 +1727,14 @@ describe('the migration header discharges TR-2 and TR-4 in the file itself, not 
     expect(MIGRATION_SQL).toMatch(/DELIBERATELY RETAINED, NOT DROPPED/);
   });
 
-  it('carries no @approved-by stamp — this file is staged, never applied by EXEC (TR-1)', () => {
-    expect(MIGRATION_SQL).toMatch(/@approved-by: PENDING — INTENTIONALLY BLANK/);
-    expect(MIGRATION_SQL).not.toMatch(/@approved-by:\s*\S+@\S+/);
+  it('carries a real, non-placeholder approval, but is APPLY-HELD — never applied by EXEC (TR-1)', () => {
+    // POST-CEREMONY (2026-08-24T12:43Z, ceremony/20260824-sitting): TR-1 means EXEC itself never
+    // applies this file — it does not mean the file must stay permanently unapproved. The chairman
+    // separately approved it through the proper ceremony, with apply explicitly HELD pending the
+    // 13-writer-wiring precondition. Assert BOTH halves: real approval present, AND the hold language
+    // that distinguishes "approved to apply" from "approved, but not yet".
+    expect(MIGRATION_SQL).not.toMatch(/@approved-by: PENDING/);
+    expect(MIGRATION_SQL).toMatch(/@approved-by:\s*\S+@\S+/);
+    expect(MIGRATION_SQL).toMatch(/APPLY HELD/);
   });
 });

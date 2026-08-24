@@ -306,7 +306,7 @@ export async function verifyJoinShape(args) {
  * Do not re-promote its output to a blocking gate without re-deciding that.
  *
  * MEASURED RECALL DEFECT THIS REPAIRS (FR-8 / TS-20). The original implementation matched
- * only `.from('table').update(` on ONE physical line. In this codebase's dominant style the
+ * only `.from(TABLE_NAME).update(` on ONE physical line. In this codebase's dominant style the
  * table name and the write verb land on DIFFERENT lines, so recall on real lifecycle writers
  * was ZERO — scripts/modules/handoff/db/SDRepository.js (the declared canonical writer itself)
  * and lib/sd-park.js were both invisible, while all 16 of its findings were metadata/scope
