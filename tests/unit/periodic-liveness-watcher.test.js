@@ -10,6 +10,7 @@
  * produce the desired signal combination -- a genuine test of the real logic, not a mock stand-in.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { observedGapStats } from '../../lib/periodic-liveness/gha-run-resolver.mjs';
 
 const state = {
   claudeSessionsRow: null,
@@ -386,6 +387,38 @@ describe('evaluateRow', () => {
     const now = new Date(firedAt.getTime() + 20 * 60 * 1000); // 20 minutes later -- beyond 300s*3=15min, would false-OK if floored to 6x
     const row = selfStampedRow({ last_fired_at: firedAt.toISOString(), expected_interval_seconds: 300, grace_multiplier: 3 });
     const result = await evaluateRow(row, { now: now.getTime() });
+    expect(result.state).toBe(STATE.OVERDUE);
+  });
+
+  // QF-20260824-373: the QF-631 fix's fixed GHA_GRACE_MULTIPLIER_FLOOR=6 (30min threshold on a
+  // declared 300s workflow) recurred after shipping -- overnight GitHub scheduler throttling
+  // produced WORSE gaps than the one daytime incident it was measured from. Real evidence: three
+  // successful sms-relay-drain-cron.yml runs at 05:37, 06:22, 07:35Z (gaps 45min, then 73min).
+  // Regression (per the QF's own instruction): replay that run history through the derivation and
+  // assert no false breach on a comparable future gap once it is in the fetched window.
+  it('github_actions_api: QF-20260824-373 replay of the 05:37/06:22/07:35Z overnight gaps -- observedGapStats floors a comparable future gap OK', async () => {
+    const row = ghaCronRow({ process_key: 'gha_cron:sms-relay-drain-cron.yml', expected_interval_seconds: 300, grace_multiplier: 3 });
+    const runs = [
+      { path: '.github/workflows/sms-relay-drain-cron.yml', created_at: '2026-08-24T05:37:00Z', run_started_at: '2026-08-24T05:37:00Z', conclusion: 'success' },
+      { path: '.github/workflows/sms-relay-drain-cron.yml', created_at: '2026-08-24T06:22:00Z', run_started_at: '2026-08-24T06:22:00Z', conclusion: 'success' },
+      { path: '.github/workflows/sms-relay-drain-cron.yml', created_at: '2026-08-24T07:35:00Z', run_started_at: '2026-08-24T07:35:00Z', conclusion: 'success' },
+    ];
+    const ghaGapStats = observedGapStats(runs); // max observed gap = 73min (06:22 -> 07:35)
+    const lastRun = new Date('2026-08-24T07:35:00Z');
+    // A later night's comparable 80min gap (beyond the old 30min static floor, inside the new
+    // 73min*1.2=87.6min observed-gap floor).
+    const now = new Date(lastRun.getTime() + 80 * 60 * 1000);
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'stamp', ranAtIso: lastRun.toISOString() }]]);
+    const result = await evaluateRow(row, { ghaDecisions, ghaGapStats, now: now.getTime() });
+    expect(result.state).toBe(STATE.OK);
+  });
+
+  it('github_actions_api: QF-20260824-373 without ghaGapStats, the SAME 80min gap still false-OVERDUEs on the old static floor alone (proves the new floor is load-bearing)', async () => {
+    const row = ghaCronRow({ process_key: 'gha_cron:sms-relay-drain-cron.yml', expected_interval_seconds: 300, grace_multiplier: 3 });
+    const lastRun = new Date('2026-08-24T07:35:00Z');
+    const now = new Date(lastRun.getTime() + 80 * 60 * 1000);
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'stamp', ranAtIso: lastRun.toISOString() }]]);
+    const result = await evaluateRow(row, { ghaDecisions, now: now.getTime() }); // no ghaGapStats
     expect(result.state).toBe(STATE.OVERDUE);
   });
 });
