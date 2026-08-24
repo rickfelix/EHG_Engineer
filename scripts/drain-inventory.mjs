@@ -75,6 +75,25 @@ async function readDescriptor(supabase, descriptor, nowMs) {
       if (error) return { noData: true, reason: `closing-path probe failed: ${error.message}` };
       return { ...age, closingPathUses: count || 0 };
     }
+
+    // SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 (FR-1): a same-table drain -- the channel closes
+    // via a STATUS transition on the same feedback row, not a separate disposition table. Counts
+    // rows with a terminal status (NOT IN UNDRAINED_STATUSES) OR matching an optional
+    // closingPathExtraFilter (a JSONB metadata flag that closes the item WITHOUT changing status,
+    // e.g. feedback-fingerprint-promoter.mjs's promoted_to_qf). Deliberately does NOT widen
+    // CLOSING_PATH_TABLES -- this reads the SAME already-queried table/category, not a new relation.
+    if (descriptor.closingPathSameTable) {
+      let q = supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('category', src.category);
+      const extra = descriptor.closingPathExtraFilter;
+      if (extra?.jsonPath && extra?.op) {
+        q = q.or(`status.not.in.(${UNDRAINED_STATUSES.join(',')}),metadata->>${extra.jsonPath}.${extra.op}`);
+      } else {
+        q = q.not('status', 'in', `(${UNDRAINED_STATUSES.join(',')})`);
+      }
+      const { count, error } = await q;
+      if (error) return { noData: true, reason: `same-table closing-path probe failed: ${error.message}` };
+      return { ...age, closingPathUses: count || 0 };
+    }
     return { ...age, closingPathUses: null };
   }
 
