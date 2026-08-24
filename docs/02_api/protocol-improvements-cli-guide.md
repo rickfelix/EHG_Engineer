@@ -55,6 +55,23 @@ tags: [api, auto-generated]
 
 ## Overview
 
+**REMOVED COMMANDS (SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001, FR-4):** `review`, `apply-auto`,
+and `rescan` no longer exist on `scripts/protocol-improvements.js` — they called methods
+(`reviewImprovement`, `applyAutoImprovements`, `rescanRetrospectives`) that did not exist on any
+resolvable implementation. `npm run protocol:apply-auto` and `npm run protocol:rescan` are also
+removed from `package.json`. Because the CLI's unknown-command fallback prints help text and exits
+0, running a removed command (or a script wired to one) now silently no-ops instead of failing —
+if you have automation depending on these, update it to use `list --status=PENDING` (replaces
+`review`'s listing use) and `apply <queue-id>` (single-improvement apply is unaffected). The
+underlying classes this section used to describe (`ImprovementExtractor`, `ImprovementApplicator`,
+`EffectivenessTracker`, `ImprovementRepository`, `ValidationGuard`,
+`ProtocolImprovementOrchestrator`) were also deleted — they were unreachable dead code well before
+this SD (confirmed via repo-wide import grep), not the live implementation this guide describes
+below. The remaining subcommands (`list`, `approve`, `reject`, `apply`, `effectiveness`, `stats`,
+`evaluate`, `evaluation-report`, `judge-stats`) are all live, backed by
+`scripts/modules/protocol-improvements/index.js`'s `createProtocolImprovementSystem()` (or, for
+`evaluate`/`evaluation-report`/`judge-stats`, `scripts/modules/ai-quality-judge/`).
+
 This guide covers the CLI tools for managing the protocol improvement system that automatically extracts, reviews, and applies improvements from retrospectives.
 
 ## Overview
@@ -443,10 +460,10 @@ CREATE TABLE protocol_improvement_queue (
 | Command | Description |
 |---------|-------------|
 | `npm run protocol:improvements` | List all improvements |
-| `npm run protocol:review` | List pending improvements |
-| `npm run protocol:apply-auto` | Auto-apply eligible improvements |
+| `npm run protocol:review` | List pending improvements (`list --status=PENDING`) |
+| ~~`npm run protocol:apply-auto`~~ | **REMOVED (FR-4)** — called a nonexistent method; use `apply <queue-id>` per-item |
 | `npm run protocol:effectiveness` | Show effectiveness report |
-| `npm run protocol:rescan` | Rescan retrospectives |
+| ~~`npm run protocol:rescan`~~ | **REMOVED (FR-4)** — called a nonexistent method; no replacement |
 | `npm run protocol:stats` | Show statistics |
 
 ## Best Practices

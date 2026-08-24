@@ -105,12 +105,6 @@ export function sanitizeProtocolSectionPayload(payload, ctx = {}) {
     else dropped.push(k);
   }
 
-  // An append that would write nothing is a malformed payload, not a no-op. Saying so keeps the
-  // string-payload class visible even if a future caller pre-coerces it into an empty object.
-  if (Object.keys(clean).length === 0) {
-    throw new PayloadRefused('no writable columns after allowlist', `${where}, dropped: ${dropped.join(', ') || 'nothing'}`);
-  }
-
   // SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-2): metadata has no sub-key filtering above,
   // so a caller (including a model-authored payload) could set metadata.provenance directly and
   // have it trusted as-is -- self-attested provenance, the same blind-guard shape as an actor-role
@@ -131,6 +125,15 @@ export function sanitizeProtocolSectionPayload(payload, ctx = {}) {
     clean.metadata = restMetadata;
   } else if ('metadata' in clean) {
     delete clean.metadata;
+  }
+
+  // MUST run AFTER provenance stripping, not before (regression-agent finding, PLAN_VERIFICATION):
+  // a payload whose only allowlisted content is metadata.provenance (self-attested, no real
+  // ctx.assignedSdId/sourceRetroId) collapses clean.metadata away above, so checking emptiness
+  // beforehand let {metadata:{provenance:{...}}} slip through as clean={} -- silently defeating
+  // this file's own fail-loud contract instead of refusing at the sanitizer boundary.
+  if (Object.keys(clean).length === 0) {
+    throw new PayloadRefused('no writable columns after allowlist', `${where}, dropped: ${dropped.join(', ') || 'nothing'}`);
   }
 
   return { clean, dropped };

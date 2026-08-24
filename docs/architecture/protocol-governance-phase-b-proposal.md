@@ -60,7 +60,10 @@ append-only ledger from SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001) before th
 allowed to proceed. This is an honest, checkable property — but it proves only that an
 independently-audited artifact was **cited**, not that the proposer and approver are actually
 different people. That residual gap should be stated explicitly in whatever Phase-B design the
-chairman approves, not glossed over.
+chairman approves, not glossed over. `chairman_ratifications` itself is, as of this writing, ALSO
+a staged-but-unapplied chairman-gated migration (`20260823_chairman_ratifications.sql`) — this
+proposal's approval-artifact-reference design has a second table dependency to apply before it is
+buildable, not only the sequencing dependency on SSOT-DEDUP-001 noted below.
 
 ### 3. The arming precondition: currently unreachable, and why
 
@@ -103,9 +106,9 @@ the 24h cap) REJECTS on the real path" — cannot honestly arm today, for two in
 should arm only once the Phase-A ledger (`leo_protocol_sections_history`) shows **100% provenance
 coverage across all observed write channels for a 14-day rolling window** — a measured,
 falsifiable precondition, not a calendar date. As things stand today, that precondition **cannot
-be satisfied** until the two additional write sites above are also fixed. This proposal
+be satisfied** until the three additional write sites above are also fixed. This proposal
 recommends treating that as a **named follow-up item**, not a silent gap: either a small QF/SD
-closes those two sites' provenance handling, or the coverage measurement is explicitly redefined
+closes all three sites' provenance handling, or the coverage measurement is explicitly redefined
 to exclude them with a documented rationale the chairman signs off on.
 
 There is also a hard sequencing dependency: sibling SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (same
@@ -118,8 +121,11 @@ measurement or trip an armed cap prematurely.
 
 ### Option A — Build the follow-up fixes, then arm Phase B on schedule
 
-Fix the two additional write sites (`applyChecklistItemChange`, `applySubAgentConfigChange`) to
-route through the sanitizer, let SSOT-DEDUP-001's bulk pass complete, then measure 14 days of
+Fix the three additional write sites (`applyChecklistItemChange`, `applySubAgentConfigChange`,
+and `protocol-improvements/index.js`'s `applyImprovement()`) to route through the sanitizer (the
+third needs its own allowlist/provenance treatment, not a drop-in call to the same function, since
+it also lacks a `target_table` allowlist), let SSOT-DEDUP-001's bulk pass complete, then measure
+14 days of
 100% coverage off the live ledger and arm Phase B with a ratified rate-cap number and the
 approval-artifact-reference self-approval check.
 
@@ -146,13 +152,13 @@ caught sooner with blocking in place.
 
 ## Recommendation
 
-Option A, but sequenced explicitly and not rushed: fix the two additional write sites as a
+Option A, but sequenced explicitly and not rushed: fix the three additional write sites as a
 small, focused follow-up (low risk, same shape as this SD's own FR-2), let the sibling dedup SD
 land, then let the 14-day measurement run for real before asking the chairman to ratify a
 specific rate-cap number and approve the approval-artifact-reference design for self-approval.
 This keeps Phase A's honest observability as the immediate deliverable while giving Phase B a
 real, measured foundation instead of a guessed one. This recommendation is not binding — the
-chairman may select either option, a hybrid, or request the two write-site fixes as a
+chairman may select either option, a hybrid, or request the three write-site fixes as a
 precondition before deciding anything else.
 
 ## Routing

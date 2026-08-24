@@ -65,6 +65,15 @@ async function step2ServiceRoleChannelProof() {
   const { data: exists, error: existsErr } = await supabase
     .from('leo_protocol_sections_history').select('id').limit(1);
   if (existsErr) {
+    // PGRST205 is PostgREST's specific "table not in schema cache" code -- the ONLY error that
+    // legitimately means "not applied yet." Any other error (RLS denial, network failure, stale
+    // schema cache after a real apply) must FAIL loudly, not be swallowed as a skip (validation-
+    // agent finding V-3: the original unconditional `if (existsErr)` treated every error the same
+    // way, so a real post-apply regression would have silently reported SKIPPED forever).
+    if (existsErr.code !== 'PGRST205') {
+      console.error(`[STEP 2 FAIL] unexpected error checking for leo_protocol_sections_history (not a missing-table condition): ${existsErr.code} ${existsErr.message}`);
+      return false;
+    }
     console.log(`[STEP 2 SKIPPED] leo_protocol_sections_history does not exist live yet (migration not applied): ${existsErr.message}`);
     return true; // not a failure -- this step is post-apply-only, by design
   }

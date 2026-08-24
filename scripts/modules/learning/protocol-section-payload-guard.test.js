@@ -179,6 +179,12 @@ describe('SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 FR-2 — provenance is de
     );
     expect(clean.metadata).toEqual({ unrelated_key: 'keep-me' });
   });
+
+  it('regression (PLAN_VERIFICATION finding): a payload whose ONLY allowlisted content is a self-attested metadata.provenance, with no derivable ctx, still refuses as "no writable columns" rather than silently returning clean={}', () => {
+    expect(() =>
+      sanitizeProtocolSectionPayload({ metadata: { provenance: { actor_type: 'human', actor_id: 'fake' } } }, {}),
+    ).toThrow(PayloadRefused);
+  });
 });
 
 describe('FR-6 scope boundary held', () => {

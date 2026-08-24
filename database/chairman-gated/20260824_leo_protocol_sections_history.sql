@@ -170,7 +170,17 @@ BEGIN
   END IF;
 
   -- INSERT and UPDATE both have NEW; provenance is read from it identically in both branches.
-  v_provenance := NEW.metadata -> 'provenance';
+  -- A JSONB SQL-null (`{"provenance": null}`) or a bare scalar is NOT "present" -- `x -> 'k'`
+  -- returns the SQL value 'null'::jsonb (which IS NOT NULL by Postgres's own rules) for an
+  -- explicit null, so both a NULLIF against 'null'::jsonb and a jsonb_typeof='object' check are
+  -- required, or a caller could satisfy provenance_status='present' with no real provenance
+  -- (PLAN_VERIFICATION validation-agent finding V-2 -- caught before this migration was ever
+  -- applied, live-measured on Postgres 17.4: '{"provenance": null}'::jsonb -> 'provenance' IS
+  -- NOT NULL evaluates true).
+  v_provenance := NULLIF(NEW.metadata -> 'provenance', 'null'::jsonb);
+  IF v_provenance IS NOT NULL AND jsonb_typeof(v_provenance) <> 'object' THEN
+    v_provenance := NULL;
+  END IF;
   v_provenance_status := CASE WHEN v_provenance IS NOT NULL THEN 'present' ELSE 'missing' END;
 
   IF TG_OP = 'INSERT' THEN
@@ -395,6 +405,22 @@ BEGIN
     IF NOT (h.metadata_key_delta -> 'added' ? 'provenance') THEN
       RAISE EXCEPTION 'UPDATE history row metadata_key_delta did not record the added provenance key: %',
         h.metadata_key_delta USING ERRCODE = 'P0105';
+    END IF;
+
+    -- UPDATE a governed column, OVERWRITING that real provenance with a JSONB-null -- expect
+    -- provenance_status to revert to 'missing' (validation-agent finding V-2:
+    -- `metadata->'provenance'` on an explicit JSON null returns 'null'::jsonb, which IS NOT NULL
+    -- by Postgres's own rules -- a naive `IS NOT NULL` check would have let this count as
+    -- 'present' with no real provenance, silently defeating the honest-sentinel design).
+    UPDATE public.leo_protocol_sections
+      SET content = 'probe content v3', metadata = jsonb_build_object('provenance', 'null'::jsonb)
+      WHERE id = probe_section_id;
+
+    SELECT * INTO h FROM public.leo_protocol_sections_history
+      WHERE section_id = probe_section_id AND operation = 'UPDATE' ORDER BY id DESC LIMIT 1;
+    IF h.provenance_status <> 'missing' OR h.provenance IS NOT NULL THEN
+      RAISE EXCEPTION 'JSONB-null provenance was not treated as missing: status=%, provenance=%',
+        h.provenance_status, h.provenance USING ERRCODE = 'P0110';
     END IF;
 
     -- Metadata-ONLY UPDATE (no governed-column change) -- expect NO new history row (the WHEN
