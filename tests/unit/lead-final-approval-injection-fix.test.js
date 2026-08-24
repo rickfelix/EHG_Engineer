@@ -127,13 +127,40 @@ describe('FR-1/FR-3: sink #2 (gh pr list --head) -- double-quoted, asymmetric ma
 });
 
 describe.skipIf(process.platform === 'win32')('FR-3: backtick/$() substitution -- POSIX-only, explicitly platform-gated', () => {
-  it('command substitution is neutralized by execFileSync for both sinks on a POSIX host', () => {
+  it('VULNERABLE (pre-fix shape, execSync) confirms command substitution actually fires on sink #1', () => {
+    resetMarker();
+    const substitutionBranch = `feat/X-a\`${markerWriteCommand()}\`b`;
+    try {
+      execSync(`git rev-list --count origin/main..${substitutionBranch}`, { encoding: 'utf8', timeout: 10000 });
+    } catch { /* expected: git errors on the substituted-away text, injected command already ran */ }
+    expect(markerExists(), 'documents the vulnerability: backtick substitution fires against execSync sink #1').toBe(true);
+  });
+
+  it('FIXED: command substitution is neutralized by execFileSync on sink #1 (git rev-list --count)', () => {
     resetMarker();
     const substitutionBranch = `feat/X-a\`${markerWriteCommand()}\`b`;
     try {
       execFileSync('git', ['rev-list', '--count', `origin/main..${substitutionBranch}`], { encoding: 'utf8', timeout: 10000, shell: false });
     } catch { /* expected */ }
-    expect(markerExists(), 'backtick substitution must not execute via execFileSync').toBe(false);
+    expect(markerExists(), 'backtick substitution must not execute via execFileSync on sink #1').toBe(false);
+  });
+
+  it('VULNERABLE (pre-fix shape, execSync double-quoted) confirms command substitution fires on sink #2 too', () => {
+    resetMarker();
+    const substitutionBranch = `feat/X-a\`${markerWriteCommand()}\`b`;
+    try {
+      execSync(`gh pr list --head "${substitutionBranch}" --state merged --json number --limit 1`, { encoding: 'utf8', timeout: 10000 });
+    } catch { /* expected */ }
+    expect(markerExists(), 'documents the vulnerability: backtick substitution fires against execSync sink #2 (double quotes do not block $()/backtick substitution)').toBe(true);
+  });
+
+  it('FIXED: command substitution is neutralized by execFileSync on sink #2 (gh pr list --head)', () => {
+    resetMarker();
+    const substitutionBranch = `feat/X-a\`${markerWriteCommand()}\`b`;
+    try {
+      execFileSync('gh', ['pr', 'list', '--head', substitutionBranch, '--state', 'merged', '--json', 'number', '--limit', '1'], { encoding: 'utf8', timeout: 10000, shell: false });
+    } catch { /* expected */ }
+    expect(markerExists(), 'backtick substitution must not execute via execFileSync on sink #2').toBe(false);
   });
 });
 
