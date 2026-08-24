@@ -33,7 +33,7 @@ const silentConsole = { warn: vi.fn(), error: vi.fn(), log: vi.fn() };
 const runPreSendConsultLane = async () => ({ action: 'send' });
 
 /** Minimal fake supabase covering exactly what stageDecisionSmsNotification + handleInboundSmsReply need. */
-function makeFakeSupabase(seed = {}, { forceInsertError = null, forceUpdateError = null } = {}) {
+function makeFakeSupabase(seed = {}, { forceInsertError = null, forceUpdateError = null, rpcChairmanUserId = 'u-resolved', forceRpcError = null } = {}) {
   const tables = {
     chairman_notifications: [...(seed.chairman_notifications || [])],
     chairman_decisions: [...(seed.chairman_decisions || [])],
@@ -104,17 +104,30 @@ function makeFakeSupabase(seed = {}, { forceInsertError = null, forceUpdateError
     };
     return api;
   }
-  return { from, _tables: tables };
+  /**
+   * SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 (FR-3): the real chairman-sms-gate now resolves
+   * chairman_user_id via supabase.rpc('fn_resolve_chairman_user_id') instead of an env-var
+   * fallback -- this fake must support that RPC or every test that doesn't explicitly configure
+   * rpcChairmanUserId/forceRpcError falls through to notification_stage_failed.
+   */
+  async function rpc(fnName) {
+    if (fnName !== 'fn_resolve_chairman_user_id') return { data: null, error: { message: `unexpected rpc: ${fnName}` } };
+    if (forceRpcError) return { data: null, error: { message: forceRpcError } };
+    return { data: rpcChairmanUserId, error: null };
+  }
+  return { from, rpc, _tables: tables };
 }
 
 describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', () => {
-  it('TS-1: decision send with decisionId stages exactly one matchable row + token via env-var identity resolution', async () => {
-    const prevUser = process.env.CHAIRMAN_USER_ID, prevEmail = process.env.CHAIRMAN_EMAIL, prevPhone = process.env.CHAIRMAN_PHONE;
-    process.env.CHAIRMAN_USER_ID = 'u-env';
+  it('TS-1: decision send with decisionId stages exactly one matchable row + token via DB-first chairman identity resolution (SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 FR-3)', async () => {
+    const prevEmail = process.env.CHAIRMAN_EMAIL, prevPhone = process.env.CHAIRMAN_PHONE;
     process.env.CHAIRMAN_EMAIL = 'chairman@env.example';
     process.env.CHAIRMAN_PHONE = '+15550001111';
     try {
-      const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-env-1', status: 'pending', brief_data: {} }] });
+      const sb = makeFakeSupabase(
+        { chairman_decisions: [{ id: 'dec-env-1', status: 'pending', brief_data: {} }] },
+        { rpcChairmanUserId: 'u-db-resolved' },
+      );
       const sender = makeSender();
       const res = await sendChairmanSMS(
         wellFormedDecision({ decisionId: 'dec-env-1' }),
@@ -127,15 +140,40 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       const row = sb._tables.chairman_notifications[0];
       // status is asserted separately by TS-7 (staged queued, then transitioned to sent on
       // confirmed dispatch, QF-20260815-065) -- this assertion is about identity/staging fields.
+      // chairman_user_id now comes from the fn_resolve_chairman_user_id() RPC (FR-3), not an env var.
       expect(row).toMatchObject({
-        channel: 'sms', decision_id: 'dec-env-1', chairman_user_id: 'u-env',
+        channel: 'sms', decision_id: 'dec-env-1', chairman_user_id: 'u-db-resolved',
         recipient_email: 'chairman@env.example', recipient_phone: '+15550001111',
       });
       expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeTruthy();
       // The dispatched message carries the SAME resolved phone staging used (TR-5).
       expect(sender.send.mock.calls[0][0].recipientPhone).toBe('+15550001111');
     } finally {
-      process.env.CHAIRMAN_USER_ID = prevUser; process.env.CHAIRMAN_EMAIL = prevEmail; process.env.CHAIRMAN_PHONE = prevPhone;
+      process.env.CHAIRMAN_EMAIL = prevEmail; process.env.CHAIRMAN_PHONE = prevPhone;
+    }
+  });
+
+  it('TS-1b (SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 FR-3/FR-5 AC-2): an unresolvable chairman identity (RPC error, CHAIRMAN_USER_ID genuinely unset -- not stubbed) fails loud BEFORE any chairman_notifications write, never a silent NOT NULL bounce', async () => {
+    const prevUser = process.env.CHAIRMAN_USER_ID;
+    delete process.env.CHAIRMAN_USER_ID;
+    try {
+      const sb = makeFakeSupabase(
+        { chairman_decisions: [{ id: 'dec-unresolvable-1', status: 'pending', brief_data: {} }] },
+        { forceRpcError: 'fn_resolve_chairman_user_id: NO auth.users row matches the chairman predicate' },
+      );
+      const sender = makeSender();
+      const res = await sendChairmanSMS(
+        wellFormedDecision({ decisionId: 'dec-unresolvable-1' }),
+        DAYTIME,
+        { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
+      );
+      expect(res.sent).toBe(false);
+      expect(res.reason).toBe('notification_stage_failed');
+      expect(res.detail).toContain('fn_resolve_chairman_user_id');
+      expect(sender.send).not.toHaveBeenCalled();
+      expect(sb._tables.chairman_notifications).toHaveLength(0);
+    } finally {
+      if (prevUser !== undefined) process.env.CHAIRMAN_USER_ID = prevUser;
     }
   });
 

@@ -147,6 +147,26 @@ describe('performBoundedConsult — FR-3 FAIL-OPEN (Adam never hard-blocked on S
     expect(result.degraded).toBe(true);
     // chairman surface: does NOT auto-proceed and does NOT emit a documented-proceed ledger.
     expect(recordLedger).not.toHaveBeenCalled();
+    // A genuine hard timeout (consult() never resolved at all) produces no envelope, so there is
+    // no correlationId to carry -- distinct from the pending-envelope case below.
+    expect(result.correlationId).toBeUndefined();
+  });
+
+  it('SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 (FR-1): a chairman-targeted hold from a PENDING (non-blocking) consult carries the correlationId forward -- previously dropped, making every held row unreconcilable by construction', async () => {
+    const consult = vi.fn(async () => ({ correlationId: 'corr-pending-1', pending: true }));
+    const recordLedger = vi.fn(async () => {});
+    const result = await performBoundedConsult(
+      { ...HIGH, isChairmanTargeted: true },
+      { consult, recordLedger, timeoutMs: 200 },
+    );
+
+    expect(result.action).toBe('hold-and-surface');
+    expect(result.degraded).toBe(true);
+    expect(result.correlationId).toBe('corr-pending-1');
+    // Discriminates the pending case from a genuine timeout -- both used to share one hardcoded
+    // 'timeout' reason even though the pending case is the only one ever observed in production.
+    expect(result.reason).toBe('solomon-consult-async::chairman-hold-pending-reconcile');
+    expect(recordLedger).not.toHaveBeenCalled();
   });
 
   it('a failing recordLedger STILL proceeds (ledger capture is best-effort, never fatal)', async () => {
@@ -205,6 +225,24 @@ describe('FR-5 — NO SELF-EXEMPTION (mechanism, not caller opt-in)', () => {
     // for any shape and the guard is decorative.
     expect(hasConsultEvidence({ action: 'send' })).toBe(false);
     expect(hasConsultEvidence({ action: 'proceed' })).toBe(false);
+
+    // Path C (SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001, FR-5 AC-6): chairman hold-and-surface is a
+    // THIRD exit that the two-exit invariant above never covered -- it carries neither
+    // consultRecorded nor a ledger (nothing was decided yet), so hasConsultEvidence alone reads it
+    // as unaudited. It IS audited, just differently: by the correlationId it carries forward, which
+    // lets a durable record (chairman_held_sends) join back to this exact consult. Extend the
+    // invariant rather than leaving the hold arm as the gate's one truly unaudited exit.
+    const held = await performBoundedConsult(
+      { ...HIGH, isChairmanTargeted: true },
+      { consult: async () => ({ correlationId: 'corr-hold-audit', pending: true }), timeoutMs: 200 },
+    );
+    expect(held.action).toBe('hold-and-surface');
+    const hasAuditableTrail = (r) => hasConsultEvidence(r) || (r.action === 'hold-and-surface' && Boolean(r.correlationId));
+    expect(hasAuditableTrail(held)).toBe(true);
+    // Still non-tautological: a hold with NO correlationId (a genuine hard timeout, not a pending
+    // envelope) has nothing to join a durable record to via this path -- it depends on
+    // v_chairman_held_sends_unreconcilable to surface it downstream instead, not this invariant.
+    expect(hasAuditableTrail({ action: 'hold-and-surface', degraded: true })).toBe(false);
   });
 
   // TS-8 / TS-12 (SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001) — FR-7 guard.
