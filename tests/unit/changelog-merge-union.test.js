@@ -30,14 +30,16 @@ import path from 'node:path';
 const require_ = createRequire(import.meta.url);
 const { scrubGitEnv } = require_('../../lib/fleet/source-tree-refresh.cjs');
 
-let root;
-
-const git = (args, cwd = root) => execFileSync('git', args, {
+// No default `cwd` -- an omitted cwd falls back to process.cwd(), which is the LIVE repo. Every
+// call site below must pass an explicit temp-repo dir (or REPO_ROOT for the FR-1 binding test).
+const git = (args, cwd) => execFileSync('git', args, {
   cwd,
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe'],
   env: scrubGitEnv(process.env),
 });
+
+const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
 
 const CHANGELOG_BASE = [
   '# Changelog',
@@ -165,6 +167,10 @@ describe('CHANGELOG.md merge=union fix (FR-1/FR-2)', () => {
       threw = true;
     }
     expect(threw, 'attribute on theirs-only must still conflict').toBe(true);
+    // Pin the specific conflict shape, not just "the command exited non-zero" -- a threw-only
+    // assertion is satisfied by ANY merge failure and borrows its discriminating power entirely
+    // from TS-2 being green in the same run.
+    expect(git(['status', '--porcelain'], dir)).toMatch(/^UU CHANGELOG\.md$/m);
     git(['merge', '--abort'], dir);
   });
 
@@ -196,5 +202,16 @@ describe('CHANGELOG.md merge=union fix (FR-1/FR-2)', () => {
     expect(result).toContain('Entry C (from theirs)');
     expect(result).not.toMatch(/<<<<<<<|=======|>>>>>>>/);
     expect(git(['status', '--porcelain'], dir).trim()).toBe('');
+  });
+
+  it('FR-1 binding: the SHIPPED .gitattributes actually resolves CHANGELOG.md to merge=union', () => {
+    // TS-1..TS-3b above prove git's union mechanism works -- none of them read this repo's real
+    // .gitattributes. Confirmed (EXEC-phase TESTING mutation check): deleting the real
+    // `CHANGELOG.md merge=union` line does NOT fail any of the other tests, since each builds its
+    // own isolated fixture repo with its own inline .gitattributes content. This test is the one
+    // that actually binds to the shipped file, so a future silent removal or an overriding rule
+    // added later in .gitattributes (attribute resolution is last-match-wins) is caught here.
+    const out = git(['check-attr', 'merge', '--', 'CHANGELOG.md'], REPO_ROOT);
+    expect(out.trim()).toBe('CHANGELOG.md: merge: union');
   });
 });
