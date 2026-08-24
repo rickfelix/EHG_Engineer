@@ -869,6 +869,18 @@ else
 fi
 
 # ============================================================================
+# STAGE 9B: Root Dirt Lint (NON-BLOCKING) -- SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-2
+# ============================================================================
+# Whole-tree untracked-file count (not just repo root, unlike Stage 9 above) against a
+# documented, measured threshold. See scripts/lint/root-dirt-lint.mjs and
+# docs/architecture/evidence-boundary.md for the full rationale. NON-BLOCKING for the same
+# reason as Stage 9: a hard block on a metric no single commit fully controls (concurrent
+# fleet-session scratch accumulation) would fail unrelated commits. Kept separate from Stage 9
+# (not merged into it) so each check's own narrower scope and threshold stay independently
+# auditable -- Stage 9 is repo-root-only via a bash glob; this is the whole tree via git itself.
+node scripts/lint/root-dirt-lint.mjs || true
+
+# ============================================================================
 # STAGE 10: CLAUDE_*.md Drift Gate (BLOCKING when generated-doc family is staged)
 # ============================================================================
 # SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-2): if this commit stages CLAUDE_*.md, the

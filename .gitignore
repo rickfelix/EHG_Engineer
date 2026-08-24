@@ -491,3 +491,45 @@ scripts/harness/.spine-verify-first-runs/
 # SD-LEO-INFRA-FOUR-AUDIT-CRITICAL-001: same pattern — --baseline mode's regenerable snapshot,
 # re-written fresh each run, read back by --verify. Narrow entry, not the whole directory.
 .artifacts/four-audit-critical-timestamptz-baseline.json
+
+# SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-2: one-time evidence-boundary triage. Full rationale
+# and per-directory disposition (what's ephemeral vs. durable, and why) is in
+# docs/architecture/evidence-boundary.md — read that before adding to or removing from this
+# block. None of the entries below match an already-tracked path (each verified via
+# `git ls-files` before being added), so this cannot silently untrack anything.
+scratchpad/
+# Session scratch dumped directly at repo root with this literal prefix instead of scratchpad/
+# or .artifacts/ (worse hygiene than either) — matches an already-tracked path is fine, see above.
+/.artifacts-*
+# 25 per-session/per-agent scratch subdirectories under .artifacts/ (0 tracked files in any of
+# them, individually verified). .artifacts/ itself is NOT blanket-ignored — 160 files are
+# tracked there, some nested (e.g. .artifacts/lead/, .artifacts/qa-recheck/) — see this
+# .gitignore's own earlier "NARROWED FROM A BLANKET" comment for why that regression must not
+# repeat. This is a point-in-time list, not a self-maintaining pattern — a future session's new
+# scratch subdirectory here needs its own entry (see evidence-boundary.md's Enforcement section
+# for how root-dirt-lint.mjs surfaces that drift instead of letting it silently reaccumulate).
+.artifacts/adam-plans/
+.artifacts/adam-proposals-20260815/
+.artifacts/adam-scratch/
+.artifacts/brand/
+.artifacts/c4/
+.artifacts/dbagent-a4/
+.artifacts/evidence-misdirected-writes-20260812/
+.artifacts/j1-testing/
+.artifacts/rca-agegauge/
+.artifacts/rca-b3/
+.artifacts/rca-scratch/
+.artifacts/retro-tre/
+.artifacts/sec-h/
+.artifacts/sec-probe/
+.artifacts/stories-C/
+.artifacts/stories-a4/
+.artifacts/stories-c1/
+.artifacts/testing-agent-llm-canary/
+.artifacts/testing-c1/
+.artifacts/testing-scratch/
+.artifacts/testing-tmp/
+.artifacts/tmp-alpha2/
+.artifacts/val-drive-forcing/
+.artifacts/val-story-e2e-write/
+.artifacts/venture-50763b6a-demand-test/
