@@ -61,6 +61,22 @@ const keysUnavailable = (error = 'simulated outage') => async () => ({
 });
 const gateWith = (loadKeySet) => createPRMergeVerificationGate(null, { loadKeySet });
 
+/**
+ * SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-1a): the gate now issues some calls via execFileSync
+ * (argv array, never a shell) instead of execSync (shell string) for the fixed injection sinks
+ * (git rev-list --count at :887, gh pr list --head at :898, gh pr list --repo Scan A/C at
+ * :601/:761/:1048). This helper reconstructs an equivalent command STRING from an
+ * execFileSync(file, args) call so every test's existing string-matching dispatch function keeps
+ * working for BOTH mock shapes -- wiring both mocks to the SAME dispatch closure so a test cannot
+ * silently stop covering a scenario it used to cover, which is the exact "mock goes quietly dead
+ * on a converted call site" bug class this SD exists to prevent (verified: without this, 8 of 14
+ * tests in this file broke silently-green on the earlier all-execSync mock alone).
+ */
+function mockBothExecs(dispatch) {
+  execSync.mockImplementation(dispatch);
+  execFileSync.mockImplementation((file, args) => dispatch([file, ...(args || [])].join(' ')));
+}
+
 describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,7 +90,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // key-set load introduced a REACHABLE pre-try failure with the same fail-closed obligation, so
   // the thing the skip wanted to cover now exists and is tested rather than deferred.
   it('key-set unavailable fails closed, attributably to the resolver', async () => {
-    execSync.mockImplementation(() => '');
+    mockBothExecs(() => '');
     const result = await gateWith(keysUnavailable('db unreachable')).validator(makeCtx());
     expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
@@ -86,7 +102,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   });
 
   it('inner branch-comparison error marks branch unverified and blocks completion', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return `  origin/feat/${SD}-thing\n  origin/main`;
@@ -107,7 +123,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // EXCLUDED it rather than merely finding nothing.
   it('happy path: passes when the only branches belong to other SDs', async () => {
     const OTHER = 'SD-MAN-ORCH-OTHER-002';
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return `  origin/feat/${OTHER}-work\n  origin/main\n  origin/HEAD -> origin/main`;
@@ -129,7 +145,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
 
   it('detects unmerged branches with commits ahead of main — including SUFFIXED branches', async () => {
     // The assertion the quarantine buried. Under the anchored matcher this returned passed:true.
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return `  origin/feat/${SD}-thing\n  origin/main`;
@@ -149,7 +165,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // executes, so this is the first version of this test that exercises what it claims to.
   it('squash-merge artifact (branch + merged PR) passes — whitelist actually runs now', async () => {
     let headQueried = false;
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return `  origin/feat/${SD}-thing\n  origin/main`;
@@ -167,7 +183,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
 
   it('a CHILD key branch does not block the parent', async () => {
     const CHILD = `${SD}-A`;
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return `  origin/feat/${CHILD}\n  origin/main`;
@@ -191,7 +207,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // merely passed===false — both test files fully mock sd-type-checker.js, so an unrelated crash in
   // the outer catch (gates.js) would ALSO read as passed:false with zero never-pushed logic present.
   it('TS-1: infrastructure-type SD with zero evidence anywhere FAILS with a structured reason', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -209,7 +225,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // TS-2: the corrected, narrow exemption (FR-2) still exempts genuinely no-code SD types — a
   // documentation-type SD with the SAME zero-evidence fixture as TS-1 must PASS, not FAIL.
   it('TS-2: documentation-type SD with zero evidence anywhere still PASSES (exemption)', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -226,7 +242,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // byte-identical between this fixture and TS-1's never-pushed fixture. Scan C (merged-PR
   // evidence) is what tells them apart.
   it('TS-5: merged-and-branch-deleted SD (normal /ship --delete-branch outcome) PASSES', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n'; // branch deleted post-merge
@@ -246,7 +262,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // silently reintroduce the exact false-positive class TS-5 exists to prevent.
   it('Scan C is search-scoped to the SD key, not an unbounded repo-wide list', async () => {
     let scanCCommand = null;
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -258,13 +274,22 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
     });
     const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
     expect(result.passed).toBe(true);
-    expect(scanCCommand).toContain(`--search "${SD}"`);
+    // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-1, FR-1a): Scan C is now execFileSync-array, so the
+    // sdId arrives as its own argv element with no surrounding shell-quoting — asserted via the
+    // reconstructed command string (unquoted, unlike the old shell form) AND directly via the
+    // mock's actual call arguments, which is the platform-independent, cannot-false-green proof.
+    expect(scanCCommand).toContain(`--search ${SD}`);
+    expect(execFileSync).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining(['--search', SD]),
+      expect.any(Object),
+    );
   });
 
   // TESTING EXEC-phase coverage gap (medium): the localCandidate-populated branch of the
   // diagnostic-only local-branch enumeration was previously only ever exercised in its EMPTY form.
   it('names a local, never-pushed branch in the message when git for-each-ref finds one', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -273,8 +298,10 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
       return '';
     });
     // execFileSync('git', ['ls-remote', '--heads', 'origin', '--', branch], opts) — argv form, not
-    // a string command (SEC-1 fix). Empty output = branch not found on remote.
-    execFileSync.mockImplementation(() => '');
+    // a string command (SEC-1 fix). mockBothExecs' dispatch falls through to `return ''` for this
+    // reconstructed command (no explicit handler above matches 'ls-remote'), matching the old
+    // "empty output = branch not found on remote" behavior without a separate override that would
+    // otherwise clobber the Scan A/C dispatch wiring this test also needs.
     const result = await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
     expect(result.passed).toBe(false);
     expect(result.details?.localCandidate).toBe(`feat/${SD}`);
@@ -285,7 +312,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // TESTING EXEC-phase finding (medium): a transient gh failure during Scan C must fail closed,
   // not silently read as "no merge evidence" (which would mislabel an outage as never_pushed).
   it('Scan C failure fails closed rather than reporting never_pushed', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -308,7 +335,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
     const saturatedResults = Array.from({ length: 100 }, (_, i) => ({
       number: i, headRefName: `feat/SD-SOME-OTHER-KEY-${i}`, url: 'u', mergedAt: '2026-01-01',
     }));
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -327,7 +354,7 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
   // (not merely claim to share it) — a ship_review_findings row is one more chance for an SD Scan
   // A/B/C's live git/gh state missed to avoid a false never_pushed verdict.
   it('a ship_review_findings row (pr_number) saves an SD from a false never_pushed verdict', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
       if (cmd.startsWith('git fetch')) return '';
       if (cmd === 'git branch -r') return '  origin/main\n';
@@ -346,5 +373,35 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
     const gate = createPRMergeVerificationGate(fakeSupabase, { loadKeySet: keys(SD) });
     const result = await gate.validator(makeCtx(SD, 'infrastructure'));
     expect(result.passed).toBe(true);
+  });
+
+  // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-1a, TESTING recommendation): platform-and-payload
+  // -independent regression guard. tests/unit/lead-final-approval-injection-fix.test.js proves
+  // execFileSync-with-these-argv-shapes is immune to injection as a GENERAL fact, but does not
+  // import gates.js, so it cannot detect a future regression back to execSync there. THIS
+  // assertion is the one that actually binds to the real gate: it fails immediately and loudly
+  // if the branch-name/repo/sdId sinks this SD fixed are ever changed back to a shell string,
+  // regardless of payload choice or host platform.
+  it('the branch-name, repo, and sdId sinks never call execSync (only execFileSync)', async () => {
+    mockBothExecs((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return `  origin/feat/${SD}-thing\n  origin/main`;
+      if (cmd.includes('rev-list --count')) return '3';
+      if (cmd.includes('gh pr list --head')) return JSON.stringify([{ number: 42 }]);
+      if (cmd.startsWith('gh pr list --repo') && cmd.includes('--state merged')) return '[]';
+      return '';
+    });
+    await gateWith(keys(SD)).validator(makeCtx(SD, 'infrastructure'));
+    // execSync IS still legitimately called for git fetch / git branch -r (untouched, literal
+    // strings, no interpolation) -- the assertion is on the SPECIFIC converted call shapes, not
+    // a blanket "execSync never called".
+    const shellCalls = execSync.mock.calls.map(([cmd]) => cmd);
+    expect(shellCalls.some((c) => c.includes('rev-list --count')), 'rev-list --count must never reach execSync').toBe(false);
+    expect(shellCalls.some((c) => c.includes('gh pr list --head')), 'gh pr list --head must never reach execSync').toBe(false);
+    expect(shellCalls.some((c) => c.startsWith('gh pr list --repo')), 'gh pr list --repo (Scan A/C) must never reach execSync').toBe(false);
+    // And the converse: execFileSync WAS actually called for each (not simply unreached).
+    expect(execFileSync).toHaveBeenCalledWith('git', expect.arrayContaining(['rev-list', '--count']), expect.any(Object));
+    expect(execFileSync).toHaveBeenCalledWith('gh', expect.arrayContaining(['--head']), expect.any(Object));
   });
 });

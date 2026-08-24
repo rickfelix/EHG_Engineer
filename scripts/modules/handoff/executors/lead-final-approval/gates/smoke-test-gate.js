@@ -102,6 +102,11 @@ export function createSmokeTestGate(supabase, prdRepo) {
 
       console.log(`   Command: ${smokeTestCmd}`);
 
+      // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-4 audit): EXPLICIT ACCEPTED EXCEPTION, not a
+      // conversion target. smokeTestCmd is an arbitrary command SOURCED FROM A PRD FIELD --
+      // executing it via a shell is this gate's entire purpose (PLAN authors a smoke-test
+      // command; this gate runs it), unlike the FR-1/FR-4 sinks elsewhere in this SD, which
+      // interpolate an attacker- or repo-controlled STRING into an otherwise-fixed command.
       // Execute the command
       try {
         execSync(smokeTestCmd, {

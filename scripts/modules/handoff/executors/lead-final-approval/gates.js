@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3/FR-4): branch→owner resolution replaces the anchored
 // regex. See lib/git/branch-owner.js for why a widened regex is provably impossible.
-import { branchBelongsToSd, loadKeySet, OWNER_REASON, BRANCH_TYPE_TOKENS } from '../../../../../lib/git/branch-owner.js';
+import { branchBelongsToSd, loadKeySet, isRefCharsetSafe, OWNER_REASON, BRANCH_TYPE_TOKENS } from '../../../../../lib/git/branch-owner.js';
 import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective, isValidPreflightRetro } from '../../retro-filters.js';
@@ -594,6 +594,8 @@ export function createPRPrecheckGate(supabase, deps = {}) {
 
       try {
         const { execSync } = await import('child_process');
+        // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-4 audit): `repo` iterates this HARDCODED
+        // literal array -- verified-safe, no interpolation risk, no conversion needed.
         const repos = ['rickfelix/ehg', 'rickfelix/EHG_Engineer'];
 
         for (const repo of repos) {
@@ -760,8 +762,13 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
 
         for (const { githubRepo: repo } of reposWithPaths) {
           try {
-            const result = execSync(
-              `gh pr list --repo ${repo} --state open --json number,title,headRefName,url --limit 100`,
+            // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-4): `repo` here is registry/provisioner
+            // derived (computeReposForSD -> resolveGitHubRepo(sd.target_application) on the
+            // venture path), not attacker-controlled via a branch name -- a tighter trust
+            // boundary than the FR-1 sinks, but converted for completeness/defense-in-depth.
+            const result = execFileSync(
+              'gh',
+              ['pr', 'list', '--repo', repo, '--state', 'open', '--json', 'number,title,headRefName,url', '--limit', '100'],
               { encoding: 'utf8', timeout: 30000 }
             );
 
@@ -871,21 +878,43 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
             // per-pattern .includes() (collapses 4 pattern iterations into 1
             // regex test per branch).
             {
-              const matchingBranches = branchList.split('\n')
-                .map(b => b.trim())
-                .filter(b => {
-                  if (!b || b.includes('HEAD')) return false;
-                  // FR-3: SAME resolver as the PR scan above. This is the second of the two guards
-                  // that shared the anchored regex — so both were blind to a suffixed branch, and
-                  // fixing only the PR scan would have left this one silently passing.
-                  return branchBelongsToSd(b, sdId, keySet).belongs;
-                });
+              const matchingBranches = [];
+              // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-2): branches that resolve to this SD but
+              // fail the ref-charset guard are tracked separately and treated as BLOCKING below,
+              // never silently dropped -- see isRefCharsetSafe's docblock for why filtering them
+              // out here would be a fail-open.
+              const charsetViolations = [];
+              for (const raw of branchList.split('\n')) {
+                const b = raw.trim();
+                if (!b || b.includes('HEAD')) continue;
+                // FR-3: SAME resolver as the PR scan above. This is the second of the two guards
+                // that shared the anchored regex — so both were blind to a suffixed branch, and
+                // fixing only the PR scan would have left this one silently passing.
+                if (!branchBelongsToSd(b, sdId, keySet).belongs) continue;
+                if (!isRefCharsetSafe(b)) { charsetViolations.push(b); continue; }
+                matchingBranches.push(b);
+              }
+
+              for (const branch of charsetViolations) {
+                const cleanBranch = branch.replace('origin/', '');
+                console.log(`   ⚠️  ${cleanBranch} rejected by ref-charset guard — treated as blocking (FR-2)`);
+                unmergedBranches.push({ branch: cleanBranch, repo, commits: null, reason: 'ref_charset_violation' });
+              }
 
               for (const branch of matchingBranches) {
                 const cleanBranch = branch.replace('origin/', '');
                 try {
-                  const commitCount = execSync(
-                    `git rev-list --count origin/main..${branch}`,
+                  // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-1, live RCE fix): was execSync with
+                  // unescaped template-literal branch interpolation -- a branch name containing a
+                  // bare '&' executed as an injected shell command (confirmed by execution).
+                  // execFileSync with an argv array never invokes a shell, so `branch` can never be
+                  // reparsed as a command regardless of its characters. NO leading '--' separator:
+                  // `git rev-list --count -- <rev>` fails with a usage error (verified) because '--'
+                  // before the rev is parsed as "no commits given, paths follow"; the argv element
+                  // can never itself start with '-' so no separator is needed here.
+                  const commitCount = execFileSync(
+                    'git',
+                    ['rev-list', '--count', `origin/main..${branch}`],
                     { encoding: 'utf8', cwd: repoPath, timeout: 10000 }
                   ).trim();
 
@@ -895,8 +924,16 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
                     // the worktree branch diverges from main. If the PR is merged, skip.
                     let prMerged = false;
                     try {
-                      const prStatus = execSync(
-                        `gh pr list --head "${cleanBranch}" --state merged --json number --limit 1`,
+                      // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-1, live RCE fix): was execSync with
+                      // cleanBranch wrapped in double quotes -- double-quoting does NOT prevent
+                      // shell injection (a quote-breakout payload, e.g. a literal '"' followed by
+                      // '&whoami&', executes; confirmed by execution). execFileSync as an argv
+                      // element is behavior-identical for a legitimate branch and inert for either
+                      // this payload class or a bare '&' (which the old sink #1 above was directly
+                      // vulnerable to with no quoting at all).
+                      const prStatus = execFileSync(
+                        'gh',
+                        ['pr', 'list', '--head', cleanBranch, '--state', 'merged', '--json', 'number', '--limit', '1'],
                         { encoding: 'utf8', cwd: repoPath, timeout: 15000 }
                       ).trim();
                       const mergedPrs = JSON.parse(prStatus || '[]');
@@ -1012,8 +1049,13 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
           let scanCSaturated = false;
           for (const { githubRepo: repo } of reposWithPaths) {
             try {
-              const result = execSync(
-                `gh pr list --repo ${repo} --state merged --search "${sdId}" --json number,headRefName,url,mergedAt --limit ${SCAN_C_LIMIT}`,
+              // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-4): sdId is a DB-resolved SD identifier
+              // (not attacker-controlled via a branch name), and repo is registry/provisioner
+              // derived (see FR-4 note above) -- lower severity than the FR-1 sinks, converted
+              // for completeness.
+              const result = execFileSync(
+                'gh',
+                ['pr', 'list', '--repo', repo, '--state', 'merged', '--search', sdId, '--json', 'number,headRefName,url,mergedAt', '--limit', String(SCAN_C_LIMIT)],
                 { encoding: 'utf8', timeout: 30000 }
               );
               const prs = JSON.parse(result || '[]');
