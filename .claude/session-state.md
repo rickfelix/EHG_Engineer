@@ -214,6 +214,87 @@ needs a new exported pure `formatBeltHeaderLine(...)` (matches the file's own es
 extraction pattern for formatClaimableNow/deficitFingerprint/shouldPingAdam); captured a GREEN
 baseline (87 tests / 6 files) across the affected suites before any change.
 
+## Update 5 (2026-08-24) — EXEC phase complete, EXEC-TO-PLAN PASSED (87%)
+
+Implemented FR-1 through FR-5 (commit 1d33af3e2aa):
+- FR-1: `schedulingConstraintHeld` axis + `isSchedulingConstraintActive` helper in
+  lib/fleet/claim-eligibility.cjs, added to INELIGIBILITY_AXES (between notBeforeHold and
+  oneWayDoor) and CLAIM_WRITE_FENCE_AXES. Live specimen shape confirmed by direct DB query
+  (SD-LEO-FEAT-EVA-VENTURE-IDEATION-001: `{note, source}` free-form prose, no structured
+  resolution field) — presence-only check, fail-CLOSED on any non-empty/malformed shape
+  (mirrors isLeadBlockerActive precedent).
+- FR-2: `formatDeficitFormula()` new pure exported fn + console line naming
+  demandSoon/BELT_BUFFER/beltDepth explicitly — this is a NEW line, not a correction (verified
+  directly: no formula text existed anywhere in the file before).
+- FR-3: `formatBeltExtent()` new pure exported fn, wired into reachAdam() via a new
+  `openQfCount` param at its call site, so the Adam header states the same SD+QF breakdown the
+  console BELT line (:129) already computes.
+- FR-4: new test file tests/unit/fleet/claim-eligibility-scheduling-constraint-held.test.js
+  (TS-1/TS-2/TS-3) + tests/fixtures/belt-capacity-verdicts-snapshot.json (40 real rows, committed
+  snapshot not live replay) + belt-verdict.test.js TS-4 tests + capacity-forecast-saturation-ack
+  formatBeltExtent/formatDeficitFormula tests.
+- FR-5: capacity-inputs.mjs and claimable-leaves.mjs's classifyDispatchIneligibility(d) call site
+  left untouched (verified: absent from commit's file list); added a code comment (not just PRD
+  text) at claimable-leaves.mjs:57 documenting the deliberate tier-filtering deferral.
+
+Mandatory AXIS_FIXTURES entry added to released-mid-phase-two-sided-control.test.js in the SAME
+commit (a new INELIGIBILITY_AXES member silently escapes that roster-coverage test otherwise —
+confirmed by PLAN-phase TESTING evidence). Fixed a real regression this triggered: an
+over-specified static full-membership `.toEqual([...])` pin on CLAIM_WRITE_FENCE_AXES in
+exec-boundary-hold-claim-eligibility.test.js (updated, not weakened — same anti-pattern the OTHER
+test file's own docstring warns against).
+
+Full consumer sweep: tests/unit/fleet/ (167 files/2113 tests) + every direct/indirect importer of
+claim-eligibility.cjs or coordinator-capacity-forecast.mjs (~30 more files/358 tests) — all green,
+zero regressions beyond the one static-pin fix above.
+
+Dispatched TESTING (EXEC phase, evidence d096ee6b-f1e8-4288-8b1a-d618e85572da,
+CONDITIONAL_PASS/88%) — independently re-verified its 4 real findings myself before acting:
+- F6 (fixture said 40 rows, was actually 39) — CONFIRMED via direct count, rebuilt fixture
+  programmatically from the original 40-row fetch (not hand-transcribed again).
+- F7 (TS-5/extent test asserted a tautology — both sides reduced to the same local expression,
+  never touching production beltDepth) — CONFIRMED by reading the test; rewrote it to derive
+  beltDepth from the REAL computeBeltVerdict().
+- F8 (FR-1 AC-3 said malformed values → "not-held", shipped code is fail-closed → "held") —
+  CONFIRMED the divergence exists; judged the CODE correct (matches isLeadBlockerActive
+  precedent, safer direction for a hold axis with zero prior shape data) and corrected the PRD
+  AC text instead of the code.
+- F9 (sibling emitMaskedStallEscalation() has the identical header-vs-list mismatch, outside
+  FR-3's literal reachAdam()-only scope) — deliberately NOT fixed here, flagged as a follow-up
+  finding for completion-flags routing (avoid silent scope growth).
+Also implemented F10 (extracted formatDeficitFormula for testability) and F11 (added the FR-5
+code comment) as cheap, clearly-justified wins. Corrected PRD via
+scripts/one-off/forecaster-claimable-predicate-001-exec-prd-correction.mjs (FR-1 AC-3, FR-2 AC-3
++ description). Committed all fixes (b2a736f58b5). Re-ran the full regression sweep after: 172
+files / 2184 tests, zero failures.
+
+Dispatched SECURITY (EXEC phase, evidence db6deddc-263b-4286-bc49-ada9c2ed5778, PASS/96%) —
+empirically fuzz-tested isSchedulingConstraintActive against 21 hostile shapes (no eval/dynamic
+require, no coercion path), verified all 8 CLAIM_WRITE_FENCE_AXES production call sites use the
+required all-match form (Set addition is monotonic-refusal-only, no fail-open), confirmed fixture
+contains only 4 numeric fields (no PII/session/SD-key leakage), confirmed no new deps/egress/file
+writes/secrets. Flagged one pre-existing, untouched, non-blocking informational note (SEC-7:
+reachAdam already interpolates sd_key/callsign/session_id into its body — predates this SD).
+
+`handoff.js precheck EXEC-TO-PLAN`: 87%, PASSED (only TESTING+SECURITY evidence was missing,
+both now satisfied). `handoff.js execute EXEC-TO-PLAN`: PASS, score 87. **SD is now
+active/PLAN_VERIFICATION (VERIFY phase).**
+
+## Pending follow-up (route via capture-completion-flags at post-completion, NOT in this SD's
+## scope — do not silently fold into this diff)
+- F9: scripts/coordinator-capacity-forecast.mjs's emitMaskedStallEscalation() (~line 355-357)
+  has the same header(combined beltDepth)-vs-claimable-now-list(SD keys only) extent mismatch
+  that FR-3 fixed in reachAdam(), but FR-3's scope names reachAdam() specifically. Tiny fix
+  (~5 LOC, thread openQfCount through its call site at ~line 255, reuse formatBeltExtent). Good
+  Tier-1 QF candidate.
+
+## Next steps
+1. VERIFY phase: dispatch VALIDATION + REGRESSION sub-agents (per task hydration from the
+   EXEC-TO-PLAN handoff), independently verify their findings, run PLAN-TO-LEAD precheck/execute.
+2. LEAD-FINAL-APPROVAL, PR, full post-completion tail (/document, /heal, /learn,
+   capture-completion-flags — including the F9 follow-up finding above).
+3. /checkin for the next SD.
+
 ## Notes carried from prior SD (VENTURE-SCAFFOLD-CODE-001, completed this session)
 - ENF-15 force-push allowlist does NOT include docs/* branches — relevant if this SD
   also needs a post-merge CHANGELOG PR later.
