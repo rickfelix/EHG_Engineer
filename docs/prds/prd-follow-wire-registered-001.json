@@ -1,0 +1,226 @@
+{
+  "executive_summary": "R5's canonical-writer choke (database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql -- STAGED, NOT APPLIED, chairman-gated) has never been run: pg_proc has zero rows for its guard function or registry function today. Its writer registry (sd_canonical_writer_policy) is a hardcoded jsonb literal inside an IMMUTABLE SQL function's VALUES clause -- 18 rows currently say stamp_wired:false, and NOTHING wiring the actual writer code changes those literals; only editing the file itself does. This PRD therefore treats 'wiring' as two coupled halves that must land in the SAME first-apply ceremony, not two independent steps: (1) each of the 18 writers' code sends the lifecycle_write_token stamp, verified statically before the ceremony; (2) the choke file's own registry literals are updated from stamp_wired:false to true for exactly those 18 rows, as part of applying the file for the first time -- not edited ahead of time, not edited outside the ceremony. Round-3 correction (prospective TESTING, evidence 142015b2, FAIL, confidence 92) also found the originally-ratified REVOKE scope (chairman decision e1da09a3: 'FROM PUBLIC, anon, authenticated') would break production -- the guard and registry functions are SECURITY INVOKER, and 'authenticated' genuinely has live direct UPDATE access (2 pg_policies), so revoking its EXECUTE would fail-close every legitimate write with 42501 (not the app's own SDCW1, so its compensation logic would not even recognize the failure). REVOKE scope is corrected to PUBLIC, anon only; flagged to the coordinator (signal 55488b41) as a reversal of part of an explicit chairman verbatim ratification, since PUBLIC+anon alone is inert exactly as originally claimed.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Wire the 13 script/lib registered writers' code to send the stamp",
+      "description": "Add a lifecycle_write_token column value to every protected-column UPDATE in: scripts/cancel-sd.js (sd:cancel), scripts/reactivate-sd.js (sd:reactivate), scripts/sd-recover.js (sd:recover), scripts/sd-verify.js (sd:verify), lib/sd-park.js park()/unpark() (sd-park.js:90,136 -- raw pg, add lifecycle_write_token=$n to the existing SET clause), scripts/leo-continuous.js (leo:continuous), scripts/stale-session-sweep.cjs (5 write sites, exact line numbers to be re-confirmed at EXEC -- TESTING re-verification (evidence 838b982d) found the 5th site's line was mis-cited during LEAD/PLAN; the count of 5 is correct, the FR-3a static preflight is the authoritative backstop regardless of which line each site lands on), lib/sd/revert.js:91 (sd-revert.js), lib/fleet/release-work-item.mjs:295 (release-work-item.mjs), lib/eva/bridge/reap-orphaned-provisioning.js:82 (reap-orphaned-provisioning.js), lib/eva/lifecycle-sd-bridge.js:1324 (lifecycle-sd-bridge.js), lib/utils/orchestrator-child-completion.js:216 (orchestrator-child-completion.js), scripts/modules/shipping/SDGitStateReconciler.js:424 (SDGitStateReconciler.js). CORRECTION (TESTING F6): scripts/modules/handoff/lib/canonical-writer-stamp.js is NOT a wiring helper -- it exports a plain string constant, a SQLSTATE, and a rejection predicate. The stamp itself is an ordinary column value (works identically whether the caller is supabase-js or raw pg). Each writer sets lifecycle_write_token to its OWN literal registry identity string (e.g. 'sd:cancel') matching its exact name in the choke's VALUES clause -- do not reuse the shared 'handoff.js' constant.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Each of the 13 files' protected-column UPDATE call sites includes a lifecycle_write_token=<own-identity> value in the SAME statement as the protected-column write, verified by direct grep/read of each call site (NOT by querying sd_canonical_writer_policy(), which cannot reflect this -- see FR-2).",
+        "scripts/stale-session-sweep.cjs (CJS) sets the literal identity string directly -- no import of an ESM module is required, since the stamp is a plain value, not a call into canonical-writer-stamp.js."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire the 5 db_function writers' code, AND flip all 18 registry literals, in the SAME first-apply ceremony",
+      "description": "CORRECTION (TESTING F2, CRITICAL): sd_canonical_writer_policy's stamp_wired flags are hardcoded jsonb literals in an IMMUTABLE SQL function (choke file lines ~325-421) -- they cannot be changed by any writer-side code change, only by editing this function's own VALUES clause. Per TESTING F3, they also cannot be edited via a separate addendum file (would duplicate all 27 registry rows into a second representation, which the choke file's own header (lines ~288-293) explicitly forbids and tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js:1276 mechanically catches). Therefore: (a) add a self-stamp SET clause to each of complete_business_evaluation, request_business_evaluation, fn_rollback_sd_hierarchy (zero live JS call sites -- these 3 can ONLY be wired via this DDL, matching the existing pattern already used for 8 other db_function writers in the choke's own section 4), delete_venture (live caller lib/deleteVentureFully.js:148, SECURITY DEFINER, live product path), and kill_venture (SECURITY DEFINER); (b) in the SAME migration edit, flip all 18 stamp_wired:false literals (the 13 from FR-1 plus these 5) to stamp_wired:true in the choke file's own VALUES clause. Both (a) and (b) land in the SAME chairman-supervised first-apply ceremony (FR-4) -- this is the ONE sanctioned exception to 'never edit the chairman-stamped file': the file has never been applied, so this is completing its own pre-first-application content, not retroactively altering an already-live, already-approved-verbatim artifact. This is NOT a decide-and-inform change for the 5 db_function bodies specifically (3 are SECURITY DEFINER on the live venture/business-evaluation product domain) -- it requires its own fresh chairman sign-off alongside the ceremony, distinct from R5's original approval which covered the file's original (pre-FR-1/FR-2) content.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The 5 db_function bodies each gain a self-stamp SET clause via CREATE OR REPLACE FUNCTION, verified by pg_get_functiondef() diff showing only the stamp addition (no other semantic change) -- delete_venture and kill_venture's existing SECURITY DEFINER behavior is otherwise byte-identical.",
+        "All 18 stamp_wired literals in the choke file's own registry VALUES clause read true after the ceremony -- verified by reading the file's post-edit content directly, not by calling the (pre-ceremony, nonexistent) live function.",
+        "This edit is reviewed and approved as part of the SAME ceremony sign-off as the guard's first application -- not committed or applied ahead of time by a worker unilaterally.",
+        "The choke file's $verify$ block's own post-condition check (which hardcodes a list of 8 already-stamped db_function names) is extended to include all 13 now-stamped db_function/db_trigger_cascade writers (the original 8 plus these 5) -- re-verification (evidence 838b982d, finding D4) found this block would otherwise ship claiming stamp_wired:true for the 5 new functions without its own post-condition actually covering them."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Author the REVOKE addendum as a NEW file -- corrected scope (PUBLIC, anon only)",
+      "description": "Author a NEW SQL file: REVOKE EXECUTE ON FUNCTION public.sd_canonical_writer_policy(text) FROM PUBLIC, anon -- never editing the chairman-stamped choke file, which currently only GRANTs (line 433) and leaves the Postgres default PUBLIC EXECUTE grant unrevoked. CORRECTION (TESTING F1, CRITICAL): the originally chairman-ratified scope (decision e1da09a3) also named 'authenticated'. Both the guard trigger (enforce_canonical_lifecycle_write) and the registry function are SECURITY INVOKER, and the choke file's own comment (lines ~427-432) states the resulting invariant verbatim: every role that can UPDATE the table must be able to call the registry as itself, which is why it grants to service_role AND authenticated. Live pg_policies confirms 'authenticated' has genuine direct UPDATE access via 2 policies (strategic_directives_v2_service_role_access, venture_update_strategic_directives_v2). Revoking its EXECUTE would fail-close every such live UPDATE with 42501 -- a SQLSTATE the app's own SDCW1-detection compensation logic does not recognize, producing a silent, undetected write failure (the exact failure mode canonical-writer-stamp.js's own F8 comment says it exists to prevent). PUBLIC and anon alone remain inert exactly as originally claimed (neither has any legitimate call path to this function). This reverses part of an explicit chairman verbatim decision -- flagged to the coordinator (signal 55488b41) for re-ratification alongside the ceremony, not silently narrowed.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A new migration file runs REVOKE EXECUTE ... FROM PUBLIC, anon (NOT authenticated); the choke file itself is untouched by this addendum.",
+        "Post-apply, EXECUTE on sd_canonical_writer_policy(text) is denied for PUBLIC and anon.",
+        "Post-apply, a live authenticated-role UPDATE to a protected column (matching the shape of pg_policies venture_update_strategic_directives_v2) still succeeds when properly stamped -- proving the corrected scope is genuinely inert to the legitimate write path this originally-ratified scope would have broken."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Guard-apply ceremony: static pre-apply preflight (FR-3a) + an actually-visible post-apply confirmation (FR-3b)",
+      "description": "CORRECTION (TESTING F3, CRITICAL + F5): FR-3a cannot call sd_canonical_writer_policy(NULL) live pre-apply -- that function does not exist in pg_proc until the choke file (containing it) is itself applied, so a 'live call while held' preflight raises 42883 (undefined function), permanently. The preflight must instead be a STATIC check: read each of the 18 writer files/functions' actual source (reusing the already-fixed, multi-pass, raw-SQL-aware detection in scripts/lib/lead-precheck-helpers.js -- TESTING F8 confirms the previously-documented ~0%-recall same-line-regex defect at those exact lines is already repaired there) and confirm each sends its stamp. This preflight BLOCKS the ceremony if any of the 18 is missing its stamp in code. Once the preflight passes, the ceremony applies the choke file (now amended per FR-2 with the 5 db_function stamps AND all 18 stamp_wired literals flipped to true) plus the FR-3 REVOKE addendum, in one supervised apply with readbacks. Post-apply, the choke's own $verify$ WARNING-at-zero block is ALSO amended (same ceremony edit) to RAISE NOTICE on a genuinely-zero result, not stay silent (TESTING F5: silence is indistinguishable from the block never running, erroring, or being swallowed) -- this NOTICE is the independent, now-actually-observable post-apply confirmation.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The preflight is a static source check against the 18 writer files/functions, not a live DB call -- verified to run correctly with the guard still fully unapplied (no pg_proc entries).",
+        "With any of the 18 writers' code missing its stamp, the preflight blocks the ceremony (fixture/unit test).",
+        "The choke file's post-apply $verify$ block emits an observable RAISE NOTICE (not silence) when the unwired count is genuinely zero, distinguishable from 'block did not run'.",
+        "The REVOKE addendum (FR-3) and the db_function/registry-literal amendment (FR-2) apply in the SAME ceremony as the choke file's first application, in the unhold order: column applied (already true) -> R5 branch merged (already true) -> FR-1 static preflight reports 0 missing -> choke file (FR-2-amended) + REVOKE addendum (FR-3) apply together with readbacks -> post-apply NOTICE confirms 0 unwired live."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Extend the existing DDL test file -- not a fictional pglite/txn harness",
+      "description": "CORRECTION (TESTING F4, HIGH; re-verified with 2 further corrections D1/D2, evidence 838b982d): no pglite pattern exists anywhere in this repo. tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js (1774 lines, TS-1..TS-18 + TS-21..TS-31, npm run test:db tier; next free ID is TS-32) ALREADY covers this exact choke file and is the established, correct place to add scenarios -- it explicitly documents its own scope limits (no PostgREST/RLS/supabase-js layer, and per its own header lines 28-33 and line 694-697, the 5 db_function writers ARE created in this stub but are NOT CALLABLE -- the tables their bodies read don't exist in the ~12-object stub). Add new scenarios starting at TS-32 to this SAME file: (a) each db_function's amended body is verified STATICALLY (pg_get_functiondef diff / shape-simulation, following this same file's own existing TS-8/TS-9/TS-12 pattern for RPC shapes it also cannot literally invoke) to confirm only the stamp SET clause was added, not a live invocation; (b) an unregistered, unstamped identity is rejected with SDCW1 (this tier CAN exercise this, since it only needs the guard trigger + a raw UPDATE, not the 5 functions' own bodies); (c) the corrected REVOKE (PUBLIC, anon only) denies EXECUTE for those roles while a stamped, authenticated-shaped write still succeeds. For the 12 script/lib writers whose call shape is supabase-js (not raw pg, so NOT exercisable in this DDL-tier harness per its own documented limits), FR-1's acceptance criteria (direct grep/read of the stamp at each call site) is the correct-tier verification -- do not claim a false integration-level proof this harness cannot provide.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "New TS-32+ scenarios are added to tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js, following its existing conventions, covering: the 5 db_function stamps (verified statically -- pg_get_functiondef diff / shape-simulation, since this stub cannot literally invoke them), an unregistered-writer SDCW1 rejection, and the corrected REVOKE's denial + non-breakage of a stamped authenticated write.",
+        "No new pglite/pg-lite dependency or fixture harness is introduced -- the existing .db.test.js / npm run test:db pattern is reused.",
+        "For the 12 supabase-js-shaped writers, the PRD does not claim DDL-tier integration proof; FR-1's static-citation acceptance criteria stands as the verification for those."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "The choke file's registry literals are edited ONCE, as part of the ceremony -- everything else about it stays untouched",
+      "description": "database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql is STAGED, NOT APPLIED, CHAIRMAN-GATED. The ONE sanctioned exception (FR-2) is flipping its 18 stamp_wired literals to true and adding the 5 db_function self-stamp bodies, both as part of the SAME first-apply ceremony this SD proposes, with its own fresh sign-off -- not ahead of time, not by a worker unilaterally, not via a separate addendum (which would duplicate the registry, a defect this file's own header forbids). FR-1's 13 script/lib writers and FR-3's REVOKE remain in genuinely separate, new files."
+    },
+    {
+      "id": "TR-2",
+      "title": "Per-writer literal identity, not the shared handoff.js constant",
+      "description": "The stamp is a plain lifecycle_write_token column value, not a function call -- each of the 13 script/lib writers (FR-1) sets its own literal registry-identity string matching its exact name in the choke's VALUES clause. Keep each literal defined once per writer file (not re-derived or copy-pasted inconsistently) to avoid the drift canonical-writer-stamp.js's own header warns against."
+    },
+    {
+      "id": "TR-3",
+      "title": "No ESM/CJS interop work is required",
+      "description": "CORRECTION (TESTING F6): since the stamp is a plain column value rather than a call into an ESM helper module, scripts/stale-session-sweep.cjs (CommonJS) needs no special interop -- it sets the literal string directly in its own SET clause, same as every other writer."
+    },
+    {
+      "id": "TR-4",
+      "title": "Reuse the existing, already-fixed multi-pass stamp-detection logic for the static preflight",
+      "description": "FR-3a's preflight must reuse the raw-SQL-aware, multi-pass detection already implemented in scripts/lib/lead-precheck-helpers.js (TESTING F8 confirms the previously-documented same-line-regex defect at those lines is already repaired) rather than reinventing detection logic."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Each of the 13 script/lib writers' source includes its own stamp identity in the same statement as its protected-column write",
+      "type": "static/unit",
+      "expected": "Direct read/grep of each call site confirms the stamp literal is present in the same UPDATE/query as the protected column."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Each of the 5 db_function writers' amended body sends the stamp (DDL tier, static verification -- extends the existing choke test file)",
+      "type": "static (tests/ddl/*.db.test.js, pg_get_functiondef diff / shape-simulation)",
+      "expected": "pg_get_functiondef() diff for each amended function shows only the stamp SET clause added, no other semantic change -- the harness cannot literally invoke these functions (their underlying tables don't exist in the stub, per the file's own documented limits), so this is a static-shape proof, matching the existing TS-8/TS-9/TS-12 pattern for RPC shapes that harness also cannot invoke."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Unregistered, unstamped writer is rejected (extends the existing choke test file)",
+      "type": "integration (tests/ddl/*.db.test.js)",
+      "expected": "A write from an identity not present in the registry raises SDCW1 under the applied guard, matching the existing TS-1..TS-3 pattern in that file."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Corrected REVOKE denies EXECUTE for PUBLIC/anon only, and does not break a stamped authenticated write",
+      "type": "integration (tests/ddl/*.db.test.js)",
+      "expected": "SET ROLE anon; SELECT sd_canonical_writer_policy('x'); fails with insufficient privilege post-addendum; a stamped write shaped like the live venture_update_strategic_directives_v2 policy still succeeds."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Static preflight blocks the ceremony when a writer's code is missing its stamp",
+      "type": "unit",
+      "expected": "With one of the 18 writer files/functions artificially missing its stamp literal, the FR-3a static preflight reports blocked, without ever calling the (nonexistent, pre-apply) live registry function."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "The choke's post-apply $verify$ block emits an observable success signal at zero, not silence",
+      "type": "integration (tests/ddl/*.db.test.js)",
+      "expected": "With all 18 writers wired and the ceremony applied, the amended $verify$ block RAISE NOTICEs a zero-unwired confirmation, capturable/assertable in the test, distinct from the block simply not running."
+    }
+  ],
+  "acceptance_criteria": [
+    "All 18 writers' code (13 script/lib + 5 db_function) sends the lifecycle_write_token stamp, statically verified before the ceremony.",
+    "The choke file's own registry literals (all 18) read stamp_wired:true only after, and as part of, the same ceremony that first applies the file -- never edited ahead of time.",
+    "The REVOKE addendum's actual scope is PUBLIC, anon only -- NOT authenticated -- with the coordinator/chairman notified of this correction to the originally-ratified scope (signal 55488b41) before the ceremony proceeds.",
+    "New test scenarios extend the existing tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js rather than inventing a new harness.",
+    "The choke file's post-apply confirmation is an observable NOTICE, not silence-implies-success."
+  ],
+  "risks": [
+    {
+      "risk": "Proceeding with the originally-ratified REVOKE scope (including 'authenticated') would break every live authenticated write to strategic_directives_v2's protected columns, with a failure mode (42501, not SDCW1) the app's own detection logic does not recognize.",
+      "mitigation": "REVOKE scope corrected to PUBLIC, anon only in this PRD; flagged to the coordinator/chairman for re-ratification (signal 55488b41) before the ceremony proceeds. TS-4 proves the corrected scope is inert to the legitimate write path.",
+      "severity": "high"
+    },
+    {
+      "risk": "Editing the choke file's own registry literals (FR-2) -- even though scoped to the one first-apply ceremony -- is still an edit to a chairman-approved-verbatim artifact and needs its own explicit sign-off distinct from R5's original approval, which did not contemplate this content.",
+      "mitigation": "Called out explicitly in FR-2 and TR-1 as requiring fresh sign-off alongside the ceremony; the guard-apply ceremony (FR-4) already requires readbacks and an unhold order before anything applies live.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The 5 db_function amendments include 3 SECURITY DEFINER functions on the venture/business-evaluation product domain, one (delete_venture) on a live product call path.",
+      "mitigation": "pg_get_functiondef() diff verification (FR-2 AC) constrains the change to strictly the stamp addition; TS-2 proves the amended functions still behave correctly.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Claiming DDL-tier integration test coverage for the 12 supabase-js-shaped script/lib writers would be a false proof -- that harness has no PostgREST/RLS/supabase-js layer.",
+      "mitigation": "FR-5 explicitly scopes DDL-tier tests to only what that harness can actually exercise (the 5 db_function writers, SDCW1 rejection, REVOKE denial); the 12 supabase-js writers are verified via FR-1's static citation instead, honestly labeled as a different verification tier.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Every operator npm script that mutates strategic_directives_v2 lifecycle columns (sd:cancel, sd:reactivate, sd:recover, sd:verify, sd:park/unpark, leo:continuous)",
+      "The stale-session-sweep.cjs fleet-hygiene cron job",
+      "Fleet libs: release-work-item.mjs, reap-orphaned-provisioning.js, lifecycle-sd-bridge.js, orchestrator-child-completion.js, SDGitStateReconciler.js",
+      "The venture-lifecycle db_function surfaces: complete_business_evaluation, request_business_evaluation, fn_rollback_sd_hierarchy, delete_venture, kill_venture",
+      "Every live authenticated-role UPDATE to strategic_directives_v2 (via venture_update_strategic_directives_v2 and strategic_directives_v2_service_role_access policies) -- the population FR-3's corrected REVOKE scope must NOT break"
+    ],
+    "dependencies": [
+      "database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql (STAGED, NOT APPLIED -- amended in-place by FR-2 as part of this SD's ceremony, per the one sanctioned exception in TR-1)",
+      "R5/SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 (completed 2026-08-24T15:24:25Z; left the guard approved-held)",
+      "scripts/lib/lead-precheck-helpers.js's existing multi-pass stamp-detection logic (reused for FR-3a's static preflight)",
+      "tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js (existing test file, extended not replaced)"
+    ],
+    "data_contracts": [
+      "strategic_directives_v2.lifecycle_write_token column (already applied)"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "The choke's amended $verify$ block's RAISE NOTICE is the live, observable post-apply confirmation (FR-4).",
+      "24h post-apply SDCW1 noise from registered writers is the measured success signal per the original success criteria."
+    ]
+  },
+  "system_architecture": {
+    "summary": "13 script/lib writer edits (new, separate files) + one amendment to the choke file itself (the sanctioned FR-2 exception: 5 new db_function stamps + 18 registry literals flipped + an observable success NOTICE) + one new REVOKE addendum file with a corrected scope, all gated by a new static preflight script, applied together in one ceremony.",
+    "components": [
+      { "name": "13 script/lib writer files (FR-1)", "change": "add the stamp literal to each protected-column UPDATE call site" },
+      { "name": "database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql", "change": "AMENDED (sanctioned exception, FR-2): 5 db_function self-stamps, 18 registry literals flipped to true, $verify$ block emits a positive NOTICE" },
+      { "name": "database/chairman-gated/<new>_sd_canonical_writer_policy_revoke.sql", "change": "NEW -- REVOKE EXECUTE FROM PUBLIC, anon (corrected scope, excludes authenticated)" },
+      { "name": "new FR-3a static preflight script", "change": "NEW -- reads the 18 writer files/functions' source directly (via lead-precheck-helpers.js's existing multi-pass detection), blocks the ceremony if any is missing its stamp" },
+      { "name": "tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js", "change": "extended with TS-32+ (db_function stamps, SDCW1 rejection, corrected-REVOKE denial + non-breakage)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Wire the 13 script/lib writers first (lowest risk, JS/raw-pg only, separate files), then amend the choke file itself as the one sanctioned exception (5 db_function stamps + registry literal flips + NOTICE fix), author the corrected-scope REVOKE addendum, extend the existing DDL test file, build the static preflight, then run the ceremony.",
+    "steps": [
+      "Wire the 13 script/lib writers (FR-1), one commit per logical group (operator tools, fleet libs) to keep PRs small.",
+      "Amend the choke file (FR-2): add the 5 db_function self-stamps, flip all 18 registry literals to true, fix the $verify$ block to RAISE NOTICE on a genuine zero -- obtain fresh sign-off for this specific amendment.",
+      "Author the corrected-scope REVOKE addendum (FR-3) as a new, separate file.",
+      "Extend tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js with TS-32+ (FR-5).",
+      "Build the FR-3a static preflight, reusing lead-precheck-helpers.js's detection logic; prove it blocks on an artificially-unwired writer (TS-5).",
+      "Run the guard-apply ceremony per the FR-4 unhold order, with readbacks, after coordinator/chairman re-ratification of the corrected REVOKE scope and the FR-2 amendment."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Before any code changes, read the choke file's registry VALUES clause directly and count stamp_wired:false entries.",
+      "expected_outcome": "18."
+    },
+    {
+      "step_number": 2,
+      "instruction": "After FR-1 and FR-2 land (choke file amended, ceremony applied in a staging/fixture environment), read the same VALUES clause.",
+      "expected_outcome": "0 stamp_wired:false entries -- all 18 read true."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run the FR-3a static preflight against the wired writer files before the ceremony applies.",
+      "expected_outcome": "Preflight reports all 18 writers' code is stamped and clears the ceremony to proceed -- runs correctly even though the guard/registry function does not exist in pg_proc yet."
+    },
+    {
+      "step_number": 4,
+      "instruction": "In the extended tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js, run the new TS-32+ scenarios.",
+      "expected_outcome": "The 5 db_function stamps succeed, an unregistered writer is rejected with SDCW1, and the corrected REVOKE denies PUBLIC/anon while a stamped authenticated-shaped write still succeeds."
+    },
+    {
+      "step_number": 5,
+      "instruction": "Confirm the amended $verify$ block's behavior with all 18 wired.",
+      "expected_outcome": "An observable RAISE NOTICE confirms zero unwired -- not silence."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-FOLLOW-WIRE-REGISTERED-001"
+  }
+}

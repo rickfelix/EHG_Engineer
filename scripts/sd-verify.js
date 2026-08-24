@@ -346,6 +346,7 @@ async function completeSD(sdId) {
       current_phase: 'COMPLETED',
       progress_percentage: 100,
       completion_date: new Date().toISOString(),
+      lifecycle_write_token: 'sd:verify',
     })
     .eq('id', sd.id);
 
