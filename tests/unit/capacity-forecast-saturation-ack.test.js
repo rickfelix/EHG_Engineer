@@ -3,7 +3,8 @@
 // saturation). A deficit fingerprint + shouldPingAdam suppress the duplicate ping until a
 // supply-change signal (fingerprint change). These pin the two pure helpers.
 import { describe, it, expect } from 'vitest';
-import { deficitFingerprint, shouldPingAdam, formatClaimableNow } from '../../scripts/coordinator-capacity-forecast.mjs';
+import { deficitFingerprint, shouldPingAdam, formatClaimableNow, formatBeltExtent, formatDeficitFormula } from '../../scripts/coordinator-capacity-forecast.mjs';
+import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
 
 const state = { verdict: 'DEFICIT', beltDepth: 0, deficit: 2, claimable: [{ sd_key: 'SD-A' }, { sd_key: 'SD-B' }] };
 
@@ -78,5 +79,59 @@ describe('formatClaimableNow (QF-20260818-381)', () => {
   it('handles a missing/undefined claimable array the same as empty', () => {
     expect(formatClaimableNow(undefined, 1)).toBe("0 claimable; 1 tier-fenced (above every live worker's rung)");
     expect(formatClaimableNow(undefined, 0)).toBe('NONE');
+  });
+});
+
+// SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-3 (TS-5): the Adam-facing header's
+// beltDepth is claimable.length + openQfCount BY CONSTRUCTION (claimableCount === claimable.length,
+// scripts/lib/capacity-inputs.mjs:458) — formatBeltExtent states that same sum explicitly so the
+// header always agrees with the claimable-now list's extent, closing the FR-3 mismatch.
+describe('formatBeltExtent (SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-3)', () => {
+  it('reports the SD+QF breakdown for a mixed belt', () => {
+    expect(formatBeltExtent({ claimable: [{ sd_key: 'SD-A' }, { sd_key: 'SD-B' }], openQfCount: 3 })).toBe('2 SD + 3 QF');
+  });
+
+  it('the header total agrees with the REAL production beltDepth (computeBeltVerdict), not a locally re-derived sum', () => {
+    // FR-3's whole point is that the Adam header must match the ACTUAL beltDepth the forecaster
+    // computes -- so this pins formatBeltExtent's breakdown against computeBeltVerdict's real
+    // output, not a hand-duplicated `claimable.length + openQfCount` expression that could drift
+    // from the production formula (lib/drive-loop/belt-verdict.js) without this test noticing.
+    const claimable = [{ sd_key: 'SD-A' }, { sd_key: 'SD-B' }, { sd_key: 'SD-C' }];
+    const openQfCount = 4;
+    const { beltDepth } = computeBeltVerdict({
+      idleNow: 1, freeingSoon: 0, claimableCount: claimable.length, openQfCount, buffer: 1,
+    });
+    const listedSdCount = formatClaimableNow(claimable).split(', ').length;
+    const breakdown = formatBeltExtent({ claimable, openQfCount });
+    expect(breakdown).toBe(`${listedSdCount} SD + ${openQfCount} QF`);
+    expect(beltDepth).toBe(listedSdCount + openQfCount);
+  });
+
+  it('an empty belt reports 0 SD + 0 QF, not NaN/undefined', () => {
+    expect(formatBeltExtent({ claimable: [], openQfCount: 0 })).toBe('0 SD + 0 QF');
+    expect(formatBeltExtent({ claimable: undefined, openQfCount: undefined })).toBe('0 SD + 0 QF');
+  });
+});
+
+// SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-2: the PUBLISHED formula text itself now has
+// a regression test, not just the arithmetic it displays -- names demandSoon/buffer/beltDepth
+// explicitly and is deliberately UNCLAMPED (distinguishing it from the GAUGE line and
+// deficitFingerprint()'s separate, legitimate Math.max(0, deficit) floors).
+describe('formatDeficitFormula (SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-2)', () => {
+  it('names demand, buffer, and belt explicitly and states the real formula', () => {
+    const line = formatDeficitFormula({ demandSoon: 6, buffer: 1, beltDepth: 5, deficit: 2 });
+    expect(line).toBe('FORMULA: deficit = (demand 6 + buffer 1) - belt 5 = 2');
+  });
+
+  it('is agreement-checkable against computeBeltVerdict for a REAL negative-deficit (SURPLUS) case, unclamped', () => {
+    const { beltDepth, demandSoon, deficit } = computeBeltVerdict({
+      idleNow: 1, freeingSoon: 0, claimableCount: 9, openQfCount: 0, buffer: 2,
+    });
+    expect(deficit).toBeLessThan(0); // SURPLUS
+    const line = formatDeficitFormula({ demandSoon, buffer: 2, beltDepth, deficit });
+    // Asserts the RAW negative value survives into the line -- a reintroduced Math.max(0, deficit)
+    // clamp would silently rewrite this to the wrong (0) reading and this assertion would catch it.
+    expect(line.endsWith(`= ${deficit}`)).toBe(true);
+    expect(deficit).not.toBe(0);
   });
 });

@@ -9,8 +9,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
 import { VERDICTS, HEALTHY_VERDICTS } from '../../lib/drive-loop/score/leg4-capacity.js';
+
+const beltCapacityVerdictsSnapshot = JSON.parse(
+  readFileSync(new URL('../fixtures/belt-capacity-verdicts-snapshot.json', import.meta.url), 'utf8')
+);
 
 const base = { idleNow: 0, freeingSoon: 0, claimableCount: 0, openQfCount: 0, buffer: 2 };
 
@@ -87,5 +92,33 @@ describe('SEEDED — a missing input throws rather than reading as zero', () => 
   it('NaN and Infinity are rejected too, not just undefined', () => {
     expect(() => computeBeltVerdict({ ...base, idleNow: NaN })).toThrow(/idleNow/);
     expect(() => computeBeltVerdict({ ...base, buffer: Infinity })).toThrow(/buffer/);
+  });
+});
+
+// SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-2/FR-4 (TS-4): replay a COMMITTED SNAPSHOT of
+// real belt_capacity_verdicts rows (not a live DB read -- a live replay is self-invalidating,
+// since a regressed formula writes rows that satisfy itself) through the deficit arithmetic
+// identity. Stored rows carry belt_depth/demand_soon/deficit/verdict but NOT idleNow, so the
+// DEFICIT-URGENT ladder branch cannot be re-derived from them -- this suite checks the arithmetic
+// identity (every row) and the non-URGENT verdict-ladder branches (TIGHT/DEFICIT/SURPLUS) only.
+describe('formula invariant against a real belt_capacity_verdicts snapshot (FR-2/FR-4, TS-4)', () => {
+  const { rows, belt_buffer_at_capture: buffer } = beltCapacityVerdictsSnapshot;
+
+  it('the snapshot is non-trivial and covers more than one verdict', () => {
+    expect(rows.length).toBeGreaterThanOrEqual(30);
+    expect(new Set(rows.map((r) => r.verdict)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('every sampled row satisfies deficit = (demand_soon + buffer) - belt_depth exactly', () => {
+    const mismatches = rows.filter((r) => (r.demand_soon + buffer) - r.belt_depth !== r.deficit);
+    expect(mismatches, `mismatched rows: ${JSON.stringify(mismatches)}`).toEqual([]);
+  });
+
+  it('the non-URGENT verdict ladder (TIGHT/DEFICIT/SURPLUS) matches the stored verdict for every sampled row', () => {
+    const mismatches = rows.filter((r) => {
+      const expected = r.deficit > 0 ? 'DEFICIT' : r.deficit === 0 ? 'TIGHT' : 'SURPLUS';
+      return expected !== r.verdict;
+    });
+    expect(mismatches, `mismatched rows: ${JSON.stringify(mismatches)}`).toEqual([]);
   });
 });

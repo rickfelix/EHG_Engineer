@@ -1,0 +1,246 @@
+{
+  "_comment": "SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-4 (TS-4): committed snapshot of 40 real belt_capacity_verdicts rows, pulled 2026-08-24. A COMMITTED snapshot, not a live replay, is deliberate -- a live replay is self-invalidating (a regressed formula writes rows that satisfy itself). Rows carry belt_depth/demand_soon/deficit/verdict but NOT idleNow, so only the deficit arithmetic identity and the non-URGENT verdict-ladder branches are checkable from stored data (see the test file for the URGENT caveat).",
+  "belt_buffer_at_capture": 1,
+  "rows": [
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "DEFICIT",
+      "belt_depth": 5,
+      "demand_soon": 5,
+      "deficit": 1
+    },
+    {
+      "verdict": "DEFICIT",
+      "belt_depth": 5,
+      "demand_soon": 5,
+      "deficit": 1
+    },
+    {
+      "verdict": "DEFICIT",
+      "belt_depth": 4,
+      "demand_soon": 5,
+      "deficit": 2
+    },
+    {
+      "verdict": "DEFICIT",
+      "belt_depth": 5,
+      "demand_soon": 5,
+      "deficit": 1
+    },
+    {
+      "verdict": "DEFICIT",
+      "belt_depth": 5,
+      "demand_soon": 5,
+      "deficit": 1
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "TIGHT",
+      "belt_depth": 6,
+      "demand_soon": 5,
+      "deficit": 0
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 7,
+      "demand_soon": 5,
+      "deficit": -1
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 7,
+      "demand_soon": 5,
+      "deficit": -1
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 7,
+      "demand_soon": 5,
+      "deficit": -1
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 7,
+      "demand_soon": 5,
+      "deficit": -1
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 7,
+      "demand_soon": 5,
+      "deficit": -1
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 8,
+      "demand_soon": 5,
+      "deficit": -2
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 9,
+      "demand_soon": 5,
+      "deficit": -3
+    },
+    {
+      "verdict": "SURPLUS",
+      "belt_depth": 10,
+      "demand_soon": 5,
+      "deficit": -4
+    }
+  ]
+}

@@ -50,7 +50,9 @@ describe('SD-LEO-INFRA-PHASE-SCOPED-FENCE-001 FR-4/TS-3: claim-eligibility negat
     expect(CLAIM_WRITE_FENCE_AXES.has('exec_boundary_hold')).toBe(false);
     // SD-FDBK-FIX-DISPATCH-ELIGIBILITY-HONOR-001: lead_blocker_active added as a 4th write-fence axis.
     // SD-LEO-INFRA-BELT-CLAIM-ELIGIBILITY-001: chairman_ratification_pending added as a 5th.
-    expect([...CLAIM_WRITE_FENCE_AXES]).toEqual(['human_action_required', 'needs_coordinator_review', 'not_before_hold', 'lead_blocker_active', 'chairman_ratification_pending']);
+    // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001: scheduling_constraint_held added as a 6th
+    // (re-checked at the claim-WRITE boundary for the same race-closing reason as not_before_hold).
+    expect([...CLAIM_WRITE_FENCE_AXES]).toEqual(['human_action_required', 'needs_coordinator_review', 'not_before_hold', 'scheduling_constraint_held', 'lead_blocker_active', 'chairman_ratification_pending']);
   });
 
   it('a held SD with no OTHER ineligibility axis is fully claimable (regression baseline)', () => {

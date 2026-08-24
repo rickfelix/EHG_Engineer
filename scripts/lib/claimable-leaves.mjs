@@ -54,6 +54,11 @@ export function claimableDbFreeReason(d) {
   if (isStartedSd(d)) return 'in_flight';
   if (isFixtureSd(d.sd_key, d.metadata)) return 'fixture';
   if (isUnactionableRemediationSd(d)) return 'unactionable_venture_remediation';
+  // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-5 (deliberate, LEAD-approved deferral, NOT
+  // a gap): called with no ctx, so classifyDispatchIneligibility's ctx-dependent tier axes can
+  // never fire here -- whether the fleet-wide belt should be tier-FILTERED (not just
+  // tier-displayed) is a separate architectural decision with fleet-wide blast radius, out of
+  // scope for this SD.
   return classifyDispatchIneligibility(d); // null => eligible on the DB-free axes
 }
 
