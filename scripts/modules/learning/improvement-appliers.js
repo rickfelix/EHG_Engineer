@@ -100,6 +100,17 @@ async function applyProtocolSectionChange(improvement) {
     console.warn(`[improvement-appliers] dropped non-allowlisted keys for queue row ${improvement?.id ?? 'unknown'}: ${dropped.join(', ')}`);
   }
 
+  // SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (FR-3): the sanitizer derives provenance but never set
+  // publication_status, so every /learn-applied section landed UNCLASSIFIED for
+  // scripts/protocol-publication-audit.cjs -- 22 of 286 live rows today. Set here, after the
+  // sanitizer's pure derivation, rather than inside sanitizeProtocolSectionPayload() itself, to
+  // avoid touching its existing, separately-tested provenance logic.
+  clean.metadata = {
+    ...(clean.metadata || {}),
+    publication_status: 'file',
+    publication_note: 'Appended by the /learn applier (applyProtocolSectionChange) via protocol_improvement_queue.',
+  };
+
   const { error } = await supabase
     .from('leo_protocol_sections')
     .insert(clean);
@@ -263,7 +274,10 @@ async function applySubAgentConfigChange(improvement) {
         improvement_type: 'SUB_AGENT_CONFIG',
         scope: 'all_sub_agents',
         impact: payload?.impact,
-        evidence_count: payload?.evidence
+        evidence_count: payload?.evidence,
+        // SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (FR-3): unclassified without this.
+        publication_status: 'file',
+        publication_note: 'Created by the /learn applier (applySubAgentConfigChange fallback) via protocol_improvement_queue.',
       }
     };
 
@@ -377,7 +391,10 @@ async function applyChecklistItemChange(improvement) {
       added_at: new Date().toISOString(),
       improvement_id: improvement.id,
       impact: payload?.impact,
-      category: payload?.category
+      category: payload?.category,
+      // SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (FR-3): unclassified without this.
+      publication_status: 'file',
+      publication_note: 'Created by the /learn applier (applyChecklistItemChange) via protocol_improvement_queue.',
     }
   };
 

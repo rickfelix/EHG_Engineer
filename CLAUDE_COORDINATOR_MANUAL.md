@@ -1,8 +1,8 @@
-<!-- file_content_hash: b8947bb3616d3d86 -->
+<!-- file_content_hash: bf191631749350a8 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_MANUAL.md — Coordinator Manual (how-to companion)
 
-**Generated**: 2026-08-23 12:18:25 AM
+**Generated**: 2026-08-24 4:38:44 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -31,6 +31,6 @@ Before acting on any Adam-sourced count or queue gauge (belt sizes, unpromoted t
 
 ---
 
-*Generated from database: 2026-08-23*
+*Generated from database: 2026-08-24*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_manual). Do not hand-edit — edit the DB section and regenerate.*
