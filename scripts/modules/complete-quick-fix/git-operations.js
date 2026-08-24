@@ -672,7 +672,13 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
       files: filesChanged,
       insertions: insertions ? parseInt(insertions[1]) : 0,
       deletions: deletions ? parseInt(deletions[1]) : 0,
-      netChange: insertions && deletions ? parseInt(insertions[1]) - parseInt(deletions[1]) : 0
+      netChange: insertions && deletions ? parseInt(insertions[1]) - parseInt(deletions[1]) : 0,
+      // SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 FR-5: surface which diff source produced
+      // filesChanged — 'branch-diff' (origin/main...HEAD, the normal committed-diff path) or
+      // 'working-tree-fallback' (uncommitted QF, per QF-20260603-778). The QF eligibility
+      // preflight scan records this tier alongside any refusal (QF-20260706-632 near-miss:
+      // the fallback once attributed ~264 foreign dirty files to one QF).
+      diffSourceTier: diffRange === 'HEAD' ? 'working-tree-fallback' : 'branch-diff'
     };
 
     console.log(`   Insertions: +${diffAnalysis.insertions}`);
