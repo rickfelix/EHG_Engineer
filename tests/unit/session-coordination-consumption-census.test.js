@@ -34,7 +34,14 @@ const ALLOWED_WRITE_FILES = new Set([
   'scripts/stale-session-sweep.cjs',
   'scripts/hooks/coordination-inbox.cjs',
   'lib/coordinator/relay-queue.cjs',
-  'lib/coordinator/signal-router.cjs',
+  // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): lib/coordinator/signal-router.cjs REMOVED from this
+  // allowlist — its only acknowledged_at write (stampRoutedToCoordinator) was an automated sweep
+  // disposing a signal the instant it noticed it, the same defect class stampRouted() was fixed
+  // for (9 critical signals silently vanished when promotion alone disposed rows). It is now a
+  // non-disposing provenance marker only (routed_to_coordinator: true) with no
+  // read_at/acknowledged_at write left in the file at all. acknowledged_at is now written
+  // EXCLUSIVELY by coordinator-ack-signal.cjs's FR-1 canonical writer (TR-4, the single-
+  // canonical-writer invariant this SD introduces).
 ]);
 
 // Matches both the inline-literal style (.update({ read_at: now })) and the dynamic-assembly

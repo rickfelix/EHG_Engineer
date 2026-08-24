@@ -1484,6 +1484,12 @@ const { getActiveCoordinatorId: _getActiveCoordinatorIdForInbox } = require('../
 // SD-LEO-INFRA-ACKSTAMP-FALSE-METRICS-C6-001 (closure map class C6): excludes rows
 // answered by a correlated reply from ack-null-derived headline counts.
 const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs');
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-2): the table below this require is NEWEST-first
+// (see the `.order('created_at', {ascending:false})` query above), capped at 20 rows — so a
+// signal that has been open far longer than 20 others is invisible in it. This surfaces the
+// TRUE oldest-first age instead, "so a 2.5h latency is visible at the tick, not discovered in
+// retro" (this SD's own provenance). Reuses DEFAULT_ALERT_AGE_MIN, not a new SLA constant.
+const { fetchAllOutstandingSignals, formatCoordinatorOverdueWarning } = require('../lib/fleet/outstanding-signals.cjs');
 
 // ── Section: Worker-Signal Inbox (FR-3a) ──
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
@@ -1575,6 +1581,15 @@ async function printInbox() {
   if (trueCount > 0) {
     console.log('  Ack a signal: node scripts/coordinator-ack-signal.cjs --signal <id>');
   }
+
+  // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-2): oldest-first overdue line, independent of the
+  // newest-first table below — a signal past DEFAULT_ALERT_AGE_MIN surfaces here even when it
+  // has aged off the 20-row newest-first display entirely. Fails quiet by design (see
+  // outstanding-signals.cjs's own docblock): a query error here must never break the tick.
+  const overdueResult = await fetchAllOutstandingSignals(supabase);
+  const overdueWarning = formatCoordinatorOverdueWarning(overdueResult);
+  if (overdueWarning) console.log('  ' + overdueWarning);
+
   console.log('');
   console.log('  ' + pad('Type', 16) + pad('Severity', 10) + pad('Callsign', 12) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));

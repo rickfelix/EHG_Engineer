@@ -190,7 +190,7 @@ to re-run the census.
 | `scripts/stale-session-sweep.cjs` STUCK-signal auto-drain | exempt (narrow, ratified) | SD-LEO-INFRA-THRESHOLD-AUTO-SIGNAL-OVERFIRE-001(c) — scoped to dead-sender or >1h-stale `stuck` signals only |
 | `scripts/hooks/coordination-inbox.cjs` `classifyInboxMessage`-driven stamp | already-correct — the canonical reference implementation | see receipt-contract table above |
 | `lib/coordinator/relay-queue.cjs` `drainOne` claim-lease | exempt | repurposes `acknowledged_at` as an atomic claim/lease mutex for its own row-kind (relay requests) — adversarially reviewed; not a violation since this queue has no meaningful "seen" stage |
-| `lib/coordinator/signal-router.cjs` `stampRouted` | already-correct | acks on genuine promotion-to-`feedback` action (fingerprint aggregation) |
+| ~~`lib/coordinator/signal-router.cjs` `stampRouted`~~ REMOVED (SD-LEO-INFRA-SIGNAL-LANE-PER-001, 2026-08-24) | n/a — file no longer writes `acknowledged_at` | This row's original claim ("acks on genuine promotion-to-`feedback` action") was already stale when written: `stampRouted()` never touched `acknowledged_at` — that write lived in a SEPARATE, then-dormant function, `stampRoutedToCoordinator()` (SD-LEO-INFRA-SIGNAL-ROUTER-AUTO-001, FR-7), which this census apparently conflated with `stampRouted`. FR-4 wired `stampRoutedToCoordinator` live but made it a non-disposing provenance marker (mirrors `stampRouted`'s already-correct shape) — it never writes `acknowledged_at` either. `acknowledged_at` for the signal lane is now written EXCLUSIVELY by `scripts/coordinator-ack-signal.cjs` (already listed above), the sole canonical writer. |
 
 ### Read-only consumers — exempt, never mutate
 

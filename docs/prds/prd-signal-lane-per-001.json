@@ -1,0 +1,133 @@
+{
+  "executive_summary": "Worker /signal rows (session_coordination, signal lane) can look dispositioned while remaining structurally open: 153 live rows carry a hand-written payload.disposition yet acknowledged_at is still NULL -- the only field fleet-dashboard.cjs's inbox actually checks -- and a validated critical escalation (signal 26318f2b) sat undispositioned for ~4.4h before a one-off manual batch closed it. This SD extends the existing thin ack mechanism (coordinator-ack-signal.cjs + receipt-ledger.cjs) with a real 5-value disposition vocabulary and single canonical writer (FR-1), surfaces undispositioned age at the coordinator tick (FR-2), backfills the current 262 open rows without corrupting the answered-rate ledger's measurement integrity (FR-3), and gives lone (non-promoted) dispositioned signals a path into the existing SIGNAL_RESOLVED notify-back loop, which today only fires for promotion-derived signals (FR-4). Two LEAD-phase VALIDATION findings are load-bearing constraints here, not afterthoughts: a naive backfill would flatten 10 distinct hand-stamped dispositions into 262 fake 'ACTIONED' answered-rate-ledger rows (~9% numerator inflation), and a dormant third acknowledged_at writer (signal-router.cjs's ackAndRouteLoneSignal, 0 rows ever produced) is the most likely place FR-4 gets wired and must not become a second silent-close path.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Extend coordinator-ack-signal.cjs + receipt-ledger.cjs with a real disposition vocabulary and single canonical writer",
+      "description": "Widen receipt-ledger.cjs's existing 3-value DISPOSITIONS enum (ACTIONED/DECLINED/SUPERSEDED, lib/coordination/receipt-ledger.cjs:70-74) to the signal-lane's 5-value vocabulary (actioned/promoted/duplicate-of/rejected-with-reason/deferred-with-trigger) OR define an explicit mapping from the 5 signal-lane values onto the 3 existing ledger values -- buildReceipt() at receipt-ledger.cjs:89 currently silently drops any value not in its enum, so an unmapped 5th value would vanish from the ledger with no error. coordinator-ack-signal.cjs becomes the SOLE writer of a disposition onto a signal row (stamping both acknowledged_at, the existing retirement signal fleet-dashboard.cjs checks, and the new disposition value with writer identity) -- extend this file, do not create a second parallel writer. Mirror coordinator-ack-adam.cjs's mandatory-linkage pattern: 'rejected-with-reason' requires a non-empty reason string or the write is rejected before touching the DB (same shape as coordinator-ack-adam.cjs:226-248's LINKAGE_REQUIRED_DISPOSITIONS check); 'deferred-with-trigger' requires an explicit trigger condition or is rejected (mirrors coordinator-ack-adam.cjs:285-287).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Calling the extended writer with disposition='actioned' on a fixture signal row sets BOTH acknowledged_at (non-null) and a disposition value with writer identity recorded, verified by re-reading the row.",
+        "Calling the writer with disposition='deferred-with-trigger' and no trigger argument is rejected before any DB write occurs (verified: row's acknowledged_at remains NULL).",
+        "A vocabulary-reconciliation test proves all 5 signal-lane disposition values map to a receipt-ledger DISPOSITIONS entry with no silent drop -- inject each of the 5 values and assert buildReceipt() does not omit any of them from the resulting receipt."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Surface undispositioned signal age at the coordinator tick, oldest-first",
+      "description": "Add a query (built on the existing acknowledged_at IS NULL retirement gate fleet-dashboard.cjs:1490-1515 already uses) that surfaces open signal-lane rows ordered oldest-first by created_at, with an explicit 'overdue' marker once a row exceeds a coordinator-configurable SLA threshold. Rendered in the coordinator's existing inbox surface, not a new dashboard.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A fixture signal row older than the SLA threshold appears in the surfaced oldest-first list with an explicit overdue marker.",
+        "A fixture signal row younger than the SLA threshold does NOT appear as overdue.",
+        "The SLA threshold value is a named, documented constant (e.g. SIGNAL_DISPOSITION_SLA_MINUTES), not implicit prose -- resolves the SD's own success_criteria[0] previously-unbound SLA reference."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Live-queried backfill for the current open signal population, WITHOUT corrupting the answered-rate ledger",
+      "description": "MUST run AFTER FR-1 lands (ordering dependency -- the backfill needs FR-1's canonical writer/vocabulary to exist first). Query session_coordination live at run time (WHERE payload.signal_type IS NOT NULL AND acknowledged_at IS NULL), not a hardcoded row-id list or frozen count -- the 'as of 2026-08-24' figure of 262 open (109 never-touched + 153 already hand-stamped with a payload.disposition while acknowledged_at is still NULL) is a snapshot, and hand-stamping is confirmed still ongoing. CRITICAL CONSTRAINT (VALIDATION finding, sub_agent_execution_results eb009c8e-0ec1-49ec-bef7-b8cc2ff20d01): backfilled rows MUST NOT be written through FR-1's writer unmodified, because that writer hardcodes disposition:'ACTIONED' and isRetention:false unconditionally (coordinator-ack-signal.cjs:99,102) -- doing so would flatten the 153 rows' 10 distinct hand-stamped disposition texts into a single generic 'ACTIONED' value AND inject 262 rows indistinguishable from genuine coordinator answers into the answered-rate ledger (a ~9% numerator inflation on today's 2,864-row ledger, 610 of which are signal receipts). Backfilled rows MUST either (a) go through a distinct isRetention:true path that preserves the original hand-stamped disposition text verbatim, or (b) be excluded from the answered-rate ledger's receipt insert entirely. Pick one and document the choice; do not leave it ambiguous for EXEC to guess.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Running the backfill against a fixture DB state (mix of never-touched and already-hand-stamped rows) leaves zero signal-lane rows with acknowledged_at NULL afterward.",
+        "The answered-rate ledger's row count and its is_retention=false (genuine-answer) subset are BYTE-IDENTICAL before and after a backfill run against a fixture population -- this is the primary regression test for the VALIDATION HIGH finding.",
+        "Each of the 153 already-hand-stamped rows' original disposition text is preserved (not flattened to a generic value) somewhere queryable after backfill -- verified by comparing pre/post text for a sample of the 10 distinct hand-stamped texts.",
+        "Re-running the backfill script a second time against an already-backfilled fixture is a no-op (idempotent) -- no duplicate ledger rows, no re-processing of already-closed rows."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Widen SIGNAL_RESOLVED to cover lone (non-promoted) dispositioned signals, resolving the dormant third writer",
+      "description": "The existing SIGNAL_RESOLVED loop (scripts/stale-session-sweep.cjs's runCoordinatorHousekeeping, lines ~1945-2026) fires ONLY when payload.routed_to_sd_key is set, which scripts/sd-from-feedback.js:386-394 stamps ONLY on promotion (3+ same-fingerprint aggregation) -- it has NEVER fired in production (0 rows with routed_to_sd_key, 0 notification_sent, 0 SIGNAL_RESOLVED messages ever sent), so this is zero-yield, not merely narrow. CRITICAL CONSTRAINT (VALIDATION finding): a dormant third acknowledged_at writer already exists at lib/coordinator/signal-router.cjs:337-432 (shouldRouteLone/stampRoutedToCoordinator/ackAndRouteLoneSignal, from SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001) -- self-documented as unreachable, 0 rows ever produced, stamps acknowledged_at with NO receipt-ledger call (the same 'invisible to measurement' defect FR-1 exists to fix), and has a fixture-blind bug where loadRecentSignals doesn't select acknowledged_at but branches on it (so in production the idempotency guard can never fire -- its tests pass only because every mock hand-supplies the field). EXEC must explicitly decide: either wire FR-1's canonical writer through this path (fixing the missing receipt-ledger call and the select-list gap) and widen SIGNAL_RESOLVED to trigger on FR-1's new disposition field directly (not routed_to_sd_key), or retire the dormant path entirely if superseded. Never leave both a fixed FR-1 path and an unfixed dormant path live simultaneously. Also add an explicit ORDER BY (created_at ASC) to the SIGNAL_RESOLVED candidate query, currently .limit(50) with no ordering -- invisible today at 0 candidates, a starvation risk once widened against 262 rows.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "POSITIVE CONTROL (resolves the VALIDATION finding that the existing negative-only test would be vacuous): disposing a lone, non-promoted fixture signal via FR-1's writer results in an actual SIGNAL_RESOLVED message reaching the sender's session -- not just the absence of a false trigger.",
+        "NEGATIVE CONTROL: promoting a fixture signal (3+ same-fingerprint) WITHOUT giving it an individual disposition does NOT fire SIGNAL_RESOLVED -- regression guard against reintroducing the prior defect where 9 critical signals silently vanished when stampRouted() disposed rows purely on promotion.",
+        "The dormant signal-router.cjs:337-432 path's fixture-blind bug is either fixed (loadRecentSignals selects acknowledged_at) with a test using a REAL row shape (not hand-supplied mock fields), or the path is retired -- one or the other, verified by which files exist/are called after EXEC.",
+        "The candidate query has an explicit ORDER BY; a test with >50 candidate rows confirms the oldest, not an arbitrary subset, is processed first."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No DB migration required",
+      "description": "coordination_receipts.disposition is a bare text column with no CHECK constraint (confirmed by VALIDATION) -- widening the vocabulary from 3 to 5 values is JS-only (receipt-ledger.cjs's DISPOSITIONS constant + buildReceipt() mapping logic), not a schema change."
+    },
+    {
+      "id": "TR-2",
+      "title": "FR-1 must land and be verified before FR-3 executes",
+      "description": "FR-3's backfill depends on FR-1's canonical writer and vocabulary existing; sequence commits/PRs so FR-1 is testable in isolation first."
+    },
+    {
+      "id": "TR-3",
+      "title": "Backfill is idempotent and live-queried, never a frozen ID list",
+      "description": "The 262-row figure is a point-in-time snapshot and manual hand-stamping is confirmed ongoing; the backfill script must re-derive its target row set from a live query every run, and be safe to re-run without side effects on already-processed rows."
+    },
+    {
+      "id": "TR-4",
+      "title": "Single canonical writer invariant preserved end to end",
+      "description": "After EXEC, exactly one code path may stamp a signal-lane disposition + acknowledged_at together (FR-1's extended writer). Any pre-existing or newly-discovered second path (including the dormant signal-router.cjs:337-432 writer) must be either routed through FR-1's writer or explicitly retired -- never left as a silent alternate closer."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Canonical writer stamps both acknowledged_at and disposition+writer-identity atomically", "type": "unit", "expected": "Row is closed by the same check fleet-dashboard.cjs already uses, and hand-stamp detection can distinguish this write from an out-of-band one." },
+    { "id": "TS-2", "scenario": "rejected-with-reason and deferred-with-trigger reject writes missing their mandatory linkage field", "type": "unit", "expected": "No DB write occurs; row state unchanged." },
+    { "id": "TS-3", "scenario": "All 5 signal-lane disposition values survive buildReceipt() with no silent drop", "type": "unit", "expected": "Each value maps to a real, distinguishable receipt-ledger entry." },
+    { "id": "TS-4", "scenario": "Backfill run against a fixture with never-touched AND already-hand-stamped rows", "type": "integration", "expected": "Zero rows remain open; answered-rate ledger row count and is_retention=false subset unchanged from pre-backfill baseline; original hand-stamped disposition text preserved for a sample of rows." },
+    { "id": "TS-5", "scenario": "Backfill re-run is a no-op on an already-backfilled fixture", "type": "integration", "expected": "No duplicate ledger rows, no re-processing." },
+    { "id": "TS-6", "scenario": "SIGNAL_RESOLVED positive control for a lone dispositioned signal", "type": "integration", "expected": "Sender's session receives the SIGNAL_RESOLVED message." },
+    { "id": "TS-7", "scenario": "SIGNAL_RESOLVED negative control for promotion-without-disposition", "type": "integration", "expected": "No SIGNAL_RESOLVED fires; regression guard against the prior silent-vanish defect holds." },
+    { "id": "TS-8", "scenario": "Coordinator inbox surfaces oldest-first overdue signals against the named SLA constant", "type": "unit", "expected": "A fixture row past SLA is flagged overdue; a fixture row under SLA is not." }
+  ],
+  "acceptance_criteria": [
+    "A signal row cannot sit past the named SLA constant without either a recorded disposition or an explicit surfaced-overdue line at the coordinator tick.",
+    "Hand-stamping a disposition outside the canonical writer is detectable via missing/mismatched writer identity.",
+    "The 26318f2b-class replay (a critical signal) reaches dispositioned state within one coordinator tick cycle in fixture.",
+    "The answered-rate ledger's measurement integrity is provably unchanged by the FR-3 backfill (byte-identical row count and is_retention=false subset pre/post).",
+    "SIGNAL_RESOLVED fires for a genuinely lone-dispositioned signal (positive control) and does not fire for promotion alone (negative control)."
+  ],
+  "risks": [
+    { "risk": "A naive FR-3 backfill reusing FR-1's writer unmodified corrupts the answered-rate ledger by ~9% (VALIDATION HIGH finding).", "mitigation": "FR-3 explicitly requires a distinct isRetention:true / ledger-excluded path; TS-4 is the primary regression test.", "severity": "high" },
+    { "risk": "FR-4 wires into the dormant signal-router.cjs:337-432 path without fixing its missing receipt-ledger call or its fixture-blind loadRecentSignals bug, creating a second silent-close mechanism (VALIDATION HIGH finding).", "mitigation": "FR-4 requires an explicit fix-or-retire decision for that path, verified by TS-6/TS-7 using real (not hand-supplied) row shapes.", "severity": "high" },
+    { "risk": "Widening SIGNAL_RESOLVED's trigger reintroduces the prior regression where promotion alone disposed 9 critical signals silently.", "mitigation": "TS-7 is a dedicated negative control asserting promotion-without-disposition never fires SIGNAL_RESOLVED.", "severity": "medium" },
+    { "risk": "Vocabulary mismatch: the 5-value signal-lane set vs receipt-ledger's existing 3-value DISPOSITIONS enum could silently drop values via buildReceipt()'s unlisted-value behavior.", "mitigation": "FR-1 requires an explicit mapping/extension, verified by TS-3.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Coordinator inbox tick (fleet-dashboard.cjs)", "Worker sessions awaiting SIGNAL_RESOLVED outcomes (worker-checkin.cjs, hooks/coordination-inbox.cjs)", "Answered-rate ledger reporting (coordination_receipts consumers)"],
+    "dependencies": ["scripts/coordinator-ack-signal.cjs", "lib/coordination/receipt-ledger.cjs", "lib/coordinator/signal-router.cjs", "scripts/stale-session-sweep.cjs", "scripts/sd-from-feedback.js"],
+    "data_contracts": ["session_coordination.payload (JSONB, no schema change)", "coordination_receipts.disposition (bare text, no CHECK constraint -- no migration needed per TR-1)"],
+    "runtime_config": ["SIGNAL_DISPOSITION_SLA_MINUTES (new named constant, FR-2)"],
+    "observability_rollout": ["Answered-rate ledger row count + is_retention=false subset compared pre/post backfill as the primary safety check (TS-4)", "SIGNAL_RESOLVED message delivery counted before/after FR-4 to confirm it moves off zero"]
+  },
+  "system_architecture": {
+    "summary": "Extend the existing thin signal-ack chain (coordinator-ack-signal.cjs -> receipt-ledger.cjs) with a real disposition vocabulary; extend or retire the dormant lone-signal writer in signal-router.cjs; widen the existing SIGNAL_RESOLVED sweep in stale-session-sweep.cjs to key off the new disposition field instead of promotion-only routed_to_sd_key.",
+    "components": [
+      { "name": "scripts/coordinator-ack-signal.cjs", "change": "Extended: 5-value disposition vocabulary, mandatory-linkage checks for rejected-with-reason/deferred-with-trigger, writer-identity stamp." },
+      { "name": "lib/coordination/receipt-ledger.cjs", "change": "Extended: DISPOSITIONS enum widened or explicitly mapped; buildReceipt() no longer silently drops unlisted values." },
+      { "name": "lib/coordinator/signal-router.cjs", "change": "Fixed (missing receipt-ledger call, fixture-blind loadRecentSignals select-list gap) OR retired -- explicit EXEC decision, not both left live." },
+      { "name": "scripts/stale-session-sweep.cjs", "change": "runCoordinatorHousekeeping's SIGNAL_RESOLVED trigger widened beyond routed_to_sd_key; candidate query gains explicit ORDER BY." },
+      { "name": "scripts/one-off/signal-lane-backfill-001.mjs (new)", "change": "NEW: live-queried, idempotent backfill for open signal-lane rows, routed through the isRetention-safe path (FR-3), never through FR-1's writer unmodified." },
+      { "name": "Coordinator inbox surface (fleet-dashboard.cjs)", "change": "Extended: oldest-first undispositioned-age surfacing against a named SLA constant." }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Sequential: FR-1 (extend writer+vocabulary) first and independently testable, then FR-2 (surfacing) and FR-3 (backfill, depends on FR-1) in parallel, then FR-4 (widen SIGNAL_RESOLVED, depends on FR-1's disposition field existing) last.",
+    "steps": [
+      "FR-1: extend coordinator-ack-signal.cjs + receipt-ledger.cjs; land and unit-test in isolation before proceeding.",
+      "FR-2: add oldest-first overdue surfacing to the coordinator inbox against a new named SLA constant.",
+      "FR-3: build the live-queried, idempotent backfill with the answered-rate-ledger-safe path; verify TS-4/TS-5 against a fixture mirroring the real 262-row mixed population before running against production data.",
+      "FR-4: decide fix-vs-retire for the dormant signal-router.cjs lone-signal path; widen SIGNAL_RESOLVED's trigger; verify TS-6 (positive) and TS-7 (negative) both hold.",
+      "Run the FR-3 backfill against live production session_coordination only after FR-1/FR-3 test suites are green."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the FR-1 disposition writer against a fixture signal row and confirm it stamps BOTH acknowledged_at AND a canonical disposition value with writer identity, not a payload.disposition hand-stamp.", "expected_outcome": "Row transitions from open to genuinely closed by the acknowledged_at IS NULL check fleet-dashboard.cjs already uses." },
+    { "step_number": 2, "instruction": "Run the FR-3 backfill against a fixture mixing never-touched and already-hand-stamped rows, then diff the answered-rate ledger's row count and is_retention=false subset before/after.", "expected_outcome": "Zero open rows remain; ledger counts are byte-identical pre/post; original hand-stamped disposition text is preserved and queryable." },
+    { "step_number": 3, "instruction": "Dispose a lone (non-promoted) fixture signal via the FR-1 writer and run the FR-4-widened SIGNAL_RESOLVED check.", "expected_outcome": "The sender receives a SIGNAL_RESOLVED notification even though no routed_to_sd_key/promotion ever occurred." },
+    { "step_number": 4, "instruction": "Promote a fixture signal via the existing aggregation path (3+ same-fingerprint) WITHOUT giving it an individual disposition, then run the FR-4-widened SIGNAL_RESOLVED check.", "expected_outcome": "No SIGNAL_RESOLVED fires from promotion alone -- regression guard against reintroducing the prior 'critical signals silently vanish' defect." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SIGNAL-LANE-PER-001"
+  }
+}
