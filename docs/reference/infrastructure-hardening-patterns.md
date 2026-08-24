@@ -301,28 +301,27 @@ Prevent hung sub-agents from blocking workflow indefinitely.
 ### Implementation
 
 ```javascript
-// Configurable timeout (60s default)
-const timeoutMs = options.timeout || 60000;
+// Configurable timeout (120s default, via SUB_AGENT_TIMEOUT_MS)
+const timeoutMs = options.timeout || parseInt(process.env.SUB_AGENT_TIMEOUT_MS || '120000', 10);
 
-const timeoutPromise = new Promise((_, reject) =>
-  setTimeout(
-    () => reject(new Error(`Sub-agent ${code} timed out after ${timeoutMs}ms`)),
-    timeoutMs
-  )
-);
+const timeoutPromise = new Promise((_, reject) => {
+  timeoutHandle = setTimeout(() => reject(new SubAgentTimeoutError(code, timeoutMs)), timeoutMs);
+});
 
 // Race sub-agent execution against timeout
 results = await Promise.race([
   subAgentModule.execute(sdUUID || sdId, subAgent, execOptions),
   timeoutPromise
 ]);
+clearTimeout(timeoutHandle); // cleared on BOTH the success and catch paths -- see below
 ```
 
 ### Benefits
 - **Prevents infinite hangs**: Enforces maximum execution time
-- **Configurable per agent**: Different agents can have different timeouts
-- **Clean error handling**: Timeout throws clear error message
+- **Configurable per agent**: Different agents can have different timeouts (or fleet-wide via `SUB_AGENT_TIMEOUT_MS`)
+- **Clean error handling**: Timeout throws a named `SubAgentTimeoutError` sentinel, distinguishable from a genuine thrown error or a missing module (see "Failure Cause Discrimination" below)
 - **Auto-recovery**: Orchestrator continues after timeout
+- **No leaked timer**: `clearTimeout(timeoutHandle)` runs on both the success path and inside the catch block -- an earlier version only cleared it on success, leaking a pending timer on every non-timeout failure (SD-LEO-INFRA-EXECUTOR-120S-1800S-001, FR-2)
 
 ### Configuration
 
@@ -331,10 +330,77 @@ results = await Promise.race([
 await executeSubAgent(subAgent, sdId, { timeout: 120000 }); // 2 minutes
 ```
 
-**Default timeout**: 60000ms (60 seconds)
+**Default timeout**: 120000ms (2 minutes), overridable fleet-wide via `SUB_AGENT_TIMEOUT_MS`
 
 ### File Modified
-`lib/sub-agent-executor/executor.js:189-199`
+`lib/sub-agent-executor/executor.js` (timeout wrapper + failure-cause discrimination, ~lines 220-360 as of SD-LEO-INFRA-EXECUTOR-120S-1800S-001)
+
+---
+
+## Failure Cause Discrimination
+
+### Pattern Overview
+
+When the timeout-wrapped `Promise.race()` above rejects, discriminate WHY it rejected instead of collapsing every cause into one identical outcome. Before SD-LEO-INFRA-EXECUTOR-120S-1800S-001, a bare `catch {}` around the sub-agent module's dynamic `import()` treated a timeout, a genuine thrown error, and a truly-missing module file identically -- all three wrote `verdict='MANUAL_REQUIRED'` with zero trace of which one actually happened, corrupting 81 live evidence rows before the cause could be told apart.
+
+### Implementation
+
+```javascript
+} catch (rawErr) {
+  clearTimeout(timeoutHandle);
+  // Normalize BEFORE any branch dereferences .message/.stack -- a non-Error rejection
+  // (null/undefined/a thrown string, all legal JS) would otherwise crash inside this very
+  // catch block and escape to the outer catch, which stores verdict='ERROR' (a fleet-wide
+  // hard block, not the mode-gated MANUAL_REQUIRED advisory below).
+  const err = rawErr instanceof Error ? rawErr : new Error(String(rawErr));
+
+  let failureCause;
+  if (err instanceof SubAgentTimeoutError) {
+    failureCause = 'timeout';
+  } else {
+    // Module-relative resolution, NOT process.cwd()-relative and NOT error.code alone:
+    // - a naive relative fs.existsSync() resolves against the wrong cwd from any caller
+    //   other than the exact one it was written for
+    // - ERR_MODULE_NOT_FOUND is thrown identically whether the top-level module itself is
+    //   missing or one of ITS transitive dependencies is missing inside an otherwise-present
+    //   module -- only checking the TOP-LEVEL module's own resolved path discriminates them
+    const resolvedModulePath = fileURLToPath(new URL(modulePathSpecifier, import.meta.url));
+    failureCause = fs.existsSync(resolvedModulePath) ? 'genuine_error' : 'missing_module';
+  }
+
+  // verdict stays 'MANUAL_REQUIRED' for ALL THREE causes -- a deliberate, documented,
+  // zero-blast-radius scope boundary. subagent-evidence-gate.js's NON_EVIDENCE_VERDICTS
+  // (which ERROR belongs to) is checked BEFORE REJECT_VERDICTS and triggers an unconditional
+  // fleet-wide hard block that ignores SUBAGENT_VERDICT_MODE entirely -- routing any of these
+  // three causes through verdict='ERROR' would silently convert a mode-gated advisory into
+  // that hard block. metadata.failure_cause carries the real cause instead.
+  results = {
+    verdict: 'MANUAL_REQUIRED',
+    confidence: 50,
+    error: err.message,
+    stack: err.stack,
+    metadata: { failure_cause: failureCause },
+    // ...cause-specific message/recommendations
+  };
+}
+```
+
+### Benefits
+- **Diagnosable evidence**: `metadata.failure_cause` (`timeout` | `genuine_error` | `missing_module`) tells a reader WHY a `MANUAL_REQUIRED` row exists, without inferring it from message text
+- **Zero blast radius**: the gate-facing `verdict` value is unchanged from before this pattern shipped -- no downstream handoff-blocking behavior changes
+- **cwd-independent**: module-existence resolution uses `fileURLToPath(new URL(modulePathSpecifier, import.meta.url))`, correct regardless of the process's current working directory
+- **Crash-safe on hostile rejections**: normalizing `rawErr` to a real `Error` before any `.message`/`.stack` access prevents a non-Error rejection from crashing inside the catch and escaping to a verdict='ERROR' outer catch
+
+### Caveats
+- **Non-Error rejections still normalized via `String(rawErr)`**: a prototype-less object or an object with a throwing `toString()` can still throw during that `String()` call -- a narrower, largely theoretical residual of the same failure mode (see PR #7490 review discussion). Not addressed; the LOC cost was judged not worth it for a case that requires an attacker to control what a sub-agent module *throws*, not just what it returns.
+- **Do not add a fourth failure_cause without re-checking the gate**: any new cause must still route through `verdict='MANUAL_REQUIRED'`, or re-verify against `subagent-evidence-gate.js`'s verdict-classification ordering first.
+
+### Historical Corruption Remediation
+
+Rows written before this pattern shipped are marked `metadata.pre_fix_corrupted=true` by an idempotent, read-merge-write remediation script (`scripts/one-off/remediate-executor-manual-required-corruption-001.mjs`) — re-queries the live table at run time rather than a fixed row list, safe to re-run indefinitely.
+
+### File Modified
+`lib/sub-agent-executor/executor.js`, `lib/sub-agent-executor/results-storage.js` (added `error`/`stack` to `PERSISTED_ELSEWHERE`)
 
 ---
 
