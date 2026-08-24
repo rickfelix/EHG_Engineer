@@ -16,7 +16,7 @@ import {
   COORDINATOR_CONTRACT_FILE,
 } from '../../../scripts/coordinator-startup-check.mjs';
 import { createRequire } from 'node:module';
-const { SINGLE_READ_TOKEN_BUDGET } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
+const { SINGLE_READ_TOKEN_BUDGET, SINGLE_READ_TOKEN_CAP, SINGLE_READ_MARGIN_TOKENS } = createRequire(import.meta.url)('../../../lib/protocol/contract-read-coverage.cjs');
 
 const REPO = process.cwd();
 
@@ -207,10 +207,20 @@ describe('roleArmingStates — arming is measured, not asserted', () => {
      * What must hold forever is that `armed` is DERIVED from the measurement rather than stated:
      * every role reports a real token count, and its armed flag agrees with that count against the
      * budget. If a contract shrinks, the role arms and this still passes.
+     *
+     * QF-20260824-393 (RCA sub_agent_execution_results 6c3c9e20-e8f4-4b7d-9be0-5c8857183c3d):
+     * SINGLE_READ_TOKEN_BUDGET === SINGLE_READ_TOKEN_CAP, and the marginal band added by
+     * SD-LEO-INFRA-CONTRACT-READ-FIT-001 is symmetric about that same cap -- so tokens inside
+     * [CAP - MARGIN, CAP] satisfy `tokens <= budget` while the implementation correctly reports
+     * armed:false (basis:predicted_marginal, an intentionally UNCONFIRMED estimate). The bare
+     * `tokens <= budget` comparison was unsatisfiable for any role whose estimate lands in that
+     * band -- not a hypothetical, CLAUDE_SOLOMON.md sits there today. `marginal` mirrors that
+     * same symmetric-band test so the invariant matches the implementation's own tri-state rule.
      */
     for (const s of roleArmingStates(REPO)) {
       expect(s.tokens).toBeGreaterThan(0);
-      expect(s.armed).toBe(s.tokens <= SINGLE_READ_TOKEN_BUDGET);
+      const marginal = Math.abs(s.tokens - SINGLE_READ_TOKEN_CAP) <= SINGLE_READ_MARGIN_TOKENS;
+      expect(s.armed).toBe(!marginal && s.tokens <= SINGLE_READ_TOKEN_BUDGET);
       expect(s.reason).toContain('token');
     }
 
