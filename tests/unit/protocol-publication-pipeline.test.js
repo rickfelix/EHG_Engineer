@@ -14,7 +14,7 @@ import { CLAUDEMDGeneratorV3, KNOWN_GENERATED_FILES, verifyFileContentHash } fro
 import { parseOnlyFlag, parseRefreshLessonsFlag, detectConflictedState } from '../../scripts/generate-claude-md-from-db.js';
 
 const require = createRequire(import.meta.url);
-const { evaluatePublicationInvariants } = require('../../scripts/protocol-publication-audit.cjs');
+const { evaluatePublicationInvariants, evaluateContentUniqueness } = require('../../scripts/protocol-publication-audit.cjs');
 
 const sha16 = (s) => crypto.createHash('sha256').update(s).digest('hex').substring(0, 16);
 
@@ -279,5 +279,41 @@ describe('QF-20260705-104: detectConflictedState (generator entry guard, seam 2)
       expect(() => detectConflictedState(dir)).not.toThrow();
       expect(detectConflictedState(dir)).toBeNull();
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('FR-3c (SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001): evaluateContentUniqueness (pure)', () => {
+  const row = (id, type, content) => ({ id, section_type: type, content });
+
+  it('all-unique content => ok, no duplicate families', () => {
+    const r = evaluateContentUniqueness([row(1, 'a', 'alpha'), row(2, 'b', 'beta')]);
+    expect(r.ok).toBe(true);
+    expect(r.duplicateFamilies).toEqual([]);
+  });
+
+  it('duplicate content across DIFFERENT section_types is caught', () => {
+    const r = evaluateContentUniqueness([row(1, 'a', 'same text'), row(2, 'b', 'same text')]);
+    expect(r.ok).toBe(false);
+    expect(r.duplicateFamilies).toHaveLength(1);
+    expect(r.duplicateFamilies[0].ids.sort()).toEqual([1, 2]);
+    expect(r.duplicateFamilies[0].section_types.sort()).toEqual(['a', 'b']);
+  });
+
+  it('duplicate content sharing the SAME section_type is still caught (the {544,545} shape a section_type-constraint-keyed check would miss)', () => {
+    const r = evaluateContentUniqueness([row(544, 'handoff_precheck', 'identical'), row(545, 'handoff_precheck', 'identical')]);
+    expect(r.ok).toBe(false);
+    expect(r.duplicateFamilies[0].section_types).toEqual(['handoff_precheck']);
+  });
+
+  it('empty/whitespace-only content is not treated as a meaningful duplicate signal', () => {
+    const r = evaluateContentUniqueness([row(1, 'a', ''), row(2, 'b', '   '), row(3, 'c', null)]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('a 3-row duplicate family (the {308,309,310} shape) is reported as one family with all 3 ids', () => {
+    const r = evaluateContentUniqueness([row(308, 'x1', 'dup'), row(309, 'x2', 'dup'), row(310, 'x3', 'dup')]);
+    expect(r.ok).toBe(false);
+    expect(r.duplicateFamilies).toHaveLength(1);
+    expect(r.duplicateFamilies[0].ids.sort()).toEqual([308, 309, 310]);
   });
 });
