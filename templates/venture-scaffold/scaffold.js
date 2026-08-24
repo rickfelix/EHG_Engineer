@@ -2,33 +2,58 @@
 
 /**
  * Modular Venture Scaffold CLI
- * Generates working Playwright config, smoke tests, and CI workflow for new venture repos.
+ * Generates working Playwright config, smoke tests, CI workflow, a hardened
+ * deploy workflow, a stack-scan CI workflow, and a feedback/error-reporting
+ * module for new venture repos.
  *
  * Usage:
  *   node templates/venture-scaffold/scaffold.js <venture-name> [--modules testing,ci-cd]
  *   node templates/venture-scaffold/scaffold.js elysian --modules testing
- *   node templates/venture-scaffold/scaffold.js adsonix --modules testing,ci-cd
+ *   node templates/venture-scaffold/scaffold.js adsonix --modules testing,ci-cd,deploy,stack-scan,feedback
  *
- * SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-E
+ * SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-E (testing, ci-cd)
+ * SD-LEO-INFRA-VENTURE-SCAFFOLD-CODE-001 (deploy, stack-scan, feedback; isMainModule guard)
  */
 
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
-// Module registry — extensible for future modules
-const MODULE_REGISTRY = {
+// Module registry — extensible for future modules. Every generate() is PURE:
+// (ventureName, outputDir, options) -> [{path, content}], no disk I/O. Callers
+// (main() below, and FR-2's shared provisioning adapters) are responsible for
+// creating parent directories and writing files.
+export const MODULE_REGISTRY = {
   testing: {
     name: 'Testing (Playwright)',
     version: '1.0.0',
     description: 'Playwright config, smoke tests, and test fixtures',
-    generate: generateTestingModule
+    generate: generateTestingModule,
   },
   'ci-cd': {
     name: 'CI/CD (GitHub Actions)',
     version: '1.0.0',
     description: 'GitHub Actions workflow for test execution',
-    generate: generateCICDModule
-  }
+    generate: generateCICDModule,
+  },
+  deploy: {
+    name: 'Deploy (Cloudflare Workers)',
+    version: '1.0.0',
+    description: 'Hardened deploy workflow — concurrency guard, build-secret verification, DB migration, live-URL check, config-drift check, post-deploy signed-in UAT probe',
+    generate: generateDeployModule,
+  },
+  'stack-scan': {
+    name: 'Stack Scan (CI)',
+    version: '1.0.0',
+    description: 'Dependency vulnerability + committed-secret scan on push/PR',
+    generate: generateStackScanModule,
+  },
+  feedback: {
+    name: 'Feedback / Error Reporting',
+    version: '1.0.0',
+    description: 'Client error/feedback reporter + minimal Worker-style server handler',
+    generate: generateFeedbackModule,
+  },
 };
 
 function generateTestingModule(ventureName, outputDir, options) {
@@ -58,11 +83,8 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
 });
-`
+`,
   });
-
-  // tests/e2e directory
-  mkdirSync(join(outputDir, 'tests', 'e2e'), { recursive: true });
 
   // Smoke test
   files.push({
@@ -109,16 +131,14 @@ test.describe('${ventureName} Smoke Tests', () => {
     expect(errors).toHaveLength(0);
   });
 });
-`
+`,
   });
 
   return files;
 }
 
-function generateCICDModule(ventureName, outputDir) {
+function generateCICDModule(ventureName, outputDir, _options) {
   const files = [];
-
-  mkdirSync(join(outputDir, '.github', 'workflows'), { recursive: true });
 
   files.push({
     path: join(outputDir, '.github', 'workflows', 'playwright.yml'),
@@ -150,7 +170,350 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
-`
+`,
+  });
+
+  return files;
+}
+
+// Vendored FROM altifyai's real origin/main deploy.yml (commit f7d0790, fetched
+// via `gh api repos/rickfelix/altifyai/contents/.github/workflows/deploy.yml`,
+// NOT the stale local worktree checkout) — the only genuinely hardened deploy
+// workflow found across 18 sampled venture repos. Stack-specific literals
+// (Clerk build-secret env var, D1 database name, UAT probe path) are
+// parameterized via `options`; the safety PATTERNS (concurrency guard,
+// fail-loud build-secret-bake verification, DB migration step, live-URL
+// fail-loud extraction, config-drift check, post-deploy signed-in UAT probe
+// with redaction) are preserved as-is.
+function generateDeployModule(ventureName, outputDir, options) {
+  const buildSecretEnvVar = options.buildSecretEnvVar || 'VITE_CLERK_PUBLISHABLE_KEY';
+  const buildSecretGrepPattern = options.buildSecretGrepPattern || 'pk_(test|live)_[A-Za-z0-9+/=]{20,}';
+  // Adversarial deep-tier review finding (ship-adversarial-review, PR #7482, WARNING):
+  // the writer (venture-scaffold-modules-writer.js SEC-2) sanitizes ventureName before
+  // calling generate(), but the CLI's main() (this file, below) passes CLI argv straight
+  // through unsanitized -- the CLI is a documented supported entry point, and this PR
+  // newly exports MODULE_REGISTRY, widening who can call generate() directly. Reproduced:
+  // an unsanitized name with shell metacharacters reaches this default and is interpolated
+  // unquoted into a `run:` line that executes with Cloudflare deploy credentials. Applying
+  // the SAME normalization here (not just at the writer) closes the gap for every caller,
+  // not only the ones that happen to go through the writer.
+  const safeVentureName = String(ventureName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venture';
+  const d1DatabaseName = options.d1DatabaseName || safeVentureName;
+  const uatProbePath = options.uatProbePath || '/api/events';
+  const uatWriteBody = options.uatWriteBody
+    || '{"eventType":"page_view","eventName":"page_view","properties":{"path":"/ci-post-deploy-uat"}}';
+
+  const files = [];
+  files.push({
+    path: join(outputDir, '.github', 'workflows', 'deploy.yml'),
+    content: `name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # Scaffolded by venture-scaffold's deploy module (SD-LEO-INFRA-VENTURE-SCAFFOLD-CODE-001),
+      # vendored from altifyai's deploy.yml. ${buildSecretEnvVar} must stay scoped to
+      # THIS step only (build tools inline it at build time) -- job-level env silently
+      # produces a working build with an empty key baked in.
+      - name: Build
+        env:
+          ${buildSecretEnvVar}: \${{ secrets.${buildSecretEnvVar} }}
+        run: npm run build
+      # A build can succeed even with the secret absent -- assert the real value was
+      # actually baked into the built assets, not just that the build step exited 0.
+      - name: Verify build secret was baked into the build
+        run: |
+          grep -rqE '${buildSecretGrepPattern}' dist/ || { echo "::error::build produced no matching build secret -- ${buildSecretEnvVar} was empty at build time"; exit 1; }
+      # Idempotent -- only applies migrations not yet recorded. Safe to run every deploy.
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply ${d1DatabaseName} --remote
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          npx wrangler deploy | tee deploy-output.txt
+      # wrangler can exit 0 while refusing to deploy (e.g. workers.dev subdomain not
+      # registered yet) -- fail loud instead of reporting a silently-green non-deploy.
+      - name: Surface the live URL
+        run: |
+          URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\\.workers\\.dev' deploy-output.txt | tail -1)
+          if [ -z "$URL" ]; then
+            echo "::error::No live URL found in wrangler's deploy output -- this is NOT a successful deploy."
+            exit 1
+          fi
+          echo "Deployed: $URL"
+          echo "### Deployed 🚀" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+      # If the account's workers.dev subdomain or worker name ever changes, a
+      # committed ALLOWED_ORIGINS silently goes stale and every real user gets
+      # 401'd -- convert that assumption into a measurement on every deploy.
+      - name: Verify ALLOWED_ORIGINS matches the live deploy URL
+        run: |
+          URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\\.workers\\.dev' deploy-output.txt | tail -1)
+          # A missing wrangler.toml or an absent/not-yet-configured ALLOWED_ORIGINS line
+          # is a legitimate, tolerated case (see the echo below) -- but under GitHub
+          # Actions' bash -e, a failed command-substitution ASSIGNMENT (both greps
+          # exiting 1 on no-match) aborts the script before the tolerance check on the
+          # next line ever runs. Same defect class as the already-fixed git-grep bug
+          # above; the trailing "|| true" here plays the same role "|| rc=$?" does there.
+          PINNED=$(grep -oE '^ALLOWED_ORIGINS\\s*=\\s*"[^"]+"' wrangler.toml 2>/dev/null | grep -oE 'https://[^"]+' || true)
+          if [ -n "$PINNED" ] && [ "$URL" != "$PINNED" ]; then
+            echo "::error::wrangler.toml's committed ALLOWED_ORIGINS ($PINNED) no longer matches the live deploy URL ($URL)."
+            exit 1
+          fi
+          echo "ALLOWED_ORIGINS check passed (or not configured yet): $URL"
+      # Proves the LIVE deployed instance is genuinely reachable while
+      # authenticated -- every check above this line only proves the BUILD
+      # succeeded, never that a real session can use it. Not a static credential --
+      # the token is a pre-minted session credential used only as a Bearer header.
+      # SECURITY finding SEC-4 (EXEC-TO-PLAN review, evidence 6f9eabc9): on failure,
+      # only a .error/.message field (truncated) is ever printed -- never the raw
+      # response body. Re-verification (evidence 8eec89e0) found one residual: an
+      # .error field containing the token in prose ("token X is expired") still
+      # printed verbatim through the allowlist, since the allowlist only bounds
+      # WHICH field is read, not what it contains. Literal token substitution is
+      # now applied to the extracted excerpt too -- defense in depth, not either/or.
+      - name: post-deploy-signed-in-uat
+        env:
+          CHAIRMAN_UAT_SESSION_TOKEN: \${{ secrets.CHAIRMAN_UAT_SESSION_TOKEN }}
+        run: |
+          set -o pipefail
+          URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\\.workers\\.dev' deploy-output.txt | tail -1)
+          if [ -z "$CHAIRMAN_UAT_SESSION_TOKEN" ]; then
+            echo "::error::CHAIRMAN_UAT_SESSION_TOKEN is not configured -- cannot run the post-deploy signed-in UAT check."
+            exit 1
+          fi
+          echo "Probing $URL${uatProbePath} as the signed-in test identity..."
+          STATUS=$(curl -sS -o response.json -w '%{http_code}' \\
+            -H "Authorization: Bearer $CHAIRMAN_UAT_SESSION_TOKEN" \\
+            "$URL${uatProbePath}")
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Signed-in GET ${uatProbePath} returned HTTP $STATUS (expected 200)."
+            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('response.json','utf8'));let m=j.error||j.message;if(typeof m==='string'){if(t)m=m.split(t).join('[REDACTED]');out=m.slice(0,300)}}catch{}console.log(out)"
+            exit 1
+          fi
+          echo "Signed-in probe succeeded: GET ${uatProbePath} returned 200 against the live deploy."
+          WRITE_STATUS=$(curl -sS -o write-response.json -w '%{http_code}' \\
+            -H "Authorization: Bearer $CHAIRMAN_UAT_SESSION_TOKEN" \\
+            -H "Content-Type: application/json" \\
+            -d '${uatWriteBody}' \\
+            "$URL${uatProbePath}")
+          if [ "$WRITE_STATUS" != "201" ]; then
+            echo "::error::Signed-in POST ${uatProbePath} returned HTTP $WRITE_STATUS (expected 201)."
+            node -e "const fs=require('fs');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('write-response.json','utf8'));let m=j.error||j.message;if(typeof m==='string'){if(t)m=m.split(t).join('[REDACTED]');out=m.slice(0,300)}}catch{}console.log(out)"
+            exit 1
+          fi
+          echo "First-walk event recorded successfully."
+`,
+  });
+
+  return files;
+}
+
+// New design -- no existing precedent across the 18 sampled venture repos.
+// Minimal CI workflow scanning the dependency stack: known-vulnerability audit
+// + a committed-secret pattern grep. Deliberately does not add an unvendored
+// external tool dependency (e.g. gitleaks) -- uses the same grep-pattern
+// approach as this repo's own pre-commit secret scan.
+function generateStackScanModule(ventureName, outputDir, _options) {
+  const files = [];
+  files.push({
+    path: join(outputDir, '.github', 'workflows', 'stack-scan.yml'),
+    content: `name: Stack Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  stack-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high
+      - name: Committed-secret pattern scan
+        run: |
+          set -o pipefail
+          # SECURITY finding SEC-3 (EXEC-TO-PLAN review, evidence 6f9eabc9): the original
+          # pattern caught only 2 of 7 realistic modern credential formats tested (missed
+          # Supabase/generic JWTs, GitHub fine-grained PATs and OAuth/app tokens, OpenAI's
+          # current sk-proj- format, and Stripe's live-secret prefix) while still reporting "No
+          # committed-secret-shaped patterns found" -- manufactured confidence. Expanded here.
+          # SECURITY re-verification (evidence 8eec89e0) caught two regressions in the
+          # first SEC-3 fix, both empirically reproduced before this correction:
+          # (A) widening the sk- tail to [A-Za-z0-9_-]{20,} (to reach sk-proj-) also
+          # matched ordinary kebab-case code with an sk-/task-/risk-/disk- shaped word
+          # -- false-positived on 5/5 ordinary code samples tested. Reverted to an
+          # ENUMERATED prefix instead of a widened class: sk-(proj-)?[A-Za-z0-9]{20,}
+          # -- zero false positives on ordinary code, verified with grep -E directly.
+          # KNOWN LIMITATION (SECURITY re-verification, evidence 6d1aaad0): a real
+          # sk-proj- key is base64url-bodied, so a '-'/'_' can land anywhere in the
+          # first 20 chars, which this alphanumeric-only tail then misses -- roughly
+          # half of real project keys evade it. SECURITY's suggested fix, anchoring
+          # word-initial occurrences with \\b instead of narrowing the class
+          # (\\bsk-(proj-)?[A-Za-z0-9_-]{20,}), was independently re-verified here
+          # with real grep -E against THIS FILE's OWN ordinary-code test fixtures and
+          # still matched all 5 (a leading "sk-" is itself a word boundary, so \\b does
+          # not distinguish "sk-a-real-key" from "sk-scheduler-configuration-manager")
+          # -- adopting it would have reintroduced the exact false-positive class this
+          # fix exists to close. Zero false positives was judged the safer trade-off:
+          # a scanner that's red on ordinary code gets disabled by the first venture
+          # team that hits it (the same reasoning that motivated this fix in the first
+          # place), which is worse than a defense-in-depth scanner (not the primary
+          # security boundary) missing some project-key shapes.
+          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9]{20,}|${'sk' + '_live_'}[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)'
+          # (B) 'git grep ...' followed by a separate 'rc=$?' line runs under GitHub
+          # Actions' bash -e -- git grep's own exit 1 (no match, the CLEAN case) trips
+          # set -e and aborts BEFORE 'rc=$?' ever executes. Empirically reproduced: a
+          # secret-free repo exited 1 with zero output, so the step was red on every
+          # clean repo, indistinguishable from secrets-found. '|| rc=$?' is the standard
+          # fix -- it captures the exit code without letting -e see a bare non-zero exit.
+          rc=0
+          git grep -InE "$PATTERN" -- . ':(exclude)*.lock' ':(exclude)node_modules' || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::Committed-secret-shaped pattern found in tracked files -- see matches above."
+            exit 1
+          elif [ "$rc" -gt 1 ]; then
+            echo "::error::git grep itself failed (exit $rc) -- treating as a scan failure, not a clean pass."
+            exit "$rc"
+          fi
+          echo "No committed-secret-shaped patterns found."
+`,
+  });
+
+  return files;
+}
+
+// New design -- unified client+server feedback/error-reporting module. No
+// single existing venture implementation is complete/canonical enough to copy
+// verbatim (shapes found range from client-only to client+server to a
+// platform-specific variant). Server handler is Worker-style (matches the
+// fleet's common Cloudflare Workers deploy pattern) and deliberately stack-
+// agnostic beyond that -- it only requires a fetch-style Request and logs
+// structured JSON rather than assuming a specific DB.
+function generateFeedbackModule(ventureName, outputDir, options) {
+  const endpoint = options.feedbackEndpoint || '/api/feedback';
+  const files = [];
+
+  files.push({
+    path: join(outputDir, 'feedback', 'client.js'),
+    content: `/**
+ * Feedback / error reporter for ${ventureName}.
+ * Generated by venture-scaffold's feedback module v1.0.0.
+ *
+ * Usage: wire into your app's entry point --
+ *   import { reportError, installGlobalErrorReporting } from './feedback/client.js';
+ *   installGlobalErrorReporting();
+ */
+
+const ENDPOINT = '${endpoint}';
+
+export async function reportError(error, context = {}) {
+  const payload = {
+    message: error?.message || String(error),
+    stack: error?.stack || null,
+    url: typeof window !== 'undefined' ? window.location.href : null,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    context,
+    reportedAt: new Date().toISOString(),
+  };
+  try {
+    await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Never let a failed report crash the caller -- feedback reporting is best-effort.
+  }
+}
+
+export function installGlobalErrorReporting() {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('error', (event) => {
+    reportError(event.error || new Error(event.message), { type: 'window.error' });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    reportError(event.reason instanceof Error ? event.reason : new Error(String(event.reason)), { type: 'unhandledrejection' });
+  });
+}
+`,
+  });
+
+  files.push({
+    path: join(outputDir, 'feedback', 'server.js'),
+    content: `/**
+ * Minimal feedback/error-reporting server handler for ${ventureName}.
+ * Generated by venture-scaffold's feedback module v1.0.0.
+ *
+ * Worker-style: takes a fetch-style Request, returns a Response. Stack-agnostic
+ * beyond that -- logs structured JSON (picked up by Cloudflare Workers tail
+ * logs and most platforms' log aggregation) rather than assuming a specific
+ * DB. Ventures with a DB should extend this to persist reports.
+ *
+ * Usage (Cloudflare Workers-style router):
+ *   if (url.pathname === '${endpoint}') return handleFeedbackRequest(request, env);
+ */
+export async function handleFeedbackRequest(request, _env) {
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400 });
+  }
+
+  if (!body || typeof body.message !== 'string' || !body.message.trim()) {
+    return new Response(JSON.stringify({ error: 'message_required' }), { status: 400 });
+  }
+
+  console.error(JSON.stringify({
+    kind: 'client_feedback_report',
+    message: body.message,
+    stack: body.stack || null,
+    url: body.url || null,
+    userAgent: body.userAgent || null,
+    context: body.context || {},
+    receivedAt: new Date().toISOString(),
+  }));
+
+  return new Response(JSON.stringify({ ok: true }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+}
+`,
   });
 
   return files;
@@ -170,11 +533,11 @@ function parseArgs(args) {
   return { ventureName, modules, output, port };
 }
 
-function main() {
+export function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args.includes('--help')) {
-    console.log('Usage: node scaffold.js <venture-name> [--modules=testing,ci-cd] [--output=path] [--port=8080]');
+    console.log('Usage: node scaffold.js <venture-name> [--modules=testing,ci-cd,deploy,stack-scan,feedback] [--output=path] [--port=8080]');
     console.log('\nAvailable modules:');
     for (const [key, mod] of Object.entries(MODULE_REGISTRY)) {
       console.log(`  ${key}: ${mod.description} (v${mod.version})`);
@@ -223,11 +586,11 @@ function main() {
   }
 
   console.log(`\n✅ Scaffold complete: ${totalFiles} files generated`);
-  console.log(`\n💡 Next steps:`);
+  console.log('\n💡 Next steps:');
   console.log(`   cd ${ventureName}`);
-  console.log(`   npm install @playwright/test`);
-  console.log(`   npx playwright install chromium`);
-  console.log(`   npx playwright test`);
+  console.log('   npm install @playwright/test');
+  console.log('   npx playwright install chromium');
+  console.log('   npx playwright test');
 }
 
-main();
+if (isMainModule(import.meta.url)) main();

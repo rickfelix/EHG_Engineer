@@ -424,6 +424,16 @@ A BEFORE UPDATE trigger fires **per qualifying row**. When these predicates filt
 
 ### 6e. Rollback paths — the guard can make failure recovery itself fail
 
+**SUPERSEDED (2026-08-24, post-EXEC): QF-20260824-641 traced both call sites named below and found
+NEITHER is reachable in the real handoff pipeline** — `index.js`'s post-verification path swallows
+its own errors and never throws, so no partial-state branch exists for a rollback to protect. Rather
+than stamp dead code per this section's original "Recommendation for EXEC", `captureStateSnapshot`,
+`rollbackSdState`, and `rollbackState` were deleted entirely. The `rollbackSdState`/`rollbackState`
+sites in the table below, and their `updated at :39`/`:35` line references, **no longer exist** —
+this analysis is kept as the record of why the hazard mattered and how it was found, not as a
+current description of the code. See QF-20260824-641 and the corresponding merge into
+`feat/SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001` for the actual resolution.
+
 **This is a distinct hazard class from the forward-path sites and needs its own EXEC decision.**
 
 Two of the 12 reachable sites are **rollback/compensation** paths, not forward transitions:

@@ -1,0 +1,66 @@
+name: Protocol Publication Audit (advisory)
+
+# SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (FR-3e): ADVISORY ONLY, non-blocking. Wires
+# `npm run protocol:pub-audit` (from SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001, extended by
+# this SD's FR-3a/b/c/d) into CI so future regressions surface visibly instead of accumulating
+# silently -- but never fails the build. The write-side fix (FR-3a) landed the same SD as this
+# workflow, so promoting to a REQUIRED check now would risk instantly reddening this SD's or a
+# concurrent session's PR on the write-side-fix/backfill race the LEAD-phase risk-agent flagged.
+# Promotion to required is an explicit follow-up SD/QF decision after a demonstrated green cycle,
+# not this workflow's own act.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/protocol-publication-audit.cjs'
+      - 'scripts/modules/learning/improvement-appliers.js'
+      - 'scripts/modules/learning/protocol-section-payload-guard.js'
+      - 'scripts/section-file-mapping*.json'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publication-audit:
+    name: Publication-status completeness + content uniqueness (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run protocol publication audit (advisory)
+        shell: bash
+        run: |
+          set +e
+          npm run protocol:pub-audit --silent
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "::notice::Protocol publication audit passed clean."
+          elif [ "$code" -eq 1 ]; then
+            echo "::warning::Protocol publication audit found violations (unclassified sections and/or duplicate content). ADVISORY ONLY -- not blocking this PR. Run 'npm run protocol:pub-audit' locally to see details."
+          else
+            echo "::warning::Protocol publication audit could not run (exit $code) -- infra/secret issue, not a content violation. ADVISORY ONLY."
+          fi
+          exit 0

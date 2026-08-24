@@ -19,12 +19,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 (FR-3): approveDecision now routes decision-verb
+// resolution through resolveDecisionVerb (fn_chairman_decision_value RPC, or the JS-side
+// thesis_kill_tier_b bridge, which never calls the RPC). This stub only needs to answer for
+// 'stage_gate' (the non-kill test case below) -- 'thesis_kill_tier_b' is bridged and must NOT
+// reach here.
+function rpcVerbFor(decisionType, action) {
+  if (decisionType === 'stage_gate') return action === 'approved' ? 'proceed' : 'kill';
+  throw new Error(`rpcVerbFor stub: no mapping configured for ${decisionType}/${action}`);
+}
+
 function makeSupabaseStub(existingRow) {
   const inserted = [];
   const updated = [];
   return {
     inserted,
     updated,
+    rpc: async (fnName, args) => ({ data: rpcVerbFor(args.p_decision_type, args.p_action), error: null }),
     from(table) {
       if (table === 'chairman_decisions') {
         return {

@@ -169,12 +169,17 @@ function defaultChangedFiles(rootDir) {
 }
 
 function defaultResolveSiblingRepo(rootDir) {
-  // env override (mirrors the CI) -> registry -> ../ehg fallback.
+  // env override (mirrors the CI) -> registry -> ../ehg fallback. existsSync-gated
+  // (SD-LEO-INFRA-REPO-HYGIENE-PATH-001, RCA finding): a resolver returning a truthy-but-wrong
+  // path (e.g. worktree-relative before that bug was fixed at the source in lib/repo-paths.js/
+  // .cjs) previously short-circuited past this function's own correct `../ehg` fallback, which
+  // was never reachable as a result. `p &&` alone is not a strong enough guard for a function
+  // whose whole contract is "return a real, usable directory".
   if (process.env.EHG_APP_PATH) return process.env.EHG_APP_PATH;
   try {
     const { resolveRepoPath } = require('../../../../../../lib/repo-paths.cjs');
     const p = resolveRepoPath('ehg');
-    if (p) return p;
+    if (p && existsSync(p)) return p;
   } catch { /* fall through */ }
   return path.resolve(rootDir, '..', 'ehg');
 }
@@ -230,8 +235,8 @@ export function isStageConfigRelevant(changedFiles, readMigration, warnings) {
         if (Array.isArray(warnings)) {
           warnings.push(
             `${f}: references venture_stages in an unrecognized statement shape — treated as ` +
-            `stage-config-relevant (fail-safe). If this migration does not change stage config, ` +
-            `make its venture_stages references trigger/function/comment-only.`,
+            'stage-config-relevant (fail-safe). If this migration does not change stage config, ' +
+            'make its venture_stages references trigger/function/comment-only.',
           );
         }
         return true;

@@ -7054,10 +7054,10 @@
   "match": "select('rule_id, severity, description, created_at')",
   "note": "leo_lint_rules is a curated protocol-lint rule registry/config table, not an event stream — provably small fixed rule set"
  },
- "scripts/protocol-publication-audit.cjs:76": {
+ "scripts/protocol-publication-audit.cjs:145": {
   "classification": "bounded-by-design",
   "match": "select('id, section_type, target_file",
-  "note": "leo_protocol_sections -- whole-table curated protocol-documentation config table (the CLAUDE.md content source), operationally small (dozens of sections)."
+  "note": "leo_protocol_sections -- whole-table curated protocol-documentation config table (the CLAUDE.md content source), operationally small (dozens of sections). Line moved 76->117->145 across two SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 commits (FR-3c added evaluateContentUniqueness(); a PLAN_VERIFICATION correction added a .limit(999) + explanatory comment). The live-blocking count-truncation-diff-lint.mjs never actually reads this file -- only the advisory buildInventory() path does -- so the REAL fix for the blocking check is the .limit(999) on the select chain itself; this entry documents the advisory-path classification only."
  },
  "scripts/push-integrity-metrics.js:239": {
   "classification": "bounded-by-design",

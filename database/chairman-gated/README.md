@@ -516,6 +516,53 @@ via distinct custom SQLSTATEs so a broken guard cannot be silently swallowed by 
 OPERATOR_CONTRACT gate waiver (armed_cadence/reaper, expires 2026-11-23) on `metadata` for exactly
 this reason: nothing to arm a cadence against or reap until this table is live.
 
+## Applying `20260824_leo_protocol_sections_history.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260824_leo_protocol_sections_history.sql" --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001, FR-1.) Creates `leo_protocol_sections_history`, a
+Phase-A LOG-ONLY audit trail for `leo_protocol_sections` (the entire live LEO protocol ruleset,
+which has no `created_at`/`updated_at` and no wired audit trail today — an existing trigger,
+`trg_doctrine_constraint_sections`, is confirmed blind for this table). THREE trigger definitions
+(`AFTER INSERT` no WHEN, `AFTER UPDATE` WHEN-scoped to 7 governed columns, `AFTER DELETE` no WHEN)
+share one function branching on `TG_OP` — a two-trigger split throws Postgres `42P17` (a
+change-scoped WHEN clause necessarily references `OLD`, which does not exist on `INSERT`, the
+same way `NEW` does not exist on `DELETE`; live-probed during EXEC). The function derives its own
+`channel` (`service_role` vs `postgres`, via `current_setting('role', true)`/`current_user` —
+never trusted from caller-supplied metadata) and records `provenance_status`
+(`present`/`missing`) plus a `metadata_key_delta`, honestly logging `missing` rather than
+fabricating a value (0/286 pre-existing rows carry a provenance key today). The history table is
+itself append-only (`no_update`/`no_delete`/`no_truncate` triggers, `ENABLE ALWAYS TRIGGER`,
+mirroring `20260823_chairman_ratifications.sql`'s pattern). **This migration never blocks a
+write** — Phase B (blocking enforcement of freeze/rate-cap/self-approval) is staged separately as
+a chairman-decision proposal (`docs/architecture/protocol-governance-phase-b-proposal.md`), not
+executed by this migration; LEAD-phase review found shipping Phase B immediately would itself
+commit new blind-guard defects and brick a live chairman ceremony script.
+
+Post-condition verification is the migration's own inline `DO $verify$` block (INSERT/UPDATE/
+metadata-only-UPDATE-suppression/DELETE, plus append-only tamper rejection, all via distinct
+custom SQLSTATEs), which only proves the `postgres`-channel branch (the block itself runs as
+that direct connection). The `service_role`/PostgREST channel branch — which cannot share a
+transaction with the DO block, since a REST call is a separate connection that auto-commits — is
+proven separately:
+
+```
+node database/chairman-gated/20260824_leo_protocol_sections_history_dry_run.mjs
+```
+
+Step 1 (works pre- or post-apply) re-runs the full UP file body — table, function, three
+triggers, append-only guards, posture, and its own `DO $verify$` block — inside a
+script-controlled transaction that always `ROLLBACK`s (live-run during EXEC: PASS, zero lasting
+trace confirmed by direct query afterward). Step 2 (post-apply only) performs a disposable,
+self-cleaning `supabase-js`/service-role INSERT and confirms the resulting history row records
+`channel='service_role'`, then explicitly deletes both the probe section and its own history row
+(a REST write cannot be rolled back) — skips gracefully with a clear message if run before the
+migration is actually applied.
+
 ## Dry-run proof for `database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql`
 
 Authored by SD-LEO-INFRA-RECONCILE-EHG-REPO-001, re-verified here for SD-LEO-INFRA-MINUS-GATE-SSOT-001
@@ -541,6 +588,66 @@ then `--prod-deploy`, no `--allow-any-path` needed since the file already resolv
 `@approved-by:` marker and this SD does not add one. See the migration file's own header for the full
 behavior-delta analysis (S10/S16/S19/S25 promotion-gate enforcement begins; S23/S24 kill/promotion
 labels correct) and its documented deploy-time blast radius / pre-deploy census requirement.
+
+## Applying `20260824_ventures_rls_integrity_repair.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260824_ventures_rls_integrity_repair.sql" --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001.) Re-scoped after its original premise was falsified: a
+chairman-commissioned architecture eval claimed any venture-access client could UPDATE ANY
+`ventures` column, including `current_lifecycle_stage`. That finding came from an unqualified
+`pg_policies WHERE tablename='ventures'` query (no `schemaname` filter) that silently matched an
+abandoned `portfolio.ventures` decoy table (1 row, dead since 2025-11-30) instead of the real,
+live `public.ventures` — and this happened TWICE, independently, once in the eval and again in a
+same-day "consumer census" meant to correct it. Coordinator disposition (signal 83226336) accepted
+a worker's falsification finding in full; Adam ratified the re-scope 2026-08-24T01:48:25Z.
+
+**What it does:**
+1. Drops the `portfolio.ventures` decoy table + its 4 own policies + the 2 dependent FK
+   constraints on `portfolio.kill_switch_audit_log.venture_id` and
+   `governance.eva_authority_levels.venture_id` (those two tables themselves are NOT dropped,
+   only the FK to the decoy). `portfolio.has_venture_access(uuid)` is explicitly untouched — it
+   only calls `portfolio.current_venture()`, never queries the decoy, and is live-referenced by
+   ~9 other RLS policies and 17 migration files.
+2. Narrows `authenticated_read_ventures` from `qual=true` (every authenticated user can read all
+   152 ventures cross-tenant) to `portfolio.has_venture_access(id)`.
+3. Adds `ventures_content_update_policy` (UPDATE, scoped by `has_venture_access(id)`) plus a
+   `BEFORE UPDATE` guard trigger, `ventures_block_client_governance_write_trg`, that refuses a
+   direct client-role (`authenticated`/`anon`) write of `current_lifecycle_stage` specifically —
+   **not** the five other originally-classified "governance" columns (`status`,
+   `orchestrator_state`, `launched_at`, `workflow_status`, `recursion_state`). Those five were
+   narrowed OUT of the guard during EXEC: the only existing RPC with a matching write path
+   (`advance_venture_stage`) only models a stage transition
+   (`p_from_stage`/`p_to_stage`/`p_transition_type`) — it has no parameter for the other five, so
+   guarding them would have broken every legitimate write EVA's own automated state-machine/
+   recursion/orchestrator flows make today (they all use the same RLS-bound client). Closing
+   those five needs its own governed RPC path in a follow-up SD.
+4. `DO $verify$` proves both directions behaviourally: a trusted-context (`current_user NOT IN
+   ('authenticated','anon')`, e.g. inside `advance_venture_stage`, which runs as its owner
+   `postgres` during execution — a standard SECURITY DEFINER mechanism, not a new convention)
+   write of `current_lifecycle_stage` succeeds; a simulated client-role write of the same column
+   is refused (via a faked `request.jwt.claims` so `has_venture_access` genuinely selects the
+   probe row instead of denying at row-selection before the trigger ever fires); a client-role
+   content-class write still succeeds.
+
+**Companion app-code PR (separate repo, already merged): rickfelix/ehg#797.** Routes the 5 live
+client-side call sites in the EHG app that wrote `current_lifecycle_stage` directly
+(`evaStateMachines.ts`, `recursionEngine.ts`, `evaRollback.ts`, `pages/api/v2/chairman/decide.ts`,
+`pages/api/v2/ventures/[id]/promote.ts`) onto `advance_venture_stage` instead — merge/deploy that
+PR **before** this migration's ceremony apply, per the migration's own risk mitigation, so there
+is never a live window where the guard is active but a real call site still writes the column
+directly. `ventures.ts` and `useVentureData.ts` were deliberately left unchanged (no derivable
+from-stage / initialization-only writes); `automationEngine.ts`'s pre-existing unrelated
+camelCase-column bug was left untouched, flagged as follow-up.
+
+`scripts/one-off/ventures-client-write-001-operator-contract-waiver.mjs` recorded an
+OPERATOR_CONTRACT gate waiver (armed_cadence/reaper, expires 2026-11-24) on `metadata` — this
+migration creates no new data table, log, or queue; a stateless RLS/trigger policy change has
+nothing for a periodic cadence to arm against or a reaper to expire.
 
 ## The underlying finding, which outlives this SD
 

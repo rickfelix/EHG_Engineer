@@ -17,7 +17,19 @@ const {
   WOULD_DENY_EVENT_TYPE,
   BASE_FLAG,
   ENFORCE_FLAG,
+  LANES,
+  UNTRACKED_LANE,
+  LANE_KIND_SETS,
+  LANE_TTL_MS,
+  DEAD_LETTER_TTL_MARKER_KEY,
+  COMMS_LANE_TTLS_SD,
+  resolveLaneForKind,
+  resolveLaneTtlMs,
+  isExpiredUnread,
+  buildExpiredUnreadStampPatch,
 } = require('../../../lib/coordination/lane-contract.cjs');
+const { DIRECTIVE_KINDS, ADVISORY_KINDS } = require('../../../lib/fleet/worker-status.cjs');
+import { isPurgeEligible } from '../../../lib/coordination/dead-letter-drain.js';
 
 describe('resolveLaneContractMode — staged off/observe/enforce ladder (FR-1)', () => {
   it('resolves off when the base flag is disabled', async () => {
@@ -148,5 +160,178 @@ describe('readCanonicalBody — dual-read, payload.body primary / body-column fa
 
   it('ignores a non-string body column value', () => {
     expect(readCanonicalBody({ payload: {}, body: 12345 })).toBe('');
+  });
+});
+
+describe('resolveLaneForKind — kind->lane mapping, SD-LEO-INFRA-COMMS-LANE-TTLS-001 FR-1', () => {
+  it('CONTROL: the conceptual lane name is NOT itself a live payload.kind -- a naive identity mapping would wrongly resolve this to its own name', () => {
+    // Ground truth (STORIES evidence 414186aa, fully-paged 6662-row census): zero live rows
+    // carry payload.kind literally equal to "directive"/"advisory"/"reply"/"suggestion". If
+    // resolveLaneForKind ever degenerated into `kind => LANES.includes(kind) ? kind : 'untracked'`
+    // it would still pass an exhaustiveness check against LANES but be dead by construction
+    // against the real table -- this assertion is what catches that regression.
+    for (const lane of LANES) {
+      expect(resolveLaneForKind(lane)).toBe(UNTRACKED_LANE);
+    }
+  });
+
+  it('CONTROL: an unrecognized/garbage kind resolves to untracked, never throws or returns null/undefined (no silent drop)', () => {
+    expect(resolveLaneForKind('totally_made_up_kind_xyz')).toBe(UNTRACKED_LANE);
+    expect(resolveLaneForKind(null)).toBe(UNTRACKED_LANE);
+    expect(resolveLaneForKind(undefined)).toBe(UNTRACKED_LANE);
+    expect(resolveLaneForKind('')).toBe(UNTRACKED_LANE);
+  });
+
+  it('every DIRECTIVE_KINDS entry (lib/fleet/worker-status.cjs) maps to the directive lane', () => {
+    expect(DIRECTIVE_KINDS.length).toBeGreaterThan(0);
+    for (const kind of DIRECTIVE_KINDS) {
+      expect(resolveLaneForKind(kind)).toBe('directive');
+    }
+  });
+
+  it('every ADVISORY_KINDS entry (lib/fleet/worker-status.cjs -- terminal replies/acks) maps to the reply lane', () => {
+    expect(ADVISORY_KINDS.length).toBeGreaterThan(0);
+    for (const kind of ADVISORY_KINDS) {
+      expect(resolveLaneForKind(kind)).toBe('reply');
+    }
+  });
+
+  it('at least one real live kind maps to the advisory lane (adam_advisory)', () => {
+    expect(resolveLaneForKind('adam_advisory')).toBe('advisory');
+  });
+
+  it('at least one real live kind maps to the suggestion lane (dispatch_suggestion, dispatch_override)', () => {
+    expect(resolveLaneForKind('dispatch_suggestion')).toBe('suggestion');
+    expect(resolveLaneForKind('dispatch_override')).toBe('suggestion');
+  });
+
+  it('high-volume informational kinds (roll_call, periodic_liveness_flag) are explicitly untracked, not silently dropped into a tracked lane', () => {
+    expect(resolveLaneForKind('roll_call')).toBe(UNTRACKED_LANE);
+    expect(resolveLaneForKind('periodic_liveness_flag')).toBe(UNTRACKED_LANE);
+  });
+
+  it('LANE_KIND_SETS has no overlap between lanes (every kind belongs to exactly one lane)', () => {
+    const seen = new Map();
+    for (const lane of LANES) {
+      for (const kind of LANE_KIND_SETS[lane]) {
+        expect(seen.has(kind)).toBe(false);
+        seen.set(kind, lane);
+      }
+    }
+  });
+});
+
+describe('LANE_TTL_MS / resolveLaneTtlMs — per-lane TTL registry, FR-1', () => {
+  it('CONTROL: the 4 tracked lanes do NOT all share one TTL -- a naive single-constant registry (copy-pasting reply-class.cjs DEFAULT_REPLY_WINDOW_MS everywhere) would fail this', () => {
+    const values = new Set(LANES.map((lane) => LANE_TTL_MS[lane]));
+    expect(values.size).toBeGreaterThan(1);
+  });
+
+  it('every tracked lane has a positive, finite TTL', () => {
+    for (const lane of LANES) {
+      expect(Number.isFinite(LANE_TTL_MS[lane])).toBe(true);
+      expect(LANE_TTL_MS[lane]).toBeGreaterThan(0);
+    }
+  });
+
+  it('resolveLaneTtlMs(untracked) and any unrecognized lane resolve to null, not a fallback duration', () => {
+    expect(resolveLaneTtlMs(UNTRACKED_LANE)).toBeNull();
+    expect(resolveLaneTtlMs('not_a_real_lane')).toBeNull();
+  });
+
+  it('resolveLaneTtlMs matches LANE_TTL_MS for each tracked lane', () => {
+    for (const lane of LANES) {
+      expect(resolveLaneTtlMs(lane)).toBe(LANE_TTL_MS[lane]);
+    }
+  });
+});
+
+describe('isExpiredUnread — payload-only expired-unread predicate, FR-2', () => {
+  const NOW = new Date('2026-08-23T12:00:00.000Z').getTime();
+  const directiveTtl = LANE_TTL_MS.directive;
+
+  it('CONTROL: two rows of the SAME lane and SAME age differ ONLY by read_at -- the read one must never be eligible while the unread one is (proves read_at actually gates the predicate, not just age)', () => {
+    const bornAt = new Date(NOW - directiveTtl - 1000).toISOString();
+    const unread = { payload: { kind: 'coordinator_directive' }, created_at: bornAt, read_at: null };
+    const read = { payload: { kind: 'coordinator_directive' }, created_at: bornAt, read_at: new Date(NOW - 500).toISOString() };
+    expect(isExpiredUnread(unread, { nowMs: NOW })).toBe(true);
+    expect(isExpiredUnread(read, { nowMs: NOW })).toBe(false);
+  });
+
+  it('CONTROL: an untracked-lane row is NEVER eligible no matter how old (roll_call has no TTL to expire against)', () => {
+    const ancient = { payload: { kind: 'roll_call' }, created_at: new Date(NOW - 365 * 24 * 60 * 60 * 1000).toISOString(), read_at: null };
+    expect(isExpiredUnread(ancient, { nowMs: NOW })).toBe(false);
+  });
+
+  it('a directive-lane row unread past its TTL is eligible', () => {
+    const row = { payload: { kind: 'work_assignment' }, created_at: new Date(NOW - directiveTtl - 1).toISOString(), read_at: null };
+    expect(isExpiredUnread(row, { nowMs: NOW })).toBe(true);
+  });
+
+  it('a directive-lane row unread but still within its TTL is NOT eligible (boundary)', () => {
+    const row = { payload: { kind: 'work_assignment' }, created_at: new Date(NOW - directiveTtl + 1).toISOString(), read_at: null };
+    expect(isExpiredUnread(row, { nowMs: NOW })).toBe(false);
+  });
+
+  it('fail-closed: a missing or unparseable created_at is never eligible, same discipline as dead-letter-drain.js isPurgeEligible', () => {
+    expect(isExpiredUnread({ payload: { kind: 'work_assignment' }, created_at: null, read_at: null }, { nowMs: NOW })).toBe(false);
+    expect(isExpiredUnread({ payload: { kind: 'work_assignment' }, created_at: 'not-a-date', read_at: null }, { nowMs: NOW })).toBe(false);
+  });
+});
+
+describe('buildExpiredUnreadStampPatch — FR-2 marker, payload-only', () => {
+  it('CONTROL: the marker key is dead_letter_ttl -- explicitly NOT dead_letter_drained (dead-letter-drain.js FR-1d\'s own key, would collide) and NOT dead_letter_reason (the collision-prone literal the PRD originally proposed, corrected per STORIES evidence 414186aa)', () => {
+    const patch = buildExpiredUnreadStampPatch({ payload: { kind: 'work_assignment' } }, { nowMs: Date.now() });
+    expect(Object.prototype.hasOwnProperty.call(patch.payload, DEAD_LETTER_TTL_MARKER_KEY)).toBe(true);
+    expect(patch.payload).not.toHaveProperty('dead_letter_drained');
+    expect(patch.payload).not.toHaveProperty('dead_letter_reason');
+    expect(DEAD_LETTER_TTL_MARKER_KEY).toBe('dead_letter_ttl');
+  });
+
+  it('preserves existing payload fields alongside the new marker', () => {
+    const patch = buildExpiredUnreadStampPatch({ payload: { kind: 'work_assignment', subject: 'keep-me' } }, { nowMs: Date.now() });
+    expect(patch.payload.subject).toBe('keep-me');
+    expect(patch.payload.kind).toBe('work_assignment');
+  });
+
+  it('the marker records lane, ttl_ms, an ISO timestamp, and this SD\'s key', () => {
+    const nowMs = new Date('2026-08-23T00:00:00.000Z').getTime();
+    const patch = buildExpiredUnreadStampPatch({ payload: { kind: 'work_assignment' } }, { nowMs });
+    const marker = patch.payload.dead_letter_ttl;
+    expect(marker.lane).toBe('directive');
+    expect(marker.ttl_ms).toBe(LANE_TTL_MS.directive);
+    expect(marker.at).toBe('2026-08-23T00:00:00.000Z');
+    expect(marker.sd).toBe(COMMS_LANE_TTLS_SD);
+  });
+
+  it('an untracked-lane row gets a marker with ttl_ms:null (not silently omitted, not a fallback duration)', () => {
+    const patch = buildExpiredUnreadStampPatch({ payload: { kind: 'roll_call' } }, { nowMs: Date.now() });
+    expect(patch.payload.dead_letter_ttl.lane).toBe(UNTRACKED_LANE);
+    expect(patch.payload.dead_letter_ttl.ttl_ms).toBeNull();
+  });
+});
+
+describe('FR-2 stamp survives cleanup_expired_coordination() unchanged (PRD acceptance criterion, two-armed)', () => {
+  const NOW = new Date('2026-08-23T12:00:00.000Z').getTime();
+  const farPastExpiresAt = new Date(NOW - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
+
+  it('MATCHING fixture: a row with expires_at in the past, stamped by FR-2 (payload-only, acknowledged_at/read_at both still null), is NOT purge-eligible -- the stamp never arms cleanup_expired_coordination()\'s purge predicate', () => {
+    const raw = { payload: { kind: 'work_assignment' }, expires_at: farPastExpiresAt, acknowledged_at: null, read_at: null };
+    const patch = buildExpiredUnreadStampPatch(raw, { nowMs: NOW });
+    const stamped = { ...raw, payload: patch.payload };
+    expect(stamped.payload.dead_letter_ttl).toBeDefined();
+    expect(isPurgeEligible(stamped, { nowMs: NOW })).toBe(false);
+  });
+
+  it('CONTROL: isPurgeEligible is NOT vacuously false -- an otherwise-identical row that IS acknowledged (a real purge candidate, never touched by FR-2\'s stamp) correctly IS purge-eligible, proving the matching fixture\'s false result is meaningful', () => {
+    const acknowledged = { payload: { kind: 'work_assignment' }, expires_at: farPastExpiresAt, acknowledged_at: new Date(NOW - 1000).toISOString(), read_at: null };
+    expect(isPurgeEligible(acknowledged, { nowMs: NOW })).toBe(true);
+  });
+
+  it('CONTROL fixture: a row whose expires_at is NOT in the past is not purge-eligible for the RIGHT reason (expires_at hasn\'t passed), independent of whether it carries the FR-2 stamp', () => {
+    const notYetExpired = { payload: { kind: 'work_assignment' }, expires_at: new Date(NOW + 60 * 60 * 1000).toISOString(), acknowledged_at: null, read_at: null };
+    expect(isPurgeEligible(notYetExpired, { nowMs: NOW })).toBe(false);
+    const stamped = buildExpiredUnreadStampPatch(notYetExpired, { nowMs: NOW });
+    expect(isPurgeEligible({ ...notYetExpired, payload: stamped.payload }, { nowMs: NOW })).toBe(false);
   });
 });

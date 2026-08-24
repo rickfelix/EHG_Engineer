@@ -592,7 +592,14 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
   console.log('\n📊 Git Diff Auto-Analysis\n');
 
   let filesChanged = [];
-  let diffAnalysis = {};
+  // QF-20260823-098: default diffSourceTier to null (not undefined-via-missing-key) up
+  // front. If an execSync below throws AFTER filesChanged is already populated (e.g. the
+  // `git diff ${diffRange} --stat` call), the outer catch swallows it and this object is
+  // returned as-is — without this default, diffSourceTier would be undefined rather than
+  // an explicit "we don't know" null, and lib/quick-fix/sensitive-path-registry.js's
+  // preflight reason string would read as if the tier were simply omitted rather than
+  // unavailable.
+  let diffAnalysis = { diffSourceTier: null };
 
   // QF-20260509-779: refresh origin/main BEFORE computing the diff so the
   // 3-dot symmetric difference doesn't include commits already merged via
@@ -672,7 +679,13 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
       files: filesChanged,
       insertions: insertions ? parseInt(insertions[1]) : 0,
       deletions: deletions ? parseInt(deletions[1]) : 0,
-      netChange: insertions && deletions ? parseInt(insertions[1]) - parseInt(deletions[1]) : 0
+      netChange: insertions && deletions ? parseInt(insertions[1]) - parseInt(deletions[1]) : 0,
+      // SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 FR-5: surface which diff source produced
+      // filesChanged — 'branch-diff' (origin/main...HEAD, the normal committed-diff path) or
+      // 'working-tree-fallback' (uncommitted QF, per QF-20260603-778). The QF eligibility
+      // preflight scan records this tier alongside any refusal (QF-20260706-632 near-miss:
+      // the fallback once attributed ~264 foreign dirty files to one QF).
+      diffSourceTier: diffRange === 'HEAD' ? 'working-tree-fallback' : 'branch-diff'
     };
 
     console.log(`   Insertions: +${diffAnalysis.insertions}`);

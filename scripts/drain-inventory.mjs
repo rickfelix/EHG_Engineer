@@ -14,11 +14,21 @@
  * Usage: node scripts/drain-inventory.mjs [--json]
  */
 import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'node:module';
 import { DRAIN_DESCRIPTORS } from '../lib/governance/gauge-registry.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import {
   VERDICT, buildInventoryRow, classifyStructural, exitCodeFor, computeOldestUndrainedAge, paginateAll,
 } from '../lib/governance/drain-inventory.js';
+
+// SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 (FR-1/FR-2 follow-up, VALIDATION evidence
+// b1dbe3ce): reuse lib/coordinator/drain-gauge.cjs's EXISTING RESOLVED_EQUIVALENT_STATUSES
+// rather than defining a second, independent terminal-status list for the same channel -- this
+// SD's own charter is convergence, and a locally-defined TERMINAL_STATUSES here would have been
+// exactly the multiply-representations defect it exists to close (VALIDATION also found the
+// reused list additionally covers `duplicate`/`shipped`, which a from-scratch list omitted).
+const require = createRequire(import.meta.url);
+const { RESOLVED_EQUIVALENT_STATUSES } = require('../lib/coordinator/drain-gauge.cjs');
 
 const PROCESS_KEY = 'standard_loop:drain-inventory';
 const UNDRAINED_STATUSES = ['new', 'triaged']; // canonical, per feedback-sla-gauge.cjs:20
@@ -73,6 +83,27 @@ async function readDescriptor(supabase, descriptor, nowMs) {
       const { count, error } = await supabase.from(descriptor.closingPathTable)
         .select('*', { count: 'exact', head: true });
       if (error) return { noData: true, reason: `closing-path probe failed: ${error.message}` };
+      return { ...age, closingPathUses: count || 0 };
+    }
+
+    // SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 (FR-1): a same-table drain -- the channel closes
+    // via a STATUS transition on the same feedback row, not a separate disposition table. Counts
+    // rows with a genuinely TERMINAL status (RESOLVED_EQUIVALENT_STATUSES, an explicit allow-list --
+    // NOT the complement of UNDRAINED_STATUSES, which would silently count non-terminal statuses
+    // like `backlog`/`in_progress` as closed) OR matching an optional closingPathExtraFilter (a
+    // JSONB metadata flag that closes the item WITHOUT changing status, e.g. feedback-fingerprint-
+    // promoter.mjs's promoted_to_qf). Deliberately does NOT widen CLOSING_PATH_TABLES -- this reads
+    // the SAME already-queried table/category, not a new relation.
+    if (descriptor.closingPathSameTable) {
+      let q = supabase.from('feedback').select('*', { count: 'exact', head: true }).eq('category', src.category);
+      const extra = descriptor.closingPathExtraFilter;
+      if (extra?.jsonPath && extra?.op) {
+        q = q.or(`status.in.(${RESOLVED_EQUIVALENT_STATUSES.join(',')}),metadata->>${extra.jsonPath}.${extra.op}`);
+      } else {
+        q = q.in('status', RESOLVED_EQUIVALENT_STATUSES);
+      }
+      const { count, error } = await q;
+      if (error) return { noData: true, reason: `same-table closing-path probe failed: ${error.message}` };
       return { ...age, closingPathUses: count || 0 };
     }
     return { ...age, closingPathUses: null };

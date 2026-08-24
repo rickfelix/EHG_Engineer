@@ -134,6 +134,59 @@ describe('FR-4 AS CORRECTED — the append sites stay SHAPED, and are NOT saniti
   });
 });
 
+describe('SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 FR-2 — provenance is derived from ctx, never trusted from the caller', () => {
+  it('strips a caller-supplied (self-attested) metadata.provenance and replaces it with the ctx-derived value', () => {
+    const { clean } = sanitizeProtocolSectionPayload(
+      { title: 'T', content: 'C', metadata: { provenance: { actor_type: 'human', actor_id: 'fake' } } },
+      { queueRowId: 'q-1', assignedSdId: 'SD-FAKE-001' },
+    );
+    expect(clean.metadata.provenance).toEqual({ sd_key: 'SD-FAKE-001', actor_type: 'sd', actor_id: 'SD-FAKE-001' });
+  });
+
+  it('derives provenance from assignedSdId when present, ignoring sourceRetroId', () => {
+    const { clean } = sanitizeProtocolSectionPayload(
+      { title: 'T', content: 'C' },
+      { assignedSdId: 'SD-REAL-002', sourceRetroId: 'retro-9' },
+    );
+    expect(clean.metadata.provenance).toEqual({ sd_key: 'SD-REAL-002', actor_type: 'sd', actor_id: 'SD-REAL-002' });
+  });
+
+  it('falls back to sourceRetroId when assignedSdId is absent', () => {
+    const { clean } = sanitizeProtocolSectionPayload(
+      { title: 'T', content: 'C' },
+      { sourceRetroId: 'retro-9' },
+    );
+    expect(clean.metadata.provenance).toEqual({ sd_key: null, actor_type: 'retrospective', actor_id: 'retro-9' });
+  });
+
+  it('omits metadata.provenance entirely when neither assignedSdId nor sourceRetroId is present — does not fabricate a value', () => {
+    const { clean } = sanitizeProtocolSectionPayload({ title: 'T', content: 'C' }, { queueRowId: 'q-1' });
+    expect(clean.metadata).toBeUndefined();
+  });
+
+  it('preserves other pre-existing metadata keys alongside the derived provenance', () => {
+    const { clean } = sanitizeProtocolSectionPayload(
+      { title: 'T', content: 'C', metadata: { unrelated_key: 'keep-me' } },
+      { assignedSdId: 'SD-REAL-003' },
+    );
+    expect(clean.metadata).toEqual({ unrelated_key: 'keep-me', provenance: { sd_key: 'SD-REAL-003', actor_type: 'sd', actor_id: 'SD-REAL-003' } });
+  });
+
+  it('preserves other metadata keys even when provenance cannot be derived (no fabricated provenance, but nothing else lost)', () => {
+    const { clean } = sanitizeProtocolSectionPayload(
+      { title: 'T', content: 'C', metadata: { unrelated_key: 'keep-me' } },
+      {},
+    );
+    expect(clean.metadata).toEqual({ unrelated_key: 'keep-me' });
+  });
+
+  it('regression (PLAN_VERIFICATION finding): a payload whose ONLY allowlisted content is a self-attested metadata.provenance, with no derivable ctx, still refuses as "no writable columns" rather than silently returning clean={}', () => {
+    expect(() =>
+      sanitizeProtocolSectionPayload({ metadata: { provenance: { actor_type: 'human', actor_id: 'fake' } } }, {}),
+    ).toThrow(PayloadRefused);
+  });
+});
+
 describe('FR-6 scope boundary held', () => {
   it('protocol_constitution is not touched', () => {
     expect(applierCode()).not.toMatch(/protocol_constitution/);

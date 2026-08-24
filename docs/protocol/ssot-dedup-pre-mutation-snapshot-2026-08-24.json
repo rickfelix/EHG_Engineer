@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-08-24T08:36:15.786Z",
+  "sd_key": "SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001",
+  "rows": [
+    {
+      "id": 307,
+      "section_type": "mandatory_phase_transitions",
+      "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)",
+      "target_file": "CLAUDE_CORE.md",
+      "order_index": 4,
+      "content": "## MANDATORY: Phase Transition Commands (BLOCKING)\n\n**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions.\n> Why: `handoff.js` writes phase state to `sd_phase_handoffs` and runs the gate pipeline. Without this record, future sessions cannot determine the SD's phase, which gates passed, or whether implementation was authorized — the SD becomes unresumable.\n\n### Required Commands\n\n**Pre-flight Batch Validation (RECOMMENDED)**:\n```bash\nnode scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001\n```\n\n**Phase Transitions**:\n```bash\n# LEAD → PLAN\nnode scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001\nnode scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001\n\n# PLAN → EXEC\nnode scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001\nnode scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001\n\n# EXEC → PLAN (Verification)\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001\n\n# PLAN → LEAD (Final Approval)\nnode scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001\n```\n\n### Error Codes\n| Code | Meaning | Fix |\n|------|---------|-----|\n| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run | Run TESTING first |\n| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff | Complete missing handoff |\n| `ERR_NO_PRD` | No PRD for PLAN-TO-EXEC | Create PRD first |\n\n### Emergency Bypass (Rate-Limited)\n```bash\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \\\n  --bypass-validation --bypass-reason \"Production outage - JIRA-12345\"\n```\n- 3 bypasses per SD max, 10 per day globally\n- All bypasses logged to `audit_log` with severity=warning\n\n### Compliance Check\n```bash\nnpm run handoff:compliance SD-ID\n```\n\n> Why: Skipping these commands is the most common cause of orphaned SDs — directives that appear in-progress but have no handoff records, making them invisible to the queue and unresumable by new sessions.\n\n**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**",
+      "content_sha256": "46e7e3792304f94b04e6bf24f1b70a262932568473c8e10386a7cd5b7dab8525",
+      "metadata": {
+        "category": "workflow_enforcement",
+        "criticality": "mandatory",
+        "publication_note": "Routed via target_file=CLAUDE_CORE.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 308,
+      "section_type": "mandatory_phase_transitions_lead",
+      "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)",
+      "target_file": "CLAUDE_LEAD.md",
+      "order_index": 1,
+      "content": "**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.\n\n### ⛔ NEVER DO THIS:\n- Using `database-agent` to directly insert into `sd_phase_handoffs`\n- Creating handoff records without running validation scripts\n- Skipping preflight knowledge retrieval\n\n### ✅ ALWAYS DO THIS:\n\n#### Pre-flight Batch Validation (RECOMMENDED)\n```bash\n# SD-LEO-STREAMS-001: Find ALL issues at once (reduces handoff iterations 60-70%)\nnode scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001\n```\n\n#### LEAD → PLAN Transition\n```bash\n# Step 1: MANDATORY - Run preflight (loads context from database)\nnode scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001\n\n# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)\nnode scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001\n```\n\n#### PLAN → EXEC Transition\n```bash\n# Step 1: MANDATORY - Run preflight\nnode scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001\n\n# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)\nnode scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001\n```\n\n#### EXEC → PLAN Transition (Verification)\n```bash\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001\n```\n\n#### PLAN → LEAD Transition (Final Approval)\n```bash\nnode scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001\n```\n\n### Emergency Bypass (SD-LEARN-010)\nFor emergencies ONLY. Bypasses require audit logging and are rate-limited.\n\n```bash\n# Emergency bypass with mandatory justification (min 20 chars)\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \\\n  --bypass-validation \\\n  --bypass-reason \"Production outage requires immediate fix - JIRA-12345\"\n```\n\n**Rate Limits:**\n- 3 bypasses per SD maximum\n- 10 bypasses per day globally\n- All bypasses logged to `audit_log` table with severity=warning\n\n### What These Scripts Enforce\n| Script | Validations |\n|--------|-------------|\n| `phase-preflight.js` | Loads context, patterns, and lessons from database |\n| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |\n| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |\n| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |\n| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |\n| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |\n\n### Error Codes (SD-LEARN-010)\n| Code | Meaning | Remediation |\n|------|---------|-------------|\n| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |\n| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |\n| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |\n\n### Compliance Marker\nValid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.\n\n### Check Compliance\n```bash\nnpm run handoff:compliance        # Check all recent handoffs\nnpm run handoff:compliance SD-ID  # Check specific SD\n```\n\n**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**",
+      "content_sha256": "b74627d2ea4c06f6bb498e4e13e20ddfe0050e1e29950402933e6a393c8cfe67",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_LEAD.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 309,
+      "section_type": "mandatory_phase_transitions_plan",
+      "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)",
+      "target_file": "CLAUDE_PLAN.md",
+      "order_index": 1,
+      "content": "**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.\n\n### ⛔ NEVER DO THIS:\n- Using `database-agent` to directly insert into `sd_phase_handoffs`\n- Creating handoff records without running validation scripts\n- Skipping preflight knowledge retrieval\n\n### ✅ ALWAYS DO THIS:\n\n#### Pre-flight Batch Validation (RECOMMENDED)\n```bash\n# SD-LEO-STREAMS-001: Find ALL issues at once (reduces handoff iterations 60-70%)\nnode scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001\n```\n\n#### LEAD → PLAN Transition\n```bash\n# Step 1: MANDATORY - Run preflight (loads context from database)\nnode scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001\n\n# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)\nnode scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001\n```\n\n#### PLAN → EXEC Transition\n```bash\n# Step 1: MANDATORY - Run preflight\nnode scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001\n\n# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)\nnode scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001\n```\n\n#### EXEC → PLAN Transition (Verification)\n```bash\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001\n```\n\n#### PLAN → LEAD Transition (Final Approval)\n```bash\nnode scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001\n```\n\n### Emergency Bypass (SD-LEARN-010)\nFor emergencies ONLY. Bypasses require audit logging and are rate-limited.\n\n```bash\n# Emergency bypass with mandatory justification (min 20 chars)\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \\\n  --bypass-validation \\\n  --bypass-reason \"Production outage requires immediate fix - JIRA-12345\"\n```\n\n**Rate Limits:**\n- 3 bypasses per SD maximum\n- 10 bypasses per day globally\n- All bypasses logged to `audit_log` table with severity=warning\n\n### What These Scripts Enforce\n| Script | Validations |\n|--------|-------------|\n| `phase-preflight.js` | Loads context, patterns, and lessons from database |\n| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |\n| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |\n| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |\n| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |\n| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |\n\n### Error Codes (SD-LEARN-010)\n| Code | Meaning | Remediation |\n|------|---------|-------------|\n| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |\n| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |\n| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |\n\n### Compliance Marker\nValid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.\n\n### Check Compliance\n```bash\nnpm run handoff:compliance        # Check all recent handoffs\nnpm run handoff:compliance SD-ID  # Check specific SD\n```\n\n**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**",
+      "content_sha256": "b74627d2ea4c06f6bb498e4e13e20ddfe0050e1e29950402933e6a393c8cfe67",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_PLAN.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 310,
+      "section_type": "mandatory_phase_transitions_exec",
+      "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)",
+      "target_file": "CLAUDE_EXEC.md",
+      "order_index": 1,
+      "content": "**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.\n\n### ⛔ NEVER DO THIS:\n- Using `database-agent` to directly insert into `sd_phase_handoffs`\n- Creating handoff records without running validation scripts\n- Skipping preflight knowledge retrieval\n\n### ✅ ALWAYS DO THIS:\n\n#### Pre-flight Batch Validation (RECOMMENDED)\n```bash\n# SD-LEO-STREAMS-001: Find ALL issues at once (reduces handoff iterations 60-70%)\nnode scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001\n```\n\n#### LEAD → PLAN Transition\n```bash\n# Step 1: MANDATORY - Run preflight (loads context from database)\nnode scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001\n\n# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)\nnode scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001\n```\n\n#### PLAN → EXEC Transition\n```bash\n# Step 1: MANDATORY - Run preflight\nnode scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001\n\n# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)\nnode scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001\n```\n\n#### EXEC → PLAN Transition (Verification)\n```bash\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001\n```\n\n#### PLAN → LEAD Transition (Final Approval)\n```bash\nnode scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001\n```\n\n### Emergency Bypass (SD-LEARN-010)\nFor emergencies ONLY. Bypasses require audit logging and are rate-limited.\n\n```bash\n# Emergency bypass with mandatory justification (min 20 chars)\nnode scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \\\n  --bypass-validation \\\n  --bypass-reason \"Production outage requires immediate fix - JIRA-12345\"\n```\n\n**Rate Limits:**\n- 3 bypasses per SD maximum\n- 10 bypasses per day globally\n- All bypasses logged to `audit_log` table with severity=warning\n\n### What These Scripts Enforce\n| Script | Validations |\n|--------|-------------|\n| `phase-preflight.js` | Loads context, patterns, and lessons from database |\n| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |\n| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |\n| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |\n| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |\n| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |\n\n### Error Codes (SD-LEARN-010)\n| Code | Meaning | Remediation |\n|------|---------|-------------|\n| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |\n| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |\n| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |\n\n### Compliance Marker\nValid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.\n\n### Check Compliance\n```bash\nnpm run handoff:compliance        # Check all recent handoffs\nnpm run handoff:compliance SD-ID  # Check specific SD\n```\n\n**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**",
+      "content_sha256": "b74627d2ea4c06f6bb498e4e13e20ddfe0050e1e29950402933e6a393c8cfe67",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_EXEC.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 449,
+      "section_type": "migration_execution_protocol_lead",
+      "title": "Migration Execution Protocol",
+      "target_file": "CLAUDE_LEAD.md",
+      "order_index": 1,
+      "content": "## ⚠️ CRITICAL: Migration Execution Protocol\n\n**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.\n\nThe DATABASE sub-agent handles common blockers automatically:\n- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)\n- **Connection issues**: Uses proven connection patterns\n- **Execution failures**: Tries alternative scripts before giving up\n\n**Never give up on migration execution** - the sub-agent has multiple fallback methods.\n\n**Invocation**:\n```\nTask tool with subagent_type=\"database-agent\":\n\"Execute the migration file: database/migrations/YYYYMMDD_name.sql\"\n```",
+      "content_sha256": "257ffbbb8ed4798561fcbdfeaec88ec4aee13a39f53aaf0b0e650550fed82b7e",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_LEAD.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 450,
+      "section_type": "migration_execution_protocol_plan",
+      "title": "Migration Execution Protocol",
+      "target_file": "CLAUDE_PLAN.md",
+      "order_index": 1,
+      "content": "## ⚠️ CRITICAL: Migration Execution Protocol\n\n**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.\n\nThe DATABASE sub-agent handles common blockers automatically:\n- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)\n- **Connection issues**: Uses proven connection patterns\n- **Execution failures**: Tries alternative scripts before giving up\n\n**Never give up on migration execution** - the sub-agent has multiple fallback methods.\n\n**Invocation**:\n```\nTask tool with subagent_type=\"database-agent\":\n\"Execute the migration file: database/migrations/YYYYMMDD_name.sql\"\n```",
+      "content_sha256": "257ffbbb8ed4798561fcbdfeaec88ec4aee13a39f53aaf0b0e650550fed82b7e",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_PLAN.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 544,
+      "section_type": "handoff_precheck",
+      "title": "Handoff Precheck Command",
+      "target_file": "CLAUDE_PLAN.md",
+      "order_index": 2405,
+      "content": "## Handoff Precheck Command\n\nBefore running a handoff execute, use **precheck** to evaluate ALL gates at once:\n\n```bash\nnode scripts/handoff.js precheck <TYPE> <SD-ID>\n```\n\nPrecheck runs all gates in batch mode. LLM-powered gates are skipped for fast advisory checks (<5s). Use this to identify ALL failures before fixing them.",
+      "content_sha256": "dab6378f633824a077aa2c03339d6c01597827d2d1d0e10b88f2b0a074a9df28",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_PLAN.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    },
+    {
+      "id": 545,
+      "section_type": "handoff_precheck",
+      "title": "Handoff Precheck Command",
+      "target_file": "CLAUDE_EXEC.md",
+      "order_index": 2406,
+      "content": "## Handoff Precheck Command\n\nBefore running a handoff execute, use **precheck** to evaluate ALL gates at once:\n\n```bash\nnode scripts/handoff.js precheck <TYPE> <SD-ID>\n```\n\nPrecheck runs all gates in batch mode. LLM-powered gates are skipped for fast advisory checks (<5s). Use this to identify ALL failures before fixing them.",
+      "content_sha256": "dab6378f633824a077aa2c03339d6c01597827d2d1d0e10b88f2b0a074a9df28",
+      "metadata": {
+        "publication_note": "Routed via target_file=CLAUDE_EXEC.md.",
+        "publication_status": "file"
+      },
+      "protocol_id": "leo-v4-3-3-ui-parity"
+    }
+  ]
+}

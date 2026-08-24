@@ -4,78 +4,17 @@
  *
  * Gap #7 Fix (2026-01-01): LeadToPlanExecutor was missing state transition.
  * SD remained in LEAD phase even after handoff was approved.
+ *
+ * QF-20260824-641: removed captureStateSnapshot/rollbackSdState (SD-LEO-INFRA-HANDOFF-
+ * INTEGRITY-RECOVERY-001, dead since introduction — zero callers). Traced the executor's
+ * post-verification path (index.js executeSpecific -> transitionSdToPlan ->
+ * createHandoffRetrospective): both swallow their own errors and never throw, so
+ * executeSpecific cannot fail after a state mutation starts. There is no reachable
+ * partial-state branch for rollback to protect; deleted rather than wired.
  */
-
 import {
   CANONICAL_WRITER_STAMP,
-  CANONICAL_WRITE_SQLSTATE,
-  isCanonicalWriteRejection,
 } from '../../lib/canonical-writer-stamp.js';
-
-/**
- * Capture current SD state for rollback on handoff failure
- * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Defensive rollback
- *
- * @param {Object} sd - Strategic Directive
- * @returns {Object} Snapshot of phase/status before transition
- */
-export function captureStateSnapshot(sd) {
-  return {
-    current_phase: sd?.current_phase || 'LEAD',
-    status: sd?.status || 'draft',
-    captured_at: new Date().toISOString()
-  };
-}
-
-/**
- * Rollback SD state to pre-transition snapshot
- * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Called when handoff record creation fails
- *
- * @param {string} sdId - SD ID
- * @param {Object} snapshot - State snapshot from captureStateSnapshot()
- * @param {Object} supabase - Supabase client
- */
-export async function rollbackSdState(sdId, snapshot, supabase) {
-  console.log('\n⚠️  STATE ROLLBACK: Reverting SD phase/status');
-  console.log('-'.repeat(50));
-  // SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 FR-4 (F8): a guard rejection here must NOT be
-  // swallowed like every other error. This path only runs when a handoff has ALREADY failed, so a
-  // dropped rejection leaves the forward transition half-applied with no automated way back —
-  // a recoverable failure silently turned into a stuck SD.
-  let guardRejection = null;
-  try {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-    const queryField = isUUID ? 'id' : 'sd_key';
-    const { error } = await supabase
-      .from('strategic_directives_v2')
-      .update({
-        current_phase: snapshot.current_phase,
-        status: snapshot.status,
-        lifecycle_write_token: CANONICAL_WRITER_STAMP,
-        updated_at: new Date().toISOString()
-      })
-      .eq(queryField, sdId);
-    if (error) {
-      console.log(`   ❌ Rollback failed: ${error.message}`);
-      if (isCanonicalWriteRejection(error)) guardRejection = error;
-    } else {
-      console.log(`   ✅ Rolled back to phase=${snapshot.current_phase}, status=${snapshot.status}`);
-    }
-  } catch (error) {
-    console.log(`   ❌ Rollback error: ${error.message}`);
-    if (isCanonicalWriteRejection(error)) guardRejection = error;
-  }
-
-  if (guardRejection) {
-    throw new Error(
-      `LEAD-TO-PLAN rollback was REJECTED by the canonical-writer guard (${CANONICAL_WRITE_SQLSTATE}): ` +
-      `${guardRejection.message}. The SD is now stuck mid-handoff — the forward transition is applied ` +
-      'and its compensating write could not run. Restore this call site\'s lifecycle_write_token ' +
-      `before retrying; SD ${sdId} needs manual reconciliation to ` +
-      `phase=${snapshot.current_phase}, status=${snapshot.status}.`
-    );
-  }
-}
 
 /**
  * STATE TRANSITION: Update SD current_phase on successful LEAD-TO-PLAN handoff

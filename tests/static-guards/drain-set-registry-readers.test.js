@@ -54,6 +54,14 @@ const ALLOWLIST_PATTERNS = [
   // dead-letter kinds are high-value (retarget to a live role-successor) vs noise (drain), a
   // triage/priority concern orthogonal to "does this role's inbox drain this kind" (QF-20260721-737).
   /^lib\/coordination\/dead-letter-drain\.js$/,
+  // NOT a per-role recognized-kinds mirror -- SD-LEO-INFRA-COMMS-LANE-TTLS-001's
+  // ADVISORY_LANE_KINDS/SUGGESTION_LANE_KINDS classify which of 4 CONCEPTUAL DELIVERY LANES
+  // (directive/reply/advisory/suggestion) a kind belongs to for TTL/dead-letter tracking -- an
+  // orthogonal axis to "does this role's inbox drain this kind" (the class Child B closed).
+  // DIRECTIVE_KINDS/ADVISORY_KINDS are re-imported from worker-status.cjs, never re-authored;
+  // only the 'advisory'/'suggestion' lane buckets are hand-listed because no existing registry
+  // covers that bucketing.
+  /^lib\/coordination\/lane-contract\.cjs$/,
 ];
 
 function isAllowlisted(rel) {

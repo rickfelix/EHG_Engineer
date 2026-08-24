@@ -480,5 +480,54 @@
       "input": "Every *.js/*.cjs/*.mjs file TEXT under scripts/, lib/, and tests/ (enumerated via fs.readdirSync directory walk in --all mode, or git diff/ls-files in the default --diff mode), read via readFileSync -- matches a line where KILL_GATE_STAGES, PROMOTION_GATE_STAGES, KILL_GATES, or PROMOTION_GATES is assigned an array literal ('[') or a Set literal ('new Set('), excluding comment lines and lines carrying the gate-stage-lint-disable-line pragma, filtered against scripts/lint/gate-stage-hardcoded-literal-allowlist.json by repo-relative path. Consumes no DB columns and no environment variables.",
       "seen": "EXEC run (2026-08-23) of 'node scripts/lint/gate-stage-hardcoded-literal-lint.mjs --all' against the live repo reported 0 violations across 4049 files, immediately after this SD's FR-1/FR-4 changes removed the last live KILL_GATE_STAGES/PROMOTION_GATE_STAGES/KILL_GATES/PROMOTION_GATES literal assignments from lib/agents/modules/venture-state-machine/stage-gates.js and lib/eva/devils-advocate.js (proving the scan reads real, current file content, not a stale/stubbed list). The same command run against a tmp-dir fixture carrying the seeded defect above reported exactly that violation by file:line:identifier and exited 1 (tests/unit/lint/gate-stage-hardcoded-literal-lint.test.js, TS-6 RED-first proof), and reported 0 violations again once the fixture literal was removed."
     }
+  },
+  {
+    "name": "capture-channel-ceremony-scope-lock-lint",
+    "script": "scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs",
+    "seedTest": "tests/unit/lint/capture-channel-ceremony-scope-lock-lint.test.js",
+    "neuter": {
+      "find": "if (result.pass) {",
+      "replace": "if (true) {",
+      "why": "the lint always takes the pass branch (prints the checkmark, exit 0) regardless of what evaluateCeremonyScopeLock actually found, so the seed test's assertion that a genuine ceremony-file touch exits 1 goes RED"
+    },
+    "note": "SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 (FR-5), VALIDATION finding V-1. A fixture trial is impractical here for the same structural reason as schema-reference-lint's own registration: control-seed-test.mjs's runTrial plants files with `git init` + `git add -A` but no commit, so no HEAD exists in the scratch dir -- and this lint's entire job is diffing a base ref against HEAD (`${base}...HEAD`), which is unexpressible without real git history. The committed seedTest instead builds an actual two-commit repo and spawns the real CLI against it (a genuine ceremony-path touch vs. an unrelated one), so neutering the pass/fail branch is observable exactly the way the SEC-CCD SECURITY fixes (hardened-runner argv spawn, base-ref validation) are exercised for real rather than asserted.",
+    "observability_proof": {
+      "input": "git diff --name-only --diff-filter=ACMRD `${base}...HEAD` (via lib/git/hardened-runner.cjs's argv-array runGit, base ref validated by VALID_BASE_REF before any spawn) against lib/governance/ceremony-scope-lock.js's PATH_BAN allow-list (4 named files) plus a content check on scripts/capture-completion-flags.js for a net loss of the completion_flag_witness marker string. Consumes no DB columns and no environment variables besides the optional CEREMONY_LINT_BASE override.",
+      "seen": "PLAN_VERIFICATION run (2026-08-24) of the committed seedTest against the live lint: TS-5/TS-5b/TS-6 scenarios replayed against a real historical commit (f972159f9ec~1) that genuinely touches .claude/settings.json confirmed the lint fires correctly (TESTING evidence 8c4733fd); the seedTest's own two-commit fixture reproduces the same result in isolation and the neuter above was hand-verified to flip it from green to a genuine assertion failure (expected 1, received 0) before this registration was committed."
+    }
+  },
+  {
+    "name": "no-literal-home-path-lint",
+    "script": "scripts/lint/no-literal-home-path-lint.mjs",
+    "rootFlag": "--root",
+    "note": "SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-1). Structurally modeled on require-main-guard-in-one-off-lint.mjs (also --root scoped). The allowlist loaded during the trial is ALWAYS the real repo's scripts/lint/no-literal-home-path-allowlist.json (ALLOWLIST_PATH is derived from the script's own __dirname, not from --root), so the seeded path below must not collide with a real allowlist entry -- it does not.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-home-path-defect.mjs",
+        "content": "// SEEDED DEFECT: a literal, machine-specific absolute home-directory path where\n// resolveRepoPath('ehg') (lib/repo-paths.js) should be used instead -- the exact class of\n// defect that made lib/gates/cross-repo-build-check.js and .../ui-interactivity-check.js\n// silently break for any checkout not at that one path.\nexport const p = 'C:/Users/rickf/Projects/_EHG/ehg';\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-home-path-defect"
+    ],
+    "observability_proof": {
+      "input": "Every git-tracked *.js/*.mjs/*.cjs file's TEXT content (via `git ls-files -z` with cwd pinned to REPO_ROOT/--root, then fs.readFileSync per file), scanned line-by-line against HOME_PATH_RE (a Windows-drive-letter-plus-Users-plus-username or POSIX /home/username shape), filtered against scripts/lint/no-literal-home-path-allowlist.json by exact repo-relative file path. Consumes no DB columns and no environment variables.",
+      "seen": "Real positives observed against this repo's own live tracked tree during this control's authoring (SD-LEO-INFRA-REPO-HYGIENE-PATH-001, 2026-08-24): `node scripts/lint/no-literal-home-path-lint.mjs` run with no flags against the real 7573-file *.js/*.mjs/*.cjs population reports '0 ungoverned violations ... 13 grandfathered' -- those 13 are genuine pre-existing literal-home-path hits (12 distinct files, one file with 2 matching lines) found by this exact code path and individually reviewed into scripts/lint/no-literal-home-path-allowlist.json with a reason per entry, not fixture data. A first-pass version of HOME_PATH_RE (single-backslash separator class) missed 5 of those 13 outright -- caught by a failing unit test before this lint had ever run against the live corpus -- and widening it to [\\\\/]+ (one-or-more separators, matching a JS string literal's doubled backslash) is what surfaced the remaining real hits in scripts/modules/handoff/gates/ and scripts/hooks/lib/detect-context.cjs."
+    }
+  },
+  {
+    "name": "root-dirt-lint",
+    "script": "scripts/lint/root-dirt-lint.mjs",
+    "seedTest": "tests/unit/lint/root-dirt-lint.test.js",
+    "note": "SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-2). Cannot use a fixture trial: control-seed-test.mjs's runTrial harness `git add -A`s every planted fixture before invoking the control, which makes them TRACKED -- the exact opposite of what this control measures (`git status --porcelain --untracked-files=all`, counting only `?? ` lines). checkThreshold() was split out from main() specifically to give this control a seed-testable pure unit instead.",
+    "neuter": {
+      "find": "return { exceeds: count > threshold, count, threshold };",
+      "replace": "return { exceeds: false, count, threshold };",
+      "why": "the threshold comparison always reports 'not exceeded' regardless of the real untracked-file count, so the 'reports exceeds:true when count is over threshold' and 'respects an explicit threshold override' assertions in the checkThreshold describe block go RED (hand-verified pre-registration: 2 of 9 tests fail under this exact neuter, restoring the line returns all 9 to green)."
+    },
+    "observability_proof": {
+      "input": "`git status --porcelain --untracked-files=all` run with cwd pinned to getRepoRoot() (lib/repo-paths.js, not process.cwd()) -- countUntrackedFiles counts every line prefixed `?? `; checkThreshold(count) is a pure comparison against THRESHOLD = BASELINE(2291) + BUFFER(100). Consumes no DB columns and no environment variables.",
+      "seen": "Real positive observed live against this repo's own main checkout throughout this SD's EXEC-TO-PLAN and PLAN-TO-LEAD review (2026-08-24): `node scripts/lint/root-dirt-lint.mjs`, run with cwd pinned to getRepoRoot(), repeatedly reported '3192 untracked file(s) exceeds threshold 2391' / '3193 untracked file(s) exceeds threshold 2391' against the genuinely-dirty main checkout -- not a fixture, the real tracked-repo untracked-file count -- both before and independently reconfirmed during SECURITY sub-agent re-verification of this same SD."
+    }
   }
 ]

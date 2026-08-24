@@ -18,8 +18,8 @@ import {
   CANONICAL_WRITE_SQLSTATE,
   isCanonicalWriteRejection,
 } from '../../../scripts/modules/handoff/lib/canonical-writer-stamp.js';
-import { rollbackSdState, transitionSdToPlan } from '../../../scripts/modules/handoff/executors/lead-to-plan/state-transitions.js';
-import { rollbackState, transitionSdToExec } from '../../../scripts/modules/handoff/executors/plan-to-exec/state-transitions.js';
+import { transitionSdToPlan } from '../../../scripts/modules/handoff/executors/lead-to-plan/state-transitions.js';
+import { transitionSdToExec } from '../../../scripts/modules/handoff/executors/plan-to-exec/state-transitions.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -179,73 +179,55 @@ describe('forward transitions send the stamp', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────
-describe('TS-32 / FR-4 F8 — the two compensation paths', () => {
-  const leadSnapshot = { current_phase: 'LEAD', status: 'draft' };
-  const execSnapshot = { sd_phase: 'PLAN_PRD', sd_status: 'planning', sd_is_working_on: false };
+describe('TS-32 / FR-4 F8 (SUPERSEDED by QF-20260824-641) — the two compensation paths are gone, not fixed', () => {
+  // FR-4 originally planned to fix rollbackSdState/rollbackState's swallow-and-log bug (never
+  // re-raising an SDCW1 rejection). QF-20260824-641 traced both call sites and found neither is
+  // EVER reachable in the real handoff pipeline (index.js's post-verification path swallows its
+  // own errors and never throws, so no partial-state branch exists for a rollback to protect) and
+  // deleted captureStateSnapshot/rollbackSdState/rollbackState entirely rather than patch dead code.
+  // These tests verify the deletion, matching the pattern below for FR-7's dead completion writers.
+  const LEAD_TO_PLAN = path.join(REPO_ROOT, 'scripts/modules/handoff/executors/lead-to-plan/state-transitions.js');
+  const PLAN_TO_EXEC = path.join(REPO_ROOT, 'scripts/modules/handoff/executors/plan-to-exec/state-transitions.js');
 
-  it('rollbackSdState restores the snapshot AND carries the same identity as its forward path', async () => {
-    // "The rollback write actually lands." A green forward-path test proves nothing about this
-    // path — it only runs under conditions the happy path never creates.
-    const supabase = fakeSupabase();
-    await rollbackSdState('SD-TEST-003', leadSnapshot, supabase);
-    const write = supabase.calls.find((c) => c.table === 'strategic_directives_v2');
-    expect(write.payload).toMatchObject({
-      current_phase: 'LEAD',
-      status: 'draft',
-      lifecycle_write_token: CANONICAL_WRITER_STAMP,
-    });
+  it('captureStateSnapshot/rollbackSdState are gone from lead-to-plan/state-transitions.js', () => {
+    const src = fs.readFileSync(LEAD_TO_PLAN, 'utf8');
+    expect(src).not.toContain('function captureStateSnapshot');
+    expect(src).not.toContain('function rollbackSdState');
   });
 
-  it('rollbackState restores the snapshot AND carries the same identity as its forward path', async () => {
-    const supabase = fakeSupabase();
-    await rollbackState(supabase, 'SD-TEST-004', null, execSnapshot);
-    const write = supabase.calls.find((c) => c.table === 'strategic_directives_v2');
-    expect(write.payload).toMatchObject({
-      current_phase: 'PLAN_PRD',
-      status: 'planning',
-      is_working_on: false,
-      lifecycle_write_token: CANONICAL_WRITER_STAMP,
-    });
+  it('captureStateSnapshot/rollbackState are gone from plan-to-exec/state-transitions.js', () => {
+    const src = fs.readFileSync(PLAN_TO_EXEC, 'utf8');
+    expect(src).not.toContain('function captureStateSnapshot');
+    expect(src).not.toContain('function rollbackState');
   });
 
-  it('rollbackSdState THROWS on an SDCW1 rejection instead of logging and dropping it', async () => {
-    // The regression scenario: someone removes the stamp from this call site. Before this change the
-    // rejection was a console.log with no rethrow — invisible at every layer, leaving the SD stuck
-    // mid-handoff with the forward transition applied and no diagnosable trace.
-    const supabase = fakeSupabase({ strategic_directives_v2: { data: null, error: SDCW1_ERROR } });
-    await expect(rollbackSdState('SD-TEST-005', leadSnapshot, supabase)).rejects.toThrow(
-      /rollback was REJECTED by the canonical-writer guard \(SDCW1\)/,
-    );
+  it('the forward transitions still stamp lifecycle_write_token after the deletion', async () => {
+    // Two-sided: proves the deletion did not collaterally remove the stamp wiring on the paths
+    // that ARE reachable (the forward transitions themselves, covered above in this file).
+    expect(transitionSdToPlan).toBeInstanceOf(Function);
+    expect(transitionSdToExec).toBeInstanceOf(Function);
   });
 
-  it('rollbackState THROWS on an SDCW1 rejection instead of logging and dropping it', async () => {
-    const supabase = fakeSupabase({ strategic_directives_v2: { data: null, error: SDCW1_ERROR } });
-    await expect(rollbackState(supabase, 'SD-TEST-006', null, execSnapshot)).rejects.toThrow(
-      /rollback was REJECTED by the canonical-writer guard \(SDCW1\)/,
-    );
-  });
-
-  it('the thrown message names the SD and the state it must be reconciled to', async () => {
-    const supabase = fakeSupabase({ strategic_directives_v2: { data: null, error: SDCW1_ERROR } });
-    const err = await rollbackSdState('SD-TEST-007', leadSnapshot, supabase).catch((e) => e);
-    expect(err.message).toContain('SD-TEST-007');
-    expect(err.message).toContain('phase=LEAD');
-    expect(err.message).toContain('status=draft');
-  });
-
-  it('[TWO-SIDED] a NON-SDCW1 error keeps the existing fail-soft behaviour — no throw', async () => {
-    // Without this, "throw on rollback failure" would be indistinguishable from "throw on any
-    // rollback failure", which would be a behaviour change well beyond FR-4's scope: a transient
-    // network blip during compensation would start aborting the caller.
-    const other = { code: '08006', message: 'connection failure' };
-    const supabase = fakeSupabase({ strategic_directives_v2: { data: null, error: other } });
-    await expect(rollbackSdState('SD-TEST-008', leadSnapshot, supabase)).resolves.toBeUndefined();
-    await expect(rollbackState(supabase, 'SD-TEST-009', null, execSnapshot)).resolves.toBeUndefined();
-  });
-
-  it('a successful rollback still resolves quietly', async () => {
-    const supabase = fakeSupabase();
-    await expect(rollbackSdState('SD-TEST-010', leadSnapshot, supabase)).resolves.toBeUndefined();
+  it('no caller anywhere in active scripts/ or lib/ references the deleted functions', () => {
+    // scripts/one-off/ is excluded: it holds disposable, already-executed evidence-writer scripts
+    // that quote deleted identifiers in historical prose (findings text describing what a sub-agent
+    // reviewed AT THE TIME), the same class of textual-not-functional mention FR-7's own evidence
+    // documents for complete-orchestrator.js. They are not active code and are never re-run.
+    const roots = ['scripts', 'lib'].map((d) => path.join(REPO_ROOT, d));
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name.startsWith('.') || entry.name === 'one-off') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { walk(full); continue; }
+        if (!/\.(js|mjs|cjs)$/.test(entry.name)) continue;
+        if (full === LEAD_TO_PLAN || full === PLAN_TO_EXEC) continue; // the definition sites themselves are gone
+        const text = fs.readFileSync(full, 'utf8');
+        if (/\brollbackSdState\b/.test(text) || /\brollbackState\b/.test(text)) offenders.push(full);
+      }
+    };
+    for (const root of roots) walk(root);
+    expect(offenders, `stale references to deleted rollback functions: ${offenders.join(', ')}`).toEqual([]);
   });
 });
 

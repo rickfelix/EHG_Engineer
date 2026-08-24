@@ -1,0 +1,36 @@
+name: No Literal Home Path Lint
+
+# SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-1.
+# Tree-at-rest guard: scans every git-tracked *.js/*.mjs/*.cjs file for a literal, machine-
+# specific absolute home-directory path instead of a lib/repo-paths.js resolver call -- the
+# exact class of defect that made lib/gates/cross-repo-build-check.js and
+# scripts/modules/handoff/executors/exec-to-plan/gates/ui-interactivity-check.js silently break
+# for any checkout not at that one path (see scripts/lint/no-literal-home-path-lint.mjs for the
+# full design rationale). A reason-required grandfather allowlist
+# (scripts/lint/no-literal-home-path-allowlist.json) covers pre-existing violations so this job
+# doesn't red-line for the whole corpus; it blocks only a NEW, un-allowlisted instance.
+#
+# Runs on every PR and on push to main (squash-merge / admin-bypass still gets scanned). Not yet
+# a required status check in branch protection -- same posture as the sibling
+# no-connection-string-literals-lint workflow this is modeled on.
+
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-literal-home-path-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Scan tracked tree for literal home-directory paths
+        run: node scripts/lint/no-literal-home-path-lint.mjs

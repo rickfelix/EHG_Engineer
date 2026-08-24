@@ -3,85 +3,18 @@
  * Part of SD-LEO-REFACTOR-PLANTOEXEC-001
  *
  * Root cause fix: Handoffs should act as state machine transitions, not just validation gates
- * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Added rollback support
+ *
+ * QF-20260824-641: removed captureStateSnapshot/rollbackState (SD-LEO-INFRA-HANDOFF-
+ * INTEGRITY-RECOVERY-001, dead since introduction — zero callers). Traced index.js's call
+ * order: transitionPrdToExec runs first and throws only when its own DB write did not take
+ * effect (nothing mutated yet); transitionSdToExec runs second and swallows its own errors
+ * (never throws). No reachable path leaves a partial PRD/SD mutation followed by a
+ * propagated exception; deleted rather than wired.
  */
 
 import {
   CANONICAL_WRITER_STAMP,
-  CANONICAL_WRITE_SQLSTATE,
-  isCanonicalWriteRejection,
 } from '../../lib/canonical-writer-stamp.js';
-
-/**
- * Capture current SD + PRD state for rollback on handoff failure
- * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Defensive rollback
- */
-export function captureStateSnapshot(sd, prd) {
-  return {
-    sd_phase: sd?.current_phase || 'PLAN_PRD',
-    sd_status: sd?.status || 'planning',
-    sd_is_working_on: sd?.is_working_on || false,
-    prd_status: prd?.status || 'approved',
-    prd_phase: prd?.phase || null,
-    captured_at: new Date().toISOString()
-  };
-}
-
-/**
- * Rollback SD + PRD state to pre-transition snapshot
- * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001
- */
-export async function rollbackState(supabase, sdId, prd, snapshot) {
-  console.log('\n⚠️  STATE ROLLBACK: Reverting SD and PRD phase/status');
-  console.log('-'.repeat(50));
-  // SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 FR-4 (F8): see the identical note in
-  // lead-to-plan/state-transitions.js. A guard rejection on a compensation path is the one error
-  // here that must not be logged and dropped. The PRD rollback below stays fail-soft — that table
-  // is not guarded, and letting a PRD failure abort the SD revert would be a regression.
-  let guardRejection = null;
-  try {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-    const queryField = isUUID ? 'id' : 'sd_key';
-    const { error: sdErr } = await supabase
-      .from('strategic_directives_v2')
-      .update({
-        current_phase: snapshot.sd_phase,
-        status: snapshot.sd_status,
-        is_working_on: snapshot.sd_is_working_on,
-        lifecycle_write_token: CANONICAL_WRITER_STAMP,
-        updated_at: new Date().toISOString()
-      })
-      .eq(queryField, sdId);
-    if (sdErr) {
-      console.log(`   ❌ SD rollback failed: ${sdErr.message}`);
-      if (isCanonicalWriteRejection(sdErr)) guardRejection = sdErr;
-    } else {
-      console.log(`   ✅ SD rolled back to phase=${snapshot.sd_phase}, status=${snapshot.sd_status}`);
-    }
-
-    if (prd) {
-      const { error: prdErr } = await supabase
-        .from('product_requirements_v2')
-        .update({ status: snapshot.prd_status, phase: snapshot.prd_phase, updated_at: new Date().toISOString() })
-        .eq('id', prd.id);
-      if (prdErr) console.log(`   ❌ PRD rollback failed: ${prdErr.message}`);
-      else console.log(`   ✅ PRD rolled back to status=${snapshot.prd_status}`);
-    }
-  } catch (error) {
-    console.log(`   ❌ Rollback error: ${error.message}`);
-    if (isCanonicalWriteRejection(error)) guardRejection = error;
-  }
-
-  if (guardRejection) {
-    throw new Error(
-      `PLAN-TO-EXEC rollback was REJECTED by the canonical-writer guard (${CANONICAL_WRITE_SQLSTATE}): ` +
-      `${guardRejection.message}. The SD is now stuck mid-handoff — the forward transition is applied ` +
-      'and its compensating write could not run. Restore this call site\'s lifecycle_write_token ' +
-      `before retrying; SD ${sdId} needs manual reconciliation to ` +
-      `phase=${snapshot.sd_phase}, status=${snapshot.sd_status}.`
-    );
-  }
-}
 
 /**
  * Transition PRD status to EXEC phase

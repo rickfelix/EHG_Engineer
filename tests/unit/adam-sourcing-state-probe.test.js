@@ -209,3 +209,48 @@ test('C4: the demand section is rendered by the composed path, not only by the p
   for (const engine of BELT_DEPTH_GATED_PRODUCERS) assert.match(out, new RegExp(engine));
   assert.ok(BELT_DEPTH_GATED_PRODUCERS.length >= 4, 'expected the QF-side minters to be registered too');
 });
+
+// SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (FR-1) — TS-8: the new DB-vs-deployment diff must
+// be ACTUALLY CALLED and its output must appear in the RENDERED text, not merely defined and
+// importable. Mirrors the "C4: demand section rendered by composed path" pattern above, which
+// exists for exactly this reason — a source-level import grep would pass on a dead, unwired
+// import (the same failure shape reconcileSourcingArmState() itself already demonstrates
+// elsewhere in this file).
+
+test('TS-8: renderSourcingStateLines renders mocked mismatch data in its output', () => {
+  const mismatches = [
+    { arm: 'gauge-gap-miner', db_state: true, deployment_state: 'disabled_manually', deployment_error: null, mismatched: true },
+    { arm: 'deferred-watcher', db_state: true, deployment_state: 'disabled_manually', deployment_error: null, mismatched: true },
+    { arm: 'auto-refill', db_state: true, deployment_state: 'active', deployment_error: null, mismatched: false },
+  ];
+  const out = renderSourcingStateLines({ flags: [], mismatches });
+  assert.match(out, /MISMATCH\s+gauge-gap-miner: DB says true but deployment is disabled_manually/);
+  assert.match(out, /MISMATCH\s+deferred-watcher: DB says true but deployment is disabled_manually/);
+  assert.doesNotMatch(out, /MISMATCH\s+auto-refill/); // the matched arm must not be reported as a mismatch
+});
+
+test('TS-8: an unresolved (unknown) mismatch entry is rendered distinctly, never as a silent match', () => {
+  const mismatches = [
+    { arm: 'gauge-gap-miner', db_state: true, deployment_state: 'unknown', deployment_error: 'ECONNRESET', mismatched: null },
+  ];
+  const out = renderSourcingStateLines({ flags: [], mismatches });
+  assert.match(out, /UNRESOLVED\s+gauge-gap-miner.*ECONNRESET/);
+  assert.doesNotMatch(out, /all arms match/);
+});
+
+test('mismatches: null (probe skipped/unreadable) renders nothing extra — distinct from "checked, 0 found"', () => {
+  const withNull = renderSourcingStateLines({ flags: [] });
+  assert.doesNotMatch(withNull, /MISMATCH|UNRESOLVED|all arms match/);
+});
+
+test('TS-8: fetchSourcingState -> renderSourcingState composition actually calls the diff (not a dead import)', async () => {
+  // No GITHUB_TOKEN in env: diffSourcingArmStateVsDeployment's real no-token path fires for real
+  // (deployment_state='unknown', deployment_error='no_token') — proving the composed call reaches
+  // the new function end-to-end without needing a live GitHub API mock.
+  const { mismatches } = await fetchSourcingState({ supabase: stubSupabase({}), env: {} });
+  assert.equal(Array.isArray(mismatches), true);
+  assert.equal(mismatches.length, 3);
+  assert.equal(mismatches.every((m) => m.deployment_error === 'no_token' && m.mismatched === null), true);
+  const out = await renderSourcingState({ supabase: stubSupabase({}), env: {} });
+  assert.match(out, /UNRESOLVED/);
+});
