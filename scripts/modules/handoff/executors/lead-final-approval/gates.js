@@ -52,13 +52,25 @@ export { createWireCheckGate };
 // (SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-C)
 import { createInvocationPathGate } from './gates/invocation-path-gate.js';
 // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001: a direct re-export-from passthrough, not a separate
-// `export { createInvocationPathGate };` of the locally-imported binding — MEASURED (via extensive
-// reproduction) that the local-import-then-separate-export form corrupts under vitest when this
-// file is co-scheduled in the same worker as another file that also imports gates.js (reproduces
-// with zero code changes, order-independent, survives --no-file-parallelism; a companion fix
-// landed in tests/unit/invocation-detector/invocation-path-gate.test.js). This passthrough form
-// keeps the SAME local `createInvocationPathGate` binding usable below (line ~1822) while giving
-// the export itself its own, more standard re-export declaration.
+// `export { createInvocationPathGate };` of the locally-imported binding.
+//
+// CORRECTED (RCA, see tests/unit/gates-namespace-exports.test.js): an earlier version of this
+// comment attributed the break to "co-scheduling in the same vitest worker" — that mechanism was
+// measured FALSE by RCA (reproduces with this file running completely alone). The REAL root cause
+// was a literal mock-hoisting trigger token (a "vi" + ".mock(" pair) sitting in an unrelated
+// comment elsewhere in this file (the FR-2
+// exemption note below, quoting the test files' own mock call for explanatory purposes). Vitest's
+// mock-hoisting transform (@vitest/mocker's hoistMocks) scans raw file TEXT, comments included, for
+// that token; finding it, it hoists this PRODUCTION module's imports as if it were a test file, and
+// its rewrite does not correctly handle `export { X };` of a plain locally-imported binding — Vite's
+// generated export getter throws on the (now-hoisted-away) local reference and a wrapping try/catch
+// silently converts that into `undefined`. That single mistaken comment silently broke 11 of the 12
+// `export { X };` re-exports in this file, not just this one — this passthrough form (an `export {
+// X } from '...'` re-export declaration, rather than a getter over a local binding) happens to be
+// immune to that specific rewrite bug, which is why converting only this one export "fixed" the
+// symptom without touching the actual root cause. The literal token has since been removed from the
+// exemption comment below; this passthrough form is kept regardless, since it is a reasonable,
+// slightly more standard way to re-export a plain pass-through binding.
 export { createInvocationPathGate } from './gates/invocation-path-gate.js';
 
 // Phantom Test Audit Gate — call-surface alignment check (SD-FDBK-ENH-PAT-PHANTOM-TABLE-001)
@@ -628,7 +640,7 @@ export function createPRPrecheckGate(supabase, deps = {}) {
 // isInfrastructureSDSync()/SD_TYPE_CATEGORIES.NON_CODE — measured against strategic_directives_v2,
 // NON_CODE exempts 3393/4595 completed SDs (73.8%), with 'infrastructure' alone accounting for
 // 2733 (59.5%) — including this SD's own type. Both test files for this gate also fully mock
-// sd-type-checker.js (`vi.mock(..., () => ({ getTierForSD: vi.fn(() => 3) }))`), so importing any
+// sd-type-checker.js (both test files mock its getTierForSD export), so importing any
 // further symbol from that module throws under mock and the outer catch reads as a false green
 // (see the note on FR-2 in the PRD). Checking ctx.sd.sd_type against this local Set avoids both
 // problems. 'process' is deliberately NOT included: SECURITY EXEC review (SEC-7) measured it
