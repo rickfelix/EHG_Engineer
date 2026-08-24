@@ -114,6 +114,25 @@ describe('createRCAGate — warn-only by default (LEO_RCA_GATE_ENFORCE unset)', 
     expect(result.gate_status).toBe('WARN');
     expect(result.blocking_rcr_ids).toEqual(['rcr-approved']);
   });
+
+  // PLAN-VERIFICATION VALIDATION re-verify (3f769d5f) found the CAPA_APPROVED test above is
+  // mutation-blind: the chain mock's .in() never actually filters, so the fixture's status
+  // value is decorative and the test stays green even if CAPA_APPROVED is removed from
+  // BLOCKING_STATUSES. This pins the actual query argument, which IS mutation-sensitive.
+  it('the status filter query argument actually includes CAPA_APPROVED', async () => {
+    const chain = createSupabaseChainMock({ result: { data: [], error: null } });
+    let capturedStatusArgs;
+    const originalIn = chain.in;
+    chain.in = vi.fn((col, vals) => {
+      if (col === 'status') capturedStatusArgs = vals;
+      return originalIn(col, vals);
+    });
+
+    const gate = createRCAGate(chain);
+    await gate.validator({ sdId: 'SD-TEST-007' });
+
+    expect(capturedStatusArgs).toEqual(['OPEN', 'IN_REVIEW', 'CAPA_PENDING', 'CAPA_APPROVED']);
+  });
 });
 
 describe('createRCAGate — hard enforcement (LEO_RCA_GATE_ENFORCE=true)', () => {
