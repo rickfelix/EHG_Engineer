@@ -357,12 +357,26 @@ jobs:
           # SECURITY re-verification (evidence 8eec89e0) caught two regressions in the
           # first SEC-3 fix, both empirically reproduced before this correction:
           # (A) widening the sk- tail to [A-Za-z0-9_-]{20,} (to reach sk-proj-) also
-          # matched ordinary kebab-case code containing "sk-" as a substring (task-,
-          # risk-, disk-, desk-, mask- style words) -- false-positived on 5/5 ordinary
-          # code samples tested. Reverted to an ENUMERATED prefix instead of a widened
-          # class: sk-(proj-)?[A-Za-z0-9]{20,} -- still catches all 7 target formats,
-          # zero false positives on ordinary code.
-          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)'
+          # matched ordinary kebab-case code with an sk-/task-/risk-/disk- shaped word
+          # -- false-positived on 5/5 ordinary code samples tested. Reverted to an
+          # ENUMERATED prefix instead of a widened class: sk-(proj-)?[A-Za-z0-9]{20,}
+          # -- zero false positives on ordinary code, verified with grep -E directly.
+          # KNOWN LIMITATION (SECURITY re-verification, evidence 6d1aaad0): a real
+          # sk-proj- key is base64url-bodied, so a '-'/'_' can land anywhere in the
+          # first 20 chars, which this alphanumeric-only tail then misses -- roughly
+          # half of real project keys evade it. SECURITY's suggested fix, anchoring
+          # word-initial occurrences with \b instead of narrowing the class
+          # (\bsk-(proj-)?[A-Za-z0-9_-]{20,}), was independently re-verified here
+          # with real grep -E against THIS FILE's OWN ordinary-code test fixtures and
+          # still matched all 5 (a leading "sk-" is itself a word boundary, so \b does
+          # not distinguish "sk-a-real-key" from "sk-scheduler-configuration-manager")
+          # -- adopting it would have reintroduced the exact false-positive class this
+          # fix exists to close. Zero false positives was judged the safer trade-off:
+          # a scanner that's red on ordinary code gets disabled by the first venture
+          # team that hits it (the same reasoning that motivated this fix in the first
+          # place), which is worse than a defense-in-depth scanner (not the primary
+          # security boundary) missing some project-key shapes.
+          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)'
           # (B) 'git grep ...' followed by a separate 'rc=$?' line runs under GitHub
           # Actions' bash -e -- git grep's own exit 1 (no match, the CLEAN case) trips
           # set -e and aborts BEFORE 'rc=$?' ever executes. Empirically reproduced: a

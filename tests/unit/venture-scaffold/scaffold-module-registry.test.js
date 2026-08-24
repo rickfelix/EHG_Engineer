@@ -134,6 +134,44 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
     }
   });
 
+  // SECURITY re-verification (evidence 6d1aaad0, EXEC-TO-PLAN, LOW): the JWT
+  // alternative's '\.' collapsed to '.' (any char) in the GENERATED output, because
+  // an unrecognized JS string escape like '\.' inside a template literal drops the
+  // backslash -- confirmed directly (source had \., generated YAML had bare .).
+  // Doubled to '\\.' in source so the emitted pattern carries a literal '\.'.
+  it('SEC-3/LOW regression: the JWT pattern segment carries a literal backslash-dot in the GENERATED output, not a collapsed any-char dot', async () => {
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const files = MODULE_REGISTRY['stack-scan'].generate('acme-venture', '/tmp/acme-venture', {});
+    const stackScanYml = files.find((f) => f.path.endsWith('stack-scan.yml'));
+    expect(stackScanYml.content).toContain('eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+');
+  });
+
+  // SECURITY re-verification (evidence 6d1aaad0) proposed anchoring with \b instead
+  // of narrowing the character class (\bsk-(proj-)?[A-Za-z0-9_-]{20,}), to catch real
+  // sk-proj- keys whose base64url body has '-'/'_' at arbitrary positions. Independently
+  // re-verified that proposal with real grep -E against THIS FILE's own ordinary-code
+  // fixtures below -- it still matched all 5 (a leading "sk-" is itself a word boundary,
+  // so \b cannot distinguish "sk-<realkey>" from "sk-scheduler-configuration-manager").
+  // Adopting it would have reintroduced the exact false-positive class this pattern
+  // exists to avoid. This test documents the accepted trade-off explicitly: the
+  // alphanumeric-only tail has zero false positives (asserted here) at the cost of
+  // missing sk-proj- keys whose first 20 body chars aren't all alphanumeric (a known,
+  // disclosed limitation of a lightweight defense-in-depth scanner, not a claimed guarantee).
+  it('SEC-3 known limitation (documented, not silently regressed): zero false positives is chosen over full sk-proj- recall', async () => {
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const files = MODULE_REGISTRY['stack-scan'].generate('acme-venture', '/tmp/acme-venture', {});
+    const stackScanYml = files.find((f) => f.path.endsWith('stack-scan.yml'));
+    const match = stackScanYml.content.match(/PATTERN='(.+)'/);
+    const pattern = new RegExp(match[1]);
+
+    // A real sk-proj- key with an alphanumeric first 20 body chars IS caught.
+    expect(pattern.test('sk-proj-' + 'ABCDEFGHIJKLMNOPQRST')).toBe(true);
+    // A real sk-proj- key with '-'/'_' in its first 20 body chars is NOT caught --
+    // documented limitation, not a silent gap.
+    expect(pattern.test('sk-proj-' + 'AB_DEFGHIJKLMNOPQRST')).toBe(false);
+    expect(pattern.test('sk-proj-' + 'AB-DEFGHIJKLMNOPQRST')).toBe(false);
+  });
+
   // SECURITY re-verification (evidence 8eec89e0, EXEC-TO-PLAN) found the widened
   // sk- character class ([A-Za-z0-9_-]{20,}) false-positived on ordinary kebab-case
   // code containing "sk-" as a substring -- 5/5 ordinary samples matched. Reverted
