@@ -13,6 +13,7 @@ const fsState = { registryJson: null };
 let insertPayloads = [];
 let updatePayloads = [];
 let selectResult = [];
+let isCalls = [];
 
 function freshRegistry() {
   return { applications: {}, metadata: { total_apps: 0, active_apps: 0, last_updated: null } };
@@ -30,10 +31,19 @@ vi.mock('../../../../lib/supabase-client.js', () => ({
     from: (table) => {
       if (table !== 'applications') throw new Error(`unexpected table ${table}`);
       return {
-        // SEC-5 fix: the real code no longer chains .eq('status','active') on this
-        // select -- it matches across ANY status now, so select() itself must be
-        // directly awaitable (a thenable), not require an .eq() call first.
-        select: () => Promise.resolve({ data: selectResult, error: null }),
+        // V1 fix (VALIDATION PLAN_VERIFICATION review, evidence 95af1848): the
+        // real code chains .is('deleted_at', null), mirroring the partial unique
+        // index predicate (uq_applications_normalized_name is WHERE deleted_at IS
+        // NULL). selectResult here represents what the DB would ACTUALLY return
+        // after that server-side filter -- i.e. tests must never put a
+        // soft-deleted row in selectResult, since Postgres itself would exclude
+        // it. isCalls proves the query is actually built with the filter.
+        select: () => ({
+          is: (col, val) => {
+            isCalls.push({ col, val });
+            return Promise.resolve({ data: selectResult, error: null });
+          },
+        }),
         update: (payload) => ({
           eq: (_col, val) => {
             updatePayloads.push({ payload, id: val });
@@ -61,6 +71,7 @@ beforeEach(() => {
   insertPayloads = [];
   updatePayloads = [];
   selectResult = [];
+  isCalls = [];
   fsState.registryJson = freshRegistry();
 });
 
@@ -132,6 +143,36 @@ describe('venture-provisioner DEFAULT_STEPS: registry_updated DB write-through (
     // deactivated venture is never silently reactivated by this write-through.
     expect(updatePayloads[0].payload).toEqual({ local_path: '/tmp/acme-venture' });
     expect(Object.keys(updatePayloads[0].payload)).not.toContain('status');
+  });
+
+  // VALIDATION finding V1 (PLAN_VERIFICATION review, evidence 95af1848, HIGH,
+  // measured against the LIVE DB): uq_applications_normalized_name is a PARTIAL
+  // unique index (WHERE deleted_at IS NULL) -- confirmed live: 4 soft-deleted
+  // tombstone rows exist today (MarketLens, CronGenius, Market Modeling SaaS,
+  // DataDistill). The SEC-5 fix widened the collision probe from
+  // .eq('status','active') to no filter at all, which (without also excluding
+  // tombstones) would match a soft-deleted row and take the UPDATE branch,
+  // resurrecting the exact ApexNiche-class silent-skip FR-4 exists to close --
+  // one mechanism over. Fixed by adding .is('deleted_at', null), mirroring the
+  // index's own predicate exactly. This test proves the query is actually built
+  // with that filter (a soft-deleted row would never even reach the client, so
+  // simulating "the DB already filtered it out" and asserting isCalls is the
+  // correct way to test a server-side WHERE clause).
+  it('V1 regression: the collision probe queries with deleted_at IS NULL, mirroring the partial unique index', async () => {
+    selectResult = []; // the DB itself excludes tombstones once .is() is applied
+    const ctx = {
+      ventureId: 'v1',
+      venture: { name: 'MarketLens', repoName: 'marketlens', localPath: '/tmp/marketlens' },
+      stepsCompleted: [],
+      log: () => {},
+    };
+    await registryStep().execute(ctx);
+
+    expect(isCalls).toEqual([{ col: 'deleted_at', val: null }]);
+    // With the tombstone correctly excluded by the query, a same-named NEW
+    // venture must take the INSERT branch, not silently match the tombstone.
+    expect(insertPayloads.length).toBe(1);
+    expect(updatePayloads).toEqual([]);
   });
 
   it('the registry.json write (existing, correct behavior) is preserved unchanged alongside the new INSERT', async () => {
