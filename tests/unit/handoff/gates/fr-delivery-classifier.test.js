@@ -366,7 +366,7 @@ describe('frIdOf', () => {
 // change. Override complianceRows/complianceError to test something else (see the dedicated
 // round-5 describe block, and fr-delivery-classifier-testref-realfs.test.js for the full
 // cross-repo/unregistered-application coverage).
-function stubWithTesting({ stories = [], testingRows = [], testingError = null, complianceRows = null, complianceError = null } = {}) {
+function stubWithTesting({ stories = [], storiesError = null, testingRows = [], testingError = null, complianceRows = null, complianceError = null } = {}) {
   const effectiveComplianceRows = complianceRows ?? testingRows.map((r) => ({ id: r.id, expected_repo_path: process.cwd() }));
   return {
     from(table) {
@@ -375,7 +375,9 @@ function stubWithTesting({ stories = [], testingRows = [], testingError = null, 
         eq() { return chain; },
         maybeSingle() { return Promise.resolve({ data: null, error: null }); },
         then(res) {
-          if (table === 'user_stories') return Promise.resolve({ data: stories, error: null }).then(res);
+          if (table === 'user_stories') {
+            return Promise.resolve(storiesError ? { data: null, error: storiesError } : { data: stories, error: null }).then(res);
+          }
           if (table === 'sub_agent_execution_results') {
             return Promise.resolve(testingError ? { data: null, error: testingError } : { data: testingRows, error: null }).then(res);
           }
@@ -772,12 +774,34 @@ describe('classifyFrDelivery — testing_evidence second signal (TS-1..TS-N2)', 
     expect(c.frs.find((f) => f.id === 'FR-1').status).toBe('delivered');
     expect(c.testing_evidence_rows_seen).toBe(0);
   });
+
+  // Pre-existing bug found by testing-agent evidence e3437068-25eb-4922-b069-90bec988ff3f while
+  // reviewing SD-LEO-INFRA-FR-DELIVERY-SECOND-SIGNAL-001 (filed as standalone feedback, out of
+  // that SD's scope): the user_stories query destructured only {data}, so an error made `data`
+  // null and every FR on the SD silently classified undelivered/unverifiable with no visibility
+  // into WHY. Fixed by binding `error` and surfacing stories_lookup_failed, mirroring the
+  // pre-existing compliance_lookup_failed pattern for the sibling testing_evidence query.
+  it('a bound user_stories query error is surfaced via stories_lookup_failed, not silently folded into zero validated stories', async () => {
+    const c = await classifyFrDelivery(
+      stubWithTesting({ storiesError: { message: 'column "description" does not exist' }, testingRows: [] }),
+      { sdId: 'sd-stories-err', functionalRequirements: [{ id: 'FR-1' }, { id: 'FR-2' }] },
+    );
+    expect(c.stories_lookup_failed).toBe(true);
+    expect(c.validated_story_count).toBe(0);
+    // Degrades gracefully -- no throw, and the existing classification logic still runs.
+    expect(c.frs).toHaveLength(2);
+  });
+
+  it('stories_lookup_failed is false on a healthy (non-erroring) lookup, including a genuine zero-rows result', async () => {
+    const c = await classifyFrDelivery(stubWithTesting({ stories: [], testingRows: [] }), { sdId: 'sd-stories-ok', functionalRequirements: [{ id: 'FR-1' }] });
+    expect(c.stories_lookup_failed).toBe(false);
+  });
 });
 
 describe('TS-10: consuming gates tolerate the extended classification shape', () => {
   it('a classification with all new fields present but empty produces byte-identical scoring/warnings to the pre-extension shape', () => {
     const base = { frs: [{ id: 'FR-002', description: 'b', status: 'undelivered' }, { id: 'FR-001', description: 'a', status: 'delivered' }], total: 2, delivered: 1, descoped: 0, undelivered: 1, unverifiable: 0 };
-    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], unresolved_test_refs: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [], compliance_lookup_failed: false };
+    const extended = { ...base, regex_fr_mentions: [], testing_evidence_rows_seen: 0, unmatched_fr_coverage_ids: [], unresolved_test_refs: [], conflicting_signals: [], unrecognized_phase_rows: [], rejected_phase_rows: [], compliance_lookup_failed: false, stories_lookup_failed: false };
     const rBase = projectGateResult(base, { enforced: true });
     const rExtended = projectGateResult(extended, { enforced: true });
     expect(rExtended.passed).toBe(rBase.passed);
@@ -801,6 +825,19 @@ describe('TS-10: consuming gates tolerate the extended classification shape', ()
     const base = { frs: [], total: 2, delivered: 2, descoped: 0, undelivered: 0, unverifiable: 0, compliance_lookup_failed: false };
     const r = projectGateResult(base, { enforced: true });
     expect(r.warnings.join(' ')).not.toMatch(/repo-compliance lookup/i);
+  });
+
+  it('stories_lookup_failed=true is NEVER silent, in either enforcement mode', () => {
+    const base = { frs: [], total: 2, delivered: 0, descoped: 0, undelivered: 2, unverifiable: 0, stories_lookup_failed: true };
+    for (const enforced of [true, false]) {
+      const r = projectGateResult(base, { enforced });
+      expect(r.warnings.join(' ')).toMatch(/user_stories lookup.*failed/i);
+    }
+  });
+  it('stories_lookup_failed=false produces no such warning', () => {
+    const base = { frs: [], total: 2, delivered: 2, descoped: 0, undelivered: 0, unverifiable: 0, stories_lookup_failed: false };
+    const r = projectGateResult(base, { enforced: true });
+    expect(r.warnings.join(' ')).not.toMatch(/user_stories lookup/i);
   });
 });
 
