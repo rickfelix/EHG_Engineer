@@ -327,7 +327,41 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  if (client) await client.end();
+  // Cross-test-file hygiene: the "ddl" CI job runs every tests/ddl/*.db.test.js file against the
+  // SAME shared `ddl_check` database, sequentially, with no per-file schema isolation. Without this
+  // teardown, this file's WIDER strategic_directives_v2 (id TEXT PRIMARY KEY, NOT NULL, no default)
+  // survives into a later file's run; that file's own `CREATE TABLE IF NOT EXISTS
+  // strategic_directives_v2 (sd_key TEXT PRIMARY KEY, status TEXT)` then becomes a silent no-op
+  // against this file's leftover table, and its INSERTs (which never supply `id`, because ITS OWN
+  // schema has no `id` column) fail with a NOT NULL violation — a real regression this exact
+  // scenario caused (tests/ddl/plan-of-record-remainder-v2-ddl.db.test.js, discovered live in CI).
+  // CASCADE drops the dependent triggers this file creates on each table.
+  if (client) {
+    try {
+      await client.query('DROP TABLE IF EXISTS public.strategic_directives_v2 CASCADE');
+      await client.query('DROP TABLE IF EXISTS public._ddl_probe CASCADE');
+      await client.query('DROP TABLE IF EXISTS public._ddl_cascade_driver CASCADE');
+      await client.query('DROP TABLE IF EXISTS public.exec_implementation_sessions CASCADE');
+      await client.query('DROP TABLE IF EXISTS public.lead_evaluations CASCADE');
+      await client.query('DROP TABLE IF EXISTS public.plan_technical_validations CASCADE');
+      await client.query('DROP TABLE IF EXISTS public.sd_phase_tracking CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.auto_transition_status() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.enforce_canonical_lifecycle_write() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.sd_canonical_writer_policy(text) CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.complete_orchestrator_sd(character varying) CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.fn_atomic_lead_to_plan_transition(text, text, text) CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.fn_atomic_exec_to_plan_transition(text, text, text, text) CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.update_sd_after_exec_completion() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.update_sd_after_lead_evaluation() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.update_sd_after_plan_validation() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.update_sd_progress_from_phases() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public._ddl_record() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public._ddl_cascade_wrapper() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public._mmm_unaware_mutator() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.calculate_sd_progress(text) CASCADE');
+    } catch { /* best effort — a later file's own CREATE TABLE IF NOT EXISTS is the real safety net */ }
+    await client.end();
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────
