@@ -2048,15 +2048,19 @@ async function notifySignalResolvedByDisposition(supabase) {
 // state with the rest of main(), so this is a pure hoist, zero behavior change. Kept in
 // this file (not lib/sweep/passes/) for the same source-text-pinning reason documented on
 // runQaFixtureScan() above (this block isn't pinned today, but the convention is uniform).
-async function runCoordinatorHousekeeping(ctx) {
-  const { supabase } = ctx;
-
-  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
-  // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
-  // status is 'completed' AND payload.notification_sent is not yet true, look up
-  // sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
-  // Drops silently when callsign no longer maps to a live session. Sets
-  // payload.notification_sent=true to prevent re-send.
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
+// For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
+// status is 'completed' AND payload.notification_sent is not yet true, look up
+// sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
+// Drops silently when callsign no longer maps to a live session. Sets
+// payload.notification_sent=true to prevent re-send.
+//
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction 37018288): extracted to its
+// own function — mirroring notifySignalResolvedByDisposition()'s existing extraction —
+// so the null-safety fix below (TESTING evidence bfb24a47) is directly unit-testable with
+// a minimal fake client, instead of only reachable by mocking all of
+// runCoordinatorHousekeeping's other unrelated blocks. Behavior-preserving extraction.
+async function notifySignalResolvedByPromotion(supabase) {
   try {
     const { data: candidates } = await supabase
       .from('session_coordination')
@@ -2132,6 +2136,12 @@ async function runCoordinatorHousekeeping(ctx) {
   } catch (resolvedErr) {
     console.log('SIGNAL_RESOLVED: ' + (resolvedErr && resolvedErr.message ? resolvedErr.message : 'unknown'));
   }
+}
+
+async function runCoordinatorHousekeeping(ctx) {
+  const { supabase } = ctx;
+
+  await notifySignalResolvedByPromotion(supabase);
 
   // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4) — SIGNAL_RESOLVED for a LONE, individually-
   // dispositioned signal. Extracted to its own function (rather than inlined here like the
@@ -4564,4 +4574,5 @@ module.exports.clearHalfReleasedSdClaims = clearHalfReleasedSdClaims;
 // the REAL SIGNAL_RESOLVED logic (fake client, real code path) against fixtures, not a
 // re-implementation of the trigger condition.
 module.exports.notifySignalResolvedByDisposition = notifySignalResolvedByDisposition;
+module.exports.notifySignalResolvedByPromotion = notifySignalResolvedByPromotion;
 module.exports.resolveLiveSessionForCallsign = resolveLiveSessionForCallsign;

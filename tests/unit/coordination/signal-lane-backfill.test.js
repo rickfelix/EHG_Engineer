@@ -91,6 +91,10 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-3: backfillRow (TS-4 primary regre
     expect(result.ok).toBe(true);
     expect(result.handStamped).toBe(false);
     expect(c.getRow('sig-1').acknowledged_at).toBe('2026-08-24T12:00:00Z');
+    // TESTING correction (37018288): backfillRow also stamps payload.notification_sent=true so a
+    // hand-stamped historical closure never trips a false SIGNAL_RESOLVED notification later.
+    // MUTATION: remove that stamp -> this fails, closing the gap TESTING found zero coverage for.
+    expect(c.getRow('sig-1').payload.notification_sent).toBe(true);
     const receipt = c.receipts[0];
     expect(receipt.is_retention).toBe(true);
     expect(receipt.disposition).toBeNull();
