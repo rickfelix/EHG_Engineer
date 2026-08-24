@@ -1,3 +1,28 @@
+# SD-LEO-INFRA-CHANGELOG-CONTENTION-PARALLEL-001 — parallel fleet worker sessions hand-edit the
+# single CHANGELOG.md at merge time, colliding whenever two sessions concurrently append entries
+# under the same date/category section (105 commits touched it in 30d, ~31% of repo churn).
+# git's built-in `union` merge driver unions non-conflicting textual changes instead of raising a
+# conflict; measured to resolve the exact reported concurrent-append shape cleanly (both entries
+# preserved, correctly nested, zero conflict markers).
+#
+# REAL PRECONDITION (measured, not assumed — an earlier draft of this comment wrongly said "must
+# be in the merge-base"; that is FALSE): git reads .gitattributes from the CHECKED-OUT ("ours")
+# side's working tree/history AT MERGE TIME, not from the merge-base commit. A branch forked
+# before this line lands on main still gets ONE conflict on its first `git merge origin/main`
+# (its own checked-out history lacks this line at that moment) — clean thereafter, once that sync
+# brings the line into its own tip. This matches the existing, already-required pre-ship
+# main-sync workflow; no new process burden.
+#
+# ACCEPTED RESIDUAL RISK: union merge trades a loud conflict for a silent-duplication risk if two
+# sessions ever REWORD the SAME existing entry (rather than each appending a distinct new one) —
+# both copies would be kept instead of forcing a human decision. Low frequency (changelog entries
+# are rarely edited post-hoc); revisit with a per-SD fragment+assembler design only if this is
+# ever actually observed in practice. Also out of scope: GitHub's server-side PR-merge button does
+# not apply .gitattributes merge drivers to its own conflict detection — this fix covers local
+# `git merge`/`git rebase` (the actual source of the reported pain: shipping prep, main-sync
+# before /ship), not the server-side path.
+CHANGELOG.md merge=union
+
 # SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D
 # Pin the generated stage-config.js to LF so its on-disk form matches the
 # generator output (scripts/generate-stage-config.cjs emits LF) on every
