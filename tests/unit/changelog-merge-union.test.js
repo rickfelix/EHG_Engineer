@@ -69,8 +69,7 @@ function initRepo(dirname) {
   return dir;
 }
 
-function writeChangelog(dir, extraLine, attrLine = null) {
-  if (attrLine) fs.writeFileSync(path.join(dir, '.gitattributes'), attrLine + '\n');
+function writeChangelog(dir, extraLine) {
   fs.writeFileSync(
     path.join(dir, 'CHANGELOG.md'),
     CHANGELOG_BASE.replace('- Entry A', `- Entry A\n- ${extraLine}`),
