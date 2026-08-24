@@ -1,6 +1,7 @@
 -- SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 (FR-1..FR-4) -- Ventures RLS integrity repair.
 --
--- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting)
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: Chairman verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting, Adam 0549d739, branch ceremony/20260824-sitting)
 --   Chairman verification NOT yet obtained. This file is staged only.
 --   WHY chairman-gated: this file creates a TRIGGER (client governance-write guard) and
 --   REVOKE/GRANT-equivalent policy changes (narrowed SELECT qual, new UPDATE policy) -- both

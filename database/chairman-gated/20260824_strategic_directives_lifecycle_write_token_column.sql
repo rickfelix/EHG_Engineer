@@ -1,7 +1,8 @@
 -- SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 — STEP 1 of 2: the stamp column, ALONE.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting)
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: Chairman verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting, Adam 0549d739, branch ceremony/20260824-sitting)
 --   approval on record. See database/chairman-gated/README.md.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════

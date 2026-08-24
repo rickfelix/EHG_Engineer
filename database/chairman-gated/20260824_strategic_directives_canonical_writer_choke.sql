@@ -2,7 +2,9 @@
 -- public.strategic_directives_v2 (status / current_phase / completion_date)
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting) — APPLY HELD by packet terms: approved today, applies only after the 13 writers are wired + Golf-2 code branch merged (Solomon-verified precondition).
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: Chairman verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting, Adam 0549d739, branch ceremony/20260824-sitting)
+-- @approval-record: APPLY HELD by packet terms — approved today, applies only after 13 writers wired + Golf-2 branch merged (Solomon-verified precondition).
 --   approval on record. See database/chairman-gated/README.md: the approver header must match
 --   `git config user.email` at apply time and is checked against the chairman-approval record.
 --

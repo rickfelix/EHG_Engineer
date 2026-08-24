@@ -1,7 +1,8 @@
 -- SD-LEO-INFRA-MINUS-EVIDENCE-LAYER-001 (T-minus P1 — Evidence Layer)
 -- Target DB: EHG_Engineer consolidated
 --
--- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting)
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: Chairman verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting, Adam 0549d739, branch ceremony/20260824-sitting)
 --   on record. See README.md ceremony guards: the approver header must match `git config user.email`
 --   at apply time and is checked against the chairman-approval record, not merely present.
 --

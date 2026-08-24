@@ -1,5 +1,6 @@
 -- 20260823_register_path_integrity_flags.sql
--- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting)
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: Chairman verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting, Adam 0549d739, branch ceremony/20260824-sitting)
 -- SD-LEO-INFRA-MINUS-PATH-INTEGRITY-001 (FR-1/FR-4, TR-9)
 --
 -- Registers the two new leo_feature_flags rows FR-1 and FR-4 need, following
