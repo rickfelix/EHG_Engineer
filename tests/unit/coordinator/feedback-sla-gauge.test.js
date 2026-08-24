@@ -19,13 +19,16 @@ describe('computeBreaches (pure)', () => {
     expect(breaches).toEqual([{ category: 'coordinator_review', count: 1, oldestAgeDays: 10 }]);
   });
 
-  it('harness_backlog only counts high/critical severity (escalations)', () => {
+  it('harness_backlog counts ALL severities, not just high/critical (SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 FR-3)', () => {
+    // Previously restricted to severityIn:['high','critical'], which left ~94% of the live
+    // backlog (medium/low/NULL severity) structurally invisible to breach alarming. Widened so
+    // the medium-severity row below now counts alongside the high-severity one.
     const rows = [
-      { category: 'harness_backlog', severity: 'medium', created_at: new Date(NOW - 30 * DAY_MS).toISOString() }, // stale but not escalation-severity
+      { category: 'harness_backlog', severity: 'medium', created_at: new Date(NOW - 30 * DAY_MS).toISOString() },
       { category: 'harness_backlog', severity: 'high', created_at: new Date(NOW - 8 * DAY_MS).toISOString() },
     ];
     const breaches = computeBreaches(rows, NOW);
-    expect(breaches).toEqual([{ category: 'harness_backlog', count: 1, oldestAgeDays: 8 }]);
+    expect(breaches).toEqual([{ category: 'harness_backlog', count: 2, oldestAgeDays: 30 }]);
   });
 
   it('reports the oldest age and full count across multiple stale rows in one category', () => {

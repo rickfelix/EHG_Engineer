@@ -1,0 +1,69 @@
+# Capture-channel ceremony scope-lock — blocks a PR that touches the completion_flag capture
+# ceremony (the one Stop-hook-encoded mandate in SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001's
+# scope). FR-3/FR-4 explicitly reserve any actual ceremony change to a separate chairman ruling;
+# this lint is the mechanical guarantee, not a one-time LEAD-phase assertion.
+#
+# Narrow, path-triggered: only fires when a PR touches one of the 5 named ceremony surfaces
+# (lib/governance/ceremony-scope-lock.js's PATH_BAN + the witness-content file) or this workflow
+# itself. Any other PR is unaffected.
+#
+# ROLLOUT — ADVISORY FIRST: continue-on-error is true for a 7-day soak, mirroring
+# diagnostic-gauge-citation-lint.yml's own rollout convention for a brand-new lint.
+# FLIP CRITERION: after 7 days (from merge of this workflow) with zero false-positive reports in
+# the harness backlog, set continue-on-error: false to make the lint blocking.
+name: Capture Channel Ceremony Scope Lock Lint
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/hooks/post-completion-tail-enforcement.cjs'
+      - 'scripts/hooks/stop-subagent-enforcement/post-completion-validator.js'
+      - 'scripts/hooks/stop-subagent-enforcement.js'
+      - '.claude/settings.json'
+      - 'scripts/capture-completion-flags.js'
+      - 'scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs'
+      - 'lib/governance/ceremony-scope-lock.js'
+      - '.github/workflows/capture-channel-ceremony-scope-lock-lint.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capture-channel-ceremony-scope-lock-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ceremony-scope-lock-lint:
+    name: ceremony-scope-lock-lint
+    runs-on: ubuntu-latest
+    # ADVISORY SOAK — see flip criterion in the header comment.
+    continue-on-error: true
+    steps:
+      # fetch-depth: 0 (full history) makes the base ref reachable already -- no separate shallow
+      # re-fetch is needed, and one would risk silently degrading merge-base resolution.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run capture-channel ceremony scope-lock lint (diff vs PR base)
+        env:
+          # SEC-CCD-002 (SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 SECURITY review 40c35949):
+          # base_ref reaches the lint ONLY via this env var, never inline-interpolated into `run:` —
+          # the lint's own VALID_BASE_REF guard (lib/git/hardened-runner.cjs) validates its shape
+          # before any git process spawns.
+          CEREMONY_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          node scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs --base "$CEREMONY_LINT_BASE" | tee lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## Capture Channel Ceremony Scope Lock Lint"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code

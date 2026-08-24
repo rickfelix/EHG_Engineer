@@ -25,6 +25,8 @@ import {
   DEFAULT_BACKLOG_AGE_MS,
 } from '../../../lib/governance/drain-inventory.js';
 
+const DAY = 24 * 60 * 60 * 1000;
+
 /** A structurally sound descriptor: has a consumer and a closing path, so nothing structural fires. */
 const SOUND = Object.freeze({ consumer: 'some-consumer', closingPath: 'the row is dispositioned' });
 /** A reading of a healthy queue: shallow, recent, and its closing path is in use. */
@@ -97,6 +99,47 @@ describe('UNDRAINED fires on data — the gap this SD closes', () => {
     // The closing-path branch must survive: ordering moved it, it did not delete it.
     const shallowUnexercised = { count: 3, oldestAgeMs: 60_000, closingPathUses: 0 };
     expect(classifyObserved(SOUND, shallowUnexercised)).toBe(VERDICT.CLOSING_PATH_UNEXERCISED);
+  });
+});
+
+describe('SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 FR-2 — a single lifetime disposition must not permanently disarm the check', () => {
+  it('[THE LIVE BUG, RED-first] a backlog-sized queue with a NEGLIGIBLE disposition rate is UNDRAINED, not PASS', () => {
+    // Live measured state of invariant-gauge-finding at LEAD-phase investigation time: 5,419
+    // undrained rows against exactly 1 lifetime gauge_finding_dispositions row (rate 0.018%).
+    // Before the FR-2 fix, `reading.closingPathUses !== 0` short-circuited exceedsBacklogThreshold
+    // to false regardless of magnitude, so this exact shape read PASS.
+    const liveInvariantGaugeFinding = { count: 5419, oldestAgeMs: 51 * DAY, closingPathUses: 1 };
+    expect(classifyObserved(SOUND, liveInvariantGaugeFinding)).toBe(VERDICT.UNDRAINED);
+    expect(exceedsBacklogThreshold(SOUND, liveInvariantGaugeFinding)).toBe(true);
+  });
+
+  it('the pre-existing ACCEPT-CONTROL (848/53, rate 6.2%) still PASSES — the rate fix must not regress it', () => {
+    const acceptControl = { count: 848, oldestAgeMs: 30 * DAY, closingPathUses: 53 };
+    expect(classifyObserved(SOUND, acceptControl)).toBe(VERDICT.PASS);
+  });
+
+  it('a null/undefined closingPathUses (no closing-path reading at all) is normalized to 0, never treated as evidence of drainage', () => {
+    // This is the exact shape a descriptor with no closingPathTable produces today (e.g. a new
+    // status-based descriptor before its CLI reading branch is wired) -- `undefined !== 0` is
+    // true in JS, so the ORIGINAL check would have silently disarmed on this shape too.
+    const deepWithNoReading = { count: 6249, oldestAgeMs: 200 * DAY, closingPathUses: null };
+    expect(classifyObserved(SOUND, deepWithNoReading)).toBe(VERDICT.UNDRAINED);
+    // REGRESSION evidence 56415f6d: pin the underlying predicate directly too, not just the
+    // classifier that wraps it -- a null closing-path reading on a backlog-sized population is
+    // deliberately treated as "no measured drainage" (falls back to isBacklogSized), never as a
+    // manufactured PASS from missing data.
+    expect(exceedsBacklogThreshold(SOUND, deepWithNoReading)).toBe(true);
+
+    const deepWithUndefinedReading = { count: 6249, oldestAgeMs: 200 * DAY };
+    expect(classifyObserved(SOUND, deepWithUndefinedReading)).toBe(VERDICT.UNDRAINED);
+  });
+
+  it('a shallow queue with a low rate but small absolute population is unaffected (rate check only applies once backlog-sized)', () => {
+    // count=1, closingPathUses=1 is an EXISTING pinned fixture (drain-inventory.test.js:204-205,
+    // :341-343-adjacent) — 100% rate trivially passes, but this test additionally confirms a
+    // shallow population never reaches the new rate branch at all (isBacklogSized gates it).
+    const shallow = { count: 1, closingPathUses: 1 };
+    expect(classifyObserved(SOUND, shallow)).toBe(VERDICT.PASS);
   });
 });
 

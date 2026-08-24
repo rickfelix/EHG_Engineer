@@ -111,6 +111,7 @@
     "protocol:lint:test": "node scripts/protocol-lint/cli.mjs test",
     "protocol:lint:promote": "node scripts/protocol-lint/cli.mjs promote",
     "protocol:lint:review": "node scripts/protocol-lint/cli.mjs review",
+    "lint:ceremony-scope-lock": "node scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs",
     "lint:metadata-flags": "node scripts/lint/metadata-flag-lint.mjs",
     "lint:env-flags": "node scripts/lint/process-env-feature-flag-lint.mjs",
     "lint:fleet-liveness-select": "node scripts/lint/fleet-liveness-select-lint.mjs",
