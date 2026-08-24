@@ -11,6 +11,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_UUID = 'ed76707d-be3e-4b34-8066-7b9ec2db7709';
 const SD_KEY = 'SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001';
@@ -258,7 +259,9 @@ async function main() {
   console.log('Verified:', JSON.stringify(ver, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

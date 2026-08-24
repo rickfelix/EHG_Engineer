@@ -93,6 +93,7 @@ import fs from 'fs';
 import { execSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import { isNeverPushedSpecimen, computeReposForSD } from '../modules/handoff/executors/lead-final-approval/gates.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
  * Local git history evidence — see the file-header notes (rounds 1 and 2) on why this is the
@@ -336,7 +337,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(err => {
-  console.error('UNEXPECTED ERROR:', err);
-  process.exit(2);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch(err => {
+    console.error('UNEXPECTED ERROR:', err);
+    process.exit(2);
+  });
+}
