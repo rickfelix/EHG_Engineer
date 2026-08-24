@@ -159,6 +159,45 @@ describe('createPRMergeVerificationGate fail-closed behaviour', () => {
     expect(result.issues.join('\n')).toMatch(/5 commits/);
   });
 
+  // FR-2/SEC-2/SEC-3 (SD-LEO-FIX-LEAD-FINAL-APPROVAL-001, EXEC-TO-PLAN TESTING+SECURITY findings):
+  // isRefCharsetSafe's INTEGRATION at gates.js:894 had zero coverage -- every prior FR-2 test
+  // exercised the pure function in isolation. Mutation-tested: deleting the `if (!isRefCharsetSafe
+  // (b))` guard, or silently `continue`-ing past a violator instead of pushing it, both left this
+  // suite 27/27 green before this test existed. The branch below owns per branchBelongsToSd (rest
+  // starts with `${SD}-`) but fails the charset allowlist, exactly the shape a pushed exploit branch
+  // would take.
+  it('FR-2/SEC-2/SEC-3: a branch that fails the ref-charset guard blocks, is marked unverified, and is never rendered into a runnable remediation command', async () => {
+    const evilBranch = `${SD}-a&calc.exe&b`;
+    mockBothExecs((cmd) => {
+      if (cmd.startsWith('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.startsWith('git fetch')) return '';
+      if (cmd === 'git branch -r') return `  origin/feat/${evilBranch}\n  origin/main`;
+      return '';
+    });
+    const result = await gateWith(keys(SD)).validator(makeCtx());
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    const violation = result.details?.unmergedBranches?.find((b) => b.reason === 'ref_charset_violation');
+    expect(violation).toBeTruthy();
+    // SEC-3: unverified:true routes it away from the `verified` bucket, which is rendered below as
+    // a literal `git push -u origin <branch> && gh pr create && gh pr merge` command an operator
+    // could copy-paste -- the exact defect class FR-1 closed, resurfacing in the output channel.
+    expect(violation.unverified).toBe(true);
+    expect(result.issues.join('\n')).not.toContain(`git push -u origin feat/${evilBranch}`);
+    // Filtered out before the rev-list/gh-pr-list argv sinks -- the payload never even reaches
+    // execFileSync, let alone a shell.
+    expect(execFileSync).not.toHaveBeenCalledWith(
+      'git',
+      expect.arrayContaining([expect.stringContaining('calc.exe')]),
+      expect.any(Object),
+    );
+    expect(execFileSync).not.toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining([expect.stringContaining(evilBranch)]),
+      expect.any(Object),
+    );
+  });
+
   // WAS VACUOUS, and only becomes meaningful now. It passed under the anchored matcher because the
   // branch was filtered out BEFORE the merged-PR whitelist ran — green for the wrong reason, and
   // identical before and after the fix. With the branch now visible, the whitelist path actually

@@ -898,7 +898,12 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
               for (const branch of charsetViolations) {
                 const cleanBranch = branch.replace('origin/', '');
                 console.log(`   ⚠️  ${cleanBranch} rejected by ref-charset guard — treated as blocking (FR-2)`);
-                unmergedBranches.push({ branch: cleanBranch, repo, commits: null, reason: 'ref_charset_violation' });
+                // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (SEC-3): unverified:true, NOT the `verified`
+                // bucket -- `verified` entries get rendered below into a copy-pasteable
+                // `git push ... && gh pr create && gh pr merge` remediation command with the raw
+                // branch text spliced in. A branch that just failed the shell-metacharacter
+                // allowlist is exactly the string that must never reach that command-shaped output.
+                unmergedBranches.push({ branch: cleanBranch, repo, commits: null, reason: 'ref_charset_violation', unverified: true });
               }
 
               for (const branch of matchingBranches) {
