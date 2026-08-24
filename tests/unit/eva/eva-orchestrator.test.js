@@ -252,6 +252,130 @@ describe('EvaOrchestrator', () => {
     });
   });
 
+  describe('processStage - venture PARK check (SD-LEO-INFRA-APEXNICHE-STAGE-RUNAWAY-001)', () => {
+    // ApexNiche AI's stage-21 gate replayed the same chairman override into eva_stage_gate_attempts
+    // every ~30s, unbounded (1300+ rows, attempt_number 660+ and climbing) because nothing checked
+    // ventures.metadata.gating_decision before running gate evaluation -- the SAME field
+    // adam-quiet-tick.js's readVenturePark() reads to suppress stall alarms. This guard must fire
+    // BEFORE any gate evaluation or persistence, and must be scoped to the parked venture only.
+    it('returns BLOCKED and skips ALL gate evaluation when metadata.gating_decision.parked is true', async () => {
+      const parkedVentureRow = {
+        id: 'v-1', name: 'Test Venture', status: 'active',
+        current_lifecycle_stage: 21, archetype: 'saas', created_at: '2026-01-01',
+        autonomy_level: 'L0',
+        metadata: {
+          gating_decision: {
+            decision: 'PARKED pending class fix',
+            parked: true,
+            by: 'SD-LEO-INFRA-APEXNICHE-STAGE-RUNAWAY-001',
+            at: '2026-08-24T18:30:50.387Z',
+            unpark_trigger: 'SD-LEO-INFRA-STAGE-GATE-RETRY-001 shipped + stage-21 gate re-evaluated once',
+          },
+        },
+      };
+      const mockFrom = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: parkedVentureRow, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: parkedVentureRow, error: null }),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+      };
+      const mockSupabase = { from: vi.fn(() => ({ ...mockFrom })) };
+      const evaluateRealityGateFn = vi.fn().mockResolvedValue({ passed: true });
+      const validateStageGateFn = vi.fn().mockResolvedValue({ passed: true });
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn,
+          validateStageGateFn,
+        },
+      );
+
+      expect(result.status).toBe(STATUS.BLOCKED);
+      expect(result.errors.some((e) => e.code === 'VENTURE_PARKED')).toBe(true);
+      // The whole point of a kill-at-writer guard: no gate evaluation ever ran for this call.
+      expect(validateStageGateFn).not.toHaveBeenCalled();
+      expect(evaluateRealityGateFn).not.toHaveBeenCalled();
+      // No eva_stage_gate_attempts / eva_stage_gate_results insert/update ever fires.
+      expect(mockFrom.insert).not.toHaveBeenCalled();
+    });
+
+    it('proceeds with normal gate evaluation when metadata.gating_decision is absent', async () => {
+      // Regression guard: an un-parked venture (no gating_decision key at all) must be
+      // completely unaffected by this venture-scoped check.
+      const mockSupabase = createMockSupabase();
+      const validateStageGateFn = vi.fn().mockResolvedValue({ passed: true });
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn,
+        },
+      );
+
+      expect(result.status).toBe(STATUS.COMPLETED);
+      expect(validateStageGateFn).toHaveBeenCalled();
+    });
+
+    it('proceeds with normal gate evaluation when gating_decision is present but records an UNPARK, not a park (RISK-agent LEAD finding)', async () => {
+      // RISK-agent caught a real cross-venture regression: metadata.gating_decision is a
+      // decision-record SLOT, not a park-only flag -- a DIFFERENT live venture (AltifyAI)
+      // carries this exact shape to record an UNPARK ("UNPARKED — first dedicated revenue
+      // push authorized"), no parked:true key. Gating on mere key-presence would have
+      // silently stage-frozen a chairman-authorized, actively-progressing venture.
+      const unparkedVentureRow = {
+        id: 'v-1', name: 'AltifyAI-shaped Venture', status: 'active',
+        current_lifecycle_stage: 19, archetype: 'saas', created_at: '2026-01-01',
+        autonomy_level: 'L0',
+        metadata: {
+          gating_decision: {
+            decision: 'UNPARKED — first dedicated revenue push authorized',
+            by: 'chairman (SMS)',
+            at: '2026-08-10T00:00:00.000Z',
+          },
+        },
+      };
+      const mockFrom = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: unparkedVentureRow, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: unparkedVentureRow, error: null }),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+      };
+      const mockSupabase = { from: vi.fn(() => ({ ...mockFrom })) };
+      const validateStageGateFn = vi.fn().mockResolvedValue({ passed: true });
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn,
+        },
+      );
+
+      expect(result.status).toBe(STATUS.COMPLETED);
+      expect(validateStageGateFn).toHaveBeenCalled();
+      expect(result.errors.some((e) => e.code === 'VENTURE_PARKED')).toBe(false);
+    });
+  });
+
   describe('processStage - gate blocking', () => {
     it('should return BLOCKED when stage gate fails', async () => {
       const mockSupabase = createMockSupabase();
