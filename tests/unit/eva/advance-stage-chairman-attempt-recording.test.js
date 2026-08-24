@@ -43,27 +43,35 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 FR-1/FR-2 (TS-3): c
   });
 });
 
-describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (VALIDATION c39db537 correction): the 3 non-_handleChairmanGate() advance paths that re-confirm an already-approved decision', () => {
-  it("THE VALIDATION REGRESSION TEST: pre_exec_skip_trigger, pre_exec_skip, and re_entry call sites all pass chairmanGateSource:'chairman_decision' explicitly, since they advance off a re-confirmed approvedDecision without ever calling _handleChairmanGate() in that tick", () => {
-    // MUTATION: VALIDATION found these 3 call sites (pre_exec_skip_trigger, pre_exec_skip,
-    // re_entry) each independently re-confirm chairman_decisions.status==='approved' just above,
-    // then previously called _advanceStage() with NO chairmanGateSource signal at all -- meaning
-    // AltifyAI's real approvals reaching this code path would still produce zero
-    // eva_stage_gate_attempts rows post-fix, reproducing the exact defect this SD exists to close.
+describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (VALIDATION c39db537 + 04f7f256 corrections): the 4 non-_handleChairmanGate() advance paths that re-confirm an already-approved decision', () => {
+  it("THE VALIDATION REGRESSION TEST: all 4 call sites pass chairmanGateSource:'chairman_decision' explicitly, since each independently re-confirms an approved decision without ever calling _handleChairmanGate() in that tick", () => {
+    // MUTATION: VALIDATION found these 4 call sites (P0-universal pre_exec_skip at :899,
+    // pre_exec_skip_trigger, gate-specific pre_exec_skip at :1194ish, re_entry) each
+    // independently re-confirm chairman_decisions.status==='approved' just above, then
+    // previously called _advanceStage() with NO chairmanGateSource signal at all -- meaning
+    // AltifyAI's real approvals reaching these code paths would still produce zero
+    // eva_stage_gate_attempts rows post-fix, reproducing the exact defect this SD exists to
+    // close. A SECOND review round (evidence 04f7f256) found a 4th site the first fix missed --
+    // this count intentionally covers the full, re-verified inventory, not the first pass's.
     const occurrences = source.split("chairmanGateSource: 'chairman_decision'").length - 1;
-    expect(occurrences).toBe(3);
+    expect(occurrences).toBe(4);
   });
 
   it("_advanceStage()'s gate accepts EITHER result._chairmanGateSource OR the explicit top-level chairmanGateSource flag", () => {
     expect(source).toContain("result?._chairmanGateSource === 'chairman_decision' || chairmanGateSource === 'chairman_decision'");
   });
 
-  it('pre_exec_skip_trigger call site is tagged (DB-trigger-already-applied shortcut)', () => {
-    expect(source).toContain("{ advancementType: 'pre_exec_skip_trigger', chairmanGateSource: 'chairman_decision' }");
+  it("both 'pre_exec_skip' call sites (P0-universal AND gate-specific) are tagged", () => {
+    // MUTATION: these two sites share an identical advancementType string but live in
+    // structurally distinct blocks (the P0 UNIVERSAL guard for non-BLOCKING stages, and the
+    // gate-specific pre-execution guard for BLOCKING/hard-gate stages) -- both independently
+    // confirm a genuine chairman approval, so both must carry the tag.
+    const preExecSkipTagged = source.split("{ advancementType: 'pre_exec_skip', chairmanGateSource: 'chairman_decision' }").length - 1;
+    expect(preExecSkipTagged).toBe(2);
   });
 
-  it('pre_exec_skip call site is tagged (approved + artifacts-exist shortcut)', () => {
-    expect(source).toContain("{ advancementType: 'pre_exec_skip', chairmanGateSource: 'chairman_decision' }");
+  it('pre_exec_skip_trigger call site is tagged (DB-trigger-already-applied shortcut)', () => {
+    expect(source).toContain("{ advancementType: 'pre_exec_skip_trigger', chairmanGateSource: 'chairman_decision' }");
   });
 
   it('re_entry call site is tagged (worker re-entry after approval)', () => {
