@@ -21,6 +21,11 @@ import {
 } from '../../lib/venture-resolver.js';
 import path from 'path';
 import { existsSync } from 'fs';
+// getRepoRoot() (not this file's own ENGINEER_ROOT import above): venture-resolver.js's
+// ENGINEER_ROOT is module-location-derived (path.resolve(__dirname, '..')), which resolves to
+// THIS worktree's own path when the test suite itself runs from .worktrees/<SD>/ -- not the main
+// repo root the real `ehg` sibling actually sits next to. getRepoRoot() strips that suffix.
+import { getRepoRoot } from '../../lib/repo-paths.js';
 
 describe('venture-resolver', () => {
   beforeEach(() => {
@@ -41,10 +46,17 @@ describe('venture-resolver', () => {
     // that relative value against process.cwd() instead of the repo root, breaking from any
     // cwd). This assertion checks the resolved path actually EXISTS on disk, which the substring
     // check above cannot catch.
-    it('resolves ehg to a path that actually exists on disk', () => {
+    it('resolves ehg to a path that actually exists on disk (when the sibling checkout is present)', () => {
       const result = getVenturePath('ehg');
-      expect(existsSync(result)).toBe(true);
+      // The /.worktrees/ shape check is what actually catches the regression class and runs
+      // everywhere. existsSync is strictly stronger but environment-dependent: CI checks out
+      // only this repo, with no sibling `ehg` directory, so it cannot be asserted unconditionally
+      // (CI failure caught 2026-08-24) -- it still runs wherever the sibling is actually present.
       expect(result.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+      const siblingCheckedOut = existsSync(path.resolve(getRepoRoot(), '..', 'ehg'));
+      if (siblingCheckedOut) {
+        expect(existsSync(result)).toBe(true);
+      }
     });
 
     it('resolves EHG case-insensitively', () => {
@@ -98,10 +110,13 @@ describe('venture-resolver', () => {
     // LOAD-BEARING (SD-LEO-INFRA-REPO-HYGIENE-PATH-001): same blind-spot class as
     // getVenturePath's equivalent test above -- getVentureConfig had the identical
     // path.resolve(app.local_path)-against-process.cwd() bug at its own local_path resolution.
-    it('resolves local_path to a path that actually exists on disk', () => {
+    it('resolves local_path to a path that actually exists on disk (when the sibling checkout is present)', () => {
       const config = getVentureConfig('ehg');
-      expect(existsSync(config.local_path)).toBe(true);
       expect(config.local_path.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+      const siblingCheckedOut = existsSync(path.resolve(getRepoRoot(), '..', 'ehg'));
+      if (siblingCheckedOut) {
+        expect(existsSync(config.local_path)).toBe(true);
+      }
     });
   });
 
@@ -120,11 +135,14 @@ describe('venture-resolver', () => {
 
     // LOAD-BEARING (SD-LEO-INFRA-REPO-HYGIENE-PATH-001): same blind-spot class as above --
     // listVentures() had the identical bug at its own local_path resolution.
-    it('resolves ehg\'s local_path to a path that actually exists on disk', () => {
+    it('resolves ehg\'s local_path to a path that actually exists on disk (when the sibling checkout is present)', () => {
       const ventures = listVentures();
       const ehg = ventures.find(v => v.name === 'ehg');
-      expect(existsSync(ehg.local_path)).toBe(true);
       expect(ehg.local_path.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+      const siblingCheckedOut = existsSync(path.resolve(getRepoRoot(), '..', 'ehg'));
+      if (siblingCheckedOut) {
+        expect(existsSync(ehg.local_path)).toBe(true);
+      }
     });
   });
 

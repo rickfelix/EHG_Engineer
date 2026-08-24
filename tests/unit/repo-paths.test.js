@@ -184,7 +184,13 @@ describe('lib/repo-paths', () => {
   describe('resolveLocalPath() base parameter', () => {
     it('an already-absolute value is returned unchanged regardless of base', async () => {
       const { resolveLocalPath } = await import('../../lib/repo-paths.js');
-      expect(resolveLocalPath('C:/abs/path', '/some/base')).toBe(path.resolve('C:/abs/path'));
+      // Platform-correct absolute literal: 'C:/abs/path' is only absolute on win32 --
+      // path.isAbsolute('C:/abs/path') is false on POSIX (no leading '/'), so a Windows-shaped
+      // literal silently exercises the WRONG branch on a Linux CI runner (CI-only failure caught
+      // 2026-08-24: both sides of the assertion differed from intent, for different reasons, on
+      // Linux vs Windows).
+      const absoluteInput = process.platform === 'win32' ? 'C:\\abs\\path' : '/abs/path';
+      expect(resolveLocalPath(absoluteInput, '/some/base')).toBe(path.resolve(absoluteInput));
     });
 
     it('a relative value resolves against the explicit base parameter, not ENGINEER_ROOT', async () => {
@@ -230,8 +236,18 @@ describe('lib/repo-paths', () => {
       const { resolveRepoPath } = await import('../../lib/repo-paths.js');
       const resolved = resolveRepoPath('ehg');
       expect(resolved).toBeTruthy();
+      // The /.worktrees/ shape check is what actually catches the regression class (a buggy
+      // default base produces a string containing /.worktrees/ regardless of environment) and
+      // runs everywhere. The existsSync check below is strictly stronger but environment-
+      // dependent: CI checks out only this repo, with no sibling `ehg` directory, so it cannot be
+      // asserted unconditionally without making every CI run fail on a fact about the checkout,
+      // not the resolver (CI failure caught 2026-08-24). It still runs, and still catches a
+      // regression, wherever the sibling repo is actually present (every local dev machine).
       expect(resolved.replace(/\\/g, '/')).not.toContain('/.worktrees/');
-      expect(existsSync(resolved)).toBe(true);
+      const siblingCheckedOut = existsSync(path.resolve(getRepoRoot(), '..', 'ehg'));
+      if (siblingCheckedOut) {
+        expect(existsSync(resolved)).toBe(true);
+      }
     });
   });
 

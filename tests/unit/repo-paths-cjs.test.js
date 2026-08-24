@@ -29,12 +29,22 @@ describe('lib/repo-paths.cjs (CJS mirror)', () => {
     clearCache();
     const resolved = resolveRepoPath('ehg');
     expect(resolved).toBeTruthy();
+    // See the ESM twin (tests/unit/repo-paths.test.js) for why the existsSync check below is
+    // conditional on the sibling repo actually being checked out: CI has no sibling `ehg`
+    // directory, so it cannot be asserted unconditionally (CI failure caught 2026-08-24). The
+    // /.worktrees/ shape check runs unconditionally and is what actually catches the regression.
     expect(resolved.replace(/\\/g, '/')).not.toContain('/.worktrees/');
-    expect(existsSync(resolved)).toBe(true);
+    const siblingCheckedOut = existsSync(path.resolve(getRepoRoot(), '..', 'ehg'));
+    if (siblingCheckedOut) {
+      expect(existsSync(resolved)).toBe(true);
+    }
   });
 
   it('an already-absolute value is returned unchanged regardless of base', () => {
-    expect(resolveLocalPath('C:/abs/path', '/some/base')).toBe(path.resolve('C:/abs/path'));
+    // Platform-correct absolute literal -- see the ESM twin for why 'C:/abs/path' is not a valid
+    // cross-platform absolute-path literal (CI failure caught 2026-08-24).
+    const absoluteInput = process.platform === 'win32' ? 'C:\\abs\\path' : '/abs/path';
+    expect(resolveLocalPath(absoluteInput, '/some/base')).toBe(path.resolve(absoluteInput));
   });
 
   it('ESM and CJS agree on resolveRepoPath(\'ehg\') from this same runtime location', async () => {
