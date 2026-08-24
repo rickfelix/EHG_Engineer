@@ -7,7 +7,11 @@
 // PREDICATE-001, for the same technique applied to belt_capacity_verdicts).
 //
 // Only generated_by/key_learnings/retro_type/status/quality_score are persisted -- the fields
-// classifyRetro() actually reads. No titles, descriptions, SD keys, or session ids are included.
+// classifyRetro() actually reads. No titles, descriptions, or session ids are included at the
+// COLUMN level. Not a claim of absence at the CONTENT level -- key_learnings free text may
+// itself mention SD keys (EXEC-phase SECURITY finding SEC-06, evidence 319ee551): this repo is
+// private and every such key already appears on main elsewhere, so there is no new disclosure,
+// but the prior wording asserted more than was actually verified.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { writeFileSync } from 'node:fs';
