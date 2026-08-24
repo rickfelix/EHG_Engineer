@@ -669,11 +669,14 @@ npm run audit:retro          # Generate audit retrospective
 ```bash
 npm run protocol:improvements    # List improvements
 npm run protocol:review          # Review pending improvements
-npm run protocol:apply-auto      # Apply auto-improvements
 npm run protocol:effectiveness   # Check effectiveness
-npm run protocol:rescan          # Rescan for improvements
 npm run protocol:stats           # Show statistics
 ```
+
+`protocol:apply-auto` and `protocol:rescan` were removed in SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001
+(FR-4) — both called methods that did not exist on any resolvable implementation. Use
+`node scripts/protocol-improvements.js apply <queue-id>` to apply a single improvement instead;
+there is no replacement for `rescan`.
 
 ---
 

@@ -516,6 +516,53 @@ via distinct custom SQLSTATEs so a broken guard cannot be silently swallowed by 
 OPERATOR_CONTRACT gate waiver (armed_cadence/reaper, expires 2026-11-23) on `metadata` for exactly
 this reason: nothing to arm a cadence against or reap until this table is live.
 
+## Applying `20260824_leo_protocol_sections_history.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260824_leo_protocol_sections_history.sql" --prod-deploy --allow-any-path
+```
+
+(SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001, FR-1.) Creates `leo_protocol_sections_history`, a
+Phase-A LOG-ONLY audit trail for `leo_protocol_sections` (the entire live LEO protocol ruleset,
+which has no `created_at`/`updated_at` and no wired audit trail today — an existing trigger,
+`trg_doctrine_constraint_sections`, is confirmed blind for this table). THREE trigger definitions
+(`AFTER INSERT` no WHEN, `AFTER UPDATE` WHEN-scoped to 7 governed columns, `AFTER DELETE` no WHEN)
+share one function branching on `TG_OP` — a two-trigger split throws Postgres `42P17` (a
+change-scoped WHEN clause necessarily references `OLD`, which does not exist on `INSERT`, the
+same way `NEW` does not exist on `DELETE`; live-probed during EXEC). The function derives its own
+`channel` (`service_role` vs `postgres`, via `current_setting('role', true)`/`current_user` —
+never trusted from caller-supplied metadata) and records `provenance_status`
+(`present`/`missing`) plus a `metadata_key_delta`, honestly logging `missing` rather than
+fabricating a value (0/286 pre-existing rows carry a provenance key today). The history table is
+itself append-only (`no_update`/`no_delete`/`no_truncate` triggers, `ENABLE ALWAYS TRIGGER`,
+mirroring `20260823_chairman_ratifications.sql`'s pattern). **This migration never blocks a
+write** — Phase B (blocking enforcement of freeze/rate-cap/self-approval) is staged separately as
+a chairman-decision proposal (`docs/architecture/protocol-governance-phase-b-proposal.md`), not
+executed by this migration; LEAD-phase review found shipping Phase B immediately would itself
+commit new blind-guard defects and brick a live chairman ceremony script.
+
+Post-condition verification is the migration's own inline `DO $verify$` block (INSERT/UPDATE/
+metadata-only-UPDATE-suppression/DELETE, plus append-only tamper rejection, all via distinct
+custom SQLSTATEs), which only proves the `postgres`-channel branch (the block itself runs as
+that direct connection). The `service_role`/PostgREST channel branch — which cannot share a
+transaction with the DO block, since a REST call is a separate connection that auto-commits — is
+proven separately:
+
+```
+node database/chairman-gated/20260824_leo_protocol_sections_history_dry_run.mjs
+```
+
+Step 1 (works pre- or post-apply) re-runs the full UP file body — table, function, three
+triggers, append-only guards, posture, and its own `DO $verify$` block — inside a
+script-controlled transaction that always `ROLLBACK`s (live-run during EXEC: PASS, zero lasting
+trace confirmed by direct query afterward). Step 2 (post-apply only) performs a disposable,
+self-cleaning `supabase-js`/service-role INSERT and confirms the resulting history row records
+`channel='service_role'`, then explicitly deletes both the probe section and its own history row
+(a REST write cannot be rolled back) — skips gracefully with a clear message if run before the
+migration is actually applied.
+
 ## Dry-run proof for `database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql`
 
 Authored by SD-LEO-INFRA-RECONCILE-EHG-REPO-001, re-verified here for SD-LEO-INFRA-MINUS-GATE-SSOT-001

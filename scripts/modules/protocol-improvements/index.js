@@ -2,13 +2,17 @@
 /**
  * Protocol Improvements Module - Main Exports
  *
- * This module provides a complete API for extracting, applying, and tracking
- * protocol improvements from retrospectives.
+ * createProtocolImprovementSystem() below is the ONE live implementation used by
+ * scripts/protocol-improvements.js (list/approve/reject/apply/effectiveness/stats) --
+ * its methods are inline, self-contained Supabase queries against protocol_improvement_queue,
+ * not delegating to any other class in this directory.
  *
- * Architecture:
- * - ImprovementExtractor: Parse retrospectives for actionable improvements
- * - ImprovementApplicator: Apply approved improvements to database
- * - EffectivenessTracker: Measure if improvements reduce issue frequency
+ * SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-4): ImprovementExtractor.js,
+ * ImprovementApplicator.js, EffectivenessTracker.js, ImprovementRepository.js,
+ * ValidationGuard.js, and ProtocolImprovementOrchestrator.js were deleted -- confirmed dead by
+ * a repo-wide import grep: nothing outside this directory imported them, and this factory
+ * (their only in-directory consumer) never called any of their methods despite importing and
+ * re-exporting three of them. Deleting them does not change this factory's behavior.
  *
  * Database-First Architecture:
  * - ALL changes write to database first
@@ -16,19 +20,12 @@
  * - NEVER write directly to .md files
  */
 
-// Import classes
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
-import { ImprovementExtractor } from './ImprovementExtractor.js';
-import { ImprovementApplicator } from './ImprovementApplicator.js';
-import { EffectivenessTracker } from './EffectivenessTracker.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — listImprovements/getStats/
 // getEffectivenessReport below list-and-process the ENTIRE protocol_improvement_queue
 // (a growing queue accumulating every retrospective-sourced improvement); a silently-capped
 // read undercounts stats and truncates the CLI list/effectiveness report with no error.
 import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
-
-// Re-export classes
-export { ImprovementExtractor, ImprovementApplicator, EffectivenessTracker };
 
 /**
  * Factory function to create a protocol improvement system instance
@@ -225,8 +222,5 @@ export function createProtocolImprovementSystem() {
 
 // Default export
 export default {
-  ImprovementExtractor,
-  ImprovementApplicator,
-  EffectivenessTracker,
   createProtocolImprovementSystem
 };

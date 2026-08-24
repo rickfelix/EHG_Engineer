@@ -377,6 +377,23 @@ async function landContract(split) {
 }
 
 /**
+ * Merge an incoming metadata object onto whatever a row's metadata already holds, instead of
+ * overwriting it wholesale. SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-2): this script's
+ * own hardcoded metadata literal (sd/companion_of/governed/chairman_decision/rider) used to
+ * REPLACE the entire metadata object on every UPDATE, silently erasing any other key a different
+ * writer had set on the row (e.g. a metadata.provenance the FR-1 audit trigger reads) -- exported
+ * for direct unit testing, since this file has no import.meta.url guard and calls process.exit()
+ * on every terminal path, making the whole script unsafe to import/execute under a test runner.
+ * @param {object|null|undefined} existing the row's current metadata (may be absent)
+ * @param {object} incoming this script's own metadata literal for the row
+ * @returns {object} existing keys preserved; incoming keys take precedence on conflict
+ */
+export function mergeSectionMetadata(existing, incoming) {
+  const base = (existing && typeof existing === 'object' && !Array.isArray(existing)) ? existing : {};
+  return { ...base, ...incoming };
+}
+
+/**
  * Land the companion rows. IDEMPOTENT by section_type: re-running updates content rather than
  * inserting a second row, because two rows of one companion type would silently BOTH render.
  */
@@ -384,7 +401,7 @@ async function landCompanions() {
   const results = [];
   for (const c of COMPANIONS) {
     const { data: existing, error: selErr } = await supabase
-      .from('leo_protocol_sections').select('id').eq('section_type', c.section_type);
+      .from('leo_protocol_sections').select('id, metadata').eq('section_type', c.section_type).limit(2);
     if (selErr) throw new Error(`select ${c.section_type}: ${selErr.message}`);
 
     if (existing && existing.length > 1) {
@@ -405,11 +422,13 @@ async function landCompanions() {
         governed: true,
         chairman_decision: 'A-GOVERN (2026-07-31T12:08:50Z, packet adam-decision-govdemote-20260731, row 6cc469b1)',
         rider: 'no auto-default — governed explicitly via section_type + mapping, never by a fallback path',
+        provenance: { actor_type: 'ceremony', actor_id: 'adam-contract-land' },
       },
     };
 
     if (existing && existing.length === 1) {
-      const { error } = await supabase.from('leo_protocol_sections').update(payload).eq('id', existing[0].id);
+      const updatePayload = { ...payload, metadata: mergeSectionMetadata(existing[0].metadata, payload.metadata) };
+      const { error } = await supabase.from('leo_protocol_sections').update(updatePayload).eq('id', existing[0].id);
       if (error) throw new Error(`update ${c.section_type}: ${error.message}`);
       results.push(`UPDATED ${c.section_type} (row ${existing[0].id}, ${payload.content.length} B)`);
     } else {

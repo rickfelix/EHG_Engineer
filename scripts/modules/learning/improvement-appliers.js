@@ -88,7 +88,14 @@ async function applyProtocolSectionChange(improvement) {
   // human review. INSERT-ONLY now, and the payload is filtered to an explicit column allowlist.
   // sanitize THROWS on a non-object payload (the string shape measured in the live queue) rather
   // than degrading to {} — a silent empty write is how this fix would ship looking correct.
-  const { clean, dropped } = sanitizeProtocolSectionPayload(payload, { queueRowId: improvement?.id });
+  // SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-2): assignedSdId/sourceRetroId are only
+  // visible here, on the queue row -- the sanitizer itself stays synchronous/pure with no DB
+  // self-fetch, so this is the one place they can be threaded through for derived provenance.
+  const { clean, dropped } = sanitizeProtocolSectionPayload(payload, {
+    queueRowId: improvement?.id,
+    assignedSdId: improvement?.assigned_sd_id,
+    sourceRetroId: improvement?.source_retro_id,
+  });
   if (dropped.length) {
     console.warn(`[improvement-appliers] dropped non-allowlisted keys for queue row ${improvement?.id ?? 'unknown'}: ${dropped.join(', ')}`);
   }
