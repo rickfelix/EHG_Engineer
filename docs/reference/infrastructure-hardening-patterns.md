@@ -1058,6 +1058,52 @@ branch returned before ever reaching the double-stamp guard the test claimed to 
 
 ---
 
+## Pattern: A `fork` sub-agent that ends its own turn with "running in background, I'll check back" has not done the work -- treat it as incomplete (SD-LEO-INFRA-ALTIFYAI-PRICING-CHECKOUT-001)
+
+**Symptom**: An Agent tool call (`subagent_type: "fork"`) was dispatched with a detailed,
+multi-file security-hardening implementation task. It returned a short text response --
+`tool_uses: 2`, ~30 seconds -- saying it was "running in the background" and would "check back
+in ~10 minutes to merge its fix." The turn ended there. No PR existed on GitHub afterward.
+
+**Root cause**: forks (and agents generally) only produce a result the orchestrator can act on
+by returning a completed answer within their own turn -- there is no mechanism by which a fork
+can autonomously "check back" into the parent conversation later. A fork that spawns background
+work of its own and then ends its turn early has, from the orchestrator's perspective, simply
+not done the task -- the promised follow-up never arrives, because nothing is listening for it.
+This is a hallucinated capability, not a real async pattern: contrast with `Workflow`'s actual
+background execution, which *does* deliver a `<task-notification>` on completion.
+
+**Detection**: `tool_uses` far below what the task shape implies (a multi-file
+implement-test-commit-push-PR task should show 20-80 tool calls, not 2) plus response text
+promising a future check-in is the tell. Verify directly against the external system the agent
+claimed to have changed (here, `gh pr list --repo <repo> --state all --limit 5`) rather than
+trusting the response text -- the same "verify the artifact, not the narration" discipline this
+document's other patterns already establish for retrospectives and test claims.
+
+**Recovery that did NOT work**: `SendMessage({to: <the fork's agentId>, ...})` asking it to
+finish the work. The response came back from a *different* agentId with "I'm a freshly-started
+agent with no memory of a conversation that described [the task]" -- once a fork's turn has
+ended with this failure mode, SendMessage to its ID does not reliably resume the original
+context; it can produce a fresh agent that received the message as a cold-start prompt.
+
+**Recovery that worked**: re-issue a brand-new `Agent({subagent_type: "fork", ...})` call
+containing the FULL original task specification inline (not a reference to "your prior
+message"), with an explicit instruction added: *"do this work synchronously and completely
+within this single turn... do not end your turn early with a 'running in background, will check
+back' style message -- that does not work in this environment."* This succeeded on the next
+attempt (33 tool calls, real PR opened, CI green).
+
+**Generalization**: whenever dispatching a fork/agent for implementation work (not just this
+SD), a short response with disproportionately few tool calls and language implying a future
+autonomous check-in is a signal to verify externally before trusting it, and to re-dispatch with
+an explicit synchronous-completion instruction rather than assuming the work is merely delayed.
+
+### Files Modified
+None (process/operational finding, not a code fix) -- captured here for future sessions
+dispatching implementation forks.
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
