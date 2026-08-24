@@ -97,6 +97,18 @@ function evaluateContentUniqueness(rows) {
   return { duplicateFamilies, ok: duplicateFamilies.length === 0 };
 }
 
+/**
+ * SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (EXEC-phase security-agent finding S-3): section_type is
+ * caller-writable through the /learn auto-approve pipeline with no format constraint (0/286 rows
+ * contain '::' today, but nothing prevents a future one). This script's stdout now lands in a
+ * GitHub Actions log via .github/workflows/protocol-publication-audit.yml, where a literal '::'
+ * sequence is parsed as a workflow command -- neutralize it before printing any row-derived
+ * value, closing the annotation-spoofing/log-suppression surface at negligible cost.
+ */
+function escapeForCiLog(value) {
+  return String(value).replace(/::/g, ': :');
+}
+
 function loadMappedTypes(repoRoot) {
   const mapped = new Set();
   for (const file of ['scripts/section-file-mapping.json', 'scripts/section-file-mapping-digest.json']) {
@@ -112,10 +124,17 @@ async function main() {
   const repoRoot = path.resolve(__dirname, '..');
   const mappedTypes = loadMappedTypes(repoRoot);
 
-  const { data: rows, error } = await sb
+  // warnIfCapTruncated: leo_protocol_sections is a curated, operationally small
+  // (dozens-to-low-hundreds of rows) protocol-documentation config table, not a growing event
+  // stream -- a full-table read is correct by design (evaluateContentUniqueness needs every
+  // row's content). Tripwired rather than a bare unbounded select() so a future growth past the
+  // PostgREST page cap fails loudly instead of silently under-scanning.
+  const { warnIfCapTruncated } = await import('../lib/db/fetch-all-paginated.mjs');
+  const { data: rawRows, error } = await sb
     .from('leo_protocol_sections')
     .select('id, section_type, target_file, content, metadata');
   if (error) throw new Error(`leo_protocol_sections read failed: ${error.message}`);
+  const rows = warnIfCapTruncated(rawRows, 'protocol-publication-audit:leo_protocol_sections');
 
   const result = evaluatePublicationInvariants(rows, mappedTypes);
   const uniqueness = evaluateContentUniqueness(rows);
@@ -128,29 +147,29 @@ async function main() {
     console.log(`  runtime: ${result.counts.runtime}  file: ${result.counts.file}  retired: ${result.counts.retired}`);
     if (result.unclassified.length) {
       console.log(`  ❌ UNCLASSIFIED (${result.unclassified.length}):`);
-      result.unclassified.forEach((u) => console.log(`     - id=${u.id} ${u.section_type}`));
+      result.unclassified.forEach((u) => console.log(`     - id=${u.id} ${escapeForCiLog(u.section_type)}`));
     }
     if (result.invalidStatus.length) {
       console.log(`  ❌ INVALID STATUS (${result.invalidStatus.length}):`);
-      result.invalidStatus.forEach((u) => console.log(`     - id=${u.id} status=${u.status}`));
+      result.invalidStatus.forEach((u) => console.log(`     - id=${u.id} status=${escapeForCiLog(u.status)}`));
     }
     if (result.mappingDrift.length) {
       console.log(`  ❌ MAPPING DRIFT — mapped section_types absent from DB (${result.mappingDrift.length}):`);
-      result.mappingDrift.forEach((t) => console.log(`     - ${t}`));
+      result.mappingDrift.forEach((t) => console.log(`     - ${escapeForCiLog(t)}`));
     }
     if (result.darkUnreviewed.length) {
       console.log(`  ⚠️  dark 'file' sections missing a publication_note (${result.darkUnreviewed.length}) — advisory`);
     }
     if (uniqueness.duplicateFamilies.length) {
       console.log(`  ❌ DUPLICATE CONTENT (${uniqueness.duplicateFamilies.length} famil${uniqueness.duplicateFamilies.length === 1 ? 'y' : 'ies'}):`);
-      uniqueness.duplicateFamilies.forEach((f) => console.log(`     - ids=[${f.ids.join(',')}] section_types=[${f.section_types.join(',')}]`));
+      uniqueness.duplicateFamilies.forEach((f) => console.log(`     - ids=[${f.ids.join(',')}] section_types=[${f.section_types.map(escapeForCiLog).join(',')}]`));
     }
     console.log(ok ? '  ✅ all invariants hold' : '  ❌ violations found');
   }
   process.exitCode = ok ? 0 : 1;
 }
 
-module.exports = { evaluatePublicationInvariants, evaluateContentUniqueness, VALID_STATUSES, loadMappedTypes };
+module.exports = { evaluatePublicationInvariants, evaluateContentUniqueness, VALID_STATUSES, loadMappedTypes, escapeForCiLog };
 
 if (require.main === module) {
   // SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001 (FR-3d): this check reads the live DB and is

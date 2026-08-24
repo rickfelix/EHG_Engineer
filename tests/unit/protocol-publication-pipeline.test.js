@@ -14,7 +14,7 @@ import { CLAUDEMDGeneratorV3, KNOWN_GENERATED_FILES, verifyFileContentHash } fro
 import { parseOnlyFlag, parseRefreshLessonsFlag, detectConflictedState } from '../../scripts/generate-claude-md-from-db.js';
 
 const require = createRequire(import.meta.url);
-const { evaluatePublicationInvariants, evaluateContentUniqueness } = require('../../scripts/protocol-publication-audit.cjs');
+const { evaluatePublicationInvariants, evaluateContentUniqueness, escapeForCiLog } = require('../../scripts/protocol-publication-audit.cjs');
 
 const sha16 = (s) => crypto.createHash('sha256').update(s).digest('hex').substring(0, 16);
 
@@ -315,5 +315,20 @@ describe('FR-3c (SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001): evaluateContentUniquenes
     expect(r.ok).toBe(false);
     expect(r.duplicateFamilies).toHaveLength(1);
     expect(r.duplicateFamilies[0].ids.sort()).toEqual([308, 309, 310]);
+  });
+});
+
+describe('EXEC-phase security finding S-3: escapeForCiLog neutralizes GitHub Actions workflow commands', () => {
+  it('breaks a literal "::" sequence so it cannot be parsed as a workflow command', () => {
+    expect(escapeForCiLog('::set-output name=x::evil')).not.toContain('::');
+  });
+
+  it('leaves ordinary section_type text unchanged in substance', () => {
+    expect(escapeForCiLog('mandatory_phase_transitions')).toBe('mandatory_phase_transitions');
+  });
+
+  it('coerces a non-string value safely', () => {
+    expect(() => escapeForCiLog(null)).not.toThrow();
+    expect(() => escapeForCiLog(undefined)).not.toThrow();
   });
 });

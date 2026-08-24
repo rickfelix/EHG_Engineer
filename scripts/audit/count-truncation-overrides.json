@@ -7054,10 +7054,10 @@
   "match": "select('rule_id, severity, description, created_at')",
   "note": "leo_lint_rules is a curated protocol-lint rule registry/config table, not an event stream — provably small fixed rule set"
  },
- "scripts/protocol-publication-audit.cjs:76": {
+ "scripts/protocol-publication-audit.cjs:117": {
   "classification": "bounded-by-design",
   "match": "select('id, section_type, target_file",
-  "note": "leo_protocol_sections -- whole-table curated protocol-documentation config table (the CLAUDE.md content source), operationally small (dozens of sections)."
+  "note": "leo_protocol_sections -- whole-table curated protocol-documentation config table (the CLAUDE.md content source), operationally small (dozens of sections). Line moved from :76 to :117 by SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001's FR-3c (added evaluateContentUniqueness(), ~40 lines inserted above this call); content column added to the select for the new uniqueness check."
  },
  "scripts/push-integrity-metrics.js:239": {
   "classification": "bounded-by-design",
