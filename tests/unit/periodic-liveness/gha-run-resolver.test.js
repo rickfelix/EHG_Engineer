@@ -37,6 +37,25 @@ describe('latestRunPerWorkflow', () => {
     const latest = latestRunPerWorkflow([{ created_at: '2026-07-01T00:00:00Z' }]);
     expect(latest.size).toBe(0);
   });
+
+  it('QF-20260823-374: an in-flight run (conclusion=null) never shadows the last COMPLETED run, even when it is more recent', () => {
+    // Reproduces the watcher-observes-its-own-in-flight-invocation race: the workflow's own
+    // currently-running invocation is present in the very API response its own resolver call
+    // fetches (it started most recently, and has not finished yet), which previously permanently
+    // prevented its registry row from ever being stamped.
+    const runs = [
+      run({ path: '.github/workflows/periodic-liveness-watcher-cron.yml', created_at: '2026-08-23T19:09:00Z', conclusion: 'success' }),
+      run({ path: '.github/workflows/periodic-liveness-watcher-cron.yml', created_at: '2026-08-23T23:09:00Z', conclusion: null }),
+    ];
+    const latest = latestRunPerWorkflow(runs);
+    expect(latest.get('periodic-liveness-watcher-cron.yml').created_at).toBe('2026-08-23T19:09:00Z');
+  });
+
+  it('QF-20260823-374: an in-flight run for a workflow with NO prior completed run resolves to no entry (no_data upstream, never a false OVERDUE)', () => {
+    const runs = [run({ path: '.github/workflows/brand-new.yml', conclusion: null })];
+    const latest = latestRunPerWorkflow(runs);
+    expect(latest.has('brand-new.yml')).toBe(false);
+  });
 });
 
 describe('classifyGhaCronRows', () => {
@@ -62,6 +81,15 @@ describe('classifyGhaCronRows', () => {
     const latestByFile = latestRunPerWorkflow([run({ path: '.github/workflows/other.yml' })]);
     const [decision] = classifyGhaCronRows(latestByFile, ['gha_cron:foo.yml']);
     expect(decision).toEqual({ processKey: 'gha_cron:foo.yml', decision: 'no_data' });
+  });
+
+  it('QF-20260823-374: a workflow watching its own in-flight run still classifies STAMP from its last completed success', () => {
+    const latestByFile = latestRunPerWorkflow([
+      run({ path: '.github/workflows/periodic-liveness-watcher-cron.yml', created_at: '2026-08-23T19:09:00Z', run_started_at: '2026-08-23T19:09:05Z', conclusion: 'success' }),
+      run({ path: '.github/workflows/periodic-liveness-watcher-cron.yml', created_at: '2026-08-23T23:09:00Z', conclusion: null }),
+    ]);
+    const [decision] = classifyGhaCronRows(latestByFile, ['gha_cron:periodic-liveness-watcher-cron.yml']);
+    expect(decision).toEqual({ processKey: 'gha_cron:periodic-liveness-watcher-cron.yml', decision: 'stamp', ranAtIso: '2026-08-23T19:09:05Z' });
   });
 });
 
