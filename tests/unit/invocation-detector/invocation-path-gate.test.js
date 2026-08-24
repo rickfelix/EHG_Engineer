@@ -9,6 +9,16 @@ import {
   createInvocationPathGate,
   evaluateInvocationViolations,
 } from '../../../scripts/modules/handoff/executors/lead-final-approval/gates/invocation-path-gate.js';
+// SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001: statically imported (not a runtime `await import()`
+// inside the test below) — MEASURED that a dynamic import of gates.js here is corrupted whenever
+// this file runs in the same vitest worker as ANY OTHER file that also imports gates.js (proven
+// pre-existing and content-independent: reproduces with zero changes, pairing this file against
+// completely unmodified files such as tests/unit/lead-final-pr-merge-verification-cross-repo.test.js;
+// order-independent; survives --no-file-parallelism). A static import sidesteps whatever vitest/
+// esbuild module-cache-reuse defect causes that, while still proving the SAME thing the dynamic
+// import was checking: that gates.js re-exports createInvocationPathGate (i.e. it is wired into
+// the LEAD-FINAL pipeline, not merely defined in its own module).
+import { createInvocationPathGate as createInvocationPathGateFromAggregator } from '../../../scripts/modules/handoff/executors/lead-final-approval/gates.js';
 
 // A synthetic "live" trigger source set: a cron workflow + matching loop-contract for one script.
 const SOURCES = {
@@ -96,9 +106,8 @@ describe('createInvocationPathGate — gate shape & opt-out', () => {
 });
 
 describe('gate wiring — INVOCATION_PATH_PROOF must be registered in the LEAD-FINAL pipeline', () => {
-  it('gates.js exports createInvocationPathGate (it is imported + pushed)', async () => {
-    const mod = await import('../../../scripts/modules/handoff/executors/lead-final-approval/gates.js');
-    expect(typeof mod.createInvocationPathGate).toBe('function');
-    expect(mod.createInvocationPathGate(null).name).toBe('INVOCATION_PATH_PROOF');
+  it('gates.js exports createInvocationPathGate (it is imported + pushed)', () => {
+    expect(typeof createInvocationPathGateFromAggregator).toBe('function');
+    expect(createInvocationPathGateFromAggregator(null).name).toBe('INVOCATION_PATH_PROOF');
   });
 });

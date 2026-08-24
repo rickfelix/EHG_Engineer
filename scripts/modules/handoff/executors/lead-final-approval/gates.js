@@ -51,7 +51,15 @@ export { createWireCheckGate };
 // Invocation-Path Proof Gate — autonomous code must have a LIVE trigger, not just be reachable
 // (SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-C)
 import { createInvocationPathGate } from './gates/invocation-path-gate.js';
-export { createInvocationPathGate };
+// SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001: a direct re-export-from passthrough, not a separate
+// `export { createInvocationPathGate };` of the locally-imported binding — MEASURED (via extensive
+// reproduction) that the local-import-then-separate-export form corrupts under vitest when this
+// file is co-scheduled in the same worker as another file that also imports gates.js (reproduces
+// with zero code changes, order-independent, survives --no-file-parallelism; a companion fix
+// landed in tests/unit/invocation-detector/invocation-path-gate.test.js). This passthrough form
+// keeps the SAME local `createInvocationPathGate` binding usable below (line ~1822) while giving
+// the export itself its own, more standard re-export declaration.
+export { createInvocationPathGate } from './gates/invocation-path-gate.js';
 
 // Phantom Test Audit Gate — call-surface alignment check (SD-FDBK-ENH-PAT-PHANTOM-TABLE-001)
 import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
