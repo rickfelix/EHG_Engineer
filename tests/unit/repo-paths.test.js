@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'path';
+import { existsSync } from 'fs';
 import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, getRepoRoot, isInsideWorktree, stripWorktreeSuffix, ENGINEER_ROOT } from '../../lib/repo-paths.js';
 
 describe('lib/repo-paths', () => {
@@ -207,6 +208,30 @@ describe('lib/repo-paths', () => {
       const rightBase = path.resolve(stripWorktreeSuffix(worktreeShaped), '../ehg');
       expect(wrongBase).not.toBe(rightBase);
       expect(rightBase.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+    });
+
+    // TESTING sub-agent finding (mutation testing, 2026-08-24): every test above passes an
+    // EXPLICIT base parameter, so none of them ever evaluate the default expression
+    // `base = getRepoRoot()` -- reverting the default back to ENGINEER_ROOT (the original bug)
+    // survived all of them. This test calls resolveLocalPath with NO base argument at all, so it
+    // is the one assertion that actually exercises the default and would fail if it regressed.
+    it('LOAD-BEARING: with NO base argument, the default (getRepoRoot(), not ENGINEER_ROOT) is used', async () => {
+      const { resolveLocalPath } = await import('../../lib/repo-paths.js');
+      const resolved = resolveLocalPath('../ehg'); // no second argument -- exercises the default
+      expect(resolved).toBe(path.resolve(getRepoRoot(), '..', 'ehg'));
+      expect(resolved.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+    });
+
+    // Same load-bearing requirement, exercised through the real public API rather than the
+    // internal helper: resolveRepoPath('ehg') is what every consumer actually calls, and its
+    // result must both avoid /.worktrees/ AND point at a directory that genuinely exists --
+    // stronger than a string-shape assertion alone.
+    it('LOAD-BEARING: resolveRepoPath(\'ehg\') from THIS actual runtime location resolves to a real, existing directory', async () => {
+      const { resolveRepoPath } = await import('../../lib/repo-paths.js');
+      const resolved = resolveRepoPath('ehg');
+      expect(resolved).toBeTruthy();
+      expect(resolved.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+      expect(existsSync(resolved)).toBe(true);
     });
   });
 
