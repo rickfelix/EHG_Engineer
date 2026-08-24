@@ -212,7 +212,7 @@ BEGIN
     -- which for a chairman-ceremony apply is service_role/postgres -- NOT authenticated/anon)
     -- can still write the guarded column directly, proving the guard only restricts
     -- authenticated/anon and does not brick service-role/admin operations.
-    UPDATE public.ventures SET current_lifecycle_stage = current_lifecycle_stage WHERE id = probe_venture_id;
+    UPDATE public.ventures SET current_lifecycle_stage = current_lifecycle_stage WHERE id = probe_venture_id; -- stage-advancement-lint-disable-line: DO $verify$ probe of this migration's own guard trigger, not a new advancement path.
 
     -- Negative case: simulate the client role and attempt a direct governance-column write.
     -- portfolio.has_venture_access(id) reads auth.jwt()->app_metadata->venture_id (via
@@ -229,7 +229,7 @@ BEGIN
     -- SET LOCAL ROLE changes current_user for the remainder of this subtransaction.
     SET LOCAL ROLE authenticated;
     BEGIN
-      UPDATE public.ventures SET current_lifecycle_stage = current_lifecycle_stage WHERE id = probe_venture_id;
+      UPDATE public.ventures SET current_lifecycle_stage = current_lifecycle_stage WHERE id = probe_venture_id; -- stage-advancement-lint-disable-line: DO $verify$ negative probe, expected to be refused by this migration's own guard trigger.
       RAISE EXCEPTION 'ventures_rls_integrity_repair: GUARD DID NOT FIRE -- a client-role governance-column UPDATE was ACCEPTED.' USING ERRCODE = 'P0202';
     EXCEPTION
       WHEN SQLSTATE 'P0201' THEN NULL; -- expected: the guard trigger's own rejection
