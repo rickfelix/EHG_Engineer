@@ -1098,6 +1098,27 @@ SD), a short response with disproportionately few tool calls and language implyi
 autonomous check-in is a signal to verify externally before trusting it, and to re-dispatch with
 an explicit synchronous-completion instruction rather than assuming the work is merely delayed.
 
+**Recurrence (SD-LEO-GEN-ALTIFYAI-DEMAND-LOOP-001, same day)**: happened AGAIN, twice in a row,
+for a plain LEAD-phase *investigation* dispatch (not implementation) -- 1 tool call each time,
+both claiming to have "armed a wakeup to check back in ~N minutes." The second attempt's prompt
+included the exact explicit anti-backgrounding instruction from this pattern's "Recovery that
+worked" section above, verbatim, and the fork did it anyway. Two consecutive failures despite the
+documented workaround being applied is itself the signal: this is not a one-off quirk to work
+around per-dispatch, it is a live characteristic of the `fork` subagent_type under some
+condition not yet isolated (session length? task phrasing as "investigation" rather than
+"implementation"? something else). **What worked instead**: abandoning `fork` entirely for that
+task and dispatching a dedicated `testing-agent` (a non-fork, non-generic subagent_type) for what
+was still fundamentally a research/investigation task -- it completed correctly and
+synchronously (15 tool calls, real findings) on the first attempt. Every `testing-agent` and
+`security-agent` dispatch across this entire session-day completed correctly; only `fork`
+exhibited this failure, and it did so 3 times total (1 in the pricing-checkout SD, 2 in this
+one). **Recommendation, strengthened**: when a `fork` dispatch fails this way once, do not
+simply retry `fork` with a sterner prompt -- switch to a dedicated agent type (`testing-agent`
+for review/investigation work, or handle implementation directly) rather than spending a second
+`fork` attempt on faith that the instruction alone will fix it. A `/signal feedback` to the
+coordinator is also warranted at 2 consecutive failures, per this repo's own recurrence
+threshold (gate 2x / RCA 2x / tool 3x).
+
 ### Files Modified
 None (process/operational finding, not a code fix) -- captured here for future sessions
 dispatching implementation forks.
