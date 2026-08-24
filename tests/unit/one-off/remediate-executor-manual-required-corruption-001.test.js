@@ -45,8 +45,13 @@ describe('matchesPreFixFingerprint', () => {
   });
 
   it('does not match text containing "for automation" WITHOUT the "Create lib/sub-agents/" phrase (TESTING finding: both substrings must be required, not just one)', () => {
+    // Fixture must actually contain "for automation" (the first conjunct) so this test
+    // exercises the SECOND conjunct's absence -- a fixture that fails the first conjunct
+    // (e.g. "test automation") passes vacuously regardless of the second (TESTING re-verification
+    // finding R4: the prior fixture read as "unrelated guidance about test automation", which
+    // does not contain the literal substring "for automation" at all).
     const row = preFixRow({
-      recommendations: ['This is unrelated guidance about test automation, nothing to do with a missing module'],
+      recommendations: ['Set up a CI pipeline for automation of the release process'],
     });
     expect(matchesPreFixFingerprint(row)).toBe(false);
   });
