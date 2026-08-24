@@ -32,6 +32,11 @@ function listOwnerRepos() {
   return JSON.parse(raw);
 }
 
+// TESTING finding F8 (EXEC-TO-PLAN review, evidence baa1c962, MEDIUM): a bare
+// catch{} could not distinguish a genuine 404 (manifest absent) from an
+// auth/rate-limit/network failure -- a rate-limited run would silently report
+// EVERY repo as "PROPOSED for backfill" with no error surfaced, for a report
+// whose whole purpose is deciding backfill scope.
 function fetchManifest(repoName) {
   try {
     const raw = execFileSync('gh', [
@@ -39,9 +44,13 @@ function fetchManifest(repoName) {
       '--jq', '.content',
     ], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
     const content = Buffer.from(raw.trim().replace(/\n/g, ''), 'base64').toString('utf8');
-    return { present: true, manifest: JSON.parse(content) };
-  } catch {
-    return { present: false, manifest: null };
+    return { present: true, manifest: JSON.parse(content), error: null };
+  } catch (err) {
+    const stderr = String(err.stderr || err.message || '');
+    if (/HTTP 404/.test(stderr)) {
+      return { present: false, manifest: null, error: null }; // genuinely absent
+    }
+    return { present: false, manifest: null, error: stderr.trim().slice(0, 200) || 'unknown fetch error' };
   }
 }
 
@@ -52,12 +61,13 @@ export function buildCensus({ repoLister = listOwnerRepos, manifestFetcher = fet
   const ventureRepos = active.filter((r) => !isKnownPlatformRepo(r.name));
 
   const rows = ventureRepos.map((r) => {
-    const { present, manifest } = manifestFetcher(r.name);
+    const { present, manifest, error } = manifestFetcher(r.name);
     return {
       name: r.name,
       manifestPresent: present,
       modules: present ? (manifest.modules || []).map((m) => `${m.module}@${m.version}`).join(', ') : null,
       generatedAt: present ? manifest.generated_at : null,
+      fetchError: error || null,
     };
   });
 
@@ -69,24 +79,48 @@ export function buildCensus({ repoLister = listOwnerRepos, manifestFetcher = fet
   };
 }
 
-export function toMarkdown(census, nowIso = new Date().toISOString()) {
+// SECURITY finding SEC-1 (EXEC-TO-PLAN review, evidence 6f9eabc9): EHG_Engineer is a
+// PUBLIC repo (verified via `gh repo view`), but most venture repos are PRIVATE.
+// Committing a per-repo name table here would publish unlaunched venture names --
+// competitive information -- to anyone. The aggregate-only summary below is what gets
+// committed/merged as this SD's FR-5 PR artifact; the full per-repo table (still
+// genuinely useful for backfill triage) is written LOCALLY ONLY, to a gitignored path
+// (scripts/temp/), never committed.
+export function toMarkdownSummary(census, nowIso = new Date().toISOString()) {
   const withManifest = census.ventureRepos.filter((r) => r.manifestPresent).length;
+  const fetchErrors = census.ventureRepos.filter((r) => r.fetchError).length;
+  const genuinelyMissing = census.ventureRepos.length - withManifest - fetchErrors;
   let md = `# Venture Scaffold Backfill Census — SD-LEO-INFRA-VENTURE-SCAFFOLD-CODE-001 FR-5\n\n`;
   md += `Generated: ${nowIso}\n\n`;
-  md += `**Report-only. Zero writes to any venture repo. Backfill is PROPOSED per-venture below, never auto-applied.**\n\n`;
+  md += `**Report-only. Zero writes to any venture repo. Backfill is PROPOSED per-venture, never auto-applied.**\n\n`;
+  md += `Per-repo venture names are deliberately NOT included here — this repo is PUBLIC and most\n`;
+  md += `venture repos are PRIVATE, so a name table would be a competitive-information disclosure\n`;
+  md += `(SECURITY finding SEC-1). The full per-repo breakdown is generated locally only, at\n`;
+  md += `\`scripts/temp/venture-scaffold-backfill-census-full.md\` (gitignored) — re-run\n`;
+  md += `\`node scripts/audits/venture-scaffold-backfill-census.mjs\` to regenerate it for review.\n\n`;
   md += `## Scope\n\n`;
   md += `- Total repos scanned under \`${OWNER}\`: ${census.totalReposScanned}\n`;
   md += `- Archived (excluded): ${census.archivedExcluded}\n`;
   md += `- Platform/infra repos (excluded): ${census.platformExcluded.join(', ') || 'none'}\n`;
   md += `- Venture repos in census: ${census.ventureRepos.length}\n`;
-  md += `- Already scaffolded (manifest present): ${withManifest} / ${census.ventureRepos.length}\n\n`;
-  md += `## Per-repo scaffold state\n\n`;
+  md += `- Already scaffolded (manifest present): ${withManifest} / ${census.ventureRepos.length}\n`;
+  md += `- Genuinely missing a manifest (proposed for backfill): ${genuinelyMissing} / ${census.ventureRepos.length}\n`;
+  md += `- Fetch failed (auth/rate-limit/network — status UNKNOWN, NOT counted as missing): ${fetchErrors} / ${census.ventureRepos.length}\n`;
+  return md;
+}
+
+export function toMarkdownFull(census, nowIso = new Date().toISOString()) {
+  let md = toMarkdownSummary(census, nowIso);
+  md += `\n## Per-repo scaffold state (LOCAL ONLY — do not commit, contains private venture names)\n\n`;
   md += `| repo | manifest present | stamped modules | generated_at |\n|---|---|---|---|\n`;
   for (const r of [...census.ventureRepos].sort((a, b) => a.name.localeCompare(b.name))) {
-    md += `| ${r.name} | ${r.manifestPresent ? '✅' : '❌ PROPOSED for backfill'} | ${r.modules || '—'} | ${r.generatedAt || '—'} |\n`;
+    const state = r.fetchError ? `⚠️ UNKNOWN (fetch failed: ${r.fetchError})` : (r.manifestPresent ? '✅' : '❌ PROPOSED for backfill');
+    md += `| ${r.name} | ${state} | ${r.modules || '—'} | ${r.generatedAt || '—'} |\n`;
   }
   md += `\n## Backfill proposal\n\n`;
-  const missing = census.ventureRepos.filter((r) => !r.manifestPresent);
+  // Only genuinely-confirmed-absent repos are proposed -- a fetch failure means
+  // UNKNOWN, not missing, so it must never silently count as a backfill candidate.
+  const missing = census.ventureRepos.filter((r) => !r.manifestPresent && !r.fetchError);
   if (missing.length === 0) {
     md += `All venture repos in this census already carry a scaffold manifest. No backfill proposed.\n`;
   } else {
@@ -98,10 +132,12 @@ export function toMarkdown(census, nowIso = new Date().toISOString()) {
 
 export function main() {
   const census = buildCensus();
-  const md = toMarkdown(census);
-  const outPath = 'docs/audits/venture-scaffold-backfill-census.md';
-  writeFileSync(outPath, md, 'utf8');
-  console.log(`Census written to ${outPath}`);
+  const summaryPath = 'docs/audits/venture-scaffold-backfill-census.md';
+  const fullPath = 'scripts/temp/venture-scaffold-backfill-census-full.md';
+  writeFileSync(summaryPath, toMarkdownSummary(census), 'utf8');
+  writeFileSync(fullPath, toMarkdownFull(census), 'utf8');
+  console.log(`Aggregate summary (committable) written to ${summaryPath}`);
+  console.log(`Full per-repo report (local only, gitignored) written to ${fullPath}`);
   console.log(`${census.ventureRepos.length} venture repos scanned, ${census.ventureRepos.filter((r) => r.manifestPresent).length} already scaffolded.`);
 }
 

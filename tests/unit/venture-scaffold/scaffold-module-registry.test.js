@@ -67,6 +67,47 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
     expect(deployYml.content).toContain('post-deploy-signed-in-uat'); // UAT probe preserved
   });
 
+  // SECURITY finding SEC-3 (EXEC-TO-PLAN review, evidence 6f9eabc9): the original
+  // stack-scan secret pattern caught only 2 of 7 realistic modern credential formats
+  // tested empirically, while still reporting "No committed-secret-shaped patterns
+  // found" -- manufactured confidence. This test extracts the SAME regex the generated
+  // workflow embeds and proves it now catches every format that was missed.
+  it('SEC-3 regression: the stack-scan secret pattern catches modern credential formats it previously missed', async () => {
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const files = MODULE_REGISTRY['stack-scan'].generate('acme-venture', '/tmp/acme-venture', {});
+    const stackScanYml = files.find((f) => f.path.endsWith('stack-scan.yml'));
+    const match = stackScanYml.content.match(/PATTERN='(.+)'/);
+    expect(match, 'expected to find the PATTERN= line in the generated workflow').toBeTruthy();
+    const pattern = new RegExp(match[1]);
+
+    // Built via concatenation/repeat (never a literal matching the full shape in
+    // source text) so this repo's own pre-commit secret scanner does not false-
+    // positive on these deliberately fake test fixtures.
+    const shouldMatch = {
+      'AWS key': 'AKIA' + 'FAKE'.repeat(4),
+      'OpenAI legacy': 'sk-' + 'fake1234567890123456789',
+      'OpenAI sk-proj-': 'sk-proj-' + 'fakeFAKE123_-'.repeat(2),
+      'Stripe live key': 'sk_live_' + 'fake1234567890123456789',
+      'GitHub classic PAT': 'ghp_' + 'a'.repeat(36),
+      'GitHub OAuth token': 'gho_' + 'a'.repeat(36),
+      'GitHub fine-grained PAT': 'github_pat_' + 'a'.repeat(22),
+      'Supabase/generic JWT': 'eyJ' + 'fakeHeader'.repeat(2) + '.eyJ' + 'fakePayload'.repeat(2) + '.' + 'fakeSig'.repeat(3),
+    };
+    for (const [label, sample] of Object.entries(shouldMatch)) {
+      expect(pattern.test(sample), `expected pattern to match ${label}: ${sample}`).toBe(true);
+    }
+  });
+
+  it('SEC-3 regression: the stack-scan step distinguishes a git-grep scan error from a clean pass', async () => {
+    const { MODULE_REGISTRY } = await import(scaffoldPath);
+    const files = MODULE_REGISTRY['stack-scan'].generate('acme-venture', '/tmp/acme-venture', {});
+    const stackScanYml = files.find((f) => f.path.endsWith('stack-scan.yml'));
+    // Must capture the real exit code and branch on it (not `if git grep ...; then`,
+    // which collapses "no match" (1) and "scan error" (>1) into the same branch).
+    expect(stackScanYml.content).toContain('rc=$?');
+    expect(stackScanYml.content).toMatch(/rc"\s*-gt\s*1/);
+  });
+
   it('module-registry.json stays in sync with MODULE_REGISTRY (version + module set) — not orphaned dead data', async () => {
     const { MODULE_REGISTRY } = await import(scaffoldPath);
     expect(existsSync(registryJsonPath)).toBe(true);
@@ -78,6 +119,20 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
 
     for (const key of jsKeys) {
       expect(staticRegistry.modules[key].version, `${key} version drift`).toBe(MODULE_REGISTRY[key].version);
+    }
+
+    // TESTING finding F10 (EXEC-TO-PLAN review, evidence baa1c962, LOW): the sync
+    // check previously compared keys+versions only -- the `files` arrays (the field
+    // FR-1 AC-2 actually cares about, and the most likely to rot) were never
+    // cross-checked against what generate() actually returns.
+    const outputDir = '/tmp/sync-check-venture';
+    for (const key of jsKeys) {
+      const generatedFiles = MODULE_REGISTRY[key]
+        .generate('sync-check-venture', outputDir, {})
+        .map((f) => f.path.slice(outputDir.length + 1).replace(/\\/g, '/'))
+        .sort();
+      const declaredFiles = [...(staticRegistry.modules[key].files || [])].sort();
+      expect(declaredFiles, `${key} files[] drift`).toEqual(generatedFiles);
     }
   });
 });

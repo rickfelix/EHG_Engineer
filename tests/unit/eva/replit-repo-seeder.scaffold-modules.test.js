@@ -28,13 +28,18 @@ vi.mock('fs', () => ({
   // A minimal, ALWAYS-parseable manifest so applyVentureScaffoldModules' own
   // post-write self-check (checkScaffoldManifest) passes under this generic mock.
   readFileSync: vi.fn(() => JSON.stringify({ generated_at: new Date().toISOString(), modules: [{ module: 'deploy', version: '1.0.0' }] })),
-  // Absent for CLAUDE.md/.replit/replit.md (so they get seeded) and for anything not
-  // yet "written" by this test's own writeCalls tracking; present otherwise — mirrors
-  // real disk semantics closely enough for the git-add-allowlist assertion below.
+  // TESTING finding F2 (EXEC-TO-PLAN review, evidence baa1c962, HIGH): a blanket
+  // "true for everything except CLAUDE.md/.replit/replit.md" mock gave the git-add
+  // allowlist gating in replit-repo-seeder.js ZERO effective coverage -- mutation-
+  // tested by repointing all 3 gates at nonexistent paths and confirming the test
+  // suite stayed fully green. Genuinely path-aware now: "exists" only for
+  // CLAUDE.md/.replit/replit.md's absence special-case, or a path that was actually
+  // written (or a directory containing something actually written) via writeFileSync
+  // during THIS call -- close enough to real disk semantics to exercise the gating.
   existsSync: vi.fn((p) => {
     const norm = String(p).replace(/\\/g, '/');
     if (/(?:CLAUDE\.md|\.replit|replit\.md)$/.test(norm)) return false;
-    return true;
+    return writeCalls.some((c) => c.path === norm || c.path.startsWith(`${norm}/`));
   }),
 }));
 
@@ -100,6 +105,32 @@ describe('seedRepo() — FR-2 scaffold module wiring', () => {
     expect(addCall).toContain('feedback/');
     expect(addCall).toContain('scaffold-manifest.json');
     // Pre-existing paths must still be present — this fix must not regress them.
+    expect(addCall).toContain('docs/');
+    expect(addCall).toContain('CLAUDE.md');
+  });
+
+  // TESTING finding F2's genuine negative arm: when the scaffold write genuinely
+  // fails (nothing lands on disk), the gates must correctly EXCLUDE those paths --
+  // proving the existsSync checks are load-bearing, not vacuously true.
+  it('negative arm: when the scaffold module write fails, its paths are excluded from git add (pre-existing docs are still committed)', async () => {
+    const fs = await import('fs');
+    fs.writeFileSync.mockImplementation((p, content) => {
+      const norm = String(p).replace(/\\/g, '/');
+      if (norm.includes('.github/workflows/') || norm.includes('/feedback/') || norm.endsWith('scaffold-manifest.json')) {
+        throw new Error('simulated disk failure for scaffold module files');
+      }
+      writeCalls.push({ path: norm, content: String(content) });
+    });
+
+    const { seedRepo } = await import('../../../lib/eva/bridge/replit-repo-seeder.js');
+    const result = await seedRepo('v-1', 'https://github.com/foo/bar.git');
+
+    expect(result.errors.some((e) => e.includes('scaffold modules'))).toBe(true);
+    const addCall = execCalls.find((c) => c.startsWith('git add '));
+    expect(addCall).toBeDefined();
+    expect(addCall).not.toContain('.github/workflows/');
+    expect(addCall).not.toContain('feedback/');
+    expect(addCall).not.toContain('scaffold-manifest.json');
     expect(addCall).toContain('docs/');
     expect(addCall).toContain('CLAUDE.md');
   });

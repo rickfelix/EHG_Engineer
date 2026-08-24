@@ -34,7 +34,12 @@ vi.mock('node:child_process', () => ({
         const manifest = { generated_at: '2026-08-24T00:00:00.000Z', modules: [{ module: 'deploy', version: '1.0.0' }] };
         return Buffer.from(JSON.stringify(manifest)).toString('base64');
       }
-      throw new Error('404 Not Found'); // gh api throws non-zero exit on 404
+      // Mirrors execFileSync's real thrown shape (an Error with a populated .stderr
+      // string, given encoding:'utf8') and gh's real 404 message, empirically
+      // confirmed via a live run: "gh: Not Found (HTTP 404)".
+      const err = new Error('Command failed');
+      err.stderr = 'gh: Not Found (HTTP 404)\n';
+      throw err;
     }
     throw new Error(`unexpected exec call: ${full}`);
   }),
@@ -89,26 +94,71 @@ describe('venture-scaffold-backfill-census', () => {
     expect(result.ventureRepos.map((r) => r.name)).toEqual(['venture-a']);
   });
 
-  it('toMarkdown() lists every venture repo and proposes backfill only for the unscaffolded ones', async () => {
-    const { toMarkdown } = await import('../../../scripts/audits/venture-scaffold-backfill-census.mjs');
+  it('toMarkdownSummary() reports aggregate counts only — no per-repo venture names', async () => {
+    const { toMarkdownSummary } = await import('../../../scripts/audits/venture-scaffold-backfill-census.mjs');
     const census = {
       totalReposScanned: 4,
       archivedExcluded: 0,
-      platformExcluded: ['EHG'],
+      platformExcluded: ['ehg'],
       ventureRepos: [
         { name: 'venture-a', manifestPresent: true, modules: 'deploy@1.0.0', generatedAt: '2026-08-24T00:00:00.000Z' },
         { name: 'venture-b', manifestPresent: false, modules: null, generatedAt: null },
       ],
     };
-    const md = toMarkdown(census, '2026-08-24T00:00:00.000Z');
+    const md = toMarkdownSummary(census, '2026-08-24T00:00:00.000Z');
     expect(md).toContain('Report-only. Zero writes');
+    expect(md).toContain('Venture repos in census: 2');
+    expect(md).toContain('Already scaffolded (manifest present): 1 / 2');
+    expect(md).toContain('Genuinely missing a manifest (proposed for backfill): 1 / 2');
+    expect(md).toContain('Fetch failed (auth/rate-limit/network — status UNKNOWN, NOT counted as missing): 0 / 2');
+    // SECURITY finding SEC-1 regression: the committed summary must never name a venture.
+    expect(md).not.toContain('venture-a');
+    expect(md).not.toContain('venture-b');
+  });
+
+  it('toMarkdownFull() (local-only artifact) lists every venture repo and proposes backfill only for the unscaffolded ones', async () => {
+    const { toMarkdownFull } = await import('../../../scripts/audits/venture-scaffold-backfill-census.mjs');
+    const census = {
+      totalReposScanned: 4,
+      archivedExcluded: 0,
+      platformExcluded: ['ehg'],
+      ventureRepos: [
+        { name: 'venture-a', manifestPresent: true, modules: 'deploy@1.0.0', generatedAt: '2026-08-24T00:00:00.000Z', fetchError: null },
+        { name: 'venture-b', manifestPresent: false, modules: null, generatedAt: null, fetchError: null },
+      ],
+    };
+    const md = toMarkdownFull(census, '2026-08-24T00:00:00.000Z');
     expect(md).toContain('venture-a');
     expect(md).toContain('venture-b');
     expect(md).toMatch(/venture-b[\s\S]*Backfill proposal/); // venture-b table row, then the proposal section
     expect(md).toContain('1 venture repo(s) have no scaffold manifest');
   });
 
-  it('FR-5 AC#2: main() makes zero write/mutating gh or git calls — only reads, and writes the report exactly once', async () => {
+  // TESTING finding F8 (EXEC-TO-PLAN review, evidence baa1c962, MEDIUM): a fetch
+  // failure (auth/rate-limit/network) must be surfaced as UNKNOWN, never silently
+  // collapsed into "missing" -- the report's whole purpose is deciding backfill
+  // scope, so a failed instrument must not manufacture confidence.
+  it('toMarkdownFull() distinguishes a genuinely fetch-failed repo from one that is genuinely missing a manifest', async () => {
+    const { toMarkdownFull } = await import('../../../scripts/audits/venture-scaffold-backfill-census.mjs');
+    const census = {
+      totalReposScanned: 3,
+      archivedExcluded: 0,
+      platformExcluded: ['ehg'],
+      ventureRepos: [
+        { name: 'venture-missing', manifestPresent: false, modules: null, generatedAt: null, fetchError: null },
+        { name: 'venture-rate-limited', manifestPresent: false, modules: null, generatedAt: null, fetchError: 'API rate limit exceeded' },
+      ],
+    };
+    const md = toMarkdownFull(census, '2026-08-24T00:00:00.000Z');
+    expect(md).toMatch(/venture-missing.*❌ PROPOSED for backfill/);
+    expect(md).toMatch(/venture-rate-limited.*⚠️ UNKNOWN \(fetch failed: API rate limit exceeded\)/);
+    // The rate-limited repo must NOT be listed under the backfill proposal.
+    const proposalSection = md.slice(md.indexOf('## Backfill proposal'));
+    expect(proposalSection).toContain('venture-missing');
+    expect(proposalSection).not.toContain('venture-rate-limited');
+  });
+
+  it('FR-5 AC#2: main() makes zero write/mutating gh or git calls — only reads', async () => {
     const { main } = await import('../../../scripts/audits/venture-scaffold-backfill-census.mjs');
     main();
 
@@ -117,13 +167,37 @@ describe('venture-scaffold-backfill-census', () => {
     for (const call of execCalls) {
       expect(call, `unexpected write-shaped gh/git call: ${call}`).not.toMatch(WRITE_SHAPED);
     }
+  });
 
-    expect(writeCalls.length).toBe(1);
-    expect(writeCalls[0].path).toBe('docs/audits/venture-scaffold-backfill-census.md');
-    // All 6 non-platform, non-archived venture repos from the module-level mock must appear.
+  it('main() writes the committable summary (no names) and the local-only full report (names) separately (SEC-1 fix)', async () => {
+    const { main } = await import('../../../scripts/audits/venture-scaffold-backfill-census.mjs');
+    main();
+
+    expect(writeCalls.length).toBe(2);
+    const summary = writeCalls.find((c) => c.path === 'docs/audits/venture-scaffold-backfill-census.md');
+    const full = writeCalls.find((c) => c.path === 'scripts/temp/venture-scaffold-backfill-census-full.md');
+    expect(summary, 'expected the committable summary to be written').toBeDefined();
+    expect(full, 'expected the local-only full report to be written').toBeDefined();
+
+    // The committed summary must never leak a venture repo name.
     for (const name of ['venture-a', 'venture-b', 'venture-c', 'venture-d', 'venture-e', 'venture-f']) {
-      expect(writeCalls[0].content).toContain(name);
+      expect(summary.content).not.toContain(name);
     }
-    expect(writeCalls[0].content).not.toContain('venture-old-archived');
+    // The local-only (gitignored, scripts/temp/) report is where the real names live.
+    for (const name of ['venture-a', 'venture-b', 'venture-c', 'venture-d', 'venture-e', 'venture-f']) {
+      expect(full.content).toContain(name);
+    }
+    expect(full.content).not.toContain('venture-old-archived');
+
+    // TESTING finding F7 (EXEC-TO-PLAN review, evidence baa1c962, MEDIUM,
+    // mutation-proven): the positive arm (a manifest that actually decodes) had
+    // never been demonstrated end-to-end -- a broken base64/JSON decode would be
+    // indistinguishable from "no repo has a manifest". venture-a/venture-b are
+    // mocked (module-level, top of this file) to genuinely have a manifest;
+    // assert they are reported PRESENT, and that the non-scaffolded repos are not.
+    expect(full.content).toMatch(/venture-a \| ✅ \| deploy@1\.0\.0/);
+    expect(full.content).toMatch(/venture-b \| ✅ \| deploy@1\.0\.0/);
+    expect(full.content).toMatch(/venture-c \| ❌ PROPOSED for backfill/);
+    expect(summary.content).toContain('Already scaffolded (manifest present): 2 / 6');
   });
 });

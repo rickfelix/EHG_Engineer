@@ -270,8 +270,14 @@ jobs:
           echo "ALLOWED_ORIGINS check passed (or not configured yet): $URL"
       # Proves the LIVE deployed instance is genuinely reachable while
       # authenticated -- every check above this line only proves the BUILD
-      # succeeded, never that a real session can use it. Never a password: the
-      # token is a pre-minted session credential used only as a Bearer header.
+      # succeeded, never that a real session can use it. Not a static credential --
+      # the token is a pre-minted session credential used only as a Bearer header.
+      # SECURITY finding SEC-4 (EXEC-TO-PLAN review, evidence 6f9eabc9): on failure,
+      # only a .error/.message field (truncated) is ever printed -- never the raw
+      # response body. A literal-token-substitution redaction (the prior approach)
+      # is bypassable by any JSON-escaped variant of the token and does nothing for
+      # OTHER secrets a misrouted response might echo; several active venture repos
+      # are PUBLIC, so CI logs are world-readable.
       - name: post-deploy-signed-in-uat
         env:
           CHAIRMAN_UAT_SESSION_TOKEN: \${{ secrets.CHAIRMAN_UAT_SESSION_TOKEN }}
@@ -288,7 +294,7 @@ jobs:
             "$URL${uatProbePath}")
           if [ "$STATUS" != "200" ]; then
             echo "::error::Signed-in GET ${uatProbePath} returned HTTP $STATUS (expected 200)."
-            node -e "const fs=require('fs');let b=fs.readFileSync('response.json','utf8');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;if(t)b=b.split(t).join('[REDACTED]');b=b.replace(/Bearer\\s+\\S+/gi,'Bearer [REDACTED]');console.log(b)"
+            node -e "const fs=require('fs');let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}console.log(out)"
             exit 1
           fi
           echo "Signed-in probe succeeded: GET ${uatProbePath} returned 200 against the live deploy."
@@ -299,7 +305,7 @@ jobs:
             "$URL${uatProbePath}")
           if [ "$WRITE_STATUS" != "201" ]; then
             echo "::error::Signed-in POST ${uatProbePath} returned HTTP $WRITE_STATUS (expected 201)."
-            node -e "const fs=require('fs');let b=fs.readFileSync('write-response.json','utf8');const t=process.env.CHAIRMAN_UAT_SESSION_TOKEN;if(t)b=b.split(t).join('[REDACTED]');b=b.replace(/Bearer\\s+\\S+/gi,'Bearer [REDACTED]');console.log(b)"
+            node -e "const fs=require('fs');let out='(no parseable error/message field)';try{const j=JSON.parse(fs.readFileSync('write-response.json','utf8'));const m=j.error||j.message;if(typeof m==='string')out=m.slice(0,300)}catch{}console.log(out)"
             exit 1
           fi
           echo "First-walk event recorded successfully."
@@ -342,10 +348,23 @@ jobs:
       - name: Committed-secret pattern scan
         run: |
           set -o pipefail
-          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{20,})'
-          if git grep -InE "$PATTERN" -- . ':(exclude)*.lock' ':(exclude)node_modules'; then
+          # SECURITY finding SEC-3 (EXEC-TO-PLAN review, evidence 6f9eabc9): the original
+          # pattern caught only 2 of 7 realistic modern credential formats tested (missed
+          # Supabase/generic JWTs, GitHub fine-grained PATs and OAuth/app tokens, OpenAI's
+          # current sk-proj- format, and Stripe's sk_live_) while still reporting "No
+          # committed-secret-shaped patterns found" -- manufactured confidence. Expanded here.
+          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)'
+          # SEC-3 also flagged the exit-code handling as blind: git grep exit 1 (no match,
+          # the good case) and exit >1 (an actual scan ERROR) were treated identically,
+          # so a broken scan silently reported "clean" instead of failing loud.
+          git grep -InE "$PATTERN" -- . ':(exclude)*.lock' ':(exclude)node_modules'
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
             echo "::error::Committed-secret-shaped pattern found in tracked files -- see matches above."
             exit 1
+          elif [ "$rc" -gt 1 ]; then
+            echo "::error::git grep itself failed (exit $rc) -- treating as a scan failure, not a clean pass."
+            exit "$rc"
           fi
           echo "No committed-secret-shaped patterns found."
 `,

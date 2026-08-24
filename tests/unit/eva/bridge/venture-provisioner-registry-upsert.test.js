@@ -30,9 +30,10 @@ vi.mock('../../../../lib/supabase-client.js', () => ({
     from: (table) => {
       if (table !== 'applications') throw new Error(`unexpected table ${table}`);
       return {
-        select: () => ({
-          eq: () => Promise.resolve({ data: selectResult, error: null }),
-        }),
+        // SEC-5 fix: the real code no longer chains .eq('status','active') on this
+        // select -- it matches across ANY status now, so select() itself must be
+        // directly awaitable (a thenable), not require an .eq() call first.
+        select: () => Promise.resolve({ data: selectResult, error: null }),
         update: (payload) => ({
           eq: (_col, val) => {
             updatePayloads.push({ payload, id: val });
@@ -76,14 +77,22 @@ describe('venture-provisioner DEFAULT_STEPS: registry_updated DB write-through (
 
     expect(updatePayloads).toEqual([]);
     expect(insertPayloads.length).toBe(1);
-    expect(insertPayloads[0]).toMatchObject({
+    expect(insertPayloads[0]).toEqual({
       name: 'AcmeVenture',
+      // TESTING finding F4 (EXEC-TO-PLAN review, evidence baa1c962, HIGH,
+      // mutation-proven): normalized_name is the exact key the resolver's
+      // normalizeVentureName matches against and carries a UNIQUE index -- a
+      // wrong value produces a row that exists but is unresolvable. Asserting
+      // the literal expected value, not just "is a non-empty string".
+      normalized_name: 'acmeventure',
       kind: 'venture',
-      status: 'active',
+      github_repo: 'rickfelix/acme-venture',
+      // TESTING finding F6: venture_id + repo_url must be populated too.
+      repo_url: 'https://github.com/rickfelix/acme-venture',
       local_path: '/tmp/acme-venture',
+      status: 'active',
+      venture_id: 'v1',
     });
-    expect(typeof insertPayloads[0].normalized_name).toBe('string');
-    expect(insertPayloads[0].normalized_name.length).toBeGreaterThan(0);
   });
 
   it('preserves existing behavior: a venture WITH a matching row gets local_path UPDATEd, not re-inserted', async () => {
@@ -100,6 +109,29 @@ describe('venture-provisioner DEFAULT_STEPS: registry_updated DB write-through (
     expect(updatePayloads.length).toBe(1);
     expect(updatePayloads[0].id).toBe('app-1');
     expect(updatePayloads[0].payload).toEqual({ local_path: '/tmp/acme-venture' });
+  });
+
+  // SECURITY finding SEC-5 (EXEC-TO-PLAN review, evidence 6f9eabc9): the collision
+  // probe used to filter .eq('status','active'), so a venture matching an INACTIVE
+  // row took the INSERT branch, hit the normalized_name UNIQUE constraint, and was
+  // silently WARN-logged-and-skipped -- the same silent-skip class FR-4 exists to fix.
+  it('SEC-5 regression: a venture matching an INACTIVE row is UPDATEd (not a doomed INSERT), and status is never touched', async () => {
+    selectResult = [{ id: 'app-inactive-1', name: 'AcmeVenture' }]; // status is not surfaced by the trimmed select — matches regardless
+    const ctx = {
+      ventureId: 'v1',
+      venture: { name: 'AcmeVenture', repoName: 'acme-venture', localPath: '/tmp/acme-venture' },
+      stepsCompleted: [],
+      log: () => {},
+    };
+    await registryStep().execute(ctx);
+
+    expect(insertPayloads).toEqual([]);
+    expect(updatePayloads.length).toBe(1);
+    expect(updatePayloads[0].id).toBe('app-inactive-1');
+    // local_path only -- status is deliberately never included, so a deliberately
+    // deactivated venture is never silently reactivated by this write-through.
+    expect(updatePayloads[0].payload).toEqual({ local_path: '/tmp/acme-venture' });
+    expect(Object.keys(updatePayloads[0].payload)).not.toContain('status');
   });
 
   it('the registry.json write (existing, correct behavior) is preserved unchanged alongside the new INSERT', async () => {
