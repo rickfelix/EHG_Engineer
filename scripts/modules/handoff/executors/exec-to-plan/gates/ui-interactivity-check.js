@@ -16,10 +16,11 @@
 
 import { execSync } from 'child_process';
 import { createBranchFileReader } from '../../../lib/branch-file-reader.js';
+import { resolveRepoPath } from '../../../../../../lib/repo-paths.js';
 
 const GATE_NAME = 'UI_INTERACTIVITY_CHECK';
 const INTERACTIVE_PATTERNS = ['onClick', 'onSubmit', 'authedFetch', 'onChange', 'onSelect'];
-const EHG_REPO_PATH = 'C:/Users/rickf/Projects/_EHG/ehg';
+const EHG_REPO_PATH = resolveRepoPath('ehg');
 
 /**
  * Create the UI interactivity check gate.
