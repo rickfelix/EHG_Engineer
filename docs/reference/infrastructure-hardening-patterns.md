@@ -997,6 +997,67 @@ on any given CI run.
 
 ---
 
+## Pattern: A "proven safe" fix for one execution context can be actively worse in another -- measure before transplanting (SD-LEO-INFRA-STALE-INDEX-LOCK-001)
+
+### Problem
+A recurring Windows libuv `UV_HANDLE_CLOSING` assertion crash in `.husky/commit-msg`'s
+`scripts/append-fleet-commit-trailer.js` left stale `.git/worktrees/<name>/index.lock` files behind
+after `git commit`, blocking the next git operation in that worktree. Two prior SDs had already
+shipped partial fixes for this defect *class* elsewhere in the repo (an unrelated ref'd
+`setInterval` in `lib/heartbeat-manager.mjs`, fixed via `armUnrefInterval()`; detection-only stale-lock
+tooling that explicitly punted on cleanup). Neither actually fixed this file's crash.
+
+### The trap: reusing a proven pattern across execution contexts without re-measuring
+The obvious fix -- replace this script's `process.exit(0)` with `process.exitCode = X; return;`,
+the exact pattern `scripts/cron/index-jam-detector.mjs:158-163` already documents as fixing an
+identical libuv assertion for its own Supabase client -- looked like a safe, already-validated
+transplant. A live probe (a real supabase-js client pointed at a blackhole IP to force the timeout
+branch deterministically) measured the opposite: the abandoned in-flight fetch, not the timer, keeps
+Node's event loop open, and letting the process drain naturally instead of forcing an exit converts
+an *intermittent* crash into a *deterministic ~50 second hang on every interactive `git commit`* --
+because the CRON context where the pattern was proven safe tolerates an invisible 50s tail; an
+interactive hook in the commit path does not. The difference is entirely about WHERE the code runs,
+not what the code does, and only a live measurement caught it before it shipped.
+
+### The actual fix: retire the dependency, don't tune it
+`append-fleet-commit-trailer.js` needed exactly one string -- a fleet callsign for commit-message
+attribution -- and was fetching it over the network on every single commit. The coordinator already
+maintains a local, always-current cache of that exact value
+(`scripts/hooks/coordination-inbox.cjs` writes `fleet-identity-<sessionId>.json` on every
+`SET_IDENTITY` message). Reading that file synchronously eliminates the Supabase client, the
+`Promise.race`, and the `setTimeout` guard entirely -- no async handle exists to leak, so there is
+nothing left for `process.exit(0)` to force-close unsafely. The defect class is retired, not
+mitigated.
+
+### The path-resolution trap this exposed
+The existing convention for locating that cache elsewhere in the repo
+(`IDENTITY_DIR = path.resolve(__dirname, '../../.claude')`, used verbatim in at least two other
+files) resolves relative to the *reading script's own location* -- correct only when that script is
+invoked from the shared checkout. Invoked from a git worktree (as `.husky/commit-msg` always is when
+committing inside one), it silently resolves to the worktree's own empty `.claude/` directory instead
+of the shared root holding the real identity files -- a fail-open that reads identical to "no
+identity assigned yet," making the bug invisible rather than loud. Fixed by resolving the shared root
+via `git rev-parse --path-format=absolute --git-common-dir` (correct in both topologies, including
+under the real `GIT_DIR`/`GIT_INDEX_FILE` env vars a commit-msg hook actually runs with -- measured,
+not assumed; `CLAUDE_PROJECT_DIR` is empty in a git-hook execution context and is not a substitute).
+
+### Verification discipline
+3 rounds of prospective TESTING review, each using REAL probes against real infrastructure (not code
+reading alone), each finding something the prior round missed: round 1 found the Supabase client
+itself (not just the timer) was the crash source; round 2 found the "obvious" replacement fix was
+actively worse; round 3 found and self-corrected a false assumption about *when* a session's callsign
+becomes available, before landing on the coordinator's already-existing cache. Regression tests use
+real `child_process` spawns against a disposable temp git repo plus a real `git worktree add` of it
+(not a simulated worktree), so the path-resolution trap above is genuinely exercised, not merely
+described. A pre-existing "idempotent, never double-stamps" test was found to be vacuous during
+mutation testing -- it used a session ID with no matching identity file, so the script's fail-open
+branch returned before ever reaching the double-stamp guard the test claimed to cover.
+
+### Files Modified
+`scripts/append-fleet-commit-trailer.js`, `tests/unit/append-fleet-commit-trailer.test.js`
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
