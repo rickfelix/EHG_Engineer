@@ -95,7 +95,7 @@ describe('stage-execution-worker.js: fixture-venture skipped-decision consumers 
 
       const result = await worker._handleChairmanGate('fixture-venture-1', 10);
 
-      expect(result).toEqual({ blocked: false, killed: false, approved: true });
+      expect(result).toEqual({ blocked: false, killed: false, approved: true, source: 'fixture_venture_skip' });
       expect(waitForDecision).not.toHaveBeenCalled();
     });
 
