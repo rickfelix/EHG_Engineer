@@ -304,21 +304,42 @@ module-boundaries) are genuinely still `pending`, not failed. This is the known
 in-progress-not-failed pattern from this session's carried notes — correct response is
 ScheduleWakeup + retry, never blind hammer-retry. Scheduling a wakeup to retry the merge.
 
-## Pending follow-up (route via capture-completion-flags at post-completion, NOT in this SD's
-## scope — do not silently fold into this diff)
-- F9: scripts/coordinator-capacity-forecast.mjs's emitMaskedStallEscalation() (~line 355-357)
-  has the same header(combined beltDepth)-vs-claimable-now-list(SD keys only) extent mismatch
-  that FR-3 fixed in reachAdam(), but FR-3's scope names reachAdam() specifically. Tiny fix
-  (~5 LOC, thread openQfCount through its call site at ~line 255, reuse formatBeltExtent). Good
-  Tier-1 QF candidate.
+## Update 7 (2026-08-24) — SD COMPLETE. Full post-completion tail done.
 
-## Next steps (revised, Update 6)
-1. Retry the hardened auto-merge for PR #7492 once CI's required checks clear (`gh pr checks 7492`
-   to confirm, then re-run the lib/ship/auto-merge.mjs sequence from Update 6).
-2. LEAD-FINAL-APPROVAL, then full post-completion tail (/document, /heal, /learn,
-   capture-completion-flags — MUST include the F9 follow-up finding above as an incidental
-   finding, per CLAUDE.md's completion-flags reflective interrogation).
-3. /checkin for the next SD (same-turn next-claim discipline).
+PR #7492 merged (retried the hardened auto-merge once "Run Unit Tier" cleared — succeeded,
+`adminUsed:true` for enforce_admins). Worktree cleanup was correctly blocked by this session's
+still-live claim (expected, not an error). `handoff.js execute LEAD-FINAL-APPROVAL`: PASS, score
+95%. **SD status = completed.**
+
+Post-completion tail:
+- `/document`: infrastructure-type SD with no new deployable/config surface -> proportionate
+  action was a CHANGELOG.md entry (matching this session's established VENTURE-SCAFFOLD-CODE-001
+  precedent), not a new runbook. Created isolated worktree
+  `.worktrees/SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001-changelog` (main repo's own working
+  tree had heavy uncommitted state from OTHER concurrent fleet sessions — never touch it directly).
+  PR #7494 opened; CI still running as of this update, not yet merged (non-blocking — SD is
+  already status=completed independent of this doc-only PR's merge timing). Retry the merge on a
+  future pass: `gh pr checks 7494`, then the same `lib/ship/auto-merge.mjs` invocation pattern
+  from Update 6 with prNumber=7494 and branch=docs/SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001-changelog.
+- `/heal sd --sd-id`: scored directly (first-hand knowledge of every line shipped, no Explore
+  agent needed) — 99/100, PASS, no corrective SD generated. Only sub-100 dimension: a PRD
+  acceptance-criterion wording lag ("replay 803+ rows") against the deliberately-safer shipped
+  design (committed 40-row snapshot) — not an undelivered promise.
+- `/learn` (AUTO-PROCEED auto-approve --threshold=50): 0 items above threshold. Nothing to act on.
+- `capture-completion-flags`: answered the FR-6 reflective interrogation ("Are there any gaps we
+  failed to close?" -> yes, 1: F9). Routed F9 (below) as type=harness -> harness_backlog, feedback
+  id e00e1e50-fd69-4aa0-958b-fc6ee6f393b6. Reflection: {asked:true, checklist_items:6, gaps_found:1}.
+
+F9 (routed, not silently folded into this SD's diff): scripts/coordinator-capacity-forecast.mjs's
+emitMaskedStallEscalation() (~line 355-360) has the same header(combined beltDepth)-vs-
+claimable-now-list(SD keys only) extent mismatch that FR-3 fixed in reachAdam(), but FR-3's scope
+named reachAdam() specifically. Tiny fix (~5 LOC, thread openQfCount through its call site at
+~line 255, reuse formatBeltExtent). Good Tier-1 QF candidate — now durable in the feedback table,
+not just this file.
+
+## Next steps
+1. (Non-blocking, opportunistic) Merge PR #7494 (CHANGELOG entry) once its CI clears.
+2. /checkin for the next SD (same-turn next-claim discipline) — proceeding now.
 
 ## Notes carried from prior SD (VENTURE-SCAFFOLD-CODE-001, completed this session)
 - ENF-15 force-push allowlist does NOT include docs/* branches — relevant if this SD
