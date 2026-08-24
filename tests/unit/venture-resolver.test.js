@@ -20,6 +20,7 @@ import {
   ENGINEER_ROOT
 } from '../../lib/venture-resolver.js';
 import path from 'path';
+import { existsSync } from 'fs';
 
 describe('venture-resolver', () => {
   beforeEach(() => {
@@ -31,6 +32,19 @@ describe('venture-resolver', () => {
       const result = getVenturePath('ehg');
       expect(result).toContain('ehg');
       expect(path.isAbsolute(result)).toBe(true);
+    });
+
+    // LOAD-BEARING (SD-LEO-INFRA-REPO-HYGIENE-PATH-001): the assertion above (`toContain('ehg')`)
+    // is a blind spot -- it passes even for the wrong path `...\.worktrees\ehg`, which is
+    // exactly what this function returned before this fix (registry.json's local_path values
+    // became relative in that SD's FR-1; this file's own path.resolve(app.local_path) resolved
+    // that relative value against process.cwd() instead of the repo root, breaking from any
+    // cwd). This assertion checks the resolved path actually EXISTS on disk, which the substring
+    // check above cannot catch.
+    it('resolves ehg to a path that actually exists on disk', () => {
+      const result = getVenturePath('ehg');
+      expect(existsSync(result)).toBe(true);
+      expect(result.replace(/\\/g, '/')).not.toContain('/.worktrees/');
     });
 
     it('resolves EHG case-insensitively', () => {
@@ -80,6 +94,15 @@ describe('venture-resolver', () => {
     it('returns null for null input', () => {
       expect(getVentureConfig(null)).toBeNull();
     });
+
+    // LOAD-BEARING (SD-LEO-INFRA-REPO-HYGIENE-PATH-001): same blind-spot class as
+    // getVenturePath's equivalent test above -- getVentureConfig had the identical
+    // path.resolve(app.local_path)-against-process.cwd() bug at its own local_path resolution.
+    it('resolves local_path to a path that actually exists on disk', () => {
+      const config = getVentureConfig('ehg');
+      expect(existsSync(config.local_path)).toBe(true);
+      expect(config.local_path.replace(/\\/g, '/')).not.toContain('/.worktrees/');
+    });
   });
 
   describe('listVentures', () => {
@@ -93,6 +116,15 @@ describe('venture-resolver', () => {
       const ventures = listVentures();
       const names = ventures.map(v => v.name);
       expect(names).toContain('ehg');
+    });
+
+    // LOAD-BEARING (SD-LEO-INFRA-REPO-HYGIENE-PATH-001): same blind-spot class as above --
+    // listVentures() had the identical bug at its own local_path resolution.
+    it('resolves ehg\'s local_path to a path that actually exists on disk', () => {
+      const ventures = listVentures();
+      const ehg = ventures.find(v => v.name === 'ehg');
+      expect(existsSync(ehg.local_path)).toBe(true);
+      expect(ehg.local_path.replace(/\\/g, '/')).not.toContain('/.worktrees/');
     });
   });
 
