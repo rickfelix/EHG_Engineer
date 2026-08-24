@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'path';
-import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, getRepoRoot, isInsideWorktree, ENGINEER_ROOT } from '../../lib/repo-paths.js';
+import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, getRepoRoot, isInsideWorktree, stripWorktreeSuffix, ENGINEER_ROOT } from '../../lib/repo-paths.js';
 
 describe('lib/repo-paths', () => {
   beforeEach(() => {
@@ -139,14 +139,30 @@ describe('lib/repo-paths', () => {
   });
 
   // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5)
+  //
+  // CORRECTED by SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (RCA finding, 2026-08-24): the original
+  // assertions here pinned getRepoRoot() === ENGINEER_ROOT unconditionally, which is only true
+  // when the test process itself is NOT running from inside a .worktrees/<SD>/ checkout. Nearly
+  // all real EXEC-phase work runs from exactly such a worktree, so these assertions were false
+  // most of the time this suite actually ran -- the file was quarantined as "assertion-drift" on
+  // 2026-06-11 rather than recognized as a genuine defect (a real, worktree-resolution bug in
+  // resolveLocalPath() went undetected as a direct result -- see lib/repo-paths.js's own doc
+  // comment on resolveLocalPath for the full incident). The correct, environment-INDEPENDENT
+  // invariant is that getRepoRoot() always equals stripWorktreeSuffix(ENGINEER_ROOT) -- true from
+  // main (a no-op) AND from any worktree (strips the suffix) -- and never itself contains a
+  // '/.worktrees/' segment.
   describe('getRepoRoot()', () => {
-    it('returns ENGINEER_ROOT', () => {
-      expect(getRepoRoot()).toBe(ENGINEER_ROOT);
+    it('equals stripWorktreeSuffix(ENGINEER_ROOT) -- true from main AND from a worktree', () => {
+      expect(getRepoRoot()).toBe(stripWorktreeSuffix(ENGINEER_ROOT));
+    });
+
+    it('never itself contains a /.worktrees/ segment, regardless of where the test runs', () => {
+      expect(getRepoRoot().replace(/\\/g, '/')).not.toContain('/.worktrees/');
     });
 
     it('is invariant regardless of options', () => {
-      expect(getRepoRoot({})).toBe(ENGINEER_ROOT);
-      expect(getRepoRoot({ cwd: '/totally/elsewhere' })).toBe(ENGINEER_ROOT);
+      expect(getRepoRoot({})).toBe(getRepoRoot());
+      expect(getRepoRoot({ cwd: '/totally/elsewhere' })).toBe(getRepoRoot());
     });
 
     it('returns an absolute path', () => {
@@ -156,7 +172,41 @@ describe('lib/repo-paths', () => {
     it('is exported from the default module export', async () => {
       const mod = await import('../../lib/repo-paths.js');
       expect(typeof mod.default.getRepoRoot).toBe('function');
-      expect(mod.default.getRepoRoot()).toBe(ENGINEER_ROOT);
+      expect(mod.default.getRepoRoot()).toBe(getRepoRoot());
+    });
+  });
+
+  // SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (RCA preventive control P2): pure-function coverage for
+  // resolveLocalPath's `base` parameter, proving the wrong-base and right-base arithmetic
+  // directly rather than only through the module's own default expression (which a test using
+  // only the default can never observe changing).
+  describe('resolveLocalPath() base parameter', () => {
+    it('an already-absolute value is returned unchanged regardless of base', async () => {
+      const { resolveLocalPath } = await import('../../lib/repo-paths.js');
+      expect(resolveLocalPath('C:/abs/path', '/some/base')).toBe(path.resolve('C:/abs/path'));
+    });
+
+    it('a relative value resolves against the explicit base parameter, not ENGINEER_ROOT', async () => {
+      const { resolveLocalPath } = await import('../../lib/repo-paths.js');
+      const worktreeShaped = path.resolve(ENGINEER_ROOT, '.worktrees', 'FAKE-SD-FOR-TEST');
+      const mainShaped = path.resolve(ENGINEER_ROOT, '..', 'main-shaped-root');
+      // Same relative input, two different explicit bases -- proves resolution genuinely
+      // depends on the passed base, not a closed-over module constant.
+      expect(resolveLocalPath('../ehg', worktreeShaped)).toBe(path.resolve(worktreeShaped, '../ehg'));
+      expect(resolveLocalPath('../ehg', mainShaped)).toBe(path.resolve(mainShaped, '../ehg'));
+      expect(resolveLocalPath('../ehg', worktreeShaped)).not.toBe(resolveLocalPath('../ehg', mainShaped));
+    });
+
+    it('demonstrates the wrong-base vs right-base arithmetic that caused the regression', () => {
+      // Simulates the exact bug class without needing a real worktree directory: resolving a
+      // relative registry value against a worktree-shaped path (wrong) vs. its
+      // stripWorktreeSuffix()'d equivalent (right) must differ, proving the base choice is
+      // load-bearing, not cosmetic.
+      const worktreeShaped = path.resolve(ENGINEER_ROOT, '.worktrees', 'FAKE-SD-FOR-TEST');
+      const wrongBase = path.resolve(worktreeShaped, '../ehg');
+      const rightBase = path.resolve(stripWorktreeSuffix(worktreeShaped), '../ehg');
+      expect(wrongBase).not.toBe(rightBase);
+      expect(rightBase.replace(/\\/g, '/')).not.toContain('/.worktrees/');
     });
   });
 

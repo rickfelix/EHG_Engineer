@@ -37,6 +37,7 @@
 // of any measurement.
 import { execFileSync } from 'node:child_process';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { getRepoRoot } from '../../lib/repo-paths.js';
 
 export const BASELINE = 2291;
 export const BUFFER = 100;
@@ -53,7 +54,12 @@ export function countUntrackedFiles(cwd = process.cwd()) {
 
 function main() {
   const strict = process.argv.includes('--strict');
-  const count = countUntrackedFiles();
+  // getRepoRoot() (not process.cwd()): most fleet commits run from a .worktrees/<SD>/ checkout,
+  // which starts nearly empty of untracked scratch -- measuring cwd there would make this check
+  // hollow for the majority of real commits (SD-LEO-INFRA-REPO-HYGIENE-PATH-001, RCA finding).
+  // The debris this lint targets accumulates in the MAIN checkout, so that's what must be
+  // measured regardless of which worktree the commit is actually happening in.
+  const count = countUntrackedFiles(getRepoRoot());
 
   if (count <= THRESHOLD) {
     console.log(`✅ root-dirt-lint: ${count} untracked file(s) (threshold ${THRESHOLD}, baseline ${BASELINE} + ${BUFFER} buffer)`);
