@@ -31,6 +31,16 @@
  * evidence 40c35949: a hand-rolled execSync string-interpolation call here would have reproduced
  * the exact shell-injection sink class 5 prior SDs/QFs already closed elsewhere in this repo).
  *
+ * KNOWN LIMITATION (VALIDATION evidence b1dbe3ce): PATH_BAN names exactly one settings surface,
+ * `.claude/settings.json`. A hook registered instead through `.claude/settings.local.json` (a
+ * real, supported override file for this exact tool) or a brand-new dispatcher file this lint has
+ * never heard of would disable the ceremony without touching any banned path. Separately, the
+ * witness-marker check is a bare occurrence COUNT (`hasNetWitnessMarkerLoss`), not a semantic
+ * check: a rewrite that swaps `completion_flag_witness` for a differently-spelled but
+ * functionally-identical marker, at the same call site, leaves the count net-zero and passes
+ * silently. Both are name/count-shaped detection, not behavior-shaped, and neither is closed by
+ * this SD -- flagged here rather than left implicit.
+ *
  * Usage: node scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs [--base <ref>]
  * Exit: 1 if any ceremony surface is touched, 0 otherwise.
  */

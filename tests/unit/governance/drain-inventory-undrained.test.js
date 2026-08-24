@@ -124,6 +124,11 @@ describe('SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 FR-2 — a single lifetim
     // true in JS, so the ORIGINAL check would have silently disarmed on this shape too.
     const deepWithNoReading = { count: 6249, oldestAgeMs: 200 * DAY, closingPathUses: null };
     expect(classifyObserved(SOUND, deepWithNoReading)).toBe(VERDICT.UNDRAINED);
+    // REGRESSION evidence 56415f6d: pin the underlying predicate directly too, not just the
+    // classifier that wraps it -- a null closing-path reading on a backlog-sized population is
+    // deliberately treated as "no measured drainage" (falls back to isBacklogSized), never as a
+    // manufactured PASS from missing data.
+    expect(exceedsBacklogThreshold(SOUND, deepWithNoReading)).toBe(true);
 
     const deepWithUndefinedReading = { count: 6249, oldestAgeMs: 200 * DAY };
     expect(classifyObserved(SOUND, deepWithUndefinedReading)).toBe(VERDICT.UNDRAINED);

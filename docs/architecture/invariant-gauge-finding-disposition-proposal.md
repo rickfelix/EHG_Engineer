@@ -79,4 +79,7 @@ option, a hybrid, or request the title-breakdown investigation as a precondition
 
 This document is delivered as FR-4's evidence package. Per this SD's PRD (FR-4 AC-2), it is
 routed to the chairman via the standard chairman decision channel, not left as a docs/-only
-artifact awaiting discovery.
+artifact awaiting discovery: `feedback` row `825674d8-8350-4049-bd8b-320c1d2c04ff`
+(category=`chairman_decision_capture`, status=`new`, `metadata.doc_path` pointing back at this
+file) queues it for the morning ceremony packet, per VALIDATION's identification (evidence
+b1dbe3ce) of that channel as the live, actively-used surface for staged chairman decisions.
