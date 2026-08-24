@@ -101,16 +101,16 @@ tags: [reference, auto-generated]
   - [v2.0.0 (2026-01-25)](#v200-2026-01-25)
   - [v1.0.0 (2025-10-28)](#v100-2025-10-28)
 
-**Strategic Directive**: SD-LEO-ENH-ENHANCE-RCA-SUB-001
-**Version**: 2.2
-**Last Updated**: 2026-02-07
+**Strategic Directive**: SD-LEO-ENH-ENHANCE-RCA-SUB-001, SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001
+**Version**: 2.3
+**Last Updated**: 2026-08-23
 
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 2.2.0
+- **Version**: 2.3.0
 - **Author**: LEO Protocol Team
-- **Last Updated**: 2026-02-07
+- **Last Updated**: 2026-08-23
 - **Tags**: rca, root-cause-analysis, quality-gates, forensics, sub-agent, slash-commands, auto-trigger
 
 ## Overview
@@ -762,15 +762,19 @@ Learning records automatically link to EVA preference model:
 
 ### How the Gate Works
 
-**Location**: `scripts/unified-handoff-system.js` → `executeExecToPlan()` at line 513
+**Location**: `scripts/modules/handoff/executors/exec-to-plan/gates/rca-gate.js` (`createRCAGate`, exported as the `RCA_GATE` handoff gate)
 
 **Logic**:
-1. Query for P0/P1 RCRs for this SD
-2. Filter for RCRs without verified CAPAs
-3. If any found: BLOCK handoff with reasonCode='RCA_GATE_BLOCKED'
-4. If none found: ALLOW handoff to proceed
+1. Query `root_cause_reports` for P0/P1 rows scoped to this SD, filtered to a blocking status set: `OPEN`, `IN_REVIEW`, `CAPA_PENDING`, `CAPA_APPROVED` (`STALE` is deliberately excluded — a dormant RCR is not re-litigated at every handoff)
+2. If any blocking rows exist: warn (default) or block (enforced), depending on the `LEO_RCA_GATE_ENFORCE` env flag below
+3. If none found: `gate_status: 'PASS'`
 
-**Non-blocking on error**: If RCA gate check fails (database error, etc.), gate returns PASS with error metadata to prevent false blocks
+**On query error (e.g. a table/column mismatch)**: the gate binds and checks the Supabase response's `error` field explicitly — a query failure returns `gate_status: 'WARN'` (or `'FAIL'` if enforcement is on), **never** a silent `PASS`. (SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001, 2026-08-23, repaired a real defect here: the gate previously destructured only `{ data }` and queried a table, `root_cause_analyses`, that never existed — every invocation silently returned `passed:true, score:100` and the fail-closed catch block was dead code that never ran.)
+
+**Enforcement flag — `LEO_RCA_GATE_ENFORCE`** (default unset = warn-only):
+- **Unset/false** (current default): a blocking condition or query error returns `passed: true, gate_status: 'WARN'` and logs the blocking RCR ids — visible, but does not block EXEC-TO-PLAN.
+- **`true`**: the same conditions return `passed: false, gate_status: 'FAIL'` / `'BLOCKED'`, actually blocking the handoff.
+- Hard enforcement is deferred pending measured, non-zero RCR resolution throughput — as of 2026-08-23 only 2 of 1271 lifetime RCRs have ever reached `RESOLVED`, so flipping this on today would deadlock any SD that newly accrues a P0/P1 RCR during EXEC with no functioning exit path.
 
 ### Example: Blocked Handoff
 
@@ -1252,13 +1256,21 @@ PENDING → UNDER_REVIEW → APPROVED → IN_PROGRESS → IMPLEMENTED → VERIFI
 ---
 
 **Document Version**: 2.2
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-08-23
 **Maintained By**: LEO Protocol Team
 **Feedback**: Report issues to RCA sub-agent or create SD for improvements
 
 ---
 
 ## Changelog
+
+### v2.3.0 (2026-08-23)
+- **FIXED**: `RCA_GATE` (scripts/modules/handoff/executors/exec-to-plan/gates/rca-gate.js) no longer silently PASSes on a query error — it now binds and checks the Supabase response's `error` field, returning `gate_status: 'WARN'`/`'FAIL'` instead. Pre-fix, the gate queried a nonexistent table (`root_cause_analyses`) and destructured only `{ data }`, so every invocation returned `passed:true, score:100` unconditionally.
+- **FIXED**: Gate now correctly queries `root_cause_reports` using `severity_priority`/`status` (not the old `priority`/`capa_status` column names), with `CAPA_APPROVED` added to the blocking-status set.
+- **NEW**: `LEO_RCA_GATE_ENFORCE` env flag gates hard enforcement (default unset = warn-only); see "Gate Enforcement" above.
+- **NEW**: `skipRCA` in `lib/rca/rca-orchestrator.js`'s `triggerQuick()` is no longer hardcoded `true` — it resolves per `trigger_type` from a new `rca_auto_trigger_config` metadata key (not the pre-existing `enabled` column), defaulting conservatively to skip.
+- **NEW**: `lib/disposition/disposition-loop.js` — a thin, opt-in defect-disposition loop (detect→classify→diagnose→retry≤2→revise→re-evaluate→verify→record→escalate) over these existing primitives. Zero production callers by design; wiring automatic invocation into the shared EXEC-TO-PLAN pipeline is left as a follow-on decision.
+- Comprehensive SD: SD-LEO-INFRA-MINUS-DISPOSITION-RAILS-001 (PR #7465)
 
 ### v2.2.0 (2026-02-07)
 - **NEW**: Automatic RCA Trigger SDK (`lib/rca/trigger-sdk.js`)
