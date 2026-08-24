@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3/FR-4): branch→owner resolution replaces the anchored
 // regex. See lib/git/branch-owner.js for why a widened regex is provably impossible.
-import { branchBelongsToSd, loadKeySet, OWNER_REASON } from '../../../../../lib/git/branch-owner.js';
+import { branchBelongsToSd, loadKeySet, OWNER_REASON, BRANCH_TYPE_TOKENS } from '../../../../../lib/git/branch-owner.js';
 import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective, isValidPreflightRetro } from '../../retro-filters.js';
@@ -51,7 +51,27 @@ export { createWireCheckGate };
 // Invocation-Path Proof Gate — autonomous code must have a LIVE trigger, not just be reachable
 // (SD-LEO-INFRA-INVOCATION-PATH-PROOF-001-C)
 import { createInvocationPathGate } from './gates/invocation-path-gate.js';
-export { createInvocationPathGate };
+// SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001: a direct re-export-from passthrough, not a separate
+// `export { createInvocationPathGate };` of the locally-imported binding.
+//
+// CORRECTED (RCA, see tests/unit/gates-namespace-exports.test.js): an earlier version of this
+// comment attributed the break to "co-scheduling in the same vitest worker" — that mechanism was
+// measured FALSE by RCA (reproduces with this file running completely alone). The REAL root cause
+// was a literal mock-hoisting trigger token (a "vi" + ".mock(" pair) sitting in an unrelated
+// comment elsewhere in this file (the FR-2
+// exemption note below, quoting the test files' own mock call for explanatory purposes). Vitest's
+// mock-hoisting transform (@vitest/mocker's hoistMocks) scans raw file TEXT, comments included, for
+// that token; finding it, it hoists this PRODUCTION module's imports as if it were a test file, and
+// its rewrite does not correctly handle `export { X };` of a plain locally-imported binding — Vite's
+// generated export getter throws on the (now-hoisted-away) local reference and a wrapping try/catch
+// silently converts that into `undefined`. That single mistaken comment silently broke 11 of the 12
+// `export { X };` re-exports in this file, not just this one — this passthrough form (an `export {
+// X } from '...'` re-export declaration, rather than a getter over a local binding) happens to be
+// immune to that specific rewrite bug, which is why converting only this one export "fixed" the
+// symptom without touching the actual root cause. The literal token has since been removed from the
+// exemption comment below; this passthrough form is kept regardless, since it is a reasonable,
+// slightly more standard way to re-export a plain pass-through binding.
+export { createInvocationPathGate } from './gates/invocation-path-gate.js';
 
 // Phantom Test Audit Gate — call-surface alignment check (SD-FDBK-ENH-PAT-PHANTOM-TABLE-001)
 import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
@@ -615,6 +635,54 @@ export function createPRPrecheckGate(supabase, deps = {}) {
   };
 }
 
+// SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-2): the narrow, MEASURED exemption for
+// "this sd_type ships no code". Deliberately NOT scripts/modules/sd-type-checker.js's
+// isInfrastructureSDSync()/SD_TYPE_CATEGORIES.NON_CODE — measured against strategic_directives_v2,
+// NON_CODE exempts 3393/4595 completed SDs (73.8%), with 'infrastructure' alone accounting for
+// 2733 (59.5%) — including this SD's own type. Both test files for this gate also fully mock
+// sd-type-checker.js (both test files mock its getTierForSD export), so importing any
+// further symbol from that module throws under mock and the outer catch reads as a false green
+// (see the note on FR-2 in the PRD). Checking ctx.sd.sd_type against this local Set avoids both
+// problems. 'process' is deliberately NOT included: SECURITY EXEC review (SEC-7) measured it
+// against the live sd_type_check CHECK constraint (15 permitted values) and found it is not a
+// valid sd_type — a dead Set member that would additionally have told an operator, via the
+// never-pushed remediation message, to set a value the database rejects.
+const NO_CODE_SD_TYPES = new Set(['documentation', 'docs', 'orchestrator']);
+
+// SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (VALIDATION VERIFY finding, 1-REP): named directly
+// off BRANCH_TYPE_TOKENS (lib/git/branch-owner.js, already imported above for branchBelongsToSd)
+// instead of a second, hand-maintained literal — the never-pushed message and
+// branchBelongsToSd's own recognition now cannot drift apart. 'chore' is deliberately NOT in
+// BRANCH_TYPE_TOKENS (pinned by an existing test fixture); this alias exists only to give the
+// never-pushed failure message a name that doesn't imply a private, SD-local list.
+const RECOGNIZED_BRANCH_TYPES = BRANCH_TYPE_TOKENS;
+
+/**
+ * SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-4, TR-8): pure classifier shared by the live gate's
+ * third state (below) and the retro census one-off script, so the two definitions of "never-pushed
+ * specimen" can never drift apart. Takes no I/O — callers gather the evidence.
+ *
+ * @param {Object} params
+ * @param {Object} params.sd - { sd_type }
+ * @param {Array} [params.shipReviewFindings] - rows that may carry pr_url / merged_at as evidence
+ * @param {Object} [params.metadata] - { openPRs, mergedPRs, hasMergeEvidence, unmergedBranches }
+ * @returns {boolean}
+ */
+export function isNeverPushedSpecimen({ sd, shipReviewFindings, metadata } = {}) {
+  if (NO_CODE_SD_TYPES.has(sd?.sd_type)) return false;
+  const md = metadata || {};
+  const hasOpenPR = Number(md.openPRs ?? 0) > 0;
+  const hasMergedPR = Number(md.mergedPRs ?? 0) > 0 || Boolean(md.hasMergeEvidence);
+  const hasUnmergedBranch = Number(md.unmergedBranches ?? 0) > 0;
+  if (hasOpenPR || hasMergedPR || hasUnmergedBranch) return false;
+  // ship_review_findings has no pr_url/merged_at column — a row's presence with a pr_number is
+  // itself the evidence (a PR was reviewed, which requires one to have existed).
+  if (Array.isArray(shipReviewFindings) && shipReviewFindings.some((f) => f?.pr_number)) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Create Gate 4: PR merge verification
  *
@@ -680,7 +748,7 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
       const keySet = keySetResult.keys;
 
       try {
-        const { execSync } = await import('child_process');
+        const { execSync, execFileSync } = await import('child_process');
 
         // SD-LEO-INFRA-CROSS-REPO-MERGE-001: scope repo scan to SD's target_application
         // and metadata.target_repos[] instead of hardcoding both repos.
@@ -779,6 +847,12 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
         // for the unmerged-branch scan to keep both loops consuming a single source of truth
         // (writer/consumer asymmetry class — PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
         const unmergedBranches = [];
+        // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (TR-6): squash-merge evidence observed below
+        // (the `gh pr list --head ... --state merged` whitelist check) used to live only in a
+        // function-local `let prMerged` and was discarded once the loop moved on. Hoisted here so
+        // it survives as positive evidence for the never-pushed third-state check further down —
+        // without this, a squash-merged SD is indistinguishable from a never-pushed one.
+        const mergeEvidence = [];
         for (const { githubRepo: repo, localPath: repoPath } of reposWithPaths) {
           try {
 
@@ -828,6 +902,7 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
                       const mergedPrs = JSON.parse(prStatus || '[]');
                       if (mergedPrs.length > 0) {
                         prMerged = true;
+                        mergeEvidence.push({ branch: cleanBranch, repo, prNumber: mergedPrs[0].number });
                         console.log(`   ✅ ${cleanBranch} has merged PR #${mergedPrs[0].number} — squash-merge artifact, skipping`);
                       }
                     } catch (_prErr) {
@@ -862,6 +937,12 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
             }
           } catch (_repoError) {
             // Intentionally suppressed: skip repo if can't check branches
+            // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-5, deferred, NOT closed by this SD):
+            // this is the same fail-open class RESUME-FINAL-READ-001's FR-4 already closed on the
+            // PR-scan side (the `unreadableRepos` refusal above, ~line 726) — an unreadable repo
+            // here is silently treated as "nothing to report" instead of blocking. Flagged by this
+            // SD's own review as a candidate follow-up SD; out of scope here (this SD's boundary is
+            // the never-pushed third state, not other suppression sites in this gate).
             console.debug('[LeadFinalApproval] repo branch check suppressed:', _repoError?.message || _repoError);
           }
         }
@@ -905,13 +986,203 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
 
         console.log('   ✅ No unmerged branches with commits found');
 
+        // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (FR-1): Scan A (open PRs) and Scan B (unmerged
+        // remote branches) are BOTH remote-only "is anything currently outstanding" surfaces. A
+        // normally-shipped SD (PR opened, merged, branch deleted via /ship --delete-branch) returns
+        // zero on BOTH — MEASURED (TESTING sub-agent PLAN-phase probe) to be byte-identical to a
+        // branch that was never pushed at all. mergeEvidence (hoisted above from the squash-merge
+        // whitelist check) is the first, cheap positive-evidence signal. When it's empty too, Scan C
+        // below is the authoritative positive-evidence source: same execSync/gh-CLI invocation
+        // pattern, same branchBelongsToSd resolver as Scan A, `--state merged` instead of
+        // `--state open`, PLUS `--search "<sdId>"` — MEASURED (TESTING sub-agent EXEC-phase probe,
+        // row d0b12eb8) that omitting --search reintroduces the exact false-positive class this SD
+        // exists to close: `gh pr list --state merged --limit 100` with no search filter only sees
+        // the 100 most-recently-merged PRs REPO-WIDE (a ~50-hour window measured live on
+        // rickfelix/EHG_Engineer), so any SD merged earlier than that window — the common case for
+        // an orchestrator parent waiting on children, a resumed SD, or simply a few days passing —
+        // reads as zero evidence and false-positives as never_pushed. Demonstrated live:
+        // SD-LEO-INFRA-RESUME-FINAL-READ-001 (merged PR #6790, 2026-08-04) returns 0 matches
+        // without --search and is found immediately with it. Only when Scan A, Scan B,
+        // mergeEvidence, AND Scan C are ALL empty for a code-implying sd_type (NOT in
+        // NO_CODE_SD_TYPES) do we conclude nothing was ever pushed.
+        if (mergeEvidence.length === 0 && !NO_CODE_SD_TYPES.has(ctx.sd.sd_type)) {
+          const SCAN_C_LIMIT = 100;
+          const mergedPRs = [];
+          let scanCFailed = false;
+          let scanCSaturated = false;
+          for (const { githubRepo: repo } of reposWithPaths) {
+            try {
+              const result = execSync(
+                `gh pr list --repo ${repo} --state merged --search "${sdId}" --json number,headRefName,url,mergedAt --limit ${SCAN_C_LIMIT}`,
+                { encoding: 'utf8', timeout: 30000 }
+              );
+              const prs = JSON.parse(result || '[]');
+              // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (SECURITY EXEC finding SEC-9, medium,
+              // self-referential — this SD's own key already returns 65/100 before shipping):
+              // --search matches the SD key anywhere in a PR title/body/comments, not only on the
+              // owning branch (branchBelongsToSd is what narrows that down), and --limit caps the
+              // RAW search result set. If the raw set hits the cap, GitHub's relevance ranking may
+              // have pushed the actually-owning PR outside the window — a capped, all-filtered-out
+              // result is "cannot conclude", not "no evidence".
+              if (prs.length >= SCAN_C_LIMIT) scanCSaturated = true;
+              const matching = prs.filter(pr => branchBelongsToSd(pr.headRefName, sdId, keySet).belongs);
+              mergedPRs.push(...matching.map(pr => ({ ...pr, repo })));
+            } catch (_e) {
+              // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (TESTING EXEC finding, medium): a
+              // transient gh failure here must NOT silently read as "no merge evidence" — that
+              // would mislabel a verification outage as reason:'never_pushed', which matters
+              // because FR-4's census keys off that exact code. Track and fail closed below,
+              // consistent with the unreadableRepos posture Scan A already takes (~line 730) rather
+              // than the historically lenient posture this catch used to have.
+              scanCFailed = true;
+            }
+          }
+
+          if (scanCFailed && mergedPRs.length === 0) {
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                `Cannot verify merge evidence for ${sdId}: Scan C (merged-PR search) failed for at least one repo.`,
+                'This BLOCKS rather than reporting never_pushed. A gh outage during Scan C is not evidence the SD was never pushed.',
+                'Usually gh auth or rate limiting: check `gh auth status`, then re-run.',
+                'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+              ],
+              warnings: [],
+              details: { fail_closed: true, reason: 'scan_c_unreadable' }
+            };
+          }
+
+          if (scanCSaturated && mergedPRs.length === 0) {
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                `Cannot conclude merge evidence for ${sdId}: Scan C's search returned ${SCAN_C_LIMIT}+ results (window saturated) with none matching this SD's branch ownership.`,
+                'This BLOCKS rather than reporting never_pushed. A saturated search window is not evidence of absence — the owning PR may have been ranked outside it.',
+                'Verify manually (e.g. `gh pr list --state merged --search "<sdKey>" --json headRefName,number,url`) before concluding this SD never shipped.',
+                'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+              ],
+              warnings: [],
+              details: { fail_closed: true, reason: 'scan_c_saturated' }
+            };
+          }
+
+          // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (TESTING EXEC finding, high): route the
+          // "is this a specimen" decision through the SAME isNeverPushedSpecimen classifier the
+          // retro census (FR-4) uses, instead of a second, independently-drifting inline
+          // condition. shipReviewFindings gives ship_review_findings-recorded evidence (a
+          // pr_number row) one more chance to save an SD Scan A/B/C's live git/gh state missed —
+          // e.g. a repo that has since been archived/renamed. supabase is optional (tests pass
+          // null); a DB lookup failure here degrades to "no additional evidence", never to a
+          // false pass — Scan A/B/C above remain the authoritative, already-fail-closed source.
+          let shipReviewFindings = [];
+          if (supabase) {
+            try {
+              // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (SECURITY EXEC finding, low): bind and
+              // log `error` (repo convention: ALWAYS bind error on supabase reads) so a
+              // permanently-broken lookup (renamed column, revoked grant) is observable rather
+              // than silently indistinguishable from "no rows". Direction stays fail-closed
+              // either way — an error still degrades to [], never to a false pass.
+              const { data, error: findingsErr } = await supabase
+                .from('ship_review_findings')
+                .select('id, pr_number, sd_key')
+                .eq('sd_key', sdId)
+                .limit(5);
+              if (findingsErr) {
+                console.log(`   ⚠️  ship_review_findings lookup failed (degrading to no additional evidence): ${findingsErr.message}`);
+              }
+              shipReviewFindings = data || [];
+            } catch (_findingsErr) {
+              // Non-fatal — see comment above.
+            }
+          }
+          const isSpecimen = isNeverPushedSpecimen({
+            sd: { sd_type: ctx.sd.sd_type },
+            shipReviewFindings,
+            metadata: { openPRs: 0, mergedPRs: mergedPRs.length, unmergedBranches: 0 },
+          });
+
+          if (isSpecimen) {
+            // DIAGNOSTIC ONLY, never required for the FAIL verdict below. Enumerates LOCAL
+            // branches — host-local: if this gate runs on a different machine/worktree than EXEC,
+            // this step finds nothing, and the verdict still correctly fails on the strength of
+            // Scan A/B/C being empty alone (SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 residual,
+            // documented — not a gap this SD claims to close).
+            let localCandidate = null;
+            for (const { localPath: repoPath } of reposWithPaths) {
+              try {
+                const localRefs = execSync('git for-each-ref --format=%(refname:short) refs/heads/', {
+                  encoding: 'utf8', cwd: repoPath, timeout: 10000
+                });
+                const localBranches = localRefs.split('\n').map(b => b.trim()).filter(Boolean);
+                for (const branch of localBranches) {
+                  if (!branchBelongsToSd(branch, sdId, keySet).belongs) continue;
+                  try {
+                    // SD-LEO-INFRA-MERGE-VERIFICATION-NEVER-001 (SECURITY EXEC finding SEC-1,
+                    // CONFIRMED BY EXECUTION): branchBelongsToSd imposes no charset constraint on
+                    // the suffix after the SD key, so a local branch name like
+                    // `feat/<KEY>-a&whoami` passes the filter and, via execSync's shell
+                    // interpolation, executed an injected command when probed. execFileSync with
+                    // an argv array (git's own `--` end-of-options marker) never invokes a shell,
+                    // so the branch name can never be reparsed as a command regardless of its
+                    // characters.
+                    const remoteCheck = execFileSync('git', ['ls-remote', '--heads', 'origin', '--', branch], {
+                      encoding: 'utf8', cwd: repoPath, timeout: 10000
+                    });
+                    if (!remoteCheck.trim()) { localCandidate = branch; break; }
+                  } catch (_lsErr) {
+                    // Cannot confirm remote absence for this candidate — skip naming it.
+                  }
+                }
+              } catch (_forEachErr) {
+                // git for-each-ref unavailable in this repo — diagnostic-only, no effect on verdict.
+              }
+              if (localCandidate) break;
+            }
+
+            console.log(`   ❌ No open PR, no unmerged branch, and no merged PR found for ${sdId}`);
+
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                `No branch was ever pushed for ${sdId}: found no open PR, no unmerged remote branch, and no merged PR evidence.`,
+                localCandidate
+                  ? `  → Local branch found but never pushed to remote: ${localCandidate}`
+                  : `  → Checked recognized branch types (${RECOGNIZED_BRANCH_TYPES.join('|')}); none found locally on this host — this diagnostic step is host-local and does not affect the verdict above.`,
+                '',
+                'REMEDIATION: If code was written, push the branch and open a PR via /ship.',
+                `If this SD genuinely ships no code, its sd_type should be one of: ${[...NO_CODE_SD_TYPES].join(', ')}.`,
+                'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+              ],
+              warnings: [],
+              details: {
+                checkedPatterns: branchPatterns,
+                openPRs: 0,
+                unmergedBranches: 0,
+                mergedPRs: 0,
+                reason: 'never_pushed',
+                recognizedBranchTypes: RECOGNIZED_BRANCH_TYPES,
+                localCandidate
+              }
+            };
+          }
+
+          console.log(`   ✅ Found ${mergedPRs.length} merged PR(s) as positive evidence — SD has shipped code`);
+          mergeEvidence.push(...mergedPRs.map(pr => ({ branch: pr.headRefName, repo: pr.repo, prNumber: pr.number })));
+        }
+
         return {
           passed: true,
           score: 100,
           max_score: 100,
           issues: [],
           warnings: [],
-          details: { checkedPatterns: branchPatterns, openPRs: 0, unmergedBranches: 0 }
+          details: { checkedPatterns: branchPatterns, openPRs: 0, unmergedBranches: 0, mergeEvidence: mergeEvidence.length }
         };
 
       } catch (error) {
