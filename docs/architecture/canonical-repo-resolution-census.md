@@ -1,3 +1,12 @@
+---
+Category: Architecture
+Status: Approved
+Version: 1.1.0
+Author: Claude (multiple SDs — see per-section provenance; SD-LEO-INFRA-REPO-HYGIENE-PATH-001 added the 2026-08-24 entry)
+Last Updated: 2026-08-24
+Tags: [repo-resolution, worktree, canonical-resolver, census]
+---
+
 # Canonical Repo/App Resolution Census
 
 SD-LEO-INFRA-CANONICAL-REPO-APP-001 (FR-1). File:line → disposition table for every
@@ -139,6 +148,27 @@ closing the exact "two independent representations of the same predicate" gap th
 design review (testing-agent evidence `c636ba21`/`ce10a1bd`) flagged. `computeReposForSD`
 itself remains untouched and deferred, per the golden-master-regression precondition
 above — this resolution is scoped to the QF-escalation writer/gate pair only.
+
+### FIXED — worktree-blind base-resolution defect in the previously-uncatalogued resolver family, closed by SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (2026-08-24)
+
+The "Previously-undocumented parallel resolver family" section above flagged
+`lib/venture-resolver.js` as catalogued-but-not-yet-audited against this census's
+defect classes. SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (whose core PRD scope was fixing
+`lib/repo-paths.js`'s own `resolveLocalPath` default-base regression — a fresh instance
+of the worktree-blind-resolution class, root-caused to a 2026-06-11 quarantine
+misclassification) found the **identical class of bug**, independently, in two sites
+this census had not yet reached:
+
+| Site | Notes |
+|---|---|
+| `lib/venture-resolver.js` — `getVenturePath`, `getVentureConfig`, `listVentures` (3 of the 8 exports catalogued in the per-export table above) | All three called a bare `path.resolve(app.local_path)` on the registry's now-relative `local_path` values (made relative by this SD's own FR-1), which resolves against **`process.cwd()`**, not the repo root — broken from any cwd, not merely from inside a `.worktrees/<sd>` checkout. Fixed by routing all three through `resolveLocalPath` (imported from `./repo-paths.js`), the same helper `lib/repo-paths.js` itself now uses. `getVentureConfigAsync` (DB-first), `getGitHubRepo`, and `getCurrentVenture` were **not** touched — still open candidates for the same audit this census calls for; not fixed here because none of them shared the specific `path.resolve(app.local_path)` call shape this fix targeted. |
+| `scripts/modules/implementation-fidelity/utils/repo-detection.js` (2 occurrences, ~lines 72/88) | Same call shape, same fix (`resolveLocalPath` import alongside the module's pre-existing `resolveRepoPath`/`ENGINEER_ROOT` imports from `lib/repo-paths.js`). Not previously catalogued anywhere in this census — found via a targeted grep for the exact `path.resolve(.*local_path)` shape after the `venture-resolver.js` instance surfaced, not via a full repo sweep, so other uncatalogued instances of this specific shape may still exist. |
+
+Tests: `tests/unit/venture-resolver.test.js` (3 new "LOAD-BEARING" cases, one per
+fixed export, asserting `existsSync(result)` — the pre-existing `toContain('ehg')`
+substring assertions were a blind spot that also passes for the buggy
+`.worktrees/ehg`-shaped path). `repo-detection.js` has no dedicated unit test file;
+covered indirectly by its own consumers' existing test suites.
 
 ### FIXED — identical defect class to this SD's FR-2/FR-3, closed by SD-LEARN-FIX-ADDRESS-PAT-LES-002 (2026-08-19)
 

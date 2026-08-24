@@ -1,0 +1,26 @@
+{
+  "_doc": "Machine-readable companion to docs/05_testing/collection-contract.md (SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-3). vitest.config.js's SHARED_EXCLUDE is BUILT FROM this file's `patterns` array (via loadCollectionContractExclude()) rather than a hand-maintained inline literal. Each entry's `pattern` is the exact glob string previously hardcoded in vitest.config.js -- copied byte-for-byte, not rewritten, so this refactor changes WHERE the list lives, never WHAT it excludes. `gitignore_backed: true` marks an entry that corresponds to an actual gitignored-copy-directory incident (the class FR-3 exists to guard against); `gitignore_backed: false` marks an entry excluded for an unrelated reason (source-tree scoping, spec-file routing, etc.) that happens to live in the same list.",
+  "patterns": [
+    { "pattern": "**/tests/e2e/**", "gitignore_backed": false, "reason": "E2E suite routed to Playwright, not vitest." },
+    { "pattern": "**/tests/a11y.spec.js", "gitignore_backed": false, "reason": "Accessibility spec routed to Playwright, not vitest." },
+    { "pattern": "**/tests/**/*.spec.js", "gitignore_backed": false, "reason": ".spec.js is the Playwright naming convention in this repo; vitest owns .test.js only." },
+    { "pattern": "**/tests/integration.test.js", "gitignore_backed": false, "reason": "Legacy single-file integration entrypoint, superseded by tests/integration/**." },
+    { "pattern": "**/node_modules/**", "gitignore_backed": true, "reason": "Standard dependency tree exclusion; also gitignored." },
+    { "pattern": "**/applications/**", "gitignore_backed": false, "reason": "Venture application source trees, not this repo's own test suite." },
+    { "pattern": "**/press-kit/**", "gitignore_backed": false, "reason": "Marketing asset tree, no test files expected or wanted." },
+    { "pattern": "lib/agents/**", "gitignore_backed": false, "reason": "SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3: anchored to the source tree it targets (NOT an unanchored '**/agents/**', which previously also matched tests/unit/agents/** and silently orphaned 12 real unit tests from every project -- see vitest.config.js's own comment for the full incident writeup)." },
+    { "pattern": "scripts/agents/**", "gitignore_backed": false, "reason": "Same anchoring rationale as lib/agents/** above." },
+    { "pattern": "**/archive/**", "gitignore_backed": false, "reason": "Deprecated-code holding area; deliberately does NOT match 'archived' (see tests/archived/** below, a distinct, separately-added entry)." },
+    { "pattern": "**/test/**", "gitignore_backed": false, "reason": "SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001: orphaned legacy test/ root, separately excluded by CI but not by a bare local `npm test` before this entry -- the local/CI divergence this SD's FR-3 exists to close a whole CLASS of." },
+    { "pattern": "**/tests/archived/**", "gitignore_backed": false, "reason": "Archived .test.js files import @playwright/test and crash a vitest run with 'Playwright Test did not expect test.describe()'." },
+    { "pattern": "**/docs/archived/**", "gitignore_backed": false, "reason": "Archived documentation, never contains real test files, excluded defensively." },
+    { "pattern": "**/.worktrees/**", "gitignore_backed": true, "reason": "git worktree checkouts under .worktrees/ are gitignored and can contain a full parallel copy of every test file (an in-progress SD branch checked out alongside main)." },
+    { "pattern": "**/.cursor/worktrees/**", "gitignore_backed": true, "reason": "Same class as .worktrees/** for the Cursor editor's own worktree convention." },
+    { "pattern": "**/.claude/worktrees/**", "gitignore_backed": true, "reason": "Same class as .worktrees/** for a Claude-Code-specific worktree location." },
+    { "pattern": "**/PATH/**", "gitignore_backed": false, "reason": "Defensive exclusion for a literal 'PATH' directory name (environment-variable-name collision hazard on some tooling)." },
+    { "pattern": "scratch/**", "gitignore_backed": true, "reason": "QF-20260727-884: scratch/ holds PRESERVED WORKTREE COPIES and is gitignored ('/scratch/' in .gitignore) -- measured incident: 887 scratch/preserved-* directories holding exactly 14 phantom test files, collected locally but invisible to CI. See vitest.config.js's own comment for the full incident writeup." },
+    { "pattern": "**/scratch/**", "gitignore_backed": true, "reason": "Unanchored companion to scratch/** above, covering a preserved copy landing outside the top-level scratch/ root." },
+    { "pattern": ".reaper-source/**", "gitignore_backed": true, "reason": "SD-LEO-INFRA-VITEST-TIER-REAL-001: .reaper-source/ is a gitignored FULL REPO COPY -- measured incident: 3117 phantom collection entries locally (3116 in the unit project), invisible to CI." },
+    { "pattern": "**/.reaper-source/**", "gitignore_backed": true, "reason": "Unanchored companion to .reaper-source/** above." }
+  ]
+}

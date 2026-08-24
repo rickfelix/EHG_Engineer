@@ -242,8 +242,17 @@ describe('config wiring — discovery is ungated and the phantom tree is exclude
   });
 
   it('.reaper-source/** is excluded — 3117 phantom entries otherwise diverge local from CI', () => {
-    expect(cfg).toContain("'.reaper-source/**'");
-    expect(cfg).toContain("'**/.reaper-source/**'");
+    // SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-3): the exclude pattern list moved out of this
+    // file's raw source into tests/collection-contract.json, loaded at runtime via
+    // loadCollectionContractExclude() (see vitest.config.js's own SHARED_EXCLUDE line and
+    // tests/unit/vitest-collection-contract.test.js for the loader's own coverage) -- so the
+    // literal pattern strings genuinely live in the contract file now, not in vitest.config.js's
+    // text, and this assertion follows them there.
+    expect(cfg).toContain('loadCollectionContractExclude');
+    const contract = JSON.parse(fs.readFileSync(path.join(REPO, 'tests', 'collection-contract.json'), 'utf8'));
+    const patterns = contract.patterns.map((e) => e.pattern);
+    expect(patterns).toContain('.reaper-source/**');
+    expect(patterns).toContain('**/.reaper-source/**');
   });
 
   it('the ddl overlap is deduplicated on the db project', () => {

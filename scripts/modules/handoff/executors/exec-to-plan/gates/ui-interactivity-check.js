@@ -15,11 +15,13 @@
  */
 
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import path from 'path';
 import { createBranchFileReader } from '../../../lib/branch-file-reader.js';
+import { resolveRepoPath } from '../../../../../../lib/repo-paths.js';
 
 const GATE_NAME = 'UI_INTERACTIVITY_CHECK';
 const INTERACTIVE_PATTERNS = ['onClick', 'onSubmit', 'authedFetch', 'onChange', 'onSelect'];
-const EHG_REPO_PATH = 'C:/Users/rickf/Projects/_EHG/ehg';
 
 /**
  * Create the UI interactivity check gate.
@@ -49,6 +51,32 @@ export function createUiInteractivityCheckGate(supabase) {
 
       const sdKey = sd.sd_key || ctx.sdKey;
       const branchPatterns = [`feat/${sdKey}`, `fix/${sdKey}`];
+
+      // Resolved INSIDE the validator (not at module load) and existence-checked explicitly,
+      // so a genuinely broken repo path surfaces as a real gate failure rather than falling
+      // into the generic catch(err) below's advisory pass -- SD-LEO-INFRA-REPO-HYGIENE-PATH-001,
+      // RCA finding: a wrong-but-defined EHG_REPO_PATH previously made every execSync call throw
+      // ENOENT, caught below, and silently returned passed:true score:70 -- indistinguishable
+      // from a genuine pass for every EHG feature SD run from a worktree.
+      //
+      // Checks for .git specifically (not just the directory existing) -- SECURITY sub-agent
+      // finding, EXEC-TO-PLAN review 2026-08-24: a plain existsSync(EHG_REPO_PATH) is satisfied
+      // by an EMPTY directory too (measured: this SD's own FR-4 dry-run script creates exactly
+      // such a placeholder), which then made `git branch -r` throw "not a git repository",
+      // landing in the unchanged catch(err) below and re-opening the same advisory-pass
+      // camouflage this fix exists to close.
+      const EHG_REPO_PATH = resolveRepoPath('ehg');
+      if (!EHG_REPO_PATH || !existsSync(EHG_REPO_PATH) || !existsSync(path.join(EHG_REPO_PATH, '.git'))) {
+        console.log(`   ❌ Resolved ehg repo path is missing or not a git checkout: ${EHG_REPO_PATH}`);
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [`resolveRepoPath('ehg') returned '${EHG_REPO_PATH}', which is missing or not a git checkout (.git not found). This is a gate-infrastructure failure, not a component-interactivity finding.`],
+          warnings: [],
+          remediation: 'Verify applications/registry.json\'s ehg entry and that the ehg repo is checked out as a sibling of EHG_Engineer\'s main checkout.',
+        };
+      }
 
       try {
         // Find the SD's branch in the EHG repo

@@ -8,6 +8,7 @@ import {
   fetchScheduledRuns,
   latestRunPerWorkflow,
   classifyGhaCronRows,
+  observedGapStats,
 } from '../../../lib/periodic-liveness/gha-run-resolver.mjs';
 
 function run(overrides = {}) {
@@ -111,5 +112,58 @@ describe('fetchScheduledRuns', () => {
     const runs = await fetchScheduledRuns('owner/repo', 'tok', { perPage: 2, fetchImpl });
     expect(runs).toHaveLength(2);
     expect(call).toBe(2); // page 1 (full, perPage=2) then page 2 (empty, stops pagination)
+  });
+
+  it('QF-20260824-373: default maxPages is 10 (not the old 5) -- pages until a short/empty page even past 500 runs', async () => {
+    let call = 0;
+    const fetchImpl = async () => {
+      call += 1;
+      // 100/page (the real default perPage) for 7 pages, then a short page on page 8 -- exceeds
+      // the old maxPages=5 ceiling, proving the deeper default is actually wired through.
+      const batch = call <= 7
+        ? Array.from({ length: 100 }, (_, i) => run({ path: `.github/workflows/w${call}-${i}.yml` }))
+        : [];
+      return { ok: true, json: async () => ({ workflow_runs: batch }) };
+    };
+    const runs = await fetchScheduledRuns('owner/repo', 'tok', { fetchImpl });
+    expect(runs).toHaveLength(700);
+    expect(call).toBe(8);
+  });
+});
+
+describe('observedGapStats', () => {
+  it('QF-20260824-373: computes the largest gap between consecutive SUCCESSFUL runs per workflow file', () => {
+    const runs = [
+      run({ path: '.github/workflows/sms-relay-drain-cron.yml', created_at: '2026-08-24T05:37:00Z', run_started_at: '2026-08-24T05:37:00Z' }),
+      run({ path: '.github/workflows/sms-relay-drain-cron.yml', created_at: '2026-08-24T06:22:00Z', run_started_at: '2026-08-24T06:22:00Z' }),
+      run({ path: '.github/workflows/sms-relay-drain-cron.yml', created_at: '2026-08-24T07:35:00Z', run_started_at: '2026-08-24T07:35:00Z' }),
+    ];
+    const stats = observedGapStats(runs);
+    const entry = stats.get('sms-relay-drain-cron.yml');
+    expect(entry.sampleCount).toBe(3);
+    expect(entry.maxGapMs).toBe(73 * 60 * 1000); // 06:22 -> 07:35
+  });
+
+  it('ignores non-successful runs -- a failed/cancelled run is not cadence evidence', () => {
+    const runs = [
+      run({ path: '.github/workflows/foo.yml', created_at: '2026-08-24T00:00:00Z', run_started_at: '2026-08-24T00:00:00Z', conclusion: 'success' }),
+      run({ path: '.github/workflows/foo.yml', created_at: '2026-08-24T00:05:00Z', run_started_at: '2026-08-24T00:05:00Z', conclusion: 'failure' }),
+      run({ path: '.github/workflows/foo.yml', created_at: '2026-08-24T01:00:00Z', run_started_at: '2026-08-24T01:00:00Z', conclusion: 'success' }),
+    ];
+    const stats = observedGapStats(runs);
+    // The failure run is excluded, so the only measured gap is 00:00 -> 01:00 (1h), not 5min.
+    expect(stats.get('foo.yml').maxGapMs).toBe(60 * 60 * 1000);
+    expect(stats.get('foo.yml').sampleCount).toBe(2);
+  });
+
+  it('a single-sample workflow (no consecutive pair) reports maxGapMs=0, not a false floor', () => {
+    const runs = [run({ path: '.github/workflows/lonely.yml', created_at: '2026-08-24T00:00:00Z', run_started_at: '2026-08-24T00:00:00Z' })];
+    const stats = observedGapStats(runs);
+    expect(stats.get('lonely.yml')).toEqual({ maxGapMs: 0, sampleCount: 1 });
+  });
+
+  it('skips runs with no resolvable path, same as latestRunPerWorkflow', () => {
+    const stats = observedGapStats([{ created_at: '2026-08-24T00:00:00Z', conclusion: 'success' }]);
+    expect(stats.size).toBe(0);
   });
 });
