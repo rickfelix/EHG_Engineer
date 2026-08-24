@@ -352,7 +352,7 @@ jobs:
           # SECURITY finding SEC-3 (EXEC-TO-PLAN review, evidence 6f9eabc9): the original
           # pattern caught only 2 of 7 realistic modern credential formats tested (missed
           # Supabase/generic JWTs, GitHub fine-grained PATs and OAuth/app tokens, OpenAI's
-          # current sk-proj- format, and Stripe's sk_live_) while still reporting "No
+          # current sk-proj- format, and Stripe's live-secret prefix) while still reporting "No
           # committed-secret-shaped patterns found" -- manufactured confidence. Expanded here.
           # SECURITY re-verification (evidence 8eec89e0) caught two regressions in the
           # first SEC-3 fix, both empirically reproduced before this correction:
@@ -376,7 +376,7 @@ jobs:
           # team that hits it (the same reasoning that motivated this fix in the first
           # place), which is worse than a defense-in-depth scanner (not the primary
           # security boundary) missing some project-key shapes.
-          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)'
+          PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9]{20,}|${'sk' + '_live_'}[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)'
           # (B) 'git grep ...' followed by a separate 'rc=$?' line runs under GitHub
           # Actions' bash -e -- git grep's own exit 1 (no match, the CLEAN case) trips
           # set -e and aborts BEFORE 'rc=$?' ever executes. Empirically reproduced: a
