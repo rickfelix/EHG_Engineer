@@ -152,28 +152,58 @@ describe('isSolomonSession (S-2 allowlist, fail-closed)', () => {
   });
 });
 
-describe('resolveVerifiedAnswer (S-3: single query, no TOCTOU window)', () => {
+describe('resolveVerifiedAnswer (S-3 TOCTOU fix + V-1 rotated-Solomon fallback)', () => {
   it('reports found=false when no answer row exists', async () => {
     const supabase = makeFakeSupabase({ answerRow: null });
-    const result = await resolveVerifiedAnswer(supabase, 'corr-1');
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
     expect(result).toEqual({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null });
   });
 
-  it('reports isGenuineSolomon=true only when the SAME row read confirms the sender via the allowlist', async () => {
+  it('STRONG path: isGenuineSolomon=true when the SAME row read confirms the sender via the current-role allowlist', async () => {
     const supabase = makeFakeSupabase({
-      answerRow: { id: 'ans-1', sender_session: 'solomon-session-1', payload: { body: 'GO' } },
+      answerRow: { id: 'ans-1', sender_session: 'solomon-session-1', sender_type: 'solomon', payload: { body: 'GO' } },
       solomonSessionIds: ['solomon-session-1'],
     });
-    const result = await resolveVerifiedAnswer(supabase, 'corr-1');
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
     expect(result).toEqual({ found: true, isGenuineSolomon: true, answerRowId: 'ans-1', verdict: 'GO' });
   });
 
-  it('reports isGenuineSolomon=false for an answer from a non-Solomon session (the S-2 forgery attempt)', async () => {
+  it('V-1 FALLBACK path: a ROTATED-OUT Solomon (no longer role=solomon in claude_sessions) is still recognized via the write-time sender_type attestation', async () => {
     const supabase = makeFakeSupabase({
-      answerRow: { id: 'ans-1', sender_session: 'random-forged-session', payload: { body: 'GO' } },
+      // solomonSessionIds deliberately does NOT include this session -- simulating a Solomon seat
+      // that has since handed off, exactly the corpus finding (21 of 27 real verdicts came from a
+      // since-retired Solomon session whose current role metadata no longer says 'solomon').
+      answerRow: { id: 'ans-1', sender_session: 'retired-solomon-session', sender_type: 'solomon', payload: { body: 'GO' } },
+      solomonSessionIds: [],
+    });
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
+    expect(result.isGenuineSolomon).toBe(true);
+  });
+
+  it('the fallback does NOT reopen S-2: a forged sender_type=solomon claim from the ORIGINAL ASKER session is still refused', async () => {
+    const supabase = makeFakeSupabase({
+      answerRow: { id: 'ans-1', sender_session: 'adam-session-1', sender_type: 'solomon', payload: { body: 'GO' } },
+      solomonSessionIds: [],
+    });
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
+    expect(result.isGenuineSolomon).toBe(false);
+  });
+
+  it('the fallback does NOT reopen S-2: a forged sender_type=solomon claim from the shared unattended sentinel is still refused', async () => {
+    const supabase = makeFakeSupabase({
+      answerRow: { id: 'ans-1', sender_session: 'chairman-lane-automated', sender_type: 'solomon', payload: { body: 'GO' } },
+      solomonSessionIds: [],
+    });
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', null);
+    expect(result.isGenuineSolomon).toBe(false);
+  });
+
+  it('reports isGenuineSolomon=false for a non-Solomon sender_type from a genuinely different, non-Solomon session (the original S-2 forgery attempt)', async () => {
+    const supabase = makeFakeSupabase({
+      answerRow: { id: 'ans-1', sender_session: 'random-forged-session', sender_type: 'adam', payload: { body: 'GO' } },
       solomonSessionIds: ['solomon-session-1'],
     });
-    const result = await resolveVerifiedAnswer(supabase, 'corr-1');
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
     expect(result.isGenuineSolomon).toBe(false);
   });
 });
