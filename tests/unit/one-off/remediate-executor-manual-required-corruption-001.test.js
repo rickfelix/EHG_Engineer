@@ -44,6 +44,13 @@ describe('matchesPreFixFingerprint', () => {
     expect(matchesPreFixFingerprint(row)).toBe(false);
   });
 
+  it('does not match text containing "for automation" WITHOUT the "Create lib/sub-agents/" phrase (TESTING finding: both substrings must be required, not just one)', () => {
+    const row = preFixRow({
+      recommendations: ['This is unrelated guidance about test automation, nothing to do with a missing module'],
+    });
+    expect(matchesPreFixFingerprint(row)).toBe(false);
+  });
+
   it('does not match a non-MANUAL_REQUIRED verdict', () => {
     const row = preFixRow({ verdict: 'PASS' });
     expect(matchesPreFixFingerprint(row)).toBe(false);
@@ -56,9 +63,17 @@ describe('matchesPreFixFingerprint', () => {
 });
 
 /** Minimal in-memory fake for sub_agent_execution_results, supporting exactly the query shapes
- * remediate() issues: .eq('verdict',...).limit(), and .eq('id',...).maybeSingle(), plus .update(). */
-function makeFakeTable(rows) {
+ * remediate() issues: .eq('verdict',...).limit(), and .eq('id',...).maybeSingle(), plus .update().
+ *
+ * onAfterBatchFetch (TESTING retrospective finding): fires exactly once, AFTER the initial
+ * .limit() batch snapshot has already been captured/resolved but BEFORE remediate() issues its
+ * per-row .maybeSingle() re-fetch -- simulating a genuine concurrent write landing in the real
+ * race window between the two queries, so the re-fetch (unlike the stale batch snapshot) sees
+ * the mutated row. A test that mutates the store BEFORE calling remediate() at all only ever
+ * exercises the batch filter and never reaches this window. */
+function makeFakeTable(rows, { onAfterBatchFetch } = {}) {
   const store = new Map(rows.map((r) => [r.id, structuredClone(r)]));
+  let batchFetchFired = false;
   return {
     store,
     from(table) {
@@ -69,7 +84,12 @@ function makeFakeTable(rows) {
         eq(col, val) { pendingEq = { col, val }; return this; },
         limit() {
           const all = [...store.values()].filter((r) => !pendingEq || r[pendingEq.col] === pendingEq.val);
-          return Promise.resolve({ data: all.map((r) => structuredClone(r)), error: null });
+          const snapshot = all.map((r) => structuredClone(r));
+          if (!batchFetchFired && onAfterBatchFetch) {
+            batchFetchFired = true;
+            onAfterBatchFetch(store);
+          }
+          return Promise.resolve({ data: snapshot, error: null });
         },
         maybeSingle() {
           const all = [...store.values()].filter((r) => !pendingEq || r[pendingEq.col] === pendingEq.val);
@@ -141,14 +161,25 @@ describe('remediate (TS-6/TS-7)', () => {
     expect(fake.store.get('new').metadata.pre_fix_corrupted).toBeUndefined();
   });
 
-  it('TS-7d: a row that no longer matches the fingerprint by fetch time is excluded, not marked', async () => {
-    const fake = makeFakeTable([preFixRow({ id: 'a' })]);
-    // Simulate a concurrent write landing before remediate() ever queries -- a live sub-agent
-    // execution racing the remediation script, mutating the row to a real post-fix shape.
-    fake.store.get('a').metadata = { failure_cause: 'genuine_error', error: 'raced', stack: 'x' };
-    fake.store.get('a').recommendations = ['Investigate the thrown error captured in metadata.error/metadata.stack'];
+  it('TS-7d: a row still matching the STALE batch snapshot but raced to a post-fix shape before the re-fetch is excluded, not marked', async () => {
+    // Genuinely exercises the read-merge-write re-check (TESTING retrospective finding): the
+    // batch .limit() call captures a pre-fix snapshot, THEN (via onAfterBatchFetch, simulating
+    // a real concurrent write landing in that exact window) the row is mutated to a correct
+    // post-fix shape, and ONLY THEN does remediate() issue its per-row re-fetch. A prior version
+    // of this test mutated the row before calling remediate() at all, which only exercised the
+    // batch filter (matchesPreFixFingerprint on the initial query) and never reached the re-fetch
+    // path -- deleting the entire re-fetch/re-check block left it green.
+    const fake = makeFakeTable([preFixRow({ id: 'a' })], {
+      onAfterBatchFetch: (store) => {
+        const row = store.get('a');
+        row.metadata = { failure_cause: 'genuine_error', error: 'raced', stack: 'x' };
+        row.recommendations = ['Investigate the thrown error captured in metadata.error/metadata.stack'];
+      },
+    });
     const result = await remediate(fake, { log: () => {} });
-    expect(result.fingerprintMatched, 'the row no longer matches at fetch time, so it is excluded from the candidate set').toBe(0);
-    expect(fake.store.get('a').metadata.pre_fix_corrupted).toBeUndefined();
+    expect(result.fingerprintMatched, 'the STALE batch snapshot still matched -- proving this test reaches the batch/candidate stage').toBe(1);
+    expect(result.marked, 'the re-fetch must see the raced row and refuse to mark it').toBe(0);
+    expect(result.skippedRace, 'the race must be observably reported as a skip, not silently absorbed').toBeGreaterThan(0);
+    expect(fake.store.get('a').metadata.pre_fix_corrupted, 'a row that raced to a correct post-fix shape must never be marked corrupted').toBeUndefined();
   });
 });

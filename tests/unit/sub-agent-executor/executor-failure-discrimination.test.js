@@ -130,6 +130,69 @@ describe('executor.js failure-cause discrimination (FR-1/FR-2/FR-3)', () => {
     expect(row.recommendations.join(' '), 'must NOT carry the old hardcoded missing-module text for a genuine error').not.toMatch(/Create lib\/sub-agents/);
   });
 
+  it('TS-2b (M1): a non-Error rejection (null) does NOT crash the catch and escape to verdict=ERROR', async () => {
+    // TESTING/SECURITY retrospective finding (evidence ce5f58e3/2f9ab06f, confirmed by A/B
+    // execution against the parent commit): dereferencing err.message on a non-Error rejection
+    // used to throw a TypeError INSIDE the catch block, escaping to the OUTER catch, which
+    // stores verdict='ERROR' -- an unconditional hard block per subagent-evidence-gate.js's
+    // NON_EVIDENCE_VERDICTS, reproducing exactly the blast radius FR-3 exists to prevent.
+    const code = '__TEST_FR1_NULL_REJECT__';
+    writeFixture(code, 'export async function execute() { return Promise.reject(null); }\n');
+
+    await runExecutor(code, capture);
+
+    expect(capture.inserts.length).toBe(1);
+    const row = capture.inserts[0];
+    expect(row.verdict, 'a non-Error rejection must still land as MANUAL_REQUIRED, not escape to ERROR').toBe('MANUAL_REQUIRED');
+    expect(row.metadata.failure_cause).toBe('genuine_error');
+  });
+
+  it('TS-2c (M1): a non-Error rejection (bare string) is normalized instead of destroying the thrown value', async () => {
+    const code = '__TEST_FR1_STRING_REJECT__';
+    writeFixture(code, 'export async function execute() { throw "distinctive bare string reject"; }\n');
+
+    await runExecutor(code, capture);
+
+    expect(capture.inserts.length).toBe(1);
+    const row = capture.inserts[0];
+    expect(row.verdict).toBe('MANUAL_REQUIRED');
+    expect(row.metadata.failure_cause).toBe('genuine_error');
+    expect(row.metadata.error, 'a thrown string must not be silently lost as metadata.error=null').toContain('distinctive bare string reject');
+  });
+
+  it('TS-2d: the race timer is cleared on the error path too, not just the success path', async () => {
+    // TESTING finding: TS-5 only covered the fast-SUCCESS path; deleting the catch-path
+    // clearTimeout left every existing test green because none of them exercised a
+    // fast-genuine-error case, which is exactly FR-2's other half.
+    const code = '__TEST_FR1_FAST_ERROR__';
+    writeFixture(code, 'export async function execute() { throw new Error(\'fast failure\'); }\n');
+
+    const realSetTimeout = global.setTimeout;
+    const realClearTimeout = global.clearTimeout;
+    const raceHandles = [];
+    const clearedHandles = new Set();
+    const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation((fn, ms, ...rest) => {
+      const handle = realSetTimeout(fn, ms, ...rest);
+      if (ms === 45000) raceHandles.push(handle);
+      return handle;
+    });
+    const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout').mockImplementation((handle) => {
+      clearedHandles.add(handle);
+      return realClearTimeout(handle);
+    });
+
+    try {
+      await runExecutor(code, capture, { timeout: 45000 });
+      expect(capture.inserts.length).toBe(1);
+      expect(capture.inserts[0].verdict).toBe('MANUAL_REQUIRED');
+      expect(raceHandles.length, 'the race timer was never even created').toBe(1);
+      expect(clearedHandles.has(raceHandles[0]), 'the race timeout handle was never cleared on the error path -- it will fire naturally in prod').toBe(true);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    }
+  });
+
   it('TS-3: a code with no module file at all is labeled failure_cause=missing_module, cwd-independent', async () => {
     const code = '__TEST_FR1_NONEXISTENT__';
     // Deliberately NOT writing a fixture -- proves the REAL, unmocked fs check.

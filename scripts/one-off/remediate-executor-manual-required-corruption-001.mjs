@@ -40,12 +40,18 @@ export async function remediate(supabase, { log = console.log } = {}) {
   // remain live and unfixed -- out of scope here); this is not the historical-scan population,
   // just the current verdict=MANUAL_REQUIRED slice, which will never plausibly reach 5000 rows
   // for one verdict value on this table (count-truncation discipline, explicit bound).
+  const CANDIDATE_FETCH_LIMIT = 5000;
   const { data: candidates, error: fetchErr } = await supabase
     .from('sub_agent_execution_results')
     .select('id, sd_id, sub_agent_code, phase, verdict, recommendations, metadata')
     .eq('verdict', 'MANUAL_REQUIRED')
-    .limit(5000);
+    .limit(CANDIDATE_FETCH_LIMIT);
   if (fetchErr) throw new Error(`remediate: candidate fetch failed: ${fetchErr.message}`);
+  // SECURITY finding L4 (evidence 2f9ab06f): a silently-hit cap would otherwise read as "the
+  // whole population", not "the whole population up to the cap" -- log it loudly if ever hit.
+  if ((candidates || []).length === CANDIDATE_FETCH_LIMIT) {
+    log(`  ⚠ candidate fetch hit the ${CANDIDATE_FETCH_LIMIT}-row cap -- some MANUAL_REQUIRED rows may be silently excluded from this run`);
+  }
 
   const toMark = (candidates || []).filter(matchesPreFixFingerprint);
   log(`remediate-executor-manual-required-corruption: ${(candidates || []).length} MANUAL_REQUIRED row(s) live, ${toMark.length} match the pre-fix fingerprint`);
