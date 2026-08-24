@@ -41,6 +41,15 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 FR-1/FR-2 (TS-3): c
     // retry-amplification risk FR-2 exists to prevent.
     expect(guardIdx).toBeGreaterThan(updateIdx);
   });
+
+  it('adversarial /ship-gate finding #1: the guard also requires the UPDATE above to have succeeded (!stageUpdateError)', () => {
+    // MUTATION: without this, a silently-failed ventures.current_lifecycle_stage UPDATE (e.g. an
+    // RLS denial or transient DB error swallowed elsewhere) would still let a durable
+    // "chairman_adjudicated" eva_stage_gate_attempts row be written for an advance that never
+    // actually happened -- a false ledger entry with no corresponding real stage change.
+    expect(source).toContain('const { error: stageUpdateError } = await this._supabase');
+    expect(source).toContain("if (!stageUpdateError && (result?._chairmanGateSource === 'chairman_decision' || chairmanGateSource === 'chairman_decision')) {");
+  });
 });
 
 describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (VALIDATION c39db537 + 04f7f256 corrections): the 4 non-_handleChairmanGate() advance paths that re-confirm an already-approved decision', () => {
@@ -65,17 +74,26 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (VALIDATION c39db53
     // MUTATION: these two sites share an identical advancementType string but live in
     // structurally distinct blocks (the P0 UNIVERSAL guard for non-BLOCKING stages, and the
     // gate-specific pre-execution guard for BLOCKING/hard-gate stages) -- both independently
-    // confirm a genuine chairman approval, so both must carry the tag.
-    const preExecSkipTagged = source.split("{ advancementType: 'pre_exec_skip', chairmanGateSource: 'chairman_decision' }").length - 1;
+    // confirm a genuine chairman approval, so both must carry the tag. Matched on the tag prefix
+    // (not the full literal) since each site also threads a distinct chairmanDecisionId variable
+    // (adversarial /ship-gate finding #2) after the shared prefix.
+    const preExecSkipTagged = source.split("{ advancementType: 'pre_exec_skip', chairmanGateSource: 'chairman_decision', chairmanDecisionId:").length - 1;
     expect(preExecSkipTagged).toBe(2);
   });
 
   it('pre_exec_skip_trigger call site is tagged (DB-trigger-already-applied shortcut)', () => {
-    expect(source).toContain("{ advancementType: 'pre_exec_skip_trigger', chairmanGateSource: 'chairman_decision' }");
+    expect(source).toContain("{ advancementType: 'pre_exec_skip_trigger', chairmanGateSource: 'chairman_decision', chairmanDecisionId:");
   });
 
   it('re_entry call site is tagged (worker re-entry after approval)', () => {
-    expect(source).toContain("advancementType: 're_entry', chairmanGateSource: 'chairman_decision' }");
+    expect(source).toContain("advancementType: 're_entry', chairmanGateSource: 'chairman_decision', chairmanDecisionId:");
+  });
+
+  it('all 4 tagged call sites also thread a real chairman_decisions.id via chairmanDecisionId (adversarial /ship-gate finding #2)', () => {
+    // MUTATION: without this, `reasoning` in the recordGateAttempt() call can never reference
+    // the actual chairman_decisions row, contradicting FR-1's own spec text.
+    const chairmanDecisionIdTagged = source.split("chairmanGateSource: 'chairman_decision', chairmanDecisionId:").length - 1;
+    expect(chairmanDecisionIdTagged).toBe(4);
   });
 });
 
@@ -90,8 +108,16 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (TS-5): gateType an
   });
 
   it('the recordGateAttempt call is wrapped in a non-fatal try/catch that only logs a warning', () => {
+    // Re-anchored (not a fixed-width window) after the adversarial /ship-gate finding #2 fix
+    // widened the recordGateAttempt() call with a chairmanDecisionRef/reasoning-ternary/metadata
+    // block, which had pushed `catch (err)` past a previous fixed 700-char offset.
     const guardIdx = source.indexOf("result?._chairmanGateSource === 'chairman_decision'");
-    const windowAfter = source.slice(guardIdx, guardIdx + 700);
+    const tryIdx = source.indexOf('try {', guardIdx);
+    const catchIdx = source.indexOf('catch (err)', tryIdx);
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(tryIdx).toBeGreaterThan(guardIdx);
+    expect(catchIdx).toBeGreaterThan(tryIdx);
+    const windowAfter = source.slice(guardIdx, catchIdx + 300);
     expect(windowAfter).toContain('try {');
     expect(windowAfter).toContain('catch (err)');
     expect(windowAfter).toContain('non-fatal');

@@ -95,7 +95,10 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 FR-1a (TS-1): _hand
       return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }), single: vi.fn().mockResolvedValue({ data: null, error: null }) };
     });
     const result = await worker._handleChairmanGate('v-2', 10);
-    expect(result).toEqual({ blocked: false, killed: false, approved: true, source: 'chairman_decision' });
+    // SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (adversarial /ship-gate finding): the
+    // real chairman_decisions.id is now carried in decisionId, so recordGateAttempt()'s
+    // `reasoning` string can reference the actual decision instead of just advancementType.
+    expect(result).toEqual({ blocked: false, killed: false, approved: true, source: 'chairman_decision', decisionId: 'decision-1' });
   });
 
   it("source='chairman_decision' for a FRESHLY-resolved decision via waitForDecision", async () => {
@@ -103,7 +106,7 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 FR-1a (TS-1): _hand
     waitForDecision.mockResolvedValue({ status: 'approved' });
     worker._gateTimeoutMs = 1000; // non-zero so waitForDecision path is actually taken
     const result = await worker._handleChairmanGate('v-3', 10);
-    expect(result).toEqual({ blocked: false, killed: false, approved: true, source: 'chairman_decision' });
+    expect(result).toEqual({ blocked: false, killed: false, approved: true, source: 'chairman_decision', decisionId: 'decision-2' });
     expect(waitForDecision).toHaveBeenCalled();
   });
 
