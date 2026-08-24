@@ -11,9 +11,12 @@
  * stamps read_at (DELIVERED) on render but the SELECT gates on acknowledged_at IS NULL
  * (ACTIONED), so a signal RE-SURFACES until the coordinator explicitly acks it here.
  *
- * `--signal <id>` stamps the top-level `acknowledged_at` column (the SAME ACTIONED marker
- * the FR-4 signal-router `ackAndRouteLoneSignal` already writes) — the ONLY thing that
- * retires the signal. Optional `--reply "<body>"` ALSO sends a coordinator_reply to the
+ * `--signal <id>` stamps the top-level `acknowledged_at` column — the ONLY thing that
+ * retires the signal. (SD-LEO-INFRA-SIGNAL-LANE-PER-001 / FR-4 correction: the signal-router
+ * `ackAndRouteLoneSignal` does NOT write this column — it was made a non-disposing provenance
+ * marker to avoid regressing the "9 critical signals silently vanished on promotion alone"
+ * defect class; this script remains the sole path that stamps acknowledged_at with a genuine
+ * disposition.) Optional `--reply "<body>"` ALSO sends a coordinator_reply to the
  * worker's sender_session + correlation_id (reusing coordinator-reply.cjs), gated behind
  * COORDINATOR_TWOWAY_V2=on; the ack-stamp works regardless.
  *

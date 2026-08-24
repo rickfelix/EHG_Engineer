@@ -48,6 +48,8 @@ function fakeClient({ signalRows = [], sdRows = [], liveSessions = [] } = {}) {
     from(table) {
       if (table === 'session_coordination') {
         const filters = [];
+        let orderCol = null;
+        let orderAsc = true;
         const builder = {
           select() { return builder; },
           not(col, op, val) {
@@ -57,9 +59,21 @@ function fakeClient({ signalRows = [], sdRows = [], liveSessions = [] } = {}) {
             return builder;
           },
           or(orString) { filters.push(parseOrString(orString)); return builder; },
-          order() { return builder; },
-          async limit() {
-            const rows = [...store.values()].filter((r) => filters.every((f) => f(r)));
+          // PRD FR-4 AC4: the real promotion-path query was also fixed to order explicitly
+          // (created_at ASC, not the random-UUID `id`) -- a no-op here would hide a starvation
+          // regression once .limit(50) actually truncates.
+          order(col, { ascending = true } = {}) { orderCol = col; orderAsc = ascending; return builder; },
+          async limit(n) {
+            let rows = [...store.values()].filter((r) => filters.every((f) => f(r)));
+            if (orderCol) {
+              rows = rows.slice().sort((a, b) => {
+                const av = readPath(a, orderCol);
+                const bv = readPath(b, orderCol);
+                const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+                return orderAsc ? cmp : -cmp;
+              });
+            }
+            if (typeof n === 'number') rows = rows.slice(0, n);
             return { data: rows, error: null };
           },
           update(patch) {
@@ -146,5 +160,23 @@ describe("SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4: notifySignalResolvedByPromotion
     const c = fakeClient({ signalRows: [sig], sdRows: [COMPLETED_SD], liveSessions: [LIVE_GOLF4] });
     await notifySignalResolvedByPromotion(c);
     expect(c.inserts).toHaveLength(0);
+  });
+});
+
+describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 AC4: explicit ORDER BY (created_at, not id) prevents starvation past .limit(50)', () => {
+  it('with 60 candidate rows, the 50 OLDEST (by created_at) are processed, not an arbitrary subset', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => promotedSignal(`sig-${i}`, {
+      payload: { signal_type: 'harness-bug', sender_callsign: 'Golf-4', routed_to_sd_key: 'SD-EXAMPLE-001' },
+      created_at: new Date(Date.parse('2026-08-01T00:00:00Z') + i * 1000).toISOString(), // sig-0 oldest
+    }));
+    // Inserted NEWEST-first -- see the sibling disposition-path test for why insertion order
+    // must be scrambled relative to timestamp order for this test to be discriminating.
+    const c = fakeClient({ signalRows: rows.slice().reverse(), sdRows: [COMPLETED_SD], liveSessions: [LIVE_GOLF4] });
+    await notifySignalResolvedByPromotion(c);
+    for (let i = 0; i < 50; i++) expect(c.getRow(`sig-${i}`).payload.notification_sent).toBe(true);
+    for (let i = 50; i < 60; i++) expect(c.getRow(`sig-${i}`).payload.notification_sent).toBeUndefined();
+    // MUTATION: revert the .order('created_at') fix back to ordering by `id` (a random UUID in
+    // production) -> an arbitrary 50-row subset is processed instead of the oldest, and this
+    // assertion starts failing nondeterministically.
   });
 });

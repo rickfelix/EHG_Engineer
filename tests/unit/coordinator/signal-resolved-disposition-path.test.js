@@ -72,6 +72,8 @@ function fakeClient({ signalRows = [], liveSessions = [] } = {}) {
     from(table) {
       if (table === 'session_coordination') {
         const filters = [];
+        let orderCol = null;
+        let orderAsc = true;
         const builder = {
           select() { return builder; },
           // NOT (IS NULL) = IS NOT NULL. A missing JSONB key reads as SQL NULL, so `!= null`
@@ -89,9 +91,21 @@ function fakeClient({ signalRows = [], liveSessions = [] } = {}) {
           // per clause (see evalClause). This is the exact form the real code uses to fix the
           // .neq()-on-a-possibly-absent-key defect: `payload->>x IS NULL OR payload->>x <> 'true'`.
           or(orString) { filters.push(parseOrString(orString)); return builder; },
-          order() { return builder; },
-          async limit() {
-            const rows = [...store.values()].filter((r) => filters.every((f) => f(r)));
+          // PRD FR-4 AC4: the real query has an explicit ORDER BY on the SIGNAL_RESOLVED
+          // candidate query -- a no-op here would let a starvation regression (arbitrary
+          // subset, not oldest-first) pass silently once .limit(50) actually truncates.
+          order(col, { ascending = true } = {}) { orderCol = col; orderAsc = ascending; return builder; },
+          async limit(n) {
+            let rows = [...store.values()].filter((r) => filters.every((f) => f(r)));
+            if (orderCol) {
+              rows = rows.slice().sort((a, b) => {
+                const av = readPath(a, orderCol);
+                const bv = readPath(b, orderCol);
+                const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+                return orderAsc ? cmp : -cmp;
+              });
+            }
+            if (typeof n === 'number') rows = rows.slice(0, n);
             return { data: rows, error: null };
           },
           update(patch) {
@@ -215,6 +229,25 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 TS-7: NEGATIVE control — promo
     const c = fakeClient({ signalRows: [neverNotified], liveSessions: [LIVE_GOLF4] });
     const result = await notifySignalResolvedByDisposition(c);
     expect(result.notified).toBe(1);
+  });
+});
+
+describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 AC4: explicit ORDER BY prevents starvation past the .limit(50) cap', () => {
+  it('with 60 candidate rows, the 50 OLDEST (by acknowledged_at) are processed, not an arbitrary subset', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => dispositionedSignal(`sig-${i}`, {
+      acknowledged_at: new Date(Date.now() - (600 - i) * 1000).toISOString(), // sig-0 oldest ... sig-59 newest
+    }));
+    // Inserted NEWEST-first (reverse of timestamp order) so the Map's natural insertion order
+    // would produce the WRONG (newest-50) result if the fake's .order() were a no-op -- a test
+    // built by inserting in timestamp order already would pass even without real sorting.
+    const c = fakeClient({ signalRows: rows.slice().reverse(), liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified + result.dropped).toBe(50);
+    for (let i = 0; i < 50; i++) expect(c.getRow(`sig-${i}`).payload.notification_sent).toBe(true);
+    for (let i = 50; i < 60; i++) expect(c.getRow(`sig-${i}`).payload.notification_sent).toBeUndefined();
+    // MUTATION: drop the .order('acknowledged_at', {ascending:true}) call (or the fake's ordering
+    // support) -> an arbitrary 50-row subset gets processed instead of the oldest, and this
+    // assertion starts failing nondeterministically -- the starvation risk PRD FR-4 AC4 names.
   });
 });
 
