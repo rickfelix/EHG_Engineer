@@ -55,6 +55,7 @@ import { processStage, _internal } from '../../../lib/eva/eva-orchestrator.js';
 import { evaluateDecision, DEFAULTS } from '../../../lib/eva/decision-filter-engine.js';
 import { evaluateRealityGate, BOUNDARY_CONFIG } from '../../../lib/eva/reality-gates.js';
 import { isDevilsAdvocateGate } from '../../../lib/eva/devils-advocate.js';
+import { _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
 
 const { STATUS, FILTER_ACTION } = _internal;
 
@@ -214,6 +215,22 @@ function createStatefulMockSupabase() {
           single: vi.fn().mockResolvedValue({ data: state.stage_work[0] || null, error: null }),
         };
       }
+      // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): venture_stages backs stage-governance.js's SSOT,
+      // read by isDevilsAdvocateGate/getKillGates (kill gates 3/5/13/23, promotion 10/16/17/18/19/24/25)
+      // — this 15-step scenario exercises both, so it needs real (not empty) rows.
+      if (table === 'venture_stages') {
+        const rows = Array.from({ length: 26 }, (_, i) => {
+          const stage_number = i + 1;
+          const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+            : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+            : 'none';
+          return { stage_number, gate_type, work_type: 'decision_gate', review_mode: 'auto', is_high_consequence: false };
+        });
+        return {
+          select: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+        };
+      }
       // Fallback for chairman_preferences, venture_dependencies, stage_templates, etc.
       return {
         select: vi.fn().mockReturnThis(),
@@ -330,6 +347,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
   beforeEach(() => {
     mockSupabase = createStatefulMockSupabase();
     vi.clearAllMocks();
+    _resetCacheForTest();
   });
 
   // Step 1: Ideation → Stage 0
@@ -452,8 +470,8 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     });
 
     // Verify kill gates at stages 3 and 5 were encountered
-    const killGate3 = isDevilsAdvocateGate(3);
-    const killGate5 = isDevilsAdvocateGate(5);
+    const killGate3 = await isDevilsAdvocateGate(mockSupabase, 3);
+    const killGate5 = await isDevilsAdvocateGate(mockSupabase, 5);
     expect(killGate3.isGate).toBe(true);
     expect(killGate3.gateType).toBe('kill');
     expect(killGate5.isGate).toBe(true);
@@ -554,8 +572,8 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     expect(results).toHaveLength(5);
     results.forEach(r => expect(r.status).toBe(STATUS.COMPLETED));
 
-    // Verify promotion gate at stage 17 (PROMOTION_GATES = [17, 18, 23])
-    const promotionGate17 = isDevilsAdvocateGate(17);
+    // Verify promotion gate at stage 17 (SSOT promotion set: 10, 16, 17, 18, 19, 24, 25)
+    const promotionGate17 = await isDevilsAdvocateGate(mockSupabase, 17);
     expect(promotionGate17.isGate).toBe(true);
     expect(promotionGate17.gateType).toBe('promotion');
   });
@@ -645,8 +663,8 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     const state = mockSupabase._state;
     state.venture.current_lifecycle_stage = 22;
 
-    // Stage 22 is not a devil's advocate gate (PROMOTION_GATES = [17, 18, 23])
-    const gate22 = isDevilsAdvocateGate(22);
+    // Stage 22 is not a devil's advocate gate (unchanged: gate_type='none' under the SSOT too)
+    const gate22 = await isDevilsAdvocateGate(mockSupabase, 22);
     expect(gate22.isGate).toBe(false);
 
     const result = await processStage(
@@ -668,10 +686,11 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     const state = mockSupabase._state;
     state.venture.current_lifecycle_stage = 23;
 
-    // Stage 23 is a promotion gate (PROMOTION_GATES = [17, 18, 23])
-    const gate23 = isDevilsAdvocateGate(23);
+    // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): stage 23 is now correctly a KILL gate under the
+    // SSOT (was miscategorized as promotion by the old hardcoded PROMOTION_GATES=[17,18,23]).
+    const gate23 = await isDevilsAdvocateGate(mockSupabase, 23);
     expect(gate23.isGate).toBe(true);
-    expect(gate23.gateType).toBe('promotion');
+    expect(gate23.gateType).toBe('kill');
 
     const result = await processStage(
       { ventureId: 'v-e2e-phase-a', stageId: 23, options: { dryRun: true, stageTemplate: makeStageTemplate(23) } },
@@ -810,16 +829,18 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
       expect(boundaries).toContain('23->24');
     });
 
-    it('verifies kill gates at stages 3, 5, 13, 24 and promotion gates at 17, 18, 23', () => {
+    // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): corrected SSOT-derived sets — kill=[3,5,13,23]
+    // (was [3,5,13,24]), promotion=[10,16,17,18,19,24,25] (was [17,18,23]).
+    it('verifies kill gates at stages 3, 5, 13, 23 and promotion gates at 10, 16, 17, 18, 19, 24, 25', async () => {
       // Kill gates
-      for (const stage of [3, 5, 13, 24]) {
-        const { isGate, gateType } = isDevilsAdvocateGate(stage);
+      for (const stage of [3, 5, 13, 23]) {
+        const { isGate, gateType } = await isDevilsAdvocateGate(mockSupabase, stage);
         expect(isGate).toBe(true);
         expect(gateType).toBe('kill');
       }
       // Promotion gates
-      for (const stage of [17, 18, 23]) {
-        const { isGate, gateType } = isDevilsAdvocateGate(stage);
+      for (const stage of [10, 16, 17, 18, 19, 24, 25]) {
+        const { isGate, gateType } = await isDevilsAdvocateGate(mockSupabase, stage);
         expect(isGate).toBe(true);
         expect(gateType).toBe('promotion');
       }

@@ -3,37 +3,62 @@
  * SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-002-B
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   isDevilsAdvocateGate,
   getDevilsAdvocateReview,
   buildArtifactRecord,
   _internal,
 } from '../../../lib/eva/devils-advocate.js';
+import { _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
+// SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): SSOT-derived (async, requires supabase).
+function mockSupabase() {
+  const rows = Array.from({ length: 26 }, (_, i) => {
+    const stage_number = i + 1;
+    const gate_type = [3, 5, 13, 23].includes(stage_number) ? 'kill'
+      : [10, 16, 17, 18, 19, 24, 25].includes(stage_number) ? 'promotion'
+      : 'none';
+    return { stage_number, gate_type, work_type: 'decision_gate', review_mode: 'auto', is_high_consequence: false };
+  });
+  return {
+    from: () => ({
+      select: () => ({ order: () => Promise.resolve({ data: rows, error: null }) }),
+    }),
+    channel: () => ({ on: function () { return this; }, subscribe: function () { return this; } }),
+  };
+}
+
+beforeEach(() => {
+  _resetCacheForTest();
+});
+
 describe('DevilsAdvocate', () => {
   describe('isDevilsAdvocateGate', () => {
-    it('should identify kill gates', () => {
-      for (const stage of [3, 5, 13, 24]) {
-        const result = isDevilsAdvocateGate(stage);
+    it('should identify kill gates', async () => {
+      const supabase = mockSupabase();
+      for (const stage of [3, 5, 13, 23]) {
+        const result = await isDevilsAdvocateGate(supabase, stage);
         expect(result.isGate).toBe(true);
         expect(result.gateType).toBe('kill');
       }
     });
 
-    it('should identify promotion gates', () => {
-      for (const stage of [17, 18, 23]) {
-        const result = isDevilsAdvocateGate(stage);
+    it('should identify promotion gates', async () => {
+      const supabase = mockSupabase();
+      for (const stage of [10, 16, 17, 18, 19, 24, 25]) {
+        const result = await isDevilsAdvocateGate(supabase, stage);
         expect(result.isGate).toBe(true);
         expect(result.gateType).toBe('promotion');
       }
     });
 
-    it('should return false for non-gate stages', () => {
-      for (const stage of [1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 19, 20, 21, 22, 25, 26]) {
-        const result = isDevilsAdvocateGate(stage);
+    it('should return false for non-gate stages', async () => {
+      const supabase = mockSupabase();
+      for (const stage of [1, 2, 4, 6, 7, 8, 9, 11, 12, 14, 15, 20, 21, 22, 26]) {
+        const result = await isDevilsAdvocateGate(supabase, stage);
         expect(result.isGate).toBe(false);
         expect(result.gateType).toBeNull();
       }
@@ -224,16 +249,16 @@ describe('DevilsAdvocate', () => {
     });
 
     describe('constants', () => {
-      it('should define correct kill gates', () => {
-        expect(_internal.KILL_GATES).toEqual([3, 5, 13, 24]);
+      it('should define correct kill gates', async () => {
+        expect(await _internal.getKillGates(mockSupabase())).toEqual([3, 5, 13, 23]);
       });
 
-      it('should define correct promotion gates', () => {
-        expect(_internal.PROMOTION_GATES).toEqual([17, 18, 23]);
+      it('should define correct promotion gates', async () => {
+        expect(await _internal.getPromotionGates(mockSupabase())).toEqual([10, 16, 17, 18, 19, 24, 25]);
       });
 
-      it('should have all gates combined', () => {
-        expect(_internal.ALL_GATES).toHaveLength(7);
+      it('should have all gates combined', async () => {
+        expect(await _internal.getAllGates(mockSupabase())).toHaveLength(11);
       });
     });
   });

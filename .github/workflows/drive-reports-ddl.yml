@@ -75,6 +75,11 @@ on:
       # migration and its ddl test would otherwise trigger nothing.
       - 'database/migrations/20260823145041_ventures_teardown_disposition.sql'
       - 'tests/ddl/venture-teardown-disposition-ddl.db.test.js'
+      # SD-LEO-INFRA-MINUS-CARGO-INSTRUMENTS-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260823_eva_stage_gate_attempts.sql'
+      - 'tests/ddl/thesis-kill-instrument-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'
