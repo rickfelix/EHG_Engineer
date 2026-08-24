@@ -104,6 +104,20 @@ CREATE POLICY authenticated_read_ventures
 -- current_user IN ('authenticated','anon'). This is a MINIMAL, non-invasive check: it requires
 -- NO change to advance_venture_stage's body and does not touch the other 2 (out-of-scope,
 -- flagged-for-consolidation) advance RPCs.
+--
+-- SCOPE CORRECTION (caught during EXEC, before this ever reached the client-code changes):
+-- the original FR-4 draft guarded ALL SIX nominally-governance columns (current_lifecycle_stage,
+-- status, orchestrator_state, launched_at, workflow_status, recursion_state) behind
+-- advance_venture_stage. But that RPC's signature (p_venture_id, p_from_stage, p_to_stage,
+-- p_transition_type) only models a STAGE transition -- it has no parameter path for status,
+-- orchestrator_state, workflow_status, or recursion_state. Guarding those five behind an RPC
+-- that cannot write them would have broken every legitimate write of those columns (EVA's own
+-- automated state-machine/recursion/orchestrator flows all use the same RLS-bound client per
+-- the Explore pass). TR-4 forbids inventing a new RPC to cover them. The guard is therefore
+-- narrowed to the ONE column that has a real, existing, matching RPC route today;
+-- status/orchestrator_state/launched_at/workflow_status/recursion_state remain directly
+-- client-writable for now (practically content-class) until a follow-up SD gives each an actual
+-- governed path -- flagged in this SD's retrospective, not silently dropped.
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.ventures_block_client_governance_write()
 RETURNS TRIGGER
@@ -116,15 +130,9 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NEW.current_lifecycle_stage IS DISTINCT FROM OLD.current_lifecycle_stage
-     OR NEW.status IS DISTINCT FROM OLD.status
-     OR NEW.orchestrator_state IS DISTINCT FROM OLD.orchestrator_state
-     OR NEW.launched_at IS DISTINCT FROM OLD.launched_at
-     OR NEW.workflow_status IS DISTINCT FROM OLD.workflow_status
-     OR NEW.recursion_state IS DISTINCT FROM OLD.recursion_state
-  THEN
+  IF NEW.current_lifecycle_stage IS DISTINCT FROM OLD.current_lifecycle_stage THEN
     RAISE EXCEPTION
-      'public.ventures: governance-class columns (current_lifecycle_stage, status, orchestrator_state, launched_at, workflow_status, recursion_state) cannot be written directly by client role %; route through the advance_venture_stage RPC.',
+      'public.ventures: current_lifecycle_stage cannot be written directly by client role %; route through the advance_venture_stage RPC.',
       current_user
       USING ERRCODE = 'P0201';
   END IF;
@@ -155,12 +163,12 @@ COMMENT ON TABLE public.ventures IS
   '(1) service_role: unrestricted (ALL, qual=true). '
   '(2) authenticated: SELECT and UPDATE scoped to portfolio.has_venture_access(id) -- NOT '
   'qual=true. UPDATE additionally column-gated by ventures_block_client_governance_write_trg: '
-  'content-class columns (name, description, industry, target_market, business_model, '
-  'value_proposition, projected_revenue, projected_roi, funding_required, metadata, '
-  'brand_variants, growth_strategy) are directly client-writable; governance-class columns '
-  '(current_lifecycle_stage, status, orchestrator_state, launched_at, workflow_status, '
-  'recursion_state) must route through the advance_venture_stage RPC (or an equivalent trusted, '
-  'privilege-elevated context). anon: no access. '
+  'current_lifecycle_stage cannot be written directly by client role authenticated/anon -- must '
+  'route through the advance_venture_stage RPC (the only column with a matching existing RPC '
+  'route; see the migration header for why status/orchestrator_state/launched_at/'
+  'workflow_status/recursion_state are NOT yet guarded the same way). Every other column '
+  '(including those five) is directly client-writable, scoped by has_venture_access(id). '
+  'anon: no access. '
   'Query this posture with an EXPLICIT schemaname filter -- an unqualified pg_policies query '
   'silently matched an abandoned portfolio.ventures decoy twice before this SD retired it.';
 
@@ -202,9 +210,9 @@ BEGIN
   BEGIN
     -- Positive case: a trusted context (this DO block runs as the migration's connecting role,
     -- which for a chairman-ceremony apply is service_role/postgres -- NOT authenticated/anon)
-    -- can still write a governance column directly, proving the guard only restricts
+    -- can still write the guarded column directly, proving the guard only restricts
     -- authenticated/anon and does not brick service-role/admin operations.
-    UPDATE public.ventures SET orchestrator_state = orchestrator_state WHERE id = probe_venture_id;
+    UPDATE public.ventures SET current_lifecycle_stage = current_lifecycle_stage WHERE id = probe_venture_id;
 
     -- Negative case: simulate the client role and attempt a direct governance-column write.
     -- portfolio.has_venture_access(id) reads auth.jwt()->app_metadata->venture_id (via
