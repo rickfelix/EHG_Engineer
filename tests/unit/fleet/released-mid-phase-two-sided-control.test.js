@@ -50,6 +50,9 @@ const AXIS_FIXTURES = {
   testFixtureKey: { row: orphan({ sd_key: 'SD-TEST-FIXTURE-001' }), blocks: true },
   humanActionRequired: { row: orphan({ metadata: { requires_human_action: true } }), blocks: true },
   notBeforeHold: { row: orphan({ metadata: { not_before: '2099-01-01T00:00:00Z' } }), blocks: true },
+  // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-1: presence-only hold, mirrors the live
+  // specimen's {note, source} shape but any non-empty value activates it.
+  schedulingConstraintHeld: { row: orphan({ metadata: { scheduling_constraint: { note: 'post-W3-start', source: 'w6_ruling on test' } } }), blocks: true },
   oneWayDoor: { row: orphan({ metadata: { door_class_note: 'one_way' } }), blocks: true },
   coAuthorPending: { row: orphan({ metadata: { co_author_pending: true } }), blocks: true },
   chairmanRatificationPending: { row: orphan({ metadata: { chairman_ratified: false } }), blocks: true },

@@ -189,6 +189,14 @@ async function main() {
   console.log(`  PENDING: ${formatPendingSummary(pendingScan)}`);
 
   console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — ${recommendation}` : ''));
+  // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-2: no line anywhere in this file previously
+  // named the deficit formula, so a reader had only the resulting numbers to trust. State the real
+  // formula (lib/drive-loop/belt-verdict.js:56-58) with THIS run's actual values, unclamped — a
+  // negative deficit here is a legitimate SURPLUS reading, not an error. This is a NEW line, not a
+  // correction of prior wrong text (there was none) — do not conflate with the separate, legitimate
+  // Math.max(0, deficit) clamps at the GAUGE line below and in deficitFingerprint(), which floor
+  // their own machine-readable/dedup surfaces for unrelated reasons and are left untouched.
+  console.log(`  FORMULA: deficit = (demand ${demandSoon} + buffer ${BELT_BUFFER}) - belt ${beltDepth} = ${deficit}`);
 
   // ── proactive Adam reach-out on a forecast deficit ──
   if (verdict.startsWith('DEFICIT')) {
@@ -217,7 +225,12 @@ async function main() {
     } else if (decision.reason === 'saturation-unchanged') {
       console.log(`  ACTION: deficit unchanged since last ping (same belt-dry state, no supply change) — suppressing duplicate Adam ping until supply changes.`);
     } else {
-      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, aboveTop, rows, awareness });
+      // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-3: pass openQfCount through so the
+      // Adam-facing header can show the same SD+QF breakdown the console line above already prints
+      // (claimable.length === claimableCount by construction — scripts/lib/capacity-inputs.mjs:458 —
+      // so beltDepth === claimable.length + openQfCount always; the header now states that sum
+      // explicitly instead of only showing the combined total).
+      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, openQfCount, aboveTop, rows, awareness });
       if (sent) { writeCooldown(currentFp); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
       else console.log('  ACTION: ⚠ no live Adam session found to reach — surface to operator.');
     }
@@ -395,6 +408,18 @@ function writeCooldown(fingerprint) {
 // min_tier_rank=2, not a filter bug. aboveTop is already computed for the console BELT-BY-TIER
 // display (tierClaimableBreakdown().aboveTop) but was never threaded into these Adam-facing
 // messages. Pure (no IO) so it is directly unit-testable.
+// SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 (FR-3, TS-5): the Adam-facing header's
+// beltDepth is claimable.length + openQfCount BY CONSTRUCTION (claimableCount ===
+// claimable.length, scripts/lib/capacity-inputs.mjs:458) — this formats that same sum the
+// console BELT line already prints (line ~129: "(${claimable.length} SD + ${openQfCount} QF)"),
+// so the two surfaces state one extent instead of a combined total next to an SD-only list.
+// Pure (no IO) so it is directly unit-testable, matching formatClaimableNow/deficitFingerprint's
+// own extraction pattern.
+export function formatBeltExtent({ claimable, openQfCount }) {
+  const sdCount = Array.isArray(claimable) ? claimable.length : 0;
+  return `${sdCount} SD + ${Number(openQfCount) || 0} QF`;
+}
+
 export function formatClaimableNow(claimable, aboveTop = 0) {
   if (Array.isArray(claimable) && claimable.length) {
     return claimable.map((d) => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ');
@@ -446,7 +471,10 @@ async function reachAdam(f) {
   } catch { activeRungKey = null; }
   const body = [
     `[COORD->ADAM] PREDICTIVE belt-low (capacity forecaster). Verdict=${f.verdict}.`,
-    `Belt=${f.beltDepth} claimable vs demand(soon)=${f.demandSoon} (idle ${f.idleNow} + freeing-soon ${f.freeingSoon}) → short by ${f.deficit}.`,
+    // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-3: state the SD+QF extent breakdown
+    // explicitly (same numbers the console BELT line already prints) so this header's total always
+    // agrees with "Claimable now:" below, which enumerates SD keys only.
+    `Belt=${f.beltDepth} claimable [${formatBeltExtent(f)}] vs demand(soon)=${f.demandSoon} (idle ${f.idleNow} + freeing-soon ${f.freeingSoon}) → short by ${f.deficit}.`,
     `Claimable now: ${formatClaimableNow(f.claimable, f.aboveTop)}. Idle/at-risk workers: ${idleList}.`,
     // SD-LEO-INFRA-COORDINATOR-SOURCING-ENGINE-AWARENESS-001 (FR-2): surface the engine state FIRST so
     // the ask is "activate/distill the engine/roadmap" when it's dormant-with-backlog, NOT perpetual
