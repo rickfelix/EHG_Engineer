@@ -33,8 +33,17 @@
 -- scripts/modules/handoff/lib/canonical-writer-stamp.js's isCanonicalWriteRejection() would not
 -- recognize the failure, silently swallowing it in any caller that only branches on SDCW1.
 --
--- PUBLIC and anon carry no legitimate call path to this function (anon has no UPDATE grant on the
--- table at all), so revoking their EXECUTE is inert exactly as the original ratification intended --
+-- PUBLIC and anon carry no legitimate call path to this function. CORRECTION (SECURITY re-
+-- verification, evidence e9545112, finding S1): an earlier draft of this note claimed "anon has no
+-- UPDATE grant on the table at all" -- that is FALSE. Live measurement: anon DOES hold a table-
+-- level UPDATE grant on strategic_directives_v2. The real reason anon cannot reach a live write is
+-- Row-Level Security: relrowsecurity=true on the table, and the only anon-facing policy is
+-- anon_read_strategic_directives_v2 (cmd=SELECT) -- there is no anon UPDATE policy, so any anon
+-- UPDATE matches zero rows and the guard trigger never fires (RLS filters before the trigger sees a
+-- row). The safety of narrowing this REVOKE to exclude anon-breakage-risk therefore rests
+-- specifically on RLS-for-anon, not on an absent table grant -- if an anon UPDATE policy were ever
+-- added to this table without re-reviewing this file, that reasoning would need re-verification.
+-- Revoking EXECUTE from PUBLIC/anon is still inert exactly as the original ratification intended --
 -- the narrowing removes only the part of the originally-named scope that would have broken
 -- production, not the part that closes the real gap.
 --
@@ -45,7 +54,34 @@
 --
 -- Apply only after this file's own @approved-by header is filled in by the chairman/coordinator,
 -- following the same ceremony as the choke file itself (database/chairman-gated/README.md).
+--
+-- CEREMONY ORDERING (SECURITY re-verification, evidence e9545112, finding S2): this file MUST apply
+-- strictly AFTER the choke file itself -- sd_canonical_writer_policy(text) does not exist in pg_proc
+-- until the choke file creates it, so applying this REVOKE first raises 42883 (undefined_function),
+-- fail-closed but asymmetric with the choke file's own PRE-condition discipline. The $precondition$
+-- block below makes that ordering requirement explicit rather than relying on operator discipline.
+--
+-- DOWN-CYCLE COUPLING (same finding, S2): database/chairman-gated/20260824_strategic_directives_
+-- canonical_writer_choke_DOWN.sql DROPs sd_canonical_writer_policy entirely. A DOWN-then-re-apply
+-- cycle of the choke file would silently revert THIS file's REVOKE too -- Postgres restores the
+-- default PUBLIC EXECUTE grant on a fresh CREATE (only CREATE OR REPLACE preserves an existing ACL,
+-- and DROP+CREATE is not that). Nothing currently re-arms this REVOKE automatically after such a
+-- cycle, and scripts/lint/secdef-execute-revoke-allowlist.json still allowlists this function, so
+-- the secdef-execute-revoke-lint would NOT flag the regression. Any ceremony that runs the choke
+-- file's DOWN migration must re-apply this file afterward -- called out here so it lands on the
+-- ceremony checklist, not rediscovered live.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+DO $precondition$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname = 'sd_canonical_writer_policy'
+  ) THEN
+    RAISE EXCEPTION 'sd_canonical_writer_policy REVOKE addendum: the function does not exist yet -- apply database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql FIRST. Refusing to proceed out of order.';
+  END IF;
+END
+$precondition$;
 
 REVOKE EXECUTE ON FUNCTION public.sd_canonical_writer_policy(text) FROM PUBLIC, anon;
 

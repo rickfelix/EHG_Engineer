@@ -6,9 +6,15 @@
 // per writer identity, same discipline as the function-body generators -- throws on drift rather
 // than silently mismatching.
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
-const CHOKE_FILE = 'database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql';
+// Anchored to REPO_ROOT rather than cwd (SECURITY re-verification, evidence e9545112, finding S4) --
+// matches the convention in the sibling canonical-writer-preflight script, so this only ever
+// touches the repo's own choke file regardless of the caller's working directory.
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const CHOKE_FILE = path.join(REPO_ROOT, 'database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql');
 
 const WRITERS = [
   'complete_business_evaluation',
