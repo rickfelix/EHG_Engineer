@@ -334,7 +334,12 @@ describe('AXIS 3 roadmap_motion — motion is a RATE, and state however complete
     // Provenance, not adjectives: the numbers a reader can go re-measure.
     expect(r.citation).toMatch(/1864/);
     expect(r.citation).toMatch(/0\.9%/);
-    expect(r.citation).toMatch(/SD-FDBK-INFRA-ROADMAP-COMMITMENT-CLOCK-001/);
+    // SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (TESTING finding C1, evidence 80e4d285):
+    // SD-FDBK-INFRA-ROADMAP-COMMITMENT-CLOCK-001 was cited here as the named unblocking child but
+    // was never actually created (confirmed zero rows, exact-key and ILIKE search). The citation
+    // now names no SD key at all rather than naming a phantom one.
+    expect(r.citation).not.toMatch(/SD-FDBK-INFRA-ROADMAP-COMMITMENT-CLOCK-001/);
+    expect(r.citation).toMatch(/No tracking SD\/QF filed/);
   });
 
   it('does NOT claim storage is missing — the store exists and is named', () => {

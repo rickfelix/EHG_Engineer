@@ -13,6 +13,11 @@
  * new sourcing-engine flag ships.
  */
 
+// SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (FR-1): resolveGitHubRepo, not a hardcoded
+// 'owner/repo' literal -- lint-repo-resolution-drift.mjs (Category C in
+// docs/architecture/canonical-repo-resolution-census.md) exists specifically to catch this.
+import { resolveGitHubRepo } from '../../lib/repo-paths.js';
+
 // The canonical sourcing-engine activation flags (mirrors the per-module isXxxFlagEnabled helpers:
 // lib/sourcing-engine/gauge-gap-miner.js, lib/sourcing-engine/deferred-watcher.js). Add new
 // sourcing-engine flags here as they ship so the forecaster surfaces them automatically.
@@ -92,6 +97,121 @@ export async function reconcileSourcingArmState(supabase, stateByArm = {}, updat
     }
     return 0;
   }
+}
+
+// SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (FR-1): workflow filename per arm, so the
+// activation-state DB row can be cross-checked against the GitHub Actions API's own /workflows
+// endpoint (which accepts a workflow filename as `workflow_id` per the GitHub REST API docs).
+const SOURCING_ARM_WORKFLOW_FILE = Object.freeze({
+  'gauge-gap-miner': 'sourcing-gauge-gap-miner-cron.yml',
+  'deferred-watcher': 'sourcing-deferred-watcher-cron.yml',
+  'auto-refill': 'sourcing-auto-refill-cron.yml',
+});
+
+const GITHUB_API_BASE = 'https://api.github.com';
+
+// TR-1: interval-cached, never a live API call on every invocation (the migration's own
+// preamble documents why -- workflow-YAML presence != enabled, and gh-run-state is rate-limited).
+const DIFF_CACHE_TTL_MS = 15 * 60 * 1000;
+let _diffCache = null; // { result, fetchedAt }
+
+/**
+ * IO: fetch a single workflow's live `state` field ('active' | 'disabled_manually' |
+ * 'disabled_inactivity' | ...) from the GitHub Actions API. Deliberately per-workflow (not the
+ * list-all endpoint) so one arm's network failure never blinds the diff to the other two arms
+ * (TESTING sub-agent finding C3/C8, evidence 80e4d285).
+ *
+ * @param {string} repo - "owner/name"
+ * @param {string} workflowFilename - e.g. "sourcing-auto-refill-cron.yml"
+ * @param {string} token - GitHub token (Bearer auth)
+ * @param {{fetchImpl?: typeof fetch}} [opts]
+ * @returns {Promise<string>} the workflow's `state` field
+ */
+export async function fetchWorkflowState(repo, workflowFilename, token, opts = {}) {
+  const { fetchImpl = fetch } = opts;
+  const url = `${GITHUB_API_BASE}/repos/${repo}/actions/workflows/${workflowFilename}`;
+  const resp = await fetchImpl(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+  if (!resp.ok) {
+    throw new Error(`GitHub API error fetching ${workflowFilename}: ${resp.status} ${resp.statusText}`);
+  }
+  const data = await resp.json();
+  return data.state;
+}
+
+/**
+ * SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (FR-1): read-only diff between
+ * sourcing_engine_activation_state (the DB row LEAD-phase VALIDATION found seeded enabled=true
+ * for all 3 arms at migration time, with its one write helper -- reconcileSourcingArmState()
+ * above -- having ZERO production callers) and each arm's ACTUAL GitHub Actions workflow state.
+ *
+ * Deliberately NOT named "reconcile*" (TESTING sub-agent finding C7, evidence 80e4d285): that
+ * prefix already belongs to the unused writer above, and a shared name invites exactly the kind
+ * of confusion that let it ship uncalled and unnoticed. This function is READ-ONLY -- it never
+ * calls reconcileSourcingArmState or writes to sourcing_engine_activation_state (TR-2).
+ *
+ * THREE-STATE, not boolean (TESTING finding C4): db_state is `true | false | 'no_row'` -- a
+ * missing row and a row saying false are different facts (mirrors the existing badge convention
+ * at adam-startup-check.mjs's own SOURCING SSOT STATE probe). deployment_state is
+ * `'active' | 'disabled_manually' | 'disabled_inactivity' | 'unknown'` -- 'unknown' carries a
+ * distinct per-arm deployment_error (network failure vs 404 are different facts, TESTING finding
+ * C8) and is never silently treated as a clean match: mismatched is `null` (not `false`) whenever
+ * deployment_state is 'unknown', so a caller can never read an unresolvable arm as verified-agree.
+ *
+ * @param {object} supabase - service-role client (read-only: only .select() is called)
+ * @param {{repo?: string, token?: string, fetchImpl?: typeof fetch, now?: () => number, forceRefresh?: boolean}} [opts]
+ * @returns {Promise<Array<{arm: string, db_state: (true|false|'no_row'), deployment_state: string, deployment_error: (string|null), mismatched: (boolean|null)}>>}
+ */
+export async function diffSourcingArmStateVsDeployment(supabase, opts = {}) {
+  const {
+    repo = resolveGitHubRepo('EHG_Engineer'),
+    token = process.env.GITHUB_TOKEN,
+    fetchImpl = fetch,
+    now = () => Date.now(),
+    forceRefresh = false,
+  } = opts;
+
+  if (!forceRefresh && _diffCache && (now() - _diffCache.fetchedAt) < DIFF_CACHE_TTL_MS) {
+    return _diffCache.result;
+  }
+
+  // Fail-loud, not fail-open (TESTING finding C8, citing the deliberate split already documented
+  // at adam-startup-check.mjs:666-674): fail-open is correct for the forecaster deciding what
+  // ACTION to take on a degraded read; fail-loud is correct here, a badge reporting what current
+  // state IS must never silently substitute a clean-looking default.
+  const { data: dbRows, error: dbError } = await supabase.from(SOURCING_ACTIVATION_TABLE).select('arm, enabled');
+  if (dbError) throw new Error(`diffSourcingArmStateVsDeployment: DB read failed: ${dbError.message}`);
+  const byArm = new Map((dbRows || []).map((r) => [r.arm, r.enabled === true]));
+
+  const result = [];
+  for (const f of SOURCING_ENGINE_FLAGS) {
+    const filename = SOURCING_ARM_WORKFLOW_FILE[f.label];
+    const db_state = byArm.has(f.label) ? byArm.get(f.label) : 'no_row';
+    let deployment_state = 'unknown';
+    let deployment_error = null;
+    if (!token) {
+      deployment_error = 'no_token';
+    } else {
+      try {
+        const rawState = await fetchWorkflowState(repo, filename, token, { fetchImpl });
+        deployment_state = rawState || 'unknown';
+      } catch (e) {
+        deployment_error = e.message;
+      }
+    }
+    const dbBool = db_state === true;
+    const deployBool = deployment_state === 'active';
+    const mismatched = deployment_state === 'unknown' ? null : dbBool !== deployBool;
+    result.push({ arm: f.label, db_state, deployment_state, deployment_error, mismatched });
+  }
+
+  _diffCache = { result, fetchedAt: now() };
+  return result;
 }
 
 /**
