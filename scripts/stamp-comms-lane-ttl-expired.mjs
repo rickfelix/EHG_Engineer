@@ -10,6 +10,13 @@
  * FR-2's "durable dead-letter-state source of record" claim is dead by construction (TESTING
  * evidence a2448854, EXEC-TO-PLAN review).
  *
+ * SCHEDULED by .github/workflows/comms-lane-ttl-stamp-cron.yml (hourly, dry-run by default,
+ * gated behind the COMMS_LANE_TTL_STAMP_APPLY repo variable) -- a VALIDATION sub-agent at
+ * PLAN_VERIFICATION (evidence f9ce429f) found an earlier version of this file existed but was
+ * invoked by nothing, reproducing the exact "instrument nobody invokes" defect class this SD's
+ * own sibling (SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001) already names. See
+ * tests/static-guards/comms-lane-ttl-stamp-scheduled-safely.test.js for the durable pin.
+ *
  * PAYLOAD-ONLY, never writes acknowledged_at/read_at (see buildExpiredUnreadStampPatch).
  *
  * Usage: node scripts/stamp-comms-lane-ttl-expired.mjs [--apply]

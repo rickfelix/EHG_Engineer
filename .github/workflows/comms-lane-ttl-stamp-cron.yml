@@ -1,0 +1,70 @@
+name: "Comms lane TTL expired-unread stamp (cron)"
+
+# SD-LEO-INFRA-COMMS-LANE-TTLS-001 (FR-2).
+#
+# WHAT THIS CLOSES. lib/coordination/lane-contract.cjs's buildExpiredUnreadStampPatch/
+# isExpiredUnread were EXEC-TO-PLAN-flagged as dead by construction (TESTING evidence
+# a2448854): scripts/stamp-comms-lane-ttl-expired.mjs was the caller they were built for,
+# but nothing ever invoked it -- the exact "instrument nobody invokes" defect the sibling
+# SD-LEO-INFRA-COORDINATION-LANE-DRAIN-001's own dead-letter-drain-cron.yml already
+# documents as a recurring failure mode in this codebase. This is the scheduled half.
+#
+# HOURLY, mirroring dead-letter-drain-cron.yml's own reasoning: the marker's purpose is a
+# durable dead-letter-state record, not a sub-hour-latency alert (FR-3's alarm is the
+# latency-sensitive path, and it recomputes live rather than depending on this stamp).
+#
+# APPLY IS OFF BY DEFAULT AND STAYS OFF UNTIL DELIBERATELY ENABLED, same two-gate shape as
+# the sibling workflow -- scheduling is the irreversible act; enabling writes is a config
+# change (repo variable), not a code change.
+
+on:
+  schedule:
+    - cron: '15 * * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write mode. Leave false to dry-run. Only set true after reviewing a dry-run plan."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  comms-lane-ttl-stamp:
+    name: Comms lane TTL expired-unread stamp
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Two independent gates must BOTH allow a write: the repo variable (for the scheduled
+      # run) and the dispatch input (for a manual run). Absent either, this is a dry-run.
+      - name: Stamp expired-unread rows
+        run: |
+          if [ "${{ vars.COMMS_LANE_TTL_STAMP_APPLY }}" = "true" ] || [ "${{ inputs.apply }}" = "true" ]; then
+            echo "APPLY MODE — writes enabled"
+            node scripts/stamp-comms-lane-ttl-expired.mjs --apply
+          else
+            echo "DRY-RUN — no writes (set repo variable COMMS_LANE_TTL_STAMP_APPLY=true to enable)"
+            node scripts/stamp-comms-lane-ttl-expired.mjs
+          fi
