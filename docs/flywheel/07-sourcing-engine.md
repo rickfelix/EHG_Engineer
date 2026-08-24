@@ -3,8 +3,8 @@ category: documentation
 status: draft
 version: 0.1.0
 author: docmon-agent (Information Architecture Lead)
-last_updated: 2026-06-20
-tags: [flywheel, sourcing-engine, belt, automation, crons-active, env-probe-false-negative]
+last_updated: 2026-08-24
+tags: [flywheel, sourcing-engine, belt, automation, crons-disabled, ssot-inversion]
 ---
 
 # Link 7 — Automated Belt Feed (the Sourcing Engine)
@@ -19,15 +19,27 @@ a lane, dedup, stage into `roadmap_wave_items`, and (where chairman-approved) pr
 SDs — keeping the belt full without a human in the loop. It is the forward complement to the
 backward coherence enforcement (drift prevented at the source).
 
-> **[ENGINE STATE — CRITICAL, corrected 2026-06-20]** The 2 behavioral staging crons (Sourcing
-> **deferred-watcher** + Sourcing **gauge-gap miner**) are **REGISTERED + ACTIVE with their flags ON
-> in GitHub Actions** (commit 4ba41115 / PR #4933). The local-env flag probe (`adam-startup-check`
-> + the forecaster awareness module) reads `process.env` — which **never carries the GitHub-Actions
-> workflow env** — so it reports a **FALSE "dormant."** That false-negative is itself a known gap
-> (the probe should read the deployed workflow env / a DB `engine_state` row). As of 2026-06-20 the
-> crons are **ARMED** but had **not yet been observed firing** (GitHub new-schedule latency); a
-> manual `workflow_dispatch` confirms execution. NOTE the 4 umbrella `SOURCING_*` flags remain a
-> **display/registry only**.
+> **[ENGINE STATE — CRITICAL, corrected 2026-08-24]** The "false dormant" theory below (as of
+> 2026-06-20) was itself wrong. SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 built a reconciler
+> (`diffSourcingArmStateVsDeployment()`, `scripts/lib/sourcing-engine-awareness.mjs`) that reads
+> each arm's ACTUAL deployed GitHub Actions workflow state via the API — not `process.env` — and
+> live-verified: **gauge-gap-miner and deferred-watcher are `disabled_manually`**, not active.
+> `auto-refill` (a 3rd arm, not covered by the 2026-06-20 note below) is the one arm actually
+> `active`. The DB's `sourcing_engine_activation_state` rows say `enabled=true` for all 3 — a real
+> SSOT inversion between the DB's belief and deployed reality, not a local-probe artifact. See
+> `docs/sourcing-engine-activation-runbook.md`'s "FR-6 — Per-tier disposition table" for the full,
+> live-verified breakdown. Re-enabling the 2 disabled arms is a chairman-gated decision, not yet
+> made as of this correction.
+>
+> <details><summary>Superseded 2026-06-20 note (kept for history — do not trust)</summary>
+>
+> The 2 behavioral staging crons (Sourcing **deferred-watcher** + Sourcing **gauge-gap miner**)
+> were believed **REGISTERED + ACTIVE with their flags ON in GitHub Actions** (commit 4ba41115 /
+> PR #4933), with a **local** `process.env` probe theorized to report a false "dormant" because it
+> cannot see the workflow env. The 2026-08-24 correction above found this exactly backwards: the
+> crons really are disabled, and the probe's "dormant" reading was correct all along.
+>
+> </details>
 >
 > An activation runbook exists at `docs/sourcing-engine-activation-runbook.md`
 > (SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001) documenting the chairman-authorized go-live + how
