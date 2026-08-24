@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-24](#2026-08-24)
+  - [Infrastructure](#infrastructure)
 - [2026-08-23](#2026-08-23)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -137,6 +139,21 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-24
+
+### Infrastructure
+- **A chairman-commissioned architecture eval's premise was falsified before EXEC began — twice, independently, the same unqualified `pg_policies` query matched an abandoned decoy table instead of the real one** - PR #7471, ehg#797 (SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001)
+  - **What the eval claimed vs. what measurement showed**: the eval said any venture-access client could UPDATE ANY `ventures` column via the browser, including `current_lifecycle_stage`. A same-day "consumer census" meant to correct it repeated the identical root cause: `pg_policies WHERE tablename='ventures'` with no `schemaname` filter silently matched an abandoned `portfolio.ventures` decoy (1 row, dead since 2025-11-30, an orphaned scaffold of an abandoned three-schema consolidation) instead of the real, live `public.ventures`. A worker's schema-qualified re-read plus an empirical RLS probe (`SET LOCAL ROLE authenticated` inside `BEGIN`/`ROLLBACK`) found the opposite of the eval's claim: `public.ventures` had NO UPDATE policy for authenticated/anon at all.
+  - **Escalated rather than built against a false premise, or unilaterally cancelled a chairman-commissioned SD**: `/signal spec-conflict` at high then critical severity; coordinator disposition accepted the finding in full, Adam ratified a re-scope to what the measurement actually supported.
+  - **What shipped (re-scoped)**: `database/chairman-gated/20260824_ventures_rls_integrity_repair.sql` (staged, not applied) retires the `portfolio.ventures` decoy + its 2 dependent FK constraints (`portfolio.has_venture_access()` explicitly preserved — it never queried the decoy), narrows a real cross-tenant SELECT over-grant (`authenticated_read_ventures` was `qual=true`), and adds a real UPDATE policy + guard trigger so content-class writes succeed while `current_lifecycle_stage` fails loudly instead of silently no-op'ing under RLS denial (the actual, previously-undetected bug: Supabase JS doesn't throw on RLS-denied UPDATE, so ~15 live EHG-app call sites were silently no-op'ing in production). Companion PR ehg#797 routes 5 of those call sites through the existing `advance_venture_stage` RPC.
+  - **A real scope error caught mid-EXEC, before it reached the client-code changes**: the first migration draft guarded all six nominally-governance columns behind `advance_venture_stage`, but that RPC's signature only models a stage transition — it has no parameter path for `status`/`orchestrator_state`/`launched_at`/`workflow_status`/`recursion_state`. Guarding all six would have broken every legitimate write of the other five (EVA's own automated state-machine flows use the same RLS-bound client). Narrowed to the one column with a real, matching RPC route; the other five are flagged, not silently dropped.
+  - **The migration's own `DO $verify$` block had a design bug, caught before it ever ran**: the negative-case client-role probe never faked the `request.jwt.claims` that `has_venture_access()` reads — without it, RLS would deny the probe row at row-selection before the trigger ever fired, making the assertion test nothing (a 0-row UPDATE raises no exception in Postgres).
+  - **CI caught a real issue**: a pre-existing `stage-advancement-chokepoint-lint` flagged the migration's own verify-block probes as uncensused `current_lifecycle_stage` writes — closed with the lint's documented single-line disable pragma, not a broader allowlist entry.
+  - **A delegated diff review caught a real test regression**: routing `evaRollback.ts` through the RPC broke `tests/unit/evaRollback.test.ts` (its mock Supabase client had no `.rpc()`) — fixed the test fixture, not shipped broken.
+  - **Deliberately deferred, not silently absorbed**: `status`/`orchestrator_state`/`launched_at`/`workflow_status`/`recursion_state` remain directly client-writable — each needs its own governed RPC path in a follow-up SD; the 3 disagreeing SECURITY DEFINER advance RPCs (`advance_venture_stage`/`fn_advance_venture_stage`/`advance_venture_to_stage`) corroborated by both investigations were left un-consolidated to avoid scope creep.
+  - **Also filed as a durable, cross-session lesson**: the unqualified-`pg_policies`-schema-collision defect class, so a third repeat is caught before it reaches an SD at all.
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 94%, LEAD-FINAL-APPROVAL 97%.
 
 ## 2026-08-23
 
