@@ -5,8 +5,17 @@
  * from a genuine pass for every EHG feature SD run from a worktree. This test proves the gate
  * now fails closed (passed: false) when the resolved repo path doesn't exist, rather than
  * relying on the catch-all to camouflage the problem as an advisory pass.
+ *
+ * SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24: the first version of this fix
+ * checked existsSync(EHG_REPO_PATH) only, which an EMPTY directory also satisfies (this SD's own
+ * FR-4 dry-run script creates exactly such a placeholder) -- `git branch -r` there throws "not a
+ * git repository", landing back in the same catch(err) advisory-pass camouflage. The gate now
+ * also checks for .git specifically; the "empty directory" test below proves that gap is closed.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 vi.mock('../../../../../lib/repo-paths.js', () => ({
   resolveRepoPath: vi.fn(),
@@ -30,7 +39,24 @@ describe('UI_INTERACTIVITY_CHECK gate — resolved repo path validation', () => 
     expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
     expect(result.issues.length).toBeGreaterThan(0);
-    expect(result.issues[0]).toMatch(/nonexistent path/);
+    expect(result.issues[0]).toMatch(/missing or not a git checkout/);
+  });
+
+  it('fails closed when resolveRepoPath returns an EXISTING but empty (non-git) directory', async () => {
+    const emptyDir = mkdtempSync(path.join(tmpdir(), 'ui-interactivity-empty-dir-'));
+    try {
+      resolveRepoPath.mockReturnValue(emptyDir);
+
+      const gate = createUiInteractivityCheckGate({});
+      const sd = { target_application: 'EHG', sd_type: 'feature', sd_key: 'SD-TEST-004' };
+      const result = await gate.validator({ sd });
+
+      expect(result.passed).toBe(false);
+      expect(result.score).toBe(0);
+      expect(result.issues[0]).toMatch(/missing or not a git checkout/);
+    } finally {
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
   });
 
   it('fails closed when resolveRepoPath returns null', async () => {

@@ -23,6 +23,16 @@
 // Scenario A (foreign prefix) and Scenario B (foreign prefix AND worktree-nested) are both run
 // and recorded, so this evidence file can no longer attest to portability while missing the
 // exact axis that broke.
+//
+// DRYRUN_ROOT is created via mkdtempSync (not a PID-based literal name) -- SECURITY sub-agent
+// finding, EXEC-TO-PLAN review 2026-08-24: a predictable `C:\ehg-portability-dryrun-<pid>`
+// name, combined with mkdirSync's recursive:true writing THROUGH a pre-existing directory/
+// junction without erroring, is an arbitrary-file-overwrite primitive (this script writes a
+// package.json into it) if another local principal or a PID-reused prior run's leftover state
+// occupies that exact path first. Low severity on a single-developer local machine, but
+// mkdtempSync's atomic, random-suffixed creation closes it for free. Still rooted directly
+// under C:\ (not os.tmpdir(), which on this machine is itself under C:\Users\rickf -- exactly
+// the prefix this dry-run exists to test OUTSIDE of).
 
 import { pathToFileURL } from 'node:url';
 
@@ -79,7 +89,7 @@ async function run() {
   const path = await import('node:path');
 
   const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
-  const DRYRUN_ROOT = path.join('C:\\', `ehg-portability-dryrun-${process.pid}`);
+  const DRYRUN_ROOT = fs.mkdtempSync(path.join('C:\\', 'ehg-portability-dryrun-'));
 
   // Scenario A: foreign prefix, ordinary (non-worktree) layout.
   const A_ENGINEER_ROOT = path.join(DRYRUN_ROOT, 'scenario-a-plain', 'EHG_Engineer');

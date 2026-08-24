@@ -4,16 +4,16 @@
   "description": "Portability dry-run: repo-paths.js resolver COPIED (not symlinked) to a throwaway prefix outside C:/Users/rickf, run from that copy under TWO scenarios (plain, and worktree-nested), output verified to reflect the new location in both.",
   "note_on_scenario_b": "Scenario B was added after a TESTING sub-agent finding during this SD's own EXEC-TO-PLAN handoff: the first version of this script only covered the foreign-prefix axis and missed that resolveLocalPath's resolution base was ALSO broken specifically for worktree-nesting -- the actual regression that shipped. Scenario B reproduces that exact shape.",
   "original_repo_root": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPO-HYGIENE-PATH-001",
-  "run_at": "2026-08-24T06:12:27.256Z",
+  "run_at": "2026-08-24T06:38:43.947Z",
   "scenario_a": {
     "name": "A_foreign_prefix_plain",
     "results": {
-      "module_location": "C:\\ehg-portability-dryrun-39012\\scenario-a-plain\\EHG_Engineer",
-      "ehg_root": "C:\\ehg-portability-dryrun-39012\\scenario-a-plain\\ehg",
-      "getRepoRoot": "C:\\ehg-portability-dryrun-39012\\scenario-a-plain\\EHG_Engineer",
-      "resolveRepoPath_ehg": "C:\\ehg-portability-dryrun-39012\\scenario-a-plain\\ehg",
-      "resolveRepoPath_EHG_Engineer": "C:\\ehg-portability-dryrun-39012\\scenario-a-plain\\EHG_Engineer",
-      "ENGINEER_ROOT_export": "C:\\ehg-portability-dryrun-39012\\scenario-a-plain\\EHG_Engineer"
+      "module_location": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-a-plain\\EHG_Engineer",
+      "ehg_root": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-a-plain\\ehg",
+      "getRepoRoot": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-a-plain\\EHG_Engineer",
+      "resolveRepoPath_ehg": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-a-plain\\ehg",
+      "resolveRepoPath_EHG_Engineer": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-a-plain\\EHG_Engineer",
+      "ENGINEER_ROOT_export": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-a-plain\\EHG_Engineer"
     },
     "checks": {
       "getRepoRoot_matches_expected": true,
@@ -26,12 +26,12 @@
   "scenario_b": {
     "name": "B_foreign_prefix_AND_worktree_nested",
     "results": {
-      "module_location": "C:\\ehg-portability-dryrun-39012\\scenario-b-worktree\\EHG_Engineer\\.worktrees\\FAKE-SD-FOR-DRYRUN",
-      "ehg_root": "C:\\ehg-portability-dryrun-39012\\scenario-b-worktree\\ehg",
-      "getRepoRoot": "C:\\ehg-portability-dryrun-39012\\scenario-b-worktree\\EHG_Engineer",
-      "resolveRepoPath_ehg": "C:\\ehg-portability-dryrun-39012\\scenario-b-worktree\\ehg",
-      "resolveRepoPath_EHG_Engineer": "C:\\ehg-portability-dryrun-39012\\scenario-b-worktree\\EHG_Engineer\\.worktrees\\FAKE-SD-FOR-DRYRUN",
-      "ENGINEER_ROOT_export": "C:\\ehg-portability-dryrun-39012\\scenario-b-worktree\\EHG_Engineer\\.worktrees\\FAKE-SD-FOR-DRYRUN"
+      "module_location": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-b-worktree\\EHG_Engineer\\.worktrees\\FAKE-SD-FOR-DRYRUN",
+      "ehg_root": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-b-worktree\\ehg",
+      "getRepoRoot": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-b-worktree\\EHG_Engineer",
+      "resolveRepoPath_ehg": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-b-worktree\\ehg",
+      "resolveRepoPath_EHG_Engineer": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-b-worktree\\EHG_Engineer\\.worktrees\\FAKE-SD-FOR-DRYRUN",
+      "ENGINEER_ROOT_export": "C:\\ehg-portability-dryrun-LgBBs2\\scenario-b-worktree\\EHG_Engineer\\.worktrees\\FAKE-SD-FOR-DRYRUN"
     },
     "checks": {
       "getRepoRoot_matches_expected": true,

@@ -495,11 +495,17 @@ scripts/harness/.spine-verify-first-runs/
 # SD-LEO-INFRA-REPO-HYGIENE-PATH-001, FR-2: one-time evidence-boundary triage. Full rationale
 # and per-directory disposition (what's ephemeral vs. durable, and why) is in
 # docs/architecture/evidence-boundary.md — read that before adding to or removing from this
-# block. None of the entries below match an already-tracked path (each verified via
-# `git ls-files` before being added), so this cannot silently untrack anything.
+# block. Every entry's directory/name-prefix scope was checked against `git ls-files` before
+# being added (SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24: an earlier version of
+# this comment overclaimed "none match" — corrected below). A gitignore pattern matching an
+# already-tracked path is harmless either way: git does not stop tracking a path just because a
+# later-added pattern would match it (only `git rm --cached` untracks), so this block cannot
+# silently untrack anything regardless.
 scratchpad/
 # Session scratch dumped directly at repo root with this literal prefix instead of scratchpad/
-# or .artifacts/ (worse hygiene than either) — matches an already-tracked path is fine, see above.
+# or .artifacts/ (worse hygiene than either). MATCHES 2 already-tracked files
+# (.artifacts-qf687-update-fr0.mjs, .artifacts-retro-venture-journey-uat-001.mjs) — harmless per
+# the note above, both remain tracked and reachable by `git add` for future changes.
 /.artifacts-*
 # 25 per-session/per-agent scratch subdirectories under .artifacts/ (0 tracked files in any of
 # them, individually verified). .artifacts/ itself is NOT blanket-ignored — 160 files are

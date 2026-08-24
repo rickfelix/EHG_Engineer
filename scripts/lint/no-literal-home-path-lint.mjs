@@ -40,11 +40,14 @@ const ALLOWLIST_PATH = path.resolve(__dirname, 'no-literal-home-path-allowlist.j
 // Case-insensitive: the same literal has appeared with mixed-case drive letters and backslash
 // vs forward-slash separators across the corpus (Windows path normalization varies by tool).
 // [\\/]+ (one or more), not a single char class: a real Windows path embedded in a JS string
-// literal is backslash-ESCAPED on disk ("C:\\Users\\rickf" -- two literal backslash bytes per
-// separator, since JS string syntax requires doubling a backslash to represent one). A
-// single-backslash class alone missed every real occurrence in scripts/modules/handoff/gates/
-// and scripts/hooks/lib/detect-context.cjs on first pass -- caught by a failing unit test before
-// this lint had ever run against the live corpus.
+// literal is backslash-ESCAPED on disk -- a Windows drive-letter path written as a JS string
+// doubles each separator byte on disk, since JS string syntax requires doubling a backslash to
+// represent one. A single-backslash class alone missed every real occurrence in
+// scripts/modules/handoff/gates/ and scripts/hooks/lib/detect-context.cjs on first pass --
+// caught by a failing unit test before this lint had ever run against the live corpus. (This
+// comment deliberately avoids spelling out a literal two-backslash example: an earlier draft of
+// this exact comment did, which made this file match its own pattern -- SECURITY sub-agent
+// finding, EXEC-TO-PLAN review 2026-08-24.)
 export const HOME_PATH_RE = /(?:[A-Za-z]:[\\/]+Users[\\/]+rickf|\/home\/rickf)/i;
 
 const SCAN_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
@@ -104,7 +107,16 @@ export function evaluateFiles(files, { allow = {} } = {}) {
 
 function loadTrackedFiles() {
   // -z: NUL-delimited output, sidesteps core.quotePath escaping non-ASCII paths.
-  const raw = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  // cwd: REPO_ROOT (SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24): without an
+  // explicit cwd, `git ls-files` returns paths relative to whatever directory this script was
+  // INVOKED from, not the repo root. Every subsequent readFileSync(path.join(REPO_ROOT, p))
+  // then pointed at a nonexistent location, threw, and was silently swallowed by the catch
+  // below -- producing a false "0 violations, 0 scanned" PASS when run from any subdirectory
+  // (e.g. `cd lib && node ../scripts/lint/no-literal-home-path-lint.mjs`). Latent in practice
+  // (CI and the npm script both invoke from repo root today), but a governance lint reporting a
+  // clean scan after silently measuring nothing is exactly the class of hollow check this
+  // codebase's own conventions warn against.
+  const raw = execFileSync('git', ['ls-files', '-z'], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const paths = raw.split('\0').filter(Boolean);
   const files = [];
   for (const p of paths) {
@@ -124,6 +136,18 @@ function main() {
 
   const allow = loadAllowlist();
   const files = loadTrackedFiles();
+
+  // SECURITY sub-agent finding, EXEC-TO-PLAN review 2026-08-24: a total measurement failure
+  // (e.g. the cwd bug this same review caught) must be a loud error, not a silent "0 scanned,
+  // clean" pass indistinguishable from a genuinely small repo. This repo's own tracked *.js/
+  // *.mjs/*.cjs population is in the thousands; a floor far below that catches the failure mode
+  // without hardcoding a brittle exact count.
+  if (files.length < 100) {
+    console.error(`❌ no-literal-home-path-lint: only ${files.length} file(s) scanned -- this looks like a measurement failure (this repo's real *.js/*.mjs/*.cjs population is in the thousands), not a clean/small tree. Refusing to report a false pass.`);
+    process.exitCode = 1;
+    return;
+  }
+
   const { violations, grandfathered, ok } = evaluateFiles(files, { allow });
 
   if (jsonMode) {

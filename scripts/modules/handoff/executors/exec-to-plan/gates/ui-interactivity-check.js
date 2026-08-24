@@ -16,6 +16,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
+import path from 'path';
 import { createBranchFileReader } from '../../../lib/branch-file-reader.js';
 import { resolveRepoPath } from '../../../../../../lib/repo-paths.js';
 
@@ -57,14 +58,21 @@ export function createUiInteractivityCheckGate(supabase) {
       // RCA finding: a wrong-but-defined EHG_REPO_PATH previously made every execSync call throw
       // ENOENT, caught below, and silently returned passed:true score:70 -- indistinguishable
       // from a genuine pass for every EHG feature SD run from a worktree.
+      //
+      // Checks for .git specifically (not just the directory existing) -- SECURITY sub-agent
+      // finding, EXEC-TO-PLAN review 2026-08-24: a plain existsSync(EHG_REPO_PATH) is satisfied
+      // by an EMPTY directory too (measured: this SD's own FR-4 dry-run script creates exactly
+      // such a placeholder), which then made `git branch -r` throw "not a git repository",
+      // landing in the unchanged catch(err) below and re-opening the same advisory-pass
+      // camouflage this fix exists to close.
       const EHG_REPO_PATH = resolveRepoPath('ehg');
-      if (!EHG_REPO_PATH || !existsSync(EHG_REPO_PATH)) {
-        console.log(`   ❌ Resolved ehg repo path does not exist: ${EHG_REPO_PATH}`);
+      if (!EHG_REPO_PATH || !existsSync(EHG_REPO_PATH) || !existsSync(path.join(EHG_REPO_PATH, '.git'))) {
+        console.log(`   ❌ Resolved ehg repo path is missing or not a git checkout: ${EHG_REPO_PATH}`);
         return {
           passed: false,
           score: 0,
           max_score: 100,
-          issues: [`resolveRepoPath('ehg') returned a nonexistent path: ${EHG_REPO_PATH}. This is a gate-infrastructure failure, not a component-interactivity finding.`],
+          issues: [`resolveRepoPath('ehg') returned '${EHG_REPO_PATH}', which is missing or not a git checkout (.git not found). This is a gate-infrastructure failure, not a component-interactivity finding.`],
           warnings: [],
           remediation: 'Verify applications/registry.json\'s ehg entry and that the ehg repo is checked out as a sibling of EHG_Engineer\'s main checkout.',
         };
