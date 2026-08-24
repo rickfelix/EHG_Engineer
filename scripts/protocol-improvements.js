@@ -5,15 +5,24 @@
  *
  * Usage:
  *   node scripts/protocol-improvements.js list [--status=PENDING] [--phase=PLAN]
- *   node scripts/protocol-improvements.js review <queue-id>
  *   node scripts/protocol-improvements.js approve <queue-id>
  *   node scripts/protocol-improvements.js reject <queue-id> --reason="..."
  *   node scripts/protocol-improvements.js apply <queue-id>
- *   node scripts/protocol-improvements.js apply-auto [--threshold=0.85] [--dry-run]
- *   node scripts/protocol-improvements.js effectiveness [queue-id]
- *   node scripts/protocol-improvements.js rescan [--since=2025-01-01]
+ *   node scripts/protocol-improvements.js effectiveness
+ *   node scripts/protocol-improvements.js evaluate <queue-id>
+ *   node scripts/protocol-improvements.js evaluation-report <queue-id>
+ *   node scripts/protocol-improvements.js judge-stats
+ *   node scripts/protocol-improvements.js stats
  *
- * @see scripts/modules/protocol-improvements/ for implementation
+ * SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-4): review/apply-auto/rescan removed --
+ * each called a method that does not exist on createProtocolImprovementSystem() (confirmed
+ * dead code: reviewImprovement, applyAutoImprovements, rescanRetrospectives), and
+ * effectiveness's single-improvement branch (getImprovementEffectiveness) was removed for the
+ * same reason. list/approve/reject/apply/effectiveness/stats call real, working methods on the
+ * same factory and are unaffected. evaluate/evaluation-report/judge-stats are a separate,
+ * live code path into scripts/modules/ai-quality-judge/, also unaffected.
+ *
+ * @see scripts/modules/protocol-improvements/index.js for the live factory implementation
  */
 
 import { createProtocolImprovementSystem } from './modules/protocol-improvements/index.js';
@@ -86,18 +95,6 @@ async function main() {
       break;
     }
 
-    case 'review': {
-      const improvementId = args[1];
-
-      if (!improvementId) {
-        console.log('Usage: node scripts/protocol-improvements.js review <queue-id>');
-        process.exit(1);
-      }
-
-      await system.reviewImprovement(improvementId);
-      break;
-    }
-
     case 'approve': {
       const improvementId = args[1];
 
@@ -156,70 +153,20 @@ async function main() {
       process.exit(result.success ? 0 : 1);
     }
 
-    case 'apply-auto': {
-      const threshold = parseFloat(flags.threshold || '0.85');
-      const dryRun = !!flags['dry-run'];
-
-      console.log('');
-      console.log(`🤖 Auto-Applying Improvements (threshold: ${threshold})`);
-      if (dryRun) {
-        console.log('   DRY RUN - No changes will be made');
-      }
-      console.log('');
-
-      const results = await system.applyAutoImprovements(threshold, dryRun);
-
-      console.log('');
-      console.log('Results:');
-      results.forEach(result => {
-        const status = result.success ? '✅' : '❌';
-        console.log(`  ${status} ${result.text.substring(0, 80)}...`);
-        if (result.error) {
-          console.log(`     Error: ${result.error}`);
-        }
-      });
-
-      console.log('');
-      break;
-    }
-
     case 'effectiveness': {
-      const improvementId = args[1];
-
-      if (improvementId) {
-        // Show effectiveness for specific improvement
-        await system.getImprovementEffectiveness(improvementId);
-      } else {
-        // Show overall effectiveness report
-        const filters = {};
-
-        if (flags.minScore) {
-          filters.minScore = parseFloat(flags.minScore);
-        }
-
-        await system.getEffectivenessReport(filters);
-      }
-
-      break;
-    }
-
-    case 'rescan': {
-      const since = flags.since || null;
-
+      // SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-4): the single-improvement branch
+      // that used to live here called system.getImprovementEffectiveness(id), a method that
+      // does not exist on createProtocolImprovementSystem() (confirmed dead code, alongside
+      // apply-auto/review/rescan below). Only the report path (getEffectivenessReport) is
+      // real; effectiveness now always shows the aggregate report.
       const filters = {};
-      if (since) {
-        filters.since = since;
+
+      if (flags.minScore) {
+        filters.minScore = parseFloat(flags.minScore);
       }
 
-      const result = await system.rescanRetrospectives(filters);
+      await system.getEffectivenessReport(filters);
 
-      console.log('');
-      console.log('✅ Rescan Complete');
-      console.log('='.repeat(50));
-      console.log(`   Total Extracted: ${result.total}`);
-      console.log(`   Inserted/Updated: ${result.inserted}`);
-      console.log(`   Skipped: ${result.skipped}`);
-      console.log('');
       break;
     }
 
@@ -406,7 +353,6 @@ async function main() {
       console.log('');
       console.log('COMMANDS:');
       console.log('  list [--status] [--phase]       - List improvements in queue');
-      console.log('  review <id>                     - Review improvement details');
       console.log('  evaluate <id>                   - AI Quality Judge evaluation (Phase 1)');
       console.log('  evaluate --all [--limit=N]      - Batch evaluate pending improvements');
       console.log('  evaluation-report <id>          - Show detailed evaluation report');
@@ -414,30 +360,25 @@ async function main() {
       console.log('  approve <id>                    - Approve improvement');
       console.log('  reject <id> --reason="..."      - Reject improvement');
       console.log('  apply <id> [--dry-run]          - Apply improvement');
-      console.log('  apply-auto [--threshold] [--dry-run] - Auto-apply eligible improvements');
-      console.log('  effectiveness [id]              - Show effectiveness report');
-      console.log('  rescan [--since]                - Rescan retrospectives');
+      console.log('  effectiveness                   - Show effectiveness report');
       console.log('  stats                           - Show system statistics');
       console.log('  help                            - Show this help');
       console.log('');
       console.log('FLAGS:');
       console.log('  --status=PENDING|APPROVED|APPLIED|REJECTED');
       console.log('  --phase=LEAD|PLAN|EXEC');
-      console.log('  --threshold=0.85 (for apply-auto)');
-      console.log('  --since=2025-01-01 (for rescan)');
       console.log('  --reason="..." (for reject)');
-      console.log('  --dry-run (for apply commands)');
-      console.log('  --limit=N (for list)');
+      console.log('  --dry-run (for apply)');
+      console.log('  --limit=N (for list, evaluate --all)');
+      console.log('  --threshold=70 (for evaluate --all)');
       console.log('');
       console.log('EXAMPLES:');
       console.log('  node scripts/protocol-improvements.js list --status=PENDING');
-      console.log('  node scripts/protocol-improvements.js review abc-123-def');
       console.log('  node scripts/protocol-improvements.js approve abc-123-def');
       console.log('  node scripts/protocol-improvements.js reject abc-123-def --reason="Not applicable"');
       console.log('  node scripts/protocol-improvements.js apply abc-123-def');
-      console.log('  node scripts/protocol-improvements.js apply-auto --threshold=0.90 --dry-run');
       console.log('  node scripts/protocol-improvements.js effectiveness');
-      console.log('  node scripts/protocol-improvements.js rescan --since=2025-01-01');
+      console.log('  node scripts/protocol-improvements.js evaluate abc-123-def');
       console.log('');
   }
 }
