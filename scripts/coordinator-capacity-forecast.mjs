@@ -189,14 +189,7 @@ async function main() {
   console.log(`  PENDING: ${formatPendingSummary(pendingScan)}`);
 
   console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — ${recommendation}` : ''));
-  // SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 FR-2: no line anywhere in this file previously
-  // named the deficit formula, so a reader had only the resulting numbers to trust. State the real
-  // formula (lib/drive-loop/belt-verdict.js:56-58) with THIS run's actual values, unclamped — a
-  // negative deficit here is a legitimate SURPLUS reading, not an error. This is a NEW line, not a
-  // correction of prior wrong text (there was none) — do not conflate with the separate, legitimate
-  // Math.max(0, deficit) clamps at the GAUGE line below and in deficitFingerprint(), which floor
-  // their own machine-readable/dedup surfaces for unrelated reasons and are left untouched.
-  console.log(`  FORMULA: deficit = (demand ${demandSoon} + buffer ${BELT_BUFFER}) - belt ${beltDepth} = ${deficit}`);
+  console.log(`  ${formatDeficitFormula({ demandSoon, buffer: BELT_BUFFER, beltDepth, deficit })}`);
 
   // ── proactive Adam reach-out on a forecast deficit ──
   if (verdict.startsWith('DEFICIT')) {
@@ -415,6 +408,20 @@ function writeCooldown(fingerprint) {
 // so the two surfaces state one extent instead of a combined total next to an SD-only list.
 // Pure (no IO) so it is directly unit-testable, matching formatClaimableNow/deficitFingerprint's
 // own extraction pattern.
+// SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001 (FR-2): no line anywhere in this file
+// previously named the deficit formula, so a reader had only the resulting numbers to trust.
+// States the real formula (lib/drive-loop/belt-verdict.js:56-58) with THIS run's actual values,
+// UNCLAMPED — a negative deficit is a legitimate SURPLUS reading, not an error. This is a NEW
+// line, not a correction of prior wrong text (there was none) — do not conflate with the
+// separate, legitimate Math.max(0, deficit) clamps at the GAUGE line and in deficitFingerprint(),
+// which floor their own machine-readable/dedup surfaces for unrelated reasons and stay untouched.
+// Extracted as a pure function (matching formatBeltExtent/formatClaimableNow/deficitFingerprint's
+// own established pattern) so the published text itself has a regression test, not just the
+// arithmetic it displays.
+export function formatDeficitFormula({ demandSoon, buffer, beltDepth, deficit }) {
+  return `FORMULA: deficit = (demand ${demandSoon} + buffer ${buffer}) - belt ${beltDepth} = ${deficit}`;
+}
+
 export function formatBeltExtent({ claimable, openQfCount }) {
   const sdCount = Array.isArray(claimable) ? claimable.length : 0;
   return `${sdCount} SD + ${Number(openQfCount) || 0} QF`;
