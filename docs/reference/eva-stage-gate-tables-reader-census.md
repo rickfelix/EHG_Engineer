@@ -47,6 +47,7 @@ governance:
 | `eva-orchestrator.js` taste-gate block | `:1269` area (post-edit) | writer call site | Same outcome vocabulary. The pre-existing `details:`/`criteria:` param-name typo on this block's `recordGateResult` call (TESTING F11) is fixed ONLY on the new `recordGateAttempt` write below (`criteria: tasteGateCriteria`) -- fixing it on the `recordGateResult` call itself was reverted (TESTING F-B): `taste_gate_sN` shares `eva_stage_gate_results`' upsert key (`gate_type='exit'`) with the earlier `stage_gate` write at stages 10/13/16, so populating `gate_criteria` there would clobber that write's own evidence. See "Known limitation carried into the new table" below. |
 | `stage-17-blueprint-review.js` | `:427` area (post-edit) | writer call site | Same outcome vocabulary. |
 | `recordGateOverride` | `lib/eva/artifact-persistence-service.js` | writer call site (extension) | Writes a `resolved_outcome='override'` attempt alongside its existing `eva_stage_gate_results.gate_criteria` merge. |
+| `_advanceStage()` (chairman-adjudicated stage-advance ledger write) | `lib/eva/stage-execution-worker.js:3292` (Side-effect 1b) | writer call site | Added by SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 (2026-08-24). Structurally different from the 4 rows above: those fire from gate-*evaluation* call sites; this one fires from the daemon's single stage-advance chokepoint. Writes `resolvedOutcome:'chairman_adjudicated'` ONLY when the advance was reached via a genuine chairman decision — `result._chairmanGateSource === 'chairman_decision'` (tagged by `_handleChairmanGate()`'s 2 genuine-decision return branches) OR an explicit `chairmanGateSource` context flag passed by the 4 call sites that re-confirm an already-approved `chairman_decisions` row without re-invoking `_handleChairmanGate()` in that tick — never for the 3 automated auto-approval sources (`autonomy_auto_approve`/`governance_auto_approve`/`fixture_venture_skip`), which would otherwise be mislabeled chairman-adjudicated. Gated on the preceding `ventures.current_lifecycle_stage` UPDATE having actually succeeded (`!stageUpdateError`) and placed strictly after it — deliberately avoiding the retry-amplification failure mode this SD's PRD cites as prior art (1000+ rows accrued for a different venture via a different write path, unrelated to this table). Where available, threads the real `chairman_decisions.id` into `reasoning` and `metadata.chairman_decision_id` — the reverse direction of PRD FR-6's stamping (attempt→decision, not decision→attempt); see the FR-6 gap note below, which FR-6 itself remains unclosed by. |
 
 ### Explicitly NOT wired in this SD (documented gap, not a silent omission)
 
@@ -69,7 +70,10 @@ governance:
   INSERT happens in a different, not-yet-located call path), so the stamping could not be wired
   without a separate investigation into where `chairman_decisions` rows for gate-override
   decisions actually originate. Follow-up SD: locate that write path and pass the `attempt_id`
-  through.
+  through. SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001's new `_advanceStage()` write site
+  (row above) writes the opposite direction of this link (`chairman_decisions.id` INTO the new
+  attempt row's `metadata`, when available) but still does not write anything back onto
+  `chairman_decisions` itself — FR-6's gap is unchanged by that SD.
 - **`emergencyUnblockGate`** (`lib/eva/artifact-persistence-service.js`) is a second override-
   adjacent write path this SD did not extend — scoped out because its exact outcome semantics
   (does it always correspond to a `chairman_adjudicated` attempt, or something else?) need their
