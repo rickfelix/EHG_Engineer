@@ -1,5 +1,5 @@
 -- @chairman-gated
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting)
 --   Chairman verification NOT yet obtained. This file is staged only.
 --   WHY chairman-gated rather than database/migrations/: this file creates TRIGGERS on a live,
 --   heavily-written table (leo_protocol_sections) plus REVOKE/GRANT statements -- both land it

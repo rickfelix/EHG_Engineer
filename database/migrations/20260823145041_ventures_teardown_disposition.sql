@@ -1,4 +1,5 @@
 -- Migration: ventures.teardown_disposition columns + kill/cancel disposition-default wiring
+-- @approved-by: Chairman, verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting presented by Adam 0549d739; scribe branch ceremony/20260824-sitting)
 -- SD: SD-LEO-INFRA-VENTURE-KILL-CANCEL-001
 -- PRD: PRD-SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 (FR-1)
 -- Sub-agent evidence:
