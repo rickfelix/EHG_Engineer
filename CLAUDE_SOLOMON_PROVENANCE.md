@@ -1,8 +1,8 @@
-<!-- file_content_hash: a46ec5fcade91deb -->
+<!-- file_content_hash: cf7921383017671c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-08-23 8:34:07 AM
+**Generated**: 2026-08-24 4:38:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -90,6 +90,6 @@ The "fleet is one account, his live use preempts everything" priority in the P1 
 
 ---
 
-*Generated from database: 2026-08-23*
+*Generated from database: 2026-08-24*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_provenance). Do not hand-edit — edit the DB section and regenerate.*

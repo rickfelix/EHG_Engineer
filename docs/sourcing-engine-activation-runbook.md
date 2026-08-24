@@ -1,3 +1,12 @@
+---
+Category: Deployment
+Status: Approved
+Version: 1.1.0
+Author: Claude (multiple SDs — see per-section provenance; SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 added FR-6)
+Last Updated: 2026-08-24
+Tags: [sourcing-engine, activation, runbook, disposition]
+---
+
 # Sourcing Engine — Activation Runbook
 
 SD-LEO-INFRA-SOURCING-ENGINE-ACTIVATION-001 (go-live, chairman-authorized 2026-06-20).
@@ -138,3 +147,45 @@ Requires the originating `feedback` row to carry a `dedup_key` (now persisted at
 
 **Status**: code shipped and tested (PR #6097); migration is `@chairman-gated` and not yet applied, so
 the mechanism is inert until applied and a disposition is written.
+
+## FR-6 — Per-tier disposition table (SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001)
+
+**Why this table exists**: this is the third SD to investigate an "auto-refill promotes 0"-shaped
+symptom (after `SD-LEO-INFRA-AUTO-REFILL-414-NULL-TITLES-001` and
+`SD-LEO-INFRA-AUTO-REFILL-READ-DB-ACTIVATION-FLAG-001`, both completed 2026-06-29, both fixing real
+but different root causes). This SD's LEAD-phase VALIDATION (evidence `1e5eb721-560e-4ffc-b9e1-742614e680c0`)
+and Explore (evidence `8cdedf7a-3f37-4705-93ed-3784bef3c135`) passes produced a complete,
+evidence-cited disposition for all three named tiers — published here so a fourth SD does not
+re-derive it from scratch.
+
+| Tier | Mechanism | Consumes `roadmap_wave_items`? | Deployment state (as of 2026-08-24) | Disposition |
+|---|---|---|---|---|
+| `auto-refill` | `scripts/sourcing-engine/refill-cron.mjs`, hourly `--apply` | **Yes — the ONLY consumer of the three.** Scoped to `item_disposition IN ('pending','selected') AND wave_id IN activeWaveIds AND promoted_to_sd_key IS NULL` (`refill-cron.mjs:188-195`, active-wave scoping at `:93-108`). | `active` (all-success runs through ship date) | **WORKING-BY-DESIGN.** Armed, running, correctly scoped. Not broken. |
+| `gauge-gap-miner` | `lib/sourcing-engine/gauge-gap-miner.js`, driven by `scripts/sourcing-engine/gauge-gap-miner-sweep.mjs` | **No — writer only.** Only reads `roadmap_wave_items` for idempotency (`source_type='vdr_gauge'`); has no disposition-based consumption path. | `disabled_manually` (deliberate) | **WRITER-ONLY, deliberately disabled.** Cannot ever drain the queue by design — 5 rows ever written, all one date, all `dropped`. |
+| `deferred-watcher` | `lib/sourcing-engine/deferred-watcher.js`, driven by `scripts/sourcing-engine-deferred-watcher-sweep.mjs` | **No — different surface entirely.** Reads `conversion_ledger` where `lane LIKE 'blocked-on-%'`; never touches `roadmap_wave_items`. | `disabled_manually` (deliberate) | **DIFFERENT-SURFACE, deliberately disabled.** Was never a consumer of this queue in the first place. |
+
+**The corrected framing**: the original symptom ("a 504-row queue with zero consumption") measured
+the wrong surface — `roadmap_wave_items`'s raw table count, which includes rows under archived
+roadmaps that no consumer reads (502 of the 504 sat under 3 archived "EVA Intake Roadmap" entries;
+the true eligible depth via `v_plan_of_record_remainder` was 1-2). Only `auto-refill` was ever a
+real consumer, and it is working. The genuine, narrower defect this SD fixed instead: an
+activation-state SSOT inversion (the DB said all 3 arms `enabled=true` while 2 were actually
+`disabled_manually` in GitHub Actions — see `scripts/lib/sourcing-engine-awareness.mjs`'s
+`diffSourcingArmStateVsDeployment()`), plus the misleading raw-count measurement path itself (see
+"Sourcing engine + Roadmap-SSOT awareness" in `.claude/commands/coordinator.md`), plus a dangling
+citation in `lib/governance/drive-state/axes/roadmap-motion.cjs` unrelated to this queue but found
+during the same audit.
+
+**Remaining open question, NOT resolved by this SD**: whether `gauge-gap-miner` and
+`deferred-watcher` should be re-enabled is a chairman-gated activation decision (per the existing
+`SOURCING_*` activation doctrine) — explicitly out of this SD's scope. This table documents their
+current disposition, not a recommendation to flip it.
+
+**Live observation (2026-08-24, EXEC phase, `diffSourcingArmStateVsDeployment()` run against real
+production state — not mocked)**: reproduced the LEAD-phase VALIDATION finding exactly —
+`gauge-gap-miner`: db_state=true, deployment_state=disabled_manually, mismatched=true;
+`deferred-watcher`: db_state=true, deployment_state=disabled_manually, mismatched=true;
+`auto-refill`: db_state=true, deployment_state=active, mismatched=false. This is a point-in-time
+observation, not a pinned test assertion — the corresponding unit test (TS-7) asserts result
+*shape* (3 entries, each resolvable), not this specific count, since the count changes the moment
+someone flips a workflow's enabled state.

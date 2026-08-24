@@ -520,7 +520,7 @@ export function summarizeBacklogDisposition(total = 0, dispositioned = 0) {
 }
 
 /** Pure: render the state-probe section from already-resolved data (no I/O). */
-export function renderSourcingStateLines({ flags = [], wave = null, backlog = null, demand = null, arms = null } = {}) {
+export function renderSourcingStateLines({ flags = [], wave = null, backlog = null, demand = null, arms = null, mismatches = null } = {}) {
   const lines = ['═══ SOURCING SSOT STATE (read-only — route the SSOT before hand-mining) ═══'];
   // Flags
   const anyOn = flags.some((f) => f.on);
@@ -539,6 +539,25 @@ export function renderSourcingStateLines({ flags = [], wave = null, backlog = nu
     }
   } else {
     lines.push('    ⚠️  DB arm states UNREADABLE — the OPERATIVE gate could not be read; do NOT read this as "off"');
+  }
+  // SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (FR-1): DB-vs-deployment mismatch detection.
+  // The arm rows above show what sourcing_engine_activation_state SAYS; this shows whether that
+  // matches what GitHub Actions ACTUALLY has deployed — LEAD-phase VALIDATION (evidence 1e5eb721)
+  // found the DB row says all 3 arms enabled=true while 2 of 3 workflows are disabled_manually.
+  // Rendered only when the diff genuinely ran (null = skipped/unreadable, not "no mismatches").
+  if (Array.isArray(mismatches)) {
+    const flagged = mismatches.filter((m) => m.mismatched === true);
+    const unresolved = mismatches.filter((m) => m.mismatched === null);
+    if (flagged.length === 0 && unresolved.length === 0) {
+      lines.push('  DB-vs-deployment: ✅ all arms match live GitHub Actions state');
+    } else {
+      for (const m of flagged) {
+        lines.push(`    ⚠️  MISMATCH  ${m.arm}: DB says ${m.db_state} but deployment is ${m.deployment_state}`);
+      }
+      for (const m of unresolved) {
+        lines.push(`    ❔ UNRESOLVED  ${m.arm}: deployment state unknown (${m.deployment_error || 'no detail'}) — NOT reported as matched`);
+      }
+    }
   }
   // SD-LEO-INFRA-SOURCING-ENGINE-BELT-GATED-001 (FR-3): the DEMAND VERDICT, printed immediately
   // under the flag list so the two are read together. A flag line alone cannot distinguish "on and
@@ -685,15 +704,25 @@ export async function fetchSourcingState({ supabase = null, env = process.env } 
       enabled: byArm.has(f.label) ? byArm.get(f.label) : null,
     }));
   } catch { arms = null; }
-  return { wave, backlog, demand, arms };
+  // SD-LEO-INFRA-SOURCING-ENGINE-CONSUMPTION-001 (FR-1): DB-vs-deployment mismatch detection.
+  // Fail-open at THIS composition level (same doctrine as every other section in this function)
+  // -- diffSourcingArmStateVsDeployment itself fails LOUD on a genuine DB fault (its own callers
+  // must be able to tell "ran and found nothing" from "could not run"), but an unreadable probe
+  // section here degrades to null (rendered as skipped), not a thrown startup-check failure.
+  let mismatches = null;
+  try {
+    const { diffSourcingArmStateVsDeployment } = await import('./lib/sourcing-engine-awareness.mjs');
+    mismatches = await diffSourcingArmStateVsDeployment(client, { token: env.GITHUB_TOKEN });
+  } catch { mismatches = null; }
+  return { wave, backlog, demand, arms, mismatches };
 }
 
 /** Compose the full state-probe section (async, fail-open — never throws). */
 export async function renderSourcingState({ supabase = null, env = process.env } = {}) {
   try {
     const flags = readSourcingFlags(env);
-    const { wave, backlog, demand, arms } = await fetchSourcingState({ supabase, env });
-    return renderSourcingStateLines({ flags, wave, backlog, demand, arms });
+    const { wave, backlog, demand, arms, mismatches } = await fetchSourcingState({ supabase, env });
+    return renderSourcingStateLines({ flags, wave, backlog, demand, arms, mismatches });
   } catch (err) {
     return '═══ SOURCING SSOT STATE ═══\n  ✅ state probe skipped (fail-open): ' + (err?.message || String(err));
   }

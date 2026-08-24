@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-23T12:29:01.437Z -->
-<!-- git_commit: 021daef5 -->
-<!-- db_snapshot_hash: 30d313ecbc99265b -->
-<!-- file_content_hash: ebc45b02958ab9f4 -->
+<!-- generated_at: 2026-08-24T08:38:44.917Z -->
+<!-- git_commit: 8621c153 -->
+<!-- db_snapshot_hash: cde139c0d3a08750 -->
+<!-- file_content_hash: 2c711882a933e298 -->
 
 # CLAUDE_SOLOMON_DIGEST.md - Solomon Role (Oracle)
 

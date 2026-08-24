@@ -688,8 +688,15 @@ dips) is the **anti-pattern** — it means the engine is idle while you do its j
 1. **Engine activation-flag state** — are the `SOURCING_*` flags on? (`SOURCING_GAUGE_GAP_MINER_V1`,
    `SOURCING_DEFERRED_WATCHER_V1`, `SOURCING_AUTO_REFILL_V1`). The canonical list + the reader live
    in `scripts/lib/sourcing-engine-awareness.mjs` (`readSourcingEngineFlags`).
-2. **Unpromoted roadmap depth** — how many `roadmap_wave_items` have `promoted_to_sd_key IS NULL`?
-   A rich unpromoted backlog with the engine OFF is the tell.
+2. **Unpromoted roadmap depth** — read this from `v_plan_of_record_remainder`
+   (`remainder_state='promotable_now'`), the same view the SOURCING SSOT STATE probe
+   (`scripts/adam-startup-check.mjs`'s `renderSourcingState`) and `refill-cron.mjs`'s eligibility
+   scoping both already read. **Do NOT** run a raw count directly against `roadmap_wave_items` —
+   that table's `remainder_state` is stamped per-item regardless of whether its PARENT ROADMAP is
+   archived, so a raw table count silently includes rows under `strategic_roadmaps.status='archived'`
+   entries (confirmed live 2026-08-24: 502 of a raw-counted 504 sat under 3 archived "EVA Intake
+   Roadmap" rows; the true eligible depth via the view was 1-2). A rich unpromoted backlog with the
+   engine OFF is the tell — but only when read from the view, not the raw table.
 3. **Remediation order:**
    - **Engine DORMANT + rich backlog** → the fix is to **PROPOSE/co-sponsor ACTIVATION** (flip the
      flags + apply the dormant migrations) and/or **Wave-0 distillation**, escalating to the

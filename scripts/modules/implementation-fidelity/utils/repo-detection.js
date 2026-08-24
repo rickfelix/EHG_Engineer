@@ -10,7 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 import { getSDSearchTerms } from './git-helpers.js';
-import { resolveRepoPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
+import { resolveRepoPath, resolveLocalPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
 import { resolveWorktreeCwd } from '../../../../lib/resolve-worktree-cwd.js';
 
 const execAsync = promisify(exec);
@@ -69,7 +69,10 @@ export async function resolveReposForSD(sd_id, supabase) {
     const targetAppLc = String(targetApp).toLowerCase();
     const match = activeApps.find(a => a.name?.toLowerCase() === targetAppLc || a.id?.toLowerCase() === targetAppLc);
     if (match && match.local_path) {
-      const resolved = path.resolve(match.local_path);
+      // resolveLocalPath(), not a bare path.resolve(): registry local_path values are now
+      // relative (SD-LEO-INFRA-REPO-HYGIENE-PATH-001 FR-1) -- a bare path.resolve() on a
+      // relative value resolves against process.cwd(), the caller's ambient cwd, not the repo.
+      const resolved = resolveLocalPath(match.local_path);
       console.log(`   📋 Registry resolved ${targetApp} → ${resolved}`);
       return [resolved];
     }
@@ -85,7 +88,7 @@ export async function resolveReposForSD(sd_id, supabase) {
   const paths = [];
   for (const app of activeApps) {
     if (app.local_path) {
-      paths.push(path.resolve(app.local_path));
+      paths.push(resolveLocalPath(app.local_path));
     } else {
       // Auto-discover by scanning parent directory for matching repo name
       paths.push(path.resolve(EHG_ENGINEER_ROOT, '..', app.name));

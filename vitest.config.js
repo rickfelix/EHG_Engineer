@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadCollectionContractExclude } from './lib/collection-contract.js';
 // SD-LEO-INFRA-VITEST-TIER-REAL-001: the designation predicate no longer gates discovery here —
 // it gates at RUNTIME in tests/setup.db.js (imported there, never re-derived; see db-target.js).
 // The config-level dotenv load that fed the old discovery gate is gone WITH the gate: it put real
@@ -26,6 +27,12 @@ function loadQuarantineExclude() {
   }
 }
 const QUARANTINE_EXCLUDE = loadQuarantineExclude();
+
+// SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-3): the pattern list, its per-entry rationale, and the
+// fail-safe (never fail-open) loading behavior now live in lib/collection-contract.js -- see
+// that module's own doc comment and docs/05_testing/collection-contract.md for the full rationale.
+// Imported above (not defined inline) so tests/unit/vitest-collection-contract.test.js can
+// exercise the exact function this file calls.
 
 /**
  * Vite plugin to strip shebang lines from .mjs/.js files.
@@ -60,60 +67,12 @@ function stripShebangPlugin() {
  * Note: a bare `vitest run` (no --project) runs BOTH projects; the npm scripts
  * pin the default to the unit project on purpose.
  */
-const SHARED_EXCLUDE = [
-  '**/tests/e2e/**',
-  '**/tests/a11y.spec.js',
-  '**/tests/**/*.spec.js',
-  '**/tests/integration.test.js',
-  '**/node_modules/**',
-  '**/applications/**',
-  '**/press-kit/**',
-  // SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3. This was '**/agents/**', aimed at the product
-  // source tree — but that glob also matched tests/unit/agents/**, so 12 ordinary unit tests
-  // were members of ZERO collected projects and never ran while the suite reported green.
-  // MEASURED: 12 tracked files under tests/unit/agents/, 0 collected.
-  //
-  // Anchored to the source trees it was actually for. NOT written as an exception list
-  // ("exclude agents EXCEPT tests/unit/agents") — an exception list would grow one entry per
-  // discovery and quietly become the catch-all the membership guard exists to prevent.
-  'lib/agents/**',
-  'scripts/agents/**',
-  '**/archive/**',
-  // SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001: the unanchored '**/*.test.js' include
-  // swept the orphaned legacy test/ root (CI separately --excludes it, so local
-  // npm test diverged from CI) and tests/archived/ ('archive' above does NOT
-  // match 'archived'), whose .test.js files import @playwright/test and crash
-  // the unit run with "Playwright Test did not expect test.describe()".
-  '**/test/**',
-  '**/tests/archived/**',
-  '**/docs/archived/**',
-  '**/.worktrees/**',
-  '**/.cursor/worktrees/**',
-  '**/.claude/worktrees/**',
-  '**/PATH/**',
-  // QF-20260727-884: scratch/ holds PRESERVED WORKTREE COPIES and is gitignored
-  // (.gitignore '/scratch/'), so `git ls-files scratch` returns ZERO test files and CI never sees
-  // them — while a local run collected them as live tests. MEASURED in the shared root at
-  // origin/main: 887 scratch/preserved-* directories holding exactly 14 test files, and a local
-  // unit run reporting exactly 14 failures. A 14-for-14 match.
-  //
-  // WHY THIS ONE MATTERED MORE THAN ITS SIZE: CI stayed green and local read red, both correctly,
-  // and the contradiction was unresolvable without reading the failing file paths. At least one
-  // worker read it as "main is broken" and it cost coordinator time to reconcile. A signal that
-  // means different things on two surfaces is worse than a signal that is simply wrong on both.
-  // It also blocked ship-preflight, which runs the local suite.
-  //
-  // Both forms are listed deliberately: the anchored one is the real rule, and the unanchored one
-  // also covers a preserved copy that lands outside the top-level scratch/ root.
-  'scratch/**',
-  '**/scratch/**',
-  // SD-LEO-INFRA-VITEST-TIER-REAL-001: .reaper-source/ is a gitignored FULL REPO COPY
-  // (.gitignore '.reaper-source'), the same two-surface divergence class as scratch/ above —
-  // measured at 3117 phantom collection entries locally (3116 in the unit project) that CI never
-  // sees. Excluding it is a hard prerequisite for any local==CI collection assertion.
-  '.reaper-source/**',
-  '**/.reaper-source/**',
-];
+// SD-LEO-INFRA-REPO-HYGIENE-PATH-001 (FR-3): the pattern list and its per-entry rationale
+// (including the QF-20260727-884 scratch/ and SD-LEO-INFRA-VITEST-TIER-REAL-001
+// .reaper-source/ incident writeups previously inlined here) now live in
+// tests/collection-contract.json / docs/05_testing/collection-contract.md — this is a hand-maintained
+// array no longer; see loadCollectionContractExclude() and SAFETY_FLOOR_EXCLUDE above.
+const SHARED_EXCLUDE = loadCollectionContractExclude();
 
 // Inherently DB-dependent test locations — routed to the opt-in `db` project
 // and excluded from the default `unit` project. Unit-directory tests that also

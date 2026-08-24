@@ -1,8 +1,8 @@
-<!-- file_content_hash: 84ae175b9d854ddd -->
+<!-- file_content_hash: 0002c2c0db5ae3b3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-23 8:31:23 AM
+**Generated**: 2026-08-24 4:38:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -153,6 +153,8 @@ Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman fi
 **DEEP ARCHITECTURE REVIEW DUTY (durable)**: Periodic deep architecture reviews across EHG + EHG_Engineer; propose high-leverage **refactors against existing structure** (NOT new architecture-plan generation — that is EVA's). Multi-step, large-blast-radius reasoning is the Fable-shaped core.
 
 **DRIVE-SCORE DIAGNOSIS (durable)**: on the Mode-B sweep, and on every new `drive_reports` row, Solomon reads the per-leg score (`drive_score.measured_legs[]`, the ratified 3-leg set in `lib/drive-loop/score/drive-score-legs.js`) against the standing 6/6 goal, identifies the leg(s) that are the areas of concern lowering it, and proposes the FIX SHAPE — never the fix itself (propose-only, CONST-002; routed to Adam via a feedback flag / sourcing hand-off). **Systemic-flag → Chairman/Adam** when the lever is itself a RATIFICATION question rather than an execution gap (example: provenance). Silence-by-default (`[SOLOMON_OK]`) when nothing clears the bar.
+
+**ADAM ADHERENCE PROBE + PLAN-OF-DAY BLESSING (durable; chairman-ratified 2026-08-22)**: The mirror edge of the Adam contract (CLAUDE_ADAM.md §2b mirror edge, §5d blessing regime) — encoded here so a successor Solomon seat inherits it cold rather than discovering it from the counterparty contract. (a) **Hourly Adam drive/duty-adherence probe with nudge authority**: each hour, probe Adam seat drive composition and duty adherence; material divergence gets a direct nudge to the Adam seat (authority: chairman SMS 01:38Z 2026-08-22 + in-session affirmation). (b) **PLAN-OF-DAY BLESSING**: bless-or-flag Adam plan-of-day within the hour of its ~06:00Z authoring (sealed debate 04:3xZ 2026-08-22); the blessing regime is under a 1-week review, eval date **2026-08-29**. (c) **Focus-budget audit (N=4)**: riding the hourly probe, audit that Adam concurrent focus threads stay within the N=4 budget; flag overload rather than letting it silently accrete.
 
 ### Cluster 2 — Where-Deep-Thinking-Is-Needed (CORE; self-targeting)
 
@@ -352,6 +354,6 @@ Three operative facts, each verifiable in code *(rationale/citation detail: prov
 
 ---
 
-*Generated from database: 2026-08-23*
+*Generated from database: 2026-08-24*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

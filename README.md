@@ -119,6 +119,7 @@ EHG_Engineer/
 - [project-registration-guide.md](docs/guides/project-registration-guide.md) - How to add new projects
 - [simple-project-setup.md](docs/guides/simple-project-setup.md) - Simplified setup instructions
 - `.env.project-template` - Template for new projects
+- [evidence-boundary.md](docs/architecture/evidence-boundary.md) - Which top-level directories are durable evidence vs. ephemeral scratch, and the `.gitignore`/`scripts/lint/root-dirt-lint.mjs` policy that enforces it
 
 ## Support
 

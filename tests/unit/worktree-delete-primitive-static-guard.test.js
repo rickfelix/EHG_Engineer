@@ -152,6 +152,8 @@ describe('worktree delete primitive is chokepoint-only (FR-5)', () => {
         'FR-4 removed .worktrees from its allowlist and it refuses worktree paths outright. SECURITY disproved the first version of this reason by escaping the LEXICAL containment check via an intermediate-segment junction; containment is now realpath-based and the resolved path is what gets deleted, so the claim holds as restated.'],
       ['scripts/audit/worktree-reparse-audit.mjs',
         'Removes its own mkdtemp scratch dir, not a worktree.'],
+      ['scripts/one-off/fr4-portability-dry-run-repo-hygiene-path-001.mjs',
+        'Removes its own mkdtemp scratch dir (DRYRUN_ROOT, a throwaway copy of a few files used to prove path-resolution portability), not a worktree -- same shape as worktree-reparse-audit.mjs above. Mentions .worktrees only in comments/scenario labels describing the layout it simulates.'],
       ['scripts/hooks/concurrent-session-worktree.cjs',
         'CORRECTED BY SECURITY: it DOES rmSync a worktree path, but it is NOT unsafe — :610 calls _unlinkNestedLinks(wtPath) inside the retry loop immediately before every rmSync at :612, mirroring the canonical _unlinkLinksRecursive (worktree-manager.js:1334). My earlier reason here said it was not junction-safe; that was wrong. The real (minor) issue is DUPLICATION of the primitive rather than reuse, which is a drift risk, not a wipe risk.'],
       ['scripts/maintenance/sweep-worker-scratch.mjs',
