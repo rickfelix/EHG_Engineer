@@ -18,8 +18,7 @@ const { notifySignalResolvedByDisposition } = require_('../../../scripts/stale-s
  * `->>'` ALWAYS extracts as TEXT in real Postgres/PostgREST — a JSONB boolean `true` reads back
  * as the STRING `'true'`, not the JS boolean. Coercing here matters: notification_sent is written
  * as a JS boolean (matching the real production code) but compared against the string literal
- * `'true'` in `.neq('payload->>notification_sent', 'true')` — without this coercion the fake
- * would silently under-filter, and this specific negative control would pass for the wrong reason.
+ * `'true'` — without this coercion the fake would silently under-filter.
  */
 function readPath(row, col) {
   const m = /^payload->>(\w+)$/.exec(col);
@@ -28,6 +27,31 @@ function readPath(row, col) {
     return v === undefined || v === null ? v : String(v);
   }
   return row[col];
+}
+
+/**
+ * Evaluates one PostgREST filter clause (`col.op.val`) against a row, with NULL-PROPAGATION
+ * semantics matching real SQL: a comparison against a missing/NULL column is NULL (falsy), never
+ * silently "passes as not-equal". This is the exact defect TESTING found live (bfb24a47) — the
+ * naive JS `!==` a bare .neq() fake would use treats `undefined !== 'true'` as true, which is
+ * backwards from what `payload->>'x' <> 'true'` actually evaluates to (NULL) when the key is
+ * absent. Getting this right is the ENTIRE point of these fixtures.
+ */
+function evalClause(row, col, op, val) {
+  const actual = readPath(row, col);
+  if (op === 'is') return val === null ? actual == null : actual === val;
+  if (op === 'neq') return actual == null ? false : actual !== val; // NULL <> x -> NULL (falsy)
+  if (op === 'eq') return actual == null ? false : actual === val; // NULL = x -> NULL (falsy)
+  throw new Error(`evalClause: unsupported op ${op}`);
+}
+
+/** Parses one `.or('col.op.val,col2.op2.val2')` string into an ANY-of predicate. */
+function parseOrString(orString) {
+  const clauses = orString.split(',').map((part) => {
+    const [col, op, ...rest] = part.split('.');
+    return { col, op, val: rest.join('.') === 'null' ? null : rest.join('.') };
+  });
+  return (row) => clauses.some((c) => evalClause(row, c.col, c.op, c.val));
 }
 
 /**
@@ -50,22 +74,21 @@ function fakeClient({ signalRows = [], liveSessions = [] } = {}) {
         const filters = [];
         const builder = {
           select() { return builder; },
-          // IS NULL / IS NOT NULL semantics: a missing JSONB key reads as SQL NULL (matches
-          // PostgREST's ->> extraction), so `== null` (loose) catches both absent and explicit
-          // null -- a strict `=== null` would wrongly treat "key absent" as "not null".
+          // NOT (IS NULL) = IS NOT NULL. A missing JSONB key reads as SQL NULL, so `!= null`
+          // (loose) catches both absent and explicit null.
           not(col, op, val) {
             filters.push(val === null && op === 'is'
               ? (row) => readPath(row, col) != null
-              : (row) => readPath(row, col) !== val);
+              : (row) => !evalClause(row, col, op, val));
             return builder;
           },
-          is(col, val) {
-            filters.push(val === null
-              ? (row) => readPath(row, col) == null
-              : (row) => readPath(row, col) === val);
-            return builder;
-          },
-          neq(col, val) { filters.push((row) => readPath(row, col) !== val); return builder; },
+          is(col, val) { filters.push((row) => evalClause(row, col, 'is', val)); return builder; },
+          neq(col, val) { filters.push((row) => evalClause(row, col, 'neq', val)); return builder; },
+          gte(col, val) { filters.push((row) => { const v = readPath(row, col); return v != null && v >= val; }); return builder; },
+          // PostgREST .or('col.op.val,col2.op2.val2') -- an ANY-of predicate, itself NULL-safe
+          // per clause (see evalClause). This is the exact form the real code uses to fix the
+          // .neq()-on-a-possibly-absent-key defect: `payload->>x IS NULL OR payload->>x <> 'true'`.
+          or(orString) { filters.push(parseOrString(orString)); return builder; },
           order() { return builder; },
           async limit() {
             const rows = [...store.values()].filter((r) => filters.every((f) => f(r)));
@@ -94,12 +117,18 @@ function fakeClient({ signalRows = [], liveSessions = [] } = {}) {
   };
 }
 
+// SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): the real function applies a rolling 24h recency
+// window (`gte('acknowledged_at', now - 24h)`) -- a hardcoded past ISO string would eventually
+// fall outside that window and start failing for reasons unrelated to the code under test.
+const RECENT_ACK = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 minutes ago
+const OLD_ACK = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(); // 48h ago -- outside the window
+
 const dispositionedSignal = (id, overrides = {}) => ({
   id,
   sender_session: 'sess-old-1',
   payload: { signal_type: 'harness-bug', sender_callsign: 'Golf-4' },
   body: 'a lone signal that was individually dispositioned',
-  acknowledged_at: '2026-08-24T10:00:00Z',
+  acknowledged_at: RECENT_ACK,
   ...overrides,
 });
 
@@ -162,5 +191,51 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 TS-7: NEGATIVE control — promo
     const result = await notifySignalResolvedByDisposition(c);
     expect(result.notified).toBe(0);
     expect(c.inserts).toHaveLength(0);
+  });
+
+  it('does not notify a signal acknowledged OUTSIDE the 24h recency window (flood-guard against the historical backlog)', async () => {
+    const old = dispositionedSignal('sig-1', { acknowledged_at: OLD_ACK });
+    const c = fakeClient({ signalRows: [old], liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified).toBe(0);
+    expect(c.inserts).toHaveLength(0);
+    // MUTATION: drop the .gte(acknowledged_at, recentCutoff) filter -> this fires, which is
+    // exactly TESTING's "230 historically-acked rows notify at once" finding (recycled
+    // sender_callsign misdirection risk).
+  });
+
+  it("THE PRIMARY REGRESSION TEST for TESTING's blocking finding (bfb24a47): a genuine never-notified row IS found, proving .or() is null-safe where a bare .neq() would silently exclude it", async () => {
+    // notification_sent is ABSENT entirely (not false, not present-and-false) -- the exact shape
+    // of every real never-notified row. A bare `.neq('payload->>notification_sent','true')`
+    // fake modeled as `readPath(row,col) !== val` would (wrongly) let this through too, which is
+    // why this test alone would NOT have caught the bug -- it is the .or() parser itself
+    // (parseOrString/evalClause) that is under test here, exercised via the real query builder.
+    const neverNotified = dispositionedSignal('sig-1');
+    expect(neverNotified.payload.notification_sent).toBeUndefined();
+    const c = fakeClient({ signalRows: [neverNotified], liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified).toBe(1);
+  });
+});
+
+describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4: evalClause/.or() NULL-propagation unit coverage', () => {
+  it('NULL <> x evaluates to false (not true) -- the exact bug this SD found live', () => {
+    expect(evalClause({ payload: {} }, 'payload->>notification_sent', 'neq', 'true')).toBe(false);
+    // A naive `!==`-based fake would return true here. This is the single assertion that,
+    // inverted, reproduces the production defect TESTING measured (0 candidates where 16 exist).
+  });
+
+  it('NULL IS NULL evaluates to true', () => {
+    expect(evalClause({ payload: {} }, 'payload->>routed_to_sd_key', 'is', null)).toBe(true);
+  });
+
+  it('parseOrString: an absent key matches the is-null clause, so the OR is satisfied', () => {
+    const predicate = parseOrString('payload->>notification_sent.is.null,payload->>notification_sent.neq.true');
+    expect(predicate({ payload: {} })).toBe(true);
+  });
+
+  it('parseOrString: notification_sent=true (present) satisfies NEITHER clause -- correctly excluded', () => {
+    const predicate = parseOrString('payload->>notification_sent.is.null,payload->>notification_sent.neq.true');
+    expect(predicate({ payload: { notification_sent: true } })).toBe(false);
   });
 });

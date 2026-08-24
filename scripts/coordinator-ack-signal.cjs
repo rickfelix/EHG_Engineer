@@ -20,10 +20,14 @@
  * SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-1): `--disposition <value>` names WHAT the ack means,
  * not just THAT it happened — one of actioned (default) / promoted / duplicate-of /
  * rejected-with-reason / deferred-with-trigger, mirroring coordinator-ack-adam.cjs's
- * ack-then-disposition contract. THIS SCRIPT IS THE SOLE CANONICAL WRITER of a signal-lane
- * disposition + acknowledged_at together — a disposition written any other way (a hand-stamped
- * payload.disposition, or a second script) is detectable via the missing writer_identity this
- * script always stamps into the receipt's metadata.
+ * ack-then-disposition contract. THIS SCRIPT IS THE SOLE WRITER OF A GENUINE FR-1 DISPOSITION —
+ * a disposition value from the 5-value vocabulary above, written any other way (a hand-stamped
+ * payload.disposition, or a second script), is detectable via the missing writer_identity this
+ * script always stamps into the receipt's metadata. The ONE narrow exception is
+ * scripts/one-off/signal-lane-backfill-001.mjs (FR-3), which also stamps acknowledged_at for
+ * historical rows but ALWAYS pairs it with disposition:null + isRetention:true — never a genuine
+ * FR-1 disposition value — and is idempotent (never re-touches an already-closed row), so it
+ * cannot become an ongoing parallel closing mechanism.
  *
  * Usage:
  *   node scripts/coordinator-ack-signal.cjs --signal <id>
@@ -45,6 +49,19 @@ const { recordReceipt, LANES, STATES, resolveSignalDisposition } = require('../l
 // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-1): writer identity stamped into every receipt this script
 // writes, so a hand-stamped payload.disposition (which carries no such key) is detectable.
 const WRITER_IDENTITY = 'coordinator-ack-signal.cjs';
+
+/**
+ * The actual DETECTOR half of "hand-stamping a disposition outside the writer is detectable"
+ * (TS-1's negative arm). A real function, not an inline test assertion — TESTING's EXEC-TO-PLAN
+ * review (bfb24a47) found the prior test only asserted a JS literal's own shape (a tautology
+ * exercising no production code); this is what a real caller (e.g. a future audit script) would
+ * actually call.
+ * @param {object|null|undefined} receiptMetadata - a coordination_receipts row's `metadata` column
+ * @returns {boolean} true only for a receipt genuinely written by THIS script
+ */
+function isCanonicalSignalDisposition(receiptMetadata) {
+  return Boolean(receiptMetadata) && receiptMetadata.writer_identity === WRITER_IDENTITY;
+}
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -199,7 +216,7 @@ async function main() {
   }
 }
 
-module.exports = { parseArgs, ackSignal, WRITER_IDENTITY };
+module.exports = { parseArgs, ackSignal, WRITER_IDENTITY, isCanonicalSignalDisposition };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

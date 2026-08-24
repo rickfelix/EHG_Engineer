@@ -1966,15 +1966,31 @@ async function resolveLiveSessionForCallsign(supabase, callsign) {
 // silently vanished when an earlier version disposed rows purely on promotion).
 async function notifySignalResolvedByDisposition(supabase) {
   try {
+    // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction bfb24a47): a 24h recency window
+    // — bounding this against the 230 signal-lane rows that already carried acknowledged_at
+    // BEFORE this SD existed (acked by mechanisms this SD did not introduce). Without a bound,
+    // the first tick after this ships would notify about all of them at once, and since
+    // payload.sender_callsign is a recycled identifier (not a stable session), a currently-live
+    // seat holding a reused callsign could receive a resolution notice for a DIFFERENT session's
+    // old signal. Flood-guard, mirrors fleet-dashboard.cjs printInbox's own 7-day window for the
+    // same reason.
+    const recentCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: dispositionedCandidates } = await supabase
       .from('session_coordination')
       .select('id, sender_session, payload, body, acknowledged_at')
       .not('acknowledged_at', 'is', null)
+      .gte('acknowledged_at', recentCutoff)
       .not('payload->>signal_type', 'is', null)
       // Excludes the promotion path above (routed_to_sd_key rows), so a signal is never notified
       // twice through two different trigger conditions for two different reasons.
       .is('payload->>routed_to_sd_key', null)
-      .neq('payload->>notification_sent', 'true')
+      // NULL-SAFE, NOT .neq(): in Postgres, `payload->>'notification_sent' <> 'true'` evaluates
+      // to NULL (not TRUE) when the key is absent, so PostgREST's .neq() SILENTLY EXCLUDES every
+      // row that has never been notified — which is every genuine candidate. Verified live against
+      // production: the naive .neq() form returned 0 rows where this null-safe form returns 16
+      // (TESTING evidence bfb24a47-3793-4260-af7f-92735fdf10fb). This is the SAME defect class
+      // that made the pre-existing promotion-path query below never fire either.
+      .or('payload->>notification_sent.is.null,payload->>notification_sent.neq.true')
       .order('acknowledged_at', { ascending: true })
       .limit(50);
 
@@ -2044,15 +2060,21 @@ async function runCoordinatorHousekeeping(ctx) {
   try {
     const { data: candidates } = await supabase
       .from('session_coordination')
-      .select('id, payload, body')
+      .select('id, payload, body, created_at')
       .not('payload->>routed_to_sd_key', 'is', null)
-      .neq('payload->>notification_sent', 'true')
+      // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction bfb24a47): this was ALSO the
+      // null-propagation bug fixed in notifySignalResolvedByDisposition() above — `.neq()` against
+      // a JSONB->>text column evaluates to NULL (not TRUE) when the key is absent, so a row that
+      // was never notified is SILENTLY EXCLUDED rather than included. This is very likely part of
+      // why this loop has measured 0 fires in production, independent of whatever else gated it.
+      .or('payload->>notification_sent.is.null,payload->>notification_sent.neq.true')
       // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): explicit ordering — invisible today at 0
       // candidates (TESTING/VALIDATION measured this loop has NEVER fired in production), but a
       // starvation risk once FR-2/FR-3's backfill makes the open population non-trivial and this
-      // .limit(50) starts actually truncating. Oldest first, matching the rest of this SD's
-      // oldest-first convention.
-      .order('id', { ascending: true })
+      // .limit(50) starts actually truncating. Oldest first BY created_at — `id` is a random UUID
+      // v4 (not chronological; TESTING caught this via a live query), so ordering by it would not
+      // actually be oldest-first despite reading as such.
+      .order('created_at', { ascending: true })
       .limit(50);
 
     let notified = 0;

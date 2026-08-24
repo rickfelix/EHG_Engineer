@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
-const { ackSignal, WRITER_IDENTITY } = require_('../../../scripts/coordinator-ack-signal.cjs');
+const { ackSignal, WRITER_IDENTITY, isCanonicalSignalDisposition } = require_('../../../scripts/coordinator-ack-signal.cjs');
 
 /** Minimal PostgREST-shaped fake, seeded with one signal row. Records every insert/update. */
 function fakeClient({ row, updateError = null, insertError = null } = {}) {
@@ -77,23 +77,26 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-1: ackSignal writes acknowledged_a
     // from this one, and hand-stamp detection silently stops working.
   });
 
-  it('NEGATIVE: a row with no writer_identity in its receipt metadata is detectable as hand-stamped, not canonical', async () => {
-    // Simulates the actual live defect this SD exists to fix: 153 rows carry a hand-written
-    // payload.disposition with no writer identity anywhere. A detector checking for
-    // metadata.writer_identity === WRITER_IDENTITY must distinguish this from a canonical write.
-    const handStampedReceiptMetadata = { signal_type: 'harness-bug', via: 'manual' };
-    const isCanonical = handStampedReceiptMetadata.writer_identity === WRITER_IDENTITY;
-    expect(isCanonical).toBe(false);
+  it('NEGATIVE: isCanonicalSignalDisposition() correctly rejects a hand-stamped shape, using the REAL detector function', async () => {
+    // TESTING's EXEC-TO-PLAN review (bfb24a47) found the original version of this test only
+    // asserted a JS literal's own field against itself -- a tautology exercising zero production
+    // code. isCanonicalSignalDisposition() is the real, exported detector; both branches below
+    // call it, so a detector that returned true/false unconditionally would fail one of them.
+    const handStampedReceiptMetadata = { signal_type: 'harness-bug', via: 'manual' }; // no writer_identity at all -- the real live shape (153 rows)
+    expect(isCanonicalSignalDisposition(handStampedReceiptMetadata)).toBe(false);
+    expect(isCanonicalSignalDisposition(null)).toBe(false);
+    expect(isCanonicalSignalDisposition(undefined)).toBe(false);
+    expect(isCanonicalSignalDisposition({ writer_identity: 'some-other-script.cjs' })).toBe(false);
 
-    // Confirm the REAL writer never produces this shape.
+    // POSITIVE arm through the SAME detector: the REAL writer's actual output must pass it.
     const c = fakeClient({ row: ROW });
     await ackSignal({ supabase: c, signalId: 'sig-1', disposition: 'actioned', coordinatorSession: 'coord-1' });
     const canonicalMetadata = c.inserts[0].row.metadata;
-    expect(canonicalMetadata.writer_identity === WRITER_IDENTITY).toBe(true);
+    expect(isCanonicalSignalDisposition(canonicalMetadata)).toBe(true);
 
-    // MUTATION: a detector that returns "clean"/"canonical" unconditionally regardless of input
-    // would pass both assertions above trivially -- this is why both a positive AND a negative
-    // input are asserted against the SAME detector logic, per TESTING's TS-1 negative-arm finding.
+    // MUTATION: hardcode isCanonicalSignalDisposition to return true unconditionally -> the first
+    // four assertions fail. Hardcode it to return false unconditionally -> the last one fails.
+    // Only a detector that genuinely reads writer_identity passes all five.
   });
 
   it('IDEMPOTENT: acking an already-acknowledged row is a no-op (no double-write, no error)', async () => {

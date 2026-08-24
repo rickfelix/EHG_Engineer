@@ -12,7 +12,22 @@ const { fetchOpenSignalRows, backfillRow, runBackfill, WRITER_IDENTITY } =
   require_('../../../scripts/one-off/signal-lane-backfill-001.mjs');
 const { computeAnsweredRate } = require_('../../../lib/coordination/answered-rate.cjs');
 
-/** Fake session_coordination + coordination_receipts store, PostgREST-shaped. */
+/** Reads a plain column or a "payload->>key" JSONB-arrow path off a row. */
+function readPath(row, col) {
+  const m = /^payload->>(\w+)$/.exec(col);
+  if (m) return row.payload ? row.payload[m[1]] : undefined;
+  return row[col];
+}
+
+/**
+ * Fake session_coordination + coordination_receipts store, PostgREST-shaped, that APPLIES its
+ * recorded filters at read time rather than hardcoding the expected result. TESTING found the
+ * original version of this fake stubbed `.not()`/`.is()` as no-ops and hardcoded `!r.acknowledged_at`
+ * directly inside `range()` — so deleting either real filter from fetchOpenSignalRows (e.g. the
+ * `.not('payload->>signal_type', 'is', null)` scope, or `.is('acknowledged_at', null)` itself,
+ * which is where FR-3's entire idempotency guarantee actually lives) would still pass every test
+ * here. This version cannot pass that way.
+ */
 function fakeClient(rows) {
   const store = new Map(rows.map((r) => [r.id, { ...r }]));
   const receipts = [];
@@ -21,19 +36,31 @@ function fakeClient(rows) {
     getRow: (id) => store.get(id),
     from(table) {
       if (table === 'session_coordination') {
-        return {
-          select() { return this; },
-          not() { return this; },
-          is() { return this; },
-          order() { return this; },
+        const filters = [];
+        const builder = {
+          select() { return builder; },
+          not(col, op, val) {
+            filters.push(val === null && op === 'is'
+              ? (row) => readPath(row, col) != null
+              : (row) => readPath(row, col) !== val);
+            return builder;
+          },
+          is(col, val) {
+            filters.push(val === null
+              ? (row) => readPath(row, col) == null
+              : (row) => readPath(row, col) === val);
+            return builder;
+          },
+          order() { return builder; },
           async range(from, to) {
-            const all = [...store.values()].filter((r) => !r.acknowledged_at);
+            const all = [...store.values()].filter((r) => filters.every((f) => f(r)));
             return { data: all.slice(from, to + 1), error: null };
           },
           update(patch) {
             return { eq: async (col, val) => { Object.assign(store.get(val), patch); return { error: null }; } };
           },
         };
+        return builder;
       }
       if (table === 'coordination_receipts') {
         return { async insert(row) { receipts.push(row); return { error: null }; } };

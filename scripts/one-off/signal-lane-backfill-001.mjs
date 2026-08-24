@@ -83,7 +83,16 @@ export async function backfillRow(sb, row, { nowIso, dryRun = false } = {}) {
 
   const { error: updErr } = await sb
     .from('session_coordination')
-    .update({ acknowledged_at: now })
+    .update({
+      acknowledged_at: now,
+      // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4, TESTING correction bfb24a47): a retroactive
+      // hygiene close must NEVER trigger notifySignalResolvedByDisposition()'s "the coordinator
+      // dispositioned this" message -- nobody actually looked at these rows, and telling the
+      // original sender otherwise would be misleading. Pre-stamping notification_sent=true here
+      // (rather than relying on that function to somehow distinguish backfilled rows) excludes
+      // every backfilled row from that query's candidate set by construction.
+      payload: { ...(row.payload || {}), notification_sent: true },
+    })
     .eq('id', row.id);
   if (updErr) return { ok: false, id: row.id, error: updErr.message };
 
