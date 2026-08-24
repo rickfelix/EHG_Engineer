@@ -28,6 +28,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const VENTURE_ID = '809ec7e7-f688-4a0c-b9f8-c8a8291cf94d'; // ApexNiche AI
 const SD_KEY = 'SD-LEO-INFRA-APEXNICHE-STAGE-RUNAWAY-001';
@@ -86,4 +87,6 @@ async function main() {
   return 0;
 }
 
-main().then((code) => { process.exitCode = code; });
+if (isMainModule(import.meta.url)) {
+  main().then((code) => { process.exitCode = code; });
+}
