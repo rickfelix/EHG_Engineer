@@ -11,7 +11,7 @@
  * Kill-switch: set env LEO_SHIP_REVIEW_POPULATOR_OFF=1 to disable globally.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { probeRepoColumnExists, normalizeGithubRepo } from '../../../../../../lib/ship/repo-column-probe.mjs';
 
 const KILL_SWITCH = 'LEO_SHIP_REVIEW_POPULATOR_OFF';
@@ -46,8 +46,17 @@ export function fetchLatestMergedPR(branch, repos = ['rickfelix/EHG_Engineer', '
 }
 
 function defaultFetcher(repo, branch) {
-  const cmd = `gh pr list --repo ${repo} --state merged --head ${branch} --limit 1 --json number,mergedAt,mergeCommit`;
-  const raw = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+  // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (SEC-1): was execSync with an unquoted template-literal
+  // `branch` interpolation -- the same defect class as FR-1's primary sinks, in a hook that runs
+  // automatically on every LEAD-FINAL-APPROVAL success. `branch` is DB-sourced (sd.feature_branch
+  // / sd.branch / sd.metadata.branch), not directly push-controlled, but still an external value
+  // this SD's own FR-4 audit claimed to have fully accounted for. execFileSync argv array closes
+  // it the same way as the primary sinks.
+  const raw = execFileSync(
+    'gh',
+    ['pr', 'list', '--repo', repo, '--state', 'merged', '--head', branch, '--limit', '1', '--json', 'number,mergedAt,mergeCommit'],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 }
+  );
   const arr = JSON.parse(raw);
   if (!Array.isArray(arr) || arr.length === 0) return null;
   return { pr_number: arr[0].number, mergedAt: arr[0].mergedAt || null };

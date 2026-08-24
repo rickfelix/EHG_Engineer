@@ -22,11 +22,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('child_process', () => ({ execSync: vi.fn(), execFileSync: vi.fn() }));
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import {
   createPRMergeVerificationGate,
   createPRPrecheckGate,
 } from '../../../scripts/modules/handoff/executors/lead-final-approval/gates.js';
+
+/**
+ * SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-1/FR-4): Scan A's `gh pr list --state open` call (and
+ * others in gates.js) moved from execSync(shell string) to execFileSync(argv array) to close a
+ * shell-injection sink. This file's mocks only drove execSync, so with the real code calling
+ * execFileSync, the mock went silently dead here -- the exact "mock goes quietly dead on a
+ * converted call site" bug class flagged in pr-merge-verification.test.js's own mockBothExecs
+ * comment, missed in THIS sibling file during that conversion. Reconstructs an equivalent command
+ * STRING from an execFileSync(file, args) call so every dispatch closure below keeps working for
+ * both mock shapes.
+ */
+function mockBothExecs(dispatch) {
+  execSync.mockImplementation(dispatch);
+  execFileSync.mockImplementation((file, args) => dispatch([file, ...(args || [])].join(' ')));
+}
 
 const makeCtx = (sdKey) => ({
   sd: { id: 'test-uuid', sd_key: sdKey, sd_type: 'infrastructure', target_application: 'EHG_Engineer' },
@@ -46,7 +61,7 @@ const keysUnavailable = (error = 'simulated outage') => async () => ({
  * one that was never pushed, and the third state (added by this SD) fails it.
  */
 function mockGh({ openPrs = [], mergedPrs = [] } = {}) {
-  execSync.mockImplementation((cmd) => {
+  mockBothExecs((cmd) => {
     if (cmd.includes('gh pr list') && cmd.includes('--state open')) return JSON.stringify(openPrs);
     if (cmd.includes('gh pr list') && cmd.includes('--state merged')) return JSON.stringify(mergedPrs);
     if (cmd.includes('git branch -r')) return '  origin/main\n';
@@ -175,7 +190,7 @@ describe('FR-4 — the key set is a new dependency, and it fails CLOSED', () => 
   // and continued, openPRs came back empty, and the gate returned passed:true / score:100. Found by
   // the EXEC TESTING sub-agent by probing the shipped gate, not by reading it.
   it('BLOCKS when a repo PR list cannot be read — an outage is not an all-clear', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.includes('gh pr list') && cmd.includes('--state open')) throw new Error('gh: auth token expired');
       if (cmd.includes('git branch -r')) return '  origin/main\n';
       return '';
@@ -187,7 +202,7 @@ describe('FR-4 — the key set is a new dependency, and it fails CLOSED', () => 
   });
 
   it('the refusal names the unreadable repo rather than reporting a generic failure', async () => {
-    execSync.mockImplementation((cmd) => {
+    mockBothExecs((cmd) => {
       if (cmd.includes('gh pr list') && cmd.includes('--state open')) throw new Error('API rate limit exceeded');
       if (cmd.includes('git branch -r')) return '  origin/main\n';
       return '';
