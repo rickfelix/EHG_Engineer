@@ -14,6 +14,7 @@ import {
   formatSourcingAwareness,
   diffSourcingArmStateVsDeployment,
   fetchWorkflowState,
+  resetSourcingArmDiffCache,
 } from '../../scripts/lib/sourcing-engine-awareness.mjs';
 
 // Minimal supabase mock: from().select() -> {data,error}; from().upsert().select() -> {data,error}.
@@ -318,6 +319,24 @@ describe('diffSourcingArmStateVsDeployment', () => {
     t += 60_000; // well within the 15-minute TTL
     await diffSourcingArmStateVsDeployment(sb, { token: 't', fetchImpl, now });
     expect(fetchImpl.mock.calls.length).toBe(callsAfterFirst); // no new calls — served from cache
+  });
+
+  it('TR-2: resetSourcingArmDiffCache() forces a live re-fetch even inside the TTL window', async () => {
+    // VALIDATION sub-agent finding LOW-A (evidence 95775eb6): resetSourcingArmDiffCache had zero
+    // callers repo-wide -- every other test achieved isolation via forceRefresh:true instead,
+    // making the export exactly the class of dead-production-code this SD's own FR-1 exists to
+    // fix (reconcileSourcingArmState had the same defect). This test is that caller, and it
+    // asserts the real behavior (a genuine re-fetch), not just that the call doesn't throw.
+    const sb = fakeReadOnlySb([{ arm: 'auto-refill', enabled: true }]);
+    const fetchImpl = fakeFetchImpl({ 'sourcing-auto-refill-cron.yml': { state: 'active' } });
+    let t = 1000;
+    const now = () => t;
+    await diffSourcingArmStateVsDeployment(sb, { token: 't', fetchImpl, now, forceRefresh: true });
+    const callsAfterFirst = fetchImpl.mock.calls.length;
+    t += 60_000; // well within the 15-minute TTL -- without a reset this would serve from cache
+    resetSourcingArmDiffCache();
+    await diffSourcingArmStateVsDeployment(sb, { token: 't', fetchImpl, now });
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(callsAfterFirst); // cache was genuinely cleared
   });
 
   it('no token: every arm reports unknown with a no_token error, never a silent clean match', async () => {
