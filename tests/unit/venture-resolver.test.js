@@ -16,15 +16,14 @@ import {
   clearRegistryCache,
   normalizeVentureName,
   VentureRegistryCollisionError,
-  VentureRegistryInvalidNameError,
-  ENGINEER_ROOT
+  VentureRegistryInvalidNameError
 } from '../../lib/venture-resolver.js';
 import path from 'path';
 import { existsSync } from 'fs';
-// getRepoRoot() (not this file's own ENGINEER_ROOT import above): venture-resolver.js's
-// ENGINEER_ROOT is module-location-derived (path.resolve(__dirname, '..')), which resolves to
-// THIS worktree's own path when the test suite itself runs from .worktrees/<SD>/ -- not the main
-// repo root the real `ehg` sibling actually sits next to. getRepoRoot() strips that suffix.
+// getRepoRoot() (not venture-resolver.js's own ENGINEER_ROOT export): that export is
+// module-location-derived (path.resolve(__dirname, '..')), which resolves to THIS worktree's own
+// path when the test suite itself runs from .worktrees/<SD>/ -- not the main repo root the real
+// `ehg` sibling actually sits next to. getRepoRoot() strips that suffix.
 import { getRepoRoot } from '../../lib/repo-paths.js';
 
 describe('venture-resolver', () => {
