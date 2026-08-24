@@ -495,6 +495,12 @@ async function ackMessage(sb, id, opts = {}) {
 // worker must SEE on /checkin (beyond WORK_ASSIGNMENT)? COACHING is its own message_type; advisory
 // INFO carries payload.kind. EXCLUDED: friction signals (payload.signal_type), the worker's own
 // roll_call ping, WORK_ASSIGNMENT (surfaced as pending_work_assignment), and SET_IDENTITY (FR-2).
+// QF-20260729-716: this function returning false for a message_type is NOT itself a bug -- it is
+// only a defect for a type nothing ELSE can drain either. lib/coordinator/undrainable-message-
+// types.cjs's UNDRAINABLE_WORKER_MESSAGE_TYPES is refused at send time in dispatch.cjs precisely
+// because CLAIM_REMINDER/STALE_WARNING have no ack path anywhere, not merely because they return
+// false here (WORK_ASSIGNMENT/SET_IDENTITY also return false and are perfectly fine -- they are
+// handled by a different code path below, not by isCoordinatorPush).
 function isCoordinatorPush(m) {
   if (!m) return false;
   const p = m.payload || {};
