@@ -116,12 +116,21 @@ CREATE INDEX IF NOT EXISTS leo_protocol_sections_history_provenance_status_idx
   WHERE provenance_status = 'missing';
 
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- SECURITY DEFINER + pinned search_path on all 4 functions below (EXEC-phase security-agent
+-- finding S-4): with the default SECURITY INVOKER, any future role granted write on
+-- leo_protocol_sections without a matching grant on leo_protocol_sections_history would turn
+-- "Phase A never blocks a write" into a hard 42501 block the moment that role fires the trigger.
+-- Pinning search_path closes the classic mutable-search_path privilege-escalation risk that
+-- SECURITY DEFINER would otherwise reopen.
+--
 -- THE SHARED TRIGGER FUNCTION. Branches on TG_OP before touching NEW (INSERT/UPDATE) vs OLD
 -- (DELETE) to avoid the null-dereference each event's absent record would otherwise cause.
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.log_leo_protocol_sections_history()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
 AS $hist$
 DECLARE
   v_channel            TEXT;
@@ -265,7 +274,7 @@ ALTER TABLE public.leo_protocol_sections ENABLE ALWAYS TRIGGER trg_leo_protocol_
 -- chairman_ratifications' one NULL->encoded exception) -- once a history row lands, it is final.
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.leo_protocol_sections_history_no_update()
-RETURNS TRIGGER LANGUAGE plpgsql AS $nu$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $nu$
 BEGIN
   RAISE EXCEPTION 'leo_protocol_sections_history is append-only: row % cannot be updated.', OLD.id;
 END
@@ -277,7 +286,7 @@ CREATE TRIGGER leo_protocol_sections_history_no_update_trg
   FOR EACH ROW EXECUTE FUNCTION public.leo_protocol_sections_history_no_update();
 
 CREATE OR REPLACE FUNCTION public.leo_protocol_sections_history_no_delete()
-RETURNS TRIGGER LANGUAGE plpgsql AS $nd$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $nd$
 BEGIN
   RAISE EXCEPTION 'leo_protocol_sections_history is append-only: row % cannot be deleted.', OLD.id;
 END
@@ -289,7 +298,7 @@ CREATE TRIGGER leo_protocol_sections_history_no_delete_trg
   FOR EACH ROW EXECUTE FUNCTION public.leo_protocol_sections_history_no_delete();
 
 CREATE OR REPLACE FUNCTION public.leo_protocol_sections_history_no_truncate()
-RETURNS TRIGGER LANGUAGE plpgsql AS $nt$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $nt$
 BEGIN
   RAISE EXCEPTION 'leo_protocol_sections_history is append-only: TRUNCATE is not permitted.';
 END

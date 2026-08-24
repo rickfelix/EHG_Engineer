@@ -70,14 +70,34 @@ the 24h cap) REJECTS on the real path" — cannot honestly arm today, for two in
 - **0/286 pre-existing rows carry a provenance key.** Blocking on missing provenance immediately
   would brick `scripts/protocol/adam-contract-land.mjs` — a real, recurring chairman ceremony
   script, not a one-off — on the very next run after Phase B armed.
-- **Two additional live write sites bypass FR-2's fix entirely.** `improvement-appliers.js`'s
+- **Three, not two, live write sites bypass FR-2's fix entirely.** `improvement-appliers.js`'s
   `applyChecklistItemChange` (an unconditional insert) and `applySubAgentConfigChange` (a
   fallback-branch insert) both write to `leo_protocol_sections` without going through
-  `sanitizeProtocolSectionPayload()` at all — confirmed by direct code read during PLAN. FR-1's
-  audit trigger still observes and logs these writes (Phase A's coverage is unaffected — the
-  trigger fires regardless of which application code performed the write), but they will always
-  record `provenance_status='missing'` until a **separate, out-of-this-SD's-scope fix** routes
-  them through the same sanitizer FR-2 already fixed.
+  `sanitizeProtocolSectionPayload()` at all — confirmed by direct code read during PLAN. A
+  **third** site was found by the EXEC-phase security-agent review after this document's initial
+  draft: `scripts/modules/protocol-improvements/index.js`'s `applyImprovement()` performs an
+  unallowlisted `insert`/`upsert` against a fully caller-controlled `target_table`, with no
+  provenance strip — the same defect class SD-LEO-INFRA-IMPROVEMENT-APPLIER-UPSERTS-001 fixed at
+  one call site but left at this one. This is a pre-existing condition (confirmed present before
+  this SD, at commit `b6be1880ba0`), not a regression introduced here. FR-1's audit trigger still
+  observes and logs writes from all three sites (Phase A's coverage is unaffected — the trigger
+  fires regardless of which application code performed the write), but they will always record
+  `provenance_status='missing'` until a **separate, out-of-this-SD's-scope fix** routes all three
+  through the same sanitizer FR-2 already fixed. Any future census of these bypass sites should
+  re-grep for direct `leo_protocol_sections` writers rather than trusting this list as exhaustive
+  — this document's own count grew from two to three between drafts.
+
+- **`provenance_status` is self-attested and gameable, unlike `channel`.** The FR-1 trigger derives
+  `channel` from server-side session state (`current_setting('role')`/`current_user`), which no
+  caller can spoof. `provenance_status`, by contrast, is derived from `NEW.metadata->'provenance'`
+  — a value the writer itself supplies. Once the sanitizer-routed sites reach 100% coverage, any
+  writer can still trivially satisfy the letter of an arming precondition keyed on
+  `provenance_status='present'` by attaching an arbitrary object, without the "external
+  approval-artifact reference" property described above actually being checked. This means the
+  arming precondition, as stated, measures *whether a provenance key exists*, not *whether it
+  is trustworthy* — Phase B's design must key blocking enforcement on the approval-artifact
+  reference check itself (option 2 above), not on `provenance_status` alone, or it inherits the
+  same self-attestation hole this whole SD exists to close.
 
 **The proposed arming precondition, staged here, not yet met:** Phase B's blocking enforcement
 should arm only once the Phase-A ledger (`leo_protocol_sections_history`) shows **100% provenance
