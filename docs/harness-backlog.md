@@ -113,6 +113,28 @@ Two behaviours worth knowing when reading these rows: the body used to be silent
 
 `node scripts/fleet-dashboard.cjs draingauge` (also included in the `all` render) shows open-actionable count (`category='harness_backlog' AND archived_at IS NULL AND status` not resolved-equivalent) and oldest-actionable-age, via an exact `count()` query — not a row fetch, which PostgREST implicitly caps at 1000 rows.
 
+### Census convergence + SLA coverage fix (SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001, 2026-08-24)
+
+Before this SD, "does harness_backlog/completion_flag have a working closing mechanism" had 3
+disagreeing representations: this doc, `lib/coordinator/feedback-sla-gauge.cjs`'s `SLA_CATEGORIES`,
+and `lib/governance/gauge-registry.js`'s `DRAIN_DESCRIPTORS` (which did not carry either category
+at all). `DRAIN_DESCRIPTORS` now has `harness-backlog`/`completion-flag` entries reading the SAME
+`feedback` table/category already queried above (`closingPathSameTable`, no new relation — see
+SEC-DRAIN-001's allow-list note in `scripts/drain-inventory.mjs`), so `node scripts/drain-inventory.mjs`
+reports a real `sla`/`drainRate` for both — live-measured 15.9% (harness_backlog) and 66.1%
+(completion_flag), busy-but-working once the pre-existing `fn_auto_close_feedback_on_sd_completion`
+DB trigger (any linked SD/QF closing auto-resolves its `feedback` rows) is accounted for, not the
+raw ~86%/~98% open-status snapshot this doc's earlier drafts would suggest in isolation.
+
+Separately, `feedback-sla-gauge.cjs`'s `harness_backlog` entry carried `severityIn: ['high',
+'critical']` — since ~94% of harness_backlog rows are `severity=medium`, the 7-day SLA breach gauge
+was structurally blind to nearly the whole backlog regardless of age. That filter is removed; the
+gauge now covers every severity. A related, deliberately-descoped item: a dedicated terminal path
+for non-recurring **singleton** rows (as opposed to the 3+/14d fingerprint-promotion path above) was
+considered and dropped after the `fn_auto_close_feedback_on_sd_completion` discovery above showed a
+working closing mechanism already exists; the S1 sweep's `archiveReclassify()` (below) remains the
+only singleton-specific disposition path, and it is manual/one-time, not a recurring drain.
+
 ## S1 enumeration sweep — one-time legacy complement (SD-LEO-INFRA-HARNESS-BACKLOG-S1-ENUMERATION-SWEEP-001, 2026-07-10)
 
 The drain policy above is write-time-forward: it closes rows going forward but never touched the pre-existing backlog that accumulated before it shipped. `scripts/one-off/s1-backlog-sweep.mjs` is the one-time complement — it paginates every open `harness_backlog` row (PostgREST-safe, 1000-row pages + `COUNT(*)` reconciliation, throws `PAGINATION_MISMATCH` on drift) and dispositions each into one of:
