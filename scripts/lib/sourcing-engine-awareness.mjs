@@ -113,7 +113,7 @@ const GITHUB_API_BASE = 'https://api.github.com';
 // TR-1: interval-cached, never a live API call on every invocation (the migration's own
 // preamble documents why -- workflow-YAML presence != enabled, and gh-run-state is rate-limited).
 const DIFF_CACHE_TTL_MS = 15 * 60 * 1000;
-let _diffCache = null; // { result, fetchedAt }
+let _diffCache = null; // { key, result, fetchedAt }
 
 /**
  * IO: fetch a single workflow's live `state` field ('active' | 'disabled_manually' |
@@ -128,14 +128,24 @@ let _diffCache = null; // { result, fetchedAt }
  * @returns {Promise<string>} the workflow's `state` field
  */
 export async function fetchWorkflowState(repo, workflowFilename, token, opts = {}) {
-  const { fetchImpl = fetch } = opts;
-  const url = `${GITHUB_API_BASE}/repos/${repo}/actions/workflows/${workflowFilename}`;
+  const { fetchImpl = fetch, timeoutMs = 10_000 } = opts;
+  // SECURITY sub-agent finding LOW-1 (evidence cdb7974c): this function is exported, so a future
+  // caller passing non-constant input could otherwise inject path segments; today's only caller
+  // passes fixed constants (GITHUB_API_BASE is a non-overridable module const; repo/workflowFilename
+  // both trace to frozen constants), but the encoding + shape assert make that safety survive the
+  // next caller rather than depend on today's callers staying disciplined.
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`fetchWorkflowState: invalid repo shape: ${repo}`);
+  const url = `${GITHUB_API_BASE}/repos/${repo}/actions/workflows/${encodeURIComponent(workflowFilename)}`;
+  // AbortSignal.timeout (SECURITY finding LOW-3 / TESTING finding P7, evidence cdb7974c/3004beaa):
+  // undici's connect/header defaults (~10s/300s) mean an unresponsive GitHub API could otherwise
+  // hang this startup-check probe far longer than any caller expects across 3 sequential arms.
   const resp = await fetchImpl(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     },
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!resp.ok) {
     throw new Error(`GitHub API error fetching ${workflowFilename}: ${resp.status} ${resp.statusText}`);
@@ -170,13 +180,24 @@ export async function fetchWorkflowState(repo, workflowFilename, token, opts = {
 export async function diffSourcingArmStateVsDeployment(supabase, opts = {}) {
   const {
     repo = resolveGitHubRepo('EHG_Engineer'),
-    token = process.env.GITHUB_TOKEN,
+    // No process.env.GITHUB_TOKEN fallback here (TESTING finding P5, evidence 3004beaa): a caller
+    // passing an explicit controlled opts object (e.g. a test with a deliberately-scoped env) had
+    // `token` silently fall through to ambient process.env whenever it passed undefined, defeating
+    // dependency injection. adam-startup-check.mjs's fetchSourcingState is the one call site that
+    // should read ambient env, and it already does so explicitly via `{ token: env.GITHUB_TOKEN }`.
+    token = null,
     fetchImpl = fetch,
     now = () => Date.now(),
     forceRefresh = false,
   } = opts;
 
-  if (!forceRefresh && _diffCache && (now() - _diffCache.fetchedAt) < DIFF_CACHE_TTL_MS) {
+  // Cache keyed on repo + token-presence (TESTING finding P6 / SECURITY finding LOW-4, evidence
+  // 3004beaa/cdb7974c): a single global slot could otherwise serve a stale no-token result to a
+  // later token-bearing call within the same process (e.g. env.GITHUB_TOKEN becomes available
+  // mid-session), which reads as `deployment_state: 'unknown'` sticking around long after the
+  // condition that caused it cleared.
+  const cacheKey = `${repo}|${token ? 'tok' : 'notok'}`;
+  if (!forceRefresh && _diffCache && _diffCache.key === cacheKey && (now() - _diffCache.fetchedAt) < DIFF_CACHE_TTL_MS) {
     return _diffCache.result;
   }
 
@@ -184,7 +205,10 @@ export async function diffSourcingArmStateVsDeployment(supabase, opts = {}) {
   // at adam-startup-check.mjs:666-674): fail-open is correct for the forecaster deciding what
   // ACTION to take on a degraded read; fail-loud is correct here, a badge reporting what current
   // state IS must never silently substitute a clean-looking default.
-  const { data: dbRows, error: dbError } = await supabase.from(SOURCING_ACTIVATION_TABLE).select('arm, enabled');
+  // .limit(100): the table holds exactly 3 rows (one per SOURCING_ENGINE_FLAGS entry) and is
+  // semantically free to bound -- explicit per this repo's count-truncation discipline
+  // (count-truncation-diff-lint), which flags every unbounded .select( on a changed line.
+  const { data: dbRows, error: dbError } = await supabase.from(SOURCING_ACTIVATION_TABLE).select('arm, enabled').limit(100);
   if (dbError) throw new Error(`diffSourcingArmStateVsDeployment: DB read failed: ${dbError.message}`);
   const byArm = new Map((dbRows || []).map((r) => [r.arm, r.enabled === true]));
 
@@ -210,8 +234,16 @@ export async function diffSourcingArmStateVsDeployment(supabase, opts = {}) {
     result.push({ arm: f.label, db_state, deployment_state, deployment_error, mismatched });
   }
 
-  _diffCache = { result, fetchedAt: now() };
+  _diffCache = { key: cacheKey, result, fetchedAt: now() };
   return result;
+}
+
+/**
+ * Test-hygiene helper (TESTING finding P6, evidence 3004beaa): resets the module-scope diff cache
+ * so one test's cached result can never leak into a sibling test that omits `forceRefresh`.
+ */
+export function resetSourcingArmDiffCache() {
+  _diffCache = null;
 }
 
 /**

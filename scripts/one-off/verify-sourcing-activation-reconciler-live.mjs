@@ -15,9 +15,22 @@ import { createClient } from '@supabase/supabase-js';
 import { diffSourcingArmStateVsDeployment } from '../lib/sourcing-engine-awareness.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
+function resolveGithubToken() {
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+  // SECURITY finding LOW-2 (evidence cdb7974c): `gh` only writes the token to stdout on exit 0, so
+  // a partial-write-then-fail is theoretical -- but stdio is still pinned explicitly (no inherited
+  // stdin, stderr discarded rather than surfaced) and a timeout is set, matching the in-repo
+  // precedent at scripts/adam-github-assessment.mjs:36, rather than relying on execFileSync defaults.
+  return execFileSync('gh', ['auth', 'token'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: 10_000,
+  }).trim();
+}
+
 async function run() {
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const token = process.env.GITHUB_TOKEN || execFileSync('gh', ['auth', 'token'], { encoding: 'utf8' }).trim();
+  const token = resolveGithubToken();
   const result = await diffSourcingArmStateVsDeployment(supabase, { token, forceRefresh: true });
   console.log(JSON.stringify(result, null, 2));
   const unresolved = result.filter((r) => r.deployment_state === 'unknown');
@@ -30,5 +43,8 @@ async function run() {
 }
 
 if (isMainModule(import.meta.url)) {
-  run();
+  run().catch((e) => {
+    console.error(`verify-sourcing-activation-reconciler-live: ${e.message}`);
+    process.exitCode = 1;
+  });
 }

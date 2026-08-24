@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { vi } from 'vitest';
 import {
   SOURCING_ENGINE_FLAGS,
+  SOURCING_ACTIVATION_TABLE,
   isSourcingFlagOn,
   readSourcingEngineFlags,
   readSourcingEngineFlagsFromDb,
@@ -189,8 +190,17 @@ describe('diffSourcingArmStateVsDeployment', () => {
     const writeSpy = vi.fn();
     return {
       writeSpy,
-      from() {
-        return { select: () => Promise.resolve({ data: dbRows, error: null }), upsert: writeSpy, insert: writeSpy, update: writeSpy, delete: writeSpy, rpc: writeSpy };
+      // TESTING sub-agent finding P4 (evidence 3004beaa): from() previously ignored its
+      // argument entirely, so a mutant reading a completely wrong table survived every test.
+      // Pinned to SOURCING_ACTIVATION_TABLE so that mutant is now caught.
+      from(table) {
+        if (table !== SOURCING_ACTIVATION_TABLE) {
+          return { select: () => ({ limit: () => Promise.resolve({ data: null, error: { message: `unexpected table: ${table}` } }) }) };
+        }
+        return {
+          select: () => ({ limit: () => Promise.resolve({ data: dbRows, error: null }) }),
+          upsert: writeSpy, insert: writeSpy, update: writeSpy, delete: writeSpy, rpc: writeSpy,
+        };
       },
     };
   }
@@ -235,6 +245,33 @@ describe('diffSourcingArmStateVsDeployment', () => {
     expect(autoRefill.db_state).toBe('no_row');
     expect(autoRefill.deployment_state).toBe('active');
     expect(autoRefill.mismatched).toBe(true);
+  });
+
+  it('TS-2c: reverse mismatch with an EXPLICIT false row (not just no_row) — DB off, deployment active', async () => {
+    // TESTING sub-agent finding P2 (evidence 3004beaa): TS-2b only fixtured the no_row case; a
+    // mutant that special-cased "byArm always true" survived because no fixture ever set
+    // enabled=false explicitly. This is the distinct case: a REAL row exists and says false.
+    const sb = fakeReadOnlySb([{ arm: 'auto-refill', enabled: false }]);
+    const fetchImpl = fakeFetchImpl({ 'sourcing-auto-refill-cron.yml': { state: 'active' } });
+    const result = await diffSourcingArmStateVsDeployment(sb, { token: 't', fetchImpl, forceRefresh: true });
+    const autoRefill = result.find((r) => r.arm === 'auto-refill');
+    expect(autoRefill.db_state).toBe(false);
+    expect(autoRefill.deployment_state).toBe('active');
+    expect(autoRefill.mismatched).toBe(true);
+  });
+
+  it('TS-3c: a non-active, non-disabled_manually deployment state (disabled_inactivity) still reports a mismatch', async () => {
+    // TESTING sub-agent finding P3 (evidence 3004beaa): a mutant computing deployBool as
+    // `state !== 'disabled_manually'` (instead of `state === 'active'`) survived every prior
+    // test, because none exercised the third real GitHub Actions state -- disabled_inactivity --
+    // documented in this function's own JSDoc as handled but never fixtured. Under that mutant,
+    // an inactivity-disabled cron reads as "active" and a real mismatch goes unreported.
+    const sb = fakeReadOnlySb([{ arm: 'deferred-watcher', enabled: true }]);
+    const fetchImpl = fakeFetchImpl({ 'sourcing-deferred-watcher-cron.yml': { state: 'disabled_inactivity' } });
+    const result = await diffSourcingArmStateVsDeployment(sb, { token: 't', fetchImpl, forceRefresh: true });
+    const dw = result.find((r) => r.arm === 'deferred-watcher');
+    expect(dw.deployment_state).toBe('disabled_inactivity');
+    expect(dw.mismatched).toBe(true);
   });
 
   it('TS-3: distinguishes API-unreachable from a 404 as different facts, never silently clean', async () => {
