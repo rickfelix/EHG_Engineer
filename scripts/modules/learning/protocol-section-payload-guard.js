@@ -77,7 +77,9 @@ export class PayloadRefused extends Error {
  * unfiltered write succeeded silently.
  *
  * @param {unknown} payload         the raw improvement payload
- * @param {{queueRowId?: string}} [ctx] for attributable refusals
+ * @param {{queueRowId?: string, assignedSdId?: string, sourceRetroId?: string}} [ctx] for
+ *   attributable refusals (queueRowId) and derived provenance (assignedSdId/sourceRetroId --
+ *   FR-2, SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001)
  * @returns {{clean: object, dropped: string[]}}
  * @throws {PayloadRefused} on a non-object payload, an overwrite attempt, or an empty result
  */
@@ -107,6 +109,28 @@ export function sanitizeProtocolSectionPayload(payload, ctx = {}) {
   // string-payload class visible even if a future caller pre-coerces it into an empty object.
   if (Object.keys(clean).length === 0) {
     throw new PayloadRefused('no writable columns after allowlist', `${where}, dropped: ${dropped.join(', ') || 'nothing'}`);
+  }
+
+  // SD-LEO-INFRA-PROTOCOL-GOVERNANCE-PACKAGE-001 (FR-2): metadata has no sub-key filtering above,
+  // so a caller (including a model-authored payload) could set metadata.provenance directly and
+  // have it trusted as-is -- self-attested provenance, the same blind-guard shape as an actor-role
+  // GUC no caller can be prevented from setting. Strip any caller-supplied provenance and derive it
+  // server-side from ctx, which the caller (improvement-appliers.js) populates from columns on the
+  // protocol_improvement_queue row it already holds -- data the model itself never authors.
+  const existingMetadata = (clean.metadata && typeof clean.metadata === 'object' && !Array.isArray(clean.metadata)) ? clean.metadata : {};
+  const { provenance: _droppedProvenance, ...restMetadata } = existingMetadata;
+  const derivedProvenance = ctx.assignedSdId
+    ? { sd_key: ctx.assignedSdId, actor_type: 'sd', actor_id: ctx.assignedSdId }
+    : ctx.sourceRetroId
+      ? { sd_key: null, actor_type: 'retrospective', actor_id: ctx.sourceRetroId }
+      : null; // neither present -- omit provenance entirely; the FR-1 trigger records PROVENANCE_MISSING
+
+  if (derivedProvenance) {
+    clean.metadata = { ...restMetadata, provenance: derivedProvenance };
+  } else if (Object.keys(restMetadata).length > 0) {
+    clean.metadata = restMetadata;
+  } else if ('metadata' in clean) {
+    delete clean.metadata;
   }
 
   return { clean, dropped };
