@@ -49,6 +49,19 @@ export async function main(argv = process.argv, deps = {}) {
       .eq('status', 'held')
       .order('held_at', { ascending: true });
     if (error) {
+      // database/migrations/20260824_chairman_held_sends.sql is @chairman-gated (requires the
+      // chairman's own approval to apply -- EXEC cannot self-approve it). Until it lands, this
+      // table genuinely does not exist, and that is an EXPECTED, non-alarming state, not an INFRA
+      // failure -- exiting 1 here every 15 minutes until the chairman applies the migration would
+      // be pure CI noise on a schedule nobody can act on. Detected by PostgREST's own "table not
+      // found in schema cache" wording (matches the sibling pattern already seen live in this repo
+      // for other unapplied/renamed tables), scoped narrowly so any OTHER read failure (RLS denial,
+      // network error, genuine schema drift) still reports EXIT_INFRA as before.
+      const tableMissing = /schema cache|does not exist/i.test(String(error.message || ''));
+      if (tableMissing) {
+        logger.log?.(`[chairman-held-sends-release] ${JSON.stringify({ ts: new Date().toISOString(), ok: true, reason: 'table_not_yet_applied', error: error.message })}`);
+        return { exitCode: EXIT_OK, summary: { checked: 0, released: 0, refused: 0, heldStill: 0, skipped: 0, auditWriteFailed: 0, rowErrors: 0, strandedInReleasing: 0, tableApplied: false } };
+      }
       logger.log?.(`[chairman-held-sends-release] ${JSON.stringify({ ts: new Date().toISOString(), ok: false, reason: 'read_failed', error: error.message })}`);
       return { exitCode: EXIT_INFRA, summary: { error: error.message } };
     }

@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 17 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 18 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -83,6 +83,12 @@ describe('policy registry (TS-1)', () => {
       // row per worker Stop-hook firing, fleet-wide, unbounded. Keyed on created_at,
       // DATABASE-stamped (DEFAULT now(), the writer never supplies its own value).
       worker_wind_down_events: 'created_at',
+      // SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 (operator-contract REAPER): a released/refused/
+      // expired held-decision row has no ongoing service purpose after this window. Keyed on
+      // created_at; a row genuinely stuck in held/releasing surfaces via
+      // public.v_chairman_held_sends_unreconcilable (24h horizon) well before the 90-day archive
+      // window, so this age-only policy cannot silently erase an unresolved chairman decision.
+      chairman_held_sends: 'created_at',
     });
   });
 
