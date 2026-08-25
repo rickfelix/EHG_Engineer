@@ -47,16 +47,17 @@ function makeSupabase(stage) {
         return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: stage }, error: null }) }) }) };
       }
       if (table === 'chairman_decisions') {
-        // SECURITY finding M9 (EXEC-TO-PLAN review): this chain must match hasActiveOverride()'s
-        // actual query shape -- override_key, decision_type, AND venture_id (SECURITY finding
-        // H3) are all .eq() filters before .is(). A 2-level mock silently threw a TypeError on
-        // the 3rd .eq(), swallowed by hasActiveOverride's catch, so this control passed for the
-        // wrong reason (a broken query, not a real "no override" evaluation).
+        // SECURITY finding M9 (EXEC-TO-PLAN review), UPDATED post ship-gate-review atomic-claim
+        // rewrite: both controls run armed:true, which now routes to the ATOMIC UPDATE claim
+        // path (not the read-only select used only in shadow/unarmed mode) -- override_key,
+        // decision_type, AND venture_id (SECURITY finding H3) are .eq() filters, followed by
+        // .is()/.gt()/.select()/.maybeSingle(). A shorter mock chain silently threw a TypeError
+        // swallowed by hasActiveOverride's catch, so this control passed for the wrong reason
+        // (a broken query, not a real "no override" evaluation).
         return {
-          select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ is: () => ({ gt: () => ({ limit: () => ({
+          update: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ is: () => ({ gt: () => ({ select: () => ({
             maybeSingle: async () => { overrideQueryReached = true; return { data: null, error: null }; },
           }) }) }) }) }) }) }),
-          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
         };
       }
       if (table === 'audit_log') return { insert };

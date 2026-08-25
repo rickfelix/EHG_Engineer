@@ -15,11 +15,11 @@ import {
   VERDICT,
 } from '../../../lib/governance/stage-gate-predicate.js';
 
-function makeSupabase({ venture = null, ventureError = null, overrideRow = null, overrideError = null, consumeError = null } = {}) {
+function makeSupabase({ venture = null, ventureError = null, overrideRow = null, overrideError = null, consumeError = null, claimRaceLost = false } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: null });
   const overrideEqSpy = vi.fn();
-  const consumeUpdateSpy = vi.fn();
-  const consumeEqSpy = vi.fn();
+  const claimUpdateSpy = vi.fn();
+  const claimEqSpy = vi.fn();
   const from = vi.fn((table) => {
     if (table === 'ventures') {
       return {
@@ -32,6 +32,7 @@ function makeSupabase({ venture = null, ventureError = null, overrideRow = null,
     }
     if (table === 'chairman_decisions') {
       return {
+        // Shadow-mode (shouldConsume=false) read-only existence check.
         select: () => ({
           eq: (col, val) => {
             overrideEqSpy(col, val);
@@ -56,9 +57,41 @@ function makeSupabase({ venture = null, ventureError = null, overrideRow = null,
             };
           },
         }),
+        // Armed (shouldConsume=true) ATOMIC claim: UPDATE ... WHERE consumed_at IS NULL ...
+        // RETURNING. Models the race-closing behavior directly: claimRaceLost simulates a
+        // concurrent caller having already consumed the row (WHERE no longer matches ->
+        // zero rows updated -> {data:null,error:null}), the exact scenario the ship-gate
+        // adversarial review flagged.
         update: (patch) => {
-          consumeUpdateSpy(patch);
-          return { eq: (col, val) => { consumeEqSpy(col, val); return Promise.resolve({ error: consumeError }); } };
+          claimUpdateSpy(patch);
+          return {
+            eq: (col, val) => {
+              claimEqSpy(col, val);
+              return {
+                eq: (col2, val2) => {
+                  claimEqSpy(col2, val2);
+                  return {
+                    eq: (col3, val3) => {
+                      claimEqSpy(col3, val3);
+                      return {
+                        is: () => ({
+                          gt: () => ({
+                            select: () => ({
+                              maybeSingle: async () => {
+                                if (consumeError) return { data: null, error: consumeError };
+                                if (claimRaceLost || !overrideRow) return { data: null, error: null };
+                                return { data: { id: overrideRow.id }, error: null };
+                              },
+                            }),
+                          }),
+                        }),
+                      };
+                    },
+                  };
+                },
+              };
+            },
+          };
         },
       };
     }
@@ -69,7 +102,7 @@ function makeSupabase({ venture = null, ventureError = null, overrideRow = null,
   });
   return {
     from, _insert: insert, _overrideEqSpy: overrideEqSpy,
-    _consumeUpdateSpy: consumeUpdateSpy, _consumeEqSpy: consumeEqSpy,
+    _claimUpdateSpy: claimUpdateSpy, _claimEqSpy: claimEqSpy,
   };
 }
 
@@ -202,17 +235,36 @@ describe('checkStageGate — TS-7/TS-8: chairman override', () => {
     expect(r.reason).toBe('chairman_override');
     // FR-4 reachability: the override lookup must key on override_key (renamed from sd_key)
     // with the actorId actually passed to checkStageGate -- not a literal SD key.
-    expect(supabase._overrideEqSpy).toHaveBeenCalledWith('override_key', 'SD-X');
+    expect(supabase._claimEqSpy).toHaveBeenCalledWith('override_key', 'SD-X');
     // SECURITY finding H3: the lookup must ALSO scope by venture_id -- an override_key like a
     // campaign_id is not globally unique across ventures.
-    expect(supabase._overrideEqSpy).toHaveBeenCalledWith('venture_id', 'v1');
-    // SECURITY finding H2: a matched override is CONSUMED (consumed_at written), not left
-    // active to silently suppress every subsequent call until its TTL expires.
-    expect(supabase._consumeUpdateSpy).toHaveBeenCalledWith(expect.objectContaining({ consumed_at: expect.any(String) }));
-    expect(supabase._consumeEqSpy).toHaveBeenCalledWith('id', 'ov-1');
+    expect(supabase._claimEqSpy).toHaveBeenCalledWith('venture_id', 'v1');
+    // SECURITY finding H2: a matched override is CONSUMED via an ATOMIC UPDATE (ship-gate
+    // adversarial review: not a separate SELECT-then-UPDATE, which would be a TOCTOU race).
+    expect(supabase._claimUpdateSpy).toHaveBeenCalledWith(expect.objectContaining({ consumed_at: expect.any(String) }));
+    // Ship-gate adversarial review finding: the audit_log row must carry the override reason,
+    // not just a bare 'PASS' indistinguishable from a genuinely-reached stage.
+    expect(supabase._insert).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ verdict: 'PASS', reason: 'chairman_override' }),
+    }));
   });
 
-  it('SECURITY finding H4: an active override in SHADOW mode (armed:false) is looked up for an accurate shadow verdict, but NOT consumed', async () => {
+  it('ship-gate adversarial review finding: two concurrent calls sharing the same overrideKey+ventureId cannot both consume the same one-shot override', async () => {
+    // First call wins the atomic claim; second call's identical UPDATE affects zero rows
+    // (claimRaceLost models the WHERE clause no longer matching after the first commits).
+    const winner = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 1 }, overrideRow: { id: 'ov-1' } });
+    const loser = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 1 }, overrideRow: { id: 'ov-1' }, claimRaceLost: true });
+    const [r1, r2] = await Promise.all([
+      checkStageGate({ supabase: winner, ventureId: 'v1', requiredStage: 24, actorType: 'campaign', actorId: 'campaign-shared', armed: true }),
+      checkStageGate({ supabase: loser, ventureId: 'v1', requiredStage: 24, actorType: 'campaign', actorId: 'campaign-shared', armed: true }),
+    ]);
+    expect(r1.blocked).toBe(false); // the winner's evaluation is genuinely suppressed
+    expect(r1.reason).toBe('chairman_override');
+    expect(r2.blocked).toBe(true); // the loser sees no active override left and is BLOCKED, not silently passed
+    expect(r2.reason).toBe(null);
+  });
+
+  it('SECURITY finding H4: an active override in SHADOW mode (armed:false) is looked up for an accurate shadow verdict, but NOT claimed/consumed', async () => {
     const supabase = makeSupabase({
       venture: { is_demo: false, current_lifecycle_stage: 1 },
       overrideRow: { id: 'ov-1' },
@@ -222,10 +274,10 @@ describe('checkStageGate — TS-7/TS-8: chairman override', () => {
     expect(r.blocked).toBe(false); // shadow verdict still accurately reports the override would suppress it
     expect(r.reason).toBe('chairman_override');
     // The one-shot must NOT be burned by a shadow-mode evaluation that suppressed nothing real.
-    expect(supabase._consumeUpdateSpy).not.toHaveBeenCalled();
+    expect(supabase._claimUpdateSpy).not.toHaveBeenCalled();
   });
 
-  it('SECURITY finding M8: a failed consume update is warned, not silently swallowed, and the block is still suppressed this call', async () => {
+  it('SECURITY finding M8 (revised for the atomic claim): a failed claim update fails CLOSED, warns, and does not suppress the block', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const supabase = makeSupabase({
       venture: { is_demo: false, current_lifecycle_stage: 1 },
@@ -233,8 +285,12 @@ describe('checkStageGate — TS-7/TS-8: chairman override', () => {
       consumeError: { message: 'permission denied for table chairman_decisions' },
     });
     const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
-    expect(r.blocked).toBe(false);
-    expect(r.reason).toBe('chairman_override');
+    // An unreadable claim result is treated the same as "no override" -- fail closed, never
+    // suppress on an ambiguous outcome (the atomic claim replaces the old SELECT-then-UPDATE,
+    // which could still suppress the block on a failed UPDATE since the SELECT had already
+    // found the row).
+    expect(r.blocked).toBe(true);
+    expect(r.reason).toBe(null);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('permission denied for table chairman_decisions'));
     warnSpy.mockRestore();
   });
@@ -246,16 +302,29 @@ describe('checkStageGate — TS-7/TS-8: chairman override', () => {
     });
     const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
     expect(r.blocked).toBe(true);
-    expect(supabase._consumeUpdateSpy).not.toHaveBeenCalled();
+    // The atomic claim UPDATE still runs (the WHERE clause simply matches nothing) -- the
+    // implementation no longer does a separate SELECT-first existence check when armed.
+    expect(supabase._claimUpdateSpy).toHaveBeenCalled();
   });
 
-  it('an override lookup error fails closed (never suppresses a block)', async () => {
+  it('an override CLAIM error (armed path) fails closed (never suppresses a block) -- covered by the M8 test above via consumeError; this pins the no-override-row case too', async () => {
+    const supabase = makeSupabase({
+      venture: { is_demo: false, current_lifecycle_stage: 1 },
+      overrideRow: { id: 'ov-1' },
+      consumeError: { message: 'connection reset' },
+    });
+    const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
+    expect(r.blocked).toBe(true);
+  });
+
+  it('an override LOOKUP error in SHADOW mode (armed:false) also fails closed -- this path uses the read-only select, not the armed claim path', async () => {
     const supabase = makeSupabase({
       venture: { is_demo: false, current_lifecycle_stage: 1 },
       overrideError: { message: 'connection reset' },
     });
-    const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
-    expect(r.blocked).toBe(true);
+    const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: false });
+    expect(r.blocked).toBe(true); // the shadow verdict itself, since armed:false never actually enforces
+    expect(r.reason).toBe(null);
   });
 
   it('the override lookup is never queried on a PASS case (stage already sufficient)', async () => {
