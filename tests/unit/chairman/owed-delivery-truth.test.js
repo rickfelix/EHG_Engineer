@@ -97,6 +97,35 @@ describe('applyOwedDeliveryTruth', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  // PLAN_VERIFICATION VAL-C2: PGRST204 rejects the WHOLE update, not just the new field, so
+  // pre-migration the core delivered_at/status stamp must not be lost — the writer retries
+  // without delivery_status_source and the retry's success is what the caller sees.
+  it('column-absent (PGRST204) retry: the core delivered_at/status write still lands without delivery_status_source', async () => {
+    let call = 0;
+    const patches = [];
+    const obj = {
+      update: vi.fn((patch) => { patches.push(patch); return obj; }),
+      not: vi.fn(() => obj),
+      or: vi.fn(() => obj),
+      eq: vi.fn(() => obj),
+      select: vi.fn(() => obj),
+      limit: vi.fn(() => {
+        call += 1;
+        return Promise.resolve(call === 1
+          ? { data: null, error: { code: 'PGRST204', message: "Could not find the 'delivery_status_source' column" } }
+          : { data: [{ id: 'row-1' }], error: null });
+      }),
+    };
+    const supabase = { from: vi.fn(() => obj) };
+    const result = await applyOwedDeliveryTruth(supabase, { messageSid: 'SM1', status: 'delivered', deliveredAt: '2026-08-24T00:00:00.000Z', source: 'carrier_push' });
+
+    expect(result).toEqual({ matched: true, updated: true, error: null, tableAbsent: false, columnAbsent: true });
+    expect(patches).toHaveLength(2);
+    expect(patches[0]).toEqual({ status: 'delivered', delivered_at: '2026-08-24T00:00:00.000Z', delivery_status_source: 'carrier_push' });
+    expect(patches[1]).toEqual({ status: 'delivered', delivered_at: '2026-08-24T00:00:00.000Z' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it('a genuine write failure is visible: warns with SID + message, error surfaced in the return', async () => {
     const supabase = makeSupabase({ data: null, error: { code: '42501', message: 'permission denied' } });
     const result = await applyOwedDeliveryTruth(supabase, { messageSid: 'SM1', status: 'delivered', deliveredAt: 'x', source: 'carrier_push' });
