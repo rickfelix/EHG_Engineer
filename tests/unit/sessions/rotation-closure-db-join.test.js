@@ -114,6 +114,21 @@ describe('stampCcParentPid (FR-1)', () => {
     await expect(stampCcParentPid(sb, 'new', undefined)).resolves.toBeUndefined();
     expect(sb.metadataUpdates).toEqual([]);
   });
+
+  // SECURITY review (evidence 803b2cfb, S3): an empty-string or non-numeric parentPid must never
+  // be stamped -- it would make the DB-join a match-anything bucket for any other row that also
+  // degraded to the same malformed value.
+  it('refuses to stamp a non-numeric parentPid (empty string)', async () => {
+    const sb = fakeSupabase([{ session_id: 'new', metadata: {} }]);
+    await stampCcParentPid(sb, 'new', '');
+    expect(sb.metadataUpdates).toEqual([]);
+  });
+
+  it('refuses to stamp a non-numeric parentPid (garbage string)', async () => {
+    const sb = fakeSupabase([{ session_id: 'new', metadata: {} }]);
+    await stampCcParentPid(sb, 'new', 'not-a-pid');
+    expect(sb.metadataUpdates).toEqual([]);
+  });
 });
 
 describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
@@ -220,6 +235,21 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
     ]);
     await closeRotatedOutSessions(sb, 'still-live', { parentPid: PID, pidsDir: dir });
     expect(sb.released).toEqual([]);
+  });
+
+  it('a session_id containing filter-syntax metacharacters (e.g. a smuggled quote) is excluded from the release call (SECURITY review Q3)', async () => {
+    // postgrest-js escapes commas/parens in .in() filter values but not double-quotes -- a
+    // shape-invalid id must be filtered out at the last point before use, regardless of which
+    // pass (or which malformed upstream data) produced it.
+    const dir = markerDir({});
+    const sb = fakeSupabase([
+      { session_id: 'ZZZNOTAREALID","victim-session-id', status: 'active', hostname: HOST, metadata: { cc_parent_pid: String(PID) } },
+      { session_id: 'legit-session-abc123', status: 'active', hostname: HOST, metadata: { cc_parent_pid: String(PID) } },
+    ]);
+    await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
+    const closedIds = sb.released.flatMap((r) => r.ids);
+    expect(closedIds).not.toContain('ZZZNOTAREALID","victim-session-id');
+    expect(closedIds).toContain('legit-session-abc123');
   });
 
   it('a malformed PASS-2 row (null session_id) is dropped, not injected into the shared release call — PASS 1\'s legitimate release still succeeds (TESTING review Q3)', async () => {

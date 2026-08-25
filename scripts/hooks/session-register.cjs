@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { stampBranch } = require('../../lib/session-writer.cjs');
-const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
+const { resolveSessionId, isValidSessionId } = require('../../lib/hooks/session-id.cjs');
 
 /**
  * Detect the current repo context from CWD or CLAUDE_PROJECT_DIR.
@@ -307,13 +307,18 @@ async function captureAccountIdentity(supabase, sessionId) {
  */
 async function stampCcParentPid(supabase, sessionId, parentPid) {
   try {
-    if (parentPid === undefined || parentPid === null) return;
+    // SECURITY review (evidence 803b2cfb): parentPid shape was never validated -- an empty
+    // string is neither undefined nor null (so the old check let it through) but IS truthy-ish
+    // as a metadata value, and would make the DB-join a match-anything bucket for any other row
+    // that also degraded to an empty stamp. A pid is always a positive integer; reject anything
+    // else outright rather than stamp a value the join query would treat as a wildcard.
+    const pidStr = String(parentPid);
+    if (!/^\d+$/.test(pidStr)) return;
     const { data, error } = await supabase
       .from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
     if (error || !data) return;
     const meta = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
       ? data.metadata : {};
-    const pidStr = String(parentPid);
     if (meta.cc_parent_pid === pidStr) return; // already stamped — no-op
     await supabase.from('claude_sessions')
       .update({ metadata: { ...meta, cc_parent_pid: pidStr } })
@@ -434,14 +439,19 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
     // written below -- the two passes are additive coverage, not a single point of failure.
     try {
       const hostname = overrides.hostname !== undefined ? overrides.hostname : getHostname();
-      if (hostname !== 'unknown') {
+      // SECURITY review (evidence 803b2cfb): a malformed parentPid (e.g. empty string) must never
+      // reach the query -- it would join against any OTHER row that also degraded to the same
+      // malformed stamp, defeating the pid-specificity this whole join depends on. stampCcParentPid
+      // already refuses to write a non-numeric pid, so this mirrors that same guard on the read side.
+      const pidStr = String(parentPid);
+      if (hostname !== 'unknown' && /^\d+$/.test(pidStr)) {
         // .limit(999): naturally bounded (one host, one pid, non-terminal statuses -- realistically
         // at most a handful of rows), but count-truncation-diff-lint requires an explicit marker.
         const { data: dbRows, error: dbErr } = await supabase
           .from('claude_sessions')
           .select('session_id')
           .eq('hostname', hostname)
-          .eq('metadata->>cc_parent_pid', String(parentPid))
+          .eq('metadata->>cc_parent_pid', pidStr)
           .neq('session_id', currentSessionId)
           .in('status', ['active', 'idle', 'stale'])
           .limit(999);
@@ -463,7 +473,13 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
 
     if (!toClose.size) return;
 
-    const toCloseIds = [...toClose.keys()];
+    // SECURITY review (evidence 803b2cfb): postgrest-js escapes commas/parens in .in() filter
+    // values but not double-quotes, so an id containing one could smuggle extra filter syntax.
+    // Every real session_id is Claude-Code-issued and shape-validated at capture (isValidSessionId,
+    // lib/hooks/session-id.cjs) -- re-validate here, at the last point before use, so a malformed
+    // id from EITHER pass (marker file content or a DB row) can never reach the query string.
+    const toCloseIds = [...toClose.keys()].filter((id) => isValidSessionId(id));
+    if (!toCloseIds.length) return;
     const { error: relErr } = await supabase
       .from('claude_sessions').update({ status: 'released' }).in('session_id', toCloseIds);
     process.stderr.write(
