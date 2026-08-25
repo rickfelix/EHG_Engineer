@@ -11,12 +11,23 @@
 import { describe, it, expect } from 'vitest';
 import {
   checkMinimumAssertionManifest,
+  generateProbeNonce,
   assertLiveDeploymentBinding,
   computeSubstantiveEvidenceHash,
   checkCanaryMutationControl,
   assertFenceTwoSidedness,
   classifyUatFailure,
 } from '../../../lib/eva/uat-control-pack.js';
+
+describe('generateProbeNonce', () => {
+  it('returns a high-entropy, 32-hex-char string, different on each call', () => {
+    const a = generateProbeNonce();
+    const b = generateProbeNonce();
+    expect(a).toMatch(/^[0-9a-f]{32}$/);
+    expect(b).toMatch(/^[0-9a-f]{32}$/);
+    expect(a).not.toBe(b);
+  });
+});
 
 describe('checkMinimumAssertionManifest', () => {
   it('passes when every journey meets its manifest minimum', () => {
@@ -72,7 +83,17 @@ describe('assertLiveDeploymentBinding', () => {
       deploymentSha: '1234567',
     });
     expect(result.passed).toBe(false);
-    expect(result.reason).toMatch(/stubbed\/mocked transport/);
+    expect(result.reason).toMatch(/inconsistent transport/);
+  });
+
+  it('SECURITY finding S4: a PASS reason is honest about validating internal consistency, not an independent live-network proof', () => {
+    const result = assertLiveDeploymentBinding({
+      nonceWriteResult: { outcome: 'ok', echoedNonce: 'abc' },
+      expectedNonce: 'abc',
+      deploymentSha: '1234567',
+    });
+    expect(result.passed).toBe(true);
+    expect(result.reason).toMatch(/does not itself prove/);
   });
 
   it('fails when deploymentSha is null/implausible', () => {

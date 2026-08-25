@@ -105,6 +105,29 @@ describe('completeSession() control-pack evidence', () => {
     expect(payload.metadata.control_pack_failures[0].control).toBe('live_deployment_binding');
   });
 
+  it('S5 wiring: the FIRST run for a venture/stage (no priorRunEvidenceHash) establishes a baseline evidence_hash without failing', async () => {
+    state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    const result = await completeSession('run-1', {
+      evidenceManifest: { integrity: { artifact_hashes: ['h1'] }, test_run: { total: 10, passed: 10 } },
+      deploymentSha: 'sha-abc',
+    });
+    const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.quality_gate).toBe('GREEN');
+    expect(payload.metadata.evidence_hash).toBeTruthy();
+    expect(result.summary.controlPackFailures).toEqual([]);
+  });
+
+  it('S5 wiring: a SECOND run whose evidence hash matches the prior run\'s is forced RED (run-uniqueness failure)', async () => {
+    state.row = { id: 'run-2', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    const manifest = { integrity: { artifact_hashes: ['h1'] }, test_run: { total: 10, passed: 10 } };
+    const { computeSubstantiveEvidenceHash } = await import('../../../lib/eva/uat-control-pack.js');
+    const priorHash = computeSubstantiveEvidenceHash(manifest, 'sha-abc');
+    await completeSession('run-2', { evidenceManifest: manifest, deploymentSha: 'sha-abc', priorRunEvidenceHash: priorHash });
+    const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.quality_gate).toBe('RED');
+    expect(payload.metadata.control_pack_failures[0].control).toBe('run_unique_evidence_hash');
+  });
+
   it('control-pack failures never UPGRADE a gate the pass-rate math already downgraded to RED', async () => {
     state.row = { id: 'run-1', total_tests: 10, passed_tests: 5, failed_tests: 5, skipped_tests: 0, metadata: {} };
     await completeSession('run-1', {
