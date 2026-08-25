@@ -37,5 +37,25 @@
     "recorded_at": "2026-08-11T13:55:00.000Z",
     "source": "manual:coordinator-ruling",
     "corroborated": true
+  },
+  "20260821_purge_killed_venture_scheduler_queue.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is SELF-ASSERTED in the migration file and is not corroborated against an external registry, so an author can obtain this deferral by adding one comment line to their own SQL. Treat as disclosed-but-unverified provenance when auditing.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-08-25T01:13:13.565Z",
+    "review_by": "2026-11-23T01:13:13.565Z",
+    "source": "auto:chairman-gate-marker",
+    "corroborated": false
+  },
+  "20260821_worker_wind_down_events.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is SELF-ASSERTED in the migration file and is not corroborated against an external registry, so an author can obtain this deferral by adding one comment line to their own SQL. Treat as disclosed-but-unverified provenance when auditing.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-MIGRATION-APPLY-STATE-TRIAGE-001",
+    "recorded_at": "2026-08-25T01:13:13.565Z",
+    "review_by": "2026-11-23T01:13:13.565Z",
+    "source": "auto:chairman-gate-marker",
+    "corroborated": false
   }
 }

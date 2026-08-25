@@ -33,6 +33,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { KNOWN_DISPOSITIONS, DEFAULT_LEDGER_PATH } from './lib/migration-disposition-ledger.mjs';
+import { resolveMigrationPath } from './verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -197,6 +198,46 @@ export function serializeLedger(ledger) {
   return `${JSON.stringify(sorted, null, 2)}\n`;
 }
 
+/**
+ * Read each gap's SQL body, keyed by basename (the shape buildLedger()'s Rule A expects).
+ *
+ * SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-1): was `path.join(ROOT, 'database', 'migrations',
+ * base)` for every gap, unconditionally -- stripping a repo-relative id like
+ * 'database/chairman-gated/foo.sql' down to its basename and reconstructing a path in the WRONG
+ * directory. Every CEREMONY_PENDING gap (which the verifier's own classifyFiles() reports with
+ * `file` still carrying its full 'database/chairman-gated/' prefix -- see CHAIRMAN_GATED_PREFIX
+ * in verify-migration-apply-state.mjs) resolved to a non-existent path, so its body was never
+ * read, Rule A's marker regex ran against '', and NONE of them were ever seeded -- the ledger
+ * mechanism this SD relies on could not suppress the exact files it was built for.
+ * resolveMigrationPath() is verify-migration-apply-state.mjs's own single resolution seam for
+ * this id duality (repo-relative ids resolve from repo root; bare basenames resolve from
+ * database/migrations/) -- reused here instead of re-deriving it.
+ *
+ * Injectable (readFile/exists/resolvePath) so this is unit-testable without real disk I/O.
+ *
+ * @param {Array<{file:string}>} gaps
+ * @param {object} [deps]
+ * @param {(id:string, opts:object)=>string} [deps.resolvePath]
+ * @param {(p:string)=>boolean} [deps.exists]
+ * @param {(p:string, enc:string)=>string} [deps.readFile]
+ * @param {string} [deps.repoRoot]
+ * @returns {Map<string,string>} basename -> file contents
+ */
+export function readGapBodies(gaps, {
+  resolvePath = resolveMigrationPath,
+  exists = existsSync,
+  readFile = readFileSync,
+  repoRoot = ROOT,
+} = {}) {
+  const sql = new Map();
+  for (const g of gaps) {
+    const base = String(g.file).replace(/^.*[\\/]/, '');
+    const p = resolvePath(g.file, { repoRoot });
+    if (exists(p)) sql.set(base, readFile(p, 'utf8'));
+  }
+  return sql;
+}
+
 // ── isMain: all I/O lives below this line ────────────────────────────────────
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
@@ -216,12 +257,7 @@ if (isMain) {
   const ledgerPath = path.join(ROOT, DEFAULT_LEDGER_PATH);
   const existing = existsSync(ledgerPath) ? JSON.parse(readFileSync(ledgerPath, 'utf8')) : {};
 
-  const sql = new Map();
-  for (const g of report.gaps) {
-    const base = String(g.file).replace(/^.*[\\/]/, '');
-    const p = path.join(ROOT, 'database', 'migrations', base);
-    if (existsSync(p)) sql.set(base, readFileSync(p, 'utf8'));
-  }
+  const sql = readGapBodies(report.gaps, { repoRoot: ROOT });
   const sweep = parseSweepDoc(readFileSync(path.join(ROOT, 'docs/database/committed-unapplied-sweep-2026-06-10.md'), 'utf8'));
 
   const { ledger, seeded, preserved, residue, reasons } = buildLedger({
