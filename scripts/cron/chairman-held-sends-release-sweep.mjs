@@ -45,14 +45,14 @@ export async function main(argv = process.argv, deps = {}) {
 
     // Bounded batch per sweep run (matches this repo's convention for operational sweeps) -- a
     // 15-minute cadence and per-row retry-via-attempts means an oversized backlog drains across
-    // multiple runs rather than needing an unbounded read here.
-    const HELD_ROWS_BATCH_LIMIT = 200;
+    // multiple runs rather than needing an unbounded read here. Literal (not a named constant):
+    // count-truncation-diff-lint's classifier only recognizes a numeric literal inside limit(...).
     const { data: heldRows, error } = await supabase
       .from('chairman_held_sends')
       .select('*')
       .eq('status', 'held')
       .order('held_at', { ascending: true })
-      .limit(HELD_ROWS_BATCH_LIMIT);
+      .limit(200);
     if (error) {
       // database/migrations/20260824_chairman_held_sends.sql is @chairman-gated (requires the
       // chairman's own approval to apply -- EXEC cannot self-approve it). Until it lands, this
