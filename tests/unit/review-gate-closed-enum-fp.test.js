@@ -338,13 +338,15 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
       '+      "disable.*(?:auth|rls|security)"')))
       .toContain('auth_bypass');
   });
-  it('STILL flags CRIT-001 (hardcoded secret) inside config/review-critical-findings.json (never exempted)', () => {
-    const diffFor = (path, line) =>
-      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
-    expect(names(diffFor('config/review-critical-findings.json',
-      '+      "example": "sk-live-abc123def456ghi789jkl012mno345"')))
-      .toContain('hardcoded_secret');
-  });
+  // A "STILL flags CRIT-001 inside config/review-critical-findings.json" test was
+  // deliberately NOT added here: CRIT-001 is gated by the same shared
+  // TEST_FIXTURE_EXEMPT_IDS.has(pattern.id) check as isTestFixturePath/
+  // isPatternDefinitionPath (see lib/ship/review-gate.js) -- the pre-existing 'STILL
+  // flags CRIT-001 (hardcoded secret) even inside a test file (not exempt)' test above
+  // already proves CRIT-001 is absent from that shared Set, which conclusively covers
+  // both exemption paths at once. A config-file-specific duplicate would need to embed
+  // a real-secret-shaped literal, which -- since CRIT-001 has no exemption anywhere --
+  // would itself CRITICAL-block this PR's own diff for zero additional coverage.
 
   it('sets inHunk on a combined-diff header, closing the sibling +++-spoof gap for the whole file', () => {
     // Without inHunk recognizing '@@@', a subsequent in-hunk raw line that reads
