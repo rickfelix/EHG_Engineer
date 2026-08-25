@@ -563,6 +563,62 @@ self-cleaning `supabase-js`/service-role INSERT and confirms the resulting histo
 (a REST write cannot be rolled back) — skips gracefully with a clear message if run before the
 migration is actually applied.
 
+## Applying SD-LEO-INFRA-STAGE-WRITER-CHOKE-001 (FOUR ordered steps, four files)
+
+The canonical-writer choke on `ventures.current_lifecycle_stage` mirrors SD-LEO-INFRA-STRATEGIC-
+DIRECTIVES-CANONICAL-001's own 3-step split above, with a 4th step folded in because this table's
+canonical RPC also carries a live, forensically-proven-exploited gate-array bug that must close (or
+be explicitly deferred) before traffic concentrates into it.
+
+LEAD-phase VALIDATION (evidence e8ca10e8) found that R5 (the SD immediately above) never actually
+wired its own equivalent choke into production — only the column landed, despite the SD showing
+`status=completed`. This SD's own EXEC-phase discipline: nothing here is marked done until each step
+is verified live in `pg_proc`/`pg_trigger`/`information_schema`, not merely staged.
+
+| Step | File | What it is |
+|---|---|---|
+| 1 | `20260825_ventures_stage_write_token_column.sql` | The `stage_write_token` column, alone. Additive, catalog-only. |
+| 2 | `20260825_ventures_stage_rpcs_self_stamp.sql` + JS/TS code (below) | `advance_venture_stage` (also closes the promotion-gate array bug, superseding `20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql` for apply purposes), `advance_venture_to_stage`, `rescan_stage_20` self-stamp; `lib/eva/stage-execution-worker.js` (3 sites), `lib/agents/venture-ceo/handlers.js`, `lib/eva/saga-coordinator.js`, `scripts/eva-run.js`, `scripts/canary/run-canary-probe.mjs` self-stamp; `ehg` repo's `promote.ts` routed through `advance_venture_stage` via `supabase.rpc()`. |
+| 3 | `20260825_ventures_canonical_writer_choke.sql` | The registry (`ventures_canonical_writer_policy`) + `aaa_`/`zzz_` guard triggers. |
+| 4 | `20260825_ventures_canonical_writer_policy_revoke.sql` | `REVOKE EXECUTE FROM PUBLIC`. |
+
+**Step 2's ehg-repo half is a HARD PREREQUISITE, not an optional deferral**, unlike most entries
+above: `promote.ts` is a live, actively-called chairman-facing route. Once step 3 arms, an unrouted
+raw write there 500s on every call, not merely "stays ungated".
+
+Step 3 refuses to apply if step 1 has not (its `$precondition$` block aborts). 3-before-2 is NOT
+machine-enforceable — applying with any writer still unwired breaks that writer instantly. Enumerate
+what remains before running step 3:
+
+```sql
+SELECT writer_identity, capability_flags->>'surface', notes
+  FROM public.ventures_canonical_writer_policy()
+ WHERE (capability_flags->>'stamp_wired')::boolean IS NOT TRUE
+ ORDER BY writer_identity;
+```
+
+**Both `aaa_` and `zzz_` perform IDENTICAL full validation** (unlike a design that trusts `aaa_`
+alone) — `trg_validate_stage_column` (live, unconditional) coerces a NULL stage to 1 mid-chain,
+sorting between the two under COLLATE "C" byte order, so only `zzz_` (firing last) observes the true
+final value. See the choke file's own header for the full measurement.
+
+**Rollback**: `20260825_ventures_canonical_writer_choke_DOWN.sql` — drops both triggers and both
+functions, retains the column and every writer's self-stamp (harmless once unvalidated). Re-applying
+after a rollback is NOT a plain re-run — see that file's own header, mirroring R5's MODE 1 caveat.
+
+**DDL proof**: `tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js` — includes isolation tests
+(TS-6a/TS-6b) proving SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001's staged client-axis guard
+(`ventures_block_client_governance_write_trg`) is independently correct even though `aaa_` masks it
+in a composed run (name-collation order, not apply order, governs which guard actually fires first).
+**Not run against a live database during authoring** — no local/CI Postgres was reachable in the
+authoring sandbox; treat as unverified until the "ddl" CI job runs it.
+
+**FR-4 (freeze-then-ratify)**: `scripts/reconciliation-packet-generator.mjs` (is_demo=false ventures
+only, bounded at 999) / `scripts/reconciliation-packet-apply.mjs` (optimistic-lock CAS on
+`current_lifecycle_stage` itself — no separate version column — via `advance_venture_stage`, never a
+raw write; 3 distinct outcomes: clean apply, stage-diverged re-queue, content-gate refusal). Pure-
+logic unit tests: `tests/unit/reconciliation-packet.test.js` (passing, no DB required).
+
 ## Dry-run proof for `database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql`
 
 Authored by SD-LEO-INFRA-RECONCILE-EHG-REPO-001, re-verified here for SD-LEO-INFRA-MINUS-GATE-SSOT-001

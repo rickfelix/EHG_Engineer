@@ -1,5 +1,14 @@
 -- @chairman-gated
 -- =============================================================================
+-- SUPERSEDED FOR APPLY PURPOSES (2026-08-25, SD-LEO-INFRA-STAGE-WRITER-CHOKE-001): the fix in this
+-- file is folded verbatim into database/chairman-gated/20260825_ventures_stage_rpcs_self_stamp.sql,
+-- which adds a stage_write_token self-stamp on top for that SD's canonical-writer choke. Applying
+-- BOTH is a harmless re-CREATE-OR-REPLACE (the newer file's body is a strict superset of this one's),
+-- but only the newer file needs to be run -- see database/chairman-gated/README.md, "Applying
+-- SD-LEO-INFRA-STAGE-WRITER-CHOKE-001". This file is left in place for its own historical review
+-- record and is NOT deleted.
+-- =============================================================================
+--
 -- Migration: advance_venture_stage(uuid,int,int,text) -- converge hard-gate
 --            membership onto the venture_stages SSOT (delete hardcoded arrays)
 -- SD: SD-LEO-INFRA-RECONCILE-EHG-REPO-001
