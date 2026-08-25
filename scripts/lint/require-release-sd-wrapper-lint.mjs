@@ -26,8 +26,19 @@
  * expected-count entry that would silently absorb a second, unrelated raw call added to that
  * same file later.
  *
+ * KNOWN LIMITATION (control-seed-test-lint FR-4): this control enforces wrapper ADOPTION, not
+ * CORRECT wrapper USAGE. It only checks whether a call site routes through bestEffortReleaseSd
+ * at all -- it cannot see whether the caller then passes `expectedSdKey` correctly. REGRESSION
+ * sub-agent finding (EXEC-TO-PLAN, this SD): scripts/stale-session-sweep.cjs:224 and
+ * scripts/fleet-kill.mjs:113 already call bestEffortReleaseSd (so this lint is silent on both),
+ * but via a `sdKey ? {expectedSdKey: sdKey} : {}` ternary that OMITS the option entirely when
+ * sdKey is falsy -- reproducing the QF-20260726-593 unscoped-fallthrough shape at the call site,
+ * one layer below what this lint can observe. Also DELIBERATELY NARROW at the AST level (see
+ * eslint-rules/require-release-sd-wrapper.js): a computed member access (`obj['rpc'](...)`) or a
+ * non-literal first argument (`obj.rpc(fnName, ...)`) is invisible to this rule.
+ *
  * Usage:
- *   node scripts/lint/require-release-sd-wrapper-lint.mjs [--json] [--root <dir>]
+ *   node scripts/lint/require-release-sd-wrapper-lint.mjs [--json] [--root <dir>] [--allowlist <file>]
  */
 
 import fs from 'fs';
