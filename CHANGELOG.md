@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-25](#2026-08-25)
+  - [Bugfix](#bugfix)
 - [2026-08-24](#2026-08-24)
   - [Infrastructure](#infrastructure)
   - [Security](#security)
@@ -140,6 +142,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-25
+
+### Bugfix
+- **A test asserting today's live-repo file size as a permanent requirement was one 505-token drift away from breaking, and the SD's own auto-generated description was already stale about which occurrence remained open** - PR #7525 (SD-PAT-FIX-GREEN-TEST-ASSERTING-001)
+  - **What shipped**: fixed the 8th confirmed occurrence of PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001 -- `tests/unit/contract-read-fit-marginal.test.js`'s "clearly-under contract" test read the live, DB-regenerated `CLAUDE_PLAN.md` and pinned today's fit/margin as a permanent fact. Measured to have only 505 tokens of headroom before the file would drift into the marginal band and flip the assertion red -- a near-term time bomb, not a theoretical risk. Replaced with the same synthetic-fixture pattern a sibling test in the same file already used, sized via the module's own imported `scale.HARNESS_BYTES_PER_TOKEN` constant rather than a restated literal.
+  - **The SD's own pattern-alert description had already gone stale by the time work began**: it named a "7th occurrence" (`coordinator-contract-read.test.js:213`) as still open, but that had already been fixed pre-SD by QF-20260824-393 (commit 6dfdec122f0) -- caught by reading the current code rather than trusting the auto-generated text, and corrected on the SD record with citations so PLAN did not re-scope already-finished work.
+  - **A validation-agent's independent class re-derivation, followed by a real Explore-agent sweep of all 62 tests referencing root CLAUDE_*.md/_DIGEST.md files**, surfaced two further latent sibling instances not named anywhere in the SD -- `tests/unit/adam/adam-digest-authority-survives.test.js:76` and `tests/unit/coordinator/coordinator-digest-authority-survives.test.js:51`, both a live-DIGEST-length-vs-live-CONTRACT-length ratio pin (0.6 and 0.8 thresholds, no stated reason for the difference). Measured at ~33% of each threshold today (large margin, not urgent) and recorded as documented 9th/10th occurrences in `issue_patterns.metadata` rather than fixed inline, to avoid scope creep on an otherwise small, clean fix.
+  - **A TESTING sub-agent correctly BLOCKED on two genuinely undelivered PRD user stories** (correcting the stale occurrence-count claim; documenting the two new siblings) before re-verifying PASS once `issue_patterns.occurrence_count` was reconciled 7 -> 8 and both user_stories rows were actually closed out -- a real verification pass, not a presence check.
+  - **Verification**: LEAD-TO-PLAN 96%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 85%, PLAN-TO-LEAD 96%, LEAD-FINAL-APPROVAL 94%. Targeted suite 30/30, full unit project 42,608 passing.
 
 ## 2026-08-24
 
