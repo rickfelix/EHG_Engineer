@@ -52,17 +52,22 @@
 --   this function yet -- do not proceed.
 --
 -- (b) The 5 JS/script writers (stage-execution-worker.js, venture-ceo-handlers.js,
---     saga-coordinator.js, eva-run.js, run-canary-probe.mjs) and the ehg-repo promote.ts route are
---     APPLICATION CODE, not database state -- no SQL query can observe whether the running process
---     was built from a commit that includes this SD's self-stamp changes. Confirm by DEPLOYMENT
---     ARTIFACT, not inference: the EVA daemon process's running commit SHA (or its most recent
---     restart timestamp, cross-referenced against this SD's merge commit) must be AT OR AFTER the
---     merge of this SD's PR in both EHG_Engineer and the ehg repo (PR #799). If the daemon has not
---     restarted onto post-merge code, its self-stamps do not exist yet regardless of what main
---     contains. Prefer directly exercising one real writer against a staging/canary venture and
---     confirming via `SELECT stage_write_token FROM ventures WHERE id = <fixture>` immediately
---     after the call (before the guard's own at-rest NULL-out fires) over trusting a deploy
---     timestamp alone.
+--     saga-coordinator.js, eva-run.js, run-canary-probe.mjs) are APPLICATION CODE, not database
+--     state -- no SQL query can observe whether the running process was built from a commit that
+--     includes this SD's self-stamp changes. Confirm by DEPLOYMENT ARTIFACT, not inference: the EVA
+--     daemon process's running commit SHA (or its most recent restart timestamp, cross-referenced
+--     against this SD's merge commit) must be AT OR AFTER the merge of this SD's own EHG_Engineer
+--     PR. If the daemon has not restarted onto post-merge code, its self-stamps do not exist yet
+--     regardless of what main contains. Prefer directly exercising one real writer against a
+--     staging/canary venture and confirming via `SELECT stage_write_token FROM ventures WHERE id =
+--     <fixture>` immediately after the call (before the guard's own at-rest NULL-out fires) over
+--     trusting a deploy timestamp alone.
+--     The ehg-repo promote.ts route needed NO separate PR from this SD -- SD-LEO-INFRA-VENTURES-
+--     CLIENT-WRITE-001's already-merged rickfelix/ehg#797 independently routed it (and 4 other
+--     client-side call sites) through advance_venture_stage first. This SD's own promote.ts PR
+--     (rickfelix/ehg#799) became a redundant no-op diff once #797 landed and was closed rather than
+--     merged (2026-08-25) -- verified by resolving its merge conflict against origin/main and
+--     confirming the file was byte-identical either way.
 --
 -- STEP 2 (20260825_ventures_stage_rpcs_self_stamp.sql + the paired JS/TS code deploys across both
 -- EHG_Engineer and the ehg repo) MUST already be live before this file applies. This file's own

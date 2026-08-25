@@ -584,7 +584,10 @@ is verified live in `pg_proc`/`pg_trigger`/`information_schema`, not merely stag
 
 **Step 2's ehg-repo half is a HARD PREREQUISITE, not an optional deferral**, unlike most entries
 above: `promote.ts` is a live, actively-called chairman-facing route. Once step 3 arms, an unrouted
-raw write there 500s on every call, not merely "stays ungated".
+raw write there 500s on every call, not merely "stays ungated". **Already satisfied**, but not by
+this SD's own work: SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001's rickfelix/ehg#797 (merged 2026-08-25)
+independently routed `promote.ts` through `advance_venture_stage` first. This SD's own equivalent
+PR (rickfelix/ehg#799) became a redundant no-op once #797 landed and was closed, not merged.
 
 Step 3 refuses to apply if step 1 has not (its `$precondition$` block aborts). 3-before-2 is NOT
 machine-enforceable — applying with any writer still unwired breaks that writer instantly.
