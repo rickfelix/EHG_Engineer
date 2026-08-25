@@ -205,6 +205,21 @@ describe('resolveConsultOriginator — finds who asked the consult/advisory', ()
     await resolveConsultOriginator(sb, CONSULT_CORR);
     expect(selectLog.some((cols) => String(cols).includes('payload'))).toBe(true);
   });
+
+  // SECURITY EXEC-TO-PLAN (sub_agent_execution_results e4068393-0933-4b30-9d9e-6a48aa8afa83) S3:
+  // EXEC-TST-W1 above pins the BY-ID branch's kind guard; nothing previously pinned the
+  // correlation-FALLBACK branch's `.in('payload->>kind', REPLY_ELIGIBLE_KINDS)` filter in
+  // isolation — deleting that `.in()` call left every existing test green, because every
+  // fallback fixture used so far only ever contains eligible-kind rows. A correlation carrying
+  // an ineligible-kind row (e.g. a stray chairman_directive sharing the correlation_id) must
+  // resolve null, never that row's sender.
+  it('EXEC-SEC-S3: a correlation whose only row is an ineligible kind resolves null via the fallback path, not that row\'s sender', async () => {
+    const strayRow = { sender_session: 'coordinator-sess', payload: { kind: 'chairman_directive', correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:46:29Z' };
+    const sb = fakeSb({ byId: null, byCorrelation: [strayRow] });
+    const result = await resolveConsultOriginator(sb, CONSULT_CORR);
+    expect(result).toBeNull();
+    expect(result).not.toBe('coordinator-sess');
+  });
 });
 
 describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', () => {
@@ -333,6 +348,37 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', (
     expect(withOne).toBe(ADAM_SESSION);
     expect(withThree).toBe(ADAM_SESSION);
     expect(withOne).toBe(withThree);
+  });
+
+  // SECURITY EXEC-TO-PLAN (sub_agent_execution_results e4068393-0933-4b30-9d9e-6a48aa8afa83) S4:
+  // the resolved originator was written straight to target_session with zero validation. A
+  // resolved value of a 'broadcast-'-prefixed live fan-out sentinel (resolveSolomonAdvisoryTarget's
+  // own fallback shape) would silently convert a targeted 1:1 CC into an unintended fleet-wide
+  // broadcast of reply content.
+  it('EXEC-SEC-S4: an originator resolving to a broadcast- sentinel is refused, never written as target_session', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'broadcast-adam', payload: { kind: SOLOMON_CONSULT_KIND } } }),
+      BASE_ARGS,
+      { insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(res.originator).toBeNull();
+    expect(inserts).toHaveLength(0);
+  });
+
+  // S4 (nil UUID variant): the nil UUID defeats plain typeof/non-empty checks (QF-20260727-862)
+  // but is never a real session — must be refused the same way.
+  it('EXEC-SEC-S4: an originator resolving to the nil UUID is refused, never written as target_session', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: '00000000-0000-0000-0000-000000000000', payload: { kind: SOLOMON_CONSULT_KIND } } }),
+      BASE_ARGS,
+      { insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(res.originator).toBeNull();
+    expect(inserts).toHaveLength(0);
   });
 });
 

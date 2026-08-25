@@ -50,6 +50,7 @@ const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.c
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { getActiveAdamId } = require('../lib/coordinator/adam-identity.cjs');
+const { isUsableSessionId } = require('../lib/coordinator/session-id-guard.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
@@ -666,6 +667,9 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
         originator = (await getLiveSolomonId(supabase).catch(() => null)) || originator;
       }
     } catch { /* keep the raw originator */ }
+    if (!isUsableSessionId(originator) || originator.startsWith('broadcast-')) {
+      return { inserted: false, originator: null };
+    }
     if (originator === target || originator === sessionId) return { inserted: false, originator };
     // Idempotence: a row for this reply already targeting the originator (a prior CC, or the
     // primary answer itself under --to adam) means delivered — never duplicate.
