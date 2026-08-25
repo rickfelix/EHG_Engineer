@@ -253,6 +253,17 @@ describe.skipIf(!HAS_REAL_DB)('claim dual-column atomicity (SD-LEO-INFRA-CLAIM-D
   it('FR-4 (fresh claim): switch_sd_claim with p_old_sd_id=NULL sets all three columns on the new SD', async () => {
     await clearSessionClaim(SESS_FRESH_CLAIM);
     await clearSDClaim(SD_FRESH_CLAIM);
+    // switch_sd_claim's initial lookup requires status='active' (its `FOR UPDATE` guard row-locks
+    // only an active session) -- clearSessionClaim() alone leaves status='idle', which would make
+    // the RPC return {success:false, error:'Session not found or not active'} before ever reaching
+    // the fresh-claim branch this test exists to prove. setSessionClaim() sets status='active' but
+    // also claims an SD, which would defeat the "genuinely fresh, no prior SD" premise this test
+    // needs -- so set status directly here instead, keeping sd_key null.
+    const { error: activateErr } = await supabase
+      .from('claude_sessions')
+      .update({ status: 'active', heartbeat_at: new Date().toISOString() })
+      .eq('session_id', SESS_FRESH_CLAIM);
+    if (activateErr) throw new Error(`activate SESS_FRESH_CLAIM failed: ${activateErr.message}`);
 
     const before = await getSDClaimState(SD_FRESH_CLAIM);
     expect(before.claiming_session_id).toBeNull();
