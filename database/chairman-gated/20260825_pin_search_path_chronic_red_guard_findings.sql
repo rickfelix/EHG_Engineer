@@ -1,0 +1,50 @@
+-- @chairman-gated
+--
+-- THERE IS DELIBERATELY NO `-- @approved-by:` LINE IN THIS FILE.
+--   Empirically verified against scripts/lib/migration-tier-classifier.mjs (not assumed): a bare
+--   `ALTER FUNCTION ... SET search_path` statement is NOT in the classifier's recognized-safe
+--   statement set at all, so it classifies TIER-2 ("unrecognized_or_unsafe_statement") by
+--   default-deny. Confirmed live: classifyMigration() on this file's exact SQL returns
+--   {tier:2, reason:"unrecognized_or_unsafe_statement: alter function ..."}. TIER-2 requires the
+--   3-factor chairman gate (`--prod-deploy` + a single-use 1h token + an `@approved-by` header
+--   matching `git config user.email`, enforced by scripts/lib/migration-guards.js).
+--   The builder that authored this file holds none of those and MUST NOT forge the attestation.
+--   The chairman adds the `@approved-by` line and runs:
+--       node scripts/apply-migration.js database/chairman-gated/20260825_pin_search_path_chronic_red_guard_findings.sql --prod-deploy
+--   APPLY IS NOT MINE. Until it is applied, both functions remain visible in the
+--   security-linter-sentinel's function_search_path_mutable findings (a known, declared gap, not
+--   a silently-hidden one -- FR-2's disposition plan names both explicitly).
+--
+-- =============================================================================
+-- Pin search_path on the 2 remaining function_search_path_mutable findings
+-- SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-2)
+-- =============================================================================
+-- The security-linter-sentinel's live findings (2026-08-24) include 2 SECURITY
+-- DEFINER functions with no pinned search_path: rescan_stage_20 and
+-- log_sd_mutation_audit. Same CVE-2018-1058 privilege-escalation vector the
+-- prior database/migrations/20260602_pin_search_path_security_definer_functions.sql
+-- migration closed for its own 12-function target set -- rescan_stage_20 was
+-- actually IN that earlier migration's explicit target list, but the function
+-- is still unpinned live (proconfig=[]), meaning that migration was never
+-- applied. log_sd_mutation_audit did not exist yet at that migration's
+-- authoring time.
+--
+-- Schema analysis (pg_get_functiondef inspected for both, live 2026-08-25):
+--   * rescan_stage_20(uuid): references only public tables (ventures,
+--     strategic_directives_v2, chairman_decisions, venture_stage_work) and
+--     public.fn_stage_artifact_precondition, plus pg_catalog builtins
+--     (jsonb_build_object, NOW, COALESCE, array_to_string). No cross-schema
+--     reads. -> pinned path: public, pg_catalog
+--   * log_sd_mutation_audit(): a trigger function referencing only public's
+--     audit_log table and pg_catalog builtins (current_setting, session_user,
+--     jsonb_build_object, COALESCE). -> pinned path: public, pg_catalog
+--
+-- PLAIN ALTER FUNCTION statements (no DO block): ALTER FUNCTION ... SET
+-- search_path is itself idempotent -- re-running sets the same value again,
+-- no error -- so no conditional-skip wrapper is needed for correctness, and
+-- re-applying after a partial failure is safe.
+-- =============================================================================
+
+ALTER FUNCTION public.rescan_stage_20(p_venture_id uuid) SET search_path = public, pg_catalog;
+
+ALTER FUNCTION public.log_sd_mutation_audit() SET search_path = public, pg_catalog;

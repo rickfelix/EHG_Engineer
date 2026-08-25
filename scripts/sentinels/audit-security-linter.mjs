@@ -26,6 +26,9 @@
  *   node scripts/sentinels/audit-security-linter.mjs --strict   # exit 1 if any findings
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
 // SD-ALTIFYAI-FDBK-FIX-GENERIC-SECURITY-SUB-001: shared with the SECURITY sub-agent
 // (lib/sub-agents/security.js) so one catalog definition serves both instruments.
@@ -38,38 +41,18 @@ import { probePgNetExposure } from '../../lib/security/pg-net-exposure.js';
 const JSON_MODE = process.argv.includes('--json');
 const STRICT = process.argv.includes('--strict');
 
-// Tables intentionally without RLS — system/PostGIS plus the disposable
-// quarantine/backup copies left by the 20260609/20260610 SD-MAN purge sweep.
-// They hold pre-image copies slated for drop, never carry live reads, and are
-// not worth an RLS policy — exempting them keeps the sentinel's signal on REAL
-// gaps instead of drowning in ~two dozen false positives.
-//
-// `_backup`/`_quarantine` are OVERLOADED naming conventions in this repo (real
-// dated backup tables also use `<feature>_backup_YYYYMMDD`), so those copies are
-// listed EXPLICITLY and by review — never by an open-ended suffix pattern that
-// could silently swallow a future real table's RLS gap (the very failure this
-// anti-noise change must not introduce).
-const EXEMPTED_TABLES = new Set([
-  'schema_migrations',
-  'spatial_ref_sys',
-  // SD-MAN purge/quarantine campaign copies (2026-06-09/10) — non-`_qparity` suffix.
-  // management_reviews_quarantine_20260610 is still LIVE in production (SD-LEO-INFRA-RETARGET-
-  // RESTORE-REHEARSAL-001 decoupled the DR restore-rehearsal drill from reading it, but did NOT
-  // drop it — that remains a separate, chairman-gated migration). Remove this entry in the same
-  // PR as that eventual drop.
-  'management_reviews_quarantine_20260610',
-  'venture_artifacts_storm_quarantine_20260610',
-  'sd_baseline_items_purge_backup_20260609',
-  'sd_baseline_items_recon_backup',
-]);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// `_qparityYYYYMMDD` is a TOOL-GENERATED quarantine-parity suffix unique to the
-// purge sweep — no human-authored feature table uses it — so it is safe to
-// exempt by pattern. Anchored to the suffix with an 8-digit datestamp so it
-// cannot match a live table (e.g. `scope_completion_chain` matches none).
-const EXEMPTED_TABLE_PATTERNS = [
-  /_qparity\d{8}$/i,
-];
+// SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-2b): was two hardcoded arrays here (EXEMPTED_TABLES,
+// EXEMPTED_TABLE_PATTERNS) -- this sentinel was the one place that still violated the
+// "baselines are data, not predicate edits" principle FR-3 establishes for both guards.
+// Migrated to exempted-tables.json; adding a new exemption now requires only a data-file edit,
+// no predicate code change.
+const EXEMPTED_MANIFEST = JSON.parse(readFileSync(join(__dirname, 'exempted-tables.json'), 'utf8'));
+const EXEMPTED_TABLES = new Set(EXEMPTED_MANIFEST.exempted_tables.map((e) => e.name));
+const EXEMPTED_TABLE_PATTERNS = EXEMPTED_MANIFEST.exempted_table_patterns.map(
+  (p) => new RegExp(p.pattern, p.flags || ''),
+);
 
 /**
  * True if a public table is intentionally exempt from the RLS requirement:

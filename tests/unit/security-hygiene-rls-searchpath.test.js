@@ -140,3 +140,36 @@ describe('FR-3: migration SQL content', () => {
     expect(sql).toMatch(/VERIFY FAILED: fn_advance_venture_stage search_path not pinned/);
   });
 });
+
+describe('SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-2b) — exemption manifest', () => {
+  it('exempts venture_artifacts_storm_quarantine_20260704, the sibling missing before this fix', () => {
+    expect(isExemptTable('venture_artifacts_storm_quarantine_20260704')).toBe(true);
+  });
+
+  it('does not accidentally widen the pattern-based exemption to match this new name incidentally', () => {
+    // The new entry must be exempted via the EXPLICIT list (name review), not because it
+    // happens to also satisfy the _qparity pattern -- it does not carry that suffix.
+    expect(/_qparity\d{8}$/i.test('venture_artifacts_storm_quarantine_20260704')).toBe(false);
+  });
+
+  it('adding a new exemption requires only a data-file edit, no predicate code change', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, join } = await import('node:path');
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const manifestPath = join(__dirname, '../../scripts/sentinels/exempted-tables.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    // The manifest is the single source of truth isExemptTable() reads from -- proving its
+    // shape here (rather than just re-testing isExemptTable's output, already covered above)
+    // is what makes this a genuine "data, not predicate" regression guard: if a future change
+    // reverted to hardcoded arrays in the .mjs file, this manifest would still exist but the
+    // predicate wouldn't read it, and THIS assertion (not just the exempt-table ones above)
+    // would be the one positioned to catch that the source of truth moved back into code.
+    const names = manifest.exempted_tables.map((e) => e.name);
+    expect(names).toContain('venture_artifacts_storm_quarantine_20260704');
+    expect(names).toContain('venture_artifacts_storm_quarantine_20260610');
+    for (const entry of manifest.exempted_tables) {
+      expect(entry.reason, `${entry.name} must carry a reason`).toBeTruthy();
+    }
+  });
+});

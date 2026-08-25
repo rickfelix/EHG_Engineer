@@ -602,6 +602,16 @@ async function main() {
 
   // ── Disposition ledger (FR-6) — loaded BEFORE the DB try, deliberately ──────
   //
+  // SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-3): BASELINES ARE DATA, NEVER PREDICATE EDITS.
+  // A known/deliberate/documented state (a chairman-gated file awaiting sign-off, a reviewed
+  // quarantine copy) is suppressed by adding a DATA entry to docs/audits/migration-dispositions.json
+  // (schema + writer: scripts/lib/migration-disposition-ledger.mjs), never by adding a new
+  // branch to this file's classification/blocking logic. This guard already followed that
+  // principle before this SD (the ledger IS the mechanism); FR-1 of this SD fixed a bug in the
+  // seeder that populates it, not the predicate itself. The sibling guard,
+  // scripts/sentinels/audit-security-linter.mjs, did NOT follow this principle until this same
+  // SD's FR-2b migrated its hardcoded exemption arrays to scripts/sentinels/exempted-tables.json.
+  //
   // CI FALSE-PASS GUARD. Inside the try below, ANY throw prints
   // MIGRATION_APPLY_STATE_INFRA_ERROR, which migration-deploy-drift-guard.yml greps and
   // converts to exit 0. A corrupt ledger reaching that path would turn the gate
