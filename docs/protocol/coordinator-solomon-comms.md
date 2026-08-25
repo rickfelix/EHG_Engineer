@@ -33,6 +33,24 @@ chairman-escalation rather than auto-sourcing. Stamped via `solomon-advisory.cjs
 This SD wires visibility only — the fail-closed pick-vs-instrument **routing** decision
 itself is a sibling FW-3 child SD's scope, not yet implemented.
 
+## Reply CC to the true originator (not just the answer target)
+
+An answer on this lane is often addressed to the coordinator (the relay), not the session
+that actually asked. Without a CC, the true originator never sees the reply in its own
+inbox — SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001 fixed a case where this silently failed for
+`adam_advisory`-kind correlations while the `solomon_consult` path CC'd correctly.
+
+`scripts/solomon-advisory.cjs`'s `resolveConsultOriginator` resolves the originating
+session from the same value `--reply-to` accepts (a row id or a bare `correlation_id`) for
+any kind in `REPLY_ELIGIBLE_KINDS` (currently `{solomon_consult, adam_advisory}`) —
+excluding reply rows themselves, since a reply on `session_coordination` shares its ask's
+`kind` and `correlation_id`. `ensureOriginatorCc` then inserts a `via:cc_originator` copy
+targeted at that originator, idempotently (skipped if already delivered, or if the
+originator IS the answer target/sender). The resolved CC target is validated before
+write — refused if it isn't a usable session id (nil UUID, blank) or resolves to a
+`broadcast`/`broadcast-*` fan-out sentinel, which would otherwise turn a targeted CC into
+an unintended fleet-wide broadcast of reply content.
+
 ## Who triggers a consult
 
 The consult is routed by the Phase-B/D triage SSOT (`lib/coordinator/solomon-triage.cjs` `evaluateSolomonTriage`): a worker/coordinator escalates after a counter-gated threshold (e.g. RCA recurrence ≥ 2, gate-fail ≥ 3) wires a `solomon_consult` row. Solomon does not poll for new problems — it drains what is routed to it.
