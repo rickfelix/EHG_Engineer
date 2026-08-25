@@ -1844,6 +1844,7 @@ async function runQaFixtureScan(ctx) {
   // tests/unit/lib/sweep/pass-registry.test.js pins that return to EXACTLY the five
   // formerly-main()-scoped locals. Widening a pinned contract for an unread value is a bad trade.
   await clearHalfReleasedSdClaims(supabase, actions, warnings);
+  await detectClaimFocusMismatch(supabase, actions, warnings);
 
   // Adversarial-review fix (PR #5755): main() still consumes these five locals after the
   // hoist (dead-release cross-signal gate, CLAIM_RELEASED announce, QA summary) — return
@@ -1932,6 +1933,95 @@ async function clearHalfReleasedSdClaims(supabase, actions, warnings) {
   }
 
   return halfReleasedClaims;
+}
+
+/**
+ * CLAIM=2-SURF stale-claim-on-switch, DETECTION ONLY (QF-20260824-154).
+ *
+ * strategic_directives_v2.claiming_session_id (dispatch-authoritative) and
+ * claude_sessions.sd_key (canonical live "what am I currently focused on" mirror) can
+ * legitimately diverge: a worker may deliberately hold a claim on SD-X (e.g. blocked on human
+ * input) while ACTIVELY working QF-Y — claiming multiple items simultaneously is a real,
+ * protocol-sanctioned worker pattern (checkin's own claim_multiplicity reporting tracks it as
+ * normal), not itself a defect. clearHalfReleasedSdClaims above already handles the genuinely
+ * unambiguous case (claiming session is DEAD); this function does NOT duplicate that.
+ *
+ * What it DOES surface: a claim where the claiming session is LIVE but its current sd_key
+ * points elsewhere (or is null) — this is EITHER a deliberate multi-hold (fine) OR a genuine
+ * soft-orphan the worker silently walked away from (not fine) and DB state alone cannot tell
+ * the two apart. Auto-releasing here would wrongly strip a legitimate multi-hold; never
+ * surfacing it leaves a genuine abandonment invisible indefinitely (the QF's own measured
+ * incident: rows the coordinator only found via manual cross-session inspection). This is
+ * deliberately a ONE-TIME STAMP-AND-REPORT, not a release — the auto-release model question
+ * ("should a focus switch ever release a prior claim") is an open model-ruling question this
+ * function does not resolve; it only makes the ambiguous state visible with provenance, which
+ * is the concrete, uncontroversial half of the fix.
+ *
+ * @param {object} supabase
+ * @param {string[]} actions - appended: one line per newly-stamped mismatch
+ * @param {string[]} warnings - appended: one line when the guard makes it skip the tick
+ * @returns {Promise<Array>} the rows newly stamped this tick (empty when it skipped or found none)
+ */
+async function detectClaimFocusMismatch(supabase, actions, warnings) {
+  let stamped = [];
+  try {
+    const claimed = await fapPaginate(() => supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, claiming_session_id, metadata')
+      .not('status', 'in', '(completed,cancelled)')
+      .not('claiming_session_id', 'is', null)
+      .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE)
+      .order('sd_key', { ascending: true }));
+
+    // Skip rows already stamped — this is a ONE-TIME detection per divergence, not a
+    // per-tick re-announcement (a re-stamp fires only if the live sd_key itself changes again).
+    const candidates = (claimed || []).filter((sd) => !sd.metadata || !sd.metadata.claim_focus_mismatch);
+    if (candidates.length === 0) return stamped;
+
+    const sessionIds = [...new Set(candidates.map((sd) => sd.claiming_session_id))];
+    const { data: sessions, error: sessErr } = await supabase
+      .from('claude_sessions')
+      .select('id, sd_key, status')
+      .in('id', sessionIds);
+    if (sessErr) {
+      warnings.push('GUARD_UNAVAILABLE: claim-focus-mismatch check skipped this tick — session read failed (' + sessErr.message + ')');
+      return stamped;
+    }
+    const sessionById = new Map((sessions || []).map((s) => [s.id, s]));
+
+    for (const sd of candidates) {
+      const session = sessionById.get(sd.claiming_session_id);
+      // Only report on a LIVE session with a DIFFERENT focus — a dead/missing session is
+      // clearHalfReleasedSdClaims's job above, not this function's.
+      if (!session || session.status !== 'active') continue;
+      if (session.sd_key === sd.sd_key) continue; // in focus, no mismatch
+
+      const { error } = await supabase
+        .from('strategic_directives_v2')
+        .update({
+          metadata: {
+            ...(sd.metadata || {}),
+            claim_focus_mismatch: {
+              detected_at: new Date().toISOString(),
+              claiming_session_id: sd.claiming_session_id,
+              live_sd_key: session.sd_key || null,
+              detected_by: 'detectClaimFocusMismatch',
+            },
+          },
+        })
+        .eq('sd_key', sd.sd_key)
+        .eq('claiming_session_id', sd.claiming_session_id); // CAS: same guard as the release path above
+
+      if (!error) {
+        stamped.push(sd);
+        actions.push('QA: claim-focus mismatch stamped on ' + sd.sd_key + ' — claimant ' + String(sd.claiming_session_id).slice(0, 8)
+          + ' is live but currently focused on ' + (session.sd_key || 'nothing') + ' (multi-hold or soft-orphan; not auto-released, review needed)');
+      }
+    }
+  } catch (e) {
+    warnings.push('GUARD_UNAVAILABLE: claim-focus-mismatch check skipped this tick — ' + ((e && e.message) || 'unknown error'));
+  }
+  return stamped;
 }
 
 // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): extracted from the promotion-path SIGNAL_RESOLVED
@@ -4570,6 +4660,9 @@ module.exports.SWEEP_PASS_REGISTRY_RETIREMENT = SWEEP_PASS_REGISTRY_RETIREMENT;
 // QF-20260727-031: exported so the regression test drives the REAL SD-side half-released-claim
 // detector (fake client, real code path) rather than asserting against a re-implementation.
 module.exports.clearHalfReleasedSdClaims = clearHalfReleasedSdClaims;
+// QF-20260824-154: same rationale — exported so the regression test drives the real
+// claim-focus-mismatch detector, not a re-implementation.
+module.exports.detectClaimFocusMismatch = detectClaimFocusMismatch;
 
 // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): exported so the positive/negative-control tests drive
 // the REAL SIGNAL_RESOLVED logic (fake client, real code path) against fixtures, not a
