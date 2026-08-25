@@ -82,11 +82,60 @@ describe('FR-6 wiring — a corrupt ledger must never fail the gate OPEN', () =>
   }, 300000);
 
   it('an APPLIED ledger entry cannot suppress a real gap or fake completion, end to end', () => {
+    // SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-1b): was a HARDCODED basename
+    // ('20260713_quick_fixes_factory_lane.sql'). That file's live status moved to APPLIED and
+    // left the gap set some time after this test was authored -- a forged ledger entry pointing
+    // at a basename that is not a gap can never be "contradictory" (contradictoryBasenames()
+    // only iterates the live gap set), so the assertion below silently stopped being reachable.
+    // Confirmed by direct reproduction before this fix: the test failed because the tool's
+    // OWN correct behavior (no contradiction to report for a non-gap file) looked identical to
+    // a broken detector -- proving the detector itself needed no change, only this fixture's
+    // basename needed to be resolved from the LIVE recent-gap set at test-run time, not a
+    // filename frozen at authoring time.
+    //
+    // Ensure the ledger is genuinely empty first, so this run's own gap discovery is not
+    // suppressed by whatever the ledger held from a prior test in this same file.
+    if (fs.existsSync(LEDGER)) fs.rmSync(LEDGER);
+    const discovery = runVerifier(['--json', '--recent-only']);
+    let report;
+    try {
+      // Brace-match rather than slice-to-end-of-output: the verifier's --json mode prints the
+      // JSON object followed by a trailing outcome marker (e.g. [MIGRATION_APPLY_STATE_GAPS_FOUND])
+      // on stdout, and runVerifier() combines stdout+stderr -- either can leave content AFTER the
+      // JSON's closing brace, which a naive "everything from the first '{' onward" parse cannot
+      // tolerate. And a bare `discovery.out.indexOf('{')` is not safe for the START either --
+      // reproduced directly: a dotenvx CLI tip banner line ("tip: ⌘ override existing
+      // { override: true }") that precedes the real JSON contains its own tiny, unrelated
+      // `{...}` fragment, which indexOf('{') finds FIRST. Anchor the start to a line that is
+      // EXACTLY '{' (the same technique scripts/seed-migration-dispositions.mjs already uses for
+      // this identical dotenvx-banner-before-JSON shape), then brace-match forward from there.
+      const startMatch = /^\{[ \t]*$/m.exec(discovery.out);
+      if (!startMatch) throw new Error("no line matching exactly '{' found in output");
+      const startIdx = startMatch.index;
+      let depth = 0, inStr = false, esc = false, endIdx = -1;
+      for (let i = startIdx; i < discovery.out.length; i++) {
+        const c = discovery.out[i];
+        if (esc) { esc = false; continue; }
+        if (c === '\\' && inStr) { esc = true; continue; }
+        if (c === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (c === '{') depth++;
+        else if (c === '}') { depth--; if (depth === 0) { endIdx = i; break; } }
+      }
+      if (endIdx === -1) throw new Error('no matching closing brace found');
+      report = JSON.parse(discovery.out.slice(startIdx, endIdx + 1));
+    } catch (e) {
+      throw new Error(`could not parse verifier --json output to find a live recent gap: ${e.message}\n${discovery.out.slice(0, 2000)}`);
+    }
+    const liveRecentGap = (report.recentGaps || [])[0];
+    expect(liveRecentGap, 'no live recent gap found to forge an APPLIED entry against -- the fixture needs at least one').toBeTruthy();
+    const targetBasename = String(liveRecentGap.file).replace(/^.*[\\/]/, '');
+
     // The FR-2b guard proven through the actual CLI rather than through the pure function:
-    // claim every one of the recent gap files is APPLIED and confirm the gate stays red, the
+    // claim a genuinely live recent gap file is APPLIED and confirm the gate stays red, the
     // suppression count stays 0, and the contradiction is surfaced.
     const forged = {
-      '20260713_quick_fixes_factory_lane.sql': {
+      [targetBasename]: {
         disposition: 'APPLIED', reason: 'forged by a test to prove this cannot suppress',
         owner: 'test', sd_key: 'SD-TEST', recorded_at: '2026-07-25T00:00:00.000Z',
       },
@@ -98,7 +147,7 @@ describe('FR-6 wiring — a corrupt ledger must never fail the gate OPEN', () =>
     expect(code).toBe(1); // still blocking
     expect(out).toMatch(/0 suppressed/);
     expect(out).toContain('LEDGER CONTRADICTS SCHEMA');
-    expect(out).toContain('20260713_quick_fixes_factory_lane.sql');
+    expect(out).toContain(targetBasename);
   }, 300000);
 
   it('the committed ledger is well-formed and its suppressions are all reason-carrying', () => {

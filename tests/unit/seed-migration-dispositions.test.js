@@ -4,8 +4,8 @@
  * buildLedger is pure, so every case here runs with no disk and no DB.
  */
 
-import { describe, it, expect } from 'vitest';
-import { buildLedger, parseSweepDoc, serializeLedger } from '../../scripts/seed-migration-dispositions.mjs';
+import { describe, it, expect, vi } from 'vitest';
+import { buildLedger, parseSweepDoc, serializeLedger, readGapBodies } from '../../scripts/seed-migration-dispositions.mjs';
 
 const NOW = '2026-07-25T00:00:00.000Z';
 const GATED = '-- requires-chairman-apply\nALTER TABLE t ADD COLUMN c int;';
@@ -175,5 +175,51 @@ describe('parseSweepDoc', () => {
     for (const bad of ['', null, undefined, '## DEFERRED\n\ngarbage']) {
       expect(parseSweepDoc(bad).size).toBe(0);
     }
+  });
+});
+
+describe('SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-1) — readGapBodies resolves the real file location', () => {
+  it('resolves a chairman-gated repo-relative id via the injected resolver, not a hardcoded database/migrations/ path', () => {
+    const resolvePath = vi.fn((id) => `/repo/${id}`);
+    const exists = vi.fn(() => true);
+    const readFile = vi.fn(() => GATED);
+    const sql = readGapBodies(
+      [{ file: 'database/chairman-gated/20260824_foo.sql' }],
+      { resolvePath, exists, readFile, repoRoot: '/repo' },
+    );
+    // The bug this SD fixes: the OLD code always reconstructed
+    // path.join(ROOT, 'database', 'migrations', base), which never matches a
+    // chairman-gated/ id. Asserting the resolver was called with the FULL id (not a
+    // stripped basename) is what a database/migrations/-only reconstruction would fail.
+    expect(resolvePath).toHaveBeenCalledWith('database/chairman-gated/20260824_foo.sql', { repoRoot: '/repo' });
+    expect(exists).toHaveBeenCalledWith('/repo/database/chairman-gated/20260824_foo.sql');
+    expect(sql.get('20260824_foo.sql')).toBe(GATED);
+  });
+
+  it('keys the returned map by BASENAME (the shape Rule A in buildLedger expects), even for a repo-relative id', () => {
+    const sql = readGapBodies(
+      [{ file: 'database/chairman-gated/20260817_bar.sql' }],
+      { resolvePath: () => '/repo/database/chairman-gated/20260817_bar.sql', exists: () => true, readFile: () => PLAIN, repoRoot: '/repo' },
+    );
+    expect([...sql.keys()]).toEqual(['20260817_bar.sql']);
+    expect(sql.has('database/chairman-gated/20260817_bar.sql')).toBe(false);
+  });
+
+  it('skips a gap whose resolved path does not exist, rather than throwing', () => {
+    const sql = readGapBodies(
+      [{ file: 'database/chairman-gated/missing.sql' }],
+      { resolvePath: () => '/nowhere.sql', exists: () => false, readFile: () => { throw new Error('must not be called'); }, repoRoot: '/repo' },
+    );
+    expect(sql.size).toBe(0);
+  });
+
+  it('a bare-basename gap id (ordinary database/migrations/ file) still resolves correctly', () => {
+    const resolvePath = vi.fn((id) => `/repo/database/migrations/${id}`);
+    const sql = readGapBodies(
+      [{ file: '20260821_ordinary.sql' }],
+      { resolvePath, exists: () => true, readFile: () => PLAIN, repoRoot: '/repo' },
+    );
+    expect(resolvePath).toHaveBeenCalledWith('20260821_ordinary.sql', { repoRoot: '/repo' });
+    expect(sql.get('20260821_ordinary.sql')).toBe(PLAIN);
   });
 });

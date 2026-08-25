@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "purpose": "Tables intentionally without RLS -- system/PostGIS plus disposable quarantine/backup copies. Consumed by scripts/sentinels/audit-security-linter.mjs's isExemptTable(). SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-2b): migrated out of the sentinel's predicate code into this data manifest, per the 'baselines are data, not predicate edits' principle FR-3 establishes -- the sentinel's own hardcoded EXEMPTED_TABLES/EXEMPTED_TABLE_PATTERNS arrays were the one place that principle was still violated.",
+    "note": "`_backup`/`_quarantine` are OVERLOADED naming conventions in this repo (real dated backup tables also use `<feature>_backup_YYYYMMDD`), so those copies are listed EXPLICITLY and by review -- never by an open-ended suffix pattern that could silently swallow a future real table's RLS gap."
+  },
+  "exempted_tables": [
+    { "name": "schema_migrations", "reason": "PostGIS/system table, not application data." },
+    { "name": "spatial_ref_sys", "reason": "PostGIS/system table, not application data." },
+    { "name": "management_reviews_quarantine_20260610", "reason": "SD-MAN purge/quarantine campaign copy (2026-06-09/10). Still LIVE in production as of authoring -- SD-LEO-INFRA-RETARGET-RESTORE-REHEARSAL-001 decoupled the DR restore-rehearsal drill from reading it, but did NOT drop it. Remove this entry in the same PR as that eventual drop." },
+    { "name": "venture_artifacts_storm_quarantine_20260610", "reason": "SD-MAN purge/quarantine campaign copy (2026-06-09/10). One-time archive, never hard-deleted, zero live consumers." },
+    { "name": "venture_artifacts_storm_quarantine_20260704", "reason": "SD-LEO-INFRA-CHRONIC-RED-GUARD-001 (FR-2b): sibling of the already-exempted venture_artifacts_storm_quarantine_20260610 (both one-time quarantine snapshots via CREATE TABLE ... LIKE ... INCLUDING ALL, COMMENT ON TABLE says 'never hard-deleted', zero code consumers in either repo). Was previously unexempted, inflating the sentinel's live finding count by one for a reason unrelated to any real new exposure." },
+    { "name": "sd_baseline_items_purge_backup_20260609", "reason": "SD-MAN purge/quarantine campaign copy (2026-06-09/10)." },
+    { "name": "sd_baseline_items_recon_backup", "reason": "SD-MAN purge/quarantine campaign copy (2026-06-09/10)." }
+  ],
+  "exempted_table_patterns": [
+    { "pattern": "_qparity\\d{8}$", "flags": "i", "reason": "TOOL-GENERATED quarantine-parity suffix unique to the purge sweep -- no human-authored feature table uses it. Anchored to the suffix with an 8-digit datestamp so it cannot match a live table." }
+  ]
+}

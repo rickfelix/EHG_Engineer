@@ -242,6 +242,145 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
       .not.toContain('permission_escalation');
   });
 
+  // CRIT-003 auth_bypass -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. 'disable' matched inside
+  // the compound noun-phrase 'rls_disabled_in_public' / 'RLS-disabled' (the Supabase
+  // database-linter's own official finding-type name), with 'security'/'rls' reappearing
+  // later on the same long prose line to satisfy the '.*' suffix. State-descriptor compound
+  // (term BEFORE 'disable[d]', hyphen/underscore-joined), not the imperative-verb danger
+  // shape ('disable RLS'), which must still fire.
+  it('does NOT flag prose naming the rls_disabled_in_public linter finding by its official name', () => {
+    expect(names(
+      "+ summary: 'The sentinel's live finding breakdown: 12 rls_disabled_in_public tables, 2 function_search_path_mutable SECURITY DEFINER functions'"
+    )).not.toContain('auth_bypass');
+  });
+  it('does NOT flag prose describing "RLS-disabled tables" as a finding', () => {
+    expect(names(
+      '+  *    RLS-disabled tables, 1 sensitive-column exposure, 2 mutable-search-path SECURITY DEFINER'
+    )).not.toContain('auth_bypass');
+  });
+  it('STILL flags the imperative "disable RLS" shape (term AFTER disable, not compound)', () => {
+    expect(names('+ ALTER TABLE feedback DISABLE ROW LEVEL SECURITY;')).toContain('auth_bypass');
+  });
+  it('STILL flags "// disable rls checks locally" (disable not preceded by a term-hyphen compound)', () => {
+    expect(names(
+      '+ const disableAuthForTesting = true; // disable rls checks locally'
+    )).toContain('auth_bypass');
+  });
+
+  // Deep-tier adversarial review of this same SD's PR found the FIRST version of the
+  // CRIT-003 fix above over-broad: it excluded 'disable' whenever ANY compound adjacency
+  // preceded it, which also suppressed genuine imperative-verb compounds like
+  // 'auth_disable()' -- not just the safe past-participle 'disabled' state-descriptor
+  // form. Narrowed to apply only to the literal word 'disabled'.
+  it('STILL flags an imperative verb-call compound like "auth_disable()" (not the safe "disabled" state form)', () => {
+    expect(names(
+      '+ auth_disable(); // bypass auth'
+    )).toContain('auth_bypass');
+  });
+  it('STILL flags an imperative verb-call compound like "security_disable_all()"', () => {
+    expect(names(
+      '+ security_disable_all(); // security off'
+    )).toContain('auth_bypass');
+  });
+  it('STILL flags an imperative compound inside an object literal, e.g. {\'rls-disable\': true, security: false}', () => {
+    expect(names(
+      "+ const cfg = {'rls-disable': true, security: false};"
+    )).toContain('auth_bypass');
+  });
+  it('does NOT re-flag the original "RLS-disabled tables" state-descriptor false positive', () => {
+    expect(names(
+      '+  *    RLS-disabled tables, 1 sensitive-column exposure, 2 mutable-search-path SECURITY DEFINER'
+    )).not.toContain('auth_bypass');
+  });
+
+  // CRIT-006 permission_escalation -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. 'service_role_key.*client'
+  // matched the safe, common backend idiom '<...>_SERVICE_ROLE_KEY client' ('client' as a noun
+  // meaning "an SDK client object built with the key"), not the key being sent TO a
+  // browser/frontend client.
+  it('does NOT flag "the explicit SUPABASE_SERVICE_ROLE_KEY client" (safe backend-client noun phrase)', () => {
+    expect(names(
+      '+    "reason": "Service-role-only consumer via scripts/foo.mjs\'s explicit SUPABASE_SERVICE_ROLE_KEY client. Service_role bypasses RLS unconditionally"'
+    )).not.toContain('permission_escalation');
+  });
+  it('STILL flags the service role key handed to a browser-facing sendToClient call', () => {
+    expect(names(
+      '+ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; sendToClient(serviceRoleKey);'
+    )).toContain('permission_escalation');
+  });
+  it('STILL flags the service role key assigned onto window with a browser comment', () => {
+    expect(names(
+      '+ window.serviceRoleClient = createClient(url, service_role_key); // expose to browser'
+    )).toContain('permission_escalation');
+  });
+  it('STILL flags the service role key returned straight to the frontend', () => {
+    expect(names(
+      '+ return { service_role_key: key }; // sent straight to the frontend'
+    )).toContain('permission_escalation');
+  });
+
+  // CRIT-006/CRIT-007 test-fixture exemption -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001.
+  // The three genuine-detection fixtures above necessarily embed dangerous CODE
+  // SHAPES as fixture strings, which would CRITICAL-block this PR's own diff without
+  // the exemption. Pin that detection is NOT silently lost for real (non-test) files.
+  it('STILL flags CRIT-006 on the SAME genuine shape when the file is NOT a test path', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('lib/db/policy.js',
+      '+ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; sendToClient(serviceRoleKey);')))
+      .toContain('permission_escalation');
+  });
+  it('STILL flags CRIT-007 on the SAME genuine shape when the file is NOT a test path', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('src/client-config.js',
+      '+ window.serviceRoleClient = createClient(url, service_role_key); // expose to browser')))
+      .toContain('service_role_exposure');
+  });
+
+  // isPatternDefinitionPath exemption -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. A closed-enum
+  // regex compiled to match bare keywords necessarily contains those same keywords as
+  // literal substrings in its OWN pattern-definition line, so editing that line always
+  // self-matches. config/review-critical-findings.json is exempted for the same ID set as
+  // test fixtures; a DIFFERENT file with the same filename elsewhere is NOT exempted, and
+  // CRIT-001 is never exempted anywhere (a real secret value is still a real leak).
+  it('does NOT flag CRIT-003 inside config/review-critical-findings.json itself (pattern self-reference)', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('config/review-critical-findings.json',
+      '+      "disable.*(?:auth|rls|security)"')))
+      .not.toContain('auth_bypass');
+  });
+  it('does NOT flag CRIT-006 inside config/review-critical-findings.json itself', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('config/review-critical-findings.json',
+      '+      "service_role_key.*(?:client|browser|frontend)"')))
+      .not.toContain('permission_escalation');
+  });
+  it('does NOT leak the config-file exemption to a same-named file in a different directory', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('other/review-critical-findings.json',
+      '+      "disable.*(?:auth|rls|security)"')))
+      .toContain('auth_bypass');
+  });
+  it('does NOT leak the config-file exemption to a same-named file in a DIFFERENT nested directory (deep-tier review finding)', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('vendor/config/review-critical-findings.json',
+      '+      "disable.*(?:auth|rls|security)"')))
+      .toContain('auth_bypass');
+  });
+  // A "STILL flags CRIT-001 inside config/review-critical-findings.json" test was
+  // deliberately NOT added here: CRIT-001 is gated by the same shared
+  // TEST_FIXTURE_EXEMPT_IDS.has(pattern.id) check as isTestFixturePath/
+  // isPatternDefinitionPath (see lib/ship/review-gate.js) -- the pre-existing 'STILL
+  // flags CRIT-001 (hardcoded secret) even inside a test file (not exempt)' test above
+  // already proves CRIT-001 is absent from that shared Set, which conclusively covers
+  // both exemption paths at once. A config-file-specific duplicate would need to embed
+  // a real-secret-shaped literal, which -- since CRIT-001 has no exemption anywhere --
+  // would itself CRITICAL-block this PR's own diff for zero additional coverage.
+
   it('sets inHunk on a combined-diff header, closing the sibling +++-spoof gap for the whole file', () => {
     // Without inHunk recognizing '@@@', a subsequent in-hunk raw line that reads
     // '+++ b/tests/x' (2-wide polarity '++' immediately followed by content starting
