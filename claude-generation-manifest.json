@@ -1,203 +1,19 @@
 {
-  "generated_at": "2026-08-24T08:52:35.896Z",
-  "git_commit": "9d53f7cb",
-  "db_snapshot_hash": "cde139c0d3a08750",
+  "generated_at": "2026-08-25T02:19:57.626Z",
+  "git_commit": "c96a2ea8",
+  "db_snapshot_hash": "4e97d70f203a5729",
   "files": {
-    "CLAUDE.md": {
-      "type": "full",
-      "chars": 19564,
-      "bytes": 19703,
-      "estimated_tokens": 4891,
-      "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE.md"
-    },
-    "CLAUDE_CORE.md": {
-      "type": "full",
-      "chars": 94500,
-      "bytes": 95087,
-      "estimated_tokens": 23625,
-      "content_hash": "dfe79ede94890dfc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_CORE.md"
-    },
-    "CLAUDE_LEAD.md": {
-      "type": "full",
-      "chars": 58425,
-      "bytes": 58621,
-      "estimated_tokens": 14607,
-      "content_hash": "78dae37f310a935f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_LEAD.md"
-    },
-    "CLAUDE_LEAD_MANUAL.md": {
-      "type": "full",
-      "chars": 8818,
-      "bytes": 8862,
-      "estimated_tokens": 2205,
-      "content_hash": "e31913dbf2dcf793",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_LEAD_MANUAL.md"
-    },
-    "CLAUDE_PLAN.md": {
-      "type": "full",
-      "chars": 54854,
-      "bytes": 55111,
-      "estimated_tokens": 13714,
-      "content_hash": "1025d8ad22db9f45",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_PLAN.md"
-    },
-    "CLAUDE_PLAN_MANUAL.md": {
-      "type": "full",
-      "chars": 38353,
-      "bytes": 38460,
-      "estimated_tokens": 9589,
-      "content_hash": "ccb97f4a08fcdd86",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_PLAN_MANUAL.md"
-    },
-    "CLAUDE_EXEC.md": {
-      "type": "full",
-      "chars": 92809,
-      "bytes": 93243,
-      "estimated_tokens": 23203,
-      "content_hash": "c0b1f623b6832234",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_EXEC.md"
-    },
-    "CLAUDE_ADAM.md": {
-      "type": "full",
-      "chars": 53445,
-      "bytes": 54017,
-      "estimated_tokens": 13362,
-      "content_hash": "4b3e0bbec287a933",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_ADAM.md"
-    },
-    "CLAUDE_ADAM_MANUAL.md": {
-      "type": "full",
-      "chars": 15698,
-      "bytes": 15842,
-      "estimated_tokens": 3925,
-      "content_hash": "0076d0a58d1cba9f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_ADAM_MANUAL.md"
-    },
-    "CLAUDE_ADAM_PROVENANCE.md": {
-      "type": "full",
-      "chars": 6924,
-      "bytes": 6988,
-      "estimated_tokens": 1731,
-      "content_hash": "8fdda65904e7bcad",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_ADAM_PROVENANCE.md"
-    },
-    "CLAUDE_COORDINATOR.md": {
-      "type": "full",
-      "chars": 25532,
-      "bytes": 25726,
-      "estimated_tokens": 6383,
-      "content_hash": "79d29e2c472bf6c3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_COORDINATOR.md"
-    },
-    "CLAUDE_COORDINATOR_MANUAL.md": {
-      "type": "full",
-      "chars": 4557,
-      "bytes": 4593,
-      "estimated_tokens": 1140,
-      "content_hash": "bf191631749350a8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_COORDINATOR_MANUAL.md"
-    },
-    "CLAUDE_COORDINATOR_PROVENANCE.md": {
-      "type": "full",
-      "chars": 2126,
-      "bytes": 2138,
-      "estimated_tokens": 532,
-      "content_hash": "38e5f300ac43d962",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_COORDINATOR_PROVENANCE.md"
-    },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 56476,
-      "bytes": 56987,
-      "estimated_tokens": 14119,
-      "content_hash": "0002c2c0db5ae3b3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_SOLOMON.md"
-    },
-    "CLAUDE_SOLOMON_MANUAL.md": {
-      "type": "full",
-      "chars": 11227,
-      "bytes": 11324,
-      "estimated_tokens": 2807,
-      "content_hash": "8ae08f80fb8d5bc2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_SOLOMON_MANUAL.md"
-    },
-    "CLAUDE_SOLOMON_PROVENANCE.md": {
-      "type": "full",
-      "chars": 11727,
-      "bytes": 11838,
-      "estimated_tokens": 2932,
-      "content_hash": "cf7921383017671c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_SOLOMON_PROVENANCE.md"
-    },
-    "CLAUDE_DIGEST.md": {
-      "type": "digest",
-      "chars": 9611,
-      "bytes": 9653,
-      "estimated_tokens": 2403,
-      "content_hash": "a744915741cf068b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_DIGEST.md"
-    },
-    "CLAUDE_CORE_DIGEST.md": {
-      "type": "digest",
-      "chars": 13747,
-      "bytes": 13861,
-      "estimated_tokens": 3437,
-      "content_hash": "a37512745037d4ca",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_CORE_DIGEST.md"
-    },
-    "CLAUDE_LEAD_DIGEST.md": {
-      "type": "digest",
-      "chars": 5551,
-      "bytes": 5571,
-      "estimated_tokens": 1388,
-      "content_hash": "5555f2172dfe0253",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_LEAD_DIGEST.md"
-    },
-    "CLAUDE_PLAN_DIGEST.md": {
-      "type": "digest",
-      "chars": 8541,
-      "bytes": 8581,
-      "estimated_tokens": 2136,
-      "content_hash": "8ca84ecad650ae7e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_PLAN_DIGEST.md"
-    },
-    "CLAUDE_EXEC_DIGEST.md": {
-      "type": "digest",
-      "chars": 10964,
-      "bytes": 11046,
-      "estimated_tokens": 2741,
-      "content_hash": "99a2a29875bc48f0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_EXEC_DIGEST.md"
-    },
-    "CLAUDE_ADAM_DIGEST.md": {
-      "type": "digest",
-      "chars": 17754,
-      "bytes": 18068,
-      "estimated_tokens": 4439,
-      "content_hash": "a6dc38da7cd869dc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_ADAM_DIGEST.md"
-    },
-    "CLAUDE_COORDINATOR_DIGEST.md": {
-      "type": "digest",
-      "chars": 8498,
-      "bytes": 8566,
-      "estimated_tokens": 2125,
-      "content_hash": "7e7497cf7a58d95e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_COORDINATOR_DIGEST.md"
-    },
-    "CLAUDE_SOLOMON_DIGEST.md": {
-      "type": "digest",
-      "chars": 3959,
-      "bytes": 3997,
-      "estimated_tokens": 990,
-      "content_hash": "2c711882a933e298",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-SSOT-DEDUP-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "chars": 57529,
+      "bytes": 58040,
+      "estimated_tokens": 14383,
+      "content_hash": "b67d2a50be0d2fa2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-ENCODE-SMS-FACET-001\\CLAUDE_SOLOMON.md"
     }
   },
   "section_digests": {
-    "global": "636615e6169d1fc1",
+    "global": "fd98798e11fe089f",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -458,7 +274,7 @@
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "a2a538ee3b5fe726",
+      "611": "ca7e8b5f21051636",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",

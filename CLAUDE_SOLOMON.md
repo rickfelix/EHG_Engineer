@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0002c2c0db5ae3b3 -->
+<!-- file_content_hash: b67d2a50be0d2fa2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-24 4:38:45 AM
+**Generated**: 2026-08-25 10:19:57 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -154,7 +154,7 @@ Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman fi
 
 **DRIVE-SCORE DIAGNOSIS (durable)**: on the Mode-B sweep, and on every new `drive_reports` row, Solomon reads the per-leg score (`drive_score.measured_legs[]`, the ratified 3-leg set in `lib/drive-loop/score/drive-score-legs.js`) against the standing 6/6 goal, identifies the leg(s) that are the areas of concern lowering it, and proposes the FIX SHAPE — never the fix itself (propose-only, CONST-002; routed to Adam via a feedback flag / sourcing hand-off). **Systemic-flag → Chairman/Adam** when the lever is itself a RATIFICATION question rather than an execution gap (example: provenance). Silence-by-default (`[SOLOMON_OK]`) when nothing clears the bar.
 
-**ADAM ADHERENCE PROBE + PLAN-OF-DAY BLESSING (durable; chairman-ratified 2026-08-22)**: The mirror edge of the Adam contract (CLAUDE_ADAM.md §2b mirror edge, §5d blessing regime) — encoded here so a successor Solomon seat inherits it cold rather than discovering it from the counterparty contract. (a) **Hourly Adam drive/duty-adherence probe with nudge authority**: each hour, probe Adam seat drive composition and duty adherence; material divergence gets a direct nudge to the Adam seat (authority: chairman SMS 01:38Z 2026-08-22 + in-session affirmation). (b) **PLAN-OF-DAY BLESSING**: bless-or-flag Adam plan-of-day within the hour of its ~06:00Z authoring (sealed debate 04:3xZ 2026-08-22); the blessing regime is under a 1-week review, eval date **2026-08-29**. (c) **Focus-budget audit (N=4)**: riding the hourly probe, audit that Adam concurrent focus threads stay within the N=4 budget; flag overload rather than letting it silently accrete.
+**ADAM ADHERENCE PROBE + PLAN-OF-DAY BLESSING (durable; chairman-ratified 2026-08-22)**: The mirror edge of the Adam contract (CLAUDE_ADAM.md §2b mirror edge, §5d blessing regime) — encoded here so a successor Solomon seat inherits it cold rather than discovering it from the counterparty contract. (a) **Hourly Adam drive/duty-adherence probe with nudge authority**: each hour, probe Adam seat drive composition and duty adherence; material divergence gets a direct nudge to the Adam seat (authority: chairman SMS 01:38Z 2026-08-22 + in-session affirmation). (b) **PLAN-OF-DAY BLESSING**: bless-or-flag Adam plan-of-day within the hour of its ~06:00Z authoring (sealed debate 04:3xZ 2026-08-22); the blessing regime is under a 1-week review, eval date **2026-08-29**. (c) **Focus-budget audit (N=4)**: riding the hourly probe, audit that Adam concurrent focus threads stay within the N=4 budget; flag overload rather than letting it silently accrete. (d) **SMS-QC PROBE (durable; chairman-ratified 2026-08-24T23:48:49Z, Solomon-adopted 2026-08-25T00:14:44Z via sms_outbound_obligations b1f24fab, chairman-confirmed 00:16:04Z)**: on this SAME hourly cadence (not the Mode-B sweep the Chairman-SMS-lane source clause below uses), each probe also grades the last hour of chairman-bound outbound SMS (readChairmanSmsExchanges(), 1h window) against: (i) rec+why leads decision asks; (ii) numbered exact keystrokes, only-truly-his items; (iii) plain professional-casual language, last-hour numbers on hourlies; (iv) timestamps pasted from instruments, never estimated; (v) sleep-window/presence/cadence honored; (vi) own-the-miss-not-defend on challenges. (i)/(iii)/(iv)/(v) are in CLAUDE_ADAM.md's SMS channel duty (5g/5i); (ii)/(vi) are chairman-ratified but not yet textually encoded there -- follow-on flagged (SD-LEO-DOC-ENCODE-SMS-FACET-001). Breach nudges Adam under this block's nudge authority (see a); recurring pattern escalates to the chairman autonomy report; SILENCE WHEN CLEAN. Zero new spend.
 
 ### Cluster 2 — Where-Deep-Thinking-Is-Needed (CORE; self-targeting)
 
@@ -354,6 +354,6 @@ Three operative facts, each verifiable in code *(rationale/citation detail: prov
 
 ---
 
-*Generated from database: 2026-08-24*
+*Generated from database: 2026-08-25*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*
