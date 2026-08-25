@@ -1,16 +1,22 @@
 /**
- * ClaimSwapper — Atomic release+acquire claim via single UPDATE
+ * ClaimSwapper — Atomic release+acquire claim via Postgres RPCs
  *
- * Performs claim transfer on claude_sessions using a conditional UPDATE
- * that only succeeds if the session still holds the old claim. This prevents
- * double-claiming race conditions.
+ * Performs claim transfer for a session by delegating to atomic Postgres RPCs
+ * (switch_sd_claim / release_sd) that own both claim-surface tables
+ * (claude_sessions and strategic_directives_v2) in one transaction, so a claim
+ * is never left synced on one table but stale on the other.
  *
  * Part of SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001
  *
- * SD-LEO-INFRA-LEO-INFRA-SESSION-001 (FR-2): worktree-state clears now route
+ * SD-LEO-INFRA-LEO-INFRA-SESSION-001 (FR-2): worktree-state clears route
  * through lib/lifecycle/worktree-state-writer.mjs. Worktree columns are NOT
- * touched in the sd_key UPDATEs here; clearWorktreeState is invoked after a
- * successful release/swap so the (sd_key, worktree_*) invariant holds.
+ * owned by the RPCs; clearWorktreeState is invoked after a successful
+ * release/swap so the (sd_key, worktree_*) invariant holds.
+ *
+ * SD-LEO-INFRA-CLAIM-SURFACE-SYNC-001 (FR-1): swapClaim() previously did a
+ * raw claude_sessions-only UPDATE that never touched strategic_directives_v2's
+ * claim columns on either the evicted or newly-claimed SD -- now delegates to
+ * switch_sd_claim, mirroring releaseClaim()'s existing release_sd delegation.
  */
 
 import { clearWorktreeState } from '../../../lib/lifecycle/worktree-state-writer.mjs';
