@@ -1,0 +1,146 @@
+{
+  "executive_summary": "QF-20260824-154 (auto-escalated Tier-3) reported that a worker switching claude_sessions.sd_key can leave the OLD SD's strategic_directives_v2.claiming_session_id stuck, stranding it from the dispatch belt (dispatch reads claiming_session_id only). LEAD-phase premise verification found the RPCs claim_sd/release_sd already correctly clear both surfaces for claim/release, but scripts/modules/handoff/claim-swapper.js::swapClaim() performs a raw, hand-rolled sd_key UPDATE that bypasses ALL of them -- clearing neither the old SD's claim columns NOR setting the new SD's claim columns. A prospective TESTING sub-agent review (evidence pending write, FAIL 85 at first pass) found a SUPERIOR, already-existing, already-deployed fix mechanism this PRD's first draft missed: the switch_sd_claim(p_session_id, p_old_sd_id, p_new_sd_id, p_new_track) Postgres RPC (migration 20260506000000_claim_dual_column_atomicity.sql) atomically does everything swapClaim() needs -- clears the old SD's 3 claim columns AND sets the new SD's 3 claim columns in ONE transaction, with existence/terminal-status guards -- and is already used elsewhere (lib/session-manager.mjs). claim-swapper.js's own sibling function releaseClaim() already demonstrates the correct pattern in the same file: delegate to an atomic RPC (release_sd) rather than hand-roll raw UPDATEs. This SD: (1) rewrites swapClaim() to delegate to switch_sd_claim RPC, matching releaseClaim()'s existing pattern, while preserving its existing post-swap clearWorktreeState() call for the worktree-path concern (which the RPC does not own); (2) one-time-sweeps the one live stale row via the existing releaseClaimBothSurfaces() helper; (3) rewrites scripts/modules/handoff/claim-swapper.test.js's swapClaim describe block to match the new RPC-based implementation (mirroring the rpc-mock pattern already used for releaseClaim's own tests in the same file) and adds the fresh-claim-sets-new-SD-columns assertion the QF's second named facet requires.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Rewrite swapClaim() to delegate to the existing switch_sd_claim RPC",
+      "description": "scripts/modules/handoff/claim-swapper.js:31-79 swapClaim() currently builds a raw conditional UPDATE on claude_sessions.sd_key (CAS-guarded via .eq('sd_key', oldSdKey) when supplied) and touches NOTHING on strategic_directives_v2 -- neither clearing the OLD SD's claiming_session_id/active_session_id/is_working_on, NOR setting the NEW SD's. This is LIVE code, called from scripts/modules/handoff/auto-chain-executor.js:114-118 inside executeAutoChain() (gated on autoProceed && chainEnabled; orchestrator chaining defaults OFF per CLAUDE.md, so this fires on chained-orchestrator claim transitions, not every worker claim switch). A correct, ALREADY-DEPLOYED atomic RPC for exactly this operation exists: public.switch_sd_claim(p_session_id text, p_old_sd_id text, p_new_sd_id text, p_new_track text DEFAULT NULL) -- migration 20260506000000_claim_dual_column_atomicity.sql, captured live at database/evidence/claim-surface-sync/switch_sd_claim.before.sql. It verifies the session actually holds p_old_sd_id (FOR UPDATE row lock), verifies p_new_sd_id exists and is not terminal-status, atomically clears the OLD SD's 3 claim columns, writes the new claude_sessions.sd_key, and atomically SETS the NEW SD's 3 claim columns -- all in one transaction. releaseClaim() in the SAME file (lines 89-133) already demonstrates the correct pattern: delegate to an atomic RPC (release_sd) rather than hand-roll. Rewrite swapClaim() to call supabase.rpc('switch_sd_claim', { p_session_id: sessionId, p_old_sd_id: oldSdKey, p_new_sd_id: newSdKey, p_new_track: track }), map its {success, error, message} shape to swapClaim()'s existing {success, reason} return contract, and PRESERVE the existing post-success clearWorktreeState(sessionId, {supabase, reason:'claim_swap'}) call when oldSdKey was provided (the RPC is DB-only and does not own worktree_path/worktree_branch -- those stay lib/lifecycle/worktree-state-writer.mjs's concern, unchanged from today).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "swapClaim(supabase, {sessionId, oldSdKey, newSdKey, track}) calls the switch_sd_claim RPC instead of a raw .from('claude_sessions').update() chain.",
+        "After a successful swap, the OLD SD's claiming_session_id/active_session_id/is_working_on are NULL/false (verified by direct DB read in the regression, not just the RPC's own reported success), AND the NEW SD's claiming_session_id/active_session_id/is_working_on are set to the session/true.",
+        "swapClaim() with oldSdKey=null (fresh claim, no prior SD) still calls switch_sd_claim with p_old_sd_id=null and correctly sets the new SD's columns -- verify switch_sd_claim's own null-oldSdKey handling (it compares v_session.sd_key IS DISTINCT FROM p_old_sd_id, so a session with sd_key already NULL and p_old_sd_id=NULL matches).",
+        "clearWorktreeState is still invoked exactly when oldSdKey is truthy, matching today's behavior -- this SD does not change the worktree-clear semantics.",
+        "swapClaim()'s existing {success, reason} return shape is preserved so callers (auto-chain-executor.js) do not need changes.",
+        "Map the RPC's error payload to `reason` as `data.message || data.error` (not `data.error || data.message`) -- switch_sd_claim's NEW existence/terminal-status guards return a terse code in `error` (e.g. 'sd_not_found') and the descriptive text in `message`; `data.error || data.message` would surface the terse code instead of the useful message (TESTING confirming-review finding, evidence af9b9eb7).",
+        "Note (informational, non-blocking): switch_sd_claim's claude_sessions UPDATE does not null released_at/released_reason the way claim_sd/release_sd do -- confirmed moot in practice (the RPC's own precondition requires status='active', and the fields are already null whenever a session is active), but worth a one-line code comment for future readers."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "One-time sweep: clear the live stale claim on SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001",
+      "description": "Live-measured at LEAD phase and RE-VERIFIED during prospective TESTING review (still current): SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001.claiming_session_id=1a553cdb-967e-430e-b409-cf22575f6ab3, but that session's own claude_sessions row shows sd_key=NULL, status=idle, released_reason='completed' -- a genuine, currently-live soft-orphan invisible to dispatch. Clear it via the EXISTING lib/claim/release-claim-both-surfaces.mjs::releaseClaimBothSurfaces() helper (holder-pinned CAS + old-holder-gone readback) -- this row is a pure release case (the session already moved on with no new claim to preserve), so the helper's full-release semantics are correct here.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001.claiming_session_id reads NULL after the sweep runs, verified by a direct DB read (not the helper's own self-reported success flag alone) -- re-check the row's live state at EXEC time first, since state may have changed since LEAD/PLAN.",
+        "The sweep uses releaseClaimBothSurfaces(), not a hand-rolled clear -- no 4th release mechanism introduced.",
+        "The sweep script is a one-off (scripts/one-off/*), run once at EXEC time and not left as a recurring cron."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Rewrite claim-swapper.test.js's swapClaim tests for the RPC-based implementation + add the fresh-claim second-facet assertion",
+      "description": "scripts/modules/handoff/claim-swapper.test.js ALREADY EXISTS with the correct harness pattern for this file (makeSupabase() for the old raw-UPDATE shape, makeReleaseSupabase() with an .rpc mock for releaseClaim's RPC-based tests). tests/unit/session-writer/no-bypass.test.js is the WRONG target -- it is a static source-regex allowlist lint with no runtime harness, cannot invoke swapClaim() or observe cross-table effects, and its generalization mechanism (source-pattern matching) has nothing to do with claiming_session_id sync. Rewrite the 'swapClaim -- FR-2 wiring' describe block in claim-swapper.test.js to mock supabase.rpc('switch_sd_claim', ...) (mirroring makeReleaseSupabase's rpc mock shape exactly) instead of the raw .update().eq().eq().select() chain, since FR-1 changes swapClaim()'s internal implementation. Preserve the existing clearWorktreeState assertions (still correct post-FR-1: still called exactly when oldSdKey is truthy and the RPC reports success). ADD the QF's own named 'second facet' regression (witnessed 2026-08-24 ~22:44Z: a fresh claim wrote sd_key while claiming_session_id lagged) -- assert that a fresh claim (oldSdKey=null) results in the NEW SD's strategic_directives_v2 claiming_session_id/active_session_id/is_working_on being set, not just claude_sessions.sd_key. Since switch_sd_claim is a single atomic RPC call from the JS side, this is asserted by checking the RPC was called with p_new_sd_id correctly (unit level) PLUS a live integration check in the FR-1 regression (DB-level, not mockable) for the true end-to-end guarantee.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "claim-swapper.test.js's swapClaim tests are rewritten to mock supabase.rpc('switch_sd_claim', ...) instead of the raw .update() chain; all 5 existing swapClaim test cases (worktree columns excluded from payload, clearWorktreeState invoked on switch, not invoked on fresh claim, not invoked on RPC-reported failure, not invoked on RPC DB error) are preserved in intent, adapted to the new call shape.",
+        "A NEW unit test asserts swapClaim() calls switch_sd_claim with { p_session_id, p_old_sd_id: null, p_new_sd_id } for a fresh claim (no prior SD) -- the unit-level half of the QF's second facet.",
+        "A NEW integration/db-tier test (or an addition to an existing live-DB claim test) verifies, against a real DB row, that after switch_sd_claim runs for a fresh claim, strategic_directives_v2.claiming_session_id for the NEW sd_key is actually set -- mutation-verified: a version of switch_sd_claim (or a stand-in) that skips the new-SD UPDATE must make this test fail.",
+        "Mutation-verified for FR-1's core fix: reverting swapClaim() to the pre-fix raw UPDATE reproduces a failing test; restoring the fix makes it pass again."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema/migration change",
+      "description": "switch_sd_claim, release_sd, releaseClaimBothSurfaces all already exist and are already correct. This SD is pure application-code (claim-swapper.js) + test rewrite + one-off DB-row cleanup. No new columns, no new RPC, no migration file."
+    },
+    {
+      "id": "TR-2",
+      "title": "Preserve swapClaim()'s external contract",
+      "description": "Callers (auto-chain-executor.js) must not need changes: swapClaim()'s {success, reason} return shape and parameter signature ({sessionId, oldSdKey, newSdKey, track}) stay the same; only the internal implementation changes from a raw UPDATE to an RPC call."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "swapClaim() delegates to switch_sd_claim RPC and both surfaces update atomically",
+      "type": "unit",
+      "expected": "supabase.rpc('switch_sd_claim', {...}) is called with the correct params; on RPC success, swapClaim() returns {success:true}"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Fresh claim (no oldSdKey) sets the NEW SD's claim columns, not just claude_sessions.sd_key",
+      "type": "integration",
+      "expected": "strategic_directives_v2.claiming_session_id/active_session_id/is_working_on for the new SD are set after switch_sd_claim runs with p_old_sd_id=null"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Claim switch clears the OLD SD's claim columns",
+      "type": "integration",
+      "expected": "strategic_directives_v2.claiming_session_id/active_session_id/is_working_on for the OLD SD are cleared after switch_sd_claim runs"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "clearWorktreeState still invoked exactly when oldSdKey is truthy",
+      "type": "unit",
+      "expected": "clearWorktreeStateMock called once with (sessionId, {supabase, reason:'claim_switch'}) on a switch, not called on a fresh claim"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "One-time sweep clears the live stale row",
+      "type": "integration",
+      "expected": "SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001.claiming_session_id is NULL after running the sweep script, verified by direct DB read"
+    }
+  ],
+  "acceptance_criteria": [
+    "No SD is left permanently unreachable from dispatch due to a stale claiming_session_id caused by claim-swapper.js::swapClaim(), in EITHER direction (old-SD-not-cleared OR new-SD-not-set).",
+    "The one currently-known live stale row is cleared.",
+    "claim-swapper.test.js's rewritten regression fails on the pre-fix code and passes on the post-fix code (mutation-verified)."
+  ],
+  "risks": [
+    {
+      "risk": "switch_sd_claim's existence/terminal-status guards for p_new_sd_id are stricter than swapClaim()'s current behavior (which has no such guards) -- a caller that previously succeeded switching onto a phantom/terminal SD id will now get an error instead.",
+      "mitigation": "This is the CORRECT, safer behavior (matches claim_sd's own guards) and the only live caller (auto-chain-executor.js) switches onto SDs already known to exist and be workable in the chain -- verify at EXEC time that auto-chain-executor.js's own error handling for a swapClaim() failure is adequate (it already checks {success:false} today).",
+      "severity": "low"
+    },
+    {
+      "risk": "Rewriting claim-swapper.test.js's mock shape could silently drop coverage if the new rpc-mock tests don't cover every branch the old update-chain tests did.",
+      "mitigation": "FR-3's acceptance criteria explicitly enumerate all 5 existing test cases to preserve in intent, not just count-match."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/fleet/claim-eligibility.cjs (dispatch eligibility reads claiming_session_id)",
+      "scripts/modules/handoff/auto-chain-executor.js (the live caller of swapClaim())",
+      "lib/session-manager.mjs (existing consumer of switch_sd_claim RPC -- confirms this SD reuses an already-proven-live path)"
+    ],
+    "dependencies": [
+      "public.switch_sd_claim RPC (already deployed, migration 20260506000000_claim_dual_column_atomicity.sql)",
+      "lib/claim/release-claim-both-surfaces.mjs (FR-2's sweep mechanism, already exists)",
+      "lib/lifecycle/worktree-state-writer.mjs::clearWorktreeState (unchanged dependency, preserved)"
+    ],
+    "data_contracts": ["none -- no schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": [
+      "FR-2's sweep is a one-time, logged one-off script run (not a new recurring job)",
+      "FR-1's fix is verified by the rewritten regression plus a live re-check of belt_ineligibility_breakdown at the next /checkin after merge"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Single-file application-code fix (claim-swapper.js delegates to an already-deployed RPC), a test-file rewrite, and a one-off DB cleanup script -- no new components, no new RPC.",
+    "components": [
+      { "name": "scripts/modules/handoff/claim-swapper.js", "change": "swapClaim() rewritten to call switch_sd_claim RPC instead of a raw UPDATE, preserving clearWorktreeState post-step" },
+      { "name": "scripts/modules/handoff/claim-swapper.test.js", "change": "swapClaim describe block rewritten for the RPC-mock shape; new fresh-claim second-facet test added" },
+      { "name": "scripts/one-off/sweep-stale-claim-first-customer-001.mjs", "change": "NEW -- one-time cleanup via releaseClaimBothSurfaces()" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Delegate to the already-correct, already-deployed switch_sd_claim RPC (matching the file's own releaseClaim() precedent) instead of hand-rolling a partial fix; sweep the one confirmed live victim; rewrite the existing test file for the new implementation shape.",
+    "steps": [
+      "FR-1: rewrite swapClaim() to call switch_sd_claim RPC, preserving the clearWorktreeState() post-step and the {success,reason} return contract.",
+      "FR-3: rewrite claim-swapper.test.js's swapClaim tests for the RPC-mock shape; add the fresh-claim second-facet unit test; add a live-DB integration test for the same facet. Mutation-verify (revert FR-1, confirm red; restore, confirm green).",
+      "FR-2: re-verify SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001's live state (may have changed since PLAN), then write and run the one-off sweep script; verify via direct DB read.",
+      "Full targeted test run (claim-swapper.test.js + any DDL/db-tier test touched) + full `npx vitest run tests/unit` sweep before shipping."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Query strategic_directives_v2 for SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001.claiming_session_id after the sweep runs", "expected_outcome": "NULL" },
+    { "step_number": 2, "instruction": "Run the rewritten regression tests in scripts/modules/handoff/claim-swapper.test.js", "expected_outcome": "Passes on post-fix code" },
+    { "step_number": 3, "instruction": "Revert the FR-1 RPC-delegation and re-run the regression test", "expected_outcome": "Fails (mutation-verifies the test actually checks the fix)" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-CLAIM-SURFACE-SYNC-001"
+  }
+}
