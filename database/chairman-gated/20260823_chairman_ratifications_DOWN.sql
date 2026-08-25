@@ -1,4 +1,10 @@
 -- ROLLBACK for 20260823_chairman_ratifications.sql
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal 'Approve repair.' in-terminal 2026-08-25: DOWN+UP cycle to purge three
+--    hand-shaped rows Adam inserted outside the canonical writer — flagged REGRESSED by the
+--    FR-4 detector minutes after first apply. Table was minutes old; only those three rows
+--    existed. Re-capture follows via recordChairmanRatification (canonical, unencoded).
+--    Scribed by Adam per CLAUDE_ADAM.md §3c.)
 -- SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001
 
 BEGIN;
