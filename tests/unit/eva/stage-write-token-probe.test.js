@@ -52,6 +52,24 @@ describe('probeStageWriteTokenExists', () => {
   it('returns false when supabase is missing', async () => {
     expect(await probeStageWriteTokenExists(null)).toBe(false);
   });
+
+  // REGRESSION (Run Unit Tier, CI): a mock supabase that doesn't implement .select()/.limit() at
+  // all THROWS a TypeError rather than resolving with {error} -- caught here so it can never
+  // regress again. Real callers' existing test mocks (tests/unit/venture-ceo-task-completion-
+  // artifact-check.test.js, tests/unit/eva/stage-execution-worker-high-consequence-mint.test.js)
+  // only implement .from().update() with no .select(), and the exception previously propagated
+  // out of this probe and into the CALLER's own try/catch, silently skipping the caller's entire
+  // write -- not just the stamp.
+  it('returns false (does not throw) when supabase.from(...).select is not a function', async () => {
+    const throwingSupabase = { from: () => ({ update: () => ({ eq: () => Promise.resolve({ error: null }) }) }) };
+    await expect(probeStageWriteTokenExists(throwingSupabase)).resolves.toBe(false);
+  });
+
+  it('a thrown exception is not cached -- a subsequent healthy call still flips to true', async () => {
+    const throwingSupabase = { from: () => ({}) };
+    expect(await probeStageWriteTokenExists(throwingSupabase)).toBe(false);
+    expect(await probeStageWriteTokenExists(makeSupabase(null))).toBe(true);
+  });
 });
 
 describe('stageWriteTokenField', () => {
