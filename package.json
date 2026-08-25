@@ -124,6 +124,7 @@
     "lint:no-process-cwd": "node scripts/lint/no-process-cwd-in-sub-agents-lint.mjs",
     "lint:ismainmodule-classguard": "node scripts/lint/ismainmodule-classguard-lint.mjs",
     "lint:main-guard-one-off": "node scripts/lint/require-main-guard-in-one-off-lint.mjs",
+    "lint:release-sd-wrapper": "node scripts/lint/require-release-sd-wrapper-lint.mjs",
     "lint:mocked-sut-import": "node scripts/lint/no-mocked-sut-import-lint.mjs",
     "lint:session-coordination-insert": "node scripts/lint/session-coordination-insert-classguard-lint.mjs",
     "lint:count-truncation-diff": "node scripts/lint/count-truncation-diff-lint.mjs",

@@ -133,11 +133,15 @@ describe('releaseClaim — atomic release_sd RPC', () => {
   });
 
   it('returns failure when session row not found, without invoking RPC', async () => {
+    // SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-2): releaseClaim now delegates its scope check
+    // to bestEffortReleaseSd, which does not distinguish "no session row" from "session row
+    // exists but holds no SD" -- both resolve to heldSdKey===null ("holds nothing"). Both are
+    // equally correct reasons to refuse the release; only the reason text changed.
     const supabase = makeReleaseSupabase({ noSession: true });
     const result = await releaseClaim(supabase, 'S1', 'SD-OLD');
 
     expect(result.success).toBe(false);
-    expect(result.reason).toMatch(/not found/);
+    expect(result.reason).toMatch(/holds nothing/);
     expect(supabase._spies.rpc).not.toHaveBeenCalled();
   });
 

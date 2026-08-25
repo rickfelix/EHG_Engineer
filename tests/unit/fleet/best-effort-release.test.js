@@ -52,4 +52,35 @@ describe('bestEffortReleaseSd', () => {
     await bestEffortReleaseSd({ rpc }, 'sess-9', 'unfit_repo_mismatch', silent);
     expect(rpc).toHaveBeenCalledWith('release_sd', { p_session_id: 'sess-9', p_reason: 'unfit_repo_mismatch' });
   });
+
+  // SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-3): both known release_sd SQL bodies always
+  // return success:true today, so this is presently unreachable in production — but the
+  // check must exist so a future RPC contract change cannot silently read as a release
+  // that happened.
+  it('FR-3: resolves {released:false} when the RPC data explicitly reports success:false', async () => {
+    const supabase = { rpc: async () => ({ data: { success: false }, error: null }) };
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'manual', silent);
+    expect(r.released).toBe(false);
+    expect(r.error).toBe('release_sd_reported_failure');
+  });
+
+  it('FR-3: prefers data.message over data.error on success:false (mirrors claim-swapper.js swapClaim\'s precedent)', async () => {
+    const supabase = {
+      rpc: async () => ({ data: { success: false, error: 'terse_code', message: 'human-readable reason' }, error: null }),
+    };
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'manual', silent);
+    expect(r.error).toBe('human-readable reason');
+  });
+
+  it('FR-3: falls back to data.error when success:false carries no message', async () => {
+    const supabase = { rpc: async () => ({ data: { success: false, error: 'terse_code' }, error: null }) };
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'manual', silent);
+    expect(r.error).toBe('terse_code');
+  });
+
+  it('FR-3: does not misfire on a normal success response (no explicit success:false)', async () => {
+    const supabase = { rpc: async () => ({ data: { released_sd: 'X' }, error: null }) };
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'manual', silent);
+    expect(r.released).toBe(true);
+  });
 });
