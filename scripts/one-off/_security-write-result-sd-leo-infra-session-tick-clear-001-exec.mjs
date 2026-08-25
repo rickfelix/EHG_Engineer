@@ -20,6 +20,7 @@
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = '7eee0052-1da3-4bfb-9509-a090c52b0d25';
 const SD_KEY = 'SD-LEO-INFRA-SESSION-TICK-CLEAR-001';
@@ -184,8 +185,10 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => {
-  console.error('FAILED:', e.message);
-  console.error(e.stack);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('FAILED:', e.message);
+    console.error(e.stack);
+    process.exit(1);
+  });
+}
