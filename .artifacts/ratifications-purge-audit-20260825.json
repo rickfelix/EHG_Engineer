@@ -1,0 +1,58 @@
+{
+  "purged_at_verbal": "chairman in-terminal Approve repair. 2026-08-25",
+  "reason": "hand-shaped outside canonical writer; FR-4 REGRESSED section=undefined; re-captured canonically as unencoded",
+  "rows": [
+    {
+      "id": "4bd0e67b-1009-4237-9b14-810a8ec17910",
+      "ratified_at": "2026-08-25T18:49:01.229Z",
+      "quote": "I want you to truly pay attention to the process as AltifyAI walks stage 20 through stage 22. I want to make sure that we are addressing any issues with the Venture Factory and that we are not just working around them. Remember, this Venture Factory, all the venture stages, needs to be something that we can replicate and improve upon.",
+      "source": "terminal:2026-08-25-sitting",
+      "target_contracts": [
+        "adam",
+        "coordinator"
+      ],
+      "scribe_seat": "adam-50192c2e",
+      "encoded_at": "2026-08-25T18:49:01.229Z",
+      "encoded_ref": {
+        "memory": "watch-the-altifyai-s20-22-walk-as-factory-integrity-exercise",
+        "coordinator_relay_corr": "9f1b0eae-5c05-42a0-a7bb-976160dd6664"
+      },
+      "marker_text": "S20-22 WATCH standing duty: factory-integrity exercise — root-fix never workaround; replicability test on every fix (memory watch-the-altifyai-s20-22-walk-as-factory-integrity-exercise + coordinator dispatch bar corr 9f1b0eae)"
+    },
+    {
+      "id": "4807b1dd-f8af-46df-922b-2df5dd6ad9e7",
+      "ratified_at": "2026-08-25T18:49:01.247Z",
+      "quote": "For UAT to be robust and successful, it does need to be its own stage. [Adam rec agreed: I agree] Please have Solomon double check the plan. I want to make sure that the plan is detailed and robust. I also want to make sure that the UAT stage is robust within itself.",
+      "source": "terminal:2026-08-25-sitting",
+      "target_contracts": [
+        "adam",
+        "protocol"
+      ],
+      "scribe_seat": "adam-50192c2e",
+      "encoded_at": "2026-08-25T18:49:01.247Z",
+      "encoded_ref": {
+        "sd_key": "SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001",
+        "solomon_verdict": "2c8da5e0-e926-409c-8837-a2e17e97f29d"
+      },
+      "marker_text": "Dedicated venture UAT stage program: SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001 (census-first stage-key migration; Solomon double-check hard gate; in-stage robustness criteria incl. Solomon five binding additions)"
+    },
+    {
+      "id": "c554e13b-225e-4528-8732-8d9777f3726d",
+      "ratified_at": "2026-08-25T18:49:01.266Z",
+      "quote": "Outreach to any real person stays BLOCKED until S23 Launch Readiness (chairman test-it-yourself sitting) and S24 Go Live pass — packet ruling 2-BLOCKED, I agree with all your recommendations.",
+      "source": "terminal:2026-08-25-sitting",
+      "target_contracts": [
+        "adam",
+        "coordinator",
+        "protocol"
+      ],
+      "scribe_seat": "adam-50192c2e",
+      "encoded_at": "2026-08-25T18:49:01.266Z",
+      "encoded_ref": {
+        "field": "metadata.outreach_ruling",
+        "venture": "AltifyAI 50763b6a-1fad-4e1e-b2fc-296a1d66ebf9"
+      },
+      "marker_text": "AltifyAI outreach_ruling BLOCKED-until-S23+S24 recorded on the venture row 2026-08-25T17:19:48.035Z (stage-key annotation pending the UAT-stage renumber SD)"
+    }
+  ]
+}
