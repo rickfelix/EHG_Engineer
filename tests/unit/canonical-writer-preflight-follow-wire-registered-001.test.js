@@ -9,6 +9,7 @@ import {
   SCRIPT_LIB_WRITERS,
   DB_FUNCTION_WRITERS,
 } from '../../scripts/one-off/canonical-writer-preflight-follow-wire-registered-001.mjs';
+import { assertPreconditionsMet } from '../../scripts/one-off/flip-registry-stamp-wired-follow-wire-registered-001.mjs';
 
 const CHOKE_FILE = 'database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql';
 
@@ -83,5 +84,23 @@ describe('SD-LEO-INFRA-FOLLOW-WIRE-REGISTERED-001 FR-4: canonical-writer static 
 
   it('MUTATION: a parser that finds zero identities refuses to trust the hardcoded list rather than silently reporting everything wired', () => {
     expect(() => assertRegistryMatchesHardcodedList('not a real choke file at all')).toThrow(/REGISTRY PARSE FAILURE/);
+  });
+
+  it('the registry-flip script refuses to run against the current, real repo state without error (all FR-1 writers wired, all FR-2 writers at least prepared)', () => {
+    expect(() => assertPreconditionsMet()).not.toThrow();
+  });
+
+  it('MUTATION (VALIDATION finding V3/V4): the registry-flip script refuses to flip if an FR-1 writer is not actually wired', () => {
+    const target = SCRIPT_LIB_WRITERS.find((w) => w.identity === 'sd:cancel');
+    const original = fs.readFileSync(target.file, 'utf8');
+    try {
+      const mutated = original.replace(`lifecycle_write_token: '${target.identity}',\n`, '');
+      expect(mutated, 'mutation anchor not found -- test is stale against the real file').not.toBe(original);
+      fs.writeFileSync(target.file, mutated);
+      expect(() => assertPreconditionsMet()).toThrow(/REFUSING TO FLIP/);
+    } finally {
+      fs.writeFileSync(target.file, original);
+    }
+    expect(() => assertPreconditionsMet()).not.toThrow();
   });
 });

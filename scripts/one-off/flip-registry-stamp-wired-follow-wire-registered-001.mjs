@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { checkScriptLibWriters, checkDbFunctionWriters } from './canonical-writer-preflight-follow-wire-registered-001.mjs';
 
 // Anchored to REPO_ROOT rather than cwd (SECURITY re-verification, evidence e9545112, finding S4) --
 // matches the convention in the sibling canonical-writer-preflight script, so this only ever
@@ -37,7 +38,29 @@ const WRITERS = [
   'SDGitStateReconciler.js',
 ];
 
+/**
+ * Coupling to the preflight (VALIDATION re-verification, evidence 3d2fee77, finding V3/V4): this
+ * script previously flipped all 18 literals unconditionally, with no check that the writers it is
+ * about to mark stamp_wired:true are actually wired anywhere. Refuses to proceed unless every FR-1
+ * script/lib writer is confirmed live-wired, and every FR-2 db_function writer is at minimum
+ * PREPARED (its own live-wired state necessarily lags -- this script's own literal flip is PART OF
+ * landing that amendment, so requiring "already wired in the choke file" here would be circular).
+ */
+function assertPreconditionsMet() {
+  const scriptLibResults = checkScriptLibWriters();
+  const notWired = scriptLibResults.filter((r) => !r.wired);
+  if (notWired.length > 0) {
+    throw new Error(`REFUSING TO FLIP: ${notWired.length} FR-1 script/lib writer(s) are not actually wired yet: ${notWired.map((r) => r.identity).join(', ')}. Fix FR-1 before flipping any registry literal.`);
+  }
+  const dbFunctionResults = checkDbFunctionWriters();
+  const neitherWiredNorPrepared = dbFunctionResults.filter((r) => !r.wired && !r.preparedOnly);
+  if (neitherWiredNorPrepared.length > 0) {
+    throw new Error(`REFUSING TO FLIP: ${neitherWiredNorPrepared.length} FR-2 db_function writer(s) have no prepared amendment yet: ${neitherWiredNorPrepared.map((r) => r.identity).join(', ')}. Generate their .after.sql artifacts first.`);
+  }
+}
+
 function main() {
+  assertPreconditionsMet();
   let content = fs.readFileSync(CHOKE_FILE, 'utf8');
   const flipped = [];
 
@@ -68,3 +91,5 @@ function main() {
 if (isMainModule(import.meta.url)) {
   main();
 }
+
+export { assertPreconditionsMet, WRITERS };
