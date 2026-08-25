@@ -271,13 +271,19 @@ describe('ventures canonical-writer choke — migration DDL', () => {
   it('registry returns every declared writer identity, exactly the corrected list', async () => {
     const { rows } = await client.query('SELECT writer_identity FROM public.ventures_canonical_writer_policy() ORDER BY writer_identity');
     const identities = rows.map((r) => r.writer_identity);
+    // CI FINDING: this ephemeral Postgres's default collation is NOT byte-order/"C" -- it weighs
+    // punctuation below letters at the primary comparison level (locale-aware, e.g. en_US.utf8),
+    // so 'eva-run.js' sorts AFTER 'evaRollback.ts' (compares closer to "evarun" vs "evarollback",
+    // 'o' < 'u') and 'stage24-go-live-route.ts' sorts BEFORE 'stage-execution-worker.js' (closer
+    // to "stage24golive..." vs "stageexecution...", '2' < 'e'). Order below is the actual observed
+    // collation order (CI run 32870910801), not a byte-order assumption.
     expect(identities).toEqual([
       'advance_venture_stage',
       'advance_venture_to_stage',
       'chairman-decide.ts',
       'ehg:promote.ts',
-      'eva-run.js',
       'evaRollback.ts',
+      'eva-run.js',
       'evaStateMachines.ts',
       'fn_advance_venture_stage',
       'initialize_venture_stages',
@@ -287,8 +293,8 @@ describe('ventures canonical-writer choke — migration DDL', () => {
       'run-canary-probe.mjs',
       'saga-coordinator.js',
       'scaffoldStage1',
-      'stage-execution-worker.js',
       'stage24-go-live-route.ts',
+      'stage-execution-worker.js',
       'useVentureData.ts',
       'venture-ceo-handlers.js',
     ]);
