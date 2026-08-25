@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -84,7 +85,9 @@ async function main() {
   console.log('DONE.');
 }
 
-main().catch((err) => {
-  console.error('FAILED:', err.message);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error('FAILED:', err.message);
+    process.exit(1);
+  });
+}
