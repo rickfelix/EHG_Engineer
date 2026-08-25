@@ -230,27 +230,37 @@ AS $function$
        '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
        'ehg repo app/api/stage24/[ventureId]/go-live/route.ts performLaunch(), Stage 23->24 launch. Uses the SERVICE ROLE (bypasses RLS entirely) for a compound write (launched_at + current_lifecycle_stage=24 + deployment_url + an idempotency guard on launched_at IS NULL) -- the highest-severity of the found gaps, since a service_role write has no RLS fallback to fail safely into and would 500 on every launch the instant this choke arms unregistered.'),
 
-      -- ── ehg REPO writers CENSUSED but NOT self-stamped: each is live-verified RLS-BLOCKED
+      -- ── ehg REPO writers CENSUSED, now PASSTHROUGH callers of the registered RPC (not raw
+      -- writers): SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 independently routed all 4 of these
+      -- through advance_venture_stage (rickfelix/ehg, merged into origin/main 2026-08-25) while
+      -- this SD's own writer-completeness fix branch was open -- discovered when resolving that
+      -- branch's merge conflict against origin/main. Same passthrough shape as
+      -- reconciliation-packet-apply.mjs above: stamp_wired:true because none of these performs a
+      -- raw, bypass-capable write anymore, not because they carry their own stamp.
+      ('chairman-decide.ts',
+       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/pages/api/v2/chairman/decide.ts, "proceed" decision branch. Routed through supabase.rpc(''advance_venture_stage'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+      ('evaRollback.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/services/evaRollback.ts, rollback-to-previous-stage. Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''rollback'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+      ('evaStateMachines.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/services/evaStateMachines.ts, state-machine stage-advance. Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''automatic'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+      ('recursionEngine.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/services/recursionEngine.ts updateWorkflowState(). Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''rollback'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+
+      -- ── ehg REPO writers CENSUSED but genuinely NOT self-stamped: live-verified RLS-BLOCKED
       -- TODAY (public.ventures has exactly two policies -- "Allow service_role to manage ventures"
       -- ALL and "authenticated_read_ventures" SELECT -- no authenticated UPDATE policy exists at
       -- all), so every write below already 0-rows-silently under RLS before it can ever reach this
       -- guard's BEFORE UPDATE trigger. stamp_wired:false is accurate, not a gap: stamping a write
       -- that RLS already filters out has no effect, and these rows exist for census completeness
-      -- (this SD's own stated purpose) rather than to authorize a reachable write path. If RLS
-      -- posture on ventures ever changes to add an authenticated UPDATE policy, these become real
-      -- gaps and must be revisited -- audited 2026-08-25.
-      ('chairman-decide.ts',
-       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'ehg repo src/pages/api/v2/chairman/decide.ts, "proceed" decision stage-advance branch. RLS-bound (createServerSupabaseClient), not service-role. RLS-blocked today (see class note above) -- the chairman-decide stage-advance path is currently non-functional, a pre-existing bug unrelated to this SD.'),
-      ('evaRollback.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'ehg repo src/services/evaRollback.ts, rollback-to-previous-stage write. Anon-key browser client (no server-side/Node importer found). RLS-blocked today (see class note above).'),
-      ('evaStateMachines.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'ehg repo src/services/evaStateMachines.ts, state-machine stage-advance write. Anon-key browser client (no server-side/Node importer found). RLS-blocked today (see class note above).'),
-      ('recursionEngine.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'ehg repo src/services/recursionEngine.ts updateWorkflowState(). Anon-key browser client (no server-side/Node importer found). RLS-blocked today (see class note above).'),
+      -- (this SD's own stated purpose) rather than to authorize a reachable write path. Unlike the
+      -- 4 above, SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 deliberately left these two unchanged (its
+      -- own README: "no derivable from-stage / initialization-only writes"). If RLS posture on
+      -- ventures ever changes to add an authenticated UPDATE policy, these become real gaps and
+      -- must be revisited -- audited 2026-08-25.
       ('scaffoldStage1',
        '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
        'ehg repo src/services/ventures.ts scaffoldStage1(), venture-initialization write (stage=1). Anon-key browser client, only imported from .tsx components/hooks. RLS-blocked today (see class note above).'),
