@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-08-25](#2026-08-25)
+  - [Documentation](#documentation)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
 - [2026-08-24](#2026-08-24)
@@ -145,6 +146,14 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-08-25
+
+### Documentation
+- **A chairman-verbally-ratified SMS quality-control duty existed only in a live SMS exchange, with nothing to survive a Solomon seat rotation** - PR #7530 (SD-LEO-DOC-ENCODE-SMS-FACET-001)
+  - **What shipped**: encoded clause (d) into the Solomon role contract's existing hourly Adam-adherence probe duty (`leo_protocol_sections` id=611): each hourly probe now also grades the last hour of chairman-bound outbound SMS against a 6-item ratified comms checklist (rec+why on decision asks, numbered exact keystrokes for truly-his items, plain professional-casual language with last-hour numbers, timestamps pasted from instruments never estimated, sleep-window/presence/cadence honored, own-the-miss-not-defend on challenges), nudging Adam on breach and escalating recurring patterns to the chairman autonomy report. Pure DB-content amendment plus a scoped `--only CLAUDE_SOLOMON.md` regeneration -- no code changes, confirmed by both LEAD-phase VALIDATION and PLAN-phase prospective TESTING.
+  - **A SECURITY review of a documentation-only change still found a real, non-code defect**: the shipped clause pointed at an existing sibling clause as "below" when it was actually above in the document, and misattributed a cadence detail to the wrong clause — a successor Solomon seat following the pointer literally would find nothing. Fixed in a follow-up commit before merge, adding an explicit read-only/never-joins-the-lane restatement so the boundary survives a seat that never follows the pointer at all.
+  - **A LEAD-TO-PLAN gate rejected the first mechanism-claim citation because it named a `.json` config file**: `GATE_MECHANISM_CLAIM_VERIFIER`'s file-line regex only recognizes `.js/.cjs/.mjs/.ts/.tsx/.sql` extensions, not `.json` — fixed by re-citing the `.js` function that actually implements the claimed mechanism.
+  - **Deliberately deferred, not silently absorbed**: 2 of the 6 graded checklist items (numbered-exact-keystrokes-only-truly-his, own-the-miss-not-defend) are stated inline in the new clause but have no existing textual encoding in `CLAUDE_ADAM.md` itself, despite being real chairman-ratified feedback — flagged as a `needs_decision` completion-flag rather than encoded here, to keep this SD's scope to the Solomon-side duty only.
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 99%, EXEC-TO-PLAN 91%, PLAN-TO-LEAD 98%, LEAD-FINAL-APPROVAL 95%.
 
 ### Bugfix
 - **A test asserting today's live-repo file size as a permanent requirement was one 505-token drift away from breaking, and the SD's own auto-generated description was already stale about which occurrence remained open** - PR #7525 (SD-PAT-FIX-GREEN-TEST-ASSERTING-001)
