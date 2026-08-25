@@ -1,6 +1,6 @@
 # Stage 21-26 Census
 
-- **Generated**: 2026-08-25T20:40:38.788Z
+- **Generated**: 2026-08-25T21:07:44.335Z
 - **SD**: SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-A
 - **Re-run command**: `node scripts/audits/stage-21-26-census.mjs`
 - **Scope**: 2 filesystem repos (EHG_Engineer, ehg) + 1 shared database (not 2 separate databases)
@@ -2244,7 +2244,7 @@ PASS -- both known-live stage 21/22 `component_path` mismatches were detected:
 | EHG_Engineer | lib/audits/stage-census/corpus-walker.mjs | 2 | `stage 21` | hand-written |
 | EHG_Engineer | lib/audits/stage-census/corpus-walker.mjs | 17 | `stage-21` | hand-written |
 | EHG_Engineer | lib/audits/stage-census/db-sweep.mjs | 2 | `stage 21` | hand-written |
-| EHG_Engineer | lib/audits/stage-census/db-sweep.mjs | 51 | `stage 21` | hand-written |
+| EHG_Engineer | lib/audits/stage-census/db-sweep.mjs | 52 | `stage 21` | hand-written |
 | EHG_Engineer | lib/audits/stage-census/negative-control.mjs | 11 | `Stage22DistributionSetup.tsx` | hand-written |
 | EHG_Engineer | lib/audits/stage-census/negative-control.mjs | 12 | `Stage21VisualAssets.tsx` | hand-written |
 | EHG_Engineer | lib/audits/stage-census/negative-control.mjs | 11 | `stage_number: 21` | hand-written |
@@ -2660,9 +2660,9 @@ PASS -- both known-live stage 21/22 `component_path` mismatches were detected:
 | EHG_Engineer | supabase/migrations/20260329_extend_lifecycle_to_26_stages.sql | 39 | `stage 26` | hand-written |
 | EHG_Engineer | supabase/migrations/20260329_extend_lifecycle_to_26_stages.sql | 49 | `stage 26` | hand-written |
 | EHG_Engineer | supabase/migrations/20260329_extend_lifecycle_to_26_stages.sql | 101 | `stage 26` | hand-written |
-| EHG_Engineer | tests/database/stage-census-negative-control.db.test.js | 22 | `stage 21` | hand-written |
-| EHG_Engineer | tests/database/stage-census-regex-hazard.db.test.js | 26 | `Stage22DistributionSetup.tsx` | hand-written |
-| EHG_Engineer | tests/database/stage-census-regex-hazard.db.test.js | 26 | `Stage21VisualAssets.tsx` | hand-written |
+| EHG_Engineer | tests/database/stage-census-negative-control.db.test.js | 23 | `stage 21` | hand-written |
+| EHG_Engineer | tests/database/stage-census-regex-hazard.db.test.js | 27 | `Stage22DistributionSetup.tsx` | hand-written |
+| EHG_Engineer | tests/database/stage-census-regex-hazard.db.test.js | 27 | `Stage21VisualAssets.tsx` | hand-written |
 | EHG_Engineer | tests/ddl/thesis-kill-instrument-ddl.db.test.js | 119 | `stage_number: 21` | hand-written |
 | EHG_Engineer | tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js | 277 | `stage24` | hand-written |
 | EHG_Engineer | tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js | 296 | `stage24` | hand-written |
