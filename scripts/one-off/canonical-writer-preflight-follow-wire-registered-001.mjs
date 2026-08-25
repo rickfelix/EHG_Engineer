@@ -138,7 +138,7 @@ function assertRegistryMatchesHardcodedList(choke) {
     if (entryMatch && entryMatch[1] === 'false') unknownUnwired.push(id);
   }
   if (unknownUnwired.length > 0) {
-    throw new Error(`REGISTRY DRIFT: the choke file names ${unknownUnwired.length} unwired writer(s) this preflight does not know about (${unknownUnwired.join(', ')}) -- update SCRIPT_LIB_WRITERS/DB_FUNCTION_WRITERS above before trusting this preflight's result.`);
+    throw new Error(`REGISTRY DRIFT: the choke file names ${unknownUnwired.length} unwired writer(s) this preflight does not know about (${unknownUnwired.join(', ')}) -- revise SCRIPT_LIB_WRITERS/DB_FUNCTION_WRITERS above before trusting this preflight's result.`);
   }
 }
 
