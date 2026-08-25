@@ -1,10 +1,10 @@
 ---
 category: architecture
 status: approved
-version: 1.0.0
-author: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001
-last_updated: 2026-07-04
-tags: [stage-advancement, artifact-gate, governance, census]
+version: 1.1.0
+author: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 (+ SD-LEO-INFRA-STAGE-WRITER-CHOKE-001, 2026-08-25 addition)
+last_updated: 2026-08-25
+tags: [stage-advancement, artifact-gate, governance, census, canonical-writer]
 ---
 
 # Stage-Advancement Path Census
@@ -207,6 +207,52 @@ class as the original FR-3 entry.
 - 1 staged chairman-gated trigger closing the RLS/service-role gap that census+lint alone cannot guarantee against (FR-7, not tied to a specific path row above -- it is the backstop for ANY future path).
 - 6 deliberately exempt by definition (2 revert-only compensations in the daemon worker, 1 revert-only saga compensation, 1 venture-creation initialization, 1 manual operator CLI override, 1 duplicate-definition non-issue).
 - 3 superseded/dead (historical migration versions, rollback scripts).
+
+## Post-census addition (2026-08-25) — SD-LEO-INFRA-STAGE-WRITER-CHOKE-001
+
+**Delivers the FR-7 backstop this census flagged as outstanding** (line 59-61 above, and the
+"1 staged chairman-gated trigger" row in the Disposition summary): a pair of `BEFORE INSERT OR
+UPDATE` triggers on `ventures` (`aaa_enforce_canonical_stage_write`, sorts first;
+`zzz_enforce_canonical_stage_write_final`, sorts last — Postgres fires same-timing BEFORE triggers
+in name-collation order, so both independently re-validate the write regardless of what any other
+trigger in the chain did to the row first) plus a dedicated `reset_stage_write_token_on_insert()` /
+`aaa_reset_canonical_stage_write_token_insert` pair closing an INSERT-time bypass the UPDATE-only
+enforcement function couldn't reach (it dereferences `OLD`, which doesn't exist on INSERT). This
+closes the RLS/service-role gap at the database layer itself — not by trusting every call site to
+route through a gated RPC or JS chokepoint, which is what paths #1-15 above still rely on.
+
+**Self-stamp writer registry** (`ventures_canonical_writer_policy()`, in
+`database/chairman-gated/20260825_ventures_canonical_writer_choke.sql`) now enumerates 19 writer
+identities across both EHG_Engineer and the `ehg` repo — a superset of, and cross-checked against,
+this file's own path census. Each caller stamps `stage_write_token` with its own identity on write;
+the trigger rejects any write whose token doesn't match an entry in the registry. New JS/TS writers
+added after this SD probe for the column's existence at runtime
+(`lib/eva/stage-write-token-probe.js`, mirroring the proven `lib/ship/repo-column-probe.mjs`
+pattern) and degrade to a plain, unstamped write when it is absent — the column ships un-applied
+until a separate chairman-verbal ceremony (same convention as every other entry in this file:
+**staged, not applied** — `database/chairman-gated/`, `@approved-by: PENDING`).
+
+**Reconciles with this census's own #16/#17 open items and the 2026-07-22 ehg-side gap**: while
+building the registry, found that sibling SD `SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001` had, in
+parallel, independently routed 4 previously-RLS-blocked `ehg`-repo writers (`promote.ts`,
+`evaRollback.ts`, `evaStateMachines.ts`, `recursionEngine.ts`, `chairman/decide.ts`) through
+`supabase.rpc('advance_venture_stage', ...)` — registry corrected to reflect passthrough-via-RPC
+rather than re-doing that work. Also found and fixed a genuinely new, previously-uncensused
+service-role writer in the `ehg` repo: `app/api/stage24/[ventureId]/go-live/route.ts`
+(`performLaunch()`), the highest-severity gap found this SD since it uses the admin/service-role
+client, which bypasses RLS entirely — exactly the class of write this SD's trigger backstop exists
+to catch even when a call site is missed. `useVentureData.ts` / `scaffoldStage1` remain genuinely
+RLS-blocked and unstamped, confirmed unchanged by the sibling SD (deliberate, per that SD's own
+scope). Path census items #16 (`_updateVentureProgress`) and #17 (`eva_ventures` mirror) remain
+open per their original disposition above — out of this SD's scope too, but now also covered by the
+same self-stamp registry once each is fixed.
+
+**SQL migrations for the trigger, the registry, RPC-authorization hardening (`rescan_stage_20` had
+zero auth check; added), and the REVOKE-addendum no-op (fixed to name `anon`/`authenticated`
+explicitly) all live under `database/chairman-gated/`, staged only** — see that directory's own
+`README.md` for the chairman-verbal-ceremony application process. A DDL test tier
+(`tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js`) exercises every trigger and RPC against
+an ephemeral Postgres in CI; production application remains a separate, later, human-run step.
 
 ## Zero-new-bypass guard
 
