@@ -8,6 +8,17 @@
 --   create_policy token from the AI-delegatable subset -- "data-access-policy changes the
 --   chairman reserved", regardless of raw tier. This file is therefore chairman-gated by
 --   explicit repo governance, not merely by the raw classifier.
+--   PLAN-VERIFY REGRESSION review flagged (correctly, independently confirmed): GAP A is
+--   enforced only by the Adam-delegated apply path (adam-delegated-apply.js), a DIFFERENT
+--   code path from scripts/modules/handoff/pre-checks/pending-migrations-check.js's
+--   auto-apply candidate scan, which calls the RAW classifyMigration() with no enable_rls
+--   exclusion. That scan's actual safety fence is DIRECTORY SCOPE: checkSDPendingMigrations()
+--   (pending-migrations-check.js:800-802,896) only globs `database/migrations`,
+--   `database/manual-updates`, `supabase/migrations` -- `database/chairman-gated/` is not
+--   scanned, so this file is invisible to that pre-check regardless of its TIER-1
+--   classification. DO NOT relocate this file into `database/migrations/` -- doing so would
+--   make it eligible for that pre-check's auto-apply candidate list despite being an
+--   RLS-enable change, because that specific path does not consult GAP A.
 --   The chairman adds the `@approved-by` line and runs:
 --       node scripts/apply-migration.js database/chairman-gated/20260825_enable_rls_chronic_red_guard_zero_consumer_tables.sql --prod-deploy
 --   APPLY IS NOT MINE.
