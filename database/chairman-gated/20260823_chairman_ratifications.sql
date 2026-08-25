@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS public.chairman_ratifications (
   CONSTRAINT cr_encoding_state_consistent CHECK (
     (encoded_at IS NULL AND encoded_ref IS NULL AND marker_text IS NULL)
     OR
-    (encoded_at IS NOT NULL AND encoded_ref IS NOT NULL AND btrim(marker_text) <> '')
+    (encoded_at IS NOT NULL AND encoded_ref IS NOT NULL AND marker_text IS NOT NULL AND btrim(marker_text) <> '')
   )
 );
 
