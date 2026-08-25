@@ -242,6 +242,56 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
       .not.toContain('permission_escalation');
   });
 
+  // CRIT-003 auth_bypass -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. 'disable' matched inside
+  // the compound noun-phrase 'rls_disabled_in_public' / 'RLS-disabled' (the Supabase
+  // database-linter's own official finding-type name), with 'security'/'rls' reappearing
+  // later on the same long prose line to satisfy the '.*' suffix. State-descriptor compound
+  // (term BEFORE 'disable[d]', hyphen/underscore-joined), not the imperative-verb danger
+  // shape ('disable RLS'), which must still fire.
+  it('does NOT flag prose naming the rls_disabled_in_public linter finding by its official name', () => {
+    expect(names(
+      "+ summary: 'The sentinel's live finding breakdown: 12 rls_disabled_in_public tables, 2 function_search_path_mutable SECURITY DEFINER functions'"
+    )).not.toContain('auth_bypass');
+  });
+  it('does NOT flag prose describing "RLS-disabled tables" as a finding', () => {
+    expect(names(
+      '+  *    RLS-disabled tables, 1 sensitive-column exposure, 2 mutable-search-path SECURITY DEFINER'
+    )).not.toContain('auth_bypass');
+  });
+  it('STILL flags the imperative "disable RLS" shape (term AFTER disable, not compound)', () => {
+    expect(names('+ ALTER TABLE feedback DISABLE ROW LEVEL SECURITY;')).toContain('auth_bypass');
+  });
+  it('STILL flags "// disable rls checks locally" (disable not preceded by a term-hyphen compound)', () => {
+    expect(names(
+      '+ const disableAuthForTesting = true; // disable rls checks locally'
+    )).toContain('auth_bypass');
+  });
+
+  // CRIT-006 permission_escalation -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. 'service_role_key.*client'
+  // matched the safe, common backend idiom '<...>_SERVICE_ROLE_KEY client' ('client' as a noun
+  // meaning "an SDK client object built with the key"), not the key being sent TO a
+  // browser/frontend client.
+  it('does NOT flag "the explicit SUPABASE_SERVICE_ROLE_KEY client" (safe backend-client noun phrase)', () => {
+    expect(names(
+      '+    "reason": "Service-role-only consumer via scripts/foo.mjs\'s explicit SUPABASE_SERVICE_ROLE_KEY client. Service_role bypasses RLS unconditionally"'
+    )).not.toContain('permission_escalation');
+  });
+  it('STILL flags the service role key handed to a browser-facing sendToClient call', () => {
+    expect(names(
+      '+ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; sendToClient(serviceRoleKey);'
+    )).toContain('permission_escalation');
+  });
+  it('STILL flags the service role key assigned onto window with a browser comment', () => {
+    expect(names(
+      '+ window.serviceRoleClient = createClient(url, service_role_key); // expose to browser'
+    )).toContain('permission_escalation');
+  });
+  it('STILL flags the service role key returned straight to the frontend', () => {
+    expect(names(
+      '+ return { service_role_key: key }; // sent straight to the frontend'
+    )).toContain('permission_escalation');
+  });
+
   it('sets inHunk on a combined-diff header, closing the sibling +++-spoof gap for the whole file', () => {
     // Without inHunk recognizing '@@@', a subsequent in-hunk raw line that reads
     // '+++ b/tests/x' (2-wide polarity '++' immediately followed by content starting
