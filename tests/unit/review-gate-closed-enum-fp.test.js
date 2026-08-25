@@ -267,6 +267,32 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     )).toContain('auth_bypass');
   });
 
+  // Deep-tier adversarial review of this same SD's PR found the FIRST version of the
+  // CRIT-003 fix above over-broad: it excluded 'disable' whenever ANY compound adjacency
+  // preceded it, which also suppressed genuine imperative-verb compounds like
+  // 'auth_disable()' -- not just the safe past-participle 'disabled' state-descriptor
+  // form. Narrowed to apply only to the literal word 'disabled'.
+  it('STILL flags an imperative verb-call compound like "auth_disable()" (not the safe "disabled" state form)', () => {
+    expect(names(
+      '+ auth_disable(); // bypass auth'
+    )).toContain('auth_bypass');
+  });
+  it('STILL flags an imperative verb-call compound like "security_disable_all()"', () => {
+    expect(names(
+      '+ security_disable_all(); // security off'
+    )).toContain('auth_bypass');
+  });
+  it('STILL flags an imperative compound inside an object literal, e.g. {\'rls-disable\': true, security: false}', () => {
+    expect(names(
+      "+ const cfg = {'rls-disable': true, security: false};"
+    )).toContain('auth_bypass');
+  });
+  it('does NOT re-flag the original "RLS-disabled tables" state-descriptor false positive', () => {
+    expect(names(
+      '+  *    RLS-disabled tables, 1 sensitive-column exposure, 2 mutable-search-path SECURITY DEFINER'
+    )).not.toContain('auth_bypass');
+  });
+
   // CRIT-006 permission_escalation -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. 'service_role_key.*client'
   // matched the safe, common backend idiom '<...>_SERVICE_ROLE_KEY client' ('client' as a noun
   // meaning "an SDK client object built with the key"), not the key being sent TO a
@@ -335,6 +361,13 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     const diffFor = (path, line) =>
       `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
     expect(names(diffFor('other/review-critical-findings.json',
+      '+      "disable.*(?:auth|rls|security)"')))
+      .toContain('auth_bypass');
+  });
+  it('does NOT leak the config-file exemption to a same-named file in a DIFFERENT nested directory (deep-tier review finding)', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('vendor/config/review-critical-findings.json',
       '+      "disable.*(?:auth|rls|security)"')))
       .toContain('auth_bypass');
   });
