@@ -67,10 +67,13 @@ describe('checkUatRobustnessGate', () => {
     expect(result.reason).toMatch(/has not opted in/);
   });
 
-  it('S2 fix: an ABSENT ventures row also does not apply (never blocks a venture that cannot be looked up as opted-in)', async () => {
+  it('NEW-2 fix (EXEC-TO-PLAN round-2): an ABSENT ventures row (a ghost/nonexistent ventureId) fails CLOSED, matching SEC-51 polarity -- NOT a silent pass', async () => {
     const supabase = buildSupabase({ stageMetadata: MARKED_STAGE, ventureRowExists: false });
     const result = await checkUatRobustnessGate(supabase, 'venture-1', 20);
-    expect(result.applies).toBe(false);
+    expect(result.applies).toBe(true);
+    expect(result.satisfied).toBe(false);
+    expect(result.indeterminate).toBe(true);
+    expect(result.reason).toMatch(/no ventures row found/);
   });
 
   it('applies=true, satisfied=false when marked + opted-in but no UAT run exists for this venture/stage', async () => {
@@ -103,14 +106,35 @@ describe('checkUatRobustnessGate', () => {
     expect(result.reason).toMatch(/canary_mutation_control/);
   });
 
-  it('applies=true, satisfied=true when opted-in and the latest completed run is GREEN', async () => {
+  it('applies=true, satisfied=true when opted-in, the latest completed run is GREEN, AND the control pack was actually evaluated', async () => {
+    const supabase = buildSupabase({
+      stageMetadata: MARKED_STAGE,
+      ventureMetadata: OPTED_IN_VENTURE,
+      run: { id: 'run-1', status: 'completed', metadata: { quality_gate: 'GREEN', control_pack_evaluated: true } },
+    });
+    const result = await checkUatRobustnessGate(supabase, 'venture-1', 20);
+    expect(result.satisfied).toBe(true);
+  });
+
+  it('NEW-4 fix (EXEC-TO-PLAN round-2, HIGH): GREEN from pass-rate math ALONE, with no control-pack evidence ever evaluated, does NOT satisfy the gate', async () => {
+    const supabase = buildSupabase({
+      stageMetadata: MARKED_STAGE,
+      ventureMetadata: OPTED_IN_VENTURE,
+      run: { id: 'run-1', status: 'completed', metadata: { quality_gate: 'GREEN', control_pack_evaluated: false } },
+    });
+    const result = await checkUatRobustnessGate(supabase, 'venture-1', 20);
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/control-pack evidence was ever evaluated/);
+  });
+
+  it('NEW-4 fix: GREEN with control_pack_evaluated entirely absent from metadata (the exact shape journey-walk-orchestrator.js\'s completeSession(testRun.id) call produces) does NOT satisfy', async () => {
     const supabase = buildSupabase({
       stageMetadata: MARKED_STAGE,
       ventureMetadata: OPTED_IN_VENTURE,
       run: { id: 'run-1', status: 'completed', metadata: { quality_gate: 'GREEN' } },
     });
     const result = await checkUatRobustnessGate(supabase, 'venture-1', 20);
-    expect(result.satisfied).toBe(true);
+    expect(result.satisfied).toBe(false);
   });
 
   it('fails closed (indeterminate) on a venture_stages read error', async () => {

@@ -55,6 +55,20 @@ describe('completeSession() control-pack evidence', () => {
     expect(result.summary.controlPackFailures).toEqual([]);
   });
 
+  it('SECURITY finding NEW-4: omitting controlPackEvidence stamps control_pack_evaluated=false, so lib/eva/uat-robustness-gate.js can tell "ran clean" apart from "never ran"', async () => {
+    state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    await completeSession('run-1');
+    const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.control_pack_evaluated).toBe(false);
+  });
+
+  it('supplying controlPackEvidence (even an empty object) stamps control_pack_evaluated=true', async () => {
+    state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    await completeSession('run-1', {});
+    const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.control_pack_evaluated).toBe(true);
+  });
+
   it('TS-6 negative control: a clean run with passing control-pack evidence stays GREEN, not forced RED', async () => {
     state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
     const result = await completeSession('run-1', {

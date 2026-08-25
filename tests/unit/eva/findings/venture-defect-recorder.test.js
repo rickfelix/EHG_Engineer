@@ -70,6 +70,20 @@ describe('recordVentureDefect', () => {
     expect(insertedRows[0].metadata.venture_id).toBe('venture-1');
   });
 
+  // TESTING sub-agent finding N3 (EXEC-TO-PLAN round-2 re-review): the bug that blocked this
+  // SD in production (feedback_type='uat_failure', which violates the live
+  // feedback_feedback_type_check constraint) had no test pinning the value -- this file's mock
+  // accepts any row shape, so a regression to the invalid value would stay green here forever.
+  // Pinned against the actual ratified enum (database/migrations/20260401_venture_user_feedback_channel.sql,
+  // extended by 20260704d_venture_error_aggregation_rpc.sql).
+  it('N3 regression guard: feedback_type is one of the live CHECK constraint\'s ratified values', async () => {
+    const RATIFIED_FEEDBACK_TYPES = ['sentry_error', 'user_bug', 'user_feature_request', 'user_usability', 'user_other', 'venture_error'];
+    const insertedRows = [];
+    const supabase = buildSupabase({ existing: null, insertedRows });
+    await recordVentureDefect(supabase, { venture_defect_class: 'CONTENT_DATA_DEFECT', title: 't' });
+    expect(RATIFIED_FEEDBACK_TYPES).toContain(insertedRows[0].feedback_type);
+  });
+
   it('a dedup hit returns recorded:false with the existing feedbackId (no insert)', async () => {
     const insertedRows = [];
     const supabase = buildSupabase({ existing: { id: 'existing-row-id' }, insertedRows });
