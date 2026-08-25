@@ -64,8 +64,11 @@
 --     anon/authenticated caller of the view, the exact same failure-invisible-to-both-sides shape
 --     as north_star above. Unlike north_star, this one does NOT need a new follow-up-SD: a
 --     correctly-scoped fix -- RLS-enable PLUS a permissive scope_completion_chain_read_all FOR
---     SELECT USING (true) policy, citing this exact view by name -- already exists, staged and
---     chairman-gated, from a PRIOR SD: database/migrations/20260616_security_hygiene_rls_searchpath.sql.
+--     SELECT USING (true) policy -- already exists, staged and chairman-gated, from a PRIOR SD:
+--     database/migrations/20260616_security_hygiene_rls_searchpath.sql. PLAN-VERIFY VALIDATION
+--     review flagged (correctly): the POLICY itself is a blanket, table-level USING (true), not
+--     scoped to the view specifically; it is that migration's own surrounding rationale COMMENT
+--     (not the executable policy clause) that names writer_consumer_asymmetry_witnesses.
 --     Confirmed live 2026-08-25 that it was never applied (relrowsecurity=false, policy_count=0
 --     on scope_completion_chain, matching the sentinel's current finding). Re-authoring the same
 --     fix here would be a duplicate, chairman-gated migration racing the existing one; the
