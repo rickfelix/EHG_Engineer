@@ -3,7 +3,10 @@
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE. -- @approved-by: PENDING
+-- CHAIRMAN-GATED. Corrected scope (PUBLIC, anon — excluding authenticated) chairman-ratified:
+-- morning ruling #1 'A' (2026-08-25) + ratification-sitting packet ruling 4-APPROVE BOTH, fresh
+-- verbal 'A' in-terminal. Scribed by Adam per CLAUDE_ADAM.md §3c. Applies strictly AFTER the choke.
+-- @approved-by: codestreetlabs@gmail.com
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 --
 -- PROVENANCE AND SCOPE CORRECTION (read before approving):
