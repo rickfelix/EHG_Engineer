@@ -24,7 +24,10 @@
 -- before trusting the rest. Full result: 10 of the 12 tables have EITHER zero live application
 -- consumers at all, or consumers that exclusively use a service-role client (which BYPASSES RLS
 -- entirely per Postgres role semantics -- ENABLE ROW LEVEL SECURITY with no policy denies only
--- anon/authenticated, never service_role). The 10 tables below are that verified-safe subset.
+-- anon/authenticated, never service_role). One of those 10 (scope_completion_chain) was pulled
+-- back out below after EXEC-TO-PLAN SECURITY review found a live SQL-level consumer the
+-- application-code-only census could not see -- the 9 tables below are the remaining
+-- verified-safe subset.
 --
 -- EXCLUDED from this migration, on purpose:
 --   * north_star -- HAS a real, live anon-key browser consumer (ehg repo's
@@ -40,12 +43,54 @@
 --     quarantine snapshot, not a live-access table); this one gets the matching EXEMPTION via
 --     FR-2b's data-manifest migration, not RLS remediation -- enabling RLS on a table nobody
 --     ever queries again would be a no-op exemption dressed up as a fix.
+--   * scope_completion_chain -- REMOVED after EXEC-TO-PLAN SECURITY review (finding SEC-2),
+--     independently re-verified live rather than trusted on the sub-agent's word alone: the
+--     public.writer_consumer_asymmetry_witnesses VIEW has security_invoker=on and carries
+--     explicit GRANT SELECT to BOTH anon and authenticated, and its definition genuinely UNIONs
+--     a branch reading scope_completion_chain. security_invoker=on means that branch executes
+--     under the QUERYING role's own RLS, not the view owner's -- a bare RLS-enable with no
+--     policy on scope_completion_chain would silently zero out that UNION branch for every
+--     anon/authenticated caller of the view, the exact same failure-invisible-to-both-sides shape
+--     as north_star above. Unlike north_star, this one does NOT need a new follow-up-SD: a
+--     correctly-scoped fix -- RLS-enable PLUS a permissive scope_completion_chain_read_all FOR
+--     SELECT USING (true) policy, citing this exact view by name -- already exists, staged and
+--     chairman-gated, from a PRIOR SD: database/migrations/20260616_security_hygiene_rls_searchpath.sql.
+--     Confirmed live 2026-08-25 that it was never applied (relrowsecurity=false, policy_count=0
+--     on scope_completion_chain, matching the sentinel's current finding). Re-authoring the same
+--     fix here would be a duplicate, chairman-gated migration racing the existing one; the
+--     disposition table points at the existing file instead.
 --
 -- Per-table consumer evidence (file:line citations from the rls-dep-census teammate, spot-check
--- confirmed for 3 of these 10):
+-- confirmed for 3 of these 9):
 --   claim_rejects                       -- zero app-code consumer at all; written only by the
 --                                            Postgres trigger claim_eligibility_observe()
---                                            (database/migrations/20260704_claim_eligibility_observe_trigger.sql)
+--                                            (database/migrations/20260704_claim_eligibility_observe_trigger.sql).
+--                                            EXEC-TO-PLAN SECURITY review (finding SEC-3) flagged
+--                                            that this trigger is SECURITY INVOKER (prosecdef=false)
+--                                            and wraps its INSERT in an outer EXCEPTION WHEN OTHERS
+--                                            THEN RETURN NEW -- an RLS denial under a non-bypassing
+--                                            invoking role would silently swallow the audit INSERT.
+--                                            Independently traced live (not assumed) rather than
+--                                            taking the "zero consumer" claim on faith a second
+--                                            time: the trigger only fires WHEN (NEW.claiming_
+--                                            session_id IS DISTINCT FROM OLD.claiming_session_id
+--                                            AND NEW.claiming_session_id IS NOT NULL) -- i.e. only
+--                                            on a claim write. Queried pg_proc/pg_roles live
+--                                            2026-08-25: the sole DB-side claim-write entrypoint,
+--                                            claim_sd(), is SECURITY DEFINER owned by role
+--                                            "postgres" (rolbypassrls=true), so the UPDATE inside
+--                                            it -- and the trigger it fires -- executes under a
+--                                            bypassing role regardless of caller. Every other
+--                                            code path that writes claiming_session_id directly
+--                                            (e.g. scripts/claim-orchestrator-for-rollup.mjs) uses
+--                                            createSupabaseServiceClient, i.e. role "service_role"
+--                                            (also rolbypassrls=true, confirmed live). "authenticated"
+--                                            and "anon" both have rolbypassrls=false but neither
+--                                            role has any write path to this column in the current
+--                                            codebase. SEC-3's architectural concern is real (a
+--                                            future non-service-role write path would silently
+--                                            lose audit rows) but does not apply to any write path
+--                                            that exists today -- RLS-enable-only remains safe.
 --   coverage_matrix                     -- lib/governance/coverage-matrix.js, service-role only
 --                                            (scripts/coverage-matrix-regenerate.mjs explicit
 --                                            SUPABASE_SERVICE_ROLE_KEY)
@@ -53,9 +98,6 @@
 --                                            same service-role entrypoint
 --   door_routing_ledger                 -- zero real query call sites; two code comments name it
 --                                            an explicit "dead-table pattern"
---   scope_completion_chain              -- scripts/modules/handoff/executors/lead-final-approval/
---                                            gates/*.js, LEAD-FINAL-APPROVAL Node CLI gates,
---                                            service-role only
 --   selection_postures                  -- lib/eva/stage-zero/profile-service.js, injected
 --                                            deps.supabase from backend EVA Stage-0 modules
 --   sourcing_chairman_queue             -- lib/sourcing-engine/escalator.js, injected
@@ -80,7 +122,6 @@ ALTER TABLE public.claim_rejects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coverage_matrix ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coverage_matrix_rotation_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.door_routing_ledger ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.scope_completion_chain ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.selection_postures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sourcing_chairman_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.v_hc_flag_enabled ENABLE ROW LEVEL SECURITY;
