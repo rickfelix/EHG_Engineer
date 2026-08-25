@@ -15,20 +15,31 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
  * Pure-ish query function (exported for unit testing with a mock supabase client).
+ *
+ * Paginates via .range() rather than one unbounded .select() -- PostgREST silently caps an
+ * unbounded select at 1000 rows (SECURITY finding SEC-1 / TESTING finding, evidence
+ * 7b1758b7/11345782: the table held 1902 attempt rows for ApexNiche alone, so a single .select()
+ * truncated the count and could produce a false "0 unbounded ventures" on a table this size).
+ *
  * @returns {Promise<Array<{venture_id:string, stage_number:number, attempt_count:number}>>}
  */
-export async function findUnboundedRetryVentures(supabase, { ceiling = GATE_RETRY_CEILING } = {}) {
-  const { data: attempts, error } = await supabase
-    .from('eva_stage_gate_attempts')
-    .select('venture_id, stage_number');
-  if (error) {
-    throw new Error(`[census-unbounded-retry] attempts query failed: ${error.message}`);
-  }
-
+export async function findUnboundedRetryVentures(supabase, { ceiling = GATE_RETRY_CEILING, pageSize = 1000 } = {}) {
   const counts = new Map();
-  for (const row of attempts || []) {
-    const key = `${row.venture_id}::${row.stage_number}`;
-    counts.set(key, (counts.get(key) || 0) + 1);
+  let offset = 0;
+  for (;;) {
+    const { data: page, error } = await supabase
+      .from('eva_stage_gate_attempts')
+      .select('venture_id, stage_number')
+      .range(offset, offset + pageSize - 1);
+    if (error) {
+      throw new Error(`[census-unbounded-retry] attempts query failed: ${error.message}`);
+    }
+    for (const row of page || []) {
+      const key = `${row.venture_id}::${row.stage_number}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    if (!page || page.length < pageSize) break;
+    offset += pageSize;
   }
 
   const candidates = [...counts.entries()]
