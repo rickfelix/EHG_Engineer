@@ -43,11 +43,16 @@ export async function main(argv = process.argv, deps = {}) {
     const releaseHeldSend = deps.releaseHeldSend
       || (await import('../../lib/adam/chairman-held-send-release.js')).releaseHeldSend;
 
+    // Bounded batch per sweep run (matches this repo's convention for operational sweeps) -- a
+    // 15-minute cadence and per-row retry-via-attempts means an oversized backlog drains across
+    // multiple runs rather than needing an unbounded read here.
+    const HELD_ROWS_BATCH_LIMIT = 200;
     const { data: heldRows, error } = await supabase
       .from('chairman_held_sends')
       .select('*')
       .eq('status', 'held')
-      .order('held_at', { ascending: true });
+      .order('held_at', { ascending: true })
+      .limit(HELD_ROWS_BATCH_LIMIT);
     if (error) {
       // database/migrations/20260824_chairman_held_sends.sql is @chairman-gated (requires the
       // chairman's own approval to apply -- EXEC cannot self-approve it). Until it lands, this

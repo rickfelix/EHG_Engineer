@@ -72,27 +72,34 @@ function makeFakeSupabase({ answerRow = null, claimSucceeds = true, releaseUpdat
               eq(col, val) { filters.push([col, val]); return builder; },
               is(col, val) { filters.push([col, val]); return builder; },
               select() {
-                // CLAIM shape: .update().eq().eq().is().select()
+                // CLAIM shape: .update().eq().eq().is().select('id').maybeSingle() -- production
+                // reads a single row (or null), never an array, so the fake must expose the same
+                // .maybeSingle() terminal instead of resolving select() itself.
                 writes.push({ vals, filters, terminal: 'select' });
-                return Promise.resolve(claimSucceeds ? { data: [{ id: 'held-1' }], error: null } : { data: [], error: null });
+                return {
+                  maybeSingle: async () => (claimSucceeds ? { data: { id: 'held-1' }, error: null } : { data: null, error: null }),
+                };
               },
               then(resolve, reject) {
                 writes.push({ vals, filters, terminal: 'thenable' });
                 if (isUnclaim) {
-                  // UNCLAIM shape now ALSO calls .select('id') (S-8 fix) before landing here via
-                  // the select() branch above -- this then() only covers the RELEASE write shape.
+                  // UNCLAIM shape now ALSO calls .select('id').maybeSingle() (S-8 fix) before
+                  // landing here via the select() branch above -- this then() only covers the
+                  // RELEASE write shape.
                   return Promise.resolve({ data: null, error: null }).then(resolve, reject);
                 }
                 const result = releaseUpdateError ? { data: null, error: { message: releaseUpdateError } } : { data: null, error: null };
                 return Promise.resolve(result).then(resolve, reject);
               },
             };
-            // UNCLAIM also terminates in .select('id') per the S-8 fix -- route it through the
-            // same select() branch as claim, but resolve based on unclaimMatches.
+            // UNCLAIM also terminates in .select('id').maybeSingle() per the S-8 fix -- route it
+            // through the same select() branch as claim, but resolve based on unclaimMatches.
             if (isUnclaim) {
               builder.select = () => {
                 writes.push({ vals, filters, terminal: 'select' });
-                return Promise.resolve(unclaimMatches ? { data: [{ id: heldRow().id }], error: null } : { data: [], error: null });
+                return {
+                  maybeSingle: async () => (unclaimMatches ? { data: { id: heldRow().id }, error: null } : { data: null, error: null }),
+                };
               };
             }
             return builder;

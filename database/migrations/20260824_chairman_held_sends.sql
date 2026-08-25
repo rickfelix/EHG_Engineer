@@ -316,7 +316,7 @@ COMMENT ON FUNCTION public.fn_resolve_chairman_user_id() IS
 
 -- pg_default_acl grants EXECUTE on every new function to anon AND authenticated (objtype "f",
 -- measured). Revoked explicitly; the chairman UUID is not public.
-REVOKE ALL ON FUNCTION public.fn_resolve_chairman_user_id() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.fn_resolve_chairman_user_id() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_resolve_chairman_user_id() TO service_role;
 
 -- ---------------------------------------------------------------------------

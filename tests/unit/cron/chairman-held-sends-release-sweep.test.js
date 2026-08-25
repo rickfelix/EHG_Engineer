@@ -14,7 +14,9 @@ function makeSupabase(rows) {
       return {
         select: () => ({
           eq: () => ({
-            order: async () => ({ data: rows, error: null }),
+            order: () => ({
+              limit: async () => ({ data: rows, error: null }),
+            }),
           }),
         }),
       };
@@ -24,7 +26,7 @@ function makeSupabase(rows) {
 
 describe('chairman-held-sends-release-sweep main()', () => {
   it('exits OK (0), not INFRA, when the table does not exist yet (migration not applied -- operator-contract note)', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => ({ order: async () => ({ data: null, error: { message: "Could not find the table 'public.chairman_held_sends' in the schema cache" } }) }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: "Could not find the table 'public.chairman_held_sends' in the schema cache" } }) }) }) }) }) };
     const logger = { log: vi.fn() };
     const result = await main([], { supabase, logger, env: {} });
     expect(result.exitCode).toBe(0);
@@ -32,7 +34,7 @@ describe('chairman-held-sends-release-sweep main()', () => {
   });
 
   it('exits INFRA (1) when the read query itself fails', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => ({ order: async () => ({ data: null, error: { message: 'read boom' } }) }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'read boom' } }) }) }) }) }) };
     const logger = { log: vi.fn() };
     const result = await main([], { supabase, logger, env: {} });
     expect(result.exitCode).toBe(1);
