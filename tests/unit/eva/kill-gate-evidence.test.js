@@ -166,4 +166,33 @@ describe('recordGateOverride (FR-5)', () => {
     await expect(recordGateOverride(api, { ventureId: 'v1', stageNumber: 3, gateType: 'kill', override: {} }))
       .rejects.toThrow(/decision_id/);
   });
+
+  // SD-LEO-INFRA-STAGE-GATE-RETRY-001 (FR-3): the same decision_id re-arriving must be a no-op --
+  // this is the exact defect that produced ApexNiche's 1900+ eva_stage_gate_attempts rows (the
+  // P0 UNIVERSAL guard in stage-execution-worker.js re-calls this function unconditionally every
+  // ~30s poll cycle for a venture sitting on an already-approved decision).
+  it('is a no-op when gate_criteria.override.decision_id already matches (FR-3 idempotent short-circuit)', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: { override: { decision_id: 'd-9' } } },
+    });
+    const id = await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-9', decided_by: 'chairman' },
+    });
+    expect(id).toBe('g-1');
+    expect(writes).toHaveLength(0); // no update, no attempt write
+  });
+
+  it('still records a genuinely NEW decision_id for the same gate (FR-3 does not over-suppress)', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: { override: { decision_id: 'd-9' } } },
+    });
+    const id = await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-10', decided_by: 'chairman' },
+    });
+    expect(id).toBe('g-1');
+    const upd = writes.find((w) => w.op === 'update');
+    expect(upd.payload.gate_criteria.override).toMatchObject({ decision_id: 'd-10' });
+  });
 });
