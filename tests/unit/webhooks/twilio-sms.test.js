@@ -99,7 +99,8 @@ describe('handleTwilioStatusCallback applyOwedDeliveryTruth error visibility', (
       not: vi.fn(() => obj),
       or: vi.fn(() => obj),
       eq: vi.fn(() => obj),
-      select: vi.fn(() => Promise.resolve(terminalResult)),
+      select: vi.fn(() => obj),
+      limit: vi.fn(() => Promise.resolve(terminalResult)),
     };
     return obj;
   }
@@ -138,5 +139,84 @@ describe('handleTwilioStatusCallback applyOwedDeliveryTruth error visibility', (
     const supabase = makeSupabase({ data: [], error: null });
     await handleTwilioStatusCallback(req, makeRes(), { supabase, provider });
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  // SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-3 AC-2: this is the legacy DIRECT (synchronous)
+  // Twilio webhook path — a genuine carrier push, distinct from the new relay-staged drain, but
+  // both converge on the same writer and must both stamp source='carrier_push'.
+  it('FR-3 AC-2: stamps delivery_status_source=carrier_push via the extracted writer', async () => {
+    let capturedPatch;
+    const builder = {
+      update: vi.fn((patch) => { capturedPatch = patch; return builder; }),
+      not: vi.fn(() => builder),
+      or: vi.fn(() => builder),
+      eq: vi.fn(() => builder),
+      select: vi.fn(() => builder),
+      limit: vi.fn(() => Promise.resolve({ data: [{ id: 'row-1' }], error: null })),
+    };
+    const supabase = { from: vi.fn(() => builder) };
+    await handleTwilioStatusCallback(req, makeRes(), { supabase, provider });
+    expect(capturedPatch).toMatchObject({ delivery_status_source: 'carrier_push' });
+  });
+});
+
+// SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-7 AC-3 gap #1 (Explore finding): handleTwilioStatusCallback's
+// OWN 401-signature path had zero direct test coverage (only the inbound-reply handler's signature
+// path was exercised elsewhere).
+describe('handleTwilioStatusCallback signature verification', () => {
+  const req = { method: 'POST', headers: { 'x-twilio-signature': 'bad-sig' }, body: { MessageSid: 'SM1', MessageStatus: 'delivered' }, protocol: 'https', get: () => 'host', originalUrl: '/x' };
+
+  it('an invalid signature returns 401 before any database write', async () => {
+    const provider = {
+      verifyInboundSignature: () => false,
+      parseStatusCallback: () => ({ messageSid: 'SM1', status: 'delivered' }),
+    };
+    const fromSpy = vi.fn();
+    const supabase = { from: fromSpy };
+    const res = makeRes();
+
+    await handleTwilioStatusCallback(req, res, { supabase, provider });
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(fromSpy).not.toHaveBeenCalled();
+  });
+
+  it('a missing signature header also returns 401', async () => {
+    const provider = { verifyInboundSignature: () => false, parseStatusCallback: () => ({ messageSid: 'SM1', status: 'delivered' }) };
+    const noSigReq = { ...req, headers: {} };
+    const res = makeRes();
+    await handleTwilioStatusCallback(noSigReq, res, { supabase: { from: vi.fn() }, provider });
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+});
+
+// SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-7 AC-3 gap #2 (Explore finding): the
+// TWILIO_STATUS_TO_NOTIFICATION_STATUS collapse had zero direct test coverage.
+describe('TWILIO_STATUS_TO_NOTIFICATION_STATUS mapping (chairman_notifications)', () => {
+  const provider = { verifyInboundSignature: () => true, parseStatusCallback: (body) => ({ messageSid: body.MessageSid, status: body.MessageStatus }) };
+
+  function makeSupabaseCapturingNotifications() {
+    const notifPatches = [];
+    const obligationsBuilder = {
+      update: vi.fn(() => obligationsBuilder), not: vi.fn(() => obligationsBuilder), or: vi.fn(() => obligationsBuilder),
+      eq: vi.fn(() => obligationsBuilder), select: vi.fn(() => obligationsBuilder), limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
+    };
+    const notifBuilder = {
+      update: vi.fn((patch) => { notifPatches.push(patch); return notifBuilder; }),
+      eq: vi.fn(() => notifBuilder),
+      then: (resolve) => resolve({ data: null, error: null }),
+    };
+    const supabase = { from: vi.fn((table) => (table === 'sms_outbound_obligations' ? obligationsBuilder : notifBuilder)) };
+    return { supabase, notifPatches };
+  }
+
+  it.each([
+    ['queued', 'queued'], ['sending', 'queued'], ['sent', 'sent'],
+    ['delivered', 'sent'], ['undelivered', 'failed'], ['failed', 'failed'],
+  ])('MessageStatus=%s collapses to chairman_notifications.status=%s', async (twilioStatus, expectedNotificationStatus) => {
+    const { supabase, notifPatches } = makeSupabaseCapturingNotifications();
+    const req = { method: 'POST', headers: { 'x-twilio-signature': 'sig' }, body: { MessageSid: 'SM1', MessageStatus: twilioStatus }, protocol: 'https', get: () => 'host', originalUrl: '/x' };
+    await handleTwilioStatusCallback(req, makeRes(), { supabase, provider });
+    expect(notifPatches[0]).toEqual({ status: expectedNotificationStatus });
   });
 });

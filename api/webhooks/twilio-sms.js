@@ -17,6 +17,7 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import twilioProvider from '../../lib/messaging/providers/twilio-provider.js';
 import { handleInboundSmsReply } from '../../lib/chairman/sms-bridge.js';
+import { applyOwedDeliveryTruth } from '../../lib/chairman/owed-delivery-truth.js';
 
 let _supabase = null;
 function db() {
@@ -69,74 +70,6 @@ const TWILIO_STATUS_TO_NOTIFICATION_STATUS = {
   undelivered: 'failed',
   failed: 'failed',
 };
-
-// SD-LEO-INFRA-SMS-CHANNEL-HARDENING-001-B FR-2: map a Twilio MessageStatus onto the owed-row
-// state change — delivery-truth, keyed to provider_message_id (the Twilio SID). A 201-accept
-// alone is 'queued'/'sending'/'sent' and NEVER sets delivered_at; delivered is the ONLY status
-// that stamps delivered_at; undelivered/failed flip the row onto the reconcile/retry/alert path
-// (FR-3). Transient statuses return null => no owed-row write (the row stays on its send path).
-function owedRowUpdateForStatus(status, nowIso) {
-  if (status === 'delivered') return { status: 'delivered', delivered_at: nowIso };
-  if (status === 'undelivered') return { status: 'undelivered' };
-  if (status === 'failed') return { status: 'failed' };
-  return null; // queued/sending/sent — transient, leave the owed row on its send path
-}
-
-// Twilio message SIDs are alphanumeric (e.g. "SM<32 hex chars>"); this codebase's own test
-// fixtures also use a hyphenated fake-SID convention (e.g. "SM-SENT-1"), so hyphens are allowed
-// too. Validated before use in a hand-built PostgREST .or() filter string (defense in depth —
-// the signature check above already guarantees this value is genuinely from Twilio, since params
-// are HMAC-signed with the auth token; this guard just keeps the filter string well-formed).
-const VALID_MESSAGE_SID = /^[A-Za-z0-9-]+$/;
-
-/**
- * Stamp delivery-truth onto the owed obligation row matched by provider_message_id (FR-2), OR
- * (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-001-A Solomon Pin #2) — for a 'delivered' callback ONLY — by
- * containment in prior_provider_message_ids. A resend preserves the ORIGINAL SID there, so a late
- * 'delivered' callback for it still resolves against this row instead of silently no-op'ing once
- * provider_message_id was overwritten by the newest attempt: delivery-truth achieved by ANY
- * attempt satisfies the obligation, no matter which SID confirms it.
- *
- * PRIOR-SID SCOPE (adversarial-review finding, deep-tier review, /ship EXEC-TO-PLAN): a
- * 'undelivered'/'failed' callback is matched ONLY against the CURRENT provider_message_id, never
- * against prior_provider_message_ids. A superseded (pre-resend) attempt's late failure tells us
- * nothing about the newer attempt actively in flight — applying it there would wrongly terminate
- * a row whose current send may still succeed (or may have already delivered, awaiting its own
- * callback), the exact "silently lost obligation" failure mode this SD exists to close.
- *
- * STATUS GUARD (adversarial-review finding, deep-tier SECURITY sub-agent, EXEC-TO-PLAN):
- * excludes rows already 'delivered' or 'canceled' — a late/duplicate callback for a SID the row
- * has EVER carried must never regress an already-correct terminal state. Without this guard, a
- * late callback for a prior (pre-resend) SID could flip an already-'delivered' row's status
- * backwards, or race a concurrent in-flight resend (see the matching .eq('status','sending')
- * guard on the Pass-2 send-outcome update in lib/chairman/sms-outbound-worker.js).
- *
- * FAIL-SOFT: while the STAGED sms_outbound_obligations migration is unapplied the table is
- * absent (42P01/PGRST205) and this degrades to a no-op and never crashes the callback path. Any
- * OTHER error (QF-20260822-215 — same discard class as SD-LEO-FIX-SMS-OUTBOUND-WORKER-002) is a
- * genuine write failure and must be visible, not silently swallowed. Runs AFTER the 401 signature
- * reject, so a forged callback can never reach it.
- */
-async function applyOwedDeliveryTruth(supabase, { messageSid, status }) {
-  const patch = owedRowUpdateForStatus(status, new Date().toISOString());
-  if (!patch || !VALID_MESSAGE_SID.test(messageSid || '')) return;
-  // 'delivered' may resolve via prior-SID history (any attempt delivering satisfies the
-  // obligation); 'undelivered'/'failed' is scoped to the CURRENT SID only (see PRIOR-SID SCOPE).
-  const matchFilter = patch.status === 'delivered'
-    ? `provider_message_id.eq.${messageSid},prior_provider_message_ids.cs.{${messageSid}}`
-    : `provider_message_id.eq.${messageSid}`;
-  const { data, error } = await supabase
-    .from('sms_outbound_obligations')
-    .update(patch)
-    .not('status', 'in', '(delivered,canceled)')
-    .or(matchFilter)
-    .select('id');
-  // A zero-row match with no error is expected (most status callbacks have no owed-state row
-  // at all) and stays silent, matching sms-outbound-worker.js's established idiom.
-  if (error && error.code !== '42P01' && error.code !== 'PGRST205') {
-    console.warn(`[twilio-sms] applyOwedDeliveryTruth UPDATE failed for SID ${messageSid} (status=${status}, matched=${data?.length ?? 0}): ${error.message}`);
-  }
-}
 
 export async function handleTwilioSmsWebhook(req, res) {
   if (req.method !== 'POST') {
@@ -210,9 +143,13 @@ export async function handleTwilioStatusCallback(req, res, { supabase, provider 
       .eq('provider_message_id', messageSid)
       .eq('channel', 'sms');
 
-    // FR-2: delivery-truth on the owed-state row — delivered ONLY on MessageStatus=delivered;
-    // undelivered/failed onto the reconcile path; a 201-accept alone is never delivered.
-    await applyOwedDeliveryTruth(sb, { messageSid, status });
+    // FR-2/FR-3: delivery-truth on the owed-state row — delivered ONLY on MessageStatus=delivered;
+    // undelivered/failed onto the reconcile path; a 201-accept alone is never delivered. This is
+    // the legacy direct (synchronous) Twilio webhook — a genuine carrier push, so deliveredAt is
+    // the receipt-time-now and source is 'carrier_push' (SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-3;
+    // the new relay-staged drain is the second 'carrier_push' caller, using the staged event's own
+    // arrival time instead — see lib/chairman/sms-bridge.js:drainSmsStatusStaging).
+    await applyOwedDeliveryTruth(sb, { messageSid, status, deliveredAt: new Date().toISOString(), source: 'carrier_push' });
   }
 
   return res.status(200).json({ received: true });

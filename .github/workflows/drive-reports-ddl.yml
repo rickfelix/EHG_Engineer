@@ -90,6 +90,12 @@ on:
       - 'database/chairman-gated/20260824_strategic_directives_canonical_writer_choke_DOWN.sql'
       - 'database/evidence/canonical-writer-choke/**'
       - 'tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js'
+      # SD-LEO-INFRA-SMS-DELIVERY-STATUS-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing — confirmed live on this SD's
+      # own PR before this line was added (0 of 54 checks matched "Drive Reports DDL").
+      - 'database/chairman-gated/20260824_sms_status_staging.sql'
+      - 'tests/ddl/sms-status-staging-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

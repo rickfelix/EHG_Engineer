@@ -799,6 +799,10 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', (
     const row = sb._tables.sms_outbound_obligations[0];
     expect(row.delivered_at).toBe(new Date(twilioDeliveredAt).toISOString());
     expect(row.delivered_at).not.toBe(new Date(DAY_NOW).toISOString());
+    // SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-3 AC-3: Pass 1c's own write site stamps its
+    // discriminator directly (never via the shared owed-delivery-truth writer, which it does
+    // not call) -- carrier_poll when Twilio's date_updated was usable.
+    expect(row.delivery_status_source).toBe('carrier_poll');
   });
 
   it('QF-20260729-286: when Twilio omits/malforms date_updated, delivered_at falls back to this poll tick\'s now (no worse than pre-fix)', async () => {
@@ -809,6 +813,9 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', (
     expect(summary.confirmedDelivered).toBe(1);
     const row = sb._tables.sms_outbound_obligations[0];
     expect(row.delivered_at).toBe(new Date(DAY_NOW).toISOString());
+    // SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-3 AC-3: local_clock_fallback when Twilio's
+    // date_updated was absent/unparseable and this poll tick's own clock was used instead.
+    expect(row.delivery_status_source).toBe('local_clock_fallback');
   });
 
   it('Solomon Pin #3: the provider-check ITSELF failing (no callback AND a failed check) escalates to owed_escalate, never silently closed', async () => {
