@@ -12,6 +12,13 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
   recordPendingDecision: vi.fn().mockResolvedValue({ recorded: true, id: 'decision-1' }),
 }));
 
+// SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: checkStageGate()'s armed param defaults to
+// isEnabled(), which opens its OWN live Supabase client from process.env (ignoring the
+// injected test double) -- unmocked, every test here would make a real network call.
+// Mocked to false (the safe, shadow-mode default) to keep this suite hermetic.
+vi.mock('../../../lib/feature-flags/evaluator.js', () => ({ isEnabled: vi.fn().mockResolvedValue(false) }));
+
+import { isEnabled } from '../../../lib/feature-flags/evaluator.js';
 import {
   HONESTY_INVARIANTS,
   checkSuppressionInvariant,
@@ -32,6 +39,11 @@ function makeSupabase({
   contentRow = { lifecycle_state: 'SCHEDULE' }, contentError = null,
   writeBudget = { is_over_budget: false, writes_used: 1, writes_remaining: 99 }, writeBudgetError = null,
   autonomyState = 'autonomous', insertData = { id: 'ledger-1' }, insertError = null,
+  // SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: undefined (the pre-existing default) leaves
+  // current_lifecycle_stage absent, which fails checkStageGate CLOSED (unresolvable_stage) --
+  // harmless for every pre-existing test here since armed defaults to isEnabled()=false
+  // (mocked). Pass a number to exercise the call-site suppression tests below.
+  ventureStage,
 } = {}) {
   const enrollmentsChain = {
     select: vi.fn().mockReturnThis(),
@@ -58,8 +70,16 @@ function makeSupabase({
   const venturesChain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn(() => Promise.resolve({ data: { is_demo: false, name: 'Real Venture', launch_mode: 'live' }, error: null })),
+    maybeSingle: vi.fn(() => Promise.resolve({
+      data: { is_demo: false, name: 'Real Venture', launch_mode: 'live', current_lifecycle_stage: ventureStage },
+      error: null,
+    })),
   };
+  // SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: checkStageGate() writes an audit_log row on
+  // every in-scope evaluation. Own chain, matching the ventures pattern above -- sharing
+  // ledgerChain would register as a spurious ledgerChain.insert call and corrupt this
+  // file's "writes NO ledger row" assertions.
+  const auditLogChain = { insert: vi.fn(() => Promise.resolve({ error: null })) };
 
   return {
     from: vi.fn((table) => {
@@ -67,6 +87,7 @@ function makeSupabase({
       if (table === 'marketing_content') return contentChain;
       if (table === 'venture_channel_autonomy') return autonomyChain;
       if (table === 'ventures') return venturesChain;
+      if (table === 'audit_log') return auditLogChain;
       return ledgerChain;
     }),
     rpc: vi.fn(() => Promise.resolve({ data: [writeBudget], error: writeBudgetError })),
@@ -288,5 +309,24 @@ describe('FR-1 enforcement inside checkPublishAuthorization', () => {
     expect(r.reason).not.toContain('HONESTY');
     // The invariants never even ran on this branch — the human is still the check here.
     expect(supabase.contentChain.maybeSingle).not.toHaveBeenCalled();
+  });
+});
+
+describe('SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: stage-gate call-site suppression (FR-3)', () => {
+  it('an armed + blocked stage gate suppresses BEFORE the venture_channel_autonomy lookup — the honesty invariants never even run', async () => {
+    isEnabled.mockResolvedValueOnce(true); // armed
+    const supabase = makeSupabase({ ventureStage: 1 }); // below the S24 requirement
+    const r = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+    expect(r.allowed).toBe(false);
+    expect(r.reason).toContain('STAGE_GATE_BLOCKED');
+    expect(supabase.contentChain.maybeSingle).not.toHaveBeenCalled();
+    expect(supabase.ledgerChain.insert).not.toHaveBeenCalled();
+  });
+
+  it('an armed but PASSING stage gate (venture already at S24) falls through to normal authorization', async () => {
+    isEnabled.mockResolvedValueOnce(true); // armed
+    const supabase = makeSupabase({ ventureStage: 24 });
+    const r = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+    expect(r.allowed).toBe(true);
   });
 });
