@@ -184,10 +184,19 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
     expect(closedIds).toContain('same-host');
   });
 
-  it('TS-7: fail-closed on the unknown/degenerate hostname bucket — DB-join closes nothing even with a matching pid', async () => {
+  it('TS-7: fail-closed on the unknown/degenerate hostname bucket — DB-join closes nothing even with a matching pid AND a matching-hostname row (mutation-sensitive)', async () => {
+    // TESTING review (evidence 484d5121): the original version of this test used only
+    // hostname=HOST rows, so it passed vacuously whether or not the `hostname !== 'unknown'`
+    // guard existed (a real hostname query simply never matches 'unknown'). This decoy row
+    // shares the 'unknown' bucket the CURRENT session resolved to -- if the guard were removed,
+    // `.eq('hostname', 'unknown')` WOULD match it, proving the guard is load-bearing, not
+    // incidental. Reachable in production: any host whose os.hostname() throws stamps its own
+    // rows hostname:'unknown' (session-register.cjs's own getHostname() fallback), so two such
+    // machines share one bucket and a coincidentally-matching pid would otherwise collide.
     const dir = markerDir({});
     const sb = fakeSupabase([
-      { session_id: 'old', status: 'active', hostname: HOST, metadata: { cc_parent_pid: String(PID) } },
+      { session_id: 'other-machine-unknown-host', status: 'active', hostname: 'unknown', metadata: { cc_parent_pid: String(PID) } },
+      { session_id: 'same-host-normal', status: 'active', hostname: HOST, metadata: { cc_parent_pid: String(PID) } },
     ]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir, hostname: 'unknown' });
     expect(sb.released).toEqual([]);
@@ -211,6 +220,18 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
     ]);
     await closeRotatedOutSessions(sb, 'still-live', { parentPid: PID, pidsDir: dir });
     expect(sb.released).toEqual([]);
+  });
+
+  it('a malformed PASS-2 row (null session_id) is dropped, not injected into the shared release call — PASS 1\'s legitimate release still succeeds (TESTING review Q3)', async () => {
+    const dir = markerDir({ 'tick-old.json': { session_id: 'old', cc_parent_pid: PID } }); // found by PASS 1
+    const sb = fakeSupabase([
+      { session_id: 'old', status: 'active', hostname: HOST, metadata: {} },
+      { session_id: null, status: 'active', hostname: HOST, metadata: { cc_parent_pid: String(PID) } }, // malformed
+    ]);
+    await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
+    // If the null id leaked into toCloseIds, this array would contain null and/or the whole
+    // release call would be a different shape -- assert it is exactly the one legitimate id.
+    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
   });
 
   it('does not double-release a session already found by the marker path (dedup across passes)', async () => {

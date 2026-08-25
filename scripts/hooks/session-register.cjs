@@ -446,8 +446,12 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
           .in('status', ['active', 'idle', 'stale'])
           .limit(999);
         if (!dbErr && dbRows) {
+          // TESTING review (evidence 484d5121): a malformed row (missing/null session_id) must
+          // never reach toClose -- it would inject undefined/null into the shared release call's
+          // .in(toCloseIds) below, turning that single write into a PostgREST 400 and silently
+          // losing PASS 1's already-found, legitimate releases along with it.
           for (const r of dbRows) {
-            if (!toClose.has(r.session_id)) toClose.set(r.session_id, 'db_join');
+            if (r?.session_id && !toClose.has(r.session_id)) toClose.set(r.session_id, 'db_join');
           }
         }
       }
@@ -575,11 +579,24 @@ async function main() {
 
   // SD-LEO-INFRA-SESSION-TICK-CLEAR-001 (FR-1). Derived once, shared with closeRotatedOutSessions
   // below so both use an identical value (agreement by construction) rather than deriving twice.
+  //
+  // TESTING review (evidence 484d5121): findClaudeCodePid() can throw (e.g. an execSync timeout
+  // discovering the parent). The try/catch is scoped to ONLY that call, not the `||` fallback
+  // chain -- a throw must still fall through to process.ppid || process.pid, not silently leave
+  // parentPid undefined (which would permanently blind both the stamp and the DB-join pass with
+  // zero stderr trace).
   let parentPid;
   try {
     const { findClaudeCodePid } = require('./capture-session-id.cjs');
-    parentPid = findClaudeCodePid() || process.ppid || process.pid;
-  } catch { /* stampCcParentPid no-ops on undefined; closeRotatedOutSessions re-derives its own */ }
+    parentPid = findClaudeCodePid();
+  } catch (pidErr) {
+    process.stderr.write(
+      `[session-register] parentPid.findClaudeCodePid_failed reason=${(pidErr?.message || String(pidErr)).slice(0, 200)}\n`
+    );
+  }
+  if (parentPid === undefined || parentPid === null) {
+    parentPid = process.ppid || process.pid;
+  }
   await stampCcParentPid(supabase, sessionId, parentPid);
 
   // SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (FR-1). Last, and awaited only so its stderr lands
