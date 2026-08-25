@@ -1125,6 +1125,76 @@ dispatching implementation forks.
 
 ---
 
+## Pattern: A retry/backoff counter gated on the same evaluation it controls is a self-referential fixed point
+
+**SD**: SD-LEO-INFRA-STAGE-GATE-RETRY-001
+
+**Symptom**: A first implementation of bounded-retry-with-backoff for EVA's stage-gate
+re-evaluation loop (`lib/eva/gate-retry-guard.js`) computed a "should skip this poll" decision
+purely from `attemptCount` -- the number of prior gate-evaluation attempts recorded in
+`eva_stage_gate_attempts`. When the guard decided to skip, the caller (`stage-execution-worker.js`
+'s `_processVenture`) correctly did NOT evaluate the gate that tick, so no new attempt row was
+written. The next poll (~30s later) re-read the SAME `attemptCount`, computed the SAME skip
+decision, and repeated forever. A prospective TESTING sub-agent review of the merged EXEC diff
+caught this by literally executing the shipped `shouldSkipForBackoff()` across a simulated
+sequence of poll ticks: it skipped starting at attempt 8 and never advanced past it in a
+500-tick simulation. Verdict: FAIL. This was WORSE than the original unbounded-retry defect this
+SD existed to fix -- the original bug at least stayed visible (a growing row count); this bug
+froze a venture invisibly, with zero further DB writes and zero visibility to the SD's own
+census-as-code instrument (which only flags ventures AT or PAST the ceiling -- a venture stuck
+below it, forever, is invisible to both the fix and its own monitoring).
+
+**Root cause**: the backoff mechanism's gating condition (`shouldSkip`) and its own advancing
+counter (`attemptCount`) were the same variable, and the ONLY thing that advances that variable
+is exactly the action `shouldSkip` suppresses. Any retry/backoff design where "we're waiting" and
+"the thing that ends the wait" share a single counter, and the counter only advances when NOT
+waiting, is a fixed point once the wait condition first becomes true.
+
+**Fix**: redesigned the backoff to be WALL-CLOCK-TIME-based instead of attempt-count-based.
+`getGateAttemptState()` now returns both `attemptCount` (for the hard ceiling comparison, unchanged) and
+`lastAttemptAt` (the most recent attempt's timestamp). `shouldSkipForBackoff(attemptCount,
+lastAttemptAt, now)` compares `now - lastAttemptAt` against an exponentially-growing required
+delay. Because `now` (real elapsed time) advances on every poll regardless of whether evaluation
+runs, the skip condition eventually clears even while `attemptCount` stays frozen -- the venture
+proceeds, a new attempt is recorded, `attemptCount` advances, and the NEXT required delay grows
+further. This breaks the fixed point: a round-2 adversarial re-review independently simulated the
+corrected function over a realistic 30s-poll loop and confirmed the venture genuinely reached the
+ceiling in ~5.4 simulated days (15,619 ticks), versus freezing forever under the original design.
+
+**Generalization**: before shipping any retry/backoff/rate-limit mechanism, ask explicitly: *does
+advancing past the "wait" state require the exact action the wait state is suppressing?* If yes,
+the counter must be driven by something that advances independently of that action -- wall-clock
+time elapsed (as here), a separate heartbeat/tick counter, or an external signal -- never the same
+counter the gate itself controls. A unit test that asserts the backoff schedule's SHAPE
+(delays increase) is not sufficient to catch this class of bug -- it must simulate the schedule
+being DRIVEN THE SAME WAY THE REAL CALLER DRIVES IT (i.e., re-invoke the skip decision across many
+simulated ticks with the counter held exactly as the real caller would hold it) to see whether it
+ever un-sticks. This is the same "mutation/simulation over the shipped function beats a
+unit-test-shape check" pattern used elsewhere in this doc, applied to a retry/backoff-specific
+failure mode not previously catalogued here.
+
+**Also caught in the same review** (documented briefly, not full pattern sections since they map
+onto EXISTING catalogued classes in this repo): (a) `scripts/eva/census-unbounded-retry.mjs`'s
+first cut used a single unbounded `.select()` against `eva_stage_gate_attempts`, silently capped
+at 1000 rows by PostgREST against a real 1902-row specimen -- exactly the class
+SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001's `count-truncation-diff-lint` CI check exists to
+block on NEW sites; it caught a SECOND unbounded site (a `.in()`-filtered `ventures` lookup) this
+SD introduced, which `.in()` alone does not satisfy (only `single()`/`maybeSingle()`/`limit(<1000)`
+/`range()`/`fetchAllPaginated` are recognized bounding markers -- see
+`scripts/audit/count-truncation-inventory.mjs`'s `classifyChain()`). (b) an idempotency
+short-circuit (`recordGateOverride`) gated only on a decision-id match would have permanently
+suppressed a retry after a transient audit-write failure, since the pre-fix code's every-poll
+retry had accidentally been self-healing that exact failure mode -- fixed by gating the
+short-circuit on a durable `attempt_recorded=true` stamp set only after the write actually
+succeeds, not on the presence of the decision alone.
+
+### Files Modified
+`lib/eva/gate-retry-guard.js` (backoff redesign), `lib/eva/artifact-persistence-service.js`
+(idempotency + attempt_recorded stamp), `scripts/eva/census-unbounded-retry.mjs` (pagination +
+bounded ventures lookup), plus corresponding tests in `tests/unit/eva/`.
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -1143,3 +1213,4 @@ dispatching implementation forks.
 | 1.3.0 | 2026-07-02 | Added isMainModule raw-pattern class-guard from SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B |
 | 1.4.0 | 2026-07-02 | Added sub-agent evidence control-character corruption pattern from SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001 |
 | 1.5.0 | 2026-08-16 | Added ratchet-guard comparison-logic testability pattern from SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 |
+| 1.6.0 | 2026-08-25 | Added self-referential retry/backoff fixed-point pattern from SD-LEO-INFRA-STAGE-GATE-RETRY-001 |
