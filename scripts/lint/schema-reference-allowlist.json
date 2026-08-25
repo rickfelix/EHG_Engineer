@@ -31,6 +31,7 @@
   "cost_governor_log",
   "forecast_ledger",
   "sms_relay_staging",
+  "sms_status_staging",
   "sms_inbound_suspensions",
   "sms_decision_class_whitelist",
   "sms_approved_spend_ledger",

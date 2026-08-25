@@ -39,11 +39,17 @@ CREATE TABLE IF NOT EXISTS sms_status_staging (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider_message_id TEXT NOT NULL,
   message_status TEXT NOT NULL,
-  raw_payload JSONB,
   signature_valid BOOLEAN NOT NULL DEFAULT true,
   received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   drained_at TIMESTAMPTZ,
-  CONSTRAINT sms_status_staging_sid_status_key UNIQUE (provider_message_id, message_status)
+  CONSTRAINT sms_status_staging_sid_status_key UNIQUE (provider_message_id, message_status),
+  -- SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 SECURITY finding SEC-W1: without this, the composite
+  -- key does not actually bound growth as intended — an attacker (or a Twilio API change) could
+  -- insert arbitrary distinct message_status strings per SID, multiplying rows unboundedly.
+  -- Twilio's own documented outbound-message status vocabulary, closed.
+  CONSTRAINT sms_status_staging_message_status_valid CHECK (
+    message_status IN ('queued', 'sending', 'sent', 'delivered', 'undelivered', 'failed')
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_sms_status_staging_undrained
@@ -65,10 +71,14 @@ ALTER TABLE sms_status_staging ENABLE ROW LEVEL SECURITY;
 -- Requires BOTH anon-key EXECUTE grant AND the correct p_relay_secret — mirrors
 -- fn_relay_insert_sms_candidate exactly, reusing the SAME sms_relay_secret singleton.
 -- ============================================================
+-- SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 SECURITY finding SEC-W2: no p_raw_payload parameter —
+-- the drain (lib/chairman/sms-bridge.js:drainSmsStatusStaging) only ever reads
+-- provider_message_id/message_status/received_at, so persisting the full Twilio callback body
+-- (which includes the recipient's phone number) would be a write-only PII retention sink with
+-- no purge job, no different from a data leak. Store only what is actually consumed.
 CREATE OR REPLACE FUNCTION fn_relay_insert_sms_status(
   p_provider_message_id TEXT,
   p_message_status TEXT,
-  p_raw_payload JSONB,
   p_relay_secret TEXT
 )
 RETURNS void
@@ -99,8 +109,8 @@ BEGIN
   -- Idempotent on (provider_message_id, message_status): a Twilio retry of the SAME status
   -- event never creates a duplicate row, but a DIFFERENT status event for the same SID
   -- (e.g. sent then delivered) always inserts its own row.
-  INSERT INTO sms_status_staging (provider_message_id, message_status, raw_payload, signature_valid)
-  VALUES (p_provider_message_id, p_message_status, p_raw_payload, true)
+  INSERT INTO sms_status_staging (provider_message_id, message_status, signature_valid)
+  VALUES (p_provider_message_id, p_message_status, true)
   ON CONFLICT (provider_message_id, message_status) DO NOTHING;
 END;
 $$;
@@ -109,7 +119,7 @@ $$;
 -- opened ONLY to anon — the relay authenticates with the project's anon key AS ONE OF TWO
 -- factors (the p_relay_secret check above is the other). No read/update/delete grant is
 -- ever given.
-REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, JSONB, TEXT) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, JSONB, TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, JSONB, TEXT) TO anon;
-GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, JSONB, TEXT) TO service_role;
+REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, TEXT) TO anon;
+GRANT EXECUTE ON FUNCTION fn_relay_insert_sms_status(TEXT, TEXT, TEXT) TO service_role;

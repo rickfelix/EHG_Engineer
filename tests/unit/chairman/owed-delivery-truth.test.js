@@ -36,7 +36,8 @@ describe('applyOwedDeliveryTruth', () => {
       not: vi.fn(() => obj),
       or: vi.fn(() => obj),
       eq: vi.fn(() => obj),
-      select: vi.fn(() => Promise.resolve(terminalResult)),
+      select: vi.fn(() => obj),
+      limit: vi.fn(() => Promise.resolve(terminalResult)),
     };
     return obj;
   }

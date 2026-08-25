@@ -47,6 +47,23 @@ function makeFakeSupabase(rows) {
 describe('drainSmsStatusStaging', () => {
   beforeEach(() => { applyOwedDeliveryTruth.mockReset(); });
 
+  // TESTING mutation finding M3: a naive process-then-mark implementation still passes every
+  // other test in this file (they only assert final outcomes, not ordering). This test observes
+  // the row's OWN drained_at state at the moment the writer is invoked, so it can only pass if
+  // the claim genuinely happened before processing.
+  it('claim-first: the staging row is already marked claimed at the moment the writer is called', async () => {
+    const sb = makeFakeSupabase([{ id: 'stg-order', provider_message_id: 'SM1', message_status: 'delivered', received_at: 'x', drained_at: null }]);
+    let drainedAtWhenWriterCalled;
+    applyOwedDeliveryTruth.mockImplementation(async () => {
+      drainedAtWhenWriterCalled = sb._table[0].drained_at;
+      return { matched: true, updated: true, error: null, tableAbsent: false, columnAbsent: false };
+    });
+
+    await drainSmsStatusStaging(sb);
+
+    expect(drainedAtWhenWriterCalled, 'writer was called before the claim landed -- process-then-mark, not claim-first').not.toBeNull();
+  });
+
   it('claim-first: passes deliveredAt=row.received_at (never a freshly-computed timestamp) and source=carrier_push', async () => {
     const receivedAt = '2020-01-01T00:00:00.000Z';
     const sb = makeFakeSupabase([{ id: 'stg-1', provider_message_id: 'SM1', message_status: 'delivered', received_at: receivedAt, drained_at: null }]);

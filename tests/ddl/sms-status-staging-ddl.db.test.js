@@ -24,6 +24,29 @@ const MIGRATION_PATH = fileURLToPath(
 );
 const MIGRATION_SQL = fs.readFileSync(MIGRATION_PATH, 'utf8');
 
+// This SD's own migration does not create sms_relay_secret (it REUSES the existing table from
+// SD-LEO-FEAT-SMS-INBOUND-RELAY-001's 20260717_sms_relay_staging.sql, not applied in this
+// ephemeral DB). Stubbed here so fn_relay_insert_sms_status's secret check is exercisable in
+// isolation — mirrors tests/ddl/close-remaining-secdef-execute-exposure-ddl.db.test.js's own
+// STUB_SCHEMA role-creation pattern (Postgres roles are cluster-global with no CREATE ROLE IF NOT
+// EXISTS, hence the DO-block guard).
+const STUB_SCHEMA = `
+DO $roles$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role')  THEN CREATE ROLE service_role NOLOGIN;  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')          THEN CREATE ROLE anon NOLOGIN;          END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+END
+$roles$;
+
+CREATE TABLE IF NOT EXISTS sms_relay_secret (
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  secret_value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE sms_relay_secret ENABLE ROW LEVEL SECURITY;
+`;
+
 let client;
 
 beforeAll(async () => {
@@ -35,6 +58,7 @@ beforeAll(async () => {
     password: process.env.PGPASSWORD || 'postgres',
   });
   await client.connect();
+  await client.query(STUB_SCHEMA);
   await client.query(MIGRATION_SQL);
   // The RPC's secret check requires a seeded row — set a known secret for this ephemeral DB only.
   await client.query(
@@ -54,12 +78,12 @@ beforeEach(async () => {
 describe('sms_status_staging composite uniqueness (VALIDATION W4 / TR-4)', () => {
   it('a sent-then-delivered pair for the same MessageSid produces TWO distinct rows', async () => {
     await client.query(
-      'SELECT fn_relay_insert_sms_status($1, $2, $3::jsonb, $4)',
-      ['SM-composite-1', 'sent', '{}', 'ddl-test-secret'],
+      'SELECT fn_relay_insert_sms_status($1, $2, $3)',
+      ['SM-composite-1', 'sent', 'ddl-test-secret'],
     );
     await client.query(
-      'SELECT fn_relay_insert_sms_status($1, $2, $3::jsonb, $4)',
-      ['SM-composite-1', 'delivered', '{}', 'ddl-test-secret'],
+      'SELECT fn_relay_insert_sms_status($1, $2, $3)',
+      ['SM-composite-1', 'delivered', 'ddl-test-secret'],
     );
     const { rows } = await client.query(
       'SELECT message_status FROM sms_status_staging WHERE provider_message_id = \'SM-composite-1\' ORDER BY message_status',
@@ -69,12 +93,12 @@ describe('sms_status_staging composite uniqueness (VALIDATION W4 / TR-4)', () =>
 
   it('inserting the SAME status twice for the same MessageSid is idempotent (exactly one row)', async () => {
     await client.query(
-      'SELECT fn_relay_insert_sms_status($1, $2, $3::jsonb, $4)',
-      ['SM-composite-2', 'delivered', '{}', 'ddl-test-secret'],
+      'SELECT fn_relay_insert_sms_status($1, $2, $3)',
+      ['SM-composite-2', 'delivered', 'ddl-test-secret'],
     );
     await client.query(
-      'SELECT fn_relay_insert_sms_status($1, $2, $3::jsonb, $4)',
-      ['SM-composite-2', 'delivered', '{}', 'ddl-test-secret'],
+      'SELECT fn_relay_insert_sms_status($1, $2, $3)',
+      ['SM-composite-2', 'delivered', 'ddl-test-secret'],
     );
     const { rows } = await client.query(
       'SELECT id FROM sms_status_staging WHERE provider_message_id = \'SM-composite-2\' AND message_status = \'delivered\'',
@@ -84,10 +108,22 @@ describe('sms_status_staging composite uniqueness (VALIDATION W4 / TR-4)', () =>
 
   it('a wrong relay secret is rejected with ERRCODE 28000 and inserts nothing', async () => {
     await expect(
-      client.query('SELECT fn_relay_insert_sms_status($1, $2, $3::jsonb, $4)', ['SM-bad-secret', 'sent', '{}', 'wrong-secret']),
+      client.query('SELECT fn_relay_insert_sms_status($1, $2, $3)', ['SM-bad-secret', 'sent', 'wrong-secret']),
     ).rejects.toMatchObject({ code: '28000' });
     const { rows } = await client.query(
       'SELECT id FROM sms_status_staging WHERE provider_message_id = \'SM-bad-secret\'',
+    );
+    expect(rows.length).toBe(0);
+  });
+
+  // SECURITY finding SEC-W1: the composite key alone does not bound staging growth without a
+  // closed message_status vocabulary.
+  it('an unrecognized message_status is rejected by the CHECK constraint (23514) and inserts nothing', async () => {
+    await expect(
+      client.query('SELECT fn_relay_insert_sms_status($1, $2, $3)', ['SM-bad-status', 'not-a-real-twilio-status', 'ddl-test-secret']),
+    ).rejects.toMatchObject({ code: '23514' });
+    const { rows } = await client.query(
+      'SELECT id FROM sms_status_staging WHERE provider_message_id = \'SM-bad-status\'',
     );
     expect(rows.length).toBe(0);
   });

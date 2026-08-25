@@ -21,6 +21,13 @@ const WORKFLOW = path.join(repoRoot, '.github', 'workflows', 'sms-status-relay-d
 const RUNNER = path.join(repoRoot, 'scripts', 'sms-status-relay-drain.cjs');
 const require = createRequire(import.meta.url);
 
+// TESTING mutation finding M11: a bare regex on the raw file text is satisfied by this file's
+// OWN docstring mentioning the function name — it would still "pass" with every real call site
+// deleted. Strip comments first so the assertion can only be satisfied by executable code.
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
 describe('SMS status-drain machinery names its dispatcher', () => {
   it('the cron workflow exists, is scheduled, and its run step invokes the runner', () => {
     expect(fs.existsSync(WORKFLOW), `missing dispatcher workflow: ${WORKFLOW}`).toBe(true);
@@ -31,7 +38,7 @@ describe('SMS status-drain machinery names its dispatcher', () => {
 
   it('the runner exists and dispatches drainSmsStatusStaging from lib/chairman/sms-bridge.js', () => {
     expect(fs.existsSync(RUNNER), `missing runner: ${RUNNER}`).toBe(true);
-    const src = fs.readFileSync(RUNNER, 'utf8');
+    const src = stripComments(fs.readFileSync(RUNNER, 'utf8'));
     expect(src, 'runner no longer references lib/chairman/sms-bridge.js').toMatch(
       /import\(\s*['"][./]*\.\.\/lib\/chairman\/sms-bridge\.js['"]\s*\)/,
     );
@@ -39,7 +46,7 @@ describe('SMS status-drain machinery names its dispatcher', () => {
   });
 
   it('the runner stamps standard_loop:sms-status-relay-drain on every successful tick', () => {
-    const src = fs.readFileSync(RUNNER, 'utf8');
+    const src = stripComments(fs.readFileSync(RUNNER, 'utf8'));
     expect(src, 'runner no longer references lib/periodic-liveness/stamp-last-fired.js').toMatch(
       /import\(\s*['"][./]*\.\.\/lib\/periodic-liveness\/stamp-last-fired\.js['"]\s*\)/,
     );
