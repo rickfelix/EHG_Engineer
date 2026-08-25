@@ -295,6 +295,35 @@ async function captureAccountIdentity(supabase, sessionId) {
 }
 
 /**
+ * SD-LEO-INFRA-SESSION-TICK-CLEAR-001 (FR-1) — stamp this session's cc_parent_pid into its own
+ * metadata, additively, at every SessionStart. This is the durable, marker-INDEPENDENT half of
+ * the fix: closeRotatedOutSessions' DB-join fallback (below) reads this field directly from
+ * claude_sessions, so a rotated-out session stays discoverable even after its tick marker file
+ * has been deleted (by a sibling daemon's unconditional deleteMarker(), or an orphan-sweep) --
+ * the exact recurrence this SD closes (Solomon advisory a58e7151).
+ *
+ * Read-modify-merge, matching captureAccountIdentity()'s pattern immediately above: never a bare
+ * `metadata: {...}` upsert, which would clobber any other keys already on the row.
+ */
+async function stampCcParentPid(supabase, sessionId, parentPid) {
+  try {
+    if (parentPid === undefined || parentPid === null) return;
+    const { data, error } = await supabase
+      .from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
+    if (error || !data) return;
+    const meta = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
+      ? data.metadata : {};
+    const pidStr = String(parentPid);
+    if (meta.cc_parent_pid === pidStr) return; // already stamped — no-op
+    await supabase.from('claude_sessions')
+      .update({ metadata: { ...meta, cc_parent_pid: pidStr } })
+      .eq('session_id', sessionId);
+  } catch {
+    // telemetry — never abort SessionStart
+  }
+}
+
+/**
  * SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 FR-1 — close the session ids this rotation replaced.
  *
  * /clear and compaction-resume mint a NEW session_id while the Claude Code process survives.
@@ -341,8 +370,6 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
     const markers = readTickMarkers(
       overrides.pidsDir || path.resolve(__dirname, '../../.claude/pids')
     );
-    const candidateIds = [...markers.keys()];
-    if (!candidateIds.length) return;
 
     // FAIL-CLOSED IDENTITY GUARD. This predicate is "everything on our pid EXCEPT us", so it is
     // only as safe as `us`. Measured on live data: with a correct currentSessionId the pid-22196
@@ -357,6 +384,10 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
     // on. Disagreement means identity resolution and the marker record contradict each other —
     // exactly the smear this file's getCurrentSessionId() comment describes — and the only safe
     // reading of a contradiction is to close nothing.
+    //
+    // SD-LEO-INFRA-SESSION-TICK-CLEAR-001: moved ahead of the (now-removed) marker-emptiness
+    // early-return so this ONE check gates BOTH the marker-based pass below AND the DB-join
+    // fallback (FR-3) — the guard must not be duplicated in two places that could drift.
     const ownMarkerPid = markers.get(String(currentSessionId));
     if (ownMarkerPid !== undefined && String(ownMarkerPid) !== String(parentPid)) {
       process.stderr.write(
@@ -366,22 +397,74 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('claude_sessions').select('session_id,status').in('session_id', candidateIds);
-    if (error || !data) return;
+    const toClose = new Map(); // session_id -> path that found it ('marker'|'db_join'), for logging
 
-    // The predicate's row shape carries cc_parent_pid, which claude_sessions does NOT have as a
-    // column — the marker supplies it. Attaching it here keeps the shipped, unit-tested predicate
-    // untouched and confines the file-join to the wiring.
-    const rows = data.map((r) => ({ ...r, cc_parent_pid: markers.get(r.session_id) }));
-    const toClose = [...new Set(sessionsToClose({ currentSessionId, parentPid, rows }))];
-    if (!toClose.length) return;
+    // PASS 1 (SD-LEO-INFRA-SESSION-TICK-DAEMONS-001, unchanged): marker-based join. Fast, covers
+    // the common case where the rotated-out session's tick marker still exists.
+    const candidateIds = [...markers.keys()];
+    if (candidateIds.length) {
+      // .limit(999): candidateIds is bounded by how many tick markers exist on this host at once
+      // (naturally small), but count-truncation-diff-lint requires a recognized bounding marker
+      // on every select() site (.in() alone is not one) -- see SD-LEO-INFRA-STAGE-GATE-RETRY-001
+      // for the same pattern.
+      const { data, error } = await supabase
+        .from('claude_sessions').select('session_id,status').in('session_id', candidateIds).limit(999);
+      if (!error && data) {
+        // The predicate's row shape carries cc_parent_pid, which claude_sessions does NOT have as
+        // a column — the marker supplies it. Attaching it here keeps the shipped, unit-tested
+        // predicate untouched and confines the file-join to the wiring.
+        const rows = data.map((r) => ({ ...r, cc_parent_pid: markers.get(r.session_id) }));
+        for (const id of sessionsToClose({ currentSessionId, parentPid, rows })) {
+          toClose.set(id, 'marker');
+        }
+      }
+    }
 
+    // PASS 2 (SD-LEO-INFRA-SESSION-TICK-CLEAR-001, FR-2): DB-join fallback, marker-INDEPENDENT.
+    // Runs unconditionally (not gated on candidateIds.length — that early-return is exactly what
+    // made round-1 of this fix dead code in the scenario it exists for: the marker-deleted case
+    // IS the normal shape of the defect, per this file's own comment above). Finds a rotated-out
+    // session via the durable metadata.cc_parent_pid stamp (stampCcParentPid, above) even when its
+    // tick marker is gone. Host-scoped (claude_sessions is multi-host; PIDs are only unique per
+    // host) and fail-closed on the 'unknown' degenerate hostname bucket, matching the tty
+    // rejection precedent in rotation-closure.cjs's own header.
+    //
+    // Independently try/caught: a failure here (or a Supabase double in a test that only stubs
+    // the marker-path shape) must never prevent PASS 1's already-found closures from being
+    // written below -- the two passes are additive coverage, not a single point of failure.
+    try {
+      const hostname = overrides.hostname !== undefined ? overrides.hostname : getHostname();
+      if (hostname !== 'unknown') {
+        // .limit(999): naturally bounded (one host, one pid, non-terminal statuses -- realistically
+        // at most a handful of rows), but count-truncation-diff-lint requires an explicit marker.
+        const { data: dbRows, error: dbErr } = await supabase
+          .from('claude_sessions')
+          .select('session_id')
+          .eq('hostname', hostname)
+          .eq('metadata->>cc_parent_pid', String(parentPid))
+          .neq('session_id', currentSessionId)
+          .in('status', ['active', 'idle', 'stale'])
+          .limit(999);
+        if (!dbErr && dbRows) {
+          for (const r of dbRows) {
+            if (!toClose.has(r.session_id)) toClose.set(r.session_id, 'db_join');
+          }
+        }
+      }
+    } catch (dbJoinErr) {
+      process.stderr.write(
+        `[session-register] rotation.db_join_failed reason=${(dbJoinErr?.message || String(dbJoinErr)).slice(0, 200)}\n`
+      );
+    }
+
+    if (!toClose.size) return;
+
+    const toCloseIds = [...toClose.keys()];
     const { error: relErr } = await supabase
-      .from('claude_sessions').update({ status: 'released' }).in('session_id', toClose);
+      .from('claude_sessions').update({ status: 'released' }).in('session_id', toCloseIds);
     process.stderr.write(
-      `[session-register] rotation.closed pid=${parentPid} n=${toClose.length} ` +
-      `ids=${toClose.map((s) => String(s).slice(0, 8)).join(',')}` +
+      `[session-register] rotation.closed pid=${parentPid} n=${toCloseIds.length} ` +
+      `ids=${toCloseIds.map((s) => `${String(s).slice(0, 8)}:${toClose.get(s)}`).join(',')}` +
       (relErr ? ` error=${relErr.message}` : '') + `\n`
     );
   } catch (err) {
@@ -490,9 +573,18 @@ async function main() {
       .eq('loop_state', LOOP_STATE_AWAITING_TICK);
   } catch { /* best-effort observability; never block SessionStart */ }
 
+  // SD-LEO-INFRA-SESSION-TICK-CLEAR-001 (FR-1). Derived once, shared with closeRotatedOutSessions
+  // below so both use an identical value (agreement by construction) rather than deriving twice.
+  let parentPid;
+  try {
+    const { findClaudeCodePid } = require('./capture-session-id.cjs');
+    parentPid = findClaudeCodePid() || process.ppid || process.pid;
+  } catch { /* stampCcParentPid no-ops on undefined; closeRotatedOutSessions re-derives its own */ }
+  await stampCcParentPid(supabase, sessionId, parentPid);
+
   // SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (FR-1). Last, and awaited only so its stderr lands
   // inside this hook's output — it cannot throw (fully wrapped) and cannot block startup.
-  await closeRotatedOutSessions(supabase, sessionId);
+  await closeRotatedOutSessions(supabase, sessionId, { parentPid });
 }
 
 // SD-LEO-INFRA-FIX-SESSION-REGISTER-001: only auto-invoke main() when this
@@ -529,4 +621,6 @@ module.exports = {
   closeRotatedOutSessions,
   // QF-20260726-514 — exported so the account capture is testable without running SessionStart.
   resolveAccountIdentity, captureAccountIdentity,
+  // SD-LEO-INFRA-SESSION-TICK-CLEAR-001 — exported so the pid stamp is testable in isolation.
+  stampCcParentPid,
 };

@@ -40,7 +40,10 @@ function fakeSupabase(rows) {
     released,
     from() {
       return {
-        select: () => ({ in: (_c, ids) => ({ data: rows.filter((r) => ids.includes(r.session_id)), error: null }) }),
+        // .limit() must be chainable after .in() -- the real query now ends with .limit(999)
+        // (SD-LEO-INFRA-SESSION-TICK-CLEAR-001, count-truncation-diff-lint requires a bounding
+        // marker on every select() site).
+        select: () => ({ in: (_c, ids) => { const r = { data: rows.filter((row) => ids.includes(row.session_id)), error: null }; return { ...r, limit: () => r }; } }),
         update: (patch) => ({ in: (_c, ids) => { released.push({ patch, ids }); return { error: null }; } }),
       };
     },
