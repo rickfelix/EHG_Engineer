@@ -7,6 +7,12 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
   recordPendingDecision: vi.fn().mockResolvedValue({ recorded: true, id: 'decision-1' }),
 }));
 
+// SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: checkStageGate()'s armed param defaults to
+// isEnabled(), which opens its OWN live Supabase client from process.env (ignoring the
+// injected test double) -- unmocked, every test in this file would make a real network
+// call. Mocked to false (the safe, shadow-mode default) to keep this suite hermetic.
+vi.mock('../../../lib/feature-flags/evaluator.js', () => ({ isEnabled: vi.fn().mockResolvedValue(false) }));
+
 import { recordPendingDecision } from '../../../lib/chairman/record-pending-decision.mjs';
 import { evaluateGraduation, recordPublishOutcome, checkPublishAuthorization } from '../../../lib/marketing/autonomy-gate.js';
 
@@ -191,11 +197,17 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn(() => Promise.resolve({ data: contentRow, error: contentError })),
     };
+    // SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: checkStageGate() writes an audit_log row on
+    // every in-scope evaluation. Own chain, matching the ventures/marketing_content
+    // pattern above -- sharing ledgerChain would register as a spurious ledgerChain.insert
+    // call and corrupt the dedup/no-duplicate-insert assertions this describe block makes.
+    const auditLogChain = { insert: vi.fn(() => Promise.resolve({ error: null })) };
     return {
       from: vi.fn((table) => {
         if (table === 'venture_channel_autonomy') return autonomyChain;
         if (table === 'ventures') return venturesChain;
         if (table === 'marketing_content') return marketingContentChain;
+        if (table === 'audit_log') return auditLogChain;
         return ledgerChain;
       }),
       // FR-1 invariant 4 delegates to marketlens-caps.checkWriteBudget, which calls this RPC.

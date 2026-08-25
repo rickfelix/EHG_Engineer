@@ -6,6 +6,15 @@
  * expected Supabase calls and return the right shape.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: checkStageGate()'s armed param defaults to
+// isEnabled(), which opens its OWN live Supabase client from process.env -- unmocked,
+// the new call-site-suppression tests below would make a real network call. Mocked to
+// false (shadow-mode default) so every OTHER test in this file, none of which sets
+// enrollment.venture_id, is byte-identical to before this mock was added.
+vi.mock('../../lib/feature-flags/evaluator.js', () => ({ isEnabled: vi.fn().mockResolvedValue(false) }));
+
+import { isEnabled } from '../../lib/feature-flags/evaluator.js';
 import { createEmailCampaigns, ENROLLMENT_STATUS } from '../../lib/marketing/ai/email-campaigns.js';
 
 function makeSupabaseStub(handlers = {}) {
@@ -220,6 +229,59 @@ describe('processStep (campaign_enrollments UPDATE)', () => {
       [{ subject: 's', htmlA: 'a' }]
     );
     expect(res.action).toBe('skipped');
+  });
+});
+
+describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-site suppression (FR-3)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('an armed + blocked stage gate suppresses the send without ever calling sendEmail', async () => {
+    isEnabled.mockResolvedValueOnce(true); // armed
+    const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
+    const supabase = makeSupabaseStub({
+      venture_consent_events: consentLog(OPT_IN_ON_RECORD),
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 1 }, error: null }) }) })
+      }
+    });
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
+    const enrollment = {
+      id: 'e-1', status: ENROLLMENT_STATUS.ACTIVE, current_step: 0, opened_previous: true,
+      lead_email: 'a@b.co', campaign_id: 'c-1', venture_id: 'v-1'
+    };
+    const steps = [{ subject: 's', htmlA: 'A', htmlB: 'B', delayHours: 1 }];
+
+    const res = await ec.processStep(enrollment, steps);
+    expect(res.action).toBe('suppressed');
+    expect(res.reason).toBe('stage_gate');
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('an armed but PASSING stage gate (venture already at S24) falls through and sends', async () => {
+    isEnabled.mockResolvedValueOnce(true); // armed
+    const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
+    const { updateMock } = (() => {
+      const eqMock = vi.fn(async () => ({ error: null }));
+      const updateMock = vi.fn(() => ({ eq: eqMock }));
+      return { updateMock, eqMock };
+    })();
+    const supabase = makeSupabaseStub({
+      campaign_enrollments: { update: updateMock },
+      venture_consent_events: consentLog(OPT_IN_ON_RECORD),
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24 }, error: null }) }) })
+      }
+    });
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
+    const enrollment = {
+      id: 'e-1', status: ENROLLMENT_STATUS.ACTIVE, current_step: 0, opened_previous: true,
+      lead_email: 'a@b.co', campaign_id: 'c-1', venture_id: 'v-1'
+    };
+    const steps = [{ subject: 's', htmlA: 'A', htmlB: 'B', delayHours: 1 }];
+
+    const res = await ec.processStep(enrollment, steps);
+    expect(res.action).toBe('sent');
+    expect(sendSpy).toHaveBeenCalledTimes(1);
   });
 });
 
