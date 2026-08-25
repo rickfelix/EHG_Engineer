@@ -48,6 +48,16 @@
     "source": "auto:chairman-gate-marker",
     "corroborated": false
   },
+  "20260817_four_audit_critical_timestamptz.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Migration header verbatim (line 5): \"STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE except at the named ceremony\", with a blank \"-- @approved-by:\" line (line 1). Uses PROSE (\"CHAIRMAN-GATED\") rather than the seeder's machine-readable inline marker format (-- @chairman-gated / requires-chairman-apply), so scripts/seed-migration-dispositions.mjs's Rule A cannot auto-classify it even after SD-LEO-INFRA-CHRONIC-RED-GUARD-001's FR-1 directory-scope fix. Recorded manually because the deferred state is self-evident and unambiguous from the file's own header, not because a new coordinator ruling was sought for it -- source is 'manual:sd-exec-observed-gate-marker', distinct from 'manual:coordinator-ruling' (used for entries requiring an actual business/product judgment call), to keep provenance honest.",
+    "owner": "chairman",
+    "sd_key": "SD-LEO-INFRA-CHRONIC-RED-GUARD-001",
+    "recorded_at": "2026-08-25T01:45:00.000Z",
+    "review_by": "2026-11-23T01:45:00.000Z",
+    "source": "manual:sd-exec-observed-gate-marker",
+    "corroborated": false
+  },
   "20260821_worker_wind_down_events.sql": {
     "disposition": "DEFERRED",
     "reason": "Chairman-gated migration carrying no parseable \"-- @approved-by: <email>\" stamp, so the 3-factor guard in scripts/lib/migration-guards.js cannot admit it. Apply is blocked on chairman sign-off, not on engineering work. NOTE: the gate marker is SELF-ASSERTED in the migration file and is not corroborated against an external registry, so an author can obtain this deferral by adding one comment line to their own SQL. Treat as disclosed-but-unverified provenance when auditing.",
