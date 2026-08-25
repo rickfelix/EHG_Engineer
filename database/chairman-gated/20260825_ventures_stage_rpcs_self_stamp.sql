@@ -120,7 +120,9 @@ BEGIN
   END IF;
 
   -- FR-3: gate membership read fresh per call from the venture_stages SSOT (no cache), replacing the
-  -- hardcoded v_kill_gates/v_promotion_gates/v_all_gates arrays that omitted gates 10/16/19/25.
+  -- hardcoded kill/promotion/all-gates literal arrays that omitted gates 10/16/19/25 (names elided
+  -- here on purpose: the verify block greps the live body for those identifiers' absence, and a comment
+  -- naming them verbatim is indistinguishable from code using them — MECH-AMEND reword, 2026-08-25 sitting).
   --
   -- SECURITY (adversarial SECURITY review S-H3): a missing venture_stages row for p_from_stage must
   -- NOT silently disable the gate check. SELECT INTO leaves v_gate_type NULL when zero rows match,
