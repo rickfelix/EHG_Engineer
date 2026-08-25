@@ -292,6 +292,60 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     )).toContain('permission_escalation');
   });
 
+  // CRIT-006/CRIT-007 test-fixture exemption -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001.
+  // The three genuine-detection fixtures above necessarily embed dangerous CODE
+  // SHAPES as fixture strings, which would CRITICAL-block this PR's own diff without
+  // the exemption. Pin that detection is NOT silently lost for real (non-test) files.
+  it('STILL flags CRIT-006 on the SAME genuine shape when the file is NOT a test path', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('lib/db/policy.js',
+      '+ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; sendToClient(serviceRoleKey);')))
+      .toContain('permission_escalation');
+  });
+  it('STILL flags CRIT-007 on the SAME genuine shape when the file is NOT a test path', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('src/client-config.js',
+      '+ window.serviceRoleClient = createClient(url, service_role_key); // expose to browser')))
+      .toContain('service_role_exposure');
+  });
+
+  // isPatternDefinitionPath exemption -- SD-LEO-INFRA-CHRONIC-RED-GUARD-001. A closed-enum
+  // regex compiled to match bare keywords necessarily contains those same keywords as
+  // literal substrings in its OWN pattern-definition line, so editing that line always
+  // self-matches. config/review-critical-findings.json is exempted for the same ID set as
+  // test fixtures; a DIFFERENT file with the same filename elsewhere is NOT exempted, and
+  // CRIT-001 is never exempted anywhere (a real secret value is still a real leak).
+  it('does NOT flag CRIT-003 inside config/review-critical-findings.json itself (pattern self-reference)', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('config/review-critical-findings.json',
+      '+      "disable.*(?:auth|rls|security)"')))
+      .not.toContain('auth_bypass');
+  });
+  it('does NOT flag CRIT-006 inside config/review-critical-findings.json itself', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('config/review-critical-findings.json',
+      '+      "service_role_key.*(?:client|browser|frontend)"')))
+      .not.toContain('permission_escalation');
+  });
+  it('does NOT leak the config-file exemption to a same-named file in a different directory', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('other/review-critical-findings.json',
+      '+      "disable.*(?:auth|rls|security)"')))
+      .toContain('auth_bypass');
+  });
+  it('STILL flags CRIT-001 (hardcoded secret) inside config/review-critical-findings.json (never exempted)', () => {
+    const diffFor = (path, line) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,0 +1,1 @@\n${line}`;
+    expect(names(diffFor('config/review-critical-findings.json',
+      '+      "example": "sk-live-abc123def456ghi789jkl012mno345"')))
+      .toContain('hardcoded_secret');
+  });
+
   it('sets inHunk on a combined-diff header, closing the sibling +++-spoof gap for the whole file', () => {
     // Without inHunk recognizing '@@@', a subsequent in-hunk raw line that reads
     // '+++ b/tests/x' (2-wide polarity '++' immediately followed by content starting
