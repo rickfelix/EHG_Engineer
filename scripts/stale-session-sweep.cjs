@@ -712,6 +712,7 @@ async function completeStuck100Sd(supabaseClient, sd, { orchestratorSdKeys, acce
       claiming_session_id: null,
       active_session_id: null, // FR-1: co-clear (no claude_sessions flip here → trigger won't fire)
       is_working_on: false,
+      lifecycle_write_token: 'stale-session-sweep.cjs',
     })
     .eq('sd_key', sd.sd_key)
     .select('sd_key');
@@ -832,7 +833,7 @@ async function resetSdPhaseOnRelease(sdKey, reason) {
     }
     await supabase
       .from('strategic_directives_v2')
-      .update({ current_phase: resetTo })
+      .update({ current_phase: resetTo, lifecycle_write_token: 'stale-session-sweep.cjs' })
       .eq('sd_key', sdKey);
     console.log('  PHASE_RESET: ' + sdKey + ' ' + sd.current_phase + ' → ' + resetTo + ' (' + reason + ')');
   }
@@ -1204,6 +1205,7 @@ async function cancelStaleTestFixtures(supabase, now, actions, warnings) {
           claiming_session_id: null,
           active_session_id: null,
           is_working_on: false,
+          lifecycle_write_token: 'stale-session-sweep.cjs',
         })
         .eq('id', fixture.id)
         .is('claiming_session_id', null); // race guard: only if still unclaimed
@@ -1787,7 +1789,8 @@ async function runQaFixtureScan(ctx) {
           progress_percentage: 0,
           claiming_session_id: null,
           active_session_id: null, // FR-1: co-clear (SD-only update → trigger won't fire)
-          is_working_on: false
+          is_working_on: false,
+          lifecycle_write_token: 'stale-session-sweep.cjs'
         })
         .eq('sd_key', sd.sd_key)
         .select('sd_key');
@@ -2941,7 +2944,8 @@ async function main() {
         status: 'draft',
         current_phase: 'LEAD',
         progress_percentage: 0,
-        is_working_on: false
+        is_working_on: false,
+        lifecycle_write_token: 'stale-session-sweep.cjs'
       })
       .eq('sd_key', sd.sd_key)
       .eq('status', 'in_progress')

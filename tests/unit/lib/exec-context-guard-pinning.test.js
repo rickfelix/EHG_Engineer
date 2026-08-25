@@ -65,14 +65,17 @@ describe('SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 — static guard pinning (FR-6, A
       expect(src).toMatch(/assertSweepHandoffGate/);
     });
 
-    it('Site #1 — PHASE_RESET_MAP path (line ~73): gates the .update({ current_phase: resetTo })', () => {
+    it('Site #1 — PHASE_RESET_MAP path (line ~73): gates the .update({ current_phase: resetTo, ... })', () => {
       // Find the function resetSdPhaseOnRelease and assert it contains an
       // isSweepResetAllowed call BEFORE the .update.
+      // Matched on the prefix, not the full literal (SD-LEO-INFRA-FOLLOW-WIRE-REGISTERED-001
+      // appended a lifecycle_write_token field to this same object) -- end-anchored on `resetTo`
+      // itself, not a fixed close-brace slice, so a future appended field doesn't re-break this pin.
       const fnMatch = src.match(/async function resetSdPhaseOnRelease[\s\S]*?\n\}/);
       expect(fnMatch).toBeTruthy();
       const body = fnMatch[0];
       const guardIdx = body.indexOf('isSweepResetAllowed');
-      const updateIdx = body.indexOf('.update({ current_phase: resetTo })');
+      const updateIdx = body.indexOf('.update({ current_phase: resetTo');
       expect(guardIdx).toBeGreaterThan(-1);
       expect(updateIdx).toBeGreaterThan(-1);
       expect(guardIdx).toBeLessThan(updateIdx);
