@@ -21,7 +21,7 @@ function makeSupabaseMock({ allAttempts, ventures }) {
         };
       }
       if (table === 'ventures') {
-        return { select: vi.fn(() => ({ in: vi.fn(async () => ({ data: ventures, error: null })) })) };
+        return { select: vi.fn(() => ({ in: vi.fn(() => ({ limit: vi.fn(async () => ({ data: ventures, error: null })) })) })) };
       }
       throw new Error(`unexpected table ${table}`);
     }),
@@ -68,7 +68,7 @@ describe('findUnboundedRetryVentures (FR-4 positive control)', () => {
     const api = {
       from: vi.fn((table) => {
         if (table === 'eva_stage_gate_attempts') return { select: vi.fn(() => ({ range: rangeSpy })) };
-        if (table === 'ventures') return { select: vi.fn(() => ({ in: vi.fn(async () => ({ data: [{ id: 'v-x', metadata: {} }], error: null })) })) };
+        if (table === 'ventures') return { select: vi.fn(() => ({ in: vi.fn(() => ({ limit: vi.fn(async () => ({ data: [{ id: 'v-x', metadata: {} }], error: null })) })) })) };
         throw new Error(`unexpected table ${table}`);
       }),
     };

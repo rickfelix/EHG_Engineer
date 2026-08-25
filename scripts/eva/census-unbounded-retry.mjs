@@ -52,10 +52,16 @@ export async function findUnboundedRetryVentures(supabase, { ceiling = GATE_RETR
   if (candidates.length === 0) return [];
 
   const ventureIds = [...new Set(candidates.map((c) => c.venture_id))];
+  // .limit(999): ventureIds is inherently small in practice (the distinct venture/stage pairs
+  // that crossed GATE_RETRY_CEILING -- the whole point of this census is that count should be
+  // ~0 in steady state), but an explicit bound keeps this select provably bounded rather than
+  // relying on .in()'s practical size limits alone (count-truncation-diff-lint requires a
+  // recognized bounding marker: single()/maybeSingle()/limit(<1000)/range()/fetchAllPaginated).
   const { data: ventures, error: ventureErr } = await supabase
     .from('ventures')
     .select('id, metadata')
-    .in('id', ventureIds);
+    .in('id', ventureIds)
+    .limit(999);
   if (ventureErr) {
     throw new Error(`[census-unbounded-retry] ventures query failed: ${ventureErr.message}`);
   }
