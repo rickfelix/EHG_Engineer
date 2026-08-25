@@ -23,7 +23,7 @@
  * pre-existing double silently ignored them, which would have hidden a cap-before-filter
  * regression entirely.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
@@ -44,7 +44,7 @@ const CONSULT_CORR = 'corr-3333';
  * that filters BEFORE capping (the correct shape) produce genuinely different results here,
  * exactly as they would against real PostgREST.
  */
-function fakeSb({ byId = null, byCorrelation = [], selectLog = null } = {}) {
+function fakeSb({ byId = null, byCorrelation = [], selectLog = null, correlationError = null } = {}) {
   return {
     from() {
       const state = { ascending: null, inFilters: [], eqFilters: [] };
@@ -57,6 +57,9 @@ function fakeSb({ byId = null, byCorrelation = [], selectLog = null } = {}) {
         order(_col, opts) { state.ascending = Boolean(opts && opts.ascending); return this; },
         maybeSingle() { return Promise.resolve({ data: byId, error: null }); },
         limit(n) {
+          // EXEC-TST-T1: supabase-js reports a query-level failure via a non-null `error`
+          // WITHOUT throwing — this must NOT be conflated with the "no rows" empty-data case.
+          if (correlationError) return Promise.resolve({ data: null, error: correlationError });
           let rows = byCorrelation.slice();
           for (const [col, vals] of state.inFilters) {
             if (col === 'payload->>kind') rows = rows.filter((r) => vals.includes(r.payload && r.payload.kind));
@@ -103,6 +106,21 @@ describe('resolveConsultOriginator — finds who asked the consult/advisory', ()
   it('returns null when nothing matches (caller skips the CC — fail-open)', async () => {
     const sb = fakeSb({ byId: null, byCorrelation: [] });
     expect(await resolveConsultOriginator(sb, 'unknown')).toBeNull();
+  });
+
+  // EXEC-TO-PLAN TESTING R3 (T1, sub_agent_execution_results a81a8b51-cc47-48c5-95ce-236085092de1):
+  // the EXEC-TST-W4 comment claims a correlation-query failure is "loud, still fail-open" — but
+  // the code only logged from the catch block, so a non-throwing supabase-js error (the normal
+  // shape for a bad column / missing table / RLS denial) silently degraded to the pre-fix "no CC"
+  // symptom with zero operator signal. This pins that the loud-logging guarantee actually holds.
+  it('EXEC-TST-T1: a non-throwing query-level error on the correlation fallback logs loudly, not silently', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sb = fakeSb({ byId: null, correlationError: { message: 'column "payload->>kind" does not exist', code: '42703' } });
+    const result = await resolveConsultOriginator(sb, CONSULT_CORR);
+    expect(result).toBeNull();
+    expect(errSpy).toHaveBeenCalled();
+    expect(errSpy.mock.calls.some((args) => String(args[0]).includes('42703') || String(args[0]).includes('query error'))).toBe(true);
+    errSpy.mockRestore();
   });
 
   it('returns null for a missing value', async () => {
@@ -171,6 +189,21 @@ describe('resolveConsultOriginator — finds who asked the consult/advisory', ()
       const laterAsk = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:20:00Z' };
       const sb = fakeSb({ byId: null, byCorrelation: [earlierAsk, laterAsk] });
       expect(await resolveConsultOriginator(sb, CONSULT_CORR)).toBe('adam-coordinator-health');
+    });
+
+    // EXEC-TO-PLAN TESTING R3 (T6, LOW): the prior C1 tests prove cap must be >1, but a
+    // shrunk-but-still->1 cap (e.g. .limit(2) or .limit(3)) survived those fixtures too — neither
+    // has more than 2 leading reply rows. Four leading replies ahead of the true ask requires a
+    // cap of at least 5 to resolve correctly, killing the .limit(2)/.limit(3) mutants directly.
+    it('a correlation with 4 leading reply rows still resolves the true (5th, oldest non-reply) ask', async () => {
+      const replies = Array.from({ length: 4 }, (_, i) => ({
+        sender_session: SOLOMON_SESSION,
+        payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR },
+        created_at: `2026-08-25T00:0${i}:00Z`,
+      }));
+      const askRow = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:10:00Z' };
+      const sb = fakeSb({ byId: null, byCorrelation: [...replies, askRow] });
+      expect(await resolveConsultOriginator(sb, CONSULT_CORR)).toBe(ADAM_SESSION);
     });
   });
 
@@ -378,6 +411,63 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', (
     );
     expect(res.inserted).toBe(false);
     expect(res.originator).toBeNull();
+    expect(inserts).toHaveLength(0);
+  });
+
+  // EXEC-TO-PLAN TESTING R3 (T2, sub_agent_execution_results a81a8b51-cc47-48c5-95ce-236085092de1):
+  // moving the S4 guard BEFORE the W3/FR-5 live-role remap survived the full suite, because every
+  // existing S4 fixture uses sessionRole:null (no remap fires). The RAW resolved originator here
+  // ('adam-sess-old') is a perfectly usable session — it is the REMAPPED (live) value that is
+  // poisoned. The guard must validate what actually gets WRITTEN, not the pre-remap input.
+  it('EXEC-TST-T2: the S4 guard validates the POST-remap value, not the pre-remap originator', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'adam-sess-old', payload: { kind: SOLOMON_CONSULT_KIND } }, sessionRole: 'adam' }),
+      BASE_ARGS,
+      { getLiveAdamId: async () => 'broadcast-adam', insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(res.originator).toBeNull();
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('EXEC-TST-T2: the S4 guard refuses a POST-remap nil UUID even though the pre-remap originator was usable', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'solomon-sess-old', payload: { kind: 'adam_advisory' } }, sessionRole: 'solomon' }),
+      BASE_ARGS,
+      { getLiveSolomonId: async () => '00000000-0000-0000-0000-000000000000', insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(res.originator).toBeNull();
+    expect(inserts).toHaveLength(0);
+  });
+
+  // EXEC-TO-PLAN TESTING R3 (T3): moving the self/target skip BEFORE the remap also survived the
+  // full suite, for the same reason — no existing fixture has a remap land ON the running session
+  // or the answer target. Here the RAW originator ('solomon-sess-old') differs from both target
+  // and sessionId, but the LIVE remap resolves to sessionId itself (Solomon replying on its own
+  // adam_advisory thread after a seat rotation) — the skip must fire on the value actually about
+  // to be written, or this self-addresses a CC.
+  it('EXEC-TST-T3: the self/target skip applies to the POST-remap value — a remap landing on the running session is not self-CC\'d', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'solomon-sess-old', payload: { kind: 'adam_advisory' } }, sessionRole: 'solomon' }),
+      BASE_ARGS, // sessionId: 'solomon-1'
+      { getLiveSolomonId: async () => 'solomon-1', insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('EXEC-TST-T3: the self/target skip also applies when a remap lands on the answer target', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'adam-sess-old', payload: { kind: SOLOMON_CONSULT_KIND } }, sessionRole: 'adam' }),
+      BASE_ARGS, // target: 'coord-1'
+      { getLiveAdamId: async () => 'coord-1', insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
     expect(inserts).toHaveLength(0);
   });
 });

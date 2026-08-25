@@ -584,13 +584,20 @@ const REPLY_ELIGIBLE_KINDS = Object.freeze([SOLOMON_CONSULT_KIND, PAYLOAD_KINDS.
  */
 async function resolveOriginatorFromCorrelation(supabase, correlationId) {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('session_coordination')
       .select('sender_session, payload, created_at')
       .eq('payload->>correlation_id', String(correlationId))
       .in('payload->>kind', REPLY_ELIGIBLE_KINDS)
       .order('created_at', { ascending: true })
       .limit(20);
+    // EXEC-TO-PLAN TESTING R3 (T1): supabase-js reports a query-level failure (bad column, missing
+    // table, etc.) via `error` WITHOUT throwing — the prior code only logged from the catch below,
+    // so a non-throwing failure degraded to the exact pre-fix symptom (no CC) with zero signal.
+    if (error) {
+      console.error(`[solomon-advisory] resolveOriginatorFromCorrelation query error for correlation ${correlationId}: ${error.message || error.code || error}`);
+      return null;
+    }
     const rows = Array.isArray(data) ? data : [];
     const origin = rows.find((r) => !isReplyRow(r));
     if (origin) return (origin.payload && origin.payload.origin_session) || origin.sender_session || null;
