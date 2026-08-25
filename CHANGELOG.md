@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-25](#2026-08-25)
+  - [Infrastructure](#infrastructure)
 - [2026-08-24](#2026-08-24)
   - [Infrastructure](#infrastructure)
 - [2026-08-23](#2026-08-23)
@@ -139,6 +141,18 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-25
+
+### Infrastructure
+- **Two CI drift guards that could go silently "chronically red" (or silently blind to real findings) were hardened, after four independent rounds of re-verification each caught a real defect the prior round missed** - PR #7534 (SD-LEO-INFRA-CHRONIC-RED-GUARD-001)
+  - **What shipped**: fixed `scripts/seed-migration-dispositions.mjs`'s `readGapBodies()` — it rebuilt every gap's SQL-body path as a hardcoded `database/migrations/<basename>`, so it could never find (or classify) a gap file that actually lived in `database/chairman-gated/`, meaning the auto-seed Rule A silently never fired for exactly the class of file it was built to seed. Added a committed, per-finding disposition table (`docs/audits/sentinel-finding-dispositions.json`) covering all 14 live `scripts/sentinels/audit-security-linter.mjs` findings, and two chairman-gated (dormant, unapproved) remediation migrations for the verified-zero-consumer subset: RLS-enable on 9 tables, and a `search_path` pin on 2 `SECURITY DEFINER` functions. Migrated the sentinel's hardcoded table-exemption arrays into a data manifest (`scripts/sentinels/exempted-tables.json`), and documented the "baselines are data, never predicate edits" principle inline in both guards.
+  - **Round 1 (LEAD)**: the submitted premise (a single platform-blocked `pg_net` finding causes the sentinel's reds; `CEREMONY_PENDING` is the drift guard's sole blocker) was independently re-verified against live CI history and source and found false before PLAN began — the real, accumulating cause was a live security backlog trending 1→11→12 RLS-disabled tables across three sampled dates.
+  - **Round 2 (PLAN)**: a prospective TESTING review found the LEAD-corrected PRD was *still* wrong — mechanically self-contradictory FRs (a double-counted finding), a misdiagnosed root cause for a stale test fixture, and an RLS remediation plan that would have silently deny-all'd `north_star`'s confirmed live anon-key browser consumer.
+  - **Round 3 (EXEC-TO-PLAN SECURITY)**: even the carefully-scoped, teammate-census-informed "zero consumer" RLS migration missed two real SQL-level consumers no application-code grep could find — a `security_invoker=on` view (`writer_consumer_asymmetry_witnesses`) reading `scope_completion_chain` with anon/authenticated grants, and a `SECURITY DEFINER`-context trigger (`claim_eligibility_observe`) writing `claim_rejects`. Fixed by re-pointing `scope_completion_chain` at a pre-existing, correctly-scoped, dormant migration from a *different* prior SD instead of racing it with a duplicate, and by tracing live `pg_roles`/`pg_proc` to prove every current write path to `claim_rejects` bypasses RLS regardless of caller (the SECURITY DEFINER RPC and every direct-update script are both owned by/run as roles with `rolbypassrls=true`).
+  - **Round 4 (PLAN-VERIFY VALIDATION)**: independently re-ran the same defect class with a *different* instrument — a live `pg_depend`/`pg_rewrite` view-dependency scan across the 9 remaining tables — confirming zero dependent views, so the SEC-2 miss does not recur elsewhere.
+  - **A deep-tier adversarial review of the PR found one more real defect in this SD's own tooling fix**: an earlier attempt at this same SD had already narrowed the `/ship` review gate's own closed-enumeration false positives (its `CRIT-003`/`CRIT-006` patterns were matching this PR's own legitimate security-hardening prose); the adversarial pass found that narrowing was itself over-broad, incorrectly suppressing genuine imperative-verb danger shapes like `auth_disable()` alongside the safe `disabled` state-descriptor form it was meant to target. Fixed with a precise lookahead, mutation-tested.
+  - **Verification**: LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 91%, LEAD-FINAL-APPROVAL 95%. Both new SQL migrations ship dormant (no `@approved-by`, cannot auto-apply) pending chairman sign-off.
 
 ## 2026-08-24
 

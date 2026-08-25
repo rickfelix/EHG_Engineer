@@ -1,9 +1,9 @@
 ---
 category: database
 status: approved
-version: 1.2.0
+version: 1.3.0
 author: rickfelix
-last_updated: 2026-08-18
+last_updated: 2026-08-25
 tags: [database, migrations, ci, governance]
 ---
 
@@ -154,14 +154,19 @@ Only two rules are trusted, both re-derivable from tracked sources:
   *self-asserted in the author's own SQL* and is not checked against any registry, so an author
   can obtain this deferral by adding one comment line. It is time-boxed to 90 days for that
   reason.
-  **Caveat (2026-08-11):** this is a content-marker rule (`CHAIRMAN_GATED_RE` in
-  `scripts/seed-migration-dispositions.mjs`), not a path rule — it does not fire merely because a
-  file lives under `database/chairman-gated/`. Measured against the 11 files in that directory at
-  the time `CEREMONY_PENDING` shipped: **none** carry the literal `@chairman-gated` or
-  `requires-chairman-apply` comment the regex requires, including the 2 that were newly
-  surfaced as `CEREMONY_PENDING` gaps. Directory placement and Rule A's marker are two different,
-  currently-unreconciled conventions for saying the same thing — a file in the directory needs a
-  **manual** disposition entry (steps below) until that's reconciled.
+  **Caveat (2026-08-11), RESOLVED 2026-08-25 (SD-LEO-INFRA-CHRONIC-RED-GUARD-001, FR-1):** this
+  is a content-marker rule (`CHAIRMAN_GATED_RE` in `scripts/seed-migration-dispositions.mjs`), not
+  a path rule — it never fired merely because a file lives under `database/chairman-gated/`.
+  The actual root cause of the "none of the 11 files carry the marker" measurement above was a
+  *separate* bug: `readGapBodies()` reconstructed each gap's SQL-body path as a hardcoded
+  `path.join(ROOT, 'database', 'migrations', basename)`, so it could never find (and therefore
+  never scan the content of) any file that actually lived in `database/chairman-gated/` —
+  `CHAIRMAN_GATED_RE.test('')` is trivially false. Fixed by resolving each gap's body via the
+  verifier's own `resolveMigrationPath()` instead of a hardcoded reconstruction, so Rule A can
+  now genuinely read chairman-gated files' content and correctly auto-seeds `DEFERRED` for any
+  that carry the marker. Directory placement and Rule A's marker remain conceptually distinct
+  conventions (a file in the directory with no marker still needs a **manual** entry), but the
+  directory no longer hides marker-bearing files from Rule A.
 - **B — the 2026-06-10 human sweep → its verdict**, but only when *every* object the verifier
   reports missing for that file is covered by the doc **and** the doc cites that exact file.
   Currently this yields zero files, because the sweep adjudicated tables and views from a
