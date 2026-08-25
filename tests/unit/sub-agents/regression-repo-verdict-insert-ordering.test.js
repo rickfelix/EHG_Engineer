@@ -15,7 +15,7 @@
  * applySubAgentRepoVerdict is used via importOriginal, since that is exactly what this test verifies
  * actually wires into the stored row.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'node:os';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -76,6 +76,10 @@ describe('regression.js execute() — repo-verdict/insert ordering (SD-LEO-INFRA
   beforeEach(async () => {
     inserted.length = 0;
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'regression-ordering-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
   it('the stored row carries the repo-resolution downgrade -- conditions/justification/metadata all present', async () => {
