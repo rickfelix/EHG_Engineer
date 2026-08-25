@@ -1,7 +1,10 @@
 -- SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 (FR-1) -- chairman_ratifications: the
 -- append-only ledger of chairman ratifications, with encoding-staleness tracking.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal 'A', in-terminal 2026-08-25 — third ceremony of the ratification sitting,
+--    ruling: apply the ratification ledger now + mint the Solomon ratification-capture-audit SD.
+--    Scribed by Adam per CLAUDE_ADAM.md §3c.)
 --   Chairman verification NOT yet obtained. This file is staged only.
 --   WHY chairman-gated rather than database/migrations/: this file creates TRIGGERS
 --   (append-only guard) and REVOKE/GRANT statements -- both land it in
