@@ -44,12 +44,14 @@ const CONSULT_CORR = 'corr-3333';
  * that filters BEFORE capping (the correct shape) produce genuinely different results here,
  * exactly as they would against real PostgREST.
  */
-function fakeSb({ byId = null, byCorrelation = [] } = {}) {
+function fakeSb({ byId = null, byCorrelation = [], selectLog = null } = {}) {
   return {
     from() {
       const state = { ascending: null, inFilters: [], eqFilters: [] };
       const api = {
-        select() { return this; },
+        // EXEC-TST-W5/W6: record the requested column list so a test can assert the
+        // correlation-fallback query still retains `payload` (isReplyRow's only input).
+        select(cols) { if (selectLog) selectLog.push(cols); return this; },
         eq(col, val) { state.eqFilters.push([col, val]); return this; },
         in(col, vals) { state.inFilters.push([col, vals]); return this; },
         order(_col, opts) { state.ascending = Boolean(opts && opts.ascending); return this; },
@@ -136,6 +138,72 @@ describe('resolveConsultOriginator — finds who asked the consult/advisory', ()
 
   it('REPLY_ELIGIBLE_KINDS is exactly {solomon_consult, adam_advisory} — no silent widening beyond the two named kinds', () => {
     expect([...REPLY_ELIGIBLE_KINDS].sort()).toEqual(['adam_advisory', 'solomon_consult']);
+  });
+
+  // EXEC-TST-C1/EXEC-TST-C2 (prospective EXEC-TO-PLAN TESTING, sub_agent_execution_results
+  // 4101e867-2ebb-4d69-83ac-98838edfaf75): mutation testing proved 4 mutants of the shipped fix
+  // survived the round-1 test additions with the suite fully green — i.e. the cap size, the sort
+  // direction, and the reply-row exclusion were each individually unpinned even though the
+  // COMBINED regression shape (M1b, DESC+limit(1)) was caught. These 4 tests each isolate and
+  // kill one previously-surviving mutant.
+  describe('FR-4 cap-then-filter — each mechanism independently pinned (EXEC-TST-C1)', () => {
+    // Kills M1c (.limit(20) -> .limit(1)) AND M1d (rows.find(!isReplyRow) -> rows[0]): the reply
+    // is the OLDEST row on the correlation (an unusual but valid ordering — e.g. clock skew), so
+    // a 1-row cap fetches ONLY the reply (wrong: null) and a bare rows[0] returns the reply's own
+    // sender (wrong: the replier) — only cap>1 PLUS the JS filter together resolve the true ask.
+    it('a correlation whose OLDEST row is a reply still resolves the true (later, non-reply) ask — not null, not the replier', async () => {
+      const replyRow = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:40:00Z' };
+      const askRow = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:46:29Z' };
+      const sb = fakeSb({ byId: null, byCorrelation: [replyRow, askRow] });
+      const result = await resolveConsultOriginator(sb, CONSULT_CORR);
+      expect(result).not.toBeNull();
+      expect(result).not.toBe(SOLOMON_SESSION);
+      expect(result).toBe(ADAM_SESSION);
+    });
+
+    // Kills M1a (ascending:true -> false): TWO genuine non-reply candidates on the same
+    // correlation (a real, if unusual, shape — e.g. an automated advisory followed by a human
+    // one) — only ascending order picks the OLDEST (the true first ask), matching FR-4's stated
+    // invariant. Descending would pick the newer one instead, silently answering a different
+    // question ("who asked most recently" vs "who originated this").
+    it('with two non-reply candidates on one correlation, the OLDEST (not the newest) is resolved as originator', async () => {
+      const earlierAsk = { sender_session: 'adam-coordinator-health', payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:10:00Z' };
+      const laterAsk = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:20:00Z' };
+      const sb = fakeSb({ byId: null, byCorrelation: [earlierAsk, laterAsk] });
+      expect(await resolveConsultOriginator(sb, CONSULT_CORR)).toBe('adam-coordinator-health');
+    });
+  });
+
+  // Kills M1d in isolation: a correlation carrying ONLY reply rows (no ask present at all — a
+  // real, live-reachable shape: measured 14/373 sampled correlations). Fail-open (null) is
+  // correct; returning the replier's own session would be the exact misdelivery class this SD
+  // exists to eliminate.
+  it('EXEC-TST-C2: a replies-only correlation (no ask row) resolves null, never the replier', async () => {
+    const reply1 = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:50:00Z' };
+    const reply2 = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:55:00Z' };
+    const sb = fakeSb({ byId: null, byCorrelation: [reply1, reply2] });
+    const result = await resolveConsultOriginator(sb, CONSULT_CORR);
+    expect(result).toBeNull();
+    expect(result).not.toBe(SOLOMON_SESSION);
+  });
+
+  // EXEC-TST-W1: the existing 'a NON-eligible-kind row resolved by id yields null' test above
+  // uses kind='coordinator_reply', which isReplyRow() ALSO independently classifies as a reply
+  // (its own first clause) — so that fixture cannot distinguish "the I4 kind guard fired" from
+  // "the reply-exclusion fired for an unrelated reason" (mutation-proved: deleting the guard
+  // leaves that test green). A genuinely non-reply, non-eligible kind is required to pin it.
+  it('EXEC-TST-W1: a non-reply, non-eligible kind (chairman_directive) resolved by id yields null — the ONLY fixture that actually pins the I4 guard', async () => {
+    const sb = fakeSb({ byId: { sender_session: 'coordinator-sess', payload: { kind: 'chairman_directive' } } });
+    expect(await resolveConsultOriginator(sb, CONSULT_ROW_ID)).toBeNull();
+  });
+
+  // EXEC-TST-W5/W6: the fallback query's select() must retain `payload` — isReplyRow's only
+  // input — or the reply-exclusion silently becomes a no-op (every row reads as non-reply).
+  it('EXEC-TST-W5/W6: the correlation-fallback query requests payload in its select list', async () => {
+    const selectLog = [];
+    const sb = fakeSb({ byId: null, byCorrelation: [], selectLog });
+    await resolveConsultOriginator(sb, CONSULT_CORR);
+    expect(selectLog.some((cols) => String(cols).includes('payload'))).toBe(true);
   });
 });
 
@@ -225,6 +293,19 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', (
     const res = await ensureOriginatorCc(ccFakeSb(), BASE_ARGS, { insertRow: async () => ({ data: null, error: { message: 'boom' } }) });
     expect(res.inserted).toBe(false);
     expect(res.error).toBe('boom');
+  });
+
+  // EXEC-TST-W3: scripts/solomon-advisory.cjs:1215 (the dedup-HEAL call site) runs EXCLUSIVELY
+  // when alreadyAnswered() is true -- i.e. exclusively in the state where a reply row already
+  // exists on the correlation -- and passes the identical arg shape ensureOriginatorCc accepts
+  // here. TS-3 above only exercises this shape with a solomon_consult-flavored ask; this pins
+  // the adam_advisory-flavored ask the widening (FR-1) newly admits to that same call site.
+  it('EXEC-TST-W3: the heal-path shape (ensureOriginatorCc after a prior reply) works for an adam_advisory ask, not just solomon_consult', async () => {
+    const inserts = [];
+    const adamAdvisoryAsk = { sender_session: ADAM_SESSION, payload: { kind: 'adam_advisory' } };
+    const res = await ensureOriginatorCc(ccFakeSb({ consult: adamAdvisoryAsk }), BASE_ARGS, { insertRow: captureInsertRow(inserts) });
+    expect(res.inserted).toBe(true);
+    expect(res.originator).toBe(ADAM_SESSION);
   });
 
   // TS-3: the currently-working solomon_consult multi-reply control path must not regress.

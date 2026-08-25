@@ -559,9 +559,14 @@ async function resolveReplyToCorrelation(supabase, value) {
 
 // SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001 FR-1/FR-2: kinds whose replies are CC-worthy. Widened
 // from solomon_consult-only so an adam_advisory-kind correlation (Solomon replying to an Adam
-// advisory) also CCs its true originator — previously it silently resolved to coordinator-only
-// (2 real specimens, 2026-08-25 00:50-01:01Z). NOT a blanket bypass of adversarial-review I4: an
-// arbitrary kind (coordinator_reply, ack, …) still resolves null, exactly as before.
+// advisory) also CCs its true originator — previously it silently resolved to coordinator-only.
+// EXEC-TST-W6 (replayed against live data): of the 2 candidate specimens named at LEAD, 1
+// (reply 4dbf183c, correlation a25bbb03-*, 2026-08-25 00:50:28Z) is a confirmed real
+// adam_advisory miss this fix repairs (0 pre-existing cc_originator rows; the fix now resolves
+// the true asker 50192c2e). The other (reply 18700836, correlation 9d15ee25) has a
+// coordinator_request ask whose sender already equals the reply target — correctly requires no
+// CC, not a specimen of this bug. NOT a blanket bypass of adversarial-review I4: an arbitrary
+// kind (coordinator_reply, ack, chairman_directive, …) still resolves null, exactly as before.
 const REPLY_ELIGIBLE_KINDS = Object.freeze([SOLOMON_CONSULT_KIND, PAYLOAD_KINDS.ADAM_ADVISORY]);
 
 /**
@@ -588,7 +593,12 @@ async function resolveOriginatorFromCorrelation(supabase, correlationId) {
     const rows = Array.isArray(data) ? data : [];
     const origin = rows.find((r) => !isReplyRow(r));
     if (origin) return (origin.payload && origin.payload.origin_session) || origin.sender_session || null;
-  } catch { /* fail-open: no CC */ }
+  } catch (e) {
+    // EXEC-TST-W4: fail-open is correct (never block the reply on a resolver error), but silent
+    // was wrong — a query-level failure here degrades to the exact pre-fix symptom (no CC) with
+    // zero operator signal. Loud, still fail-open.
+    console.error(`[solomon-advisory] resolveOriginatorFromCorrelation failed for correlation ${correlationId}: ${(e && e.message) || e}`);
+  }
   return null;
 }
 
