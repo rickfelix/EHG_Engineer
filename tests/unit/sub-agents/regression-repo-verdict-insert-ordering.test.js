@@ -41,6 +41,12 @@ vi.mock('../../../scripts/modules/sd-id-normalizer.js', () => ({
 }));
 
 const inserted = [];
+// Mutable per-test fixture for the strategic_directives_v2 lookup -- lets the "SD not found"
+// test below swap in a not-found response without a second vi.mock block.
+let sdLookupResponse = {
+  data: { id: 'fake-sd-uuid-0001', sd_type: 'infrastructure', intensity_level: null, status: 'active', target_application: 'EHG_Engineer' },
+  error: null,
+};
 
 vi.mock('../../../scripts/lib/supabase-connection.js', () => ({
   createSupabaseServiceClient: vi.fn().mockResolvedValue({
@@ -49,10 +55,7 @@ vi.mock('../../../scripts/lib/supabase-connection.js', () => ({
         return {
           select: () => ({
             eq: () => ({
-              single: async () => ({
-                data: { id: 'fake-sd-uuid-0001', sd_type: 'infrastructure', intensity_level: null, status: 'active', target_application: 'EHG_Engineer' },
-                error: null,
-              }),
+              single: async () => sdLookupResponse,
             }),
           }),
         };
@@ -75,6 +78,10 @@ describe('regression.js execute() — repo-verdict/insert ordering (SD-LEO-INFRA
 
   beforeEach(async () => {
     inserted.length = 0;
+    sdLookupResponse = {
+      data: { id: 'fake-sd-uuid-0001', sd_type: 'infrastructure', intensity_level: null, status: 'active', target_application: 'EHG_Engineer' },
+      error: null,
+    };
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'regression-ordering-test-'));
   });
 
@@ -101,5 +108,24 @@ describe('regression.js execute() — repo-verdict/insert ordering (SD-LEO-INFRA
     expect(row.conditions.length).toBeGreaterThan(0);
     expect(typeof row.justification).toBe('string');
     expect(row.justification.length).toBeGreaterThanOrEqual(50);
+  });
+
+  it('resolves normally with verdict=ERROR (never rejects) when the SD is not found', async () => {
+    // Deep-tier adversarial review finding: moving getSDDetails() ahead of resolveSubAgentRepo()
+    // must not silently change execute()'s documented never-rejects contract. This pins it.
+    sdLookupResponse = { data: null, error: { message: 'no rows found' } };
+    const { execute } = await import('../../../lib/sub-agents/regression.js');
+
+    const results = await execute('missing-sd-id', {}, {
+      repo_path: tmpDir,
+      engineer_path: tmpDir,
+      fullValidation: true,
+    });
+
+    expect(results.verdict).toBe('ERROR');
+    expect(results.confidence).toBe(0);
+    expect(results.critical_issues.length).toBeGreaterThan(0);
+    // The failure never reached storeResults() -- nothing should have been inserted.
+    expect(inserted).toHaveLength(0);
   });
 });
