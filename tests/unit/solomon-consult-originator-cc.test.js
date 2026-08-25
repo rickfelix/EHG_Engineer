@@ -414,6 +414,22 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', (
     expect(inserts).toHaveLength(0);
   });
 
+  // PLAN_VERIFICATION REGRESSION (R1, sub_agent_execution_results 6a6c6c26-453b-4fca-8f4e-a390cc45ce20):
+  // the S4 guard originally checked only the 'broadcast-'-PREFIXED sentinels, but bare 'broadcast'
+  // (no trailing dash) is ALSO a live fleet-wide fan-out sentinel (lib/coordinator/dispatch.cjs
+  // SENTINEL_TARGETS, used by chairman_directive) — the same amplification class S4 exists to stop.
+  it('EXEC-REG-R1: an originator resolving to the bare broadcast sentinel (no dash) is refused, never written as target_session', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'broadcast', payload: { kind: SOLOMON_CONSULT_KIND } } }),
+      BASE_ARGS,
+      { insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(res.originator).toBeNull();
+    expect(inserts).toHaveLength(0);
+  });
+
   // EXEC-TO-PLAN TESTING R3 (T2, sub_agent_execution_results a81a8b51-cc47-48c5-95ce-236085092de1):
   // moving the S4 guard BEFORE the W3/FR-5 live-role remap survived the full suite, because every
   // existing S4 fixture uses sessionRole:null (no remap fires). The RAW resolved originator here

@@ -674,7 +674,11 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
         originator = (await getLiveSolomonId(supabase).catch(() => null)) || originator;
       }
     } catch { /* keep the raw originator */ }
-    if (!isUsableSessionId(originator) || originator.startsWith('broadcast-')) {
+    // PLAN_VERIFICATION REGRESSION (R1): 'broadcast' (bare, no trailing dash) is ALSO a live
+    // fleet-wide fan-out sentinel (lib/coordinator/dispatch.cjs SENTINEL_TARGETS, used by
+    // chairman_directive) — the prefix-only check let it through the same amplification path
+    // the 'broadcast-'-prefixed guard was added to close.
+    if (!isUsableSessionId(originator) || originator === 'broadcast' || originator.startsWith('broadcast-')) {
       return { inserted: false, originator: null };
     }
     if (originator === target || originator === sessionId) return { inserted: false, originator };
