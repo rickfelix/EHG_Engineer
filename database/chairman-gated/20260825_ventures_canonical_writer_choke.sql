@@ -158,6 +158,9 @@ AS $function$
       ('rescan_stage_20',
        '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
        'SECURITY DEFINER RPC. Stage 20->21 auto-advance on terminal-SD + deployment-artifact verification.'),
+      ('fn_advance_venture_stage',
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'SECURITY DEFINER RPC, the EVA-daemon-path advance. Discovered mid-EXEC (not in the original writer census): lib/eva/artifact-persistence-service.js''s advanceStage() -- documented there as the primary general-advance call path -- calls this function, not advance_venture_stage.'),
 
       -- ── EVA STAGE MACHINERY (JS, self-stamping wired in step 2's code deploy) ──────────────────
       ('stage-execution-worker.js',

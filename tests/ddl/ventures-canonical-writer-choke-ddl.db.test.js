@@ -213,6 +213,7 @@ describe('ventures canonical-writer choke — migration DDL', () => {
       'advance_venture_to_stage',
       'ehg:promote.ts',
       'eva-run.js',
+      'fn_advance_venture_stage',
       'reconciliation-packet-apply.mjs',
       'rescan_stage_20',
       'run-canary-probe.mjs',

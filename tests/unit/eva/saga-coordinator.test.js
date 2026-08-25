@@ -313,6 +313,17 @@ describe('createStageCompensation', () => {
     expect(mockDb.from).toHaveBeenCalledWith('ventures');
   });
 
+  // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001: self-stamp for the canonical-writer choke.
+  it('should self-stamp stage_write_token in the same UPDATE as the revert', async () => {
+    const updateFn = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+    const mockDb = { from: vi.fn().mockReturnValue({ update: updateFn }) };
+
+    const compensate = createStageCompensation(mockDb, 'venture-1', 5);
+    await compensate();
+
+    expect(updateFn).toHaveBeenCalledWith({ current_lifecycle_stage: 5, stage_write_token: 'saga-coordinator.js' });
+  });
+
   it('should throw on db error', async () => {
     const mockDb = {
       from: vi.fn().mockReturnValue({

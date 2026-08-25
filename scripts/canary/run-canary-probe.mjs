@@ -245,7 +245,7 @@ if (!admission.allowed) {
   if (!args.includes('--no-reset') && (venture.current_lifecycle_stage ?? 0) > 1) {
     log(`   reset: stage ${venture.current_lifecycle_stage} → 1 (deterministic full pass; --no-reset to continue instead)`);
     await supabase.from('ventures')
-      .update({ current_lifecycle_stage: 1 })
+      .update({ current_lifecycle_stage: 1, stage_write_token: 'run-canary-probe.mjs' }) // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001
       .eq('id', venture.id);
   }
 

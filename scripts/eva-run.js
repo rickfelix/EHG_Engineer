@@ -190,7 +190,7 @@ async function main() {
   if (startStage !== undefined && Number(startStage) !== currentStage && !dryRun) {
     const { error: updateError } = await supabase
       .from('ventures')
-      .update({ current_lifecycle_stage: Number(startStage) })
+      .update({ current_lifecycle_stage: Number(startStage), stage_write_token: 'eva-run.js' }) // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001
       .eq('id', ventureId);
 
     if (updateError) {
