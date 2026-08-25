@@ -1,0 +1,56 @@
+name: "Chairman held-send release sweep (cron)"
+
+# SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 (FR-1 release path) -- durable host for releasing
+# chairman-targeted decision sends that were held because the pre-send Solomon consult could not
+# verdict in-call. Mirrors solomon-late-verdict-reconcile-cron.yml's rationale exactly: a Solomon
+# verdict can land long after any live session exists to consume it, so the release sweep must run
+# as a scheduled workflow, not only inside a live Adam session.
+
+on:
+  schedule:
+    # Every 15 minutes, matching the sibling late-verdict reconciler this sweep depends on
+    # (chairman_held_sends.consult_correlation_id resolves against the SAME session_coordination
+    # answer rows that sweep reconciles). No point polling faster than the verdict source updates.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Held chairman decision release sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # supabase-js + service-role ONLY, matching every other *cron*.yml in this repo (no pooler/pg
+    # path -- SUPABASE_POOLER_URL is undefined on a GHA runner).
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Exit 0 = ran clean (0 released is a normal, healthy outcome -- most sweeps will find nothing
+      # to release). Exit 1 = INFRA failure only (client construction failed, read query failed);
+      # per-row failures (refused/held/stranded) are counted and logged, never turned into a
+      # process-level failure, since this table does not exist until the chairman applies the
+      # @chairman-gated migration -- until then this step is expected to no-op against a missing
+      # table via the same fail-open read-error path every row-level check already covers.
+      - name: Run chairman held-send release sweep
+        run: node scripts/cron/chairman-held-sends-release-sweep.mjs
