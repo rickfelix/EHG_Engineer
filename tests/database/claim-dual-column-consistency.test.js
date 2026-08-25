@@ -31,12 +31,16 @@ const SD_RELEASE = 'SD-DEMO-CDC-001';
 const SD_STALE = 'SD-DEMO-CDC-002';
 const SD_SWITCH_OLD = 'SD-DEMO-CDC-003';
 const SD_SWITCH_NEW = 'SD-DEMO-CDC-004';
-const ALL_TEST_SDS = [SD_RELEASE, SD_STALE, SD_SWITCH_OLD, SD_SWITCH_NEW];
+// SD-LEO-INFRA-CLAIM-SURFACE-SYNC-001 (FR-3): fresh-claim facet (p_old_sd_id=NULL) --
+// distinct from SD_SWITCH_NEW above, which is only ever exercised alongside an old SD.
+const SD_FRESH_CLAIM = 'SD-DEMO-CDC-005';
+const ALL_TEST_SDS = [SD_RELEASE, SD_STALE, SD_SWITCH_OLD, SD_SWITCH_NEW, SD_FRESH_CLAIM];
 
 const SESS_RELEASE = 'test-session-cdc-release';
 const SESS_STALE = 'test-session-cdc-stale';
 const SESS_SWITCH = 'test-session-cdc-switch';
-const ALL_TEST_SESSIONS = [SESS_RELEASE, SESS_STALE, SESS_SWITCH];
+const SESS_FRESH_CLAIM = 'test-session-cdc-fresh-claim';
+const ALL_TEST_SESSIONS = [SESS_RELEASE, SESS_STALE, SESS_SWITCH, SESS_FRESH_CLAIM];
 
 async function ensureTestSession(sessionId) {
   const { error } = await supabase
@@ -239,5 +243,43 @@ describe.skipIf(!HAS_REAL_DB)('claim dual-column atomicity (SD-LEO-INFRA-CLAIM-D
     expect(newAfter.claiming_session_id).toBe(SESS_SWITCH);
     expect(newAfter.active_session_id).toBe(SESS_SWITCH);
     expect(newAfter.is_working_on).toBe(true);
+  }, 30000);
+
+  // SD-LEO-INFRA-CLAIM-SURFACE-SYNC-001 (FR-3): the fresh-claim facet of QF-20260824-154
+  // ("a fresh claim wrote sd_key while claiming_session_id lagged") -- switch_sd_claim with
+  // p_old_sd_id=NULL, distinct from FR-3's own switch-with-an-old-SD case above. This is the
+  // end-to-end DB-tier proof that scripts/modules/handoff/claim-swapper.js::swapClaim()'s new
+  // RPC delegation actually sets the NEW SD's claim columns for a session with no prior claim.
+  it('FR-4 (fresh claim): switch_sd_claim with p_old_sd_id=NULL sets all three columns on the new SD', async () => {
+    await clearSessionClaim(SESS_FRESH_CLAIM);
+    await clearSDClaim(SD_FRESH_CLAIM);
+    // switch_sd_claim's initial lookup requires status='active' (its `FOR UPDATE` guard row-locks
+    // only an active session) -- clearSessionClaim() alone leaves status='idle', which would make
+    // the RPC return {success:false, error:'Session not found or not active'} before ever reaching
+    // the fresh-claim branch this test exists to prove. setSessionClaim() sets status='active' but
+    // also claims an SD, which would defeat the "genuinely fresh, no prior SD" premise this test
+    // needs -- so set status directly here instead, keeping sd_key null.
+    const { error: activateErr } = await supabase
+      .from('claude_sessions')
+      .update({ status: 'active', heartbeat_at: new Date().toISOString() })
+      .eq('session_id', SESS_FRESH_CLAIM);
+    if (activateErr) throw new Error(`activate SESS_FRESH_CLAIM failed: ${activateErr.message}`);
+
+    const before = await getSDClaimState(SD_FRESH_CLAIM);
+    expect(before.claiming_session_id).toBeNull();
+
+    const { data: rpcResult, error } = await supabase.rpc('switch_sd_claim', {
+      p_session_id: SESS_FRESH_CLAIM,
+      p_old_sd_id: null,
+      p_new_sd_id: SD_FRESH_CLAIM,
+      p_new_track: 'STANDALONE'
+    });
+    expect(error).toBeNull();
+    expect(rpcResult.success).toBe(true);
+
+    const after = await getSDClaimState(SD_FRESH_CLAIM);
+    expect(after.claiming_session_id).toBe(SESS_FRESH_CLAIM);
+    expect(after.active_session_id).toBe(SESS_FRESH_CLAIM);
+    expect(after.is_working_on).toBe(true);
   }, 30000);
 });
