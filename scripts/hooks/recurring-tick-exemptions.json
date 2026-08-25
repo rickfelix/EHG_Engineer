@@ -23,6 +23,10 @@
     {
       "script": "sms-relay-drain.cjs",
       "reason": "Coordinator */5 cadence duty (STANDARD_LOOPS, QF-20260727-064), idempotent fail-soft exit-0 — hard-blocks at the 3rd invocation within its own 10-min schedule (QF-20260812-090). Compensating control confirmed wired (QF-20260815-850): the script now calls stampLastFired('standard_loop:sms-relay-drain') on every successful tick, so the periodic-liveness watcher lane actually covers it."
+    },
+    {
+      "script": "sms-status-relay-drain.cjs",
+      "reason": "SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-6 — same */5 coordinator cadence duty as sms-relay-drain.cjs (its status-callback sibling), idempotent fail-soft exit-0. Compensating control wired from day one (not retrofitted): the script calls stampLastFired('standard_loop:sms-status-relay-drain') on every successful tick, so the periodic-liveness watcher lane covers it."
     }
   ]
 }

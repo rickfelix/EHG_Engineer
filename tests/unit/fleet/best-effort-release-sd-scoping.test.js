@@ -79,11 +79,46 @@ describe('bestEffortReleaseSd — SD-scoping guard (QF-20260726-593)', () => {
     expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
+  it('SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-3): scope_unverifiable propagates the underlying DB message in `error`, not just the literal skip code', async () => {
+    const supabase = makeSupabase('SD-TARGET-001', { fromError: 'db down' });
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'r', silent, { expectedSdKey: 'SD-TARGET-001' });
+    expect(r.error).toBe('db down');
+    expect(r.skipped).toBe('scope_unverifiable'); // still the stable discriminator callers branch on
+  });
+
   it('FAIL-CLOSED: scoping requested but the client cannot read session state (no .from)', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: null }));
     const r = await bestEffortReleaseSd({ rpc }, 'sess-1', 'r', silent, { expectedSdKey: 'SD-TARGET-001' });
     expect(r.skipped).toBe('scope_unverifiable');
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  // SECURITY finding, SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 EXEC-TO-PLAN: releaseClaim()/
+  // releaseSessionClaim() always pass `{expectedSdKey: sdKey}` -- if `sdKey` is falsy
+  // (undefined/null/''), a truthy-only check on the value treats "explicitly scoped, but
+  // empty" identically to "never migrated to scoping", silently falling through to the
+  // UNSCOPED legacy RPC call -- reproducing the exact QF-20260726-593 defect this SD closes.
+  it('SECURITY: expectedSdKey explicitly provided but falsy REFUSES to release (does not fall through to unscoped legacy behavior)', async () => {
+    const supabase = makeSupabase('SD-OTHER-999');
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'release_claim', silent, { expectedSdKey: '' });
+    expect(r.released).toBe(false);
+    expect(r.skipped).toBe('invalid_expected_sd_key');
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it('SECURITY: expectedSdKey: undefined explicitly in opts also refuses (not just a bare {})', async () => {
+    const supabase = makeSupabase('SD-OTHER-999');
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'release_claim', silent, { expectedSdKey: undefined });
+    expect(r.released).toBe(false);
+    expect(r.skipped).toBe('invalid_expected_sd_key');
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it('control: omitting opts entirely still preserves legacy unscoped behavior byte-for-byte', async () => {
+    const supabase = makeSupabase('SD-OTHER-999');
+    const r = await bestEffortReleaseSd(supabase, 'sess-1', 'crosscheck_block', silent);
+    expect(r.released).toBe(true);
+    expect(supabase.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('still NEVER throws — the no-throw contract survives the guard', async () => {

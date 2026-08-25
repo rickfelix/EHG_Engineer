@@ -400,6 +400,9 @@ export async function releaseSessionClaim(sd, supabase) {
   try {
     // FR-5: Import heartbeat manager to stop heartbeat on release
     const heartbeatManager = await import('../../../../../lib/heartbeat-manager.mjs');
+    // SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-1): route release through the
+    // shared, SD-scoped chokepoint instead of a raw rpc('release_sd', ...) call.
+    const { bestEffortReleaseSd } = await import('../../../../../lib/fleet/best-effort-release.mjs');
 
     // Use resolveOwnSession() to find existing session by terminal_id first,
     // avoiding duplicate session creation after context compaction.
@@ -434,30 +437,31 @@ export async function releaseSessionClaim(sd, supabase) {
 
     const claimId = sd.sd_key || sd.id;
 
-    // SD-FDBK-FIX-STALE-CLAIM-AFTER-001: compare sd_key (the real claim column),
-    // not the non-existent sd_id; otherwise the guard was always false and the
-    // release below never ran.
-    if (session.sd_key === claimId) {
-      const { error } = await supabase.rpc('release_sd', {
-        p_session_id: session.session_id,
-        // SD-FDBK-FIX-STALE-CLAIM-AFTER-001: the live release_sd signature is
-        // (p_session_id, p_reason); p_release_reason caused PGRST202 ("function not
-        // found"), so even a reached guard would have silently failed to release.
-        p_reason: 'completed'
-      });
+    // SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-1): the inline `session.sd_key===claimId`
+    // guard this replaced read a session object that can itself be stale (session-manager's
+    // fallback path can read a cached local file rather than the live claude_sessions row —
+    // QF-20260726-593 / RCA a7d374f4b77ae2a1b). bestEffortReleaseSd re-reads claude_sessions
+    // live immediately before the RPC call, so the scope check can no longer be defeated by
+    // a stale `session` object here.
+    const result = await bestEffortReleaseSd(supabase, session.session_id, 'completed', console.log, {
+      expectedSdKey: claimId
+    });
 
-      if (error) {
-        console.log(`   [Release] Warning: Could not release claim: ${error.message}`);
-      } else {
-        console.log('   [Release] ✅ Session claim released');
-      }
+    if (result.released) {
+      console.log('   [Release] ✅ Session claim released');
+    } else if (result.skipped) {
+      console.log(`   [Release] Skipped (${result.skipped}) — claim left untouched`);
+    } else if (result.error) {
+      console.log(`   [Release] Warning: Could not release claim: ${result.error}`);
+    }
 
-      // FR-5: Stop heartbeat interval on SD completion
-      const heartbeatStatus = heartbeatManager.isHeartbeatActive();
-      if (heartbeatStatus.active && heartbeatStatus.sessionId === session.session_id) {
-        heartbeatManager.stopHeartbeat();
-        console.log('   [Release] Heartbeat stopped');
-      }
+    // FR-5 / FR-1: the heartbeat-stop is unconditional — a skipped or failed release must
+    // never leave a stale claim held AND its heartbeat still running (which would read as
+    // a live worker to every liveness gauge).
+    const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+    if (heartbeatStatus.active && heartbeatStatus.sessionId === session.session_id) {
+      heartbeatManager.stopHeartbeat();
+      console.log('   [Release] Heartbeat stopped');
     }
   } catch (error) {
     console.log(`   [Release] Warning: ${error.message}`);

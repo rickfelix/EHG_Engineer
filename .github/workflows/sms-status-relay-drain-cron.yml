@@ -1,0 +1,52 @@
+name: "SMS status-staging drain (cron)"
+
+# SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-6 — mirrors sms-relay-drain-cron.yml exactly, one
+# table over. drainSmsStatusStaging() in lib/chairman/sms-bridge.js would have zero production
+# call sites without this workflow (the same registered-verifier-never-dispatched class the
+# inbound relay's own drain shipped with, requiring a follow-on SD to fix — this SD lands the
+# runner + cron in the SAME PR as the drain function). The runner is a NO-OP until
+# SMS_STATUS_RELAY_DRAIN_ENABLED is set, so this cron is safe to arm before cutover. Static
+# wiring pinned by tests/unit/cron/sms-status-relay-drain-wiring.test.js — renaming this file
+# or the runner script fails CI.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  drain:
+    name: Drain sms_status_staging into sms_outbound_obligations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # FR-6 enable gate — set to true (repo variable) only once the status relay cutover is
+      # live AND the delivery_status_source column migration has been applied. Until then the
+      # runner is inert, so arming this cron early is safe.
+      SMS_STATUS_RELAY_DRAIN_ENABLED: ${{ vars.SMS_STATUS_RELAY_DRAIN_ENABLED }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Drain SMS status staging
+        run: node scripts/sms-status-relay-drain.cjs

@@ -63,7 +63,7 @@ export function computeReactivation(sd, { toStatus = 'draft', reason = null, now
   if (priorBlocker) nextMeta.blocker = { ...priorBlocker, status: 'cleared', cleared_at: ts };
   if (reason) nextMeta.reactivation_reason = String(reason).slice(0, 500);
 
-  const updates = { status: toStatus, metadata: nextMeta, updated_at: ts };
+  const updates = { status: toStatus, metadata: nextMeta, updated_at: ts, lifecycle_write_token: 'sd:reactivate' };
   const pre_state = { status: sd.status, current_phase: sd.current_phase ?? null, blocker_status: priorBlocker?.status ?? null };
   const post_state = { status: toStatus, reactivated_at: ts, blocker_status: priorBlocker ? 'cleared' : null };
   return { ok: true, updates, pre_state, post_state, blockerCleared: !!priorBlocker };

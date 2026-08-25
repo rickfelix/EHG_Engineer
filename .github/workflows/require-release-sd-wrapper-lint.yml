@@ -1,0 +1,50 @@
+name: release_sd Raw-Call Class Guard Lint
+
+# SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-4)
+#
+# Blocks any PR that introduces a NEW raw `<obj>.rpc('release_sd', ...)` call site in scripts/**
+# or lib/** beyond what a count-anchored allowlist entry (scripts/lint/
+# require-release-sd-wrapper-allowlist.json) already accounts for. release_sd is SESSION-scoped,
+# not SD-scoped -- an un-guarded caller can silently drop an unrelated live claim
+# (QF-20260726-593, RCA a7d374f4b77ae2a1b). Callers must route through
+# lib/fleet/best-effort-release.mjs's bestEffortReleaseSd(expectedSdKey) instead.
+#
+# The allowlist is COUNT-ANCHORED ({reason, expected: N} per file), not a boolean per-file
+# grandfather: several files mix already-wrapped and still-raw call sites, so a boolean
+# allowlist would blind this lint to a NEW raw call added to an already-listed file. Only an
+# observed count EXCEEDING `expected` blocks the PR.
+#
+# HARD CONSTRAINT (per the documented 32-day CI-blindness incident on the sibling
+# ismainmodule-classguard-lint.yml workflow): list ONE path-filter entry PER EXTENSION below.
+# GitHub Actions does NOT expand brace-glob alternation -- never combine extensions into one
+# glob entry here.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'scripts/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'eslint-rules/require-release-sd-wrapper.js'
+      - 'scripts/lint/require-release-sd-wrapper-lint.mjs'
+      - 'scripts/lint/require-release-sd-wrapper-allowlist.json'
+      - '.github/workflows/require-release-sd-wrapper-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  require-release-sd-wrapper-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect ungoverned raw release_sd call sites
+        run: node scripts/lint/require-release-sd-wrapper-lint.mjs

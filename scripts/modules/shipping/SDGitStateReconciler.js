@@ -422,7 +422,7 @@ export class SDGitStateReconciler {
         try {
           const { error } = await this.supabase
             .from('strategic_directives_v2')
-            .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+            .update({ status: 'in_progress', updated_at: new Date().toISOString(), lifecycle_write_token: 'SDGitStateReconciler.js' })
             .eq('id', fix.sdId || this.sdId);
 
           if (error) throw error;

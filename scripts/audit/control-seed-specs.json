@@ -529,5 +529,21 @@
       "input": "`git status --porcelain --untracked-files=all` run with cwd pinned to getRepoRoot() (lib/repo-paths.js, not process.cwd()) -- countUntrackedFiles counts every line prefixed `?? `; checkThreshold(count) is a pure comparison against THRESHOLD = BASELINE(2291) + BUFFER(100). Consumes no DB columns and no environment variables.",
       "seen": "Real positive observed live against this repo's own main checkout throughout this SD's EXEC-TO-PLAN and PLAN-TO-LEAD review (2026-08-24): `node scripts/lint/root-dirt-lint.mjs`, run with cwd pinned to getRepoRoot(), repeatedly reported '3192 untracked file(s) exceeds threshold 2391' / '3193 untracked file(s) exceeds threshold 2391' against the genuinely-dirty main checkout -- not a fixture, the real tracked-repo untracked-file count -- both before and independently reconfirmed during SECURITY sub-agent re-verification of this same SD."
     }
+  },
+  {
+    "name": "require-release-sd-wrapper-lint",
+    "script": "scripts/lint/require-release-sd-wrapper-lint.mjs",
+    "rootFlag": "--root",
+    "note": "SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-4). Structurally modeled on require-main-guard-in-one-off-lint.mjs (also --root scoped). The allowlist loaded during the trial is by default the real repo's scripts/lint/require-release-sd-wrapper-allowlist.json (ALLOWLIST_PATH is derived from the script's own __dirname, not from --root) -- the seeded fixture path below (scripts/seeded-release-sd-defect.mjs) does not collide with any of the 13 real allowlist entries, so the trial's ungoverned violation is genuinely fresh, not an artifact of the real allowlist's counts.",
+    "fixtures": [
+      {
+        "path": "scripts/seeded-release-sd-defect.mjs",
+        "content": "// SEEDED DEFECT: a raw supabase.rpc('release_sd', ...) call site with no expectedSdKey scope\n// guard and no allowlist entry -- the exact QF-20260726-593 shape this lint exists to block.\nexport async function doIt(supabase, sessionId) {\n  return supabase.rpc('release_sd', { p_session_id: sessionId, p_reason: 'manual' });\n}\n"
+      }
+    ],
+    "observability_proof": {
+      "input": "scripts/**/*.{mjs,cjs,js} and lib/**/*.{mjs,cjs,js} file TEXT (enumerated via fs.readdirSync directory walk, not git ls-files), each parsed through ESLint's Linter API against eslint-rules/require-release-sd-wrapper.js -- a CallExpression whose callee is a non-computed `.rpc` member access with a string-literal first argument `'release_sd'` -- filtered against scripts/lint/require-release-sd-wrapper-allowlist.json by repo-relative path with a count-anchored {reason, expected} comparison, and lib/fleet/best-effort-release.mjs excluded outright as a structural exemption. Consumes no DB columns and no environment variables.",
+      "seen": "Real positive observed in this PR's own CI (GitHub Actions run 32821787889, job require-release-sd-wrapper-lint, PR #7540, 2026-08-25): `node scripts/lint/require-release-sd-wrapper-lint.mjs` run against the real, live 4853-file scripts/**+lib/** population reported '0 ungoverned violations across 4853 file(s) scanned (scripts/**, lib/**); 13 call site(s) in 9 file(s) governed by allowlist' -- those 13 are genuine pre-existing raw release_sd call sites (scripts/hooks/reclaim-sd-after-compaction.cjs, session-state-sync.cjs, scripts/modules/claim-health/self-heal.js, scripts/modules/complete-quick-fix/orchestrator.js, scripts/modules/sd-next/claim-analysis.js, scripts/sd-start.js, lib/claim-guard.mjs, lib/commands/claim-command.js, lib/session-manager.mjs) found by this exact code path against the live tracked tree, not fixture data -- each individually reviewed into the allowlist with a reason and an exact expected count per file."
+    }
   }
 ]

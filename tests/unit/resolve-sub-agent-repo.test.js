@@ -161,6 +161,12 @@ describe('applySubAgentRepoVerdict', () => {
     expect(results.verdict).toBe('CONDITIONAL_PASS');
     expect(results.metadata.probe_exists).toBe(false);
   });
+
+  // SD-LEO-INFRA-SUB-AGENT-REPO-001: the insertable-by-construction-on-downgrade tests moved to
+  // tests/unit/sub-agents/conditional-pass-insertability.test.js -- THIS file is pre-existing
+  // quarantined (tests/quarantine-manifest.json, since 2026-06-28, for an unrelated Windows/Linux
+  // path assertion-drift reason) and therefore invisible to CI; new tests added here would be
+  // silently CI-blind (deep-tier adversarial review finding).
 });
 
 describe('toCanonicalRepoPath (SD-LEO-INFRA-FIX-RESOLVESUBAGENTREPO-WINDOWS-001)', () => {

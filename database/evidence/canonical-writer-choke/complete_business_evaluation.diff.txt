@@ -1,0 +1,53 @@
+--- complete_business_evaluation.before.sql
++++ complete_business_evaluation.after.sql
+  CREATE OR REPLACE FUNCTION public.complete_business_evaluation(p_sd_id text, p_evaluation_result text, p_rationale text, p_business_problem text DEFAULT NULL::text, p_solution_value text DEFAULT NULL::text, p_duplication_risk text DEFAULT 'LOW'::text)
+   RETURNS boolean
+   LANGUAGE plpgsql
+   SET search_path TO 'public', 'extensions'
+  AS $function$
+  DECLARE
+      v_new_status TEXT;
+  BEGIN
+      -- Insert business evaluation
+      INSERT INTO sd_business_evaluations (
+          sd_id,
+          business_problem_statement,
+          solution_value_proposition,
+          duplication_risk,
+          evaluation_result,
+          evaluation_rationale
+      ) VALUES (
+          p_sd_id,
+          p_business_problem,
+          p_solution_value,
+          p_duplication_risk,
+          p_evaluation_result,
+          p_rationale
+      );
+  
+      -- Determine new status based on evaluation result
+      CASE p_evaluation_result
+          WHEN 'APPROVE' THEN v_new_status := 'business_approved';
+          WHEN 'REJECT' THEN v_new_status := 'business_rejected';
+          ELSE v_new_status := 'pending_business_evaluation'; -- CONDITIONAL, CLARIFY, etc.
+      END CASE;
+  
+      -- Update SD status
+      UPDATE strategic_directives_v2
+      SET
+          status = v_new_status,
+          current_phase = CASE
+              WHEN p_evaluation_result = 'APPROVE' THEN 'READY_FOR_PLAN'
+              WHEN p_evaluation_result = 'REJECT' THEN 'REJECTED'
+              ELSE 'LEAD_BUSINESS_EVALUATION'
+          END,
++         lifecycle_write_token = 'complete_business_evaluation',
+          updated_at = NOW()
+      WHERE id = p_sd_id;
+  
+      RAISE NOTICE 'Business evaluation completed for SD %: % - %', p_sd_id, p_evaluation_result, p_rationale;
+      RETURN TRUE;
+  END;
+  $function$
+  
+  

@@ -63,6 +63,7 @@ const ADDITIONAL_SCOPE = [
   { path: 'scripts/adam-decision-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.' },
   { path: 'scripts/adam-exec-summary.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.' },
   { path: 'scripts/adam-heartbeat-email.mjs', reason: 'Reaches the email transport only via the pathToFileURL dynamic-import idiom.' },
+  { path: 'scripts/cron/chairman-held-sends-release-sweep.mjs', reason: 'SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001: releases held chairman decisions by dynamically importing lib/adam/chairman-held-send-release.js, which dynamically imports chairman-sms-gate/index.js to dispatch -- outside scripts/cron, the only entrypoint the census enumerates by default.' },
 ];
 
 /** The real emitters. A module is a "sink" when it can reach one of these. */

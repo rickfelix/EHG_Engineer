@@ -1125,6 +1125,135 @@ dispatching implementation forks.
 
 ---
 
+## Pattern: A retry/backoff counter gated on the same evaluation it controls is a self-referential fixed point
+
+**SD**: SD-LEO-INFRA-STAGE-GATE-RETRY-001
+
+**Symptom**: A first implementation of bounded-retry-with-backoff for EVA's stage-gate
+re-evaluation loop (`lib/eva/gate-retry-guard.js`) computed a "should skip this poll" decision
+purely from `attemptCount` -- the number of prior gate-evaluation attempts recorded in
+`eva_stage_gate_attempts`. When the guard decided to skip, the caller (`stage-execution-worker.js`
+'s `_processVenture`) correctly did NOT evaluate the gate that tick, so no new attempt row was
+written. The next poll (~30s later) re-read the SAME `attemptCount`, computed the SAME skip
+decision, and repeated forever. A prospective TESTING sub-agent review of the merged EXEC diff
+caught this by literally executing the shipped `shouldSkipForBackoff()` across a simulated
+sequence of poll ticks: it skipped starting at attempt 8 and never advanced past it in a
+500-tick simulation. Verdict: FAIL. This was WORSE than the original unbounded-retry defect this
+SD existed to fix -- the original bug at least stayed visible (a growing row count); this bug
+froze a venture invisibly, with zero further DB writes and zero visibility to the SD's own
+census-as-code instrument (which only flags ventures AT or PAST the ceiling -- a venture stuck
+below it, forever, is invisible to both the fix and its own monitoring).
+
+**Root cause**: the backoff mechanism's gating condition (`shouldSkip`) and its own advancing
+counter (`attemptCount`) were the same variable, and the ONLY thing that advances that variable
+is exactly the action `shouldSkip` suppresses. Any retry/backoff design where "we're waiting" and
+"the thing that ends the wait" share a single counter, and the counter only advances when NOT
+waiting, is a fixed point once the wait condition first becomes true.
+
+**Fix**: redesigned the backoff to be WALL-CLOCK-TIME-based instead of attempt-count-based.
+`getGateAttemptState()` now returns both `attemptCount` (for the hard ceiling comparison, unchanged) and
+`lastAttemptAt` (the most recent attempt's timestamp). `shouldSkipForBackoff(attemptCount,
+lastAttemptAt, now)` compares `now - lastAttemptAt` against an exponentially-growing required
+delay. Because `now` (real elapsed time) advances on every poll regardless of whether evaluation
+runs, the skip condition eventually clears even while `attemptCount` stays frozen -- the venture
+proceeds, a new attempt is recorded, `attemptCount` advances, and the NEXT required delay grows
+further. This breaks the fixed point: a round-2 adversarial re-review independently simulated the
+corrected function over a realistic 30s-poll loop and confirmed the venture genuinely reached the
+ceiling in ~5.4 simulated days (15,619 ticks), versus freezing forever under the original design.
+
+**Generalization**: before shipping any retry/backoff/rate-limit mechanism, ask explicitly: *does
+advancing past the "wait" state require the exact action the wait state is suppressing?* If yes,
+the counter must be driven by something that advances independently of that action -- wall-clock
+time elapsed (as here), a separate heartbeat/tick counter, or an external signal -- never the same
+counter the gate itself controls. A unit test that asserts the backoff schedule's SHAPE
+(delays increase) is not sufficient to catch this class of bug -- it must simulate the schedule
+being DRIVEN THE SAME WAY THE REAL CALLER DRIVES IT (i.e., re-invoke the skip decision across many
+simulated ticks with the counter held exactly as the real caller would hold it) to see whether it
+ever un-sticks. This is the same "mutation/simulation over the shipped function beats a
+unit-test-shape check" pattern used elsewhere in this doc, applied to a retry/backoff-specific
+failure mode not previously catalogued here.
+
+**Also caught in the same review** (documented briefly, not full pattern sections since they map
+onto EXISTING catalogued classes in this repo): (a) `scripts/eva/census-unbounded-retry.mjs`'s
+first cut used a single unbounded `.select()` against `eva_stage_gate_attempts`, silently capped
+at 1000 rows by PostgREST against a real 1902-row specimen -- exactly the class
+SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001's `count-truncation-diff-lint` CI check exists to
+block on NEW sites; it caught a SECOND unbounded site (a `.in()`-filtered `ventures` lookup) this
+SD introduced, which `.in()` alone does not satisfy (only `single()`/`maybeSingle()`/`limit(<1000)`
+/`range()`/`fetchAllPaginated` are recognized bounding markers -- see
+`scripts/audit/count-truncation-inventory.mjs`'s `classifyChain()`). (b) an idempotency
+short-circuit (`recordGateOverride`) gated only on a decision-id match would have permanently
+suppressed a retry after a transient audit-write failure, since the pre-fix code's every-poll
+retry had accidentally been self-healing that exact failure mode -- fixed by gating the
+short-circuit on a durable `attempt_recorded=true` stamp set only after the write actually
+succeeds, not on the presence of the decision alone.
+
+### Files Modified
+`lib/eva/gate-retry-guard.js` (backoff redesign), `lib/eva/artifact-persistence-service.js`
+(idempotency + attempt_recorded stamp), `scripts/eva/census-unbounded-retry.mjs` (pagination +
+bounded ventures lookup), plus corresponding tests in `tests/unit/eva/`.
+
+---
+
+## Pattern: A fix for a recurrence must be adversarially reviewed for its OWN new failure modes, not just re-verified against the old bug
+
+**SD**: SD-LEO-INFRA-SESSION-TICK-CLEAR-001
+
+**Symptom**: SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (2026-08-04) shipped a SessionStart-hosted
+mechanism to release a rotated-out session's `claude_sessions` row (so its tick daemon self-exits)
+on `/clear`/compaction-resume. Fully wired, but its candidate discovery depended entirely on a
+`.claude/pids/tick-<session_id>.json` marker file SHARED across every daemon one session_id ever
+spawns over its life. `session-tick.cjs`'s `deleteMarker()` unlinks that shared file
+UNCONDITIONALLY on any exit (`cleanupAndExit`, wired to SIGINT/SIGTERM/uncaughtException) — the
+FIRST sibling daemon to exit deletes the join key every surviving sibling still needs. A real
+specimen (the "Solomon" seat) had its daemon become immortal until a human manually intervened.
+
+**The fix, and the lesson**: the fix (an additive `metadata.cc_parent_pid` DB field, stamped at
+every SessionStart, plus a marker-INDEPENDENT closure pass that joins on it directly) is correct
+and closes the class. But across FIVE rounds of independent adversarial review on this single SD
+(1 PLAN-phase prospective + 2 EXEC-phase retrospective, each followed by fixes), every round found
+a REAL, NON-OBVIOUS defect that had NOTHING to do with the original marker-deletion bug:
+
+1. **PLAN prospective**: the new DB-join query, as first designed, sat AFTER an existing
+   `if (!candidateIds.length) return;` early-return — meaning it was DEAD CODE in exactly the
+   marker-deleted scenario it existed to fix. (Also caught: `claude_sessions` is measured
+   MULTI-HOST live — an un-scoped pid join would have introduced a NEW cross-host false-death
+   vector while fixing the marker one.)
+2. **EXEC retrospective (TESTING)**: a test for the hostname fail-closed guard was vacuous (its
+   fixture never contained a row the guard specifically needed to exclude, so it passed whether or
+   not the guard existed). A malformed row from the new query path (missing/null `session_id`)
+   could have poisoned the SHARED release call, silently losing the marker-path's OWN legitimate
+   releases along with it. A `parentPid` derivation wrapped a fallback chain inside the SAME
+   try/catch as the primary lookup, so a thrown error skipped the fallback entirely with zero
+   trace.
+3. **EXEC retrospective (SECURITY)**: `parentPid` was never shape-validated — an empty string
+   would pass the `undefined`/`null` check and become a "match-anything" DB-join bucket for any
+   other row that also degraded to the same malformed stamp. `session_id` values reaching the
+   final `.in(toCloseIds)` release call were never shape-validated either — postgrest-js escapes
+   commas/parens in filter values but NOT double-quotes, demonstrated live by the reviewer as a
+   filter-syntax smuggling vector.
+
+None of these five defects were variants of the ORIGINAL bug (shared marker deletion). Each was a
+new failure mode introduced by the FIX ITSELF — the natural byproduct of adding a new code path
+(new query ordering, new cross-cutting scope, new untrusted-shaped inputs) to close an old one.
+
+**Generalization**: when closing a recurrence, "does this fix the original bug" is necessary but
+not sufficient review. The fix is new code with its own surface — ordering bugs (does it actually
+run in the failure scenario, or only in the already-working case?), scope bugs (did closing a
+narrow gap accidentally widen a boundary — host, tenant, permission — the original bug never
+touched?), and input-shape bugs (does the new code path trust a value the old path never had to
+handle?) are the three recurring shapes this SD's five rounds actually found. A recurrence-fix
+review checklist should ask all three explicitly, not just "does the acceptance-gate scenario now
+pass" — every one of these five findings would have shipped invisibly past that single check.
+
+### Files Modified
+`scripts/hooks/session-register.cjs` (stampCcParentPid, closeRotatedOutSessions PASS 2),
+`tests/unit/sessions/rotation-closure-db-join.test.js` (new, 17 tests),
+`tests/unit/sessions/rotation-closure-wiring.test.js` (fake updated for the new trailing
+`.limit(999)`).
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -1143,3 +1272,5 @@ dispatching implementation forks.
 | 1.3.0 | 2026-07-02 | Added isMainModule raw-pattern class-guard from SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B |
 | 1.4.0 | 2026-07-02 | Added sub-agent evidence control-character corruption pattern from SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001 |
 | 1.5.0 | 2026-08-16 | Added ratchet-guard comparison-logic testability pattern from SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 |
+| 1.6.0 | 2026-08-25 | Added self-referential retry/backoff fixed-point pattern from SD-LEO-INFRA-STAGE-GATE-RETRY-001 |
+| 1.7.0 | 2026-08-25 | Added recurrence-fix-needs-its-own-adversarial-review pattern from SD-LEO-INFRA-SESSION-TICK-CLEAR-001 |
