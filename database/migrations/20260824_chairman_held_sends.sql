@@ -1,8 +1,13 @@
 -- SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001 (FR-1) — durable hold-and-release lane for chairman-
 -- targeted decision sends that the pre-send Solomon consult could not verdict in-call.
 -- @chairman-gated
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal, in-terminal ratification sitting 2026-08-25 — packet ruling 4-APPROVE BOTH,
+--    "I agree with all your recommendations". Scribed by Adam per CLAUDE_ADAM.md §3c; the
+--    builder-era warning below is preserved as history — the attestation above is the chairman's,
+--    not the builder's.)
 --
--- ⚠ THERE IS DELIBERATELY NO `-- @approved-by:` LINE IN THIS FILE.
+-- ⚠ THERE WAS DELIBERATELY NO `-- @approved-by:` LINE IN THIS FILE until the chairman's ruling above.
 --   The REVOKE/GRANT statements below are required posture, not optional hardening — pg_default_acl
 --   in this database grants `arwdDxtm` to anon AND authenticated on EVERY new relation, and `X` on
 --   every new function (MEASURED 2026-08-24: defaclacl
