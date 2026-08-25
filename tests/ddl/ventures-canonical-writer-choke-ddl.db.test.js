@@ -99,6 +99,17 @@ ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS stage_write_token TEXT;
 ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT true;
 ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
+-- CI FINDING (first real run of this file -- the DDL test tier was never registered in the CI
+-- trigger filter until this SD's own fix, so nothing below was ever executed before now): whichever
+-- sibling file's CREATE TABLE actually wins the race owns the table's grants too, and none of the
+-- converged-shape siblings GRANT anything to authenticated/anon (they only ever write as the
+-- superuser connection). This file's TS-6b/composed-control tests need the authenticated role to be
+-- able to reach the UPDATE far enough to hit the trigger layer (and be refused there with CGOV1/SVCW1) --
+-- without a table-level GRANT, Postgres refuses with a generic 42501 before any trigger runs,
+-- which is a real permission denial, not the guard we're testing. GRANT is naturally idempotent
+-- (safe to re-run even if a sibling file already granted the same thing).
+GRANT SELECT, INSERT, UPDATE ON public.ventures TO service_role, authenticated, anon;
+
 CREATE TABLE IF NOT EXISTS public._ddl_probe (
   seq   SERIAL PRIMARY KEY,
   label TEXT NOT NULL
@@ -173,6 +184,26 @@ const insertVenture = async ({ stage = null, isDemo = true } = {}) => {
     [stage, isDemo],
   );
   return rows[0].id;
+};
+
+// CI FINDING (first real run of this file): trg_validate_stage_column is BEFORE INSERT OR UPDATE,
+// unconditional -- it coerces NULL -> 1 on the INSERT itself, so insertVenture({stage: null}) can
+// never actually leave a row at NULL; a plain INSERT always gets coerced immediately. TS-7's whole
+// premise needs an EXISTING row genuinely at NULL (mirroring legacy/grandfather data that predates
+// the trigger in production), so this bypasses the insert-time coercion by disabling the trigger
+// only for the duration of the insert, matching the same DISABLE/ENABLE pattern TS-6a/TS-6b already
+// use for isolation.
+const insertVentureWithNullStage = async ({ isDemo = true } = {}) => {
+  await client.query('ALTER TABLE public.ventures DISABLE TRIGGER trg_validate_stage_column');
+  try {
+    const { rows } = await client.query(
+      'INSERT INTO public.ventures (current_lifecycle_stage, is_demo) VALUES (NULL, $1) RETURNING id',
+      [isDemo],
+    );
+    return rows[0].id;
+  } finally {
+    await client.query('ALTER TABLE public.ventures ENABLE TRIGGER trg_validate_stage_column');
+  }
 };
 
 const readVenture = async (id) => {
@@ -312,7 +343,7 @@ describe('ventures canonical-writer choke — migration DDL', () => {
 
   // TS-7 — the whole reason for TWO full-validation triggers, not one
   it('TS-7: raw UPDATE on a NULL-stage row, no token — refused by zzz_ even though aaa_ alone would have passed it', async () => {
-    const id = await insertVenture({ stage: null });
+    const id = await insertVentureWithNullStage();
     expect((await readVenture(id)).current_lifecycle_stage).toBeNull();
 
     // Write an unrelated column; current_lifecycle_stage is not in the SET clause, so a caller
@@ -331,7 +362,7 @@ describe('ventures canonical-writer choke — migration DDL', () => {
   });
 
   it('TS-7 positive control: the same NULL-stage write succeeds when correctly stamped', async () => {
-    const id = await insertVenture({ stage: null });
+    const id = await insertVentureWithNullStage();
     const result = await tryUpdate(
       "UPDATE public.ventures SET name = 'stamped nudge', stage_write_token = 'stage-execution-worker.js' WHERE id = $1",
       [id],
