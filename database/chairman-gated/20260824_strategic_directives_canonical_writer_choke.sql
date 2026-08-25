@@ -3,6 +3,15 @@
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
 -- @approved-by: codestreetlabs@gmail.com
+-- @amendment: 2026-08-25 ratification sitting — chairman fresh verbal "A" (fold approval, in-terminal):
+--   the five prepared FR-2 db_function stamp amendments (complete_business_evaluation,
+--   request_business_evaluation, fn_rollback_sd_hierarchy, delete_venture, kill_venture) are folded
+--   into section 4 VERBATIM from database/evidence/canonical-writer-choke/*.after.sql (PR #7524;
+--   live pg_get_functiondef() re-verified MATCH against each .before.sql immediately pre-fold).
+--   All 18 registry stamp_wired flags set true — the 13 script/lib writers were measured wired in
+--   merged code by scripts/one-off/canonical-writer-preflight-follow-wire-registered-001.mjs, the
+--   5 db_function writers become wired by this fold itself. $verify$ (g) extended to the five.
+--   Scribed by Adam per CLAUDE_ADAM.md §3c.
 -- @approval-record: Chairman verbal at terminal 2026-08-24T12:43Z — "A on all" (11-item ceremony sitting, Adam 0549d739, branch ceremony/20260824-sitting)
 -- @approval-record: APPLY HELD by packet terms — approved today, applies only after 13 writers wired + Golf-2 branch merged (Solomon-verified precondition).
 --   approval on record. See database/chairman-gated/README.md: the approver header must match
@@ -266,6 +275,11 @@
 --
 -- This block makes the dependency ENFORCED rather than documented: applying this file out of order
 -- aborts here, before any object is created.
+-- TR-2 apply-session requirement, satisfied IN-FILE (SET LOCAL rides apply-migration.js's own
+-- transaction wrap — same session, transaction-scoped). Equivalence-preserving apply-mechanics
+-- amendment per the MECH-AMEND calibration (2026-08-22), scribed at the 2026-08-25 sitting.
+SET LOCAL lock_timeout = '3s';
+
 DO $precondition$
 BEGIN
   IF NOT EXISTS (
@@ -361,62 +375,62 @@ AS $function$
 
       -- ── OTHER protected-column DB FUNCTIONS (writer-inventory 1a, disposition=allowlist) ─────
       ('complete_business_evaluation',
-       '{"surface":"db_function","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"db_function","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'SECURITY INVOKER. Zero live JS call sites (invoked from DB only). NOT YET WIRED -- see the PRE-APPLY BLOCKER note above.'),
       ('request_business_evaluation',
-       '{"surface":"db_function","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"db_function","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'SECURITY INVOKER. Zero live JS call sites. NOT YET WIRED.'),
       ('fn_rollback_sd_hierarchy',
-       '{"surface":"db_function","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"db_function","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'SECURITY DEFINER. Cancels a descendant tree. Zero live JS call sites. NOT YET WIRED.'),
       ('delete_venture',
-       '{"surface":"db_function","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"db_function","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'SECURITY DEFINER. Cascades venture deletion to SD status=cancelled. Live caller: lib/deleteVentureFully.js. NOT YET WIRED.'),
       ('kill_venture',
-       '{"surface":"db_function","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"db_function","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'SECURITY DEFINER. Cascades venture kill to SD status=cancelled. NOT YET WIRED.'),
 
       -- ── OPERATOR / RECOVERY TOOLS (writer-inventory 1d, disposition=allowlist) ───────────────
       ('sd:cancel',
-       '{"surface":"operator_tool","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'scripts/cancel-sd.js, live via `npm run sd:cancel`. NOT YET WIRED -- applying before this is wired takes sd:cancel offline.'),
       ('sd:reactivate',
-       '{"surface":"operator_tool","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'scripts/reactivate-sd.js, live via `npm run sd:reactivate`. Writes status ONLY -- it READS current_phase for audit but never writes it. NOT YET WIRED.'),
       ('sd:recover',
-       '{"surface":"operator_tool","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'scripts/sd-recover.js, live via `npm run sd:recover`. Disaster-recovery tool. NOT YET WIRED.'),
       ('sd:verify',
-       '{"surface":"operator_tool","protected_columns":["status","current_phase","completion_date"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status","current_phase","completion_date"],"stamp_wired":true}'::jsonb,
        'scripts/sd-verify.js, live via `npm run sd:verify`. NOT YET WIRED.'),
       ('sd-park.js',
-       '{"surface":"operator_tool","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'lib/sd-park.js park()/unpark(), raw pg, live via `npm run sd:park` / `sd:unpark`. Writes status ONLY, and DELIBERATELY depends on status_auto_transition firing off the progress column -- the exact unstamped derived path zzz_ + the self-stamp exist to keep working. NOT YET WIRED.'),
       ('leo:continuous',
-       '{"surface":"operator_tool","protected_columns":["status","current_phase","completion_date"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status","current_phase","completion_date"],"stamp_wired":true}'::jsonb,
        'scripts/leo-continuous.js, live via `npm run leo:continuous`. NOT YET WIRED.'),
       ('stale-session-sweep.cjs',
-       '{"surface":"operator_tool","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"operator_tool","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'scripts/stale-session-sweep.cjs, 5 distinct write sites. NOT YET WIRED.'),
 
       -- ── FLEET / EVA LIBS (writer-inventory 1d, disposition=allowlist) ────────────────────────
       ('sd-revert.js',
-       '{"surface":"fleet_lib","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"fleet_lib","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'lib/sd/revert.js -- reverts an SD to draft/LEAD. NOT YET WIRED.'),
       ('release-work-item.mjs',
-       '{"surface":"fleet_lib","protected_columns":["status","current_phase"],"stamp_wired":false}'::jsonb,
+       '{"surface":"fleet_lib","protected_columns":["status","current_phase"],"stamp_wired":true}'::jsonb,
        'lib/fleet/release-work-item.mjs. NOT YET WIRED.'),
       ('reap-orphaned-provisioning.js',
-       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'lib/eva/bridge/reap-orphaned-provisioning.js -- cancels orphaned orchestrator trees. NOT YET WIRED.'),
       ('lifecycle-sd-bridge.js',
-       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'lib/eva/lifecycle-sd-bridge.js -- cancels on hierarchy-creation rollback. NOT YET WIRED.'),
       ('orchestrator-child-completion.js',
-       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'lib/utils/orchestrator-child-completion.js -- sets ready_for_final. NOT YET WIRED.'),
       ('SDGitStateReconciler.js',
-       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":false}'::jsonb,
+       '{"surface":"fleet_lib","protected_columns":["status"],"stamp_wired":true}'::jsonb,
        'scripts/modules/shipping/SDGitStateReconciler.js. NOT YET WIRED.')
   )
   SELECT r.writer_identity, r.capability_flags, r.notes
@@ -1292,6 +1306,411 @@ END;
 $function$;
 
 
+
+
+-- complete_business_evaluation: live pg_get_functiondef() capture + the stamp edit ONLY. Provenance, capture
+-- timestamp and per-line diff: database/evidence/canonical-writer-choke/complete_business_evaluation.{before,after}.sql
+-- and complete_business_evaluation.diff.txt. FR-2 prepared artifact (PR #7524), folded at the 2026-08-25 ratification
+-- sitting on the chairman's fresh verbal "A". Deliberately no timestamp inline -- one representation, in the artifacts.
+CREATE OR REPLACE FUNCTION public.complete_business_evaluation(p_sd_id text, p_evaluation_result text, p_rationale text, p_business_problem text DEFAULT NULL::text, p_solution_value text DEFAULT NULL::text, p_duplication_risk text DEFAULT 'LOW'::text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+    v_new_status TEXT;
+BEGIN
+    -- Insert business evaluation
+    INSERT INTO sd_business_evaluations (
+        sd_id,
+        business_problem_statement,
+        solution_value_proposition,
+        duplication_risk,
+        evaluation_result,
+        evaluation_rationale
+    ) VALUES (
+        p_sd_id,
+        p_business_problem,
+        p_solution_value,
+        p_duplication_risk,
+        p_evaluation_result,
+        p_rationale
+    );
+
+    -- Determine new status based on evaluation result
+    CASE p_evaluation_result
+        WHEN 'APPROVE' THEN v_new_status := 'business_approved';
+        WHEN 'REJECT' THEN v_new_status := 'business_rejected';
+        ELSE v_new_status := 'pending_business_evaluation'; -- CONDITIONAL, CLARIFY, etc.
+    END CASE;
+
+    -- Update SD status
+    UPDATE strategic_directives_v2
+    SET
+        status = v_new_status,
+        current_phase = CASE
+            WHEN p_evaluation_result = 'APPROVE' THEN 'READY_FOR_PLAN'
+            WHEN p_evaluation_result = 'REJECT' THEN 'REJECTED'
+            ELSE 'LEAD_BUSINESS_EVALUATION'
+        END,
+        lifecycle_write_token = 'complete_business_evaluation',
+        updated_at = NOW()
+    WHERE id = p_sd_id;
+
+    RAISE NOTICE 'Business evaluation completed for SD %: % - %', p_sd_id, p_evaluation_result, p_rationale;
+    RETURN TRUE;
+END;
+$function$;
+
+
+-- request_business_evaluation: live pg_get_functiondef() capture + the stamp edit ONLY. Provenance, capture
+-- timestamp and per-line diff: database/evidence/canonical-writer-choke/request_business_evaluation.{before,after}.sql
+-- and request_business_evaluation.diff.txt. FR-2 prepared artifact (PR #7524), folded at the 2026-08-25 ratification
+-- sitting on the chairman's fresh verbal "A". Deliberately no timestamp inline -- one representation, in the artifacts.
+CREATE OR REPLACE FUNCTION public.request_business_evaluation(p_sd_id text, p_rationale text DEFAULT NULL::text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'extensions'
+AS $function$
+BEGIN
+    UPDATE strategic_directives_v2
+    SET
+        status = 'pending_business_evaluation',
+        current_phase = 'LEAD_BUSINESS_EVALUATION',
+        lifecycle_write_token = 'request_business_evaluation',
+        updated_at = NOW()
+    WHERE id = p_sd_id
+      AND status = 'draft';
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Cannot move SD % to business evaluation. Must be in draft status.', p_sd_id;
+    END IF;
+
+    RAISE NOTICE 'SD % moved to business evaluation phase. LEAD must evaluate business value before any PLAN/EXEC work can begin.', p_sd_id;
+    RETURN TRUE;
+END;
+$function$;
+
+
+-- fn_rollback_sd_hierarchy: live pg_get_functiondef() capture + the stamp edit ONLY. Provenance, capture
+-- timestamp and per-line diff: database/evidence/canonical-writer-choke/fn_rollback_sd_hierarchy.{before,after}.sql
+-- and fn_rollback_sd_hierarchy.diff.txt. FR-2 prepared artifact (PR #7524), folded at the 2026-08-25 ratification
+-- sitting on the chairman's fresh verbal "A". Deliberately no timestamp inline -- one representation, in the artifacts.
+CREATE OR REPLACE FUNCTION public.fn_rollback_sd_hierarchy(p_orchestrator_id text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+DECLARE
+  v_cancelled_sds INTEGER := 0;
+  v_cancelled_prds INTEGER := 0;
+  v_descendant_ids TEXT[];
+  v_descendant_uuids UUID[];
+BEGIN
+  -- Find all descendants using recursive CTE
+  WITH RECURSIVE descendants AS (
+    SELECT id, uuid_id
+    FROM strategic_directives_v2
+    WHERE id = p_orchestrator_id
+    UNION ALL
+    SELECT sd.id, sd.uuid_id
+    FROM strategic_directives_v2 sd
+    JOIN descendants d ON sd.parent_sd_id = d.id
+  )
+  SELECT
+    array_agg(id),
+    array_agg(uuid_id)
+  INTO v_descendant_ids, v_descendant_uuids
+  FROM descendants;
+
+  -- Cancel all descendant SDs
+  IF v_descendant_ids IS NOT NULL THEN
+    UPDATE strategic_directives_v2
+    SET status = 'cancelled',
+        lifecycle_write_token = 'fn_rollback_sd_hierarchy',
+        updated_at = NOW()
+    WHERE id = ANY(v_descendant_ids)
+      AND status != 'cancelled';
+    GET DIAGNOSTICS v_cancelled_sds = ROW_COUNT;
+  END IF;
+
+  -- Cancel associated PRDs (directive_id references uuid_id)
+  IF v_descendant_uuids IS NOT NULL THEN
+    UPDATE product_requirements_v2
+    SET status = 'cancelled',
+        updated_at = NOW()
+    WHERE directive_id = ANY(v_descendant_uuids)
+      AND status != 'cancelled';
+    GET DIAGNOSTICS v_cancelled_prds = ROW_COUNT;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'cancelled_sds', v_cancelled_sds,
+    'cancelled_prds', v_cancelled_prds,
+    'orchestrator_id', p_orchestrator_id,
+    'total_descendants', COALESCE(array_length(v_descendant_ids, 1), 0)
+  );
+END;
+$function$;
+
+
+-- delete_venture: live pg_get_functiondef() capture + the stamp edit ONLY. Provenance, capture
+-- timestamp and per-line diff: database/evidence/canonical-writer-choke/delete_venture.{before,after}.sql
+-- and delete_venture.diff.txt. FR-2 prepared artifact (PR #7524), folded at the 2026-08-25 ratification
+-- sitting on the chairman's fresh verbal "A". Deliberately no timestamp inline -- one representation, in the artifacts.
+CREATE OR REPLACE FUNCTION public.delete_venture(p_venture_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_name TEXT;
+  v_deleted_counts JSONB := '{}'::JSONB;
+  v_count INT;
+BEGIN
+  -- SD-LEO-GEN-DEFENSE-DEPTH-ADD-001: internal authorization guard (defense-in-depth +
+  -- closes the live authenticated-exposed hole). Only a chairman or the service role may
+  -- hard-delete a venture. Returns the function's standard failure shape (its EXCEPTION
+  -- WHEN OTHERS handler would convert a RAISE into this anyway).
+  IF NOT (public.fn_is_chairman() OR auth.role() = 'service_role') THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'insufficient_privilege: chairman or service role required to delete a venture',
+      'detail', '42501'
+    );
+  END IF;
+
+  SELECT name INTO v_name FROM ventures WHERE id = p_venture_id;
+  IF v_name IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Venture not found');
+  END IF;
+
+  -- RESTRICT children (must be deleted explicitly) ------------------------------------
+  DELETE FROM chairman_decisions WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('chairman_decisions', v_count);
+  DELETE FROM chairman_directives WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('chairman_directives', v_count);
+  DELETE FROM governance_decisions WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('governance_decisions', v_count);
+  DELETE FROM compliance_gate_events WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('compliance_gate_events', v_count);
+  DELETE FROM risk_escalation_log WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('risk_escalation_log', v_count);
+  DELETE FROM risk_gate_passage_log WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('risk_gate_passage_log', v_count);
+
+  -- NO ACTION children (block the delete unless removed first) -------------------------
+  DELETE FROM blueprint_quality_assessments WHERE venture_id = p_venture_id;
+  DELETE FROM deep_research_results       WHERE venture_id = p_venture_id;
+  DELETE FROM factory_guardrail_state     WHERE venture_id = p_venture_id;
+  DELETE FROM ops_agent_health            WHERE venture_id = p_venture_id;
+  DELETE FROM ops_customer_health_scores  WHERE venture_id = p_venture_id;
+  DELETE FROM ops_friday_scorecards       WHERE venture_id = p_venture_id;
+  DELETE FROM ops_health_alerts           WHERE venture_id = p_venture_id;
+  DELETE FROM ops_product_health          WHERE venture_id = p_venture_id;
+  DELETE FROM ops_quarterly_assessments   WHERE venture_id = p_venture_id;
+  DELETE FROM ops_revenue_alerts          WHERE venture_id = p_venture_id;
+  DELETE FROM ops_revenue_metrics         WHERE venture_id = p_venture_id;
+  DELETE FROM persona_behavioral_data     WHERE venture_id = p_venture_id;
+  DELETE FROM product_hunt_cache          WHERE venture_id = p_venture_id;
+  DELETE FROM risk_forecasts              WHERE venture_id = p_venture_id;
+  DELETE FROM service_tasks               WHERE venture_id = p_venture_id;
+  DELETE FROM service_telemetry           WHERE venture_id = p_venture_id;
+  DELETE FROM stage_proving_journal       WHERE venture_id = p_venture_id;
+  DELETE FROM venture_artifact_summaries  WHERE venture_id = p_venture_id;
+  DELETE FROM venture_exit_readiness      WHERE venture_id = p_venture_id;
+  DELETE FROM venture_service_bindings    WHERE venture_id = p_venture_id;
+
+  -- Vision artifacts: eva_vision_documents.venture_id is ON DELETE CASCADE, but its
+  -- children are RESTRICT/NO ACTION. Clear them (and the docs) before the venture delete.
+  DELETE FROM eva_vision_scores
+    WHERE vision_id IN (SELECT id FROM eva_vision_documents WHERE venture_id = p_venture_id);
+  DELETE FROM eva_vision_iterations
+    WHERE vision_id IN (SELECT id FROM eva_vision_documents WHERE venture_id = p_venture_id);
+  DELETE FROM eva_architecture_plans
+    WHERE venture_id = p_venture_id
+       OR vision_id IN (SELECT id FROM eva_vision_documents WHERE venture_id = p_venture_id);
+  DELETE FROM strategic_roadmaps
+    WHERE vision_key IN (SELECT vision_key FROM eva_vision_documents WHERE venture_id = p_venture_id);
+  DELETE FROM strategic_themes
+    WHERE vision_key IN (SELECT vision_key FROM eva_vision_documents WHERE venture_id = p_venture_id);
+  DELETE FROM eva_vision_documents WHERE venture_id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('eva_vision_documents', v_count);
+
+  -- SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001: cancel NON-TERMINAL linked SDs BEFORE the
+  -- venture_id=NULL orphaning, so deletion leaves a cancellation audit trail.
+  UPDATE strategic_directives_v2
+  SET status = 'cancelled',
+      cancellation_reason = 'Cancelled by venture deletion (' || v_name || ')',
+      metadata = COALESCE(metadata, '{}'::jsonb)
+                 || jsonb_build_object('cancelled_due_to_venture', p_venture_id, 'cancelled_at', now()),
+      lifecycle_write_token = 'delete_venture',
+      updated_at = now()
+  WHERE venture_id = p_venture_id
+    AND status NOT IN ('completed', 'cancelled');
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_deleted_counts := v_deleted_counts || jsonb_build_object('strategic_directives_cancelled', v_count);
+
+  UPDATE strategic_directives_v2 SET venture_id = NULL WHERE venture_id = p_venture_id;
+  UPDATE sd_phase_handoffs SET venture_id = NULL WHERE venture_id = p_venture_id;
+  UPDATE sd_proposals SET venture_id = NULL WHERE venture_id = p_venture_id;
+  UPDATE product_requirements_v2 SET venture_id = NULL WHERE venture_id = p_venture_id;
+  UPDATE venture_dependencies SET dependent_venture_id = NULL WHERE dependent_venture_id = p_venture_id;
+  UPDATE venture_dependencies SET provider_venture_id = NULL WHERE provider_venture_id = p_venture_id;
+  UPDATE venture_capabilities SET origin_venture_id = NULL WHERE origin_venture_id = p_venture_id;
+  UPDATE venture_templates SET source_venture_id = NULL WHERE source_venture_id = p_venture_id;
+  UPDATE venture_nursery SET promoted_to_venture_id = NULL WHERE promoted_to_venture_id = p_venture_id;
+  UPDATE agent_registry SET venture_id = NULL WHERE venture_id = p_venture_id;
+  UPDATE ventures SET
+    brief_id = NULL,
+    vision_id = NULL,
+    architecture_plan_id = NULL,
+    ceo_agent_id = NULL,
+    portfolio_id = NULL,
+    company_id = NULL,
+    source_blueprint_id = NULL
+  WHERE id = p_venture_id;
+
+  DELETE FROM ventures WHERE id = p_venture_id;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  IF v_count = 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Venture delete returned 0 rows');
+  END IF;
+  RETURN jsonb_build_object(
+    'success', true,
+    'venture_id', p_venture_id,
+    'venture_name', v_name,
+    'deleted_counts', v_deleted_counts
+  );
+EXCEPTION WHEN OTHERS THEN
+  RETURN jsonb_build_object(
+    'success', false,
+    'error', SQLERRM,
+    'detail', SQLSTATE
+  );
+END;
+$function$;
+
+
+-- kill_venture: live pg_get_functiondef() capture + the stamp edit ONLY. Provenance, capture
+-- timestamp and per-line diff: database/evidence/canonical-writer-choke/kill_venture.{before,after}.sql
+-- and kill_venture.diff.txt. FR-2 prepared artifact (PR #7524), folded at the 2026-08-25 ratification
+-- sitting on the chairman's fresh verbal "A". Deliberately no timestamp inline -- one representation, in the artifacts.
+CREATE OR REPLACE FUNCTION public.kill_venture(p_venture_id uuid, p_rationale text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_killer_uid UUID := auth.uid();
+  v_kill_log_id UUID;
+  v_sd_cancelled INT := 0;  -- SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001
+BEGIN
+  -- A-1: Role check via canonical helper (chairman/admin/owner accepted)
+  IF NOT public.fn_is_chairman() THEN
+    RAISE EXCEPTION 'Only chairman or lead can reject a venture'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Length check (matches CHECK on table; defense-in-depth; cleaner error)
+  IF length(p_rationale) < 20 THEN
+    RAISE EXCEPTION 'Rationale must be at least 20 characters (got %)', length(p_rationale)
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- A-3 + A-8 step 1: dual-state UPDATE on ventures
+  UPDATE public.ventures
+  SET
+    status = 'cancelled',
+    workflow_status = 'killed',
+    killed_at = now(),
+    kill_reason = p_rationale,
+    -- SD-LEO-INFRA-VENTURE-KILL-CANCEL-001 FR-1: default to pending_teardown only when no
+    -- disposition is already set (e.g. a pre-emptive 'retained' recorded before this kill) --
+    -- COALESCE never overwrites an existing value.
+    teardown_disposition = COALESCE(
+      teardown_disposition,
+      CASE WHEN deployment_url IS NOT NULL THEN 'pending_teardown' END
+    ),
+    updated_at = now()
+  WHERE id = p_venture_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Venture % not found', p_venture_id
+      USING ERRCODE = 'no_data_found';
+  END IF;
+
+  -- SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001: cancel the venture's NON-TERMINAL
+  -- strategic directives so a killed venture no longer leaves orphaned active SDs.
+  UPDATE public.strategic_directives_v2
+  SET
+    status = 'cancelled',
+    cancellation_reason = p_rationale,
+    metadata = COALESCE(metadata, '{}'::jsonb)
+               || jsonb_build_object('cancelled_due_to_venture', p_venture_id, 'cancelled_at', now()),
+    lifecycle_write_token = 'kill_venture',
+    updated_at = now()
+  WHERE venture_id = p_venture_id
+    AND status NOT IN ('completed', 'cancelled');
+  GET DIAGNOSTICS v_sd_cancelled = ROW_COUNT;
+
+  -- A-8 step 2: INSERT ventures_kill_log audit row
+  INSERT INTO public.ventures_kill_log (venture_id, killed_by_user_id, rationale, metadata)
+  VALUES (p_venture_id, v_killer_uid, p_rationale,
+          jsonb_build_object('strategic_directives_cancelled', v_sd_cancelled))
+  RETURNING id INTO v_kill_log_id;
+
+  -- A-8 step 3 + A-2: emit eva_events row — GUARDED on the eva_ventures mirror.
+  -- eva_events.eva_venture_id FKs to eva_ventures(id); ventures created outside the
+  -- EVA pipeline have no mirror, so emit the event only when one exists. The kill
+  -- must not be aborted just because the venture is not EVA-tracked.
+  INSERT INTO public.eva_events (event_type, event_source, event_data, eva_venture_id)
+  SELECT
+    'status_change',
+    'kill_venture_rpc',
+    jsonb_build_object(
+      'type', 'venture.killed',
+      'venture_id', p_venture_id,
+      'killed_by_user_id', v_killer_uid,
+      'rationale', p_rationale,
+      'killed_at', now(),
+      'kill_log_id', v_kill_log_id,
+      'strategic_directives_cancelled', v_sd_cancelled
+    ),
+    p_venture_id
+  WHERE EXISTS (SELECT 1 FROM public.eva_ventures WHERE id = p_venture_id);
+
+  -- A-8 step 4 + A-5: operations_audit_log governance trail
+  INSERT INTO public.operations_audit_log (entity_type, entity_id, action, performed_by, severity, metadata)
+  VALUES (
+    'venture',
+    p_venture_id::text,
+    'kill',
+    v_killer_uid,
+    'warning',
+    jsonb_build_object(
+      'rationale', p_rationale,
+      'kill_log_id', v_kill_log_id,
+      'strategic_directives_cancelled', v_sd_cancelled,
+      'sd_id', '5474573f-3fd9-43e5-8c9e-4584a0cedfdc'
+    )
+  );
+
+  RETURN v_kill_log_id;
+END;
+$function$;
+
+
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 5. $verify$ — STRUCTURAL POST-CONDITIONS, RUN AS PART OF THE APPLY ITSELF
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -1406,7 +1825,9 @@ BEGIN
        AND p.proname IN ('auto_transition_status', 'complete_orchestrator_sd',
                          'fn_atomic_lead_to_plan_transition', 'fn_atomic_exec_to_plan_transition',
                          'update_sd_after_exec_completion', 'update_sd_after_lead_evaluation',
-                         'update_sd_after_plan_validation', 'update_sd_progress_from_phases')
+                         'update_sd_after_plan_validation', 'update_sd_progress_from_phases',
+                         'complete_business_evaluation', 'request_business_evaluation',
+                         'fn_rollback_sd_hierarchy', 'delete_venture', 'kill_venture')
        AND pg_get_functiondef(p.oid) NOT LIKE '%lifecycle_write_token%'
   LOOP
     RAISE EXCEPTION 'canonical-writer choke: % does not set lifecycle_write_token — its own writes would be rejected by the guard it ships with. Refusing to deploy.', v_bad_fn;
