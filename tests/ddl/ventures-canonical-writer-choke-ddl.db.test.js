@@ -114,6 +114,12 @@ CREATE TABLE IF NOT EXISTS public._ddl_probe (
   seq   SERIAL PRIMARY KEY,
   label TEXT NOT NULL
 );
+-- _stub_update_ventures_updated_at() INSERTs a probe row as the CURRENT ROLE (not SECURITY
+-- DEFINER), so TS-6b's SET ROLE authenticated case needs this too -- without it, authenticated
+-- reaches this trigger fine (name-sort 'u' < 'v' puts it before the client-axis trigger) and
+-- 42501s on the probe insert itself, before ever reaching ventures_block_client_governance_write_trg.
+GRANT INSERT ON public._ddl_probe TO service_role, authenticated, anon;
+GRANT USAGE ON SEQUENCE public._ddl_probe_seq_seq TO service_role, authenticated, anon;
 
 -- Instrumented stand-in for fn_validate_stage_column / trg_validate_stage_column, VERBATIM copy of
 -- the live logic (re-verified via pg_get_functiondef 2026-08-25): coerces a NULL stage to 1 on ANY
