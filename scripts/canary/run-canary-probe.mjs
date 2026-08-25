@@ -30,6 +30,7 @@ import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-prod
 // CANARY_NAME is IMPORTED, not spelled again. It was already declared in two places and this file
 // carried a third copy as a bare string literal — the parallel convention child D exists to abolish.
 import { CANARY_NAME } from '../../lib/governance/venture-archive-predicate.mjs';
+import { stageWriteTokenField } from '../../lib/eva/stage-write-token-probe.js';
 import {
   CANARY_KEY, CANARY_FLAG, EXTERNAL_DEP_STAGES, STAGE_STATUS,
   buildRunId, alertDedupKey, classifyExecutionRow, buildRunReport,
@@ -244,8 +245,9 @@ if (!admission.allowed) {
   // probe of the feasible range). --no-reset continues from the current stage.
   if (!args.includes('--no-reset') && (venture.current_lifecycle_stage ?? 0) > 1) {
     log(`   reset: stage ${venture.current_lifecycle_stage} → 1 (deterministic full pass; --no-reset to continue instead)`);
+    // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001: degrades to {} until the column exists.
     await supabase.from('ventures')
-      .update({ current_lifecycle_stage: 1 })
+      .update({ current_lifecycle_stage: 1, ...(await stageWriteTokenField(supabase, 'run-canary-probe.mjs')) })
       .eq('id', venture.id);
   }
 
