@@ -323,6 +323,7 @@ async function cancelSD(sd, reason) {
     claiming_session_id: null,
     is_working_on: false,
     updated_at: new Date().toISOString(),
+    lifecycle_write_token: 'sd:cancel',
   };
 
   const { error: sdErr } = await supabase

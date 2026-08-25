@@ -6,7 +6,7 @@
  * Verdict tiers identical to the PLAN gate. See lib/cross-sd-overlap.js for
  * details. Part of SD-LEO-INFRA-CROSS-FILE-OVERLAP-001.
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import {
   appendOverlapMetadata,
   buildOverlapEntry,
@@ -59,8 +59,13 @@ function resolveMergeCommit(other, mainRef) {
   const fromMeta = other?.metadata?.merge_commit_sha || other?.metadata?.commit_sha;
   if (fromMeta && typeof fromMeta === 'string' && fromMeta.length >= 7) return fromMeta;
   try {
-    const sha = execSync(
-      `git log ${mainRef} --grep "${other.sd_key}" --pretty=format:%H -n 1`,
+    // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-4): was execSync with unquoted mainRef and
+    // double-quoted sd_key interpolation -- same shell-injection sink class as the LEAD-FINAL
+    // primary sinks, though neither value is push-access-controlled here (mainRef resolves via
+    // getMainRef, other.sd_key is DB-sourced). Converted for completeness/defense-in-depth.
+    const sha = execFileSync(
+      'git',
+      ['log', mainRef, '--grep', other.sd_key, '--pretty=format:%H', '-n', '1'],
       { encoding: 'utf8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim();
     return sha || null;

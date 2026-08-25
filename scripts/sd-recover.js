@@ -158,7 +158,8 @@ async function repairSD(sd, handoffs, { dryRun = false } = {}) {
     .update({
       current_phase: correctPhase,
       status: correctStatus,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      lifecycle_write_token: 'sd:recover'
     })
     .eq('id', sd.id);
 

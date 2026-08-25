@@ -17,7 +17,7 @@
  *
  * Phase: LEAD-FINAL-APPROVAL
  */
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -348,8 +348,13 @@ export function createInvocationPathGate(supabase) {
       const mainRef = getMainRef({ cwd: ROOT_DIR }).ref;
       let changed = [];
       try {
-        const diff = execSync(
-          `git diff --name-only --diff-filter=A ${mainRef}...HEAD -- "*.js" "*.mjs" "*.cjs"`,
+        // SD-LEO-FIX-LEAD-FINAL-APPROVAL-001 (FR-4): was execSync with unquoted mainRef
+        // interpolation -- same shell-injection sink class as the LEAD-FINAL primary sinks,
+        // though mainRef (resolved via getMainRef) is not push-access-controlled here.
+        // Converted for completeness/defense-in-depth.
+        const diff = execFileSync(
+          'git',
+          ['diff', '--name-only', '--diff-filter=A', `${mainRef}...HEAD`, '--', '*.js', '*.mjs', '*.cjs'],
           { encoding: 'utf8', cwd: ROOT_DIR, timeout: 10000 }
         );
         changed = diff.split('\n').map((f) => f.trim()).filter(Boolean)

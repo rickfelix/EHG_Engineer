@@ -452,7 +452,7 @@ async function executeSD(sd, parentSdId = null) {
       // Update phase
       await supabase
         .from('strategic_directives_v2')
-        .update({ current_phase: phase })
+        .update({ current_phase: phase, lifecycle_write_token: 'leo:continuous' })
         .eq('id', sd.id);
 
       // Phase-specific execution would happen here
@@ -469,7 +469,8 @@ async function executeSD(sd, parentSdId = null) {
             current_phase: 'COMPLETE',
             progress_percentage: 100,
             is_working_on: false,
-            completion_date: new Date().toISOString()
+            completion_date: new Date().toISOString(),
+            lifecycle_write_token: 'leo:continuous'
           })
           .eq('id', sd.id);
       }

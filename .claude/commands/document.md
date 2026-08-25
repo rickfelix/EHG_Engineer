@@ -124,6 +124,11 @@ supabase.from('strategic_directives_v2')
 
 When documenting completed SDs for release notes or CHANGELOG, apply these patterns:
 
+> **Concurrent-merge protection** (SD-LEO-INFRA-CHANGELOG-CONTENTION-PARALLEL-001): `.gitattributes`
+> sets `CHANGELOG.md merge=union`, so two sessions concurrently appending entries under the same
+> date/category section merge cleanly instead of conflicting. Keep hand-editing CHANGELOG.md
+> exactly as below — no fragment-file path or new write mechanism was introduced.
+
 **Auto/Manual Classification**:
 Classify each documentation item before writing:
 

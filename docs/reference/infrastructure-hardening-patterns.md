@@ -1058,6 +1058,143 @@ branch returned before ever reaching the double-stamp guard the test claimed to 
 
 ---
 
+## Pattern: A `fork` sub-agent that ends its own turn with "running in background, I'll check back" has not done the work -- treat it as incomplete (SD-LEO-INFRA-ALTIFYAI-PRICING-CHECKOUT-001)
+
+**Symptom**: An Agent tool call (`subagent_type: "fork"`) was dispatched with a detailed,
+multi-file security-hardening implementation task. It returned a short text response --
+`tool_uses: 2`, ~30 seconds -- saying it was "running in the background" and would "check back
+in ~10 minutes to merge its fix." The turn ended there. No PR existed on GitHub afterward.
+
+**Root cause**: forks (and agents generally) only produce a result the orchestrator can act on
+by returning a completed answer within their own turn -- there is no mechanism by which a fork
+can autonomously "check back" into the parent conversation later. A fork that spawns background
+work of its own and then ends its turn early has, from the orchestrator's perspective, simply
+not done the task -- the promised follow-up never arrives, because nothing is listening for it.
+This is a hallucinated capability, not a real async pattern: contrast with `Workflow`'s actual
+background execution, which *does* deliver a `<task-notification>` on completion.
+
+**Detection**: `tool_uses` far below what the task shape implies (a multi-file
+implement-test-commit-push-PR task should show 20-80 tool calls, not 2) plus response text
+promising a future check-in is the tell. Verify directly against the external system the agent
+claimed to have changed (here, `gh pr list --repo <repo> --state all --limit 5`) rather than
+trusting the response text -- the same "verify the artifact, not the narration" discipline this
+document's other patterns already establish for retrospectives and test claims.
+
+**Recovery that did NOT work**: `SendMessage({to: <the fork's agentId>, ...})` asking it to
+finish the work. The response came back from a *different* agentId with "I'm a freshly-started
+agent with no memory of a conversation that described [the task]" -- once a fork's turn has
+ended with this failure mode, SendMessage to its ID does not reliably resume the original
+context; it can produce a fresh agent that received the message as a cold-start prompt.
+
+**Recovery that worked**: re-issue a brand-new `Agent({subagent_type: "fork", ...})` call
+containing the FULL original task specification inline (not a reference to "your prior
+message"), with an explicit instruction added: *"do this work synchronously and completely
+within this single turn... do not end your turn early with a 'running in background, will check
+back' style message -- that does not work in this environment."* This succeeded on the next
+attempt (33 tool calls, real PR opened, CI green).
+
+**Generalization**: whenever dispatching a fork/agent for implementation work (not just this
+SD), a short response with disproportionately few tool calls and language implying a future
+autonomous check-in is a signal to verify externally before trusting it, and to re-dispatch with
+an explicit synchronous-completion instruction rather than assuming the work is merely delayed.
+
+**Recurrence (SD-LEO-GEN-ALTIFYAI-DEMAND-LOOP-001, same day)**: happened AGAIN, twice in a row,
+for a plain LEAD-phase *investigation* dispatch (not implementation) -- 1 tool call each time,
+both claiming to have "armed a wakeup to check back in ~N minutes." The second attempt's prompt
+included the exact explicit anti-backgrounding instruction from this pattern's "Recovery that
+worked" section above, verbatim, and the fork did it anyway. Two consecutive failures despite the
+documented workaround being applied is itself the signal: this is not a one-off quirk to work
+around per-dispatch, it is a live characteristic of the `fork` subagent_type under some
+condition not yet isolated (session length? task phrasing as "investigation" rather than
+"implementation"? something else). **What worked instead**: abandoning `fork` entirely for that
+task and dispatching a dedicated `testing-agent` (a non-fork, non-generic subagent_type) for what
+was still fundamentally a research/investigation task -- it completed correctly and
+synchronously (15 tool calls, real findings) on the first attempt. Every `testing-agent` and
+`security-agent` dispatch across this entire session-day completed correctly; only `fork`
+exhibited this failure, and it did so 3 times total (1 in the pricing-checkout SD, 2 in this
+one). **Recommendation, strengthened**: when a `fork` dispatch fails this way once, do not
+simply retry `fork` with a sterner prompt -- switch to a dedicated agent type (`testing-agent`
+for review/investigation work, or handle implementation directly) rather than spending a second
+`fork` attempt on faith that the instruction alone will fix it. A `/signal feedback` to the
+coordinator is also warranted at 2 consecutive failures, per this repo's own recurrence
+threshold (gate 2x / RCA 2x / tool 3x).
+
+### Files Modified
+None (process/operational finding, not a code fix) -- captured here for future sessions
+dispatching implementation forks.
+
+---
+
+## Pattern: A retry/backoff counter gated on the same evaluation it controls is a self-referential fixed point
+
+**SD**: SD-LEO-INFRA-STAGE-GATE-RETRY-001
+
+**Symptom**: A first implementation of bounded-retry-with-backoff for EVA's stage-gate
+re-evaluation loop (`lib/eva/gate-retry-guard.js`) computed a "should skip this poll" decision
+purely from `attemptCount` -- the number of prior gate-evaluation attempts recorded in
+`eva_stage_gate_attempts`. When the guard decided to skip, the caller (`stage-execution-worker.js`
+'s `_processVenture`) correctly did NOT evaluate the gate that tick, so no new attempt row was
+written. The next poll (~30s later) re-read the SAME `attemptCount`, computed the SAME skip
+decision, and repeated forever. A prospective TESTING sub-agent review of the merged EXEC diff
+caught this by literally executing the shipped `shouldSkipForBackoff()` across a simulated
+sequence of poll ticks: it skipped starting at attempt 8 and never advanced past it in a
+500-tick simulation. Verdict: FAIL. This was WORSE than the original unbounded-retry defect this
+SD existed to fix -- the original bug at least stayed visible (a growing row count); this bug
+froze a venture invisibly, with zero further DB writes and zero visibility to the SD's own
+census-as-code instrument (which only flags ventures AT or PAST the ceiling -- a venture stuck
+below it, forever, is invisible to both the fix and its own monitoring).
+
+**Root cause**: the backoff mechanism's gating condition (`shouldSkip`) and its own advancing
+counter (`attemptCount`) were the same variable, and the ONLY thing that advances that variable
+is exactly the action `shouldSkip` suppresses. Any retry/backoff design where "we're waiting" and
+"the thing that ends the wait" share a single counter, and the counter only advances when NOT
+waiting, is a fixed point once the wait condition first becomes true.
+
+**Fix**: redesigned the backoff to be WALL-CLOCK-TIME-based instead of attempt-count-based.
+`getGateAttemptState()` now returns both `attemptCount` (for the hard ceiling comparison, unchanged) and
+`lastAttemptAt` (the most recent attempt's timestamp). `shouldSkipForBackoff(attemptCount,
+lastAttemptAt, now)` compares `now - lastAttemptAt` against an exponentially-growing required
+delay. Because `now` (real elapsed time) advances on every poll regardless of whether evaluation
+runs, the skip condition eventually clears even while `attemptCount` stays frozen -- the venture
+proceeds, a new attempt is recorded, `attemptCount` advances, and the NEXT required delay grows
+further. This breaks the fixed point: a round-2 adversarial re-review independently simulated the
+corrected function over a realistic 30s-poll loop and confirmed the venture genuinely reached the
+ceiling in ~5.4 simulated days (15,619 ticks), versus freezing forever under the original design.
+
+**Generalization**: before shipping any retry/backoff/rate-limit mechanism, ask explicitly: *does
+advancing past the "wait" state require the exact action the wait state is suppressing?* If yes,
+the counter must be driven by something that advances independently of that action -- wall-clock
+time elapsed (as here), a separate heartbeat/tick counter, or an external signal -- never the same
+counter the gate itself controls. A unit test that asserts the backoff schedule's SHAPE
+(delays increase) is not sufficient to catch this class of bug -- it must simulate the schedule
+being DRIVEN THE SAME WAY THE REAL CALLER DRIVES IT (i.e., re-invoke the skip decision across many
+simulated ticks with the counter held exactly as the real caller would hold it) to see whether it
+ever un-sticks. This is the same "mutation/simulation over the shipped function beats a
+unit-test-shape check" pattern used elsewhere in this doc, applied to a retry/backoff-specific
+failure mode not previously catalogued here.
+
+**Also caught in the same review** (documented briefly, not full pattern sections since they map
+onto EXISTING catalogued classes in this repo): (a) `scripts/eva/census-unbounded-retry.mjs`'s
+first cut used a single unbounded `.select()` against `eva_stage_gate_attempts`, silently capped
+at 1000 rows by PostgREST against a real 1902-row specimen -- exactly the class
+SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001's `count-truncation-diff-lint` CI check exists to
+block on NEW sites; it caught a SECOND unbounded site (a `.in()`-filtered `ventures` lookup) this
+SD introduced, which `.in()` alone does not satisfy (only `single()`/`maybeSingle()`/`limit(<1000)`
+/`range()`/`fetchAllPaginated` are recognized bounding markers -- see
+`scripts/audit/count-truncation-inventory.mjs`'s `classifyChain()`). (b) an idempotency
+short-circuit (`recordGateOverride`) gated only on a decision-id match would have permanently
+suppressed a retry after a transient audit-write failure, since the pre-fix code's every-poll
+retry had accidentally been self-healing that exact failure mode -- fixed by gating the
+short-circuit on a durable `attempt_recorded=true` stamp set only after the write actually
+succeeds, not on the presence of the decision alone.
+
+### Files Modified
+`lib/eva/gate-retry-guard.js` (backoff redesign), `lib/eva/artifact-persistence-service.js`
+(idempotency + attempt_recorded stamp), `scripts/eva/census-unbounded-retry.mjs` (pagination +
+bounded ventures lookup), plus corresponding tests in `tests/unit/eva/`.
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -1076,3 +1213,4 @@ branch returned before ever reaching the double-stamp guard the test claimed to 
 | 1.3.0 | 2026-07-02 | Added isMainModule raw-pattern class-guard from SD-LEO-INFRA-ISMAINMODULE-WINDOWS-GUARD-CLASSFIX-001-B |
 | 1.4.0 | 2026-07-02 | Added sub-agent evidence control-character corruption pattern from SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001 |
 | 1.5.0 | 2026-08-16 | Added ratchet-guard comparison-logic testability pattern from SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 |
+| 1.6.0 | 2026-08-25 | Added self-referential retry/backoff fixed-point pattern from SD-LEO-INFRA-STAGE-GATE-RETRY-001 |

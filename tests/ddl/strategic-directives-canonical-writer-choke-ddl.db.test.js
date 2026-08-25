@@ -1772,3 +1772,74 @@ describe('the migration header discharges TR-2 and TR-4 in the file itself, not 
     expect(MIGRATION_SQL).toMatch(/APPLY HELD/);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-FOLLOW-WIRE-REGISTERED-001 / FR-2 (TS-32+): the 5 db_function writers this SD wires
+// (complete_business_evaluation, request_business_evaluation, fn_rollback_sd_hierarchy,
+// delete_venture, kill_venture). These assert against the PREPARED evidence artifacts under
+// database/evidence/canonical-writer-choke/ (live pg_get_functiondef() captures + generated
+// .after.sql, same discipline and generator pattern as AMENDED_FUNCTIONS above), NOT against
+// MIGRATION_SQL — the actual insertion of these 5 bodies into the choke file's own section 4, plus
+// flipping the 18 stamp_wired registry literals to true, is the ONE sanctioned exception to
+// TR-1 and requires its own fresh chairman/coordinator sign-off (signaled dbedbac6) before landing
+// in the gated file itself. This block proves the PREPARED amendment is correct and ready; it does
+// not (and cannot, until that sign-off lands) prove the live choke file reflects it yet.
+const NEWLY_WIRED_DB_FUNCTIONS = [
+  'complete_business_evaluation',
+  'request_business_evaluation',
+  'fn_rollback_sd_hierarchy',
+  'delete_venture',
+  'kill_venture',
+];
+
+describe('FR-2 (TS-32+): the 5 newly-wired db_function writers — prepared-artifact verification', () => {
+  it('each .before.sql capture names its provenance, so a stale copy is visible (mirrors the existing AMENDED_FUNCTIONS check)', () => {
+    for (const name of NEWLY_WIRED_DB_FUNCTIONS) {
+      const raw = artifact(name, 'before');
+      expect(raw).toMatch(/CAPTURED LIVE via pg_get_functiondef\(\) at \d{4}-\d{2}-\d{2}T/);
+    }
+  });
+
+  it('each .after.sql adds ONLY a lifecycle_write_token assignment relative to its own .before.sql — no other semantic change', () => {
+    for (const name of NEWLY_WIRED_DB_FUNCTIONS) {
+      const before = definitionOf(artifact(name, 'before'));
+      const after = definitionOf(artifact(name, 'after'));
+      expect(after).not.toBe(before);
+      expect(after).toContain(`lifecycle_write_token = '${name}'`);
+      // Every line in AFTER not present in BEFORE must be the stamp line (or blank) — anything else
+      // would mean the amendment changed more than the stamp, which pg_get_functiondef() diff review
+      // (database/evidence/canonical-writer-choke/${name}.diff.txt) is supposed to catch, not just this test.
+      const beforeLines = new Set(before.split('\n'));
+      const addedLines = after.split('\n').filter((l) => !beforeLines.has(l) && l.trim() !== '');
+      // Exactly one line was added, and it is nothing but the stamp assignment — proves the
+      // amendment is a pure insertion, not a reflow/retype of surrounding lines.
+      expect(addedLines).toHaveLength(1);
+      expect(addedLines[0].trim()).toBe(`lifecycle_write_token = '${name}',`);
+    }
+  });
+
+  it('delete_venture and kill_venture keep SECURITY DEFINER; complete/request_business_evaluation and fn_rollback_sd_hierarchy keep their own original security mode — the stamp addition changes no privilege surface', () => {
+    const expectSameSecurityMode = (name) => {
+      const before = artifact(name, 'before');
+      const after = artifact(name, 'after');
+      const mode = (text) => (text.includes('\n SECURITY DEFINER\n') ? 'DEFINER' : 'INVOKER');
+      expect(mode(after)).toBe(mode(before));
+    };
+    for (const name of NEWLY_WIRED_DB_FUNCTIONS) expectSameSecurityMode(name);
+  });
+
+  it('the registry-flip script (scripts/one-off/flip-registry-stamp-wired-follow-wire-registered-001.mjs) targets exactly these 5 plus the 13 FR-1 script/lib writers — 18 total, matching the corrected PRD scope, not the original "13"', () => {
+    const flipScript = readLF(
+      fileURLToPath(new URL('../../scripts/one-off/flip-registry-stamp-wired-follow-wire-registered-001.mjs', import.meta.url)),
+    );
+    const FR1_SCRIPT_LIB_WRITERS = [
+      'sd:cancel', 'sd:reactivate', 'sd:recover', 'sd:verify', 'sd-park.js', 'leo:continuous',
+      'stale-session-sweep.cjs', 'sd-revert.js', 'release-work-item.mjs',
+      'reap-orphaned-provisioning.js', 'lifecycle-sd-bridge.js', 'orchestrator-child-completion.js',
+      'SDGitStateReconciler.js',
+    ];
+    for (const w of [...NEWLY_WIRED_DB_FUNCTIONS, ...FR1_SCRIPT_LIB_WRITERS]) {
+      expect(flipScript).toContain(`'${w}'`);
+    }
+  });
+});

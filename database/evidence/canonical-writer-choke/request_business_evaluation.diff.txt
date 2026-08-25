@@ -1,0 +1,27 @@
+--- request_business_evaluation.before.sql
++++ request_business_evaluation.after.sql
+  CREATE OR REPLACE FUNCTION public.request_business_evaluation(p_sd_id text, p_rationale text DEFAULT NULL::text)
+   RETURNS boolean
+   LANGUAGE plpgsql
+   SET search_path TO 'public', 'extensions'
+  AS $function$
+  BEGIN
+      UPDATE strategic_directives_v2
+      SET
+          status = 'pending_business_evaluation',
+          current_phase = 'LEAD_BUSINESS_EVALUATION',
++         lifecycle_write_token = 'request_business_evaluation',
+          updated_at = NOW()
+      WHERE id = p_sd_id
+        AND status = 'draft';
+  
+      IF NOT FOUND THEN
+          RAISE EXCEPTION 'Cannot move SD % to business evaluation. Must be in draft status.', p_sd_id;
+      END IF;
+  
+      RAISE NOTICE 'SD % moved to business evaluation phase. LEAD must evaluate business value before any PLAN/EXEC work can begin.', p_sd_id;
+      RETURN TRUE;
+  END;
+  $function$
+  
+  

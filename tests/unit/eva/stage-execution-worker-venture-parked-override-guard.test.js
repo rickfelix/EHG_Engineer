@@ -143,3 +143,113 @@ describe('VENTURE_PARKED governance-override guard (SD-LEO-INFRA-APEXNICHE-STAGE
     expect(worker._advanceStage).toHaveBeenCalledWith('v-parked', STAGE, STAGE + 1, expect.anything());
   });
 });
+
+describe('VENTURE_PARKED entry-point guard in _processVenture (2nd pass -- live post-merge incident)', () => {
+  // Live post-merge verification found eva_stage_gate_attempts STILL growing for the real
+  // ApexNiche venture, through a full code merge AND a leo-stack daemon restart. Root cause: the
+  // "P0 UNIVERSAL pre-execution guard" (stage-execution-worker.js ~826-869) runs unconditionally
+  // on EVERY poll for any venture with an approved chairman_decisions row, calling
+  // recordGateOverride() -> recordGateAttempt() -- a fresh eva_stage_gate_attempts INSERT --
+  // entirely BEFORE processStage() is ever considered, via the "already approved + has
+  // artifacts -- skipping processStage, advancing" shortcut. The processStage()-internal guard
+  // (tested above) never had a chance to run for this exact, real-world shape. This describe
+  // block reproduces that exact shape (approved chairman_decisions row + existing artifacts,
+  // matching ApexNiche's live stage-21 kill-gate state) and proves the NEW entry-point guard
+  // (top of _processVenture, right after the venture fetch) stops it before chairman_decisions
+  // is ever queried.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    govState = { isReview: false, isBlocking: false, isKill: false, isPromotion: false, isHighConsequence: false };
+  });
+
+  function makeVulnerableSupabase(ventureRow) {
+    const queriedTables = [];
+    const from = vi.fn((table) => {
+      queriedTables.push(table);
+      if (table === 'ventures') {
+        const chain = {
+          select: () => chain, eq: () => chain, update: () => chain,
+          single: async () => ({ data: ventureRow, error: null }),
+          maybeSingle: async () => ({ data: ventureRow, error: null }),
+        };
+        return chain;
+      }
+      if (table === 'chairman_decisions') {
+        // If reached, this is the REAL live shape: an approved, non-advisory decision for this
+        // venture+stage (ApexNiche's chairman override 7c706688) -- exactly what feeds the
+        // vulnerable "already approved + has artifacts" shortcut.
+        const chain = {
+          select: () => chain, eq: () => chain, neq: () => chain, limit: () => chain, order: () => chain,
+          maybeSingle: async () => ({ data: { id: 'decision-7c706688', status: 'approved', updated_at: new Date().toISOString() }, error: null }),
+          single: async () => ({ data: { id: 'decision-7c706688', status: 'approved', updated_at: new Date().toISOString(), decided_by: 'chairman', rationale: 'override' }, error: null }),
+        };
+        return chain;
+      }
+      if (table === 'venture_artifacts') {
+        // Existing artifacts -- the second precondition of the vulnerable shortcut.
+        const chain = {
+          select: () => chain, eq: () => chain, limit: () => chain,
+          maybeSingle: async () => ({ data: { artifact_data: {} }, error: null }),
+        };
+        // .limit(1) resolves as an array in the real shortcut's `existingArt.length > 0` check.
+        chain.limit = () => Promise.resolve({ data: [{ id: 'art-1' }], error: null });
+        return chain;
+      }
+      const chain = {
+        select: () => chain, eq: () => chain, neq: () => chain, in: () => chain,
+        gt: () => chain, lt: () => chain, order: () => chain, limit: () => chain,
+        update: () => chain,
+        insert: async () => ({ data: null, error: null }),
+        upsert: async () => ({ data: null, error: null }),
+        maybeSingle: async () => ({ data: null, error: null }),
+        single: async () => ({ data: null, error: null }),
+      };
+      return chain;
+    });
+    return { supabase: { from, rpc: vi.fn(async () => ({ data: null, error: null })) }, queriedTables };
+  }
+
+  it('freezes a parked venture BEFORE the P0 universal pre-execution guard ever queries chairman_decisions', async () => {
+    const parkedVentureRow = {
+      current_lifecycle_stage: STAGE,
+      name: 'ApexNiche-shaped Venture',
+      metadata: {
+        gating_decision: {
+          decision: 'PARKED pending class fix',
+          parked: true,
+          by: 'SD-LEO-INFRA-APEXNICHE-STAGE-RUNAWAY-001',
+          at: '2026-08-24T18:50:31.326Z',
+          unpark_trigger: 'SD-LEO-INFRA-STAGE-GATE-RETRY-001 shipped + stage-21 gate re-evaluated once',
+        },
+      },
+    };
+    const { supabase, queriedTables } = makeVulnerableSupabase(parkedVentureRow);
+    const worker = makeWorker(supabase);
+
+    const result = await worker.processOneStage('v-apexniche-shaped');
+
+    expect(result.status).toBe('blocked');
+    expect(result.gate).toBe('venture_parked');
+    expect(processStage).not.toHaveBeenCalled();
+    expect(worker._advanceStage).not.toHaveBeenCalled();
+    // The load-bearing assertion: the vulnerable P0 block's own trigger query never runs.
+    expect(queriedTables).not.toContain('chairman_decisions');
+    expect(queriedTables).not.toContain('venture_artifacts');
+  });
+
+  it('regression control: an UNPARKED venture with the same approved-decision shape still takes the vulnerable shortcut (pre-existing behavior preserved)', async () => {
+    const unparkedVentureRow = {
+      current_lifecycle_stage: STAGE,
+      name: 'ApexNiche-shaped Venture',
+      metadata: {}, // no gating_decision at all
+    };
+    const { supabase, queriedTables } = makeVulnerableSupabase(unparkedVentureRow);
+    const worker = makeWorker(supabase);
+
+    await worker.processOneStage('v-apexniche-shaped');
+
+    // Proves makeVulnerableSupabase() genuinely reaches the P0 block absent the guard --
+    // the prior test's zero-query result is the guard's doing, not a fixture artifact.
+    expect(queriedTables).toContain('chairman_decisions');
+  });
+});
