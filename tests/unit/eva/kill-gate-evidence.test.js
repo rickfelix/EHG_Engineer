@@ -99,7 +99,7 @@ describe('DFE devils_advocate_challenge rule (FR-4)', () => {
 });
 
 /** Recording mock supabase for the persistence-layer tests. @private */
-function makeSupabaseMock({ existingGateRow = null } = {}) {
+function makeSupabaseMock({ existingGateRow = null, rpcImpl = null } = {}) {
   const writes = [];
   const api = {
     from: vi.fn(() => api),
@@ -109,9 +109,17 @@ function makeSupabaseMock({ existingGateRow = null } = {}) {
     upsert: vi.fn((payload) => { writes.push({ op: 'upsert', payload }); return api; }),
     maybeSingle: vi.fn(async () => ({ data: existingGateRow, error: null })),
     single: vi.fn(async () => ({ data: { id: 'row-1' }, error: null })),
+    ...(rpcImpl ? { rpc: vi.fn(rpcImpl) } : {}),
   };
   return { api, writes };
 }
+
+/** rpc impl for a successful recordGateAttempt (open + finalize both succeed). @private */
+const RPC_ATTEMPT_SUCCESS = (fn) => {
+  if (fn === 'open_eva_gate_attempt') return Promise.resolve({ data: { attempt_id: 'a-1' }, error: null });
+  if (fn === 'finalize_eva_gate_attempt') return Promise.resolve({ data: true, error: null });
+  throw new Error(`unexpected rpc ${fn}`);
+};
 
 describe('recordGateResult evidence params (FR-1)', () => {
   it('persists criteria -> gate_criteria and evaluatedBy -> evaluated_by', async () => {
@@ -165,5 +173,75 @@ describe('recordGateOverride (FR-5)', () => {
     const { api } = makeSupabaseMock();
     await expect(recordGateOverride(api, { ventureId: 'v1', stageNumber: 3, gateType: 'kill', override: {} }))
       .rejects.toThrow(/decision_id/);
+  });
+
+  // SD-LEO-INFRA-STAGE-GATE-RETRY-001 (FR-3): the same decision_id re-arriving must be a no-op --
+  // this is the exact defect that produced ApexNiche's 1900+ eva_stage_gate_attempts rows (the
+  // P0 UNIVERSAL guard in stage-execution-worker.js re-calls this function unconditionally every
+  // ~30s poll cycle for a venture sitting on an already-approved decision).
+  it('is a no-op when gate_criteria.override.decision_id already matches AND attempt_recorded=true (FR-3 idempotent short-circuit)', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: { override: { decision_id: 'd-9', attempt_recorded: true } } },
+    });
+    const id = await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-9', decided_by: 'chairman' },
+    });
+    expect(id).toBe('g-1');
+    expect(writes).toHaveLength(0); // no update, no attempt write
+  });
+
+  // SECURITY finding SEC-2 (evidence 7b1758b7): decision_id matching alone is NOT sufficient --
+  // if the audit-trail write never succeeded, a transient failure must not be permanently
+  // suppressed. attempt_recorded=false means "override recorded, but its evidence row is not
+  // durably confirmed yet" -- the write must be retried, not short-circuited.
+  it('does NOT short-circuit when attempt_recorded=false despite a matching decision_id (retries the audit-trail write)', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: { override: { decision_id: 'd-9', attempt_recorded: false } } },
+    });
+    const id = await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-9', decided_by: 'chairman' },
+    });
+    expect(id).toBe('g-1');
+    expect(writes.some((w) => w.op === 'update')).toBe(true); // retried, not suppressed
+  });
+
+  it('stamps attempt_recorded=true only after the attempt write actually succeeds', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: {} },
+      rpcImpl: RPC_ATTEMPT_SUCCESS,
+    });
+    await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-9', decided_by: 'chairman' },
+    });
+    const stampWrite = writes.find((w) => w.op === 'update' && w.payload.gate_criteria?.override?.attempt_recorded === true);
+    expect(stampWrite).toBeTruthy();
+  });
+
+  it('leaves attempt_recorded=false when the attempt write fails (no rpc stub -> throws)', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: {} },
+      // no rpcImpl -> api.rpc is undefined -> recordGateAttempt throws, caught by recordGateOverride
+    });
+    await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-9', decided_by: 'chairman' },
+    });
+    expect(writes.every((w) => w.payload.gate_criteria?.override?.attempt_recorded !== true)).toBe(true);
+  });
+
+  it('still records a genuinely NEW decision_id for the same gate (FR-3 does not over-suppress)', async () => {
+    const { api, writes } = makeSupabaseMock({
+      existingGateRow: { id: 'g-1', gate_criteria: { override: { decision_id: 'd-9', attempt_recorded: true } } },
+    });
+    const id = await recordGateOverride(api, {
+      ventureId: 'v1', stageNumber: 3, gateType: 'kill',
+      override: { decision_id: 'd-10', decided_by: 'chairman' },
+    });
+    expect(id).toBe('g-1');
+    const upd = writes.find((w) => w.op === 'update');
+    expect(upd.payload.gate_criteria.override).toMatchObject({ decision_id: 'd-10' });
   });
 });
