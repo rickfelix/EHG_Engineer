@@ -194,10 +194,18 @@ $function$;
 
 -- service_role only: every write path above runs as service_role (EVA daemon, RPCs are SECURITY
 -- DEFINER but the GUARD runs as the invoker's role at UPDATE time via PostgREST, which for every
--- registered writer here is service_role). anon/authenticated are deliberately excluded -- a raw
--- client write is refused by aaa_ for lacking a valid stamp regardless of whether it can enumerate
--- the registry, and this table (unlike strategic_directives_v2) has no legitimate authenticated
--- direct-write path to current_lifecycle_stage today.
+-- registered writer here is service_role). anon/authenticated are deliberately excluded from this
+-- function's own grant -- but that grant is orthogonal to what actually stops a client write today.
+-- CORRECTION (adversarial SECURITY review S-H4): this guard alone does NOT refuse a client write "for
+-- lacking a valid stamp" the way the original comment here claimed -- a stamp is a free-text column
+-- value, and nothing prevents a client from supplying one it read out of this very registry unless
+-- something else blocks the write first. What actually stops anon/authenticated from reaching
+-- current_lifecycle_stage today is that public.ventures currently has NO authenticated UPDATE RLS
+-- policy at all -- a fact this guard does not create and must not be read as providing. The staged
+-- (also unapplied) SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 migration is what ADDS an authenticated
+-- UPDATE policy in the first place, gated by its own ventures_block_client_governance_write_trg
+-- (see FR-5 composition notes below) -- this SD's own guard is a writer-IDENTITY check, not a
+-- client-authorization boundary, and must not be relied on as one.
 GRANT EXECUTE ON FUNCTION public.ventures_canonical_writer_policy(text) TO service_role;
 
 

@@ -119,10 +119,26 @@ BEGIN
 
   -- FR-3: gate membership read fresh per call from the venture_stages SSOT (no cache), replacing the
   -- hardcoded v_kill_gates/v_promotion_gates/v_all_gates arrays that omitted gates 10/16/19/25.
-  SELECT COALESCE(gate_type, 'none') INTO v_gate_type
+  --
+  -- SECURITY (adversarial SECURITY review S-H3): a missing venture_stages row for p_from_stage must
+  -- NOT silently disable the gate check. SELECT INTO leaves v_gate_type NULL when zero rows match,
+  -- and COALESCE(gate_type, 'none') only handles a NULL *column value on a found row* -- it cannot
+  -- distinguish "found a row with gate_type=NULL" from "no row at all" without FOUND, and the original
+  -- code coalesced both to 'none', failing OPEN on a catalog gap (contradicting choke.sql's own
+  -- FAIL-CLOSED-on-could-not-check principle). Fail closed instead: no SSOT row is a data-integrity
+  -- problem, not evidence no gate applies.
+  SELECT gate_type INTO v_gate_type
     FROM venture_stages
     WHERE stage_number = p_from_stage
     FOR SHARE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'stage_gate_lookup_failed',
+      'from_stage', p_from_stage,
+      'message', format('No venture_stages catalog row for stage %s -- cannot determine gate requirements', p_from_stage)
+    );
+  END IF;
   v_gate_type := COALESCE(v_gate_type, 'none');
 
   IF v_gate_type IN ('kill', 'promotion') THEN
@@ -604,6 +620,7 @@ CREATE OR REPLACE FUNCTION public.rescan_stage_20(p_venture_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_total INTEGER;
@@ -618,6 +635,20 @@ DECLARE
   v_precondition JSONB;
   v_artifacts_complete BOOLEAN;
 BEGIN
+  -- SECURITY (SD-LEO-INFRA-STAGE-WRITER-CHOKE-001, adversarial SECURITY review S-C1): this function
+  -- previously had NO authorization check at all despite being SECURITY DEFINER (runs as the function
+  -- owner, bypassing RLS) and, on the terminal branch below, auto-approving a pending stage-20
+  -- chairman_decisions row and advancing current_lifecycle_stage to 21 for an ARBITRARY p_venture_id.
+  -- Any caller able to invoke this RPC could self-approve a chairman gate for any venture whose SDs
+  -- happened to be terminal. Matched to the same check advance_venture_stage/advance_venture_to_stage
+  -- already use, rather than registering this as a "blessed" canonical writer while leaving it
+  -- unauthorized -- concentrating trust into an unfixed writer would make the choke's guarantee only
+  -- as strong as its weakest registered member.
+  IF NOT (public.fn_is_service_role() OR public.fn_is_chairman()
+          OR public.fn_user_has_venture_access(p_venture_id)) THEN
+    RAISE EXCEPTION 'access denied: venture access required (SD-LEO-INFRA-STAGE-WRITER-CHOKE-001)';
+  END IF;
+
   SELECT
     COUNT(*),
     COUNT(*) FILTER (WHERE status IN ('completed', 'cancelled')),
@@ -743,6 +774,8 @@ BEGIN
   ASSERT v_def NOT LIKE '%v_promotion_gates%', 'advance_venture_stage: hardcoded gate arrays not removed';
   ASSERT v_def LIKE '%FROM venture_stages%',   'advance_venture_stage: venture_stages SSOT read missing';
   ASSERT v_def LIKE '%stage_write_token = ''advance_venture_stage''%', 'advance_venture_stage: self-stamp missing';
+  -- S-H3: a missing venture_stages row must fail closed, not coalesce straight past FOUND.
+  ASSERT v_def LIKE '%stage_gate_lookup_failed%', 'advance_venture_stage: fail-closed gate-lookup guard missing';
 
   v_def := pg_get_functiondef('public.advance_venture_to_stage(uuid,integer,text,text)'::regprocedure);
   ASSERT v_def LIKE '%stage_write_token = ''advance_venture_to_stage''%', 'advance_venture_to_stage: self-stamp missing';
@@ -752,5 +785,10 @@ BEGIN
 
   v_def := pg_get_functiondef('public.rescan_stage_20(uuid)'::regprocedure);
   ASSERT v_def LIKE '%stage_write_token = ''rescan_stage_20''%', 'rescan_stage_20: self-stamp missing';
+  -- S-C1: rescan_stage_20 previously had NO authorization check despite being SECURITY DEFINER and
+  -- auto-approving a pending chairman gate on its terminal branch -- must not become a "blessed"
+  -- canonical writer while remaining unauthorized.
+  ASSERT v_def LIKE '%fn_is_service_role() OR public.fn_is_chairman()%OR public.fn_user_has_venture_access%',
+    'rescan_stage_20: authorization check missing';
 END
 $verify$;
