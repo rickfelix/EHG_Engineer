@@ -2,7 +2,9 @@
 -- public.ventures.current_lifecycle_stage.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: PENDING
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal, in-terminal stage sitting 2026-08-25: 'approve all four, applied in order
+--    with a readback after each.' Scribed by Adam per CLAUDE_ADAM.md §3c.)
 -- @approval-record: PENDING — chairman ratification not yet scheduled.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -152,6 +154,8 @@
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 1. PRECONDITION — the stamp column must ALREADY exist (step 1)
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
+SET LOCAL lock_timeout = '3s'; -- per this file's own apply-time requirement (MECH-AMEND in-file)
+
 DO $precondition$
 BEGIN
   IF NOT EXISTS (

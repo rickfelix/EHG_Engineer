@@ -2,8 +2,10 @@
 -- (advance_venture_stage, advance_venture_to_stage, rescan_stage_20).
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: PENDING
--- @approval-record: PENDING — chairman ratification not yet scheduled. DO NOT APPLY.
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal, in-terminal stage sitting 2026-08-25: 'approve all four, applied in order
+--    with a readback after each.' Scribed by Adam per CLAUDE_ADAM.md §3c.)
+-- @approval-record: chairman verbal at the 2026-08-25 in-terminal stage sitting (all four, in order).
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- PREREQUISITE: 20260825_ventures_stage_write_token_column.sql (step 1) must already be applied.

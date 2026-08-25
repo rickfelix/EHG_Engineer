@@ -2,7 +2,9 @@
 -- public.ventures_canonical_writer_policy(text) for PUBLIC, anon, AND authenticated explicitly.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: PENDING
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal, in-terminal stage sitting 2026-08-25: 'approve all four, applied in order
+--    with a readback after each.' Scribed by Adam per CLAUDE_ADAM.md §3c.)
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.

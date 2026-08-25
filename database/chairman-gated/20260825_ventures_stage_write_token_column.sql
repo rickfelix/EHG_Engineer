@@ -1,8 +1,10 @@
 -- SD-LEO-INFRA-STAGE-WRITER-CHOKE-001 — STEP 1 of 4: the stamp column, ALONE.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq), table public.ventures
 --
--- @approved-by: PENDING
--- @approval-record: PENDING — chairman ratification not yet scheduled. DO NOT APPLY.
+-- @approved-by: codestreetlabs@gmail.com
+--   (Chairman verbal, in-terminal stage sitting 2026-08-25: 'approve all four, applied in order
+--    with a readback after each.' Scribed by Adam per CLAUDE_ADAM.md §3c.)
+-- @approval-record: chairman verbal at the 2026-08-25 in-terminal stage sitting (all four, in order).
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- WHY THIS IS A SEPARATE FILE — mirrors SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001's own
@@ -70,6 +72,8 @@
 --
 -- NOTE: no BEGIN;/COMMIT; here — scripts/apply-migration.js wraps the file in its own transaction.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+SET LOCAL lock_timeout = '3s'; -- per this file's own apply-time requirement (MECH-AMEND in-file)
 
 ALTER TABLE public.ventures
   ADD COLUMN IF NOT EXISTS stage_write_token TEXT;
