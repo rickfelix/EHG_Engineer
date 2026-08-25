@@ -1,0 +1,40 @@
+{
+  "allow": {
+    "scripts/hooks/reclaim-sd-after-compaction.cjs": {
+      "reason": "Pre-existing raw release_sd call sites (2), grandfathered pending retrofit. SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 hardened only the two highest-risk callers (LEAD-FINAL-APPROVAL's releaseSessionClaim, claim-swapper.js's releaseClaim); the remaining ~13 sites are a follow-on.",
+      "expected": 2
+    },
+    "scripts/hooks/session-state-sync.cjs": {
+      "reason": "Pre-existing raw release_sd call site, grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 1
+    },
+    "scripts/modules/claim-health/self-heal.js": {
+      "reason": "Pre-existing raw release_sd call site, grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 1
+    },
+    "scripts/modules/complete-quick-fix/orchestrator.js": {
+      "reason": "Pre-existing raw release_sd call site, grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 1
+    },
+    "scripts/modules/sd-next/claim-analysis.js": {
+      "reason": "Pre-existing raw release_sd call site, grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 1
+    },
+    "scripts/sd-start.js": {
+      "reason": "Pre-existing raw release_sd call sites (3), grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 3
+    },
+    "lib/claim-guard.mjs": {
+      "reason": "Pre-existing raw release_sd call sites (2), grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 2
+    },
+    "lib/commands/claim-command.js": {
+      "reason": "Pre-existing raw release_sd call site, grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 1
+    },
+    "lib/session-manager.mjs": {
+      "reason": "Pre-existing raw release_sd call site, grandfathered pending retrofit (SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 follow-on).",
+      "expected": 1
+    }
+  }
+}

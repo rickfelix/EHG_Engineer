@@ -20,6 +20,7 @@
  */
 
 import { clearWorktreeState } from '../../../lib/lifecycle/worktree-state-writer.mjs';
+import { bestEffortReleaseSd } from '../../../lib/fleet/best-effort-release.mjs';
 
 /**
  * Atomically swap the claimed SD for a session.
@@ -86,55 +87,39 @@ export async function swapClaim(supabase, { sessionId, oldSdKey, newSdKey, track
 /**
  * Release a claim without acquiring a new one.
  *
+ * SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-2): delegates to bestEffortReleaseSd's
+ * shared expectedSdKey guard instead of a duplicate caller-side pre-check + raw
+ * rpc('release_sd', ...) call. The prior pre-check here was byte-equivalent to the
+ * guard bestEffortReleaseSd now performs internally; keeping both would drift.
+ *
  * @param {object} supabase - Supabase client
  * @param {string} sessionId - Session to release
  * @param {string} sdKey - SD key to release
  * @returns {Promise<{ success: boolean, reason: string }>}
  */
 export async function releaseClaim(supabase, sessionId, sdKey) {
-  try {
-    // Pre-check holds caller-side safety: confirm session actually holds sdKey.
-    // The atomic RPC below is session-scoped (releases whatever the session
-    // holds) so this guards against caller-side bugs where the wrong sdKey is
-    // passed.
-    const { data: session, error: selectError } = await supabase
-      .from('claude_sessions')
-      .select('sd_key')
-      .eq('session_id', sessionId)
-      .maybeSingle();
+  const result = await bestEffortReleaseSd(supabase, sessionId, 'release_claim', () => {}, {
+    expectedSdKey: sdKey
+  });
 
-    if (selectError) {
-      return { success: false, reason: `DB error: ${selectError.message}` };
-    }
-    if (!session) {
-      return { success: false, reason: `Session ${sessionId} not found` };
-    }
-    if (session.sd_key !== sdKey) {
-      return { success: false, reason: `Session does not hold claim on ${sdKey}` };
-    }
-
-    // Atomic release via release_sd RPC (migration 20260502_release_clear_worktree_state.sql):
-    // single UPDATE NULLs sd_key, worktree_path, worktree_branch together so the
-    // ck_claude_sessions_worktree_state_consistency invariant holds at every
-    // observable row state. Also clears claiming_session_id / active_session_id
-    // on the SD row, fixing the partial-cleanup class where releaseClaim only
-    // touched claude_sessions.
-    const { data, error } = await supabase.rpc('release_sd', {
-      p_session_id: sessionId,
-      p_reason: 'release_claim'
-    });
-
-    if (error) {
-      return { success: false, reason: `DB error: ${error.message}` };
-    }
-    if (data && data.success === false) {
-      return { success: false, reason: data.error || data.message || 'release_sd RPC reported failure' };
-    }
-
+  if (result.released) {
     return { success: true, reason: `Released ${sdKey}` };
-  } catch (err) {
-    return { success: false, reason: `Exception: ${err.message}` };
   }
+
+  if (result.skipped === 'sd_mismatch') {
+    return {
+      success: false,
+      reason: result.heldSdKey === null
+        ? `Session does not hold claim on ${sdKey} (holds nothing)`
+        : `Session does not hold claim on ${sdKey} (holds ${result.heldSdKey})`
+    };
+  }
+
+  if (result.skipped === 'scope_unverifiable') {
+    return { success: false, reason: `DB error: ${result.error}` };
+  }
+
+  return { success: false, reason: result.error || 'release_sd RPC reported failure' };
 }
 
 /**
