@@ -96,6 +96,15 @@ on:
       # own PR before this line was added (0 of 54 checks matched "Drive Reports DDL").
       - 'database/chairman-gated/20260824_sms_status_staging.sql'
       - 'tests/ddl/sms-status-staging-ddl.db.test.js'
+      # SD-LEO-INFRA-STAGE-WRITER-CHOKE-001. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migrations and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260825_ventures_stage_write_token_column.sql'
+      - 'database/chairman-gated/20260825_ventures_stage_rpcs_self_stamp.sql'
+      - 'database/chairman-gated/20260825_ventures_canonical_writer_choke.sql'
+      - 'database/chairman-gated/20260825_ventures_canonical_writer_choke_DOWN.sql'
+      - 'database/chairman-gated/20260825_ventures_canonical_writer_policy_revoke.sql'
+      - 'tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

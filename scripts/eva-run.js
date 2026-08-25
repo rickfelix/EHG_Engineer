@@ -33,6 +33,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { run as orchestratorRun } from '../lib/eva/eva-orchestrator.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { stageWriteTokenField } from '../lib/eva/stage-write-token-probe.js';
 
 // ── Exit Codes ──────────────────────────────────────────────
 
@@ -188,9 +189,10 @@ async function main() {
 
   // If --stage is specified, update the venture stage before running
   if (startStage !== undefined && Number(startStage) !== currentStage && !dryRun) {
+    // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001: degrades to {} until the column exists.
     const { error: updateError } = await supabase
       .from('ventures')
-      .update({ current_lifecycle_stage: Number(startStage) })
+      .update({ current_lifecycle_stage: Number(startStage), ...(await stageWriteTokenField(supabase, 'eva-run.js')) })
       .eq('id', ventureId);
 
     if (updateError) {
