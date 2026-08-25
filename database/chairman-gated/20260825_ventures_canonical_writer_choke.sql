@@ -287,31 +287,52 @@ CREATE TRIGGER zzz_enforce_canonical_stage_write_final
   BEFORE UPDATE ON public.ventures
   FOR EACH ROW EXECUTE FUNCTION public.enforce_canonical_stage_write('final');
 
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- 3b. INSERT-time reset — closes the "insert with a stamp, then coast on it" bypass
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- enforce_canonical_stage_write() dereferences OLD and cannot run on INSERT (OLD is unassigned for
+-- an INSERT-row trigger). Without this, a caller could INSERT a row with stage_write_token already
+-- set to a valid registry identity; a later BEFORE-UPDATE NEW inherits any column absent from the
+-- UPDATE's SET clause, so an unstamped UPDATE of current_lifecycle_stage on that row would still see
+-- a non-NULL OLD.stage_write_token and could be crafted to pass -- one free bypass per inserted row,
+-- contradicting the "structurally NULL at rest" invariant in 20260825_ventures_stage_write_token_column.sql.
+CREATE OR REPLACE FUNCTION public.reset_stage_write_token_on_insert()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  NEW.stage_write_token := NULL;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS aaa_reset_canonical_stage_write_token_insert ON public.ventures;
+
+CREATE TRIGGER aaa_reset_canonical_stage_write_token_insert
+  BEFORE INSERT ON public.ventures
+  FOR EACH ROW EXECUTE FUNCTION public.reset_stage_write_token_on_insert();
+
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 4. Post-apply verification — every registry entry, the trigger sort bound, no UPDATE OF usage
+-- 4. Post-apply verification — the trigger sort bound, no UPDATE OF usage
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- NOTE: this file does NOT self-check "stamp_wired" against the registry above -- that registry is
+-- a hardcoded VALUES list in THIS SAME FILE, so any such check would be tautological (always true)
+-- and would read as a machine gate while verifying nothing. The real pre-apply check is the human
+-- one in the header above (query ventures_canonical_writer_policy() against the LIVE, already-
+-- deployed step-2 code, not this file's own literal text).
 DO $verify$
 DECLARE
-  v_unwired_count integer;
-  v_unwired_list  text;
   v_min_before_trigger text;
   v_max_before_trigger text;
 BEGIN
-  SELECT count(*), string_agg(writer_identity, ', ')
-    INTO v_unwired_count, v_unwired_list
-    FROM public.ventures_canonical_writer_policy()
-   WHERE (capability_flags->>'stamp_wired')::boolean IS NOT TRUE;
-
-  IF v_unwired_count > 0 THEN
-    RAISE WARNING 'ventures canonical-writer choke: % registry entr(y/ies) NOT verified stamp_wired: %. Confirm these are actually wired live before trusting this deploy.', v_unwired_count, v_unwired_list;
-  END IF;
-
   SELECT min(t.tgname), max(t.tgname)
     INTO v_min_before_trigger, v_max_before_trigger
     FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
    WHERE c.relname = 'ventures' AND NOT t.tgisinternal
-     AND t.tgtype & 2 = 2   -- BEFORE
+     AND t.tgtype & 1 = 1    -- ROW-level (excludes statement-level triggers)
+     AND t.tgtype & 2 = 2    -- BEFORE
      AND t.tgtype & 16 = 16; -- UPDATE
 
   IF v_min_before_trigger <> 'aaa_enforce_canonical_stage_write' THEN

@@ -35,9 +35,13 @@ export const OUTCOME = Object.freeze({
   CONTENT_GATE_REFUSAL: 'content_gate_refusal',
 });
 
-// A refusal from advance_venture_stage that represents a CONTENT/GOVERNANCE problem, not a timing
-// problem. stage_mismatch is deliberately excluded here -- a stage_mismatch surfacing from the RPC
-// itself (rather than our own pre-check below) is a late-detected divergence and belongs to outcome 2.
+// A refusal from advance_venture_stage that represents a KNOWN CONTENT/GOVERNANCE problem, not a
+// timing problem. stage_mismatch is deliberately excluded here -- a stage_mismatch surfacing from
+// the RPC itself (rather than our own pre-check below) is a late-detected divergence and belongs
+// to outcome 2. Any error NOT in this set still lands in outcome 3 (FR-4 is exactly 3 outcomes,
+// not 4), but is tagged `known: false` so an unrecognized refusal -- e.g. the canonical-writer
+// choke's own SVCW1 firing because this script's registered self-stamp broke -- stays visible as
+// a distinct, unexpected case rather than reading identically to an ordinary content-gate refusal.
 const CONTENT_GATE_ERRORS = new Set(['artifact_precondition_unmet', 'gate_not_approved']);
 
 /**
@@ -55,10 +59,10 @@ export function classifyOutcome({ frozenStage, liveStage, rpcResult }) {
     // Race: diverged between our pre-check read and the RPC's own FOR UPDATE read.
     return { outcome: OUTCOME.STAGE_DIVERGED_REQUEUE, detail: rpcResult };
   }
-  // Any other refusal (artifact_precondition_unmet, gate_not_approved, venture_not_found,
-  // invalid_to_stage, or an unrecognized error) is a content/governance-class refusal, not a
-  // timing problem -- surfaced distinctly per FR-4, never silently folded into outcome 2.
-  return { outcome: OUTCOME.CONTENT_GATE_REFUSAL, detail: rpcResult };
+  return {
+    outcome: OUTCOME.CONTENT_GATE_REFUSAL,
+    detail: { ...rpcResult, known: CONTENT_GATE_ERRORS.has(rpcResult?.error) },
+  };
 }
 
 export async function applyPacket(supabase, packet, { transitionType = 'reconciliation_ratify' } = {}) {
@@ -70,11 +74,23 @@ export async function applyPacket(supabase, packet, { transitionType = 'reconcil
       .eq('id', v.id)
       .maybeSingle();
 
-    if (readError || !live) {
+    if (readError) {
+      // A genuine transient read failure -- retryable next window, same class as a stage race.
       results.push({
         ventureId: v.id,
         outcome: OUTCOME.STAGE_DIVERGED_REQUEUE,
-        detail: { reason: 'read_failed_or_venture_gone', error: readError?.message },
+        detail: { reason: 'read_failed', error: readError.message },
+      });
+      continue;
+    }
+    if (!live) {
+      // The venture record no longer exists. Requeuing this forever would retry indefinitely
+      // against a row that will never reappear -- this is a content/governance problem (the
+      // packet itself is stale), not a timing one, so it does not land in --requeue-out.
+      results.push({
+        ventureId: v.id,
+        outcome: OUTCOME.CONTENT_GATE_REFUSAL,
+        detail: { reason: 'venture_gone', known: false },
       });
       continue;
     }
@@ -95,10 +111,13 @@ export async function applyPacket(supabase, packet, { transitionType = 'reconcil
     });
 
     if (rpcError) {
+      // rpcError.code === 'SVCW1' here would mean the canonical-writer choke rejected THIS
+      // script's own registered self-stamp -- an infrastructure misconfiguration, not an
+      // ordinary content refusal. Tagged distinctly so it doesn't read as routine in the summary.
       results.push({
         ventureId: v.id,
         outcome: OUTCOME.CONTENT_GATE_REFUSAL,
-        detail: { reason: 'rpc_error', error: rpcError.message },
+        detail: { reason: 'rpc_error', error: rpcError.message, known: false, choke_rejection: rpcError.code === 'SVCW1' },
       });
       continue;
     }

@@ -87,6 +87,16 @@ describe('reconciliation-packet-apply — classifyOutcome (pure)', () => {
     expect(result.outcome).toBe(OUTCOME.CONTENT_GATE_REFUSAL);
   });
 
+  it('an unrecognized rpcResult.error still lands in outcome 3 but is tagged known:false', () => {
+    const result = classifyOutcome({
+      frozenStage: 5,
+      liveStage: 5,
+      rpcResult: { success: false, error: 'something_unforeseen' },
+    });
+    expect(result.outcome).toBe(OUTCOME.CONTENT_GATE_REFUSAL);
+    expect(result.detail.known).toBe(false);
+  });
+
   it('a late-detected stage_mismatch from the RPC itself is still outcome 2, not outcome 3', () => {
     const result = classifyOutcome({
       frozenStage: 5,
@@ -151,6 +161,64 @@ describe('reconciliation-packet-apply — applyPacket (mock supabase)', () => {
 
     const results = await applyPacket(supabase, packet);
     expect(results[0].outcome).toBe(OUTCOME.CONTENT_GATE_REFUSAL);
+  });
+
+  it('a venture that no longer exists is a content-gate refusal, not an infinite requeue', async () => {
+    const packet = {
+      stamped_at: '2026-08-25T00:00:00.000Z',
+      ventures: [{ id: 'gone', name: 'Gone', frozen_stage: 5 }],
+    };
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+        }),
+      }),
+      rpc: vi.fn(),
+    };
+
+    const results = await applyPacket(supabase, packet);
+    expect(results[0].outcome).toBe(OUTCOME.CONTENT_GATE_REFUSAL);
+    expect(results[0].detail.reason).toBe('venture_gone');
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it('a genuine read error is a re-queueable outcome 2, distinct from a gone venture', async () => {
+    const packet = {
+      stamped_at: '2026-08-25T00:00:00.000Z',
+      ventures: [{ id: 'flaky', name: 'Flaky', frozen_stage: 5 }],
+    };
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'timeout' } }) }),
+        }),
+      }),
+      rpc: vi.fn(),
+    };
+
+    const results = await applyPacket(supabase, packet);
+    expect(results[0].outcome).toBe(OUTCOME.STAGE_DIVERGED_REQUEUE);
+    expect(results[0].detail.reason).toBe('read_failed');
+  });
+
+  it('an SVCW1 rpc error (choke rejecting this script\'s own stamp) is tagged choke_rejection:true', async () => {
+    const packet = {
+      stamped_at: '2026-08-25T00:00:00.000Z',
+      ventures: [{ id: 'misconfigured', name: 'Misconfigured', frozen_stage: 5 }],
+    };
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: { current_lifecycle_stage: 5 }, error: null }) }),
+        }),
+      }),
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: 'missing canonical-writer stamp', code: 'SVCW1' } }),
+    };
+
+    const results = await applyPacket(supabase, packet);
+    expect(results[0].outcome).toBe(OUTCOME.CONTENT_GATE_REFUSAL);
+    expect(results[0].detail.choke_rejection).toBe(true);
   });
 
   it('calls advance_venture_stage (a registered writer), never a raw ventures.update', async () => {

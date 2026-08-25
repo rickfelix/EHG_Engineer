@@ -197,6 +197,7 @@ afterAll(async () => {
       await client.query('DROP FUNCTION IF EXISTS public._stub_update_ventures_updated_at() CASCADE');
       await client.query('DROP FUNCTION IF EXISTS public._stub_block_client_governance_write() CASCADE');
       await client.query('DROP FUNCTION IF EXISTS public.enforce_canonical_stage_write() CASCADE');
+      await client.query('DROP FUNCTION IF EXISTS public.reset_stage_write_token_on_insert() CASCADE');
       await client.query('DROP FUNCTION IF EXISTS public.ventures_canonical_writer_policy(text) CASCADE');
     } finally {
       await client.end();
@@ -370,6 +371,23 @@ describe('ventures canonical-writer choke — migration DDL', () => {
   it('guard condition uses IS DISTINCT FROM, never UPDATE OF, on the trigger definitions', () => {
     expect(CHOKE_MIGRATION_SQL).not.toMatch(/BEFORE UPDATE OF current_lifecycle_stage[^\n]*enforce_canonical_stage_write/);
     expect(CHOKE_MIGRATION_SQL).toMatch(/NEW\.current_lifecycle_stage IS DISTINCT FROM OLD\.current_lifecycle_stage/);
+  });
+
+  // Regression for the "insert with a stamp, then coast on it" bypass: without an INSERT-time
+  // reset, a row inserted with stage_write_token already set to a valid identity would let the
+  // NEXT unstamped UPDATE inherit that token via OLD (any column absent from the SET clause is
+  // carried forward unchanged), refusing nothing.
+  it('INSERT with a spoofed valid token is nulled at insert; the next unstamped UPDATE is still refused', async () => {
+    const { rows } = await client.query(
+      "INSERT INTO public.ventures (current_lifecycle_stage, stage_write_token) VALUES (1, 'advance_venture_stage') RETURNING id",
+    );
+    const id = rows[0].id;
+    const afterInsert = await readVenture(id);
+    expect(afterInsert.stage_write_token).toBeNull(); // reset at insert, not just at rest post-guard
+
+    const result = await tryUpdate('UPDATE public.ventures SET current_lifecycle_stage = 2 WHERE id = $1', [id]);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('SVCW1');
   });
 
   it('re-applying the choke migration is idempotent (MODE 2 partial-apply recovery)', async () => {
