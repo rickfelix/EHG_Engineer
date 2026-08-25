@@ -42,8 +42,8 @@ afterAll(() => {
   for (const d of tmpDirs) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ } }
 });
 
-/** Build a temp project dir with a CLAUDE_SOLOMON.md of the given byte size and a recorded read. */
-function makeProjectDir(contractBytes, status) {
+/** Build a temp project dir with a contract file of the given byte size and a recorded read. */
+function makeProjectDir(contractBytes, status, filename = 'CLAUDE_SOLOMON.md') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crf-proj-'));
   tmpDirs.push(dir);
   // Prose-like filler so the density veto (cl100k on raw) stays well under the cap and the BYTE
@@ -51,11 +51,11 @@ function makeProjectDir(contractBytes, status) {
   const line = 'The coordinator reviews the contract and records the verdict for the fleet. ';
   let body = '';
   while (Buffer.byteLength(body, 'utf8') < contractBytes) body += line;
-  fs.writeFileSync(path.join(dir, 'CLAUDE_SOLOMON.md'), body.slice(0, contractBytes), 'utf8');
+  fs.writeFileSync(path.join(dir, filename), body.slice(0, contractBytes), 'utf8');
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
   fs.writeFileSync(
     path.join(dir, '.claude', 'unified-session-state.json'),
-    JSON.stringify({ protocolFileReadStatus: { 'CLAUDE_SOLOMON.md': status } }),
+    JSON.stringify({ protocolFileReadStatus: { [filename]: status } }),
     'utf8',
   );
   return dir;
@@ -79,8 +79,18 @@ describe('FR-1: the fit predictor margin-bands near-cap predictions to fits:null
     expect(Math.abs(r.tokens - SINGLE_READ_TOKEN_CAP)).toBeLessThanOrEqual(SINGLE_READ_MARGIN_TOKENS);
   });
 
-  it('a clearly-under contract (CLAUDE_PLAN.md) still reads fits:true', () => {
-    const r = singleReadFit(repoRoot, 'CLAUDE_PLAN.md');
+  it('a clearly-under contract still reads fits:true', () => {
+    // PAT-TEST-PINS-FACT-NOT-BEHAVIOUR-001 (8th instance, sub_agent_execution_results
+    // 6c3c9e20-e8f4-4b7d-9be0-5c8857183c3d prevention checklist: "Never pin behaviour to the
+    // size/content of a DB-generated file (CLAUDE_*.md)"): this used to read the LIVE repo's
+    // CLAUDE_PLAN.md directly and assert TODAY's fit/margin -- a fact-pin that fails the moment
+    // CLAUDE_PLAN.md (auto-regenerated from the DB) drifts into or past the marginal band,
+    // regardless of whether the predictor itself still behaves correctly. Switched to the same
+    // synthetic-fixture pattern the sibling test above already uses, sized well clear of the
+    // margin band so the assertion is about the PREDICTOR's behavior, not this file's history.
+    const clearlyUnderBytes = Math.round((SINGLE_READ_TOKEN_CAP - SINGLE_READ_MARGIN_TOKENS) / 2) * scale.HARNESS_BYTES_PER_TOKEN;
+    const dir = makeProjectDir(clearlyUnderBytes, { readCount: 1, lastReadWasPartial: false }, 'CLAUDE_PLAN.md');
+    const r = singleReadFit(dir, 'CLAUDE_PLAN.md');
     expect(r.fits).toBe(true);
     expect(Math.abs(r.tokens - SINGLE_READ_TOKEN_CAP)).toBeGreaterThan(SINGLE_READ_MARGIN_TOKENS);
   });
