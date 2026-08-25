@@ -274,14 +274,22 @@ describe('ventures canonical-writer choke — migration DDL', () => {
     expect(identities).toEqual([
       'advance_venture_stage',
       'advance_venture_to_stage',
+      'chairman-decide.ts',
       'ehg:promote.ts',
       'eva-run.js',
+      'evaRollback.ts',
+      'evaStateMachines.ts',
       'fn_advance_venture_stage',
+      'initialize_venture_stages',
       'reconciliation-packet-apply.mjs',
+      'recursionEngine.ts',
       'rescan_stage_20',
       'run-canary-probe.mjs',
       'saga-coordinator.js',
+      'scaffoldStage1',
       'stage-execution-worker.js',
+      'stage24-go-live-route.ts',
+      'useVentureData.ts',
       'venture-ceo-handlers.js',
     ]);
   });
