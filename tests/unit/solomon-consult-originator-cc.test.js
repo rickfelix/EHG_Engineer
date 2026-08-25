@@ -10,37 +10,74 @@
  *      coordinator target — resolveConsultOriginator() now resolves the consult's
  *      originating session (payload.origin_session, else sender_session) so the send
  *      path CCs the originator whenever it differs from the target and from Solomon.
+ *
+ * SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001: widened to also CC the originator of an
+ * adam_advisory-kind correlation (Solomon replying to an Adam advisory), which previously
+ * resolved to coordinator-only with no CC — 2 real specimens, 2026-08-25 00:50-01:01Z.
+ * Prospective TESTING (sub_agent_execution_results 34995120-556f-437e-bf38-c93c55eb1e24)
+ * found the naive widen alone breaks on an already-answered correlation (a reply is itself
+ * stored as kind=adam_advisory sharing the ask's correlation_id), so both the by-id branch
+ * (falls through via correlation_id on a reply-row hit) and the correlation-fallback branch
+ * (cap-then-filter with ASCENDING order, not the pre-existing DESC .limit(1)) were corrected.
+ * `fakeSb` below was upgraded to actually respect order()/limit()/in() arguments — the
+ * pre-existing double silently ignored them, which would have hidden a cap-before-filter
+ * regression entirely.
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { resolveConsultOriginator, ensureOriginatorCc, checkConsultQuota, resolveSolomonAdvisoryTarget, SOLOMON_CONSULT_KIND } = require('../../scripts/solomon-advisory.cjs');
+const {
+  resolveConsultOriginator, ensureOriginatorCc, checkConsultQuota, resolveSolomonAdvisoryTarget,
+  SOLOMON_CONSULT_KIND, REPLY_ELIGIBLE_KINDS,
+} = require('../../scripts/solomon-advisory.cjs');
 
+const ADAM_ADVISORY_KIND = 'adam_advisory';
 const ADAM_SESSION = 'adam-sess-1111';
+const SOLOMON_SESSION = 'solomon-sess-5555';
 const CONSULT_ROW_ID = 'row-id-2222';
 const CONSULT_CORR = 'corr-3333';
 
+/**
+ * A fidelity-upgraded double: `in()`/`eq()` accumulate real filters, `order()` records the
+ * requested direction, and `limit()` applies filters + sort + cap AT CALL TIME against
+ * `byCorrelation` — so a query that filters AFTER capping (the regressed shape) and a query
+ * that filters BEFORE capping (the correct shape) produce genuinely different results here,
+ * exactly as they would against real PostgREST.
+ */
 function fakeSb({ byId = null, byCorrelation = [] } = {}) {
   return {
     from() {
-      const state = { wantsCorrelation: false };
+      const state = { ascending: null, inFilters: [], eqFilters: [] };
       const api = {
         select() { return this; },
-        eq(col, val) {
-          if (col === 'payload->>correlation_id') state.wantsCorrelation = true;
-          state.lastEq = { col, val };
-          return this;
-        },
-        order() { return this; },
+        eq(col, val) { state.eqFilters.push([col, val]); return this; },
+        in(col, vals) { state.inFilters.push([col, vals]); return this; },
+        order(_col, opts) { state.ascending = Boolean(opts && opts.ascending); return this; },
         maybeSingle() { return Promise.resolve({ data: byId, error: null }); },
-        limit() { return Promise.resolve({ data: byCorrelation, error: null }); },
+        limit(n) {
+          let rows = byCorrelation.slice();
+          for (const [col, vals] of state.inFilters) {
+            if (col === 'payload->>kind') rows = rows.filter((r) => vals.includes(r.payload && r.payload.kind));
+          }
+          for (const [col, val] of state.eqFilters) {
+            if (col === 'payload->>correlation_id') rows = rows.filter((r) => String((r.payload && r.payload.correlation_id)) === String(val));
+            if (col === 'payload->>kind') rows = rows.filter((r) => (r.payload && r.payload.kind) === val);
+          }
+          rows.sort((a, b) => {
+            const ta = a.created_at || '';
+            const tb = b.created_at || '';
+            const cmp = ta < tb ? -1 : ta > tb ? 1 : 0;
+            return state.ascending ? cmp : -cmp;
+          });
+          return Promise.resolve({ data: rows.slice(0, n), error: null });
+        },
       };
       return api;
     },
   };
 }
 
-describe('resolveConsultOriginator — finds who asked the consult', () => {
+describe('resolveConsultOriginator — finds who asked the consult/advisory', () => {
   it('resolves by row id: returns the consult row sender_session', async () => {
     const sb = fakeSb({ byId: { sender_session: ADAM_SESSION, payload: { kind: SOLOMON_CONSULT_KIND } } });
     expect(await resolveConsultOriginator(sb, CONSULT_ROW_ID)).toBe(ADAM_SESSION);
@@ -51,13 +88,13 @@ describe('resolveConsultOriginator — finds who asked the consult', () => {
     expect(await resolveConsultOriginator(sb, CONSULT_ROW_ID)).toBe(ADAM_SESSION);
   });
 
-  it('a NON-consult row resolved by id yields null — CC is scoped to consults only (review I4)', async () => {
+  it('a NON-eligible-kind row resolved by id yields null — CC stays scoped, not a blanket bypass (review I4)', async () => {
     const sb = fakeSb({ byId: { sender_session: 'coordinator-sess', payload: { kind: 'coordinator_reply' } } });
     expect(await resolveConsultOriginator(sb, CONSULT_ROW_ID)).toBeNull();
   });
 
   it('falls back to a correlation match on solomon_consult rows when no row matches the id', async () => {
-    const sb = fakeSb({ byId: null, byCorrelation: [{ sender_session: ADAM_SESSION, payload: { kind: SOLOMON_CONSULT_KIND, correlation_id: CONSULT_CORR } }] });
+    const sb = fakeSb({ byId: null, byCorrelation: [{ sender_session: ADAM_SESSION, payload: { kind: SOLOMON_CONSULT_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:00:00Z' }] });
     expect(await resolveConsultOriginator(sb, CONSULT_CORR)).toBe(ADAM_SESSION);
   });
 
@@ -69,9 +106,40 @@ describe('resolveConsultOriginator — finds who asked the consult', () => {
   it('returns null for a missing value', async () => {
     expect(await resolveConsultOriginator(fakeSb(), null)).toBeNull();
   });
+
+  // SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001 FR-1: by-id resolution now also admits adam_advisory.
+  it('FR-1: resolves by row id for an adam_advisory-kind (non-reply) row', async () => {
+    const sb = fakeSb({ byId: { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND } } });
+    expect(await resolveConsultOriginator(sb, CONSULT_ROW_ID)).toBe(ADAM_SESSION);
+  });
+
+  // FR-2 (TST-C1): --reply-to resolving to a REPLY row by id must NOT return that row's own
+  // sender — it must fall through via payload.correlation_id to the true (ask) originator.
+  it('FR-2: a reply row hit BY ID falls through to the true originator, not the replier', async () => {
+    const askRow = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:46:29Z' };
+    const replyRow = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:50:28Z' };
+    // byId hits the REPLY row directly (its own id was pasted); byCorrelation is what the
+    // fall-through's correlation query subsequently sees.
+    const sb = fakeSb({ byId: replyRow, byCorrelation: [askRow, replyRow] });
+    expect(await resolveConsultOriginator(sb, 'reply-row-id')).toBe(ADAM_SESSION);
+  });
+
+  // FR-4 (TST-C2): on an already-answered correlation, the fallback must resolve the ASK row
+  // (oldest), never the newest row (which is the reply) — this is the exact regression a
+  // cap-before-filter (limit(1) DESC) implementation reproduces.
+  it('FR-4: correlation fallback on an answered correlation resolves the ask, not the newest (reply) row', async () => {
+    const askRow = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:46:29Z' };
+    const replyRow = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:50:28Z' };
+    const sb = fakeSb({ byId: null, byCorrelation: [askRow, replyRow] });
+    expect(await resolveConsultOriginator(sb, CONSULT_CORR)).toBe(ADAM_SESSION);
+  });
+
+  it('REPLY_ELIGIBLE_KINDS is exactly {solomon_consult, adam_advisory} — no silent widening beyond the two named kinds', () => {
+    expect([...REPLY_ELIGIBLE_KINDS].sort()).toEqual(['adam_advisory', 'solomon_consult']);
+  });
 });
 
-describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3)', () => {
+describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', () => {
   const CONSULT = { sender_session: ADAM_SESSION, payload: { kind: SOLOMON_CONSULT_KIND } };
   const BASE_ARGS = {
     replyRef: CONSULT_ROW_ID, replyTo: CONSULT_CORR, target: 'coord-1', sessionId: 'solomon-1',
@@ -84,6 +152,7 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3)', () => {
         const api = {
           select() { return this; },
           eq() { return this; },
+          in() { return this; },
           order() { return this; },
           maybeSingle() {
             if (table === 'claude_sessions') return Promise.resolve({ data: sessionRole ? { metadata: { role: sessionRole } } : null, error: null });
@@ -126,6 +195,21 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3)', () => {
     expect(inserts[0].target_session).toBe(LIVE_ADAM);
   });
 
+  // FR-5: symmetric remap for a Solomon-originated adam_advisory thread whose resolved
+  // originator session has since rotated.
+  it('FR-5: re-resolves a dead SOLOMON originator session to the LIVE solomon session', async () => {
+    const inserts = [];
+    const LIVE_SOLOMON = 'solomon-sess-9999';
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ consult: { sender_session: 'solomon-sess-old', payload: { kind: 'adam_advisory' } }, sessionRole: 'solomon' }),
+      BASE_ARGS,
+      { getLiveSolomonId: async () => LIVE_SOLOMON, insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(true);
+    expect(res.originator).toBe(LIVE_SOLOMON);
+    expect(inserts[0].target_session).toBe(LIVE_SOLOMON);
+  });
+
   it('skips when the originator IS the answer target (coordinator-originated consult: no duplicate)', async () => {
     const inserts = [];
     const res = await ensureOriginatorCc(
@@ -141,6 +225,33 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3)', () => {
     const res = await ensureOriginatorCc(ccFakeSb(), BASE_ARGS, { insertRow: async () => ({ data: null, error: { message: 'boom' } }) });
     expect(res.inserted).toBe(false);
     expect(res.error).toBe('boom');
+  });
+
+  // TS-3: the currently-working solomon_consult multi-reply control path must not regress.
+  it('TS-3: a SECOND reply on an already-answered solomon_consult correlation still CCs the original asker', async () => {
+    const inserts = [];
+    // The consult row (by id) is the ORIGINAL ask, unaffected by how many replies exist since --
+    // ensureOriginatorCc's replyRef here is the ask's own row id, matching real usage where each
+    // reply is sent with --reply-to <original-consult-id-or-correlation>.
+    const res = await ensureOriginatorCc(ccFakeSb({ consult: CONSULT }), BASE_ARGS, { insertRow: captureInsertRow(inserts) });
+    expect(res.inserted).toBe(true);
+    expect(res.originator).toBe(ADAM_SESSION);
+  });
+
+  // TS-8: resolution must be STABLE (same originator) regardless of how many reply rows have
+  // accumulated on the correlation, so the dedup key (target_session=originator) stays effective.
+  it('TS-8: dedup stability — resolving via the correlation fallback is identical whether 1 or 3 replies exist', async () => {
+    const askRow = { sender_session: ADAM_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR }, created_at: '2026-08-25T00:46:29Z' };
+    const reply1 = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:50:00Z' };
+    const reply2 = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T00:55:00Z' };
+    const reply3 = { sender_session: SOLOMON_SESSION, payload: { kind: ADAM_ADVISORY_KIND, correlation_id: CONSULT_CORR, reply_to: CONSULT_CORR }, created_at: '2026-08-25T01:00:00Z' };
+    const sbOne = fakeSb({ byId: null, byCorrelation: [askRow, reply1] });
+    const sbThree = fakeSb({ byId: null, byCorrelation: [askRow, reply1, reply2, reply3] });
+    const withOne = await resolveConsultOriginator(sbOne, CONSULT_CORR);
+    const withThree = await resolveConsultOriginator(sbThree, CONSULT_CORR);
+    expect(withOne).toBe(ADAM_SESSION);
+    expect(withThree).toBe(ADAM_SESSION);
+    expect(withOne).toBe(withThree);
   });
 });
 

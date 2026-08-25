@@ -557,12 +557,47 @@ async function resolveReplyToCorrelation(supabase, value) {
   return value;
 }
 
+// SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001 FR-1/FR-2: kinds whose replies are CC-worthy. Widened
+// from solomon_consult-only so an adam_advisory-kind correlation (Solomon replying to an Adam
+// advisory) also CCs its true originator — previously it silently resolved to coordinator-only
+// (2 real specimens, 2026-08-25 00:50-01:01Z). NOT a blanket bypass of adversarial-review I4: an
+// arbitrary kind (coordinator_reply, ack, …) still resolves null, exactly as before.
+const REPLY_ELIGIBLE_KINDS = Object.freeze([SOLOMON_CONSULT_KIND, PAYLOAD_KINDS.ADAM_ADVISORY]);
+
 /**
- * QF-20260705-488: resolve the session that ORIGINATED a consult, from the same value
- * `--reply-to` accepts (a consult row id OR a bare correlation id). Prefers an explicit
+ * FR-2/FR-4: resolve the ORIGINAL (non-reply) row on a correlation, oldest-first. Every Solomon
+ * reply on an adam_advisory-kind correlation is ITSELF stored with the same kind and
+ * correlation_id (buildAdvisoryPayload, line ~146/189) — so once adam_advisory is admitted to
+ * REPLY_ELIGIBLE_KINDS, taking the single newest row (the pre-existing `.limit(1)` DESC query)
+ * resolves the REPLY's own sender on any already-answered correlation (measured live: 42/42
+ * sampled multi-row correlations have a reply as the newest row). Fetch a bounded ASCENDING
+ * candidate set instead, filter out reply rows via isReplyRow() in JS (its `reply_to !== ''`
+ * clause is not expressible as a single PostgREST filter), and take the first (oldest = the ask)
+ * remaining row. Ascending order also makes resolution STABLE regardless of how many replies
+ * accumulate, which the dedup key in ensureOriginatorCc depends on for idempotency.
+ */
+async function resolveOriginatorFromCorrelation(supabase, correlationId) {
+  try {
+    const { data } = await supabase
+      .from('session_coordination')
+      .select('sender_session, payload, created_at')
+      .eq('payload->>correlation_id', String(correlationId))
+      .in('payload->>kind', REPLY_ELIGIBLE_KINDS)
+      .order('created_at', { ascending: true })
+      .limit(20);
+    const rows = Array.isArray(data) ? data : [];
+    const origin = rows.find((r) => !isReplyRow(r));
+    if (origin) return (origin.payload && origin.payload.origin_session) || origin.sender_session || null;
+  } catch { /* fail-open: no CC */ }
+  return null;
+}
+
+/**
+ * QF-20260705-488: resolve the session that ORIGINATED a consult/advisory, from the same value
+ * `--reply-to` accepts (a row id OR a bare correlation id). Prefers an explicit
  * payload.origin_session (set by relay paths that preserve the true originator), else the
- * consult row's sender_session. Null when unresolvable — the caller treats that as
- * "no CC" (fail-open). Exported for tests.
+ * row's sender_session. Null when unresolvable — the caller treats that as "no CC" (fail-open).
+ * Exported for tests.
  */
 async function resolveConsultOriginator(supabase, value) {
   if (!value) return null;
@@ -574,25 +609,22 @@ async function resolveConsultOriginator(supabase, value) {
       .maybeSingle();
     if (byId) {
       const p = byId.payload || {};
-      // Adversarial-review I4: CC is scoped to CONSULTS only — the correlation branch below
-      // already filters on kind; without this symmetric check, replying to a non-consult row
-      // by id would CC that row's sender (an undocumented side effect on non-consult flows).
-      if (p.kind !== SOLOMON_CONSULT_KIND) return null;
+      // Adversarial-review I4 (widened, FR-1): CC is scoped to reply-worthy kinds only — the
+      // correlation branch already filters on kind too; without this symmetric check, replying
+      // to an arbitrary non-eligible row by id would CC that row's sender.
+      if (!REPLY_ELIGIBLE_KINDS.includes(p.kind)) return null;
+      // FR-2: a reply row hit BY ID (the natural id to paste when answering an already-answered
+      // thread — Solomon's inbox renders reply rows with their own ids) is not itself the
+      // originator. Fall through via its own correlation_id to resolve the TRUE originator,
+      // instead of returning this row's own sender (which would reproduce the CC-less bug
+      // through the by-id door instead of the fallback door).
+      if (isReplyRow(byId)) {
+        return p.correlation_id ? resolveOriginatorFromCorrelation(supabase, p.correlation_id) : null;
+      }
       return p.origin_session || byId.sender_session || null;
     }
   } catch { /* fall through to correlation match */ }
-  try {
-    const { data } = await supabase
-      .from('session_coordination')
-      .select('sender_session, payload, created_at')
-      .eq('payload->>correlation_id', String(value))
-      .eq('payload->>kind', SOLOMON_CONSULT_KIND)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const row = Array.isArray(data) && data[0] ? data[0] : null;
-    if (row) return (row.payload && row.payload.origin_session) || row.sender_session || null;
-  } catch { /* fail-open: no CC */ }
-  return null;
+  return resolveOriginatorFromCorrelation(supabase, value);
 }
 
 /**
@@ -606,17 +638,22 @@ async function resolveConsultOriginator(supabase, value) {
  * Never throws (fail-open). Exported for tests.
  * @returns {Promise<{inserted: boolean, originator: string|null, error?: string}>}
  */
-async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, sessionId, subject, payload, expiresAt }, { getLiveAdamId = getActiveAdamId, insertRow = insertCoordinationRow } = {}) {
+async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, sessionId, subject, payload, expiresAt }, { getLiveAdamId = getActiveAdamId, getLiveSolomonId = getActiveSolomonId, insertRow = insertCoordinationRow } = {}) {
   try {
     let originator = await resolveConsultOriginator(supabase, replyRef);
     if (!originator) return { inserted: false, originator: null };
-    // W3: map a dead consult-time session id to the LIVE session of the same role. Adam is
-    // the one lateral peer whose consults this lane answers; other roles keep the raw id
-    // (their outbound drains re-target unread rows on restart).
+    // W3: map a dead consult-time session id to the LIVE session of the same role.
+    // FR-5 (SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001): widening REPLY_ELIGIBLE_KINDS to adam_advisory
+    // (FR-1) makes SOLOMON's OWN outbound advisories candidates too — every non-reply
+    // solomon-advisory send is stamped kind=adam_advisory regardless of sender (line ~146). A
+    // resolved Solomon-role originator whose session has since rotated needs the same live-remap
+    // Adam already gets, or the CC dead-letters into a stale, dead Solomon seat.
     try {
       const { data: sess } = await supabase.from('claude_sessions').select('metadata').eq('session_id', originator).maybeSingle();
       if (sess && sess.metadata && sess.metadata.role === 'adam') {
         originator = (await getLiveAdamId(supabase).catch(() => null)) || originator;
+      } else if (sess && sess.metadata && sess.metadata.role === 'solomon') {
+        originator = (await getLiveSolomonId(supabase).catch(() => null)) || originator;
       }
     } catch { /* keep the raw originator */ }
     if (originator === target || originator === sessionId) return { inserted: false, originator };
@@ -1302,6 +1339,7 @@ module.exports = {
   computeConsultSignature, enforceSweepBudget, SOLOMON_SWEEP_BUDGET, alreadyAnswered, checkConsultQuota,
   drainInbox, resolveReplyToCorrelation, drainSolomonOutbound, captureLedgerRow,
   checkLedgerCaptureHealth, resolveSolomonAdvisoryTarget, resolveConsultOriginator, ensureOriginatorCc,
+  REPLY_ELIGIBLE_KINDS, resolveOriginatorFromCorrelation, // SD-LEO-INFRA-ADVISORY-REPLY-WIRE-001
   stampSurfaced, ackRows, KNOWN_SEND_KINDS, MESSAGE_KINDS,
   // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: exported so the ARGV path is testable.
   // The parse lives in an unexported main(), which is half of why the flag-leak went unseen — every
