@@ -1195,6 +1195,65 @@ bounded ventures lookup), plus corresponding tests in `tests/unit/eva/`.
 
 ---
 
+## Pattern: A fix for a recurrence must be adversarially reviewed for its OWN new failure modes, not just re-verified against the old bug
+
+**SD**: SD-LEO-INFRA-SESSION-TICK-CLEAR-001
+
+**Symptom**: SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (2026-08-04) shipped a SessionStart-hosted
+mechanism to release a rotated-out session's `claude_sessions` row (so its tick daemon self-exits)
+on `/clear`/compaction-resume. Fully wired, but its candidate discovery depended entirely on a
+`.claude/pids/tick-<session_id>.json` marker file SHARED across every daemon one session_id ever
+spawns over its life. `session-tick.cjs`'s `deleteMarker()` unlinks that shared file
+UNCONDITIONALLY on any exit (`cleanupAndExit`, wired to SIGINT/SIGTERM/uncaughtException) — the
+FIRST sibling daemon to exit deletes the join key every surviving sibling still needs. A real
+specimen (the "Solomon" seat) had its daemon become immortal until a human manually intervened.
+
+**The fix, and the lesson**: the fix (an additive `metadata.cc_parent_pid` DB field, stamped at
+every SessionStart, plus a marker-INDEPENDENT closure pass that joins on it directly) is correct
+and closes the class. But across FIVE rounds of independent adversarial review on this single SD
+(1 PLAN-phase prospective + 2 EXEC-phase retrospective, each followed by fixes), every round found
+a REAL, NON-OBVIOUS defect that had NOTHING to do with the original marker-deletion bug:
+
+1. **PLAN prospective**: the new DB-join query, as first designed, sat AFTER an existing
+   `if (!candidateIds.length) return;` early-return — meaning it was DEAD CODE in exactly the
+   marker-deleted scenario it existed to fix. (Also caught: `claude_sessions` is measured
+   MULTI-HOST live — an un-scoped pid join would have introduced a NEW cross-host false-death
+   vector while fixing the marker one.)
+2. **EXEC retrospective (TESTING)**: a test for the hostname fail-closed guard was vacuous (its
+   fixture never contained a row the guard specifically needed to exclude, so it passed whether or
+   not the guard existed). A malformed row from the new query path (missing/null `session_id`)
+   could have poisoned the SHARED release call, silently losing the marker-path's OWN legitimate
+   releases along with it. A `parentPid` derivation wrapped a fallback chain inside the SAME
+   try/catch as the primary lookup, so a thrown error skipped the fallback entirely with zero
+   trace.
+3. **EXEC retrospective (SECURITY)**: `parentPid` was never shape-validated — an empty string
+   would pass the `undefined`/`null` check and become a "match-anything" DB-join bucket for any
+   other row that also degraded to the same malformed stamp. `session_id` values reaching the
+   final `.in(toCloseIds)` release call were never shape-validated either — postgrest-js escapes
+   commas/parens in filter values but NOT double-quotes, demonstrated live by the reviewer as a
+   filter-syntax smuggling vector.
+
+None of these five defects were variants of the ORIGINAL bug (shared marker deletion). Each was a
+new failure mode introduced by the FIX ITSELF — the natural byproduct of adding a new code path
+(new query ordering, new cross-cutting scope, new untrusted-shaped inputs) to close an old one.
+
+**Generalization**: when closing a recurrence, "does this fix the original bug" is necessary but
+not sufficient review. The fix is new code with its own surface — ordering bugs (does it actually
+run in the failure scenario, or only in the already-working case?), scope bugs (did closing a
+narrow gap accidentally widen a boundary — host, tenant, permission — the original bug never
+touched?), and input-shape bugs (does the new code path trust a value the old path never had to
+handle?) are the three recurring shapes this SD's five rounds actually found. A recurrence-fix
+review checklist should ask all three explicitly, not just "does the acceptance-gate scenario now
+pass" — every one of these five findings would have shipped invisibly past that single check.
+
+### Files Modified
+`scripts/hooks/session-register.cjs` (stampCcParentPid, closeRotatedOutSessions PASS 2),
+`tests/unit/sessions/rotation-closure-db-join.test.js` (new, 17 tests),
+`tests/unit/sessions/rotation-closure-wiring.test.js` (fake updated for the new trailing
+`.limit(999)`).
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -1214,3 +1273,4 @@ bounded ventures lookup), plus corresponding tests in `tests/unit/eva/`.
 | 1.4.0 | 2026-07-02 | Added sub-agent evidence control-character corruption pattern from SD-LEO-INFRA-FIX-SYSTEMIC-WINDOWS-001 |
 | 1.5.0 | 2026-08-16 | Added ratchet-guard comparison-logic testability pattern from SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 |
 | 1.6.0 | 2026-08-25 | Added self-referential retry/backoff fixed-point pattern from SD-LEO-INFRA-STAGE-GATE-RETRY-001 |
+| 1.7.0 | 2026-08-25 | Added recurrence-fix-needs-its-own-adversarial-review pattern from SD-LEO-INFRA-SESSION-TICK-CLEAR-001 |
