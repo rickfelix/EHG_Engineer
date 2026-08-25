@@ -25,6 +25,7 @@ import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-age
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { normalizeLearningCategory } from '../../lib/retro/learning-category.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = '97447674-35bb-4af1-ba65-089f76beee08';
 const SD_KEY = 'SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-A';
@@ -417,8 +418,10 @@ async function main() {
   console.log('  retrospective_id:', retroId, 'status:', status, 'quality_score:', calculatedScore);
 }
 
-main().catch((e) => {
-  console.error('FAILED:', e.message);
-  console.error(e.stack);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('FAILED:', e.message);
+    console.error(e.stack);
+    process.exit(1);
+  });
+}
