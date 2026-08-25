@@ -1329,8 +1329,14 @@ WHERE sd_id = 'SD-XXX-001'
 
 **Resolution**: Wait for stale threshold (5 min) or manually release:
 ```sql
-SELECT release_sd('SD-XXX-001');
+-- release_sd() takes the SESSION id, not the SD key -- and it is SESSION-scoped, not
+-- SD-scoped: it releases WHATEVER that session currently holds (QF-20260726-593). Confirm
+-- the session actually holds the SD you intend to release before calling this manually,
+-- or you can silently drop an unrelated live claim.
+SELECT sd_key FROM claude_sessions WHERE session_id = '<crashed-session-id>'; -- confirm first
+SELECT release_sd('<crashed-session-id>', 'manual_stale_cleanup');
 ```
+In application code, prefer `bestEffortReleaseSd(supabase, sessionId, reason, log, { expectedSdKey })` (`lib/fleet/best-effort-release.mjs`) over calling the RPC directly — it performs the same confirm-before-release check and refuses (fail-closed) on a mismatch instead of relying on an operator to remember the two-step check above.
 
 #### Issue: Two Different SDs Get Conflict Warning
 
