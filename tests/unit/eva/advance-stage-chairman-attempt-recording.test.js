@@ -32,8 +32,11 @@ describe('SD-LEO-INFRA-ALTIFYAI-INSTRUMENTATION-RETROFIT-001 FR-1/FR-2 (TS-3): c
   });
 
   it('the call site appears AFTER the raw ventures.current_lifecycle_stage UPDATE (single point of no return)', () => {
-    // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001 added a stage_write_token self-stamp to this same UPDATE.
-    const updateIdx = source.indexOf(".update({ current_lifecycle_stage: toStage, stage_write_token: 'stage-execution-worker.js' })");
+    // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001 added a stage_write_token self-stamp to this same UPDATE,
+    // via a probe that degrades to {} until the chairman-gated column exists (REGRESSION review R1
+    // -- an unconditional literal key would reject the whole UPDATE on every unapplied-migration
+    // deploy window).
+    const updateIdx = source.indexOf(".update({ current_lifecycle_stage: toStage, ...(await stageWriteTokenField(this._supabase, 'stage-execution-worker.js')) })");
     const guardIdx = source.indexOf("result?._chairmanGateSource === 'chairman_decision'");
     expect(updateIdx).toBeGreaterThan(-1);
     expect(guardIdx).toBeGreaterThan(-1);

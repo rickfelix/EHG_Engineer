@@ -763,6 +763,33 @@ SD-LEO-INFRA-STAGE-WRITER-CHOKE-001''s canonical-writer choke.';
 
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- EXECUTE-grant posture — required by scripts/lint/secdef-execute-revoke-lint.mjs (CI-enforced,
+-- REGRESSION review R4): every migration that CREATE OR REPLACEs a SECURITY DEFINER function must
+-- explicitly REVOKE ... FROM PUBLIC in the SAME file (PostgreSQL grants EXECUTE to PUBLIC by
+-- default on function creation, and anon/authenticated inherit that unless separately addressed).
+-- CREATE OR REPLACE does not itself reset an existing grant, so this restates -- rather than
+-- changes -- each function's live posture (SECURITY review, live-measured): anon has never had a
+-- legitimate reason to call any of these four; authenticated genuinely does (promote.ts and
+-- src/lib/ventures/advanceStage.ts call advance_venture_stage via an RLS-bound user-session
+-- client, not service-role -- see this file's fn_is_service_role()/fn_is_chairman()/
+-- fn_user_has_venture_access() checks, which are what make an authenticated grant safe here).
+REVOKE EXECUTE ON FUNCTION public.advance_venture_stage(uuid, integer, integer, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.advance_venture_stage(uuid, integer, integer, text) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION public.advance_venture_to_stage(uuid, integer, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.advance_venture_to_stage(uuid, integer, text, text) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) TO authenticated, service_role;
+
+-- rescan_stage_20 is authenticated-callable on the same basis now that it carries the same
+-- authorization check as its siblings (S-C1 fix above) -- previously it had NO check at all, so an
+-- authenticated grant would have been a genuine open door; it no longer is.
+REVOKE EXECUTE ON FUNCTION public.rescan_stage_20(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.rescan_stage_20(uuid) TO authenticated, service_role;
+
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- Post-condition verification
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 DO $verify$
@@ -792,3 +819,33 @@ BEGIN
     'rescan_stage_20: authorization check missing';
 END
 $verify$;
+
+-- EXECUTE-grant posture, live-checked (R4 / secdef-execute-revoke-lint's own runtime counterpart).
+DO $verify_grants$
+DECLARE
+  v_bad TEXT;
+BEGIN
+  SELECT string_agg(DISTINCT routine_name || ':' || grantee, ', ')
+    INTO v_bad
+    FROM information_schema.routine_privileges
+   WHERE routine_schema = 'public'
+     AND routine_name IN ('advance_venture_stage', 'advance_venture_to_stage', 'fn_advance_venture_stage', 'rescan_stage_20')
+     AND privilege_type = 'EXECUTE'
+     AND grantee IN ('PUBLIC', 'anon');
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'stage-writer RPCs: PUBLIC/anon still hold EXECUTE after the REVOKE block above: %', v_bad;
+  END IF;
+
+  SELECT string_agg(DISTINCT r.name, ', ')
+    INTO v_bad
+    FROM (VALUES ('advance_venture_stage'), ('advance_venture_to_stage'), ('fn_advance_venture_stage'), ('rescan_stage_20')) r(name)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM information_schema.routine_privileges
+      WHERE routine_schema = 'public' AND routine_name = r.name
+        AND grantee = 'authenticated' AND privilege_type = 'EXECUTE'
+   );
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'stage-writer RPCs: authenticated LOST EXECUTE (would break promote.ts/advanceStage.ts): %', v_bad;
+  END IF;
+END
+$verify_grants$;

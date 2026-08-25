@@ -75,14 +75,29 @@ BEGIN
 END
 $roles$;
 
+-- VALIDATION (PLAN_VERIFICATION, B2): tests/ddl/**/*.db.test.js runs SEQUENTIALLY
+-- (vitest.ddl.config.mjs: fileParallelism=false) against ONE shared ephemeral database for the
+-- whole CI job -- several sibling files (venture-gate-attestations-ddl, venture-teardown-
+-- disposition-ddl, venture-ingest-key-binding-ddl, venture-user-feedback-ownership-rpc-ddl,
+-- thesis-kill-instrument-ddl, telegram-bot-insert-feedback-drop-ddl) already share a "converged"
+-- public.ventures CREATE TABLE IF NOT EXISTS (id, name, deleted_at, metadata) -- see
+-- thesis-kill-instrument-ddl.db.test.js's own comment on this. Whichever file runs FIRST actually
+-- creates it; IF NOT EXISTS makes every other file's identical CREATE a safe no-op. This file's
+-- ORIGINAL version declared a competing, WIDER shape directly in CREATE TABLE -- if a sibling ran
+-- first, that CREATE silently no-op'd against the narrower converged table and every insert here
+-- failed 42703 (measured in CI, not hypothetical). Fixed: match the converged CREATE exactly, then
+-- ALTER TABLE ... ADD COLUMN IF NOT EXISTS for the columns unique to this SD's own tests --
+-- additive and order-independent regardless of which sibling file runs first.
 CREATE TABLE IF NOT EXISTS public.ventures (
-  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name                   TEXT NOT NULL DEFAULT 'stub-venture',
-  current_lifecycle_stage INTEGER,
-  stage_write_token      TEXT,
-  is_demo                BOOLEAN DEFAULT true,
-  updated_at             TIMESTAMPTZ DEFAULT now()
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT,
+  deleted_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::jsonb
 );
+ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS current_lifecycle_stage INTEGER;
+ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS stage_write_token TEXT;
+ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT true;
+ALTER TABLE public.ventures ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS public._ddl_probe (
   seq   SERIAL PRIMARY KEY,
@@ -191,7 +206,17 @@ beforeAll(async () => {
 afterAll(async () => {
   if (client) {
     try {
-      await client.query('DROP TABLE IF EXISTS public.ventures CASCADE');
+      // public.ventures itself is NOT dropped -- it's the shared converged stub other tests/ddl/
+      // sibling files depend on for the rest of the sequential CI job run (see the STUB_SCHEMA
+      // comment above). What IS this file's own and must be cleaned up so it can't affect a
+      // sibling file running afterward: every trigger this file attached to that shared table,
+      // then the functions those triggers point to, then this file's own private probe table.
+      await client.query('DROP TRIGGER IF EXISTS aaa_enforce_canonical_stage_write ON public.ventures');
+      await client.query('DROP TRIGGER IF EXISTS zzz_enforce_canonical_stage_write_final ON public.ventures');
+      await client.query('DROP TRIGGER IF EXISTS aaa_reset_canonical_stage_write_token_insert ON public.ventures');
+      await client.query('DROP TRIGGER IF EXISTS trg_validate_stage_column ON public.ventures');
+      await client.query('DROP TRIGGER IF EXISTS update_ventures_updated_at ON public.ventures');
+      await client.query('DROP TRIGGER IF EXISTS ventures_block_client_governance_write_trg ON public.ventures');
       await client.query('DROP TABLE IF EXISTS public._ddl_probe CASCADE');
       await client.query('DROP FUNCTION IF EXISTS public.fn_validate_stage_column() CASCADE');
       await client.query('DROP FUNCTION IF EXISTS public._stub_update_ventures_updated_at() CASCADE');

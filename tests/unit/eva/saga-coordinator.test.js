@@ -12,6 +12,7 @@ import {
   MODULE_VERSION,
   _internal,
 } from '../../../lib/eva/saga-coordinator.js';
+import { __resetStageWriteTokenProbeForTests } from '../../../lib/eva/stage-write-token-probe.js';
 
 const { SAGA_STATUS } = _internal;
 
@@ -298,14 +299,27 @@ describe('createArtifactCompensation', () => {
 });
 
 describe('createStageCompensation', () => {
+  beforeEach(() => {
+    __resetStageWriteTokenProbeForTests();
+  });
+
+  // stage_write_token is probed via a SEPARATE .from('ventures').select(...).limit(1) call
+  // (see stage-write-token-probe.js), independent of the .from('ventures').update(...) chain this
+  // module also performs -- the mock's `.from()` must serve both.
+  function mockDbWithColumn(columnExists) {
+    const updateFn = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+    const selectResult = columnExists
+      ? { data: [], error: null }
+      : { data: null, error: { code: '42703', message: 'column "stage_write_token" does not exist' } };
+    const from = vi.fn().mockReturnValue({
+      update: updateFn,
+      select: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue(selectResult) }),
+    });
+    return { db: { from }, updateFn };
+  }
+
   it('should revert stage to previous value', async () => {
-    const mockDb = {
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    };
+    const { db: mockDb } = mockDbWithColumn(true);
 
     const compensate = createStageCompensation(mockDb, 'venture-1', 5);
     await compensate();
@@ -314,14 +328,26 @@ describe('createStageCompensation', () => {
   });
 
   // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001: self-stamp for the canonical-writer choke.
-  it('should self-stamp stage_write_token in the same UPDATE as the revert', async () => {
-    const updateFn = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
-    const mockDb = { from: vi.fn().mockReturnValue({ update: updateFn }) };
+  it('should self-stamp stage_write_token in the same UPDATE as the revert, when the column exists', async () => {
+    const { db: mockDb, updateFn } = mockDbWithColumn(true);
 
     const compensate = createStageCompensation(mockDb, 'venture-1', 5);
     await compensate();
 
     expect(updateFn).toHaveBeenCalledWith({ current_lifecycle_stage: 5, stage_write_token: 'saga-coordinator.js' });
+  });
+
+  // Guards against exactly the regression a plain, unconditional self-stamp would cause: the
+  // column is added by a chairman-gated migration that may ship un-applied for an indeterminate
+  // period (R5 precedent) -- an unconditional stage_write_token key would make PostgREST reject
+  // the WHOLE update (PGRST204/42703) on every revert until the ceremony applies it.
+  it('degrades to a plain, unstamped write when the column does not exist yet', async () => {
+    const { db: mockDb, updateFn } = mockDbWithColumn(false);
+
+    const compensate = createStageCompensation(mockDb, 'venture-1', 5);
+    await compensate();
+
+    expect(updateFn).toHaveBeenCalledWith({ current_lifecycle_stage: 5 });
   });
 
   it('should throw on db error', async () => {
@@ -330,6 +356,7 @@ describe('createStageCompensation', () => {
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ error: { message: 'revert failed' } }),
         }),
+        select: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: [], error: null }) }),
       }),
     };
 

@@ -587,15 +587,15 @@ above: `promote.ts` is a live, actively-called chairman-facing route. Once step 
 raw write there 500s on every call, not merely "stays ungated".
 
 Step 3 refuses to apply if step 1 has not (its `$precondition$` block aborts). 3-before-2 is NOT
-machine-enforceable — applying with any writer still unwired breaks that writer instantly. Enumerate
-what remains before running step 3:
+machine-enforceable — applying with any writer still unwired breaks that writer instantly.
 
-```sql
-SELECT writer_identity, capability_flags->>'surface', notes
-  FROM public.ventures_canonical_writer_policy()
- WHERE (capability_flags->>'stamp_wired')::boolean IS NOT TRUE
- ORDER BY writer_identity;
-```
+**Correction (PLAN_VERIFICATION, VALIDATION B4)**: a query against `ventures_canonical_writer_policy()`
+cannot verify this — `capability_flags` is a hardcoded literal in that function's own VALUES list
+(every entry says `stamp_wired: true`), so such a query always returns zero rows regardless of
+whether step 2 actually shipped. Use the choke file's own header instead (section "PRE-APPLY
+BLOCKER"), which checks the 4 RPCs' LIVE function bodies via `pg_get_functiondef` (a check that can
+genuinely fail) plus a deployment-artifact check for the 5 JS/script writers and the ehg-repo route,
+which no SQL query can observe at all.
 
 **Both `aaa_` and `zzz_` perform IDENTICAL full validation** (unlike a design that trusts `aaa_`
 alone) — `trg_validate_stage_column` (live, unconditional) coerces a NULL stage to 1 mid-chain,

@@ -24,21 +24,51 @@
 -- SQLSTATE 55P03 on apply means the guard worked; retry in a quiet window.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- PRE-APPLY BLOCKER — every registry entry below must be stamp_wired=true, VERIFIED LIVE, first
+-- PRE-APPLY BLOCKER — every registered writer below must be VERIFIED LIVE stamping, first
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- Applying this file before every writer below is actually observed stamping breaks that writer
--- instantly (SDCW-class rejection on every one of its ventures.current_lifecycle_stage writes).
--- Enumerate what remains unverified:
+-- Applying this file before every writer below is actually deployed and observed stamping breaks
+-- that writer instantly (SVCW1-class rejection on every one of its ventures.current_lifecycle_stage
+-- writes).
 --
---   SELECT writer_identity, capability_flags->>'surface', notes
---     FROM public.ventures_canonical_writer_policy()
---    WHERE (capability_flags->>'stamp_wired')::boolean IS NOT TRUE
---    ORDER BY writer_identity;
+-- CORRECTION (PLAN_VERIFICATION, VALIDATION finding B4): an earlier version of this checklist
+-- pointed at `SELECT ... FROM ventures_canonical_writer_policy() WHERE capability_flags->>
+-- 'stamp_wired' IS NOT TRUE`. That query is STRUCTURALLY INCAPABLE of ever finding anything --
+-- capability_flags is a hardcoded literal inside this file's own VALUES list (every entry says
+-- true), so it always returns zero rows regardless of whether step 2 is actually deployed. It
+-- would read as "all clear" even if step 2 never shipped. There is no query against this
+-- registry that can observe deployed-code reality; the registry describes intent, not fact. Use
+-- the two checks below instead, each against something that CAN actually be wrong:
+--
+-- (a) The 4 DB-resident RPCs -- their LIVE function body is directly inspectable and IS the
+--     ground truth (this genuinely catches "step 2 migration not yet applied"):
+--
+--   SELECT proname,
+--          pg_get_functiondef(p.oid) LIKE '%stage_write_token = ''' || proname || '''%' AS self_stamped
+--     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+--    WHERE n.nspname = 'public'
+--      AND proname IN ('advance_venture_stage', 'advance_venture_to_stage', 'fn_advance_venture_stage', 'rescan_stage_20');
+--
+--   Every row must show self_stamped = true. If any is false, step 2's migration has not applied to
+--   this function yet -- do not proceed.
+--
+-- (b) The 5 JS/script writers (stage-execution-worker.js, venture-ceo-handlers.js,
+--     saga-coordinator.js, eva-run.js, run-canary-probe.mjs) and the ehg-repo promote.ts route are
+--     APPLICATION CODE, not database state -- no SQL query can observe whether the running process
+--     was built from a commit that includes this SD's self-stamp changes. Confirm by DEPLOYMENT
+--     ARTIFACT, not inference: the EVA daemon process's running commit SHA (or its most recent
+--     restart timestamp, cross-referenced against this SD's merge commit) must be AT OR AFTER the
+--     merge of this SD's PR in both EHG_Engineer and the ehg repo (PR #799). If the daemon has not
+--     restarted onto post-merge code, its self-stamps do not exist yet regardless of what main
+--     contains. Prefer directly exercising one real writer against a staging/canary venture and
+--     confirming via `SELECT stage_write_token FROM ventures WHERE id = <fixture>` immediately
+--     after the call (before the guard's own at-rest NULL-out fires) over trusting a deploy
+--     timestamp alone.
 --
 -- STEP 2 (20260825_ventures_stage_rpcs_self_stamp.sql + the paired JS/TS code deploys across both
 -- EHG_Engineer and the ehg repo) MUST already be live before this file applies. This file's own
 -- $precondition$ block only checks the COLUMN exists (step 1) — it cannot see whether step 2's code
--- is actually deployed, which is why this is a human pre-apply checklist item, not a machine gate.
+-- is actually deployed, which is why this remains a human pre-apply checklist item, not a machine
+-- gate — but the human checklist above now checks things that can genuinely be false.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- EXPLICIT NON-COVERAGE — this is a CHOKE POINT, NOT AN ABSOLUTE BARRIER
