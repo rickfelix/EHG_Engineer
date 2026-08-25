@@ -1,0 +1,159 @@
+{
+  "executive_summary": "HARNESS (Golf-5 specimen 1df1a3f5, coordinator row 2158bc68): lib/sub-agents/resolve-repo.js's applySubAgentRepoVerdict() downgrades a sub-agent's verdict from PASS to CONDITIONAL_PASS on repo-resolution failure, but never populates results.conditions/results.justification -- both required (non-empty array / >=50 chars) by sub_agent_execution_results' check_conditions_required and check_justification_required CHECK constraints whenever verdict='CONDITIONAL_PASS'. Any caller that stores a downgraded row without separately synthesizing these fields hits Postgres 23514 and the row is never written -- the writer defeats the very SUB_AGENT_REPO_RESOLUTION gate it exists to serve. LEAD-phase Explore (evidence 8881cb8f, dual-agent verified) traced this to THREE concrete, file:line-confirmed defects: (1) applySubAgentRepoVerdict itself never sets conditions/justification -- already mitigated for callers routed through lib/sub-agent-executor/results-storage.js's deriveConditionalPassEvidence (QF-20260603-485) but NOT for callers that bypass it; (2) lib/sub-agents/regression.js's storeResults() hand-rolls its own INSERT that omits metadata/conditions/justification entirely, AND (found by adversarial VALIDATION re-review) calls storeResults() BEFORE applySubAgentRepoVerdict() runs -- so even a correctly-shaped results object would have its mutation persisted too late to ever reach the DB row; (3) regression.js's execute() calls resolveSubAgentRepo() with targetApplication:options.target_application, which the CLI entry point never populates, and getSDDetails() didn't even SELECT the target_application column -- so every CLI-invoked run unconditionally resolves {repoPath:null,repoResolved:false,registrySource:'fallback'} regardless of the actual worktree/registry state. PIVOT (documented, not silently applied): the SD's original description also proposed 'preserve executed_from_cwd instead of nulling repo_path on failure' -- investigation found this would be actively harmful: v_sub_agent_repo_compliance classifies a row 'cwd_leak' (or, per VALIDATION's sharper correction, silently reclassifies to 'healthy' when toplevel-compatible -- a FALSE GREEN, worse than a false block) whenever metadata->>'repo_path' equals executed_from_cwd. The existing repo_resolved:false field is already the gate-consumed explicit failure marker; no repo_path change was made.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "applySubAgentRepoVerdict() populates conditions/justification on every downgrade, making its output insertable by construction",
+      "description": "lib/sub-agents/resolve-repo.js:227-273 applySubAgentRepoVerdict() downgrades PASS->CONDITIONAL_PASS (lines 257-270 pre-fix) via recordVerdictMutation, pushing only a warnings entry. database/migrations/20251115114444_add_validation_modes_to_sub_agent_results.sql's check_conditions_required (conditions non-null non-empty jsonb array) and check_justification_required (justification non-null, >=50 chars) both apply whenever verdict='CONDITIONAL_PASS' -- neither is populated, so any INSERT of a downgraded row not otherwise mitigated violates 23514. Fix, guarded to fire ONLY inside the existing downgrade branch (not on skipVerdictAdjust or a legitimate skip_reason path, matching VALIDATION's scoping note): if results.conditions is missing/empty, set it to a single {action: <degradation reason>, priority:'medium', blocking:false} entry; if results.justification is missing or <50 chars, set it to a descriptive string built from the same degradation reason. A caller-supplied conditions/justification (already present and valid) is left untouched -- this is additive synthesis, not an override, mirroring lib/sub-agent-executor/results-storage.js's deriveConditionalPassEvidence pass-through contract. Explicitly does NOT touch metadata.repo_path -- see FR-4 for why.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A resolution shaped exactly like the Golf-5 specimen ({repoPath:null, repoResolved:false, registrySource:'fallback'}) applied to a PASS-verdict results object yields verdict='CONDITIONAL_PASS' with a non-empty results.conditions array and a results.justification string >=50 chars.",
+        "A JS-level mirror of both CHECK constraints (conditions non-empty array + justification length>=50, only enforced when verdict='CONDITIONAL_PASS') passes against the mutated results object -- proving the row would not violate 23514 without needing a live DB round-trip.",
+        "No conditions/justification are added when the resolution is healthy (repoResolved:true, no probe failure) or when skipReason/skipVerdictAdjust apply -- verdict and results object are otherwise unchanged from current behavior.",
+        "An already-populated caller-supplied conditions/justification is preserved verbatim, not overwritten.",
+        "Mutation-verified: reverting this fix makes the Golf-5-specimen insertability test fail; restoring it passes."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "regression.js: apply the repo verdict BEFORE storing results, and forward metadata/conditions/justification into the insert",
+      "description": "lib/sub-agents/regression.js:265 (pre-fix) calls storeResults(sdId, results) INSIDE the main try block; applySubAgentRepoVerdict(results, resolution) ran afterward, unconditionally, at line 278 -- AFTER the row was already persisted. This means the repo-resolution verdict/metadata mutation had ZERO effect on what actually reached the DB (found by adversarial VALIDATION re-review of the initial LEAD plan, which had proposed only the insert-payload fix in isolation). Separately, storeResults()'s own INSERT payload (lines 776-788 pre-fix) omitted metadata/conditions/justification entirely, so even a correctly-timed mutation would still be dropped. Fix: call applySubAgentRepoVerdict(results, resolution) exactly ONCE, immediately after resolution is obtained (before Phase 1 begins) -- this is also the semantically correct place, since later phases (test/API/coverage comparison) only escalate the verdict toward FAIL and never downgrade PASS back from a prior CONDITIONAL_PASS, so applying the repo-resolution fail-closed check first composes correctly with the substantive checks that follow. Remove the two now-redundant later calls (the capture-baseline early-return branch and the end-of-function call). Add metadata/conditions/justification to storeResults()'s insert payload.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "applySubAgentRepoVerdict is called exactly once per execute() invocation, before storeResults runs (for the main full-validation/compare path) or before the capture-baseline early return.",
+        "storeResults()'s insert payload includes metadata, conditions, and justification sourced from results.",
+        "For a resolution shaped like the Golf-5 specimen, the row storeResults() would attempt to insert satisfies both CHECK constraints (same JS-mirrored assertion as FR-1, applied to the constructed insert payload)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "regression.js: resolve target_application from the SD before calling resolveSubAgentRepo (fixes the true root cause of the Golf-5 specimen)",
+      "description": "regression.js:83-88 (pre-fix) passed targetApplication:options.target_application to resolveSubAgentRepo, called BEFORE getSDDetails(sdId) (line 97 pre-fix) -- which itself didn't SELECT target_application at all (line 290 pre-fix: `.select('id, title, sd_type, intensity_level, status')`), and the CLI entry point (lines 795-814 pre-fix) never populates options.target_application. Confirmed (Explore + VALIDATION, independently): for ANY CLI invocation, resolveSubAgentRepo's `candidate` (resolve-repo.js:165) is unconditionally undefined, producing {repoPath:null,repoResolved:false,registrySource:'fallback'} regardless of whether the worktree/registry would resolve correctly -- structurally blind, not failure-dependent. Fix: move the getSDDetails(sdId) call to before resolveSubAgentRepo, add target_application to its SELECT, and pass resolveTargetApplicationForRegression(options, sdDetails) (a new pure, exported precedence helper: options.target_application wins, else sdDetails.target_application, else undefined) as resolveSubAgentRepo's targetApplication. Also normalize sdId (via the already-imported normalizeSDId) inside getSDDetails before the `.eq('id', ...)` lookup -- the `id` column is uuid, and a caller passing an sd_key would otherwise return zero rows (VALIDATION-flagged latent bug in the naive fix).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "getSDDetails's SELECT includes target_application, and its lookup is normalized (sd_key or UUID input both resolve).",
+        "resolveTargetApplicationForRegression(options, sdDetails) is exported and unit-tested for all four precedence cases (options wins; falls back to sdDetails; both absent returns undefined; null sdDetails is safe).",
+        "getSDDetails is now called before resolveSubAgentRepo in execute(), and its target_application feeds the resolution call via the precedence helper."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Do NOT alias metadata.repo_path to executed_from_cwd on resolution failure (documented pivot, not a code change)",
+      "description": "The SD's original description proposed 'on registry miss, preserve the measured executed_from_cwd [as metadata.repo_path] and mark resolution failure explicitly, instead of clobbering with a canonicalized null.' Investigated and REJECTED after two independent adversarial passes: database/migrations/20260604_fix_v_sub_agent_repo_compliance_case_insensitive.sql's v_sub_agent_repo_compliance view CASE statement checks `metadata->>'repo_path' IS NULL` -> 'explicit_null' BEFORE checking `metadata->>'repo_path' = executed_from_cwd` -> 'cwd_leak' -- so today's null repo_path already classifies as the gate-appropriate explicit_null/explicit_null_intra (correctly distinguishing intra- vs cross-repo per scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js). Aliasing repo_path to executed_from_cwd on every registry miss would make every such row non-null and equal to executed_from_cwd, hitting the cwd_leak branch instead -- which the gate's own toplevel-compatibility check (QF-20260528-426, lines 100-118 of the gate file) RECLASSIFIES TO 'healthy' whenever the writer's cwd is toplevel-compatible with the expected repo. That means aliasing would not merely over-block; for the common intra-repo case it would manufacture a FALSE GREEN -- masking the exact failure this SD exists to make visible. No code change: the existing metadata.repo_resolved:false field (already unconditionally set, already read by the gate's classifyRow for the unresolved/unresolved_intra branches) already IS the explicit, gate-consumed resolution-failure marker the success criteria ask for.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "A new regression-guard unit test asserts metadata.repo_path stays null (not aliased to executed_from_cwd) on a registry-miss resolution, and that repo_path never equals executed_from_cwd for this case.",
+        "The PRD/handoff record documents this pivot explicitly (this FR) so a future reader does not re-attempt the aliasing fix without re-deriving the same cwd_leak/false-green analysis."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema/migration change",
+      "description": "conditions/justification columns and their CHECK constraints already exist. This SD is pure application-code (resolve-repo.js, regression.js) + test additions. No new columns, no new RPC, no migration file, no change to v_sub_agent_repo_compliance or the SUB_AGENT_REPO_RESOLUTION gate."
+    },
+    {
+      "id": "TR-2",
+      "title": "Preserve applySubAgentRepoVerdict's and swapClaim-adjacent callers' external contracts",
+      "description": "applySubAgentRepoVerdict(results, resolution, opts) keeps its existing signature and mutate-in-place contract; api.js/dependency.js/performance.js/design/index.js/security.js (which route through the canonical lib/sub-agent-executor/results-storage.js writer, confirmed unaffected by Explore) require no changes. regression.js's execute(sdId, subAgent, options) keeps its existing signature and {verdict,...} return shape."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Golf-5 specimen shape becomes insertable by construction",
+      "type": "unit",
+      "expected": "applySubAgentRepoVerdict on {repoPath:null,repoResolved:false,registrySource:'fallback'} yields a non-empty conditions array and a >=50-char justification; a JS-mirrored CHECK-constraint assertion passes"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Healthy resolution and legitimate capability-skip paths are unaffected",
+      "type": "unit",
+      "expected": "No conditions/justification are added when repoResolved:true or skipReason is set; verdict stays PASS"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Caller-supplied conditions/justification are preserved, not overwritten",
+      "type": "unit",
+      "expected": "A results object with pre-populated conditions/justification keeps those exact values after applySubAgentRepoVerdict runs"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "metadata.repo_path is never aliased to executed_from_cwd (cwd_leak/false-green regression guard)",
+      "type": "unit",
+      "expected": "On a registry-miss resolution, metadata.repo_path stays null and is never equal to metadata.executed_from_cwd"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "resolveTargetApplicationForRegression precedence",
+      "type": "unit",
+      "expected": "options.target_application wins over sdDetails.target_application; falls back correctly; null-safe for a missing sdDetails"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Mutation verification of FR-1's core fix",
+      "type": "unit",
+      "expected": "Reverting the conditions/justification synthesis in applySubAgentRepoVerdict makes the Golf-5-specimen insertability test fail; restoring it passes"
+    }
+  ],
+  "acceptance_criteria": [
+    "A sub-agent verdict downgraded to CONDITIONAL_PASS by applySubAgentRepoVerdict is insertable by construction for ANY caller, not only ones routed through the canonical results-storage.js writer.",
+    "regression.js's own insert path (the confirmed site of the Golf-5 specimen) actually persists the repo-resolution verdict/metadata it computes, and resolves target_application correctly for CLI invocations.",
+    "No new false-positive (cwd_leak) or false-negative (healthy-reclassification) gate outcomes are introduced by this fix."
+  ],
+  "risks": [
+    {
+      "risk": "Moving applySubAgentRepoVerdict's call site earlier in regression.js's execute() changes WHEN the repo-resolution downgrade is visible to later phases -- a later phase could theoretically read results.verdict expecting 'PASS' and behave differently.",
+      "mitigation": "Traced every later phase's verdict-mutation logic: test/import failures always force FAIL regardless of current verdict; API/coverage branches only escalate PASS->CONDITIONAL_PASS (already a no-op if verdict is already CONDITIONAL_PASS) or FAIL unconditionally on breaking changes. No phase reads verdict for any purpose other than escalating it, so reordering is safe.",
+      "severity": "low"
+    },
+    {
+      "risk": "lib/sub-agents/vision-fidelity/index.js has the same hand-rolled-insert-missing-conditions/justification pattern (confirmed by Explore) but is NOT triggered via resolveSubAgentRepo/applySubAgentRepoVerdict -- out of scope for this SD (different trigger, same defect class).",
+      "mitigation": "Flagged as an out-of-scope completion-flag finding for a follow-up ticket, not fixed here, to keep this SD's diff scoped to the repo-writer mechanism its title names."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/sub-agent-executor/executor.js (unaffected -- routes api/dependency/performance/design/security through the canonical writer, confirmed by Explore)",
+      "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js (the SUB_AGENT_REPO_RESOLUTION gate this fix serves; unchanged, no code touched there)",
+      "v_sub_agent_repo_compliance view (unchanged; FR-4 documents why aliasing to it was rejected)"
+    ],
+    "dependencies": [
+      "database check_conditions_required / check_justification_required (already deployed, unchanged)",
+      "lib/sub-agents/verdict-chain.js::recordVerdictMutation (already exists, unchanged)"
+    ],
+    "data_contracts": ["none -- no schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": [
+      "Two completion-flag findings routed to harness_backlog: vision-fidelity/index.js's parallel hand-rolled-insert defect (out of scope here), and (from the prior SD's own out-of-scope list, unrelated) the pre-existing switch_sd_claim TOCTOU / release_sd row-count findings remain separately tracked."
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two-file application-code fix: the shared canonical writer (resolve-repo.js) gains defensive conditions/justification synthesis on its own downgrade branch; the one hand-rolled-insert caller that bypasses the canonical storage path (regression.js) gets its call ordering and insert payload corrected, plus a small exported precedence helper for target_application resolution. No new components.",
+    "components": [
+      { "name": "lib/sub-agents/resolve-repo.js", "change": "applySubAgentRepoVerdict() synthesizes conditions/justification on downgrade only; repo_path handling unchanged (FR-4 pivot)" },
+      { "name": "lib/sub-agents/regression.js", "change": "getSDDetails() moved earlier + selects target_application + normalizes sdId; applySubAgentRepoVerdict() called once, before storeResults(); storeResults()'s insert payload gains metadata/conditions/justification; new exported resolveTargetApplicationForRegression() helper" },
+      { "name": "tests/unit/resolve-sub-agent-repo.test.js", "change": "new describe block covering insertability-by-construction, no-op-on-healthy, caller-preservation, and the cwd_leak/false-green regression guard" },
+      { "name": "tests/unit/sub-agents/regression-target-application-precedence.test.js", "change": "NEW -- unit tests for the extracted precedence helper" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Fix the shared writer first (universal benefit to any future caller), then fix the one specific caller (regression.js) whose bypass of the canonical storage path and call-ordering bug together produced the Golf-5 specimen -- verified via a dual Explore+VALIDATION adversarial pass before writing code, which caught the call-ordering bug the initial plan missed.",
+    "steps": [
+      "FR-1: add conditions/justification synthesis to applySubAgentRepoVerdict's downgrade branch, scoped to fire only on actual downgrade.",
+      "FR-2/FR-3: reorder regression.js's execute() (getSDDetails before resolveSubAgentRepo, applySubAgentRepoVerdict called once immediately after resolution), extract resolveTargetApplicationForRegression, fix storeResults()'s insert payload.",
+      "FR-4: no code change -- document the rejected aliasing approach in this PRD and add a regression-guard test.",
+      "Add unit tests for all of the above; mutation-verify FR-1's core fix by reverting and confirming red, then restoring and confirming green.",
+      "Full targeted test run (resolve-sub-agent-repo tests via a temp de-quarantined copy, since the file is pre-existing-quarantined for an unrelated Windows/Linux path issue; new regression-target-application-precedence.test.js) before shipping."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the new/extended unit tests for applySubAgentRepoVerdict and resolveTargetApplicationForRegression", "expected_outcome": "All pass" },
+    { "step_number": 2, "instruction": "Revert FR-1's conditions/justification synthesis and re-run the Golf-5-specimen insertability test", "expected_outcome": "Fails (mutation-verifies the fix)" },
+    { "step_number": 3, "instruction": "node --check on both modified lib files", "expected_outcome": "No syntax errors" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SUB-AGENT-REPO-001"
+  }
+}
