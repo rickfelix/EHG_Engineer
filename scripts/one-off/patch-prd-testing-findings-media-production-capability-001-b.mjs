@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const PRD_ID = 'PRD-SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-B';
@@ -59,4 +60,6 @@ async function main() {
   console.log('Patched PRD (functional_requirements/test_scenarios/risks) with TESTING findings for', PRD_ID);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
