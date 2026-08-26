@@ -42,10 +42,16 @@ const SCAN_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 const EXCLUDE_FILE_RE = /(\.test\.|\.spec\.)/i;
 
 function candidateFiles(base) {
+  // --ignore-cr-at-eol: a checkout of an eol=lf-attributed path whose committed blob still
+  // carries CRLF (the exact renormalization-dirty state eol-renormalization-lint.mjs detects via
+  // `git ls-files --eol`) makes the working tree disagree with the index on line endings alone,
+  // right after a fresh clone -- with no PR content involved. Without this flag, the plain
+  // (no-ref) `git diff` below reports the WHOLE file as changed on any such path, which then
+  // false-positives every `.select(` line in it as "newly added" in addedLineNumbers() below.
   const out = [
-    execSync(`git diff --name-only --diff-filter=ACMR ${base}...HEAD`, { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
-    execSync('git diff --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
-    execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
+    execSync(`git diff --ignore-cr-at-eol --name-only --diff-filter=ACMR ${base}...HEAD`, { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
+    execSync('git diff --ignore-cr-at-eol --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
+    execSync('git diff --ignore-cr-at-eol --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
     execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }),
   ].join('\n');
   return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
@@ -75,10 +81,13 @@ export function parseAddedLineNumbers(diffText) {
 }
 
 function addedLineNumbers(base, relFile) {
+  // --ignore-cr-at-eol: see the matching comment in candidateFiles() above -- same false-positive
+  // mechanism, and this is the function whose bare (no-ref) fallback actually manufactures the
+  // spurious "every line added" result once a renormalization-dirty file is treated as a candidate.
   for (const cmd of [
-    `git diff -U0 --diff-filter=ACMR ${base}...HEAD -- "${relFile}"`,
-    `git diff -U0 --diff-filter=ACMR --cached -- "${relFile}"`,
-    `git diff -U0 --diff-filter=ACMR -- "${relFile}"`,
+    `git diff --ignore-cr-at-eol -U0 --diff-filter=ACMR ${base}...HEAD -- "${relFile}"`,
+    `git diff --ignore-cr-at-eol -U0 --diff-filter=ACMR --cached -- "${relFile}"`,
+    `git diff --ignore-cr-at-eol -U0 --diff-filter=ACMR -- "${relFile}"`,
   ]) {
     let diffText = '';
     try { diffText = execSync(cmd, { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }); } catch { /* try next */ }
