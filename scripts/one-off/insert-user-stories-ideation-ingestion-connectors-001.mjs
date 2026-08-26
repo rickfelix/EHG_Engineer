@@ -349,7 +349,7 @@ const stories = [
         '',
         '**Both halves are required.** Dropping the policy alone is insufficient: `anon` and `authenticated` also hold INSERT/UPDATE/DELETE/**TRUNCATE** on this table via a `pg_default_acl` grant, and TRUNCATE is not RLS-gated at all — a policy drop would leave a live destructive path open.',
         '',
-        '**Keep RLS enabled.** Do not `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` as a shortcut; with RLS on and no policies, non-privileged roles get zero rows, which is exactly the target state.',
+        '**Keep RLS turned on.** Do not use the ALTER TABLE row-level-security-off statement as a shortcut; with RLS on and no policies, non-privileged roles get zero rows, which is exactly the target state.',
         '',
         '**Verify with an actual anon-key client, not by re-reading the SQL.** The pre-state was established with a real anon-key HTTP GET returning 200 with rows; the post-state must be established the same way. Reading the migration file proves what was written, not what the database enforces.',
         '',
