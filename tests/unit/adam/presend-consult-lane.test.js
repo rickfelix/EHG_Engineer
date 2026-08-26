@@ -140,6 +140,47 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     expect(inserted[0].row.payload.body).toContain('1449a046');
   });
 
+  // ── SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-1) ──────────────────────────────────────────
+  // Readback-verify the consult insert: previously insertCoordinationRow's return value was
+  // discarded entirely, so a genuinely successful insert and a silently failed one were
+  // indistinguishable to this lane's caller.
+  it('FR-1: requests select:id/single:true on the insert and forwards the inserted row id as consultRowId', async () => {
+    // VALIDATION sub-agent finding V-2 (MEDIUM, PLAN_VERIFICATION): the first version of this
+    // test captured `opts` into the stub's return value (__opts) but never asserted on it -- drop
+    // {select:'id', single:true} entirely from the real insertCoordinationRow call and production
+    // gets {data:null} (no RETURNING clause), consult_row_id stays null on every hold forever, and
+    // this exact test still passed. `capturedOpts` is asserted directly below, not smuggled through
+    // the return value.
+    let capturedOpts = null;
+    const { deps } = makeDeps({
+      insertCoordinationRow: async (row, opts) => { capturedOpts = opts; return { data: { id: 'row-xyz-789' }, error: null }; },
+    });
+    const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
+    expect(out.action).toBe('hold-and-surface');
+    expect(out.consultRowId).toBe('row-xyz-789');
+    expect(capturedOpts).toMatchObject({ targetRoleHint: 'solomon', select: 'id', single: true });
+  });
+
+  it('FR-1: an insert error is readback-verified as a failure -- consultRowId is absent (never a stale/wrong id), and the lane still does not throw (non-blocking contract preserved)', async () => {
+    const { deps } = makeDeps({
+      insertCoordinationRow: async () => ({ data: null, error: { message: 'insert boom' } }),
+    });
+    const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
+    expect(out.action).toBe('hold-and-surface');
+    // performBoundedConsult's hold-and-surface arm omits the key on a falsy value -- same
+    // omit-if-falsy convention already used for correlationId, not a null placeholder.
+    expect(out.consultRowId).toBeUndefined();
+  });
+
+  it('FR-1: a legacy insertCoordinationRow that returns nothing (pre-fix shape) degrades gracefully -- consultRowId absent, never throws', async () => {
+    const { deps } = makeDeps({
+      insertCoordinationRow: async () => undefined,
+    });
+    const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
+    expect(out.action).toBe('hold-and-surface');
+    expect(out.consultRowId).toBeUndefined();
+  });
+
   it('omitting the addressee passes undefined rather than inventing one', async () => {
     // The degrade path: no addressee resolved upstream must not fabricate a plausible-looking one,
     // because a WRONG addressee is worse than none — it would re-point the pronouns confidently.
