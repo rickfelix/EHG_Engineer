@@ -10,7 +10,9 @@ function makeMockSupabase(children) {
   return {
     from: () => ({
       select: () => ({
-        eq: () => Promise.resolve({ data: children, error: null }),
+        eq: () => ({
+          limit: () => Promise.resolve({ data: children, error: null }),
+        }),
       }),
     }),
   };

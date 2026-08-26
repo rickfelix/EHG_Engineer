@@ -188,6 +188,29 @@ describe('getFilteredRetrospective — HANDOFF exclusion (NORMALIZE-HANDOFF-RETR
  * stale pre-LEAD-TO-PLAN handoff retros fleet-wide, the exact thing the gate exists to block (covered
  * by the pre-boundary-retro-fails case below).
  */
+/**
+ * Mirrors PostgREST .or('col.is.null,col.eq.X') / .or('a.gt.T,b.gt.T') semantics for
+ * the hand-rolled mocks below. Each .or() call the real client makes is an independent
+ * OR-group; multiple .or() calls AND together (verified live against postgrest-js:
+ * distinct calls append separate `or=` query params rather than the last overwriting
+ * the first -- TESTING sub-agent LEAD evidence bbb6f618-be3e-4f03-9933-19128cd42075).
+ * getFilteredRetrospective relies on exactly that to AND its retro_type-admission group
+ * with its created_at/updated_at freshness group (two separate .or() calls).
+ */
+function evalOrGroup(row, orStr, { castGtValue } = {}) {
+  return orStr.split(',').some((clause) => {
+    const m = clause.match(/^([a-zA-Z_]+)\.(is|eq|gt)\.(.*)$/);
+    if (!m) return false;
+    const [, col, op, rawVal] = m;
+    if (op === 'is') return rawVal === 'null' ? row[col] == null : row[col] === rawVal;
+    if (op === 'eq') return row[col] === rawVal;
+    // op === 'gt'
+    if (row[col] == null) return false;
+    const threshold = castGtValue ? castGtValue(rawVal) : new Date(rawVal).getTime();
+    return new Date(row[col]).getTime() > threshold;
+  });
+}
+
 function buildHandoffPredicateSupabase({ handoffRows = [], rows = [] } = {}) {
   const handoffChain = () => {
     const eqs = {};
@@ -208,19 +231,18 @@ function buildHandoffPredicateSupabase({ handoffRows = [], rows = [] } = {}) {
   // Reuse the retrospectives predicate chain shape from buildPredicateSupabase.
   const retroChain = () => {
     const eqs = {};
-    let orPred = null; let gtPred = null; let orderDesc = false;
+    const orPreds = []; let orderDesc = false;
     const c = {
       select: () => c,
       eq: (col, val) => { eqs[col] = val; return c; },
-      or: (str) => { orPred = str; return c; },
-      gt: (col, val) => { gtPred = { col, val }; return c; },
+      or: (str) => { orPreds.push(str); return c; },
+      gt: () => c,
       is: () => c,
       order: (_col, opts) => { orderDesc = opts && opts.ascending === false; return c; },
       limit: () => c,
       maybeSingle: () => {
         let out = rows.filter((r) => Object.entries(eqs).every(([k, v]) => r[k] === v));
-        if (orPred) out = out.filter((r) => r.retrospective_type == null || r.retrospective_type === 'SD_COMPLETION');
-        if (gtPred) out = out.filter((r) => r[gtPred.col] > gtPred.val);
+        for (const orStr of orPreds) out = out.filter((r) => evalOrGroup(r, orStr));
         if (orderDesc) out = [...out].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
         return Promise.resolve({ data: out[0] || null, error: null });
       },
@@ -354,6 +376,30 @@ describe('retro-gate freshness boundary is pinned to LEAD-TO-PLAN (SD-FDBK-INFRA
     const { retrospective } = await getFilteredRetrospective(sdUuid, null, supabase);
     expect(retrospective).toBeNull(); // freshness filter still rejects a stale pre-LEAD retro
   });
+
+  it('end-to-end: a retro created BEFORE the boundary but UPDATED after it PASSES (SD-LEO-INFRA-COMPLETION-INTEGRITY-REPAIR-001, feedback 005182bf)', async () => {
+    // enhanceRetrospective() performs a legitimate in-place UPDATE that bumps the
+    // trigger-maintained updated_at column but never touches created_at. A
+    // created_at-only freshness check made such a retro invisible to this gate even
+    // though it now genuinely satisfies freshness.
+    const supabase = buildHandoffPredicateSupabase({
+      handoffRows: [
+        { sd_id: sdUuid, from_phase: 'LEAD', to_phase: 'PLAN', status: 'accepted', accepted_at: leadToPlanAccepted },
+      ],
+      rows: [
+        {
+          id: 'updated-in-place',
+          sd_id: sdUuid,
+          retro_type: 'SD_COMPLETION',
+          retrospective_type: null,
+          created_at: '2026-03-15T00:00:00.000Z', // < T1 — would fail on created_at alone
+          updated_at: '2026-04-10T00:00:00.000Z', // > T1 — the enhanceRetrospective() bump
+        },
+      ],
+    });
+    const { retrospective } = await getFilteredRetrospective(sdUuid, null, supabase);
+    expect(retrospective?.id).toBe('updated-in-place');
+  });
 });
 
 /**
@@ -373,27 +419,24 @@ function buildSessionTzCastSupabase({ handoffRow = null, rows = [] } = {}) {
 
   const retroChain = () => {
     const eqs = {};
-    let orPred = null; let gtPred = null; let orderDesc = false;
+    const orPreds = []; let orderDesc = false;
+    // Emulate Postgres casting a naive literal via the session TimeZone (bug reproduction);
+    // an already-explicit-UTC value casts as its true absolute instant (the fix).
+    const castGtValue = (rawVal) => {
+      const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(rawVal);
+      return hasTZ ? new Date(rawVal).getTime() : new Date(`${rawVal}Z`).getTime() + SESSION_TZ_OFFSET_MS;
+    };
     const c = {
       select: () => c,
       eq: (col, val) => { eqs[col] = val; return c; },
-      or: (str) => { orPred = str; return c; },
-      gt: (col, val) => { gtPred = { col, val }; return c; },
+      or: (str) => { orPreds.push(str); return c; },
+      gt: () => c,
       is: () => c,
       order: (_col, opts) => { orderDesc = opts && opts.ascending === false; return c; },
       limit: () => c,
       maybeSingle: () => {
         let out = rows.filter((r) => Object.entries(eqs).every(([k, v]) => r[k] === v));
-        if (orPred) out = out.filter((r) => r.retrospective_type == null || r.retrospective_type === 'SD_COMPLETION');
-        if (gtPred) {
-          const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(gtPred.val);
-          // Emulate Postgres casting a naive literal via the session TimeZone (bug reproduction);
-          // an already-explicit-UTC value casts as its true absolute instant (the fix).
-          const boundaryMs = hasTZ
-            ? new Date(gtPred.val).getTime()
-            : new Date(`${gtPred.val}Z`).getTime() + SESSION_TZ_OFFSET_MS;
-          out = out.filter((r) => new Date(r[gtPred.col]).getTime() > boundaryMs);
-        }
+        for (const orStr of orPreds) out = out.filter((r) => evalOrGroup(r, orStr, { castGtValue }));
         if (orderDesc) out = [...out].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
         return Promise.resolve({ data: out[0] || null, error: null });
       },
@@ -531,6 +574,24 @@ describe('isValidPreflightRetro', () => {
   it('rejects a stale candidate (created_at <= cutoff)', () => {
     expect(isValidPreflightRetro({ ...validCandidate, created_at: cutoff }, sdUuid, cutoff)).toBe(false);
     expect(isValidPreflightRetro({ ...validCandidate, created_at: '2026-03-01T00:00:00.000Z' }, sdUuid, cutoff)).toBe(false);
+  });
+
+  it('accepts a candidate created before the cutoff but updated after it (SD-LEO-INFRA-COMPLETION-INTEGRITY-REPAIR-001, feedback 005182bf)', () => {
+    // Mirrors getFilteredRetrospective's created_at/updated_at freshness check -- a stashed
+    // candidate must not be rejected for a reason a fresh query would no longer reject for.
+    expect(isValidPreflightRetro(
+      { ...validCandidate, created_at: '2026-03-01T00:00:00.000Z', updated_at: '2026-04-10T00:00:00.000Z' },
+      sdUuid,
+      cutoff
+    )).toBe(true);
+  });
+
+  it('still rejects when both created_at and updated_at are at or before the cutoff', () => {
+    expect(isValidPreflightRetro(
+      { ...validCandidate, created_at: '2026-03-01T00:00:00.000Z', updated_at: '2026-03-15T00:00:00.000Z' },
+      sdUuid,
+      cutoff
+    )).toBe(false);
   });
 });
 
