@@ -34,7 +34,10 @@ async function fetchAllCompleted() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_key, status, current_phase, completion_date, progress')
+      // 'progress' is a known-dead column (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001) --
+      // 'progress_percentage' is the live one, kept here for diagnostic display only (it
+      // plays no role in isFalseCompletion()'s actual predicate).
+      .select('sd_key, status, current_phase, completion_date, progress_percentage')
       .eq('status', 'completed')
       .range(from, from + 999);
     if (error) throw new Error(error.message);
@@ -51,7 +54,7 @@ const anomalous = rows.filter(isFalseCompletion);
 
 console.log(`false-completion census — completed SDs=${rows.length} anomalous=${anomalous.length}`);
 for (const sd of anomalous) {
-  console.log(`  ${sd.sd_key}  current_phase=${sd.current_phase ?? 'null'} completion_date=${sd.completion_date ?? 'null'} progress=${sd.progress ?? 'null'}`);
+  console.log(`  ${sd.sd_key}  current_phase=${sd.current_phase ?? 'null'} completion_date=${sd.completion_date ?? 'null'} progress_percentage=${sd.progress_percentage ?? 'null'}`);
 }
 
 if (!assertMode) {

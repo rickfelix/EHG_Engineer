@@ -128,7 +128,9 @@ export class OrchestratorCompletionGuardian {
   async validateChildren() {
     const { data: children, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, title, status, progress')
+      // 'progress' is a known-dead column (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001) --
+      // dropped since nothing in this method ever read it.
+      .select('id, title, status')
       .eq('parent_sd_id', this.sdId);
 
     if (error) {
@@ -612,11 +614,15 @@ export class OrchestratorCompletionGuardian {
     // completion lesson -- pulling it in produced generic, verbatim-copied parent
     // content that scored 33% on the SD-completion readiness rubric (feedback
     // ea46e576-981b-41a3-a17a-5fe76cdbe637).
+    // .limit(500) makes this provably bounded (count-truncation-diff-lint) rather than
+    // relying only on .in('sd_id', ...)'s cardinality: the row count can never exceed
+    // this orchestrator's child count, which is never remotely close to 500 in practice.
     const { data: childRetros } = await supabase
       .from('retrospectives')
       .select('sd_id, key_learnings, what_went_well, what_needs_improvement, action_items')
       .in('sd_id', this.childData.map(c => c.id))
-      .eq('retro_type', 'SD_COMPLETION');
+      .eq('retro_type', 'SD_COMPLETION')
+      .limit(500);
 
     // Aggregation (dedupe + labeled fallbacks) is a pure function, unit-tested directly
     // in lib/quality/build-retrospective-content.test.js -- see that file for coverage
