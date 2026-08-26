@@ -3,9 +3,9 @@
 ## Metadata
 - **Category**: Infrastructure
 - **Status**: Approved
-- **Version**: 1.0.0
-- **Author**: SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001
-- **Last Updated**: 2026-08-24
+- **Version**: 2.0.0
+- **Author**: SD-LEO-INFRA-CHAIRMAN-DECISION-LANE-001, SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002
+- **Last Updated**: 2026-08-26
 - **Tags**: chairman, solomon, consult, sms, cron, decision-lane, deployment
 
 ## Overview
@@ -31,27 +31,20 @@ attempts to release each one via `releaseHeldSend()` (`lib/adam/chairman-held-se
 | Release mechanism | `lib/adam/chairman-held-send-release.js` — `resolveVerifiedAnswer` / `decideRelease` / `releaseHeldSend` |
 | Release sweep | `scripts/cron/chairman-held-sends-release-sweep.mjs` |
 | Workflow | `.github/workflows/chairman-held-sends-release-cron.yml`, `schedule: */15 * * * *` |
-| Migration gate | **`@chairman-gated`** — deliberately has no `@approved-by` line. Requires the chairman to add one matching their git config email and run `node scripts/apply-migration.js database/migrations/20260824_chairman_held_sends.sql --prod-deploy` with a single-use token. **Not yet applied as of this writing.** |
+| Migration gate | Base table (`20260824_chairman_held_sends.sql`) is `@chairman-gated` and has been chairman-applied and live since 2026-08-25. The FR-3 reply-field columns (`database/migrations/20260826_chairman_held_sends_reply_fields.sql`) are a NEW, separate, self-applicable migration — bare nullable `ADD COLUMN`/`COMMENT ON COLUMN` only, no `@chairman-gated` header needed, applied directly at EXEC. |
 | Retention | `lib/retention/policies.js` — `chairman_held_sends`, 90-day hot window, `mode: 'archive'` |
 | Operator-contract cadence keys | `strategic_directives_v2.metadata.operator_capability_keys = ['gha_cron:chairman-held-sends-release-cron.yml', 'cron_script:chairman-held-sends-release-sweep.mjs']` |
 
-## Pre-migration behavior (current state)
+## Migration status (as of SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002)
 
-Every call site that reads or writes `chairman_held_sends` is fail-soft or unreachable while the
-table does not exist, verified by direct source read (not assumed):
-
-- The hold-persist INSERT (`chairman-sms-gate/index.js`) is wrapped in a try/catch that never
-  re-throws — a missing-table error is loud-logged only; the SMS send is correctly held either
-  way.
-- The sweep's held-rows read pattern-matches PostgREST's `schema cache`/`does not exist` wording
-  and returns `exitCode: EXIT_OK` with `summary.tableApplied: false` **before** the per-row loop
-  ever runs. This means the sweep does not go CI-red every 15 minutes pre-migration.
-- Because of that short-circuit, `releaseHeldSend()`'s three `chairman_held_sends` call sites
-  (claim, unclaim, release-write) are **unreachable**, not merely fail-soft, until the migration
-  lands — they are only invoked from the sweep's per-row loop.
-
-`scripts/lint/schema-reference-allowlist.json`'s `_chairman_held_sends_note` documents this in
-detail and names the removal condition.
+Both migrations are now live. The base table has been chairman-applied since 2026-08-25; the
+FR-3 reply-field columns landed 2026-08-26. The fail-soft/unreachable behavior described in the
+original (v1.0.0) version of this runbook was real for the pre-migration window but no longer
+applies — the sweep's held-rows read no longer short-circuits on `table_not_yet_applied`, and
+every `chairman_held_sends` call site in `releaseHeldSend()` (claim, unclaim, release-write) is
+now genuinely reachable in production. `scripts/lint/schema-reference-allowlist.json`'s
+`chairman_held_sends` entry (and its `_chairman_held_sends_note`) were removed as part of FR-7,
+after `npm run schema:snapshot:lint` was re-run to pick up the new columns.
 
 ## Anti-forgery design (release verification)
 
@@ -100,8 +93,54 @@ folded into "still held."
    triple before PLAN-TO-LEAD would pass — the cron workflow, retention policy entry, and
    `operator_capability_keys` metadata all trace back to that gate.
 
-## After the chairman applies the migration
+## Post-migration checklist (completed)
 
-1. Apply: `node scripts/apply-migration.js database/migrations/20260824_chairman_held_sends.sql --prod-deploy` (requires an `@approved-by` line added by the chairman first).
-2. Remove `chairman_held_sends` from `scripts/lint/schema-reference-allowlist.json`'s `tables` array and its `_chairman_held_sends_note`, then re-run `npm run schema:snapshot:lint`.
-3. Confirm the sweep reports `summary.tableApplied: true` on its next run (`gh run list --workflow=chairman-held-sends-release-cron.yml`).
+1. ~~Apply the base migration~~ — done, chairman-applied 2026-08-25.
+2. ~~Remove `chairman_held_sends` from the schema-reference-lint allowlist~~ — done at FR-7
+   (SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002), after re-running `npm run schema:snapshot:lint`.
+3. Confirm the sweep reports `summary.tableApplied: true` on its next run:
+   `gh run list --workflow=chairman-held-sends-release-cron.yml`.
+
+## SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 — 7 defects fixed post-migration
+
+Once the base table was live, five defects surfaced that the pre-migration fail-soft paths had
+been masking, plus two operational gaps. All seven were fixed in one SD, each independently
+verified by at least one sub-agent pass (Explore + VALIDATION at LEAD; TESTING + SECURITY at
+EXEC; VALIDATION + REGRESSION at PLAN_VERIFICATION — 8 findings total across those passes, all
+closed, two confirmed via self-administered mutation tests):
+
+1. **Consult insert never readback-verified (FR-1)** — `lib/adam/presend-consult-lane.cjs` now
+   requests `{select:'id', single:true}` on the pre-send consult insert and forwards the row id
+   as `consultRowId` through `performBoundedConsult`'s hold-and-surface arm into
+   `chairman_held_sends.consult_row_id` — the column existed since the base migration but was
+   never written.
+2. **Release sweep never supplied a clock (FR-2)** — `scripts/cron/chairman-held-sends-release-sweep.mjs`
+   now defaults `context.now = Date.now()`, MERGED (not default-only) into `releaseDeps.context`,
+   so the rubric's quiet-hours check evaluates instead of throwing `gate_unavailable` on every
+   release attempt.
+3. **Schema missing the rubric-required reply fields (FR-3)** — new migration
+   `database/migrations/20260826_chairman_held_sends_reply_fields.sql` adds `reply_instruction`,
+   `reply_id` (singular — the rubric reads `message.replyId`, one string, never an array), and
+   `no_reply_consequence` (all nullable, no CHECK). Hold-time insert persists them; release-path
+   reconstruction restores them.
+4. **Double-composed SMS body on release (FR-4, CRITICAL)** — `sendChairmanSMS` unconditionally
+   re-composes the body from `options`/`replyInstruction`/`noReplyConsequence` on every call. A
+   held row's body is ALREADY composed at hold time, so re-dispatching it through the same gate on
+   release without a guard would fold those fields in a SECOND time — a visibly duplicated message
+   to the chairman. Caught at LEAD by VALIDATION before any code existed; fixed with
+   `opts.skipCompose`, which `releaseHeldSend()` always sets and no other caller can reach.
+5. **Non-UUID `--decision-id` silently dropped a hold (FR-5)** — `scripts/adam-chairman-decision.mjs`
+   now UUID-validates `--decision-id` before any write (a mistyped id previously failed the insert
+   with Postgres 22P02, caught-but-silent). Live execution is gated behind `isMainModule()` so the
+   validator (`parseDecisionArgs`) is unit-testable without side effects.
+6. **No detection for a stranded hold (FR-6)** — the existing `v_chairman_held_sends_unreconcilable`
+   view is db-tier-only and blind for a row's first 24h. A new, unit-testable JS function
+   (`detectOrphanedHeldSends`, in the sweep script) additionally flags `consult_row_id IS NULL`
+   (with a correlation id present), `attempts > 0`, and rows stuck in `status='releasing'` past one
+   sweep cadence. Two confirmed-dead historical rows (their underlying `chairman_decisions` row no
+   longer existed) were voided to `status='abandoned'` with documented provenance
+   (`scripts/one-off/void-stranded-chairman-held-sends-decision-002.mjs`).
+7. **Stale lint allowlist (FR-7)** — see "Migration status" above.
+
+Full detail, including the 8 sub-agent findings and how each was verified (not just re-read), is
+in the SD's retrospective: `retrospectives.id = cfbcd122-0ed6-406e-9819-fe9cfbf26d27`.
