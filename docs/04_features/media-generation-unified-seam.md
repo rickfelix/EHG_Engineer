@@ -1,10 +1,10 @@
 ---
-category: feature
-status: approved
-version: 1.0.0
-author: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
-last_updated: 2026-08-26
-tags: [feature, media-generation, creative, storage]
+Category: Feature
+Status: Approved
+Version: 1.0.0
+Author: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
+Last Updated: 2026-08-26
+Tags: feature, media-generation, creative, storage
 ---
 
 # Media Generation: Unified Adapter Seam
