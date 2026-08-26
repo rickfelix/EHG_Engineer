@@ -652,7 +652,22 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
     try {
       const claudeDir = path.join(worktreePath, '.claude');
       if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
-      fs.copyFileSync(settingsLocalSrc, settingsLocalDst);
+      // SECURITY sub-agent finding (EXEC-phase review): a raw copyFileSync propagates WHATEVER
+      // top-level keys this file happens to carry -- today only permissions.allow/deny, but a
+      // future settings.local.json gaining `hooks` (arbitrary code execution) or `env` (secrets)
+      // would fan those into every worktree silently. Filter to the permission allow/deny/ask
+      // lists only -- the one thing this provisioning step exists to propagate -- so a schema
+      // change to the source file cannot widen what gets copied.
+      const parsed = JSON.parse(fs.readFileSync(settingsLocalSrc, 'utf8'));
+      const perms = (parsed && typeof parsed === 'object' && parsed.permissions) || {};
+      const filtered = {
+        permissions: {
+          allow: Array.isArray(perms.allow) ? perms.allow : [],
+          deny: Array.isArray(perms.deny) ? perms.deny : [],
+          ...(Array.isArray(perms.ask) ? { ask: perms.ask } : {})
+        }
+      };
+      fs.writeFileSync(settingsLocalDst, JSON.stringify(filtered, null, 2));
     } catch (err) {
       // Best-effort, matching this function's documented no-throw contract -- but log loudly
       // (not silently) so a provisioning failure is observable rather than an invisible gap.
