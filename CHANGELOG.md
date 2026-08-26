@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-26](#2026-08-26)
+  - [Infrastructure](#infrastructure)
 - [2026-08-25](#2026-08-25)
   - [Documentation](#documentation)
   - [Bugfix](#bugfix)
@@ -144,6 +146,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-26
+
+### Infrastructure
+
+- **A customer-support ticket loop existed only as a dormant, canned-string-only prototype with zero live callers, and the chairman's outreach ruling (no automated contact with a real human before S23+S24) had no code anywhere reading it** - PR #7556 (SD-LEO-GEN-NEED-WELL-THOUGHT-001)
+  - **What shipped**: extends the pre-existing `lib/support/intake-pipeline.js` with an LLM-based ticket-understanding and personalized-reply-crafting step (reusing the existing `lib/llm/client-factory.js` classification client), a new read-only Stripe support skill (`lib/support/stripe-support-skill.js`, charge/subscription/invoice diagnosis only, no mutation methods), and reply-delivery staging via the already-in-production `lib/marketing/autonomy-gate.js#checkPublishAuthorization()` -- the same mechanism `SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001` already uses for outbound marketing. This makes "no reply reaches a real human" true **by construction** (zero send-capable code anywhere in the diff, verified by a static-scan + one-hop-import test), independent of the newer `stage-gate-predicate.js` mechanism which LEAD-phase investigation found is shipped but unarmed (its feature flag has zero rows in `leo_feature_flags`) and fails open.
+  - **A LEAD-phase deep-dive corrected the design before any code was written**: the original plan proposed building a new stage/outreach-ruling-reading gate; independent validation-agent + Explore sub-agent investigation found this would duplicate the shipped-but-inert `stage-gate-predicate.js`, and that the fleet's actual proven mechanism for "an automated loop wants to contact a real human who may not be cleared yet" is `checkPublishAuthorization()`'s staging pattern -- reused instead of re-derived.
+  - **Three rounds of adversarial review, each catching a real defect the prior round missed**: prospective TESTING (before code existed) found "fail-open on error" doesn't cover a HANG (an unbounded LLM/Stripe await would never trigger fail-open) and that the original design would have sent the customer's email to a third-party LLM; retrospective TESTING (after code existed) found neither new timeout actually cleared its `setTimeout`, keeping a short-lived process alive for the full window on every happy-path ticket; SECURITY found the staging mechanism's `contentId` used a caller-suppliable `ticket_id`, letting a submitter reuse an already-approved `content_ref` for entirely different content -- fixed by deriving `contentId` from the actual staged reply content instead.
+  - **PLAN_VERIFICATION found and honestly dispositioned a real gap rather than silently claiming it closed**: the PRD's "fenced-identity AltifyAI end-to-end" acceptance criterion is proven only at the mock level (58 passing tests) -- running it live against AltifyAI's real venture row would mint a genuine, visible chairman-decision approval request for a synthetic test ticket (AltifyAI is not a fixture venture). Deferred as a fast-follow DDL-tier test rather than run against production from a worker session.
+  - **Verification**: LEAD-TO-PLAN 96%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 87% (after 2 rounds of TESTING + 1 SECURITY review), PLAN-TO-LEAD 92%, LEAD-FINAL-APPROVAL 95%. `tests/unit/support/`: 58/58 passing; zero regressions across 336 tests in the reused `autonomy-gate.js`/`stripe-client.js` modules.
 
 ## 2026-08-25
 
