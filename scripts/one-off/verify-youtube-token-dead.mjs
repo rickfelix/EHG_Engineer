@@ -6,6 +6,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const ROW_ID = '5ea38ba3-6b46-4f17-be5a-3a87a4075143';
 
@@ -34,4 +35,6 @@ async function main() {
   console.log('Refresh-attempt body:', bodyText);
 }
 
-main().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
+}
