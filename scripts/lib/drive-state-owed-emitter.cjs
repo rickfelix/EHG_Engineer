@@ -81,8 +81,11 @@ async function emitOwedActions({ supabase, owedActions, targetSession, senderSes
     // only, today), is appended RAW to body -- NOT through safeCitation(), which caps at 160 chars
     // and strips control characters, including newlines. A multi-line numbered recovery packet run
     // through that would silently collapse to an unreadable fragment; body itself carries no such cap.
+    // FR-6 / risks[2] mitigation (VERIFY-phase VALIDATION finding V3): this entry must say
+    // "advisory only" or equivalent -- the packet's own recovery steps are addressed to a human,
+    // never auto-executed, and the heading makes that explicit rather than merely implicit.
     const keystrokeSuffix = Array.isArray(oa.keystroke_packets) && oa.keystroke_packets.length
-      ? '\n\nRECOVERY:\n' + oa.keystroke_packets.join('\n\n')
+      ? '\n\nRECOVERY (advisory only -- no automatic action will be taken; a human must act on these steps):\n' + oa.keystroke_packets.join('\n\n')
       : '';
 
     const body =

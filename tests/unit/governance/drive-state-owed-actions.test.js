@@ -113,7 +113,9 @@ describe('SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-4/D2 — keystroke_packets
 
     expect(lane.rows).toHaveLength(1);
     const { body, payload } = lane.rows[0];
-    expect(body).toContain('RECOVERY:');
+    expect(body).toContain('RECOVERY');
+    // FR-6 / risks[2] mitigation (V3): the entry must say "advisory only" or equivalent.
+    expect(body).toContain('advisory only');
     expect(body).toContain('press Enter to approve');
     expect(body).toContain('\n'); // newlines survive -- safeCitation would have stripped them
     expect(payload.keystroke_packets).toEqual([longPacket]);
@@ -124,7 +126,7 @@ describe('SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-4/D2 — keystroke_packets
     const owed = deriveOwedActions({ verdict: verdict({ chairman_decisions: { state: STATE.STALLED } }) });
     await emitOwedActions({ supabase: lane, owedActions: owed, senderSession: 'test-session' });
 
-    expect(lane.rows[0].body).not.toContain('RECOVERY:');
+    expect(lane.rows[0].body).not.toContain('RECOVERY');
     expect(lane.rows[0].payload.keystroke_packets).toBeNull();
   });
 });
