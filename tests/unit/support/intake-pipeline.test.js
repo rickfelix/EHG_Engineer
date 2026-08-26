@@ -391,16 +391,45 @@ describe('disposeSupportTicket -- crafted reply + stripe diagnosis wiring (round
 });
 
 describe('stageReplyDelivery -- FR-3 round 2 (staged via checkPublishAuthorization, never sent)', () => {
-  it('stages AFTER a successful auto-resolve write, with channelType=support_reply and no explicit correlationId', async () => {
+  it('stages AFTER a successful auto-resolve write, with channelType=support_reply, a content-derived contentId, and no explicit correlationId', async () => {
     const sb = makeSb();
     const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
     const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
     expect(d.staging.staged).toBe(true);
-    expect(checkPublishAuthorization).toHaveBeenCalledWith(expect.objectContaining({
-      ventureId: 'v-1', channelType: 'support_reply', contentId: ticket.ticket_id,
-    }));
+    expect(checkPublishAuthorization).toHaveBeenCalledWith(expect.objectContaining({ ventureId: 'v-1', channelType: 'support_reply' }));
     const call = vi.mocked(checkPublishAuthorization).mock.calls[0][0];
     expect(call.correlationId).toBeUndefined();
+    // SECURITY finding (EXEC-TO-PLAN, evidence 41066290): contentId must NOT be the raw,
+    // caller-spoofable ticket_id -- it must be derived from the actual staged content.
+    expect(call.contentId).not.toBe(ticket.ticket_id);
+    expect(typeof call.contentId).toBe('string');
+    expect(call.contentId.length).toBeGreaterThan(0);
+  });
+
+  it('SECURITY fix verification: two tickets with the SAME caller-supplied ticket_id but DIFFERENT resolved content never produce the same contentId (closes the accepted-approval-reuse spoof)', async () => {
+    // Genuinely different resolved content is required for this to be a meaningful test -- both
+    // tickets fall to the [canned] fallback here (no LLM/Stripe mock override), so they must land
+    // in DIFFERENT categories (different canned strings). Two same-category canned-fallback
+    // tickets legitimately sharing a contentId is correct content-based dedup, not a regression of
+    // this fix -- the vulnerability was ticket_id-based spoofing across genuinely DIFFERENT content.
+    const sb1 = makeSb();
+    const ticket1 = normalizeSupportTicket({ ticket_id: 'attacker-chosen-id', subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const triage1 = triageSupportTicket(ticket1);
+    expect(triage1.category).toBe('account');
+    await disposeSupportTicket(sb1, ticket1, triage1);
+    const firstContentId = vi.mocked(checkPublishAuthorization).mock.calls[0][0].contentId;
+
+    vi.mocked(checkPublishAuthorization).mockClear();
+    const sb2 = makeSb();
+    const ticket2 = normalizeSupportTicket({ ticket_id: 'attacker-chosen-id', subject: 'how do i configure the setup', body: 'need the tutorial guide', venture_id: 'v-1' });
+    const triage2 = triageSupportTicket(ticket2);
+    expect(triage2.category).toBe('how_to');
+    expect(triage2.routing_decision).toBe('auto_resolve');
+    await disposeSupportTicket(sb2, ticket2, triage2);
+    const secondContentId = vi.mocked(checkPublishAuthorization).mock.calls[0][0].contentId;
+
+    expect(ticket1.ticket_id).toBe(ticket2.ticket_id); // same spoofed raw id...
+    expect(firstContentId).not.toBe(secondContentId); // ...but genuinely different content -> different staged contentId
   });
 
   it('does NOT stage when the write fails and the ticket downgrades to escalate', async () => {
