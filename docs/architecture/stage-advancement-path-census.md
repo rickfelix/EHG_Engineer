@@ -1,8 +1,8 @@
 ---
 category: architecture
 status: approved
-version: 1.1.0
-author: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 (+ SD-LEO-INFRA-STAGE-WRITER-CHOKE-001, 2026-08-25 addition)
+version: 1.2.0
+author: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 (+ SD-LEO-INFRA-STAGE-WRITER-CHOKE-001, SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B, 2026-08-25 additions)
 last_updated: 2026-08-25
 tags: [stage-advancement, artifact-gate, governance, census, canonical-writer]
 ---
@@ -253,6 +253,45 @@ explicitly) all live under `database/chairman-gated/`, staged only** — see tha
 `README.md` for the chairman-verbal-ceremony application process. A DDL test tier
 (`tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js`) exercises every trigger and RPC against
 an ephemeral Postgres in CI; production application remains a separate, later, human-run step.
+
+## Post-census addition (2026-08-25, SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B)
+
+`database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber.sql` (+ its
+`_DOWN.sql` mirror) inserts a new dedicated-venture-UAT stage at `stage_number=23` and shifts
+stage_number/`current_lifecycle_stage` 23-26 -> 24-27 across `venture_stages`, `ventures`,
+`chairman_decisions`, and `venture_stage_work` — staged, chairman-gated, `@approved-by: PENDING`,
+never auto-applied. The lint's static census-diff flagged 4 `current_lifecycle_stage` write
+statements in this new file; all 4 are re-emissions of already-censused behavior, not new gaps:
+
+- `fn_validate_stage_column()`'s `NEW.current_lifecycle_stage := 1` NULL-guard — the exact
+  pre-existing default-on-create pattern this file's allowlist comment already classes as
+  "validation only, no gating, no conflict with FR-7". This `CREATE OR REPLACE` only widens the
+  function's separate upper-bound check (`> 26` -> `> 27`, a 5th occurrence of the stale bound
+  found by dry-running this migration); the NULL-guard line itself is untouched.
+- `advance_venture_stage()`'s `SET current_lifecycle_stage = p_to_stage` — the same function as
+  path #3 above. This `CREATE OR REPLACE` only widens `p_to_stage`'s upper-bound validation
+  (`> 26` -> `> 27`); the artifact-check/gate-array logic path #3 documents is untouched.
+- `fn_advance_venture_stage()`'s `UPDATE ventures SET current_lifecycle_stage = p_to_stage, ...` —
+  the chokepoint itself, path #1 above. This `CREATE OR REPLACE` widens the same bound and fixes
+  a product-review gate literal (`p_from_stage=23 AND p_to_stage=24` -> `24 AND 25`, keeping the
+  chairman kill/promotion gate aligned with this SD's own renumber instead of manufacturing a new
+  desync — a SECURITY sub-agent finding, H-3) — the artifact-check/gate-array logic itself is
+  untouched.
+- The genuinely NEW write introduced by this SD: `UPDATE public.ventures SET
+  current_lifecycle_stage = current_lifecycle_stage + 1 ... WHERE current_lifecycle_stage BETWEEN
+  23 AND 26` (this migration's own Section 3 renumber shift). **Disposition: DELIBERATELY
+  EXEMPT** — not a business-logic stage advancement at all, but a one-time administrative
+  renumber of existing parked venture *positions* to keep them pointing at the same logical stage
+  after the catalog insert. Double-gated: (a) the file's own FR-6 preflight `RAISE EXCEPTION`s
+  outright if any `is_demo=false` (real) venture is currently parked in the 23-26 shift range,
+  restricting this write to demo/fixture ventures only; (b) the file-level chairman-approval gate
+  (`@approved-by: PENDING`, `DO NOT APPLY`) that every migration in this directory requires before
+  it ever runs in production.
+
+`scripts/lint/stage-advancement-chokepoint-allowlist.json` updated to add both files (mirroring
+the existing `20260825_ventures_stage_rpcs_self_stamp.sql` entry's disposition class for the same
+reason: a staged, chairman-gated file re-emitting already-censused RPC bodies via `CREATE OR
+REPLACE`).
 
 ## Zero-new-bypass guard
 

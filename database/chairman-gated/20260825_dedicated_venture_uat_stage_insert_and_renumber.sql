@@ -776,6 +776,17 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $function$;
 
+-- secdef-execute-revoke-lint (CI): CREATE OR REPLACE re-emits this SECURITY DEFINER function's
+-- full body, which the lint treats as "new" regardless of it being a pre-existing function this
+-- migration only widens a bound on. Re-asserting the grants explicitly is a NO-OP against live
+-- production (verified via pg_proc.proacl: currently EXECUTE is granted to authenticated and
+-- service_role only, anon/PUBLIC already absent) -- this is NOT a new lockdown, just making an
+-- already-correct posture auditable in-file. Unlike translate_historical_stage_number() (FR-4,
+-- section 8 below), authenticated genuinely needs this RPC: it is called client-side from the
+-- ehg repo's chairman decide/promote API routes and several client-writable EVA service paths.
+REVOKE EXECUTE ON FUNCTION public.advance_venture_stage(uuid, integer, integer, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.advance_venture_stage(uuid, integer, integer, text) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.fn_advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_handoff_data jsonb DEFAULT '{}'::jsonb, p_idempotency_key uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1026,6 +1037,11 @@ EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object('success', false, 'error', SQLERRM, 'venture_id', p_venture_id);
 END;
 $function$;
+
+-- secdef-execute-revoke-lint (CI): see the identical note above advance_venture_stage()'s
+-- REVOKE/GRANT -- same NO-OP-against-production reasoning, same live-callers rationale.
+REVOKE EXECUTE ON FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) TO authenticated, service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 8. FR-4 -- translate-at-read shim reconciled against the REAL 20260322 precedent, extended (see

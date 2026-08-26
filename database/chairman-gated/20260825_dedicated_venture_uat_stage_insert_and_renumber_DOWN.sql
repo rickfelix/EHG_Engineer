@@ -321,6 +321,14 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $function$;
 
+-- secdef-execute-revoke-lint (CI): mirrors the UP file's identical REVOKE/GRANT -- a NO-OP
+-- against live production grants (authenticated + service_role only, verified via pg_proc.proacl),
+-- re-asserted explicitly because this function is genuinely called client-side (ehg repo's
+-- chairman decide/promote API routes) so the blanket PUBLIC/anon revoke used for
+-- translate_historical_stage_number() below does not apply here.
+REVOKE EXECUTE ON FUNCTION public.advance_venture_stage(uuid, integer, integer, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.advance_venture_stage(uuid, integer, integer, text) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.fn_advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_handoff_data jsonb DEFAULT '{}'::jsonb, p_idempotency_key uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -561,6 +569,11 @@ EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object('success', false, 'error', SQLERRM, 'venture_id', p_venture_id);
 END;
 $function$;
+
+-- secdef-execute-revoke-lint (CI): see the identical note above advance_venture_stage()'s
+-- REVOKE/GRANT in this same file.
+REVOKE EXECUTE ON FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) TO authenticated, service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 3. Drop the historical shim views/function -- safe to run any time, no dependency on the
