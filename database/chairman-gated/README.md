@@ -921,3 +921,65 @@ positive control that `service_role` retains full access and `manage_eva_sync_st
 Rollback: `20260826_eva_sync_state_rls_lockdown_DOWN.sql` — restores the exact pre-migration
 policy and grants (re-opens the exposure; only apply if an undiscovered legitimate
 anon/authenticated caller surfaces post-apply).
+
+## Applying `20260826_creative_asset_variant_scores_rls_fix.sql`
+
+SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-C (FR-1). Closes a **live-proven cross-tenant write
+hole** on `public.creative_asset_variant_scores` (SECURITY evidence
+`9c3ebaf6-e37b-432c-9dc0-b0af0eaa5827`, independently re-measured by DATABASE before staging).
+
+Replace the `-- @approved-by: PENDING` header with the applying chairman's `git config user.email`
+and **commit the file first** — guard 2 (`git_committed`) rejects uncommitted changes and guard 3
+(`approver`) rejects a header that does not match the invoker.
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260826_creative_asset_variant_scores_rls_fix.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260826_creative_asset_variant_scores_rls_fix_DOWN.sql` — restores the **fail-closed**
+state (resolver and policy removed, RLS still enabled, no `authenticated` policy). It deliberately
+does NOT reinstate the vulnerable predicate; there is no rollback path back into the hole.
+
+## What it does
+
+The deployed `cavs_venture_access` policy constrained only `creative_asset_id` and declared no
+`WITH CHECK`, so Postgres reused that incomplete `USING` expression on the write path. Measured
+live in a rolled-back transaction: a tenant holding `user_company_access` to venture A
+successfully INSERTed `(own_asset_id, venture_B_variant_id)` as the `authenticated` role — FK
+integrity checks run as table owner and bypass RLS, so the cross-tenant foreign key did not stop
+it. Because both FKs on that table are NO ACTION by deliberate FR-9 design, the planted row then
+permanently blocked venture B from deleting its own `marketing_content_variants` row (23503), and
+venture B could neither see nor remove it because RLS correctly hid it. A denial-of-service
+plantable across a tenant boundary from entirely inside the attacker's own visible surface.
+
+**Why the obvious fix is wrong, and why this file is TIER-2 rather than a TIER-1 policy edit.**
+The natural correction is an inline `EXISTS` joining `marketing_content_variants` ->
+`marketing_content` and requiring the same venture. That predicate blocks the attack *and* every
+legitimate same-venture write. Postgres evaluates a policy expression as the querying role, so
+each table the expression reads has its own RLS applied — and `marketing_content_variants` /
+`marketing_content` scope `authenticated` through `ventures.created_by`, a **different ownership
+model** from the `user_company_access` model this table uses. Measured, with the fixture user
+holding company access to venture A: the inline-EXISTS variant returned 42501 for the cross-tenant
+INSERT (correct) *and* 42501 for the same-venture INSERT (a false negative), with
+`marketing_content_variants` visible-row count **0 of 2**. That is a silently dead table, not a
+secured one — and it is the shape the original SECURITY recommendation proposed, which is why it
+was re-measured rather than applied.
+
+Resolving the variant's venture therefore has to bypass those two tables' RLS, which requires a
+`SECURITY DEFINER` resolver (`public.cavs_variant_matches_venture(uuid,uuid)` — boolean rather
+than venture-id-returning, to minimise disclosure; `search_path` pinned; `EXECUTE` revoked from
+`PUBLIC` **and** from `anon` by name, since this project's `ALTER DEFAULT PRIVILEGES` entry grants
+anon/authenticated explicitly and a from-PUBLIC-only revoke cannot touch it — the SEC-M2 class
+above). `SECURITY DEFINER` is TIER-2, so the file cannot live in `database/migrations/` without
+becoming self-applying DDL that is nominally chairman-gated — the exact failure this directory
+exists to prevent.
+
+Post-apply verification is a `DO $verify$` block in the file itself (fails the apply if `with_check`
+is NULL, if either clause omits the resolver, if the resolver is not `SECURITY DEFINER`, if its
+`search_path` is unpinned, or if `anon` retains `EXECUTE`). Behavioural regression coverage is
+`tests/integration/creative-asset-variant-scores-rls-crosstenant.db.test.js`, which performs the
+real authenticated-role cross-tenant INSERT and asserts 42501 — that suite is expected to fail its
+PREFLIGHT until this ceremony runs.

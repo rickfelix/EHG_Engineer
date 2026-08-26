@@ -56,7 +56,7 @@ describeDb('creative_asset_variant_scores RLS (FR-1, TS-4 leg A2: catalog)', () 
 
   it('cavs_venture_access is wired to the authenticated role with a non-tautological qual', async () => {
     const { rows } = await client.query(
-      `SELECT policyname, roles, qual FROM pg_policies
+      `SELECT policyname, roles, qual, with_check FROM pg_policies
        WHERE tablename = 'creative_asset_variant_scores' AND policyname = 'cavs_venture_access'`
     );
     expect(rows).toHaveLength(1);
@@ -66,6 +66,19 @@ describeDb('creative_asset_variant_scores RLS (FR-1, TS-4 leg A2: catalog)', () 
     expect(rows[0].qual).toMatch(/creative_asset_id/);
     expect(rows[0].qual).toMatch(/user_company_access/);
     expect(rows[0].qual).not.toBe('true');
+
+    // REGRESSION (SECURITY evidence 9c3ebaf6-e37b-432c-9dc0-b0af0eaa5827): every assertion
+    // above was ALSO satisfied by the live-proven cross-tenant hole, which scoped
+    // creative_asset_id correctly and left variant_id entirely unconstrained. An assertion the
+    // vulnerable artifact passes is not a regression guard, so the two below -- which it could
+    // not pass -- are the load-bearing ones. Behavioural proof (a real authenticated
+    // cross-tenant INSERT being refused) lives in the sibling
+    // creative-asset-variant-scores-rls-crosstenant.db.test.js; this is the catalog echo of it.
+    expect(rows[0].qual).toMatch(/cavs_variant_matches_venture/);
+    // A NULL with_check makes Postgres silently reuse USING on the write path, which is how the
+    // incomplete read predicate became an exploitable write predicate.
+    expect(rows[0].with_check, 'with_check must be explicit, never NULL').not.toBeNull();
+    expect(rows[0].with_check).toMatch(/cavs_variant_matches_venture/);
   });
 
   it('cavs_service_role is a full-bypass policy scoped to service_role only', async () => {
