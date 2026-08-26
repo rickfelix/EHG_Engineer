@@ -1,9 +1,9 @@
 ---
 category: reference
 status: draft
-version: 1.5.0
+version: 1.8.0
 author: Rick Felix
-last_updated: 2026-08-16
+last_updated: 2026-08-26
 tags: [reference, auto-generated]
 ---
 # Infrastructure Hardening Patterns
@@ -1254,6 +1254,56 @@ pass" — every one of these five findings would have shipped invisibly past tha
 
 ---
 
+## Pattern: A gate requirement added by one child of a multi-child decomposition needs an explicit producer -- verify one exists before shipping, don't assume a sibling covers it
+
+**SD**: SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A
+
+**Symptom**: This SD's scope (inherited from a 5-child parent decomposition) was to add a new
+`venture_artifacts` type (`launch_usage_signal`) to the `launch_readiness_gate` (Stage 23) kill
+gate's `required_artifacts` array. As originally scoped, nothing in the SD family actually WROTE
+that artifact type: this child built the ingestion RPC (`venture_usage_events` rows only), and the
+sibling explicitly named as "the AltifyAI witness" was scoped to write usage *events* too -- not
+the `venture_artifacts` row the gate itself checks. A gate requirement and its producer are two
+independent claims; the decomposition satisfied the first and silently assumed the second.
+
+This repo has already shipped exactly this failure once: `tests/unit/eva/artifact-type-producer-
+parity.test.js`'s own header records `truth_demand_thesis` -- "declared, gate-enforced at S21, and
+writable by nothing -- passed CI continuously while every venture reaching S21 blocked in
+production." Both existing producer-parity guards iterate the JS `ARTIFACT_TYPES` registry only,
+so registering the new type there (a one-line, easy-to-remember step) makes those specific guards
+pass on a claim that -- without a producer -- is still false.
+
+**Why it wasn't caught until PLAN-phase sub-agent review**: the parent SD's scope text read as
+complete (schema + RPC + "Stage-23 gate producer" as one child's title) and the sibling division
+of labor looked clean on paper (one child per numbered scope item). Nobody had traced, end to end,
+which specific artifact_type write satisfies which specific required_artifacts entry -- that trace
+only happened when a DESIGN sub-agent review, prompted to look for interface/UI-adjacent concerns,
+noticed the gate/artifact UI surface and asked "who writes this row" as a byproduct.
+
+**The fix**: rather than reassign the producer role to a different sibling (a cross-SD
+coordination cost, and still just as easy to under-verify), the RPC that owns the underlying event
+ingestion self-produces its own `venture_artifacts` witness row on successful ingestion, in the
+same transaction, with no exception handler around it -- the same code path that creates the
+signal IS the code path that proves it, so there is no second thing to keep in sync.
+
+**Generalization**: whenever an SD (or any child of a multi-child decomposition) adds a value to a
+gate's required-artifact list, require an explicit, cited answer to "what specific code path
+writes a `venture_artifacts` row of this exact `artifact_type`, and did you verify that code path
+actually runs before this gate is reachable" -- before LEAD/PLAN approval, not after. "A sibling
+covers it" is not verification; find the sibling's actual scope text and confirm it names a
+`venture_artifacts` write, not merely a related event or data write. A producer-parity CI guard
+that only checks a JS registry constant (as this repo's existing guards do) cannot see a SQL
+function body -- a DB-only producer needs its own source-pin test (read the migration file
+in-test, assert the producer statement is present, mutation-verify it) as a second, independent
+proof, not just the registry entry.
+
+### Files Modified
+`database/chairman-gated/20260826_venture_usage_events_rpc.sql` (self-producing upsert),
+`lib/eva/artifact-types.js` (registry + `ARTIFACT_TYPE_BY_STAGE[23]`),
+`tests/unit/eva/venture-usage-events-producer-source-pin.test.js` (new, mutation-verified).
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -1274,3 +1324,4 @@ pass" — every one of these five findings would have shipped invisibly past tha
 | 1.5.0 | 2026-08-16 | Added ratchet-guard comparison-logic testability pattern from SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 |
 | 1.6.0 | 2026-08-25 | Added self-referential retry/backoff fixed-point pattern from SD-LEO-INFRA-STAGE-GATE-RETRY-001 |
 | 1.7.0 | 2026-08-25 | Added recurrence-fix-needs-its-own-adversarial-review pattern from SD-LEO-INFRA-SESSION-TICK-CLEAR-001 |
+| 1.8.0 | 2026-08-26 | Added gate-requirement-needs-a-verified-producer pattern from SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A |
