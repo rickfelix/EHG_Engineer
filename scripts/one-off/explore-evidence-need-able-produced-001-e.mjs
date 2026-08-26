@@ -12,7 +12,7 @@
  * `git show origin/main:tests/contamination-scan.test.js`).
  */
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
-import { toCanonicalRepoPath } from '../../lib/sub-agents/resolve-repo.js';
+import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
@@ -71,7 +71,6 @@ const SUMMARY = 'Explore LEAD_TO_PLAN verdict: PASS with one real defect found a
   + 'yet finalized (no PRD), so this SD\'s assumed contract should be re-verified once Child A ships.';
 
 async function main() {
-  const repoRoot = 'C:\\Users\\rickf\\Projects\\_EHG\\altifyai\\.worktrees\\SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-E';
   const supabase = await getSupabaseClient();
 
   const results = {
@@ -91,11 +90,9 @@ async function main() {
     ],
     validation_mode: 'prospective',
     metadata: {
-      repo_path: toCanonicalRepoPath(repoRoot),
-      executed_from_cwd: process.cwd(),
       recorded_by: 'scripts/one-off/explore-evidence-need-able-produced-001-e.mjs',
       assessment_type: 'lead_phase_due_diligence',
-      target_repo: 'altifyai',
+      investigation_target_repo: 'altifyai (sibling repo, isolated worktree -- see below); repo_path/executed_from_cwd below are stamped against this SD\'s declared target_application (EHG_Engineer) per the SUB_AGENT_REPO_RESOLUTION gate contract, not the investigation target',
       target_branch: 'feat/SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-E',
       files_read: [
         'lib/events/track.js',
@@ -110,6 +107,14 @@ async function main() {
       test_suite_result: '492 passed, 1 pre-existing unrelated failure (tests/contamination-scan.test.js)',
     },
   };
+
+  const resolution = await resolveSubAgentRepo({
+    sdId: SD_KEY,
+    targetApplication: 'EHG_Engineer',
+    subAgentCode: 'EXPLORE',
+    supabase,
+  });
+  applySubAgentRepoVerdict(results, resolution);
 
   const stored = await storeSubAgentResults('EXPLORE', SD_KEY, null, results, {
     phase: 'LEAD_TO_PLAN',
