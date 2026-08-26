@@ -18,7 +18,8 @@ function stubSupabase(rows) {
     select: (cols) => { calls.select = cols; return chain; },
     in: (col, vals) => { calls.in = [col, vals]; return chain; },
     neq: (col, val) => { calls.neq = [col, val]; return chain; },
-    order: (col, opts) => { calls.order = [col, opts]; return Promise.resolve({ data: rows, error: null }); },
+    order: (col, opts) => { calls.order = [col, opts]; return chain; },
+    limit: (n) => { calls.limit = n; return Promise.resolve({ data: rows, error: null }); },
   };
   return { client: chain, calls };
 }
@@ -112,7 +113,8 @@ describe('fetchState (HIGH-2 fix, TESTING sub-agent EXEC review)', () => {
       select: () => client,
       in: () => client,
       neq: () => client,
-      order: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }),
+      order: () => client,
+      limit: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }),
     };
     await expect(fetchState(client)).rejects.toThrow(/connection reset/);
   });

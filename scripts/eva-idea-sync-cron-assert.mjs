@@ -41,7 +41,11 @@ export async function fetchState(supabase) {
     .select('source_type, source_identifier, last_sync_at, consecutive_failures, updated_at')
     .in('source_type', SOURCE_TYPES)
     .neq('source_identifier', YOUTUBE_CREDENTIAL_ROW)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    // count-truncation-diff-lint: explicit, provable bound. eva_sync_state has exactly one row
+    // per (source_type, source_identifier) pair (UNIQUE constraint) and only 2 source_types
+    // exist today (todoist, youtube) — 50 is a generous ceiling, not a real-world count.
+    .limit(50);
   if (error) {
     throw new Error(`eva_sync_state read failed: ${error.message}`);
   }

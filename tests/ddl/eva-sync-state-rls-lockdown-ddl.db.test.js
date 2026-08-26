@@ -134,12 +134,15 @@ afterAll(async () => {
 
 describe('negative control: pre-migration baseline reproduces the live exposure', () => {
   it('select_eva_sync_state grants authenticated a qual=true SELECT policy', async () => {
+    // CI finding (this SD's own first CI run): pg_policies.roles is name[], and the pg driver
+    // returns it as the raw Postgres array-literal string ("{authenticated}"), not a parsed JS
+    // array -- array_to_string() sidesteps the driver's type-parsing behavior entirely.
     const { rows } = await client.query(`
-      SELECT roles, cmd, qual FROM pg_policies
+      SELECT array_to_string(roles, ',') AS roles, cmd, qual FROM pg_policies
       WHERE schemaname='public' AND tablename='eva_sync_state' AND policyname='select_eva_sync_state'
     `);
     expect(rows).toHaveLength(1);
-    expect(rows[0].roles).toEqual(['authenticated']);
+    expect(rows[0].roles).toBe('authenticated');
     expect(rows[0].cmd).toBe('SELECT');
     expect(rows[0].qual).toBe('true');
   });
@@ -200,12 +203,13 @@ describe('TS-3b / FR-3 AC-3: positive control — service_role is unaffected', (
   });
 
   it('manage_eva_sync_state (service_role, ALL, qual=true) is untouched', async () => {
+    // See the negative-control test above for why array_to_string() is used here.
     const { rows } = await client.query(`
-      SELECT roles, cmd, qual FROM pg_policies
+      SELECT array_to_string(roles, ',') AS roles, cmd, qual FROM pg_policies
       WHERE schemaname='public' AND tablename='eva_sync_state' AND policyname='manage_eva_sync_state'
     `);
     expect(rows).toHaveLength(1);
-    expect(rows[0].roles).toEqual(['service_role']);
+    expect(rows[0].roles).toBe('service_role');
     expect(rows[0].cmd).toBe('ALL');
     expect(rows[0].qual).toBe('true');
   });
