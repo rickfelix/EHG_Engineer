@@ -278,7 +278,7 @@ describe('the REAL $verify$ block (extracted from the migration file, not hand-c
     await client.query('BEGIN');
     try {
       await client.query('ALTER TABLE public.eva_sync_state DISABLE ROW LEVEL SECURITY');
-      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/RLS was disabled/);
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/RLS is not enabled/);
     } finally {
       await client.query('ROLLBACK');
     }

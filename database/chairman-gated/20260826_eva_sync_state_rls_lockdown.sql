@@ -87,7 +87,7 @@ BEGIN
   END IF;
 
   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.eva_sync_state'::regclass) THEN
-    RAISE EXCEPTION 'eva_sync_state RLS lockdown: RLS was disabled on eva_sync_state — refusing to consider this applied';
+    RAISE EXCEPTION 'eva_sync_state RLS lockdown: RLS is not enabled on eva_sync_state — refusing to consider this applied';
   END IF;
 
   -- TESTING sub-agent finding (EXEC review): MAINTAIN is a PostgreSQL 17+ table privilege NOT
