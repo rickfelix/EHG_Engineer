@@ -46,3 +46,11 @@ AS $$
     last_error_at = CASE WHEN p_error IS NULL THEN NULL ELSE now() END
   RETURNING eva_sync_state.consecutive_failures, eva_sync_state.total_synced;
 $$;
+
+-- LOW-1 (TESTING sub-agent finding, EXEC review): not exploitable as-is (SECURITY INVOKER means
+-- an anon/authenticated caller would still hit FR-3's table-level REVOKE), but narrowing the
+-- function's own EXECUTE grant is a free hardening line consistent with this repo's existing
+-- close-remaining-secdef-execute-exposure precedent, rather than leaving a PUBLIC-executable
+-- function on this table for a future audit to flag.
+REVOKE EXECUTE ON FUNCTION public.eva_sync_state_record_sync_result(text, text, integer, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.eva_sync_state_record_sync_result(text, text, integer, text) TO service_role;

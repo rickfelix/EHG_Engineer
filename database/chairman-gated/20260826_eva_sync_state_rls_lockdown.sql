@@ -89,6 +89,22 @@ BEGIN
   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.eva_sync_state'::regclass) THEN
     RAISE EXCEPTION 'eva_sync_state RLS lockdown: RLS was disabled on eva_sync_state — refusing to consider this applied';
   END IF;
+
+  -- TESTING sub-agent finding (EXEC review): MAINTAIN is a PostgreSQL 17+ table privilege NOT
+  -- reported by information_schema.role_table_grants (a SQL-standard view predating MAINTAIN) —
+  -- the check above at lines 72-79 is blind to it. Live production is PG 17.4 and REVOKE ALL
+  -- above DOES revoke MAINTAIN there; this closes the verify-side blind spot. Version-guarded so
+  -- it is a genuine no-op (never evaluated) on the CI DDL tier's PG16 ephemeral container, where
+  -- 'MAINTAIN' is not a recognized privilege-type argument to has_table_privilege at all.
+  IF current_setting('server_version_num')::int >= 170000 THEN
+    IF has_table_privilege('anon', 'public.eva_sync_state', 'MAINTAIN')
+       OR has_table_privilege('authenticated', 'public.eva_sync_state', 'MAINTAIN') THEN
+      RAISE EXCEPTION 'eva_sync_state RLS lockdown: anon/authenticated still hold MAINTAIN (PG17+) — refusing to consider this applied';
+    END IF;
+    IF NOT has_table_privilege('service_role', 'public.eva_sync_state', 'MAINTAIN') THEN
+      RAISE EXCEPTION 'eva_sync_state RLS lockdown: service_role LOST MAINTAIN (PG17+) — refusing to consider this applied';
+    END IF;
+  END IF;
 END
 $verify$;
 

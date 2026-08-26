@@ -1,6 +1,7 @@
 -- SD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001 — ROLLBACK for
 -- 20260826_eva_sync_state_rls_lockdown.sql. Restores select_eva_sync_state and the anon/
--- authenticated table grants to their exact pre-migration state (live-captured 2026-08-26).
+-- authenticated table grants to their pre-migration state (live-captured 2026-08-26), including
+-- the PG17+ MAINTAIN privilege (version-guarded below — TESTING sub-agent finding, EXEC review).
 --
 -- @approved-by: PENDING
 --
@@ -28,6 +29,17 @@ END
 $precondition$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.eva_sync_state TO anon, authenticated;
+
+-- MAINTAIN does not exist as a grantable keyword before PG17 — a bare GRANT MAINTAIN would fail
+-- to parse on the CI DDL tier's PG16 ephemeral container. Dynamic SQL via EXECUTE defers parsing
+-- to runtime, so this branch is safely skipped there instead of causing a syntax error.
+DO $restore_maintain$
+BEGIN
+  IF current_setting('server_version_num')::int >= 170000 THEN
+    EXECUTE 'GRANT MAINTAIN ON public.eva_sync_state TO anon, authenticated';
+  END IF;
+END
+$restore_maintain$;
 
 CREATE POLICY select_eva_sync_state ON public.eva_sync_state
   FOR SELECT TO authenticated

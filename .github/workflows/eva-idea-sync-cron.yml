@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 # TR-5 (TESTING sub-agent finding): 187 other workflows already use a concurrency group; this one
 # lacked one, so an overlapping run plus the now-fixed atomic RPC (20260826_eva_sync_state_atomic_

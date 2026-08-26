@@ -5,13 +5,21 @@
 // WHAT A GREEN RUN OF THIS FILE DOES **NOT** MEAN
 //
 // This runs against an EPHEMERAL vanilla PostgreSQL 16 with hand-stubbed roles and a hand-stubbed
-// public.eva_sync_state table reproduced to match the LIVE pre-migration state exactly (policies,
-// grants, RLS flag — captured 2026-08-26 via pg_policies/information_schema.role_table_grants
-// against the real consolidated DB, not assumed). It proves the migration's own DROP POLICY /
-// REVOKE / $verify$ logic does what it claims against a KNOWN starting state. It does NOT prove
-// the real production grant surface still matches that snapshot at apply time (re-measure live
-// immediately before the chairman applies), nor does it prove PostgREST/anon-key HTTP reachability
-// — that is the live anon-key probe SECURITY sub-agent already ran, a different tier.
+// public.eva_sync_state table reproduced to match the LIVE pre-migration state as far as PG16 can
+// represent it (policies, grants, RLS flag — captured 2026-08-26 via pg_policies/information_
+// schema.role_table_grants against the real consolidated DB, not assumed). It proves the
+// migration's own DROP POLICY / REVOKE / $verify$ logic does what it claims against a KNOWN
+// starting state. It does NOT prove the real production grant surface still matches that snapshot
+// at apply time (re-measure live immediately before the chairman applies), nor does it prove
+// PostgREST/anon-key HTTP reachability — that is the live anon-key probe SECURITY sub-agent
+// already ran, a different tier.
+//
+// KNOWN GAP (TESTING sub-agent finding, EXEC review): live production is PostgreSQL 17.4, which
+// added the MAINTAIN table privilege (anon/authenticated/service_role each hold it live, measured
+// 2026-08-26). This CI tier's PG16 container cannot represent MAINTAIN as a grantable privilege at
+// all, so this file's 7-privilege-type sweep (PRIVILEGE_TYPES below) cannot exercise that 8th
+// dimension — the migration's own $verify$ block carries a version-guarded MAINTAIN check
+// (skipped on PG16, active on PG17+) that only ever runs for real against production.
 //
 // FAIL-CLOSED, no skip branch: if this file cannot reach a database it fails loudly rather than
 // silently passing (matches tests/ddl/telegram-bot-insert-feedback-drop-ddl.db.test.js's convention).

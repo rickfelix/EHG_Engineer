@@ -20,6 +20,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { SYNC_STATE_IDENTIFIER as YOUTUBE_CREDENTIAL_ROW } from '../lib/integrations/youtube/oauth-manager.js';
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -27,17 +28,28 @@ const SOURCE_TYPES = ['youtube', 'todoist'];
 const WATERMARK_FILE = '.eva-sync-watermark.json';
 const CIRCUIT_OPEN_THRESHOLD = 3;
 
-async function fetchState(supabase) {
+// TESTING sub-agent finding (EXEC review): a bare source_type filter with no ordering collapses
+// multiple rows (legacy Todoist projects, and YouTube's own OAuth-credential row -- a DIFFERENT
+// kind of row co-located in this table, never touched by a sync run) into PostgREST's undefined
+// heap order, which shifts every time the atomic RPC updates a row. Excluding the credential row
+// and taking the most-recently-updated remaining row per source_type is self-healing if the
+// active Todoist project or YouTube target ever changes, since only the currently-active
+// identifier's row keeps advancing.
+export async function fetchState(supabase) {
   const { data, error } = await supabase
     .from('eva_sync_state')
-    .select('source_type, source_identifier, last_sync_at, consecutive_failures')
-    .in('source_type', SOURCE_TYPES);
+    .select('source_type, source_identifier, last_sync_at, consecutive_failures, updated_at')
+    .in('source_type', SOURCE_TYPES)
+    .neq('source_identifier', YOUTUBE_CREDENTIAL_ROW)
+    .order('updated_at', { ascending: false });
   if (error) {
     throw new Error(`eva_sync_state read failed: ${error.message}`);
   }
   const bySource = {};
   for (const row of data || []) {
-    bySource[row.source_type] = row;
+    if (!bySource[row.source_type]) {
+      bySource[row.source_type] = row;
+    }
   }
   return bySource;
 }
