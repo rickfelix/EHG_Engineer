@@ -129,9 +129,12 @@ export class OrchestratorCompletionGuardian {
     const { data: children, error } = await supabase
       .from('strategic_directives_v2')
       // 'progress' is a known-dead column (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001) --
-      // dropped since nothing in this method ever read it.
+      // dropped since nothing in this method ever read it. .limit(500) makes this
+      // provably bounded (count-truncation-diff-lint): row count can never exceed this
+      // orchestrator's direct child count, never remotely close to 500 in practice.
       .select('id, title, status')
-      .eq('parent_sd_id', this.sdId);
+      .eq('parent_sd_id', this.sdId)
+      .limit(500);
 
     if (error) {
       this.validationResults.push({
