@@ -1,0 +1,82 @@
+name: "EVA idea sync (cron)"
+
+# SD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001 (FR-1)
+#
+# scripts/eva-idea-sync.js (npm run eva:ideas:sync) previously only ran manually; its watermark
+# (eva_sync_state.last_sync_at) had been stale since 2026-07-24. Hourly, offset from the existing
+# :17 estate-disposition-cron.yml drain (FR-1) so the pull has a head start before the drain reads
+# eva_youtube_intake/eva_todoist_intake.
+#
+# The sync script ALWAYS exits 0 (playlist-sync.js/todoist-sync.js swallow per-source errors
+# internally and continue) — the post-run assertion step below, not this step's own exit code, is
+# what `if: failure()` actually keys off (FR-4 AC-3).
+
+on:
+  schedule:
+    - cron: '5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# TR-5 (TESTING sub-agent finding): 187 other workflows already use a concurrency group; this one
+# lacked one, so an overlapping run plus the now-fixed atomic RPC (20260826_eva_sync_state_atomic_
+# result_rpc.sql) could still race on external API rate limits even though the DB write itself is
+# no longer a lost-update risk.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Sync YouTube + Todoist into EVA intake
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+      # YouTube credential(s) resolved per FR-2's decision (RSS/credential-free vs OAuth
+      # fallback) — provisioned separately once that decision lands; the sync script's own
+      # per-source try/catch means an unresolved YouTube credential degrades to a per-source
+      # circuit-open state (surfaced below), not a hard workflow failure for Todoist.
+      #
+      # Deliberately NOT setting TODOIST_INTAKE_PROJECTS (TR-3): that env var is a documented
+      # one-time manual override escape hatch (QF-20260612-416) — setting it here would silently
+      # widen intake scope beyond the "For Processing" project.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Capture pre-run watermarks (FR-4 AC-3)
+        run: node scripts/eva-idea-sync-cron-assert.mjs --capture
+
+      - name: Sync (YouTube + Todoist)
+        run: npm run eva:ideas:sync -- --source all
+
+      - name: Post-run assertion (FR-4 AC-3)
+        run: node scripts/eva-idea-sync-cron-assert.mjs --verify
+
+      - name: Open issue on failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `EVA idea sync cron failed (run ${context.runId})`,
+              body: `Scheduled run failed. See the post-run assertion step for which source (youtube/todoist) is unhealthy: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nSD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001 (FR-4 AC-3).`,
+              labels: ['ci-failure', 'eva-idea-sync']
+            });
