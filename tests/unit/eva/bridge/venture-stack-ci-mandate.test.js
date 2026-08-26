@@ -5,8 +5,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const SCANNER_SOURCE_PATH = fileURLToPath(new URL('../../../../lib/eva/bridge/templates/venture-stack-scan.js', import.meta.url));
+const TEMPLATE_TEST_SOURCE_PATH = fileURLToPath(new URL('../../../../lib/eva/bridge/templates/venture-stack-compliance.test.template.js', import.meta.url));
 import { buildBuildTasks } from '../../../../lib/eva/bridge/build-tasks-writer.js';
 import buildClaudeMd from '../../../../lib/eva/bridge/claude-md-writer.js';
 import {
@@ -30,6 +32,19 @@ describe('FR-1/FR-2 — the build-infra writers MANDATE stack-enforcing CI', () 
     expect(md).toMatch(/CI must enforce this stack/i);
     expect(md).toMatch(/required status check/i);
     expect(md).toContain('stack-compliance.test.js');
+  });
+
+  // FR-4 (SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-D): adversarial VALIDATION review (VAL-D-1) found
+  // FR-4's doc-writer text change had zero test coverage -- reverting it left this suite fully
+  // green. These two assertions close that gap.
+  it('buildBuildTasks mentions scanning both src/ and lib/', () => {
+    const md = buildBuildTasks({ name: 'Acme', screens: [] });
+    expect(md).toMatch(/scan `src\/` \+ `lib\/`/i);
+  });
+
+  it('buildClaudeMd mentions scanning both src/ and lib/', () => {
+    const md = buildClaudeMd({ name: 'Acme' });
+    expect(md).toMatch(/scans `src\/` \+ `lib\/`/i);
   });
 });
 
@@ -280,5 +295,18 @@ describe('FR-6 — usage-event RPC wiring is REQUIRED, and the scanner sees lib/
       const io = realIo(root);
       expect(io.files.length).toBe(0);
     });
+  });
+
+  // VAL-D-2 (adversarial VALIDATION review): the vendored template pair is otherwise validated
+  // by nothing in this repo's own suite (it targets node:test in a venture, not vitest here) --
+  // mutation-tested SURVIVED even a hard syntax error and an inverted, always-failing guard. A
+  // minimal syntax check closes the cheapest, sharpest end of that gap without building a full
+  // node:test harness for a vendored artifact.
+  it('the vendored test template is syntactically valid (would not crash a venture\'s CI outright)', () => {
+    expect(() => execFileSync(process.execPath, ['--check', TEMPLATE_TEST_SOURCE_PATH], { stdio: 'pipe' })).not.toThrow();
+  });
+
+  it('the vendored scanner is syntactically valid (would not crash a venture\'s CI outright)', () => {
+    expect(() => execFileSync(process.execPath, ['--check', SCANNER_SOURCE_PATH], { stdio: 'pipe' })).not.toThrow();
   });
 });
