@@ -58,6 +58,19 @@ Rungs are `visitors → signups → activated → paid`. Each resolves to exactl
   venture being measured*. The gate therefore requires a per-venture `attribution_status='resolved'`,
   `livemode=true` event before treating the paid rung as measured.
 
+## `cpa` — an additive citation, never a fifth rung
+
+**SD-LEO-GEN-NEED-ABLE-CONTINUALLY-001.** `resolveCpaRung()` (same file) computes an honest
+cost-per-acquisition number from `daily_rollups.spend_cents`/`conversions`
+(`lib/telemetry/cpa-gauge.mjs`) and attaches it to the persisted `rungs` object as `rungs.cpa`, but
+strictly *after* `decideActivationVerdict()`/`buildPathToPass()` have already run on the original
+4-rung array — it is never passed into either function. `cpa` is not in `ACTIVATION_RUNGS`, has no
+entry in `RATIFIED_FLOORS`, and cannot affect `PASS`/`BLOCKED`/`NO_DATA` or the citation text; it
+uses its own two-state vocabulary (`no_writer_yet`/`live`, deliberately no `stale` — no ratified
+cadence contract exists for `daily_rollups`) rather than `RUNG_STATE`'s `MEASURED`/`UNMEASURABLE`,
+so it can never be mistaken for a fifth gated rung by shape alone. Per-channel breakdown is
+available independently via `node scripts/cpa-gauge-cli.mjs <venture-id> <platform>`.
+
 ## Floors ship EMPTY, on purpose
 
 `RATIFIED_FLOORS` is empty. A rung with no ratified floor resolves `UNMEASURABLE` and **fails
