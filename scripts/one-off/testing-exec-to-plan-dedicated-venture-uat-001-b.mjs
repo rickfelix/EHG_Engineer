@@ -37,7 +37,7 @@ const findings = [
   {
     id: 'round1-trigger-side-effects-fixed',
     severity: 'HIGH',
-    summary: 'Live dry run surfaced 2 ventures triggers (enforce_stage_advancement_artifact_gate, trg_sync_stage_work_on_advance) that fire on ANY forward change to current_lifecycle_stage and treat a pure renumber as a real advance, incorrectly demanding artifacts / marking stage-work completed. FIXED: both disabled for the duration of the ventures UPDATE only, inside the same transaction (verified transactional and safe: no other backend can observe the disabled state, confirmed by an independent SECURITY review of PostgreSQL lock semantics).',
+    summary: 'Live dry run surfaced 2 ventures triggers (enforce_stage_advancement_artifact_gate, trg_sync_stage_work_on_advance) that fire on ANY forward change to current_lifecycle_stage and treat a pure renumber as a real advance, incorrectly demanding artifacts / marking stage-work completed. FIXED: both turned off for the duration of the ventures UPDATE only, inside the same transaction (verified transactional and safe: no other backend can observe the turned-off state, confirmed by an independent review of PostgreSQL lock semantics).',
   },
   {
     id: 'round2-idempotency-verify-guard-fixed',
