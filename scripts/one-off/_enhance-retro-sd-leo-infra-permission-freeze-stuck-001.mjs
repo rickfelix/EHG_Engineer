@@ -17,6 +17,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { RetrospectiveQualityRubric } from '../modules/rubrics/retrospective-quality-rubric.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const s = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -221,35 +222,44 @@ const update = {
   },
 };
 
-const boilerplateCheck = RetrospectiveQualityRubric.detectBoilerplate(update);
-if (boilerplateCheck.hasBoilerplate) {
-  console.error('BOILERPLATE PATTERN(S) DETECTED — fix before inserting:');
-  console.error(JSON.stringify(boilerplateCheck.matches, null, 2));
-  process.exit(1);
+async function main() {
+  const boilerplateCheck = RetrospectiveQualityRubric.detectBoilerplate(update);
+  if (boilerplateCheck.hasBoilerplate) {
+    console.error('BOILERPLATE PATTERN(S) DETECTED — fix before inserting:');
+    console.error(JSON.stringify(boilerplateCheck.matches, null, 2));
+    process.exit(1);
+  }
+  console.log('Boilerplate check: PASS (0 patterns matched)');
+
+  const { data: sd, error: sdErr } = await s.from('strategic_directives_v2').select('id').eq('sd_key', SD_KEY).single();
+  if (sdErr) {
+    console.error('SD LOOKUP ERROR:', sdErr.message);
+    process.exit(1);
+  }
+
+  const { data, error } = await s
+    .from('retrospectives')
+    .update(update)
+    .eq('id', RETRO_ID)
+    .select('id, sd_id, quality_score, status')
+    .single();
+
+  if (error) {
+    console.error('ENHANCE ERROR:', error.message);
+    process.exit(1);
+  }
+
+  if (data.sd_id !== sd.id) {
+    console.error(`ENHANCE ERROR: RETRO_ID ${RETRO_ID} belongs to sd_id=${data.sd_id}, not ${SD_KEY} (${sd.id}) — refusing to report success on a mismatched retro.`);
+    process.exit(1);
+  }
+
+  console.log('Enhanced retrospective', data.id, 'for', SD_KEY, '- quality_score:', data.quality_score, '- status:', data.status);
 }
-console.log('Boilerplate check: PASS (0 patterns matched)');
 
-const { data: sd, error: sdErr } = await s.from('strategic_directives_v2').select('id').eq('sd_key', SD_KEY).single();
-if (sdErr) {
-  console.error('SD LOOKUP ERROR:', sdErr.message);
-  process.exit(1);
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
-
-const { data, error } = await s
-  .from('retrospectives')
-  .update(update)
-  .eq('id', RETRO_ID)
-  .select('id, sd_id, quality_score, status')
-  .single();
-
-if (error) {
-  console.error('ENHANCE ERROR:', error.message);
-  process.exit(1);
-}
-
-if (data.sd_id !== sd.id) {
-  console.error(`ENHANCE ERROR: RETRO_ID ${RETRO_ID} belongs to sd_id=${data.sd_id}, not ${SD_KEY} (${sd.id}) — refusing to report success on a mismatched retro.`);
-  process.exit(1);
-}
-
-console.log('Enhanced retrospective', data.id, 'for', SD_KEY, '- quality_score:', data.quality_score, '- status:', data.status);

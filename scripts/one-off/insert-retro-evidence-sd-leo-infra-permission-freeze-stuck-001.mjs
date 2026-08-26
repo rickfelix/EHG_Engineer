@@ -18,6 +18,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_UUID = '535166ea-a81d-4f3d-afff-65956e5f38c6';
 const SD_KEY = 'SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001';
@@ -108,7 +109,9 @@ async function main() {
   console.log('Sub-agent evidence inserted:', JSON.stringify(subRow, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
