@@ -5,6 +5,7 @@
 
 - [2026-08-26](#2026-08-26)
   - [Infrastructure](#infrastructure)
+  - [Features](#features)
 - [2026-08-25](#2026-08-25)
   - [Documentation](#documentation)
   - [Bugfix](#bugfix)
@@ -197,6 +198,16 @@
   - **A PLAN-TO-EXEC adversarial TESTING review found 4 real test-coverage gaps** in the already-written suite (an unexercised translation-map fallback, an unasserted `console.warn` log shape, no end-to-end success-path route test, and one accepted-as-untestable defensive branch) — 3 of 4 closed with new tests; EXEC-TO-PLAN SECURITY review found zero defects.
   - **A same-session operational mistake was caught and fixed immediately**: cleaning up the merged altifyai branch with `git push --repo <url> origin --delete <branch>` from the wrong working directory silently deleted the branch from EHG_Engineer's own remote instead (`--repo` is a `gh` CLI flag, not a `git` flag) — caught via `git status -b` in the same turn (local commits untouched) and fixed by re-pushing.
   - **Verification**: LEAD-TO-PLAN 96%, PLAN-TO-EXEC 98%, EXEC-TO-PLAN 84%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL (auto-approved, infrastructure SD type). altifyai suite: 495 passing, 1 pre-existing unrelated failure; 0 regressions.
+
+### Features
+
+- **The two media-generation systems in this repo were both orphaned (zero production callers), and the quality gate that would have blocked every real asset failed closed unconditionally by design** - PR #7571 (SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A)
+  - **What shipped**: `lib/creative/generate-asset.js` becomes the single media-generation seam, replacing `lib/marketing/ai/{image,video}-generator.js` (deprecated, zero new call sites); a mandatory `venture_id` on the seam so the future HARD FENCE (sibling Child B) always has a venture to key its S23+S24 check on; `lib/creative/asset-storage.js` (new), which persists generated assets to PRIVATE Supabase Storage (never a public or signed URL) instead of discarding the provider's output entirely; and an MVP-scoped interim implementation of the previously-always-fail-closed quality gate (structural brand-source check + keyword deny-list anti-fabrication screen), narrow by design and documented as such.
+  - **A LEAD-phase Explore + independent VALIDATION pass overturned the parent orchestrator's own founding premise twice**: first from "greenfield pipeline" to "reconcile two existing systems," then found a *third*, live, nav-linked generation subsystem in the separate `ehg` app repo the original 3-child decomposition never accounted for — added as a fourth child (-D) rather than silently left as a gap.
+  - **A SECURITY review of the shipped diff found the SSRF host allowlist was simply wrong**: guessed hostnames (`runwayml.com`, `runway.team`) that would have rejected 100% of real Runway output URLs and trusted an unrelated third-party domain (`runway.team` belongs to a different company). Fixed by pinning the real, confirmed Runway output host and closing a redirect-bypass hole (`redirect: 'manual'`, refused rather than followed) — independently corroborated by a parallel research thread against Runway's own documentation.
+  - **The same review caught a pre-existing field-name bug that would have broken every real Runway insert**: `lib/marketing/ai/*`'s two providers use inconsistent provenance field names (`generator` vs `provider`) for the same concept; the write path only ever read one of them.
+  - **TESTING found the diff had broken a pre-existing sibling test** (`tests/unit/creative/providers/runway.test.js`, still calling the old 3-arg `generateAsset()` signature) — caught only because the reviewer ran the full, unfiltered `npm run test:unit` rather than a path-scoped command, which would have shown green while CI's own unit tier failed.
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 89% (after a TESTING+SECURITY fix round; blocked once at 82% by a real `SD_TYPE_THRESHOLD` gate that a `FR_DELIVERY_TRACEABILITY` evidence gap was the legitimate cause of, not a harness bug — closed with proper `fr_coverage` evidence), PLAN-TO-LEAD 90%, LEAD-FINAL-APPROVAL 96%. 66/66 `lib/creative/`+`tests/unit/creative/` tests passing; full unfiltered `npm run test:unit`: 43139 passing, only pre-existing/unrelated failures elsewhere.
 
 ## 2026-08-25
 

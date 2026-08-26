@@ -6,6 +6,12 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [feature, auto-generated]
 ---
+> **⚠️ Correction (2026-08-26, SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A):** this document is a
+> DOCMON auto-generated speculative draft. It describes a fictional `EnhancedCreativeMediaAgent`
+> class hierarchy with no corresponding implementation anywhere in this codebase — it is not prior
+> work, a ratified design, or scope precedent. For the real, shipped media-generation system, see
+> [`media-generation-unified-seam.md`](./media-generation-unified-seam.md).
+
 # Stage 34: Creative Media Automation Agent (Enhanced)
 
 
