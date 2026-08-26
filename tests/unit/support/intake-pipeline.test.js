@@ -325,6 +325,18 @@ describe('craftSupportReply (FR-1 round 2 -- LLM-based personalized reply)', () 
       vi.useRealTimers();
     }
   });
+
+  it('N1 (TESTING EXEC-TO-PLAN finding 5b69b337): the timeout timer is cleared once the LLM call wins the race, not left pending', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getClassificationClient).mockResolvedValue({ complete: async () => ({ content: 'fast reply' }) });
+      const ticket = normalizeSupportTicket({ subject: 'x', body: 'y' });
+      await craftSupportReply(ticket, triageSupportTicket(ticket));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('disposeSupportTicket -- crafted reply + stripe diagnosis wiring (round 2)', () => {

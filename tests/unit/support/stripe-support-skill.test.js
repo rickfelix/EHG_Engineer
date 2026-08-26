@@ -94,6 +94,17 @@ describe('diagnoseStripeIssue (FR-2)', () => {
       vi.useRealTimers();
     }
   });
+
+  it('N1 (TESTING EXEC-TO-PLAN finding 5b69b337): the timeout timer is cleared once the lookup wins the race, not left pending', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getStripeForVenture).mockResolvedValue(makeGuardedStripe());
+      await diagnoseStripeIssue({}, 'v-1', { customer_ref: 'nobody@example.com' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('static source guard (FR-2 hard constraint -- no mutation methods, no computed member access)', () => {
