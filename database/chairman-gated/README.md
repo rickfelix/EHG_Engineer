@@ -864,9 +864,11 @@ migration's actual behavior:**
 migration's existing direct-shift/shim taxonomy was discovered during review — live *configuration*
 tables keyed by stage number (`eva_ventures`, `stage_artifact_requirements`, `gate_boundary_config`,
 `venture_stage_cutover_grandfather`, `stage_prop_contracts`, `eva_stage_gate_results`,
-`venture_capture_snapshots`, `stage_executions`, `venture_artifacts.lifecycle_stage`). See the
-migration file's own "ADDITIONAL PRE-CEREMONY BLOCKER" section — a dedicated follow-up SD should
-resolve this before scheduling the chairman ceremony.
+`venture_capture_snapshots`, `stage_executions`, `venture_artifacts.lifecycle_stage`). The migration
+file's own "ADDITIONAL PRE-CEREMONY BLOCKER" section states this in binding terms: this migration
+**MUST NOT be chairman-approved** until each one has an explicit, individually-measured disposition
+(shift, shim, or accepted-as-broken with a stated reason) — a dedicated follow-up SD is expected to
+do that work before the ceremony is scheduled.
 
 Companion cross-repo PR (`ehg` repo, `feat/SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B`, FR-5):
 re-anchors `useLaunchWorkflow.ts`'s hardcoded stage-number literals and query boundaries to the
