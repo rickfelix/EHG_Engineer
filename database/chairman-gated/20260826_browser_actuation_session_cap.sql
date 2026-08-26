@@ -39,6 +39,10 @@ COMMENT ON TABLE public.browser_actuation_session_caps IS
   'tracking the atomic action count against its configured cap. Written only via '
   'fn_try_consume_browser_actuation_cap, never a direct client UPDATE.';
 
+-- Defense in depth alongside the REVOKE ALL below (SECURITY review, EXEC-TO-PLAN): RLS enabled with
+-- zero policies denies every row to anon/authenticated even if a future grant is mistakenly added.
+ALTER TABLE public.browser_actuation_session_caps ENABLE ROW LEVEL SECURITY;
+
 -- ============================================================
 -- 2. fn_try_consume_browser_actuation_cap
 -- ============================================================
@@ -61,10 +65,16 @@ BEGIN
     RAISE EXCEPTION 'fn_try_consume_browser_actuation_cap: p_cap_limit must be >= 1';
   END IF;
 
+  -- SECURITY finding F-SEC-2 (EXEC-TO-PLAN): cap_limit was previously first-write-wins (ON CONFLICT
+  -- never refreshed it), so a later call's p_cap_limit was silently ignored after a session's first
+  -- action. LEAST(...) lets a caller only ever SHRINK an existing session's cap, never raise it --
+  -- the safe direction (a caller cannot self-escalate its own ceiling by re-calling with a higher
+  -- p_cap_limit).
   INSERT INTO public.browser_actuation_session_caps (session_id, action_count, cap_limit)
   VALUES (p_session_id, 1, p_cap_limit)
   ON CONFLICT (session_id) DO UPDATE
     SET action_count = public.browser_actuation_session_caps.action_count + 1,
+        cap_limit = LEAST(public.browser_actuation_session_caps.cap_limit, p_cap_limit),
         updated_at = now()
     WHERE public.browser_actuation_session_caps.action_count < public.browser_actuation_session_caps.cap_limit
   RETURNING true INTO v_consumed;
@@ -88,6 +98,13 @@ GRANT EXECUTE ON FUNCTION public.fn_try_consume_browser_actuation_cap(TEXT, INTE
 -- only via the SECURITY DEFINER RPC above.
 REVOKE ALL ON public.browser_actuation_session_caps FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.browser_actuation_session_caps TO service_role;
+
+-- SECURITY finding F-SEC-1 (EXEC-TO-PLAN): app_config (reused for FR-1's write allowlist and FR-2's
+-- kill switch) is currently protected from anon/authenticated writes only by RLS having zero write
+-- policies -- correct today, but implicit. Explicit REVOKE is belt-and-suspenders, matching this
+-- file's own precedent for every other object above; it only ever removes permission, never grants,
+-- so it is safe to run even if app_config's existing posture changes it not at all.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.app_config FROM PUBLIC, anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';
 

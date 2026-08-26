@@ -1954,20 +1954,31 @@ async function printBrowserDriveAction(idOrCallsign, eventTypeArg) {
   console.log('');
 }
 
-async function printBrowserKillSwitchAction(stateArg) {
+// `client` is injectable (defaults to the module-level supabase) so a unit test can assert the
+// actual write-then-read round trip through the real isKillSwitchEngaged() reader -- exactly the
+// gap that let the F1 inversion bug ship undetected by any test.
+async function printBrowserKillSwitchAction(stateArg, client = supabase) {
+  const { isKillSwitchEngaged } = await import('../lib/fleet/browser-actuation-guards.js');
   const normalized = String(stateArg || '').toLowerCase();
   if (normalized !== 'on' && normalized !== 'off') {
-    const { isKillSwitchEngaged } = await import('../lib/fleet/browser-actuation-guards.js');
-    const engaged = await isKillSwitchEngaged(supabase);
+    const engaged = await isKillSwitchEngaged(client);
     console.log('BROWSER ACTUATION KILL SWITCH: ' + (engaged ? 'ENGAGED (STOPPED)' : 'disengaged (running)'));
     console.log('Usage: node scripts/fleet-dashboard.cjs browser-kill-switch <on|off>');
     return;
   }
   const engaged = normalized === 'on';
-  const { error } = await supabase
+  const { error } = await client
     .from('app_config')
-    .upsert({ key: BROWSER_ACTUATION_KILL_SWITCH_KEY, value: { engaged: !engaged }, description: 'SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001 FR-2: chairman kill switch. engaged:false permits actuation; missing/malformed/error defaults to STOPPED.' }, { onConflict: 'key' });
+    .upsert({ key: BROWSER_ACTUATION_KILL_SWITCH_KEY, value: { engaged }, description: 'SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001 FR-2: chairman kill switch. engaged:false permits actuation; missing/malformed/error defaults to STOPPED.' }, { onConflict: 'key' });
   if (error) { console.log('  kill switch update failed: ' + error.message); return; }
+  // Read back through the SAME reader driveAction() uses, rather than trusting the write's own
+  // intent -- this is what would have caught F1 (the `{engaged: !engaged}` inversion bug) at write
+  // time instead of only at read time.
+  const readBack = await isKillSwitchEngaged(client);
+  if (readBack !== engaged) {
+    console.log('  WARNING: read-back mismatch -- wrote engaged=' + engaged + ' but isKillSwitchEngaged() now reads ' + readBack + '. Not trusting this update.');
+    return;
+  }
   console.log('  Browser actuation kill switch is now ' + (engaged ? 'ENGAGED (all actuation STOPPED, fleet-wide)' : 'disengaged (actuation permitted, subject to remaining guards)') + '.');
 }
 
@@ -3049,7 +3060,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
