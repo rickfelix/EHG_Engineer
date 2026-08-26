@@ -3,14 +3,32 @@
  * SD-LEO-INFRA-SUPPORT-INTAKE-TRIAGE-001 — FR-1/FR-2/FR-3/FR-6.
  * Re-scoped per-venture by SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001 — FR-1..FR-6, TS-1..TS-6.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+
+// round-2 (SD-LEO-GEN-NEED-WELL-THOUGHT-001): mock the 3 new external seams so the PRE-EXISTING
+// tests below stay fast/deterministic and exercise the CANNED path exactly as before (no real LLM
+// call, no real Stripe call, no real autonomy-gate DB chain) -- new dedicated tests further down
+// override these per-case to exercise the crafted-reply/stripe-diagnosis/staging behavior.
+vi.mock('../../../lib/llm/client-factory.js', () => ({ getClassificationClient: vi.fn(async () => null) }));
+vi.mock('../../../lib/support/stripe-support-skill.js', () => ({ diagnoseStripeIssue: vi.fn(async () => null) }));
+vi.mock('../../../lib/marketing/autonomy-gate.js', () => ({ checkPublishAuthorization: vi.fn(async () => ({ allowed: false, reason: 'mocked' })) }));
+
+import { getClassificationClient } from '../../../lib/llm/client-factory.js';
+import { diagnoseStripeIssue } from '../../../lib/support/stripe-support-skill.js';
+import { checkPublishAuthorization } from '../../../lib/marketing/autonomy-gate.js';
 import {
   normalizeSupportTicket, triageSupportTicket, disposeSupportTicket, resolveVentureContext,
-  runSupportPipeline, SUPPORT_CATEGORIES,
+  runSupportPipeline, SUPPORT_CATEGORIES, craftSupportReply,
 } from '../../../lib/support/intake-pipeline.js';
+
+beforeEach(() => {
+  vi.mocked(getClassificationClient).mockReset().mockResolvedValue(null);
+  vi.mocked(diagnoseStripeIssue).mockReset().mockResolvedValue(null);
+  vi.mocked(checkPublishAuthorization).mockReset().mockResolvedValue({ allowed: false, reason: 'mocked' });
+});
 
 /**
  * Minimal supabase mock: records venture_support_tickets inserts (can fail the first N, to exercise
@@ -266,6 +284,193 @@ describe('runSupportPipeline venture threading (SD-FDBK-FIX-SCOPE-VENTURE-SUPPOR
     const result = await runSupportPipeline(sb, { subject: 'how to setup', body: 'account login guide', venture_id: 'v-4' });
     expect(result.ticket.venture_armed).toBe(false);
     expect(result.disposition.status).toBe('auto_resolved'); // armed flag does not block a normal auto-resolve
+  });
+});
+
+describe('craftSupportReply (FR-1 round 2 -- LLM-based personalized reply)', () => {
+  it('returns crafted text from the LLM client, restricting the payload to subject+body only (never customer_ref)', async () => {
+    let capturedPrompt = null;
+    vi.mocked(getClassificationClient).mockResolvedValue({
+      complete: async (_system, prompt) => { capturedPrompt = prompt; return { content: 'Try resetting your password via the link in your account settings.' }; },
+    });
+    const ticket = normalizeSupportTicket({ subject: 'Cant login', body: 'forgot my password', email: 'customer@example.com' });
+    const triage = triageSupportTicket(ticket);
+    const reply = await craftSupportReply(ticket, triage);
+    expect(reply).toMatch(/password/i);
+    expect(capturedPrompt).not.toMatch(/customer@example\.com/);
+    expect(capturedPrompt).toMatch(/forgot my password/);
+  });
+
+  it('fails open to null when the LLM client is unavailable', async () => {
+    vi.mocked(getClassificationClient).mockResolvedValue(null);
+    const ticket = normalizeSupportTicket({ subject: 'x', body: 'y' });
+    expect(await craftSupportReply(ticket, triageSupportTicket(ticket))).toBeNull();
+  });
+
+  it('fails open to null when the LLM call throws', async () => {
+    vi.mocked(getClassificationClient).mockResolvedValue({ complete: async () => { throw new Error('LLM down'); } });
+    const ticket = normalizeSupportTicket({ subject: 'x', body: 'y' });
+    expect(await craftSupportReply(ticket, triageSupportTicket(ticket))).toBeNull();
+  });
+
+  it('TS-8: fails open on a HANG (never-resolving LLM call), not just a thrown error', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getClassificationClient).mockResolvedValue({ complete: () => new Promise(() => {}) });
+      const ticket = normalizeSupportTicket({ subject: 'x', body: 'y' });
+      const pending = craftSupportReply(ticket, triageSupportTicket(ticket));
+      await vi.advanceTimersByTimeAsync(10001);
+      expect(await pending).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('N1 (TESTING EXEC-TO-PLAN finding 5b69b337): the timeout timer is cleared once the LLM call wins the race, not left pending', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getClassificationClient).mockResolvedValue({ complete: async () => ({ content: 'fast reply' }) });
+      const ticket = normalizeSupportTicket({ subject: 'x', body: 'y' });
+      await craftSupportReply(ticket, triageSupportTicket(ticket));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('disposeSupportTicket -- crafted reply + stripe diagnosis wiring (round 2)', () => {
+  it('billing-category ticket with a crafted reply and a stripe diagnosis produces a combined [crafted]...[stripe] resolution_notes', async () => {
+    vi.mocked(getClassificationClient).mockResolvedValue({ complete: async () => ({ content: 'We looked into your billing issue.' }) });
+    vi.mocked(diagnoseStripeIssue).mockResolvedValue('most recent charge: succeeded ($19.99).');
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'billing charge question', body: 'I want to understand a charge on my subscription invoice', venture_id: 'v-1', email: 'c@example.com' });
+    const triage = triageSupportTicket(ticket);
+    expect(triage.category).toBe('billing');
+    expect(triage.routing_decision).toBe('auto_resolve');
+    const d = await disposeSupportTicket(sb, ticket, triage);
+    expect(d.status).toBe('auto_resolved');
+    expect(d.resolution).toMatch(/^\[crafted\]/);
+    expect(d.resolution).toMatch(/\[stripe\]/);
+    expect(diagnoseStripeIssue).toHaveBeenCalledWith(sb, 'v-1', expect.objectContaining({ ticket_id: ticket.ticket_id }));
+  });
+
+  it('falls back to [stripe]-only when the LLM produces nothing but Stripe diagnosis succeeds', async () => {
+    vi.mocked(getClassificationClient).mockResolvedValue(null);
+    vi.mocked(diagnoseStripeIssue).mockResolvedValue('subscription: active.');
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'billing question', body: 'is my subscription active', venture_id: 'v-1', email: 'c@example.com' });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.resolution).toBe('[stripe] subscription: active.');
+  });
+
+  it('falls back to [canned] when both crafting and stripe diagnosis produce nothing', async () => {
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.resolution).toMatch(/^\[canned\]/);
+  });
+
+  it('does NOT invoke the stripe skill for a non-billing category', async () => {
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(diagnoseStripeIssue).not.toHaveBeenCalled();
+  });
+
+  it('escalated tickets never invoke craftSupportReply/diagnoseStripeIssue and prefix resolution_notes with [escalated]', async () => {
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach', venture_id: 'v-1' });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.status).toBe('escalated');
+    expect(getClassificationClient).not.toHaveBeenCalled();
+    expect(diagnoseStripeIssue).not.toHaveBeenCalled();
+    const row = sb.inserted.find((r) => r.status === 'escalated');
+    expect(row.resolution_notes).toMatch(/^\[escalated\]/);
+  });
+});
+
+describe('stageReplyDelivery -- FR-3 round 2 (staged via checkPublishAuthorization, never sent)', () => {
+  it('stages AFTER a successful auto-resolve write, with channelType=support_reply, a content-derived contentId, and no explicit correlationId', async () => {
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.staging.staged).toBe(true);
+    expect(checkPublishAuthorization).toHaveBeenCalledWith(expect.objectContaining({ ventureId: 'v-1', channelType: 'support_reply' }));
+    const call = vi.mocked(checkPublishAuthorization).mock.calls[0][0];
+    expect(call.correlationId).toBeUndefined();
+    // SECURITY finding (EXEC-TO-PLAN, evidence 41066290): contentId must NOT be the raw,
+    // caller-spoofable ticket_id -- it must be derived from the actual staged content.
+    expect(call.contentId).not.toBe(ticket.ticket_id);
+    expect(typeof call.contentId).toBe('string');
+    expect(call.contentId.length).toBeGreaterThan(0);
+  });
+
+  it('SECURITY fix verification: two tickets with the SAME caller-supplied ticket_id but DIFFERENT resolved content never produce the same contentId (closes the accepted-approval-reuse spoof)', async () => {
+    // Genuinely different resolved content is required for this to be a meaningful test -- both
+    // tickets fall to the [canned] fallback here (no LLM/Stripe mock override), so they must land
+    // in DIFFERENT categories (different canned strings). Two same-category canned-fallback
+    // tickets legitimately sharing a contentId is correct content-based dedup, not a regression of
+    // this fix -- the vulnerability was ticket_id-based spoofing across genuinely DIFFERENT content.
+    const sb1 = makeSb();
+    const ticket1 = normalizeSupportTicket({ ticket_id: 'attacker-chosen-id', subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const triage1 = triageSupportTicket(ticket1);
+    expect(triage1.category).toBe('account');
+    await disposeSupportTicket(sb1, ticket1, triage1);
+    const firstContentId = vi.mocked(checkPublishAuthorization).mock.calls[0][0].contentId;
+
+    vi.mocked(checkPublishAuthorization).mockClear();
+    const sb2 = makeSb();
+    const ticket2 = normalizeSupportTicket({ ticket_id: 'attacker-chosen-id', subject: 'how do i configure the setup', body: 'need the tutorial guide', venture_id: 'v-1' });
+    const triage2 = triageSupportTicket(ticket2);
+    expect(triage2.category).toBe('how_to');
+    expect(triage2.routing_decision).toBe('auto_resolve');
+    await disposeSupportTicket(sb2, ticket2, triage2);
+    const secondContentId = vi.mocked(checkPublishAuthorization).mock.calls[0][0].contentId;
+
+    expect(ticket1.ticket_id).toBe(ticket2.ticket_id); // same spoofed raw id...
+    expect(firstContentId).not.toBe(secondContentId); // ...but genuinely different content -> different staged contentId
+  });
+
+  it('does NOT stage when the write fails and the ticket downgrades to escalate', async () => {
+    const sb = makeSb({ failFirstNInserts: 1 });
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.status).toBe('escalated');
+    expect(checkPublishAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('does NOT stage an escalated ticket (no reply exists to deliver)', async () => {
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'URGENT down', body: 'breach', venture_id: 'v-1' });
+    await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(checkPublishAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('TS-6 (VALIDATION PLAN_VERIFICATION finding, evidence 4d0013a1): redelivering an IDENTICAL ticket produces the SAME contentId both times -- the property checkPublishAuthorization\'s own dedup (tested in its own suite) relies on to never mint a duplicate chairman_decisions row for a genuine retry', async () => {
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const triage = triageSupportTicket(ticket);
+
+    await disposeSupportTicket(makeSb(), ticket, triage);
+    const firstCall = vi.mocked(checkPublishAuthorization).mock.calls[0][0];
+
+    vi.mocked(checkPublishAuthorization).mockClear();
+    await disposeSupportTicket(makeSb(), { ...ticket }, triage); // simulates a genuine webhook/email redelivery
+    const secondCall = vi.mocked(checkPublishAuthorization).mock.calls[0][0];
+
+    expect(secondCall.contentId).toBe(firstCall.contentId);
+    expect(secondCall.correlationId).toBeUndefined();
+    expect(secondCall.ventureId).toBe(firstCall.ventureId);
+    expect(secondCall.channelType).toBe(firstCall.channelType);
+  });
+
+  it('fails open (does not throw, ticket still recorded) when checkPublishAuthorization itself throws', async () => {
+    vi.mocked(checkPublishAuthorization).mockRejectedValue(new Error('gate down'));
+    const sb = makeSb();
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const d = await disposeSupportTicket(sb, ticket, triageSupportTicket(ticket));
+    expect(d.status).toBe('auto_resolved');
+    expect(d.staging.staged).toBe(false);
   });
 });
 
