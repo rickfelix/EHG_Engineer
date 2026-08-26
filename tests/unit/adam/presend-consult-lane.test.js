@@ -145,12 +145,20 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
   // discarded entirely, so a genuinely successful insert and a silently failed one were
   // indistinguishable to this lane's caller.
   it('FR-1: requests select:id/single:true on the insert and forwards the inserted row id as consultRowId', async () => {
+    // VALIDATION sub-agent finding V-2 (MEDIUM, PLAN_VERIFICATION): the first version of this
+    // test captured `opts` into the stub's return value (__opts) but never asserted on it -- drop
+    // {select:'id', single:true} entirely from the real insertCoordinationRow call and production
+    // gets {data:null} (no RETURNING clause), consult_row_id stays null on every hold forever, and
+    // this exact test still passed. `capturedOpts` is asserted directly below, not smuggled through
+    // the return value.
+    let capturedOpts = null;
     const { deps } = makeDeps({
-      insertCoordinationRow: async (row, opts) => ({ data: { id: 'row-xyz-789' }, error: null, __opts: opts }),
+      insertCoordinationRow: async (row, opts) => { capturedOpts = opts; return { data: { id: 'row-xyz-789' }, error: null }; },
     });
     const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
     expect(out.action).toBe('hold-and-surface');
     expect(out.consultRowId).toBe('row-xyz-789');
+    expect(capturedOpts).toMatchObject({ targetRoleHint: 'solomon', select: 'id', single: true });
   });
 
   it('FR-1: an insert error is readback-verified as a failure -- consultRowId is absent (never a stale/wrong id), and the lane still does not throw (non-blocking contract preserved)', async () => {

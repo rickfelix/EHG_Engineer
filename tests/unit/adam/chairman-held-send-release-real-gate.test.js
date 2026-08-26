@@ -13,6 +13,18 @@
  * resolver, and the verified-answer lookup are stubbed -- releaseHeldSend's own
  * runPreSendConsultLane override (a verdict this function itself fetched, never caller-supplied)
  * is exercised unmodified.
+ *
+ * VALIDATION sub-agent finding V-1 (HIGH, PLAN_VERIFICATION): the first version of this file passed
+ * `context: { now: Date.now() }` into the REAL rubric, whose quiet_hours check (rubric-engine/
+ * lint.js:166) is blocking -- so this file flaked on ANY CI run inside 22:00-06:00 ET, and the
+ * negative-control test stayed green in that window for the WRONG reason (asserting only a generic
+ * `reason:'blocked'`, satisfied by quiet_hours just as well as by the missing reply fields it was
+ * meant to prove). That is exactly the flake class FR-2's own PRD acceptance criteria named and
+ * forbade ("never Date.now() / a real clock, to avoid flaking inside the quiet-hours window") --
+ * reintroduced one file over. Fixed: context.nowHourET (an integer) is set directly, which
+ * etHour() (lint.js:72) returns FIRST, before ever touching a Date -- fully deterministic,
+ * independent of wall-clock time or timezone. The negative-control test now also asserts on
+ * blockedReasons content, not just the generic {reason:'blocked'} shape.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { releaseHeldSend } from '../../../lib/adam/chairman-held-send-release.js';
@@ -117,7 +129,10 @@ describe('releaseHeldSend end-to-end through the REAL rubric (FR-3 + FR-4 combin
       sendChairmanSMS,
       // Real evaluate() runs (not overridden) -- deterministic lint + heuristicReviewer, no network.
       sendOpts: { sender, resolveChairmanZone },
-      context: { now: Date.now() },
+      // Deterministic clock (V-1 fix): nowHourET short-circuits etHour() before any Date is
+      // touched (lint.js:72), so this is byte-independent of wall-clock time -- 10:00 ET is
+      // outside the 22:00-06:00 quiet window regardless of when/where this suite runs.
+      context: { nowHourET: 10 },
     });
 
     expect(outcome.action).toBe('released');
@@ -147,11 +162,22 @@ describe('releaseHeldSend end-to-end through the REAL rubric (FR-3 + FR-4 combin
       resolveVerifiedAnswer: resolveVerifiedAnswerFn,
       sendChairmanSMS,
       sendOpts: { sender, resolveChairmanZone },
-      context: { now: Date.now() },
+      // Same deterministic clock as the positive case (V-1 fix) -- without it this test stayed
+      // green inside the quiet-hours window for the WRONG reason (a generic 'blocked' matches
+      // quiet_hours just as well as the missing-reply-fields case this test exists to prove).
+      context: { nowHourET: 10 },
     });
 
     expect(sender.send).not.toHaveBeenCalled();
     expect(outcome.action).toBe('dispatch_not_sent_unclaimed');
     expect(outcome.sendResult).toMatchObject({ sent: false, held: true, reason: 'blocked' });
+    // The load-bearing assertion (V-1 fix): pin this to the SPECIFIC rubric checks the missing
+    // reply fields trip, not merely "some blocking finding fired" -- a generic 'blocked' shape
+    // would pass identically whether the block came from the missing reply fields or from an
+    // unrelated check (e.g. quiet_hours), which is exactly how this test stayed silently
+    // meaningless before the clock fix.
+    const reasons = outcome.sendResult.blockedReasons || [];
+    expect(reasons.some((r) => r.startsWith('reply_instruction:'))).toBe(true);
+    expect(reasons.some((r) => r.startsWith('reply_ids:'))).toBe(true);
   });
 });
