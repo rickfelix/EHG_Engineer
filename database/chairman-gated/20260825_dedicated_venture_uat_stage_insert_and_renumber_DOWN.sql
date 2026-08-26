@@ -38,10 +38,18 @@ LOCK TABLE public.ventures, public.venture_stages, public.chairman_decisions, pu
 --    now occupies 23, and the shifted rows occupy 24-27). Round 1's DOWN preflight checked only
 --    24-27, missing stage 23 -- a venture mid-transition through the brand-new UAT stage would
 --    have its catalog row deleted out from under it (found by adversarial TESTING review).
+--    Also mirrors the UP file's advisory_checkpoints FK-hazard check (found missing here by
+--    adversarial ship-gate review): advisory_checkpoints.stage_number FKs into
+--    venture_stages(stage_number) with no ON UPDATE CASCADE, so a row anywhere in the post-apply
+--    23-27 footprint -- including stage 23, which this file's section 3 DELETEs outright -- would
+--    otherwise surface as a raw, unnamed FK-violation error deep inside the $revert$ block instead
+--    of this named, actionable one. Fails safe either way (whole transaction rolls back), but the
+--    named check gives the chairman a diagnosable reason instead of a bare constraint-violation.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 DO $preflight_down$
 DECLARE
   v_in_flight INTEGER;
+  v_advisory_in_range INTEGER;
 BEGIN
   SELECT count(*) INTO v_in_flight
   FROM public.venture_stage_work
@@ -49,6 +57,13 @@ BEGIN
     AND stage_status = 'in_progress';
   IF v_in_flight <> 0 THEN
     RAISE EXCEPTION 'DOWN PREFLIGHT FAILED: % venture(s) currently mid-transition (venture_stage_work.stage_status=in_progress) through stage 23-27; refusing to revert underneath live ventures.', v_in_flight;
+  END IF;
+
+  SELECT count(*) INTO v_advisory_in_range
+  FROM public.advisory_checkpoints
+  WHERE stage_number BETWEEN 23 AND 27;
+  IF v_advisory_in_range <> 0 THEN
+    RAISE EXCEPTION 'DOWN PREFLIGHT FAILED: % advisory_checkpoints row(s) reference stage_number 23-27 (no ON UPDATE CASCADE on that FK); resolve before reverting.', v_advisory_in_range;
   END IF;
 END
 $preflight_down$;
