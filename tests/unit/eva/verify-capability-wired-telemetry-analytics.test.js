@@ -50,6 +50,17 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C: verifyCapabilityWired telemetr
     expect(result.active_users).not.toBe(10);
   });
 
+  it('FR-3 AC-2 (VALIDATION mutation M3): wired criterion is event_count > 0, NOT active_users > 0 (NULL actor_hash edge case)', async () => {
+    // VALIDATION finding VAL-1 (evidence 7d046e79): every prior fixture had event_count
+    // and active_users both >0 or both 0, so this predicate was unasserted -- a mutation
+    // swapping the criterion to active_users > 0 survived. This fixture is the
+    // discriminating case FR-3 AC-2 explicitly names: events exist but every actor_hash
+    // is NULL, so active_users=0 while event_count>0.
+    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 4, active_users: 0 }], error: null });
+    const result = await verifyCapabilityWired(supabase, 'venture-g', 'telemetry-analytics');
+    expect(result.wired).toBe(true);
+  });
+
   it('reports wired=false (not a thrown error) when the RPC call errors', async () => {
     const supabase = buildMockSupabaseWithRpc({ data: null, error: { message: 'connection reset' } });
     const result = await verifyCapabilityWired(supabase, 'venture-d', 'telemetry-analytics');
@@ -159,6 +170,24 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C FR-2: fn_venture_usage_window_s
 
   it('computes active_users as COUNT(DISTINCT actor_hash), not COUNT(*)', () => {
     expect(sql).toMatch(/count\(DISTINCT actor_hash\)::BIGINT AS active_users/i);
+  });
+
+  it('TS-3 (VALIDATION mutation M4): scopes rows to the requested venture_id, not a tautology', () => {
+    // VALIDATION finding VAL-2 (evidence 7d046e79): a mutation replacing this WHERE
+    // clause with a tautology survived every prior static assertion -- this table's
+    // SECURITY DEFINER function bypasses RLS by design, so the venture_id predicate
+    // IS the access boundary. Requires the literal column comparison, not just any
+    // WHERE presence.
+    expect(sql).toMatch(/WHERE\s+venture_id\s*=\s*p_venture_id/);
+    expect(sql).toMatch(/AND\s+created_at\s*>=\s*p_window_start/);
+    expect(sql).toMatch(/AND\s+created_at\s*<=\s*p_window_end/);
+  });
+
+  it('TS-6 (VALIDATION mutation M5): malformed-window guard returns an empty result rather than erroring', () => {
+    // VALIDATION finding VAL-3: a mutation disabling this guard (IF false THEN) survived
+    // every prior static assertion.
+    expect(sql).toMatch(/IF\s+p_window_start\s+IS\s+NULL\s+OR\s+p_window_end\s+IS\s+NULL\s+OR\s+p_window_start\s*>\s*p_window_end\s+THEN/);
+    expect(sql).toMatch(/RETURN QUERY SELECT 0::BIGINT, 0::BIGINT;/);
   });
 
   it('is transaction-wrapped and staged as chairman-gated (not applied)', () => {
