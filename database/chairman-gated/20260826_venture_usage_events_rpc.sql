@@ -186,7 +186,7 @@ COMMENT ON FUNCTION public.fn_venture_usage_event_prior_hour_count(UUID) IS
   'venture_usage_events -- NOT a reuse of fn_venture_ingest_prior_hour_count, which counts FROM '
   'public.feedback and would be blind to usage-event volume entirely.';
 
-REVOKE ALL ON FUNCTION public.fn_venture_usage_event_prior_hour_count(UUID) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.fn_venture_usage_event_prior_hour_count(UUID) FROM PUBLIC, anon, authenticated;
 
 -- ============================================================
 -- 4. fn_submit_venture_usage_event: the anon-callable, ingest-key-bound RPC. Response is EXACTLY
@@ -340,7 +340,7 @@ COMMENT ON FUNCTION public.fn_submit_venture_usage_event(UUID, TEXT, TEXT, TEXT,
   'other on response shape. Self-produces its own launch_usage_signal venture_artifacts gate '
   'witness on successful ingestion, keyed by stage_key not a hardcoded stage_number.';
 
-REVOKE ALL ON FUNCTION public.fn_submit_venture_usage_event(UUID, TEXT, TEXT, TEXT, JSONB, TIMESTAMPTZ) FROM PUBLIC, authenticated;
+REVOKE EXECUTE ON FUNCTION public.fn_submit_venture_usage_event(UUID, TEXT, TEXT, TEXT, JSONB, TIMESTAMPTZ) FROM PUBLIC, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_submit_venture_usage_event(UUID, TEXT, TEXT, TEXT, JSONB, TIMESTAMPTZ) TO anon, service_role;
 
 -- ============================================================

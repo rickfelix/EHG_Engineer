@@ -28,6 +28,7 @@
  * never trusted.
  */
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = '363c8fb9-67c6-4702-807b-fa227bf4637f';
 const SD_KEY = 'SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A';
@@ -166,4 +167,6 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(e => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch(e => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+}
