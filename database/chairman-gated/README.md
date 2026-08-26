@@ -879,3 +879,45 @@ row) that logs a console warning if the frontend deploys ahead of the chairman-a
 Rollback: `20260825_dedicated_venture_uat_stage_insert_and_renumber_DOWN.sql` — full mirror,
 reverting all four tables' shifts and dropping the new UAT catalog row, with the same per-row
 snapshot-based verification and the same two CI-lint fixes applied.
+
+## Applying `20260826_eva_sync_state_rls_lockdown.sql`
+
+**SD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001 (FR-3).** Closes a live plaintext-credential
+exposure: SECURITY sub-agent confirmed (live `pg_policies` + a real anon-key HTTP GET returning
+200 with RLS-filtered rows) that `select_eva_sync_state` grants `role=authenticated` `SELECT` with
+`qual=true` — any authenticated JWT in the app can read `eva_sync_state.source_metadata` today,
+which holds the YouTube OAuth refresh/access token pair in plaintext. Live grants also show `anon`
+and `authenticated` both hold `INSERT`/`UPDATE`/`DELETE`/`TRUNCATE` via a systemic
+`pg_default_acl` grant — `TRUNCATE` is not RLS-gated at all, so this is not merely a read exposure.
+
+### What it does
+- `DROP POLICY select_eva_sync_state ON public.eva_sync_state;`
+- `REVOKE ALL ON public.eva_sync_state FROM anon, authenticated;`
+- Leaves `manage_eva_sync_state` (`service_role`, `ALL`, `qual=true`) completely untouched — all 5
+  real callers (`lib/integrations/youtube/oauth-manager.js`, `playlist-sync.js`,
+  `lib/integrations/todoist/todoist-sync.js`, `release-monitor.js`, `scripts/eva-idea-status.js`)
+  already use `createSupabaseServiceClient()` (`service_role`), confirmed by code read.
+
+**Out of scope, deliberately**: the broader `pg_default_acl` misconfiguration affects every
+public-schema table, not just this one — flagged as a systemic follow-up, not fixed here.
+
+**Apply (chairman ceremony):**
+```bash
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260826_eva_sync_state_rls_lockdown.sql" \
+  --prod-deploy --allow-any-path
+```
+
+**Urgency**: this closes a LIVE, actively-exploitable exposure (any authenticated JWT can read a
+plaintext OAuth token today) — recommend scheduling ahead of the routine chairman-gated backlog,
+not batched with lower-severity entries in this directory.
+
+DDL test: `tests/ddl/eva-sync-state-rls-lockdown-ddl.db.test.js` — proves a negative control
+(all 7 table-privilege types `true` for `anon`/`authenticated` pre-migration, matching the live
+baseline), the migration applied, then all 7 privilege types `false` post-migration, plus a
+positive control that `service_role` retains full access and `manage_eva_sync_state` is untouched.
+
+Rollback: `20260826_eva_sync_state_rls_lockdown_DOWN.sql` — restores the exact pre-migration
+policy and grants (re-opens the exposure; only apply if an undiscovered legitimate
+anon/authenticated caller surfaces post-apply).
