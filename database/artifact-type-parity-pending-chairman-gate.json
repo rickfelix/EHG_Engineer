@@ -1,4 +1,8 @@
 {
   "_doc": "ARTIFACT_TYPES registry values (lib/eva/artifact-types.js) that are registered in code but NOT YET allowed by the live venture_artifacts_artifact_type_check CHECK constraint, because the widening migration is chairman-gated and staged (not yet applied) -- mirrors the requires_chairman_apply convention used by scripts/check-migration-readiness.mjs. Every entry MUST cite the staged migration file and a reason. tests/unit/eva/artifact-type-db-parity.test.js enforces two things: (1) every drifted value not covered here still fails CI (real drift keeps failing), and (2) any entry here that IS already present in the live constraint snapshot fails CI too (a stale exemption that should have been removed once the migration was applied and the schema snapshot regenerated via `npm run schema:snapshot:lint`).",
-  "allow": {}
+  "allow": {
+    "launch_usage_signal": {
+      "reason": "SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A: staged in database/chairman-gated/20260826_venture_usage_events_rpc.sql, awaiting chairman approval. Remove this entry once applied and npm run schema:snapshot:lint has regenerated the snapshot."
+    }
+  }
 }

@@ -105,6 +105,11 @@ on:
       - 'database/chairman-gated/20260825_ventures_canonical_writer_choke_DOWN.sql'
       - 'database/chairman-gated/20260825_ventures_canonical_writer_policy_revoke.sql'
       - 'tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js'
+      # SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A. Same TR-5 fix, applied to a NEW pair rather than
+      # amended-in: this workflow's own paths filter is literal, so a PR touching only this SD's
+      # migration and its ddl test would otherwise trigger nothing.
+      - 'database/chairman-gated/20260826_venture_usage_events_rpc.sql'
+      - 'tests/ddl/venture-usage-events-rpc-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'
