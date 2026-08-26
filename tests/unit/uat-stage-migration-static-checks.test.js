@@ -66,7 +66,11 @@ describe('TS-8 disposition: stage-execution-worker.js literal is documented, not
 // FR-9 AC-1: both RPCs are updated to accept the new max stage (27) in the SAME migration.
 describe('migration static check: FR-9 upper-bound fix applied to both RPCs', () => {
   it('advance_venture_stage and fn_advance_venture_stage both check p_to_stage > 27', () => {
-    const occurrences = migrationSql.match(/p_to_stage[ \t]*>[ \t]*27/g) || [];
+    // Matches the functional IF-condition shape only -- the migration also references
+    // "p_to_stage > 27" inside the verify block's own LIKE string literal and inside
+    // fn_validate_stage_column()'s separate bound check, which are legitimate additional uses,
+    // not a third/fourth copy of the RPC's own guard clause.
+    const occurrences = migrationSql.match(/IF p_to_stage < 1 OR p_to_stage > 27 THEN/g) || [];
     expect(occurrences.length).toBe(2);
   });
 

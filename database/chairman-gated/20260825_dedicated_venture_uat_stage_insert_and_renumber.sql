@@ -8,6 +8,33 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- REVISION NOTE (round 2, same EXEC pass): an independent adversarial TESTING sub-agent review of
+-- the round-1 version of this file, run against the LIVE database and in rolled-back-transaction
+-- probes, found it would abort on its own first statement and would not have avoided the very
+-- collision it claimed to avoid. That review is the reason this file looks the way it does below.
+-- Two round-1 defects were CRITICAL and empirically proven, not inferred:
+--   (a) the quiescence preflight referenced venture_stage_transitions.completed_at, a column that
+--       does not exist on this table (venture_stage_transitions is an append-only, already-
+--       completed transition LOG written by the RPCs below at the END of a successful transition
+--       -- it has no "in progress" row shape at all, so this migration's live-transition check
+--       belongs against venture_stage_work.stage_status instead, fixed below);
+--   (b) the single-statement UPDATE...FROM renumber does NOT avoid the stage_number PRIMARY KEY
+--       collision it claimed to (proven: PostgreSQL enforces a non-deferred PK per row during
+--       statement execution, not only at statement end) -- fixed below via a two-phase
+--       negative-intermediate shift (flip to negative stage_number first, an intermediate value no
+--       live row can collide with, then land on the final positive value in a second statement).
+-- The same review also found this migration touched an irreversible go_live gate on live
+-- production venture data while never actually shifting the LIVE state pointers that reference
+-- stage_number (ventures.current_lifecycle_stage, chairman_decisions.lifecycle_stage,
+-- venture_stage_work.lifecycle_stage) -- and, independently found while fixing that gap, that
+-- ventures.current_lifecycle_stage carries its OWN hardcoded CHECK (<= 26), a FOURTH occurrence of
+-- the stale upper bound beyond the two RPCs (FR-9) and stage-execution-worker.js/stage-templates
+-- (TS-8) already known -- which would have made the new top stage (27) categorically unreachable
+-- via ANY path, RPC bound fix or not, until this constraint is also widened. Both
+-- venture_stage_work and chairman_decisions carry their OWN compound UNIQUE constraints involving
+-- their stage column, so both also use the two-phase negative-intermediate technique, not a plain
+-- +1 UPDATE.
+--
 -- This migration touches an irreversible go_live gate (stage_key='go_live', currently
 -- stage_number=24, promotion + is_irreversible=true) on live production venture data. Blast
 -- radius contract: docs/audits/stage-21-26-census.md (Child A's committed census, 3805 code
@@ -16,87 +43,152 @@
 --
 --   node scripts/eva/uat-stage-migration-preconditions.mjs
 --
--- That script re-verifies (FR-1) the writer-choke + gate-array mechanisms have not drifted
--- since this file was authored, checks stage-quiescence (FR-2), and classifies every venture
--- parked at a shifted stage as demo/real (FR-6) -- it exits non-zero and refuses if any check
--- fails. This SD's own originally-stated hard blocker had already shipped before the SD was
--- even created (proof this class of drift is real, not hypothetical) -- do not skip this step.
+-- That script re-verifies (FR-1) the writer-choke + gate-array mechanisms have not drifted since
+-- this file was authored, checks stage-quiescence (FR-2), and classifies every venture parked at
+-- a shifted stage as demo/real (FR-6) -- it exits non-zero and refuses if any check fails. As of
+-- this revision, TWO REAL (is_demo=false) ventures are currently parked in the shift range
+-- (MarketLens at stage 24, DataDistill at stage 26, both status=cancelled) -- the classifier
+-- correctly blocks on this; a chairman ceremony cannot proceed until those are resolved or an
+-- explicit override is exercised. This SD's own originally-stated hard blocker had already
+-- shipped before the SD was even created (proof this class of drift is real, not hypothetical) --
+-- do not skip this step, and DO NOT trust any premise in this file about "zero real ventures
+-- parked" without re-measuring at apply time.
 --
 -- APPLY (chairman ceremony):
 --   node scripts/apply-migration.js --issue-token
 --   MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
 --     "database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber.sql" \
 --     --prod-deploy --allow-any-path
+--   A DRY RUN (apply-migration.js with no --prod-deploy) MUST be run and its output inspected
+--   before the real apply -- the round-1 defects above would have been caught instantly by a
+--   dry run that nobody ran; do not repeat that mistake.
 --
 -- NOTE: no BEGIN;/COMMIT; here -- scripts/apply-migration.js wraps the file in its own
 -- transaction (and holds an advisory lock), matching every other file in this directory.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- WHAT THIS FILE DOES (5 objects, one transaction)
+-- WHAT THIS FILE DOES (one transaction)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- 1. Renumber venture_stages.stage_number 23-26 -> 24-27 (single UPDATE...FROM CTE, TR-2 --
---    the 20260607_swap_stage_21_22_full_content.sql technique, generalized from a 2-row swap
---    to a 4-row shift, avoiding a stage_number/stage_key UNIQUE-constraint collision mid-walk).
---    depends_on is shifted +1 in the SAME statement -- see note below; this was found during
---    EXEC, not stated in any FR, because inserting a new row mid-chain (not just swapping two
---    adjacent slots, which is what the 20260607 precedent did) uniquely requires it.
--- 2. INSERT the new dedicated-venture-UAT row at the now-vacant stage_number=23, carrying the
+-- 1. Preflight: stage-quiescent freeze (live venture_stage_work.stage_status, FR-2), parked-REAL-
+--    venture block (FR-6, enforced HERE at the DDL level, not only in the skippable Node script),
+--    and an advisory_checkpoints zero-rows-in-range check (its stage_number FK into venture_stages
+--    has no ON UPDATE CASCADE).
+-- 2. Two-phase negative-intermediate renumber of venture_stages.stage_number 23-26 -> 24-27
+--    (depends_on re-linked +1 in the same second-phase statement), guarded to run only once.
+-- 3. INSERT the new dedicated-venture-UAT row at the now-vacant stage_number=23, carrying the
 --    metadata.gates.uat_robustness_required=true marker Child C's lib/eva/uat-robustness-gate.js
---    already ships and is waiting on (that file's own header: "until child B lands that marker
---    on the new stage row, `applies` is always false" -- this is that landing).
--- 3. CREATE OR REPLACE both advance_venture_stage() and fn_advance_venture_stage() with their
---    hardcoded `p_to_stage > 26` bound updated to `> 27` (FR-9, SECURITY finding: otherwise the
---    new top stage is unreachable via 2 of 4 registered writers the instant this applies).
--- 4. CREATE OR REPLACE ventures_canonical_writer_policy() with one new registry row for the
---    dedicated-venture-UAT stage (FR-7).
--- 5. CREATE OR REPLACE the translate-at-read shim (FR-4) reconciled against the REAL 20260322
---    precedent (database/migrations/20260322_stage_renumbering_blueprint_review.sql STEP 3,
---    which already shifted venture_stage_transitions.from_stage/to_stage +1 for values 17-25).
+--    already ships and is waiting on.
+-- 4. Widen ventures.current_lifecycle_stage's CHECK bound to <= 27, then shift any ventures
+--    currently parked in 23-26 (demo-only, per the preflight block) by +1.
+-- 5. Two-phase negative-intermediate shift of chairman_decisions.lifecycle_stage and
+--    venture_stage_work.lifecycle_stage for rows in 23-26 (both LIVE, RPC-read state, not
+--    historical logs -- unlike the two FR-4 shim tables below, these must stay valid for the
+--    RPCs' own `WHERE lifecycle_stage = p_from_stage` lookups to keep working post-apply).
+-- 6. CREATE OR REPLACE both advance_venture_stage() and fn_advance_venture_stage() with their
+--    hardcoded `p_to_stage > 26` bound updated to `> 27` (FR-9).
+-- 7. CREATE OR REPLACE ventures_canonical_writer_policy() with one new registry row (FR-7).
+-- 8. CREATE OR REPLACE the translate-at-read shim (FR-4, extended to stage_events -- see note
+--    below) reconciled against the REAL 20260322 precedent.
+-- 9. Post-apply readback verification.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- DOCUMENTED, NOT FIXED: the p_from_stage=23/p_to_stage=24 "product review" choke-point literal
+-- DIRECT SHIFT vs SHIM-ONLY: why chairman_decisions/venture_stage_work move, but
+-- venture_stage_transitions/eva_stage_gate_attempts/stage_events do not
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- Independent re-verification during EXEC (reading fn_advance_venture_stage()'s full live body
--- past the p_to_stage bound this SD already knew to check) found the SAME literal stage pair
--- hardcoded a SECOND time, for an unrelated purpose: `IF p_from_stage = 23 AND p_to_stage = 24
--- THEN` gates entry into stage_key='launch_readiness_gate' (soon to be stage_number=24) behind
--- an approved chairman `product_review` decision (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001).
--- The IDENTICAL literal, for the SAME purpose, is mirrored in
--- lib/eva/stage-execution-worker.js:2971 (`if (fromStage === 23 && toStage === 24)`, plus a
--- `.eq('lifecycle_stage', 23)` query filter a few lines below) as a daemon-walk backstop, and
--- both call into lib/eva/chairman-product-review.js, whose own stage assumptions were not
--- audited by this SD.
+-- FR-4 named venture_stage_transitions and eva_stage_gate_attempts as historical, append-only
+-- records that must never be UPDATEd -- read through the shim only. chairman_decisions and
+-- venture_stage_work are different in kind: both RPCs perform LIVE, ongoing lookups against them
+-- (`WHERE lifecycle_stage = p_from_stage AND status = 'approved'`, `WHERE lifecycle_stage =
+-- p_from_stage` UPDATE) as part of every future advance call -- if left stale, a real chairman
+-- approval or an in-progress stage-work row would silently stop matching the RPCs' own queries.
+-- These two are therefore shifted directly, in the SAME migration, using the same two-phase
+-- technique venture_stages needs (both carry a compound UNIQUE constraint on their stage column).
+-- stage_events, by contrast, is a genuinely append-only event LOG (event_type IN ('STAGE_ENTRY',
+-- 'STAGE_COMPLETE', ...)) with no RPC ever reading it back by stage_number to gate a decision --
+-- found during this revision to share venture_stage_transitions' exact "historical record, not
+-- live state" shape, so it is added to the shim's coverage (a new
+-- stage_events_current_scheme view) rather than direct-shifted, consistent with FR-4's own
+-- philosophy rather than contradicting it.
 --
--- Per TS-8's own contract ("either updated... or the PRD/migration explicitly documents why the
--- check/filename intentionally stays stale-named, matching the tolerated component_path drift
--- precedent from the 20260607 swap"): this migration LEAVES both literals unchanged. Fixing only
--- the SQL side here while lib/eva/stage-execution-worker.js and chairman-product-review.js stay
--- unaudited would make the two sides of the SAME gate disagree about which transition requires
--- chairman approval -- worse than leaving both consistently stale. This is a real, previously
--- uncaught (by LEAD, PLAN, TESTING, or SECURITY review) finding with its own non-trivial blast
--- radius into live chairman-gate enforcement; it is deliberately triaged OUT of this SD's scope
--- (TR-1's "staged, chairman-gated, one concern at a time" convention) and belongs in its own
--- dedicated, independently-reviewed follow-up SD, not bundled into an already-large renumber.
--- Recorded as a completion-flag finding for SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- DOCUMENTED, NOT FIXED (deliberately out of this SD's scope -- see rationale below)
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- (a) p_from_stage=23/p_to_stage=24 "product review" choke-point literal. Independent
+--     re-verification found the SAME literal stage pair hardcoded a SECOND time inside
+--     fn_advance_venture_stage() (below, unchanged except for the FR-9 bound), for an unrelated
+--     purpose: `IF p_from_stage = 23 AND p_to_stage = 24 THEN` gates entry into
+--     stage_key='launch_readiness_gate' (soon to be stage_number=24) behind an approved chairman
+--     `product_review` decision (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001). The IDENTICAL literal
+--     is mirrored in lib/eva/stage-execution-worker.js:2971 (`if (fromStage === 23 && toStage ===
+--     24)`, plus a `.eq('lifecycle_stage', 23)` query filter a few lines below) as a daemon-walk
+--     backstop, AND that same file's two `await import('./stage-templates/stage-23.js')` dynamic
+--     imports (lines 1028, 1556) will resolve to the WRONG stage post-renumber, AND
+--     lib/eva/stage-templates/ has no stage-27.js for the new top stage at all. Both call into
+--     lib/eva/chairman-product-review.js, whose own stage assumptions were not audited by this SD.
+--     Per TS-8's own contract ("either updated... or the PRD/migration explicitly documents why
+--     the check/filename intentionally stays stale-named"): this migration leaves ALL of the
+--     above unchanged. Fixing the SQL literal alone while the JS daemon backstop, its dynamic
+--     imports, the missing template file, and chairman-product-review.js stay unaudited would
+--     make the pieces of the SAME gate disagree with each other -- worse than leaving all of them
+--     consistently stale. Triaged as its own dedicated, independently-reviewed follow-up SD.
+-- (b) lib/eva/contracts/stage-contracts.js:619-627 -- a THIRD hardcoded stage-number map (a plain
+--     object literal keyed 23/24/25/26, each value an array of upstream-dependency stage numbers)
+--     found during this revision's re-verification, entirely outside FR-5's named 2-file scope
+--     (lib/eva/gate-bars.js, ehg's useLaunchWorkflow.ts) and outside this migration's own blast
+--     radius. Not fixed here for the same reason as (a): unknown consumer set, not independently
+--     reviewed, and this SD's scope is already large. Flagged as a completion-flag finding.
+-- (c) lib/eva/uat-robustness-gate.js:59's comment ("every valid stage_number 1-26 has a row")
+--     becomes stale (1-27) post-apply -- comment-only, no functional check reads this literal
+--     (verified: the function's actual guard is a generic "row not found" check, not a numeric
+--     bound), left unchanged as a cosmetic, non-functional staleness matching the tolerated
+--     component_path drift precedent from the 20260607 swap.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 0. PRECONDITION -- stage-quiescent freeze (FR-2 AC-1). Mirrors
---    lib/eva/uat-stage-migration/quiescence-check.mjs's pure logic in SQL, since the actual
---    freeze enforcement must live in the DDL itself, not only in the pre-flight Node script.
+-- 0. PRECONDITION -- stage-quiescent freeze (FR-2), parked-REAL-venture block (FR-6, enforced at
+--    the DDL level per the round-1 review's finding that it previously was NOT), and the
+--    advisory_checkpoints FK-hazard check.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 DO $preflight$
 DECLARE
   v_in_flight INTEGER;
+  v_real_parked INTEGER;
+  v_advisory_in_range INTEGER;
   v_have_2326 INTEGER;
 BEGIN
+  -- FR-2: a venture is "mid-transition" through a stage when it has a LIVE (not yet
+  -- completed/skipped) venture_stage_work row there. venture_stage_transitions has no such
+  -- concept -- it is an append-only log the RPCs write to AFTER a transition already succeeded,
+  -- in the SAME statement/transaction as the ventures update, so it can never observe an
+  -- in-progress state at all (round-1 defect: it referenced a completed_at column that does not
+  -- exist on that table).
   SELECT count(*) INTO v_in_flight
-  FROM public.venture_stage_transitions
-  WHERE completed_at IS NULL
-    AND (from_stage BETWEEN 23 AND 26 OR to_stage BETWEEN 23 AND 26);
+  FROM public.venture_stage_work
+  WHERE lifecycle_stage BETWEEN 23 AND 26
+    AND stage_status = 'in_progress';
   IF v_in_flight <> 0 THEN
-    RAISE EXCEPTION 'PREFLIGHT FAILED: % venture(s) currently mid-transition through stage 23-26; refusing to renumber underneath live ventures (FR-2 AC-1).', v_in_flight;
+    RAISE EXCEPTION 'PREFLIGHT FAILED: % venture(s) currently mid-transition (venture_stage_work.stage_status=in_progress) through stage 23-26; refusing to renumber underneath live ventures (FR-2).', v_in_flight;
+  END IF;
+
+  -- FR-6, enforced here (not only in the skippable Node precondition script): refuse outright if
+  -- any REAL (is_demo=false) venture is currently parked at a shifted stage_number.
+  SELECT count(*) INTO v_real_parked
+  FROM public.ventures
+  WHERE current_lifecycle_stage BETWEEN 23 AND 26
+    AND is_demo IS NOT TRUE;
+  IF v_real_parked <> 0 THEN
+    RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at a shifted stage (23-26); refusing to proceed without explicit chairman review (FR-6).', v_real_parked;
+  END IF;
+
+  -- advisory_checkpoints.stage_number FKs into venture_stages(stage_number) with no ON UPDATE
+  -- CASCADE -- a row in the shift range would block the renumber with a raw FK error instead of
+  -- this named one.
+  SELECT count(*) INTO v_advisory_in_range
+  FROM public.advisory_checkpoints
+  WHERE stage_number BETWEEN 23 AND 26;
+  IF v_advisory_in_range <> 0 THEN
+    RAISE EXCEPTION 'PREFLIGHT FAILED: % advisory_checkpoints row(s) reference stage_number 23-26 (no ON UPDATE CASCADE on that FK); resolve before renumbering.', v_advisory_in_range;
   END IF;
 
   -- Idempotency short-circuit: if the shift has already run, stage_number 23-26 no longer
@@ -113,79 +205,311 @@ $preflight$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 1. PRE-APPLY SNAPSHOT -- captured into a transaction-scoped temp table so the post-apply
---    readback (FR-3 AC-1) can assert gate_type/is_irreversible traveled with each row, whether
---    this is the first run or a harmless idempotent re-run.
+--    readback can assert against real pre-apply values, whether this is the first run or a
+--    harmless idempotent re-run.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 CREATE TEMP TABLE IF NOT EXISTS _uat001b_pre_snapshot ON COMMIT DROP AS
 SELECT stage_number, stage_key, gate_type, is_irreversible, depends_on
 FROM public.venture_stages
 WHERE stage_number BETWEEN 23 AND 26;
 
--- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 2. RENUMBER -- single UPDATE...FROM CTE (TR-2), stage_number 23-26 -> 24-27. depends_on is
---    shifted +1 in the SAME statement: this is a linear chain (every row's depends_on already
---    equals stage_number-1, verified live for stages 20-26), and inserting the new row into the
---    vacated slot means "shift stage_number AND every depends_on reference by +1" re-links the
---    chain correctly with no special-casing -- found during EXEC; not called out by any FR,
---    because the 20260607 precedent only ever swapped two ADJACENT same-numbered slots and never
---    needed to re-link a chain around an inserted row.
---    Idempotent: on a second run this WHERE clause matches zero rows (nothing remains at 23-26
---    once the first run completes), so it is a safe no-op.
--- ───────────────────────────────────────────────────────────────────────────────────────────────
-WITH src AS (
-  SELECT stage_number, depends_on
-  FROM public.venture_stages
-  WHERE stage_number BETWEEN 23 AND 26
-)
-UPDATE public.venture_stages AS vs
-SET
-  stage_number = src.stage_number + 1,
-  depends_on   = ARRAY(SELECT unnest(src.depends_on) + 1),
-  updated_at   = now()
-FROM src
-WHERE vs.stage_number = src.stage_number
-  AND vs.stage_number BETWEEN 23 AND 26;
+-- Per-venture snapshot: 24 and 25 are BOTH legitimate old-shift-range AND new-shift-destination
+-- values (the ranges [23,26] and [24,27] overlap heavily), so "count of ventures with
+-- current_lifecycle_stage BETWEEN 23 AND 26" cannot distinguish "correctly shifted" from
+-- "never touched" -- found by dry-running this file and getting a false-positive failure from
+-- exactly that flawed check. Compare each affected venture's OWN before/after value instead.
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_ventures_pre_snapshot ON COMMIT DROP AS
+SELECT id, current_lifecycle_stage AS pre_stage
+FROM public.ventures
+WHERE current_lifecycle_stage BETWEEN 23 AND 26;
+
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_cd_pre_snapshot ON COMMIT DROP AS
+SELECT id, lifecycle_stage AS pre_stage
+FROM public.chairman_decisions
+WHERE lifecycle_stage BETWEEN 23 AND 26;
+
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_vsw_pre_snapshot ON COMMIT DROP AS
+SELECT id, lifecycle_stage AS pre_stage
+FROM public.venture_stage_work
+WHERE lifecycle_stage BETWEEN 23 AND 26;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 3. INSERT the new dedicated-venture-UAT stage into the now-vacant stage_number=23.
---    metadata.gates.uat_robustness_required=true is the exact marker Child C's
---    lib/eva/uat-robustness-gate.js already reads (evaluatePromotionGate-adjacent check,
---    `venture_stages.metadata.gates.uat_robustness_required === true`) -- this INSERT is what
---    activates that already-shipped, currently-always-false gate.
---    Idempotent: ON CONFLICT (stage_number) DO NOTHING is safe because after a first run,
---    stage_number=23 is permanently occupied by this row (the shift above never touches it again).
+-- 2. FR-7 -- register the new dedicated-venture-UAT stage's writer(s) in
+--    ventures_canonical_writer_policy()'s registry BEFORE the guarded block below, which stamps
+--    ventures.current_lifecycle_stage writes with this identity -- enforce_canonical_stage_write()
+--    validates the stamp against this SAME registry function, so the registration must already be
+--    live before section 3 runs (found by dry-running this file: a naive "registry last" ordering
+--    makes the DDL reject its own write with "stamp value not present in canonical-writer
+--    registry"). Full VALUES list below is the LIVE registry (pg_get_functiondef, 2026-08-25) with
+--    ONE new row appended at the end -- every existing row is reproduced verbatim; CREATE OR
+--    REPLACE would otherwise silently drop them.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
-INSERT INTO public.venture_stages (
-  stage_number, stage_key, stage_name, description, app_description,
-  phase_number, phase_name, chunk, gate_type, review_mode, work_type,
-  depends_on, required_artifacts, metadata, is_high_consequence, is_irreversible
-) VALUES (
-  23,
-  'dedicated_venture_uat',
-  'Dedicated Venture UAT',
-  'In-stage UAT robustness checkpoint: exercises the venture''s own signed-in and signed-out user journeys against the Solomon-C control pack (per-journey minimum-assertion manifest, live-deployment binding, run-unique evidence hashing) before Launch Readiness. Built by SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-C (lib/eva/uat-robustness-gate.js, lib/eva/uat-journey-runner.js-adjacent machinery); activated by this row.',
-  'Automated UAT robustness pass against the venture''s live deployment',
-  5,
-  'The Build',
-  'THE_BUILD',
-  'none',
-  'auto',
-  'automated_check',
-  ARRAY[22]::integer[],
-  ARRAY[]::text[],
-  '{"gates":{"uat_robustness_required":true}}'::jsonb,
-  false,
-  false
-)
-ON CONFLICT (stage_number) DO NOTHING;
+CREATE OR REPLACE FUNCTION public.ventures_canonical_writer_policy(p_writer_identity text DEFAULT NULL::text)
+ RETURNS TABLE(writer_identity text, capability_flags jsonb, notes text)
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  WITH registry(writer_identity, capability_flags, notes) AS (
+    VALUES
+      -- ── DB-RESIDENT RPCs (self-stamping wired in step 2, 20260825_ventures_stage_rpcs_self_stamp.sql)
+      ('advance_venture_stage'::text,
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'SECURITY DEFINER RPC. Frontend-initiated + EVA-initiated forward advance. Also closes the promotion-gate array gap (FR-3) via the venture_stages SSOT read.'::text),
+      ('advance_venture_to_stage',
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'SECURITY DEFINER RPC. Single-stage-advance path used by orchestrator bootstrap flows.'),
+      ('rescan_stage_20',
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'SECURITY DEFINER RPC. Stage 20->21 auto-advance on terminal-SD + deployment-artifact verification.'),
+      ('fn_advance_venture_stage',
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'SECURITY DEFINER RPC, the EVA-daemon-path advance. Discovered mid-EXEC (not in the original writer census): lib/eva/artifact-persistence-service.js''s advanceStage() -- documented there as the primary general-advance call path -- calls this function, not advance_venture_stage.'),
+
+      -- ── EVA STAGE MACHINERY (JS, self-stamping wired in step 2's code deploy) ──────────────────
+      ('stage-execution-worker.js',
+       '{"surface":"eva_daemon","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'lib/eva/stage-execution-worker.js. ONE identity covering all 3 write call sites (forward advance in _advanceStage, and the two chairman-gate/high-consequence revert-to-review-stage sites) -- all are the same daemon-walk authority, not distinct writers.'),
+      ('venture-ceo-handlers.js',
+       '{"surface":"eva_agent","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'lib/agents/venture-ceo/handlers.js _updateVentureProgress (line ~665). Ad-hoc CEO-runtime forward advance, gated by checkStageArtifactPrecondition (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-5) before this SD; now also stamped.'),
+      ('saga-coordinator.js',
+       '{"surface":"eva_compensation","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'lib/eva/saga-coordinator.js createStageCompensation(). Revert-only (backward) compensation write for a failed saga step -- registered distinctly, not folded into stage-execution-worker.js, since it is a genuinely different call path with its own authority to revert.'),
+      ('eva-run.js',
+       '{"surface":"operator_tool","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'scripts/eva-run.js --stage flag. Operator-invoked manual stage override before an orchestration run.'),
+      ('run-canary-probe.mjs',
+       '{"surface":"operator_tool","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'scripts/canary/run-canary-probe.mjs deterministic full-pass reset (stage -> 1) on the fenced canary venture fixture.'),
+      ('reconciliation-packet-apply.mjs',
+       '{"surface":"operator_tool","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'scripts/reconciliation-packet-apply.mjs (SD-LEO-INFRA-STAGE-WRITER-CHOKE-001 FR-4). Applies a frozen-then-ratified stage value via advance_venture_stage/advance_venture_to_stage -- itself calls a registered RPC rather than writing raw, so this identity is a passthrough label for audit legibility, never used to bypass the RPCs'' own checks.'),
+
+      -- ── ehg REPO (routed through advance_venture_stage in step 2, not a raw write) ─────────────
+      ('ehg:promote.ts',
+       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/pages/api/v2/ventures/[id]/promote.ts, Stage 0->1 promotion. Routed through supabase.rpc(''advance_venture_stage'') (matching src/lib/ventures/advanceStage.ts''s existing pattern) rather than a raw client-authenticated .update() -- the identity here is advance_venture_stage''s own stamp; this registry row exists for the writer-inventory census, not as a separate stamping caller. Landed via SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 (rickfelix/ehg#797), independently of this SD -- verified live on origin/main 2026-08-25.'),
+
+      -- ── ehg REPO writer found by a parallel multi-agent census after this SD's initial writer
+      -- inventory (PLAN_VERIFICATION, post-handoff) -- missed by the original 19-path count because
+      -- scripts/lint/stage-advancement-chokepoint-lint.mjs's RUNTIME_DIRS is EHG_Engineer-relative
+      -- and cannot see the ehg repo at all, and the LEAD-phase census only checked promote.ts there.
+      ('stage24-go-live-route.ts',
+       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo app/api/stage24/[ventureId]/go-live/route.ts performLaunch(), Stage 23->24 launch. Uses the SERVICE ROLE (bypasses RLS entirely) for a compound write (launched_at + current_lifecycle_stage=24 + deployment_url + an idempotency guard on launched_at IS NULL) -- the highest-severity of the found gaps, since a service_role write has no RLS fallback to fail safely into and would 500 on every launch the instant this choke arms unregistered.'),
+
+      -- ── ehg REPO writers CENSUSED, now PASSTHROUGH callers of the registered RPC (not raw
+      -- writers): SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 independently routed all 4 of these
+      -- through advance_venture_stage (rickfelix/ehg, merged into origin/main 2026-08-25) while
+      -- this SD's own writer-completeness fix branch was open -- discovered when resolving that
+      -- branch's merge conflict against origin/main. Same passthrough shape as
+      -- reconciliation-packet-apply.mjs above: stamp_wired:true because none of these performs a
+      -- raw, bypass-capable write anymore, not because they carry their own stamp.
+      ('chairman-decide.ts',
+       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/pages/api/v2/chairman/decide.ts, "proceed" decision branch. Routed through supabase.rpc(''advance_venture_stage'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+      ('evaRollback.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/services/evaRollback.ts, rollback-to-previous-stage. Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''rollback'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+      ('evaStateMachines.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/services/evaStateMachines.ts, state-machine stage-advance. Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''automatic'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+      ('recursionEngine.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'ehg repo src/services/recursionEngine.ts updateWorkflowState(). Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''rollback'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
+
+      -- ── ehg REPO writers CENSUSED but genuinely NOT self-stamped: live-verified RLS-BLOCKED
+      -- TODAY (public.ventures has exactly two policies -- "Allow service_role to manage ventures"
+      -- ALL and "authenticated_read_ventures" SELECT -- no authenticated UPDATE policy exists at
+      -- all), so every write below already 0-rows-silently under RLS before it can ever reach this
+      -- guard's BEFORE UPDATE trigger. stamp_wired:false is accurate, not a gap: stamping a write
+      -- that RLS already filters out has no effect, and these rows exist for census completeness
+      -- (this SD's own stated purpose) rather than to authorize a reachable write path. Unlike the
+      -- 4 above, SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 deliberately left these two unchanged (its
+      -- own README: "no derivable from-stage / initialization-only writes"). If RLS posture on
+      -- ventures ever changes to add an authenticated UPDATE policy, these become real gaps and
+      -- must be revisited -- audited 2026-08-25.
+      ('scaffoldStage1',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
+       'ehg repo src/services/ventures.ts scaffoldStage1(), venture-initialization write (stage=1). Anon-key browser client, only imported from .tsx components/hooks. RLS-blocked today (see class note above).'),
+      ('useVentureData.ts',
+       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
+       'ehg repo src/hooks/useVentureData.ts useUpdateVenture(), conditional stage write inside a general venture-edit mutation. React Query hook, browser-only by construction. RLS-blocked today (see class note above) -- in fact the WHOLE mutation is blocked, not just the stage field, a separate pre-existing bug unrelated to this SD.'),
+      ('initialize_venture_stages',
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
+       'Live DB function (database/migrations/20260530_childF_repoint_readers_to_venture_stages.sql:270, GRANT EXECUTE TO authenticated per 20251206_factory_architecture.sql:606), sets current_lifecycle_stage=1. No JS/TS caller found in either repo as of 2026-08-25 (grepped both repos; only hits are the ehg repo''s auto-generated types.ts and an archived one-time migration script) -- registered for completeness since it remains directly RPC-invokable by any authenticated caller with EXECUTE, independent of whether anything currently calls it.'),
+
+      -- ── NEW: dedicated-venture-UAT stage (SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B, FR-7) ──────
+      ('dedicated-venture-uat-stage',
+       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
+       'The dedicated-venture-UAT venture_stages row this migration inserts (stage_number=23, stage_key=dedicated_venture_uat). Transitions into/out of this stage are performed exclusively through the already-registered advance_venture_stage()/fn_advance_venture_stage() RPCs above (both read gate_type dynamically from venture_stages, per FR-3''s live re-verification finding that no code-level gate array exists left to re-anchor) -- this entry is a passthrough label for writer-census legibility over the new stage, not a distinct raw write path.')
+  )
+  SELECT r.writer_identity, r.capability_flags, r.notes
+  FROM registry r
+  WHERE p_writer_identity IS NULL OR r.writer_identity = p_writer_identity
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.ventures_canonical_writer_policy(text) TO service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 4. FR-9 -- update the hardcoded p_to_stage > 26 upper bound to > 27 in BOTH RPCs, in this SAME
---    migration (SECURITY finding: otherwise the new top stage is unreachable via 2 of 4
---    registered writers the instant this applies). Full bodies below are the LIVE definitions
---    (pg_get_functiondef, 2026-08-25) with ONLY that one line changed each -- verified by diff
---    against the committed baseline in lib/eva/uat-stage-migration/drift-check.mjs.
---    CREATE OR REPLACE is naturally idempotent (TS-9).
+-- 2b. FOUND BY DRY-RUNNING THIS FILE: fn_validate_stage_column() (BEFORE INSERT OR UPDATE trigger
+--    on ventures) carries its OWN hardcoded `current_lifecycle_stage > 26` rejection, entirely
+--    separate from the ventures_current_lifecycle_stage_check CHECK constraint widened below --
+--    this is a FIFTH occurrence of the stale upper bound. Must run BEFORE section 3's ventures
+--    UPDATE shifts a stage-26 row to 27, or that write is rejected by the OLD bound before the
+--    CHECK-constraint widening even gets a chance to matter.
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.fn_validate_stage_column()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'extensions'
+AS $function$
+BEGIN
+  IF NEW.current_lifecycle_stage IS NULL THEN
+    NEW.current_lifecycle_stage := 1;
+  END IF;
+
+  -- Validate stage range (1-27 for the 27-stage lifecycle, post SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B)
+  IF NEW.current_lifecycle_stage < 1 OR NEW.current_lifecycle_stage > 27 THEN
+    RAISE EXCEPTION 'current_lifecycle_stage must be between 1 and 27, got %',
+      NEW.current_lifecycle_stage;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- 3. GUARDED BLOCK: everything that must run exactly once (venture_stages renumber, the new
+--    UAT row, and the live-state shifts) is wrapped in one IF NOT EXISTS guard so a second run of
+--    this file is a true no-op for all of it (TS-9). The round-1 version guarded ONLY the INSERT
+--    and relied on each UPDATE's own WHERE clause to be idempotent -- which failed (round-1 F3)
+--    because a second run's WHERE clause matched the ALREADY-shifted rows again. A single shared
+--    guard is simpler and correct by construction.
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+DO $renumber$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.venture_stages WHERE stage_key = 'dedicated_venture_uat') THEN
+    RAISE NOTICE 'DEDICATED-VENTURE-UAT-001-B: already applied (dedicated_venture_uat row present) -- skipping renumber, insert, and live-state shifts.';
+    RETURN;
+  END IF;
+
+  -- 2. venture_stages: two-phase negative-intermediate shift. PostgreSQL enforces the
+  --    non-deferred PRIMARY KEY (stage_number) per row during statement execution (proven live by
+  --    the round-1 adversarial review), so a single-statement +1 collides with the row already
+  --    occupying the target number. Phase A flips the 4 rows to negative stage_number -- no live
+  --    row anywhere in the table has a negative stage_number, so this is collision-free by
+  --    construction. Phase B lands each row on its final positive value and re-links depends_on
+  --    +1 in the same statement (every row 20-26 already satisfies depends_on = {stage_number-1};
+  --    shifting both by +1 together re-links the chain around the newly inserted row with no
+  --    special-casing).
+  UPDATE public.venture_stages
+  SET stage_number = -stage_number, updated_at = now()
+  WHERE stage_number BETWEEN 23 AND 26;
+
+  UPDATE public.venture_stages
+  SET stage_number = (-stage_number) + 1,
+      depends_on   = ARRAY(SELECT unnest(depends_on) + 1),
+      updated_at   = now()
+  WHERE stage_number BETWEEN -26 AND -23;
+
+  -- 3. INSERT the new dedicated-venture-UAT row at the now-vacant stage_number=23.
+  --    metadata.gates.uat_robustness_required=true is the exact marker Child C's
+  --    lib/eva/uat-robustness-gate.js already reads.
+  INSERT INTO public.venture_stages (
+    stage_number, stage_key, stage_name, description, app_description,
+    phase_number, phase_name, chunk, gate_type, review_mode, work_type,
+    depends_on, required_artifacts, metadata, is_high_consequence, is_irreversible
+  ) VALUES (
+    23,
+    'dedicated_venture_uat',
+    'Dedicated Venture UAT',
+    'In-stage UAT robustness checkpoint: exercises the venture''s own signed-in and signed-out user journeys against the Solomon-C control pack (per-journey minimum-assertion manifest, live-deployment binding, run-unique evidence hashing) before Launch Readiness. Built by SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-C (lib/eva/uat-robustness-gate.js); activated by this row.',
+    'Automated UAT robustness pass against the venture''s live deployment',
+    5,
+    'The Build',
+    'THE_BUILD',
+    'none',
+    'auto',
+    'automated_check',
+    ARRAY[22]::integer[],
+    ARRAY[]::text[],
+    '{"gates":{"uat_robustness_required":true}}'::jsonb,
+    false,
+    false
+  );
+
+  -- 4. ventures.current_lifecycle_stage: FOUND DURING THIS REVISION (by actually dry-running this
+  --    file) -- this column carries its OWN hardcoded CHECK (<= 26), and fn_validate_stage_column()
+  --    carries a SEPARATE hardcoded duplicate of that same bound (both fixed below/above) -- a
+  --    FOURTH and FIFTH occurrence of the stale upper bound beyond the two RPCs (FR-9) and the
+  --    stage-execution-worker.js/stage-templates literal (TS-8, documented above). Without
+  --    widening both, stage 27 would be categorically unreachable via ANY path regardless of the
+  --    RPC bound fix. The preflight above already proves zero REAL ventures sit in 23-26, so only
+  --    demo/fixture ventures (if any) are shifted here.
+  ALTER TABLE public.ventures DROP CONSTRAINT IF EXISTS ventures_current_lifecycle_stage_check;
+  ALTER TABLE public.ventures ADD CONSTRAINT ventures_current_lifecycle_stage_check
+    CHECK (current_lifecycle_stage >= 1 AND current_lifecycle_stage <= 27);
+
+  -- FOUND BY DRY-RUNNING THIS FILE (not by static review): fn_enforce_stage_advancement_artifact_gate
+  -- and fn_sync_stage_work_on_advance both fire on ANY forward change to current_lifecycle_stage
+  -- and treat it as a REAL stage advancement -- the artifact gate demands artifacts for the (soon
+  -- to be renumbered) old stage, and the sync trigger marks that old stage's venture_stage_work row
+  -- 'completed', neither of which is correct for a pure relabeling where the venture has not
+  -- actually progressed. Both are disabled for the duration of this UPDATE only, inside the SAME
+  -- transaction apply-migration.js wraps this whole file in -- ROLLBACK on any later failure
+  -- restores both automatically (DISABLE/ENABLE TRIGGER is transactional DDL). The writer-choke
+  -- triggers (aaa_/zzz_enforce_canonical_stage_write) stay ACTIVE and are satisfied properly via
+  -- stage_write_token below, not bypassed.
+  ALTER TABLE public.ventures DISABLE TRIGGER enforce_stage_advancement_artifact_gate;
+  ALTER TABLE public.ventures DISABLE TRIGGER trg_sync_stage_work_on_advance;
+
+  -- stage_write_token='dedicated-venture-uat-stage' satisfies the enforce_canonical_stage_write()
+  -- choke trigger (SD-LEO-INFRA-STAGE-WRITER-CHOKE-001) this DDL write must pass through the same
+  -- as any other current_lifecycle_stage writer; the trigger's own 'final' pass resets it to NULL
+  -- at rest, so no cleanup statement is needed here.
+  UPDATE public.ventures
+  SET current_lifecycle_stage = current_lifecycle_stage + 1,
+      stage_write_token = 'dedicated-venture-uat-stage',
+      updated_at = now()
+  WHERE current_lifecycle_stage BETWEEN 23 AND 26;
+
+  ALTER TABLE public.ventures ENABLE TRIGGER enforce_stage_advancement_artifact_gate;
+  ALTER TABLE public.ventures ENABLE TRIGGER trg_sync_stage_work_on_advance;
+
+  -- 5a. chairman_decisions.lifecycle_stage: LIVE state the RPCs read directly
+  --    (`WHERE lifecycle_stage = p_from_stage AND status = 'approved'`) -- must stay valid for a
+  --    future advance call to keep matching an existing approval. Two-phase because
+  --    uq_chairman_decision_attempt is UNIQUE(venture_id, lifecycle_stage, decision_type,
+  --    attempt_number) and a single venture could hold rows at more than one shifted stage.
+  UPDATE public.chairman_decisions
+  SET lifecycle_stage = -lifecycle_stage, updated_at = now()
+  WHERE lifecycle_stage BETWEEN 23 AND 26;
+
+  UPDATE public.chairman_decisions
+  SET lifecycle_stage = (-lifecycle_stage) + 1, updated_at = now()
+  WHERE lifecycle_stage BETWEEN -26 AND -23;
+
+  -- 5b. venture_stage_work.lifecycle_stage: LIVE state the RPCs UPDATE directly
+  --    (`SET stage_status = ... WHERE lifecycle_stage = p_from_stage`). Two-phase because
+  --    venture_stage_work_venture_id_lifecycle_stage_key is UNIQUE(venture_id, lifecycle_stage).
+  UPDATE public.venture_stage_work
+  SET lifecycle_stage = -lifecycle_stage, updated_at = now()
+  WHERE lifecycle_stage BETWEEN 23 AND 26;
+
+  UPDATE public.venture_stage_work
+  SET lifecycle_stage = (-lifecycle_stage) + 1, updated_at = now()
+  WHERE lifecycle_stage BETWEEN -26 AND -23;
+END
+$renumber$;
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- 6. FR-9 -- update the hardcoded p_to_stage > 26 upper bound to > 27 in BOTH RPCs, in this SAME
+--    migration. Full bodies below are the LIVE definitions (pg_get_functiondef, 2026-08-25) with
+--    ONLY that one line changed each (fn_advance_venture_stage's unrelated
+--    p_from_stage=23/p_to_stage=24 literal, per the documented-not-fixed banner above, is
+--    otherwise untouched). CREATE OR REPLACE is naturally idempotent (TS-9).
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_transition_type text DEFAULT 'normal'::text)
  RETURNS jsonb
@@ -240,8 +564,10 @@ BEGIN
 
   -- FR-3: gate membership read fresh per call from the venture_stages SSOT (no cache), replacing the
   -- hardcoded kill/promotion/all-gates literal arrays that omitted gates 10/16/19/25 (names elided
-  -- here on purpose: the verify block greps the live body for those identifiers' absence, and a comment
-  -- naming them verbatim is indistinguishable from code using them — MECH-AMEND reword, 2026-08-25 sitting).
+  -- here on purpose: this comment describes a check performed by the ORIGINAL authoring migration
+  -- (20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql), not this file's own
+  -- verify block below, which checks a different thing (the p_to_stage bound) -- MECH-AMEND
+  -- reword, 2026-08-25 sitting).
   --
   -- SECURITY (adversarial SECURITY review S-H3): a missing venture_stages row for p_from_stage must
   -- NOT silently disable the gate check. SELECT INTO leaves v_gate_type NULL when zero rows match,
@@ -627,158 +953,41 @@ END;
 $function$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 5. FR-7 -- register the new dedicated-venture-UAT stage's writer(s) in
---    ventures_canonical_writer_policy()'s registry. Full VALUES list below is the LIVE registry
---    (pg_get_functiondef, 2026-08-25) with ONE new row appended at the end -- every existing row
---    is reproduced verbatim; CREATE OR REPLACE would otherwise silently drop them.
---    The new stage's transitions are written exclusively through the two already-registered
---    RPCs above (both read gate_type dynamically from venture_stages, per FR-3's live
---    re-verification finding that no code-level gate array exists left to re-anchor) -- this
---    entry is a passthrough label for audit legibility over the writer census, mirroring the
---    existing 'reconciliation-packet-apply.mjs' and 'ehg:promote.ts' passthrough rows below,
---    not a distinct raw write path.
--- ───────────────────────────────────────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.ventures_canonical_writer_policy(p_writer_identity text DEFAULT NULL::text)
- RETURNS TABLE(writer_identity text, capability_flags jsonb, notes text)
- LANGUAGE sql
- IMMUTABLE
- SET search_path TO 'public'
-AS $function$
-  WITH registry(writer_identity, capability_flags, notes) AS (
-    VALUES
-      -- ── DB-RESIDENT RPCs (self-stamping wired in step 2, 20260825_ventures_stage_rpcs_self_stamp.sql)
-      ('advance_venture_stage'::text,
-       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'SECURITY DEFINER RPC. Frontend-initiated + EVA-initiated forward advance. Also closes the promotion-gate array gap (FR-3) via the venture_stages SSOT read.'::text),
-      ('advance_venture_to_stage',
-       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'SECURITY DEFINER RPC. Single-stage-advance path used by orchestrator bootstrap flows.'),
-      ('rescan_stage_20',
-       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'SECURITY DEFINER RPC. Stage 20->21 auto-advance on terminal-SD + deployment-artifact verification.'),
-      ('fn_advance_venture_stage',
-       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'SECURITY DEFINER RPC, the EVA-daemon-path advance. Discovered mid-EXEC (not in the original writer census): lib/eva/artifact-persistence-service.js''s advanceStage() -- documented there as the primary general-advance call path -- calls this function, not advance_venture_stage.'),
-
-      -- ── EVA STAGE MACHINERY (JS, self-stamping wired in step 2's code deploy) ──────────────────
-      ('stage-execution-worker.js',
-       '{"surface":"eva_daemon","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'lib/eva/stage-execution-worker.js. ONE identity covering all 3 write call sites (forward advance in _advanceStage, and the two chairman-gate/high-consequence revert-to-review-stage sites) -- all are the same daemon-walk authority, not distinct writers.'),
-      ('venture-ceo-handlers.js',
-       '{"surface":"eva_agent","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'lib/agents/venture-ceo/handlers.js _updateVentureProgress (line ~665). Ad-hoc CEO-runtime forward advance, gated by checkStageArtifactPrecondition (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-5) before this SD; now also stamped.'),
-      ('saga-coordinator.js',
-       '{"surface":"eva_compensation","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'lib/eva/saga-coordinator.js createStageCompensation(). Revert-only (backward) compensation write for a failed saga step -- registered distinctly, not folded into stage-execution-worker.js, since it is a genuinely different call path with its own authority to revert.'),
-      ('eva-run.js',
-       '{"surface":"operator_tool","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'scripts/eva-run.js --stage flag. Operator-invoked manual stage override before an orchestration run.'),
-      ('run-canary-probe.mjs',
-       '{"surface":"operator_tool","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'scripts/canary/run-canary-probe.mjs deterministic full-pass reset (stage -> 1) on the fenced canary venture fixture.'),
-      ('reconciliation-packet-apply.mjs',
-       '{"surface":"operator_tool","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'scripts/reconciliation-packet-apply.mjs (SD-LEO-INFRA-STAGE-WRITER-CHOKE-001 FR-4). Applies a frozen-then-ratified stage value via advance_venture_stage/advance_venture_to_stage -- itself calls a registered RPC rather than writing raw, so this identity is a passthrough label for audit legibility, never used to bypass the RPCs'' own checks.'),
-
-      -- ── ehg REPO (routed through advance_venture_stage in step 2, not a raw write) ─────────────
-      ('ehg:promote.ts',
-       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'ehg repo src/pages/api/v2/ventures/[id]/promote.ts, Stage 0->1 promotion. Routed through supabase.rpc(''advance_venture_stage'') (matching src/lib/ventures/advanceStage.ts''s existing pattern) rather than a raw client-authenticated .update() -- the identity here is advance_venture_stage''s own stamp; this registry row exists for the writer-inventory census, not as a separate stamping caller. Landed via SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 (rickfelix/ehg#797), independently of this SD -- verified live on origin/main 2026-08-25.'),
-
-      -- ── ehg REPO writer found by a parallel multi-agent census after this SD's initial writer
-      -- inventory (PLAN_VERIFICATION, post-handoff) -- missed by the original 19-path count because
-      -- scripts/lint/stage-advancement-chokepoint-lint.mjs's RUNTIME_DIRS is EHG_Engineer-relative
-      -- and cannot see the ehg repo at all, and the LEAD-phase census only checked promote.ts there.
-      ('stage24-go-live-route.ts',
-       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'ehg repo app/api/stage24/[ventureId]/go-live/route.ts performLaunch(), Stage 23->24 launch. Uses the SERVICE ROLE (bypasses RLS entirely) for a compound write (launched_at + current_lifecycle_stage=24 + deployment_url + an idempotency guard on launched_at IS NULL) -- the highest-severity of the found gaps, since a service_role write has no RLS fallback to fail safely into and would 500 on every launch the instant this choke arms unregistered.'),
-
-      -- ── ehg REPO writers CENSUSED, now PASSTHROUGH callers of the registered RPC (not raw
-      -- writers): SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 independently routed all 4 of these
-      -- through advance_venture_stage (rickfelix/ehg, merged into origin/main 2026-08-25) while
-      -- this SD's own writer-completeness fix branch was open -- discovered when resolving that
-      -- branch's merge conflict against origin/main. Same passthrough shape as
-      -- reconciliation-packet-apply.mjs above: stamp_wired:true because none of these performs a
-      -- raw, bypass-capable write anymore, not because they carry their own stamp.
-      ('chairman-decide.ts',
-       '{"surface":"api_route","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'ehg repo src/pages/api/v2/chairman/decide.ts, "proceed" decision branch. Routed through supabase.rpc(''advance_venture_stage'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
-      ('evaRollback.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'ehg repo src/services/evaRollback.ts, rollback-to-previous-stage. Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''rollback'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
-      ('evaStateMachines.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'ehg repo src/services/evaStateMachines.ts, state-machine stage-advance. Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''automatic'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
-      ('recursionEngine.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'ehg repo src/services/recursionEngine.ts updateWorkflowState(). Routed through supabase.rpc(''advance_venture_stage'', p_transition_type=''rollback'') by SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 -- no longer a raw write.'),
-
-      -- ── ehg REPO writers CENSUSED but genuinely NOT self-stamped: live-verified RLS-BLOCKED
-      -- TODAY (public.ventures has exactly two policies -- "Allow service_role to manage ventures"
-      -- ALL and "authenticated_read_ventures" SELECT -- no authenticated UPDATE policy exists at
-      -- all), so every write below already 0-rows-silently under RLS before it can ever reach this
-      -- guard's BEFORE UPDATE trigger. stamp_wired:false is accurate, not a gap: stamping a write
-      -- that RLS already filters out has no effect, and these rows exist for census completeness
-      -- (this SD's own stated purpose) rather than to authorize a reachable write path. Unlike the
-      -- 4 above, SD-LEO-INFRA-VENTURES-CLIENT-WRITE-001 deliberately left these two unchanged (its
-      -- own README: "no derivable from-stage / initialization-only writes"). If RLS posture on
-      -- ventures ever changes to add an authenticated UPDATE policy, these become real gaps and
-      -- must be revisited -- audited 2026-08-25.
-      ('scaffoldStage1',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'ehg repo src/services/ventures.ts scaffoldStage1(), venture-initialization write (stage=1). Anon-key browser client, only imported from .tsx components/hooks. RLS-blocked today (see class note above).'),
-      ('useVentureData.ts',
-       '{"surface":"eva_service_browser","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'ehg repo src/hooks/useVentureData.ts useUpdateVenture(), conditional stage write inside a general venture-edit mutation. React Query hook, browser-only by construction. RLS-blocked today (see class note above) -- in fact the WHOLE mutation is blocked, not just the stage field, a separate pre-existing bug unrelated to this SD.'),
-      ('initialize_venture_stages',
-       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":false}'::jsonb,
-       'Live DB function (database/migrations/20260530_childF_repoint_readers_to_venture_stages.sql:270, GRANT EXECUTE TO authenticated per 20251206_factory_architecture.sql:606), sets current_lifecycle_stage=1. No JS/TS caller found in either repo as of 2026-08-25 (grepped both repos; only hits are the ehg repo''s auto-generated types.ts and an archived one-time migration script) -- registered for completeness since it remains directly RPC-invokable by any authenticated caller with EXECUTE, independent of whether anything currently calls it.'),
-
-      -- ── NEW: dedicated-venture-UAT stage (SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B, FR-7) ──────
-      ('dedicated-venture-uat-stage',
-       '{"surface":"db_function","protected_columns":["current_lifecycle_stage"],"stamp_wired":true}'::jsonb,
-       'The dedicated-venture-UAT venture_stages row this migration inserts (stage_number=23, stage_key=dedicated_venture_uat). Transitions into/out of this stage are performed exclusively through the already-registered advance_venture_stage()/fn_advance_venture_stage() RPCs above (both read gate_type dynamically from venture_stages, per FR-3''s live re-verification finding that no code-level gate array exists left to re-anchor) -- this entry is a passthrough label for writer-census legibility over the new stage, not a distinct raw write path.')
-  )
-  SELECT r.writer_identity, r.capability_flags, r.notes
-  FROM registry r
-  WHERE p_writer_identity IS NULL OR r.writer_identity = p_writer_identity
-$function$;
-
-GRANT EXECUTE ON FUNCTION public.ventures_canonical_writer_policy(text) TO service_role;
-
--- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 6. FR-4 -- translate-at-read shim reconciled against the REAL 20260322 precedent
---    (database/migrations/20260322_stage_renumbering_blueprint_review.sql STEP 3, which already
---    shifted venture_stage_transitions.from_stage/to_stage +1 for values 17-25 in place).
---    eva_stage_gate_attempts.stage_number and venture_stage_transitions.from_stage/to_stage are
---    NEVER UPDATEd by this migration (FR-4 AC-3) -- historical rows are read through this shim
---    only. Epoch marker convention (FR-4 AC-1): derive the cutover from
---    schema_migrations_applied's own applied_at record for THIS migration file (the existing
---    apply-migration.js audit log, TR-3-style reuse of established infrastructure) rather than a
---    new epoch column -- a row created strictly before that timestamp was written under the
---    pre-this-SD numbering scheme (which already carries the 20260322 shift, if applicable);
---    a row created at or after was written natively in the post-this-SD scheme and needs no
---    translation.
+-- 8. FR-4 -- translate-at-read shim reconciled against the REAL 20260322 precedent, extended (see
+--    the DIRECT SHIFT vs SHIM-ONLY note above) to cover stage_events alongside
+--    venture_stage_transitions and eva_stage_gate_attempts. None of these three tables is ever
+--    UPDATEd by this migration (FR-4 AC-3) -- historical rows are read through this shim only.
+--    Epoch marker convention (FR-4 AC-1): derive the cutover from schema_migrations_applied's own
+--    applied_at record for THIS migration file. SECURITY DEFINER + pinned search_path (unlike
+--    round 1's plain-invoker version) so the lookup itself is not silently fail-open under RLS on
+--    schema_migrations_applied for a low-privilege caller of the security_invoker=true views
+--    below; ORDER BY applied_at ASC (not DESC) takes the FIRST successful apply -- this shim does
+--    not attempt to model more than one apply/revert/re-apply cycle, which is an accepted scope
+--    limit for a one-time production ceremony (the DOWN/re-UP capability exists for non-production
+--    verification, not repeated production cycling). A NULL p_row_created_at (the column is
+--    nullable) returns the input unchanged rather than guessing.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.translate_historical_stage_number(
   p_stage_number integer,
   p_row_created_at timestamptz
 ) RETURNS integer
  LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
  STABLE
 AS $function$
 DECLARE
   v_cutover_at timestamptz;
 BEGIN
-  IF p_stage_number IS NULL THEN
-    RETURN NULL;
+  IF p_stage_number IS NULL OR p_row_created_at IS NULL THEN
+    RETURN p_stage_number;
   END IF;
 
   SELECT applied_at INTO v_cutover_at
   FROM public.schema_migrations_applied
   WHERE migration_path LIKE '%20260825_dedicated_venture_uat_stage_insert_and_renumber.sql'
     AND success = true
-  ORDER BY applied_at DESC
+  ORDER BY applied_at ASC
   LIMIT 1;
 
   -- Not yet applied: nothing to translate.
@@ -800,54 +1009,76 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE VIEW public.venture_stage_transitions_current_scheme AS
+CREATE OR REPLACE VIEW public.venture_stage_transitions_current_scheme
+WITH (security_invoker = true) AS
 SELECT
   vst.*,
   public.translate_historical_stage_number(vst.from_stage, vst.created_at) AS from_stage_current,
   public.translate_historical_stage_number(vst.to_stage, vst.created_at) AS to_stage_current
 FROM public.venture_stage_transitions vst;
 
-CREATE OR REPLACE VIEW public.eva_stage_gate_attempts_current_scheme AS
+CREATE OR REPLACE VIEW public.eva_stage_gate_attempts_current_scheme
+WITH (security_invoker = true) AS
 SELECT
   ega.*,
   public.translate_historical_stage_number(ega.stage_number, ega.created_at) AS stage_number_current
 FROM public.eva_stage_gate_attempts ega;
 
+CREATE OR REPLACE VIEW public.stage_events_current_scheme
+WITH (security_invoker = true) AS
+SELECT
+  se.*,
+  public.translate_historical_stage_number(se.stage_number, se.created_at) AS stage_number_current
+FROM public.stage_events se;
+
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 7. POST-APPLY READBACK (FR-2 AC-3, FR-3 AC-1/AC-2). Any miss aborts the whole transaction.
+-- 9. POST-APPLY READBACK. Any miss aborts the whole transaction. Round-1's gate_type/
+--    is_irreversible comparison was tautological (the renumber statement never touches those
+--    columns, so it could not fail); this version instead verifies the depends_on chain re-link,
+--    which the renumber DOES touch and is the genuinely error-prone part of this migration.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 DO $verify$
 DECLARE
-  v_mismatch_count INTEGER;
+  v_bad_chain_count INTEGER;
   v_uat_row public.venture_stages%ROWTYPE;
   v_go_live_row public.venture_stages%ROWTYPE;
-  v_irreversible_count INTEGER;
-  v_bad_bound_count INTEGER;
+  v_shifted_irreversible_count INTEGER;
+  v_present_new_bound_count INTEGER;
+  v_stale_bound_count INTEGER;
   v_registry_count INTEGER;
+  v_ventures_check_max INTEGER;
+  v_ventures_stale_count INTEGER;
+  v_cd_stale_count INTEGER;
+  v_vsw_stale_count INTEGER;
 BEGIN
-  -- gate_type/is_irreversible/depends_on-relationship traveled with each shifted row.
-  SELECT count(*) INTO v_mismatch_count
+  -- The 4 shifted rows' depends_on correctly re-links to (new stage_number - 1), proving the
+  -- actual +1/+1 chain-relink logic worked, not merely that stage_number moved.
+  SELECT count(*) INTO v_bad_chain_count
   FROM public.venture_stages vs
   JOIN _uat001b_pre_snapshot pre ON pre.stage_key = vs.stage_key
-  WHERE vs.gate_type IS DISTINCT FROM pre.gate_type
-     OR vs.is_irreversible IS DISTINCT FROM pre.is_irreversible;
-  IF v_mismatch_count <> 0 THEN
-    RAISE EXCEPTION 'POST-APPLY FAILED: % shifted row(s) have a gate_type/is_irreversible value that does not match their pre-apply snapshot (FR-3 AC-1).', v_mismatch_count;
+  WHERE vs.depends_on <> ARRAY[vs.stage_number - 1]::integer[];
+  IF v_bad_chain_count <> 0 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: % shifted row(s) have a depends_on chain that does not point at stage_number-1 after the renumber.', v_bad_chain_count;
   END IF;
 
-  -- The irreversible go_live gate is present at its new stage_number, and it is the ONLY row
-  -- carrying is_irreversible=true (FR-3 AC-2).
+  -- The irreversible go_live gate is present at its new stage_number, and no OTHER row among the
+  -- 4 shifted rows unexpectedly carries is_irreversible=true (scoped to what this migration
+  -- could actually affect -- not a table-wide count, which would abort for causes this migration
+  -- did not create).
   SELECT * INTO v_go_live_row FROM public.venture_stages WHERE stage_key = 'go_live';
   IF v_go_live_row.stage_number IS NULL OR v_go_live_row.is_irreversible IS NOT TRUE THEN
     RAISE EXCEPTION 'POST-APPLY FAILED: go_live row missing or lost is_irreversible=true after renumber.';
   END IF;
-  SELECT count(*) INTO v_irreversible_count FROM public.venture_stages WHERE is_irreversible = true;
-  IF v_irreversible_count <> 1 THEN
-    RAISE EXCEPTION 'POST-APPLY FAILED: expected exactly 1 row with is_irreversible=true, found % (FR-3 AC-2).', v_irreversible_count;
+  SELECT count(*) INTO v_shifted_irreversible_count
+  FROM public.venture_stages vs
+  JOIN _uat001b_pre_snapshot pre ON pre.stage_key = vs.stage_key
+  WHERE vs.stage_key <> 'go_live' AND vs.is_irreversible = true;
+  IF v_shifted_irreversible_count <> 0 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: % shifted row(s) other than go_live unexpectedly carry is_irreversible=true.', v_shifted_irreversible_count;
   END IF;
 
   -- The new UAT stage exists, carries the activation marker, and depends on stage 22 (Visual
-  -- Assets, unchanged) -- confirming the chain re-link, not just the raw shift.
+  -- Assets, unchanged).
   SELECT * INTO v_uat_row FROM public.venture_stages WHERE stage_key = 'dedicated_venture_uat';
   IF v_uat_row.stage_number IS NULL THEN
     RAISE EXCEPTION 'POST-APPLY FAILED: dedicated_venture_uat row was not inserted.';
@@ -859,13 +1090,60 @@ BEGIN
     RAISE EXCEPTION 'POST-APPLY FAILED: dedicated_venture_uat.depends_on = % (expected {22}).', v_uat_row.depends_on;
   END IF;
 
-  -- Both RPCs accept the new top stage (27), not 26 (FR-9 AC-2).
-  SELECT count(*) INTO v_bad_bound_count
+  -- ventures.current_lifecycle_stage's CHECK bound was actually widened to 27 (FR-9's 4th
+  -- occurrence). Per-row comparison against the pre-snapshot, NOT a "BETWEEN 23 AND 26" count --
+  -- 24 and 25 are simultaneously valid OLD-shift-range AND NEW-shift-destination values (the
+  -- ranges [23,26] and [24,27] overlap), so a bare range count cannot tell "correctly shifted"
+  -- apart from "never touched" -- found by dry-running this file and getting a false-positive
+  -- failure from exactly that flawed check in an earlier revision.
+  SELECT (regexp_match(pg_get_constraintdef(oid), '<= ([0-9]+)'))[1]::integer INTO v_ventures_check_max
+  FROM pg_constraint
+  WHERE conrelid = 'public.ventures'::regclass AND conname = 'ventures_current_lifecycle_stage_check';
+  IF v_ventures_check_max IS DISTINCT FROM 27 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: ventures_current_lifecycle_stage_check upper bound is %, expected 27.', v_ventures_check_max;
+  END IF;
+  SELECT count(*) INTO v_ventures_stale_count
+  FROM public.ventures v
+  JOIN _uat001b_ventures_pre_snapshot pre ON pre.id = v.id
+  WHERE v.current_lifecycle_stage <> pre.pre_stage + 1;
+  IF v_ventures_stale_count <> 0 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: % ventures row(s) did not shift by exactly +1 from their pre-apply stage.', v_ventures_stale_count;
+  END IF;
+
+  -- chairman_decisions.lifecycle_stage and venture_stage_work.lifecycle_stage: per-row +1
+  -- comparison, same reasoning as ventures above.
+  SELECT count(*) INTO v_cd_stale_count
+  FROM public.chairman_decisions cd
+  JOIN _uat001b_cd_pre_snapshot pre ON pre.id = cd.id
+  WHERE cd.lifecycle_stage <> pre.pre_stage + 1;
+  IF v_cd_stale_count <> 0 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: % chairman_decisions row(s) did not shift by exactly +1 from their pre-apply stage.', v_cd_stale_count;
+  END IF;
+  SELECT count(*) INTO v_vsw_stale_count
+  FROM public.venture_stage_work vsw
+  JOIN _uat001b_vsw_pre_snapshot pre ON pre.id = vsw.id
+  WHERE vsw.lifecycle_stage <> pre.pre_stage + 1;
+  IF v_vsw_stale_count <> 0 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: % venture_stage_work row(s) did not shift by exactly +1 from their pre-apply stage.', v_vsw_stale_count;
+  END IF;
+
+  -- Both RPCs accept the new top stage (27): assert PRESENCE of the new bound, not merely absence
+  -- of the old one, and scope to this schema's copies.
+  SELECT count(*) INTO v_present_new_bound_count
   FROM pg_proc
-  WHERE proname IN ('advance_venture_stage', 'fn_advance_venture_stage')
+  WHERE pronamespace = 'public'::regnamespace
+    AND proname IN ('advance_venture_stage', 'fn_advance_venture_stage')
+    AND pg_get_functiondef(oid) LIKE '%p_to_stage > 27%';
+  IF v_present_new_bound_count <> 2 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: expected 2 RPC(s) with p_to_stage > 27, found % (FR-9 AC-1/AC-2).', v_present_new_bound_count;
+  END IF;
+  SELECT count(*) INTO v_stale_bound_count
+  FROM pg_proc
+  WHERE pronamespace = 'public'::regnamespace
+    AND proname IN ('advance_venture_stage', 'fn_advance_venture_stage')
     AND pg_get_functiondef(oid) LIKE '%p_to_stage > 26%';
-  IF v_bad_bound_count <> 0 THEN
-    RAISE EXCEPTION 'POST-APPLY FAILED: % RPC(s) still hardcode p_to_stage > 26 (FR-9 AC-1/AC-2).', v_bad_bound_count;
+  IF v_stale_bound_count <> 0 THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: % RPC(s) still hardcode p_to_stage > 26 (FR-9 AC-1/AC-2).', v_stale_bound_count;
   END IF;
 
   -- The writer registry carries the new UAT stage entry (FR-7 AC-1).
@@ -875,6 +1153,6 @@ BEGIN
     RAISE EXCEPTION 'POST-APPLY FAILED: dedicated-venture-uat-stage writer entry not found in the registry (FR-7 AC-1).';
   END IF;
 
-  RAISE NOTICE 'DEDICATED-VENTURE-UAT-001-B RENUMBER VERIFIED: UAT stage inserted at %, go_live at %, gate-semantics preserved, RPC bound=27, writer registered.', v_uat_row.stage_number, v_go_live_row.stage_number;
+  RAISE NOTICE 'DEDICATED-VENTURE-UAT-001-B RENUMBER VERIFIED: UAT stage inserted at %, go_live at %, chain re-linked, ventures/chairman_decisions/venture_stage_work shifted, ventures CHECK widened to 27, RPC bound=27, writer registered.', v_uat_row.stage_number, v_go_live_row.stage_number;
 END
 $verify$;
