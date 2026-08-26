@@ -15,8 +15,8 @@ import { isCalibrationEligibleVenture } from '../../../lib/eva/gate-enforcement.
 const UUID = '9c85bf76-ced0-495f-9b68-394ca6fa0615';
 
 describe('gate-bar regime scope and mode', () => {
-  it('covers exactly the 9 sitting-ruled chairman-gate stages', () => {
-    expect([...CHAIRMAN_GATE_STAGES].sort((a, b) => a - b)).toEqual([3, 5, 10, 13, 17, 18, 23, 24, 25]);
+  it('covers exactly the 9 sitting-ruled chairman-gate stages (re-anchored by SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B FR-5)', () => {
+    expect([...CHAIRMAN_GATE_STAGES].sort((a, b) => a - b)).toEqual([3, 5, 10, 13, 17, 18, 24, 25, 26]);
   });
 
   it('ships OBSERVE-ONLY (flip is a chairman-gated reviewed change)', () => {
@@ -89,6 +89,17 @@ describe('TS-3: S3 kill-gate web-grounding', () => {
   it('grounding bar only applies to S3', async () => {
     const r = await evaluateGateBars({ stage_number: 24, overall_score: 90, gate_criteria: { ok: true } });
     expect(r.bars.find((b) => b.bar === 's3_web_grounding')).toBeUndefined();
+  });
+
+  it('FR-5: G2 intake gate rides the re-anchored Launch Readiness (24) and Post-Launch (26) stages, not the pre-renumber 23/25', async () => {
+    const atNewLaunchReadiness = await evaluateGateBars({ stage_number: 24, overall_score: 90, gate_criteria: {} });
+    expect(atNewLaunchReadiness.bars.some((b) => b.bar === 'intake_G2')).toBe(true);
+
+    const atNewPostLaunch = await evaluateGateBars({ stage_number: 26, overall_score: 90, gate_criteria: {} });
+    expect(atNewPostLaunch.bars.some((b) => b.bar === 'intake_G2')).toBe(true);
+
+    const atNewGoLive = await evaluateGateBars({ stage_number: 25, overall_score: 90, gate_criteria: {} });
+    expect(atNewGoLive.bars.some((b) => b.bar === 'intake_G2')).toBe(false);
   });
 });
 

@@ -3,6 +3,8 @@
   "_comment_historical": "The database/migrations/* entries below (after the staged-migration block) are superseded historical CREATE OR REPLACE versions of fn_advance_venture_stage / rescan_stage_20 (dead code from a live-behavior standpoint -- only the latest-applied definition matters), the eva_ventures sync trigger sync_ventures_to_eva_ventures_update() -- 20260315_fix_eva_ventures_status_sync.sql (original) plus its verbatim SD-LEO-INFRA-EVA-SCHEDULER-HYGIENE-001 FR-4 reproduction in the two 20260821_eva_scheduler_queue_kill_time_teardown*.sql files, all three census #18 (same disposition class as #17, deferred) -- the stage=1 null-guard trigger (fn_validate_stage_column -- validation only, no gating, no conflict with FR-7), venture-initialization SQL, a fixture-purge one-off, a canary health-probe script, and this lint script's own file (whose comments literally contain the pattern strings being described).",
   "files": [
     "database/chairman-gated/20260825_ventures_stage_rpcs_self_stamp.sql",
+    "database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber.sql",
+    "database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber_DOWN.sql",
     "lib/eva/stage-execution-worker.js",
     "lib/eva/stage-artifact-precondition.js",
     "lib/eva/saga-coordinator.js",
