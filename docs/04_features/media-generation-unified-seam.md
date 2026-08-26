@@ -1,7 +1,7 @@
 ---
 Category: Feature
 Status: Approved
-Version: 1.0.0
+Version: 1.1.0
 Author: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
 Last Updated: 2026-08-26
 Tags: feature, media-generation, creative, storage
@@ -12,7 +12,7 @@ Tags: feature, media-generation, creative, storage
 ## Metadata
 - **Category**: Feature
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
 - **Last Updated**: 2026-08-26
 - **Tags**: feature, media-generation, creative, storage
@@ -34,9 +34,9 @@ describes a fictional `EnhancedCreativeMediaAgent` class hierarchy with no corre
 ## What changed (SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A)
 
 1. **Mandatory `venture_id`.** `generateAsset(ventureId, capability, spec, constraints, deps)`
-   rejects a missing venture before any provider request is made. This exists so the future
-   HARD FENCE (child B of the parent orchestrator, `SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-B`)
-   always has a venture to key its S23+S24 stage-gate check against.
+   rejects a missing venture before any provider request is made. This exists so the HARD FENCE
+   (child B, `SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-B`, now shipped -- see "Read/view fence"
+   below) always has a venture to key its S23+S24 check against.
 2. **Private asset storage.** `lib/creative/asset-storage.js` (new) uploads a generated asset's
    bytes to a **private** Supabase Storage bucket (`creative-assets-private`, `public: false`) via
    `lib/storage/private-signed-upload.js`, and returns only the storage **path** — never a public
@@ -55,6 +55,17 @@ describes a fictional `EnhancedCreativeMediaAgent` class hierarchy with no corre
    rejected) is unchanged. A full claims-registry/brand-token comparator remains out of scope,
    deferred to a follow-up SD if these interim checks prove insufficient.
 
+## Read/view fence (SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-B, PR #7575)
+
+Storage above is **write-side only** — it deliberately returns a path and never a URL. The
+matching read side is `lib/creative/asset-view-gate.js`, the sole sanctioned way to view a
+persisted asset: `checkAssetViewAuthorized()` (chairman S23 `product_review` approval **and**
+S24 `current_lifecycle_stage >= 24`, fail-closed on every ambiguity) and `mintAssetViewUrl()`
+(the only permitted `createSignedUrl()` caller against `creative-assets-private`, TTL-capped,
+venture-bound `storagePath`). That module's own header comment is the authoritative contract —
+including why `armed:true` is a hardcoded literal and why `shouldEnforceBlock()` is never used.
+No other code path may mint a URL for this bucket.
+
 ## Known limitations (tracked, not silent)
 
 - The anti-fabrication keyword screen is a **prompt**-side check, not an **output**-side one, and
@@ -62,14 +73,18 @@ describes a fictional `EnhancedCreativeMediaAgent` class hierarchy with no corre
   future work.
 - All of the above controls (venture check, quality gate, storage) are overridable via an
   injectable `deps` parameter (mirroring this codebase's existing test-injection pattern). This is
-  intentional for testability, but means **the future HARD FENCE must not be implemented as
-  something that lives behind this same injection point** — it needs its own, non-bypassable
-  chokepoint.
+  intentional for testability, but meant **the HARD FENCE could not be implemented as something
+  living behind this same injection point** — it needed its own chokepoint. Satisfied: the fence
+  ships as a separate read-side module (`lib/creative/asset-view-gate.js`), not as a `deps` entry
+  on this write-side seam.
 - Kling was not added as a second configured video provider (Runway already is one, real and
   working); this is an explicit, documented scope decision, not an oversight.
 
 ## Related
 
 - `database/migrations/20260826_creative_assets_storage_path.sql` — additive `storage_path` column.
+  **Not yet applied live** (live `42703` undefined_column as of 2026-08-26; DDL permission required,
+  raised to the coordinator as signal `8714aa90-b4aa-41ed-8050-9cde5a7cfc76`).
+- `lib/creative/asset-view-gate.js` — the gated read/view primitive (child -B).
 - `SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001` (parent orchestrator) — the reconciliation effort
   this child is one part of; see children -B (fence), -C (variant scoring), -D (ehg app reconciliation).
