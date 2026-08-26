@@ -1996,9 +1996,22 @@ async function printBrowserAuditAction(idOrCallsign) {
   console.log('BROWSER ACTUATION AUDIT — ' + session.session_id);
   console.log('─'.repeat(72));
   if (queryError) { console.log('  audit query failed: ' + queryError.message); return; }
-  if (!rows || rows.length === 0) { console.log('  (no browser_* events for this session)'); console.log(''); return; }
-  for (const r of rows) {
-    console.log('  ' + r.created_at + '  ' + r.event_type + '  ' + JSON.stringify(r.payload || {}));
+  if (!rows || rows.length === 0) { console.log('  (no browser_* events for this session)'); }
+  else {
+    for (const r of rows) {
+      console.log('  ' + r.created_at + '  ' + r.event_type + '  ' + JSON.stringify(r.payload || {}));
+    }
+  }
+  // FR-4 cap status: reads browser_actuation_session_caps (the table FR-4's migration creates) so
+  // the operator/chairman can see current usage, not just the refusal audit trail above -- the
+  // Operator Contract gate's CONSUMER leg for that new table (a real read, not a citation).
+  const { data: capRow, error: capError } = await supabase
+    .from('browser_actuation_session_caps')
+    .select('action_count, cap_limit, updated_at')
+    .eq('session_id', session.session_id)
+    .maybeSingle();
+  if (!capError && capRow) {
+    console.log('  cap usage: ' + capRow.action_count + '/' + capRow.cap_limit + ' (updated ' + capRow.updated_at + ')');
   }
   console.log('');
 }
