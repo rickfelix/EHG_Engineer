@@ -1916,6 +1916,82 @@ async function printTakeoverAction(idOrCallsign) {
   }
 }
 
+// ── Section: Guarded browser actuation (SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001, FR-7/FR-9) ──
+// FR-9: the first REAL production caller of driveAction() -- it had ZERO callers repo-wide before
+// this SD (confirmed by TESTING sub-agent + a repo-wide grep + SD-LEO-INFRA-LEO-COMPLETION-001's own
+// prior Explore evidence). Deliberately does NOT launch a real browser or automate any site -- this
+// control-plane has never spawned a browser process (see browser-control.js's own header); actionFn
+// here is a safe placeholder that proves the FULL new guard chain (kill switch, allowlist, cap,
+// fenced-identity, audit) executes for real, against a live session and a live DB, not a unit mock.
+// FR-7: kill-switch toggle + a queryable audit view, satisfying LEAD Q7 (UI Inspectability) via this
+// CLI -- the same operator surface Child E of SD-LEO-INFRA-LEO-COMPLETION-001 already established as
+// this fleet's real, actively-used chairman-facing surface (not a new web panel).
+const BROWSER_ACTUATION_KILL_SWITCH_KEY = 'browser_actuation_kill_switch';
+
+async function printBrowserDriveAction(idOrCallsign, eventTypeArg) {
+  if (!idOrCallsign) {
+    console.log('Usage: node scripts/fleet-dashboard.cjs browser-drive <session-id-or-callsign> [eventType]');
+    console.log('  eventType defaults to browser_navigate (a read). No real browser automation runs --');
+    console.log('  this proves the guard chain (kill switch/allowlist/cap/fenced-identity/audit) end-to-end.');
+    return;
+  }
+  const { driveAction } = await import('../lib/fleet/browser-control.js');
+  const { session, error } = await resolveSessionRow(idOrCallsign);
+  if (error) { console.log('  ' + error); return; }
+  const eventType = eventTypeArg || 'browser_navigate';
+  const isWrite = eventType.startsWith('browser_write_');
+  const result = await driveAction(supabase, session, {
+    eventType,
+    isWrite,
+    actionFn: () => ({ simulated: true, note: 'guard chain executed for real; no browser automation is wired into this control-plane' }),
+  });
+  console.log('BROWSER ACTUATION — ' + session.session_id + ' (' + eventType + ')');
+  console.log('─'.repeat(72));
+  console.log('  executed: ' + result.executed);
+  if (!result.executed) console.log('  reason:   ' + result.reason);
+  if (result.executed) console.log('  result:   ' + JSON.stringify(result.result));
+  if (result.auditWarning) console.log('  warning:  ' + result.auditWarning);
+  console.log('');
+}
+
+async function printBrowserKillSwitchAction(stateArg) {
+  const normalized = String(stateArg || '').toLowerCase();
+  if (normalized !== 'on' && normalized !== 'off') {
+    const { isKillSwitchEngaged } = await import('../lib/fleet/browser-actuation-guards.js');
+    const engaged = await isKillSwitchEngaged(supabase);
+    console.log('BROWSER ACTUATION KILL SWITCH: ' + (engaged ? 'ENGAGED (STOPPED)' : 'disengaged (running)'));
+    console.log('Usage: node scripts/fleet-dashboard.cjs browser-kill-switch <on|off>');
+    return;
+  }
+  const engaged = normalized === 'on';
+  const { error } = await supabase
+    .from('app_config')
+    .upsert({ key: BROWSER_ACTUATION_KILL_SWITCH_KEY, value: { engaged: !engaged }, description: 'SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001 FR-2: chairman kill switch. engaged:false permits actuation; missing/malformed/error defaults to STOPPED.' }, { onConflict: 'key' });
+  if (error) { console.log('  kill switch update failed: ' + error.message); return; }
+  console.log('  Browser actuation kill switch is now ' + (engaged ? 'ENGAGED (all actuation STOPPED, fleet-wide)' : 'disengaged (actuation permitted, subject to remaining guards)') + '.');
+}
+
+async function printBrowserAuditAction(idOrCallsign) {
+  if (!idOrCallsign) { console.log('Usage: node scripts/fleet-dashboard.cjs browser-audit <session-id-or-callsign>'); return; }
+  const { session, error } = await resolveSessionRow(idOrCallsign);
+  if (error) { console.log('  ' + error); return; }
+  const { data: rows, error: queryError } = await supabase
+    .from('coordination_events')
+    .select('event_type, created_at, payload')
+    .eq('session_id', session.session_id)
+    .like('event_type', 'browser_%')
+    .order('created_at', { ascending: false })
+    .limit(25);
+  console.log('BROWSER ACTUATION AUDIT — ' + session.session_id);
+  console.log('─'.repeat(72));
+  if (queryError) { console.log('  audit query failed: ' + queryError.message); return; }
+  if (!rows || rows.length === 0) { console.log('  (no browser_* events for this session)'); console.log(''); return; }
+  for (const r of rows) {
+    console.log('  ' + r.created_at + '  ' + r.event_type + '  ' + JSON.stringify(r.payload || {}));
+  }
+  console.log('');
+}
+
 // ── Section: Adam advisory inbox (SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B) ──
 // Surfaces Adam advisories (payload.kind=adam_advisory) in a SEPARATE section from
 // the worker-friction inbox (printInbox). Adam advisories deliberately omit
@@ -2817,12 +2893,24 @@ const SESSION_SCOPED_ACTIONS = {
   'detail': printSessionDetail,
   'browser-request': printBrowserRequestAction,
   'takeover': printTakeoverAction,
+  // SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001 FR-7/FR-9
+  'browser-drive': printBrowserDriveAction,
+  'browser-audit': printBrowserAuditAction,
+};
+
+// Fleet-wide (not session-scoped) actuation actions.
+const FLEET_SCOPED_ACTIONS = {
+  'browser-kill-switch': printBrowserKillSwitchAction,
 };
 
 async function main() {
   const command = (process.argv[2] || 'all').toLowerCase();
   if (SESSION_SCOPED_ACTIONS[command]) {
-    await SESSION_SCOPED_ACTIONS[command](process.argv[3]);
+    await SESSION_SCOPED_ACTIONS[command](process.argv[3], process.argv[4]);
+    return;
+  }
+  if (FLEET_SCOPED_ACTIONS[command]) {
+    await FLEET_SCOPED_ACTIONS[command](process.argv[3]);
     return;
   }
   const section = command;
