@@ -447,6 +447,23 @@ describe('stageReplyDelivery -- FR-3 round 2 (staged via checkPublishAuthorizati
     expect(checkPublishAuthorization).not.toHaveBeenCalled();
   });
 
+  it('TS-6 (VALIDATION PLAN_VERIFICATION finding, evidence 4d0013a1): redelivering an IDENTICAL ticket produces the SAME contentId both times -- the property checkPublishAuthorization\'s own dedup (tested in its own suite) relies on to never mint a duplicate chairman_decisions row for a genuine retry', async () => {
+    const ticket = normalizeSupportTicket({ subject: 'how do i reset my password', body: 'account login reset', venture_id: 'v-1' });
+    const triage = triageSupportTicket(ticket);
+
+    await disposeSupportTicket(makeSb(), ticket, triage);
+    const firstCall = vi.mocked(checkPublishAuthorization).mock.calls[0][0];
+
+    vi.mocked(checkPublishAuthorization).mockClear();
+    await disposeSupportTicket(makeSb(), { ...ticket }, triage); // simulates a genuine webhook/email redelivery
+    const secondCall = vi.mocked(checkPublishAuthorization).mock.calls[0][0];
+
+    expect(secondCall.contentId).toBe(firstCall.contentId);
+    expect(secondCall.correlationId).toBeUndefined();
+    expect(secondCall.ventureId).toBe(firstCall.ventureId);
+    expect(secondCall.channelType).toBe(firstCall.channelType);
+  });
+
   it('fails open (does not throw, ticket still recorded) when checkPublishAuthorization itself throws', async () => {
     vi.mocked(checkPublishAuthorization).mockRejectedValue(new Error('gate down'));
     const sb = makeSb();
