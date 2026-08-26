@@ -2005,8 +2005,11 @@ async function printBrowserAuditAction(idOrCallsign) {
   // FR-4 cap status: reads browser_actuation_session_caps (the table FR-4's migration creates) so
   // the operator/chairman can see current usage, not just the refusal audit trail above -- the
   // Operator Contract gate's CONSUMER leg for that new table (a real read, not a citation).
+  // browser_actuation_session_caps ships in this SD's own staged, chairman-gated migration
+  // (database/chairman-gated/20260826_browser_actuation_session_cap.sql) -- not live yet, so
+  // absent from the schema snapshot by design until the migration is applied.
   const { data: capRow, error: capError } = await supabase
-    .from('browser_actuation_session_caps')
+    .from('browser_actuation_session_caps') // schema-lint-disable-line: staged, chairman-gated migration, not yet applied
     .select('action_count, cap_limit, updated_at')
     .eq('session_id', session.session_id)
     .maybeSingle();
