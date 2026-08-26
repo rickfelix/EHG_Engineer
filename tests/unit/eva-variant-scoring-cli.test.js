@@ -21,7 +21,10 @@ describe('renderScoringState (FR-7)', () => {
       query_error: { status: 'query_error', error: 'connection refused' },
       no_bridged_rows: { status: 'no_bridged_rows' },
       gate_excluded: { status: 'gate_excluded', reason: 'product_review_not_approved' },
-      no_writer_yet: { status: 'no_writer_yet', candidateCount: 2 },
+      // D2 fix: fed the ACTUAL status the bridge emits ('no_outcome_data'), not a
+      // hand-constructed 'no_writer_yet' the bridge never produces -- proves the translation
+      // this test seam owns, rather than testing a status nothing upstream ever sends.
+      no_writer_yet: { status: 'no_outcome_data', candidateCount: 2 },
     };
 
     const renders = {};

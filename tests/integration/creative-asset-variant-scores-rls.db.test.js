@@ -8,6 +8,14 @@
  * repo. This is deliberate -- writing/reading live RLS state against production from an ad hoc
  * test run is exactly what the gate exists to prevent (QF-20260726-459).
  *
+ * TESTING finding D1 (evidence f9247bbd-7d82-47c0-86cf-69f641af7e7f): an earlier version of
+ * this file created the raw pg client in a bare, unguarded beforeAll, which threw
+ * DB_TIER_BLOCKED instead of skipping cleanly (the gate patches the socket layer, so an
+ * unconditional connect attempt still fires even inside a describe.skipIf'd block if that
+ * block wraps only the it()s, not the client creation itself). Fixed to match
+ * tests/database/uat-stage-migration-preconditions.db.test.js's proven pattern: HAS_REAL_DB
+ * guards the connection attempt itself, and describeDb wraps every it().
+ *
  * A2 is the load-bearing leg: confirms cavs_venture_access is wired in pg_policies with the
  * expected role and a non-tautological qual, and that RLS is actually enabled on the table.
  * A3 is explicitly a WEAK, corroborating-only control (TESTING evidence
@@ -17,21 +25,27 @@
  * authenticated-session behavioral test (this repo has no auth.uid()-simulating harness) --
  * that would be a separate, explicitly estimated follow-up, not assumed free here.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { it, expect, beforeAll, afterAll } from 'vitest';
 import { createDatabaseClient } from '../../scripts/lib/supabase-connection.js';
 import { createClient } from '@supabase/supabase-js';
+import { describeDb, HAS_REAL_DB } from '../helpers/db-available.js';
 
 let client;
 
+// verify:false (matching tests/database/uat-stage-migration-preconditions.db.test.js's proven
+// pattern): defers the actual connection attempt so an undesignated DB_TARGET's runtime gate
+// (tests/setup.db.js) can skip this suite's it()s cleanly instead of the raw pg socket connect
+// throwing DB_TIER_BLOCKED out of beforeAll before the gate has a chance to intervene.
 beforeAll(async () => {
-  client = await createDatabaseClient();
+  if (!HAS_REAL_DB) return;
+  client = await createDatabaseClient('engineer', { verify: false });
 }, 60000);
 
 afterAll(async () => {
   if (client) await client.end();
 });
 
-describe('creative_asset_variant_scores RLS (FR-1, TS-4 leg A2: catalog)', () => {
+describeDb('creative_asset_variant_scores RLS (FR-1, TS-4 leg A2: catalog)', () => {
   it('table exists and RLS is enabled', async () => {
     const { rows } = await client.query(
       "SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.creative_asset_variant_scores')"
@@ -76,7 +90,7 @@ describe('creative_asset_variant_scores RLS (FR-1, TS-4 leg A2: catalog)', () =>
   });
 });
 
-describe('creative_asset_variant_scores RLS (TS-4 leg A3: weak anon-role corroboration)', () => {
+describeDb('creative_asset_variant_scores RLS (TS-4 leg A3: weak anon-role corroboration)', () => {
   it('an anon-role client cannot read rows (corroborating only -- anon never exercises the authenticated-role predicate)', async () => {
     const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;

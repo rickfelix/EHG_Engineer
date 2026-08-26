@@ -33,7 +33,15 @@ dotenv.config();
 // Pure, exported render function (the test seam) -- separate from main()'s I/O, matching
 // scripts/eva-idea-status.js's renderSyncState() shape exactly (G5, DESIGN evidence
 // 38a6c88b-1e7f-4ab4-838c-c2db1e7f32ba).
-export function renderScoringState(result, ventureId) {
+//
+// TESTING finding D2 (evidence f9247bbd-7d82-47c0-86cf-69f641af7e7f): the bridge's
+// 'no_outcome_data' status is translated to this CLI's 'no_writer_yet' render token HERE,
+// inside the tested render seam -- not in main(), where it was previously unreachable by any
+// test and could silently break (deleting the translation left all 44 tests green while the
+// live 'no_outcome_data' state -- the one production is permanently in per FR-6 -- would have
+// printed "UNRECOGNIZED status").
+export function renderScoringState(rawResult, ventureId) {
+  const result = rawResult.status === 'no_outcome_data' ? { ...rawResult, status: 'no_writer_yet' } : rawResult;
   const lines = [`  Venture: ${ventureId}`];
 
   switch (result.status) {
@@ -83,9 +91,8 @@ async function main() {
 
   const supabase = createSupabaseServiceClient();
   const result = await selectAssetVariant({ supabase, ventureId });
-  const normalized = result.status === 'no_outcome_data' ? { ...result, status: 'no_writer_yet' } : result;
 
-  for (const line of renderScoringState(normalized, ventureId)) {
+  for (const line of renderScoringState(result, ventureId)) {
     console.log(line);
   }
 
