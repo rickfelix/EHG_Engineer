@@ -825,3 +825,55 @@ Behavioural proof:
 `tests/ddl/strategic-directives-canonical-writer-choke-ddl.db.test.js` (67 scenarios, ephemeral
 Postgres). Writer inventory:
 `database/evidence/SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001-writer-inventory.md`.
+
+## Applying `20260825_dedicated_venture_uat_stage_insert_and_renumber.sql`
+
+**SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B.** Inserts a new dedicated-venture-UAT stage at
+`stage_number=23` and renumbers `stage_number`/`current_lifecycle_stage` 23-26 -> 24-27 across
+`venture_stages`, `ventures`, `chairman_decisions`, and `venture_stage_work`. This is the largest,
+highest-blast-radius single ceremony in this directory to date — read the migration file's own
+extensive header banner (revision notes, the "DOCUMENTED, NOT FIXED" section, and the "ADDITIONAL
+PRE-CEREMONY BLOCKER" section) in full before scheduling the ceremony, not just this README.
+
+**Went through two full rounds of empirical adversarial review** (live-database rolled-back-
+transaction execution, not static diff reading) by dedicated TESTING and SECURITY sub-agents, which
+found and fixed: a nonexistent-column preflight reference, a primary-key collision in the original
+single-statement renumber technique (fixed via a two-phase negative-intermediate shift — see the
+migration's own section 3 comments for the mechanism), three live-state tables the original design
+missed shifting, two additional stale `> 26` bounds beyond the two RPCs (a CHECK constraint and a
+separate validation trigger), an anon-reachable `SECURITY DEFINER` timestamp oracle (reverted to
+plain invoker rights), a TOCTOU gap between preflight and the first exclusive lock (closed with a
+literal first-statement `LOCK TABLE ... IN ACCESS EXCLUSIVE MODE`), and a security regression a
+naive "leave it stale" disposition would have manufactured in a chairman gate literal.
+
+**Also required two follow-up fixes post-authoring, both empirically verified, neither changing the
+migration's actual behavior:**
+- `secdef-execute-revoke-lint` (CI): `advance_venture_stage()`/`fn_advance_venture_stage()` are
+  `SECURITY DEFINER` functions this migration's `CREATE OR REPLACE` re-emits (only to widen their
+  bound 26->27); the lint requires an explicit in-file `REVOKE`/`GRANT` pairing regardless. Verified
+  via `pg_proc.proacl` in a rolled-back transaction that the added statements are a byte-for-byte
+  no-op against live production grants.
+- `stage-advancement-chokepoint-lint` (CI): flagged 4 `current_lifecycle_stage` write statements in
+  this new file. 3 are re-emissions of already-censused paths (see
+  `docs/architecture/stage-advancement-path-census.md`'s "Post-census addition (2026-08-25)"
+  section); the 4th (this migration's own renumber shift) is a new but deliberately-exempt
+  administrative write, double-gated by the file's own FR-6 real-venture preflight block and the
+  chairman-approval ceremony itself.
+
+**Pre-ceremony blocker not resolved by this SD**: a THIRD category of stage-keyed data beyond this
+migration's existing direct-shift/shim taxonomy was discovered during review — live *configuration*
+tables keyed by stage number (`eva_ventures`, `stage_artifact_requirements`, `gate_boundary_config`,
+`venture_stage_cutover_grandfather`, `stage_prop_contracts`, `eva_stage_gate_results`,
+`venture_capture_snapshots`, `stage_executions`, `venture_artifacts.lifecycle_stage`). See the
+migration file's own "ADDITIONAL PRE-CEREMONY BLOCKER" section — a dedicated follow-up SD should
+resolve this before scheduling the chairman ceremony.
+
+Companion cross-repo PR (`ehg` repo, `feat/SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B`, FR-5):
+re-anchors `useLaunchWorkflow.ts`'s hardcoded stage-number literals and query boundaries to the
+post-renumber numbering, contingent on this migration having actually been applied — it adds its own
+runtime probe (a one-time, non-blocking check for this migration's `dedicated_venture_uat` marker
+row) that logs a console warning if the frontend deploys ahead of the chairman-approval ceremony.
+
+Rollback: `20260825_dedicated_venture_uat_stage_insert_and_renumber_DOWN.sql` — full mirror,
+reverting all four tables' shifts and dropping the new UAT catalog row, with the same per-row
+snapshot-based verification and the same two CI-lint fixes applied.
