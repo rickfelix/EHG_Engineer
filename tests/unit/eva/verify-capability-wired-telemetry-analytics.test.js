@@ -133,8 +133,11 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C FR-2: fn_venture_usage_window_s
   const MIGRATION_PATH = resolve(__dirname, '../../../database/chairman-gated/20260826_venture_usage_window_summary_rpc.sql');
   const sql = readFileSync(MIGRATION_PATH, 'utf8');
 
-  it('grants EXECUTE to service_role only, revoking PUBLIC/anon/authenticated', () => {
-    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.fn_venture_usage_window_summary[^;]*FROM PUBLIC, anon, authenticated/);
+  it('grants EXECUTE to service_role only, revoking PUBLIC/anon/authenticated (secdef-execute-revoke-lint compliant)', () => {
+    // Must be REVOKE EXECUTE (not REVOKE ALL) -- scripts/lint/secdef-execute-revoke-lint.mjs
+    // pattern-matches this exact literal and would otherwise false-fail in CI even though
+    // REVOKE ALL is semantically equivalent for a function (SECURITY finding, evidence ae6b2476).
+    expect(sql).toMatch(/REVOKE EXECUTE ON FUNCTION public\.fn_venture_usage_window_summary[^;]*FROM PUBLIC, anon, authenticated/);
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_venture_usage_window_summary[^;]*TO service_role/);
   });
 

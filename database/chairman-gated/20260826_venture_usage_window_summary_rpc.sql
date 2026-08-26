@@ -82,7 +82,7 @@ COMMENT ON FUNCTION public.fn_venture_usage_window_summary(UUID, TIMESTAMPTZ, TI
 -- Explicit, belt-and-suspenders REVOKE + minimal GRANT (see 20260812_venture_ingest_key_binding.sql
 -- header for why this is not redundant with ALTER DEFAULT PRIVILEGES -- that mechanism is
 -- confirmed still open in this database, so every new function needs this explicit pair).
-REVOKE ALL ON FUNCTION public.fn_venture_usage_window_summary(UUID, TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.fn_venture_usage_window_summary(UUID, TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_venture_usage_window_summary(UUID, TIMESTAMPTZ, TIMESTAMPTZ) TO service_role;
 
 NOTIFY pgrst, 'reload schema';
