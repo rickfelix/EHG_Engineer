@@ -326,6 +326,39 @@ describe('releaseHeldSend — refusal cases + success', () => {
     expect(outcome.sendResult).toEqual({ sent: true, sid: 'SM-ok' });
   });
 
+  it('SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-4): always passes skipCompose:true to sendChairmanSMS -- heldRow.body was already composed once, at hold time', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: true, isGenuineSolomon: true, answerRowId: 'ans-9', verdict: 'GO' }));
+    const sendChairmanSMS = vi.fn(async () => ({ sent: true, sid: 'SM-ok' }));
+    const supabase = makeFakeSupabase();
+    await releaseHeldSend(supabase, heldRow(), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS });
+    const [, , opts] = sendChairmanSMS.mock.calls[0];
+    expect(opts.skipCompose).toBe(true);
+  });
+
+  it('SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-3): restores reply_instruction/reply_id/no_reply_consequence from the held row onto the reconstructed message', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: true, isGenuineSolomon: true, answerRowId: 'ans-9', verdict: 'GO' }));
+    const sendChairmanSMS = vi.fn(async () => ({ sent: true, sid: 'SM-ok' }));
+    const supabase = makeFakeSupabase();
+    await releaseHeldSend(supabase, heldRow({
+      reply_instruction: 'Reply with A or B.', reply_id: 'rid-release-1', no_reply_consequence: 'Silence means hold.',
+    }), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS });
+    const [message] = sendChairmanSMS.mock.calls[0];
+    expect(message.replyInstruction).toBe('Reply with A or B.');
+    expect(message.replyId).toBe('rid-release-1');
+    expect(message.noReplyConsequence).toBe('Silence means hold.');
+  });
+
+  it('a held row that predates FR-3 (no reply fields captured) reconstructs those fields as undefined, not a crash or a fabricated value', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: true, isGenuineSolomon: true, answerRowId: 'ans-9', verdict: 'GO' }));
+    const sendChairmanSMS = vi.fn(async () => ({ sent: true, sid: 'SM-ok' }));
+    const supabase = makeFakeSupabase();
+    await releaseHeldSend(supabase, heldRow(), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS });
+    const [message] = sendChairmanSMS.mock.calls[0];
+    expect(message.replyInstruction).toBeUndefined();
+    expect(message.replyId).toBeUndefined();
+    expect(message.noReplyConsequence).toBeUndefined();
+  });
+
   it('the hold-time insert (chairman-sms-gate) writes the exact fields the release path reads back -- options already a string[]', async () => {
     const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: true, isGenuineSolomon: true, answerRowId: 'ans-9', verdict: 'GO' }));
     const sendChairmanSMS = vi.fn(async () => ({ sent: true, sid: 'SM-ok' }));

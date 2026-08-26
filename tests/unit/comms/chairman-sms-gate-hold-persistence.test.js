@@ -63,6 +63,75 @@ describe('chairman-sms-gate hold persistence (SD-LEO-INFRA-CHAIRMAN-DECISION-LAN
     expect(row.hold_reason).toBe('solomon-consult-async::chairman-hold-pending-reconcile');
   });
 
+  // ── SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-1 / FR-3) ─────────────────────────────────
+  it('FR-1: persists consult_row_id from the consult outcome when the readback-verify succeeded', async () => {
+    const supabase = makeFakeSupabaseForHold();
+    const sender = { send: vi.fn() };
+    const runPreSendConsultLane = vi.fn().mockResolvedValue({
+      action: 'hold-and-surface', correlationId: 'corr-hold-2', consultRowId: 'consult-row-999',
+      reason: 'solomon-consult-async::chairman-hold-pending-reconcile',
+    });
+
+    await sendChairmanSMS(
+      { type: 'decision', body: 'Approve X?', options: [{ label: 'A' }, { label: 'B' }], decisionId: 'dec-hold-3' },
+      {},
+      { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+    );
+
+    expect(supabase.inserted[0].consult_row_id).toBe('consult-row-999');
+  });
+
+  it('FR-1: persists consult_row_id as null when the consult outcome carries none (readback failed or a genuine timeout) -- never fabricated', async () => {
+    const supabase = makeFakeSupabaseForHold();
+    const sender = { send: vi.fn() };
+    const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-hold-3' });
+
+    await sendChairmanSMS(
+      { type: 'decision', body: 'Approve X?' },
+      {},
+      { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+    );
+
+    expect(supabase.inserted[0].consult_row_id).toBeNull();
+  });
+
+  it('FR-3: persists reply_instruction/reply_id/no_reply_consequence from the message at hold time -- the fields the release path needs to satisfy the rubric a second time', async () => {
+    const supabase = makeFakeSupabaseForHold();
+    const sender = { send: vi.fn() };
+    const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-hold-4' });
+
+    await sendChairmanSMS(
+      {
+        type: 'decision', body: 'Approve X?', options: [{ label: 'A' }, { label: 'B' }],
+        replyInstruction: 'Reply with A or B.', replyId: 'rid-hold-4', noReplyConsequence: 'No reply defaults to hold.',
+      },
+      {},
+      { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+    );
+
+    const row = supabase.inserted[0];
+    expect(row.reply_instruction).toBe('Reply with A or B.');
+    expect(row.reply_id).toBe('rid-hold-4');
+    expect(row.no_reply_consequence).toBe('No reply defaults to hold.');
+  });
+
+  it('FR-3: persists null (not undefined/crash) for reply fields the message never carried', async () => {
+    const supabase = makeFakeSupabaseForHold();
+    const sender = { send: vi.fn() };
+    const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-hold-5' });
+
+    await sendChairmanSMS(
+      { type: 'decision', body: 'Approve X?' },
+      {},
+      { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+    );
+
+    const row = supabase.inserted[0];
+    expect(row.reply_instruction).toBeNull();
+    expect(row.reply_id).toBeNull();
+    expect(row.no_reply_consequence).toBeNull();
+  });
+
   it('a hold with NO correlationId (genuine hard timeout, not a pending envelope) still persists with consult_correlation_id=null -- surfaced later via v_chairman_held_sends_unreconcilable, never silently dropped', async () => {
     const supabase = makeFakeSupabaseForHold();
     const sender = { send: vi.fn() };

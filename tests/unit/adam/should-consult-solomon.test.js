@@ -169,6 +169,29 @@ describe('performBoundedConsult — FR-3 FAIL-OPEN (Adam never hard-blocked on S
     expect(recordLedger).not.toHaveBeenCalled();
   });
 
+  it('SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-1): a chairman-targeted hold also carries consultRowId forward when the envelope supplies one -- NOT auto-propagated by the generic correlationId/pending envelope handling, so this must be forwarded explicitly', async () => {
+    const consult = vi.fn(async () => ({ correlationId: 'corr-pending-2', pending: true, consultRowId: 'row-abc-123' }));
+    const result = await performBoundedConsult(
+      { ...HIGH, isChairmanTargeted: true },
+      { consult, timeoutMs: 200 },
+    );
+
+    expect(result.action).toBe('hold-and-surface');
+    expect(result.correlationId).toBe('corr-pending-2');
+    expect(result.consultRowId).toBe('row-abc-123');
+  });
+
+  it('a chairman-targeted hold omits consultRowId entirely when the envelope did not supply one (readback failed or a genuine hard timeout) -- never fabricates one', async () => {
+    const consult = vi.fn(async () => ({ correlationId: 'corr-pending-3', pending: true }));
+    const result = await performBoundedConsult(
+      { ...HIGH, isChairmanTargeted: true },
+      { consult, timeoutMs: 200 },
+    );
+
+    expect(result.action).toBe('hold-and-surface');
+    expect(result.consultRowId).toBeUndefined();
+  });
+
   it('a failing recordLedger STILL proceeds (ledger capture is best-effort, never fatal)', async () => {
     const consult = vi.fn(() => new Promise(() => {}));
     const recordLedger = vi.fn(async () => { throw new Error('db write failed'); });
