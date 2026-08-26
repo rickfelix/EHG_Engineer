@@ -9,11 +9,14 @@ import { describe, it, expect } from 'vitest';
 import {
   ACTIVATION_VERDICT,
   RUNG_STATE,
+  ACTIVATION_RUNGS,
   DECLARED_UNFILTERED_RUNGS,
   RATIFIED_FLOORS,
   resolveTelemetryRungs,
   resolvePaidRung,
+  resolveCpaRung,
   decideActivationVerdict,
+  buildPathToPass,
   computeActivationVerdict,
 } from '../../../lib/marketing/venture-activation-gate.js';
 
@@ -26,7 +29,7 @@ const FLOORS = { activated: { minimum: 10, ratified_by: 'TEST-DECISION 2026-08-0
  * and fetchAllPaginated drives `.range()`. A double that only supports the shape MY code happens
  * to call would make this suite blind to the gauge it delegates into.
  */
-function fakeSupabase({ telemetry = null, telemetryError = null, paymentRows = [], paymentError = null }) {
+function fakeSupabase({ telemetry = null, telemetryError = null, paymentRows = [], paymentError = null, dailyRollupRows = [], dailyRollupError = null }) {
   const payload = { data: paymentRows, error: paymentError, count: (paymentRows || []).length };
   function paymentBuilder() {
     const b = {
@@ -40,6 +43,15 @@ function fakeSupabase({ telemetry = null, telemetryError = null, paymentRows = [
     for (const m of ['select', 'eq', 'not', 'order', 'is', 'gte', 'lte', 'in']) b[m] = () => b;
     return b;
   }
+  // SD-LEO-GEN-NEED-ABLE-CONTINUALLY-001 TR-6: resolveCpaRung()'s daily_rollups query is
+  // .select().eq().gte() then awaited directly (no .limit()/.maybeSingle()), so this builder only
+  // needs to be thenable, matching resolveCpaRung's real call shape.
+  function dailyRollupsBuilder() {
+    const dailyRollupsPayload = { data: dailyRollupRows, error: dailyRollupError };
+    const b = { then: (resolve, reject) => Promise.resolve(dailyRollupsPayload).then(resolve, reject) };
+    for (const m of ['select', 'eq', 'gte', 'lte', 'order']) b[m] = () => b;
+    return b;
+  }
   return {
     from(table) {
       if (table === 'venture_telemetry') {
@@ -48,6 +60,7 @@ function fakeSupabase({ telemetry = null, telemetryError = null, paymentRows = [
         return b;
       }
       if (table === 'ops_payment_events') return paymentBuilder();
+      if (table === 'daily_rollups') return dailyRollupsBuilder();
       throw new Error(`unexpected table ${table}`);
     },
   };
@@ -178,8 +191,11 @@ describe('FR-6: Image Alt Text Generator blocks honestly with a named path', () 
     expect(out.verdict).toBe(ACTIVATION_VERDICT.NO_DATA);
     expect(out.path_to_pass).toMatch(/no venture_telemetry row exists/);
     expect(out.path_to_pass).toMatch(/fleet-wide/);
-    // every rung unmeasurable, and no rung reports a number
-    for (const r of Object.values(out.rungs)) {
+    // SD-LEO-GEN-NEED-ABLE-CONTINUALLY-001 TR-5: scoped to ACTIVATION_RUNGS-named keys only.
+    // rungs.cpa uses its own (no_writer_yet/live) vocabulary, not RUNG_STATE, and is asserted
+    // separately below -- a blind Object.values(out.rungs) loop would fail once cpa is added.
+    for (const rungName of ACTIVATION_RUNGS) {
+      const r = out.rungs[rungName];
       expect(r.state).toBe(RUNG_STATE.UNMEASURABLE);
       expect(r.value).toBeNull();
     }
@@ -206,6 +222,88 @@ describe('FR-6: Image Alt Text Generator blocks honestly with a named path', () 
     });
     expect(out.verdict).toBe(ACTIVATION_VERDICT.NO_DATA);
     expect(out.citation).toMatch(/could not observe/);
+  });
+});
+
+describe('FR-2/TR-3/TR-4: resolveCpaRung is non-gating and fails closed', () => {
+  it('is no_writer_yet when no daily_rollups rows exist for the venture', async () => {
+    const cpa = await resolveCpaRung({ supabase: fakeSupabase({ dailyRollupRows: [] }), ventureId: VENTURE });
+    expect(cpa.rung).toBe('cpa');
+    expect(cpa.state).toBe('no_writer_yet');
+    expect(cpa.value_cents_per_conversion).toBeNull();
+  });
+
+  it('is live with a real number when daily_rollups rows carry spend and conversions', async () => {
+    const cpa = await resolveCpaRung({
+      supabase: fakeSupabase({ dailyRollupRows: [{ spend_cents: 10000, conversions: 20 }] }),
+      ventureId: VENTURE,
+    });
+    expect(cpa.state).toBe('live');
+    expect(cpa.value_cents_per_conversion).toBe(500);
+  });
+
+  it('fails CLOSED (no_writer_yet, never a throw) on a daily_rollups query error', async () => {
+    const cpa = await resolveCpaRung({
+      supabase: fakeSupabase({ dailyRollupRows: null, dailyRollupError: { message: 'connection reset' } }),
+      ventureId: VENTURE,
+    });
+    expect(cpa.state).toBe('no_writer_yet');
+    expect(cpa.reason).toMatch(/connection reset/);
+  });
+
+  it('TS-4: does not change decideActivationVerdict/buildPathToPass output for an existing fixture, and rungs.cpa uses its own vocabulary, not RUNG_STATE', async () => {
+    const out = await computeActivationVerdict({
+      supabase: fakeSupabase({ telemetry: null, paymentRows: [], dailyRollupRows: [{ spend_cents: 10000, conversions: 20 }] }),
+      ventureId: VENTURE,
+    });
+    // Byte-identical to the pre-CPA NO_DATA fixture above: same verdict, same path_to_pass shape.
+    expect(out.verdict).toBe(ACTIVATION_VERDICT.NO_DATA);
+    expect(out.path_to_pass).toMatch(/no venture_telemetry row exists/);
+    expect(out.path_to_pass).toMatch(/fleet-wide/);
+    // cpa is present, additive, and does NOT use the RUNG_STATE vocabulary the funnel rungs use.
+    expect(out.rungs.cpa).toBeDefined();
+    expect(out.rungs.cpa.state).toBe('live');
+    expect(out.rungs.cpa.value_cents_per_conversion).toBe(500);
+    expect(out.rungs.cpa.state).not.toBe(RUNG_STATE.MEASURED);
+    expect(out.rungs.cpa.state).not.toBe(RUNG_STATE.UNMEASURABLE);
+  });
+
+  it('TS-5: a daily_rollups query error surfaces as rungs.cpa=no_writer_yet without crashing the rest of the verdict', async () => {
+    const out = await computeActivationVerdict({
+      supabase: fakeSupabase({ telemetry: null, paymentRows: [], dailyRollupRows: null, dailyRollupError: { message: 'transient DB error' } }),
+      ventureId: VENTURE,
+    });
+    expect(out.verdict).toBe(ACTIVATION_VERDICT.NO_DATA);
+    expect(out.rungs.cpa.state).toBe('no_writer_yet');
+    expect(out.rungs.cpa.reason).toMatch(/transient DB error/);
+  });
+
+  it('is attached even on the venture_telemetry-read-error early-return path', async () => {
+    const out = await computeActivationVerdict({
+      supabase: fakeSupabase({ telemetryError: { message: 'permission denied' }, paymentRows: [], dailyRollupRows: [{ spend_cents: 5000, conversions: 10 }] }),
+      ventureId: VENTURE,
+    });
+    expect(out.verdict).toBe(ACTIVATION_VERDICT.NO_DATA);
+    expect(out.rungs.cpa.state).toBe('live');
+    expect(out.rungs.cpa.value_cents_per_conversion).toBe(500);
+  });
+
+  it('never adds cpa to ACTIVATION_RUNGS or RATIFIED_FLOORS (TR-3)', () => {
+    expect(ACTIVATION_RUNGS).not.toContain('cpa');
+    expect(RATIFIED_FLOORS.cpa).toBeUndefined();
+  });
+
+  it('TR-3: decideActivationVerdict and buildPathToPass source never reference cpa', async () => {
+    // Pins that CPA logic lives entirely in resolveCpaRung/computeActivationVerdict's post-hoc
+    // attachment, not inside the gating functions themselves -- a textual guard against a future
+    // edit accidentally threading cpa into the judged-rung computation.
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('../../../lib/marketing/venture-activation-gate.js', import.meta.url), 'utf8')
+    );
+    const decideBody = src.slice(src.indexOf('export function decideActivationVerdict'), src.indexOf('export function buildPathToPass'));
+    const buildPathBody = src.slice(src.indexOf('export function buildPathToPass'), src.indexOf('export async function computeActivationVerdict'));
+    expect(decideBody).not.toMatch(/cpa/);
+    expect(buildPathBody).not.toMatch(/cpa/);
   });
 });
 
