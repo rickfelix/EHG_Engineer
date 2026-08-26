@@ -20,6 +20,8 @@ import { isTerminalChildStatus } from '../../../lib/orchestrator/child-terminal-
 // + terminal-transition guard (guardian may no longer write status='completed').
 import { getFilteredRetrospective } from './retro-filters.js';
 import { routeOrchestratorToLeadFinal } from './lib/orchestrator-terminal-guard.js';
+import { buildRetrospectiveContent } from '../../../lib/quality/build-retrospective-content.js';
+import { resolvePatternSuccessUpdate } from '../../../lib/quality/resolve-pattern-success-update.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -605,27 +607,25 @@ export class OrchestratorCompletionGuardian {
    * Create retrospective with intelligent learnings from children
    */
   async createRetrospective() {
-    // Load child retrospectives for aggregation
+    // Load ONLY genuine SD_COMPLETION child retrospectives for aggregation. A
+    // handoff-time retro (LEAD_TO_PLAN etc.) is boilerplate scaffolding, not a real
+    // completion lesson -- pulling it in produced generic, verbatim-copied parent
+    // content that scored 33% on the SD-completion readiness rubric (feedback
+    // ea46e576-981b-41a3-a17a-5fe76cdbe637).
     const { data: childRetros } = await supabase
       .from('retrospectives')
-      .select('key_learnings, what_went_well, what_needs_improvement')
-      .in('sd_id', this.childData.map(c => c.id));
+      .select('sd_id, key_learnings, what_went_well, what_needs_improvement, action_items')
+      .in('sd_id', this.childData.map(c => c.id))
+      .eq('retro_type', 'SD_COMPLETION');
 
-    // Aggregate learnings from children
-    const aggregatedLearnings = [];
-    const aggregatedWentWell = [];
-    const aggregatedNeedsImprovement = [];
-
-    childRetros?.forEach(retro => {
-      if (retro.key_learnings) aggregatedLearnings.push(...retro.key_learnings);
-      if (retro.what_went_well) aggregatedWentWell.push(...retro.what_went_well);
-      if (retro.what_needs_improvement) aggregatedNeedsImprovement.push(...retro.what_needs_improvement);
+    // Aggregation (dedupe + labeled fallbacks) is a pure function, unit-tested directly
+    // in lib/quality/build-retrospective-content.test.js -- see that file for coverage
+    // of the fallback-when-no-child-data and dedupe-by-value cases feedback ea46e576
+    // required.
+    const content = buildRetrospectiveContent(childRetros, {
+      childCompletionPhrase: this._childCompletionSummary().phrase,
+      childCount: this.childData.length,
     });
-
-    // Deduplicate and limit
-    const uniqueLearnings = [...new Set(aggregatedLearnings)].slice(0, 5);
-    const uniqueWentWell = [...new Set(aggregatedWentWell)].slice(0, 5);
-    const uniqueNeedsImprovement = [...new Set(aggregatedNeedsImprovement)].slice(0, 3);
 
     // SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001 (formerly SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001, cancelled) (FR-6): consult guard before INSERT.
     // This is wire-in site 1 of 4 in BOTH guardian files (handoff/ + modules/).
@@ -648,19 +648,11 @@ export class OrchestratorCompletionGuardian {
         description: `Aggregated retrospective for orchestrator coordinating ${this.childData.length} child SDs`,
         retro_type: 'SD_COMPLETION',
         conducted_date: new Date().toISOString(),
-        what_went_well: uniqueWentWell.length > 0 ? uniqueWentWell : [
-          this._childCompletionSummary().phrase.replace(/^./, (c) => c.toUpperCase()),
-          'Orchestrator pattern enabled parallel execution',
-          'Proper LEO Protocol followed for all children'
-        ],
-        what_needs_improvement: uniqueNeedsImprovement.length > 0 ? uniqueNeedsImprovement : [
-          'Orchestrator artifacts should be created earlier in workflow'
-        ],
-        key_learnings: uniqueLearnings.length > 0 ? uniqueLearnings : [
-          'Orchestrator SDs require explicit artifact creation',
-          'Child SD aggregation provides valuable parent context'
-        ],
-        action_items: [],
+        what_went_well: content.what_went_well,
+        what_needs_improvement: content.what_needs_improvement,
+        key_learnings: content.key_learnings,
+        action_items: content.action_items,
+        improvement_areas: content.improvement_areas,
         status: 'PUBLISHED',
         quality_score: 80,
         generated_by: 'SUB_AGENT',
@@ -673,7 +665,7 @@ export class OrchestratorCompletionGuardian {
     if (error) {
       console.log(`   ❌ Failed to create retrospective: ${error.message}`);
     } else {
-      console.log(`   ✅ Created retrospective with ${uniqueLearnings.length} aggregated learnings`);
+      console.log(`   ✅ Created retrospective with ${content.key_learnings.length} aggregated learnings`);
     }
   }
 
@@ -715,11 +707,18 @@ export class OrchestratorCompletionGuardian {
    * Mark deliverable as complete
    */
   async completeDeliverable(deliverable) {
+    // 'ORCHESTRATOR-GUARDIAN' (21 chars) violated the VARCHAR(20) length cap on
+    // sd_scope_deliverables.verified_by (feedback 848c692a-b5dc-432d-9265-474fb1f34daa).
+    // (The migration's declared CHECK-constraint enum is not actually live -- values
+    // like 'DATABASE', 'DESIGN', 'GITHUB' already exist on this column in production --
+    // so length was the only real constraint being violated.) The guardian runs at
+    // LEAD-FINAL-APPROVAL time as LEAD-phase automation, so 'LEAD' fits both the
+    // length cap and the declared (if unenforced) enum -- no schema migration needed.
     const { error } = await supabase
       .from('sd_scope_deliverables')
       .update({
         completion_status: 'completed',
-        verified_by: 'ORCHESTRATOR-GUARDIAN',
+        verified_by: 'LEAD',
         verified_at: new Date().toISOString()
       })
       .eq('id', deliverable.id);
@@ -756,8 +755,16 @@ export class OrchestratorCompletionGuardian {
     console.log('\n⏸  ORCHESTRATOR STAGED — run LEAD-FINAL-APPROVAL to complete:');
     console.log(`   ${routing.command}`);
 
-    // Record pattern success (artifacts staged; genuine completion via LEAD-FINAL)
-    await this.recordPatternSuccess();
+    // Record pattern success (artifacts staged; genuine completion via LEAD-FINAL).
+    // recordPatternSuccess() is internally fail-soft, but this call site is ALSO
+    // wrapped defensively: staging already succeeded above, so a future regression to
+    // the best-effort telemetry method below must never take down the (already-real)
+    // staging outcome this method returns.
+    try {
+      await this.recordPatternSuccess();
+    } catch (patternError) {
+      console.log(`   ⚠️  Pattern success recording threw unexpectedly (non-blocking): ${patternError.message}`);
+    }
 
     return { success: true, routedToLeadFinal: true, leadFinalCommand: routing.command };
   }
@@ -770,14 +777,50 @@ export class OrchestratorCompletionGuardian {
     // a child was cancelled rather than genuinely completed (adversarial LOW finding).
     const { allGenuinelyCompleted } = this._childCompletionSummary();
     const outcomeScore = allGenuinelyCompleted ? 100 : 50;
-    await supabase
+
+    // supabase-js (PostgREST) has no `.sql` tagged-template method -- that API belongs
+    // to raw-SQL clients (postgres.js/Drizzle), not this client. `supabase.sql` was
+    // `undefined`, so calling it as a tagged template threw synchronously while
+    // building the update payload, and complete()'s uncaught call to this method
+    // crashed the whole staging flow (feedback 85faa739-af14-475c-aade-fc7f4b327742).
+    // Fetch-then-compute-then-write in plain JS instead; treat this as best-effort
+    // (never throw) since complete() already staged the SD successfully by this point.
+    //
+    // KNOWN GAP (out of this SD's scope, confirmed live): pattern_id='PAT-ORCH-001' does
+    // not exist in issue_patterns and never has -- this method has been dead-by-design
+    // since it was written, independent of the .sql crash above (which fired before this
+    // query was ever reached). The only live PAT-ORCH* row is 'PAT-ORCH-FW-001', an
+    // unrelated already-resolved pattern (future-state-children progress-calc bug) --
+    // NOT a general orchestrator-completion tracker, so it would be wrong to repoint
+    // this call at it. Seeding a real 'PAT-ORCH-001' row is a separate decision
+    // (content/severity/etc.) left to a follow-up rather than guessed here.
+    const { data: pattern, error: fetchError } = await supabase
+      .from('issue_patterns')
+      .select('occurrence_count, success_rate')
+      .eq('pattern_id', 'PAT-ORCH-001')
+      .maybeSingle();
+
+    // The 3-way could-not-check/not-found/update decision is a pure function, unit-tested
+    // directly (all 3 branches, including the fetch-error branch that cannot be exercised
+    // without mocking the module-level supabase client) in
+    // lib/quality/resolve-pattern-success-update.test.js.
+    const decision = resolvePatternSuccessUpdate({ fetchError, pattern, outcomeScore });
+    if (decision.action !== 'update') {
+      console.log(`   ⚠️  ${decision.logMessage}`);
+      return;
+    }
+
+    const { error: updateError } = await supabase
       .from('issue_patterns')
       .update({
-        occurrence_count: supabase.sql`occurrence_count + 1`,
-        success_rate: supabase.sql`(success_rate * occurrence_count + ${outcomeScore}) / (occurrence_count + 1)`,
+        ...decision.payload,
         last_seen_sd_id: this.sdId
       })
       .eq('pattern_id', 'PAT-ORCH-001');
+
+    if (updateError) {
+      console.log(`   ⚠️  Failed to record pattern success: ${updateError.message}`);
+    }
   }
 
   /**

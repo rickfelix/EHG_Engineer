@@ -127,7 +127,12 @@ export async function getFilteredRetrospective(sdUuid, sdCreatedAt, supabase, sd
     // column with the PHASE (LEAD_TO_PLAN/PLAN_TO_EXEC/EXEC_TO_PLAN), never 'SD_COMPLETION', so
     // they remain correctly excluded — this only admits genuine SD-completion retros.
     .or('retrospective_type.is.null,retrospective_type.eq.SD_COMPLETION')
-    .gt('created_at', leadToPlanAcceptedAt)
+    // A legitimate in-place UPDATE to an existing retro (e.g. enhanceRetrospective())
+    // bumps the trigger-maintained updated_at column but never created_at -- a
+    // created_at-only freshness check made such a retro invisible to this gate even
+    // though it now genuinely satisfies quality/freshness (feedback
+    // 005182bf-33c7-4583-ad37-73f735a0a326). Accept either timestamp past the cutoff.
+    .or(`created_at.gt.${leadToPlanAcceptedAt},updated_at.gt.${leadToPlanAcceptedAt}`)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -171,9 +176,17 @@ export function isValidPreflightRetro(candidate, sdUuid, leadToPlanAcceptedAt) {
   if (candidate.sd_id !== sdUuid) return false;
   if (candidate.retro_type !== 'SD_COMPLETION') return false;
   if (candidate.retrospective_type != null && candidate.retrospective_type !== 'SD_COMPLETION') return false;
-  const createdAt = parseAsUTC(candidate.created_at);
   const cutoff = parseAsUTC(leadToPlanAcceptedAt);
-  if (!createdAt || !cutoff || createdAt <= cutoff) return false;
+  if (!cutoff) return false;
+  const createdAt = parseAsUTC(candidate.created_at);
+  const updatedAt = parseAsUTC(candidate.updated_at);
+  // Same invariant as getFilteredRetrospective's freshness check: a legitimate in-place
+  // UPDATE (enhanceRetrospective()) bumps updated_at but never created_at, so this stash
+  // validator must not reject on created_at alone (SD-LEO-INFRA-COMPLETION-INTEGRITY-
+  // REPAIR-001, feedback 005182bf) -- the two checks must stay in lockstep or a stashed
+  // candidate could pass/fail differently than a fresh getFilteredRetrospective() query.
+  const isFresh = (createdAt && createdAt > cutoff) || (updatedAt && updatedAt > cutoff);
+  if (!isFresh) return false;
   return true;
 }
 
