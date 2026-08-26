@@ -170,12 +170,12 @@ describe('generateWithRunway (TS-1..TS-12)', () => {
     ).rejects.toMatchObject({ code: 'POLL_TIMEOUT' });
   });
 
-  it('TS-9: generateAsset("video", spec, {}) routes through the unmodified routing layer, defaulting to a safe watermarked stub (no real network call)', async () => {
+  it('TS-9: generateAsset(ventureId, "video", spec, {}) routes through the unmodified routing layer, defaulting to a safe watermarked stub (no real network call)', async () => {
     const fetchImpl = fetchQueue([]);
     vi.stubGlobal('fetch', fetchImpl);
 
     const { generateAsset } = await import('../../../../lib/creative/generate-asset.js');
-    const result = await generateAsset('video', { prompt: 'a routed video' }, {});
+    const result = await generateAsset('v1', 'video', { prompt: 'a routed video' }, {});
 
     expect(result.provenance.provider).toBe('runway');
     expect(result.provenance.testMode).toBe(true);
