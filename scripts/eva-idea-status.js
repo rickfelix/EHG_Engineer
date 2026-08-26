@@ -12,9 +12,30 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 dotenv.config();
 
+
+// Pure, exported so TS-4 can unit-test the error-vs-empty distinction without a live DB
+// (SD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001 FR-4 AC-1). A failed read must never render
+// identically to a genuinely empty eva_sync_state table.
+export function renderSyncState(syncState, error) {
+  const lines = ['  Sync State:'];
+  if (error) {
+    lines.push(`    ERROR: query failed — ${error.message || error} (sync state unavailable, NOT confirmed empty)`);
+  } else if (syncState?.length) {
+    for (const s of syncState) {
+      const lastSync = s.last_sync_at ? new Date(s.last_sync_at).toLocaleString() : 'Never';
+      const health = s.consecutive_failures >= 3 ? 'CIRCUIT OPEN' :
+                     s.consecutive_failures > 0 ? `${s.consecutive_failures} failures` : 'Healthy';
+      lines.push(`    ${s.source_type}/${s.source_identifier}: ${lastSync} (${s.total_synced} total, ${health})`);
+    }
+  } else {
+    lines.push('    No sync history');
+  }
+  return lines;
+}
 
 async function main() {
   const supabase = createSupabaseServiceClient();
@@ -71,21 +92,13 @@ async function main() {
   console.log('');
 
   // Sync state
-  const { data: syncState } = await supabase
+  const { data: syncState, error: syncStateError } = await supabase
     .from('eva_sync_state')
     .select('source_type, source_identifier, last_sync_at, total_synced, consecutive_failures')
     .order('source_type');
 
-  console.log('  Sync State:');
-  if (syncState?.length) {
-    for (const s of syncState) {
-      const lastSync = s.last_sync_at ? new Date(s.last_sync_at).toLocaleString() : 'Never';
-      const health = s.consecutive_failures >= 3 ? 'CIRCUIT OPEN' :
-                     s.consecutive_failures > 0 ? `${s.consecutive_failures} failures` : 'Healthy';
-      console.log(`    ${s.source_type}/${s.source_identifier}: ${lastSync} (${s.total_synced} total, ${health})`);
-    }
-  } else {
-    console.log('    No sync history');
+  for (const line of renderSyncState(syncState, syncStateError)) {
+    console.log(line);
   }
 
   // Categories
@@ -109,7 +122,9 @@ async function main() {
   console.log('='.repeat(60));
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  main().catch(err => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}

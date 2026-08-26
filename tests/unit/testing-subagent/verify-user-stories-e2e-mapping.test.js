@@ -136,6 +136,43 @@ describe('verifyUserStories — the check must still have teeth', () => {
   });
 });
 
+describe('verifyUserStories — status=blocked is excluded (SD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001)', () => {
+  it('a blocked story does not count against verified, and is reported separately', async () => {
+    const rows = [reportedStory(1), { ...reportedStory(2), status: 'blocked', validation_status: 'skipped' }];
+    const res = await verifyUserStories('sd-1', stubSupabase(rows), { sdType: 'feature' });
+    expect(res.verified).toBe(true);
+    expect(res.incomplete).toEqual([]);
+    expect(res.externally_blocked).toEqual(['SD-LEO-INFRA-SUBAGENT-VERDICT-LAUNDERED-001:US-002']);
+  });
+
+  it('a blocked story does NOT mask a genuinely incomplete non-blocked story', async () => {
+    const rows = [
+      { ...reportedStory(1), status: 'draft', validation_status: 'pending' },
+      { ...reportedStory(2), status: 'blocked', validation_status: 'skipped' },
+    ];
+    const res = await verifyUserStories('sd-1', stubSupabase(rows), { sdType: 'feature' });
+    expect(res.verified).toBe(false);
+    expect(res.incomplete).toHaveLength(1);
+    expect(res.incomplete[0].story_key).toContain('US-001');
+    expect(res.externally_blocked).toEqual(['SD-LEO-INFRA-SUBAGENT-VERDICT-LAUNDERED-001:US-002']);
+  });
+
+  it('all-blocked set verifies (nothing left to evaluate is incomplete)', async () => {
+    const rows = [1, 2].map(n => ({ ...reportedStory(n), status: 'blocked', validation_status: 'skipped' }));
+    const res = await verifyUserStories('sd-1', stubSupabase(rows), { sdType: 'feature' });
+    expect(res.verified).toBe(true);
+    expect(res.externally_blocked).toHaveLength(2);
+  });
+
+  it('[adversarial /ship review, EXEC pass] status=blocked ALONE (validation_status left at its normal value) is NOT exempted -- a single self-writable field cannot escape this gate', async () => {
+    const rows = [{ ...reportedStory(1), status: 'blocked', validation_status: 'pending' }];
+    const res = await verifyUserStories('sd-1', stubSupabase(rows), { sdType: 'feature' });
+    expect(res.verified).toBe(false);
+    expect(res.externally_blocked).toEqual([]);
+    expect(res.incomplete).toHaveLength(1);
+  });
+});
+
 describe('verifyUserStories — surrounding contract is unchanged', () => {
   it('an SD with no stories verifies, rather than blocking on an empty set', async () => {
     const res = await verifyUserStories('sd-1', stubSupabase([]), { sdType: 'bugfix' });

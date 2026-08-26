@@ -244,14 +244,43 @@ describe('logBrowserAction — FR-3 audit logging (TS-4, GAP-FR3-AC1)', () => {
   });
 });
 
-describe('driveAction — FR-3/FR-4/FR-5 guarded execution (TS-4, TS-5, GAP-FR3-AC2, GAP-FR4-AC3)', () => {
-  const enabledSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: { browser_mcp_enabled: true } };
-  const disabledSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: {} };
+/**
+ * A permissive supabase stub satisfying every new guard driveAction adds
+ * (SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001): kill switch disengaged, write allowlist
+ * containing whatever eventType the test passes, per-session cap always allowed. Individual tests
+ * override one facet at a time to exercise a specific guard's refusal path.
+ */
+function makePermissiveGuardSupabase({ killSwitchEngaged = false, allowlist = null, capAllowed = true, capError = null } = {}) {
+  return {
+    from: vi.fn((table) => ({
+      select: vi.fn(() => ({
+        eq: vi.fn((_col, key) => ({
+          maybeSingle: vi.fn(async () => {
+            if (key === 'browser_actuation_kill_switch') {
+              return { data: { value: { engaged: killSwitchEngaged } }, error: null };
+            }
+            if (key === 'browser_actuation_write_allowlist') {
+              return { data: allowlist === null ? null : { value: allowlist }, error: null };
+            }
+            return { data: null, error: null };
+          }),
+        })),
+      })),
+    })),
+    rpc: vi.fn(async () => (capError ? { data: null, error: capError } : { data: capAllowed, error: null })),
+  };
+}
+
+describe('driveAction — guarded execution (PRD TS-1..TS-9)', () => {
+  const FENCED = { fenced_venture: true };
+  const enabledSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: { browser_mcp_enabled: true, ...FENCED } };
+  const disabledSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: { ...FENCED } };
   const enabledPausedSession = {
     session_id: 'session-drive',
     sd_key: 'SD-TEST',
-    metadata: { browser_mcp_enabled: true, browser_takeover_paused: true },
+    metadata: { browser_mcp_enabled: true, browser_takeover_paused: true, ...FENCED },
   };
+  const nonFencedSession = { session_id: 'session-drive', sd_key: 'SD-TEST', metadata: { browser_mcp_enabled: true } };
 
   beforeEach(() => {
     logCoordinationEvent.mockClear();
@@ -267,49 +296,163 @@ describe('driveAction — FR-3/FR-4/FR-5 guarded execution (TS-4, TS-5, GAP-FR3-
       order.push('action');
       return 'result';
     });
-    const result = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn });
+    const supabase = makePermissiveGuardSupabase();
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_navigate', actionFn });
     expect(order).toEqual(['logged', 'action']);
     expect(result.executed).toBe(true);
     expect(result.result).toBe('result');
     expect(result.auditWarning).toBeUndefined();
     expect(actionFn).toHaveBeenCalledTimes(1);
     expect(logCoordinationEvent).toHaveBeenCalledWith(
-      {},
+      supabase,
       expect.objectContaining({ event_type: 'browser_navigate', session_id: 'session-drive' })
     );
   });
 
-  it('refuses to execute when the session is paused for takeover (TS-5)', async () => {
+  it('refuses to execute when the session is paused for takeover (TS-5 precursor)', async () => {
     const actionFn = vi.fn();
-    const result = await driveAction({}, enabledPausedSession, { eventType: 'browser_click', actionFn });
+    const result = await driveAction(makePermissiveGuardSupabase(), enabledPausedSession, { eventType: 'browser_click', actionFn });
     expect(result.executed).toBe(false);
     expect(result.reason).toBe('paused_for_takeover');
     expect(actionFn).not.toHaveBeenCalled();
   });
 
   it('resumes only once the caller passes a fresh, un-paused session -- never automatically', async () => {
-    const blocked = await driveAction({}, enabledPausedSession, { eventType: 'browser_click', actionFn: vi.fn() });
+    const blocked = await driveAction(makePermissiveGuardSupabase(), enabledPausedSession, { eventType: 'browser_click', actionFn: vi.fn() });
     expect(blocked.executed).toBe(false);
-    const allowed = await driveAction({}, enabledSession, { eventType: 'browser_click', actionFn: vi.fn() });
+    const allowed = await driveAction(makePermissiveGuardSupabase(), enabledSession, { eventType: 'browser_click', actionFn: vi.fn() });
     expect(allowed.executed).toBe(true);
   });
 
   it('revoking the manifest field blocks the very next action (GAP-FR4-AC3: revoke-while-active)', async () => {
-    const first = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    const first = await driveAction(makePermissiveGuardSupabase(), enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
     expect(first.executed).toBe(true);
 
     // Caller re-fetches a fresh session row with the field now revoked -- next call must block.
-    const second = await driveAction({}, disabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    const second = await driveAction(makePermissiveGuardSupabase(), disabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
     expect(second.executed).toBe(false);
     expect(second.reason).toBe('browser_mcp_disabled');
   });
 
-  it('surfaces a lost audit-log write via a generic auditWarning instead of silently discarding it or leaking raw error detail (adversarial-review round 1+2 fixes)', async () => {
+  it('surfaces a lost audit-log write via a generic auditWarning instead of silently discarding it or leaking raw error detail (adversarial-review round 1+2 fixes) -- non-write actions stay fail-open', async () => {
     logCoordinationEvent.mockImplementationOnce(async () => {
       throw new Error('simulated feed outage with internal host:port detail');
     });
-    const result = await driveAction({}, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn(() => 'ok') });
-    expect(result.executed).toBe(true); // fail-open: the action still runs
+    const result = await driveAction(makePermissiveGuardSupabase(), enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn(() => 'ok') });
+    expect(result.executed).toBe(true); // fail-open: the action still runs (this is a READ, not a write)
     expect(result.auditWarning).toBe('audit log write failed'); // generic -- raw error never surfaced to the caller
+  });
+
+  it('TS-3: kill switch engaged refuses ALL actuation (read or write), regardless of manifest/pause state, and audits the refusal', async () => {
+    const supabase = makePermissiveGuardSupabase({ killSwitchEngaged: true });
+    const actionFn = vi.fn();
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_navigate', actionFn });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('kill_switch_engaged');
+    expect(actionFn).not.toHaveBeenCalled();
+    expect(logCoordinationEvent).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ event_type: 'browser_actuation_refused', payload: expect.objectContaining({ reason: 'kill_switch_engaged' }) })
+    );
+  });
+
+  it('TS-4: kill-switch state read failure defaults to STOPPED, never RUNNING', async () => {
+    const supabase = makePermissiveGuardSupabase();
+    supabase.from = vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: { message: 'simulated' } })) })) })) }));
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('kill_switch_engaged');
+  });
+
+  it('TS-7: a non-fenced identity is refused independent of allowlist/cap/kill-switch state, and audited', async () => {
+    const supabase = makePermissiveGuardSupabase();
+    const result = await driveAction(supabase, nonFencedSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('identity_not_fenced');
+    expect(logCoordinationEvent).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ payload: expect.objectContaining({ reason: 'identity_not_fenced' }) })
+    );
+  });
+
+  it('TS-1: a non-allowlisted write action is refused and audited; reads are unaffected by the allowlist (FR-1 AC-3)', async () => {
+    const supabase = makePermissiveGuardSupabase({ allowlist: ['browser_write_click_submit'] });
+    const actionFn = vi.fn();
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_write_delete_account', isWrite: true, actionFn });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('write_not_allowlisted');
+    expect(actionFn).not.toHaveBeenCalled();
+
+    // A read (isWrite defaults false) with the exact same eventType-style string is unaffected.
+    const readResult = await driveAction(makePermissiveGuardSupabase({ allowlist: [] }), enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn(() => 'ok') });
+    expect(readResult.executed).toBe(true);
+  });
+
+  it('TS-2: an allowlist lookup error refuses a write action (fail closed, never fail open)', async () => {
+    const supabase = makePermissiveGuardSupabase();
+    supabase.from = vi.fn((table) => ({
+      select: vi.fn(() => ({
+        eq: vi.fn((_col, key) => ({
+          maybeSingle: vi.fn(async () => {
+            if (key === 'browser_actuation_kill_switch') return { data: { value: { engaged: false } }, error: null };
+            return { data: null, error: { message: 'simulated allowlist outage' } };
+          }),
+        })),
+      })),
+    }));
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_write_click_submit', isWrite: true, actionFn: vi.fn() });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('write_not_allowlisted');
+  });
+
+  it('a permitted, allowlisted write action executes and consumes the session cap', async () => {
+    const supabase = makePermissiveGuardSupabase({ allowlist: ['browser_write_click_submit'] });
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_write_click_submit', isWrite: true, actionFn: vi.fn(() => 'done') });
+    expect(result.executed).toBe(true);
+    expect(result.result).toBe('done');
+    expect(supabase.rpc).toHaveBeenCalledWith('fn_try_consume_browser_actuation_cap', expect.objectContaining({ p_session_id: 'session-drive' }));
+  });
+
+  it('TS-8/FR-3: an audit-write failure REFUSES a write-class action (fail closed) but does not affect reads', async () => {
+    logCoordinationEvent.mockImplementationOnce(async () => {
+      throw new Error('simulated feed outage');
+    });
+    const supabase = makePermissiveGuardSupabase({ allowlist: ['browser_write_click_submit'] });
+    const actionFn = vi.fn();
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_write_click_submit', isWrite: true, actionFn });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('audit_log_failed');
+    expect(actionFn).not.toHaveBeenCalled();
+  });
+
+  it('session cap reached refuses the next actuation and audits the refusal, without consuming further', async () => {
+    const supabase = makePermissiveGuardSupabase({ capAllowed: false });
+    const actionFn = vi.fn();
+    const result = await driveAction(supabase, enabledSession, { eventType: 'browser_navigate', actionFn });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('session_cap_exceeded');
+    expect(actionFn).not.toHaveBeenCalled();
+  });
+
+  it('a refusal for a guard OTHER than the cap does not consume cap budget (cap RPC never called)', async () => {
+    const supabase = makePermissiveGuardSupabase({ killSwitchEngaged: true });
+    await driveAction(supabase, enabledSession, { eventType: 'browser_navigate', actionFn: vi.fn() });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it('an outbound-messaging action refused by checkOutboundActionAuthorized is refused and audited (FR-5)', async () => {
+    const supabase = makePermissiveGuardSupabase({ allowlist: ['browser_write_send_message'] });
+    // No autonomy_state row / venture set up -> checkPublishAuthorization's own chain will not
+    // authorize; this asserts the wiring refuses on any non-allowed verdict, not the specific
+    // internal reason (covered by autonomy-gate's own test suite).
+    const result = await driveAction(supabase, enabledSession, {
+      eventType: 'browser_write_send_message',
+      isWrite: true,
+      isOutboundMessage: true,
+      outboundAuth: { ventureId: 'v1', channelType: 'email', contentId: 'c1' },
+      actionFn: vi.fn(),
+    });
+    expect(result.executed).toBe(false);
+    expect(result.reason).toBe('outbound_not_authorized');
   });
 });

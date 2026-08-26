@@ -474,6 +474,10 @@ scripts/harness/.spine-verify-first-runs/
 .claude/console-parentage.jsonl
 .claude-work/
 
+# SD-LEO-FEAT-IDEATION-INGESTION-CONNECTORS-001 FR-4 AC-3: cron-run watermark handoff between the
+# --capture and --verify steps of scripts/eva-idea-sync-cron-assert.mjs, CI-workspace-local only.
+.eva-sync-watermark.json
+
 # The drive-report-consume failure breadcrumb ONLY (SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-C).
 # NARROWED FROM A BLANKET `.artifacts/`, which was a regression I introduced: `git ls-files
 # .artifacts` shows EIGHTEEN TRACKED FILES there — evidence scripts committed deliberately by
