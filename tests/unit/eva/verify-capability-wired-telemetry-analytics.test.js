@@ -1,9 +1,14 @@
 /**
- * SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C (FR-3, FR-5)
+ * SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C (FR-3)
  *
  * Unit coverage for verifyCapabilityWired's telemetry-analytics branch: calls
  * fn_venture_usage_window_summary via supabase.rpc() (never a raw table SELECT),
- * and reports active_users as distinct(actor_hash), never raw event-row count.
+ * and reports wired=true iff event_count > 0.
+ *
+ * FR-5 (active-user counting via actor_hash) was WITHDRAWN post-EXEC: Child A's
+ * actual shipped venture_usage_events table (PR #7563) has no actor_hash column
+ * and no user-identifier of any kind -- a deliberate GDPR/erasure-boundary
+ * decision by Child A's own RISK sub-agent. Only event_count is derivable.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -25,11 +30,10 @@ function buildMockSupabaseWithRpc(rpcResult) {
 }
 
 describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C: verifyCapabilityWired telemetry-analytics', () => {
-  it('TS-1: reports wired=true with event_count and active_users when the RPC returns real data', async () => {
-    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 3, active_users: 2 }], error: null });
+  it('TS-1: reports wired=true with event_count when the RPC returns real data', async () => {
+    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 3 }], error: null });
     const result = await verifyCapabilityWired(supabase, 'venture-a', 'telemetry-analytics');
     expect(result.wired).toBe(true);
-    expect(result.active_users).toBe(2);
     expect(supabase.rpc).toHaveBeenCalledWith(
       'fn_venture_usage_window_summary',
       expect.objectContaining({ p_venture_id: 'venture-a' }),
@@ -37,28 +41,9 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C: verifyCapabilityWired telemetr
   });
 
   it('TS-2: reports wired=false when the RPC returns zero events', async () => {
-    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 0, active_users: 0 }], error: null });
+    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 0 }], error: null });
     const result = await verifyCapabilityWired(supabase, 'venture-b', 'telemetry-analytics');
     expect(result.wired).toBe(false);
-  });
-
-  it('FR-5: active_users reflects distinct(actor_hash), not raw event-row count (10 events, 1 actor)', async () => {
-    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 10, active_users: 1 }], error: null });
-    const result = await verifyCapabilityWired(supabase, 'venture-c', 'telemetry-analytics');
-    expect(result.wired).toBe(true);
-    expect(result.active_users).toBe(1);
-    expect(result.active_users).not.toBe(10);
-  });
-
-  it('FR-3 AC-2 (VALIDATION mutation M3): wired criterion is event_count > 0, NOT active_users > 0 (NULL actor_hash edge case)', async () => {
-    // VALIDATION finding VAL-1 (evidence 7d046e79): every prior fixture had event_count
-    // and active_users both >0 or both 0, so this predicate was unasserted -- a mutation
-    // swapping the criterion to active_users > 0 survived. This fixture is the
-    // discriminating case FR-3 AC-2 explicitly names: events exist but every actor_hash
-    // is NULL, so active_users=0 while event_count>0.
-    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 4, active_users: 0 }], error: null });
-    const result = await verifyCapabilityWired(supabase, 'venture-g', 'telemetry-analytics');
-    expect(result.wired).toBe(true);
   });
 
   it('reports wired=false (not a thrown error) when the RPC call errors', async () => {
@@ -93,7 +78,7 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C: verifyCapabilityWired telemetr
   });
 
   it('FR-3 AC-6: supplies a default trailing 30-day window when calling the RPC', async () => {
-    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 1, active_users: 1 }], error: null });
+    const supabase = buildMockSupabaseWithRpc({ data: [{ event_count: 1 }], error: null });
     const before = Date.now();
     await verifyCapabilityWired(supabase, 'venture-f', 'telemetry-analytics');
     const after = Date.now();
@@ -168,8 +153,14 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C FR-2: fn_venture_usage_window_s
     expect(sql).toMatch(/has_function_privilege\('service_role'/);
   });
 
-  it('computes active_users as COUNT(DISTINCT actor_hash), not COUNT(*)', () => {
-    expect(sql).toMatch(/count\(DISTINCT actor_hash\)::BIGINT AS active_users/i);
+  it('returns event_count only (no active_users/actor_hash column -- withdrawn, see file header)', () => {
+    // The file header's explanatory comment legitimately mentions actor_hash/active_users
+    // (explaining why they were withdrawn) -- scope this assertion to the function body
+    // and return type, not the whole file.
+    const fnBody = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION'), sql.indexOf('COMMENT ON FUNCTION'));
+    expect(fnBody).toMatch(/RETURNS TABLE\(event_count BIGINT\)/);
+    expect(fnBody).not.toMatch(/actor_hash/i);
+    expect(fnBody).not.toMatch(/active_users/i);
   });
 
   it('TS-3 (VALIDATION mutation M4): scopes rows to the requested venture_id, not a tautology', () => {
@@ -187,7 +178,7 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C FR-2: fn_venture_usage_window_s
     // VALIDATION finding VAL-3: a mutation disabling this guard (IF false THEN) survived
     // every prior static assertion.
     expect(sql).toMatch(/IF\s+p_window_start\s+IS\s+NULL\s+OR\s+p_window_end\s+IS\s+NULL\s+OR\s+p_window_start\s*>\s*p_window_end\s+THEN/);
-    expect(sql).toMatch(/RETURN QUERY SELECT 0::BIGINT, 0::BIGINT;/);
+    expect(sql).toMatch(/RETURN QUERY SELECT 0::BIGINT;/);
   });
 
   it('is transaction-wrapped and staged as chairman-gated (not applied)', () => {

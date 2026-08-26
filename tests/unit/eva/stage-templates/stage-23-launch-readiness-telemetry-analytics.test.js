@@ -22,7 +22,7 @@ const silentLogger = { info: () => {}, warn: () => {}, log: () => {}, error: () 
 
 function buildMockSupabase({ presentTypes = [], legalDocsPresent = true, rpcResult } = {}) {
   return {
-    rpc: vi.fn().mockResolvedValue(rpcResult ?? { data: [{ event_count: 0, active_users: 0 }], error: null }),
+    rpc: vi.fn().mockResolvedValue(rpcResult ?? { data: [{ event_count: 0 }], error: null }),
     from(table) {
       if (table === 'venture_artifacts') {
         return { select() { return { eq() { return this; }, in() {
@@ -52,11 +52,11 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C FR-4: analytics checklist case'
   it("analytics entry's detail differs between a venture with real usage events and one without", async () => {
     const supabaseWithEvents = buildMockSupabase({
       presentTypes: allUpstreamArtifacts,
-      rpcResult: { data: [{ event_count: 5, active_users: 3 }], error: null },
+      rpcResult: { data: [{ event_count: 5 }], error: null },
     });
     const supabaseWithoutEvents = buildMockSupabase({
       presentTypes: allUpstreamArtifacts,
-      rpcResult: { data: [{ event_count: 0, active_users: 0 }], error: null },
+      rpcResult: { data: [{ event_count: 0 }], error: null },
     });
 
     const withEvents = await analyzeStage23LaunchReadiness({
@@ -78,7 +78,7 @@ describe('SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C FR-4: analytics checklist case'
     const supabase = buildMockSupabase({
       presentTypes: allUpstreamArtifacts,
       legalDocsPresent: true,
-      rpcResult: { data: [{ event_count: 0, active_users: 0 }], error: null },
+      rpcResult: { data: [{ event_count: 0 }], error: null },
     });
     const result = await analyzeStage23LaunchReadiness({
       ...upstreamHappyPath, ventureId: 'venture-verdict-check', supabase, logger: silentLogger,
