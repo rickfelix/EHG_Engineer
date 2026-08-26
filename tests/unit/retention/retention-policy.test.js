@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 19 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 20 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -94,6 +94,11 @@ describe('policy registry (TS-1)', () => {
       // public.v_chairman_held_sends_unreconcilable (24h horizon) well before the 90-day archive
       // window, so this age-only policy cannot silently erase an unresolved chairman decision.
       chairman_held_sends: 'created_at',
+      // SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001 (operator-contract REAPER): a per-session
+      // browser-actuation cap counter has no service purpose once its session has gone cold.
+      // Keyed on updated_at, DATABASE-stamped (DEFAULT now(), touched by
+      // fn_try_consume_browser_actuation_cap's own UPDATE, never client-supplied).
+      browser_actuation_session_caps: 'updated_at',
     });
   });
 
