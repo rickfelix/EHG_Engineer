@@ -12,7 +12,9 @@ function fakeSupabase(dailyRollupRows, error = null) {
     from(table) {
       if (table !== 'daily_rollups') throw new Error(`unexpected table ${table}`);
       const payload = { data: dailyRollupRows, error };
-      const b = { then: (resolve, reject) => Promise.resolve(payload).then(resolve, reject) };
+      // queryCpaGaugeForChannel reads via fetchAllPaginated, which calls .range(from, to) per
+      // page -- full payload on the first page, empty page thereafter to terminate the loop.
+      const b = { range: async (from) => (from === 0 ? payload : { data: [], error }) };
       for (const m of ['select', 'eq', 'gte']) b[m] = () => b;
       return b;
     },

@@ -10,6 +10,7 @@
 // daily_rollups, so a 'stale' classification would itself be a fabrication).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -116,4 +117,6 @@ async function main() {
   console.log('PRD_RECONCILED');
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}

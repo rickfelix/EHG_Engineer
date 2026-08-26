@@ -20,6 +20,8 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 import { computeCpaGaugeState } from '../lib/telemetry/cpa-gauge.mjs';
 import { DEFAULT_CPA_LOOKBACK_DAYS } from '../lib/marketing/venture-activation-gate.js';
+// count-truncation-diff-lint: see the identical import comment in venture-activation-gate.js.
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 /**
  * @param {object} opts
@@ -32,18 +34,19 @@ import { DEFAULT_CPA_LOOKBACK_DAYS } from '../lib/marketing/venture-activation-g
  */
 export async function queryCpaGaugeForChannel({ supabase, ventureId, platform, lookbackDays = DEFAULT_CPA_LOOKBACK_DAYS, now = new Date() }) {
   const since = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
-  const { data: rows, error } = await supabase
-    .from('daily_rollups')
-    .select('spend_cents, conversions')
-    .eq('venture_id', ventureId)
-    .eq('platform', platform)
-    .gte('rollup_date', since.toISOString().slice(0, 10));
-
-  if (error) {
-    return { venture_id: ventureId, platform, state: 'no_writer_yet', value_cents_per_conversion: null, reason: `daily_rollups query failed: ${error.message}` };
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('daily_rollups')
+      .select('spend_cents, conversions')
+      .eq('venture_id', ventureId)
+      .eq('platform', platform)
+      .gte('rollup_date', since.toISOString().slice(0, 10)));
+  } catch (err) {
+    return { venture_id: ventureId, platform, state: 'no_writer_yet', value_cents_per_conversion: null, reason: `daily_rollups query failed: ${err.message}` };
   }
 
-  const gauge = computeCpaGaugeState({ dailyRollupRows: rows || [] });
+  const gauge = computeCpaGaugeState({ dailyRollupRows: rows });
   return { venture_id: ventureId, platform, ...gauge };
 }
 

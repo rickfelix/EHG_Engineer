@@ -18,6 +18,7 @@
 // marketing_attribution (dropped from TR-2) and the citation field (TR-3 forbids touching it).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -134,4 +135,6 @@ async function main() {
   console.log('SD_SMOKE_TEST_STEPS_CORRECTED');
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}

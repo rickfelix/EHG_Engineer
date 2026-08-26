@@ -43,12 +43,20 @@ function fakeSupabase({ telemetry = null, telemetryError = null, paymentRows = [
     for (const m of ['select', 'eq', 'not', 'order', 'is', 'gte', 'lte', 'in']) b[m] = () => b;
     return b;
   }
-  // SD-LEO-GEN-NEED-ABLE-CONTINUALLY-001 TR-6: resolveCpaRung()'s daily_rollups query is
-  // .select().eq().gte() then awaited directly (no .limit()/.maybeSingle()), so this builder only
-  // needs to be thenable, matching resolveCpaRung's real call shape.
+  // SD-LEO-GEN-NEED-ABLE-CONTINUALLY-001 TR-6 (+ count-truncation-diff-lint fix): resolveCpaRung()
+  // reads daily_rollups via fetchAllPaginated, which calls queryFactory().range(from, to) per
+  // page -- range() must return the full payload on the first page (from===0) and an empty page
+  // (or the error) thereafter to terminate the loop, matching the existing paymentBuilder()
+  // pattern above.
   function dailyRollupsBuilder() {
-    const dailyRollupsPayload = { data: dailyRollupRows, error: dailyRollupError };
-    const b = { then: (resolve, reject) => Promise.resolve(dailyRollupsPayload).then(resolve, reject) };
+    // A real range-paginating mock (not first-page-only) so a genuine >1-page fetch can be
+    // proven, not just assumed from a single-page happy path.
+    const b = {
+      range: async (from, to) => {
+        if (dailyRollupError) return { data: null, error: dailyRollupError };
+        return { data: (dailyRollupRows || []).slice(from, to + 1), error: null };
+      },
+    };
     for (const m of ['select', 'eq', 'gte', 'lte', 'order']) b[m] = () => b;
     return b;
   }
