@@ -163,6 +163,14 @@ describe('verifyUserStories — status=blocked is excluded (SD-LEO-FEAT-IDEATION
     expect(res.verified).toBe(true);
     expect(res.externally_blocked).toHaveLength(2);
   });
+
+  it('[adversarial /ship review, EXEC pass] status=blocked ALONE (validation_status left at its normal value) is NOT exempted -- a single self-writable field cannot escape this gate', async () => {
+    const rows = [{ ...reportedStory(1), status: 'blocked', validation_status: 'pending' }];
+    const res = await verifyUserStories('sd-1', stubSupabase(rows), { sdType: 'feature' });
+    expect(res.verified).toBe(false);
+    expect(res.externally_blocked).toEqual([]);
+    expect(res.incomplete).toHaveLength(1);
+  });
 });
 
 describe('verifyUserStories — surrounding contract is unchanged', () => {
