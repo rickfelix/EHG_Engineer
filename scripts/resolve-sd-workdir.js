@@ -635,6 +635,32 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
     }
   }
 
+  // SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-5: copy the main checkout's
+  // .claude/settings.local.json (gitignored, ~100 permission pre-grant entries) into every
+  // newly-created worktree. Without this, worktree-spawned workers inherit only the committed
+  // .claude/settings.json (zero allow entries at time of writing) and can freeze on a routine
+  // permission prompt (e.g. `cd`) that the main checkout never sees.
+  //
+  // Deliberately NOT added to SUBSTRATE_ITEMS: that list gates whether a worktree is considered
+  // healthy/functional at claim time (a missing item there flags the worktree as broken). A
+  // missing settings.local.json does not break the worktree -- it only risks a permission
+  // prompt -- so this follows the SAME opportunistic, best-effort pattern as .env.local above,
+  // never the substrate-gated pattern .env uses.
+  const settingsLocalSrc = path.join(repoRoot, '.claude', 'settings.local.json');
+  const settingsLocalDst = path.join(worktreePath, '.claude', 'settings.local.json');
+  if (fs.existsSync(settingsLocalSrc) && !fs.existsSync(settingsLocalDst)) {
+    try {
+      const claudeDir = path.join(worktreePath, '.claude');
+      if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
+      fs.copyFileSync(settingsLocalSrc, settingsLocalDst);
+    } catch (err) {
+      // Best-effort, matching this function's documented no-throw contract -- but log loudly
+      // (not silently) so a provisioning failure is observable rather than an invisible gap.
+      errors.push({ step: 'copy_settings_local_json', message: err.message });
+      emitLog({ event: 'worktree.settings_local_json_copy_failed', worktreePath, error: err.message, errorCode: 'SETTINGS_LOCAL_COPY_FAILED' });
+    }
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

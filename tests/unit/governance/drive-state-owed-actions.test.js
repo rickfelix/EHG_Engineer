@@ -83,6 +83,52 @@ describe('FR-1 / AC-1 — the forcing-function is two-sided', () => {
   });
 });
 
+describe('SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-4/D2 — keystroke_packets passthrough', () => {
+  it('deriveOwedActions passes an axis verdict\'s keystroke_packets through unchanged', () => {
+    const packets = ['Stuck seat Alpha (session aaaaaaaa, tool-silent 100m):\n1. Locate window: 3'];
+    const out = deriveOwedActions({ verdict: verdict({ fleet_health: { state: STATE.STALLED, keystroke_packets: packets } }) });
+    expect(out[0].keystroke_packets).toEqual(packets);
+  });
+
+  it('an axis with no keystroke_packets field derives null, not undefined or a crash', () => {
+    const out = deriveOwedActions({ verdict: verdict({ chairman_decisions: { state: STATE.STALLED } }) });
+    expect(out[0].keystroke_packets).toBeNull();
+  });
+
+  it('emitOwedActions appends keystroke_packets to the lane-row body UNMANGLED (not via safeCitation\'s 160-char cap / newline strip)', async () => {
+    // Deliberately longer than safeCitation's 160-char cap and multi-line, to prove this text
+    // takes a different path than `citation`.
+    const longPacket = [
+      'Stuck seat Charlie (session cccccccc, tool-silent 900m):',
+      '1. Locate window: 7',
+      '2. Check for a blocked interactive permission prompt (an expected-prompt-shape: a highlighted Yes/No-style list waiting on input)',
+      '3. If a prompt is visible: use arrow keys to highlight "Yes", then press Enter to approve',
+      '4. If no prompt is visible and the seat is still silent, terminate the process — it is wedged with nothing to approve'
+    ].join('\n');
+    expect(longPacket.length).toBeGreaterThan(160);
+
+    const lane = statefulLane();
+    const owed = deriveOwedActions({ verdict: verdict({ fleet_health: { state: STATE.STALLED, keystroke_packets: [longPacket] } }) });
+    await emitOwedActions({ supabase: lane, owedActions: owed, senderSession: 'test-session' });
+
+    expect(lane.rows).toHaveLength(1);
+    const { body, payload } = lane.rows[0];
+    expect(body).toContain('RECOVERY:');
+    expect(body).toContain('press Enter to approve');
+    expect(body).toContain('\n'); // newlines survive -- safeCitation would have stripped them
+    expect(payload.keystroke_packets).toEqual([longPacket]);
+  });
+
+  it('emitOwedActions omits the RECOVERY section entirely when keystroke_packets is absent (5/6 axes today)', async () => {
+    const lane = statefulLane();
+    const owed = deriveOwedActions({ verdict: verdict({ chairman_decisions: { state: STATE.STALLED } }) });
+    await emitOwedActions({ supabase: lane, owedActions: owed, senderSession: 'test-session' });
+
+    expect(lane.rows[0].body).not.toContain('RECOVERY:');
+    expect(lane.rows[0].payload.keystroke_packets).toBeNull();
+  });
+});
+
 describe('FR-2 / AC-2 — the cry-wolf guard: idle is not stalled', () => {
   for (const axis of STALL_CAPABLE) {
     it(`${axis}: a legitimately-idle axis (UNMEASURABLE, e.g. zero pending) derives nothing — while genuinely stalled still derives`, () => {

@@ -77,10 +77,19 @@ async function emitOwedActions({ supabase, owedActions, targetSession, senderSes
     // how the original key broke.
     const sinceIso = Number.isFinite(Date.parse(oa.since)) ? new Date(oa.since).toISOString() : String(oa.since);
 
+    // SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-4/D2: keystroke_packets, when present (fleet_health
+    // only, today), is appended RAW to body -- NOT through safeCitation(), which caps at 160 chars
+    // and strips control characters, including newlines. A multi-line numbered recovery packet run
+    // through that would silently collapse to an unreadable fragment; body itself carries no such cap.
+    const keystrokeSuffix = Array.isArray(oa.keystroke_packets) && oa.keystroke_packets.length
+      ? '\n\nRECOVERY:\n' + oa.keystroke_packets.join('\n\n')
+      : '';
+
     const body =
       'OWED ACTION (drive-state forcing-function): axis ' + oa.axis + ' STALLED since ' + sinceIso +
       ' (runs' + (oa.truncated ? '>=' : '=') + oa.runs + '). Owed act: ' + oa.act +
-      '. The all-green drive-state summary is withheld until this axis moves. Citation: ' + safeCitation(oa.citation);
+      '. The all-green drive-state summary is withheld until this axis moves. Citation: ' + safeCitation(oa.citation) +
+      keystrokeSuffix;
 
     const payload = {
       ...buildActionRequiredPayload({ actionKind: ACTION_KIND, body, senderCallsign: sender }),
@@ -88,6 +97,8 @@ async function emitOwedActions({ supabase, owedActions, targetSession, senderSes
       since: sinceIso,
       run_id: oa.run_id,
       citation: safeCitation(oa.citation),
+      // Structured access alongside the prose in body -- null for the 5/6 axes that never set it.
+      keystroke_packets: Array.isArray(oa.keystroke_packets) && oa.keystroke_packets.length ? oa.keystroke_packets : null,
     };
 
     const { error: insErr } = await supabase.from(TABLE).insert({
