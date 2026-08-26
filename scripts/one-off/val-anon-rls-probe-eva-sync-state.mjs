@@ -1,0 +1,12 @@
+import { createClient } from '@supabase/supabase-js';
+import 'dotenv/config';
+const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+console.log('anon key present:', !!anonKey);
+if (!anonKey) process.exit(0);
+const anon = createClient(process.env.SUPABASE_URL, anonKey);
+const { data, error, status } = await anon.from('eva_sync_state').select('id, source_type, source_identifier, source_metadata');
+console.log('HTTP status:', status);
+console.log('error:', error ? JSON.stringify(error) : 'none');
+console.log('rows returned to ANON:', Array.isArray(data) ? data.length : data);
+if (data?.length) console.log('ANON-VISIBLE PAYLOAD:', JSON.stringify(data, null, 2).slice(0, 1500));
+console.log('\nVERDICT: anon can read eva_sync_state.source_metadata =', Array.isArray(data) && data.length > 0);
