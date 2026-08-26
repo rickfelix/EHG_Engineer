@@ -260,6 +260,7 @@
     "eva:events:status": "node scripts/eva-events-status.js",
     "eva:services:status": "node scripts/eva-services-status.js",
     "eva:recovery:status": "node scripts/eva-recovery-status.js",
+    "eva:variant-scoring:status": "node scripts/eva/variant-scoring-cli.mjs",
     "schema:snapshot": "node scripts/schema-snapshot.js",
     "schema:audit:tables": "node scripts/audit-dormant-tables.js",
     "schema:audit:enums": "node scripts/audit-enum-coverage.js",
