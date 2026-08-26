@@ -1,10 +1,16 @@
 // SD-LEO-INFRA-REQUIRE-STACK-ENFORCING-001 — the venture-build pipeline MANDATES stack-enforcing
 // CI, and ships a reusable code-level compliance scanner that catches off-stack code.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SCANNER_SOURCE_PATH = fileURLToPath(new URL('../../../../lib/eva/bridge/templates/venture-stack-scan.js', import.meta.url));
 import { buildBuildTasks } from '../../../../lib/eva/bridge/build-tasks-writer.js';
 import buildClaudeMd from '../../../../lib/eva/bridge/claude-md-writer.js';
 import {
-  scanForStackViolations, FORBIDDEN_IMPORTS, REQUIRED,
+  scanForStackViolations, FORBIDDEN_IMPORTS, REQUIRED, WALK_ROOTS, USAGE_EVENT_RPC_NAME, realIo,
 } from '../../../../lib/eva/bridge/templates/venture-stack-scan.js';
 
 // The forbidden @supabase package literal is assembled at runtime so the contiguous token
@@ -51,9 +57,9 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     expect(violations.some((v) => v.why.includes('Supabase'))).toBe(true);
   });
 
-  it('PASSES a Clerk + Replit-Postgres + /v1/metrics + SEO-basics compliant venture (no false block)', () => {
+  it('PASSES a Clerk + Replit-Postgres + /v1/metrics + SEO-basics + usage-event compliant venture (no false block)', () => {
     const io = {
-      files: ['src/routes/__root.tsx', 'src/lib/db.ts', 'src/routes/api.v1.metrics.ts', 'src/app/sitemap.ts', 'src/app/robots.ts', 'src/app/layout.tsx'],
+      files: ['src/routes/__root.tsx', 'src/lib/db.ts', 'src/routes/api.v1.metrics.ts', 'src/app/sitemap.ts', 'src/app/robots.ts', 'src/app/layout.tsx', 'lib/events/track.js'],
       read: (rel) => ({
         'src/routes/__root.tsx': 'import { ClerkProvider } from "@clerk/tanstack-react-start";',
         'src/lib/db.ts': 'const url = process.env.DATABASE_URL; import pg from "pg";',
@@ -61,6 +67,7 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
         'src/app/sitemap.ts': 'export default function sitemap() { return [{ url: "https://example.com" }]; }',
         'src/app/robots.ts': 'export default function robots() { return { rules: { userAgent: "*" } }; }',
         'src/app/layout.tsx': 'export const metadata = { openGraph: { title: "Acme" } }; // <script type="application/ld+json">{}</script>',
+        'lib/events/track.js': `await callVentureRpc('${USAGE_EVENT_RPC_NAME}', payload);`,
       }[rel]),
     };
     const { violations, missing } = scanForStackViolations('/x', io);
@@ -151,5 +158,127 @@ describe('FR-3 — the reusable scanner catches off-stack CODE (not just deps)',
     const io = { files: ['src/app/page.tsx'], read: () => '<script type="application/ld+json">{"@context":"https://schema.org"}</script>' };
     const { missing } = scanForStackViolations('/x', io);
     expect(missing.some((m) => /structured data/.test(m))).toBe(false);
+  });
+});
+
+// SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-D — usage-event REQUIRED check, and the src/+lib/
+// walk-root generalization it needed (AltifyAI's witness call lands in lib/, not src/).
+describe('FR-6 — usage-event RPC wiring is REQUIRED, and the scanner sees lib/ too', () => {
+  it('FLAGS a venture missing the usage-event RPC call, same as a missing v1/metrics endpoint', () => {
+    const io = { files: ['src/index.ts'], read: () => 'export const x = 1;' };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(true);
+  });
+
+  it('PASSES usage-event detection when the RPC call lives in a lib/-rooted file (the AltifyAI shape)', () => {
+    const io = {
+      files: ['src/index.ts', 'lib/events/track.js'],
+      read: (rel) => ({
+        'src/index.ts': 'export const x = 1;',
+        'lib/events/track.js': `await callVentureRpc('${USAGE_EVENT_RPC_NAME}', payload);`,
+      }[rel]),
+    };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(false);
+  });
+
+  it('does NOT satisfy usage-event detection on an import specifier or symbol name alone (option-b was measured dead: it goes green before the RPC is ever called)', () => {
+    const io = {
+      files: ['src/routes/events.js'],
+      read: () => "import { recordUsageEvent } from '../../lib/events/track.js';",
+    };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(true);
+  });
+
+  // Adversarial TESTING review (PLAN phase) measured a bare-NAME match as gameable: a comment
+  // mentioning the RPC, or vendoring this very scanner file's own constant declaration, would
+  // both satisfy an unanchored regex -- the exact zero-yield failure mode option (b) was
+  // rejected for. Fixed by anchoring to a call SHAPE; these two tests lock the fix in.
+  it('does NOT satisfy usage-event detection on a bare comment mentioning the RPC name (no call shape)', () => {
+    const io = {
+      files: ['src/todo.js'],
+      read: () => `// TODO: wire up ${USAGE_EVENT_RPC_NAME} before launch`,
+    };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(true);
+  });
+
+  it('does NOT satisfy usage-event detection merely by vendoring this scanner file\'s REAL, CURRENT content (a live guard, not a synthetic strawman -- TESTING reproduced an earlier draft self-matching via its own KNOWN LIMITATION comment)', () => {
+    const realSource = readFileSync(SCANNER_SOURCE_PATH, 'utf8');
+    const io = { files: ['lib/venture-stack-scan.js'], read: () => realSource };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(true);
+  });
+
+  it('DOES satisfy usage-event detection on a raw-SQL / direct-call shape (NAME immediately followed by an open paren)', () => {
+    const io = {
+      files: ['lib/db/rpc.js'],
+      read: () => `db.query("SELECT ${USAGE_EVENT_RPC_NAME}($1, $2)", [a, b]);`,
+    };
+    const { missing } = scanForStackViolations('/x', io);
+    expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(false);
+  });
+
+  it('a forbidden import rooted in lib/ downgrades to an advisory warning, not a build-breaking violation', () => {
+    const io = {
+      files: ['lib/legacy/data.ts'],
+      read: () => SUPA_IMPORT,
+    };
+    const { violations, warnings } = scanForStackViolations('/x', io);
+    expect(violations.length).toBe(0);
+    expect(warnings.some((w) => w.class === 'lib_root_forbidden' && w.file === 'lib/legacy/data.ts')).toBe(true);
+  });
+
+  it('the SAME forbidden import rooted in src/ still hard-fails as a violation (asymmetry is lib/-only)', () => {
+    const io = { files: ['src/lib/data.ts'], read: () => SUPA_IMPORT };
+    const { violations, warnings } = scanForStackViolations('/x', io);
+    expect(violations.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.class === 'lib_root_forbidden')).toBe(false);
+  });
+
+  it('a forbidden OIDC file path rooted in lib/ also downgrades to an advisory warning', () => {
+    const io = { files: ['lib/auth/oidc.server.ts'], read: () => 'export async function exchangeCode() {}' };
+    const { violations, warnings } = scanForStackViolations('/x', io);
+    expect(violations.length).toBe(0);
+    expect(warnings.some((w) => w.class === 'lib_root_forbidden')).toBe(true);
+  });
+
+  describe('realIo() against a real filesystem', () => {
+    let root;
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), 'venture-stack-scan-test-'));
+    });
+
+    afterEach(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    it('WALK_ROOTS is exactly src and lib', () => {
+      expect(WALK_ROOTS).toEqual(['src', 'lib']);
+    });
+
+    it('walks both src/ and lib/ (not just src/), reproducing the AltifyAI witness-location gap and its fix', () => {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'lib', 'events'), { recursive: true });
+      writeFileSync(join(root, 'src', 'index.ts'), 'export const x = 1;', 'utf8');
+      writeFileSync(join(root, 'lib', 'events', 'track.js'), `await callVentureRpc('${USAGE_EVENT_RPC_NAME}', payload);`, 'utf8');
+
+      const io = realIo(root);
+      expect(io.files.sort()).toEqual(['lib/events/track.js', 'src/index.ts']);
+      expect(io.read('lib/events/track.js')).toContain(USAGE_EVENT_RPC_NAME);
+
+      const { missing } = scanForStackViolations(root);
+      expect(missing.some((m) => m.includes(USAGE_EVENT_RPC_NAME))).toBe(false);
+    });
+
+    it('does not walk a directory outside src/ and lib/ (e.g. public/)', () => {
+      mkdirSync(join(root, 'public'), { recursive: true });
+      writeFileSync(join(root, 'public', 'sneaky.js'), `${USAGE_EVENT_RPC_NAME}`, 'utf8');
+
+      const io = realIo(root);
+      expect(io.files.length).toBe(0);
+    });
   });
 });
