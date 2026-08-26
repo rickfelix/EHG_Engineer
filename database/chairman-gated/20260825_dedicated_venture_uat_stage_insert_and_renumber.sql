@@ -54,6 +54,43 @@
 -- do not skip this step, and DO NOT trust any premise in this file about "zero real ventures
 -- parked" without re-measuring at apply time.
 --
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- ADDITIONAL PRE-CEREMONY BLOCKER (round-2 TESTING review, NOT yet fixed) -- READ BEFORE SCHEDULING
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- A round-2 adversarial TESTING pass, empirically probing the LIVE schema beyond this file's own
+-- direct-shift/shim taxonomy above, found the taxonomy is incomplete: a THIRD category of
+-- stage-keyed LIVE CONFIGURATION exists, distinct from both "live state" (ventures/
+-- chairman_decisions/venture_stage_work, now shifted) and "historical log" (venture_stage_
+-- transitions/eva_stage_gate_attempts/stage_events, now shimmed). This migration does NOT shift or
+-- shim any of the following, and MUST NOT be chairman-approved until each has an explicit,
+-- individually-measured disposition (shift, shim, or accepted-as-broken with a stated reason):
+--   * public.eva_ventures -- an AFTER UPDATE-triggered mirror of ventures.current_lifecycle_stage
+--     (trg_ventures_update_sync_eva) carrying its OWN two separate CHECK constraints
+--     (chk_lifecycle_stage, eva_ventures_current_lifecycle_stage_check), BOTH still capped at 26 --
+--     empirically proven live to reject a real venture's sync to stage 27 with a 23514 violation.
+--     This means stage 27 remains categorically unreachable for any non-demo venture even after
+--     every fix in this file, until both constraints are also widened. The trigger's own
+--     is_demo=true early-return additionally means every demo venture this migration shifts is
+--     left with a STALE (-1) eva_ventures mirror value -- a silent cross-table divergence.
+--   * public.stage_artifact_requirements -- stage_number-keyed artifact-gating config read by
+--     fn_stage_artifact_precondition()'s legacy_fallback branch. Empirically proven live: because
+--     the new UAT stage's required_artifacts is empty, advance_venture_stage()'s artifact
+--     precondition check falls through to this table's STALE stage-23 row (still describing
+--     launch_readiness_checklist), turning the deliberately gate-free new UAT stage into a hard
+--     stop by construction for every venture that reaches it.
+--   * public.gate_boundary_config -- read live by lib/eva/reality-gates.js's _loadBoundaryFromDB().
+--   * public.venture_stage_cutover_grandfather -- read AND DELETEd by fn_advance_venture_stage()
+--     itself (this same file) and by lib/eva/chairman-decision-watcher.js.
+--   * public.stage_prop_contracts, public.eva_stage_gate_results (distinct from the shimmed
+--     eva_stage_gate_attempts), public.venture_capture_snapshots, public.stage_executions,
+--     public.venture_artifacts.lifecycle_stage -- all carry live rows in the 23-26 range with no
+--     stated disposition in this file.
+-- This is a materially larger surface than a few extra UPDATE statements can safely absorb inside
+-- an already-large EXEC pass without its own independent review -- it is the DATA-side counterpart
+-- to Child A's docs/audits/stage-21-26-census.md (which censused CODE references only). Recorded
+-- as a completion-flag finding recommending a dedicated follow-up SD for a systematic stage-keyed
+-- DATA/config table census before this file is scheduled for chairman ratification.
+--
 -- APPLY (chairman ceremony):
 --   node scripts/apply-migration.js --issue-token
 --   MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
@@ -113,24 +150,31 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- DOCUMENTED, NOT FIXED (deliberately out of this SD's scope -- see rationale below)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- (a) p_from_stage=23/p_to_stage=24 "product review" choke-point literal. Independent
---     re-verification found the SAME literal stage pair hardcoded a SECOND time inside
---     fn_advance_venture_stage() (below, unchanged except for the FR-9 bound), for an unrelated
---     purpose: `IF p_from_stage = 23 AND p_to_stage = 24 THEN` gates entry into
---     stage_key='launch_readiness_gate' (soon to be stage_number=24) behind an approved chairman
---     `product_review` decision (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001). The IDENTICAL literal
---     is mirrored in lib/eva/stage-execution-worker.js:2971 (`if (fromStage === 23 && toStage ===
---     24)`, plus a `.eq('lifecycle_stage', 23)` query filter a few lines below) as a daemon-walk
---     backstop, AND that same file's two `await import('./stage-templates/stage-23.js')` dynamic
---     imports (lines 1028, 1556) will resolve to the WRONG stage post-renumber, AND
---     lib/eva/stage-templates/ has no stage-27.js for the new top stage at all. Both call into
---     lib/eva/chairman-product-review.js, whose own stage assumptions were not audited by this SD.
---     Per TS-8's own contract ("either updated... or the PRD/migration explicitly documents why
---     the check/filename intentionally stays stale-named"): this migration leaves ALL of the
---     above unchanged. Fixing the SQL literal alone while the JS daemon backstop, its dynamic
---     imports, the missing template file, and chairman-product-review.js stay unaudited would
---     make the pieces of the SAME gate disagree with each other -- worse than leaving all of them
---     consistently stale. Triaged as its own dedicated, independently-reviewed follow-up SD.
+-- (a) p_from_stage/p_to_stage "product review" choke-point literal -- SQL side FIXED in round 2,
+--     JS side still deliberately stale. An independent SECURITY sub-agent review (finding H-3)
+--     disagreed with round 1's "leave both stale, consistency beats correctness" disposition for
+--     the SQL half specifically: section 5a of this migration already MOVES this stage's approved
+--     product_review decisions from lifecycle_stage=23 to 24 -- leaving fn_advance_venture_stage()'s
+--     predicate reading `p_from_stage = 23 AND p_to_stage = 24` would have the gate look for an
+--     approval at EXACTLY the stage the data was just moved away from, manufacturing (not merely
+--     inheriting) a desynchronization on the path into the irreversible go_live gate. That is a
+--     security regression, not cosmetic staleness, so the SQL predicate below is updated to
+--     `p_from_stage = 24 AND p_to_stage = 25` in this same migration.
+--     The JS daemon-walk backstop (lib/eva/stage-execution-worker.js:2971, `if (fromStage === 23
+--     && toStage === 24)`, plus a `.eq('lifecycle_stage', 23)` query filter a few lines below) is
+--     LEFT UNCHANGED. Since fn_advance_venture_stage() is documented elsewhere in this file as
+--     "the primary general-advance call path", the JS backstop firing on a (fromStage=23,
+--     toStage=24) pair that no longer occurs for a real forward advance (the equivalent real
+--     transition is now 24->25) simply stops firing -- it becomes a redundant no-op rather than
+--     an actively-wrong-permissive check, since the RPC's own (now-corrected) gate remains the
+--     enforcing layer. This is judged net-safe to leave alone: unlike the round-1 "leave both
+--     stale together" framing, no new permissive gap is introduced by fixing only the SQL side.
+--     That file's two `await import('./stage-templates/stage-23.js')` dynamic imports (lines 1028,
+--     1556) will still resolve to the wrong stage post-renumber, lib/eva/stage-templates/ still has
+--     no stage-27.js for the new top stage, and lib/eva/chairman-product-review.js's own stage
+--     assumptions remain unaudited by this SD -- all three still triaged as their own dedicated,
+--     independently-reviewed follow-up SD, per TS-8's own contract ("either updated... or the
+--     PRD/migration explicitly documents why the check/filename intentionally stays stale-named").
 -- (b) lib/eva/contracts/stage-contracts.js:619-627 -- a THIRD hardcoded stage-number map (a plain
 --     object literal keyed 23/24/25/26, each value an array of upstream-dependency stage numbers)
 --     found during this revision's re-verification, entirely outside FR-5's named 2-file scope
@@ -144,6 +188,20 @@
 --     component_path drift precedent from the 20260607 swap.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- -1. LOCK, FIRST STATEMENT IN THE FILE. SECURITY finding H-2: without an explicit table lock,
+--    apply-migration.js's plain BEGIN (READ COMMITTED, no LOCK TABLE) means the FR-6/FR-2
+--    preflight guarantees below only hold at the instant they run -- a concurrently-committed
+--    advance could move a real venture into 23-26, or a venture into an in-progress
+--    venture_stage_work row, in the window between the preflight and the first exclusive
+--    ALTER/UPDATE later in this file, and the post-apply verify (snapshot-joined) cannot observe
+--    a row that entered after its own snapshot. Locking ALL FOUR affected tables ACCESS EXCLUSIVE
+--    here makes the preflight's guarantee hold to COMMIT, at negligible cost for a one-time,
+--    already fully-serialized (advisory-locked by apply-migration.js) ceremony.
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+LOCK TABLE public.ventures, public.venture_stages, public.chairman_decisions, public.venture_stage_work
+  IN ACCESS EXCLUSIVE MODE;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 0. PRECONDITION -- stage-quiescent freeze (FR-2), parked-REAL-venture block (FR-6, enforced at
@@ -204,34 +262,47 @@ END
 $preflight$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 1. PRE-APPLY SNAPSHOT -- captured into a transaction-scoped temp table so the post-apply
---    readback can assert against real pre-apply values, whether this is the first run or a
---    harmless idempotent re-run.
+-- 1. PRE-APPLY SNAPSHOT -- captured into transaction-scoped temp tables so the post-apply readback
+--    can assert against real pre-apply values. Capture is GUARDED (only runs when this is a first
+--    apply attempt), mirroring the SAME guard the renumber block below uses -- found by an
+--    independent round-2 adversarial TESTING review: capturing unconditionally meant a SECOND
+--    (idempotent, no-op) run captured the ALREADY-shifted rows as if they were "pre-apply", and
+--    the verify block then asserted current = captured+1 against values that were already
+--    correct, producing a false POST-APPLY FAILED on a harmless re-run (the round-1 defect this
+--    revision fixed, recurring one layer out -- moved from the mutation into the verifier).
+--    Per-venture/decision/work-row snapshots, not a bare stage-range count: 24 and 25 are BOTH
+--    legitimate old-shift-range AND new-shift-destination values (the ranges [23,26] and [24,27]
+--    overlap heavily), so a bare count cannot distinguish "correctly shifted" from "never
+--    touched" -- found by dry-running this file and getting a false-positive from exactly that
+--    flawed check.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_pre_snapshot ON COMMIT DROP AS
-SELECT stage_number, stage_key, gate_type, is_irreversible, depends_on
-FROM public.venture_stages
-WHERE stage_number BETWEEN 23 AND 26;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_pre_snapshot (
+  stage_number integer, stage_key text, gate_type text, is_irreversible boolean, depends_on integer[]
+) ON COMMIT DROP;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_ventures_pre_snapshot (id uuid, pre_stage integer) ON COMMIT DROP;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_cd_pre_snapshot (id uuid, pre_stage integer) ON COMMIT DROP;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_vsw_pre_snapshot (id uuid, pre_stage integer) ON COMMIT DROP;
 
--- Per-venture snapshot: 24 and 25 are BOTH legitimate old-shift-range AND new-shift-destination
--- values (the ranges [23,26] and [24,27] overlap heavily), so "count of ventures with
--- current_lifecycle_stage BETWEEN 23 AND 26" cannot distinguish "correctly shifted" from
--- "never touched" -- found by dry-running this file and getting a false-positive failure from
--- exactly that flawed check. Compare each affected venture's OWN before/after value instead.
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_ventures_pre_snapshot ON COMMIT DROP AS
-SELECT id, current_lifecycle_stage AS pre_stage
-FROM public.ventures
-WHERE current_lifecycle_stage BETWEEN 23 AND 26;
+DO $capture_snapshot$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.venture_stages WHERE stage_key = 'dedicated_venture_uat') THEN
+    RETURN; -- already applied: leave all 4 snapshots empty, verify block's joins vacuously pass
+  END IF;
 
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_cd_pre_snapshot ON COMMIT DROP AS
-SELECT id, lifecycle_stage AS pre_stage
-FROM public.chairman_decisions
-WHERE lifecycle_stage BETWEEN 23 AND 26;
+  INSERT INTO _uat001b_pre_snapshot
+  SELECT stage_number, stage_key, gate_type, is_irreversible, depends_on
+  FROM public.venture_stages WHERE stage_number BETWEEN 23 AND 26;
 
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_vsw_pre_snapshot ON COMMIT DROP AS
-SELECT id, lifecycle_stage AS pre_stage
-FROM public.venture_stage_work
-WHERE lifecycle_stage BETWEEN 23 AND 26;
+  INSERT INTO _uat001b_ventures_pre_snapshot
+  SELECT id, current_lifecycle_stage FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26;
+
+  INSERT INTO _uat001b_cd_pre_snapshot
+  SELECT id, lifecycle_stage FROM public.chairman_decisions WHERE lifecycle_stage BETWEEN 23 AND 26;
+
+  INSERT INTO _uat001b_vsw_pre_snapshot
+  SELECT id, lifecycle_stage FROM public.venture_stage_work WHERE lifecycle_stage BETWEEN 23 AND 26;
+END
+$capture_snapshot$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 2. FR-7 -- register the new dedicated-venture-UAT stage's writer(s) in
@@ -801,13 +872,17 @@ BEGIN
     END IF;
   END IF;
 
-  -- DOCUMENTED, NOT UPDATED (see this file's header banner): this literal still reads
-  -- p_from_stage = 23 AND p_to_stage = 24, the SAME pre-renumber pair it always has. Its
-  -- twin in lib/eva/stage-execution-worker.js:2971 is likewise left unchanged, and
-  -- chairman-product-review.js's own stage assumptions were not audited by this SD --
-  -- fixing one side without the other would desynchronize the SQL and daemon-walk halves
-  -- of the SAME gate. Tracked as its own out-of-scope follow-up finding, not silently lost.
-  IF p_from_stage = 23 AND p_to_stage = 24 THEN
+  -- UPDATED (round-2, per SECURITY finding H-3, reversing the round-1 "documented, not fixed"
+  -- disposition for THIS literal specifically): section 5a above already moves this stage's
+  -- approved product_review decisions from lifecycle_stage=23 to 24 in the SAME migration --
+  -- leaving this predicate reading p_from_stage=23 would mean the check looks for an approval at
+  -- EXACTLY the stage the data was just moved away from, manufacturing (not merely inheriting) a
+  -- desynchronization on the path into the irreversible go_live gate. That is a security
+  -- regression, not a cosmetic staleness, so it is fixed here even though the broader JS-side
+  -- literal (lib/eva/stage-execution-worker.js:2971, its 2 stage-templates dynamic imports, and
+  -- chairman-product-review.js's own unaudited stage assumptions) remains its own, separately
+  -- tracked, deliberately out-of-scope finding -- see this file's header banner.
+  IF p_from_stage = 24 AND p_to_stage = 25 THEN
     IF NOT EXISTS (
       SELECT 1 FROM ventures
       WHERE id = p_venture_id
@@ -823,7 +898,7 @@ BEGIN
         RETURN jsonb_build_object(
           'success', false,
           'error', 'product_review_required',
-          'message', 'Stage 23 to 24 transition requires an approved chairman product_review decision',
+          'message', 'Stage 24 to 25 transition requires an approved chairman product_review decision',
           'venture_id', p_venture_id,
           'stage', p_from_stage,
           'to_stage', p_to_stage
@@ -958,12 +1033,15 @@ $function$;
 --    venture_stage_transitions and eva_stage_gate_attempts. None of these three tables is ever
 --    UPDATEd by this migration (FR-4 AC-3) -- historical rows are read through this shim only.
 --    Epoch marker convention (FR-4 AC-1): derive the cutover from schema_migrations_applied's own
---    applied_at record for THIS migration file. SECURITY DEFINER + pinned search_path (unlike
---    round 1's plain-invoker version) so the lookup itself is not silently fail-open under RLS on
---    schema_migrations_applied for a low-privilege caller of the security_invoker=true views
---    below; ORDER BY applied_at ASC (not DESC) takes the FIRST successful apply -- this shim does
---    not attempt to model more than one apply/revert/re-apply cycle, which is an accepted scope
---    limit for a one-time production ceremony (the DOWN/re-UP capability exists for non-production
+--    applied_at record for THIS migration file. Plain (NOT SECURITY DEFINER) plus a REVOKE below:
+--    an independent SECURITY sub-agent review found DEFINER bought nothing for the real caller
+--    set here (service_role/postgres already bypass RLS as invoker; a low-privilege invoker
+--    legitimately gets zero rows from the RLS-protected base tables either way) while making the
+--    function an anon-reachable elevated-privilege timestamp oracle over
+--    schema_migrations_applied.applied_at -- reverted from an earlier revision's DEFINER choice.
+--    ORDER BY applied_at ASC (not DESC) takes the FIRST successful apply -- this shim does not
+--    attempt to model more than one apply/revert/re-apply cycle, which is an accepted scope limit
+--    for a one-time production ceremony (the DOWN/re-UP capability exists for non-production
 --    verification, not repeated production cycling). A NULL p_row_created_at (the column is
 --    nullable) returns the input unchanged rather than guessing.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -972,7 +1050,6 @@ CREATE OR REPLACE FUNCTION public.translate_historical_stage_number(
   p_row_created_at timestamptz
 ) RETURNS integer
  LANGUAGE plpgsql
- SECURITY DEFINER
  SET search_path TO 'public'
  STABLE
 AS $function$
@@ -1030,6 +1107,24 @@ SELECT
   se.*,
   public.translate_historical_stage_number(se.stage_number, se.created_at) AS stage_number_current
 FROM public.stage_events se;
+
+-- SECURITY finding H-1: CREATE FUNCTION/VIEW in the public schema default-grants EXECUTE/SELECT
+-- to anon and authenticated (measured live default ACL). Every base table these 3 views read is
+-- service_role-policy-only RLS, so a low-privilege caller gets zero rows regardless -- but least
+-- privilege says close the surface explicitly rather than rely on that being permanent. The
+-- function itself is intentionally NOT SECURITY DEFINER (reverted from an earlier revision):
+-- measured against the real caller set, DEFINER bought nothing (service_role/postgres already
+-- bypass RLS as invoker; a low-privilege invoker legitimately gets nothing from the RLS-protected
+-- base tables either way) while making the function an anon-reachable elevated-privilege oracle
+-- over schema_migrations_applied.applied_at.
+REVOKE ALL ON FUNCTION public.translate_historical_stage_number(integer, timestamptz) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.translate_historical_stage_number(integer, timestamptz) TO service_role;
+REVOKE ALL ON public.venture_stage_transitions_current_scheme FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.venture_stage_transitions_current_scheme TO service_role;
+REVOKE ALL ON public.eva_stage_gate_attempts_current_scheme FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.eva_stage_gate_attempts_current_scheme TO service_role;
+REVOKE ALL ON public.stage_events_current_scheme FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.stage_events_current_scheme TO service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 9. POST-APPLY READBACK. Any miss aborts the whole transaction. Round-1's gate_type/

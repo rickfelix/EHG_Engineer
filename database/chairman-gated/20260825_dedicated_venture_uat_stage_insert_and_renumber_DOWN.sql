@@ -27,6 +27,13 @@
 -- transaction, matching the UP file and every other file in this directory.
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- -1. LOCK, FIRST STATEMENT IN THE FILE (SECURITY finding H-2, mirrored from the UP file): makes
+--    the preflight guarantees below hold to COMMIT rather than expiring the instant the check runs.
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+LOCK TABLE public.ventures, public.venture_stages, public.chairman_decisions, public.venture_stage_work
+  IN ACCESS EXCLUSIVE MODE;
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 0. PREFLIGHT -- quiescence, scoped to the FULL post-apply footprint (23-27: the new UAT stage
 --    now occupies 23, and the shifted rows occupy 24-27). Round 1's DOWN preflight checked only
 --    24-27, missing stage 23 -- a venture mid-transition through the brand-new UAT stage would
@@ -49,27 +56,38 @@ $preflight_down$;
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 1. PRE-REVERT SNAPSHOTS (per-row, same reasoning as the UP file's verify block: 24-26 are
 --    simultaneously valid pre-revert AND post-revert values, so a bare range count cannot
---    distinguish "reverted" from "never touched").
+--    distinguish "reverted" from "never touched"). GUARDED (only captures on a first DOWN
+--    attempt), mirroring the UP file's identical round-2 fix -- an unconditional capture made a
+--    second (idempotent, no-op) DOWN run assert "did not revert by exactly -1" against rows that
+--    were already reverted and therefore correctly untouched.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_vs_pre_snapshot ON COMMIT DROP AS
-SELECT stage_number, stage_key, gate_type, is_irreversible, depends_on
-FROM public.venture_stages
-WHERE stage_number BETWEEN 24 AND 27;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_vs_pre_snapshot (
+  stage_number integer, stage_key text, gate_type text, is_irreversible boolean, depends_on integer[]
+) ON COMMIT DROP;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_ventures_pre_snapshot (id uuid, pre_stage integer) ON COMMIT DROP;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_cd_pre_snapshot (id uuid, pre_stage integer) ON COMMIT DROP;
+CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_vsw_pre_snapshot (id uuid, pre_stage integer) ON COMMIT DROP;
 
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_ventures_pre_snapshot ON COMMIT DROP AS
-SELECT id, current_lifecycle_stage AS pre_stage
-FROM public.ventures
-WHERE current_lifecycle_stage BETWEEN 24 AND 27;
+DO $capture_down_snapshot$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.venture_stages WHERE stage_key = 'dedicated_venture_uat') THEN
+    RETURN; -- already reverted: leave all 4 snapshots empty, verify block's joins vacuously pass
+  END IF;
 
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_cd_pre_snapshot ON COMMIT DROP AS
-SELECT id, lifecycle_stage AS pre_stage
-FROM public.chairman_decisions
-WHERE lifecycle_stage BETWEEN 24 AND 27;
+  INSERT INTO _uat001b_down_vs_pre_snapshot
+  SELECT stage_number, stage_key, gate_type, is_irreversible, depends_on
+  FROM public.venture_stages WHERE stage_number BETWEEN 24 AND 27;
 
-CREATE TEMP TABLE IF NOT EXISTS _uat001b_down_vsw_pre_snapshot ON COMMIT DROP AS
-SELECT id, lifecycle_stage AS pre_stage
-FROM public.venture_stage_work
-WHERE lifecycle_stage BETWEEN 24 AND 27;
+  INSERT INTO _uat001b_down_ventures_pre_snapshot
+  SELECT id, current_lifecycle_stage FROM public.ventures WHERE current_lifecycle_stage BETWEEN 24 AND 27;
+
+  INSERT INTO _uat001b_down_cd_pre_snapshot
+  SELECT id, lifecycle_stage FROM public.chairman_decisions WHERE lifecycle_stage BETWEEN 24 AND 27;
+
+  INSERT INTO _uat001b_down_vsw_pre_snapshot
+  SELECT id, lifecycle_stage FROM public.venture_stage_work WHERE lifecycle_stage BETWEEN 24 AND 27;
+END
+$capture_down_snapshot$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 2. Revert both RPCs' upper bound to > 26, and fn_validate_stage_column()'s bound to 26. Full
