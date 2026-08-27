@@ -90,11 +90,73 @@ describe('AXIS 5 fleet_health — discriminator', () => {
     const r = fleetAxis.classify({ ...base, truncated: true, stuck: [] }, NOW);
     expect(r.citation).toMatch(/TRUNCATED/);
   });
+
+  // D1 fix (EXEC-phase non-prospective TESTING review): a live 40-row census found
+  // metadata.fleet_identity is an OBJECT on 28/28 non-null rows -- {role, color, callsign,
+  // assigned_at, accountUuid8, display_name} -- never a bare string, and window_handle is a
+  // NUMBER (20/20 rows). Every fixture below uses that real shape, not a hand-typed string.
+  const realFleetIdentity = (callsign) => ({
+    role: 'worker', color: 'blue', callsign, assigned_at: '2026-08-01T00:00:00.000Z',
+    accountUuid8: 'abcd1234', display_name: `${callsign} Worker`
+  });
+
+  // SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-3: a chairman recovering a wedged worker needs
+  // every stuck seat named, not just the first three the population query happened to return.
+  it('a citation lists ALL stuck seats, not just the first 3, when more than 3 are stuck', () => {
+    const fourStuck = [
+      { session_id: 'aaaaaaaa-1', silent: 100, window_handle: 1, fleet_identity: realFleetIdentity('Alpha') },
+      { session_id: 'bbbbbbbb-2', silent: 200, window_handle: 2, fleet_identity: realFleetIdentity('Bravo') },
+      { session_id: 'cccccccc-3', silent: 300, window_handle: 3, fleet_identity: realFleetIdentity('Charlie') },
+      { session_id: 'dddddddd-4', silent: 400, window_handle: 4, fleet_identity: realFleetIdentity('Delta') }
+    ];
+    const r = fleetAxis.classify({ ...base, stuck: fourStuck }, NOW);
+    for (const s of fourStuck) {
+      expect(r.citation).toMatch(new RegExp(s.session_id.slice(0, 8)));
+      expect(r.citation).toMatch(new RegExp(`${s.silent}m`));
+    }
+    // keystroke_packets (FR-4/D2): one per stuck seat, all four present, none stringified-object.
+    expect(r.keystroke_packets).toHaveLength(4);
+    expect(r.keystroke_packets.join(' ')).not.toMatch(/\[object Object\]/);
+    expect(r.keystroke_packets.join(' ')).toMatch(/Charlie/);
+  });
+
+  it('a stuck seat with real identity fields names its window and fleet identity (callsign) in the citation', () => {
+    const r = fleetAxis.classify({ ...base, stuck: [
+      { session_id: 'eeeeeeee-5', silent: 500, window_handle: 3, fleet_identity: realFleetIdentity('Echo') }
+    ] }, NOW);
+    expect(r.citation).toMatch(/window=3/);
+    expect(r.citation).toMatch(/identity=Echo/);
+    expect(r.citation).not.toMatch(/\[object Object\]/);
+  });
+
+  it('a stuck seat with window_handle=0 is NOT treated as absent (falsy-zero guard)', () => {
+    const r = fleetAxis.classify({ ...base, stuck: [
+      { session_id: 'aaaaaaaa-0', silent: 50, window_handle: 0, fleet_identity: null }
+    ] }, NOW);
+    expect(r.citation).toMatch(/window=0/);
+  });
+
+  it('a stuck seat with no identity fields falls back cleanly — no bracket, no placeholder text', () => {
+    const r = fleetAxis.classify({ ...base, stuck: [
+      { session_id: 'ffffffff-6', silent: 600, window_handle: null, fleet_identity: null }
+    ] }, NOW);
+    expect(r.citation).toMatch(/ffffffff@600m/);
+    expect(r.citation).not.toMatch(/window=/);
+    expect(r.citation).not.toMatch(/identity=/);
+    expect(r.citation).not.toMatch(/null/);
+  });
+
+  it('CLEAR ships an empty keystroke_packets array, not null or undefined', () => {
+    const r = fleetAxis.classify({ ...base, stuck: [] }, NOW);
+    expect(r.keystroke_packets).toEqual([]);
+  });
 });
 
 describe('AXIS 5 fleet_health — WIRING (what a discriminator test cannot catch)', () => {
+  // Real shape (D1): fleet_identity is an object, window_handle a number, per the live census.
   const seats = [
-    { session_id: 'aaaaaaaa-0000-0000-0000-000000000001', status: 'active', last_tool_at: minsAgo(600), metadata: {} },
+    { session_id: 'aaaaaaaa-0000-0000-0000-000000000001', status: 'active', last_tool_at: minsAgo(600),
+      metadata: { window_handle: 9, fleet_identity: { role: 'worker', color: 'red', callsign: 'Foxtrot', assigned_at: minsAgo(700), accountUuid8: 'ffffffff', display_name: 'Foxtrot Worker' } } },
     { session_id: 'bbbbbbbb-0000-0000-0000-000000000002', status: 'idle', last_tool_at: minsAgo(0), metadata: {} }
   ];
 
@@ -104,6 +166,22 @@ describe('AXIS 5 fleet_health — WIRING (what a discriminator test cannot catch
     expect(cap.table).toBe('claude_sessions');
     expect(state.scanned).toBe(2);
     expect(state.stuck.map((s) => s.session_id)).toContain(seats[0].session_id);
+  });
+
+  it('carries window_handle/fleet_identity from the fetched seat through to the stuck entry (FR-3/FR-4)', async () => {
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+    const stuckSeat = state.stuck.find((s) => s.session_id === seats[0].session_id);
+    expect(stuckSeat.window_handle).toBe(9);
+    expect(stuckSeat.fleet_identity.callsign).toBe('Foxtrot');
+  });
+
+  it('end-to-end: fetch() -> classify() renders the real callsign, not "[object Object]"', async () => {
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+    const r = fleetAxis.classify(state, NOW);
+    expect(r.citation).toMatch(/identity=Foxtrot/);
+    expect(r.citation).not.toMatch(/\[object Object\]/);
+    expect(r.keystroke_packets.join(' ')).toMatch(/Foxtrot/);
+    expect(r.keystroke_packets.join(' ')).not.toMatch(/\[object Object\]/);
   });
 
   it('a WRONG-TABLE fetch yields an empty population — which the classifier must call UNMEASURABLE', async () => {

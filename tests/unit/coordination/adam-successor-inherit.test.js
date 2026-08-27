@@ -25,7 +25,15 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const NOW = Date.parse('2026-08-16T00:00:00Z');
+// QF-20260826-057: anchored to the REAL clock, not a frozen historical timestamp.
+// applySuccessorInheritFilters (lib/coordinator/adam-identity.cjs) computes its 14-day TTL
+// cutoff from the actual Date.now() at call time, not an injectable clock. A fixed NOW here
+// drifts out of that window as real calendar time passes -- recent(3) anchored to a date now
+// >11 days in the past silently crossed the 14-day boundary and started failing
+// deterministically with no code change on either side. Anchoring to Date.now() keeps every
+// recent(N) offset correctly positioned relative to whatever "now" the production function
+// itself uses, regardless of when the test happens to run.
+const NOW = Date.now();
 const recent = (daysAgo) => new Date(NOW - daysAgo * DAY_MS).toISOString();
 
 function baseFixture() {
