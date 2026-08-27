@@ -7,6 +7,7 @@
   - [Infrastructure](#infrastructure)
   - [Features](#features)
   - [Security](#security)
+  - [Bugfix](#bugfix)
 - [2026-08-25](#2026-08-25)
   - [Documentation](#documentation)
   - [Bugfix](#bugfix)
@@ -217,6 +218,17 @@
   - **Two confirmed-dead historical held rows were voided with independently re-verified provenance**: their underlying `chairman_decisions` row no longer existed in the database (re-confirmed by 3 separate sub-agent passes across LEAD/EXEC/PLAN_VERIFICATION), so neither could ever complete a release regardless of the fixes above — marked `status='abandoned'` rather than left silently stuck.
   - **Verification**: LEAD-TO-PLAN, PLAN-TO-EXEC 95%, EXEC-TO-PLAN 90% (after TESTING+SECURITY fix round), PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 95%. 10 SD-scoped test files / 114 tests passing; broad regression sweep across every consumer of the 6 shared files touched (112 files / 1676 tests, 0 unrelated failures).
 
+- **A previously-diagnosed permission-freeze fix had gone silently dead 25 days earlier, and the coordinator-visible stuck-seat detector this repo already had was invisible in exactly the surface a chairman would look** - PR #7589 (SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001)
+  - **What shipped**: repaired a disabled PreToolUse `current_tool` telemetry writer in `pre-tool-enforce.cjs` (a one-line session-id derivation bug, orphaned since 2026-08-01); enriched the `fleet_health` drive-state axis to list ALL stuck seats (not the prior `slice(0,3)`) with real per-seat identity, plus a new chairman-facing numbered keystroke-packet recovery renderer wired into the existing `recover_stuck_seat` owed-action lane; and best-effort, filtered (permissions-only) provisioning of the main checkout's `.claude/settings.local.json` pre-grants into newly-created worktrees, closing the mechanical cause of at least one hand-rescued worktree-only permission freeze.
+  - **A LEAD-phase validation-informed 40% scope reduction re-aimed the SD entirely**: the founding premise ("build new stuck-seat detection") was found already superseded by existing, correctly-tuned infrastructure — the real gap was coordinator visibility, not detection.
+  - **A PLAN-phase prospective TESTING pass found 9 structural defects before any code was written**: a false architectural premise, two wrong field-name citations sourced from stale docs rather than a live census, a contradicted in-repo invariant, and a wrong insertion point among them.
+  - **An EXEC-phase retrospective TESTING pass then found the corrected field name was right and the assumed field TYPE was still wrong**: `fleet_identity` is an object on 28/28 live rows (`{role, color, callsign, ...}`), not a string, so both renderers were emitting `"[object Object]"` in production while every unit fixture (string literals) stayed green throughout.
+  - **SECURITY flagged the settings.local.json copy as an unfiltered raw file mirror** — hardened inline to propagate only `permissions.allow/deny/ask`, so a future source file gaining `hooks` or `env` keys cannot silently fan arbitrary code execution or secrets into every new worktree.
+  - **VERIFY-phase VALIDATION and REGRESSION passes found 3 more findings, one a direct refutation of an earlier claim**: REGRESSION independently grepped the actually-committed test file and found test coverage an EXEC-phase TESTING pass had called missing already existed; a real, accepted rendering trade-off (the enriched citation shrinks the routine drive-state status line's stuck-seat count from 3 to ~2 under a shared 160-char cap, mitigated by routing the full list through a separate unmangled field); and a promised "advisory only" label missing from the rendered recovery text, fixed.
+  - **FR-2's live wall-clock ordering test (does PreToolUse fire before Claude Code's own permission prompt?) was answered via citation-grounded documentation research, not a live trigger** — deliberately provoking a real blocking permission prompt inside this same unsupervised autonomous session was assessed as reproducing the exact stuck-seat failure class the SD exists to fix; recorded as a deliberate scope substitution with its own limitation stated plainly.
+  - **Merging this PR surfaced an unrelated, pre-existing repo-wide CI outage disguised as two separate problems**: a live GitHub Actions/Pull Requests platform incident (delayed run dispatch, independently confirmed via githubstatus.com and resolved mid-session) and, once CI resumed, a genuine calendar time-bomb in an unrelated test that was silently failing the required "Run Unit Tier" check for every PR in the repo — fixed via QF-20260826-057 (see Bugfix, below).
+  - **Verification**: LEAD-TO-PLAN 95%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 90%, LEAD-FINAL-APPROVAL 97%. Full scoped fleet/governance/hooks suite (264+ files) passing with 0 failures throughout EXEC/VERIFY.
+
 ### Features
 
 - **The two media-generation systems in this repo were both orphaned (zero production callers), and the quality gate that would have blocked every real asset failed closed unconditionally by design** - PR #7571 (SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A)
@@ -265,6 +277,13 @@
   - **An EXEC-phase SECURITY review found the encryption fix does not close the whole exposure**: `eva_sync_state`'s RLS policy and table grants are still open to `anon` and `authenticated`. Encrypting the token removes the payload from that row, but the table-level read access remains until the already-staged, chairman-gated migration is applied. Recorded as a genuine residual rather than folded into this SD's completion claim.
   - **Still open**: `database/chairman-gated/20260826_eva_sync_state_rls_lockdown.sql` has **not** been applied to production -- DDL permission is unavailable to a worker session, and the migration is chairman-gated by design. Raised to the coordinator as signal `371b536a-8a5a-47a4-af8c-3e29da050759` rather than left implicit. The encrypt-at-rest change is correct and effective today; what remains is the table-level lockdown.
   - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 88%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 93%. 12/12 tests in the new `lib/integrations/youtube/oauth-manager.test.js`; 82/82 passing across all 4 files in `lib/integrations/youtube/` + `lib/operator/cash-sources/` + `lib/security/`, zero regressions.
+
+### Bugfix
+
+- **A frozen test clock silently drifted past the real 14-day window it was testing, and because it sits behind a required branch-protection check, it was blocking every PR merge in the repo** - PR #7591 (QF-20260826-057)
+  - **What shipped**: `tests/unit/coordination/adam-successor-inherit.test.js`'s `NOW` constant, hardcoded to a historical timestamp, is now anchored to `Date.now()` — the same clock `applySuccessorInheritFilters` (`lib/coordinator/adam-identity.cjs`) uses to compute its real 14-day mail-retention cutoff. As real calendar time passed, the frozen fixture dates aged outside that window, producing a deterministic (not flaky) failure with zero code change on either side.
+  - **Discovered while investigating an unrelated blocked merge**: confirmed via checkout of unmodified `main` that the failure was pre-existing and unrelated to the in-flight PR (SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001) it was blocking.
+  - **Verification**: 18/18 tests passing (was 17/18); test-only change, no production code touched.
 
 ## 2026-08-25
 
