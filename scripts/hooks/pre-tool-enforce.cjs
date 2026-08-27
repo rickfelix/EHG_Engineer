@@ -1564,8 +1564,16 @@ async function main() {
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---
   // Non-blocking write of tool/timeout/silence signals to claude_sessions.
   // Fire-and-forget — never waits, never blocks, swallows all errors.
+  //
+  // SD-LEO-INFRA-PERMISSION-FREEZE-STUCK-001 FR-1: this previously read
+  // process.env.CLAUDE_SESSION_ID directly, which QF-20260504-932 already documented as
+  // unpropagated to PreToolUse subprocesses (see _SESSION_ID's derivation comment above) —
+  // so this block never fired in production. Use the same _SESSION_ID + 'unknown' guard
+  // already proven at line ~1210, not a bare truthy check: _SESSION_ID falls back to the
+  // literal string 'unknown', which is truthy, so `if (_sessId)` alone would PATCH
+  // claude_sessions?session_id=eq.unknown on every failed derivation.
   try {
-    const _sessId = process.env.CLAUDE_SESSION_ID || '';
+    const _sessId = (_SESSION_ID && _SESSION_ID !== 'unknown') ? _SESSION_ID : '';
     if (_sessId) {
       const {
         computeExpectedSilenceMs,
