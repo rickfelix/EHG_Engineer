@@ -38,10 +38,14 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
-      # YouTube credential(s) resolved per FR-2's decision (RSS/credential-free vs OAuth
-      # fallback) — provisioned separately once that decision lands; the sync script's own
-      # per-source try/catch means an unresolved YouTube credential degrades to a per-source
-      # circuit-open state (surfaced below), not a hard workflow failure for Todoist.
+      # SD-LEO-FEAT-YOUTUBE-INGESTION-CREDENTIAL-001 (FR-3): chairman approved switching the
+      # "For Processing" playlist to Unlisted, so the credential-free API-key path is wired
+      # here — no OAuth, no token custody, matching the already-live YOUTUBE_API_KEY secret
+      # used by youtube-subscription-digest.yml for a different feature. The playlist ID is
+      # a low-grade secret (never a hardcoded plaintext value in this file) per the chairman's
+      # approval riders.
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      YOUTUBE_FOR_PROCESSING_PLAYLIST_ID: ${{ secrets.YOUTUBE_FOR_PROCESSING_PLAYLIST_ID }}
       #
       # Deliberately NOT setting TODOIST_INTAKE_PROJECTS (TR-3): that env var is a documented
       # one-time manual override escape hatch (QF-20260612-416) — setting it here would silently
