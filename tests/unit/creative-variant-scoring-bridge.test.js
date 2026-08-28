@@ -23,6 +23,7 @@ function makeMockSupabase(tableResults) {
         select: () => builder,
         eq: () => builder,
         in: () => builder,
+        limit: () => builder,
         then: (resolve) => Promise.resolve(result).then(resolve),
       };
       return builder;
@@ -113,7 +114,7 @@ describe('selectAssetVariant (FR-3/FR-4)', () => {
     checkAssetViewAuthorized.mockResolvedValue({ allowed: true, reason: null });
     const supabase = {
       from: () => ({
-        select: () => ({ eq: () => ({ then: (resolve) => Promise.resolve({ data: null, error: { message: 'boom' } }).then(resolve) }) }),
+        select: () => ({ eq: () => ({ limit: () => ({ then: (resolve) => Promise.resolve({ data: null, error: { message: 'boom' } }).then(resolve) }) }) }),
       }),
     };
     const result = await selectAssetVariant({ supabase, ventureId: 'v1' });

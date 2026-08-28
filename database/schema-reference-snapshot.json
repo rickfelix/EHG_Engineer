@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-08-26T11:58:20.020Z",
+ "generated_at": "2026-08-28T10:32:24.978Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 867,
+ "table_count": 868,
  "view_count": 189,
  "check_count": 1544,
  "tables": {
@@ -153,7 +153,8 @@
   "counterfactual_scores": "{id,venture_id,profile_id,original_score,counterfactual_score,delta,breakdown,created_at,updated_at}",
   "coverage_matrix": "{id,surface_class,surface_key,checker_ids,status,is_active,first_seen_at,last_verified_at,metadata,created_at,updated_at}",
   "coverage_matrix_rotation_runs": "{id,ran_at,delta_summary,sample_verified_keys,coverage_question_feedback_ids}",
-  "creative_assets": "{id,venture_id,capability,generator,prompt,brand_source_refs,cost,provenance,consumed_at,created_at}",
+  "creative_asset_variant_scores": "{id,creative_asset_id,variant_id,metadata,created_at}",
+  "creative_assets": "{id,venture_id,capability,generator,prompt,brand_source_refs,cost,provenance,consumed_at,created_at,storage_path}",
   "crm_contact_venture_access": "{contact_id,venture_id,granted_at}",
   "crm_contacts": "{id,org_id,email,full_name,provenance_event_id,provenance_source,created_at,updated_at}",
   "crm_inbound_events": "{id,source,payload,fetched_at}",

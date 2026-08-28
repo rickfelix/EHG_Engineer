@@ -99,8 +99,7 @@ $fn$;
 -- new functions EXPLICITLY -- a separate, additive ACL entry that a FROM PUBLIC revoke cannot
 -- touch (see this directory's README, SEC-M2, and the 20260825 canonical-writer choke files).
 -- Both are therefore revoked by name before the intended grant is issued.
-REVOKE ALL ON FUNCTION public.cavs_variant_matches_venture(uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.cavs_variant_matches_venture(uuid, uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.cavs_variant_matches_venture(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cavs_variant_matches_venture(uuid, uuid) TO authenticated, service_role;
 
 -- ── POLICY ────────────────────────────────────────────────────────────────────────────

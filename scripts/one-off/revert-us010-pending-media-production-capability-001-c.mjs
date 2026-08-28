@@ -9,6 +9,7 @@
 // Reverting to the honest pending state. implementation_status stays 'pending' (unchanged).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 async function main() {
   const supabase = createClient(
@@ -29,4 +30,6 @@ async function main() {
   console.log('US-010 reverted:', JSON.stringify(data, null, 2));
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}

@@ -7,6 +7,7 @@
 // both FR_DELIVERY_TRACEABILITY and any human reviewing story state.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 async function main() {
   const supabase = createClient(
@@ -37,4 +38,6 @@ async function main() {
   console.log('US-010 (left untouched, pending chairman ceremony):', JSON.stringify(us010));
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}
