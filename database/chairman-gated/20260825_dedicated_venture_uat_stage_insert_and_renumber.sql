@@ -2,8 +2,8 @@
 -- row and renumber stage_number 23-26 to 24-27.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: PENDING
--- @approval-record: PENDING — chairman ratification not yet scheduled. DO NOT APPLY.
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: chairman verbal "approved" in-terminal 2026-08-28 ~18:1xZ ET-noon window, scribed by Adam f27a883d at the GO sitting; binds the ruling-A amended content (carve-out + provenance stamp + eva_ventures widen). Ratification capture row to follow post-apply.
 --
 -- AMENDED 2026-08-28 (FR-6 ruling-A encode; the FRESH chairman verbal taken at the sitting binds
 -- THIS amended content per the amendment rule): (1) the FR-6 preflight below carves out EXACTLY
