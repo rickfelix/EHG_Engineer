@@ -644,6 +644,18 @@ BEGIN
   WHERE id IN ('ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid, '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid)
     AND metadata ? 'renumber_map_applied';
 
+  -- Mirrors the UP file's 2026-08-28 section 2b (eva_ventures CHECK widen to 27, the ruling-A
+  -- prerequisite): narrow both stage CHECKs back to the pre-ceremony 26 — but ONLY when no
+  -- eva_ventures row still sits above 26 (the -1 revert above has already pulled DataDistill's
+  -- mirror back to 26; any other >26 row means state this DOWN does not understand, and a
+  -- constraint that would immediately fail validation must not be attempted).
+  IF NOT EXISTS (SELECT 1 FROM public.eva_ventures WHERE current_lifecycle_stage > 26) THEN
+    ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
+    ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
+    ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
+    ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
+  END IF;
+
   -- ventures CHECK bound back to 26.
   ALTER TABLE public.ventures DROP CONSTRAINT IF EXISTS ventures_current_lifecycle_stage_check;
   ALTER TABLE public.ventures ADD CONSTRAINT ventures_current_lifecycle_stage_check

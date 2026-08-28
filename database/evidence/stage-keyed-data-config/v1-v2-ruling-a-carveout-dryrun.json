@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-08-28T16:11:15.612Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001 (ruling-A amendment, ceremony/20260828-uat-cutover)",
+  "scenario": "v1-v2-ruling-a-carveout-dryrun (no fixture flip; carve-out + stamp + idempotency + 2 negative controls)",
+  "steps": [
+    {
+      "step": "BEGIN",
+      "ok": true
+    },
+    {
+      "step": "NC-1 v1-must-raise-on-revived-venture",
+      "ok": true,
+      "error": "PREFLIGHT FAILED: 1 REAL (is_demo=false) venture(s) parked at a shifted stage (23-26) beyond the FR-6 ruling-A carve-out; refusing to proceed without explicit chairman review (FR-6)."
+    },
+    {
+      "step": "apply v1 (carve-out path, no fixture flip)",
+      "ok": true
+    },
+    {
+      "step": "assert 24->25 / 26->27 + provenance stamp",
+      "ok": true
+    },
+    {
+      "step": "apply v2 (stamp-aware preflight accepts the 2 ruled rows)",
+      "ok": true
+    },
+    {
+      "step": "reapply v1 (idempotency; FR-6 check first-run-gated)",
+      "ok": true
+    },
+    {
+      "step": "reapply v2 (idempotency; stamp persists)",
+      "ok": true
+    },
+    {
+      "step": "NC-2 v2-must-raise-on-corrupted-stamp",
+      "ok": true,
+      "error": "PREFLIGHT FAILED: 2 REAL (is_demo=false) venture(s) parked at stage 24-27 ([\"510177ba-435f-4dd7-bfa5-6154cc8cf54b\", \"ecbba50e-3c98-4493-9e77-1719cf6b6f00\"]) beyond the FR-6 ruling-A carve-out; refusin"
+    },
+    {
+      "step": "ROLLBACK",
+      "ok": true
+    }
+  ],
+  "baseline": [
+    {
+      "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+      "name": "MarketLens",
+      "current_lifecycle_stage": 24,
+      "is_demo": false,
+      "status": "cancelled"
+    },
+    {
+      "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+      "name": "DataDistill",
+      "current_lifecycle_stage": 26,
+      "is_demo": false,
+      "status": "cancelled"
+    }
+  ],
+  "postV1": [
+    {
+      "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+      "current_lifecycle_stage": 25,
+      "stamp_ruling": "9e5aac51-ff7e-424d-9003-77ce7d3c723f",
+      "stamp_map": {
+        "to": 25,
+        "from": 24
+      }
+    },
+    {
+      "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+      "current_lifecycle_stage": 27,
+      "stamp_ruling": "9e5aac51-ff7e-424d-9003-77ce7d3c723f",
+      "stamp_map": {
+        "to": 27,
+        "from": 26
+      }
+    }
+  ],
+  "result": "PASS"
+}

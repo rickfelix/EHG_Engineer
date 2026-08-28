@@ -246,14 +246,21 @@ BEGIN
   -- ventures ride the renumber (MarketLens 24->25, DataDistill 26->27) and are
   -- provenance-stamped in section 4b. Each carve-out is id-, stage- AND status-pinned so it DIES
   -- if either venture moves or revives before the sitting: any drift re-blocks the apply.
-  SELECT count(*) INTO v_real_parked
-  FROM public.ventures
-  WHERE current_lifecycle_stage BETWEEN 23 AND 26
-    AND is_demo IS NOT TRUE
-    AND NOT (id = 'ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid AND current_lifecycle_stage = 24 AND status = 'cancelled')
-    AND NOT (id = '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid AND current_lifecycle_stage = 26 AND status = 'cancelled');
-  IF v_real_parked <> 0 THEN
-    RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at a shifted stage (23-26) beyond the FR-6 ruling-A carve-out; refusing to proceed without explicit chairman review (FR-6).', v_real_parked;
+  -- First-run-gated like the "exactly 4 rows" shape check below, and for the same reason: the
+  -- ventures shift this check protects is itself first-run-guarded, so on an idempotent re-run
+  -- there is no mutation left to protect — while the ruled ventures now legitimately sit at
+  -- 25/27 (in-range but no longer matching the stage-pinned carve-out), which would otherwise
+  -- false-block a harmless re-run.
+  IF NOT EXISTS (SELECT 1 FROM public.venture_stages WHERE stage_key = 'dedicated_venture_uat') THEN
+    SELECT count(*) INTO v_real_parked
+    FROM public.ventures
+    WHERE current_lifecycle_stage BETWEEN 23 AND 26
+      AND is_demo IS NOT TRUE
+      AND NOT (id = 'ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid AND current_lifecycle_stage = 24 AND status = 'cancelled')
+      AND NOT (id = '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid AND current_lifecycle_stage = 26 AND status = 'cancelled');
+    IF v_real_parked <> 0 THEN
+      RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at a shifted stage (23-26) beyond the FR-6 ruling-A carve-out; refusing to proceed without explicit chairman review (FR-6).', v_real_parked;
+    END IF;
   END IF;
 
   -- advisory_checkpoints.stage_number FKs into venture_stages(stage_number) with no ON UPDATE
@@ -467,6 +474,32 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- 2b. FR-6 RULING-A PREREQUISITE (2026-08-28 amendment; found by the ruling-A carve-out dry-run
+--     probe, NOT by review): widen eva_ventures' two lifecycle-stage CHECKs to 27 BEFORE the
+--     ventures shift below. This file's own header (hazard note) already documents that the
+--     eva_ventures mirror trigger early-returns for demo ventures — the world v1 was reviewed in
+--     had ONLY demo ventures in the shift range, so the mirror never saw a 27. Under ruling A,
+--     REAL DataDistill rides 26->27, trg_ventures_update_sync_eva fires mid-shift, and the
+--     mirror write hits the still-capped CHECK, aborting this whole apply. v2's own widen of
+--     these SAME two constraints (its section 2) is already guarded on '%<= 27%' and becomes a
+--     verbatim no-op after this. Live definitions read 2026-08-28 (pg_get_constraintdef):
+--     both are exactly ((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)) — no
+--     sibling clauses to carry (same-constraint coordination check satisfied).
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+DO $eva_checks_widen$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_lifecycle_stage' AND conrelid = 'public.eva_ventures'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+    ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
+    ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 27)));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_ventures_current_lifecycle_stage_check' AND conrelid = 'public.eva_ventures'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+    ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
+    ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 27)));
+  END IF;
+END
+$eva_checks_widen$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 3. GUARDED BLOCK: everything that must run exactly once (venture_stages renumber, the new
