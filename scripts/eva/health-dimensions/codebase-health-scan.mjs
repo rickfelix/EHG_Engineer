@@ -99,17 +99,20 @@ async function main() {
 
   // Store snapshots (even in dry-run for trending)
   for (const result of results) {
+    const { capped, truncated, byRoot } = capFindingsPerRoot(result.findings, 100);
     const { error } = await supabase.from('codebase_health_snapshots').insert({
       dimension: result.dimension,
       score: result.score,
       trend_direction: result.trend,
-      findings: result.findings.slice(0, 100), // cap at 100 findings per snapshot
+      findings: capped,
       finding_count: result.finding_count,
       metadata: {
         ...result.metadata,
         dry_run: isDryRun,
         threshold_level: result.threshold.level,
-        consecutive_breaches: result.breaches
+        consecutive_breaches: result.breaches,
+        findings_truncated: truncated,
+        ...(truncated ? { findings_by_root: byRoot } : {})
       },
       target_application: 'EHG_Engineer'
     });
@@ -274,6 +277,37 @@ async function feedToEvaPipeline(candidate) {
   }
 }
 
+/**
+ * Cap findings to a stored maximum while keeping every scan root represented.
+ * A plain sort-then-slice can structurally exclude entire roots (e.g. every
+ * finding under scripts/* if lib/* alone exceeds the cap alphabetically).
+ * Instead, allocate the cap proportionally per top-level root (min 1 each).
+ * @returns {{ capped: object[], truncated: boolean, byRoot: object|null }}
+ */
+export function capFindingsPerRoot(findings, cap = 100) {
+  if (findings.length <= cap) {
+    return { capped: findings, truncated: false, byRoot: null };
+  }
+
+  const groups = new Map();
+  for (const f of findings) {
+    const root = (f.file || '').split('/')[0] || 'unknown';
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(f);
+  }
+
+  const byRoot = {};
+  let capped = [];
+  for (const [root, items] of groups) {
+    byRoot[root] = items.length;
+    const share = Math.max(1, Math.round((items.length / findings.length) * cap));
+    capped.push(...items.slice(0, share));
+  }
+  if (capped.length > cap) capped = capped.slice(0, cap);
+
+  return { capped, truncated: true, byRoot };
+}
+
 function groupByStrategy(findings) {
   const grouped = {};
   for (const f of findings) {
@@ -283,7 +317,10 @@ function groupByStrategy(findings) {
   return grouped;
 }
 
-main().catch(err => {
-  console.error('Health scan failed:', err.message);
-  process.exit(1);
-});
+const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href;
+if (isMain) {
+  main().catch(err => {
+    console.error('Health scan failed:', err.message);
+    process.exit(1);
+  });
+}
