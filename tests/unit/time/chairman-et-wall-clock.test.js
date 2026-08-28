@@ -6,8 +6,51 @@
 import { describe, it, expect } from 'vitest';
 import {
   isSmsQuietHour, smsQuietWindowReleaseIso, etLocalHour, etLocalMinute, et6amIso, etDateStr,
-  etPrior545Iso, isValidCanonicalZone,
+  etPrior545Iso, isValidCanonicalZone, formatChairmanTimestamp,
 } from '../../../lib/time/chairman-et-wall-clock.js';
+
+// QF-20260828-884 (QF-20260828-188 leg 4): the mechanical chairman-facing timestamp formatter.
+// Adam's own answer text read a UTC stamp as ET by hand (9:02pm for 5:02pm) and the chairman
+// corrected him live -- this is the specimen the formatter exists to make impossible in code.
+describe('formatChairmanTimestamp — the specimen bug and its boundaries', () => {
+  it('renders the exact specimen correctly: a UTC stamp that reads 9:02pm by hand is 5:02pm ET', () => {
+    // 21:02 UTC on a summer date is 17:02 ET (EDT, UTC-4) -- the hand-conversion Adam made
+    // (treating UTC as if it were already ET) would have produced "9:02 PM", the wrong answer.
+    expect(formatChairmanTimestamp(new Date('2026-08-28T21:02:00.000Z'))).toBe('5:02 PM ET');
+  });
+
+  it('midnight and noon render without a "0:00" artifact (12-hour clock edge)', () => {
+    expect(formatChairmanTimestamp(new Date('2026-01-16T05:00:00.000Z'))).toBe('12:00 AM ET'); // 00:00 ET (EST, UTC-5)
+    expect(formatChairmanTimestamp(new Date('2026-01-16T17:00:00.000Z'))).toBe('12:00 PM ET'); // 12:00 ET
+  });
+
+  it('minutes are always two digits, even under 10', () => {
+    expect(formatChairmanTimestamp(new Date('2026-01-16T14:05:00.000Z'))).toBe('9:05 AM ET');
+  });
+
+  it('DST: the same wall-clock hour resolves through the correct EDT/EST offset either side of the transition', () => {
+    // 2026-03-08 02:00 ET is the US spring-forward transition (EST->EDT).
+    expect(formatChairmanTimestamp(new Date('2026-03-01T15:00:00.000Z'))).toBe('10:00 AM ET'); // EST, UTC-5
+    expect(formatChairmanTimestamp(new Date('2026-03-15T14:00:00.000Z'))).toBe('10:00 AM ET'); // EDT, UTC-4
+  });
+
+  it('accepts a ms epoch or an ISO string, not only a Date', () => {
+    const ms = Date.parse('2026-08-28T21:02:00.000Z');
+    expect(formatChairmanTimestamp(ms)).toBe('5:02 PM ET');
+    expect(formatChairmanTimestamp('2026-08-28T21:02:00.000Z')).toBe('5:02 PM ET');
+  });
+
+  it('throws on an unparseable instant rather than silently rendering "Invalid Date"', () => {
+    expect(() => formatChairmanTimestamp('not-a-date')).toThrow(/not a valid instant/);
+  });
+
+  it('respects an explicit zone parameter while still labeling it "ET" (chairman-channel convention)', () => {
+    // Same instant, different zone -- proves the zone param is load-bearing, not decorative.
+    const instant = new Date('2026-08-28T21:02:00.000Z');
+    expect(formatChairmanTimestamp(instant, 'America/New_York')).toBe('5:02 PM ET');
+    expect(formatChairmanTimestamp(instant, 'America/Los_Angeles')).toBe('2:02 PM ET');
+  });
+});
 
 describe('isSmsQuietHour — 10PM-6AM ET boundary', () => {
   it('21:59 ET is NOT quiet (just before the window)', () => {
