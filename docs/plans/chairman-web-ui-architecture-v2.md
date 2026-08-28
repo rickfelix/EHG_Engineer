@@ -587,6 +587,11 @@ const venture = supabase
   .single();
 
 // 2. Stage transition history
+// NOTE (SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001): from_stage/to_stage store raw stage_number
+// values. The venture lifecycle was renumbered 26->27 stages on 2026-08-28 -- rows created
+// before that date use the old numbering, rows after use the new. A UI rendering this
+// history should translate against the live venture_stages SSOT keyed by the row's
+// created_at relative to the renumbering date, not assume a single static scheme.
 const transitions = supabase
   .from('venture_stage_transitions')
   .select('*')

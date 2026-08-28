@@ -22,7 +22,7 @@ never auto-resolve. Companion to the Anthropic-cap contingency (`anthropic-cap-c
 | # | Act | Why non-delegable | Away-behavior |
 |---|-----|-------------------|---------------|
 | 1 | **KILL a venture at a hard kill gate** (S24 pre-launch) | Irreversible capital/identity loss | Hold (no auto-kill — venture waits) |
-| 2 | **PROMOTE a venture toward scale** (S17/S18/S23) | Commits real resources / outward-facing launch | Hold-and-surface |
+| 2 | **PROMOTE a venture toward scale** (S17/S18/S25) | Commits real resources / outward-facing launch | Hold-and-surface |
 | 3 | **PICK which 1–2 ventures get the first revenue push** | Reserved chairman judgment (EHG-VISION "screen RANKS, chairman PICKS"); gated by the conjunctive trigger | Stays deferred; never auto-picked |
 | 4 | **Ratify a gate-binding flip** (observe-only → binding) | Requires ≥3-venture ground-truth cohort judgment | Hold (gates stay observe-only) |
 | 5 | **Approve a fleet-wide / high-blast-radius prod migration** (e.g. the claim_sd central arbiter) | Fleet-outage risk; `@approved-by` is an approval attestation, not a checkbox | Hold-and-surface (proven this cohort: CLAIM-RPC-HONOR-001) |

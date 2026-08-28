@@ -235,7 +235,8 @@ describe('data-contract-scorer', () => {
       const info = getDimensionInfo();
       expect(info.dimension).toBe('V05');
       expect(info.name).toBe('Data Contracts');
-      expect(info.expectedStages).toBe(26);
+      // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001: EXPECTED_STAGES updated 26 -> 27.
+      expect(info.expectedStages).toBe(27);
     });
   });
 });

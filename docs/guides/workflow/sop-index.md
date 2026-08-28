@@ -8,7 +8,7 @@ tags: [guide, auto-generated]
 ---
 # SOP Index - 40-Stage Venture Workflow
 
-> **Note**: This index documents the retired 40-stage venture workflow; the live workflow uses stages 0-25. Stage numbers above 25 refer to the retired numbering.
+> **Note**: This index documents the retired 40-stage venture workflow; the live workflow uses stages 0-27. Stage numbers above 27 refer to the retired numbering.
 
 
 ## Metadata

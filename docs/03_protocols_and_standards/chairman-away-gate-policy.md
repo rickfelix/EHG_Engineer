@@ -26,7 +26,7 @@ proceeds on the live-true set so the away-behavior is defined for what actually 
 | 4 | Kill checkpoint — pre-launch | S24 | KILL | `KILL_GATE_STAGES` |
 | 5 | Promotion — pre-scale | S17 | PROMOTION | `PROMOTION_GATE_STAGES` |
 | 6 | Promotion — scale commit | S18 | PROMOTION | `PROMOTION_GATE_STAGES` |
-| 7 | Promotion — launch advance | S23 | PROMOTION | `PROMOTION_GATE_STAGES` |
+| 7 | Promotion — launch advance | S25 | PROMOTION | `PROMOTION_GATE_STAGES` |
 | 8 | LEO LEAD-FINAL chairman approval | — | PROMOTION (SD ship) | `handoff.js` LEAD-FINAL-APPROVAL |
 | 9 | Product-review — pre-launch taste/quality check | S23→S24 | PROMOTION (`decision_type='product_review'`, separate from gate 7's decision) | `lib/eva/stage-execution-worker.js::_advanceStage()` + `fn_advance_venture_stage` RPC (SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001) |
 
@@ -60,7 +60,7 @@ HOLD-AND-SURFACE. Ambiguity always resolves to hold (the conservative, reversibl
 | **S24 KILL (pre-launch)** | **HOLD-AND-SURFACE.** | Pre-launch kill/no-launch is a high-stakes, time-sensitive judgment (launch readiness) — surface, do not auto-decide either way. |
 | **S17 PROMOTION** | **HOLD-AND-SURFACE.** | Advancing toward scale commits resources; non-delegable. |
 | **S18 PROMOTION (scale commit)** | **HOLD-AND-SURFACE.** | Largest resource commitment; explicitly non-delegable. |
-| **S23 PROMOTION (launch advance)** | **HOLD-AND-SURFACE.** | Launch is outward-facing + hard to reverse; surface. |
+| **S25 PROMOTION (launch advance)** | **HOLD-AND-SURFACE.** | Launch is outward-facing + hard to reverse; surface. |
 | **LEAD-FINAL (SD ship)** | **SPLIT:** non-chairman SDs follow AUTO-PROCEED (safe default = the loop's existing auto-approval); **chairman-required SDs (those whose own spec mandates chairman visibility, e.g. fleet-wide migrations) HOLD-AND-SURFACE.** | Mirrors how SD-LEO-INFRA-CLAIM-RPC-HONOR-001 was correctly held at its chairman gate this cohort. |
 | **S23→S24 product-review** | **HOLD-AND-SURFACE** (one escalation email per review, no reminders; re-armed automatically on send-back/re-review). Enforced independently at both the daemon-walk and RPC advance paths, and bypassed only for fixture/demo ventures so a test venture can never be stranded waiting on a decision nobody real will ever make. | A taste/quality check an agent cannot self-certify; separate from gate 7's launch-advance decision so the two verdicts are never conflated. |
 

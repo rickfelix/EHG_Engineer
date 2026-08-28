@@ -205,6 +205,39 @@ describe('stage-governance — raw gate_type-derived sets (SD-LEO-INFRA-MINUS-GA
     expect(gov.totalStages).toBe(26);
     expect(gov.totalStages).toBe(STAGE_FIXTURE.length);
   });
+
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-1: maxStageNumber is a CEILING (MAX(stage_number)),
+  // kept distinct from totalStages (a COUNT) -- the two happen to agree on a contiguous fixture,
+  // but a non-contiguous stage set would make totalStages a silently-wrong ceiling if reused.
+  it('maxStageNumber reflects MAX(stage_number), not row count', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect(gov.maxStageNumber).toBe(26);
+  });
+
+  it('maxStageNumber diverges from totalStages on a non-contiguous stage set', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gappy = [
+      { stage_number: 1, stage_name: 'A', stage_key: 'a', gate_type: 'none', review_mode: 'auto', work_type: 'artifact_only', chunk: null, description: null },
+      { stage_number: 5, stage_name: 'B', stage_key: 'b', gate_type: 'none', review_mode: 'auto', work_type: 'artifact_only', chunk: null, description: null },
+    ];
+    const gov = await mod.getStageGovernance(makeMockSupabase(gappy));
+    expect(gov.totalStages).toBe(2);
+    expect(gov.maxStageNumber).toBe(5);
+  });
+
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-2: hardGateStages aliases blockingStagesRaw
+  // (gate_type-derived, not work_type-filtered) so consumers deriving hard_gate_stages never
+  // silently drop stages 18/19 (sd_required work_type with a real gate_type) or 26.
+  it('hardGateStages aliases blockingStagesRaw (gate_type-derived, not work_type-filtered)', async () => {
+    const mod = await import('../../../lib/eva/stage-governance.js');
+    mod._resetCacheForTest();
+    const gov = await mod.getStageGovernance(makeMockSupabase());
+    expect([...gov.hardGateStages].sort((a, b) => a - b)).toEqual([...gov.blockingStagesRaw].sort((a, b) => a - b));
+    expect([...gov.hardGateStages].sort((a, b) => a - b)).toEqual([3, 5, 10, 13, 16, 17, 18, 19, 23, 24, 25]);
+  });
 });
 
 describe('stage-governance — defensive behavior', () => {

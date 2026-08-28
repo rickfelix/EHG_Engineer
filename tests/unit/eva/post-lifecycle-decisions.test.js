@@ -82,17 +82,18 @@ describe('DECISION_TYPES', () => {
 });
 
 describe('isFinalStage', () => {
-  it('should return true for stage 26', () => {
-    expect(isFinalStage(26)).toBe(true);
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001: MAX_LIFECYCLE_STAGE updated 26 -> 27.
+  it('should return true for stage 27', () => {
+    expect(isFinalStage(27)).toBe(true);
   });
 
-  it('should return true for stage > 26', () => {
-    expect(isFinalStage(27)).toBe(true);
+  it('should return true for stage > 27', () => {
+    expect(isFinalStage(28)).toBe(true);
     expect(isFinalStage(100)).toBe(true);
   });
 
-  it('should return false for stage < 26', () => {
-    expect(isFinalStage(25)).toBe(false);
+  it('should return false for stage < 27', () => {
+    expect(isFinalStage(26)).toBe(false);
     expect(isFinalStage(1)).toBe(false);
   });
 
@@ -402,8 +403,9 @@ describe('decision options', () => {
 });
 
 describe('MAX_LIFECYCLE_STAGE', () => {
-  it('should be 26', () => {
-    expect(MAX_LIFECYCLE_STAGE).toBe(26);
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001: updated 26 -> 27 for the 2026-08-28 renumbering.
+  it('should be 27', () => {
+    expect(MAX_LIFECYCLE_STAGE).toBe(27);
   });
 });
 

@@ -24,7 +24,12 @@ import { join, relative, extname } from 'path';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.ts', '.mjs', '.cjs', '.sql']);
 const SOURCE_DIRS = ['src', 'lib', 'scripts', 'database'];
-const MAX_STAGE = 26;
+// SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-9: updated 26 -> 27 for the 2026-08-28 renumbering.
+// Kept as a literal (not derived from lib/eva/stage-governance.js) because every function in
+// this module is synchronous file-scanning with no Supabase client available -- checkStageReferences
+// runs deep inside a sync heuristic chain (buildCodeArtifactIndex/classifyDocument), and threading
+// an async DB-backed lookup through this whole doc-audit module is out of scope here.
+const MAX_STAGE = 27;
 
 // ── Code Artifact Index ─────────────────────────────────────────────
 

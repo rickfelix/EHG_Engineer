@@ -38,7 +38,7 @@ tags: [guide, guides, workflow, critique]
 - [stage 24](./stage-24.md)
 - [stage 25](./stage-25.md)
 
-The critiques below cover the retired 40-stage workflow (the live workflow uses stages 0-25); they are kept for historical reference:
+The critiques below cover the retired 40-stage workflow (the live workflow uses stages 0-27); they are kept for historical reference:
 
 - [stage 26](./stage-26.md)
 - [stage 27](./stage-27.md)

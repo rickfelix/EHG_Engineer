@@ -12,6 +12,16 @@ Authoritative reference for how lifecycle stages exchange data via `venture_arti
 
 > Why a doc and not just code: cross-stage data contracts are spread across `lib/eva/stage-templates/analysis-steps/*.js` files. When upstream stage output schemas drift, downstream stages silently consume wrong shapes. This file is the single discoverable reference for grep-style auditing.
 
+> **Stage-number note (SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001):** the venture lifecycle was
+> renumbered 26→27 stages on 2026-08-28, but the stage-template dispatch chain this doc
+> documents (`stage-16.js` .. `stage-26.js`, `analyzeStage25PostLaunchReview`, etc.) is
+> filename/function-number-keyed and deliberately did NOT move as part of that renumbering
+> (RISK sub-agent evidence 8bfae0b7; Solomon adjudication pending, tracked out-of-scope in
+> this SD's FR-8). The S16/S22-24/S24/S25/S26 headings below correctly describe the live code
+> and DB `lifecycle_stage`/`lifecycle_stage_config` values as they exist today — do NOT shift
+> them to match the new `venture_stages.stage_number` scheme until the dispatch-chain
+> migration itself lands.
+
 ## Contracts
 
 ### S16 → S25 — Financial baseline for post-launch review

@@ -62,7 +62,7 @@ Two one-off follow-up scripts also live in `scripts/venture-provisioning/`:
   `recordProvisioningReadiness` filters its fallback `UPDATE` by `is_current = true` in
   addition to the other scope columns — without that filter the `UPDATE` could match a
   historical (`is_current = false`) row and re-trigger the same unique-index violation.
-- The stage-23 launch-readiness gate (`fn_stage_artifact_precondition`) remains armed
+- The stage-24 launch-readiness gate (`fn_stage_artifact_precondition`) remains armed
   (`blocked: true, missing_artifacts: ["launch_readiness_checklist"]`) after every persist —
   this module never satisfies that gate itself.
 

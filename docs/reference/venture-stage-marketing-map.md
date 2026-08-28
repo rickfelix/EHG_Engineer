@@ -1,6 +1,6 @@
 # Venture Stage → Marketing Ownership Map
 
-**Purpose**: A durable reference mapping the 26-stage venture workflow to the marketing pieces each stage owns — so the Chairman (and any operator) can see where marketing decisions live, which stages need Chairman sign-off, and where the pre-build demand test is enforced.
+**Purpose**: A durable reference mapping the 27-stage venture workflow to the marketing pieces each stage owns — so the Chairman (and any operator) can see where marketing decisions live, which stages need Chairman sign-off, and where the pre-build demand test is enforced.
 
 **Source of truth**: The stage definitions are generated from the `venture_stages` table (columns: stage_number, stage_name, phase_number, phase_name, gate_type, work_type, description). This document is an **annotated overlay** — it does not redefine stages; it marks the marketing pieces. If `venture_stages` changes, re-derive this map against it rather than letting it drift.
 
@@ -10,7 +10,7 @@
 
 ---
 
-## The 6 phases, 26 stages
+## The 6 phases, 27 stages
 
 ### Phase 1 — "The Truth" (stages 1–5): is this real?
 | # | Stage | Gate | Marketing piece |
@@ -45,7 +45,7 @@
 | 16 | Financial Projections | ⬆️ promotion | — |
 | 17 | Blueprint Review | ⬆️ promotion | — (readiness aggregate before build) |
 
-### Phase 5 — "The Build" (stages 18–23): make it, prep the launch
+### Phase 5 — "The Build" (stages 18–24): make it, prep the launch
 | # | Stage | Gate | Marketing piece |
 |---|-------|------|-----------------|
 | 18 | Marketing Copy Studio | ⬆️ promotion 👤 | 📣 **all persona-targeted marketing copy — Chairman sign-off required** |
@@ -53,14 +53,15 @@
 | 20 | Code Quality Gate | — | — (automated security/lint/test) |
 | 21 | Distribution Setup | — | 📣 **marketing distribution channels + per-channel ad copy + targeting** |
 | 22 | Visual Assets | — | 📣 device screenshots + per-platform social graphics |
-| 23 | Launch Readiness | 🔴 KILL | — |
+| 23 | Dedicated Venture UAT | — | — (automated acceptance check) |
+| 24 | Launch Readiness | 🔴 KILL | — |
 
-### Phase 6 — "The Launch" (stages 24–26): go live and grow
+### Phase 6 — "The Launch" (stages 25–27): go live and grow
 | # | Stage | Gate | Marketing piece |
 |---|-------|------|-----------------|
-| 24 | Go Live & Announce | ⬆️ promotion | 📣 **launch execution — activates distribution channels, announces** |
-| 25 | Post-Launch Review | ⬆️ promotion | 📣 actual performance vs projections, user feedback, learnings |
-| 26 | Growth Playbook | — | 📣 growth experiments, scaling priorities, 90-day plan |
+| 25 | Go Live & Announce | ⬆️ promotion | 📣 **launch execution — activates distribution channels, announces** |
+| 26 | Post-Launch Review | ⬆️ promotion | 📣 actual performance vs projections, user feedback, learnings |
+| 27 | Growth Playbook | — | 📣 growth experiments, scaling priorities, 90-day plan |
 
 ---
 
@@ -71,8 +72,8 @@
 3. **Decide how to reach + convert** — stage 12 (GTM: channels, funnel, customer journey) — the strategic core
 4. **Create the materials** — stage 18 (copy, Chairman-gated) → stage 22 (visual/social assets)
 5. **Wire up the channels** — stage 21 (distribution setup + ad copy + targeting)
-6. **Launch** — stage 24 (go-live, activate channels, announce)
-7. **Measure + scale** — stage 25 (performance review) → stage 26 (growth playbook)
+6. **Launch** — stage 25 (go-live, activate channels, announce)
+7. **Measure + scale** — stage 26 (performance review) → stage 27 (growth playbook)
 
 ## Two things to know
 
@@ -91,7 +92,7 @@ Only two marketing stages hard-gate on the Chairman:
 Everything else is machine-generated from upstream artifacts. So the Chairman's marketing control points are: **approve the brand/name, and approve the copy.**
 
 ## Demand-test channel policy (ratified, 2026-07-12)
-The stage-12 / stage-21 outreach and distribution for a demand test must follow the **Chairman-ratified AUP-safe design** (Solomon's, commit `65e8b41e`): **manual 1:1 personalized outreach** for the cold "would a stranger pay?" signal, and the shared email rail (Resend) reserved for **opt-in sequences only** (people who raised their hand). **Cold mass-channel tactics** — forum blasting (e.g. BlackHatWorld/WebmasterWorld), unsolicited subreddit posting, unsolicited bulk email — are **out of policy**: they read as spam, risk the shared email account (which carries every venture's transactional mail), and produce a dirtier demand signal. Genuine long-term community participation is a legitimate *launch/growth* channel (stages 24/26), not a drive-by demand-test tactic. If a Stage-0 synthesis auto-generates a cold-channel demand-test plan, it must be overridden to this ratified design before the venture proceeds.
+The stage-12 / stage-21 outreach and distribution for a demand test must follow the **Chairman-ratified AUP-safe design** (Solomon's, commit `65e8b41e`): **manual 1:1 personalized outreach** for the cold "would a stranger pay?" signal, and the shared email rail (Resend) reserved for **opt-in sequences only** (people who raised their hand). **Cold mass-channel tactics** — forum blasting (e.g. BlackHatWorld/WebmasterWorld), unsolicited subreddit posting, unsolicited bulk email — are **out of policy**: they read as spam, risk the shared email account (which carries every venture's transactional mail), and produce a dirtier demand signal. Genuine long-term community participation is a legitimate *launch/growth* channel (stages 25/27), not a drive-by demand-test tactic. If a Stage-0 synthesis auto-generates a cold-channel demand-test plan, it must be overridden to this ratified design before the venture proceeds.
 
 ---
 
