@@ -50,7 +50,7 @@ function makeMockSupabase() {
 }
 
 const rawFinding = (over = {}) => ({
-  category: 'usability', severity: 'medium', title: 'Confusing signup flow', detail: 'Step order unclear',
+  category: 'usability', severity: 'medium', title: 'Confusing signup flow', detail: 'Step order not obvious to a first-time user',
   ...over,
 });
 
