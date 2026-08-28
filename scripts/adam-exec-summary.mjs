@@ -55,6 +55,11 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 // shared VERBATIM with the morning-brief SMS (same module, same query) so the two surfaces can
 // never disagree about which row is "the current score" in one morning.
 import { composeDriveLine } from '../lib/fleet/exec-email-drive-line.mjs';
+// SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (FR-3): shared VERBATIM with the manual 21:30 ET presleep
+// duty CLI (scripts/account-usage-paste-projection.mjs) so both surfaces render the same verdict.
+import { composeCapacityAdvisoryLine } from '../lib/fleet/exec-email-capacity-line.mjs';
+import { createRequire as createRequireCapacity } from 'module';
+const { getAccountIdentity } = createRequireCapacity(import.meta.url)('../lib/fleet/account-identity.cjs');
 
 enforceCliSendGuard({
   scriptName: 'scripts/adam-exec-summary.mjs',
@@ -243,6 +248,24 @@ let driveLine = null;
 try { driveLine = (await composeDriveLine({ supabase: db }))?.line ?? null; }
 catch (e) { console.warn('[adam-email] drive-score breakdown skipped (fail-soft): ' + (e?.message || e)); }
 
+// SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (FR-3): conditional capacity-exhaustion advisory line(s) --
+// additive only, silent by default. Renders NOTHING when no active exhaustion-before-reset risk
+// exists for the currently active account (composeCapacityAdvisoryLine returns null in that case),
+// so a run with no risk produces byte-identical output to before this SD. Deliberately NOT a
+// permanent headline number (standing 2026-06-14 chairman directive on this email's format) --
+// checks all 3 meters and renders one line per meter genuinely at risk (0-3 lines).
+let capacityLines = [];
+try {
+  const activeAccountUuid8 = getAccountIdentity()?.accountUuid8;
+  if (activeAccountUuid8) {
+    const results = await Promise.all(
+      ['session', 'week_all_models', 'week_fable'].map((meter) =>
+        composeCapacityAdvisoryLine(activeAccountUuid8, meter, { supabase: db })),
+    );
+    capacityLines = results.filter(Boolean).map((r) => r.line);
+  }
+} catch (e) { console.warn('[adam-email] capacity advisory skipped (fail-soft): ' + (e?.message || e)); }
+
 // SD-LEO-INFRA-EXEC-EMAIL-STRATEGY-ALIGNED-001 (FR-3): the infra-build-completion forecast line is
 // STRIPPED from the exec-summary email surface. Its compute (a read of build_completion_forecast_log)
 // is removed with the line — the forecast table keeps being WRITTEN by its own cron for other
@@ -406,6 +429,8 @@ const text = [
   ...(watchdogLine ? ['   ' + watchdogLine] : []),
   // SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the drive-score goal, framed per leg against 6/6.
   ...(driveLine ? ['   Drive: ' + driveLine] : []),
+  // SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (FR-3): 0-3 lines, silent when no active risk.
+  ...capacityLines.map((l) => '   ' + l),
   ...(opsActualsLines.length ? ['', 'Venture actuals:', ...opsActualsLines.map((l) => '   ' + l)] : []),
   ...(recentText ? ['', recentText] : []),
   ...(decisionsLine ? [decisionsLine] : []),
@@ -438,6 +463,8 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
   // SD-FDBK-INFRA-ENCODE-DRIVE-SIX-GOAL-001: the drive-score goal, framed per leg against 6/6.
   (driveLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">Drive: ${esc(driveLine)}</div>` : '') +
+  // SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (FR-3): 0-3 lines, silent when no active risk.
+  capacityLines.map((l) => `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(l)}</div>`).join('') +
   (opsActualsLines.length
     ? `<p style="font-size:13px;font-weight:600;margin:8px 0 0">Venture actuals:</p>` +
       opsActualsLines.map((l) => `<div style="font-size:12px;color:#444;margin:2px 0 0">${esc(l)}</div>`).join('')
