@@ -93,8 +93,8 @@ describe('SD-LEO-INFRA-S19-DECOMPOSITION-COVERAGE-001 — real planner + bridge 
     expect(layers).toEqual(['api']);
   });
 
-  it('a feature item with an unrecognized architectureLayer and no UI signal fails loud, naming the item', async () => {
-    mockComplete.mockResolvedValueOnce(JSON.stringify({
+  it('a feature item with an unrecognized architectureLayer and no UI signal fails loud, naming the item (after exhausting the SD-LEO-INFRA-S19-SPRINT-ITEM-001 bounded re-ask)', async () => {
+    const persistentlyBadResponse = JSON.stringify({
       sprintGoal: 'Ship something ambiguous',
       sprintItems: [
         {
@@ -106,7 +106,13 @@ describe('SD-LEO-INFRA-S19-DECOMPOSITION-COVERAGE-001 — real planner + bridge 
         },
         ...MANDATORY_ITEMS,
       ],
-    }));
+    });
+    // SD-LEO-INFRA-S19-SPRINT-ITEM-001: the planner now re-asks (bounded, max 2 re-asks = 3 total
+    // calls) before honest-refusing, so a persistently-bad LLM must be mocked across all 3 attempts.
+    mockComplete
+      .mockResolvedValueOnce(persistentlyBadResponse)
+      .mockResolvedValueOnce(persistentlyBadResponse)
+      .mockResolvedValueOnce(persistentlyBadResponse);
 
     await expect(analyzeStage19(callArgs)).rejects.toThrow(/Reconcile Ledger Batch Job/);
   });
