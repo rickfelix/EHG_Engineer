@@ -66,7 +66,14 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // live-2026-08-16 INCREASE recommendations that clears this test; see
   // scripts/quality/tuning-003-disposition.mjs for the full snapshot and the collateral
   // measurement that refused the other five (bugfix, feature, infrastructure x2, orchestrator).
-  security: { default: 70 },
+  // retrospective raised 70 -> 75 by QF-20260817-837 (evidence: n=14, avg_score=87.3,
+  // pass_rate=92.9% -- INCREASE recommendation, re-read live at claim, clears the >=10
+  // assessment bar). default (70) is unchanged, so security x prd (n=7/5, both
+  // INSUFFICIENT DATA) and security x user_story (already-current at 70/MONITOR, and a
+  // separate stale-historical-group row at 65/INCREASE that already resolved when the
+  // shared default was raised to 70 by QF-20260807-698) are both untouched.
+  // BEFORE VALUE FOR ROLLBACK: delete the retrospective key, leaving `{ default: 70 }`.
+  security: { default: 70, retrospective: 75 },
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
   // BEFORE VALUE FOR ROLLBACK: no key at all — refactor fell through to DEFAULT_THRESHOLD (60).

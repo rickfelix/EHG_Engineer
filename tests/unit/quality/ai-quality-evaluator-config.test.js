@@ -23,6 +23,16 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.security.default).toBe(70);
   });
 
+  it('APPLIED (QF-20260817-837): security gained a per-content_type retrospective override; default (and therefore prd/user_story) unchanged', () => {
+    // security x retrospective: n=14, avg=87.3, pass=92.9% -> 70->75
+    expect(SD_TYPE_PASS_THRESHOLDS.security.retrospective).toBe(75);
+    // security x prd (both INSUFFICIENT_DATA rows, n=7/n=5) and security x user_story
+    // (already-current at 70) are untouched: default stays 70.
+    expect(SD_TYPE_PASS_THRESHOLDS.security.default).toBe(70);
+    expect(SD_TYPE_PASS_THRESHOLDS.security.prd).toBeUndefined();
+    expect(SD_TYPE_PASS_THRESHOLDS.security.user_story).toBeUndefined();
+  });
+
   it('REFUSED (at QF-20260807-698 time): orchestrator INCREASE recommendation was NOT applied', () => {
     // orchestrator has no dedicated key -- ORCHESTRATOR_THRESHOLD governs it separately, and its
     // retrospective cell's 50 -> 55 recommendation was refused because orchestrator x user_story
