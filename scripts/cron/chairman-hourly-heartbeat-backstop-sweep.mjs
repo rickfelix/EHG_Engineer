@@ -105,9 +105,18 @@ export const STALENESS_GRACE_MS = 5 * 60 * 1000;
 // coverage in roughly the last hour", not "in this fixed calendar hour") — timezone-agnostic
 // by construction (a pure duration subtracted from `now`), never empty purely because of where
 // the clock happens to sit relative to an artificial boundary. SLA_WINDOW_MS is the actual SLA
-// (an hourly heartbeat); STALENESS_GRACE_MS is added as the same buffer already used for the
-// in-flight grace check, so the two concepts stay consistent with one one another.
-export const SLA_WINDOW_MS = 60 * 60 * 1000;
+// (the routine heartbeat cadence); STALENESS_GRACE_MS is added as the same buffer already used
+// for the in-flight grace check, so the two concepts stay consistent with one one another.
+//
+// QF-20260828-188 (leg 1): chairman verbal 2026-08-28 ~06:4x ET (ratification 9eebe200, section
+// 601 c3, contract hash 59a88aa736a3181b) moved the ROUTINE heartbeat SMS from hourly to every
+// 3 hours; the live path and quiet-tick were retuned same-morning but this backstop's own SLA
+// window was missed, so it kept firing on the retired 1h cadence — a live send at 20:34:39Z
+// self-described as "hourly heartbeat check-in" while the contract had already been 3-hourly
+// for ~10 hours (Solomon pre-send verdict 62b23a90/f422647f). Re-tuned to match the ratified
+// contract; LOOKBACK_MS below (and therefore the coverage read + dedupe timestamp it feeds)
+// follows automatically.
+export const SLA_WINDOW_MS = 3 * 60 * 60 * 1000;
 export const LOOKBACK_MS = SLA_WINDOW_MS + STALENESS_GRACE_MS;
 
 export function parseArgs(argv) {
@@ -203,7 +212,10 @@ async function fetchLatestRowForKind(supabase, kind, sinceIso) {
  * not tell which hours were actually covered.
  */
 export function buildBackstopBody({ liveVerdict, backstopVerdict, hourKey }) {
-  return `[backstop ${hourKey}] Still here — hourly heartbeat check-in (no live heartbeat reached this hour; live=${liveVerdict}, prior-backstop=${backstopVerdict}).`;
+  // QF-20260828-188 (leg 1): was "hourly heartbeat check-in" — self-described a cadence the
+  // ratified contract (9eebe200) retired same-day. "routine" names the SMS class, not a cadence,
+  // so this body never drifts out of sync with the SLA window again.
+  return `[backstop ${hourKey}] Still here — routine heartbeat check-in (no live heartbeat reached within the SLA window; live=${liveVerdict}, prior-backstop=${backstopVerdict}).`;
 }
 
 export { etHourWindowUtc };

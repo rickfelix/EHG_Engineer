@@ -294,28 +294,30 @@ describe('TS-J — F6 fix: the backstop\'s own OWED row, even very old, is never
 
   it('regression: during a SUSTAINED outage, the sweep re-fills roughly once per lookback window, never once per 15-minute tick', async () => {
     // Simulates a sustained outage: nothing ever dispatches the enqueued row (status stays
-    // 'owed' forever), and the sweep fires every 15 minutes for 105 minutes (8 ticks: t=0, 15,
-    // 30, 45, 60, 75, 90, 105). Before the F6 fix this produced 8 duplicate obligations (one
-    // per tick, since the 5-minute STALENESS_GRACE_MS expired well before the next tick).
-    // After the fix: the row is treated as coverage for as long as it remains inside the
-    // trailing LOOKBACK_MS (65min) window -- so a SECOND enqueue only happens once that window
-    // genuinely ages past the first attempt (t=75, the first tick past 65min), which is the
-    // CORRECT behavior (covering the next ~hour of the outage), not a duplicate-suppression bug.
+    // 'owed' forever), and the sweep fires every 15 minutes for just past one LOOKBACK_MS.
+    // Before the F6 fix this produced one duplicate obligation per tick (since the 5-minute
+    // STALENESS_GRACE_MS expired well before the next tick). After the fix: the row is treated
+    // as coverage for as long as it remains inside the trailing LOOKBACK_MS window -- so a
+    // SECOND enqueue only happens once that window genuinely ages past the first attempt, which
+    // is the CORRECT behavior (covering the next full SLA window of the outage), not a
+    // duplicate-suppression bug. Tick count is derived from LOOKBACK_MS (QF-20260828-188 leg 1
+    // retuned it 65min->185min) rather than hardcoded, so this stays correct across SLA retunes.
+    const TICK_MS = 15 * 60 * 1000;
+    const ticksToExceedLookback = Math.floor(LOOKBACK_MS / TICK_MS) + 1;
     let lastRowCreatedAt = null;
     const enqueue = vi.fn(async (_supabase, args) => {
       lastRowCreatedAt = args.__nowForTest; // the sweep's own `now` at enqueue time
       return { enqueued: true, obligationId: 'ob-outage' };
     });
-    for (let tick = 0; tick < 8; tick++) {
-      const now = new Date(MID_DAY.getTime() + tick * 15 * 60 * 1000);
+    for (let tick = 0; tick <= ticksToExceedLookback; tick++) {
+      const now = new Date(MID_DAY.getTime() + tick * TICK_MS);
       const rows = lastRowCreatedAt ? [{ kind: BACKSTOP_KIND, status: 'owed', created_at: lastRowCreatedAt.toISOString() }] : [];
       const enqueueWithNow = vi.fn((supabaseArg, args) => enqueue(supabaseArg, { ...args, __nowForTest: now }));
       await main(['node', 's', '--once'], baseDeps({ enqueue: enqueueWithNow, now, supabase: makeFilterAwareSupabase(rows) }));
     }
-    // Exactly 2: the initial fill (t=0) and one re-fill once the lookback window aged past it
-    // (t=75, the first tick where elapsed time since t=0 exceeds LOOKBACK_MS=65min) -- NOT 8
-    // (one per 15-minute tick, the pre-fix defect) and NOT 1 (which would mean an outage
-    // lasting longer than the lookback window goes permanently uncovered).
+    // Exactly 2: the initial fill (t=0) and one re-fill once the lookback window aged past it --
+    // NOT one-per-tick (the pre-fix defect) and NOT 1 (which would mean an outage lasting longer
+    // than the lookback window goes permanently uncovered).
     expect(enqueue).toHaveBeenCalledTimes(2);
   });
 });

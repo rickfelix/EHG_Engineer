@@ -9,7 +9,16 @@
  * TS-10 (regression: pre-existing sms-bridge suites pass unmodified) is not duplicated here —
  * it is satisfied by running tests/unit/chairman/sms-bridge.test.js alongside this file.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+
+// QF-20260828-188 (leg 3): mocked so the no_match->Adam mechanical fallback can be asserted
+// without standing up the real session_coordination/claude_sessions machinery those modules
+// query — this suite's fake Supabase only models the tables PARK_OUTCOMES already needed.
+const insertCoordinationRow = vi.fn(async () => ({ data: { id: 'row-mock' }, error: null }));
+const getActiveAdamId = vi.fn(async () => 'adam-session-mock');
+vi.mock('../../../lib/coordinator/dispatch.cjs', () => ({ insertCoordinationRow: (...a) => insertCoordinationRow(...a) }));
+vi.mock('../../../lib/coordinator/adam-identity.cjs', () => ({ getActiveAdamId: (...a) => getActiveAdamId(...a) }));
+
 import {
   drainSmsRelayStaging,
   handleInboundSmsReply,
@@ -147,6 +156,50 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-1');
     expect(row.parked_at).toBeTruthy();
     expect(row.drained_at).toBeTruthy();
+  });
+
+  it('QF-20260828-188 leg 3: chairman no_match is ALSO mechanically routed to Adam (adam_action_required) and stamped resolved_at in the same tick', async () => {
+    insertCoordinationRow.mockClear();
+    getActiveAdamId.mockClear();
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-nomatch-adam', provider_message_id: 'SM-nomatch-adam', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'does this follow the update guidelines?', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results.find((r) => r.id === 'stg-nomatch-adam').outcome).toBe('no_match');
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-nomatch-adam');
+    expect(row.parked_at).toBeTruthy();
+    expect(row.resolved_at).toBeTruthy();
+
+    expect(insertCoordinationRow).toHaveBeenCalledTimes(1);
+    const [, args, opts] = insertCoordinationRow.mock.calls[0];
+    expect(args.target_session).toBe('adam-session-mock');
+    expect(args.payload.kind).toBe('adam_action_required');
+    expect(args.payload.body).toContain('update guidelines');
+    expect(opts.targetRoleHint).toBe('adam');
+  });
+
+  it('QF-20260828-188 leg 3: rate_limited/expired/ambiguous stay park-only — no Adam routing, no resolved_at', async () => {
+    insertCoordinationRow.mockClear();
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const now = new Date().toISOString();
+    const priorLog = Array.from({ length: 5 }, (_, i) => ({
+      id: `log-rl2-${i}`, from_phone: CHAIR, outcome: 'no_match', created_at: now,
+    }));
+    const sb = makeFakeSupabase({
+      sms_inbound_log: priorLog,
+      sms_relay_staging: [
+        { id: 'stg-ratelimit-noadam', provider_message_id: 'SM-ratelimit-noadam', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'still there?', signature_valid: true, received_at: now, drained_at: null },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results.find((r) => r.id === 'stg-ratelimit-noadam').outcome).toBe('rate_limited');
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-ratelimit-noadam');
+    expect(row.parked_at).toBeTruthy();
+    expect(row.resolved_at).toBeFalsy();
+    expect(insertCoordinationRow).not.toHaveBeenCalled();
   });
 
   it('TS-2: chairman rate_limited parks', async () => {
@@ -304,10 +357,18 @@ describe('checkAndApplyAutoSuspend — invalid_signature counter unaffected by F
 });
 
 describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the same state', () => {
-  it('a chairman no_match row drained now, surfaces on the very next tick — the two halves are wired, not just independently correct', async () => {
+  it('a chairman rate_limited row drained now, surfaces on the very next tick — the two halves are wired, not just independently correct', async () => {
+    // QF-20260828-188 leg 3: was no_match, but no_match is now mechanically resolved in the same
+    // tick (routed to Adam, resolved_at stamped) — it no longer belongs in the "still needs a
+    // human to notice" surface this test proves. rate_limited stays park-only-unresolved, so it
+    // is the outcome that still exercises this chained wiring.
     process.env.CHAIRMAN_PHONE = CHAIR;
     const OTHER = '+15127770000';
+    const priorLog = Array.from({ length: 5 }, (_, i) => ({
+      id: `log-chain-rl-${i}`, from_phone: CHAIR, outcome: 'no_match', created_at: new Date(Date.now() - 3000).toISOString(),
+    }));
     const sb = makeFakeSupabase({
+      sms_inbound_log: priorLog,
       sms_relay_staging: [
         { id: 'stg-chain-chair', provider_message_id: 'SM-chain-chair', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'chained: any word yet?', signature_valid: true, received_at: new Date(Date.now() - 2000).toISOString(), drained_at: null },
         { id: 'stg-chain-other', provider_message_id: 'SM-chain-other', from_phone: OTHER, to_phone: '+15559999999', body_raw: 'chained: unrelated spam', signature_valid: true, received_at: new Date(Date.now() - 1000).toISOString(), drained_at: null },
@@ -315,7 +376,7 @@ describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the 
     });
 
     const drainResult = await drainSmsRelayStaging(sb);
-    expect(drainResult.results.find((r) => r.id === 'stg-chain-chair').outcome).toBe('no_match');
+    expect(drainResult.results.find((r) => r.id === 'stg-chain-chair').outcome).toBe('rate_limited');
     expect(drainResult.results.find((r) => r.id === 'stg-chain-other').outcome).toBe('no_match');
 
     // AC: the non-chairman row still terminal-drains without parking, AND it was logged toward

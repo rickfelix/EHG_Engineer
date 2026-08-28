@@ -45,13 +45,38 @@
  * forbids that under lib/drive-loop.
  */
 
-import { sendDriveSms, factsFromReport } from '../drive-report-sms.mjs';
+import { sendDriveSms, factsFromReport, formatMissingBody } from '../drive-report-sms.mjs';
 // QF-20260807-118: canonical cross-platform entry guard. The hand-rolled
 // `file://${process.argv[1]}`.replace(...) form this replaces NEVER fired on Windows — and the
 // widened class-guard lint found this file only after that blind spot was closed.
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { etParts, windowKey } from './drive-report-sweep.mjs';
 import { LAST_RUN_FIELD } from '../../lib/drive-loop/report-posture.js';
+import { insertCoordinationRow } from '../../lib/coordinator/dispatch.cjs';
+import { getActiveAdamId } from '../../lib/coordinator/adam-identity.cjs';
+
+/**
+ * The real adam_action_required routing for o.notifyAdam (QF-20260828-188 leg 2), bound to a
+ * client the same way the CLI binds `enqueue: (args) => enqueueChairmanSms(supabase, args)`
+ * below — one client per run, not a second one created per call. Fail-soft is deliberately NOT
+ * applied here: a routing failure must surface as a thrown error (same "someone HEARS about
+ * this" contract the chairman-enqueue path already has), not vanish silently the way the
+ * original off-doctrine chairman send made this whole defect invisible for a day.
+ */
+export function notifyAdamViaCoordinator(supabase) {
+  return async function notifyAdam({ body, runId }) {
+    let target = null;
+    try { target = await getActiveAdamId(supabase); } catch { target = null; }
+    if (!target) target = 'broadcast-adam';
+    return insertCoordinationRow(supabase, {
+      sender_session: process.env.CLAUDE_SESSION_ID || 'drive-report-sms-sweep',
+      target_session: target,
+      message_type: 'INFO',
+      subject: `Drive report gauge: ${body}`,
+      payload: { kind: 'adam_action_required', body, run_id: runId },
+    }, { targetRoleHint: 'adam' });
+  };
+}
 
 export const SMS_KIND = 'drive_report';
 export const DELIVER_AT_ET_HOUR = 6;
@@ -162,8 +187,13 @@ export { factsFromReport };
  * @param {() => Promise<object|null>} o.findLatestReport
  * @param {(args:object) => Promise<object>} o.enqueue enqueueChairmanSms, bound to a client
  * @param {string[]} o.recipients E.164
+ * @param {(o:{body:string, missing:object, runId:string}) => Promise<object>} [o.notifyAdam]
+ *   QF-20260828-188 (leg 2): routes the MISSING/STALE/UNUSABLE alarm — a raw internal-gauge
+ *   complaint, not a chairman-facing fact — to Adam's inbox lane instead. Defaults to the real
+ *   adam_action_required lane (insertCoordinationRow + getActiveAdamId, the same choke
+ *   scripts/adam-adherence-staleness-check.mjs already uses); injectable for tests.
  */
-export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findObligation = null, register = null, stamp = null, recipients = [], log = () => {} } = {}) {
+export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findObligation = null, register = null, stamp = null, recipients = [], notifyAdam = null, log = () => {} } = {}) {
   if (typeof findLatestReport !== 'function' || typeof enqueue !== 'function') {
     throw new Error('runDriveSmsSweep(): findLatestReport and enqueue must be injected — a sweep whose send is hidden cannot be tested for whether it sent twice');
   }
@@ -199,12 +229,32 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findO
     missing = { kind: age === null ? 'NONE' : 'STALE', ageHours: age };
   }
 
+  // QF-20260828-188 (leg 2): a MISSING/STALE/UNUSABLE reading is an internal-gauge complaint —
+  // Adam-triage, never chairman-facing SMS (Solomon pre-send verdict 62b23a90/f422647f: a
+  // 59h-stale reading reached the chairman phone raw, wrong audience, on 2026-08-28). Route it
+  // to Adam and skip the chairman-SMS bridge entirely for this tick; the liveness stamp below
+  // still runs either way, so this leg's own staleness alarm (FR-7) stays armed.
+  if (missing) {
+    if (typeof notifyAdam !== 'function') {
+      throw new Error('runDriveSmsSweep(): notifyAdam must be injected for a MISSING/STALE/UNUSABLE tick — a sweep whose Adam-routing is hidden cannot be tested for whether it reached the chairman instead');
+    }
+    const body = formatMissingBody(missing);
+    await notifyAdam({ body, missing, runId });
+    if (register) {
+      const reg = await register({ activationTrigger: SMS_ACTIVATION_TRIGGER, expectedIntervalSeconds: SMS_EXPECTED_INTERVAL_SECONDS });
+      if (reg && reg.ok === false) log(`registry: registration failed (${reg.error}) — continuing; the alarm matters more than its bookkeeping`);
+    }
+    if (stamp) await stamp({ field: LAST_RUN_FIELD, at: new Date(nowMs).toISOString() });
+    log(`routed MISSING/STALE signal for ${runId} to Adam (not the chairman)`);
+    return { sent: true, run_id: runId, recipients: 0, enqueued: [], signal: 'missing_or_stale', notified_adam: true, body };
+  }
+
+  // Only the healthy `facts` path reaches here — `missing` always returns early above.
   const notBefore = notBeforeFor(nowMs);
   const enqueued = [];
 
   const result = await sendDriveSms({
-    facts: facts ?? undefined,
-    missing: missing ?? null,
+    facts,
     recipients,
     runId,
     // The bridge is the sender. It also owns idempotence via dedupe_key UNIQUE, so a repeated
@@ -254,8 +304,8 @@ export async function runDriveSmsSweep({ nowMs, findLatestReport, enqueue, findO
   }
   if (stamp) await stamp({ field: LAST_RUN_FIELD, at: new Date(nowMs).toISOString() });
 
-  log(missing ? `enqueued MISSING/STALE signal for ${runId}` : `enqueued drive score for ${runId}`);
-  return { ...result, run_id: runId, signal: missing ? 'missing_or_stale' : 'score', not_before: notBefore, enqueued };
+  log(`enqueued drive score for ${runId}`);
+  return { ...result, run_id: runId, signal: 'score', not_before: notBefore, enqueued };
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
@@ -297,6 +347,7 @@ if (isMainModule(import.meta.url)) {
       return data || null;
     },
     enqueue: (args) => enqueueChairmanSms(supabase, args),
+    notifyAdam: notifyAdamViaCoordinator(supabase),
     // Reads back the row holding our dedupe key, so a benign dedupe is distinguishable from a
     // foreign obligation squatting on it (F3).
     findObligation: async (dedupeKey) => {
