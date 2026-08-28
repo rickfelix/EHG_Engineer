@@ -1,8 +1,8 @@
-<!-- file_content_hash: c0b1f623b6832234 -->
+<!-- file_content_hash: 850ce3ad78d26a14 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-08-24 4:38:44 AM
+**Generated**: 2026-08-28 4:39:31 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -1935,7 +1935,7 @@ gate at /leo complete can verify code-vs-DB content drift.
 {
   "db_content_assertions": [
     {
-      "table": "stage_config",                  // must be in REGISTRY_TABLES
+      "table": "venture_stages",                // must be in REGISTRY_TABLES
       "row_filter": { "stage_number": 20 },     // selects exactly one row
       "expected_columns": {
         "stage_name": "Code Quality Gate",      // literal comparison
@@ -1949,7 +1949,7 @@ gate at /leo complete can verify code-vs-DB content drift.
 ## Allowlist (REGISTRY_TABLES)
 
 The list of tables eligible for assertions lives in
-`lib/db-content-registry-allowlist.js` — currently `['stage_config',
+`lib/db-content-registry-allowlist.js` — currently `['venture_stages',
 'chairman_dashboard_config']`. Adding a table requires explicit chairman-approved
 PR and compounds gate runtime / false-positive surface area.
 
@@ -1957,14 +1957,14 @@ PR and compounds gate runtime / false-positive surface area.
 
 ### Literal match (preferred)
 ```jsonc
-{ "table": "stage_config", "row_filter": { "stage_number": 18 },
-  "expected_columns": { "stage_name": "MVP Development" } }
+{ "table": "venture_stages", "row_filter": { "stage_number": 18 },
+  "expected_columns": { "stage_name": "Marketing Copy Studio" } }
 ```
 
 ### Anchored regex (only when literal won't fit)
 ```jsonc
-{ "table": "stage_config", "row_filter": { "stage_number": 21 },
-  "expected_columns": { "description": { "regex": "^Pre-Launch" } } }
+{ "table": "venture_stages", "row_filter": { "stage_number": 21 },
+  "expected_columns": { "description": { "regex": "^Configures marketing distribution" } } }
 ```
 
 ## Anti-ReDoS guard
@@ -1980,7 +1980,6 @@ scope-completion and before /learn. On mismatch it fails closed with a remediati
 message naming `table`, `row_filter`, `expected`, and `actual`. Each run writes one
 row to `sd_verification_results` (verification_type='DB_CONTENT_PARITY', column
 `result` not `status`). Skip path (no assertions) returns pass:true with no DB reads.
-
 
 ## Atomic INSERT Pattern for Writer/Consumer Asymmetry Fixes
 
@@ -2181,6 +2180,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-08-24*
+*Generated from database: 2026-08-28*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

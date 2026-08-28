@@ -20,7 +20,7 @@ class" where a labeled-simulation artifact could satisfy a go-live gate as if it
 merge; the chairman applies it via the existing chairman-apply flow).
 
 Distinct from `ventures.pipeline_mode` (lifecycle-stage axis: building/operations/growth/...) — `launch_mode`
-is an artifact-authenticity axis. Set by the chairman at S23/go-live via the existing decision-queue /
+is an artifact-authenticity axis. Set by the chairman at S25/go-live via the existing decision-queue /
 StageSettingsSheet mechanism (ehg repo) — no new UI was added by this policy.
 
 ## Read helpers — `lib/eva/launch-mode.js`

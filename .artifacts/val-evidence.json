@@ -1,119 +1,147 @@
 {
-  "verdict": "CONDITIONAL_PASS",
-  "confidence": 88,
-  "summary": "SD is NOT duplicate work and its premise is corroborated, but the 42-function enumeration is measurably INCOMPLETE against live state and two of its three mechanisms are specified in a form that prior in-repo evidence proves is a no-op. Recommend LEAD approve with three binding conditions.",
-  "duplicate_check": {
-    "is_duplicate": false,
-    "rationale": "No open SD/QF found doing per-function SECURITY DEFINER EXECUTE triage. The nearest prior art (20260603_03) is COMPLETE and APPLIED, but solved a different slice: it revoked anon+authenticated+PUBLIC wholesale with a dynamic RLS-derived allowlist, and had no anon-vs-authenticated distinction and no recurrence prevention. This SD's Bucket B (revoke anon, KEEP authenticated) and its ALTER DEFAULT PRIVILEGES recurrence fix are genuinely new.",
-    "prior_art_reviewed": [
-      "database/migrations/20260603_03_revoke_secdef_execute_from_anon_authenticated.sql",
-      "database/migrations/20260603_02_revoke_matview_api_exposure.sql",
-      "database/migrations/20260716_revoke_anon_authenticated_write_grants_sensitive_tables.sql",
-      "database/chairman-gated/20260812_venture_ingest_key_binding.sql",
-      "database/chairman-gated/20260815_venture_user_feedback_ownership_rpc.sql",
-      "scripts/audit-rpc-execute-grants.mjs",
-      "scripts/audit/prose-gate-without-flag.mjs"
-    ]
-  },
-  "premise_assessment": {
-    "verdict": "SOUND BUT UNDER-INCLUSIVE AND DRIFTING",
-    "premise_corroborated_by": [
-      "28 of the 42 bucket functions have their latest CREATE/REPLACE in a migration dated AFTER 20260603_03 applied - this is the re-exposure mechanism the SD describes, measured from migration files",
-      "Live PostgREST probe (2026-08-15) confirms fn_is_chairman, is_leo_admin, fn_is_service_role, lhe_pending_migration_applied are anon-EXECUTABLE today"
-    ],
-    "premise_incomplete_because": [
-      "get_daily_briefing, get_okr_metrics, get_portfolio_summary are SECURITY DEFINER, predate the 2026-06-03 revoke, and are anon-EXECUTABLE live TODAY - yet appear in NONE of the three buckets. The 42-name enumeration is therefore not the complete exposed set.",
-      "9 SECURITY DEFINER functions were created in migrations dated after the 2026-07-28 scan and are absent from all buckets: log_sd_mutation_audit, fn_anon_ingress_prior_hour_count, fn_venture_ingest_prior_hour_count, _verify_venture_ingest_secret, fn_provision_venture_ingest_key, fn_submit_venture_feedback, fn_submit_venture_error, fn_submit_venture_user_feedback (+1 regex artifact)",
-      "Bucket A member fn_stage_artifact_precondition was itself redefined 2026-08-12 (20260812_fix_build_deviation_record_case_mismatch.sql), AFTER the scan, so its ACL state has reset since triage"
-    ],
-    "conclusion": "The 42 names are a FLOOR, not a ceiling, and were already drifting on the day they were written. The per-function verdicts remain valuable as CLASSIFICATION INPUT (which functions must keep authenticated, which must be excluded), but must not be the enumeration of what to revoke."
-  },
-  "blocking_conditions": [
+  "verdict": "PASS",
+  "confidence_score": 95,
+  "summary": "LEAD-phase VALIDATION for SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001. No blocking duplicate. All 6 numbered RUNTIME scope items grep/DB-verified as real and current at worktree HEAD 04e17a9f4dc. target_application EHG_Engineer confirmed correct.",
+  "findings": [
     {
-      "id": "COND-1",
-      "severity": "HIGH",
-      "title": "Bucket B as written ('REVOKE anon ONLY') is a no-op for any function carrying a PUBLIC grant",
-      "evidence": "20260603_03 lines 80-84 document this exact false-green, live-verified: '95 of these functions carried =X/postgres = a PUBLIC EXECUTE grant, so name-only revoke was a no-op for them'. anon inherits the PUBLIC pseudo-role.",
-      "required_change": "Bucket B must be REVOKE EXECUTE FROM PUBLIC, anon; followed by GRANT EXECUTE TO authenticated. Revoking anon alone leaves the function anon-callable via PUBLIC. Same applies to Bucket A (must revoke PUBLIC too, not just anon+authenticated)."
+      "type": "duplicate_check",
+      "severity": "info",
+      "title": "No blocking duplicate among 44 open SDs",
+      "detail": {
+        "open_sds_scanned": 44,
+        "blocking_duplicate": false,
+        "overlaps": [
+          {
+            "sd_key": "SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001",
+            "status": "pending_approval",
+            "phase": "LEAD_FINAL",
+            "relation": "PARENT / PARTIAL-OVERLAP",
+            "detail": "Its success_criteria #2 ('Stage-key SSOT migration: hardcoded stage-number references for 23-26 converted to stage_key/SSOT reads or explicitly allowlisted') covers the same code surface as RENUMBER-DRIFT runtime items 1,3,5. That criterion is measurably UNMET (literals still present). RENUMBER-DRIFT is the spun-out remainder. RECOMMENDATION: LEAD should record the scope split in both SDs before UAT-001 gets final approval, or UAT-001 closes asserting a criterion its own artifacts falsify.",
+            "action": "NON-BLOCKING - annotate, do not merge SDs"
+          },
+          {
+            "sd_key": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+            "status": "completed",
+            "completed": "2026-08-28T14:56Z",
+            "relation": "PREDECESSOR",
+            "detail": "Delivered the DATA/config census + migration v2 unblock (DB layer). Code layer explicitly out of its scope. No conflict."
+          },
+          {
+            "sd_key": "SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001",
+            "status": "completed",
+            "completed": "2026-05-19",
+            "relation": "metadata.dedup_match_sd_key false positive",
+            "detail": "Different subject (stage_config.gate_type vs lifecycle_stage_config.work_type canonicalization). Not a duplicate."
+          }
+        ]
+      }
     },
     {
-      "id": "COND-2",
-      "severity": "HIGH",
-      "title": "ALTER DEFAULT PRIVILEGES scoped only 'FROM PUBLIC' does not close the recurrence path on THIS instance",
-      "evidence": "20260815_venture_user_feedback_ownership_rpc.sql TR-2 comment, confirmed live: 'this instance's ALTER DEFAULT PRIVILEGES grants EXECUTE directly to anon AND authenticated on every freshly created function ... so REVOKE FROM PUBLIC alone would not remove the direct authenticated grant'. 20260812_venture_ingest_key_binding.sql confirms the same via pg_default_acl.",
-      "required_change": "The ADP statement must revoke from PUBLIC, anon AND authenticated. The SD description currently specifies only 'REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC', which the SD's own stated root cause ('Postgres grants EXECUTE to PUBLIC') under-describes - there are TWO grant sources on this instance, not one. PLAN must also measure pg_default_acl to identify the OWNING role of the existing Supabase ADP entry before assuming the new one can be scoped to it."
+      "type": "scope_verification",
+      "severity": "info",
+      "title": "6/6 RUNTIME scope items verified real+current at HEAD 04e17a9f4dc",
+      "detail": {
+        "method": "grep at worktree HEAD 04e17a9f4dc + live Supabase reads",
+        "all_six_confirmed": true,
+        "items": [
+          {
+            "item": 1,
+            "claim": "MAX_STAGE=26 at gate-constants.js:32 AND stage-execution-worker.js:103",
+            "status": "CONFIRMED",
+            "evidence": "gate-constants.js:32 'export const MAX_STAGE = 26;'; stage-execution-worker.js:103 'const MAX_STAGE = 26;' (two independent literals as claimed). Consumers: worker :526 :620 :1904 :1937. venture_stages max stage_number = 27 -> stage 27 unreachable, confirmed."
+          },
+          {
+            "item": 2,
+            "claim": "chairman_dashboard_config.hard_gate_stages = [3,5,10,13,17,18,19,23,24,25]",
+            "status": "CONFIRMED",
+            "evidence": "Live readback (id e4fd28ab): exactly [3,5,10,13,17,18,19,23,24,25]. Derived venture_stages gate set (gate_type != none) = [3,5,10,13,16,17,18,19,24,25,26]. Diff: stale 23 present (stage 23 = dedicated_venture_uat, gate_type=none), 16 and 26 missing. SD's stated target array matches the derived set exactly. Live consumers confirmed: lib/eva/stage-work-sync.js:32-35, stage-execution-worker.js:1436 and :4955."
+          },
+          {
+            "item": 3,
+            "claim": "asset-view-gate.js:43 REQUIRED_LIFECYCLE_STAGE=24",
+            "status": "CONFIRMED",
+            "evidence": "lib/creative/asset-view-gate.js:43 'const REQUIRED_LIFECYCLE_STAGE = 24;' (also read at :93). venture_stages: 24=launch_readiness_gate(kill), 25=go_live(promotion) -> fence fires one stage early as described."
+          },
+          {
+            "item": 4,
+            "claim": "lifecycle_phases phase 6 = [23,24,25,26], stage 27 phase-less",
+            "status": "CONFIRMED",
+            "evidence": "Live read: phase 6 'LAUNCH & GROW' stages [23,24,25,26]. Phases 1-6 cover 1..26; stage 27 (growth_playbook) belongs to no phase."
+          },
+          {
+            "item": 5,
+            "claim": "secondary literals",
+            "status": "CONFIRMED (all sub-items)",
+            "evidence": "gate-constants.js:43 OPERATING_MODES.LAUNCH {start:23,end:26}; contracts/stage-contracts.js:704 'for (let stage = 1; stage <= 26; stage++)'; launch-workflow/index.js:209 'for (let n = 1; n <= 26; n += 1)' plus a stale comment '26 is the current ceiling per the redesign'; launch-workflow/index.js:222 BLOCKING_GATES=[3,10,21,24]; constraint-drift-detector.js:287 'if (currentStage === 26 && category === vision)' with a stale 'Stage 25' comment; scripts/governance-stages.js:20 HARD_GATE_STAGES=new Set([3,5,10,22,23,24]) and :22-48 a 25-stage PIPELINE_STAGES name table whose names ('Expansion','Maturity','Exit Strategy') do not match live venture_stages at all."
+          },
+          {
+            "item": 6,
+            "claim": "no stale-citation / already-fixed items found",
+            "status": "CONFIRMED",
+            "evidence": "Zero of the cited line numbers were already fixed; every cited line number resolved to the claimed content at HEAD. No stale citations detected."
+          }
+        ]
+      }
     },
     {
-      "id": "COND-3",
+      "type": "target_application",
+      "severity": "info",
+      "title": "target_application=EHG_Engineer confirmed",
+      "detail": {
+        "recommendation": "EHG_Engineer",
+        "explicit_now": true,
+        "confidence": "HIGH",
+        "rationale": "All runtime scope files exist in EHG_Engineer and only there: lib/eva/gate-constants.js, lib/eva/stage-execution-worker.js, lib/eva/stage-work-sync.js, lib/creative/asset-view-gate.js, scripts/governance-stages.js. Zero occurrences of MAX_STAGE or REQUIRED_LIFECYCLE_STAGE in the EHG frontend src/. Docs scope is entirely EHG_Engineer docs/. DB scope (chairman_dashboard_config, lifecycle_phases, leo_protocol_sections) is shared but written from Engineer.",
+        "action": "Set metadata.target_application_explicit=true; keep target_application=EHG_Engineer."
+      }
+    },
+    {
+      "type": "out_of_scope",
       "severity": "MEDIUM",
-      "title": "Migration must re-derive the triage dynamically at apply time, not hardcode 42 names",
-      "evidence": "3 exposed SECDEF functions absent from the buckets + 9 new SECDEF functions since the scan + 1 bucket member redefined post-scan.",
-      "required_change": "Follow 20260603_03's proven pattern: derive the set from pg_proc at apply time, use the SD's 42 verdicts as a static ALLOWLIST/classification overlay (Bucket C = never revoke; Bucket B = re-grant authenticated), and fail the transaction on any SECDEF function that matches neither the dynamic sweep nor a declared verdict. That converts an unknown-new function from a silent gap into a loud failure."
+      "title": "EHG frontend carries a stale fail-open fallback gate list",
+      "detail": {
+        "severity": "MEDIUM",
+        "finding": "EHG frontend carries a stale fail-open fallback gate list",
+        "detail": "ehg/src/hooks/useChairmanConfig.ts:32 baseConfig.hard_gate_stages = [3,5,7,8,9,10,11,13,16,17,18,19,21,22,23,24,25]. The normal path derives from venture_stages (per SD-LEO-INFRA-RECONCILE-EHG-REPO-001) and treats chairman_dashboard_config.hard_gate_stages as deprecated, but on a venture_stages read failure it falls back to this hardcoded list, which contains the now-invalid 23 and omits 26. Not in this SD's scope (different repo); recommend a separate QF or an explicit LEAD decision to fold it in.",
+        "recommended_action": "Log via scripts/log-harness-bug.js or file a follow-up QF against the EHG repo."
+      }
+    },
+    {
+      "type": "out_of_scope",
+      "severity": "LOW",
+      "title": "Consumer/writer split on hard_gate_stages",
+      "detail": {
+        "severity": "LOW",
+        "finding": "Consumer/writer split on hard_gate_stages",
+        "detail": "EHG frontend already deprecated chairman_dashboard_config.hard_gate_stages in favour of live venture_stages derivation, while EHG_Engineer's worker + stage-work-sync still read the column as authoritative. Fixing the column value (scope item 2) is correct and sufficient for this SD, but the 'derive live' option in the scope is the stronger fix and aligns the two repos on one SSOT."
+      }
+    },
+    {
+      "type": "gate_1",
+      "severity": "info",
+      "title": "GATE_1 LEAD pre-approval checklist",
+      "detail": {
+        "duplicate_check": "PASS - no blocking duplicate; one parent-scope annotation required",
+        "infrastructure_check": "PASS - venture_stages is the existing SSOT; fix should derive from it, not add new infrastructure",
+        "backlog_validation": "NOT_EVALUATED - success_criteria (6) present and measurable; sd_backlog_map not queried in this pass",
+        "claims_verification": "PASS - 6/6 runtime claims verified against live code and live DB"
+      }
     }
   ],
-  "advisory_findings": [
-    {
-      "title": "SD Bucket A reverses a prior deliberate defense-in-depth decision without acknowledging it",
-      "detail": "fn_user_has_company_access is in Bucket A (revoke anon+authenticated). 20260603_03 EXPLICITLY allowlisted it as 'a sibling helper not currently in a policy' kept for defense-in-depth. Narrowing it may be correct, but LEAD/PLAN should record that this overturns a prior documented judgment rather than filling a gap."
-    },
-    {
-      "title": "Cited predecessor migration does not exist as a file in this repo",
-      "detail": "The SD cites 'migration 20260728_revoke_public_execute_role_flag_rpcs.sql' as applied 2026-07-28. No file of that name exists anywhere under database/. Provenance of the 'closed 4 of 46' claim is therefore unverifiable from the repo."
-    },
-    {
-      "title": "No applied-migration ledger exists",
-      "detail": "public.schema_migrations exists but is EMPTY (0 rows); _migrations_log/migrations/migration_history are absent. There is no machine-readable record of which migrations are applied, so 'applied' claims must be established by probing live grant state, never by file presence."
-    },
-    {
-      "title": "Bucket C leaves at least one live, confirmed-reachable anon surface open by design",
-      "detail": "lhe_pending_migration_applied is SECDEF, anon-EXECUTABLE live (HTTP 200), UNPLACED across all five scan dimensions, and NOT in 20260603_03's RLS-derived allowlist - meaning it was revoked in June and has been re-exposed since. The SD's Solomon rule excludes it as a presumed external integration. That exclusion should be an explicit, chairman-visible accepted risk, since unlike fn_relay_insert_sms_candidate (Twilio) there is no named consumer for it."
-    }
+  "recommendations": [
+    "APPROVE for LEAD-TO-PLAN.",
+    "Stamp metadata.target_application_explicit=true (target_application=EHG_Engineer, HIGH confidence).",
+    "Annotate the scope split vs SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001 success_criteria #2 BEFORE that SD gets LEAD final approval - its criterion (hardcoded 23-26 references converted to stage_key/SSOT) is measurably unmet and this SD is the remainder.",
+    "Prefer the derive-live option for hard_gate_stages over writing a corrected literal array - the EHG frontend already deprecated the column in favour of venture_stages derivation.",
+    "File a separate QF against the EHG repo for src/hooks/useChairmanConfig.ts:32 stale fail-open fallback gate list."
   ],
-  "tooling_recommendation": {
-    "audit_rpc_execute_grants_mjs": "EXTEND, DO NOT DUPLICATE",
-    "exists": true,
-    "path": "scripts/audit-rpc-execute-grants.mjs",
-    "what_it_checks_today": "Asserts has_function_privilege('authenticated', oid, 'EXECUTE') for app-called RPC names only (greps ehg/src for .rpc('name'), else a 24-name committed fallback). One-sided: it can only detect a LOST authenticated grant. It has no anon dimension and no notion of buckets.",
-    "why_extend": "It is the codified guard for the exact failure mode this SD can cause (over-revoking an app-called RPC and 403-ing the chairman console). Bucket B keeps authenticated on 27 functions - this script is precisely the regression test for that half. Duplicating it would create two divergent grant guards.",
-    "required_extensions": [
-      "Add the anon dimension: assert NOT has_function_privilege('anon', oid, 'EXECUTE') for every Bucket A + Bucket B function (the SD's success criteria require verifying anon-revocation; the script does not check anon at all today)",
-      "Add PUBLIC: assert NOT has_function_privilege('public', oid, 'EXECUTE') - per COND-1 this is the privilege that actually makes an anon revoke stick",
-      "Feed the bucket lists in as declared expected posture so Bucket C is asserted UNCHANGED rather than merely unchecked",
-      "Add a fail-loud arm for SECDEF functions matching no declared bucket (implements COND-3)"
-    ]
-  },
-  "live_measurement": {
-    "pooler_status": "BROKEN - blocks the canonical verification path",
-    "detail": "createDatabaseClient('engineer') fails 28P01 'password authentication failed for user postgres'. NEW DATA FOR THE HARNESS-BUG OWNER: SUPABASE_POOLER_URL is a genuinely INDEPENDENT credential (verified it does NOT embed SUPABASE_DB_PASSWORD, raw or URL-encoded) and it fails 28P01 IDENTICALLY. Two independently-stored credentials both rejected points to a server-side password rotation or a locked postgres role, NOT local .env drift.",
-    "working_alternative_found": true,
-    "alternative": "PostgREST RPC probe with the shipped anon key: POST {SUPABASE_URL}/rest/v1/rpc/{fn}. A 42501 / 'permission denied' response proves anon EXECUTE is revoked; a 200 proves it is granted. The instrument is TWO-SIDED and therefore trustworthy - the same sweep returned 4 x 42501 and 5 x 200 across 25 candidates, so it discriminates rather than returning a constant.",
-    "alternative_limitation": "Only decisive for ZERO-ARG functions. Functions requiring arguments return PGRST202 (schema-cache/overload mismatch) before permission is evaluated, which is genuinely ambiguous - 16 of 25 landed here. Supplying correct argument names would resolve most of these. This is a partial but real verification path that works TODAY without the pooler.",
-    "probe_scripts": [
-      ".artifacts/val-anon-rpc-probe.mjs",
-      ".artifacts/val-secdef-sample.mjs",
-      ".artifacts/val-staleness.mjs"
-    ],
-    "key_live_results_2026_08_15": {
-      "anon_executable_confirmed_200": [
-        "fn_is_chairman",
-        "is_leo_admin",
-        "fn_is_service_role",
-        "lhe_pending_migration_applied",
-        "get_daily_briefing",
-        "get_okr_metrics",
-        "get_portfolio_summary"
-      ],
-      "anon_revoked_confirmed_42501_count": 4,
-      "proves": "20260603_03 WAS genuinely applied (the 4 x 42501 could have no other cause), AND its effect has partially eroded since."
-    }
-  },
-  "gate_1_lead_pre_approval": {
-    "duplicate_check": "PASS - not duplicate",
-    "infrastructure_check": "PASS WITH CONDITIONS - substantial reusable prior art exists (20260603_03 dynamic pattern, audit-rpc-execute-grants.mjs) and MUST be reused per COND-3 and the tooling recommendation",
-    "claims_verification": "PARTIAL - premise corroborated by measurement but enumeration proven incomplete; predecessor migration file unverifiable",
-    "backlog_check": "FAIL - 0 rows in sd_backlog_map (checked by both uuid id and sd_key). Also 0 PRD rows and 0 user_stories. SD is status=draft so this is expected at this point, but it BLOCKS transition to status=active per the require_backlog_for_active constraint. LEAD-TO-PLAN must create backlog items covering: Bucket A revoke, Bucket B revoke+regrant, Bucket C exclusion assertions, ALTER DEFAULT PRIVILEGES, CI standing check, and the audit-rpc-execute-grants.mjs extension."
-  },
-  "recommendation": "APPROVE for LEAD-TO-PLAN with COND-1, COND-2, COND-3 attached as PLAN-phase requirements. Do NOT let the 42-name list enter the migration as a literal REVOKE enumeration. The chairman authorization ask should present the buckets as CLASSIFICATION VERDICTS over a dynamically-derived sweep, and should disclose that the exposed set is larger than 42.",
-  "backlog_items_found": 0,
-  "metadata_note": "backlog_items_found=0"
+  "warnings": [
+    "chairman_dashboard_config.hard_gate_stages is authoritative in EHG_Engineer but deprecated in the EHG frontend - two repos disagree on the SSOT for the same value.",
+    "lifecycle_phases leaves stage 27 (growth_playbook) phase-less; scope item 4 requires a phase-membership decision, not just a literal edit."
+  ],
+  "metadata": {
+    "gate": "GATE_1_LEAD_PRE_APPROVAL",
+    "verified_at_head": "04e17a9f4dc",
+    "open_sds_scanned": 44
+  }
 }

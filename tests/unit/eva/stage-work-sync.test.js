@@ -10,8 +10,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Non-gate governance by default (overridden per-test).
-const gov = { isBlocking: vi.fn(() => false), isReview: vi.fn(() => false), isHighConsequence: vi.fn(() => false) };
+// Non-gate governance by default (overridden per-test). hardGateStages added by
+// SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-2 -- isInHardGateStages now derives from this
+// instead of its own separate chairman_dashboard_config query.
+const gov = { isBlocking: vi.fn(() => false), isReview: vi.fn(() => false), isHighConsequence: vi.fn(() => false), hardGateStages: new Set() };
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
   getStageGovernance: vi.fn(async () => gov),
 }));
@@ -42,6 +44,7 @@ describe('syncStageWork (SD-LEO-INFRA-RUN-STAGE-FAITHFUL-PERSIST-001)', () => {
   beforeEach(() => {
     gov.isBlocking.mockReturnValue(false);
     gov.isReview.mockReturnValue(false);
+    gov.hardGateStages = new Set();
   });
 
   it('upserts venture_stage_work with merged advisory_data + completed status for a non-gate stage', async () => {
@@ -89,9 +92,14 @@ describe('syncStageWork (SD-LEO-INFRA-RUN-STAGE-FAITHFUL-PERSIST-001)', () => {
     expect(approvedPayload.stage_status).toBe('completed');
   });
 
-  it('isInHardGateStages reflects chairman_dashboard_config membership (fail-soft)', async () => {
-    expect(await isInHardGateStages(makeSupabase({ hardGateStages: [3, 5] }), 5)).toBe(true);
-    expect(await isInHardGateStages(makeSupabase({ hardGateStages: [3, 5] }), 7)).toBe(false);
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-2: isInHardGateStages was repointed from its own
+  // separate chairman_dashboard_config query to stage-governance.js's hardGateStages (derived
+  // live from venture_stages.gate_type) -- this test now asserts against the SAME mocked gov
+  // object every other test in this file already uses, instead of a config-row fixture.
+  it('isInHardGateStages reflects stage-governance hardGateStages membership (fail-soft)', async () => {
+    gov.hardGateStages = new Set([3, 5]);
+    expect(await isInHardGateStages(makeSupabase(), 5)).toBe(true);
+    expect(await isInHardGateStages(makeSupabase(), 7)).toBe(false);
   });
 
   it('no-ops on a null result', async () => {

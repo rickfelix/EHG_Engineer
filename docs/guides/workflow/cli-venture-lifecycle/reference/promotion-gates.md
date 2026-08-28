@@ -53,9 +53,16 @@ Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-STAGE-GATES-EX
 
 # Promotion Gates Reference
 
+> **STALE CONTENT NOTICE (SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001):** the venture lifecycle was
+> renumbered 26→27 stages on 2026-08-28, and this doc's per-stage names below already predate
+> a separate, larger stage-taxonomy redesign (they don't match the live `venture_stages`
+> names, and the live promotion-gate count is 7, not 3). This SD corrected the top-level
+> stage-count only; a full rewrite against the live SSOT is a separate, larger
+> content-authoring effort out of this SD's scope.
+
 Promotion Gates are approval checkpoints where the Chairman must verify that deliverables meet quality standards before the venture advances into a more resource-intensive phase. Unlike Kill Gates (which can terminate a venture), Promotion Gates either **approve** or **hold** -- a venture stays at its current stage until the gate passes.
 
-There are 3 Promotion Gates in the 26-stage lifecycle.
+There are 3 Promotion Gates in the 27-stage lifecycle (this doc predates the live 7-gate scheme; see notice above).
 
 ## Architecture Overview
 

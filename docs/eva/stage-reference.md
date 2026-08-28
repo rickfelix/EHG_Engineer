@@ -12,12 +12,21 @@ tags: [documentation, eva]
 > Authoritative reference for the EVA venture lifecycle pipeline.
 > Source of truth: `lib/eva/stage-templates/` and `lib/eva/stage-execution-worker.js`
 
+> **STALE CONTENT NOTICE (SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001):** the venture lifecycle
+> was renumbered 26→27 stages on 2026-08-28, and the per-stage names/phase ranges/gate table
+> below predate a separate, larger stage-taxonomy redesign that changed several stage names
+> and boundaries independent of the numbering (live `venture_stages` names no longer match
+> many entries here, e.g. Stage 1 is now "Draft Idea" not "Idea Capture"). This SD corrected
+> the top-level stage-count literals only; a full per-stage content regeneration against the
+> live `venture_stages` SSOT is a separate, larger content-authoring effort out of this SD's
+> scope.
+
 ## Overview
 
-The EVA pipeline processes ventures through the sequential stages defined by the venture_stages SSOT (26 at the time of writing), organized into 6 lifecycle phases. Each stage has a defined purpose, input/output schema, analysis step, and optional chairman gate.
+The EVA pipeline processes ventures through the sequential stages defined by the venture_stages SSOT (27 at the time of writing), organized into 6 lifecycle phases. Each stage has a defined purpose, input/output schema, analysis step, and optional chairman gate.
 
 **Key concepts:**
-- **Stages** are numbered sequentially (1-26 at the time of writing; see the venture_stages SSOT) and execute in order
+- **Stages** are numbered sequentially (1-27 at the time of writing; see the venture_stages SSOT) and execute in order
 - **Phases** group stages by business function (6 phases)
 - **Operating Modes** control the stage-execution-worker behavior (5 modes)
 - **Chairman Gates** are decision points requiring human approval (blocking or advisory)
@@ -841,7 +850,7 @@ const result = await analyzeStage01({
 
 | Metric | Value |
 |--------|-------|
-| Total Stages | 26 |
+| Total Stages | 27 |
 | Lifecycle Phases | 6 |
 | Operating Modes | 5 |
 | Blocking Chairman Gates | 4 (stages 3, 10, 22, 24) |
@@ -849,8 +858,8 @@ const result = await analyzeStage01({
 | Deterministic Kill Gates | 3 (stages 3, 5, 13) |
 | Reality Gates | 1 (stage 9) |
 | Promotion Gates | 2 (stages 16, 22) |
-| Analysis Step Functions | 26 |
-| Stage Template Files | 26 |
+| Analysis Step Functions | 27 |
+| Stage Template Files | 27 |
 
 ---
 

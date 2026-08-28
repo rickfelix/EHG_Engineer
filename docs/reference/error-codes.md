@@ -120,8 +120,8 @@ Gate types used by the venture state machine (`lib/agents/modules/venture-state-
 
 | Gate Type | Stages | Behavior on Failure |
 |-----------|--------|---------------------|
-| `KILL` | 3, 5, 13, 23 | Routes to Chairman for termination decision. `REQUIRES_CHAIRMAN_DECISION`. |
-| `PROMOTION` | 16, 17, 22 | Requires Chairman approval to advance. `REQUIRES_CHAIRMAN_APPROVAL`. |
+| `KILL` | 3, 5, 13, 24 | Routes to Chairman for termination decision. `REQUIRES_CHAIRMAN_DECISION`. |
+| `PROMOTION` | 10, 16, 17, 18, 19, 25, 26 | Requires Chairman approval to advance. `REQUIRES_CHAIRMAN_APPROVAL`. |
 | `ADVISORY` | 5, 13 | Non-blocking value multiplier assessment. Advisory only. |
 
 Gate status values: `PASS`, `FAIL`, `REQUIRES_CHAIRMAN_DECISION`, `REQUIRES_CHAIRMAN_APPROVAL`, `ERROR`.

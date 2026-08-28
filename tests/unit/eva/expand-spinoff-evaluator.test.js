@@ -109,7 +109,7 @@ describe('evaluate', () => {
     expect(result.dimensions.market).toBeDefined();
     expect(result.dimensions.operational).toBeDefined();
     expect(result.evidence.ventureId).toBe('v1');
-    expect(result.evidence.stage).toBe(25);
+    expect(result.evidence.stage).toBe(27);
     expect(result.dataCompleteness).toBeGreaterThan(0);
   });
 
@@ -169,7 +169,7 @@ describe('evaluate', () => {
     expect(result.dataCompleteness).toBeLessThan(50);
   });
 
-  it('throws STAGE_MISMATCH when no Stage 25 record exists', async () => {
+  it('throws STAGE_MISMATCH when no Stage 27 record exists', async () => {
     const venture = createVenture();
 
     const db = createMockDb({
@@ -177,7 +177,7 @@ describe('evaluate', () => {
       'eva_venture_stages:single': { data: null, error: { code: 'PGRST116', message: 'no rows' } },
     });
 
-    await expect(evaluate(db, 'v1')).rejects.toThrow('no Stage 25');
+    await expect(evaluate(db, 'v1')).rejects.toThrow('no Stage 27');
     try {
       await evaluate(db, 'v1');
     } catch (err) {

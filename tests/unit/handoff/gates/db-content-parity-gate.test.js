@@ -60,13 +60,13 @@ describe('validateDbContentParity', () => {
       id: 'uuid-1',
       metadata: {
         db_content_assertions: [
-          { table: 'stage_config', row_filter: { stage_number: 18 }, expected_columns: { stage_name: 'MVP Development' } },
+          { table: 'venture_stages', row_filter: { stage_number: 18 }, expected_columns: { stage_name: 'MVP Development' } },
         ],
       },
     };
     const client = makeMockClient({
       sd,
-      rowsByTable: { stage_config: [{ stage_number: 18, stage_name: 'MVP Development' }] },
+      rowsByTable: { venture_stages: [{ stage_number: 18, stage_name: 'MVP Development' }] },
     });
     const r = await validateDbContentParity('SD-X', client);
     expect(r.pass).toBe(true);
@@ -82,13 +82,13 @@ describe('validateDbContentParity', () => {
       id: 'uuid-2',
       metadata: {
         db_content_assertions: [
-          { table: 'stage_config', row_filter: { stage_number: 20 }, expected_columns: { stage_name: 'Code Quality Gate' } },
+          { table: 'venture_stages', row_filter: { stage_number: 20 }, expected_columns: { stage_name: 'Code Quality Gate' } },
         ],
       },
     };
     const client = makeMockClient({
       sd,
-      rowsByTable: { stage_config: [{ stage_number: 20, stage_name: 'User Testing' }] },
+      rowsByTable: { venture_stages: [{ stage_number: 20, stage_name: 'User Testing' }] },
     });
     const r = await validateDbContentParity('SD-X', client);
     expect(r.pass).toBe(false);
@@ -102,13 +102,13 @@ describe('validateDbContentParity', () => {
       id: 'uuid-3',
       metadata: {
         db_content_assertions: [
-          { table: 'stage_config', row_filter: { stage_number: 21 }, expected_columns: { description: { regex: '^Pre-Launch' } } },
+          { table: 'venture_stages', row_filter: { stage_number: 21 }, expected_columns: { description: { regex: '^Pre-Launch' } } },
         ],
       },
     };
     const client = makeMockClient({
       sd,
-      rowsByTable: { stage_config: [{ stage_number: 21, description: 'Deployment to production' }] },
+      rowsByTable: { venture_stages: [{ stage_number: 21, description: 'Deployment to production' }] },
     });
     const r = await validateDbContentParity('SD-X', client);
     expect(r.pass).toBe(false);
@@ -121,11 +121,11 @@ describe('validateDbContentParity', () => {
       id: 'uuid-4',
       metadata: {
         db_content_assertions: [
-          { table: 'stage_config', row_filter: { stage_number: 99 }, expected_columns: { stage_name: 'Doesnt Exist' } },
+          { table: 'venture_stages', row_filter: { stage_number: 99 }, expected_columns: { stage_name: 'Doesnt Exist' } },
         ],
       },
     };
-    const client = makeMockClient({ sd, rowsByTable: { stage_config: [] } });
+    const client = makeMockClient({ sd, rowsByTable: { venture_stages: [] } });
     const r = await validateDbContentParity('SD-X', client);
     expect(r.pass).toBe(false);
     expect(r.mismatches[0].actual).toBeNull();
@@ -146,15 +146,15 @@ describe('validateDbContentParity', () => {
       id: 'uuid-6',
       metadata: {
         db_content_assertions: [
-          { table: 'stage_config', row_filter: { stage_number: 18 }, expected_columns: { stage_name: 'MVP Development' } },
-          { table: 'stage_config', row_filter: { stage_number: 20 }, expected_columns: { stage_name: 'Code Quality Gate' } },
+          { table: 'venture_stages', row_filter: { stage_number: 18 }, expected_columns: { stage_name: 'MVP Development' } },
+          { table: 'venture_stages', row_filter: { stage_number: 20 }, expected_columns: { stage_name: 'Code Quality Gate' } },
         ],
       },
     };
     const client = makeMockClient({
       sd,
       rowsByTable: {
-        stage_config: [
+        venture_stages: [
           { stage_number: 18, stage_name: 'MVP Development' },
           { stage_number: 20, stage_name: 'User Testing' },
         ],
@@ -203,7 +203,7 @@ describe('evaluateExpectation anti-ReDoS guard (TR-6)', () => {
 
 describe('REGISTRY_TABLES allowlist contract (FR-2)', () => {
   it('contains the seed tables', () => {
-    expect(REGISTRY_TABLES).toEqual(['stage_config', 'chairman_dashboard_config']);
+    expect(REGISTRY_TABLES).toEqual(['venture_stages', 'chairman_dashboard_config']);
   });
   it('is frozen', () => {
     expect(Object.isFrozen(REGISTRY_TABLES)).toBe(true);

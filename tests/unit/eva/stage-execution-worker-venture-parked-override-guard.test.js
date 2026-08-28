@@ -46,6 +46,10 @@ vi.mock('../../../lib/eva/stage-governance.js', () => ({
     isKill: (n) => govState.isKill,
     isPromotion: (n) => govState.isPromotion,
     isHighConsequence: (n) => govState.isHighConsequence,
+    // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001: _processVenture reads maxStageNumber directly
+    // (no longer a hardcoded MAX_STAGE literal) -- omitting it made `currentStage <= maxStage`
+    // compare against `undefined` (always false), silently short-circuiting the whole loop.
+    maxStageNumber: 27,
   })),
 }));
 vi.mock('../../../lib/eva/autonomy-model.js', () => ({

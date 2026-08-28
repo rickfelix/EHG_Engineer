@@ -82,7 +82,7 @@ function makeAuditClient({ sds, rowsByTable = {} }) {
         },
       };
     }
-    // registry tables (stage_config etc.)
+    // registry tables (venture_stages etc.)
     let filters = {};
     const queryObj = {
       select: () => queryObj,
@@ -109,7 +109,7 @@ const SD_WITH_DRIFT = {
   updated_at: '2026-04-21T00:00:00Z',
   metadata: {
     db_content_assertions: [
-      { table: 'stage_config', row_filter: { stage_number: 20 }, expected_columns: { stage_name: 'Code Quality Gate' } },
+      { table: 'venture_stages', row_filter: { stage_number: 20 }, expected_columns: { stage_name: 'Code Quality Gate' } },
     ],
   },
 };
@@ -118,7 +118,7 @@ const STAGE_CONFIG_LIVE = [{ stage_number: 20, stage_name: 'User Testing' }];
 
 describe('runAudit walker', () => {
   it('walks completed SDs and detects pre-existing-gap on SD-REDESIGN-S18S26', async () => {
-    const client = makeAuditClient({ sds: [SD_WITH_DRIFT, SD_NO_ASSERTIONS], rowsByTable: { stage_config: STAGE_CONFIG_LIVE } });
+    const client = makeAuditClient({ sds: [SD_WITH_DRIFT, SD_NO_ASSERTIONS], rowsByTable: { venture_stages: STAGE_CONFIG_LIVE } });
     const findings = await runAudit({ supabase: client, since: '2026-04-01', dryRun: false, auditRunId: 'audit-uuid-1' });
     expect(findings).toHaveLength(1);
     expect(findings[0].sd_key).toBe('SD-REDESIGN-S18S26-MARKETINGFIRST-POSTBUILD-ORCH-001');
@@ -126,7 +126,7 @@ describe('runAudit walker', () => {
   });
 
   it('feedback-row writer shape: includes parity_gap_detected, audit_run_id, deferred_from_sd_key', async () => {
-    const client = makeAuditClient({ sds: [SD_WITH_DRIFT], rowsByTable: { stage_config: STAGE_CONFIG_LIVE } });
+    const client = makeAuditClient({ sds: [SD_WITH_DRIFT], rowsByTable: { venture_stages: STAGE_CONFIG_LIVE } });
     await runAudit({ supabase: client, since: null, dryRun: false, auditRunId: 'audit-uuid-2' });
     const fb = client._calls.feedbackInserts[0];
     expect(fb).toBeDefined();
@@ -139,14 +139,14 @@ describe('runAudit walker', () => {
   });
 
   it('dry-run mode: no feedback inserts', async () => {
-    const client = makeAuditClient({ sds: [SD_WITH_DRIFT], rowsByTable: { stage_config: STAGE_CONFIG_LIVE } });
+    const client = makeAuditClient({ sds: [SD_WITH_DRIFT], rowsByTable: { venture_stages: STAGE_CONFIG_LIVE } });
     const findings = await runAudit({ supabase: client, since: null, dryRun: true, auditRunId: 'audit-uuid-3' });
     expect(findings).toHaveLength(1);
     expect(client._calls.feedbackInserts).toHaveLength(0);
   });
 
   it('skips SDs without metadata.db_content_assertions', async () => {
-    const client = makeAuditClient({ sds: [SD_NO_ASSERTIONS], rowsByTable: { stage_config: STAGE_CONFIG_LIVE } });
+    const client = makeAuditClient({ sds: [SD_NO_ASSERTIONS], rowsByTable: { venture_stages: STAGE_CONFIG_LIVE } });
     const findings = await runAudit({ supabase: client, since: null, dryRun: true, auditRunId: 'audit-uuid-4' });
     expect(findings).toHaveLength(0);
     expect(client._calls.registryQueries).toHaveLength(0);

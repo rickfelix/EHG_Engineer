@@ -20,6 +20,13 @@ vi.mock('../../../lib/eva/chairman-decision-watcher.js', () => ({
   createOrReusePendingDecision: vi.fn(), waitForDecision: vi.fn(),
 }));
 vi.mock('../../../lib/eva/shared-services.js', () => ({ emit: vi.fn().mockResolvedValue(undefined) }));
+// SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001: _pollForWork reads maxStageNumber from
+// getStageGovernance directly (no longer a hardcoded MAX_STAGE literal). Without this mock the
+// real module hits the generic `supabase.from()` fake below and resolves an empty stage set,
+// so maxStageNumber=0 and the poll-abort guard fires, masking this test's actual assertion.
+vi.mock('../../../lib/eva/stage-governance.js', () => ({
+  getStageGovernance: vi.fn().mockResolvedValue({ maxStageNumber: 27 }),
+}));
 
 const silentLogger = { log() {}, warn() {}, error() {} };
 

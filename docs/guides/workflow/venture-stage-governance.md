@@ -9,7 +9,7 @@ tags: [governance, auto-proceed, chairman-config, workers, gates, venture-workfl
 
 # Venture Stage Governance
 
-How ventures advance through the venture lifecycle (see the venture_stages SSOT; 26 stages at the time of writing), how gates are evaluated, and how the chairman controls auto-approval behavior.
+How ventures advance through the venture lifecycle (see the venture_stages SSOT; 27 stages at the time of writing), how gates are evaluated, and how the chairman controls auto-approval behavior.
 
 ## Architecture Overview
 
@@ -99,7 +99,7 @@ Ventures in FAILED state are automatically recovered to IDLE by the worker on ea
 | Gate Type | Stages | Behavior |
 |-----------|--------|----------|
 | **Kill Gates** | 3, 5, 13, 24 | Go/no-go venture termination checkpoints |
-| **Promotion Gates** | 10, 17, 18, 23, 25 | Phase boundary advancement approval |
+| **Promotion Gates** | 10, 16, 17, 18, 19, 25, 26 | Phase boundary advancement approval |
 | **Review-Mode** | 7, 8, 9, 11 | Pause for review before auto-advancing |
 | **Existing Gates** | 5→6, 22→23, 23→24 | Artifact-based validation (financial viability, UAT, deployment health) |
 
@@ -234,7 +234,7 @@ Ventures pause at mode transitions:
 | STRATEGY | 6-12 | Stage 5→6 boundary |
 | PLANNING | 13-17 | Stage 12→13 boundary |
 | BUILD | 18-22 | Stage 17→18 boundary |
-| LAUNCH | 23-26 | Stage 22→23 boundary |
+| LAUNCH | 23-27 | Stage 22→23 boundary |
 
 The worker detects mode changes and releases the venture as IDLE, picking it up again on the next poll cycle.
 

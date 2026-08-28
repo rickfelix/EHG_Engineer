@@ -1259,7 +1259,7 @@ pass" — every one of these five findings would have shipped invisibly past tha
 **SD**: SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A
 
 **Symptom**: This SD's scope (inherited from a 5-child parent decomposition) was to add a new
-`venture_artifacts` type (`launch_usage_signal`) to the `launch_readiness_gate` (Stage 23) kill
+`venture_artifacts` type (`launch_usage_signal`) to the `launch_readiness_gate` (Stage 24) kill
 gate's `required_artifacts` array. As originally scoped, nothing in the SD family actually WROTE
 that artifact type: this child built the ingestion RPC (`venture_usage_events` rows only), and the
 sibling explicitly named as "the AltifyAI witness" was scoped to write usage *events* too -- not

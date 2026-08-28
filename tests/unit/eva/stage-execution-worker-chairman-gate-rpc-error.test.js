@@ -37,7 +37,10 @@ vi.mock('../../../lib/eva/autonomy-model.js', () => ({ checkAutonomy: vi.fn().mo
 // Force the current stage to be treated as a pre-execution (review) gate so the pending-decision
 // shortcut is reachable — isReview()=true short-circuits the isPreExecGate check.
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
-  getStageGovernance: vi.fn().mockResolvedValue({ isReview: () => true, isBlocking: () => false, isHighConsequence: () => false }),
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001: _processVenture reads maxStageNumber directly
+  // (no longer a hardcoded MAX_STAGE literal) -- omitting it made `currentStage <= maxStage`
+  // compare against `undefined` (always false), silently short-circuiting the whole loop.
+  getStageGovernance: vi.fn().mockResolvedValue({ isReview: () => true, isBlocking: () => false, isHighConsequence: () => false, maxStageNumber: 27 }),
 }));
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';

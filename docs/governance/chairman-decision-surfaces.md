@@ -104,7 +104,7 @@ Extends the `blocking`/high-consequence machinery above (SD-LEO-FEAT-MAKE-HIGH-C
 second, orthogonal factor for the human chairman console specifically: a platform-authenticator-only
 (Touch ID/Face ID/Windows Hello — never roaming keys) WebAuthn step-up challenge required before the
 `approve_chairman_decision`/`reject_chairman_decision` write, for any decision where
-`chairman_decisions.consequence_level='high'` OR `lifecycle_stage=24` (Stage 24 go-live). This is
+`chairman_decisions.consequence_level='high'` OR `lifecycle_stage=25` (Stage 25 go-live). This is
 Child C of the chairman-ratified two-tier auth model (chairman-ratified 2026-07-16): routine/bounded
 decisions stay on the SMS tier (Child B); high-consequence decisions now additionally require a
 completed passkey ceremony.

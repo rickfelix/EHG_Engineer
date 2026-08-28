@@ -50,6 +50,12 @@ vi.mock('../../../lib/eva/shared-services.js', () => ({
 // Mock autonomy-model
 vi.mock('../../../lib/eva/autonomy-model.js', () => ({
   checkAutonomy: vi.fn().mockResolvedValue({ action: 'require_approval', level: 'L0' }),
+  // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-1: _pollForWork/_processVenture now call
+  // getStageGovernance() unconditionally (previously via a hardcoded MAX_STAGE literal, no DB
+  // call at all) -- stage-governance.js imports this named export at module load, and vitest's
+  // strict mock factory throws if a real import isn't present in the mock, even for tests that
+  // never touch autonomy directly.
+  RESERVED_CHAIRMAN_STAGES: new Set([3, 5, 10, 16, 17, 18, 19]),
 }));
 
 import { processStage } from '../../../lib/eva/eva-orchestrator.js';
@@ -149,6 +155,14 @@ describe('StageExecutionWorker', () => {
           { stage_number: 23, gate_type: 'kill',      review_mode: 'auto',   work_type: 'decision_gate' },
           { stage_number: 24, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
           { stage_number: 25, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          // SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001 FR-1: this fixture is a deliberately SPARSE
+          // subset (kill/promotion/review landmark stages only) predating the 2026-08-28 27-stage
+          // renumbering -- kept AS-IS to avoid an unrelated, high-risk rewrite of every kill/
+          // promotion stage number this file's other tests depend on. A row for stage 26 is added
+          // ONLY so getStageGovernance().maxStageNumber (now used by _pollForWork/_processVenture
+          // instead of a hardcoded MAX_STAGE=26 literal) resolves to the SAME ceiling this fixture
+          // always implied, preserving every existing test's behavior exactly.
+          { stage_number: 26, gate_type: 'none',      review_mode: 'auto',   work_type: 'artifact_only' },
         ],
         error: null,
       }),

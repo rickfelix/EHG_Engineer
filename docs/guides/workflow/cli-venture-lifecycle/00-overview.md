@@ -9,7 +9,7 @@ tags: [guide, auto-generated]
 
 ## Table of Contents
 
-> **Stage-count note (2026-06-10)**: the `venture_stages` table is the single source of truth for the venture lifecycle. Literal stage counts in this document reflect the lifecycle as originally authored (25 stages) — the live lifecycle has since changed (26 stages as of migration 20260329) and may change again. Read `venture_stages` for the current stage set. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+> **Stage-count note (2026-06-10)**: the `venture_stages` table is the single source of truth for the venture lifecycle. Literal stage counts in this document reflect the lifecycle as originally authored (25 stages) — the live lifecycle has since changed (27 stages as of migration 20260828) and may change again. Read `venture_stages` for the current stage set. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
 
 - [Purpose](#purpose)
 - [System Architecture](#system-architecture)

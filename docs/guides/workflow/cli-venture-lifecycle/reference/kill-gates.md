@@ -62,9 +62,15 @@ Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-STAGE-GATES-EX
 
 # Kill Gates Reference
 
+> **STALE CONTENT NOTICE (SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001):** the venture lifecycle was
+> renumbered 26→27 stages on 2026-08-28, and this doc's per-stage names/rollback targets below
+> already predate a separate, larger stage-taxonomy redesign (they don't match the live
+> `venture_stages` names). This SD corrected the top-level stage-count only; a full rewrite
+> against the live SSOT is a separate, larger content-authoring effort out of this SD's scope.
+
 Kill Gates are hard decision points where a venture can be **terminated** ("killed"), **sent back** for revision, or **approved** to proceed. They enforce deterministic thresholds -- not AI predictions -- per Chairman Decision D01.
 
-There are 4 Kill Gates in the 26-stage lifecycle, placed at the boundaries where continuing with a flawed venture would waste significant resources.
+There are 4 Kill Gates in the 27-stage lifecycle, placed at the boundaries where continuing with a flawed venture would waste significant resources.
 
 ## Architecture Overview
 
