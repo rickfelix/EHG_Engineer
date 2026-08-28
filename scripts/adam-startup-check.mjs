@@ -418,6 +418,14 @@ export function renderContractParity(repoRoot = REPO_ROOT) {
   const head = '═══ CONTRACT↔TOOLING PARITY ═══\n  ';
   try {
     const md = readFileSync(resolve(repoRoot, ROLE_CONTEXT_DOC), 'utf8');
+    // QF-20260828-890: zero parsed markers on a non-trivial contract is itself suspicious —
+    // it read as vacuously CLEAN for 28 days (2026-07-31 to 2026-08-28) after a condensation
+    // pass silently stripped every " DUTY (durable)" marker. A guard measuring zero subjects
+    // must say so, never report full compliance.
+    const duties = parseDurableDutyMarkers(md);
+    if (md.length > 1000 && duties.length === 0) {
+      return head + `⚠️ CONTRACT DRIFT: zero " DUTY (durable)" markers found in ${ROLE_CONTEXT_DOC} — either every durable duty was removed, or the marker convention was silently stripped (this happened 2026-07-31→2026-08-28). Verify before trusting a CLEAN parity result.`;
+    }
     const missing = missingDurableDuties(md, ADAM_LOOPS);
     if (missing.length === 0) {
       return head + '✅ all durable CLAUDE_ADAM.md duties present in ADAM_LOOPS';
