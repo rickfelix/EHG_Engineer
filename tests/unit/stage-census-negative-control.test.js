@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { assertNegativeControl, KNOWN_NEGATIVE_CONTROL_ROWS } from '../../lib/audits/stage-census/negative-control.mjs';
+import {
+  assertNegativeControl,
+  KNOWN_NEGATIVE_CONTROL_ROWS,
+  assertCheckConstraintFloor,
+  CHECK_CONSTRAINT_LITERAL_26_FLOOR,
+} from '../../lib/audits/stage-census/negative-control.mjs';
 
 // TS-1 (success path, unit-level): both known-live rows present -> passes.
 // TS-2 (failure path): either known-live row missing -> throws / non-zero-exit signal.
@@ -36,5 +41,41 @@ describe('assertNegativeControl', () => {
 
   it('throws when findings is not an array', () => {
     expect(() => assertNegativeControl(undefined)).toThrow(/NEGATIVE_CONTROL_FAILED/);
+  });
+});
+
+// SD-LEO-INFRA-STAGE-KEYED-DATA-001 FR-2: CHECK-constraint sweep negative control.
+describe('assertCheckConstraintFloor', () => {
+  const makeRow = (n) => ({ table_name: `t${n}`, constraint_name: `c${n}`, definition: `CHECK (x <= 26) /* ${n} */` });
+
+  it('passes when findings meet the floor', () => {
+    const findings = Array.from({ length: CHECK_CONSTRAINT_LITERAL_26_FLOOR }, (_, i) => makeRow(i));
+    const result = assertCheckConstraintFloor(findings);
+    expect(result.ok).toBe(true);
+    expect(result.count).toBe(CHECK_CONSTRAINT_LITERAL_26_FLOOR);
+  });
+
+  it('passes when findings exceed the floor', () => {
+    const findings = Array.from({ length: CHECK_CONSTRAINT_LITERAL_26_FLOOR + 5 }, (_, i) => makeRow(i));
+    expect(() => assertCheckConstraintFloor(findings)).not.toThrow();
+  });
+
+  it('throws when findings fall below the floor (silent zero-match regression)', () => {
+    const findings = Array.from({ length: CHECK_CONSTRAINT_LITERAL_26_FLOOR - 1 }, (_, i) => makeRow(i));
+    expect(() => assertCheckConstraintFloor(findings)).toThrow(/NEGATIVE_CONTROL_FAILED/);
+  });
+
+  it('throws when findings is empty', () => {
+    expect(() => assertCheckConstraintFloor([])).toThrow(/NEGATIVE_CONTROL_FAILED/);
+  });
+
+  it('throws when findings is not an array', () => {
+    expect(() => assertCheckConstraintFloor(null)).toThrow(/NEGATIVE_CONTROL_FAILED/);
+  });
+
+  it('respects a custom floor override', () => {
+    const findings = [makeRow(1), makeRow(2)];
+    expect(() => assertCheckConstraintFloor(findings, 2)).not.toThrow();
+    expect(() => assertCheckConstraintFloor(findings, 3)).toThrow(/NEGATIVE_CONTROL_FAILED/);
   });
 });
