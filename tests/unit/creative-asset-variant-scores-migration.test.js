@@ -159,8 +159,7 @@ describe('creative_asset_variant_scores RLS fix (chairman-gated, cross-tenant ho
     // Postgres grants EXECUTE to PUBLIC on creation AND this project has an ALTER DEFAULT
     // PRIVILEGES entry granting anon/authenticated explicitly -- independent ACL entries, so
     // revoking FROM PUBLIC alone leaves anon holding EXECUTE (this directory's README, SEC-M2).
-    expect(ddlOnly).toMatch(/REVOKE ALL ON FUNCTION public\.cavs_variant_matches_venture\(uuid, uuid\) FROM PUBLIC/);
-    expect(ddlOnly).toMatch(/REVOKE ALL ON FUNCTION public\.cavs_variant_matches_venture\(uuid, uuid\) FROM anon/);
+    expect(ddlOnly).toMatch(/REVOKE EXECUTE ON FUNCTION public\.cavs_variant_matches_venture\(uuid, uuid\) FROM PUBLIC, anon/);
     expect(ddlOnly).toMatch(/GRANT EXECUTE ON FUNCTION public\.cavs_variant_matches_venture\(uuid, uuid\) TO authenticated, service_role/);
   });
 
