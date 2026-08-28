@@ -1,0 +1,267 @@
+{
+  "executive_summary": "Connect the existing design-agent to Stage-20 review via a venture-stage adapter, adding usability/accessibility/journey_coherence findings, WARN-capped so no experience finding can FAIL AltifyAI's first traversal.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Extend FINDING_CATEGORIES with three experience categories",
+      "description": "Add 'usability', 'accessibility', 'journey_coherence' to lib/eva/quality-findings/finding-shape.js FINDING_CATEGORIES (line 44-57), mirroring the existing vision-compliance pair precedent. validateFindingShape() (line 109) must accept the new categories with no other behavior change.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: FINDING_CATEGORIES array contains 'usability', 'accessibility', 'journey_coherence'",
+        "AC-2: validateFindingShape() accepts a finding with each new category and rejects an unknown category, unchanged from today",
+        "AC-3: Unit test asserts the three new strings are present and existing categories are unmodified (no accidental renames)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "WARN-cap the three experience categories in the Stage-20 verdict formula",
+      "description": "In lib/eva/stage-templates/analysis-steps/stage-20-code-quality.js (verdict formula at line 782-785), exclude findings whose category is usability/accessibility/journey_coherence from the hasCritical/hasHigh scan that drives PASS/WARN/FAIL, while still persisting them at their true severity via persistAnalyzerFindings (line 793). A critical-severity experience finding must never flip the verdict to FAIL.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: A seeded critical-severity finding in an experience category does not change verdict from PASS/WARN to FAIL",
+        "AC-2: A seeded critical-severity finding in a NON-experience category still produces FAIL, unchanged from today (no regression to the existing formula for other categories)",
+        "AC-3: The persisted finding row (venture_quality_findings) retains its true (uncapped) severity, distinguishable from a capped verdict-contribution"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Design-agent venture-stage adapter (standalone invocation)",
+      "description": "A new adapter module invokes the existing design-agent in a standalone mode (venture_id + live deployment URL, no SD context required) using a venture-stage prompt variant built on the ehg-redesign skill's scan/rank/fix rubric skeleton, retargeted from 'existing UI code' to 'Stage-15 experience artifacts (wireframes, IA, user-journey) vs. the live deployment'. Reuses scripts/execute-subagent.js --code DESIGN patterns where possible; extends only what is needed for the no-SD invocation path.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Adapter run log shows it fetched BLUEPRINT_USER_JOURNEY and BLUEPRINT_WIREFRAME_SCREENS artifacts via artifact-persistence-service.js for the target venture_id",
+        "AC-2: Adapter run log shows it fetched/considered the live deployment URL as review input",
+        "AC-3: Adapter can run with no strategic_directives_v2 row involved (verified: no createSD/SD write side effect during a standalone run)",
+        "AC-4: Adapter model-usage self-log call (track-model-usage.js) falls back to 'STANDALONE'/'UNKNOWN' sd_id per the design-agent.partial convention for a no-SD run"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Findings + cost telemetry persisted queryably for Solomon",
+      "description": "Persist each adapter run's raw findings (by category/severity) and time/token cost telemetry in a new lightweight table (e.g. venture_experience_review_runs) queryable directly by Solomon for his chairman report — sidesteps the documented dead cost-capture gap in sub_agent_execution_results/model_usage_log (0/1904 rows, field-name drift). No RLS/auth surface beyond standard read access consistent with other quality-findings tables.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: A migration creates venture_experience_review_runs with venture_id, run_id, findings_count_by_category, severity_breakdown, duration_ms, token_usage (input/output/total), cost_usd, adapter_version, run_mode, created_at",
+        "AC-2: A completed adapter run inserts exactly one row queryable by venture_id immediately after the run",
+        "AC-3: A SQL query against the table can compute: findings by category/severity, valid-and-actionable fraction placeholder field, cost, without joining any other table"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Out-of-band advisory annex runbook (documented fallback path)",
+      "description": "Because no annex/advisory-attachment pattern exists in the codebase today, document and dry-run a runbook: a standalone script invocation of the adapter that writes findings with run_mode='out_of_band_annex' and does NOT touch the live Stage-20 gating path, for use if AltifyAI reaches Stage 20 before this capability lands (chairman's explicit timing condition: never delay the venture).",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: A documented runbook (docs/) describes the exact command to run the adapter out-of-band against a venture already at/past Stage 20",
+        "AC-2: A dry-run of the runbook against a test venture writes findings tagged run_mode='out_of_band_annex' with zero diffs to any stage-23 surface and zero writes to the live Stage-20 verdict path",
+        "AC-3: The dry-run completes without delaying or blocking any other venture-stage operation (no lock/claim taken on the venture's stage progression)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "No new persistent agent/executive role registered",
+      "rationale": "Scope item 7 explicitly forbids a new agent role; the design-agent subagent definition (.claude/agents/design-agent.partial) and its registration must remain unchanged — only a new invocation mode (standalone) and a new prompt variant are added."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Zero diffs to any Stage-23 surface",
+      "rationale": "Scope item 6/7: Stage 24 remains the sole decision authority and Stage 23 is untouched by this SD. Enforced by a repo-wide diff check in CI/test against the Stage-23 file set as part of FR-2's test coverage."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "Verdict-formula change is additive and backward-compatible",
+      "rationale": "stage-20-code-quality.js:782-785 is a shared formula also exercised by the existing stage-20-journey-walk-verdict.test.js (mirrors the formula verbatim). The category-exclusion change must preserve existing behavior for every currently-registered category so that test (and any other caller relying on the formula) is unaffected except for the three new categories."
+    }
+  ],
+  "system_architecture": {
+    "overview": "A new standalone adapter wraps the existing design-agent with a venture-stage prompt variant, reading Stage-15 experience artifacts + a live deployment URL, and writing findings through the existing Stage-20 quality-findings pipeline (extended with 3 new categories) with a WARN-cap carve-out in the verdict formula. Run telemetry lands in a new dedicated table for Solomon's reporting, independent of the two broken/unsuited cost tables identified during exploration.",
+    "components": [
+      { "name": "finding-shape.js category extension", "responsibility": "Accept the 3 new experience categories in the shared finding schema", "technology": "Node.js (ESM), lib/eva/quality-findings/finding-shape.js" },
+      { "name": "Stage-20 verdict WARN-cap", "responsibility": "Exclude experience-category findings from the FAIL-driving severity scan while persisting true severity", "technology": "Node.js, lib/eva/stage-templates/analysis-steps/stage-20-code-quality.js" },
+      { "name": "Design-agent venture-stage adapter", "responsibility": "Standalone invocation of design-agent against Stage-15 artifacts + live URL, using an ehg-redesign-derived scan/rank/fix prompt variant", "technology": "Node.js CLI script, Task-tool design-agent subagent" },
+      { "name": "venture_experience_review_runs table", "responsibility": "Queryable persistence of raw findings + cost/time telemetry per run", "technology": "Postgres (Supabase migration)" },
+      { "name": "Out-of-band annex runbook", "responsibility": "Documented + dry-run fallback path for running the adapter without touching live Stage-20 gating", "technology": "Node.js CLI script + docs/ runbook" }
+    ],
+    "data_flow": "Adapter fetches Stage-15 artifacts (artifact-persistence-service.js, keyed by venture_id + artifact_class) and the live deployment URL -> invokes design-agent (standalone mode) with the venture-stage prompt variant -> normalizes findings into the shared finding shape (3 new categories) -> writes findings via the existing persistAnalyzerFindings path (in-traversal) OR a parallel out-of-band write tagged run_mode='out_of_band_annex' -> Stage-20 verdict formula excludes experience categories from FAIL/WARN scan but PASS/WARN/FAIL for non-experience findings is unchanged -> run telemetry (findings summary + cost/time) is written to venture_experience_review_runs, queryable by Solomon.",
+    "integration_points": [
+      "lib/eva/quality-findings/finding-shape.js (FINDING_CATEGORIES)",
+      "lib/eva/stage-templates/analysis-steps/stage-20-code-quality.js (verdict formula, persistAnalyzerFindings)",
+      "lib/eva/artifact-persistence-service.js (Stage-15 artifact fetch)",
+      "design-agent subagent (.claude/agents/design-agent.partial) via a new standalone invocation path",
+      "new venture_experience_review_runs table (Solomon's reporting)"
+    ]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Three new categories are accepted by the finding-shape validator",
+      "test_type": "unit",
+      "given": "A finding object with finding_category='usability' (and separately 'accessibility', 'journey_coherence')",
+      "when": "validateFindingShape() is called",
+      "then": "The finding passes shape validation with no error, matching the existing behavior for a pre-existing category"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Critical experience finding cannot FAIL the Stage-20 verdict",
+      "test_type": "unit",
+      "given": "allFindings contains one finding with category='usability' and severity='critical', and no other critical/high findings",
+      "when": "The Stage-20 verdict formula (or its exported/testable equivalent) computes the verdict",
+      "then": "The verdict is PASS or WARN, never FAIL"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Critical non-experience finding still FAILs (no regression)",
+      "test_type": "unit",
+      "given": "allFindings contains one finding with category outside the 3 new experience categories and severity='critical'",
+      "when": "The Stage-20 verdict formula computes the verdict",
+      "then": "The verdict is FAIL, exactly as before this change"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Adapter fetches real Stage-15 artifacts and live URL for a standalone run",
+      "test_type": "integration",
+      "given": "A venture_id with existing BLUEPRINT_USER_JOURNEY and BLUEPRINT_WIREFRAME_SCREENS artifacts and a deployment URL",
+      "when": "The adapter is invoked standalone (no SD context)",
+      "then": "The adapter's run log/output references the fetched artifact IDs and the deployment URL, and no strategic_directives_v2 row is created or modified"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Run telemetry is persisted and queryable",
+      "test_type": "integration",
+      "given": "A completed adapter run against a test venture",
+      "when": "venture_experience_review_runs is queried by venture_id",
+      "then": "Exactly one row exists with non-null findings_count_by_category, duration_ms, and token_usage"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Out-of-band annex dry-run touches nothing live",
+      "test_type": "integration",
+      "given": "A test venture already past Stage 20",
+      "when": "The out-of-band annex runbook command is dry-run against it",
+      "then": "Findings are written tagged run_mode='out_of_band_annex', zero diffs appear under any stage-23 file path, and the venture's live Stage-20 verdict/status is unchanged"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "No new agent role is registered",
+      "test_type": "unit",
+      "given": "The repo's sub-agent/agent registry (.claude/agents manifest and any leo_sub_agents-equivalent registration)",
+      "when": "This SD's changes are diffed against the registry",
+      "then": "No new agent/role entry is added; design-agent's existing registration is unchanged"
+    }
+  ],
+  "acceptance_criteria": [
+    "usability/accessibility/journey_coherence are present in FINDING_CATEGORIES and accepted by validateFindingShape()",
+    "A critical-severity finding in any of the 3 new categories cannot produce a FAIL verdict on the first (or any) Stage-20 traversal, while a critical finding in an existing category still FAILs exactly as before",
+    "The design-agent adapter runs standalone against a venture_id + live deployment URL, demonstrably consuming Stage-15 journey/wireframe artifacts, with zero SD-context writes",
+    "Zero diffs to any Stage-23 surface and zero new agent/role registrations anywhere in the change set",
+    "Findings + time/token cost telemetry for each run are persisted in a queryable table Solomon can read directly",
+    "An out-of-band advisory-annex runbook is documented and dry-run-verified to attach findings without delaying or gating the venture's live traversal"
+  ],
+  "risks": [
+    {
+      "risk": "Modifying the shared Stage-20 verdict formula (stage-20-code-quality.js:782-785) regresses existing category behavior",
+      "probability": "MEDIUM",
+      "impact": "HIGH",
+      "mitigation": "Implement via category-exclusion (filter out the 3 new categories before the hasCritical/hasHigh scan) rather than rewriting the formula; add a regression test asserting existing categories are unaffected, and run the existing stage-20-journey-walk-verdict.test.js unchanged against the new code",
+      "rollback_plan": "Revert the verdict-formula diff only (finding-fabric category addition and the new adapter/table are independently revertable); the formula change is the single highest-risk, smallest-surface commit and should ship as its own PR for easy isolated rollback"
+    },
+    {
+      "risk": "No existing cost-telemetry table works, and the new venture_experience_review_runs table could duplicate a fix already planned for the documented dead cost-capture gap",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Explicitly scope venture_experience_review_runs as narrow to this SD's own runs (not a general-purpose cost-capture fix); read database/migrations/20260716_cost_governor_log.sql before building to confirm it is not already the intended fix, per the exploration's open item #3",
+      "rollback_plan": "Table is additive-only and unused by any other system; drop-safe if superseded by a broader cost-capture fix later"
+    },
+    {
+      "risk": "Standalone design-agent invocation (no SD context) diverges from the existing execute-subagent.js --code DESIGN contract, creating two invocation paths that drift out of sync",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Build the standalone path as a thin wrapper that reuses the same underlying design-agent prompt/execution logic as execute-subagent.js, parameterizing SD-context vs. venture_id-context rather than duplicating the invocation code",
+      "rollback_plan": "The standalone adapter is a new, isolated script; removing it does not affect the existing SD-scoped DESIGN invocation path"
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {
+        "phase": "Unit A: Finding-fabric extension + verdict WARN-cap",
+        "description": "Add the 3 categories to finding-shape.js, implement the category-exclusion WARN-cap in stage-20-code-quality.js's verdict formula, and cover both with unit/regression tests. Smallest, highest-risk, independently-shippable commit.",
+        "deliverables": ["FINDING_CATEGORIES extended", "Verdict formula excludes experience categories from FAIL/WARN scan", "Unit tests for FR-1/FR-2 (TS-1/TS-2/TS-3)"]
+      },
+      {
+        "phase": "Unit B: Design-agent stage-adapter + telemetry table",
+        "description": "Build the standalone venture-stage adapter (prompt variant derived from the ehg-redesign rubric skeleton), the venture_experience_review_runs migration, and wire the adapter's output through the extended finding fabric.",
+        "deliverables": ["Standalone adapter script", "venture_experience_review_runs migration", "Adapter run wired to persist findings + telemetry", "Integration tests (TS-4/TS-5/TS-7)"]
+      },
+      {
+        "phase": "Unit C: Out-of-band annex runbook",
+        "description": "Document and dry-run the fallback runbook so AltifyAI's Stage-20 timing risk is covered regardless of when this capability lands relative to the venture's traversal.",
+        "deliverables": ["docs/ runbook", "Dry-run verification against a test venture (TS-6)"]
+      }
+    ],
+    "technical_decisions": [
+      "WARN-cap implemented as category-exclusion from the verdict scan (not severity-clamping at emission) so Solomon's raw-findings query retains true severity per the exploration's recommendation",
+      "Standalone adapter reuses design-agent's existing prompt/execution machinery rather than duplicating it, to avoid a second drifting implementation",
+      "A new dedicated telemetry table is created rather than retrofitting sub_agent_execution_results or model_usage_log, both of which are documented-unsuited (no cost column / wrong required-field shape) per exploration findings"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "Solomon (chairman-report duty)", "interaction": "Queries venture_experience_review_runs directly for findings by category/severity, cost, and material-improvement verdict", "frequency": "Once per Stage-20 traversal that includes an experience review, plus any out-of-band annex run" },
+      { "name": "Stage-20 quality-findings pipeline", "interaction": "Consumes the adapter's findings as additional entries in allFindings, subject to the WARN-cap", "frequency": "Once per venture Stage-20 traversal" },
+      { "name": "Stage 24 (decision authority)", "interaction": "Reads the Stage-20 verdict (including the capped experience findings) unchanged from today; no new authority granted", "frequency": "Once per venture Stage-24 review" }
+    ],
+    "dependencies": [
+      { "name": "Stage-15 artifact generators (wireframe/IA/user-journey)", "type": "upstream", "contract": "Adapter reads via artifact-persistence-service.js keyed by venture_id + artifact_class", "failure_handling": "Missing/absent Stage-15 artifacts for a venture -> adapter records a low-confidence/INCONCLUSIVE finding rather than failing the run" },
+      { "name": "design-agent subagent", "type": "upstream", "contract": "Adapter invokes the existing design-agent prompt/execution path in a new standalone mode", "failure_handling": "A failed/errored design-agent invocation must not produce a false PASS -- surfaced as a run-level error, not silently dropped findings" },
+      { "name": "Stage-20 verdict pipeline", "type": "downstream", "contract": "Adapter findings enter allFindings through the existing persistence path, subject to the new category-exclusion in the verdict formula", "failure_handling": "If the adapter's findings can't be normalized to the shared finding shape, the run must fail loudly rather than silently omit them" }
+    ],
+    "data_contracts": [
+      { "contract_name": "Experience finding shape", "schema": "Existing finding-shape.js schema, category ∈ {usability, accessibility, journey_coherence}, all other fields unchanged", "validation": "validateFindingShape()", "versioning": "Additive-only category list; no breaking change to existing consumers" },
+      { "contract_name": "venture_experience_review_runs row", "schema": "venture_id, run_id, findings_count_by_category (jsonb), severity_breakdown (jsonb), duration_ms, token_usage (jsonb), cost_usd, adapter_version, run_mode, created_at", "validation": "NOT NULL on venture_id/run_id/run_mode; run_mode CHECK IN ('in_traversal','out_of_band_annex')", "versioning": "New table, versioned via adapter_version column for future schema evolution" }
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "No new environment variables or feature flags; the standalone adapter is a CLI script invoked on demand (in-traversal call site or out-of-band runbook), not a background service."
+    },
+    "observability_rollout": {
+      "monitoring": ["venture_experience_review_runs row count and duration_ms per run", "Stage-20 verdict distribution before/after this change (confirm no unexpected FAIL-rate shift for non-experience categories)"],
+      "alerts": ["An adapter run erroring instead of completing (surfaced via its own run-level error handling, not a silent PASS)"],
+      "rollout_strategy": "WARN-capped pilot scoped to AltifyAI's first traversal per the chairman's authorization; no feature flag needed since the change is additive (new categories + exclusion in the verdict formula) and the standalone adapter is opt-in by invocation",
+      "rollback_trigger": "Any regression in existing (non-experience-category) Stage-20 verdict behavior, or the adapter producing findings that cannot be normalized to the shared shape",
+      "rollback_procedure": "Revert the verdict-formula exclusion commit (Unit A) independently of the adapter/table (Unit B/C), since Unit A is the only change touching a shared, already-tested code path"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/eva/quality-findings/finding-shape.js",
+      "lib/eva/quality-findings/vision-detectors.js",
+      "lib/eva/stage-templates/analysis-steps/stage-20-code-quality.js",
+      "lib/eva/stage-templates/analysis-steps/index.js",
+      "tests/unit/eva/stage-templates/analysis-steps/stage-20-journey-walk-verdict.test.js",
+      ".claude/agents/design-agent.partial",
+      "lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js",
+      "lib/eva/stage-templates/analysis-steps/stage-15-ia-generator.js",
+      "lib/eva/stage-templates/analysis-steps/stage-15-user-journey.js",
+      "docs/design/user-journey-artifact-schema.md",
+      "lib/eva/artifact-types.js",
+      "database/schema/sub_agent_execution_results.sql",
+      "database/migrations/20251204_model_usage_tracking.sql"
+    ],
+    "patterns_identified": [
+      "FINDING_CATEGORIES extension is a pure array-append, precedented by the vision-compliance category pair",
+      "Stage-20's verdict formula is inline, unexported logic with no existing category-scoped severity capping mechanism",
+      "Stage-15 artifacts are unified-registry artifacts fetched via artifact-persistence-service.js keyed by artifact_class",
+      "design-agent's invocation contract today assumes an SD context; a standalone venture_id+URL mode is new work",
+      "No working cost-telemetry table exists to reuse (both candidate tables are unsuited or dead)"
+    ],
+    "key_decisions": [
+      "WARN-cap via category-exclusion from the verdict scan, not severity-clamping, to preserve true severity for Solomon's reporting",
+      "New dedicated telemetry table rather than retrofitting a broken existing table",
+      "Standalone adapter as a thin wrapper reusing design-agent's existing execution path, not a duplicate implementation"
+    ],
+    "exploration_date": "2026-08-28"
+  }
+}

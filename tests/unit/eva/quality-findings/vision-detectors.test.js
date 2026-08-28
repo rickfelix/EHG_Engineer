@@ -31,8 +31,8 @@ import {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('FR-E FR-1 — FINDING_CATEGORIES enum extension', () => {
-  test('FINDING_CATEGORIES has 12 entries (was 10 prior to FR-E)', () => {
-    expect(FINDING_CATEGORIES.length).toBe(12);
+  test('FINDING_CATEGORIES has 15 entries (12 after FR-E, +3 experience categories from SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001)', () => {
+    expect(FINDING_CATEGORIES.length).toBe(15);
   });
 
   test('FINDING_CATEGORIES includes feedback_widget_present and error_capture_wired', () => {
@@ -65,12 +65,12 @@ describe('FR-E FR-1 — FINDING_CATEGORIES enum extension', () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('FR-E FR-2 — TIER_MAP for the two new categories', () => {
-  test("feedback_widget_present routes critical → Tier 3 and medium → Tier 2", () => {
+  test('feedback_widget_present routes critical → Tier 3 and medium → Tier 2', () => {
     expect(resolveTier('feedback_widget_present', 'critical')).toBe(3);
     expect(resolveTier('feedback_widget_present', 'medium')).toBe(2);
   });
 
-  test("error_capture_wired routes critical → Tier 3 and medium → Tier 2", () => {
+  test('error_capture_wired routes critical → Tier 3 and medium → Tier 2', () => {
     expect(resolveTier('error_capture_wired', 'critical')).toBe(3);
     expect(resolveTier('error_capture_wired', 'medium')).toBe(2);
   });
