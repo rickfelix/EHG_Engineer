@@ -11,6 +11,10 @@ const MIGRATION_PATH = join(
 const migrationSql = readFileSync(MIGRATION_PATH, 'utf8');
 const STAGE_EXECUTION_WORKER_PATH = join(__dirname, '../../lib/eva/stage-execution-worker.js');
 const workerSource = readFileSync(STAGE_EXECUTION_WORKER_PATH, 'utf8');
+const V2_MIGRATION_PATH = join(__dirname, '../../database/chairman-gated/20260828_stage_keyed_data_config_widen_v2.sql');
+const v2Sql = readFileSync(V2_MIGRATION_PATH, 'utf8');
+const V2_DOWN_PATH = join(__dirname, '../../database/chairman-gated/20260828_stage_keyed_data_config_widen_v2_DOWN.sql');
+const v2DownSql = readFileSync(V2_DOWN_PATH, 'utf8');
 
 // TS-11: static check -- new UAT stage writer is registered in the writer-policy registry.
 describe('migration static check: writer registration (FR-7, TS-11)', () => {
@@ -78,5 +82,78 @@ describe('migration static check: FR-9 upper-bound fix applied to both RPCs', ()
     // Matches the functional IF-condition shape only, not descriptive prose in the file's
     // header comments (which legitimately narrate "26 -> 27" as history/rationale).
     expect(migrationSql).not.toMatch(/IF p_to_stage < 1 OR p_to_stage > 26 THEN/);
+  });
+});
+
+// SD-LEO-INFRA-STAGE-KEYED-DATA-001: v2's own static checks, same convention as v1's above.
+describe('v2 migration static check: PENDING header + chairman-gated banner (v1 precedent)', () => {
+  it('carries an @approved-by: PENDING header', () => {
+    expect(v2Sql).toMatch(/@approved-by:[ \t]*PENDING/);
+  });
+
+  it('carries a DO NOT APPLY / DO NOT RUN banner', () => {
+    expect(v2Sql).toMatch(/DO NOT (APPLY|RUN THIS FILE)/);
+  });
+
+  it('references its own committed census (docs/audits/stage-keyed-data-config-census.md)', () => {
+    expect(v2Sql).toContain('docs/audits/stage-keyed-data-config-census.md');
+  });
+
+  it('is a NEW file, not an in-place edit of v1 -- both files still exist independently', () => {
+    expect(migrationSql).toMatch(/@approved-by:[ \t]*PENDING/);
+    expect(v2Sql).not.toBe(migrationSql);
+  });
+});
+
+describe('v2 migration static check: sequencing precondition (must apply after v1)', () => {
+  it('refuses to proceed unless the dedicated_venture_uat row is already present', () => {
+    expect(v2Sql).toMatch(/dedicated_venture_uat/);
+    expect(v2Sql).toMatch(/PRECONDITION FAILED/);
+  });
+});
+
+describe('v2 migration static check: all 3 previously-missed functions are replaced', () => {
+  it('replaces fn_bootstrap_venture_stages with the widened loop bound', () => {
+    expect(v2Sql).toMatch(/CREATE OR REPLACE FUNCTION public\.fn_bootstrap_venture_stages/);
+    expect(v2Sql).toMatch(/FOR v_stage IN 1\.\.27 LOOP/);
+  });
+
+  it('replaces bootstrap_venture_workflow with tier_max ELSE 27', () => {
+    expect(v2Sql).toMatch(/CREATE OR REPLACE FUNCTION public\.bootstrap_venture_workflow/);
+    expect(v2Sql).toMatch(/ELSE 27\s*\n\s*END;/);
+  });
+
+  it('replaces approve_chairman_decision with the step-up gate shifted to stage 25 (SECURITY fix)', () => {
+    // Matches the functional IF-condition shape only, not the file's own explanatory comment
+    // prose above the function (which legitimately narrates "= 24" as pre-v2 history), matching
+    // v1's own established convention for this exact distinction (see the FR-9 checks above).
+    expect(v2Sql).toMatch(/CREATE OR REPLACE FUNCTION public\.approve_chairman_decision/);
+    expect(v2Sql).toMatch(/consequence_level = 'high' OR v_decision\.lifecycle_stage = 25\)/);
+    expect(v2Sql).not.toMatch(/consequence_level = 'high' OR v_decision\.lifecycle_stage = 24\)/);
+  });
+});
+
+describe('v2 migration static check: shared parked-venture preflight function (FR-5)', () => {
+  it('defines fn_parked_venture_preflight and calls it from its own DO-block preflight', () => {
+    expect(v2Sql).toMatch(/CREATE OR REPLACE FUNCTION public\.fn_parked_venture_preflight/);
+    expect(v2Sql).toMatch(/public\.fn_parked_venture_preflight\(24, 27, false\)/);
+  });
+});
+
+describe('v2 DOWN file static check: reverses every CHECK widen and the security-relevant fix', () => {
+  it('narrows chk_lifecycle_stage back to <= 26', () => {
+    expect(v2DownSql).toMatch(/chk_lifecycle_stage CHECK \(\(\(current_lifecycle_stage >= 1\) AND \(current_lifecycle_stage <= 26\)\)\)/);
+  });
+
+  it('reverts approve_chairman_decision back to the pre-v2 lifecycle_stage = 24 step-up condition', () => {
+    expect(v2DownSql).toMatch(/v_decision\.lifecycle_stage = 24/);
+  });
+
+  it('refuses to narrow if a real stage-27 write exists since v2 applied', () => {
+    expect(v2DownSql).toMatch(/ROLLBACK REFUSED/);
+  });
+
+  it('drops fn_parked_venture_preflight', () => {
+    expect(v2DownSql).toMatch(/DROP FUNCTION IF EXISTS public\.fn_parked_venture_preflight/);
   });
 });
