@@ -2,7 +2,7 @@
   "generated_note": "Frozen allowlist for SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001 FR-7 ratchet guard. Regenerate via: node scripts/lint/progress-column-lint.mjs --write-baseline tests/unit/hygiene/progress-column-baseline.json. Must only shrink over time (see tests/unit/hygiene/no-bare-progress-column.test.js).",
   "table": "strategic_directives_v2",
   "dead_column": "progress",
-  "count": 46,
+  "count": 44,
   "sites": [
     {
       "file": "lib/eva/adapters/real-data-adapter.js",
@@ -48,7 +48,7 @@
     },
     {
       "file": "lib/eva/quality-findings/sd-generator.js",
-      "line": 632,
+      "line": 638,
       "rule": "B",
       "method": "insert",
       "snippet": "insert({ progress: ... })"
@@ -222,13 +222,6 @@
       "snippet": "sd.progress"
     },
     {
-      "file": "scripts/leo-orchestrator-enforced.js",
-      "line": 171,
-      "rule": "B",
-      "method": "update",
-      "snippet": "update({ progress: ... })"
-    },
-    {
       "file": "scripts/modules/child-progression-gate.js",
       "line": 84,
       "rule": "A",
@@ -255,13 +248,6 @@
       "rule": "C",
       "method": "property-read",
       "snippet": "blockerSD.progress"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-guardian.js",
-      "line": 127,
-      "rule": "A",
-      "method": "select",
-      "snippet": "id, title, status, progress"
     },
     {
       "file": "scripts/modules/qa/dependency-checker.js",
