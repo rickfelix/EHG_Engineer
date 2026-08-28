@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 21 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 22 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -105,6 +105,10 @@ describe('policy registry (TS-1)', () => {
       // longer 730d window (see policies.js entry comment). Keyed on created_at (insert time,
       // DB-defaulted), not pasted_at (caller-supplied, backdatable).
       account_usage_pastes: 'created_at',
+      // SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-C (FR-8, operator-contract REAPER): a
+      // creative_asset<->marketing_content_variant scoring link has no service purpose once it
+      // ages out. Keyed on created_at, DATABASE-stamped (DEFAULT now(), never client-supplied).
+      creative_asset_variant_scores: 'created_at',
     });
   });
 
