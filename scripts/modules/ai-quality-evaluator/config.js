@@ -27,10 +27,26 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   documentation: { default: 50 },
 
   // Infrastructure SDs: Lenient (internal tooling)
-  infrastructure: { default: 55 },
+  // prd/retrospective raised by QF-20260817-837 (evidence: v_ai_quality_tuning_recommendations,
+  // re-read live at claim). default (55) is unchanged, so infrastructure x user_story (MONITOR,
+  // n=996, the largest cell in the whole view, avg=69.4, pass=90.3%) is untouched -- this is
+  // exactly the collateral SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002/003 refused to risk before
+  // the per-content_type override shape existed.
+  // prd: 55 -> 60 (n=267, avg_score=81.4, pass_rate=100% -- INCREASE recommendation).
+  // retrospective: 55 -> 60 (n=198, avg_score=91.3, pass_rate=99% -- INCREASE recommendation).
+  // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 55 }`.
+  infrastructure: { default: 55, prd: 60, retrospective: 60 },
 
   // Feature SDs: Moderate baseline
-  feature: { default: 60 },
+  // prd/retrospective raised by QF-20260817-837 (evidence: v_ai_quality_tuning_recommendations,
+  // re-read live at claim). default (60) is unchanged, so feature x user_story (this SD's own
+  // scan-time INEFFECTIVE-CHANGE flag re-measured live at claim as OPTIMAL, n=138, avg=65.6,
+  // pass=79.7%) is untouched either way -- per the QF's AC-3, this cell is a content-quality
+  // signal, not a threshold problem, and gets no threshold change regardless of its live label.
+  // prd: 60 -> 65 (n=34, avg_score=81, pass_rate=97.1% -- INCREASE recommendation).
+  // retrospective: 60 -> 65 (n=67, avg_score=84.5, pass_rate=94% -- INCREASE recommendation).
+  // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 60 }`.
+  feature: { default: 60, prd: 65, retrospective: 65 },
 
   // Database SDs: Slightly stricter (data integrity)
   database: { default: 65 },
@@ -50,7 +66,14 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // live-2026-08-16 INCREASE recommendations that clears this test; see
   // scripts/quality/tuning-003-disposition.mjs for the full snapshot and the collateral
   // measurement that refused the other five (bugfix, feature, infrastructure x2, orchestrator).
-  security: { default: 70 },
+  // retrospective raised 70 -> 75 by QF-20260817-837 (evidence: n=14, avg_score=87.3,
+  // pass_rate=92.9% -- INCREASE recommendation, re-read live at claim, clears the >=10
+  // assessment bar). default (70) is unchanged, so security x prd (n=7/5, both
+  // INSUFFICIENT DATA) and security x user_story (already-current at 70/MONITOR, and a
+  // separate stale-historical-group row at 65/INCREASE that already resolved when the
+  // shared default was raised to 70 by QF-20260807-698) are both untouched.
+  // BEFORE VALUE FOR ROLLBACK: delete the retrospective key, leaving `{ default: 70 }`.
+  security: { default: 70, retrospective: 75 },
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
   // BEFORE VALUE FOR ROLLBACK: no key at all — refactor fell through to DEFAULT_THRESHOLD (60).
@@ -72,7 +95,19 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // TUNING-001 used to exonerate the scorer — the healthy user_story lane proving the same scorer
   // CAN pass user stories. This raises that control's bar on 2026-08-04. Anyone re-reading that
   // exoneration needs to know the instrument moved, and when.
-  refactor: { default: 65 }
+  refactor: { default: 65 },
+
+  // Bugfix SDs: QF-20260817-837 (evidence: database/migrations/20251205_russian_judge_sd_type_awareness_fixed.sql's
+  // v_ai_quality_tuning_recommendations, re-read live at claim per the QF's own instruction, not
+  // the 6-row count recorded at scan time). bugfix had no dedicated key before this change and
+  // fell through to DEFAULT_THRESHOLD (60) for every content_type -- `default: 60` here is
+  // byte-identical to that prior fallback, so bugfix x user_story (n=183, avg=64.9, pass=73.8%,
+  // OPTIMAL) is completely unaffected.
+  // prd: 60 -> 65 (n=43 assessments/4wk, avg_score=80.1, pass_rate=97.7% -- INCREASE recommendation).
+  // retrospective: 60 -> 65 (n=85, avg_score=84.7, pass_rate=91.8% -- INCREASE recommendation).
+  // Both clear >=10 assessments (AC-1). BEFORE VALUE FOR ROLLBACK: delete this whole key: bugfix
+  // reverts to falling through to DEFAULT_THRESHOLD (60) for every content_type, exactly as before.
+  bugfix: { default: 60, prd: 65, retrospective: 65 }
 };
 
 // SD-type-aware blocking thresholds for feedback generation

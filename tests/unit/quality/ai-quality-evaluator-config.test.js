@@ -23,13 +23,17 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.security.default).toBe(70);
   });
 
-  it('REFUSED: bugfix, infrastructure, and orchestrator INCREASE recommendations were NOT applied', () => {
-    // bugfix has no dedicated key at all -- it must keep falling through to DEFAULT_THRESHOLD,
-    // exactly like refactor did before TUNING-002 gave it one.
-    expect(SD_TYPE_PASS_THRESHOLDS.bugfix).toBeUndefined();
-    // infrastructure's prd/retrospective cells both recommended 55 -> 60, refused because
-    // infrastructure x user_story (avg ~53, the largest cell in the view) cannot clear 60.
-    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
+  it('APPLIED (QF-20260817-837): security gained a per-content_type retrospective override; default (and therefore prd/user_story) unchanged', () => {
+    // security x retrospective: n=14, avg=87.3, pass=92.9% -> 70->75
+    expect(SD_TYPE_PASS_THRESHOLDS.security.retrospective).toBe(75);
+    // security x prd (both INSUFFICIENT_DATA rows, n=7/n=5) and security x user_story
+    // (already-current at 70) are untouched: default stays 70.
+    expect(SD_TYPE_PASS_THRESHOLDS.security.default).toBe(70);
+    expect(SD_TYPE_PASS_THRESHOLDS.security.prd).toBeUndefined();
+    expect(SD_TYPE_PASS_THRESHOLDS.security.user_story).toBeUndefined();
+  });
+
+  it('REFUSED (at QF-20260807-698 time): orchestrator INCREASE recommendation was NOT applied', () => {
     // orchestrator has no dedicated key -- ORCHESTRATOR_THRESHOLD governs it separately, and its
     // retrospective cell's 50 -> 55 recommendation was refused because orchestrator x user_story
     // cannot clear 55 (and the SAME view recommends DECREASING that cell, not raising the shared bar).
@@ -37,8 +41,41 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(ORCHESTRATOR_THRESHOLD).toBe(50);
   });
 
-  it('REFUSED: feature was NOT raised (feature x user_story cannot clear a higher bar)', () => {
+  it('APPLIED (QF-20260817-837): bugfix gained a dedicated key with per-content_type prd/retrospective overrides, default unchanged from the prior DEFAULT_THRESHOLD fallback', () => {
+    // bugfix x prd: n=43, avg=80.1, pass=97.7% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.prd).toBe(65);
+    // bugfix x retrospective: n=85, avg=84.7, pass=91.8% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.retrospective).toBe(65);
+    // bugfix x user_story (OPTIMAL, n=183) is untouched: default stays 60, byte-identical to the
+    // prior DEFAULT_THRESHOLD fallback bugfix had when it had no key at all.
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.default).toBe(60);
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.user_story).toBeUndefined();
+  });
+
+  it('REFUSED (at QF-20260807-698 time): feature was NOT raised (feature x user_story could not clear a higher bar then)', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.feature.default).toBe(60);
+  });
+
+  it('APPLIED (QF-20260817-837): feature gained per-content_type prd/retrospective overrides; default (and therefore user_story) unchanged', () => {
+    // feature x prd: n=34, avg=81, pass=97.1% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.prd).toBe(65);
+    // feature x retrospective: n=67, avg=84.5, pass=94% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.retrospective).toBe(65);
+    // feature x user_story (re-measured live at claim as OPTIMAL, n=138) is untouched: default
+    // stays 60, per AC-3 (a content-quality signal, not a threshold problem).
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.default).toBe(60);
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.user_story).toBeUndefined();
+  });
+
+  it('APPLIED (QF-20260817-837): infrastructure gained per-content_type prd/retrospective overrides; default (and therefore user_story) unchanged', () => {
+    // infrastructure x prd: n=267, avg=81.4, pass=100% -> 55->60
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.prd).toBe(60);
+    // infrastructure x retrospective: n=198, avg=91.3, pass=99% -> 55->60
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.retrospective).toBe(60);
+    // infrastructure x user_story (MONITOR, n=996, the largest cell in the whole view) is
+    // untouched: default stays 55 -- exactly the collateral prior tuning rounds refused to risk.
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story).toBeUndefined();
   });
 
   it('unrelated thresholds are untouched by this QF', () => {
@@ -50,38 +87,49 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
 });
 
 describe('getPassThreshold — SD-LEO-INFRA-QUALITY-GATE-TYPE-001 (content_type resolution)', () => {
-  it('FR-6/TS-8: zero value changes -- every mapped sd_type still resolves to its exact pre-restructure number with no content_type override configured', () => {
+  it('FR-6/TS-8: zero value changes -- every mapped sd_type without a QF-20260817-837 override still resolves to its exact pre-restructure number', () => {
     expect(getPassThreshold('user_story', { sd_type: 'documentation' })).toBe(50);
-    expect(getPassThreshold('prd', { sd_type: 'infrastructure' })).toBe(55);
-    expect(getPassThreshold('retrospective', { sd_type: 'feature' })).toBe(60);
+    // feature x user_story has no override (QF-20260817-837 only added prd/retrospective) --
+    // still resolves to the unchanged default, exactly as before.
+    expect(getPassThreshold('user_story', { sd_type: 'feature' })).toBe(60);
     expect(getPassThreshold('user_story', { sd_type: 'database' })).toBe(65);
     expect(getPassThreshold('prd', { sd_type: 'security' })).toBe(70);
     expect(getPassThreshold('retrospective', { sd_type: 'refactor' })).toBe(65);
   });
 
   it('TS-2: falls back to .default when no content_type override exists', () => {
+    // infrastructure x user_story has no override (QF-20260817-837 only added prd/retrospective).
     expect(getPassThreshold('user_story', { sd_type: 'infrastructure' })).toBe(55);
-    expect(getPassThreshold('prd', { sd_type: 'infrastructure' })).toBe(55);
+    // infrastructure x prd now HAS a dedicated override (60, not the 55 default) -- see the
+    // dedicated infrastructure test above; database x prd has no override at all, standing in
+    // for the "falls back to .default" case this test originally used infra x prd for.
+    expect(getPassThreshold('prd', { sd_type: 'database' })).toBe(65);
   });
 
   it('TS-3: a per-cell content_type override resolves distinctly from a sibling content_type, without mutating the shared module singleton', () => {
     // Local fixture only -- never mutate the imported SD_TYPE_PASS_THRESHOLDS object directly,
-    // since that would leak across the module cache into other tests in the same run.
+    // since that would leak across the module cache into other tests in the same run. Uses
+    // user_story (still genuinely unmapped on infrastructure, unlike prd/retrospective which
+    // QF-20260817-837 gave real overrides) so the "real module state is untouched" assertion
+    // below stays meaningful.
     const fixtureThresholds = {
       ...SD_TYPE_PASS_THRESHOLDS,
-      infrastructure: { ...SD_TYPE_PASS_THRESHOLDS.infrastructure, prd: 60 },
+      infrastructure: { ...SD_TYPE_PASS_THRESHOLDS.infrastructure, user_story: 60 },
     };
     const entry = fixtureThresholds.infrastructure;
-    expect(entry.prd).toBe(60);
+    expect(entry.user_story).toBe(60);
     expect(entry.default).toBe(55);
     // Real module state is untouched by the fixture above.
-    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.prd).toBeUndefined();
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story).toBeUndefined();
     expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
   });
 
   it('TS-4: an unmapped sd_type still falls back to DEFAULT_THRESHOLD', () => {
     expect(getPassThreshold('prd', { sd_type: 'unknown_type' })).toBe(DEFAULT_THRESHOLD);
-    expect(getPassThreshold('prd', { sd_type: 'bugfix' })).toBe(DEFAULT_THRESHOLD);
+    // QF-20260817-837 gave bugfix a dedicated key (see the dedicated bugfix test above); it is
+    // no longer unmapped, so it moved out of this assertion and orchestrator (still genuinely
+    // unmapped, governed separately by ORCHESTRATOR_THRESHOLD) stands in for the same case.
+    expect(getPassThreshold('prd', { sd_type: 'orchestrator' })).toBe(DEFAULT_THRESHOLD);
   });
 
   it('TS-5: sd=null (or missing sd_type) short-circuits to DEFAULT_THRESHOLD without touching SD_TYPE_PASS_THRESHOLDS', () => {
@@ -98,20 +146,24 @@ describe('getPassThreshold — SD-LEO-INFRA-QUALITY-GATE-TYPE-001 (content_type 
     // singleton and restores it in `finally` -- unlike TS-3 (which only needs a local fixture),
     // this scenario requires exercising the REAL getPassThreshold against a REAL 0-valued key to
     // prove `??` (not `||`) is actually what runs, not a re-implementation of the same logic.
-    const hadOwnProperty = Object.hasOwn(SD_TYPE_PASS_THRESHOLDS.infrastructure, 'prd');
-    const previousValue = SD_TYPE_PASS_THRESHOLDS.infrastructure.prd;
-    SD_TYPE_PASS_THRESHOLDS.infrastructure.prd = 0;
+    // Uses user_story (genuinely unmapped on infrastructure) rather than prd, since
+    // QF-20260817-837 gave prd a real 60 override -- restoring via hadOwnProperty/previousValue
+    // still works generically for either shape, but user_story keeps the "restores to undefined"
+    // assertion below meaningful.
+    const hadOwnProperty = Object.hasOwn(SD_TYPE_PASS_THRESHOLDS.infrastructure, 'user_story');
+    const previousValue = SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story;
+    SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story = 0;
     try {
-      expect(getPassThreshold('prd', { sd_type: 'infrastructure' })).toBe(0);
+      expect(getPassThreshold('user_story', { sd_type: 'infrastructure' })).toBe(0);
     } finally {
       if (hadOwnProperty) {
-        SD_TYPE_PASS_THRESHOLDS.infrastructure.prd = previousValue;
+        SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story = previousValue;
       } else {
-        delete SD_TYPE_PASS_THRESHOLDS.infrastructure.prd;
+        delete SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story;
       }
     }
     // Restored -- confirms cleanup left the singleton exactly as other tests expect it.
-    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.prd).toBeUndefined();
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story).toBeUndefined();
     expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
   });
 });
