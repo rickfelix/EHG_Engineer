@@ -1,0 +1,35 @@
+name: Gemini Pin Lint
+
+# SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B (child 1 of 8).
+# Diff-scoped scan for literal "gemini-<version>" model-string pins outside the single SSOT
+# (lib/config/model-config.js's getGoogleModel(purpose) accessor). See
+# scripts/lint/gemini-pin-lint.mjs for the full design rationale and
+# scripts/lint/gemini-pin-allowlist.json for triaged non-routing exceptions.
+#
+# ADVISORY-FIRST: the lint step is `continue-on-error: true` (allow-fail) so it cannot turn an
+# in-flight parallel-session PR red before the sibling subsystem-consolidation SDs
+# (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-C through -G) have migrated the remaining routing pins onto
+# model-config.js. The report is always surfaced in the job log. Flip to blocking (remove
+# continue-on-error) once an --all sweep against main reports zero unallowlisted violations --
+# tracked on SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-G.
+
+on:
+  pull_request: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gemini-pin-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Scan diff for unallowlisted Gemini model-string pins (advisory)
+        continue-on-error: true
+        run: node scripts/lint/gemini-pin-lint.mjs --diff

@@ -1,0 +1,16 @@
+{
+  "_comment": "Categorized, file:line-keyed exceptions for scripts/lint/gemini-pin-lint.mjs. Each entry names a CONFIRMED non-routing occurrence of a literal gemini- model string. Routing pins (occurrences that select which model to CALL) are deliberately left as reported violations here until the sibling subsystem-consolidation SDs (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-C through -G) migrate them onto lib/config/model-config.js's getGoogleModel(purpose) accessor -- see SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-G for the note that the CI gate flips from allow-fail to blocking only once an --all sweep against main reports zero UNallowlisted violations.",
+  "entries": [
+    { "file": "lib/cost/governor.js", "line": 41, "category": "fallback_ladder", "note": "TIER_LADDER: literal-on-both-sides cost-degradation fallback table, not a routing pin -- degrades an ALREADY-resolved model under cost pressure" },
+    { "file": "lib/cost/governor.js", "line": 42, "category": "fallback_ladder", "note": "TIER_LADDER: same as line 41, next tier step" },
+    { "file": "lib/cost/llm-pricing.js", "line": 16, "category": "pricing_table", "note": "PRICING table key: model -> $/token, inverse direction from purpose -> model" },
+    { "file": "lib/cost/llm-pricing.js", "line": 17, "category": "pricing_table", "note": "PRICING table key: model -> $/token" },
+    { "file": "lib/cost/llm-pricing.js", "line": 18, "category": "pricing_table", "note": "PRICING table key: model -> $/token" },
+    { "file": "lib/cost/llm-pricing.js", "line": 21, "category": "pricing_table", "note": "PRICING table key: model -> $/token" },
+    { "file": "lib/cost/llm-pricing.js", "line": 49, "category": "pricing_table", "note": "PRICING table lookup by model-name substring match, reads (does not select) the model" },
+    { "file": "lib/cost/llm-pricing.js", "line": 54, "category": "pricing_table", "note": "PRICING table lookup" },
+    { "file": "lib/cost/llm-pricing.js", "line": 56, "category": "pricing_table", "note": "PRICING table lookup" },
+    { "file": "lib/cost/llm-pricing.js", "line": 57, "category": "pricing_table", "note": "PRICING table lookup" },
+    { "file": "scripts/cost-waste-ledger.mjs", "line": 41, "category": "pricing_table", "note": "PRICING['gemini-2.5-flash'] lookup for a cost estimate, reads the pricing table, does not select a model to call" }
+  ]
+}
