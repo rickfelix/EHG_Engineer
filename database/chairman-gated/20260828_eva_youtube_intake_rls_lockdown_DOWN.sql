@@ -42,10 +42,21 @@ BEGIN
   -- into a state it never took away from. Also require the fully-locked-down grant state the UP file
   -- actually produces: zero anon/authenticated/PUBLIC privileges. Same LEFT JOIN pattern as the UP
   -- file's verify block, for the same PUBLIC-blind-spot reason.
+  --
+  -- EXCEPT anon:TRUNCATE (round-2 adversarial /ship review finding): the sweep migration
+  -- database/chairman-gated/20260819_anon_truncate_sweep.sql revokes ONLY anon's TRUNCATE on this
+  -- table (line 1044), and its own DOWN (20260819_anon_truncate_sweep_DOWN.sql:247) re-grants ONLY
+  -- that one privilege back to anon — never authenticated, never PUBLIC, never any other privilege.
+  -- Requiring anon:TRUNCATE to be absent here would make this DOWN permanently unrunnable in the
+  -- exact sequence the UP file's own header documents as plausible (this UP applies, then the sweep
+  -- applies, then the sweep is later rolled back), defeating the emergency-rollback purpose of this
+  -- file. The exclusion is scoped to that single (role, privilege) pair — every other combination,
+  -- including authenticated:TRUNCATE and PUBLIC:TRUNCATE, still blocks as before.
   SELECT string_agg(DISTINCT coalesce(r.rolname, 'PUBLIC') || ':' || a.privilege_type, ', ') INTO v_existing_grantees
     FROM aclexplode(coalesce((SELECT relacl FROM pg_class WHERE oid = 'public.eva_youtube_intake'::regclass), acldefault('r', (SELECT relowner FROM pg_class WHERE oid = 'public.eva_youtube_intake'::regclass)))) a
     LEFT JOIN pg_roles r ON r.oid = a.grantee
-   WHERE r.rolname IN ('anon', 'authenticated') OR r.rolname IS NULL;
+   WHERE (r.rolname IN ('anon', 'authenticated') OR r.rolname IS NULL)
+     AND NOT (r.rolname = 'anon' AND a.privilege_type = 'TRUNCATE');
 
   IF v_existing_grantees IS NOT NULL THEN
     RAISE EXCEPTION 'eva_youtube_intake RLS lockdown DOWN: anon/authenticated/PUBLIC already hold privilege(s) [%] — refusing to proceed against an unexpected starting state (not the fully-locked-down state this migration''s UP produces).', v_existing_grantees;

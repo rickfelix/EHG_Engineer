@@ -282,7 +282,11 @@ describe('the REAL $verify$ block (extracted from the migration file, not hand-c
     await client.query('BEGIN');
     try {
       await client.query('GRANT SELECT ON public.eva_youtube_intake TO PUBLIC');
-      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon\/authenticated still hold privilege/);
+      // Pin the PUBLIC-labelled branch specifically (round-2 adversarial /ship review finding) --
+      // the earlier /anon\/authenticated still hold privilege/ regex alone also matches the
+      // "collaterally restored" test above, so it wouldn't prove THIS mutation (a PUBLIC grant, not
+      // a named-role grant) is what the LEFT JOIN + coalesce(r.rolname,'PUBLIC') widening catches.
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/PUBLIC:SELECT/);
     } finally {
       await client.query('ROLLBACK');
     }

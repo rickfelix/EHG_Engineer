@@ -78,11 +78,17 @@ $precondition$;
 
 DROP POLICY select_eva_youtube_intake ON public.eva_youtube_intake;
 
--- Explicit per-role REVOKE ALL, not a table-level DROP or a PUBLIC-only revoke: anon and
--- authenticated each hold INSERT/SELECT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER via the systemic
--- pg_default_acl grant (independent of the RLS policy above), and service_role's own
--- manage_eva_youtube_intake policy + grants are untouched since service_role is not named here.
-REVOKE ALL ON public.eva_youtube_intake FROM anon, authenticated;
+-- Explicit per-role REVOKE ALL, not a table-level DROP: anon and authenticated each hold
+-- INSERT/SELECT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER via the systemic pg_default_acl grant
+-- (independent of the RLS policy above), and service_role's own manage_eva_youtube_intake policy +
+-- grants are untouched since service_role is not named here.
+--
+-- PUBLIC is named too (round-2 adversarial /ship review finding): the verify block below detects a
+-- PUBLIC grant (LEFT JOIN + rolname IS NULL) but a bare `FROM anon, authenticated` would never
+-- remediate one — it would only abort the migration mid-way, after DROP POLICY/REVOKE ALL already
+-- ran, leaving the chairman to hand-fix. No PUBLIC grant exists on this table today (verified live
+-- 2026-08-28), so this is a verified no-op now and a self-healing revoke if one is ever added.
+REVOKE ALL ON public.eva_youtube_intake FROM anon, authenticated, PUBLIC;
 
 DO $verify$
 DECLARE
