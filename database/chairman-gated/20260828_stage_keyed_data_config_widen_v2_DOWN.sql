@@ -32,9 +32,19 @@
 --   3. REVERTS fn_bootstrap_venture_stages, bootstrap_venture_workflow, approve_chairman_decision
 --      to their PRE-v2 bodies (loop bound 26, gate_stages arrays un-shifted, and CRITICALLY the
 --      approve_chairman_decision step-up gate reverts to checking lifecycle_stage = 24 instead of
---      25 -- this UNDOES the security fix v2 made; do not roll back past this point while any
---      go_live decision might be pending approval, or the step-up MFA gate will silently stop
---      protecting it again).
+--      25 -- this UNDOES the security fix v2 made).
+--
+--      ⚠️ SECURITY: if v1 (20260825_..._insert_and_renumber.sql) is STILL APPLIED when this runs,
+--      go_live remains live at stage 25 while this reverted function checks stage 24 -- the SAME
+--      go_live MFA-bypass window v2's own forward banner warns about, opened by this rollback
+--      instead of by a gap before v2's forward apply. consequence_level is NULL on every live
+--      stage-23/24 chairman_decisions row (adversarial SECURITY sub-agent finding, 2026-08-28) --
+--      the stage-number literal is the SOLE carrier of the step-up requirement, so this is a real
+--      bypass, not a theoretical one. A full rollback (this file THEN v1's own _DOWN) is fine when
+--      both run in the SAME sitting with no decision approvals attempted in between, exactly
+--      symmetric to the forward apply's own "no gap" requirement -- this file does not block that,
+--      but the precondition immediately below makes the risk visible (NOTICE, not silent) in the
+--      REQUIRED dry-run output before any real apply.
 --
 --   4. DROPS fn_parked_venture_preflight(). Safe only if nothing else has started calling it --
 --      this SD's own scripts/eva/uat-stage-migration-preconditions.mjs update falls back to its
@@ -49,6 +59,14 @@
 --   MIGRATION_APPLY_TOKEN=<token> node scripts/apply-migration.js \
 --     "database/chairman-gated/20260828_stage_keyed_data_config_widen_v2_DOWN.sql" \
 --     --prod-deploy --allow-any-path
+
+DO $security_notice_v1_still_applied$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.venture_stages WHERE stage_key = 'dedicated_venture_uat') THEN
+    RAISE NOTICE 'SECURITY: v1 is STILL APPLIED (dedicated_venture_uat row present). Rolling back v2 now reverts approve_chairman_decision''s step-up MFA gate to checking lifecycle_stage=24 while go_live remains live at stage 25 -- a real bypass window (consequence_level is NULL on every live gate decision, so the stage literal is the sole guard). If this is a full rollback, apply v1''s own _DOWN file in the SAME sitting, with no decision approvals attempted in between.';
+  END IF;
+END
+$security_notice_v1_still_applied$;
 
 DO $guard_no_stage_27_writes$
 DECLARE

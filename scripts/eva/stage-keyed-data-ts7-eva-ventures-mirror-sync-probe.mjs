@@ -31,6 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { assertInTransaction } from '../../lib/eva/uat-stage-migration/rollback-probe-harness.mjs';
 
 const ENGINEER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const V1_PATH = path.resolve(ENGINEER_ROOT, 'database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber.sql');
@@ -52,6 +53,7 @@ async function main() {
 
   try {
     await client.query('BEGIN');
+    await assertInTransaction((sql, params) => client.query(sql, params));
 
     const { rows: beforeAnything } = await client.query(DIVERGENCE_SQL);
     evidence.divergenceBeforeAnyMigration = beforeAnything.length;

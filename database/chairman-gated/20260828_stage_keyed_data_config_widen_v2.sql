@@ -24,6 +24,17 @@
 -- first would shift gate_boundary_config/venture_stage_cutover_grandfather/stage_artifact_requirements
 -- to describe a scheme venture_stages does not yet have, a worse mismatch than the one being fixed.
 --
+-- ⚠️ SECURITY: NO GAP BETWEEN v1 AND v2 -- A GO_LIVE MFA-BYPASS WINDOW EXISTS IN BETWEEN. Adversarial
+-- SECURITY sub-agent review (2026-08-28) found that once v1 applies, go_live sits at stage 25, but
+-- production's approve_chairman_decision() still checks `lifecycle_stage = 24` for its step-up MFA
+-- gate until THIS file also applies (section 6 fixes it to `= 25`). Live-measured: consequence_level
+-- is NULL on every one of the 14 live stage-23/24 chairman_decisions rows, so the stage-number
+-- literal is the SOLE carrier of the step-up requirement -- there is no secondary gate to fall back
+-- on. Any go_live decision approved in the gap between v1's apply and v2's apply would silently
+-- bypass step-up verification. APPLY v1 IMMEDIATELY FOLLOWED BY v2, in the same chairman sitting,
+-- with no decision approvals attempted in between -- do not treat these as independently-schedulable
+-- ceremonies.
+--
 -- BLAST RADIUS CONTRACT: docs/audits/stage-keyed-data-config-census.md (this SD's own committed
 -- census, 22 disposition rows, negative-control PASS at 18 live CHECK constraints containing '26' on
 -- a stage-bearing column). Every ALTER/UPDATE below traces to exactly one row in that table. Re-run
@@ -151,6 +162,15 @@ BEGIN
 END;
 $function$;
 
+-- SECURITY finding (adversarial review, 2026-08-28): default privileges on this database
+-- auto-grant EXECUTE on new functions to anon and authenticated (pg_default_acl for functions:
+-- {postgres,anon,authenticated,service_role}=X) -- a bare GRANT ... TO service_role therefore
+-- reads as least-privilege while anon/authenticated retain EXECUTE by default. Data exposure
+-- itself is not a concern (this function is invoker-rights, no SECURITY DEFINER, so RLS still
+-- applies to its internal query -- anon has no SELECT policy on ventures), but the ACL should
+-- say what it means: explicit REVOKE first, matching the posture other functions in this
+-- codebase (e.g. advance_venture_stage in v1) already state explicitly rather than by omission.
+REVOKE EXECUTE ON FUNCTION public.fn_parked_venture_preflight(integer, integer, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_parked_venture_preflight(integer, integer, boolean) TO service_role;
 
 DO $parked_preflight$
@@ -182,42 +202,42 @@ $parked_preflight$;
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 DO $widen_checks$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'compliance_events_stage_number_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'compliance_events_stage_number_check' AND conrelid = 'public.compliance_events'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.compliance_events DROP CONSTRAINT IF EXISTS compliance_events_stage_number_check;
     ALTER TABLE public.compliance_events ADD CONSTRAINT compliance_events_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'compliance_violations_stage_number_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'compliance_violations_stage_number_check' AND conrelid = 'public.compliance_violations'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.compliance_violations DROP CONSTRAINT IF EXISTS compliance_violations_stage_number_check;
     ALTER TABLE public.compliance_violations ADD CONSTRAINT compliance_violations_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'convergence_ledger_stages_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'convergence_ledger_stages_stage_check' AND conrelid = 'public.convergence_ledger_stages'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.convergence_ledger_stages DROP CONSTRAINT IF EXISTS convergence_ledger_stages_stage_check;
     ALTER TABLE public.convergence_ledger_stages ADD CONSTRAINT convergence_ledger_stages_stage_check CHECK (((stage >= 0) AND (stage <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_artifact_dependencies_source_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_artifact_dependencies_source_stage_check' AND conrelid = 'public.eva_artifact_dependencies'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.eva_artifact_dependencies DROP CONSTRAINT IF EXISTS eva_artifact_dependencies_source_stage_check;
     ALTER TABLE public.eva_artifact_dependencies ADD CONSTRAINT eva_artifact_dependencies_source_stage_check CHECK (((source_stage >= 1) AND (source_stage <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_artifact_dependencies_target_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_artifact_dependencies_target_stage_check' AND conrelid = 'public.eva_artifact_dependencies'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.eva_artifact_dependencies DROP CONSTRAINT IF EXISTS eva_artifact_dependencies_target_stage_check;
     ALTER TABLE public.eva_artifact_dependencies ADD CONSTRAINT eva_artifact_dependencies_target_stage_check CHECK (((target_stage >= 1) AND (target_stage <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_stage_gate_results_stage_number_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_stage_gate_results_stage_number_check' AND conrelid = 'public.eva_stage_gate_results'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.eva_stage_gate_results DROP CONSTRAINT IF EXISTS eva_stage_gate_results_stage_number_check;
     ALTER TABLE public.eva_stage_gate_results ADD CONSTRAINT eva_stage_gate_results_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_lifecycle_stage' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_lifecycle_stage' AND conrelid = 'public.eva_ventures'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
     ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_ventures_current_lifecycle_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'eva_ventures_current_lifecycle_stage_check' AND conrelid = 'public.eva_ventures'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
     ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 27)));
   END IF;
@@ -228,32 +248,32 @@ BEGIN
   -- unlike venture_stages -- rejects the negative intermediate value outright regardless of the
   -- upper bound. Section 5 drops this constraint before its shift and re-adds it (widened) after.
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_of_death_predictions_actual_death_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_of_death_predictions_actual_death_stage_check' AND conrelid = 'public.stage_of_death_predictions'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.stage_of_death_predictions DROP CONSTRAINT IF EXISTS stage_of_death_predictions_actual_death_stage_check;
     ALTER TABLE public.stage_of_death_predictions ADD CONSTRAINT stage_of_death_predictions_actual_death_stage_check CHECK (((actual_death_stage IS NULL) OR ((actual_death_stage >= 1) AND (actual_death_stage <= 27))));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_of_death_predictions_predicted_death_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_of_death_predictions_predicted_death_stage_check' AND conrelid = 'public.stage_of_death_predictions'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.stage_of_death_predictions DROP CONSTRAINT IF EXISTS stage_of_death_predictions_predicted_death_stage_check;
     ALTER TABLE public.stage_of_death_predictions ADD CONSTRAINT stage_of_death_predictions_predicted_death_stage_check CHECK (((predicted_death_stage >= 1) AND (predicted_death_stage <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_prop_contracts_stage_number_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_prop_contracts_stage_number_check' AND conrelid = 'public.stage_prop_contracts'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.stage_prop_contracts DROP CONSTRAINT IF EXISTS stage_prop_contracts_stage_number_check;
     ALTER TABLE public.stage_prop_contracts ADD CONSTRAINT stage_prop_contracts_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_proving_journal_stage_number_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stage_proving_journal_stage_number_check' AND conrelid = 'public.stage_proving_journal'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.stage_proving_journal DROP CONSTRAINT IF EXISTS stage_proving_journal_stage_number_check;
     ALTER TABLE public.stage_proving_journal ADD CONSTRAINT stage_proving_journal_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'venture_capture_snapshots_lifecycle_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'venture_capture_snapshots_lifecycle_stage_check' AND conrelid = 'public.venture_capture_snapshots'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.venture_capture_snapshots DROP CONSTRAINT IF EXISTS venture_capture_snapshots_lifecycle_stage_check;
     ALTER TABLE public.venture_capture_snapshots ADD CONSTRAINT venture_capture_snapshots_lifecycle_stage_check CHECK (((lifecycle_stage >= 1) AND (lifecycle_stage <= 27)));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'venture_dependencies_required_stage_check' AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'venture_dependencies_required_stage_check' AND conrelid = 'public.venture_dependencies'::regclass AND connamespace = 'public'::regnamespace AND pg_get_constraintdef(oid) LIKE '%<= 27%') THEN
     ALTER TABLE public.venture_dependencies DROP CONSTRAINT IF EXISTS venture_dependencies_required_stage_check;
     ALTER TABLE public.venture_dependencies ADD CONSTRAINT venture_dependencies_required_stage_check CHECK (((required_stage >= 1) AND (required_stage <= 27)));
   END IF;
