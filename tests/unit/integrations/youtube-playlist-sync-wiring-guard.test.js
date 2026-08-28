@@ -29,8 +29,12 @@ vi.mock('googleapis', () => ({
   },
 }));
 
+const { rpcSpy } = vi.hoisted(() => ({ rpcSpy: vi.fn(async () => ({ data: null, error: null })) }));
 vi.mock('../../../lib/supabase-client.js', () => ({
-  createSupabaseServiceClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) }),
+  createSupabaseServiceClient: () => ({
+    from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }),
+    rpc: rpcSpy,
+  }),
 }));
 
 describe('syncYouTube production wiring (regression guard for the credential-free FR-3 path)', () => {
@@ -43,6 +47,7 @@ describe('syncYouTube production wiring (regression guard for the credential-fre
     youtubeCtor.mockClear();
     playlistsList.mockClear();
     getAuthenticatedClient.mockClear();
+    rpcSpy.mockClear();
   });
   afterEach(() => {
     if (ORIGINAL_KEY === undefined) delete process.env.YOUTUBE_API_KEY; else process.env.YOUTUBE_API_KEY = ORIGINAL_KEY;
@@ -70,5 +75,21 @@ describe('syncYouTube production wiring (regression guard for the credential-fre
     await syncYouTube({ dryRun: true });
 
     expect(getAuthenticatedClient).not.toHaveBeenCalled();
+  });
+
+  it('arms the circuit breaker when the playlist is not found (SECURITY finding C-2: a privacy flip-back must not fail silently outside CI)', async () => {
+    const { syncYouTube } = await import('../../../lib/integrations/youtube/playlist-sync.js');
+
+    // dryRun:false so the fix (gated by `if (!dryRun)`) actually fires.
+    await syncYouTube({ dryRun: false });
+
+    expect(rpcSpy).toHaveBeenCalledWith(
+      'eva_sync_state_record_sync_result',
+      expect.objectContaining({
+        p_source_type: 'youtube',
+        p_synced_count: 0,
+        p_error: expect.stringContaining('playlist not found'),
+      })
+    );
   });
 });

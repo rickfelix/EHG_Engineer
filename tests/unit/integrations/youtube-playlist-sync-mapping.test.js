@@ -83,7 +83,22 @@ describe('mapVideoToIntakeRow', () => {
 
     const row = mapVideoToIntakeRow(item, videoDetail);
 
-    expect(row.raw_data.playlistItem).toBe(item);
+    expect(row.raw_data.playlistItem).toStrictEqual(item);
     expect(row.raw_data.videoDetail).toBe(videoDetail);
+  });
+
+  it('strips snippet.playlistId from raw_data (SECURITY finding C-1: the ID is a low-grade secret, never persisted plaintext)', () => {
+    const item = {
+      id: 'PLAYLIST_ITEM_ID_4',
+      snippet: { resourceId: { videoId: 'V4' }, playlistId: 'PL_SECRET_SHOULD_NOT_PERSIST' },
+    };
+
+    const row = mapVideoToIntakeRow(item);
+
+    expect(row.raw_data.playlistItem.snippet.playlistId).toBeUndefined();
+    expect(JSON.stringify(row.raw_data)).not.toContain('PL_SECRET_SHOULD_NOT_PERSIST');
+    // Everything else on the snippet survives the sanitization.
+    expect(row.raw_data.playlistItem.snippet.resourceId).toEqual({ videoId: 'V4' });
+    expect(row.raw_data.playlistItem.id).toBe('PLAYLIST_ITEM_ID_4');
   });
 });
