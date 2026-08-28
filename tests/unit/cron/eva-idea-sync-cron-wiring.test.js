@@ -63,4 +63,10 @@ describe('eva-idea-sync-cron.yml wiring', () => {
     const failureStep = steps.find((s) => s.if && s.if.includes('failure()'));
     expect(failureStep).toBeTruthy();
   });
+
+  it('wires YOUTUBE_API_KEY and YOUTUBE_FOR_PROCESSING_PLAYLIST_ID as secrets, never plaintext (SD-LEO-FEAT-YOUTUBE-INGESTION-CREDENTIAL-001 FR-2/FR-3, TS-7)', () => {
+    const jobEnv = doc.jobs.sync.env || {};
+    expect(jobEnv.YOUTUBE_API_KEY).toBe('${{ secrets.YOUTUBE_API_KEY }}');
+    expect(jobEnv.YOUTUBE_FOR_PROCESSING_PLAYLIST_ID).toBe('${{ secrets.YOUTUBE_FOR_PROCESSING_PLAYLIST_ID }}');
+  });
 });

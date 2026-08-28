@@ -1,10 +1,10 @@
 ---
 Category: Feature
 Status: Approved
-Version: 1.1.0
+Version: 1.2.0
 Author: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
-Last Updated: 2026-08-26
-Tags: feature, media-generation, creative, storage
+Last Updated: 2026-08-28
+Tags: feature, media-generation, creative, storage, variant-scoring, rls-security
 ---
 
 # Media Generation: Unified Adapter Seam
@@ -12,10 +12,10 @@ Tags: feature, media-generation, creative, storage
 ## Metadata
 - **Category**: Feature
 - **Status**: Approved
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Author**: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
-- **Last Updated**: 2026-08-26
-- **Tags**: feature, media-generation, creative, storage
+- **Last Updated**: 2026-08-28
+- **Tags**: feature, media-generation, creative, storage, variant-scoring, rls-security
 
 ## Overview
 
@@ -66,6 +66,60 @@ venture-bound `storagePath`). That module's own header comment is the authoritat
 including why `armed:true` is a hardcoded literal and why `shouldEnforceBlock()` is never used.
 No other code path may mint a URL for this bucket.
 
+## Variant scoring bridge (SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-C, PR #7596)
+
+A produced creative asset (above) can now feed the existing marketing variant-scoring
+substrate instead of being a dead end after storage.
+
+1. **Bridge table.** `creative_asset_variant_scores` (new, TIER-1) links `creative_assets(id)`
+   to `marketing_content_variants(id)` via plain (`NO ACTION`) foreign keys, scoped by
+   `creative_assets.venture_id`. `NO ACTION` was a deliberate FR-1 tradeoff to stay TIER-1
+   (auto-appliable); the corresponding gap is that `delete_venture()` cannot cascade through
+   this table today — tracked, not silent (see Known limitations).
+2. **Outcome derivation.** `lib/marketing/ai/variant-outcome-derivation.js#deriveVariantOutcomes()`
+   is the sole, pure utility turning `daily_rollups` rows into `{id, successes, failures}` tuples.
+   `daily_rollups` has **no writer anywhere in the codebase today**; `marketing_attribution` has a
+   writer (`lib/marketing/publisher/index.js`) but records dispatch provenance only, never an
+   outcome/conversion signal. Every test exercises this against fixture data — there is no live
+   production outcome data to score against yet.
+3. **Selection bridge.** `lib/creative/variant-scoring-bridge.js#selectAssetVariant({supabase,
+   ventureId})` gates eligibility through the existing `asset-view-gate.js` S23+S24 predicate
+   (venture-uniform, not per-asset), then selects via the **sole canonical** sampler,
+   `lib/marketing/ai/thompson-sampler.js`. `lib/eva/experiments/experiment-assignment.js` has a
+   second, unrelated Thompson-sampling implementation over `experiment_assignments` — explicitly
+   out of scope here, enforced by a static regression test.
+4. **Chairman CLI.** `scripts/eva/variant-scoring-cli.mjs` (`npm run eva:variant-scoring:status`)
+   surfaces the current bridge/scoring state per venture with a 5-state contract
+   (`query_error`, `gate_excluded`, `no_bridged_rows`, `no_writer_yet`, `selected`).
+5. **Retention.** `creative_asset_variant_scores` is registered in `lib/retention/policies.js`
+   (archive mode, matching this repo's other creative/marketing tables).
+
+### Security: cross-tenant RLS hole found and contained, fix pending chairman ceremony
+
+A SECURITY sub-agent proved **live** (rolled-back transaction) that the original
+`cavs_venture_access` RLS policy constrained `creative_asset_id` but left `variant_id`
+entirely unconstrained, with a `NULL with_check` (Postgres silently reuses `USING` for
+writes when `WITH CHECK` is omitted). A tenant of venture A could plant a row referencing
+venture B's variant; because the FKs are `NO ACTION`, that row would then permanently block
+venture B's own delete of that variant.
+
+The natural fix — an inline `EXISTS` checking the variant's venture — was **also measured
+live and found wrong in the opposite direction**: it blocked the attack but also blocked
+every legitimate same-venture write, because `marketing_content`/`marketing_content_variants`
+scope `authenticated` through `ventures.created_by` (a different ownership model than this
+table's `user_company_access` model), and Postgres evaluates an RLS policy expression as the
+querying role — so the joined tables' own RLS silently zeroes out every row.
+
+The correct fix needs a `SECURITY DEFINER` resolver function, which this repo's
+migration-tier-classifier marks TIER-2 (chairman-gated). Rather than self-approving that
+migration, the live, auto-applied policy was made **fail-closed** (the vulnerable
+`authenticated` policy was removed entirely — only a `service_role` policy ships today) and
+the real fix is staged at
+`database/chairman-gated/20260826_creative_asset_variant_scores_rls_fix.sql`
+(`@approved-by: PENDING`). **As of this writing the ceremony has not run** — the table is
+safe only because nothing currently writes to it as an authenticated (non-service-role)
+user; this must be applied before any future SD adds such a writer.
+
 ## Known limitations (tracked, not silent)
 
 - The anti-fabrication keyword screen is a **prompt**-side check, not an **output**-side one, and
@@ -79,6 +133,11 @@ No other code path may mint a URL for this bucket.
   on this write-side seam.
 - Kling was not added as a second configured video provider (Runway already is one, real and
   working); this is an explicit, documented scope decision, not an oversight.
+- `delete_venture()` cannot cascade through `creative_asset_variant_scores` (child -C): its FKs
+  are plain `NO ACTION` by deliberate TIER-1 tradeoff, so an orphaned row can block a venture
+  teardown. Tracked as an explicit follow-up, not a silent gap.
+- The `cavs_venture_access` RLS fix for `creative_asset_variant_scores` (child -C) is staged but
+  **not yet applied** pending a chairman ceremony — see "Variant scoring bridge" above.
 
 ## Related
 
@@ -86,5 +145,9 @@ No other code path may mint a URL for this bucket.
   **Not yet applied live** (live `42703` undefined_column as of 2026-08-26; DDL permission required,
   raised to the coordinator as signal `8714aa90-b4aa-41ed-8050-9cde5a7cfc76`).
 - `lib/creative/asset-view-gate.js` — the gated read/view primitive (child -B).
+- `lib/creative/variant-scoring-bridge.js`, `scripts/eva/variant-scoring-cli.mjs` — the
+  variant-scoring bridge and chairman CLI (child -C).
+- `database/chairman-gated/20260826_creative_asset_variant_scores_rls_fix.sql` — the staged,
+  pending cross-tenant RLS fix (child -C).
 - `SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001` (parent orchestrator) — the reconciliation effort
   this child is one part of; see children -B (fence), -C (variant scoring), -D (ehg app reconciliation).
