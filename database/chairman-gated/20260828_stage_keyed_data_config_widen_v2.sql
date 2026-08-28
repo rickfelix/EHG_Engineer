@@ -7,8 +7,8 @@
 -- pre-shift literal, missed by v1's own writer census.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: PENDING
--- @approval-record: PENDING — chairman ratification not yet scheduled. DO NOT APPLY.
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-record: chairman verbal "approved" (verbal #2 of the 2026-08-28 GO sitting, ~18:3xZ, via SMS-nudged terminal reply), scribed by Adam f27a883d; binds the stamp-aware carve-out amendment. Applied immediately after v1 per the no-gap MFA rider.
 --
 -- AMENDED 2026-08-28 (FR-6 ruling-A encode; the FRESH chairman verbal taken at the sitting binds
 -- THIS amended content per the amendment rule): the parked-venture preflight below now recognizes
