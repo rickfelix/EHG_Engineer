@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 /**
- * TS-4 (SD-LEO-INFRA-STAGE-KEYED-DATA-001): proves the v2 chairman-gated migration
- * (database/chairman-gated/20260828_stage_keyed_data_config_widen_v2.sql) applies cleanly
- * immediately after v1 (20260825_dedicated_venture_uat_stage_insert_and_renumber.sql), inside a
- * SINGLE transaction that is ALWAYS rolled back -- never committed. Standalone .mjs probe script
- * emitting a committed JSON evidence artifact, per TR-6: this is a production-state assertion (it
- * depends on the live schema, the live gate_boundary_config/venture_stage_cutover_grandfather/
- * stage_artifact_requirements row content, and the 2 real parked ventures v1's own banner names),
- * so a non-prod DB tier would not hold the fixtures needed to prove anything -- and
- * tests/helpers/db-target.js's fail-closed DB-tier gate would report this SKIPPED, not PASS/FAIL,
- * if authored as a vitest *.db.test.js (per TESTING sub-agent finding TR-6/8ca0d619...).
+ * General v1+v2 apply/idempotency dry-run (SD-LEO-INFRA-STAGE-KEYED-DATA-001) -- NOT the PRD's
+ * TS-4 scenario. An earlier draft of this SD labeled this probe "TS-4"; adversarial VALIDATION
+ * sub-agent review during PLAN_VERIFICATION correctly found the PRD's actual TS-4 is a distinct
+ * scenario (the stage-23 artifact-gate probe via fn_stage_artifact_precondition()'s
+ * legacy_fallback path), now implemented separately at
+ * scripts/eva/stage-keyed-data-ts4-stage23-artifact-gate-probe.mjs. This file is kept (it is
+ * genuinely useful engineering validation -- it caught 4 real defects during EXEC, documented in
+ * this SD's commit history) but relabeled to avoid the misleading PRD-scenario-ID association.
+ *
+ * Proves database/chairman-gated/20260828_stage_keyed_data_config_widen_v2.sql applies cleanly
+ * immediately after v1 (20260825_dedicated_venture_uat_stage_insert_and_renumber.sql), and again
+ * idempotently, inside a SINGLE transaction that is ALWAYS rolled back -- never committed.
+ * Standalone .mjs probe script emitting a committed JSON evidence artifact, per TR-6: this is a
+ * production-state assertion (it depends on the live schema, the live gate_boundary_config/
+ * venture_stage_cutover_grandfather/stage_artifact_requirements row content, and the 2 real
+ * parked ventures v1's own banner names), so a non-prod DB tier would not hold the fixtures
+ * needed to prove anything -- and tests/helpers/db-target.js's fail-closed DB-tier gate would
+ * report this SKIPPED, not PASS/FAIL, if authored as a vitest *.db.test.js (per TESTING
+ * sub-agent finding TR-6/8ca0d619...).
  *
  * COMMIT is never issued: this file only ever calls BEGIN / ROLLBACK explicitly, both v1 and v2
  * are pure DDL/DML text (neither contains a literal transaction-control statement -- both
@@ -37,7 +46,7 @@ import { assertInTransaction } from '../../lib/eva/uat-stage-migration/rollback-
 const ENGINEER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const V1_PATH = path.resolve(ENGINEER_ROOT, 'database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber.sql');
 const V2_PATH = path.resolve(ENGINEER_ROOT, 'database/chairman-gated/20260828_stage_keyed_data_config_widen_v2.sql');
-const EVIDENCE_PATH = path.resolve(ENGINEER_ROOT, 'database/evidence/stage-keyed-data-config/TS-4-v1-v2-rollback-dryrun.json');
+const EVIDENCE_PATH = path.resolve(ENGINEER_ROOT, 'database/evidence/stage-keyed-data-config/v1-v2-apply-idempotency-dryrun.json');
 
 async function main() {
   const generatedAt = new Date().toISOString();
@@ -45,7 +54,7 @@ async function main() {
   const v2 = fs.readFileSync(V2_PATH, 'utf8');
 
   const client = await createDatabaseClient('engineer', { verify: false });
-  const evidence = { generatedAt, sd: 'SD-LEO-INFRA-STAGE-KEYED-DATA-001', scenario: 'TS-4', steps: [] };
+  const evidence = { generatedAt, sd: 'SD-LEO-INFRA-STAGE-KEYED-DATA-001', scenario: 'v1-v2-apply-idempotency-dryrun (general engineering validation, not a PRD test scenario)', steps: [] };
   let pass = false;
   try {
     await client.query('BEGIN');

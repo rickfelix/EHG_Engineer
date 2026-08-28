@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-28T13:17:27.827Z",
+  "generatedAt": "2026-08-28T13:45:55.597Z",
   "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
   "scenario": "TS-7",
   "divergenceBeforeAnyMigration": 0,
@@ -82,12 +82,6 @@
       "is_demo": true
     },
     {
-      "venture_id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
-      "eva_mirror": 24,
-      "ventures_actual": 25,
-      "is_demo": true
-    },
-    {
       "venture_id": "bbb27f1f-5af0-4b07-91cb-4ed77d0541f9",
       "eva_mirror": 23,
       "ventures_actual": 24,
@@ -125,6 +119,12 @@
     },
     {
       "venture_id": "e3adec5b-4f02-4a0d-abe4-9e7e8b8a1179",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
       "eva_mirror": 24,
       "ventures_actual": 25,
       "is_demo": true

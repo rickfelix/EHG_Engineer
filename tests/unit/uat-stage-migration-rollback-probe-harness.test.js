@@ -3,6 +3,7 @@ import {
   assertNotCommitFamily,
   assertInTransaction,
   assertSqlState,
+  assertRowCount,
   withSavepoint,
   runRolledBack,
 } from '../../lib/eva/uat-stage-migration/rollback-probe-harness.mjs';
@@ -55,6 +56,28 @@ describe('assertSqlState', () => {
 
   it('throws when the code does not match', () => {
     expect(() => assertSqlState({ code: '42501' }, '23514')).toThrow(/expected 23514, got 42501/);
+  });
+});
+
+// TS-6 (SD-LEO-INFRA-STAGE-KEYED-DATA-001, FR-7 AC-1/AC-4): the row-count assertion catches a
+// zero-row false pass, e.g. an UPDATE WHERE clause matching 0 rows (the id-vs-venture_id trap).
+describe('assertRowCount', () => {
+  it('passes when rowCount meets the minimum', () => {
+    expect(assertRowCount({ rowCount: 1 })).toBe(true);
+    expect(assertRowCount({ rowCount: 5 }, 3)).toBe(true);
+  });
+
+  it('FAILS instead of silently reporting success when the WHERE clause matched zero rows', () => {
+    expect(() => assertRowCount({ rowCount: 0 })).toThrow(/ROW_COUNT_ASSERTION_FAILED/);
+  });
+
+  it('throws when rowCount is missing from the result entirely', () => {
+    expect(() => assertRowCount({})).toThrow(/ROW_COUNT_ASSERTION_FAILED/);
+    expect(() => assertRowCount(null)).toThrow(/ROW_COUNT_ASSERTION_FAILED/);
+  });
+
+  it('respects a custom minimum', () => {
+    expect(() => assertRowCount({ rowCount: 2 }, 3)).toThrow(/ROW_COUNT_ASSERTION_FAILED/);
   });
 });
 

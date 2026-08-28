@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-28T13:17:23.907Z",
+  "generatedAt": "2026-08-28T13:45:50.641Z",
   "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
-  "scenario": "TS-4",
+  "scenario": "v1-v2-apply-idempotency-dryrun (general engineering validation, not a PRD test scenario)",
   "steps": [
     {
       "step": "BEGIN",

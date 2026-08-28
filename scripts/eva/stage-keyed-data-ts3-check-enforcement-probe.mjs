@@ -25,7 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
-import { assertNotCommitFamily, assertInTransaction, withSavepoint, assertSqlState } from '../../lib/eva/uat-stage-migration/rollback-probe-harness.mjs';
+import { assertNotCommitFamily, assertInTransaction, withSavepoint, assertSqlState, assertRowCount } from '../../lib/eva/uat-stage-migration/rollback-probe-harness.mjs';
 
 const ENGINEER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const V1_PATH = path.resolve(ENGINEER_ROOT, 'database/chairman-gated/20260825_dedicated_venture_uat_stage_insert_and_renumber.sql');
@@ -66,10 +66,14 @@ async function main() {
     evidence.fixtureApplied = true;
 
     const at27 = await withSavepoint(q, 'stage_27_lands', () => q(INSERT_SQL, [27, 'probe_ts3_stage27']));
-    evidence.stage27 = { landed: at27.landed, errorCode: at27.error?.code ?? null };
+    evidence.stage27 = { landed: at27.landed, errorCode: at27.error?.code ?? null, rowCount: at27.result?.rowCount ?? null };
     if (!at27.landed) {
       throw new Error(`TS-3 FAILED: stage_number=27 write did not LAND after v2 widened the CHECK to <= 27 (error: ${at27.error?.message})`);
     }
+    // FR-7 AC-1: absence of a thrown error is not evidence the INSERT actually happened -- assert
+    // the affected-row-count explicitly (RISK sub-agent false-pass mode #1).
+    assertRowCount(at27.result, 1);
+    evidence.stage27RowCountAsserted = true;
 
     const at28 = await withSavepoint(q, 'stage_28_positive_control', () => q(INSERT_SQL, [28, 'probe_ts3_stage28']));
     evidence.stage28 = { landed: at28.landed, errorCode: at28.error?.code ?? null };
