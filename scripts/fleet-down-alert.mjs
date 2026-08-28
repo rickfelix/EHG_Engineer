@@ -594,13 +594,17 @@ export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now =
   const message = buildFleetDeadManMessage(verdict, now);
   if (DRY) {
     console.log('[fleet-dead-man] [DRY] would page chairman via sendChairmanSMS:', message.body);
-    return;
+    return { transitioned };
   }
   const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
   const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
   const { zone: chairmanZone } = await resolveChairmanZone(now);
   const r = await send(message, { now, chairmanZone });
   console.log('[fleet-dead-man] sendChairmanSMS result:', JSON.stringify(r));
+  // SD-LEO-INFRA-OFF-HOST-FLEET-001 / TR-4: {transitioned} lets main() suppress a duplicate
+  // fleet-liveness-pager page for the SAME outage on the SAME tick. Every existing caller
+  // discards the return value today, so this is additive-only.
+  return { transitioned };
 }
 
 /**
@@ -704,6 +708,206 @@ export async function checkPerHostFreeze(db, DRY, sendChairmanSMSFn = null, now 
   }
 }
 
+// SD-LEO-INFRA-OFF-HOST-FLEET-001: a 5th, independent arm. The 08-27 outage showed detection
+// isn't delivery -- two chairman-page obligations sat status='owed' and were voided_stale rather
+// than delivered, because delivery depends on a reconciliation tick that only ever ran on a local,
+// now-dark machine. This arm measures TWO signals (heartbeat + obligations backlog), flushes the
+// backlog off-host before evaluating (the actual root-cause fix), and reports DB-unreachable as a
+// structurally distinct 'cannot measure' condition, never as fleet-dark.
+const FLEET_LIVENESS_EVENT_TYPE = 'fleet_liveness_verdict';
+const FLEET_LIVENESS_MEASUREMENT_ERROR_EVENT_TYPE = 'fleet_liveness_measurement_error';
+
+// Pure decision (FR-1): is the fleet fully dark, from the heartbeat signal alone? Leg-A-only
+// (unlike evaluateFleetDeadManPredicate, no completions check) so a stray completion write can
+// never mask a genuinely stale heartbeat; owedCount/oldestOwedAgeMin are diagnostic context only,
+// never gating.
+export function evaluateFleetLivenessPredicate({
+  lastHeartbeatAt,
+  owedCount = 0,
+  oldestOwedAgeMin = null,
+  now = new Date(),
+  windowMin = FLEET_DEAD_MAN_WINDOW_MIN,
+} = {}) {
+  const nowTs = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const backlogSuffix = `; obligations backlog: owedCount=${owedCount}${oldestOwedAgeMin != null ? `, oldestOwedAgeMin=${oldestOwedAgeMin.toFixed(1)}` : ''}`;
+
+  if (!lastHeartbeatAt) {
+    return { dead: true, reason: `no claude_sessions heartbeat has ever been recorded${backlogSuffix}`, elapsedMin: null, owedCount, oldestOwedAgeMin };
+  }
+  const last = new Date(lastHeartbeatAt);
+  if (Number.isNaN(last.getTime())) {
+    return { dead: true, reason: `lastHeartbeatAt is unparseable -- treating as no signal${backlogSuffix}`, elapsedMin: null, owedCount, oldestOwedAgeMin };
+  }
+  const elapsedMin = (nowTs.getTime() - last.getTime()) / 60000;
+  if (elapsedMin < windowMin) {
+    return { dead: false, reason: `heartbeat is ${elapsedMin.toFixed(1)}min old -- within the ${windowMin}min window${backlogSuffix}`, elapsedMin, owedCount, oldestOwedAgeMin };
+  }
+  return {
+    dead: true,
+    reason: `heartbeat stale for ${elapsedMin.toFixed(1)}min (>= ${windowMin}min)${backlogSuffix}`,
+    elapsedMin,
+    owedCount,
+    oldestOwedAgeMin,
+  };
+}
+
+/** Pure: the chairman-SMS message payload for a fleet-liveness dead-fleet trip. */
+export function buildFleetLivenessMessage(verdict, now = new Date()) {
+  return {
+    type: 'status',
+    body: `FLEET LIVENESS: ${verdict.reason}. Start/restart a worker or coordinator session.`,
+    kind: 'fleet_liveness_alert',
+    dedupeKey: `fleet-liveness-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
+/** Pure: the chairman-SMS message payload for a watchdog-cannot-measure trip (FR-4). */
+export function buildWatchdogCannotMeasureMessage(reason, now = new Date()) {
+  return {
+    type: 'status',
+    body: `WATCHDOG CANNOT MEASURE: the watchdog could not reach the database and is NOT reporting a fleet-dark verdict. ${reason}`,
+    kind: 'watchdog_cannot_measure',
+    dedupeKey: `watchdog-cannot-measure-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
+// FR-4: a single, uniform error contract for the two measurement reads below -- EITHER a thrown
+// exception OR a resolved response with a non-null `error` field routes here. A resolved response
+// with error:null and an empty data array is NOT a failure (0 rows is a fully-measured result).
+function isMeasurementFailure(result) {
+  return Boolean(result && result.error);
+}
+
+// Generic edge-trigger record + page helper shared by checkFleetLiveness's dead-fleet and
+// cannot-measure paths (mirrors recordFleetDeadManVerdict's read-prior-state -> write -> decide
+// mechanism, generalized to a boolean `active` state + a zero-arg `buildMessage` closure, invoked
+// only when a send is about to happen). `suppressSend` (FR-3) still records the verdict row but
+// skips sendChairmanSMS for this tick.
+async function recordAndPage(db, eventType, active, reason, buildMessage, DRY, sendChairmanSMSFn, now, suppressSend = false) {
+  let transitioned = true;
+  try {
+    const { data: rows, error } = await db
+      .from('system_events')
+      .select('payload')
+      .eq('event_type', eventType)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error(error.message);
+    const lastState = rows && rows[0] ? rows[0].payload?.state : 'alive';
+    const nextState = active ? 'dead' : 'alive';
+    transitioned = nextState !== lastState;
+    const payload = { state: nextState, reason, transitioned };
+    const { error: insertErr } = await db.from('system_events').insert({
+      event_type: eventType,
+      actor_type: 'system',
+      actor_role: 'fleet-liveness-pager',
+      payload,
+    });
+    if (insertErr) throw new Error(insertErr.message);
+  } catch (err) {
+    console.error(`[fleet-liveness] ${eventType} verdict recording failed (non-fatal, alert logic unaffected):`, err.message);
+  }
+
+  if (!active || !transitioned) return { transitioned };
+
+  if (suppressSend) {
+    console.log(`[fleet-liveness] ${eventType} transitioned to dead but SMS suppressed (already paged this tick by fleet-dead-man-pager)`);
+    return { transitioned };
+  }
+
+  const message = buildMessage(now);
+  if (DRY) {
+    console.log(`[fleet-liveness] [DRY] would page chairman via sendChairmanSMS (${eventType}):`, message.body);
+    return { transitioned };
+  }
+  const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
+  const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
+  const { zone: chairmanZone } = await resolveChairmanZone(now);
+  const r = await send(message, { now, chairmanZone });
+  console.log(`[fleet-liveness] sendChairmanSMS result (${eventType}):`, JSON.stringify(r));
+  return { transitioned };
+}
+
+// FR-2: rollback lever for the off-host reconcile flush, read at CALL TIME (never hoisted to a
+// module-scope const like this file's other tunables) -- deliberate deviation, since tests must
+// be able to toggle it per test case within one file run.
+function reconcileEnabled() {
+  const v = process.env.FLEET_LIVENESS_RECONCILE_ENABLED;
+  return !(v === '0' || v === 'false');
+}
+
+// FR-1..FR-4: the 5th arm. `deadManAlreadyPagedThisTick` is threaded from main()'s own
+// fleet-dead-man-pager result this tick (TR-4), defaulting false so a throw in that OTHER arm
+// never silently suppresses this one. `reconcileOutboundSmsFn` is an injectable test seam; the
+// production default dynamically imports the real reconcileOutboundSms.
+export async function checkFleetLiveness(db, DRY, sendChairmanSMSFn = null, now = new Date(), deadManAlreadyPagedThisTick = false, reconcileOutboundSmsFn = null) {
+  const nowTs = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+
+  let hbResult;
+  try {
+    hbResult = await db
+      .from('claude_sessions')
+      .select('heartbeat_at')
+      .not('heartbeat_at', 'is', null)
+      .order('heartbeat_at', { ascending: false })
+      .limit(1);
+  } catch (e) {
+    hbResult = { data: null, error: { message: e.message } };
+  }
+  if (isMeasurementFailure(hbResult)) {
+    const reason = `claude_sessions heartbeat query failed: ${hbResult.error.message}`;
+    console.error(`[fleet-liveness] MEASUREMENT FAILURE: ${reason}`);
+    await recordAndPage(db, FLEET_LIVENESS_MEASUREMENT_ERROR_EVENT_TYPE, true, reason, () => buildWatchdogCannotMeasureMessage(reason, nowTs), DRY, sendChairmanSMSFn, nowTs);
+    return;
+  }
+
+  // FR-2 root-cause fix: off-host reconcile flush BEFORE the obligations read. DRY skips this
+  // entirely -- a real Twilio send would fire for any already-queued backlog otherwise.
+  if (DRY) {
+    console.log('[fleet-liveness] [DRY] would flush obligations backlog via reconcileOutboundSms');
+  } else if (!reconcileEnabled()) {
+    console.log('[fleet-liveness] reconcile flush disabled via FLEET_LIVENESS_RECONCILE_ENABLED');
+  } else {
+    try {
+      const reconcile = reconcileOutboundSmsFn || (await import(pathToFileURL(path.resolve('lib/chairman/sms-outbound-worker.js')).href)).reconcileOutboundSms;
+      await reconcile(db, { batchLimit: 25 });
+    } catch (e) {
+      console.error('[fleet-liveness] reconcileOutboundSms failed (non-fatal, continuing):', e.message);
+    }
+  }
+
+  let obResult;
+  try {
+    obResult = await db
+      .from('sms_outbound_obligations')
+      .select('created_at', { count: 'exact' })
+      .eq('status', 'owed')
+      .order('created_at', { ascending: true })
+      .limit(1);
+  } catch (e) {
+    obResult = { data: null, error: { message: e.message }, count: null };
+  }
+  if (isMeasurementFailure(obResult)) {
+    const reason = `sms_outbound_obligations backlog query failed: ${obResult.error.message}`;
+    console.error(`[fleet-liveness] MEASUREMENT FAILURE: ${reason}`);
+    await recordAndPage(db, FLEET_LIVENESS_MEASUREMENT_ERROR_EVENT_TYPE, true, reason, () => buildWatchdogCannotMeasureMessage(reason, nowTs), DRY, sendChairmanSMSFn, nowTs);
+    return;
+  }
+
+  // Both measurements succeeded -- record recovery (no message; recordAndPage only sends on
+  // active:true) so a prior cannot-measure state clears its own edge-trigger correctly.
+  await recordAndPage(db, FLEET_LIVENESS_MEASUREMENT_ERROR_EVENT_TYPE, false, 'measurement succeeded', () => buildWatchdogCannotMeasureMessage('', nowTs), DRY, sendChairmanSMSFn, nowTs);
+
+  const lastHeartbeatAt = hbResult.data && hbResult.data[0] ? hbResult.data[0].heartbeat_at : null;
+  const owedCount = obResult.count || 0;
+  const oldestOwedRow = obResult.data && obResult.data[0];
+  const oldestOwedAgeMin = oldestOwedRow ? (nowTs.getTime() - new Date(oldestOwedRow.created_at).getTime()) / 60000 : null;
+
+  const verdict = evaluateFleetLivenessPredicate({ lastHeartbeatAt, owedCount, oldestOwedAgeMin, now: nowTs });
+  console.log(`[fleet-liveness] ${verdict.dead ? 'DEAD' : 'alive'}: ${verdict.reason}`);
+  await recordAndPage(db, FLEET_LIVENESS_EVENT_TYPE, verdict.dead, verdict.reason, () => buildFleetLivenessMessage(verdict, nowTs), DRY, sendChairmanSMSFn, nowTs, deadManAlreadyPagedThisTick);
+}
+
 /**
  * QF-20260803-882: run one notification arm in isolation, so no arm can suppress another.
  *
@@ -768,13 +972,18 @@ async function main() {
   }
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 
+  // TR-4: runAlertArms runs sequentially, so this closure-scoped let is race-free; fails safe
+  // (stays false) if the fleet-dead-man-pager arm itself throws.
+  let deadManTransitioned = false;
+
   // QF-20260803-882: isolated arms, pager first. Previously two bare awaits — an email throw
   // suppressed the pager entirely and the run still looked clean.
   const { failed } = await runAlertArms([
     ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
-    ['fleet-dead-man-pager', () => checkFleetDeadMan(db, DRY)],
+    ['fleet-dead-man-pager', async () => { deadManTransitioned = (await checkFleetDeadMan(db, DRY))?.transitioned ?? false; }],
     ['fleet-dead-man-per-host-pager', () => checkPerHostFreeze(db, DRY)],
     ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
+    ['fleet-liveness-pager', () => checkFleetLiveness(db, DRY, undefined, undefined, deadManTransitioned)],
   ]);
   // A half-delivered alert must not exit 0. The workflow treating a partial page as success is the
   // same silence one layer up.
