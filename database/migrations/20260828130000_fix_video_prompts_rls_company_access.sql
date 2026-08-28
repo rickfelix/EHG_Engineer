@@ -20,6 +20,17 @@
 -- authorship (nobody else's prompt can be edited/deleted, even within the same company).
 --
 -- Idempotent (DROP POLICY IF EXISTS + CREATE POLICY), wrapped in a transaction.
+--
+-- SECURITY review db9a6d11-acd9-4ee3-8f33-99bbe50f1816 (SEC-4, 2026-08-28): this file and
+-- 20260828120000_create_video_prompts_table_corrected.sql were, for a time, two DIVERGENT
+-- representations of "what video_prompts RLS should be" -- 20260828120000 still created the
+-- broken ventures.created_by-scoped policies, so replaying it after this file would have
+-- silently regressed the live policies back to deny-everyone with no error (both migrations
+-- "succeed"; only the predicate differs). 20260828120000 has since been rewritten to create
+-- the SAME user_company_access-scoped policies below directly, so this file is now a
+-- redundant re-assertion of the identical predicate -- kept as the historical record of the
+-- fix (and because it is itself still idempotent/harmless to rerun), not as a second source of
+-- truth. If the two files' policy bodies ever diverge again, that is itself the bug.
 
 BEGIN;
 

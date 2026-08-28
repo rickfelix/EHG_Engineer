@@ -9,8 +9,17 @@
 // Normalizes across two incompatible RLS ownership models (creative_assets /
 // creative_asset_variant_scores scope via user_company_access; marketing_content_variants
 // scopes via ventures.created_by, NULL on every live venture) by resolving access
-// server-side via user_company_access and running as service_role -- never a client-side
-// .from() call, per TR-1.
+// server-side via user_company_access -- never a client-side .from() call, per TR-1.
+//
+// SECURITY review db9a6d11-acd9-4ee3-8f33-99bbe50f1816 (SEC-3): service_role is used ONLY for
+// the 'read' action's creative_asset_variant_scores join (the genuine RLS-model mismatch this
+// bridge exists to work around) and for resolveVentureCompanyAccess's own resolution query
+// (which must see across the tenancy boundary to decide it). The 'list' and 'write' actions
+// run under a CALLER-scoped client (the verified user's own JWT, via createCallerClient()) --
+// creative_assets already has a working `creative_assets_venture_access` RLS policy scoped
+// through the SAME user_company_access predicate this function checks in application code, so
+// using the caller's own token gives that SQL policy as a second, independent layer: a bug in
+// resolveVentureCompanyAccess becomes RLS-denied, not unmitigated cross-tenant access.
 //
 // ============================================================================================
 // DENO-BUNDLE SAFETY (verified 2026-08-28 with the standalone `deno` CLI, `deno check`):
@@ -55,34 +64,31 @@
 // for SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-D FR-5.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { verifyJWT, getCorsHeaders, createAdminClient } from '../_shared/auth.ts';
-// @ts-ignore -- plain ESM .js imports, no local type declarations
+import { verifyJWT, getCorsHeaders, createAdminClient, createCallerClient } from '../_shared/auth.ts';
+// Plain ESM .js imports -- Deno resolves and type-checks these fine (implicit `any`, no local
+// .d.ts needed); no @ts-ignore/@ts-expect-error required (deno check errors on an UNUSED
+// expect-error directive, so a stale suppression comment here would itself fail the check).
 import { createSampler } from '../../../lib/marketing/ai/thompson-sampler.js';
-// @ts-ignore
 import { deriveVariantOutcomes } from '../../../lib/marketing/ai/variant-outcome-derivation.js';
-// @ts-ignore
 import { resolveVentureCompanyAccess } from '../../../lib/creative/venture-company-access.js';
+// SECURITY review db9a6d11 (SEC-1): shared allow-list, ONE representation imported by both this
+// Edge Function and the sibling Node-side lib/creative/variant-scoring-bridge.js#bridgeWriteVariant()
+// -- previously the allow-list was defined twice (once here, once nowhere on the Node side,
+// which still spread caller input unfiltered).
+import { pickAllowedAssetFields } from '../../../lib/creative/asset-write-fields.js';
 
 const sampler = createSampler();
 
-// TESTING FAIL 49e5b1ef (item 4): explicit column allow-list for the write path. The prior
-// version did `.insert({ ...asset, venture_id, campaign_id })`, spreading a caller-supplied
-// object directly into a service_role insert -- a caller could inject any creative_assets
-// column (including consumed_at, or a future column this function was never audited against)
-// simply by adding it to the request body. Only these fields are ever accepted from the
-// caller; venture_id/campaign_id are always the server-resolved/validated values, never taken
-// from the caller's `asset` object even if present there.
-const ASSET_WRITE_ALLOWED_FIELDS = ['id', 'capability', 'generator', 'prompt', 'provenance', 'cost'] as const;
-
-function pickAllowedAssetFields(asset: Record<string, unknown> | null | undefined): Record<string, unknown> {
-  const picked: Record<string, unknown> = {};
-  if (!asset || typeof asset !== 'object') return picked;
-  for (const field of ASSET_WRITE_ALLOWED_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(asset, field)) {
-      picked[field] = (asset as Record<string, unknown>)[field];
-    }
-  }
-  return picked;
+// SECURITY review db9a6d11 (SEC-2): a Vite build-time flag (VITE_ENABLE_VARIANT_PERSISTENCE_BRIDGE)
+// governs the ehg-app CLIENT's decision to call this endpoint, but cannot hold a change-control
+// boundary against a live, publicly-deployed HTTP endpoint -- the endpoint works the moment it's
+// deployed regardless of what any particular client does. This is the SERVER-side gate: an env
+// var set via Supabase secrets (NOT the VITE_ client one, which is baked into the browser
+// bundle and readable by anyone). Defaults to OFF (unset/anything other than 'true') so the
+// write path stays dormant until the same ceremony that applies FR-4 (the chairman-gated
+// creative_asset_variant_scores RLS fix) also flips this secret.
+function writePersistenceEnabled(): boolean {
+  return Deno.env.get('ENABLE_VARIANT_PERSISTENCE_BRIDGE') === 'true';
 }
 
 async function selectAssetVariantForVenture(supabase: any, ventureId: string) {
@@ -148,15 +154,14 @@ serve(async (req: Request) => {
     // Verify JWT before any database operations. callerUserId comes ONLY from the verified
     // token, never from the request body -- a client-supplied user id would let a caller
     // impersonate any venture's access.
-    const { user, error: authError, status: authStatus } = await verifyJWT(req);
-    if (authError || !user) {
+    const { user, token, error: authError, status: authStatus } = await verifyJWT(req);
+    if (authError || !user || !token) {
       return new Response(
         JSON.stringify({ status: 'unauthorized', reason: authError || 'invalid_token' }),
         { status: authStatus || 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createAdminClient();
     const body = await req.json().catch(() => ({}));
     const { action, venture_id: ventureId } = body;
 
@@ -167,7 +172,10 @@ serve(async (req: Request) => {
       );
     }
 
-    const access = await resolveVentureCompanyAccess({ supabase, userId: user.id, ventureId });
+    // resolveVentureCompanyAccess itself needs to see across the tenancy boundary to decide
+    // it, so it runs under admin -- same as the 'read' action's RLS-model-mismatch join.
+    const adminClient = createAdminClient();
+    const access = await resolveVentureCompanyAccess({ supabase: adminClient, userId: user.id, ventureId });
     if (!access.allowed) {
       return new Response(
         JSON.stringify({ status: 'unauthorized', reason: access.reason }),
@@ -176,12 +184,16 @@ serve(async (req: Request) => {
     }
 
     if (action === 'read') {
-      const result = await selectAssetVariantForVenture(supabase, ventureId);
+      const result = await selectAssetVariantForVenture(adminClient, ventureId);
       return new Response(
         JSON.stringify(result),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // SEC-3: 'list' and 'write' run under the CALLER's own JWT (RLS applies as that user,
+    // via creative_assets_venture_access) rather than admin -- see module docblock.
+    const callerClient = createCallerClient(token);
 
     // TESTING FAIL 49e5b1ef (item 2): US-004 AC-4 requires persisted variants to survive a
     // page reload. VideoVariantTesting.tsx's `campaigns` state was previously write-only (set
@@ -190,7 +202,7 @@ serve(async (req: Request) => {
     // per TR-1/FR-5), returning persisted creative_assets rows for the venture grouped by
     // campaign_id so the caller can reconstruct the same Campaign shape it renders in-session.
     if (action === 'list') {
-      const { data, error } = await supabase
+      const { data, error } = await callerClient
         .from('creative_assets')
         .select('id, campaign_id, capability, generator, prompt, provenance, cost, created_at')
         .eq('venture_id', ventureId)
@@ -211,6 +223,17 @@ serve(async (req: Request) => {
     }
 
     if (action === 'write') {
+      // SEC-2: server-side gate, independent of the ehg-app client's
+      // VITE_ENABLE_VARIANT_PERSISTENCE_BRIDGE build-time flag -- that flag can't hold a
+      // change-control boundary against a live, publicly-deployed HTTP endpoint. Defaults OFF
+      // until the same ceremony that applies FR-4 also sets this Supabase secret.
+      if (!writePersistenceEnabled()) {
+        return new Response(
+          JSON.stringify({ status: 'error', error: 'variant_persistence_write_disabled' }),
+          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { campaign_id: campaignId, asset } = body;
       if (!campaignId) {
         return new Response(
@@ -219,16 +242,16 @@ serve(async (req: Request) => {
         );
       }
 
-      // Explicit allow-list, never a spread of caller input (TESTING FAIL 49e5b1ef, item 4).
-      // venture_id/campaign_id are always the server-resolved values below, not read from the
-      // caller's `asset` object even if a caller includes them there.
+      // Explicit allow-list, never a spread of caller input (TESTING FAIL 49e5b1ef, item 4 /
+      // SECURITY review SEC-1). venture_id/campaign_id are always the server-resolved values
+      // below, not read from the caller's `asset` object even if a caller includes them there.
       const insertPayload = {
         ...pickAllowedAssetFields(asset),
         venture_id: ventureId,
         campaign_id: campaignId,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await callerClient
         .from('creative_assets')
         .insert(insertPayload)
         .select()
