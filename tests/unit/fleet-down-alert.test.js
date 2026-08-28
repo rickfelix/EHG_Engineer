@@ -1003,32 +1003,51 @@ describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integra
     expect(send).toHaveBeenCalledTimes(2); // still dead -> suppressed by its OWN edge-trigger, not spammed
   });
 
-  it('TS-8: same-tick double-page suppression, the Leg-B-masked divergence case, and the checkFleetDeadMan-throws-defaults-false case', async () => {
+  it('TS-8: same-tick double-page suppression (only when dead-man genuinely DELIVERED), the Leg-B-masked divergence case, and the checkFleetDeadMan-throws-defaults-false case', async () => {
     // Suppression leg: a trivial parameter test.
     const db1 = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
     const send1 = vi.fn().mockResolvedValue({ sent: true });
-    await checkFleetLiveness(db1, false, send1, NOW, /* deadManAlreadyPagedThisTick */ true, vi.fn());
+    await checkFleetLiveness(db1, false, send1, NOW, /* deadManDelivered */ true, vi.fn());
     expect(send1).not.toHaveBeenCalled();
     expect(db1._inserted.some((r) => r.event_type === 'fleet_liveness_verdict' && r.payload.state === 'dead')).toBe(true);
+
+    // TESTING sub-agent fix (F1, EXEC evidence row 49225f26-ada1-43f9-a5c4-ac1eb6803b0e):
+    // suppression must be keyed on genuine DELIVERY (r.sent), not merely "dead-man's state
+    // transitioned" -- a transitioned-but-undelivered page (soft-fail) must NOT suppress this arm.
+    const dbSoftFail = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const sendSoftFail = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(dbSoftFail, false, sendSoftFail, NOW, /* deadManDelivered (dead-man transitioned but sent:false) */ false, vi.fn());
+    expect(sendSoftFail).toHaveBeenCalledTimes(1);
 
     // Leg-B-masked divergence: checkFleetDeadMan would report alive (completions>0 masks its own
     // Leg-B) while this arm's Leg-A-only predicate still reports dead:true and pages independently.
     const db2 = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
     const send2 = vi.fn().mockResolvedValue({ sent: true });
-    await checkFleetLiveness(db2, false, send2, NOW, /* deadManAlreadyPagedThisTick */ false, vi.fn());
+    await checkFleetLiveness(db2, false, send2, NOW, /* deadManDelivered */ false, vi.fn());
     expect(send2).toHaveBeenCalledTimes(1);
 
     // checkFleetDeadMan-throws case: mirrors main()'s own wiring -- the assignment inside its arm
     // wrapper never executes past a throw, so the closure-scoped local stays at its false
     // initializer. A failure in the OTHER arm must never silently suppress this one.
-    let deadManTransitioned = false;
+    let deadManDelivered = false;
     try {
-      deadManTransitioned = (await checkFleetDeadMan({ from() { throw new Error('boom'); } }, false)).transitioned;
+      deadManDelivered = (await checkFleetDeadMan({ from() { throw new Error('boom'); } }, false)).delivered;
     } catch { /* stays false, matching main()'s wiring */ }
-    expect(deadManTransitioned).toBe(false);
+    expect(deadManDelivered).toBe(false);
     const send3 = vi.fn().mockResolvedValue({ sent: true });
-    await checkFleetLiveness(makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] }), false, send3, NOW, deadManTransitioned, vi.fn());
+    await checkFleetLiveness(makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] }), false, send3, NOW, deadManDelivered, vi.fn());
     expect(send3).toHaveBeenCalledTimes(1);
+  });
+
+  it('checkFleetDeadMan returns delivered:true only when sendChairmanSMS genuinely reports sent:true (F1)', async () => {
+    const dbDeadMan = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] }); // reuses claude_sessions/system_events routes; completions read is separate below
+    dbDeadMan.from = ((orig) => (table) => {
+      if (table === 'strategic_directives_v2') return { select: () => ({ eq: () => ({ gte: async () => ({ count: 0, error: null }) }) }) };
+      return orig(table);
+    })(dbDeadMan.from);
+    const delivered = await checkFleetDeadMan(dbDeadMan, false, vi.fn().mockResolvedValue({ sent: false, reason: 'soft-failed' }), NOW);
+    expect(delivered.transitioned).toBe(true);
+    expect(delivered.delivered).toBe(false);
   });
 
   it('TS-9: FLEET_LIVENESS_RECONCILE_ENABLED is parsed at CALL TIME, not hoisted', async () => {

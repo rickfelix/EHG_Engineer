@@ -594,17 +594,21 @@ export async function checkFleetDeadMan(db, DRY, sendChairmanSMSFn = null, now =
   const message = buildFleetDeadManMessage(verdict, now);
   if (DRY) {
     console.log('[fleet-dead-man] [DRY] would page chairman via sendChairmanSMS:', message.body);
-    return { transitioned };
+    return { transitioned, delivered: false };
   }
   const send = sendChairmanSMSFn || (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
   const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
   const { zone: chairmanZone } = await resolveChairmanZone(now);
   const r = await send(message, { now, chairmanZone });
   console.log('[fleet-dead-man] sendChairmanSMS result:', JSON.stringify(r));
-  // SD-LEO-INFRA-OFF-HOST-FLEET-001 / TR-4: {transitioned} lets main() suppress a duplicate
-  // fleet-liveness-pager page for the SAME outage on the SAME tick. Every existing caller
-  // discards the return value today, so this is additive-only.
-  return { transitioned };
+  // SD-LEO-INFRA-OFF-HOST-FLEET-001 / TR-4 + TESTING sub-agent finding F1 (EXEC evidence row
+  // 49225f26-ada1-43f9-a5c4-ac1eb6803b0e): `delivered` (from r.sent, NOT `transitioned`) is what
+  // main() threads into checkFleetLiveness's suppression -- `transitioned` means "this arm's
+  // internal state flipped", not "a page reached the chairman". Reusing transitioned as the
+  // suppression signal would silently disarm fleet-liveness-pager for an entire outage whenever
+  // dead-man's own send soft-fails (quiet-hours deferral, gate hold, transport failure) -- exactly
+  // the detection-succeeded-but-delivery-failed class this SD exists to close.
+  return { transitioned, delivered: Boolean(r && r.sent) };
 }
 
 /**
@@ -973,17 +977,19 @@ async function main() {
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 
   // TR-4: runAlertArms runs sequentially, so this closure-scoped let is race-free; fails safe
-  // (stays false) if the fleet-dead-man-pager arm itself throws.
-  let deadManTransitioned = false;
+  // (stays false) if the fleet-dead-man-pager arm itself throws. `delivered` (not `transitioned`
+  // -- see checkFleetDeadMan's own F1 comment) is what fleet-liveness-pager needs: a page that
+  // merely transitioned but never actually sent must not disarm the other arm's own attempt.
+  let deadManDelivered = false;
 
   // QF-20260803-882: isolated arms, pager first. Previously two bare awaits — an email throw
   // suppressed the pager entirely and the run still looked clean.
   const { failed } = await runAlertArms([
     ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
-    ['fleet-dead-man-pager', async () => { deadManTransitioned = (await checkFleetDeadMan(db, DRY))?.transitioned ?? false; }],
+    ['fleet-dead-man-pager', async () => { deadManDelivered = (await checkFleetDeadMan(db, DRY))?.delivered ?? false; }],
     ['fleet-dead-man-per-host-pager', () => checkPerHostFreeze(db, DRY)],
     ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],
-    ['fleet-liveness-pager', () => checkFleetLiveness(db, DRY, undefined, undefined, deadManTransitioned)],
+    ['fleet-liveness-pager', () => checkFleetLiveness(db, DRY, undefined, undefined, deadManDelivered)],
   ]);
   // A half-delivered alert must not exit 0. The workflow treating a partial page as success is the
   // same silence one layer up.
