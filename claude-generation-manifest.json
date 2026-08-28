@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-28T20:39:30.957Z",
-  "git_commit": "04e17a9f",
+  "generated_at": "2026-08-28T22:05:32.291Z",
+  "git_commit": "c71cc14d",
   "db_snapshot_hash": "4e97d70f203a5729",
   "files": {
     "CLAUDE.md": {
@@ -61,10 +61,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 56909,
-      "bytes": 57503,
-      "estimated_tokens": 14228,
-      "content_hash": "437df10037b91d6a",
+      "chars": 56916,
+      "bytes": 57510,
+      "estimated_tokens": 14229,
+      "content_hash": "6fe34b2422ad84fb",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -197,7 +197,7 @@
     }
   },
   "section_digests": {
-    "global": "c791e92f858bc112",
+    "global": "12739027f49842d9",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -451,7 +451,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "e596a0f4eba72db6",
+      "601": "4d7df263bbf0c7ec",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "44bc3efdff5b9875",
