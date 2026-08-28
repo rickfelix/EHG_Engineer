@@ -2281,6 +2281,28 @@ async function printSolomonInbox() {
 // exact `JUDGED_DECISIONS = [...]` text via regex; wrapping it broke that pin (caught by CI).
 const JUDGED_DECISIONS = ['accepted', 'rejected', 'partial', 'deferred'];
 
+// SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002 (FR-3): the accuracy-denominator exclusion above was
+// keyed on the literal string 'unknown' only. SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002's backfill
+// writes a NEW terminal value, 'unmeasurable', onto formerly-'unknown' correlation-leg rows —
+// without this extension, that write would silently fall INTO `decided` (no longer 'unknown')
+// while failing the numerator (not shipped_clean), mechanically regressing accuracyPct (measured
+// live behavior of the ORIGINAL predicate: this exact class of gap previously moved accuracy from
+// 96% to 8% for a different unhandled value — see the historical comment on the `decided` filter
+// below). 'unmeasurable' means "no instrument will ever resolve this", the same "not yet judged,
+// don't count it either way" status as 'unknown' — extending the SAME exclusion, not a new one.
+// Hoisted to module scope so BOTH computeSolomonLedgerRollup and computeSolomonLedgerByLegAndKind
+// share this exact predicate (the adversarial-critique-flagged duplication risk) — one function,
+// never two literals that could drift. TS-8 regression-tests this directly.
+function isUnresolvedForAccuracy(r) {
+  return r.decision === 'accepted' && (r.outcome === 'unknown' || r.outcome === 'unmeasurable');
+}
+
+// SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002 (FR-3): the set of outcome values that represent an
+// actually-measured downstream consequence — used by consequenceScoredAccuracyPct below. Excludes
+// 'unknown' (not yet resolved) and 'unmeasurable'/'not_applicable' (will never resolve) from BOTH
+// numerator and denominator, consistent with isUnresolvedForAccuracy's "no signal either way".
+const RESOLVED_CONSEQUENCE_OUTCOMES = Object.freeze(['shipped_clean', 'reverted', 'caused_rework']);
+
 function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   const all = rows || [];
   if (all.length === 0) return null;
@@ -2296,10 +2318,17 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
   // in the denominator via decision alone and already fails the numerator (decision!=='accepted'),
   // so writing outcome='not_applicable' is accuracy-math-neutral by construction.
   const decidedBatchOnly = decidedAll.filter((r) => r.batch_stamped !== true);
-  const unresolvedAcceptedCount = decidedBatchOnly.filter((r) => r.decision === 'accepted' && r.outcome === 'unknown').length;
+  const unresolvedAcceptedCount = decidedBatchOnly.filter(isUnresolvedForAccuracy).length;
   // Accuracy denominator only — cost-per-accepted below intentionally uses decidedBatchOnly (an
   // accepted row already incurred cost regardless of whether its outcome has resolved yet).
-  const decided = decidedBatchOnly.filter((r) => !(r.decision === 'accepted' && r.outcome === 'unknown'));
+  const decided = decidedBatchOnly.filter((r) => !isUnresolvedForAccuracy(r));
+  // FR-3: a distinct lens — precision among rows with ANY measured consequence (shipped_clean/
+  // reverted/caused_rework), regardless of leg or whether they were ever rejected/deferred at
+  // decision time. Deliberately NOT gated on JUDGED_DECISIONS/decidedBatchOnly's decision-based
+  // filter — a row's consequence is measured independently of its decision-time judgment.
+  const withConsequence = all.filter((r) => r.batch_stamped !== true && RESOLVED_CONSEQUENCE_OUTCOMES.includes(r.outcome));
+  const consequenceShippedClean = withConsequence.filter((r) => r.outcome === 'shipped_clean').length;
+  const consequenceScoredAccuracyPct = withConsequence.length > 0 ? Math.round((consequenceShippedClean / withConsequence.length) * 100) : null;
   const pending = all.filter((r) => !r.decision || r.decision === 'pending');
   const oldestPendingAgeMs = pending.length > 0
     ? Math.max(...pending.map((r) => nowMs - new Date(r.created_at).getTime()))
@@ -2332,6 +2361,7 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
       costPerAccepted,
       batchExcludedCount,
       unresolvedAcceptedCount,
+      consequenceScoredAccuracyPct,
     };
   }
 
@@ -2349,6 +2379,7 @@ function computeSolomonLedgerRollup(rows, nowMs = Date.now()) {
     costPerAccepted,
     batchExcludedCount,
     unresolvedAcceptedCount,
+    consequenceScoredAccuracyPct,
   };
 }
 
@@ -2368,7 +2399,7 @@ function computeSolomonLedgerByLegAndKind(rows) {
   }
   const accuracyFor = (legRows) => {
     const decidedAll = legRows.filter((r) => JUDGED_DECISIONS.includes(r.decision));
-    const decided = decidedAll.filter((r) => r.batch_stamped !== true && !(r.decision === 'accepted' && r.outcome === 'unknown'));
+    const decided = decidedAll.filter((r) => r.batch_stamped !== true && !isUnresolvedForAccuracy(r));
     if (decided.length === 0) return { decidedCount: 0, accuracyPct: null };
     const acceptedShippedClean = decided.filter((r) => r.decision === 'accepted' && r.outcome === 'shipped_clean').length;
     return { decidedCount: decided.length, accuracyPct: Math.round((acceptedShippedClean / decided.length) * 100) };
@@ -2425,6 +2456,10 @@ async function printSolomonLedgerRollup() {
 
   console.log('  ' + rollup.decidedCount + ' decided proposal(s) (' + rollup.pendingCount + ' pending, oldest ' + oldestPendingStr + ')');
   console.log('  accuracy: ' + rollup.accuracyPct + '% (' + rollup.acceptedShippedClean + '/' + rollup.decidedCount + ' accepted+shipped_clean)');
+  // SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002 (FR-3): a distinct lens from accuracyPct above —
+  // precision among rows with ANY measured consequence, regardless of leg or decision-time
+  // judgment. Rendered on its own line, clearly labeled, never conflated with accuracyPct.
+  console.log('  consequence-scored accuracy: ' + (rollup.consequenceScoredAccuracyPct !== null ? rollup.consequenceScoredAccuracyPct + '%' : 'n/a (0 resolved rows)'));
   // FR-5: surface how many non-contemporaneous batch-stamped rows were excluded so the accuracy
   // number is chairman/KPI-readable (accuracy is over trustworthy contemporaneous evidence only).
   if (rollup.batchExcludedCount > 0) {

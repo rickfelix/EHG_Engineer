@@ -28,6 +28,7 @@
  *
  * Usage:
  *   node scripts/solomon-ledger-reconcile.cjs [--dry-run]
+ *   node scripts/solomon-ledger-reconcile.cjs --backfill [--dry-run]   (SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002, FR-2 — full-ledger backfill, the only mass-writing mode)
  */
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
@@ -269,9 +270,16 @@ function addRefsFromMetadata(set, metadata) {
  * outcome_ref can legitimately be a bare commit-sha-shaped or narrative string with no real
  * artifact behind it; a LATER unrelated red-merge/revert event that happens to name the same
  * string must never flip a never-built proposal to "reverted" (there is nothing to revert).
- * unknown/shipped_clean flip (a later revert means it was not actually clean). Exported for tests.
+ * unknown/shipped_clean flip (a later revert means it was not actually clean).
+ * SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002 (TR-4): 'unmeasurable' added alongside 'not_applicable' —
+ * a row this SD's writer marks unmeasurable via an exact-match COMMIT_SHA-shaped outcome_ref is
+ * exactly the same "no traceable artifact" case not_applicable already protects; without this a
+ * later unrelated red-merge/revert event naming the same string would clobber it to 'reverted',
+ * which is NOT excluded from the accuracy denominator — reproducing the 96%->8% regression FR-3
+ * exists to prevent, through this function instead of through computeSolomonLedgerRollup's filter.
+ * Exported for tests.
  */
-const NEGATIVE_BACKPROP_TERMINAL_SKIP = Object.freeze([NEGATIVE_OUTCOME, 'caused_rework', 'not_applicable']);
+const NEGATIVE_BACKPROP_TERMINAL_SKIP = Object.freeze([NEGATIVE_OUTCOME, 'caused_rework', 'not_applicable', 'unmeasurable']);
 function selectNegativeBackprop(ledgerRows, negativeRefs) {
   const refSet = negativeRefs instanceof Set ? negativeRefs : new Set((negativeRefs || []).filter(Boolean).map(String));
   const out = [];
@@ -362,11 +370,221 @@ async function backPropagateNegativeOutcomes(supabase, { negativeRefs, source = 
   return { matched, updated };
 }
 
+// ── SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002 (FR-1/FR-2) — full-ledger backfill mode ──────────────
+// Resolves the correlation-leg gap (accepted rows with no outcome_sd_key) that the SD-keyed batch
+// above (line ~424) never touches. Runs via `--backfill` (opt-in; default `main()` behavior for
+// existing crons is unchanged).
+let _outcomeWriterModule = null;
+async function outcomeWriterModule() {
+  _outcomeWriterModule ||= await import('../lib/ledger/outcome-writer.js');
+  return _outcomeWriterModule;
+}
+
+/** The only terminal SD statuses this domain recognizes. Deliberately duplicated (not imported)
+ * from mapSdStatusToOutcome above AND from lib/ledger/outcome-writer.js's identical mapping —
+ * three independent copies of a 2-value set, so a drift test (see tests) is the only thing
+ * holding them together, never a shared import. */
+const TERMINAL_SD_STATUSES = Object.freeze(['completed', 'cancelled']);
+
+/**
+ * Independent re-derivation of a normalized SD key from an outcome_ref, DELIBERATELY NOT sharing
+ * code with lib/ledger/outcome-writer.js's deriveSdKeyFromRef — a bug in one must not make the
+ * other self-certify it. Exported for tests (TS-4e checks the two agree on a shared fixture set).
+ */
+function independentDeriveSdKey(ref, classifyRef, SHAPE, ELIGIBLE) {
+  const shape = classifyRef(ref);
+  if (shape === SHAPE.ELIGIBLE) return String(ref).trim();
+  if (shape === SHAPE.CASE_DRIFT) {
+    const upper = String(ref).trim().toUpperCase();
+    if (ELIGIBLE.test(upper)) return upper;
+  }
+  return null;
+}
+
+/**
+ * Independent verifier (FR-2 AC): counts rows in `rows` (a snapshot array — NEVER re-queried) that
+ * should remain 'still-active' by re-deriving RESOLVABLE/ELIGIBLE/CASE_DRIFT/EMPTY status from
+ * scratch. Never calls resolveLedgerOutcome. `sdStatusLookup(sdKey)` returns a status string or
+ * null/undefined. Exported for tests.
+ */
+async function computeIndependentStillActiveCount(rows, sdStatusLookup) {
+  const { classifyRef, SHAPE, ELIGIBLE } = await refShapePaginate();
+  let count = 0;
+  for (const r of (rows || [])) {
+    const existingKey = r && r.outcome_sd_key ? String(r.outcome_sd_key).trim() : null;
+    if (existingKey) {
+      const status = await sdStatusLookup(existingKey);
+      if (!TERMINAL_SD_STATUSES.includes(status)) count++;
+      continue;
+    }
+    const shape = classifyRef(r && r.outcome_ref);
+    const derivedKey = independentDeriveSdKey(r && r.outcome_ref, classifyRef, SHAPE, ELIGIBLE);
+    // TESTING sub-agent (EXEC phase, D1 -- critical): EMPTY *and* an INELIGIBLE CASE_DRIFT ref
+    // (prefix-only match, e.g. a narrative that opens with an SD-key-like token) both route to
+    // resolveLedgerOutcome's NO_CHANGE per lib/ledger/outcome-writer.js's own branch (d) — so
+    // BOTH must count as still-active here too, or this verifier disagrees with the writer it
+    // exists to independently check (measured live: a 3-row drift on the real ledger before this
+    // fix). Only classifyRef===ELIGIBLE/CASE_DRIFT WITH a successfully derived key looks up a real
+    // SD status; NARRATIVE/COMMIT_SHA/EXCLUDED_QF (and a CASE_DRIFT that fails full-match) never do.
+    if (shape === SHAPE.EMPTY || (shape === SHAPE.CASE_DRIFT && !derivedKey)) { count++; continue; }
+    if (derivedKey) {
+      const status = await sdStatusLookup(derivedKey);
+      if (!TERMINAL_SD_STATUSES.includes(status)) count++;
+    }
+    // NARRATIVE/COMMIT_SHA/EXCLUDED_QF — not still-active (would be unmeasurable-written by the
+    // writer), not counted here.
+  }
+  return count;
+}
+
+/**
+ * TESTING sub-agent (EXEC phase, D4): the readback-discrepancy check (FR-2 AC #6) lived inline in
+ * main(), which is not exported and therefore untestable — a branch that WILL fire in production
+ * (measured: the live snapshot count changed by 1 row between two runs minutes apart) had never
+ * executed under test. Pure, exported: given the counts from a completed backfill run and a fresh
+ * readback of the live outcome='unknown' count, returns whether they agree.
+ * @returns {{ok: boolean, expected: number, actual: number}}
+ */
+function checkReadbackDiscrepancy(counts, liveUnknownCount) {
+  const expected = counts['still-active'] + counts['expected-pre-migration'];
+  return { ok: liveUnknownCount === expected, expected, actual: liveUnknownCount };
+}
+
+const BACKFILL_BUCKETS = Object.freeze([
+  'resolved-written', 'unmeasurable-written', 'still-active',
+  'resolved-by-other', 'expected-pre-migration', 'unaccounted',
+]);
+
+/**
+ * FR-2's full-ledger backfill pass. Fetches ONE immutable snapshot of every outcome='unknown' row
+ * up front, then resolves each via lib/ledger/outcome-writer.js's resolveLedgerOutcome, writing
+ * per its persistence contract with a compare-and-set predicate (`.eq('id', row.id).eq('outcome',
+ * 'unknown')`). Every row lands in exactly one of BACKFILL_BUCKETS. Exported for tests.
+ * @returns {Promise<{buckets: Record<string, string[]>, counts: Record<string, number>, exitCode: number}>}
+ */
+async function runBackfill(supabase, { dryRun = false, nowIso = new Date().toISOString(), sdStatusLookup: injectedLookup } = {}) {
+  const { resolveLedgerOutcome } = await outcomeWriterModule();
+  const sdStatusLookup = injectedLookup || (async (sdKey) => {
+    const { data, error } = await supabase.from('strategic_directives_v2').select('status').eq('sd_key', sdKey).maybeSingle();
+    if (error || !data) return null;
+    return data.status;
+  });
+
+  const snapshot = await fapPaginate(() => supabase
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
+    .select('id, outcome_sd_key, outcome_ref')
+    .eq('outcome', 'unknown')
+    .order('id', { ascending: true }));
+
+  const buckets = { 'resolved-written': [], 'unmeasurable-written': [], 'still-active': [], 'resolved-by-other': [], 'expected-pre-migration': [], unaccounted: [] };
+
+  for (const row of snapshot) {
+    let verdict;
+    try {
+      verdict = await resolveLedgerOutcome(row, { sdStatusLookup });
+    } catch (e) {
+      buckets.unaccounted.push({ id: row.id, reason: `resolveLedgerOutcome threw: ${(e && e.message) || e}` });
+      continue;
+    }
+
+    if (verdict.verdict === 'NO_CHANGE') { buckets['still-active'].push(row.id); continue; }
+
+    if (dryRun) {
+      if (verdict.verdict === 'RESOLVED') buckets['resolved-written'].push(row.id);
+      else buckets['unmeasurable-written'].push(row.id);
+      continue;
+    }
+
+    const payload = { outcome: verdict.outcome, closed_by: CLOSER_OF_RECORD, closed_at: nowIso };
+    if (verdict.outcome_sd_key) payload.outcome_sd_key = verdict.outcome_sd_key;
+
+    try {
+      const { error, count } = await supabase
+        .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
+        .update(payload, { count: 'exact' })
+        .eq('id', row.id)
+        .eq('outcome', 'unknown');
+
+      if (error) {
+        if (error.code === '23514') { buckets['expected-pre-migration'].push(row.id); continue; }
+        buckets.unaccounted.push({ id: row.id, reason: error.message, code: error.code });
+        continue;
+      }
+      if (count === 0) {
+        // CAS lost-update guard: something else touched this row since the snapshot. Re-read once
+        // to find out what it now holds — never assume 'still-active' by default (H3).
+        const { data: reread, error: rereadErr } = await supabase
+          .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
+          .select('outcome')
+          .eq('id', row.id)
+          .maybeSingle();
+        if (rereadErr) { buckets.unaccounted.push({ id: row.id, reason: `CAS skip re-read failed: ${rereadErr.message}` }); continue; }
+        if (!reread || reread.outcome === 'unknown') buckets['still-active'].push(row.id);
+        else buckets['resolved-by-other'].push(row.id);
+        continue;
+      }
+      // TESTING sub-agent (EXEC phase, D5): count===1 is the ONLY value that means "this write is
+      // the one authoritative write for this row". Anything else -- count>1 (should be
+      // structurally impossible on a primary-key match, a real data-integrity signal if seen), or
+      // a client that returns null/undefined because it did not honour { count: 'exact' } -- must
+      // NOT be silently treated as success. Fail-open in the "count the row" direction, never in
+      // the "assume it wrote" direction.
+      if (count !== 1) {
+        buckets.unaccounted.push({ id: row.id, reason: `unexpected write count ${count} (expected exactly 1)` });
+        continue;
+      }
+      if (verdict.verdict === 'RESOLVED') buckets['resolved-written'].push(row.id);
+      else buckets['unmeasurable-written'].push(row.id);
+    } catch (e) {
+      buckets.unaccounted.push({ id: row.id, reason: (e && e.message) || String(e) });
+    }
+  }
+
+  const counts = Object.fromEntries(BACKFILL_BUCKETS.map((b) => [b, buckets[b].length]));
+  const exitCode = counts.unaccounted > 0 ? 1 : (counts['expected-pre-migration'] > 0 ? 2 : 0);
+  return { buckets, counts, exitCode, snapshotSize: snapshot.length };
+}
+
+// SECURITY sub-agent (EXEC phase, S-1): an unrecognized flag (--dryrun, --dry_run, -n, a typo)
+// must NEVER silently resolve to dryRun=false — that would turn an operator's intended dry run
+// into a live write across the full backfill population. Fail loud on anything not in the
+// allow-list instead of the bare `.includes('--dry-run')` this replaces.
+const KNOWN_CLI_FLAGS = Object.freeze(['--dry-run', '--backfill']);
+function validateCliArgs(argv) {
+  const unknown = argv.filter((a) => a.startsWith('-') && !KNOWN_CLI_FLAGS.includes(a));
+  if (unknown.length > 0) {
+    throw new Error(`Unrecognized flag(s): ${unknown.join(', ')}. Known flags: ${KNOWN_CLI_FLAGS.join(', ')}.`);
+  }
+}
+
 async function main() {
+  validateCliArgs(process.argv.slice(2));
   const dryRun = process.argv.includes('--dry-run');
   let supabase;
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
+
+  if (process.argv.includes('--backfill')) {
+    const result = await runBackfill(supabase, { dryRun });
+    const label = dryRun ? '[dry-run] ' : '';
+    console.log(`${label}Backfill: ${result.snapshotSize} row(s) in snapshot.`);
+    for (const b of BACKFILL_BUCKETS) console.log(`  ${b}: ${result.counts[b]}`);
+    if (!dryRun) {
+      const { count: readback } = await supabase
+        .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
+        .select('*', { count: 'exact', head: true })
+        .eq('outcome', 'unknown');
+      const check = checkReadbackDiscrepancy(result.counts, readback);
+      if (!check.ok) {
+        console.error(`ERROR: readback discrepancy — live outcome='unknown' count is ${check.actual}, expected still-active+expected-pre-migration=${check.expected}. Do not trust downstream numbers until investigated.`);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(`Readback confirmed: ${check.actual} row(s) outcome='unknown' matches still-active+expected-pre-migration.`);
+    }
+    process.exitCode = result.exitCode;
+    return;
+  }
 
   const { count: unknownBefore } = await supabase
     .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot
@@ -482,6 +700,9 @@ module.exports = {
   NEGATIVE_OUTCOME, NEGATIVE_BACKPROP_SOURCE, NEGATIVE_AUDIT_EVENTS, NEGATIVE_BACKPROP_TERMINAL_SKIP,
   selectNotApplicableOutcomes, resolveNotApplicableOutcomes, NOT_APPLICABLE_ELIGIBLE_SHAPES,
   computeLegCoverage, COVERAGE_FLOOR_PCT, isExpectedPreMigrationFailure, classifyZeroWriteOutcome,
+  runBackfill, computeIndependentStillActiveCount, independentDeriveSdKey,
+  TERMINAL_SD_STATUSES, BACKFILL_BUCKETS, checkReadbackDiscrepancy,
+  validateCliArgs, KNOWN_CLI_FLAGS,
 };
 
 if (require.main === module) {
