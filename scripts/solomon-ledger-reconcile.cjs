@@ -570,13 +570,28 @@ async function main() {
     console.log(`${label}Backfill: ${result.snapshotSize} row(s) in snapshot.`);
     for (const b of BACKFILL_BUCKETS) console.log(`  ${b}: ${result.counts[b]}`);
     if (!dryRun) {
-      const { count: readback } = await supabase
+      const { count: readback, error: readbackErr } = await supabase
         .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
         .select('*', { count: 'exact', head: true })
         .eq('outcome', 'unknown');
+      // Adversarial review (deep-tier ship gate): a failed readback query must be reported as
+      // "verification query failed", never fed into the numeric discrepancy check as if it were
+      // a real (null/undefined) count — that would misreport a transient DB error as a data
+      // discrepancy and tell the operator to distrust numbers that were never actually miscounted.
+      if (readbackErr) {
+        console.error(`ERROR: readback verification query failed (${readbackErr.message}) — could not confirm the backfill's bucket counts against live data. Re-run the readback manually before trusting downstream numbers.`);
+        process.exitCode = 1;
+        return;
+      }
       const check = checkReadbackDiscrepancy(result.counts, readback);
       if (!check.ok) {
-        console.error(`ERROR: readback discrepancy — live outcome='unknown' count is ${check.actual}, expected still-active+expected-pre-migration=${check.expected}. Do not trust downstream numbers until investigated.`);
+        // A discrepancy here is EXPECTED, not necessarily a bug, when the ledger is actively
+        // written to by other processes WHILE this pass ran (e.g. a new advisory proposal
+        // captured mid-pass) — the snapshot is a point-in-time immutable array by design (FR-2),
+        // so a row created after it was fetched shows up live but not in `expected`. Fails loud
+        // either way (never silently reconciled) so an operator can tell "benign concurrent
+        // write" from "real accounting bug" by re-running once the ledger is quiet.
+        console.error(`ERROR: readback discrepancy — live outcome='unknown' count is ${check.actual}, expected still-active+expected-pre-migration=${check.expected}. This can be a benign concurrent write during the pass (a new row created after the snapshot was fetched) OR a real accounting bug — investigate before trusting downstream numbers; re-running once the ledger is quiet will distinguish the two.`);
         process.exitCode = 1;
         return;
       }
