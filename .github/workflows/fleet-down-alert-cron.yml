@@ -46,6 +46,9 @@ jobs:
       TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
       TWILIO_MESSAGING_SERVICE: ${{ secrets.TWILIO_MESSAGING_SERVICE }}
       TWILIO_STATUS_CALLBACK_URL: ${{ secrets.TWILIO_STATUS_CALLBACK_URL }}
+      # SD-LEO-INFRA-OFF-HOST-FLEET-001 rollback lever for the fleet-liveness-pager arm's
+      # off-host reconcile flush (FR-2) -- set repo/org variable to '0' or 'false' to disable.
+      FLEET_LIVENESS_RECONCILE_ENABLED: ${{ vars.FLEET_LIVENESS_RECONCILE_ENABLED }}
 
     steps:
       - name: Checkout

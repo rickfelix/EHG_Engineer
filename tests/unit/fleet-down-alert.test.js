@@ -895,7 +895,7 @@ describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integra
   // independent-dedup assertions to be able to actually fail when the code is wrong.
   function makeLivenessDb({
     heartbeatAt = null, owedRows = [], priorEvents = [],
-    insertError = null, failMode = null,
+    insertError = null, failMode = null, errorMessage = 'simulated resolved-error response',
   // failMode: null | 'throw' | 'resolved-error' -- applies to the claude_sessions read only
   // (sufficient to prove FR-4's single error contract; obligations shares the same code path).
   } = {}) {
@@ -905,9 +905,9 @@ describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integra
       _events: events, _inserted: inserted,
       from(table) {
         if (table === 'claude_sessions') {
-          if (failMode === 'throw') throw new Error('simulated connection failure');
+          if (failMode === 'throw') throw new Error(errorMessage);
           return { select: () => ({ not: () => ({ order: () => ({ limit: async () => (failMode === 'resolved-error'
-            ? { data: null, error: { message: 'simulated resolved-error response' } }
+            ? { data: null, error: { message: errorMessage } }
             : { data: heartbeatAt ? [{ heartbeat_at: heartbeatAt }] : [], error: null }) }) }) }) };
         }
         if (table === 'sms_outbound_obligations') {
@@ -960,6 +960,23 @@ describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integra
       expect(send.mock.calls[0][0].kind).toBe('watchdog_cannot_measure');
       expect(send.mock.calls[0][0].body).not.toMatch(/FLEET DEAD-MAN|FLEET LIVENESS/);
     }
+  });
+
+  it('SEC-L1/L3: a raw driver error containing a JWT-shaped secret and a trailing "?" is sanitized in BOTH the chairman SMS body and the persisted system_events row', async () => {
+    // Deliberately SHORT/obviously-fake JWT-shaped fixture (repo secret-scanner flags realistic-
+    // length eyJ...eyJ... strings even in test fixtures) -- still matches the sanitizer's own
+    // shape regex (eyJ[chars].eyJ[chars].[chars]), which has no length requirement.
+    const dirty = 'connection failed: token eyJtest.eyJtest.sig near postgres://user:pass@host/db failed?';
+    const db = makeLivenessDb({ failMode: 'resolved-error', errorMessage: dirty });
+    const send = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(db, false, send, NOW, false, vi.fn());
+    const body = send.mock.calls[0][0].body;
+    expect(body).not.toMatch(/eyJ[A-Za-z0-9_-]+\.eyJ/); // no raw JWT
+    expect(body).not.toMatch(/postgres:\/\//); // no raw connection string
+    expect(body.endsWith('?')).toBe(false); // never ends on '?' (decision-classifier trip)
+    const persisted = db._inserted.find((r) => r.event_type === 'fleet_liveness_measurement_error');
+    expect(persisted.payload.reason).not.toMatch(/eyJ[A-Za-z0-9_-]+\.eyJ/);
+    expect(persisted.payload.reason).not.toMatch(/postgres:\/\//);
   });
 
   it('TS-4: empty obligations backlog with a stale heartbeat still correctly fires dead:true', async () => {
@@ -1050,12 +1067,14 @@ describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integra
     expect(delivered.delivered).toBe(false);
   });
 
-  it('TS-9: FLEET_LIVENESS_RECONCILE_ENABLED is parsed at CALL TIME, not hoisted', async () => {
+  it('TS-9: FLEET_LIVENESS_RECONCILE_ENABLED is parsed at CALL TIME, not hoisted, and case-insensitively (SEC-L2)', async () => {
     const cases = [
       { env: undefined, expectReconcile: true },
       { env: 'yes', expectReconcile: true },
       { env: '0', expectReconcile: false },
       { env: 'false', expectReconcile: false },
+      { env: 'FALSE', expectReconcile: false },
+      { env: 'Off', expectReconcile: false },
     ];
     for (const { env, expectReconcile } of cases) {
       if (env === undefined) delete process.env.FLEET_LIVENESS_RECONCILE_ENABLED;

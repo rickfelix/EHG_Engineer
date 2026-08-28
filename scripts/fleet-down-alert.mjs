@@ -834,10 +834,32 @@ async function recordAndPage(db, eventType, active, reason, buildMessage, DRY, s
 
 // FR-2: rollback lever for the off-host reconcile flush, read at CALL TIME (never hoisted to a
 // module-scope const like this file's other tunables) -- deliberate deviation, since tests must
-// be able to toggle it per test case within one file run.
+// be able to toggle it per test case within one file run. Case-insensitive (SECURITY sub-agent
+// finding SEC-L2, EXEC evidence row 4821d939-116f-4b9a-9f02-2d1ad979c748): a repo/org variable
+// value of 'FALSE'/'Off' must disable exactly like '0'/'false', not silently leave it enabled.
 function reconcileEnabled() {
-  const v = process.env.FLEET_LIVENESS_RECONCILE_ENABLED;
-  return !(v === '0' || v === 'false');
+  const v = String(process.env.FLEET_LIVENESS_RECONCILE_ENABLED || '').trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'off' || v === 'no');
+}
+
+// SECURITY sub-agent finding (SEC-L1/L3, EXEC evidence row 4821d939-116f-4b9a-9f02-2d1ad979c748):
+// raw DB-driver error text can carry secrets (JWTs, connection strings, password= fragments) or a
+// trailing '?' that flips chairman-sms-gate's own classifier from 'status' to 'decision'
+// (rubric-engine/lint.js effectiveType). Sanitize ONCE, applied identically to the persisted
+// system_events.payload.reason (anon-readable) and the chairman SMS body -- fixing only one sink
+// would just move the disclosure, not close it. Mirrors this file's own MAX_MESSAGE_BODY_CHARS
+// truncate-the-composed-string lesson (see buildPerHostFreezeMessage above).
+const MEASUREMENT_FAILURE_REASON_MAX_CHARS = 200;
+function sanitizeMeasurementFailureReason(raw) {
+  let s = String(raw || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[redacted-jwt]');
+  s = s.replace(/postgres(?:ql)?:\/\/\S+/gi, '[redacted-connection-string]');
+  s = s.replace(/password\s*=\s*\S+/gi, 'password=[redacted]');
+  s = s.replace(/\?+$/, '.'); // never end on '?' -- trips the decision-classifier upgrade
+  if (s.length > MEASUREMENT_FAILURE_REASON_MAX_CHARS) {
+    s = `${s.slice(0, MEASUREMENT_FAILURE_REASON_MAX_CHARS)}...(truncated)`;
+  }
+  return s;
 }
 
 // FR-1..FR-4: the 5th arm. `deadManAlreadyPagedThisTick` is threaded from main()'s own
@@ -859,19 +881,22 @@ export async function checkFleetLiveness(db, DRY, sendChairmanSMSFn = null, now 
     hbResult = { data: null, error: { message: e.message } };
   }
   if (isMeasurementFailure(hbResult)) {
-    const reason = `claude_sessions heartbeat query failed: ${hbResult.error.message}`;
-    console.error(`[fleet-liveness] MEASUREMENT FAILURE: ${reason}`);
+    // Raw text stays local (console.error, GHA run logs only); the persisted/SMS-facing copy is
+    // sanitized once (SEC-L1/L3) and reused for BOTH sinks below.
+    console.error(`[fleet-liveness] MEASUREMENT FAILURE: claude_sessions heartbeat query failed: ${hbResult.error.message}`);
+    const reason = sanitizeMeasurementFailureReason(`claude_sessions heartbeat query failed: ${hbResult.error.message}`);
     await recordAndPage(db, FLEET_LIVENESS_MEASUREMENT_ERROR_EVENT_TYPE, true, reason, () => buildWatchdogCannotMeasureMessage(reason, nowTs), DRY, sendChairmanSMSFn, nowTs);
     return;
   }
 
   // FR-2 root-cause fix: off-host reconcile flush BEFORE the obligations read. DRY skips this
   // entirely -- a real Twilio send would fire for any already-queued backlog otherwise.
+  const reconcileIsEnabled = reconcileEnabled();
+  // SEC-L2: log the RESOLVED state every run, not only when disabled.
+  console.log(`[fleet-liveness] reconcile flush ${DRY ? 'DRY' : reconcileIsEnabled ? 'enabled' : 'disabled via FLEET_LIVENESS_RECONCILE_ENABLED'}`);
   if (DRY) {
     console.log('[fleet-liveness] [DRY] would flush obligations backlog via reconcileOutboundSms');
-  } else if (!reconcileEnabled()) {
-    console.log('[fleet-liveness] reconcile flush disabled via FLEET_LIVENESS_RECONCILE_ENABLED');
-  } else {
+  } else if (reconcileIsEnabled) {
     try {
       const reconcile = reconcileOutboundSmsFn || (await import(pathToFileURL(path.resolve('lib/chairman/sms-outbound-worker.js')).href)).reconcileOutboundSms;
       await reconcile(db, { batchLimit: 25 });
@@ -892,8 +917,8 @@ export async function checkFleetLiveness(db, DRY, sendChairmanSMSFn = null, now 
     obResult = { data: null, error: { message: e.message }, count: null };
   }
   if (isMeasurementFailure(obResult)) {
-    const reason = `sms_outbound_obligations backlog query failed: ${obResult.error.message}`;
-    console.error(`[fleet-liveness] MEASUREMENT FAILURE: ${reason}`);
+    console.error(`[fleet-liveness] MEASUREMENT FAILURE: sms_outbound_obligations backlog query failed: ${obResult.error.message}`);
+    const reason = sanitizeMeasurementFailureReason(`sms_outbound_obligations backlog query failed: ${obResult.error.message}`);
     await recordAndPage(db, FLEET_LIVENESS_MEASUREMENT_ERROR_EVENT_TYPE, true, reason, () => buildWatchdogCannotMeasureMessage(reason, nowTs), DRY, sendChairmanSMSFn, nowTs);
     return;
   }
