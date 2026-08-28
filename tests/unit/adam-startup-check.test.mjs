@@ -37,8 +37,10 @@ test('ADAM_LOOPS has the 15 expected tick loops with the expected keys', () => {
   //   -- this assertion was stale at 12 for 2 days until QF-20260721-518 caught + fixed it.
   // decision-driving-sweep added by QF-20260721-010 (durable contract duty — DECISION-DRIVING-SWEEP DUTY (durable),
   //   leo_protocol_sections id=601; was session-only + undetectable by missingDurableDuties until named).
-  assert.equal(ADAM_LOOPS.length, 15);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms', 'decision-driving-sweep']);
+  // capture-gate added by SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4, 2026-08-05) — folded
+  //   (composed by adam-quiet-tick, never armed standalone), GHA-backed by role-capture-gate-cron.yml.
+  assert.equal(ADAM_LOOPS.length, 16);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'capture-gate', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms', 'decision-driving-sweep']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
