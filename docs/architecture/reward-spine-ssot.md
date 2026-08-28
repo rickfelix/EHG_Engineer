@@ -133,6 +133,24 @@ stopped, with a named closer-of-record (not the proposer).
   resolution can legitimately lag decision resolution, and treating "not yet resolved" as a miss
   would be exactly the kind of process-proxy distortion this spine exists to prevent.
 
+  **Correlation-leg RESOLVED/UNMEASURABLE backfill (SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002,
+  2026-08-28):** the correlation-keyed leg above only ever produced `not_applicable` — it never
+  attempted a genuine `RESOLVED` derivation for the small subset of correlation-leg rows whose
+  `outcome_ref` is itself a derivable SD key (ELIGIBLE/CASE_DRIFT shape). `lib/ledger/outcome-writer.js`
+  (`resolveLedgerOutcome`) closes this gap: for any `outcome='unknown'` row it derives exactly one
+  of `RESOLVED` (a terminal downstream SD status), `UNMEASURABLE` (ref-shape NARRATIVE/COMMIT_SHA/
+  EXCLUDED_QF — no instrument will ever resolve it, distinct from merely not-yet-resolved), or
+  `NO_CHANGE` (still on an active resolution path) — instrument-only, CONST-002-compliant, no
+  Solomon self-report input. `scripts/solomon-ledger-reconcile.cjs --backfill` runs it over the full
+  `outcome='unknown'` set (previously the reconciler only touched the 500-row `outcome_sd_key`-scoped
+  query). `computeSolomonLedgerRollup`'s new `consequenceScoredAccuracyPct` field
+  (`shipped_clean / (shipped_clean + reverted + caused_rework)`, resolved rows only, both legs) is a
+  distinct lens from the existing acceptance-rate `accuracyPct` — precision among rows with any
+  measured consequence, not gated on whether the row was ever `accepted`/`rejected` at decision time.
+  Measured 2026-08-28: of 1593 correlation-leg rows, only ~8 (5 ELIGIBLE + 3 CASE_DRIFT) can ever
+  produce `RESOLVED` via this path — the effect on published accuracy figures is at most single-digit
+  rows, not a materially larger data pool.
+
 ### L3 — VENTURE (usage telemetry / cash-burn / customer events)
 
 **Definition:** a venture's outcome is grounded in real usage, revenue, and customer signal —
