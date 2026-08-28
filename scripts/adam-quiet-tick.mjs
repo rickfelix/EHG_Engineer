@@ -517,7 +517,10 @@ export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
 // a breach is caught within one quiet-tick cycle instead of waiting up to 46 more minutes for the
 // next hourly check. Fail-soft: a read error or a heartbeat that has never been sent reports
 // nothing (never a false alarm) -- mirrors checkOversightStaleness's contract exactly.
-export const HEARTBEAT_OVERDUE_THRESHOLD_MS = 55 * 60 * 1000;
+// Cadence re-ratified EVERY 3 HOURS (chairman verbal 2026-08-28, ratification 9eebe200,
+// supersedes the 2026-07-31 hourly verbal): threshold = cadence minus 5min grace, same
+// shape as the old 55min-under-60min bar.
+export const HEARTBEAT_OVERDUE_THRESHOLD_MS = 175 * 60 * 1000;
 export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
   try {
     const { data } = await sb
@@ -770,6 +773,33 @@ async function readSalientState(sb) {
     state.beltZero = !(claimable && claimable.length > 0);
   } catch { /* fail-soft */ }
   return state;
+}
+
+// QF-20260828-922: witnessed 08-28 -- the chairman caught 1 live-idle seat beside 4
+// claimable drafts before any role did. A seat's heartbeat_at/last_tool_at can be kept
+// artificially fresh post-release by the /clear-survivor daemon (a "shell"), so a seat
+// only counts as genuinely idle-and-available when its last real tool call happened
+// AFTER its most recent release (or it was never released at all).
+async function checkIdleBesideClaimable(sb) {
+  try {
+    const { count: claimableCount } = await sb
+      .from('strategic_directives_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'draft');
+    if (!claimableCount) return null;
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: seats } = await sb
+      .from('claude_sessions')
+      .select('session_id, released_at, last_tool_at')
+      .is('sd_key', null)
+      .in('status', ['active', 'idle'])
+      .gte('last_tool_at', cutoff)
+      .limit(200);
+    const idleCount = (seats || []).filter(
+      (s) => !s.released_at || new Date(s.last_tool_at) > new Date(s.released_at)
+    ).length;
+    return idleCount > 0 ? { idleCount, claimableCount } : null;
+  } catch { return null; }
 }
 
 function loadLastState() {
@@ -1052,11 +1082,11 @@ async function main() {
     if (oversightStale.selfScoreOverdueH) {
       console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
     }
-    // QF-20260823-131: closes the up-to-90min hourly-heartbeat cadence gap by re-checking the
-    // SAME >=55min measured-gap bar the durable hourly cron uses, but every 15min via this tick.
+    // QF-20260823-131 (re-tuned 2026-08-28, ratification 9eebe200: cadence now EVERY 3 HOURS):
+    // re-checks the SAME >=175min measured-gap bar the durable cron uses, every 15min via this tick.
     const heartbeatCadence = await checkHeartbeatCadence(sb);
     if (heartbeatCadence.overdueMin) {
-      console.log(`QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${heartbeatCadence.overdueMin} — hourly heartbeat cadence contract breached (>=55min since last send); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`);
+      console.log(`QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${heartbeatCadence.overdueMin} — 3-hourly heartbeat cadence contract breached (>=175min since last send; chairman verbal 2026-08-28); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`);
     }
     // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: THE STANDING PRIORITY IS PRINTED HERE, ABOVE THE
     // INBOX LOOP BELOW, AND THE POSITION IS THE POINT. The measured failure was the queue setting
@@ -1071,6 +1101,12 @@ async function main() {
       console.log(`QUIET_TICK_STANDING_PRIORITY=adam status=served source=${standing.priority.source} anchored=${standing.anchored} title="${standing.priority.title}" servedBy=${standing.servedBy.join(',')}`);
     } else if (standing.status === 'unserved') {
       console.log(`QUIET_TICK_STANDING_PRIORITY_UNSERVED=adam source=${standing.priority.source} anchored=${standing.anchored} title="${standing.priority.title}" linked=${(standing.priority.linked_sd_keys || []).join(',') || '(none)'} — a standing priority is set and NOTHING is routed into it. This tick is NOT a no-op: route work to it, or clear it deliberately.`);
+    }
+
+    // QF-20260828-922: idle capacity beside claimable work is a dispatch gap, not a no-op.
+    const idleBesideClaimable = await checkIdleBesideClaimable(sb);
+    if (idleBesideClaimable) {
+      console.log(`QUIET_TICK_IDLE_BESIDE_CLAIMABLE=adam idle=${idleBesideClaimable.idleCount} claimable=${idleBesideClaimable.claimableCount} — live-idle seat(s) beside claimable draft(s) on the belt; dispatch now (node scripts/worker-checkin.cjs) rather than leaving both sides waiting.`);
     }
 
     // SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001: a chairman-gated SD with no
