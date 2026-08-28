@@ -169,4 +169,22 @@ describe('detectAccountSwitch (FR-3)', () => {
     expect(result.changed).toBe(false);
     expect(result.event).toBeNull();
   });
+
+  // QF-20260828-376: a persisted `.account-identity-last.json` can hold a truthy-but-malformed
+  // object (empty `{}`, or missing a field) from a corrupted/partial write or an older schema.
+  // Regression: this must be treated as cold-start (silent, baseline re-saved), never compared
+  // field-by-field into a notice with `undefined` values — the observed incident shape was
+  // "switched from undefined (undefined) to b@example.com (Org B)".
+  it('QF-20260828-376 regression: a malformed (empty) prior is treated as cold start, never as a switch with undefined fields', () => {
+    const result = detectAccountSwitch({}, identityB);
+    expect(result.changed).toBe(false);
+    expect(result.event).toBeNull();
+  });
+
+  it('QF-20260828-376 regression: a prior missing one required field is treated as cold start', () => {
+    const partial = { email: 'a@example.com', orgName: 'Org A' }; // missing accountUuid8
+    const result = detectAccountSwitch(partial, identityB);
+    expect(result.changed).toBe(false);
+    expect(result.event).toBeNull();
+  });
 });
