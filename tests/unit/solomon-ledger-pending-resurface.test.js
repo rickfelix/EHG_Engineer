@@ -331,8 +331,32 @@ describe('buildDigest() — actionable membership + truncation disclosure (FR-2,
     expect(d.totalCandidates).toBe(120);
     expect(d.body).toContain('truncated');
     expect(d.body).toContain('20 omitted');
-    // oldest retained preferentially — input is oldest-first
-    expect(d.ledgerIds[0]).toBe('l1');
+  });
+
+  // QF-20260729-654: a fixed oldest-N slice never advances past a static head, so rows at
+  // rank(maxItems+1)+ starve forever while the head stays pending. The window must ROTATE.
+  describe('QF-20260729-654: rotating window — no permanently-starved tail', () => {
+    it('the kept window shifts across days instead of always starting at the same row', () => {
+      const day1 = buildDigest(stalePending(120, nowMs), { nowMs, maxItems: 100 });
+      const day2 = buildDigest(stalePending(120, nowMs), { nowMs: nowMs + 24 * 60 * 60 * 1000, maxItems: 100 });
+      expect(day1.ledgerIds).not.toEqual(day2.ledgerIds);
+    });
+
+    // The falsification test the QF specifies: assert over the UNION of windows across
+    // consecutive days, not digest size or truncation-was-reported (both PASS on broken code).
+    it('FALSIFICATION: every id appears in at least one digest across enough consecutive days', () => {
+      const total = 250;
+      const maxItems = 100;
+      const candidates = stalePending(total, nowMs);
+      const seen = new Set();
+      const daysNeeded = Math.ceil(total / maxItems);
+      for (let d = 0; d < daysNeeded; d++) {
+        const digest = buildDigest(candidates, { nowMs: nowMs + d * 24 * 60 * 60 * 1000, maxItems });
+        digest.ledgerIds.forEach((id) => seen.add(id));
+      }
+      const missing = candidates.map((r) => r.id).filter((id) => !seen.has(id));
+      expect(missing).toEqual([]);
+    });
   });
 });
 
@@ -390,6 +414,28 @@ describe('resurfaceStalePending() — ONE digest row per run (FR-1)', () => {
     expect(supabase._inbox).toHaveLength(2); // re-issued immediately, not tomorrow
     // key computed INDEPENDENTLY here, never read back from the mock
     expect(supabase._inbox[1].payload.dedup_key).toBe(digestDedupKey(['l1', 'l2']));
+  });
+
+  // QF-20260729-654: with a static over-cap population and NOTHING dispositioned, the daily
+  // rotating window must still re-issue each day (not be suppressed as "unchanged") so the
+  // full backlog surfaces across consecutive runs instead of the same head recurring forever.
+  it('QF-20260729-654: re-issues a NEW digest each day for a static truncated population, and the union covers every id', async () => {
+    const nowMs = new Date('2026-07-05T12:00:00Z').getTime();
+    const total = 250;
+    const maxItems = 100;
+    const supabase = createMockSupabase({ ledgerRows: stalePending(total, nowMs, { hoursOld: 200 }) });
+    const seen = new Set();
+    const daysNeeded = Math.ceil(total / maxItems);
+    for (let d = 0; d < daysNeeded; d++) {
+      const { resurfaced } = await resurfaceStalePending(supabase, ADAM_ID, {
+        thresholdHours: 24, nowMs: nowMs + d * 24 * 60 * 60 * 1000, maxItems,
+      });
+      expect(resurfaced.length).toBeGreaterThan(0); // never suppressed as "unchanged"
+      resurfaced.forEach((id) => seen.add(id));
+    }
+    expect(supabase._inbox).toHaveLength(daysNeeded); // one NEW digest per day, not deduped away
+    const missing = Array.from({ length: total }, (_, i) => `l${i + 1}`).filter((id) => !seen.has(id));
+    expect(missing).toEqual([]);
   });
 
   it('FR-5: excludes items already resurfaced TODAY under the legacy per-item key', async () => {

@@ -91,6 +91,17 @@ function digestDedupKey(ledgerIds) {
   return `solomon_ledger_digest:${hash}`;
 }
 
+/** Pure: `count` items starting at `offset` into `arr`, wrapping around the end. */
+function rotatedWindow(arr, offset, count) {
+  const n = arr.length;
+  if (n === 0 || count <= 0) return [];
+  if (count >= n) return arr.slice();
+  const o = ((offset % n) + n) % n;
+  const head = arr.slice(o, Math.min(n, o + count));
+  const rest = count - head.length;
+  return rest > 0 ? head.concat(arr.slice(0, rest)) : head;
+}
+
 /**
  * Pure: assemble the digest payload/body from ordered candidates (oldest first, as
  * planStalePending returns them).
@@ -103,7 +114,13 @@ function digestDedupKey(ledgerIds) {
  */
 function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST_MAX_ITEMS } = {}) {
   const all = candidates || [];
-  const kept = all.slice(0, maxItems); // oldest retained preferentially -- input is oldest-first
+  // QF-20260729-654: a fixed oldest-N slice never advances past a static head -- rank
+  // (maxItems+1)+ rows starve forever while the head stays pending (same age, same day,
+  // opposite fate). Offset the window by a per-day cursor so the FULL backlog cycles through
+  // within ceil(len/maxItems) days instead of the same N being carried (rest dropped) forever.
+  const dayIndex = Math.floor(nowMs / (24 * 60 * 60 * 1000));
+  const offset = all.length > maxItems ? (dayIndex * maxItems) % all.length : 0;
+  const kept = rotatedWindow(all, offset, maxItems);
   const truncated = all.length > kept.length;
   const items = kept.map((r) => ({
     ledger_id: r.id,
@@ -265,7 +282,11 @@ async function resurfaceStalePending(supabase, adamId, { thresholdHours = DEFAUL
 
   const digest = buildDigest(members, { nowMs, maxItems });
   // Hash the FULL member set, not the post-cap slice -- see buildDigest's allLedgerIds note.
-  const key = digestDedupKey(digest.allLedgerIds);
+  // QF-20260729-654: when the window is rotating (truncated), the exposed subset changes by
+  // day even while the full pending set does not -- fold in the day index so day 2's rotated
+  // window is never suppressed as "unchanged" by day 1's identical full-set hash.
+  const dayIndex = Math.floor(nowMs / (24 * 60 * 60 * 1000));
+  const key = digest.truncated ? `${digestDedupKey(digest.allLedgerIds)}:day${dayIndex}` : digestDedupKey(digest.allLedgerIds);
 
   // Content-hash dedup: an unchanged member set is a no-op; a changed set re-issues NOW.
   const { data: existing } = await supabase.from('session_coordination').select('id')
@@ -294,6 +315,9 @@ async function resurfaceStalePending(supabase, adamId, { thresholdHours = DEFAUL
       item_count: digest.items.length,
       total_candidates: digest.totalCandidates,
       truncated: digest.truncated,
+      // Countable dropped-this-run figure (option C, QF-20260729-654) -- previously only
+      // visible as a parenthetical on a success log line, with nothing anywhere counting it.
+      omitted_count: digest.totalCandidates - digest.items.length,
     },
   });
   if (error) {
