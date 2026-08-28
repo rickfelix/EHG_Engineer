@@ -133,6 +133,18 @@ describe('v2 migration static check: all 3 previously-missed functions are repla
   });
 });
 
+describe('v2 migration static check: eva_ventures mirror backfill (TS-7 finding)', () => {
+  it('backfills eva_ventures rows exactly 1 behind their ventures row in the post-shift range', () => {
+    expect(v2Sql).toMatch(/UPDATE public\.eva_ventures ev/);
+    expect(v2Sql).toMatch(/ev\.current_lifecycle_stage = v\.current_lifecycle_stage - 1/);
+  });
+
+  it('verifies zero remaining 1-behind rows in its own post-apply block', () => {
+    expect(v2Sql).toMatch(/ev\.current_lifecycle_stage = v\.current_lifecycle_stage - 1/g);
+    expect(v2Sql).toMatch(/at least one eva_ventures row remains 1 stage behind/);
+  });
+});
+
 describe('v2 migration static check: shared parked-venture preflight function (FR-5)', () => {
   it('defines fn_parked_venture_preflight and calls it from its own DO-block preflight', () => {
     expect(v2Sql).toMatch(/CREATE OR REPLACE FUNCTION public\.fn_parked_venture_preflight/);
@@ -155,5 +167,13 @@ describe('v2 DOWN file static check: reverses every CHECK widen and the security
 
   it('drops fn_parked_venture_preflight', () => {
     expect(v2DownSql).toMatch(/DROP FUNCTION IF EXISTS public\.fn_parked_venture_preflight/);
+  });
+
+  it('reverses the eva_ventures backfill AFTER which it narrows the CHECK back to <= 26', () => {
+    const backfillIdx = v2DownSql.indexOf('ev.current_lifecycle_stage - 1, updated_at');
+    const narrowIdx = v2DownSql.indexOf('chk_lifecycle_stage CHECK');
+    expect(backfillIdx).toBeGreaterThan(-1);
+    expect(narrowIdx).toBeGreaterThan(-1);
+    expect(backfillIdx).toBeLessThan(narrowIdx);
   });
 });

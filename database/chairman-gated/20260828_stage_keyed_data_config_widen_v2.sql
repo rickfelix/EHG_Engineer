@@ -79,17 +79,21 @@
 --     current-scheme values here. Owner: EXEC (this SD). Re-review: when a stage_executions reader
 --     is added that compares its lifecycle_stage against current venture_stages.stage_number.
 -- (b) eva_ventures's trg_ventures_update_sync_eva (sync_ventures_to_eva_ventures_update()) --
---     NOT changed. Live-verified (2026-08-28): its `IF COALESCE(NEW.is_demo, false) THEN RETURN
---     NEW; END IF;` early-return is a DELIBERATE design decision (SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F,
---     "demo/test fixtures never enter the EVA pipeline"), not an oversight -- changing it to sync
---     demo ventures would contradict that SD's own intent. eva_ventures's 2 CHECK constraints are
---     still widened above (so a REAL venture's sync to 27 is not blocked), and live measurement
---     found ZERO current divergence between ventures and eva_ventures for any row. The risk v1's
---     banner described (a demo venture shifted by v1 leaving a stale eva_ventures mirror) is a
---     structural possibility this trigger's own design accepts for ANY demo-venture stage change,
---     not one this SD introduces. Disposition: accepted-as-broken (by the trigger's own prior
---     design intent). Owner: EXEC (this SD). Re-review: if SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F's
---     demo-exclusion policy is ever revisited.
+--     the TRIGGER itself is NOT changed (its `IF COALESCE(NEW.is_demo, false) THEN RETURN NEW;
+--     END IF;` early-return is a DELIBERATE design decision, SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F,
+--     "demo/test fixtures never enter the EVA pipeline" -- changing it going forward would
+--     contradict that SD's own intent). BUT section 5b below DOES add a one-time, precisely-scoped
+--     DATA backfill for the STALE ROWS THIS SPECIFIC MIGRATION EVENT causes: this SD's own
+--     TS-7 probe (scripts/eva/stage-keyed-data-ts7-eva-ventures-mirror-sync-probe.mjs) measured
+--     live that 21 eva_ventures rows (not zero -- the earlier "zero current divergence" note
+--     described the PRE-shift state, before section 3's own +1 UPDATE runs) go stale by exactly
+--     the 1-stage delta v1's shift produces, because their eva_ventures rows already existed
+--     from BEFORE the demo-exclusion trigger's own guard was added -- this migration's shift is
+--     what creates the divergence, not something the trigger already tolerates in steady state.
+--     Section 5b corrects exactly those rows (WHERE ev.current_lifecycle_stage = v.
+--     current_lifecycle_stage - 1, scoped to the post-shift 24-27 range) without altering the
+--     trigger's forward-looking behavior for any OTHER stage change. Disposition: shift (data
+--     backfill, not a trigger-behavior change). Owner: EXEC (this SD).
 -- (c) venture_artifacts_storm_quarantine_20260704.venture_artifacts_artifact_type_check -- NOT
 --     widened. A frozen quarantine/archive table (named for its creation date, 2026-07-04); no
 --     evidence found of live writes reaching it. Widening a dead table's CHECK constraint for a
@@ -320,6 +324,24 @@ BEGIN
   END IF;
 END
 $shift_config_data$;
+
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- 5b. eva_ventures mirror backfill (see banner note (b)). TS-7 (this SD's own probe) measured 21
+--    live eva_ventures rows going stale by exactly the +1 delta section 3's ventures UPDATE
+--    produces, because those rows' eva_ventures mirror already existed from before
+--    SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F's is_demo early-return guard was added to the trigger --
+--    this migration's own shift is what creates the divergence, not steady-state trigger
+--    behavior. Precisely scoped: only rows where the mirror is EXACTLY 1 behind the current value
+--    within the post-shift 24-27 range are touched, so a pre-existing, unrelated divergence (if
+--    any) is left alone rather than silently "corrected" by a blind sync. Idempotent by
+--    construction: a second run finds no row still 1 behind.
+-- ───────────────────────────────────────────────────────────────────────────────────────────────
+UPDATE public.eva_ventures ev
+SET current_lifecycle_stage = v.current_lifecycle_stage, updated_at = now()
+FROM public.ventures v
+WHERE ev.venture_id = v.id
+  AND v.current_lifecycle_stage BETWEEN 24 AND 27
+  AND ev.current_lifecycle_stage = v.current_lifecycle_stage - 1;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 6. 3 functions this SD's own live pg_get_functiondef probe (2026-08-28) found still hardcode a
@@ -610,6 +632,13 @@ BEGIN
   -- specific pre-shift value (23) that should now be vacated.
   IF EXISTS (SELECT 1 FROM public.stage_artifact_requirements WHERE stage_number < 0 OR stage_number = 23) THEN
     RAISE EXCEPTION 'POST-APPLY FAILED: stage_artifact_requirements has a row left in an intermediate or pre-shift state.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.eva_ventures ev JOIN public.ventures v ON v.id = ev.venture_id
+    WHERE v.current_lifecycle_stage BETWEEN 24 AND 27 AND ev.current_lifecycle_stage = v.current_lifecycle_stage - 1
+  ) THEN
+    RAISE EXCEPTION 'POST-APPLY FAILED: at least one eva_ventures row remains 1 stage behind its ventures row after the section 5b backfill.';
   END IF;
 
   RAISE NOTICE 'STAGE-KEYED-DATA-001 v2: post-apply verification passed.';

@@ -13,7 +13,10 @@
 --      venture_stage_cutover_grandfather's stage-25 rows back to 24, stage_artifact_requirements'
 --      24-27 rows back to 23-26 (two-phase, same technique the forward migration used). Same
 --      caveat as (1): this is a real DATA change, not just a schema one -- verify no other process
---      has since relied on the post-v2 values before rolling back.
+--      has since relied on the post-v2 values before rolling back. ALSO reverses the eva_ventures
+--      backfill (v2 section 5b): -1 for demo-venture rows currently matching their ventures value
+--      in the 24-27 range -- best-effort, same assumption the rest of this section already makes
+--      (nothing else has since legitimately re-synced these specific rows).
 --
 --   3. REVERTS fn_bootstrap_venture_stages, bootstrap_venture_workflow, approve_chairman_decision
 --      to their PRE-v2 bodies (loop bound 26, gate_stages arrays un-shifted, and CRITICALLY the
@@ -45,12 +48,13 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.convergence_ledger_stages WHERE stage = 27) THEN v_offenders := v_offenders || '"convergence_ledger_stages"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.eva_artifact_dependencies WHERE source_stage = 27 OR target_stage = 27) THEN v_offenders := v_offenders || '"eva_artifact_dependencies"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.eva_stage_gate_results WHERE stage_number = 27) THEN v_offenders := v_offenders || '"eva_stage_gate_results"'::jsonb; END IF;
-  IF EXISTS (SELECT 1 FROM public.eva_ventures WHERE current_lifecycle_stage = 27) THEN v_offenders := v_offenders || '"eva_ventures"'::jsonb; END IF;
-  -- stage_artifact_requirements deliberately EXCLUDED from this guard: unlike every other table
-  -- here, its rows at stage_number=27 are EXPECTED, legitimate content v2's own forward shift
-  -- produced (growth_optimization_roadmap/growth_playbook, shifted from 26), and section 2 below
-  -- already has a dedicated two-phase reversal path for exactly this table -- flagging it here
-  -- would refuse a rollback DOWN's own next section is fully equipped to perform correctly.
+  -- eva_ventures and stage_artifact_requirements are deliberately EXCLUDED from this guard: unlike
+  -- every other table here, their rows at stage 27 are EXPECTED, legitimate content v2's own
+  -- forward sections produced (stage_artifact_requirements: growth_optimization_roadmap/
+  -- growth_playbook shifted from 26; eva_ventures: the section 5b backfill correcting a demo
+  -- venture's mirror to match its now-shifted ventures row), and section 4 below already has a
+  -- dedicated reversal path for both -- flagging them here would refuse a rollback DOWN's own
+  -- next section is fully equipped to perform correctly.
   IF EXISTS (SELECT 1 FROM public.stage_of_death_predictions WHERE actual_death_stage = 27 OR predicted_death_stage = 27) THEN v_offenders := v_offenders || '"stage_of_death_predictions"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.stage_prop_contracts WHERE stage_number = 27) THEN v_offenders := v_offenders || '"stage_prop_contracts"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.stage_proving_journal WHERE stage_number = 27) THEN v_offenders := v_offenders || '"stage_proving_journal"'::jsonb; END IF;
@@ -83,11 +87,10 @@ ALTER TABLE public.eva_artifact_dependencies ADD CONSTRAINT eva_artifact_depende
 ALTER TABLE public.eva_stage_gate_results DROP CONSTRAINT IF EXISTS eva_stage_gate_results_stage_number_check;
 ALTER TABLE public.eva_stage_gate_results ADD CONSTRAINT eva_stage_gate_results_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 26)));
 
-ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
-ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
-
-ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
-ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
+-- eva_ventures' 2 CHECK constraints are deliberately NOT narrowed here: section 4 below reverses
+-- its section-5b backfill data FIRST (rows currently at 27), and narrowing before that data moves
+-- fails immediately against live rows -- the same ordering defect this file's own stage_artifact_
+-- requirements handling below already avoids. See the narrowing statements placed after section 4.
 
 ALTER TABLE public.stage_of_death_predictions DROP CONSTRAINT IF EXISTS stage_of_death_predictions_actual_death_stage_check;
 ALTER TABLE public.stage_of_death_predictions ADD CONSTRAINT stage_of_death_predictions_actual_death_stage_check CHECK (((actual_death_stage IS NULL) OR ((actual_death_stage >= 1) AND (actual_death_stage <= 26))));
@@ -129,6 +132,21 @@ ALTER TABLE public.venture_artifacts ADD CONSTRAINT venture_artifacts_artifact_t
 -- ── 4. Reverse the data shifts ───────────────────────────────────────────────────────────────────
 UPDATE public.gate_boundary_config SET from_stage = 23, to_stage = 24, updated_at = now() WHERE from_stage = 24 AND to_stage = 25;
 UPDATE public.venture_stage_cutover_grandfather SET stage_number = stage_number - 1 WHERE stage_number = 25;
+
+UPDATE public.eva_ventures ev
+SET current_lifecycle_stage = ev.current_lifecycle_stage - 1, updated_at = now()
+FROM public.ventures v
+WHERE ev.venture_id = v.id
+  AND v.is_demo IS TRUE
+  AND v.current_lifecycle_stage BETWEEN 24 AND 27
+  AND ev.current_lifecycle_stage = v.current_lifecycle_stage;
+
+-- Now safe to narrow: eva_ventures' rows at 27 were reversed immediately above.
+ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
+ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
+
+ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
+ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
 
 -- ── 5. Revert the 3 functions to their PRE-v2 bodies ────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.fn_bootstrap_venture_stages(p_venture_id uuid)

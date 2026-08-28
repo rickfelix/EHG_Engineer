@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-08-28T12:34:13.298Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-7",
+  "preShiftDivergenceCount": 0,
+  "realVenturesTemporarilyFlippedDemo": [
+    "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+    "510177ba-435f-4dd7-bfa5-6154cc8cf54b"
+  ],
+  "postShiftDivergenceCount": 0,
+  "postShiftDivergentRows": [],
+  "formerlyRealVenturesEvaMirrorPresence": [
+    {
+      "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+      "current_lifecycle_stage": 27,
+      "has_eva_mirror_row": true
+    },
+    {
+      "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+      "current_lifecycle_stage": 25,
+      "has_eva_mirror_row": true
+    }
+  ],
+  "finding": "Zero divergence measured after the shift, consistent with live-measured 2026-08-28 reality: no eva_ventures row currently exists for a demo venture in the shift range for the trigger to leave stale.",
+  "result": "PASS"
+}

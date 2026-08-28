@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-08-28T12:34:10.835Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-1",
+  "surfaceCount": 13,
+  "checkConstraintCount": 18,
+  "blankDispositions": [],
+  "dispositions": [
+    {
+      "surface": "eva_ventures.current_lifecycle_stage",
+      "liveRowCount": 21,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_artifact_requirements.stage_number",
+      "liveRowCount": 6,
+      "disposition": "shift"
+    },
+    {
+      "surface": "gate_boundary_config.from_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    },
+    {
+      "surface": "gate_boundary_config.to_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_stage_cutover_grandfather.stage_number",
+      "liveRowCount": 8,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_prop_contracts.stage_number",
+      "liveRowCount": 8,
+      "disposition": "shift"
+    },
+    {
+      "surface": "eva_stage_gate_results.stage_number",
+      "liveRowCount": 38,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_capture_snapshots.lifecycle_stage",
+      "liveRowCount": 6,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_executions.lifecycle_stage",
+      "liveRowCount": 98,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_artifacts.lifecycle_stage",
+      "liveRowCount": 45,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_artifacts.artifact_type",
+      "liveRowCount": 3,
+      "disposition": "shift"
+    },
+    {
+      "surface": "workflow_executions.current_stage",
+      "liveRowCount": 193,
+      "disposition": "shift"
+    },
+    {
+      "surface": "compliance_violations.stage_number",
+      "liveRowCount": 90,
+      "disposition": "shift"
+    }
+  ],
+  "result": "PASS"
+}
