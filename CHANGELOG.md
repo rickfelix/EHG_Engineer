@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-08-28](#2026-08-28)
+  - [Infrastructure](#infrastructure)
   - [Features](#features)
   - [Bugfix](#bugfix)
 - [2026-08-26](#2026-08-26)
@@ -154,6 +155,14 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-08-28
+
+### Infrastructure
+
+- **CI gate bans unallowlisted literal Gemini model pins outside the single model-config.js SSOT** - PR #7623, #7624, #7626 (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B, child 1 of 8)
+  - **What shipped**: `scripts/lint/gemini-pin-lint.mjs` scans `lib/`/`scripts/`/`tests/` for literal `gemini-<version>` strings outside `lib/config/model-config.js`'s `getGoogleModel(purpose)` accessor, cross-checked against a categorized allowlist (`scripts/lint/gemini-pin-allowlist.json`) covering the 11 confirmed non-routing occurrences (pricing tables, cost-governor fallback ladder) with staleness detection. Ships allow-fail (`continue-on-error: true`) since 24 real routing pins remain for the five sibling subsystem-consolidation children to migrate; flips to blocking once that count reaches 0. Also fixes `.env.example`, which shipped live `gemini-3.1-pro-preview` / `gemini-3-flash-preview` example values.
+  - **Two post-merge gate cycles closed with root-cause fixes, not bypasses**: `control-seed-test-lint` (a new control must prove it fires on a seeded defect) wasn't required for merge, so the first PR (#7623) landed before that fix arrived — closed with a follow-up PR (#7624) registering the control with a real fixture trial + `observability_proof`. `WIRE_CHECK_GATE` then flagged the new script as unreachable (invoked only from its own GitHub Actions workflow, no static import) — closed by registering it as a `package.json` script entry (#7626), per the gate's own remediation text.
+  - **RCA identified two harness gaps and both were signaled**, not worked around per-SD: `WIRE_CHECK_ADVISORY` (the early-warning version of this same gate) is registered only at EXEC-TO-PLAN, which is optional for infrastructure SDs — the anti-second-PR check is absent exactly where it's most needed. Separately, `main`'s branch protection requires only one status check, so `gh pr merge --auto` can squash-merge while an advisory-turned-important gate is still red, dropping any fix pushed after that point.
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 96%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 94% (full 31-gate precheck run clean before the final handoff, per RCA recommendation).
 
 ### Features
 
