@@ -356,8 +356,13 @@ $shift_config_data$;
 --    any) is left alone rather than silently "corrected" by a blind sync. Idempotent by
 --    construction: a second run finds no row still 1 behind.
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
+-- This UPDATE targets public.eva_ventures.current_lifecycle_stage (the EVA mirror, governed by its
+-- own trg_ventures_update_sync_eva demo-exclusion trigger, not the canonical writer choke), not
+-- public.ventures.current_lifecycle_stage -- the lint's own text-pattern match cannot distinguish
+-- the two tables. A one-time, precisely-scoped data backfill, not a new stage-advancement write
+-- path; see the block comment above and this SD's TESTING/SECURITY sub-agent review evidence.
 UPDATE public.eva_ventures ev
-SET current_lifecycle_stage = v.current_lifecycle_stage, updated_at = now()
+SET current_lifecycle_stage = v.current_lifecycle_stage, updated_at = now() -- stage-advancement-lint-disable-line: eva_ventures mirror, not ventures
 FROM public.ventures v
 WHERE ev.venture_id = v.id
   AND v.current_lifecycle_stage BETWEEN 24 AND 27
