@@ -633,6 +633,17 @@ BEGIN
   ALTER TABLE public.ventures ENABLE TRIGGER enforce_stage_advancement_artifact_gate;
   ALTER TABLE public.ventures ENABLE TRIGGER trg_sync_stage_work_on_advance;
 
+  -- FR-6 RULING-A STAMP REMOVAL (mirrors the UP file's 2026-08-28 section 4b amendment): the two
+  -- ruled ventures just rode the -1 revert back to their pre-ceremony stages, so the
+  -- renumber_map_applied provenance stamp the UP file wrote no longer describes live state —
+  -- strip it. The ruling itself (decision 9e5aac51) remains on record in chairman_decisions and
+  -- on SD-LEO-INFRA-STAGE-KEYED-DATA-001.metadata; only the applied-state marker is removed.
+  UPDATE public.ventures
+  SET metadata = metadata - 'renumber_map_applied',
+      updated_at = now()
+  WHERE id IN ('ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid, '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid)
+    AND metadata ? 'renumber_map_applied';
+
   -- ventures CHECK bound back to 26.
   ALTER TABLE public.ventures DROP CONSTRAINT IF EXISTS ventures_current_lifecycle_stage_check;
   ALTER TABLE public.ventures ADD CONSTRAINT ventures_current_lifecycle_stage_check

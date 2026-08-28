@@ -10,6 +10,14 @@
 -- @approved-by: PENDING
 -- @approval-record: PENDING — chairman ratification not yet scheduled. DO NOT APPLY.
 --
+-- AMENDED 2026-08-28 (FR-6 ruling-A encode; the FRESH chairman verbal taken at the sitting binds
+-- THIS amended content per the amendment rule): the parked-venture preflight below now recognizes
+-- the v1-written provenance stamp (metadata.renumber_map_applied.ruling_id =
+-- 9e5aac51-ff7e-424d-9003-77ce7d3c723f) on EXACTLY MarketLens (ecbba50e) and DataDistill
+-- (510177ba) as the "explicit chairman review" its exception calls for — those two ride the
+-- renumber per FR-6 ruling A (SMS inbound e7e38d0e 2026-08-26, Solomon concur 280f0f4d/f704edfa).
+-- Any OTHER real venture in range still blocks. No other content changed.
+--
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -186,7 +194,22 @@ BEGIN
   -- must not be silently shifted underneath.
   v_verdict := public.fn_parked_venture_preflight(24, 27, false);
   IF (v_verdict->>'blocked')::boolean THEN
-    RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at stage 24-27 (%); refusing to shift config/data rows underneath live ventures without explicit chairman review.', v_verdict->>'real_count', v_verdict->'real_venture_ids';
+    -- FR-6 RULING-A CARVE-OUT (chairman decision 9e5aac51-ff7e-424d-9003-77ce7d3c723f; the same
+    -- ruling v1's preflight carve-out cites): v1's section 4b provenance-stamped the two ruled
+    -- ventures (metadata.renumber_map_applied.ruling_id) as they rode the renumber into this
+    -- file's 24-27 range. Proceed ONLY when every blocking real venture is one of the two ruled
+    -- ids AND carries that exact stamp — any other real venture in range (e.g. one that advanced
+    -- between v1 and this apply) still raises.
+    PERFORM 1
+    FROM public.ventures v
+    WHERE v.id IN (SELECT (jsonb_array_elements_text(v_verdict->'real_venture_ids'))::uuid)
+      AND NOT (
+        v.id IN ('ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid, '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid)
+        AND v.metadata->'renumber_map_applied'->>'ruling_id' = '9e5aac51-ff7e-424d-9003-77ce7d3c723f'
+      );
+    IF FOUND THEN
+      RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at stage 24-27 (%) beyond the FR-6 ruling-A carve-out; refusing to shift config/data rows underneath live ventures without explicit chairman review.', v_verdict->>'real_count', v_verdict->'real_venture_ids';
+    END IF;
   END IF;
 END
 $parked_preflight$;

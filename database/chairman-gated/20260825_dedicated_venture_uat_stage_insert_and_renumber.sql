@@ -5,6 +5,14 @@
 -- @approved-by: PENDING
 -- @approval-record: PENDING — chairman ratification not yet scheduled. DO NOT APPLY.
 --
+-- AMENDED 2026-08-28 (FR-6 ruling-A encode; the FRESH chairman verbal taken at the sitting binds
+-- THIS amended content per the amendment rule): (1) the FR-6 preflight below carves out EXACTLY
+-- the two ventures chairman FR-6 ruling A (decision 9e5aac51-ff7e-424d-9003-77ce7d3c723f, SMS
+-- inbound e7e38d0e 2026-08-26, Solomon concur 280f0f4d/f704edfa) directs to ride the renumber:
+-- MarketLens (ecbba50e, 24->25) and DataDistill (510177ba, 26->27), both cancelled; (2) a new
+-- section 4b provenance-stamps both rows (metadata.renumber_map_applied + ruling id) as the
+-- ruling requires. No other content changed from the twice-reviewed round-2 revision.
+--
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -231,12 +239,21 @@ BEGIN
 
   -- FR-6, enforced here (not only in the skippable Node precondition script): refuse outright if
   -- any REAL (is_demo=false) venture is currently parked at a shifted stage_number.
+  -- FR-6 RULING-A CARVE-OUT (chairman decision 9e5aac51-ff7e-424d-9003-77ce7d3c723f, SMS inbound
+  -- e7e38d0e 2026-08-26; Solomon concur 280f0f4d/f704edfa; stamped on
+  -- SD-LEO-INFRA-STAGE-KEYED-DATA-001.metadata.fr6_chairman_ruling): this IS the "explicit
+  -- chairman review" the exception text below calls for. Exactly these two cancelled real
+  -- ventures ride the renumber (MarketLens 24->25, DataDistill 26->27) and are
+  -- provenance-stamped in section 4b. Each carve-out is id-, stage- AND status-pinned so it DIES
+  -- if either venture moves or revives before the sitting: any drift re-blocks the apply.
   SELECT count(*) INTO v_real_parked
   FROM public.ventures
   WHERE current_lifecycle_stage BETWEEN 23 AND 26
-    AND is_demo IS NOT TRUE;
+    AND is_demo IS NOT TRUE
+    AND NOT (id = 'ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid AND current_lifecycle_stage = 24 AND status = 'cancelled')
+    AND NOT (id = '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid AND current_lifecycle_stage = 26 AND status = 'cancelled');
   IF v_real_parked <> 0 THEN
-    RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at a shifted stage (23-26); refusing to proceed without explicit chairman review (FR-6).', v_real_parked;
+    RAISE EXCEPTION 'PREFLIGHT FAILED: % REAL (is_demo=false) venture(s) parked at a shifted stage (23-26) beyond the FR-6 ruling-A carve-out; refusing to proceed without explicit chairman review (FR-6).', v_real_parked;
   END IF;
 
   -- advisory_checkpoints.stage_number FKs into venture_stages(stage_number) with no ON UPDATE
@@ -548,6 +565,33 @@ BEGIN
 
   ALTER TABLE public.ventures ENABLE TRIGGER enforce_stage_advancement_artifact_gate;
   ALTER TABLE public.ventures ENABLE TRIGGER trg_sync_stage_work_on_advance;
+
+  -- 4b. FR-6 RULING-A PROVENANCE STAMP (same ruling as the preflight carve-out above): the two
+  --     ruled real ventures just rode the +1 shift with every other in-range venture; stamp the
+  --     machine-readable provenance the ruling itself specifies ("provenance-stamped:
+  --     renumber_map_applied + ruling id"). v2's parked-venture preflight recognizes THIS stamp
+  --     as the explicit chairman review for exactly these rows and no others. jsonb merge (||)
+  --     preserves existing metadata keys; metadata-only write, so no stage triggers fire. The
+  --     post-shift stage pin (25/27) means the stamp lands only if the shift actually carried
+  --     them; inside this first-run-guarded block it cannot double-stamp on an idempotent re-run.
+  UPDATE public.ventures
+  SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+        'renumber_map_applied', jsonb_build_object(
+          'ruling_id', '9e5aac51-ff7e-424d-9003-77ce7d3c723f',
+          'ruling', 'FR-6 ruling A',
+          'channel', 'SMS inbound e7e38d0e (2026-08-26)',
+          'solomon_concur', jsonb_build_array('280f0f4d', 'f704edfa'),
+          'map', CASE id
+                   WHEN 'ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid THEN jsonb_build_object('from', 24, 'to', 25)
+                   ELSE jsonb_build_object('from', 26, 'to', 27)
+                 END,
+          'applied_by', '20260825_dedicated_venture_uat_stage_insert_and_renumber.sql (ruling-A amendment 2026-08-28)',
+          'stamped_at', now()
+        )
+      ),
+      updated_at = now()
+  WHERE id IN ('ecbba50e-3c98-4493-9e77-1719cf6b6f00'::uuid, '510177ba-435f-4dd7-bfa5-6154cc8cf54b'::uuid)
+    AND current_lifecycle_stage IN (25, 27);
 
   -- 5a. chairman_decisions.lifecycle_stage: LIVE state the RPCs read directly
   --    (`WHERE lifecycle_stage = p_from_stage AND status = 'approved'`) -- must stay valid for a
