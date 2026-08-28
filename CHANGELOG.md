@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-28](#2026-08-28)
+  - [Features](#features)
 - [2026-08-26](#2026-08-26)
   - [Infrastructure](#infrastructure)
   - [Features](#features)
@@ -149,6 +151,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-28
+
+### Features
+
+- **YouTube "For Processing" playlist ingestion no longer depends on OAuth token custody** - PR #7597 (SD-LEO-FEAT-YOUTUBE-INGESTION-CREDENTIAL-001)
+  - **What shipped**: `lib/integrations/youtube/playlist-sync.js` reads the "For Processing" playlist via a plain `YOUTUBE_API_KEY` instead of an authenticated OAuth client, following the chairman's decision to switch the playlist from Private to Unlisted (`chairman_decisions` id `a94f88c8`). `createYoutubeClient()`/`getTargetPlaylistId()` build the client and resolve the target playlist ID from env; `findTargetPlaylist()` looks the playlist up by ID (API-key compatible) instead of the OAuth-only `mine: true` name search the prior implementation required. `.github/workflows/eva-idea-sync-cron.yml` now sources `YOUTUBE_API_KEY`/`YOUTUBE_FOR_PROCESSING_PLAYLIST_ID` from GitHub secrets.
+  - **Verified with a real pull, not a green exit code**: once the chairman provisioned the secrets, a live `workflow_dispatch` against the shipping branch ingested 20 genuinely new videos end-to-end (`Inserted: 20, Updated: 0, Errors: 0`), independently re-confirmed against `eva_sync_state`/`eva_youtube_intake` directly rather than trusting the log. A control run against unmodified `main` failed with the exact pre-existing OAuth error the fix removes, confirming this repairs an already-broken ~5-week-stale sync rather than a hypothetical one.
+  - **Two adversarial EXEC-TO-PLAN rounds caught real gaps closed before merge**: TESTING proved via mutation testing that the original test suite never actually guarded the production entry point's wiring to the new credential-free helpers (a regression back to the OAuth call would have passed every test) — closed with a wiring-guard test exercising `syncYouTube()` itself. SECURITY found the "For Processing" playlist ID — newly a low-grade secret per the chairman's own approval rider — was being persisted in plaintext into `eva_youtube_intake.raw_data` on every row of a table readable by any authenticated user; the first fix only stopped new writes, so a one-time backfill was run to strip the value from the 284 pre-existing rows still carrying it, independently re-verified at 0/304 exposed afterward. A second SECURITY finding (a future flip back to Private failing silently outside CI) was also closed by arming the sync's circuit breaker on that path.
+  - **Verification**: LEAD-TO-PLAN 95%, PLAN-TO-EXEC 87%, EXEC-TO-PLAN 89%, PLAN-TO-LEAD 90%, LEAD-FINAL-APPROVAL 93%. 582 unit tests passing.
 
 ## 2026-08-26
 
