@@ -793,7 +793,8 @@ async function checkIdleBesideClaimable(sb) {
       .select('session_id, released_at, last_tool_at')
       .is('sd_key', null)
       .in('status', ['active', 'idle'])
-      .gte('last_tool_at', cutoff);
+      .gte('last_tool_at', cutoff)
+      .limit(200);
     const idleCount = (seats || []).filter(
       (s) => !s.released_at || new Date(s.last_tool_at) > new Date(s.released_at)
     ).length;
