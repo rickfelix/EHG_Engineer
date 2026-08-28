@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-08-28T13:45:55.021Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-5",
+  "realVenturesFound": [
+    "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+    "510177ba-435f-4dd7-bfa5-6154cc8cf54b"
+  ],
+  "directInvocation": {
+    "total": 20,
+    "blocked": true,
+    "override": false,
+    "range_max": 26,
+    "range_min": 23,
+    "demo_count": 19,
+    "real_count": 1,
+    "real_venture_ids": [
+      "ecbba50e-3c98-4493-9e77-1719cf6b6f00"
+    ]
+  },
+  "wrapperInvocation": {
+    "total": 20,
+    "demoCount": 19,
+    "realCount": 1,
+    "real": [
+      {
+        "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00"
+      }
+    ],
+    "blocked": true
+  },
+  "identicalVerdict": true,
+  "result": "PASS"
+}

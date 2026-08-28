@@ -1,0 +1,126 @@
+{
+  "generatedAt": "2026-08-28T13:45:52.053Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-1",
+  "surfaceCount": 22,
+  "dispositionCounts": {
+    "shift": 19,
+    "accepted-as-broken": 1,
+    "no-op": 2
+  },
+  "blankDispositions": [],
+  "dispositions": [
+    {
+      "surface": "eva_ventures.current_lifecycle_stage",
+      "liveRowCount": 21,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_artifact_requirements.stage_number",
+      "liveRowCount": 6,
+      "disposition": "shift"
+    },
+    {
+      "surface": "gate_boundary_config.from_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    },
+    {
+      "surface": "gate_boundary_config.to_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_stage_cutover_grandfather.stage_number",
+      "liveRowCount": 8,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_prop_contracts.stage_number",
+      "liveRowCount": 8,
+      "disposition": "shift"
+    },
+    {
+      "surface": "eva_stage_gate_results.stage_number",
+      "liveRowCount": 38,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_capture_snapshots.lifecycle_stage",
+      "liveRowCount": 6,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_executions.lifecycle_stage",
+      "liveRowCount": 98,
+      "disposition": "accepted-as-broken"
+    },
+    {
+      "surface": "venture_artifacts.lifecycle_stage",
+      "liveRowCount": 45,
+      "disposition": "no-op"
+    },
+    {
+      "surface": "venture_artifacts.artifact_type",
+      "liveRowCount": 3,
+      "disposition": "shift"
+    },
+    {
+      "surface": "workflow_executions.current_stage",
+      "liveRowCount": 193,
+      "disposition": "no-op"
+    },
+    {
+      "surface": "compliance_violations.stage_number",
+      "liveRowCount": 90,
+      "disposition": "shift"
+    },
+    {
+      "surface": "compliance_events.stage_number",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "convergence_ledger_stages.stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_of_death_predictions.actual_death_stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_of_death_predictions.predicted_death_stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_proving_journal.stage_number",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_dependencies.required_stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "ventures.current_lifecycle_stage",
+      "liveRowCount": 21,
+      "disposition": "shift"
+    },
+    {
+      "surface": "eva_artifact_dependencies.source_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    },
+    {
+      "surface": "eva_artifact_dependencies.target_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    }
+  ],
+  "dispositionVsV2ContentMismatches": [],
+  "result": "PASS"
+}

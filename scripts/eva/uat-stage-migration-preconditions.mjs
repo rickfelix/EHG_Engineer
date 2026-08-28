@@ -15,6 +15,7 @@ import { createDatabaseClient } from '../lib/supabase-connection.js';
 import { runDriftCheck } from '../../lib/eva/uat-stage-migration/drift-check.mjs';
 import { runQuiescenceCheck } from '../../lib/eva/uat-stage-migration/quiescence-check.mjs';
 import { runParkedVentureClassification } from '../../lib/eva/uat-stage-migration/parked-venture-classifier.mjs';
+import { runV2ReadinessCheck } from '../../lib/eva/uat-stage-migration/v2-readiness-check.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
@@ -39,14 +40,22 @@ export async function runPreconditions(client, opts = {}) {
   const driftOutcome = await runIsolated('drift', () => runDriftCheck(client));
   const quiescenceOutcome = await runIsolated('quiescence', () => runQuiescenceCheck(client));
   const parkedOutcome = await runIsolated('parked', () => runParkedVentureClassification(client, opts));
+  // FR-6 (SD-LEO-INFRA-STAGE-KEYED-DATA-001): surfaces v2's own 24-27 parked-venture precondition
+  // ahead of a v2 apply attempt, via the same isolated-check convention -- see v2-readiness-check.mjs.
+  const v2ReadinessOutcome = await runIsolated('v2Readiness', () => runV2ReadinessCheck(client, opts));
 
   const drift = driftOutcome.ok ? driftOutcome.result : { drifted: true, error: driftOutcome.error };
   const quiescence = quiescenceOutcome.ok ? quiescenceOutcome.result : { quiescent: false, error: quiescenceOutcome.error };
   const parked = parkedOutcome.ok ? parkedOutcome.result : { blocked: true, error: parkedOutcome.error };
+  const v2Readiness = v2ReadinessOutcome.ok ? v2ReadinessOutcome.result : { applicable: true, blocked: true, error: v2ReadinessOutcome.error };
 
-  const ok = driftOutcome.ok && quiescenceOutcome.ok && parkedOutcome.ok
-    && !drift.drifted && quiescence.quiescent && !parked.blocked;
-  return { ok, drift, quiescence, parked };
+  // v2Readiness only blocks overall `ok` when it is actually applicable (v1 already applied) --
+  // before that, v2 cannot be meaningfully checked, and a not-yet-applicable v2 has no bearing on
+  // whether v1 itself is safe to apply.
+  const v2Blocking = v2Readiness.applicable && v2Readiness.blocked;
+  const ok = driftOutcome.ok && quiescenceOutcome.ok && parkedOutcome.ok && v2ReadinessOutcome.ok
+    && !drift.drifted && quiescence.quiescent && !parked.blocked && !v2Blocking;
+  return { ok, drift, quiescence, parked, v2Readiness };
 }
 
 async function main() {
@@ -70,6 +79,13 @@ async function main() {
       console.error(`PRECONDITION_ERROR: parked-venture check threw (${result.parked.error}) -- treated as blocking`);
     } else if (result.parked.blocked) {
       console.error(`PRECONDITION_FAILED: ${result.parked.realCount} REAL (non-demo) venture(s) found at a shifted stage (FR-6) -- rerun with --override-parked-venture-check only after explicit chairman review`);
+    }
+    if (result.v2Readiness.error) {
+      console.error(`PRECONDITION_ERROR: v2-readiness check threw (${result.v2Readiness.error}) -- treated as blocking`);
+    } else if (!result.v2Readiness.applicable) {
+      console.log('v2-readiness: not applicable yet (v1 has not been applied -- SD-LEO-INFRA-STAGE-KEYED-DATA-001 v2)');
+    } else if (result.v2Readiness.blocked) {
+      console.error(`PRECONDITION_FAILED: ${result.v2Readiness.realCount} REAL (non-demo) venture(s) found at stage 24-27 (SD-LEO-INFRA-STAGE-KEYED-DATA-001 v2's own shift range) -- v2 will refuse to apply until this clears`);
     }
 
     process.exitCode = result.ok ? 0 : 1;

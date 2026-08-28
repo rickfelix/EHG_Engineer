@@ -1,0 +1,47 @@
+{
+  "generatedAt": "2026-08-28T13:45:56.147Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-8",
+  "result_raw": {
+    "ok": false,
+    "drift": {
+      "drifted": false,
+      "mismatches": []
+    },
+    "quiescence": {
+      "quiescent": true,
+      "inFlightCount": 0,
+      "inFlight": []
+    },
+    "parked": {
+      "total": 21,
+      "demoCount": 19,
+      "realCount": 2,
+      "real": [
+        {
+          "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+          "is_demo": false,
+          "current_lifecycle_stage": 24
+        },
+        {
+          "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+          "is_demo": false,
+          "current_lifecycle_stage": 26
+        }
+      ],
+      "blocked": true
+    },
+    "v2Readiness": {
+      "v1Applied": false,
+      "applicable": false,
+      "blocked": false
+    }
+  },
+  "allFourChecksCompletedWithoutThrowing": true,
+  "driftAndQuiescencePassClean": true,
+  "parkedCheckIdentifiesKnownRealVenturesCorrectly": true,
+  "v2ReadinessCorrectlyNotApplicableYet": true,
+  "overallOk": false,
+  "overallOkNote": "false, as expected: the 2 known real parked ventures still block -- this is correct isolation, not a defect",
+  "result": "PASS"
+}

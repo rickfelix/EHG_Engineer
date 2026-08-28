@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-08-28T13:45:54.380Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-4",
+  "fixtureApplied": true,
+  "stageArtifactRequirementsAtStage23Count": 0,
+  "companyIdUsedForFixture": "24558c73-fc55-4ee0-a350-48f9f4987637",
+  "ventureFixtureCreated": true,
+  "ventureFixtureId": "b229b266-0b7d-4fcd-ad9b-b56d628c4c79",
+  "verdict": {
+    "source": "legacy_fallback",
+    "blocked": false,
+    "missing_artifacts": [],
+    "deviated_artifacts": []
+  },
+  "blockedFalseViaLegacyFallback": true,
+  "result": "PASS"
+}

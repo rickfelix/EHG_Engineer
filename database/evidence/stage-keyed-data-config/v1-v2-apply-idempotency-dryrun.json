@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-08-28T14:32:39.826Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "v1-v2-apply-idempotency-dryrun (general engineering validation, not a PRD test scenario)",
+  "steps": [
+    {
+      "step": "BEGIN",
+      "ok": true
+    },
+    {
+      "step": "apply v1",
+      "ok": true
+    },
+    {
+      "step": "apply v2",
+      "ok": true
+    },
+    {
+      "step": "reapply v1 (idempotency)",
+      "ok": true
+    },
+    {
+      "step": "reapply v2 (idempotency)",
+      "ok": true
+    },
+    {
+      "step": "ROLLBACK",
+      "ok": true
+    }
+  ],
+  "realVenturesTemporarilyFlippedForTestOnly": [
+    {
+      "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+      "name": "MarketLens"
+    },
+    {
+      "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+      "name": "DataDistill"
+    }
+  ],
+  "sampleWidenedChecks": [
+    {
+      "conname": "chk_lifecycle_stage",
+      "def": "CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 27)))"
+    },
+    {
+      "conname": "stage_artifact_requirements_stage_number_check",
+      "def": "CHECK (((stage_number >= 1) AND (stage_number <= 27)))"
+    },
+    {
+      "conname": "venture_capture_snapshots_lifecycle_stage_check",
+      "def": "CHECK (((lifecycle_stage >= 1) AND (lifecycle_stage <= 27)))"
+    }
+  ],
+  "gateBoundaryConfigAfterShift": [
+    {
+      "from_stage": 5,
+      "to_stage": 6
+    },
+    {
+      "from_stage": 9,
+      "to_stage": 10
+    },
+    {
+      "from_stage": 12,
+      "to_stage": 13
+    },
+    {
+      "from_stage": 17,
+      "to_stage": 18
+    },
+    {
+      "from_stage": 24,
+      "to_stage": 25
+    }
+  ],
+  "approveChairmanDecisionStepUpFixConfirmed": true,
+  "result": "PASS"
+}

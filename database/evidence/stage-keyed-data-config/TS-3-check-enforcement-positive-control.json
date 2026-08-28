@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-08-28T13:45:53.776Z",
+  "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
+  "scenario": "TS-3",
+  "fixtureApplied": true,
+  "stage27": {
+    "landed": true,
+    "errorCode": null,
+    "rowCount": 1
+  },
+  "stage27RowCountAsserted": true,
+  "stage28": {
+    "landed": false,
+    "errorCode": "23514"
+  },
+  "positiveControlConfirmedSqlState23514": true,
+  "result": "PASS"
+}
