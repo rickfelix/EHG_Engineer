@@ -72,7 +72,19 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // TUNING-001 used to exonerate the scorer — the healthy user_story lane proving the same scorer
   // CAN pass user stories. This raises that control's bar on 2026-08-04. Anyone re-reading that
   // exoneration needs to know the instrument moved, and when.
-  refactor: { default: 65 }
+  refactor: { default: 65 },
+
+  // Bugfix SDs: QF-20260817-837 (evidence: database/migrations/20251205_russian_judge_sd_type_awareness_fixed.sql's
+  // v_ai_quality_tuning_recommendations, re-read live at claim per the QF's own instruction, not
+  // the 6-row count recorded at scan time). bugfix had no dedicated key before this change and
+  // fell through to DEFAULT_THRESHOLD (60) for every content_type -- `default: 60` here is
+  // byte-identical to that prior fallback, so bugfix x user_story (n=183, avg=64.9, pass=73.8%,
+  // OPTIMAL) is completely unaffected.
+  // prd: 60 -> 65 (n=43 assessments/4wk, avg_score=80.1, pass_rate=97.7% -- INCREASE recommendation).
+  // retrospective: 60 -> 65 (n=85, avg_score=84.7, pass_rate=91.8% -- INCREASE recommendation).
+  // Both clear >=10 assessments (AC-1). BEFORE VALUE FOR ROLLBACK: delete this whole key: bugfix
+  // reverts to falling through to DEFAULT_THRESHOLD (60) for every content_type, exactly as before.
+  bugfix: { default: 60, prd: 65, retrospective: 65 }
 };
 
 // SD-type-aware blocking thresholds for feedback generation

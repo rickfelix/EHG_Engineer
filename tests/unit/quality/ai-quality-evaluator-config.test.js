@@ -23,18 +23,23 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.security.default).toBe(70);
   });
 
-  it('REFUSED: bugfix, infrastructure, and orchestrator INCREASE recommendations were NOT applied', () => {
-    // bugfix has no dedicated key at all -- it must keep falling through to DEFAULT_THRESHOLD,
-    // exactly like refactor did before TUNING-002 gave it one.
-    expect(SD_TYPE_PASS_THRESHOLDS.bugfix).toBeUndefined();
-    // infrastructure's prd/retrospective cells both recommended 55 -> 60, refused because
-    // infrastructure x user_story (avg ~53, the largest cell in the view) cannot clear 60.
-    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
+  it('REFUSED (at QF-20260807-698 time): orchestrator INCREASE recommendation was NOT applied', () => {
     // orchestrator has no dedicated key -- ORCHESTRATOR_THRESHOLD governs it separately, and its
     // retrospective cell's 50 -> 55 recommendation was refused because orchestrator x user_story
     // cannot clear 55 (and the SAME view recommends DECREASING that cell, not raising the shared bar).
     expect(SD_TYPE_PASS_THRESHOLDS.orchestrator).toBeUndefined();
     expect(ORCHESTRATOR_THRESHOLD).toBe(50);
+  });
+
+  it('APPLIED (QF-20260817-837): bugfix gained a dedicated key with per-content_type prd/retrospective overrides, default unchanged from the prior DEFAULT_THRESHOLD fallback', () => {
+    // bugfix x prd: n=43, avg=80.1, pass=97.7% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.prd).toBe(65);
+    // bugfix x retrospective: n=85, avg=84.7, pass=91.8% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.retrospective).toBe(65);
+    // bugfix x user_story (OPTIMAL, n=183) is untouched: default stays 60, byte-identical to the
+    // prior DEFAULT_THRESHOLD fallback bugfix had when it had no key at all.
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.default).toBe(60);
+    expect(SD_TYPE_PASS_THRESHOLDS.bugfix.user_story).toBeUndefined();
   });
 
   it('REFUSED: feature was NOT raised (feature x user_story cannot clear a higher bar)', () => {
@@ -81,7 +86,10 @@ describe('getPassThreshold — SD-LEO-INFRA-QUALITY-GATE-TYPE-001 (content_type 
 
   it('TS-4: an unmapped sd_type still falls back to DEFAULT_THRESHOLD', () => {
     expect(getPassThreshold('prd', { sd_type: 'unknown_type' })).toBe(DEFAULT_THRESHOLD);
-    expect(getPassThreshold('prd', { sd_type: 'bugfix' })).toBe(DEFAULT_THRESHOLD);
+    // QF-20260817-837 gave bugfix a dedicated key (see the dedicated bugfix test above); it is
+    // no longer unmapped, so it moved out of this assertion and orchestrator (still genuinely
+    // unmapped, governed separately by ORCHESTRATOR_THRESHOLD) stands in for the same case.
+    expect(getPassThreshold('prd', { sd_type: 'orchestrator' })).toBe(DEFAULT_THRESHOLD);
   });
 
   it('TS-5: sd=null (or missing sd_type) short-circuits to DEFAULT_THRESHOLD without touching SD_TYPE_PASS_THRESHOLDS', () => {
