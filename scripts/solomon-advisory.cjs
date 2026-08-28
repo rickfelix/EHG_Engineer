@@ -107,7 +107,12 @@ const SOLOMON_SWEEP_BUDGET = Object.freeze({
   maxTokens: Number(process.env.SOLOMON_SWEEP_MAX_TOKENS) || 200_000,    // token ceiling
 });
 const SOLOMON_PER_SD_MAX = Number(process.env.SOLOMON_PER_SD_MAX) || 2;   // answers per SD
-const SOLOMON_PER_DAY_MAX = Number(process.env.SOLOMON_PER_DAY_MAX) || 20; // answers per UTC day
+// QF-20260729-394: chairman ruled 150 (feedback 95d2d547, 2026-07-29), superseding the original 20.
+// `||` falls back on ANY falsy value -- "0", "15O" (typo->NaN), "" all silently resurrected the
+// superseded 20 instead of failing loud. Number.isFinite + a ternary makes a bad/absent value
+// resolve to the current ruling, not the stale one.
+const SOLOMON_PER_DAY_MAX_ENV = Number(process.env.SOLOMON_PER_DAY_MAX);
+const SOLOMON_PER_DAY_MAX = Number.isFinite(SOLOMON_PER_DAY_MAX_ENV) ? SOLOMON_PER_DAY_MAX_ENV : 150; // answers per UTC day
 
 // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: mirrors adam-advisory.cjs's KNOWN_SEND_KINDS
 // allowlist exactly -- same shared source (lib/fleet/worker-status.cjs), never a second list.
