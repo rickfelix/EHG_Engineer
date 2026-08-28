@@ -325,7 +325,16 @@ async function closePremiseUnverifiedStale(supabase, qf, nowMs, reasonCode = 'in
     // never inspects metadata for this purpose, so a metadata-only marker would NOT have excluded
     // this row from re-promotion. 'resolved' also fits semantically: this row is a closed,
     // historical trace of a disposition decision, not a fresh open item.
+    //
+    // QF-20260828-435: chk_feedback_terminal_resolution (database/migrations/
+    // 20260207_feedback_resolution_constraints.sql) requires resolution_sd_id OR quick_fix_id OR
+    // strategic_directive_id OR a non-empty resolution_notes whenever status='resolved' -- none of
+    // which this call previously supplied, so every INSERT here threw and aborted the whole
+    // --apply run (measured live: SWEEP_FATAL on the first INCONCLUSIVE candidate, zero writes).
+    // resolution_notes is an existing emitFeedback pass-through column; supplying it satisfies the
+    // constraint without inventing a new relation this closure has no natural FK for.
     status: 'resolved',
+    resolution_notes: `Closed by ${SWEEP_ACTOR}: citation check was INCONCLUSIVE (${reasonCode}) -- archived, not confirmed resolved. Premise preserved above for future recall.`,
     dedup_key: `stale-qf-disposition-sweep:${qf.id}`,
     metadata: {
       premise_unverified_stale_source_qf_id: qf.id,
