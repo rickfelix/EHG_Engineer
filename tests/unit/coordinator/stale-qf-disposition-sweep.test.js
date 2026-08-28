@@ -254,6 +254,15 @@ describe('TS-3: premise_unverified_stale preserves signal via a feedback row, no
       // feedback-fingerprint-promoter.mjs's own re-promotion candidate query.
       expect(call[0].status).toBe('resolved');
       expect(call[0].category).toBe('harness_backlog');
+      // QF-20260828-435: chk_feedback_terminal_resolution (database/migrations/
+      // 20260207_feedback_resolution_constraints.sql) rejects status='resolved' unless
+      // resolution_sd_id/quick_fix_id/strategic_directive_id/resolution_notes is set -- the
+      // mocked emitFeedback above never enforces this real DB constraint, so a regression here
+      // is invisible to every other assertion in this file. Live measurement 2026-08-28: this
+      // call previously supplied none of the four, and every --apply run threw SWEEP_FATAL on
+      // the first INCONCLUSIVE candidate with zero writes.
+      expect(typeof call[0].resolution_notes).toBe('string');
+      expect(call[0].resolution_notes.trim().length).toBeGreaterThan(0);
     }
   });
 
