@@ -65,6 +65,26 @@ import { resolveVentureCompanyAccess } from '../../../lib/creative/venture-compa
 
 const sampler = createSampler();
 
+// TESTING FAIL 49e5b1ef (item 4): explicit column allow-list for the write path. The prior
+// version did `.insert({ ...asset, venture_id, campaign_id })`, spreading a caller-supplied
+// object directly into a service_role insert -- a caller could inject any creative_assets
+// column (including consumed_at, or a future column this function was never audited against)
+// simply by adding it to the request body. Only these fields are ever accepted from the
+// caller; venture_id/campaign_id are always the server-resolved/validated values, never taken
+// from the caller's `asset` object even if present there.
+const ASSET_WRITE_ALLOWED_FIELDS = ['id', 'capability', 'generator', 'prompt', 'provenance', 'cost'] as const;
+
+function pickAllowedAssetFields(asset: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+  if (!asset || typeof asset !== 'object') return picked;
+  for (const field of ASSET_WRITE_ALLOWED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(asset, field)) {
+      picked[field] = (asset as Record<string, unknown>)[field];
+    }
+  }
+  return picked;
+}
+
 async function selectAssetVariantForVenture(supabase: any, ventureId: string) {
   // Mirrors lib/creative/variant-scoring-bridge.js#selectAssetVariant()'s query shape
   // (minus the Deno-incompatible checkAssetViewAuthorized gate -- see module docblock).
@@ -163,6 +183,33 @@ serve(async (req: Request) => {
       );
     }
 
+    // TESTING FAIL 49e5b1ef (item 2): US-004 AC-4 requires persisted variants to survive a
+    // page reload. VideoVariantTesting.tsx's `campaigns` state was previously write-only (set
+    // only by the generation handler) -- nothing ever read creative_assets back on mount. This
+    // action is that read path, routed through the bridge (never a raw client .from() call,
+    // per TR-1/FR-5), returning persisted creative_assets rows for the venture grouped by
+    // campaign_id so the caller can reconstruct the same Campaign shape it renders in-session.
+    if (action === 'list') {
+      const { data, error } = await supabase
+        .from('creative_assets')
+        .select('id, campaign_id, capability, generator, prompt, provenance, cost, created_at')
+        .eq('venture_id', ventureId)
+        .not('campaign_id', 'is', null)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ status: 'error', error: error.message || String(error) }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ status: 'ok', rows: data || [] }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (action === 'write') {
       const { campaign_id: campaignId, asset } = body;
       if (!campaignId) {
@@ -172,9 +219,18 @@ serve(async (req: Request) => {
         );
       }
 
+      // Explicit allow-list, never a spread of caller input (TESTING FAIL 49e5b1ef, item 4).
+      // venture_id/campaign_id are always the server-resolved values below, not read from the
+      // caller's `asset` object even if a caller includes them there.
+      const insertPayload = {
+        ...pickAllowedAssetFields(asset),
+        venture_id: ventureId,
+        campaign_id: campaignId,
+      };
+
       const { data, error } = await supabase
         .from('creative_assets')
-        .insert({ ...asset, venture_id: ventureId, campaign_id: campaignId })
+        .insert(insertPayload)
         .select()
         .single();
 
@@ -192,7 +248,7 @@ serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ status: 'error', error: "action must be 'read' or 'write'" }),
+      JSON.stringify({ status: 'error', error: "action must be 'read', 'list', or 'write'" }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
