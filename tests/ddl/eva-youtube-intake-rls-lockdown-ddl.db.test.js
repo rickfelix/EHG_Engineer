@@ -273,6 +273,31 @@ describe('the REAL $verify$ block (extracted from the migration file, not hand-c
     }
   });
 
+  // Adversarial /ship review finding (EXEC-TO-PLAN): aclexplode() represents a PUBLIC grant as
+  // grantee=0, which an earlier version of this query (INNER JOIN pg_roles) silently dropped —
+  // REVOKE ALL FROM anon, authenticated never touches PUBLIC, so a PUBLIC grant would have let
+  // anon/authenticated read via inheritance while this check reported "no remaining grants". The
+  // migration's query was widened to a LEFT JOIN + rolname IS NULL specifically to catch this.
+  it('RAISEs if a PUBLIC grant were present (aclexplode grantee=0, not just named anon/authenticated)', async () => {
+    await client.query('BEGIN');
+    try {
+      await client.query('GRANT SELECT ON public.eva_youtube_intake TO PUBLIC');
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/anon\/authenticated still hold privilege/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('RAISEs if service_role LOST table privileges (positive control, previously unexercised)', async () => {
+    await client.query('BEGIN');
+    try {
+      await client.query('REVOKE SELECT ON public.eva_youtube_intake FROM service_role');
+      await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toThrow(/service_role LOST table privileges/);
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
   it('RAISEs if RLS were disabled on eva_youtube_intake', async () => {
     await client.query('BEGIN');
     try {

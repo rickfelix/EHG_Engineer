@@ -109,10 +109,18 @@ BEGIN
   -- finding on the sibling anon_truncate_sweep migration, which uses this same instrument). A
   -- false-negative here (reporting "no remaining grants" when some exist) would mask an incomplete
   -- REVOKE, so this negative-assertion check uses the authoritative instrument.
-  SELECT string_agg(DISTINCT r.rolname || ':' || a.privilege_type, ', ') INTO v_remaining_grantees
+  --
+  -- LEFT JOIN, not JOIN, and rolname IS NULL is also flagged: aclexplode() represents a PUBLIC grant
+  -- as grantee=0, which an INNER JOIN to pg_roles silently drops (adversarial /ship review finding,
+  -- EXEC-TO-PLAN). REVOKE ALL ... FROM anon, authenticated (above) never touches a PUBLIC grant, so
+  -- if one were ever added to this table, anon/authenticated would still read via it while this
+  -- check reported "no remaining grants" — the exact false-negative the paragraph above warns
+  -- against. No PUBLIC grant exists on this table today (verified live 2026-08-28), but the check
+  -- itself must not depend on that staying true.
+  SELECT string_agg(DISTINCT coalesce(r.rolname, 'PUBLIC') || ':' || a.privilege_type, ', ') INTO v_remaining_grantees
     FROM aclexplode(coalesce((SELECT relacl FROM pg_class WHERE oid = v_rel), acldefault('r', (SELECT relowner FROM pg_class WHERE oid = v_rel)))) a
-    JOIN pg_roles r ON r.oid = a.grantee
-   WHERE r.rolname IN ('anon', 'authenticated');
+    LEFT JOIN pg_roles r ON r.oid = a.grantee
+   WHERE r.rolname IN ('anon', 'authenticated') OR r.rolname IS NULL;
 
   IF v_remaining_grantees IS NOT NULL THEN
     RAISE EXCEPTION 'eva_youtube_intake RLS lockdown: anon/authenticated still hold privilege(s) [%] — refusing to consider this applied', v_remaining_grantees;
