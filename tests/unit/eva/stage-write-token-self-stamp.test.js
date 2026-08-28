@@ -47,11 +47,14 @@ describe('stage_write_token self-stamp — source coverage', () => {
     expect(fnBody).toMatch(/stageWriteTokenField\([^)]*'venture-ceo-handlers\.js'\)/);
   });
 
-  it('scripts/eva-run.js: --stage override write probes before stamping', () => {
+  // QF-20260828-911: eva-run.js's --stage override used to bare-write current_lifecycle_stage
+  // (satisfying this SD's choke, but never writing venture_stage_transitions -- a DIFFERENT
+  // audit gap this token-stamping SD does not cover). Fixed by REFUSING the bare write rather
+  // than stamping it, so eva-run.js now joins reconciliation-packet-apply.mjs's "never a raw
+  // write" shape below instead of the "probes before stamping" shape above.
+  it('scripts/eva-run.js: --stage override never bare-writes current_lifecycle_stage (QF-20260828-911)', () => {
     const src = read('../../../scripts/eva-run.js');
-    const m = src.match(/\.update\(\{[^}]*current_lifecycle_stage:[^}]*\}\)/);
-    expect(m).not.toBeNull();
-    expect(m[0]).toMatch(/stageWriteTokenField\([^)]*'eva-run\.js'\)/);
+    expect(src).not.toMatch(/\.update\(\s*\{\s*current_lifecycle_stage/);
   });
 
   it('scripts/canary/run-canary-probe.mjs: deterministic-reset write probes before stamping', () => {
@@ -72,7 +75,8 @@ describe('stage_write_token self-stamp — source coverage', () => {
       '../../../lib/eva/stage-execution-worker.js',
       '../../../lib/agents/venture-ceo/handlers.js',
       '../../../lib/eva/saga-coordinator.js',
-      '../../../scripts/eva-run.js',
+      // scripts/eva-run.js removed (QF-20260828-911): it no longer writes current_lifecycle_stage
+      // at all (refuses instead), so it has nothing to probe-before-stamp.
       '../../../scripts/canary/run-canary-probe.mjs',
     ]) {
       const src = read(relPath);

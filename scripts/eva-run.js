@@ -10,7 +10,11 @@
  *   node scripts/eva-run.js <venture_id> [options]
  *
  * Options:
- *   --stage <N>       Start from stage N instead of current lifecycle_stage
+ *   --stage <N>       Start from stage N instead of current lifecycle_stage. QF-20260828-911:
+ *                     when N differs from the venture's current stage, this REFUSES (exit 4) rather
+ *                     than bare-writing the cursor -- a bare write skips venture_stage_transitions,
+ *                     the append-only audit history. Use advanceStage() (fn_advance_venture_stage)
+ *                     for a logged stage move; the refusal message prints the exact snippet.
  *   --dry-run         Skip persistence and transitions (preview mode)
  *   --json            Output results as JSON
  *   --chairman <id>   Chairman user ID for preference loading
@@ -33,7 +37,6 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { run as orchestratorRun } from '../lib/eva/eva-orchestrator.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
-import { stageWriteTokenField } from '../lib/eva/stage-write-token-probe.js';
 
 // ── Exit Codes ──────────────────────────────────────────────
 
@@ -76,6 +79,19 @@ Exit Codes:
   3  Chairman review required
   4  Execution error
 `);
+}
+
+/**
+ * QF-20260828-911: pure so it can be unit-tested without standing up a CLI/DB harness.
+ * @param {{ventureId: string, fromStage: number, toStage: number}} o
+ * @returns {string}
+ */
+function stageOverrideRefusalMessage({ ventureId, fromStage, toStage }) {
+  return `Error: --stage ${toStage} refused — a bare cursor write here would leave venture_stage_transitions silent (the append-only audit history), the exact gap QF-20260828-911 closes.
+Use the logged advance path instead, which writes BOTH the pointer and the transition row in one action:
+  node -e "Promise.all([import('./lib/eva/artifact-persistence-service.js'), import('./lib/supabase-client.js')]).then(([ap, sc]) => ap.advanceStage(sc.createSupabaseServiceClient(), { ventureId: '${ventureId}', fromStage: ${fromStage}, toStage: ${toStage} })).then(r => console.log(r))"
+(fn_advance_venture_stage via advanceStage() also runs exit-gate/thesis-kill/gate-debt enforcement --
+that is intentional: a stage jump should be subject to the same checks any other advance is.)`;
 }
 
 // ── Main ──────────────────────────────────────────────────────
@@ -187,18 +203,18 @@ async function main() {
 
   if (chairmanId) options.chairmanId = chairmanId;
 
-  // If --stage is specified, update the venture stage before running
+  // QF-20260828-911: --stage used to bare-write ventures.current_lifecycle_stage directly,
+  // satisfying the stage-writer choke but NEVER writing venture_stage_transitions -- the
+  // append-only history stayed silent for every --stage crossing since this flag shipped (one
+  // real boundary crossing, AltifyAI 19->20, needed a manual backfill row to repair). The
+  // logged writer is fn_advance_venture_stage (lib/eva/artifact-persistence-service.js
+  // advanceStage()), but it also runs exit-gate/thesis-kill/gate-debt enforcement that a bare
+  // debug/ops cursor override was never subject to -- silently routing through it here would
+  // change --stage's blocking behavior as a side effect of an audit fix. REFUSE instead (the
+  // QF's explicitly-sanctioned alternative fix shape) and name the logged path.
   if (startStage !== undefined && Number(startStage) !== currentStage && !dryRun) {
-    // SD-LEO-INFRA-STAGE-WRITER-CHOKE-001: degrades to {} until the column exists.
-    const { error: updateError } = await supabase
-      .from('ventures')
-      .update({ current_lifecycle_stage: Number(startStage), ...(await stageWriteTokenField(supabase, 'eva-run.js')) })
-      .eq('id', ventureId);
-
-    if (updateError) {
-      console.error(`Error: Failed to set start stage: ${updateError.message}`);
-      return EXIT.EXECUTION_ERROR;
-    }
+    console.error(stageOverrideRefusalMessage({ ventureId, fromStage: currentStage, toStage: Number(startStage) }));
+    return EXIT.EXECUTION_ERROR;
   }
 
   // Run orchestration
@@ -315,4 +331,4 @@ if (isMainModule(import.meta.url)) {
   });
 }
 
-export { main, EXIT };
+export { main, EXIT, stageOverrideRefusalMessage };
