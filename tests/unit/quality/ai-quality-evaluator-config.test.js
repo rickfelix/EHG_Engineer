@@ -57,6 +57,17 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.feature.user_story).toBeUndefined();
   });
 
+  it('APPLIED (QF-20260817-837): infrastructure gained per-content_type prd/retrospective overrides; default (and therefore user_story) unchanged', () => {
+    // infrastructure x prd: n=267, avg=81.4, pass=100% -> 55->60
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.prd).toBe(60);
+    // infrastructure x retrospective: n=198, avg=91.3, pass=99% -> 55->60
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.retrospective).toBe(60);
+    // infrastructure x user_story (MONITOR, n=996, the largest cell in the whole view) is
+    // untouched: default stays 55 -- exactly the collateral prior tuning rounds refused to risk.
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story).toBeUndefined();
+  });
+
   it('unrelated thresholds are untouched by this QF', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.documentation.default).toBe(50);
     expect(SD_TYPE_PASS_THRESHOLDS.database.default).toBe(65);
@@ -77,22 +88,29 @@ describe('getPassThreshold — SD-LEO-INFRA-QUALITY-GATE-TYPE-001 (content_type 
   });
 
   it('TS-2: falls back to .default when no content_type override exists', () => {
+    // infrastructure x user_story has no override (QF-20260817-837 only added prd/retrospective).
     expect(getPassThreshold('user_story', { sd_type: 'infrastructure' })).toBe(55);
-    expect(getPassThreshold('prd', { sd_type: 'infrastructure' })).toBe(55);
+    // infrastructure x prd now HAS a dedicated override (60, not the 55 default) -- see the
+    // dedicated infrastructure test above; database x prd has no override at all, standing in
+    // for the "falls back to .default" case this test originally used infra x prd for.
+    expect(getPassThreshold('prd', { sd_type: 'database' })).toBe(65);
   });
 
   it('TS-3: a per-cell content_type override resolves distinctly from a sibling content_type, without mutating the shared module singleton', () => {
     // Local fixture only -- never mutate the imported SD_TYPE_PASS_THRESHOLDS object directly,
-    // since that would leak across the module cache into other tests in the same run.
+    // since that would leak across the module cache into other tests in the same run. Uses
+    // user_story (still genuinely unmapped on infrastructure, unlike prd/retrospective which
+    // QF-20260817-837 gave real overrides) so the "real module state is untouched" assertion
+    // below stays meaningful.
     const fixtureThresholds = {
       ...SD_TYPE_PASS_THRESHOLDS,
-      infrastructure: { ...SD_TYPE_PASS_THRESHOLDS.infrastructure, prd: 60 },
+      infrastructure: { ...SD_TYPE_PASS_THRESHOLDS.infrastructure, user_story: 60 },
     };
     const entry = fixtureThresholds.infrastructure;
-    expect(entry.prd).toBe(60);
+    expect(entry.user_story).toBe(60);
     expect(entry.default).toBe(55);
     // Real module state is untouched by the fixture above.
-    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.prd).toBeUndefined();
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story).toBeUndefined();
     expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
   });
 
@@ -118,20 +136,24 @@ describe('getPassThreshold — SD-LEO-INFRA-QUALITY-GATE-TYPE-001 (content_type 
     // singleton and restores it in `finally` -- unlike TS-3 (which only needs a local fixture),
     // this scenario requires exercising the REAL getPassThreshold against a REAL 0-valued key to
     // prove `??` (not `||`) is actually what runs, not a re-implementation of the same logic.
-    const hadOwnProperty = Object.hasOwn(SD_TYPE_PASS_THRESHOLDS.infrastructure, 'prd');
-    const previousValue = SD_TYPE_PASS_THRESHOLDS.infrastructure.prd;
-    SD_TYPE_PASS_THRESHOLDS.infrastructure.prd = 0;
+    // Uses user_story (genuinely unmapped on infrastructure) rather than prd, since
+    // QF-20260817-837 gave prd a real 60 override -- restoring via hadOwnProperty/previousValue
+    // still works generically for either shape, but user_story keeps the "restores to undefined"
+    // assertion below meaningful.
+    const hadOwnProperty = Object.hasOwn(SD_TYPE_PASS_THRESHOLDS.infrastructure, 'user_story');
+    const previousValue = SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story;
+    SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story = 0;
     try {
-      expect(getPassThreshold('prd', { sd_type: 'infrastructure' })).toBe(0);
+      expect(getPassThreshold('user_story', { sd_type: 'infrastructure' })).toBe(0);
     } finally {
       if (hadOwnProperty) {
-        SD_TYPE_PASS_THRESHOLDS.infrastructure.prd = previousValue;
+        SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story = previousValue;
       } else {
-        delete SD_TYPE_PASS_THRESHOLDS.infrastructure.prd;
+        delete SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story;
       }
     }
     // Restored -- confirms cleanup left the singleton exactly as other tests expect it.
-    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.prd).toBeUndefined();
+    expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.user_story).toBeUndefined();
     expect(SD_TYPE_PASS_THRESHOLDS.infrastructure.default).toBe(55);
   });
 });

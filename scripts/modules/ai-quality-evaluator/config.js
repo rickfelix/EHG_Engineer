@@ -27,7 +27,15 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   documentation: { default: 50 },
 
   // Infrastructure SDs: Lenient (internal tooling)
-  infrastructure: { default: 55 },
+  // prd/retrospective raised by QF-20260817-837 (evidence: v_ai_quality_tuning_recommendations,
+  // re-read live at claim). default (55) is unchanged, so infrastructure x user_story (MONITOR,
+  // n=996, the largest cell in the whole view, avg=69.4, pass=90.3%) is untouched -- this is
+  // exactly the collateral SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002/003 refused to risk before
+  // the per-content_type override shape existed.
+  // prd: 55 -> 60 (n=267, avg_score=81.4, pass_rate=100% -- INCREASE recommendation).
+  // retrospective: 55 -> 60 (n=198, avg_score=91.3, pass_rate=99% -- INCREASE recommendation).
+  // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 55 }`.
+  infrastructure: { default: 55, prd: 60, retrospective: 60 },
 
   // Feature SDs: Moderate baseline
   // prd/retrospective raised by QF-20260817-837 (evidence: v_ai_quality_tuning_recommendations,
