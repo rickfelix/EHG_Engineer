@@ -545,5 +545,24 @@
       "input": "scripts/**/*.{mjs,cjs,js} and lib/**/*.{mjs,cjs,js} file TEXT (enumerated via fs.readdirSync directory walk, not git ls-files), each parsed through ESLint's Linter API against eslint-rules/require-release-sd-wrapper.js -- a CallExpression whose callee is a non-computed `.rpc` member access with a string-literal first argument `'release_sd'` -- filtered against scripts/lint/require-release-sd-wrapper-allowlist.json by repo-relative path with a count-anchored {reason, expected} comparison, and lib/fleet/best-effort-release.mjs excluded outright as a structural exemption. Consumes no DB columns and no environment variables.",
       "seen": "Real positive observed in this PR's own CI (GitHub Actions run 32821787889, job require-release-sd-wrapper-lint, PR #7540, 2026-08-25): `node scripts/lint/require-release-sd-wrapper-lint.mjs` run against the real, live 4853-file scripts/**+lib/** population reported '0 ungoverned violations across 4853 file(s) scanned (scripts/**, lib/**); 13 call site(s) in 9 file(s) governed by allowlist' -- those 13 are genuine pre-existing raw release_sd call sites (scripts/hooks/reclaim-sd-after-compaction.cjs, session-state-sync.cjs, scripts/modules/claim-health/self-heal.js, scripts/modules/complete-quick-fix/orchestrator.js, scripts/modules/sd-next/claim-analysis.js, scripts/sd-start.js, lib/claim-guard.mjs, lib/commands/claim-command.js, lib/session-manager.mjs) found by this exact code path against the live tracked tree, not fixture data -- each individually reviewed into the allowlist with a reason and an exact expected count per file."
     }
+  },
+  {
+    "name": "gemini-pin-lint",
+    "script": "scripts/lint/gemini-pin-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": ["--all"],
+    "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B. No --root, but aimable via cwd the same way diagnostic-gauge-citation-lint is -- RUNTIME_DIRS resolve against process.cwd(), so the trial's tmp git-repo fixture tree is scanned directly.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-gemini-pin-defect.js",
+        "content": "// SEEDED DEFECT: a literal Gemini model-version string outside model-config.js and not in\n// scripts/lint/gemini-pin-allowlist.json -- the exact routing-pin shape this lint exists to block.\nexport function pickModel() {\n  return 'gemini-2.5-flash';\n}\n"
+      }
+    ],
+    "detectTokens": ["seeded-gemini-pin-defect", "gemini-2.5-flash"],
+    "observability_proof": {
+      "input": "literal /['\\\"`]gemini-\\d[\\w.-]*['\\\"`]/ string matches, scanned line-by-line across lib/, scripts/, tests/ (RUNTIME_DIRS resolved against process.cwd()) via `node scripts/lint/gemini-pin-lint.mjs --all`, cross-checked by exact file:line against scripts/lint/gemini-pin-allowlist.json entries. Consumes no DB columns and no environment variables.",
+      "seen": "Real positive observed against this repo's own live checkout at HEAD (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B, 2026-08-28, pre sibling-consolidation): `node scripts/lint/gemini-pin-lint.mjs --all`, run directly against the real tracked tree (not a temp-dir fixture), reported '24 unallowlisted violation(s) in 4129 file(s) checked' across lib/ai/multimodal-client.js (13), lib/testing/vision-qa-agent.js (9), lib/creative/providers/gemini.js (1), and lib/brainstorm/provider-rotation.js (1) -- the exact set the five sibling subsystem-consolidation SDs (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-C through -G) exist to migrate onto model-config.js; see PR #7623 test output (tests/unit/lint/gemini-pin-lint.test.js pins this count)."
+    }
   }
 ]
