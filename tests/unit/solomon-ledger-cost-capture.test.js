@@ -8,6 +8,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { readSessionCostTelemetry } = require('../../lib/telemetry/session-cost.cjs');
 const { captureLedgerRow } = require('../../scripts/solomon-advisory.cjs');
+const { buildUsageEntry } = require('../../.claude/context-usage-feed.cjs');
 
 // A supabase stub whose upsert records the row it was asked to write.
 function stubSupabase() {
@@ -28,9 +29,9 @@ function stubSupabase() {
 describe('W3 FR-6: readSessionCostTelemetry — authoritative per-session telemetry', () => {
   it('captures cost_tokens (latest snapshot) + wall_ms (elapsed since first snapshot) when telemetry is present', () => {
     const logContent = [
-      JSON.stringify({ ts: '2026-07-19T10:00:00.000Z', session: 'S1', context_used: 50000, input: 40000, output: 10000 }),
-      JSON.stringify({ ts: '2026-07-19T10:05:00.000Z', session: 'OTHER', context_used: 999999 }), // different session — ignored
-      JSON.stringify({ ts: '2026-07-19T10:10:00.000Z', session: 'S1', context_used: 123456, input: 100000, output: 23456 }),
+      JSON.stringify({ timestamp: '2026-07-19T10:00:00.000Z', session_id: 'S1', context_used: 50000, input_tokens: 40000, output_tokens: 10000 }),
+      JSON.stringify({ timestamp: '2026-07-19T10:05:00.000Z', session_id: 'OTHER', context_used: 999999 }), // different session — ignored
+      JSON.stringify({ timestamp: '2026-07-19T10:10:00.000Z', session_id: 'S1', context_used: 123456, input_tokens: 100000, output_tokens: 23456 }),
     ].join('\n');
     const nowMs = Date.parse('2026-07-19T10:20:00.000Z');
     const t = readSessionCostTelemetry({ sessionId: 'S1', logContent, nowMs });
@@ -41,14 +42,14 @@ describe('W3 FR-6: readSessionCostTelemetry — authoritative per-session teleme
   });
 
   it('falls back to summing token fields when context_used is absent', () => {
-    const logContent = JSON.stringify({ ts: '2026-07-19T10:00:00.000Z', session: 'S2', input: 30000, output: 5000, cache_read: 1000 });
+    const logContent = JSON.stringify({ timestamp: '2026-07-19T10:00:00.000Z', session_id: 'S2', input_tokens: 30000, output_tokens: 5000, cache_read_tokens: 1000 });
     const t = readSessionCostTelemetry({ sessionId: 'S2', logContent, nowMs: Date.parse('2026-07-19T10:00:01.000Z') });
     expect(t.captured).toBe(true);
     expect(t.costTokens).toBe(36000); // 30000 + 5000 + 1000
   });
 
   it('is fail-soft (captured:false) when there is no snapshot for this session', () => {
-    const logContent = JSON.stringify({ ts: '2026-07-19T10:00:00.000Z', session: 'SOMEONE_ELSE', context_used: 42 });
+    const logContent = JSON.stringify({ timestamp: '2026-07-19T10:00:00.000Z', session_id: 'SOMEONE_ELSE', context_used: 42 });
     const t = readSessionCostTelemetry({ sessionId: 'S1', logContent });
     expect(t.captured).toBe(false);
     expect(t.reason).toMatch(/no telemetry snapshot/);
@@ -64,6 +65,27 @@ describe('W3 FR-6: readSessionCostTelemetry — authoritative per-session teleme
     const t = readSessionCostTelemetry({ logContent: '{}' });
     expect(t.captured).toBe(false);
     expect(t.reason).toMatch(/sessionId/);
+  });
+
+  // QF-20260729-563: the reader's field names silently drifted from what the real production
+  // writer (.claude/context-usage-feed.cjs buildUsageEntry) emits -- captured stayed false on
+  // 1,904 of 1,904 solomon_advice_outcome_ledger rows despite the write path being fully wired.
+  // Building the fixture through the REAL writer, not a hand-authored JSONL literal, is what
+  // catches a future field-name drift in either direction.
+  it('WRITER/READER CONTRACT: an entry built by the real buildUsageEntry() is captured', () => {
+    const now = new Date('2026-08-28T16:00:00.000Z');
+    const entry = buildUsageEntry({
+      sessionId: 'S-CONTRACT', modelId: 'Sonnet 5', contextUsed: 224031, contextSize: 1000000,
+      usagePercent: 28, inputTokens: 223740, outputTokens: 291, cacheCreationTokens: 2079,
+      cacheReadTokens: 221659, status: 'HEALTHY', cwd: 'C:\\repo', now,
+    });
+    const t = readSessionCostTelemetry({
+      sessionId: 'S-CONTRACT',
+      logContent: JSON.stringify(entry),
+      nowMs: now.getTime() + 1000,
+    });
+    expect(t.captured).toBe(true);
+    expect(t.costTokens).toBe(224031);
   });
 });
 
