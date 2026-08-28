@@ -74,3 +74,37 @@ describe('QF-20260508-406: read-quick-fix.js DB-backed file warning', () => {
     expect(src).toMatch(/new Set/);
   });
 });
+
+// QF-20260828-420: claim-liveness warning (cheap, schema-free half of the recurring
+// duplicate-dispatch collision fix; the RPC-level gap is tracked separately as a DB migration).
+describe('QF-20260828-420: claim-liveness warning', () => {
+  const src = readFileSync(SCRIPT, 'utf8');
+
+  it('checks claiming_session_id against the caller session id', () => {
+    expect(src).toMatch(/qf\.claiming_session_id/);
+    expect(src).toMatch(/CLAUDE_SESSION_ID/);
+  });
+
+  it('only warns for a foreign session with a fresh (<900s) heartbeat, matching claim_sd\'s own liveness window', () => {
+    expect(src).toMatch(/heartbeat_at/);
+    expect(src).toMatch(/900/);
+  });
+
+  it('is advisory-only: never exits or throws on a live-foreign-claim detection', () => {
+    // The warning block must not call process.exit -- scan the block between the
+    // claiming_session_id check and the JSON-output-mode marker for any exit call.
+    const start = src.indexOf('qf.claiming_session_id &&');
+    const end = src.indexOf('// JSON output mode');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const block = src.slice(start, end);
+    expect(block).not.toMatch(/process\.exit/);
+  });
+
+  it('fails open on a liveness-probe fault (never blocks reading a QF)', () => {
+    const start = src.indexOf('qf.claiming_session_id &&');
+    const end = src.indexOf('// JSON output mode');
+    const block = src.slice(start, end);
+    expect(block).toMatch(/catch\s*\{/);
+  });
+});

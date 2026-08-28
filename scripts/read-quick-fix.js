@@ -37,6 +37,27 @@ async function readQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
+  // QF-20260828-420 (RCA): read-quick-fix.js previously had ZERO claim-awareness, so a
+  // worker could read and start implementing a QF that another live session already holds
+  // (claim_sd's own QF-branch race gap is tracked separately as a DB migration; this is the
+  // cheap, schema-free half of the fix). Warn loudly -- never exit -- when the claim owner is
+  // a DIFFERENT session with a fresh (<900s) heartbeat, matching claim_sd's own liveness window.
+  // KNOWN LIMITATION: advisory only; a caller that ignores this warning can still proceed.
+  if (qf.claiming_session_id && qf.claiming_session_id !== process.env.CLAUDE_SESSION_ID) {
+    try {
+      const { data: holder } = await supabase
+        .from('claude_sessions')
+        .select('heartbeat_at, status')
+        .eq('session_id', qf.claiming_session_id)
+        .in('status', ['active', 'idle'])
+        .maybeSingle();
+      const hbAgeSec = holder?.heartbeat_at ? (Date.now() - new Date(holder.heartbeat_at).getTime()) / 1000 : Infinity;
+      if (holder && hbAgeSec < 900) {
+        console.error(`\n⚠️  ${qfId} is already claimed by LIVE session ${qf.claiming_session_id} (heartbeat ${Math.round(hbAgeSec)}s ago). Working it now risks a duplicate-dispatch collision -- verify via /checkin before implementing.\n`);
+      }
+    } catch { /* fail-open: never block reading a QF on a liveness-probe fault */ }
+  }
+
   // JSON output mode
   if (options.json) {
     console.log(JSON.stringify(qf, null, 2));
