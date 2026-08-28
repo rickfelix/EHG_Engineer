@@ -6,14 +6,22 @@
  * "the dispatcher is wired" is a claim about the test's beliefs and not about the code.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// QF-20260828-188 (leg 2): mocked so notifyAdamViaCoordinator's real routing shape can be
+// asserted without standing up session_coordination/claude_sessions machinery.
+const insertCoordinationRow = vi.fn(async () => ({ data: { id: 'row-mock' }, error: null }));
+const getActiveAdamId = vi.fn(async () => 'adam-session-mock');
+vi.mock('../../../lib/coordinator/dispatch.cjs', () => ({ insertCoordinationRow: (...a) => insertCoordinationRow(...a) }));
+vi.mock('../../../lib/coordinator/adam-identity.cjs', () => ({ getActiveAdamId: (...a) => getActiveAdamId(...a) }));
+
 import {
   runDriveSmsSweep, dedupeKeyFor, notBeforeFor, factsFromReport,
   SMS_KIND, PRODUCER_WINDOW_CLOSE_ET_HOUR, DELIVER_AT_ET_HOUR, ageHoursOf,
-  SMS_ACTIVATION_TRIGGER, SMS_SD_KEY,
+  SMS_ACTIVATION_TRIGGER, SMS_SD_KEY, notifyAdamViaCoordinator,
 } from '../../../scripts/cron/drive-report-sms-sweep.mjs';
 import { etParts } from '../../../scripts/cron/drive-report-sweep.mjs';
 import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
@@ -36,6 +44,12 @@ const report = (agoHours, score = {}, runId = 'drive-2026-07-15') => ({
 function bridge(result = { enqueued: true, obligationId: 'o1' }) {
   const calls = [];
   return { calls, enqueue: async (args) => { calls.push(args); return result; } };
+}
+
+/** QF-20260828-188 leg 2: records every Adam-routing call, mirroring bridge() above. */
+function adamBridge() {
+  const calls = [];
+  return { calls, notifyAdam: async (args) => { calls.push(args); return { id: 'coord-1' }; } };
 }
 
 describe('TR-3 — it ENQUEUES through the bridge, it never sends', () => {
@@ -145,14 +159,14 @@ describe('TR-3 — it ENQUEUES through the bridge, it never sends', () => {
 });
 
 describe('a MISSING report is itself the signal (TR-3), never silence', () => {
-  it('no report at all → the "none ever produced" body', async () => {
-    const { calls } = bridge();
+  it('no report at all → the "none ever produced" body, routed to Adam not the chairman', async () => {
     const b = bridge();
+    const adam = adamBridge();
     // AFTER the producer window closes — before it, "no report" is a wait, not a signal.
-    const r = await runDriveSmsSweep({ nowMs: Date.UTC(2026, 6, 15, 14, 0, 0), findLatestReport: async () => null, enqueue: b.enqueue, recipients: TO });
-    expect(b.calls[0].body).toBe('Drive report MISSING: none ever produced');
+    const r = await runDriveSmsSweep({ nowMs: Date.UTC(2026, 6, 15, 14, 0, 0), findLatestReport: async () => null, enqueue: b.enqueue, notifyAdam: adam.notifyAdam, recipients: TO });
+    expect(adam.calls[0].body).toBe('Drive report MISSING: none ever produced');
     expect(r.signal).toBe('missing_or_stale');
-    expect(calls).toHaveLength(0);
+    expect(b.calls).toHaveLength(0);
   });
 
   it("[REGRESSION] YESTERDAY's report is never sent as today's — identity, not age", async () => {
@@ -163,15 +177,18 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
     // report was deduped away. The chairman would have got yesterday's score every day, forever,
     // with plausible numbers and no error anywhere.
     const b = bridge();
+    const adam = adamBridge();
     const yesterday = report(20, {}, 'drive-2026-07-14');   // 20h old: FRESH under the old rule
     const r = await runDriveSmsSweep({
       nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),               // 10:00 ET — producer window CLOSED
       findLatestReport: async () => yesterday,
       enqueue: b.enqueue,
+      notifyAdam: adam.notifyAdam,
       recipients: TO,
     });
-    expect(b.calls[0].body, 'a stale-day report must never render as a score').toMatch(/^Drive report STALE/);
+    expect(adam.calls[0].body, 'a stale-day report must never render as a score').toMatch(/^Drive report STALE/);
     expect(r.signal).toBe('missing_or_stale');
+    expect(b.calls, 'a stale-day reading is Adam-triage, never chairman-facing').toHaveLength(0);
   });
 
   it('[WAITING] before the producer window closes, a missing report enqueues NOTHING', async () => {
@@ -201,16 +218,19 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
     expect(r.waiting).toBe('producer_window_still_open');
   });
 
-  it('once the window CLOSES with no report, the MISSING signal does go out', async () => {
+  it('once the window CLOSES with no report, the MISSING signal does go out (to Adam)', async () => {
     // Two-sided: waiting must not become permanent silence. A dead instrument has to be heard.
     const b = bridge();
+    const adam = adamBridge();
     await runDriveSmsSweep({
       nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),               // 10:00 ET
       findLatestReport: async () => null,
       enqueue: b.enqueue,
+      notifyAdam: adam.notifyAdam,
       recipients: TO,
     });
-    expect(b.calls[0].body).toBe('Drive report MISSING: none ever produced');
+    expect(adam.calls[0].body).toBe('Drive report MISSING: none ever produced');
+    expect(b.calls).toHaveLength(0);
   });
 
   it("TODAY's report sends the score even at the very first tick", async () => {
@@ -231,24 +251,53 @@ describe('a MISSING report is itself the signal (TR-3), never silence', () => {
   it('a row that exists but carries no numbers is NOT fresh — a false zero would reassure', async () => {
     // The worst outcome for a drive instrument is a corrupted reading that renders as calm.
     const b = bridge();
+    const adam = adamBridge();
     await runDriveSmsSweep({
       nowMs: JULY,
       findLatestReport: async () => ({ id: 'r', run_id: 'drive-2026-07-15', generated_at: new Date(JULY - 3600_000).toISOString(), drive_score: {} }),
       enqueue: b.enqueue,
+      notifyAdam: adam.notifyAdam,
       recipients: TO,
     });
-    expect(b.calls[0].body).toMatch(/^Drive report (STALE|MISSING|UNUSABLE)/);
+    expect(adam.calls[0].body).toMatch(/^Drive report (STALE|MISSING|UNUSABLE)/);
+    expect(b.calls).toHaveLength(0);
   });
 
   it('an unparseable generated_at is treated as missing, not as fresh', async () => {
     const b = bridge();
+    const adam = adamBridge();
     await runDriveSmsSweep({
       nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),
       findLatestReport: async () => ({ id: 'r', run_id: 'drive-2026-07-14', generated_at: 'not-a-date', drive_score: { score: { value: 4 }, possible: 6 } }),
       enqueue: b.enqueue,
+      notifyAdam: adam.notifyAdam,
       recipients: TO,
     });
-    expect(b.calls[0].body).toBe('Drive report MISSING: none ever produced');
+    expect(adam.calls[0].body).toBe('Drive report MISSING: none ever produced');
+    expect(b.calls).toHaveLength(0);
+  });
+
+  it('notifyAdamViaCoordinator: routes through insertCoordinationRow as kind=adam_action_required, targeted at the live Adam', async () => {
+    insertCoordinationRow.mockClear();
+    getActiveAdamId.mockClear();
+    const b = bridge();
+    const supabaseStub = {};
+    await runDriveSmsSweep({
+      nowMs: Date.UTC(2026, 6, 15, 14, 0, 0),
+      findLatestReport: async () => null,
+      enqueue: b.enqueue,
+      notifyAdam: notifyAdamViaCoordinator(supabaseStub),
+      recipients: TO,
+    });
+    expect(getActiveAdamId).toHaveBeenCalledWith(supabaseStub);
+    expect(insertCoordinationRow).toHaveBeenCalledTimes(1);
+    const [client, args, opts] = insertCoordinationRow.mock.calls[0];
+    expect(client).toBe(supabaseStub);
+    expect(args.target_session).toBe('adam-session-mock');
+    expect(args.payload.kind).toBe('adam_action_required');
+    expect(args.payload.body).toBe('Drive report MISSING: none ever produced');
+    expect(opts.targetRoleHint).toBe('adam');
+    expect(b.calls).toHaveLength(0);
   });
 });
 
@@ -296,13 +345,16 @@ describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4 AC-3] an hourly row newer th
       return sorted[0] ?? null;
     };
     const b = bridge();
+    const adam = adamBridge();
     await runDriveSmsSweep({
       nowMs: CLOSED,
       findLatestReport: unfilteredFindLatest([dailyRow, hourlyRow]),
       enqueue: b.enqueue,
+      notifyAdam: adam.notifyAdam,
       recipients: TO,
     });
-    expect(b.calls[0].body).toMatch(/^Drive report STALE/);
+    expect(adam.calls[0].body).toMatch(/^Drive report STALE/);
+    expect(b.calls).toHaveLength(0);
   });
 });
 
@@ -414,10 +466,12 @@ describe('SECURITY re-run findings — the alarm must not break when it has some
     // The throw lived on the MISSING branch only, so the alarm failed exactly when it fired.
     for (const skewMs of [3_000, 48 * 3_600_000]) {
       const b = bridge();
+      const adam = adamBridge();
       const future = { id: 'r', run_id: 'drive-2026-07-14', generated_at: new Date(CLOSED + skewMs).toISOString(), drive_score: {} };
-      await expect(runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => future, enqueue: b.enqueue, recipients: TO }))
+      await expect(runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => future, enqueue: b.enqueue, notifyAdam: adam.notifyAdam, recipients: TO }))
         .resolves.toBeTruthy();
-      expect(b.calls[0].body).toMatch(/^Drive report (STALE|MISSING)/);
+      expect(adam.calls[0].body).toMatch(/^Drive report (STALE|MISSING)/);
+      expect(b.calls).toHaveLength(0);
     }
     expect(ageHoursOf({ generated_at: new Date(CLOSED + 3_000).toISOString() }, CLOSED), 'clamped, not negative').toBe(0);
   });
@@ -427,10 +481,12 @@ describe('SECURITY re-run findings — the alarm must not break when it has some
     // threw and the chairman got NOTHING — silence instead of "something is wrong".
     for (const bad of [{ score: { value: -5 }, possible: 6 }, { score: { value: 1 }, possible: 6, unowned_blockers: -1 }]) {
       const b = bridge();
+      const adam = adamBridge();
       const row = { id: 'r', run_id: 'drive-2026-07-15', generated_at: new Date(CLOSED - 3_600_000).toISOString(), drive_score: bad };
-      await expect(runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => row, enqueue: b.enqueue, recipients: TO }))
+      await expect(runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => row, enqueue: b.enqueue, notifyAdam: adam.notifyAdam, recipients: TO }))
         .resolves.toBeTruthy();
-      expect(b.calls[0].body).toMatch(/^Drive report UNUSABLE/);
+      expect(adam.calls[0].body).toMatch(/^Drive report UNUSABLE/);
+      expect(b.calls).toHaveLength(0);
     }
   });
 
@@ -438,9 +494,11 @@ describe('SECURITY re-run findings — the alarm must not break when it has some
     // "STALE: last one 0h ago" is self-contradicting, and it points at a dead producer when the
     // producer ran fine and the SCORE is broken. Different cause, different remedy.
     const b = bridge();
+    const adam = adamBridge();
     const row = { id: 'r', run_id: 'drive-2026-07-15', generated_at: new Date(CLOSED).toISOString(), drive_score: {} };
-    await runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => row, enqueue: b.enqueue, recipients: TO });
-    expect(b.calls[0].body).toBe('Drive report UNUSABLE: produced 0h ago, score unreadable');
+    await runDriveSmsSweep({ nowMs: CLOSED, findLatestReport: async () => row, enqueue: b.enqueue, notifyAdam: adam.notifyAdam, recipients: TO });
+    expect(adam.calls[0].body).toBe('Drive report UNUSABLE: produced 0h ago, score unreadable');
+    expect(b.calls).toHaveLength(0);
   });
 
   it('[F3] a dedupe held by a FOREIGN obligation throws instead of reporting success', async () => {
