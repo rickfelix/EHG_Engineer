@@ -30,7 +30,15 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   infrastructure: { default: 55 },
 
   // Feature SDs: Moderate baseline
-  feature: { default: 60 },
+  // prd/retrospective raised by QF-20260817-837 (evidence: v_ai_quality_tuning_recommendations,
+  // re-read live at claim). default (60) is unchanged, so feature x user_story (this SD's own
+  // scan-time INEFFECTIVE-CHANGE flag re-measured live at claim as OPTIMAL, n=138, avg=65.6,
+  // pass=79.7%) is untouched either way -- per the QF's AC-3, this cell is a content-quality
+  // signal, not a threshold problem, and gets no threshold change regardless of its live label.
+  // prd: 60 -> 65 (n=34, avg_score=81, pass_rate=97.1% -- INCREASE recommendation).
+  // retrospective: 60 -> 65 (n=67, avg_score=84.5, pass_rate=94% -- INCREASE recommendation).
+  // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 60 }`.
+  feature: { default: 60, prd: 65, retrospective: 65 },
 
   // Database SDs: Slightly stricter (data integrity)
   database: { default: 65 },

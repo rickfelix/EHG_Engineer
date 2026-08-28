@@ -42,8 +42,19 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.bugfix.user_story).toBeUndefined();
   });
 
-  it('REFUSED: feature was NOT raised (feature x user_story cannot clear a higher bar)', () => {
+  it('REFUSED (at QF-20260807-698 time): feature was NOT raised (feature x user_story could not clear a higher bar then)', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.feature.default).toBe(60);
+  });
+
+  it('APPLIED (QF-20260817-837): feature gained per-content_type prd/retrospective overrides; default (and therefore user_story) unchanged', () => {
+    // feature x prd: n=34, avg=81, pass=97.1% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.prd).toBe(65);
+    // feature x retrospective: n=67, avg=84.5, pass=94% -> 60->65
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.retrospective).toBe(65);
+    // feature x user_story (re-measured live at claim as OPTIMAL, n=138) is untouched: default
+    // stays 60, per AC-3 (a content-quality signal, not a threshold problem).
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.default).toBe(60);
+    expect(SD_TYPE_PASS_THRESHOLDS.feature.user_story).toBeUndefined();
   });
 
   it('unrelated thresholds are untouched by this QF', () => {
@@ -55,10 +66,11 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
 });
 
 describe('getPassThreshold — SD-LEO-INFRA-QUALITY-GATE-TYPE-001 (content_type resolution)', () => {
-  it('FR-6/TS-8: zero value changes -- every mapped sd_type still resolves to its exact pre-restructure number with no content_type override configured', () => {
+  it('FR-6/TS-8: zero value changes -- every mapped sd_type without a QF-20260817-837 override still resolves to its exact pre-restructure number', () => {
     expect(getPassThreshold('user_story', { sd_type: 'documentation' })).toBe(50);
-    expect(getPassThreshold('prd', { sd_type: 'infrastructure' })).toBe(55);
-    expect(getPassThreshold('retrospective', { sd_type: 'feature' })).toBe(60);
+    // feature x user_story has no override (QF-20260817-837 only added prd/retrospective) --
+    // still resolves to the unchanged default, exactly as before.
+    expect(getPassThreshold('user_story', { sd_type: 'feature' })).toBe(60);
     expect(getPassThreshold('user_story', { sd_type: 'database' })).toBe(65);
     expect(getPassThreshold('prd', { sd_type: 'security' })).toBe(70);
     expect(getPassThreshold('retrospective', { sd_type: 'refactor' })).toBe(65);
