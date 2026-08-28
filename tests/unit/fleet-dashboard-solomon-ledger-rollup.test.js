@@ -224,3 +224,75 @@ describe('FR-3 (SD-LEO-INFRA-SOLOMON-ADVICE-LEDGER-001): computeSolomonLedgerByL
     expect(computeSolomonLedgerByLegAndKind(undefined)).toEqual({});
   });
 });
+
+// SD-LEO-INFRA-ADVICE-OUTCOME-LEDGER-002 (FR-3): 'unmeasurable' must behave EXACTLY like 'unknown'
+// for the accuracy-denominator exclusion (TS-8 — the critical regression guard), and
+// consequenceScoredAccuracyPct is a genuinely new, separately-computed lens (TS-6).
+describe('FR-3: TS-8 — accuracyPct regression guard for the new unmeasurable value', () => {
+  it('accuracyPct is BITWISE IDENTICAL whether a formerly-unknown accepted row is unknown or unmeasurable', () => {
+    const baseRows = [
+      { decision: 'accepted', outcome: 'shipped_clean', cost_tokens: 10 },
+      { decision: 'accepted', outcome: 'reverted', cost_tokens: 10 },
+    ];
+    const beforeRows = [...baseRows, { decision: 'accepted', outcome: 'unknown', cost_tokens: 10 }];
+    const afterRows = [...baseRows, { decision: 'accepted', outcome: 'unmeasurable', cost_tokens: 10 }];
+
+    const before = computeSolomonLedgerRollup(beforeRows);
+    const after = computeSolomonLedgerRollup(afterRows);
+    expect(after.accuracyPct).toBe(before.accuracyPct);
+    expect(after.decidedCount).toBe(before.decidedCount);
+    expect(after.unresolvedAcceptedCount).toBe(before.unresolvedAcceptedCount);
+  });
+
+  it('same bitwise-identical guarantee holds for computeSolomonLedgerByLegAndKind per-leg numbers', () => {
+    const baseRows = [
+      { proposal_kind: 'roadmap', outcome_sd_key: null, decision: 'accepted', outcome: 'shipped_clean' },
+    ];
+    const beforeRows = [...baseRows, { proposal_kind: 'roadmap', outcome_sd_key: null, decision: 'accepted', outcome: 'unknown' }];
+    const afterRows = [...baseRows, { proposal_kind: 'roadmap', outcome_sd_key: null, decision: 'accepted', outcome: 'unmeasurable' }];
+
+    const before = computeSolomonLedgerByLegAndKind(beforeRows);
+    const after = computeSolomonLedgerByLegAndKind(afterRows);
+    expect(after.roadmap.correlationLeg).toEqual(before.roadmap.correlationLeg);
+  });
+});
+
+describe('FR-3: TS-6 — consequenceScoredAccuracyPct', () => {
+  it('excludes unmeasurable AND unknown from both numerator and denominator', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean' },
+      { decision: 'accepted', outcome: 'shipped_clean' },
+      { decision: 'accepted', outcome: 'reverted' },
+      { decision: 'accepted', outcome: 'caused_rework' },
+      { decision: 'accepted', outcome: 'unmeasurable' },
+      { decision: 'accepted', outcome: 'unknown' },
+    ];
+    const r = computeSolomonLedgerRollup(rows);
+    // 2 shipped_clean / (2 shipped_clean + 1 reverted + 1 caused_rework) = 2/4 = 50%
+    expect(r.consequenceScoredAccuracyPct).toBe(50);
+  });
+
+  it('excludes batch_stamped rows from consequenceScoredAccuracyPct, matching accuracyPct\'s existing exclusion', () => {
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean' },
+      { decision: 'accepted', outcome: 'reverted' },
+    ];
+    const withBatchStamped = [...rows, { decision: 'accepted', outcome: 'shipped_clean', batch_stamped: true }];
+    const r1 = computeSolomonLedgerRollup(rows);
+    const r2 = computeSolomonLedgerRollup(withBatchStamped);
+    expect(r2.consequenceScoredAccuracyPct).toBe(r1.consequenceScoredAccuracyPct);
+  });
+
+  it('is null (not 0 or NaN) when there are zero resolved-consequence rows', () => {
+    const rows = [{ decision: 'accepted', outcome: 'unknown' }];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.consequenceScoredAccuracyPct).toBeNull();
+  });
+
+  it('is present (not undefined) even on the decidedCount===0 early-return branch', () => {
+    const rows = [{ decision: 'pending', outcome: 'unknown', created_at: '2026-07-04T00:00:00Z' }];
+    const r = computeSolomonLedgerRollup(rows);
+    expect(r.decidedCount).toBe(0);
+    expect(r.consequenceScoredAccuracyPct).toBeNull();
+  });
+});
