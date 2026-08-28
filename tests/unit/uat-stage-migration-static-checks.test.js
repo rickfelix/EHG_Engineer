@@ -169,11 +169,16 @@ describe('v2 DOWN file static check: reverses every CHECK widen and the security
     expect(v2DownSql).toMatch(/DROP FUNCTION IF EXISTS public\.fn_parked_venture_preflight/);
   });
 
-  it('reverses the eva_ventures backfill AFTER which it narrows the CHECK back to <= 26', () => {
-    const backfillIdx = v2DownSql.indexOf('ev.current_lifecycle_stage - 1, updated_at');
-    const narrowIdx = v2DownSql.indexOf('chk_lifecycle_stage CHECK');
-    expect(backfillIdx).toBeGreaterThan(-1);
-    expect(narrowIdx).toBeGreaterThan(-1);
-    expect(backfillIdx).toBeLessThan(narrowIdx);
+  it('treats the eva_ventures backfill as permanent -- does NOT attempt to reverse it', () => {
+    // An earlier draft attempted a "-1 for demo rows currently matching" reversal, caught by
+    // adversarial TESTING sub-agent review as NOT the true inverse of forward 5b's own predicate
+    // (which has no is_demo filter) -- it would have decremented already-in-sync rows the
+    // backfill never touched, fabricating fresh divergence. Fixed: no reversal UPDATE at all.
+    expect(v2DownSql).not.toMatch(/ev\.current_lifecycle_stage - 1, updated_at/);
+    expect(v2DownSql).toMatch(/PERMANENT data[\s\S]{0,20}correction/);
+  });
+
+  it('includes eva_ventures in the offender guard (a row at 27 correctly blocks the narrow)', () => {
+    expect(v2DownSql).toMatch(/IF EXISTS \(SELECT 1 FROM public\.eva_ventures WHERE current_lifecycle_stage = 27\)/);
   });
 });

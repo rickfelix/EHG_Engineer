@@ -1,26 +1,144 @@
 {
-  "generatedAt": "2026-08-28T12:34:13.298Z",
+  "generatedAt": "2026-08-28T12:58:08.062Z",
   "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
   "scenario": "TS-7",
-  "preShiftDivergenceCount": 0,
+  "divergenceBeforeAnyMigration": 0,
   "realVenturesTemporarilyFlippedDemo": [
     "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
     "510177ba-435f-4dd7-bfa5-6154cc8cf54b"
   ],
-  "postShiftDivergenceCount": 0,
-  "postShiftDivergentRows": [],
-  "formerlyRealVenturesEvaMirrorPresence": [
+  "divergenceAfterV1BeforeV2Backfill": 21,
+  "afterV1BeforeV2DivergentRows": [
     {
-      "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
-      "current_lifecycle_stage": 27,
-      "has_eva_mirror_row": true
+      "venture_id": "67d6a54d-23b6-4ce1-95bb-b5928a979dce",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
     },
     {
-      "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
-      "current_lifecycle_stage": 25,
-      "has_eva_mirror_row": true
+      "venture_id": "57631950-71b3-4107-b179-aad46eadaac5",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "912c0af2-419f-451a-b30a-a5623b0fecf3",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "940a8dc2-f194-4996-9d32-a963a8ba44f1",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "74f0b6a9-6c66-4102-9cd2-fd0b7dddc13f",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "6dfa21c7-eb6c-4d6d-9ea2-fa7bf48b21ae",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "6f7d4afa-a83d-4dbd-9937-8a36ce5ac26f",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "42ba3289-664a-425d-bb9a-2ba7435671a4",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "dbb993a0-bf91-496a-b18e-a73ce51feaf9",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "fe1dcddb-aa35-49ae-8f4f-ce94b10ac3f9",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "477fc915-4861-4b86-a24e-f41b32e06dd3",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "da59741c-d144-46b1-b045-bff0ec711fdc",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "bbb27f1f-5af0-4b07-91cb-4ed77d0541f9",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "2f3d4aa9-d255-4cfc-a0c4-993e1fedf24e",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "27dabff3-b022-449d-ac66-09eebd3101f7",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "9cdad540-26f7-4a6f-8085-d7d3b8465bab",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "11d633ca-9453-4faa-ba08-bcca50671f7b",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "b8d67348-c5c6-43c9-a82e-f17a06d4c40d",
+      "eva_mirror": 23,
+      "ventures_actual": 24,
+      "is_demo": true
+    },
+    {
+      "venture_id": "e3adec5b-4f02-4a0d-abe4-9e7e8b8a1179",
+      "eva_mirror": 24,
+      "ventures_actual": 25,
+      "is_demo": true
+    },
+    {
+      "venture_id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+      "eva_mirror": 26,
+      "ventures_actual": 27,
+      "is_demo": true
     }
   ],
-  "finding": "Zero divergence measured after the shift, consistent with live-measured 2026-08-28 reality: no eva_ventures row currently exists for a demo venture in the shift range for the trigger to leave stale.",
+  "divergenceAfterV2Backfill": 0,
+  "afterV2DivergentRows": [],
+  "backfillCorrectedRowCount": 21,
+  "finding": "v1 alone left 21 eva_ventures row(s) stale (measured directly, not inferred); v2's section 5b backfill corrected all of them (0 remaining). This directly demonstrates the backfill's effect within a single run.",
   "result": "PASS"
 }

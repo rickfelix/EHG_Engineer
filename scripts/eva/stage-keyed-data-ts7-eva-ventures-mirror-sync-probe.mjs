@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 /**
- * TS-7 (SD-LEO-INFRA-STAGE-KEYED-DATA-001): measures eva_ventures mirror divergence after v1's
- * +1 shift is simulated (rolled back).
+ * TS-7 (SD-LEO-INFRA-STAGE-KEYED-DATA-001): measures eva_ventures mirror divergence at THREE
+ * points within a single rolled-back run -- before v1's shift, after v1's shift but BEFORE v2's
+ * backfill, and after v2's backfill -- so the artifact directly demonstrates the backfill's
+ * effect (a delta this probe itself measures) rather than asserting a fix landed based on a
+ * separate, earlier run's narrative. An adversarial TESTING sub-agent review of an earlier
+ * version of this probe (which only measured after BOTH v1 and v2 had already applied) correctly
+ * found it could not distinguish "the backfill fixed N rows" from "there was never any
+ * divergence" -- this version measures the "would-be-broken" state explicitly, in the middle.
  *
  * NOTE on this SD's actual disposition vs. the PRD's original TS-7 framing: TS-7 was authored
- * assuming FR-4 would apply "v2's trigger fix" to sync_ventures_to_eva_ventures_update(). This
- * SD's EXEC-phase investigation (see the v2 migration file's own banner, note (b)) found that
- * function's `IF COALESCE(NEW.is_demo, false) THEN RETURN NEW; END IF;` early-return is a
- * DELIBERATE design decision (SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F, "demo/test fixtures never
- * enter the EVA pipeline"), not an oversight -- v2 does NOT modify it, and disposition is
- * documented as accepted-as-broken by the trigger's own prior intent. This probe therefore
- * MEASURES actual post-shift divergence rather than assuming a fix landed, honoring this SD's
- * own "measured, not inherited" standard.
+ * assuming FR-4 would apply a "trigger fix" to sync_ventures_to_eva_ventures_update(). This SD's
+ * EXEC-phase investigation found that function's `IF COALESCE(NEW.is_demo, false) THEN RETURN
+ * NEW; END IF;` early-return is a DELIBERATE design decision (SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F,
+ * "demo/test fixtures never enter the EVA pipeline"), not an oversight -- the TRIGGER itself is
+ * left unchanged. Instead, v2 section 5b adds a one-time, precisely-scoped DATA backfill that
+ * corrects exactly the rows THIS migration's own shift would otherwise leave stale, without
+ * altering the trigger's forward-looking behavior. This probe verifies that backfill's effect.
  *
  * Fixture, WITHIN a rolled-back transaction: v1's own preflight requires zero real ventures
- * parked in range, matching the actual production sequencing (v1 can only ever really apply once
- * any real ventures currently in the way are resolved) -- so is_demo is temporarily flipped for
- * the 2 currently-real ventures and LEFT flipped for this probe's shift simulation, which is the
- * realistic future scenario: by the time v1 actually applies, only demo ventures remain in range.
+ * parked in range, matching actual production sequencing (v1 can only ever really apply once any
+ * real ventures currently in the way are resolved) -- so is_demo is temporarily flipped for the
+ * 2 currently-real ventures and LEFT flipped for this probe's shift simulation, the realistic
+ * future scenario: by the time v1 actually applies, only demo ventures remain in range.
  *
  * Re-run: node scripts/eva/stage-keyed-data-ts7-eva-ventures-mirror-sync-probe.mjs
  */
@@ -48,8 +53,8 @@ async function main() {
   try {
     await client.query('BEGIN');
 
-    const { rows: preDivergence } = await client.query(DIVERGENCE_SQL);
-    evidence.preShiftDivergenceCount = preDivergence.length;
+    const { rows: beforeAnything } = await client.query(DIVERGENCE_SQL);
+    evidence.divergenceBeforeAnyMigration = beforeAnything.length;
 
     const { rows: realVentures } = await client.query(
       `SELECT id FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26 AND is_demo IS NOT TRUE`
@@ -59,34 +64,32 @@ async function main() {
       await client.query(`UPDATE public.ventures SET is_demo = true WHERE id = ANY($1::uuid[])`, [realVentures.map((v) => v.id)]);
     }
 
+    // v1 alone: shifts ventures.current_lifecycle_stage (and its own CHECK) but does NOT touch
+    // eva_ventures at all -- this is the "would-be-broken" state, measured explicitly rather than
+    // inferred from a separate run.
     await client.query(v1);
+    const { rows: afterV1OnlyRows } = await client.query(DIVERGENCE_SQL);
+    evidence.divergenceAfterV1BeforeV2Backfill = afterV1OnlyRows.length;
+    evidence.afterV1BeforeV2DivergentRows = afterV1OnlyRows;
+
+    // v2 (includes section 5b's backfill).
     await client.query(v2);
+    const { rows: afterV2Rows } = await client.query(DIVERGENCE_SQL);
+    evidence.divergenceAfterV2Backfill = afterV2Rows.length;
+    evidence.afterV2DivergentRows = afterV2Rows;
 
-    const { rows: postDivergence } = await client.query(DIVERGENCE_SQL);
-    evidence.postShiftDivergenceCount = postDivergence.length;
-    evidence.postShiftDivergentRows = postDivergence;
+    evidence.backfillCorrectedRowCount = evidence.divergenceAfterV1BeforeV2Backfill - evidence.divergenceAfterV2Backfill;
 
-    // Cross-check: does every demo venture that WAS in the shift range even have an eva_ventures
-    // row at all? If not, the trigger's UPDATE simply matches 0 rows for them -- no row to
-    // diverge, by construction, distinct from "diverged and silently wrong".
-    const { rows: shiftedDemoVentures } = await client.query(
-      `SELECT v.id, v.current_lifecycle_stage, (ev.venture_id IS NOT NULL) AS has_eva_mirror_row
-       FROM public.ventures v LEFT JOIN public.eva_ventures ev ON ev.venture_id = v.id
-       WHERE v.id = ANY($1::uuid[])`,
-      [realVentures.map((v) => v.id)]
-    );
-    evidence.formerlyRealVenturesEvaMirrorPresence = shiftedDemoVentures;
-
-    if (evidence.postShiftDivergenceCount > 0) {
-      evidence.finding = `${evidence.postShiftDivergenceCount} row(s) diverged after the shift -- confirms the risk v1's own banner and this SD's v2 note (b) describe: a demo venture shifted by the migration is left with a stale eva_ventures mirror, by the trigger's own deliberate is_demo early-return design.`;
+    if (evidence.divergenceAfterV1BeforeV2Backfill > 0 && evidence.divergenceAfterV2Backfill === 0) {
+      evidence.finding = `v1 alone left ${evidence.divergenceAfterV1BeforeV2Backfill} eva_ventures row(s) stale (measured directly, not inferred); v2's section 5b backfill corrected all of them (0 remaining). This directly demonstrates the backfill's effect within a single run.`;
+      pass = true;
+    } else if (evidence.divergenceAfterV1BeforeV2Backfill === 0 && evidence.divergenceAfterV2Backfill === 0) {
+      evidence.finding = 'v1 alone produced zero divergence in this run (no demo venture currently in range has a pre-existing eva_ventures mirror) -- the backfill is a no-op here, correctly, not evidence it is unneeded in general.';
+      pass = true;
     } else {
-      evidence.finding = 'Zero divergence measured after the shift, consistent with live-measured 2026-08-28 reality: no eva_ventures row currently exists for a demo venture in the shift range for the trigger to leave stale.';
+      evidence.finding = `UNEXPECTED: divergence after v1-only=${evidence.divergenceAfterV1BeforeV2Backfill}, after v2=${evidence.divergenceAfterV2Backfill} -- the backfill did not fully correct what v1 alone left stale.`;
+      pass = false;
     }
-    // This probe PASSES either way (it is a measurement, not a pass/fail assertion on the
-    // divergence count) -- v2's own disposition for this risk is documented, not fixed, so a
-    // nonzero divergence here is an EXPECTED, already-accepted finding, not a probe failure.
-    // What WOULD fail this probe: the measurement itself erroring, or the fixture failing to apply.
-    pass = true;
   } catch (err) {
     evidence.error = err.message;
     pass = false;

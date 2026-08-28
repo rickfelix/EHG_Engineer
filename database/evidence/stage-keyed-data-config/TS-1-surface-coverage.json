@@ -1,9 +1,13 @@
 {
-  "generatedAt": "2026-08-28T12:34:10.835Z",
+  "generatedAt": "2026-08-28T12:58:05.868Z",
   "sd": "SD-LEO-INFRA-STAGE-KEYED-DATA-001",
   "scenario": "TS-1",
-  "surfaceCount": 13,
-  "checkConstraintCount": 18,
+  "surfaceCount": 22,
+  "dispositionCounts": {
+    "shift": 19,
+    "accepted-as-broken": 1,
+    "no-op": 2
+  },
   "blankDispositions": [],
   "dispositions": [
     {
@@ -49,12 +53,12 @@
     {
       "surface": "stage_executions.lifecycle_stage",
       "liveRowCount": 98,
-      "disposition": "shift"
+      "disposition": "accepted-as-broken"
     },
     {
       "surface": "venture_artifacts.lifecycle_stage",
       "liveRowCount": 45,
-      "disposition": "shift"
+      "disposition": "no-op"
     },
     {
       "surface": "venture_artifacts.artifact_type",
@@ -64,13 +68,59 @@
     {
       "surface": "workflow_executions.current_stage",
       "liveRowCount": 193,
-      "disposition": "shift"
+      "disposition": "no-op"
     },
     {
       "surface": "compliance_violations.stage_number",
       "liveRowCount": 90,
       "disposition": "shift"
+    },
+    {
+      "surface": "compliance_events.stage_number",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "convergence_ledger_stages.stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_of_death_predictions.actual_death_stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_of_death_predictions.predicted_death_stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "stage_proving_journal.stage_number",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "venture_dependencies.required_stage",
+      "liveRowCount": 0,
+      "disposition": "shift"
+    },
+    {
+      "surface": "ventures.current_lifecycle_stage",
+      "liveRowCount": 21,
+      "disposition": "shift"
+    },
+    {
+      "surface": "eva_artifact_dependencies.source_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
+    },
+    {
+      "surface": "eva_artifact_dependencies.target_stage",
+      "liveRowCount": 1,
+      "disposition": "shift"
     }
   ],
+  "dispositionVsV2ContentMismatches": [],
   "result": "PASS"
 }

@@ -3,9 +3,16 @@
  * TS-1 (SD-LEO-INFRA-STAGE-KEYED-DATA-001): asserts the corrected census
  * (scripts/audits/stage-keyed-data-config-census.mjs) returns >= 11 surfaces (the PRD's own
  * acceptance floor: the original 9 corrected surfaces + workflow_executions + compliance_violations),
- * each with a non-blank disposition. Wraps the same live sweep the CLI census script runs, adding a
- * programmatic assertion + JSON evidence artifact rather than requiring a human to eyeball
- * docs/audits/stage-keyed-data-config-census.md's row count.
+ * each with a non-blank disposition -- AND cross-checks that a 'shift' disposition actually
+ * corresponds to real content in v2.sql, not merely an asserted label.
+ *
+ * An earlier version of this probe (and the census CLI it wraps) hardcoded disposition: 'shift'
+ * for every surface -- caught by adversarial TESTING sub-agent review: it made the non-blank
+ * assertion trivially true (a hardcoded literal can never be blank), left stage_executions
+ * claiming "shift" here while v2's own banner says "accepted-as-broken, NOT shifted", and gave no
+ * signal if a 'shift'-labeled surface's constraint was never actually touched in v2.sql. This
+ * version imports the CLI's own per-surface KNOWN_SURFACES (single source, not a second
+ * hand-maintained copy) and greps v2.sql for each 'shift'-disposed CHECK constraint's name.
  *
  * Re-run: node scripts/eva/stage-keyed-data-ts1-surface-coverage-probe.mjs
  */
@@ -14,29 +21,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
-import { sweepCheckConstraintsContainingLiteral, countRowsInStageRange, countRowsMatchingStageEnumValues } from '../../lib/audits/stage-census/db-sweep.mjs';
+import { countRowsInStageRange, countRowsMatchingStageEnumValues, sweepCheckConstraintsContainingLiteral } from '../../lib/audits/stage-census/db-sweep.mjs';
 import { assertCheckConstraintFloor } from '../../lib/audits/stage-census/negative-control.mjs';
+import { KNOWN_SURFACES } from '../audits/stage-keyed-data-config-census.mjs';
 
 const ENGINEER_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const EVIDENCE_PATH = path.resolve(ENGINEER_ROOT, 'database/evidence/stage-keyed-data-config/TS-1-surface-coverage.json');
+const V2_PATH = path.resolve(ENGINEER_ROOT, 'database/chairman-gated/20260828_stage_keyed_data_config_widen_v2.sql');
 const MIN_SURFACES = 11;
-
-// Same KNOWN_SURFACES list as scripts/audits/stage-keyed-data-config-census.mjs -- kept in sync
-// manually (both files are committed together in this SD; a future divergence would surface as a
-// TS-1 failure here, which is itself the point of a separate probe rather than trusting the CLI's
-// own self-report).
-const REQUIRED_SURFACES = [
-  'eva_ventures.current_lifecycle_stage', 'stage_artifact_requirements.stage_number',
-  'gate_boundary_config.from_stage', 'gate_boundary_config.to_stage',
-  'venture_stage_cutover_grandfather.stage_number', 'stage_prop_contracts.stage_number',
-  'eva_stage_gate_results.stage_number', 'venture_capture_snapshots.lifecycle_stage',
-  'stage_executions.lifecycle_stage', 'venture_artifacts.lifecycle_stage', 'venture_artifacts.artifact_type',
-  'workflow_executions.current_stage', 'compliance_violations.stage_number',
-];
 
 async function main() {
   const generatedAt = new Date().toISOString();
   const client = await createDatabaseClient('engineer', { verify: false });
+  const v2Sql = fs.readFileSync(V2_PATH, 'utf8');
   const evidence = { generatedAt, sd: 'SD-LEO-INFRA-STAGE-KEYED-DATA-001', scenario: 'TS-1' };
   let pass = false;
   try {
@@ -44,16 +41,15 @@ async function main() {
     assertCheckConstraintFloor(checkConstraints);
 
     const dispositions = [];
-    for (const key of REQUIRED_SURFACES) {
-      const [table, column] = key.split('.');
-      const liveRowCount = table === 'venture_artifacts' && column === 'artifact_type'
-        ? await countRowsMatchingStageEnumValues(client, table, column, 'stage_', '_analysis', 23, 26)
-        : await countRowsInStageRange(client, table, column, 23, 26);
-      dispositions.push({ surface: key, liveRowCount, disposition: 'shift' });
+    for (const s of KNOWN_SURFACES) {
+      const liveRowCount = s.table === 'venture_artifacts' && s.column === 'artifact_type'
+        ? await countRowsMatchingStageEnumValues(client, s.table, s.column, 'stage_', '_analysis', 23, 26)
+        : await countRowsInStageRange(client, s.table, s.column, 23, 26);
+      dispositions.push({ surface: `${s.table}.${s.column}`, liveRowCount, disposition: s.disposition });
     }
 
     evidence.surfaceCount = dispositions.length;
-    evidence.checkConstraintCount = checkConstraints.length;
+    evidence.dispositionCounts = dispositions.reduce((acc, d) => { acc[d.disposition] = (acc[d.disposition] || 0) + 1; return acc; }, {});
     evidence.blankDispositions = dispositions.filter((d) => !d.disposition).map((d) => d.surface);
     evidence.dispositions = dispositions;
 
@@ -63,13 +59,36 @@ async function main() {
     if (evidence.blankDispositions.length > 0) {
       throw new Error(`TS-1 FAILED: ${evidence.blankDispositions.length} surface(s) have a blank disposition: ${evidence.blankDispositions.join(', ')}`);
     }
-    // Sanity check: the 2 surfaces TS-1 names by name (workflow_executions, compliance_violations)
-    // must actually be present, not merely implied by a total-count match.
     const requiredNamed = ['workflow_executions.current_stage', 'compliance_violations.stage_number'];
     const missingNamed = requiredNamed.filter((n) => !dispositions.some((d) => d.surface === n));
     if (missingNamed.length > 0) {
       throw new Error(`TS-1 FAILED: PRD-named surface(s) missing: ${missingNamed.join(', ')}`);
     }
+
+    // Cross-check: every surface disposition:'shift' whose column is genuinely CHECK-bearing (has
+    // a live CHECK constraint in the sweep above) must actually appear widened in v2.sql -- not
+    // merely labeled 'shift' in the census's own static data. Surfaces with disposition 'no-op' or
+    // 'accepted-as-broken' are exempt (they are not claimed to be touched). `ventures` is ALSO
+    // exempt: its shift is genuinely v1's own (section 4), not v2's -- v2.sql only NAMES that
+    // constraint in an exclusion comment ("EXCLUDING ventures_current_lifecycle_stage_check
+    // (already widened by v1...)"), and checking for the bare constraint name there would pass via
+    // that comment text alone, not real DDL content -- the same class of vacuous match this SD's
+    // own db-sweep.mjs already learned to distrust for a different case.
+    const mismatches = [];
+    for (const s of KNOWN_SURFACES) {
+      if (s.disposition !== 'shift' || s.table === 'ventures') continue;
+      const relatedConstraints = checkConstraints.filter((c) => c.table_name === s.table);
+      for (const c of relatedConstraints) {
+        if (!v2Sql.includes(c.constraint_name)) {
+          mismatches.push(`${s.table}.${s.column}: disposition='shift' but v2.sql never references CHECK constraint ${c.constraint_name}`);
+        }
+      }
+    }
+    evidence.dispositionVsV2ContentMismatches = mismatches;
+    if (mismatches.length > 0) {
+      throw new Error(`TS-1 FAILED: ${mismatches.length} 'shift'-disposed surface(s) have no corresponding content in v2.sql: ${mismatches.join('; ')}`);
+    }
+
     pass = true;
   } catch (err) {
     evidence.error = err.message;

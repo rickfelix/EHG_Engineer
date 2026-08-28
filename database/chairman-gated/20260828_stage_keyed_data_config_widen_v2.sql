@@ -1,6 +1,6 @@
 -- SD-LEO-INFRA-STAGE-KEYED-DATA-001 — widen the stage-keyed DATA/CONFIG surfaces the -B migration
 -- (20260825_dedicated_venture_uat_stage_insert_and_renumber.sql, "v1" below) documented but
--- deliberately did not fix: 16 CHECK constraints capped at stage 26, 1 text-enum CHECK, and 3 live
+-- deliberately did not fix: 15 CHECK constraints capped at stage 26, 1 text-enum CHECK, and 3 live
 -- data tables (gate_boundary_config, venture_stage_cutover_grandfather, stage_artifact_requirements)
 -- whose row content still describes the OLD stage_number scheme after v1's renumber. Also fixes 3
 -- functions this SD's own live sub-agent evidence found still hardcode stage 26 as the ceiling or a
@@ -51,7 +51,7 @@
 --    duplicates in JS -- this migration's own preflight calls this function directly; the Node
 --    script is updated in this same SD to call it too (falling back to its existing JS logic only
 --    if this function is not yet live, i.e. before this file is chairman-approved).
--- 3. Widen 16 CHECK constraints (upper bound 26 -> 27) across 14 tables -- the full list this SD's
+-- 3. Widen 15 CHECK constraints (upper bound 26 -> 27) across 12 tables -- the full list this SD's
 --    own census measured live, EXCLUDING ventures.ventures_current_lifecycle_stage_check (already
 --    widened by v1, section 4) and venture_artifacts_storm_quarantine_20260704's duplicate
 --    artifact_type CHECK (a frozen quarantine snapshot, deliberately left untouched -- see note
@@ -172,7 +172,7 @@ END
 $parked_preflight$;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
--- 3. Widen 16 CHECK constraints (26 -> 27). Every DROP/ADD pair below reproduces the LIVE
+-- 3. Widen 15 CHECK constraints (26 -> 27). Every DROP/ADD pair below reproduces the LIVE
 --    definition (pg_get_constraintdef, 2026-08-28) with ONLY the upper bound changed -- see
 --    docs/audits/stage-keyed-data-config-census.md's "Live CHECK Constraints" table for the source.
 --    IF EXISTS/idempotent by construction: a second run finds the already-widened (<=27) constraint

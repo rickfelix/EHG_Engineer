@@ -13,10 +13,21 @@
 --      venture_stage_cutover_grandfather's stage-25 rows back to 24, stage_artifact_requirements'
 --      24-27 rows back to 23-26 (two-phase, same technique the forward migration used). Same
 --      caveat as (1): this is a real DATA change, not just a schema one -- verify no other process
---      has since relied on the post-v2 values before rolling back. ALSO reverses the eva_ventures
---      backfill (v2 section 5b): -1 for demo-venture rows currently matching their ventures value
---      in the 24-27 range -- best-effort, same assumption the rest of this section already makes
---      (nothing else has since legitimately re-synced these specific rows).
+--      has since relied on the post-v2 values before rolling back.
+--
+--      DOES NOT reverse the eva_ventures backfill (v2 section 5b). An earlier draft attempted a
+--      -1 "best-effort inverse" (WHERE is_demo AND ev.stage = v.stage), but that is NOT the
+--      inverse of forward 5b's own predicate (which has no is_demo filter and matches ev.stage =
+--      v.stage - 1) -- it would decrement every already-in-sync demo mirror in range, including
+--      rows 5b never touched, fabricating fresh divergence instead of restoring the pre-backfill
+--      state (caught by adversarial TESTING sub-agent review, not by this file's own dry-run,
+--      which never exercised _DOWN.sql against that specific case). There is no reliable way to
+--      distinguish "a row 5b corrected" from "a row that was already in sync" without a snapshot
+--      this migration does not take -- so this file treats the backfill as a PERMANENT data
+--      correction, not a reversible schema change: eva_ventures mirror rows stay corrected even
+--      after this rollback. If a row later legitimately needs to be 27 again (v2 re-applied,
+--      demo venture genuinely advanced), narrowing eva_ventures' CHECK below to <= 26 will
+--      correctly refuse via the guard below if any such row exists at 27.
 --
 --   3. REVERTS fn_bootstrap_venture_stages, bootstrap_venture_workflow, approve_chairman_decision
 --      to their PRE-v2 bodies (loop bound 26, gate_stages arrays un-shifted, and CRITICALLY the
@@ -48,13 +59,16 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.convergence_ledger_stages WHERE stage = 27) THEN v_offenders := v_offenders || '"convergence_ledger_stages"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.eva_artifact_dependencies WHERE source_stage = 27 OR target_stage = 27) THEN v_offenders := v_offenders || '"eva_artifact_dependencies"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.eva_stage_gate_results WHERE stage_number = 27) THEN v_offenders := v_offenders || '"eva_stage_gate_results"'::jsonb; END IF;
-  -- eva_ventures and stage_artifact_requirements are deliberately EXCLUDED from this guard: unlike
-  -- every other table here, their rows at stage 27 are EXPECTED, legitimate content v2's own
-  -- forward sections produced (stage_artifact_requirements: growth_optimization_roadmap/
-  -- growth_playbook shifted from 26; eva_ventures: the section 5b backfill correcting a demo
-  -- venture's mirror to match its now-shifted ventures row), and section 4 below already has a
-  -- dedicated reversal path for both -- flagging them here would refuse a rollback DOWN's own
-  -- next section is fully equipped to perform correctly.
+  -- eva_ventures is INTENTIONALLY included in this guard (an earlier draft excluded it on the
+  -- assumption a dedicated reversal path existed below -- that path was removed, see the header
+  -- note on why the backfill is treated as permanent). A row at 27 here now correctly blocks the
+  -- narrow, exactly like every other table, until a human resolves it.
+  IF EXISTS (SELECT 1 FROM public.eva_ventures WHERE current_lifecycle_stage = 27) THEN v_offenders := v_offenders || '"eva_ventures"'::jsonb; END IF;
+  -- stage_artifact_requirements is deliberately EXCLUDED from this guard: unlike every other table
+  -- here, its rows at stage 27 are EXPECTED, legitimate content v2's own forward shift produced
+  -- (growth_optimization_roadmap/growth_playbook, shifted from 26), and section 2 below already
+  -- has a dedicated two-phase reversal path for exactly this table -- flagging it here would
+  -- refuse a rollback DOWN's own next section is fully equipped to perform correctly.
   IF EXISTS (SELECT 1 FROM public.stage_of_death_predictions WHERE actual_death_stage = 27 OR predicted_death_stage = 27) THEN v_offenders := v_offenders || '"stage_of_death_predictions"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.stage_prop_contracts WHERE stage_number = 27) THEN v_offenders := v_offenders || '"stage_prop_contracts"'::jsonb; END IF;
   IF EXISTS (SELECT 1 FROM public.stage_proving_journal WHERE stage_number = 27) THEN v_offenders := v_offenders || '"stage_proving_journal"'::jsonb; END IF;
@@ -87,10 +101,14 @@ ALTER TABLE public.eva_artifact_dependencies ADD CONSTRAINT eva_artifact_depende
 ALTER TABLE public.eva_stage_gate_results DROP CONSTRAINT IF EXISTS eva_stage_gate_results_stage_number_check;
 ALTER TABLE public.eva_stage_gate_results ADD CONSTRAINT eva_stage_gate_results_stage_number_check CHECK (((stage_number >= 1) AND (stage_number <= 26)));
 
--- eva_ventures' 2 CHECK constraints are deliberately NOT narrowed here: section 4 below reverses
--- its section-5b backfill data FIRST (rows currently at 27), and narrowing before that data moves
--- fails immediately against live rows -- the same ordering defect this file's own stage_artifact_
--- requirements handling below already avoids. See the narrowing statements placed after section 4.
+-- eva_ventures' 2 CHECK constraints narrow normally here, in section 1 -- the backfill (v2 section
+-- 5b) is NOT reversed by this file (see header note), so there is no data-move step to sequence
+-- after; the guard above already refuses this narrow outright if any row is still at 27.
+ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
+ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
+
+ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
+ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
 
 ALTER TABLE public.stage_of_death_predictions DROP CONSTRAINT IF EXISTS stage_of_death_predictions_actual_death_stage_check;
 ALTER TABLE public.stage_of_death_predictions ADD CONSTRAINT stage_of_death_predictions_actual_death_stage_check CHECK (((actual_death_stage IS NULL) OR ((actual_death_stage >= 1) AND (actual_death_stage <= 26))));
@@ -130,23 +148,10 @@ ALTER TABLE public.venture_artifacts DROP CONSTRAINT IF EXISTS venture_artifacts
 ALTER TABLE public.venture_artifacts ADD CONSTRAINT venture_artifacts_artifact_type_check CHECK (((artifact_type)::text = ANY (ARRAY['blueprint_api_contract'::text, 'blueprint_data_model'::text, 'blueprint_erd_diagram'::text, 'blueprint_financial_projection'::text, 'blueprint_launch_readiness'::text, 'blueprint_positioning_brief'::text, 'blueprint_product_roadmap'::text, 'blueprint_project_plan'::text, 'blueprint_promotion_gate'::text, 'blueprint_review_summary'::text, 'blueprint_risk_register'::text, 'blueprint_schema_spec'::text, 'blueprint_sprint_plan'::text, 'blueprint_technical_architecture'::text, 'blueprint_token_manifest'::text, 'blueprint_user_journey'::text, 'blueprint_user_story_pack'::text, 'blueprint_wireframes'::text, 'build_cicd_config'::text, 'build_deviation_record'::text, 'build_mvp_build'::text, 'build_security_audit'::text, 'build_system_prompt'::text, 'build_test_coverage_report'::text, 'code_quality_report'::text, 'design_token_manifest'::text, 'distribution_ad_copy'::text, 'distribution_block_marker'::text, 'distribution_channel_config'::text, 'distribution_skip_marker'::text, 'economic_lens'::text, 'engine_business_model_canvas'::text, 'engine_exit_strategy'::text, 'engine_pricing_model'::text, 'engine_revenue_model'::text, 'engine_risk_assessment'::text, 'engine_risk_matrix'::text, 'growth_optimization_roadmap'::text, 'growth_playbook'::text, 'identity_brand_guidelines'::text, 'identity_brand_name'::text, 'identity_gtm_sales_strategy'::text, 'identity_logo_image'::text, 'identity_naming_visual'::text, 'identity_persona_brand'::text, 'intake_venture_analysis'::text, 'launch_analytics_dashboard'::text, 'launch_assumptions_vs_reality'::text, 'launch_churn_triggers'::text, 'launch_deployment_runbook'::text, 'launch_health_scoring'::text, 'launch_launch_metrics'::text, 'launch_marketing_checklist'::text, 'launch_metrics'::text, 'launch_optimization_roadmap'::text, 'launch_production_app'::text, 'launch_readiness_checklist'::text, 'launch_retention_playbook'::text, 'launch_test_plan'::text, 'launch_uat_report'::text, 'launch_user_feedback_summary'::text, 'lifecycle_sd_bridge'::text, 'marketing_app_store_desc'::text, 'marketing_blog_draft'::text, 'marketing_email_onboarding'::text, 'marketing_email_reengagement'::text, 'marketing_email_welcome'::text, 'marketing_landing_hero'::text, 'marketing_seo_meta'::text, 'marketing_social_posts'::text, 'marketing_tagline'::text, 'post_lifecycle_decision'::text, 'postlaunch_analytics_dashboard'::text, 'postlaunch_assumptions_vs_reality'::text, 'postlaunch_user_feedback_summary'::text, 's17_approved'::text, 's17_approved_png'::text, 's17_archetypes'::text, 's17_design_system'::text, 's17_fill_screen'::text, 's17_preview'::text, 's17_qa_report'::text, 's17_session_state'::text, 's17_strategy_recommendation'::text, 's17_strategy_stats'::text, 's17_variant_scores'::text, 's17_variant_wip'::text, 'stage_0_analysis'::text, 'stage_10_analysis'::text, 'stage_11_analysis'::text, 'stage_12_analysis'::text, 'stage_13_analysis'::text, 'stage_14_analysis'::text, 'stage_15_analysis'::text, 'stage_16_analysis'::text, 'stage_17_analysis'::text, 'stage_17_refined'::text, 'stage_18_analysis'::text, 'stage_19_analysis'::text, 'stage_1_analysis'::text, 'stage_20_analysis'::text, 'stage_21_analysis'::text, 'stage_22_analysis'::text, 'stage_23_analysis'::text, 'stage_24_analysis'::text, 'stage_25_analysis'::text, 'stage_26_analysis'::text, 'stage_2_analysis'::text, 'stage_3_analysis'::text, 'stage_4_analysis'::text, 'stage_5_analysis'::text, 'stage_6_analysis'::text, 'stage_7_analysis'::text, 'stage_8_analysis'::text, 'stage_9_analysis'::text, 'stitch_budget'::text, 'stitch_curation'::text, 'stitch_design_export'::text, 'stitch_project'::text, 'stitch_qa_report'::text, 'system_devils_advocate_review'::text, 'truth_ai_critique'::text, 'truth_competitive_analysis'::text, 'truth_demand_thesis'::text, 'truth_financial_model'::text, 'truth_idea_brief'::text, 'truth_problem_statement'::text, 'truth_target_market_analysis'::text, 'truth_validation_decision'::text, 'truth_value_proposition'::text, 'value_multiplier_assessment'::text, 'visual_assets_skipped'::text, 'visual_device_screenshots'::text, 'visual_final_assets'::text, 'visual_social_graphics'::text, 'wireframe_screens'::text])));
 
 -- ── 4. Reverse the data shifts ───────────────────────────────────────────────────────────────────
+-- eva_ventures is deliberately NOT reversed here -- see the header note. Its CHECK constraints
+-- already narrowed normally in section 1 above (no data-move step needed first).
 UPDATE public.gate_boundary_config SET from_stage = 23, to_stage = 24, updated_at = now() WHERE from_stage = 24 AND to_stage = 25;
 UPDATE public.venture_stage_cutover_grandfather SET stage_number = stage_number - 1 WHERE stage_number = 25;
-
-UPDATE public.eva_ventures ev
-SET current_lifecycle_stage = ev.current_lifecycle_stage - 1, updated_at = now()
-FROM public.ventures v
-WHERE ev.venture_id = v.id
-  AND v.is_demo IS TRUE
-  AND v.current_lifecycle_stage BETWEEN 24 AND 27
-  AND ev.current_lifecycle_stage = v.current_lifecycle_stage;
-
--- Now safe to narrow: eva_ventures' rows at 27 were reversed immediately above.
-ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS chk_lifecycle_stage;
-ALTER TABLE public.eva_ventures ADD CONSTRAINT chk_lifecycle_stage CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
-
-ALTER TABLE public.eva_ventures DROP CONSTRAINT IF EXISTS eva_ventures_current_lifecycle_stage_check;
-ALTER TABLE public.eva_ventures ADD CONSTRAINT eva_ventures_current_lifecycle_stage_check CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)));
 
 -- ── 5. Revert the 3 functions to their PRE-v2 bodies ────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.fn_bootstrap_venture_stages(p_venture_id uuid)
