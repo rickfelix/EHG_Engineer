@@ -52,11 +52,19 @@ BEGIN
   -- applies, then the sweep is later rolled back), defeating the emergency-rollback purpose of this
   -- file. The exclusion is scoped to that single (role, privilege) pair — every other combination,
   -- including authenticated:TRUNCATE and PUBLIC:TRUNCATE, still blocks as before.
+  --
+  -- coalesce(r.rolname, 'PUBLIC') in the exemption comparison, not bare r.rolname (round-3
+  -- verification finding): for the PUBLIC row r.rolname IS NULL, so a bare `r.rolname = 'anon'`
+  -- evaluates to NULL under three-valued logic, NOT(NULL AND true) is also NULL, and WHERE drops
+  -- the row — silently exempting PUBLIC:TRUNCATE too, exactly the wrong direction, and the exact
+  -- opposite of what the comment above claims. Wrapping in the same coalesce() already used in the
+  -- SELECT list makes the comparison FALSE (not NULL) for PUBLIC, so only the true anon:TRUNCATE
+  -- pair is exempted.
   SELECT string_agg(DISTINCT coalesce(r.rolname, 'PUBLIC') || ':' || a.privilege_type, ', ') INTO v_existing_grantees
     FROM aclexplode(coalesce((SELECT relacl FROM pg_class WHERE oid = 'public.eva_youtube_intake'::regclass), acldefault('r', (SELECT relowner FROM pg_class WHERE oid = 'public.eva_youtube_intake'::regclass)))) a
     LEFT JOIN pg_roles r ON r.oid = a.grantee
    WHERE (r.rolname IN ('anon', 'authenticated') OR r.rolname IS NULL)
-     AND NOT (r.rolname = 'anon' AND a.privilege_type = 'TRUNCATE');
+     AND NOT (coalesce(r.rolname, 'PUBLIC') = 'anon' AND a.privilege_type = 'TRUNCATE');
 
   IF v_existing_grantees IS NOT NULL THEN
     RAISE EXCEPTION 'eva_youtube_intake RLS lockdown DOWN: anon/authenticated/PUBLIC already hold privilege(s) [%] — refusing to proceed against an unexpected starting state (not the fully-locked-down state this migration''s UP produces).', v_existing_grantees;
