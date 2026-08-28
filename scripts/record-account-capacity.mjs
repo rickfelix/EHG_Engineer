@@ -27,6 +27,8 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { recordCapacityReading, rankAccountsByHeadroom } = require('../lib/fleet/account-capacity-gauge.cjs');
 const { recordUsagePaste } = require('../lib/fleet/account-usage-paste-writer.cjs');
+const { maybeEmitExhaustionAdvisory } = require('../lib/fleet/account-usage-exhaustion-advisory.cjs');
+const { METERS } = require('../lib/fleet/account-usage-burn-projection.cjs');
 
 function argVal(args, flag) {
   const i = args.indexOf(flag);
@@ -77,6 +79,22 @@ async function main() {
     return;
   }
   console.log(`Ledger row recorded: id=${ledgerResult.row.id}`);
+
+  // SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (FR-4): re-evaluate every meter for THIS paste event and
+  // emit an advisory if any meter now projects exhaustion-before-reset. Event-driven by design --
+  // the projection is a pure function of the ledger's 2 most recent rows per meter, which only
+  // change on a new paste, so evaluating here (not on an independent cron) is sufficient; see
+  // metadata.operator_contract_waiver on the SD for the full armed-cadence rationale. Fail-soft:
+  // an advisory-emission error never masks the ledger write's own success above.
+  for (const meter of Object.keys(METERS)) {
+    // eslint-disable-next-line no-await-in-loop
+    const advisory = await maybeEmitExhaustionAdvisory(ledgerResult.row.account_uuid8, meter, { supabase }).catch((e) => ({ error: e.message }));
+    if (advisory.error) {
+      console.error(`record-account-capacity: exhaustion-advisory check skipped for ${meter} (fail-soft): ${advisory.error}`);
+    } else if (advisory.emitted) {
+      console.log(`⚠ Exhaustion advisory emitted for ${meter} (Adam notified).`);
+    }
+  }
 }
 
 main();

@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 20 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 21 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -99,6 +99,12 @@ describe('policy registry (TS-1)', () => {
       // Keyed on updated_at, DATABASE-stamped (DEFAULT now(), touched by
       // fn_try_consume_browser_actuation_cap's own UPDATE, never client-supplied).
       browser_actuation_session_caps: 'updated_at',
+      // SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (operator-contract REAPER): account_usage_pastes'
+      // own consumer reads PAIRS of historical rows for burn-slope projection, unlike its sibling
+      // account_usage_snapshots (single most-recent-row consumer, safe at 90d) -- hence the
+      // longer 730d window (see policies.js entry comment). Keyed on created_at (insert time,
+      // DB-defaulted), not pasted_at (caller-supplied, backdatable).
+      account_usage_pastes: 'created_at',
     });
   });
 
@@ -115,11 +121,14 @@ describe('policy registry (TS-1)', () => {
 
   it('default window is 90d (3x the 30d longest consumer lookback)', () => {
     expect(DEFAULT_HOT_DAYS).toBe(90);
-    // design_quality_scores is the one deliberate exception: its shorter window exists
-    // specifically to age out ahead of its parent sub_agent_execution_results (see its
-    // policies.js entry comment) — every other table uses the shared default.
+    // design_quality_scores and account_usage_pastes are the two deliberate exceptions:
+    // design_quality_scores' shorter window ages it out ahead of its parent
+    // sub_agent_execution_results; account_usage_pastes' longer window protects its
+    // multi-row burn-projection consumer (see each table's policies.js entry comment) —
+    // every other table uses the shared default.
+    const EXCEPTIONS = new Set(['design_quality_scores', 'account_usage_pastes']);
     for (const p of RETENTION_POLICIES) {
-      if (p.table === 'design_quality_scores') continue;
+      if (EXCEPTIONS.has(p.table)) continue;
       expect(effectiveHotDays(p, {})).toBe(90);
     }
   });
