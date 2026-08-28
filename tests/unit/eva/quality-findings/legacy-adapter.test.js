@@ -106,7 +106,8 @@ describe('LEGACY_CHECK_MAP', () => {
   it('identity-maps every canonical category the analyzer can emit', () => {
     // Stays in lockstep with the analyzer's emitted checks: 4 code-review + 2 QA
     // + 2 Vision-Compliance (SD-LEO-INFRA-STAGE-CODE-QUALITY-001) + 4 DB/env-sourced
-    // UAT/capability categories (SD-LEO-INFRA-STAGE-ANALYZER-ADD-001).
+    // UAT/capability categories (SD-LEO-INFRA-STAGE-ANALYZER-ADD-001) + 3 Experience
+    // categories (SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001).
     expect(LEGACY_CHECK_MAP).toEqual({
       npm_audit: 'npm_audit',
       secrets: 'secrets',
@@ -120,6 +121,9 @@ describe('LEGACY_CHECK_MAP', () => {
       bug_report: 'bug_report',
       uat_signoff: 'uat_signoff',
       capability: 'capability',
+      usability: 'usability',
+      accessibility: 'accessibility',
+      journey_coherence: 'journey_coherence',
     });
   });
 });
