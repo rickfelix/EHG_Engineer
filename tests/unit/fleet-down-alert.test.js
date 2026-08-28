@@ -14,7 +14,8 @@ import {
   evaluateFleetDownAlert, evaluateDeadCoordinatorAlert, buildDeadCoordinatorMessage, checkDeadCoordinator,
   evaluateFleetDeadManPredicate, buildFleetDeadManMessage, checkFleetDeadMan,
   evaluatePerHostFreezePredicate, buildPerHostFreezeMessage, checkPerHostFreeze, recordFleetDeadManVerdict,
-  fetchEligibleHosts,
+  fetchEligibleHosts, runAlertArms,
+  evaluateFleetLivenessPredicate, buildFleetLivenessMessage, buildWatchdogCannotMeasureMessage, checkFleetLiveness,
 } from '../../scripts/fleet-down-alert.mjs';
 
 // Helper: build a newest-first pulse list from active_count values.
@@ -809,7 +810,7 @@ describe('recordFleetDeadManVerdict host-parameter backward compatibility (FR-3)
 // this SD exists precisely because an alert arm didn't reliably fire, a source-text pin closes
 // that gap without needing to invoke main() itself (which would require a live-shaped db/env).
 describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => {
-  it('runAlertArms([...]) in main() includes all four arms, dead-coordinator-pager first (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2 added fleet-dead-man-per-host-pager)', () => {
+  it('runAlertArms([...]) in main() includes all five arms, dead-coordinator-pager first (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2 added fleet-dead-man-per-host-pager; SD-LEO-INFRA-OFF-HOST-FLEET-001 added fleet-liveness-pager)', () => {
     const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
     const match = src.match(/const \{ failed \} = await runAlertArms\(\[([\s\S]*?)\]\);/);
     expect(match).not.toBeNull();
@@ -819,7 +820,7 @@ describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => 
     // a commented-out arm is correctly seen as ABSENT, not present.
     const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
     const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
-    expect(armNames).toEqual(['dead-coordinator-pager', 'fleet-dead-man-pager', 'fleet-dead-man-per-host-pager', 'worker-fleet-email']);
+    expect(armNames).toEqual(['dead-coordinator-pager', 'fleet-dead-man-pager', 'fleet-dead-man-per-host-pager', 'worker-fleet-email', 'fleet-liveness-pager']);
   });
 
   it('is comment-blind-proof: a commented-out arm entry is correctly seen as absent, not present', () => {
@@ -835,5 +836,271 @@ describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => 
     const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
     const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
     expect(armNames).toEqual(['dead-coordinator-pager', 'worker-fleet-email']);
+  });
+});
+
+describe('evaluateFleetLivenessPredicate (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1)', () => {
+  const NOW = new Date('2026-08-28T12:00:00.000Z');
+  const minutesAgo = (m) => new Date(NOW.getTime() - m * 60000).toISOString();
+
+  it('dead:true when heartbeat stale beyond the window; the obligation backlog never gates in either direction (non-empty can\'t save it, empty can\'t block it)', () => {
+    expect(evaluateFleetLivenessPredicate({ lastHeartbeatAt: minutesAgo(150), owedCount: 12, oldestOwedAgeMin: 400, now: NOW }).dead).toBe(true);
+    expect(evaluateFleetLivenessPredicate({ lastHeartbeatAt: minutesAgo(150), owedCount: 0, oldestOwedAgeMin: null, now: NOW }).dead).toBe(true);
+  });
+
+  it('dead:false when heartbeat is fresh, regardless of obligation backlog state', () => {
+    expect(evaluateFleetLivenessPredicate({ lastHeartbeatAt: minutesAgo(5), owedCount: 12, oldestOwedAgeMin: 400, now: NOW }).dead).toBe(false);
+    expect(evaluateFleetLivenessPredicate({ lastHeartbeatAt: minutesAgo(5), owedCount: 0, oldestOwedAgeMin: null, now: NOW }).dead).toBe(false);
+  });
+
+  it('no-heartbeat-history (lastHeartbeatAt=null) is treated as dead:true', () => {
+    const r = evaluateFleetLivenessPredicate({ lastHeartbeatAt: null, now: NOW });
+    expect(r.dead).toBe(true);
+  });
+
+  it('reason names the obligation backlog stats when present', () => {
+    const r = evaluateFleetLivenessPredicate({ lastHeartbeatAt: minutesAgo(150), owedCount: 3, oldestOwedAgeMin: 586, now: NOW });
+    expect(r.reason).toMatch(/owedCount=3/);
+    expect(r.reason).toMatch(/oldestOwedAgeMin=586/);
+  });
+});
+
+describe('buildFleetLivenessMessage / buildWatchdogCannotMeasureMessage (pure builders)', () => {
+  const NOW = new Date('2026-08-28T12:00:00.000Z');
+
+  it('buildFleetLivenessMessage carries the verdict reason and a fleet_liveness_alert kind', () => {
+    const verdict = { dead: true, reason: 'heartbeat stale for 650.0min (>= 120min); obligations backlog: owedCount=1, oldestOwedAgeMin=586.0' };
+    const msg = buildFleetLivenessMessage(verdict, NOW);
+    expect(msg.kind).toBe('fleet_liveness_alert');
+    expect(msg.body).toMatch(/heartbeat stale for 650\.0min/);
+    expect(msg.dedupeKey).toBe(`fleet-liveness-${NOW.toISOString().slice(0, 13)}`);
+  });
+
+  it('buildWatchdogCannotMeasureMessage carries the failure reason, a watchdog_cannot_measure kind, and never fleet-dark phrasing', () => {
+    const msg = buildWatchdogCannotMeasureMessage('claude_sessions heartbeat query failed: connection refused', NOW);
+    expect(msg.kind).toBe('watchdog_cannot_measure');
+    expect(msg.body).toMatch(/connection refused/);
+    expect(msg.body).toMatch(/NOT reporting a fleet-dark verdict/);
+    expect(msg.body).not.toMatch(/FLEET DEAD-MAN|FLEET LIVENESS/);
+    expect(msg.dedupeKey).toBe(`watchdog-cannot-measure-${NOW.toISOString().slice(0, 13)}`);
+  });
+});
+
+describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integration)', () => {
+  const NOW = new Date('2026-08-28T12:00:00.000Z');
+  const minutesAgo = (m) => new Date(NOW.getTime() - m * 60000).toISOString();
+
+  // H2 fix: models makeHostDb's CORRECT system_events event_type filtering (test:596), not
+  // makeDeadManDb's own broken route (discards its .eq() arg) -- required for TS-6/TS-8's
+  // independent-dedup assertions to be able to actually fail when the code is wrong.
+  function makeLivenessDb({
+    heartbeatAt = null, owedRows = [], priorEvents = [],
+    insertError = null, failMode = null, errorMessage = 'simulated resolved-error response',
+  // failMode: null | 'throw' | 'resolved-error' -- applies to the claude_sessions read only
+  // (sufficient to prove FR-4's single error contract; obligations shares the same code path).
+  } = {}) {
+    const events = [...priorEvents];
+    const inserted = [];
+    return {
+      _events: events, _inserted: inserted,
+      from(table) {
+        if (table === 'claude_sessions') {
+          if (failMode === 'throw') throw new Error(errorMessage);
+          return { select: () => ({ not: () => ({ order: () => ({ limit: async () => (failMode === 'resolved-error'
+            ? { data: null, error: { message: errorMessage } }
+            : { data: heartbeatAt ? [{ heartbeat_at: heartbeatAt }] : [], error: null }) }) }) }) };
+        }
+        if (table === 'sms_outbound_obligations') {
+          return { select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: owedRows.length ? [owedRows[0]] : [], error: null, count: owedRows.length }) }) }) }) };
+        }
+        if (table === 'system_events') {
+          return {
+            select: () => ({ eq: (col, val) => {
+              const byType = events.filter((e) => e.event_type === val);
+              return { order: () => ({ limit: async () => ({ data: byType.slice(0, 1), error: null }) }) };
+            } }),
+            insert: async (row) => {
+              if (insertError) return { data: null, error: { message: insertError } };
+              const full = { ...row, created_at: new Date().toISOString() };
+              inserted.push(full); events.unshift(full);
+              return { data: null, error: null };
+            },
+          };
+        }
+        throw new Error(`unexpected table in liveness test double: ${table}`);
+      },
+    };
+  }
+
+  it('TS-1: 08-27-shaped replay (stale heartbeat + owed obligation) fires a dead-fleet page naming both signals', async () => {
+    const db = makeLivenessDb({ heartbeatAt: minutesAgo(650), owedRows: [{ created_at: minutesAgo(586) }] });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    const reconcileOutboundSmsFn = vi.fn().mockResolvedValue({});
+    await checkFleetLiveness(db, false, sendChairmanSMSFn, NOW, false, reconcileOutboundSmsFn);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    const [message] = sendChairmanSMSFn.mock.calls[0];
+    expect(message.kind).toBe('fleet_liveness_alert');
+    expect(message.body).toMatch(/650\.0min|stale/);
+    expect(message.body).toMatch(/owedCount=1/);
+  });
+
+  it('TS-2: live fleet (recent heartbeat) does not page, regardless of obligation backlog state', async () => {
+    const db = makeLivenessDb({ heartbeatAt: minutesAgo(5), owedRows: [{ created_at: minutesAgo(400) }] });
+    const sendChairmanSMSFn = vi.fn();
+    const reconcileOutboundSmsFn = vi.fn().mockResolvedValue({});
+    await checkFleetLiveness(db, false, sendChairmanSMSFn, NOW, false, reconcileOutboundSmsFn);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  it('TS-3: a thrown query error and a resolved-error response both route to the SAME cannot-measure path, never fleet-dark', async () => {
+    for (const failMode of ['throw', 'resolved-error']) {
+      const send = vi.fn().mockResolvedValue({ sent: true });
+      await checkFleetLiveness(makeLivenessDb({ failMode }), false, send, NOW, false, vi.fn());
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][0].kind).toBe('watchdog_cannot_measure');
+      expect(send.mock.calls[0][0].body).not.toMatch(/FLEET DEAD-MAN|FLEET LIVENESS/);
+    }
+  });
+
+  it('SEC-L1/L3: a raw driver error containing a JWT-shaped secret and a trailing "?" is sanitized in BOTH the chairman SMS body and the persisted system_events row', async () => {
+    // Deliberately SHORT/obviously-fake JWT-shaped fixture (repo secret-scanner flags realistic-
+    // length eyJ...eyJ... strings even in test fixtures) -- still matches the sanitizer's own
+    // shape regex (eyJ[chars].eyJ[chars].[chars]), which has no length requirement.
+    const dirty = 'connection failed: token eyJtest.eyJtest.sig near postgres://user:pass@host/db failed?';
+    const db = makeLivenessDb({ failMode: 'resolved-error', errorMessage: dirty });
+    const send = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(db, false, send, NOW, false, vi.fn());
+    const body = send.mock.calls[0][0].body;
+    expect(body).not.toMatch(/eyJ[A-Za-z0-9_-]+\.eyJ/); // no raw JWT
+    expect(body).not.toMatch(/postgres:\/\//); // no raw connection string
+    expect(body.endsWith('?')).toBe(false); // never ends on '?' (decision-classifier trip)
+    const persisted = db._inserted.find((r) => r.event_type === 'fleet_liveness_measurement_error');
+    expect(persisted.payload.reason).not.toMatch(/eyJ[A-Za-z0-9_-]+\.eyJ/);
+    expect(persisted.payload.reason).not.toMatch(/postgres:\/\//);
+  });
+
+  it('TS-4: empty obligations backlog with a stale heartbeat still correctly fires dead:true', async () => {
+    const db = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(db, false, sendChairmanSMSFn, NOW, false, vi.fn());
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    expect(sendChairmanSMSFn.mock.calls[0][0].kind).toBe('fleet_liveness_alert');
+  });
+
+  it('TS-5: reconcileOutboundSms runs before the obligations read (its own throw is logged, non-fatal); skipped entirely in DRY mode', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const db = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    const reconcileOutboundSmsFn = vi.fn().mockRejectedValue(new Error('reconcile boom'));
+    await checkFleetLiveness(db, false, sendChairmanSMSFn, NOW, false, reconcileOutboundSmsFn);
+    expect(reconcileOutboundSmsFn).toHaveBeenCalledTimes(1);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1); // the arm still completes and pages
+    expect(errSpy.mock.calls.join(' ')).toMatch(/reconcileOutboundSms failed/);
+    expect(errSpy.mock.calls.join(' ')).toMatch(/reconcile boom/);
+    errSpy.mockRestore();
+
+    const dryReconcile = vi.fn().mockResolvedValue({});
+    await checkFleetLiveness(makeLivenessDb({ heartbeatAt: minutesAgo(5), owedRows: [] }), true, vi.fn(), NOW, false, dryReconcile);
+    expect(dryReconcile).not.toHaveBeenCalled();
+  });
+
+  it('TS-6: edge-trigger dedup fires once across sustained-dark ticks; a cannot-measure->dead:true sequence fires once per event_type (2 total), never 0 or 1', async () => {
+    const db = makeLivenessDb({ failMode: 'throw' });
+    const send = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(db, false, send, NOW, false, vi.fn());
+    await checkFleetLiveness(db, false, send, NOW, false, vi.fn());
+    expect(send).toHaveBeenCalledTimes(1); // cannot-measure fires once, not twice
+
+    // A subsequent tick where measurement succeeds again (failMode is a static per-db-instance
+    // flag, so a fresh db carries the prior events forward to model "the outage clears").
+    const dbLive = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [], priorEvents: db._events });
+    await checkFleetLiveness(dbLive, false, send, NOW, false, vi.fn());
+    expect(send).toHaveBeenCalledTimes(2); // dead-fleet event_type's first transition pages independently
+    await checkFleetLiveness(dbLive, false, send, NOW, false, vi.fn());
+    expect(send).toHaveBeenCalledTimes(2); // still dead -> suppressed by its OWN edge-trigger, not spammed
+  });
+
+  it('TS-8: same-tick double-page suppression (only when dead-man genuinely DELIVERED), the Leg-B-masked divergence case, and the checkFleetDeadMan-throws-defaults-false case', async () => {
+    // Suppression leg: a trivial parameter test.
+    const db1 = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const send1 = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(db1, false, send1, NOW, /* deadManDelivered */ true, vi.fn());
+    expect(send1).not.toHaveBeenCalled();
+    expect(db1._inserted.some((r) => r.event_type === 'fleet_liveness_verdict' && r.payload.state === 'dead')).toBe(true);
+
+    // TESTING sub-agent fix (F1, EXEC evidence row 49225f26-ada1-43f9-a5c4-ac1eb6803b0e):
+    // suppression must be keyed on genuine DELIVERY (r.sent), not merely "dead-man's state
+    // transitioned" -- a transitioned-but-undelivered page (soft-fail) must NOT suppress this arm.
+    const dbSoftFail = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const sendSoftFail = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(dbSoftFail, false, sendSoftFail, NOW, /* deadManDelivered (dead-man transitioned but sent:false) */ false, vi.fn());
+    expect(sendSoftFail).toHaveBeenCalledTimes(1);
+
+    // Leg-B-masked divergence: checkFleetDeadMan would report alive (completions>0 masks its own
+    // Leg-B) while this arm's Leg-A-only predicate still reports dead:true and pages independently.
+    const db2 = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const send2 = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(db2, false, send2, NOW, /* deadManDelivered */ false, vi.fn());
+    expect(send2).toHaveBeenCalledTimes(1);
+
+    // checkFleetDeadMan-throws case: mirrors main()'s own wiring -- the assignment inside its arm
+    // wrapper never executes past a throw, so the closure-scoped local stays at its false
+    // initializer. A failure in the OTHER arm must never silently suppress this one.
+    let deadManDelivered = false;
+    try {
+      deadManDelivered = (await checkFleetDeadMan({ from() { throw new Error('boom'); } }, false)).delivered;
+    } catch { /* stays false, matching main()'s wiring */ }
+    expect(deadManDelivered).toBe(false);
+    const send3 = vi.fn().mockResolvedValue({ sent: true });
+    await checkFleetLiveness(makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] }), false, send3, NOW, deadManDelivered, vi.fn());
+    expect(send3).toHaveBeenCalledTimes(1);
+  });
+
+  it('checkFleetDeadMan returns delivered:true only when sendChairmanSMS genuinely reports sent:true (F1)', async () => {
+    const dbDeadMan = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] }); // reuses claude_sessions/system_events routes; completions read is separate below
+    dbDeadMan.from = ((orig) => (table) => {
+      if (table === 'strategic_directives_v2') return { select: () => ({ eq: () => ({ gte: async () => ({ count: 0, error: null }) }) }) };
+      return orig(table);
+    })(dbDeadMan.from);
+    const delivered = await checkFleetDeadMan(dbDeadMan, false, vi.fn().mockResolvedValue({ sent: false, reason: 'soft-failed' }), NOW);
+    expect(delivered.transitioned).toBe(true);
+    expect(delivered.delivered).toBe(false);
+  });
+
+  it('TS-9: FLEET_LIVENESS_RECONCILE_ENABLED is parsed at CALL TIME, not hoisted, and case-insensitively (SEC-L2)', async () => {
+    const cases = [
+      { env: undefined, expectReconcile: true },
+      { env: 'yes', expectReconcile: true },
+      { env: '0', expectReconcile: false },
+      { env: 'false', expectReconcile: false },
+      { env: 'FALSE', expectReconcile: false },
+      { env: 'Off', expectReconcile: false },
+    ];
+    for (const { env, expectReconcile } of cases) {
+      if (env === undefined) delete process.env.FLEET_LIVENESS_RECONCILE_ENABLED;
+      else process.env.FLEET_LIVENESS_RECONCILE_ENABLED = env;
+      const db = makeLivenessDb({ heartbeatAt: minutesAgo(5), owedRows: [] });
+      const reconcileOutboundSmsFn = vi.fn().mockResolvedValue({});
+      await checkFleetLiveness(db, false, vi.fn(), NOW, false, reconcileOutboundSmsFn);
+      expect(reconcileOutboundSmsFn).toHaveBeenCalledTimes(expectReconcile ? 1 : 0);
+    }
+    delete process.env.FLEET_LIVENESS_RECONCILE_ENABLED;
+  });
+
+  it('a throw inside checkFleetLiveness is caught by runAlertArm and does not prevent other arms from running (TR-4 isolation)', async () => {
+    // A DB-read throw is caught INTERNALLY (FR-4, never escapes), so this exercises a failure
+    // point that isn't defensively caught: a rejecting sendChairmanSMSFn, which propagates up to
+    // runAlertArm's own outer try/catch.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const db = makeLivenessDb({ heartbeatAt: minutesAgo(150), owedRows: [] });
+    const throwingArm = () => checkFleetLiveness(db, false, vi.fn().mockRejectedValue(new Error('twilio boom')), NOW, false, vi.fn());
+    const otherArm = vi.fn().mockResolvedValue(undefined);
+    const { failed } = await runAlertArms([
+      ['fleet-liveness-pager', throwingArm],
+      ['other-arm', otherArm],
+    ]);
+    expect(otherArm).toHaveBeenCalledTimes(1); // still ran despite the earlier arm's failure
+    expect(failed.map((f) => f.name)).toEqual(['fleet-liveness-pager']);
+    errSpy.mockRestore();
   });
 });
