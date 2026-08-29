@@ -374,6 +374,10 @@ async function emitMaskedStallEscalation(f) {
 // never silently truncates at PostgREST's 1000-row cap either -- the exact live incident
 // this SD exists to fix (a gauge read "1000" while the true count was 1495).
 // Fail-soft: any error (view absent/unreadable) → null ("unknown"), never throws or blocks the forecast.
+// SD-LEO-INFRA-ROADMAP-CORPUS-HYGIENE-001: this function's extent is v_plan_of_record_remainder
+// (approved-wave-only, plan-of-record spine) — NOT the raw roadmap_wave_items table. A raw-table
+// census (used for corpus hygiene, not capacity forecasting) will read a larger, different count;
+// both are correct on their own extent and are not in contradiction with each other.
 async function countUnpromotedRoadmapItems(client) {
   try {
     const rows = await fetchAllPaginated(() =>
