@@ -4,7 +4,7 @@
 BEGIN;
 
 UPDATE chairman_dashboard_config
-SET hard_gate_stages = '[3,5,10,13,17,18,19,23,24,25]'::jsonb
+SET hard_gate_stages = ARRAY[3,5,10,13,17,18,19,23,24,25]::integer[]
 WHERE config_key = 'default';
 
 COMMIT;

@@ -14,11 +14,19 @@
 --
 -- AFTER: phase 6 = [23,24,25,26,27] -- the new UAT gate plus the same 4 shifted stages, so
 -- every one of the 27 live stages has exactly one phase membership again.
+--
+-- QF-20260828-273: this file's original ::jsonb cast never matched the live column type
+-- (lifecycle_phases.stages is integer[], not jsonb) -- the merged file could never actually
+-- apply ('column is of type integer[] but expression is of type jsonb'). The coordinator applied
+-- the corrected integer[] form directly to the live DB on 2026-08-29 with post-apply
+-- verification; this file is corrected here (UPDATE cast + the verify block's element-unnest,
+-- unnest() for integer[] rather than jsonb_array_elements()) so a future replay/fresh-env apply
+-- works.
 
 BEGIN;
 
 UPDATE lifecycle_phases
-SET stages = '[23,24,25,26,27]'::jsonb
+SET stages = ARRAY[23,24,25,26,27]::integer[]
 WHERE phase_number = 6;
 
 DO $$
@@ -28,7 +36,7 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO v_count
   FROM lifecycle_phases
-  WHERE phase_number = 6 AND stages = '[23,24,25,26,27]'::jsonb;
+  WHERE phase_number = 6 AND stages = ARRAY[23,24,25,26,27]::integer[];
 
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'POST-APPLY FAILED: expected exactly 1 lifecycle_phases row with phase_number=6 and the corrected stages array, found %', v_count;
@@ -36,7 +44,7 @@ BEGIN
 
   -- Every stage 1..27 has exactly one phase membership, no orphan.
   SELECT COUNT(*) INTO v_total_stages
-  FROM (SELECT jsonb_array_elements(stages) AS s FROM lifecycle_phases) t;
+  FROM (SELECT unnest(stages) AS s FROM lifecycle_phases) t;
 
   IF v_total_stages <> 27 THEN
     RAISE EXCEPTION 'POST-APPLY FAILED: expected 27 total stage memberships across all phases, found %', v_total_stages;
