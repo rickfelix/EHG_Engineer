@@ -6,7 +6,7 @@
  * JSON snapshot (database/uuid-columns-census.json), the same pattern
  * scripts/lint/schema-reference-snapshot.mjs already uses for the table/column-name snapshot.
  *
- * Regenerate: node scripts/lint/uuid-column-census.mjs
+ * Regenerate: node scripts/db/uuid-column-census.mjs
  */
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
@@ -28,7 +28,7 @@ async function main() {
   // otherwise dominate this QF's diff with pure data, not logic.
   writeFileSync('database/uuid-columns-census.json', JSON.stringify({
     generated_at: new Date().toISOString(),
-    source: 'information_schema.columns WHERE table_schema=public AND data_type=uuid (read-only census, no DDL) via scripts/lint/uuid-column-census.mjs',
+    source: 'information_schema.columns WHERE table_schema=public AND data_type=uuid (read-only census, no DDL) via scripts/db/uuid-column-census.mjs',
     column_count: columns.length,
     columns,
   }) + '\n');

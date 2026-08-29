@@ -10,7 +10,7 @@
  * this makes the mistake an impossibility to author.
  *
  * The uuid column list is a READ-ONLY, empirically-measured census (database/uuid-columns
- * -census.json, regenerate via scripts/lint/uuid-column-census.mjs) — never a naming guess like
+ * -census.json, regenerate via scripts/db/uuid-column-census.mjs) — never a naming guess like
  * "every *_id column is a uuid", which would both over- and under-fire against this schema's
  * real column types.
  *
