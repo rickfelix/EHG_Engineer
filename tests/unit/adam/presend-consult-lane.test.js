@@ -6,7 +6,7 @@
  * `require.main === module`. That is precisely how an 8s bounded wait sat on a 100% failure rate
  * (197/197 duty=pre_send_consult ledger rows over 30d were timeout-proceed) with a green suite.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { runPreSendConsultLane } = require('../../../lib/adam/presend-consult-lane.cjs');
@@ -154,6 +154,7 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     let capturedOpts = null;
     const { deps } = makeDeps({
       insertCoordinationRow: async (row, opts) => { capturedOpts = opts; return { data: { id: 'row-xyz-789' }, error: null }; },
+      verifyConsultReadback: async () => ({ verdict: 'PASS' }),
     });
     const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
     expect(out.action).toBe('hold-and-surface');
@@ -179,6 +180,56 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
     expect(out.action).toBe('hold-and-surface');
     expect(out.consultRowId).toBeUndefined();
+  });
+
+  // ── QF-20260828-255 ─────────────────────────────────────────────────────────────────────────
+  // Solomon advisory f02c00e7 / held-send 5ce0c4b5: "held pending Solomon" with NO consult row
+  // queued = a hold that can never resolve. The lane must independently verify (same action) that
+  // the row it just inserted actually exists, not merely trust insertCoordinationRow's own return.
+  it('QF-20260828-255: a genuinely-inserted row that ALSO reads back is marked consultRowVerified:true', async () => {
+    const { deps } = makeDeps({
+      insertCoordinationRow: async () => ({ data: { id: 'row-verified-1' }, error: null }),
+      verifyConsultReadback: async (id) => { expect(id).toBe('row-verified-1'); return { verdict: 'PASS' }; },
+    });
+    const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
+    expect(out.consultRowVerified).toBe(true);
+  });
+
+  it('QF-20260828-255: a row id that FAILS independent readback is marked consultRowVerified:false, loud-logged, and the lane still does not throw', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps } = makeDeps({
+      insertCoordinationRow: async () => ({ data: { id: 'row-ghost-1' }, error: null }),
+      verifyConsultReadback: async () => { throw new Error('expected exactly 1 row, got 0'); },
+    });
+    const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
+    expect(out.action).toBe('hold-and-surface'); // still holds -- fail LOUD, not fail silent-and-proceed
+    expect(out.consultRowVerified).toBe(false);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('QF-20260828-255'));
+    errSpy.mockRestore();
+  });
+
+  it('QF-20260828-255: a missing consultRowId is marked consultRowVerified:false and loud-logged without ever calling the readback checker', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const readbackSpy = vi.fn();
+    const { deps } = makeDeps({
+      insertCoordinationRow: async () => ({ data: null, error: { message: 'insert boom' } }),
+      verifyConsultReadback: readbackSpy,
+    });
+    const out = await runPreSendConsultLane({ ...INPUT, isChairmanTargeted: true }, deps);
+    expect(out.consultRowVerified).toBe(false);
+    expect(readbackSpy).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('QF-20260828-255'));
+    errSpy.mockRestore();
+  });
+
+  it('QF-20260828-255: a NON-chairman-targeted consult never calls the readback checker (only the hold-capable path needs it)', async () => {
+    const readbackSpy = vi.fn();
+    const { deps } = makeDeps({
+      insertCoordinationRow: async () => ({ data: { id: 'row-irrelevant' }, error: null }),
+      verifyConsultReadback: readbackSpy,
+    });
+    await runPreSendConsultLane(INPUT, deps); // isChairmanTargeted defaults to false
+    expect(readbackSpy).not.toHaveBeenCalled();
   });
 
   it('omitting the addressee passes undefined rather than inventing one', async () => {
