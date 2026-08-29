@@ -108,7 +108,10 @@ describe('SEC-05 — a future timestamp cannot block forever', () => {
   const YEAR = 365 * 24 * 60 * 60 * 1000;
 
   test('a tree stamped years in the future is resident for ONE window, not forever', () => {
-    const future = { nowMs: now, statFn: () => ({ mtimeMs: now + 3 * YEAR }), gitRunner: () => ({ code: 128, stdout: '' }), logger: quiet };
+    // windowMin pinned explicitly (QF-20260829-726 made the default location-aware — process.cwd()
+    // here is the repo root, outside .worktrees/, so an unpinned call would pick up the longer
+    // ceremony default). This test is about the future-timestamp clamp, not the default choice.
+    const future = { nowMs: now, windowMin: 30, statFn: () => ({ mtimeMs: now + 3 * YEAR }), gitRunner: () => ({ code: 128, stdout: '' }), logger: quiet };
     expect(treeResidencyBlocksRemoval(process.cwd(), future).reason).toBe(REAP_BLOCKED_TREE_RESIDENT);
 
     // Evaluated well past the window it is no longer resident — the clamp lets it age out.

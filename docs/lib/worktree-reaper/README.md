@@ -78,6 +78,23 @@ retired (workflow_dispatch-only now, for an explicit human-triggered run).
 
 Counter + last-run status persists at `.claude/worktree-reaper-state.json`.
 
+## Residency guard (ceremony-day knobs)
+
+`lib/worktree-reaper/residency-guard.js` blocks removal of a worktree that is still occupied
+(QF-20260829-726 documents the exact spellings — verified against the source, not guessed):
+
+| Env var | Default | Effect |
+|---|---|---|
+| `WORKTREE_RESIDENCY_GUARD` (residency-guard.js:40) | _(unset)_ | Kill switch. Set `off`/`0`/`false` to BYPASS every residency check (loud, logs on every call) — emergency rollback without a revert if the guard false-positive-storms. |
+| `WORKTREE_RESIDENCY_WINDOW_MIN` (residency-guard.js:210) | `30` (pool) / `240` (ceremony) | How many minutes of inactivity (max of fs mtime / git HEAD time) before a tree stops counting as resident. Overrides BOTH location-aware defaults below unconditionally. |
+
+**Location-aware default (QF-20260829-726):** a tree whose path is INSIDE `.worktrees/` (the
+pool `sd-start.js`/`qf-start.js` manage) defaults to 30 minutes. A tree OUTSIDE `.worktrees/`
+(the manually-created ceremony class no automated marker can reach) defaults to 240 minutes
+(4h) — enough margin for the chairman answering a ceremony queue at ~2h-paced intervals. A
+genuinely stale ceremony tree (days old) still reaps normally; only the ceremony-paced idle
+window changed. `WORKTREE_RESIDENCY_WINDOW_MIN`, once set, wins over both defaults.
+
 ## Output shape
 
 - **stdout**: human-readable table with columns `Worktree | Branch |
