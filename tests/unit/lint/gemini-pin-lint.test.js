@@ -22,13 +22,14 @@ function libFile(dir, name, content) {
 const LINT_SCRIPT = join(process.cwd(), 'scripts/lint/gemini-pin-lint.mjs');
 
 describe('gemini-pin-lint: full-sweep sanity against the real repo', () => {
-  it('reports exactly the 14 KNOWN, not-yet-consolidated routing pins (allowlist covers the other 11 non-routing occurrences)', () => {
-    // 14 is not "0 violations" -- that is the point at THIS stage of the SD. SD-LEO-ORCH-GEMINI-
-    // MODEL-SCAN-001-D consolidated the 9 pins in lib/testing/vision-qa-agent.js (24 -> 15), and
-    // SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-E consolidated the creative-gen pin in
-    // lib/creative/providers/gemini.js (15 -> 14). The remaining sibling subsystem-consolidation
-    // SDs (-F, -G) migrate the rest onto model-config.js; the CI gate flips from allow-fail to
-    // blocking only once this count reaches 0 (tracked on SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-G). A
+  it('reports exactly the 1 KNOWN, not-yet-consolidated routing pin (allowlist covers the other 15 non-routing occurrences)', () => {
+    // 1 is not "0 violations" -- that is the point at THIS stage of the SD. SD-LEO-ORCH-GEMINI-
+    // MODEL-SCAN-001-D consolidated the 9 pins in lib/testing/vision-qa-agent.js (24 -> 15), SD-E
+    // consolidated the creative-gen pin in lib/creative/providers/gemini.js (15 -> 14), and SD-F
+    // consolidated the 8 routing pins in lib/ai/multimodal-client.js and allowlisted its 5
+    // non-routing occurrences (14 -> 1). The remaining sibling SD (-G, lib/brainstorm/
+    // provider-rotation.js) migrates the last one; the CI gate flips from allow-fail to blocking
+    // only once this count reaches 0 (tracked on SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-G). A
     // regression that ADDS a new unallowlisted pin, or an allowlist entry drifting stale, changes
     // this number -- which is exactly what this pinned-count test is designed to catch.
     let output = '';
@@ -37,7 +38,7 @@ describe('gemini-pin-lint: full-sweep sanity against the real repo', () => {
     } catch (err) {
       output = err.stdout?.toString() || err.message;
     }
-    expect(output).toMatch(/14 unallowlisted violation/);
+    expect(output).toMatch(/1 unallowlisted violation/);
   });
 
   it('the allowlist has zero stale entries against the real repo', () => {
