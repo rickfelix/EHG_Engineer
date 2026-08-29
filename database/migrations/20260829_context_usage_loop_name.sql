@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2, FR-4)
 --
 -- Adds a nullable loop_name column to context_usage_log so cache-read series are queryable per
