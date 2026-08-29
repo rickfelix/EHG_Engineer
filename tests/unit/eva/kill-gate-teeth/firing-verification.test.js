@@ -46,7 +46,9 @@ function buildSupabaseMock({
       if (table === 'venture_stages') {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue({ data: killStages.map((n) => ({ stage_number: n })), error: null }),
+            eq: vi.fn(() => ({
+              limit: vi.fn().mockResolvedValue({ data: killStages.map((n) => ({ stage_number: n })), error: null }),
+            })),
           })),
         };
       }
@@ -56,7 +58,9 @@ function buildSupabaseMock({
             eq: vi.fn(() => ({
               eq: vi.fn(() => ({
                 in: vi.fn(() => ({
-                  order: vi.fn().mockResolvedValue({ data: systemEvents, error: null }),
+                  order: vi.fn(() => ({
+                    limit: vi.fn().mockResolvedValue({ data: systemEvents, error: null }),
+                  })),
                 })),
               })),
             })),
@@ -68,18 +72,25 @@ function buildSupabaseMock({
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               eq: vi.fn(() => ({
-                in: vi.fn().mockResolvedValue({ data: decisionRows, error: null }),
+                in: vi.fn(() => ({
+                  limit: vi.fn().mockResolvedValue({ data: decisionRows, error: null }),
+                })),
               })),
             })),
           })),
         };
       }
       if (table === 'kill_gate_teeth_proof_records') {
+        // fetchAllPaginated calls .range() on whatever query object is returned; a single-page
+        // response (rows.length < pageSize) ends the pagination loop after one call.
+        const rangeResolved = vi.fn().mockResolvedValue({ data: insertedRecords, error: null });
         return {
           select: vi.fn(() => ({
             in: vi.fn(() => ({
-              order: vi.fn().mockResolvedValue({ data: insertedRecords, error: null }),
-              eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: insertedRecords, error: null }) })),
+              order: vi.fn(() => ({
+                range: rangeResolved,
+                eq: vi.fn(() => ({ range: rangeResolved })),
+              })),
             })),
           })),
           insert: vi.fn((row) => ({

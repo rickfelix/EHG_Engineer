@@ -32,9 +32,11 @@ function buildSupabaseMock({ ventureName = 'ProbeAlphaVentureX', ventureReadErro
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              eq: vi.fn().mockResolvedValue(
-                eventsReadError ? { data: null, error: eventsReadError } : { data: attestationRows, error: null }
-              ),
+              eq: vi.fn(() => ({
+                limit: vi.fn().mockResolvedValue(
+                  eventsReadError ? { data: null, error: eventsReadError } : { data: attestationRows, error: null }
+                ),
+              })),
             })),
           })),
         };

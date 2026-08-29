@@ -221,7 +221,7 @@ COMMENT ON FUNCTION kill_gate_teeth_discharged_predictions() IS
 -- reason as the table revoke above -- otherwise anon would EXECUTE this function (running as its
 -- owner) and read every discharged prediction's content despite never being GRANTed EXECUTE via
 -- the PUBLIC pseudo-role.
-REVOKE ALL ON FUNCTION kill_gate_teeth_discharged_predictions() FROM anon, authenticated, PUBLIC;
+REVOKE EXECUTE ON FUNCTION kill_gate_teeth_discharged_predictions() FROM anon, authenticated, PUBLIC;
 GRANT EXECUTE ON FUNCTION kill_gate_teeth_discharged_predictions() TO kill_gate_traversal_ro;
 -- Deliberately NOT granting SELECT on kill_gate_sealed_predictions itself to this role -- that
 -- omission IS the blindness mechanism.
