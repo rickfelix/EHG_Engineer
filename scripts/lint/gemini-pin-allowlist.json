@@ -11,6 +11,11 @@
     { "file": "lib/cost/llm-pricing.js", "line": 54, "category": "pricing_table", "note": "PRICING table lookup" },
     { "file": "lib/cost/llm-pricing.js", "line": 56, "category": "pricing_table", "note": "PRICING table lookup" },
     { "file": "lib/cost/llm-pricing.js", "line": 57, "category": "pricing_table", "note": "PRICING table lookup" },
-    { "file": "scripts/cost-waste-ledger.mjs", "line": 41, "category": "pricing_table", "note": "PRICING['gemini-2.5-flash'] lookup for a cost estimate, reads the pricing table, does not select a model to call" }
+    { "file": "scripts/cost-waste-ledger.mjs", "line": 41, "category": "pricing_table", "note": "PRICING['gemini-2.5-flash'] lookup for a cost estimate, reads the pricing table, does not select a model to call" },
+    { "file": "lib/ai/multimodal-client.js", "line": 75, "category": "pricing_table", "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-F: tokenPricing table key: model -> $/token, inverse direction from purpose -> model" },
+    { "file": "lib/ai/multimodal-client.js", "line": 76, "category": "pricing_table", "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-F: tokenPricing table key -- gemini-2.5-pro-preview-05-06 has no model-config.js counterpart at all, so allowlist is the only disposition" },
+    { "file": "lib/ai/multimodal-client.js", "line": 77, "category": "pricing_table", "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-F: tokenPricing table key: model -> $/token" },
+    { "file": "lib/ai/multimodal-client.js", "line": 498, "category": "model_catalog", "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-F: getAvailableModels() enumerates BOTH available models for the provider, not a selection of one to call -- and is dead code, called nowhere in the repo" },
+    { "file": "lib/ai/multimodal-client.js", "line": 499, "category": "model_catalog", "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-F: getAvailableModels() 'gemini' provider key, same catalog list as line 498" }
   ]
 }
