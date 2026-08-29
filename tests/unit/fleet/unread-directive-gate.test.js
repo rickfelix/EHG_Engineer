@@ -47,12 +47,13 @@ describe('findUnreadDirectives', () => {
     // (not just an injected queryFn) is exercised. MEASURED against live data: target_sd
     // is always null and message_type does not discriminate 'coordinator_directive'
     // (its message_type is 'INFO') — the real filters are payload->>sd and payload->>kind.
-    const seen = { eqCalls: [], inCalls: [], isCalls: [], gtCalls: [] };
+    const seen = { eqCalls: [], inCalls: [], isCalls: [], limitCalls: [], gtCalls: [] };
     function makeQuery(rows) {
       const q = {
         eq(col, val) { seen.eqCalls.push([col, val]); return q; },
         in(col, vals) { seen.inCalls.push([col, vals]); return q; },
         is(col, val) { seen.isCalls.push([col, val]); return q; },
+        limit(n) { seen.limitCalls.push(n); return q; },
         gt(col, val) { seen.gtCalls.push([col, val]); return Promise.resolve({ data: rows, error: null }); },
       };
       return q;
@@ -69,6 +70,7 @@ describe('findUnreadDirectives', () => {
     expect(seen.eqCalls).toContainEqual(['payload->>sd', 'SD-XXX-001']);
     expect(seen.inCalls).toContainEqual(['payload->>kind', ['coordinator_directive', 'work_assignment']]);
     expect(seen.isCalls).toContainEqual(['acknowledged_at', null]);
+    expect(seen.limitCalls).toContain(50);
     expect(seen.gtCalls).toContainEqual(['created_at', '2026-08-28T00:00:00Z']);
   });
 });
