@@ -136,10 +136,12 @@ const REMINDER = [
   'and it is ending on a tool call — the user sees NO reply. A ScheduleWakeup result saying',
   '"nothing more to do this turn" satisfies the LOOP, not the human.',
   'Write the final text message NOW, as the last thing in the turn:',
+  '  - if the wakeup hook also wants an arm, arm it FIRST, then write the text — in that',
+  '    order both hooks pass; NEVER end the turn on the arm itself;',
   '  - lead with the outcome the human is waiting on;',
   '  - restate anything you only said mid-turn or in thinking — assume they did not see it;',
   '  - if you genuinely owe nothing, print one line saying exactly that.',
-  '(This reminder fires once per turn — a second stop passes through.)',
+  '(This reminder re-fires on a silent re-stop, up to 3 times, before letting the turn end.)',
 ].join('\n');
 
 function readStdinPayload(timeoutMs = 2000) {
@@ -172,6 +174,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // when a block fires; while the marker exists, EVERY turn (loop included) must
 // end on assistant text; the marker clears the moment any turn does.
 const DEBT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // staleness cap — never wedge a loop on an old marker
+const MAX_BLOCKS_PER_TURN = 3; // v4 bounded re-block cap — lifted to module scope for testability
 
 function debtPath(sessionId) {
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -179,15 +182,26 @@ function debtPath(sessionId) {
 }
 function readDebt(sessionId) {
   try {
-    const p = debtPath(sessionId);
-    if (!fs.existsSync(p)) return false;
-    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
-    if (!d.at || Date.now() - new Date(d.at).getTime() > DEBT_MAX_AGE_MS) { fs.unlinkSync(p); return false; }
-    return true;
+    const d = readDebtRecord(sessionId);
+    return d !== null;
   } catch { return false; }
 }
-function writeDebt(sessionId, why) {
-  try { fs.writeFileSync(debtPath(sessionId), JSON.stringify({ at: new Date().toISOString(), why })); } catch { /* fail-open */ }
+/** Full marker record (or null) — v4 adds turnKey/blocks for the bounded re-block counter. */
+function readDebtRecord(sessionId) {
+  try {
+    const p = debtPath(sessionId);
+    if (!fs.existsSync(p)) return null;
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!d.at || Date.now() - new Date(d.at).getTime() > DEBT_MAX_AGE_MS) { fs.unlinkSync(p); return null; }
+    return d;
+  } catch { return null; }
+}
+function writeDebt(sessionId, why, turnKey, blocks) {
+  try {
+    fs.writeFileSync(debtPath(sessionId), JSON.stringify({
+      at: new Date().toISOString(), why, turnKey: turnKey || null, blocks: blocks || 1,
+    }));
+  } catch { /* fail-open */ }
 }
 function clearDebt(sessionId) {
   try { const p = debtPath(sessionId); if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* fail-open */ }
@@ -199,6 +213,16 @@ function endsOnText(entries) {
     if (entries[i].type === 'assistant') return hasNonEmptyText(entries[i]);
   }
   return false;
+}
+
+/** Stable key for "the human message this turn owes a reply to" — uuid preferred, ts fallback. */
+function lastHumanKey(entries) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (isHumanPrompt(entries[i])) {
+      return entries[i].uuid || entries[i].timestamp || `idx-${i}`;
+    }
+  }
+  return null;
 }
 
 async function main() {
@@ -226,10 +250,24 @@ async function main() {
     }
     if (endsOnText(entries)) clearDebt(sessionId);      // debt is paid by any text-final turn
     if (!blockWorthy()) return;
-    writeDebt(sessionId, verdict.block ? verdict.why : 'carryover: prior blocked turn never printed');
-    // Anti-loop: on the second stop of the SAME turn, keep the marker but let the stop
-    // through — the debt re-blocks (once) on the next turn instead of trapping this one.
-    if (payload.stop_hook_active === true) return;
+    // ── v4 BOUNDED RE-BLOCK (chairman-directed 2026-08-29, witnessed 3× that day) ──
+    // v3's anti-loop (`stop_hook_active → pass through`) was the swallow path: block #1
+    // fired, the model re-stopped silently (typically right after a ScheduleWakeup arm,
+    // when a SECOND stop hook's louder checkin wall displaced the print demand), and the
+    // pass-through ended the turn with the human's reply never printed. The debt marker
+    // then got cleared by the NEXT turn's unrelated tick text, so the human saw nothing,
+    // three sittings in a row. Bound the escape instead of removing it: re-block the SAME
+    // turn up to MAX_BLOCKS_PER_TURN times (turn identity = the human message owed a
+    // reply, keyed by its uuid), then pass through so a genuinely wedged model cannot
+    // trap the session. Fail-open paths above are unchanged.
+    const turnKey = lastHumanKey(entries);
+    const prior = readDebtRecord(sessionId);
+    const sameTurn = prior && turnKey && prior.turnKey === turnKey;
+    const blocksSoFar = sameTurn ? (prior.blocks || 1) : 0;
+    writeDebt(sessionId,
+      verdict.block ? verdict.why : 'carryover: prior blocked turn never printed',
+      turnKey, blocksSoFar + 1);
+    if (payload.stop_hook_active === true && blocksSoFar >= MAX_BLOCKS_PER_TURN) return;
     process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
   } catch (e) {
     process.stderr.write(`[print-before-park] ${e.message}\n`); // fail-open, never trap a stop
@@ -240,4 +278,8 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { decide, isHumanPrompt, isLoopPrompt, hasNonEmptyText, readTailEntries, REMINDER };
+module.exports = {
+  decide, isHumanPrompt, isLoopPrompt, hasNonEmptyText, readTailEntries, REMINDER,
+  // QF-20260829-847 (v4 bounded re-block): exported for unit testing the counter logic.
+  readDebtRecord, writeDebt, clearDebt, lastHumanKey, endsOnText, debtPath, MAX_BLOCKS_PER_TURN,
+};
