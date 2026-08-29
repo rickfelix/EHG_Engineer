@@ -24,6 +24,13 @@
  *   - scripts/lint/tier-rank-direct-comparison-allowlist.json — categorized, file:line-keyed exceptions.
  *   - inline pragma: any line containing `tier-rank-comparison-lint-disable-line`.
  *
+ * KNOWN LIMITATION: matching is PER LINE and textual, not AST-based (mirrors gemini-pin-lint's
+ * design). A comparison split across multiple lines (e.g. `if (\n  sd.metadata.min_tier_rank >\n
+ * workerRank\n)`), or one reached through an intermediate variable whose OWN assignment line
+ * carries neither `min_tier_rank` nor the operator on the same line, is not seen. A destructured
+ * or renamed alias (`const { min_tier_rank: x } = sd.metadata; if (x > workerRank)`) also evades
+ * detection, since the literal token `min_tier_rank` no longer appears on the comparison line.
+ *
  * Exit: 1 when unallowlisted violations are found, 0 otherwise.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
