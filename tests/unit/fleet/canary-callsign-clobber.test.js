@@ -297,9 +297,12 @@ describe('FR-7: classifyWorkerNaming — the cron decision, exercised not greppe
   });
 
   it('protection survives a metadata shape that would otherwise be renamed', () => {
-    // An unstamped canary that an earlier clobber already renamed to a NATO callsign in the WRONG
-    // tier band: every other path sends this to needs_assignment. Only the marker saves it.
-    const worker = { session_id: 's-1', metadata: { fleet_identity: { callsign: 'Bravo', color: 'blue' }, tier_rank: 3 } };
+    // An unstamped canary with NO callsign yet (mid-registration): every other path sends this to
+    // needs_assignment. Only the marker saves it. QF-20260829-312: an ALREADY-assigned callsign is
+    // now always kept regardless of tier band, so the "otherwise renamed" case must be a genuinely
+    // unassigned worker, not a wrong-band one (a wrong-band-but-assigned worker is 'in_band' either
+    // way, which would make this proof vacuous).
+    const worker = { session_id: 's-1', metadata: { tier_rank: 3 } };
     expect(classifyWorkerNaming(worker, new Set(['s-1']), false, canaryMd)).toBe('canary_marker');
     // ...and WITHOUT the marker the same worker is renamed — proving the marker is what did it.
     expect(classifyWorkerNaming(worker, new Set(), false, canaryMd)).toBe('needs_assignment');
@@ -311,9 +314,11 @@ describe('FR-7: classifyWorkerNaming — the cron decision, exercised not greppe
     expect(classifyWorkerNaming(md({}), new Set(['s-1']), true, canaryMd)).toBe('canary_marker');
   });
 
-  it('NEGATIVE CONTROL — an in-band ordinary worker is kept, an out-of-band one is renamed', () => {
-    // Without both halves the guard could be widened to protect everyone (freezing the tier-band
-    // self-heal this cron exists to perform) and still pass.
+  it('QF-20260829-312: BOTH an in-band and an out-of-band ordinary worker keep their callsign — tier drift never renames an assigned worker', () => {
+    // Superseded assertion (pre-QF-20260829-312): an out-of-band callsign used to be renamed —
+    // that "self-heal by renaming" behavior is exactly the bug this QF removed (a callsign is a
+    // lifetime IDENTITY; tier is a display-only CURRENT ATTRIBUTE). Both cases now return
+    // 'in_band' identically, proving tier-band membership no longer drives the verdict at all.
     //
     // The fixtures are DERIVED from the shipped band helpers, not hardcoded. My first version pinned
     // 'Alpha' as tier-1 and failed: bands are computed from the LIVE ladderTopRank(), which is not 4
@@ -331,7 +336,11 @@ describe('FR-7: classifyWorkerNaming — the cron decision, exercised not greppe
     const inBand = { session_id: 's-2', metadata: { fleet_identity: { callsign: inBandCallsign, color: 'blue' }, tier_rank: RANK } };
     expect(classifyWorkerNaming(inBand, new Set(), false, canaryMd)).toBe('in_band');
     const outOfBand = { session_id: 's-3', metadata: { fleet_identity: { callsign: outOfBandCallsign, color: 'blue' }, tier_rank: RANK } };
-    expect(classifyWorkerNaming(outOfBand, new Set(), false, canaryMd)).toBe('needs_assignment');
+    expect(classifyWorkerNaming(outOfBand, new Set(), false, canaryMd)).toBe('in_band');
+    // A worker with NO existing callsign at all is the only remaining case that reaches
+    // needs_assignment — proving the verdict now turns on "has an identity", not "in the right band".
+    const unassigned = { session_id: 's-4', metadata: { tier_rank: RANK } };
+    expect(classifyWorkerNaming(unassigned, new Set(), false, canaryMd)).toBe('needs_assignment');
   });
 
   it('reports WHICH guard fired, so the pre-registration path cannot rot behind the metadata path', () => {

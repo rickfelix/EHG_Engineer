@@ -56,15 +56,19 @@ function stub(cfg = {}) {
 }
 
 describe('assignFleetIdentityAtCheckin — QF-20260703-665 (b) re-band vacate + grace reservation', () => {
-  it('stamps fleet_identity_vacated with the OLD callsign when a re-band picks a new one', async () => {
-    // Bravo lives in the top NATO band; tier_rank=1 maps to the bottom band ([Hotel]) — a clear
-    // wrong-band mismatch that forces a re-band instead of the idempotent-keep path.
+  it('QF-20260829-312: a tier-band mismatch no longer re-bands a fully-identified worker (vacate path is now unreachable via tier drift alone)', async () => {
+    // Superseded assertion (pre-QF-20260829-312): Bravo/tier_rank=1 used to be a "wrong-band"
+    // mismatch that forced a re-band, exercising the vacate-and-reserve mechanic below. That
+    // "self-heal by renaming" behavior is exactly the bug QF-20260829-312 removed — a callsign
+    // is a lifetime IDENTITY now, so a worker with BOTH callsign and color already assigned is
+    // always idempotent regardless of tier_rank. The vacate mechanic remains in the code for its
+    // one still-reachable trigger (a malformed identity missing `color`), but tier drift alone no
+    // longer reaches it.
     const sb = stub({ selfRow: { metadata: { tier_rank: 1, fleet_identity: { callsign: 'Bravo', color: 'green' } } }, live: [] });
     const out = await assignFleetIdentityAtCheckin(sb, 'sess-1', 'SD-MINE-001');
-    expect(out.callsign).not.toBe('Bravo');
-    expect(sb.rec.update.metadata.fleet_identity_vacated).toEqual(
-      expect.objectContaining({ callsign: 'Bravo', vacated_at: expect.any(String) }),
-    );
+    expect(out.callsign).toBe('Bravo');
+    // The idempotency check now returns before any DB write — no metadata update, no vacate stamp.
+    expect(sb.rec.update).toBeNull();
   });
 
   it('does NOT stamp fleet_identity_vacated on a first-time assignment (nothing was held before)', async () => {
