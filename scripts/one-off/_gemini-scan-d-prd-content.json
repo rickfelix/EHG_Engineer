@@ -1,0 +1,90 @@
+{
+  "executive_summary": "lib/testing/vision-qa-agent.js's autoSelectModel() hardcoded 9 literal Gemini model-string returns ('gemini-2.5-flash' x7, 'gemini-2.5-pro' x2) that bypassed the single SSOT for Gemini model selection, lib/config/model-config.js's getGoogleModel(purpose). This SD (child D of the SD-LEO-ORCH-GEMINI-MODEL-SCAN-001 8-child campaign) resolves all 9 literals to getGoogleModel('vision')/getGoogleModel('reasoning') calls, byte-identical in effective model today (MODEL_DEFAULTS.google.vision='gemini-2.5-flash', .reasoning='gemini-2.5-pro') but now env-overridable and centrally upgradable like every other purpose-keyed caller in the codebase. Verified via gemini-pin-lint.mjs (9 violations -> 0) and 12/12 branch-parity checks against the pre-fix commit.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Replace 7 gemini-2.5-flash literals with getGoogleModel('vision')",
+      "description": "In lib/testing/vision-qa-agent.js's autoSelectModel(config) method, the 7 branches returning the literal 'gemini-2.5-flash' (performance keyword, smoke/basic keyword, consensusRuns>=3, maxIterations>50, costLimit<1.0, CI/CD env, default fallback) now call getGoogleModel('vision') imported from lib/config/model-config.js, resolving through the purpose-keyed registry instead of a bypassing literal.",
+      "priority": "critical",
+      "acceptance_criteria": ["grep for the literal 'gemini-2.5-flash' inside autoSelectModel() returns zero matches", "getGoogleModel('vision') resolves to 'gemini-2.5-flash' today via MODEL_DEFAULTS.google.vision, preserving identical runtime behavior"]
+    },
+    {
+      "id": "FR-2",
+      "title": "Replace 2 gemini-2.5-pro literals with getGoogleModel('reasoning')",
+      "description": "The 2 branches returning the literal 'gemini-2.5-pro' (critical/payment/security/compliance keyword match, bugDetectionSensitivity==='high') now call getGoogleModel('reasoning'), resolving through MODEL_DEFAULTS.google.reasoning='gemini-2.5-pro' -- same effective model, now centrally routed.",
+      "priority": "critical",
+      "acceptance_criteria": ["grep for the literal 'gemini-2.5-pro' inside autoSelectModel() returns zero matches", "getGoogleModel('reasoning') resolves to 'gemini-2.5-pro' today, preserving identical runtime behavior"]
+    },
+    {
+      "id": "FR-3",
+      "title": "Preserve the pre-existing non-Gemini accessibility branch untouched",
+      "description": "autoSelectModel() has one branch returning the literal 'claude-sonnet-4-6' for an accessibility-specific code path -- out of scope for a Gemini-pin SD and left byte-identical.",
+      "priority": "high",
+      "acceptance_criteria": ["the 'claude-sonnet-4-6' literal and its surrounding branch are unmodified in the diff"]
+    },
+    {
+      "id": "FR-4",
+      "title": "Zero unallowlisted violations in scripts/lint/gemini-pin-lint.mjs for this file",
+      "description": "Running the campaign's child-B lint deliverable (scripts/lint/gemini-pin-lint.mjs --all) against lib/testing/vision-qa-agent.js reports 0 unallowlisted gemini- literal violations after the fix (was 9 before), with no new gemini-pin-allowlist.json entries required for this file.",
+      "priority": "high",
+      "acceptance_criteria": ["node scripts/lint/gemini-pin-lint.mjs --all reports 0 violations in lib/testing/vision-qa-agent.js", "scripts/lint/gemini-pin-allowlist.json unchanged"]
+    },
+    {
+      "id": "FR-5",
+      "title": "No behavior change: 12/12 branch parity vs pre-fix commit",
+      "description": "For every one of the 9 rewritten branches plus the 3 pre-existing non-Gemini branches (accessibility + any others), the resolved model value after the fix is identical to the literal returned before the fix, confirmed by differential execution comparing pre-fix (git show <sha>~1:path) and post-fix module output across representative config inputs.",
+      "priority": "critical",
+      "acceptance_criteria": ["12/12 branch outputs match between pre-fix and post-fix versions of autoSelectModel()", "TESTING sub-agent evidence records the differential comparison method and result"]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Single-file change", "description": "Only lib/testing/vision-qa-agent.js is modified (import addition + 9 return-statement rewrites); lib/config/model-config.js is read-only, no SSOT changes." },
+    { "id": "TR-2", "title": "No schema or migration changes", "description": "Pure application-code consolidation; no database/migrations/ files touched." },
+    { "id": "TR-3", "title": "Windows execSync git-ref gotcha for verification scripts", "description": "Any verification script comparing pre-fix vs post-fix content via git show must use <sha>~1:<path> rather than <sha>^:<path> -- on Windows, cmd.exe's execSync degrades '^' silently, producing a false pre-fix==post-fix match." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Lint sweep on the fixed file", "type": "static", "expected": "scripts/lint/gemini-pin-lint.mjs --all reports 0 unallowlisted violations for lib/testing/vision-qa-agent.js (was 9)" },
+    { "id": "TS-2", "scenario": "Branch-parity differential execution", "type": "differential", "expected": "All 12 autoSelectModel() branches (9 rewritten + 3 untouched) return the same effective model string pre-fix and post-fix" },
+    { "id": "TS-3", "scenario": "getGoogleModel purpose resolution sanity check", "type": "unit", "expected": "getGoogleModel('vision') === 'gemini-2.5-flash' and getGoogleModel('reasoning') === 'gemini-2.5-pro' under default env (no purpose-specific override set)" }
+  ],
+  "acceptance_criteria": [
+    "lib/testing/vision-qa-agent.js has 0 hardcoded gemini- literal returns in autoSelectModel()",
+    "gemini-pin-lint.mjs reports 0 violations for this file",
+    "TESTING sub-agent evidence confirms 12/12 branch parity"
+  ],
+  "risks": [
+    { "risk": "Consolidation accidentally changes the effective model for a branch", "mitigation": "12/12 branch-parity differential test against pre-fix commit before merge", "severity": "low" },
+    { "risk": "Pre-existing ESM/CJS mixed-module defect in vision-qa-agent.js makes the whole subsystem genuinely unloadable at runtime today, independent of this fix", "mitigation": "Explicitly out of scope; flagged as a completion-flags finding routed to harness_backlog for a separate SD, not silently absorbed or fixed here", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["VisionQAAgent.autoSelectModel() callers within the vision-QA testing subsystem"],
+    "dependencies": ["lib/config/model-config.js getGoogleModel(purpose) SSOT (read-only dependency, unmodified)"],
+    "data_contracts": ["none"],
+    "runtime_config": ["Purpose-specific env overrides for 'vision' and 'reasoning' Google model purposes now apply to this file where they previously did not (e.g. GOOGLE_MODEL_VISION, GOOGLE_MODEL_REASONING per model-config.js env-var convention)"],
+    "observability_rollout": ["Verified via scripts/lint/gemini-pin-lint.mjs --all (CI-visible), plus TESTING sub-agent branch-parity evidence stored in sub_agent_execution_results"]
+  },
+  "system_architecture": {
+    "summary": "Two literal-return branches in one file are re-pointed at the existing purpose-keyed Gemini model registry; no new components introduced.",
+    "components": [
+      { "name": "lib/testing/vision-qa-agent.js", "change": "autoSelectModel(): 9 hardcoded gemini- literal returns replaced with getGoogleModel('vision')/getGoogleModel('reasoning') calls; new import of getGoogleModel added" },
+      { "name": "lib/config/model-config.js", "change": "none (read-only SSOT consumed by the fix)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Direct read-and-replace of literal returns with SSOT accessor calls, verified by lint and differential branch-parity testing.",
+    "steps": [
+      "Add getGoogleModel import to lib/testing/vision-qa-agent.js",
+      "Replace all 7 'gemini-2.5-flash' literal returns in autoSelectModel() with getGoogleModel('vision')",
+      "Replace both 'gemini-2.5-pro' literal returns with getGoogleModel('reasoning')",
+      "Leave the 'claude-sonnet-4-6' accessibility branch untouched",
+      "Run gemini-pin-lint.mjs --all to confirm 0 violations",
+      "Run differential branch-parity check against the pre-fix commit"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: node scripts/lint/gemini-pin-lint.mjs --all", "expected_outcome": "Reports 0 unallowlisted gemini- literal violations for lib/testing/vision-qa-agent.js (down from 9 pre-fix)" },
+    { "step_number": 2, "instruction": "Run: node -e \"import('./lib/config/model-config.js').then(m => console.log(m.getGoogleModel('vision'), m.getGoogleModel('reasoning')))\"", "expected_outcome": "Prints 'gemini-2.5-flash gemini-2.5-pro', matching the values autoSelectModel() now resolves to via the SSOT" },
+    { "step_number": 3, "instruction": "git show <pre-fix-sha>~1:lib/testing/vision-qa-agent.js > /tmp/pre.js and diff the autoSelectModel() branch outputs against the current file for all 12 branches", "expected_outcome": "All 12 branch outputs are identical pre-fix vs post-fix (0 behavioral diffs)" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-D" }
+}
