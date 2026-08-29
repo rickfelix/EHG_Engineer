@@ -12,6 +12,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 // non-existent capability_gaps column (which 42703-errored every live run).
 import { buildReviewArtifact } from '../../lib/pipeline/management-review-artifact.mjs';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+import { isFixtureVenture } from '../../lib/chairman/chairman-actionable.mjs';
 
 const supabase = createSupabaseServiceClient();
 const STALE_THRESHOLD_HOURS = 24;
@@ -253,6 +254,54 @@ async function gatherVentureData() {
   };
 }
 
+// QF-20260829-286: chairman commission d4bc1bab (Solomon relay 2544151c, 2026-08-28) — five
+// standing Friday-pulse questions, using ONLY existing instruments/cadences (no new dashboard,
+// governance loop, or monitoring subsystem). Where no instrument exists (Q5), the caller renders
+// UNKNOWN rather than this function inventing tracking to complete the framework.
+async function gatherFridayPulseData() {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Paginated to match this file's established discipline against silent under-reporting on a
+  // table that grows with the factory's output (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001).
+  let activeVentures;
+  try {
+    activeVentures = await fetchAllPaginated(() => supabase
+      .from('ventures')
+      .select('name, is_demo, orchestrator_state, dwell_days')
+      .eq('status', 'active')
+      .order('id', { ascending: true }));
+  } catch {
+    activeVentures = [];
+  }
+  const blocked = (activeVentures || [])
+    .filter(v => !isFixtureVenture(v) && v.orchestrator_state === 'blocked')
+    .map(v => ({ name: v.name, ageDays: v.dwell_days }));
+
+  const { count: stageCrossings } = await supabase
+    .from('venture_stage_transitions')
+    .select('id', { count: 'exact', head: true })
+    .gte('approved_at', weekAgo);
+
+  let sdsThisWeek;
+  try {
+    sdsThisWeek = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('venture_id')
+      .gte('created_at', weekAgo));
+  } catch {
+    sdsThisWeek = [];
+  }
+  const ventureFacing = (sdsThisWeek || []).filter(s => s.venture_id).length;
+  const harnessWork = (sdsThisWeek || []).length - ventureFacing;
+
+  const { count: overrideCount } = await supabase
+    .from('bypass_ledger')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', weekAgo);
+
+  return { blocked, stageCrossings, ventureFacing, harnessWork, overrideCount };
+}
+
 async function gatherPipelineData(baselineData, sdData) {
   // Table eva_intake_queue does not exist yet
   return {
@@ -266,7 +315,7 @@ async function gatherPipelineData(baselineData, sdData) {
   };
 }
 
-function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData, gapData) {
+function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData, gapData, pulseData) {
   const staleWarnings = freshnessChecks.filter(f => !f.fresh);
   const lines = [];
 
@@ -303,6 +352,16 @@ function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureD
     lines.push(`- ${v.name}: Stage ${v.stage}`);
   }
 
+  // QF-20260829-286: chairman commission d4bc1bab — 5 standing weekly questions, existing
+  // instruments only. The 3:1-style ratio below is an observation, never a pass/fail target.
+  lines.push('');
+  lines.push('## Friday Pulse (5 questions)');
+  lines.push(`- Blocked real ventures + age: ${pulseData.blocked.length > 0 ? pulseData.blocked.map(v => `${v.name} (${v.ageDays ?? 'unknown'}d)`).join(', ') : 'None'}`);
+  lines.push(`- Stage boundary crossed this week: ${pulseData.stageCrossings > 0 ? `Yes (${pulseData.stageCrossings})` : 'No'}`);
+  lines.push(`- Venture-facing vs harness-work ratio (7d): ${pulseData.ventureFacing}:${pulseData.harnessWork}`);
+  lines.push(`- Gate-decision overrides (7d): ${pulseData.overrideCount}`);
+  lines.push('- Blocked-time attribution (chairman/tooling/fleet): UNKNOWN — no instrument exists');
+
   if (gapData && gapData.hasGaps) {
     lines.push('');
     lines.push('## Capability Gaps');
@@ -335,17 +394,18 @@ async function generateReview() {
   }
 
   // Gather all data in parallel
-  const [baselineData, sdData, okrData, ventureData, riskData, gapData] = await Promise.all([
+  const [baselineData, sdData, okrData, ventureData, riskData, gapData, pulseData] = await Promise.all([
     gatherBaselineData(),
     gatherSDData(),
     gatherOKRData(),
     gatherVentureData(),
     gatherRiskData(),
     gatherGapData(),
+    gatherFridayPulseData(),
   ]);
 
   const pipelineData = await gatherPipelineData(baselineData, sdData);
-  const narrative = buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData, gapData);
+  const narrative = buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData, gapData, pulseData);
 
   console.log('\nReview Summary:');
   console.log(`  SDs: ${sdData.total} total, ${sdData.completed} completed, ${sdData.inProgress + sdData.active} in-flight`);
