@@ -1988,6 +1988,10 @@ function parseCheckinArgs(argv) {
 }
 
 async function main() {
+  // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2): identifies this recurring task to the
+  // context-usage capture pipeline (.claude/context-usage-feed.cjs reads this env var).
+  // Never overrides a caller-set value (e.g. a different loop wrapping worker-checkin.cjs).
+  if (!process.env.CLAUDE_LOOP_NAME) process.env.CLAUDE_LOOP_NAME = 'worker-checkin';
   const sessionId = process.env.CLAUDE_SESSION_ID;
   if (!sessionId) {
     console.log(JSON.stringify({ ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' }, null, 2));
@@ -2010,6 +2014,12 @@ async function main() {
   try {
     const { tickSmsOutboundSweep } = require('../lib/checkin/sms-outbound-tick.cjs');
     await tickSmsOutboundSweep({ supabase: sb });
+  } catch { /* non-fatal — the real checkin result below must still print regardless */ }
+  // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-3): fail-soft, same piggyback pattern as the
+  // SMS tick above — a sync failure must never block or fail the check-in itself.
+  try {
+    const { tickContextUsageSync } = require('../lib/checkin/context-usage-sync-tick.cjs');
+    await tickContextUsageSync();
   } catch { /* non-fatal — the real checkin result below must still print regardless */ }
   console.log(JSON.stringify(result, null, 2));
   // SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the

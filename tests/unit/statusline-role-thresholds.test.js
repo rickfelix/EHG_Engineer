@@ -1,6 +1,6 @@
 // Unit tests for role-aware context-compaction thresholds.
 // SD-LEO-INFRA-COORDINATOR-CRON-LIFECYCLE-001
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'module';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -138,6 +138,9 @@ describe('compaction-thresholds: TS-7 adam role detection + earlier thresholds',
 describe('context-usage-feed: TS-8 burn-feed entry shape + throttle (SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001)', () => {
   const feed = require('../../.claude/context-usage-feed.cjs');
   const sample = { sessionId: 's1', modelId: 'claude-x', contextUsed: 1000, contextSize: 2000, usagePercent: 50, inputTokens: 400, outputTokens: 100, cacheCreationTokens: 300, cacheReadTokens: 200, status: 'HEALTHY', cwd: 'C:/x', now: new Date('2026-07-09T00:00:00Z') };
+  const savedLoopName = process.env.CLAUDE_LOOP_NAME;
+  beforeEach(() => { delete process.env.CLAUDE_LOOP_NAME; });
+  afterEach(() => { if (savedLoopName === undefined) delete process.env.CLAUDE_LOOP_NAME; else process.env.CLAUDE_LOOP_NAME = savedLoopName; });
 
   it('buildUsageEntry matches the sync-context-usage transformEntry field shape', () => {
     const e = feed.buildUsageEntry(sample);
@@ -161,5 +164,51 @@ describe('context-usage-feed: TS-8 burn-feed entry shape + throttle (SD-LEO-INFR
   });
   it('rejects a malformed next entry (no percent) — never appends garbage', () => {
     expect(feed.shouldAppendUsage(null, { status: 'HEALTHY' })).toBe(false);
+  });
+
+  // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C FR-2 (TS-1, TS-2)
+  describe('FR-2: loop_name capture', () => {
+    it('TS-2: omits loop_name entirely when CLAUDE_LOOP_NAME is unset (not set to null)', () => {
+      const e = feed.buildUsageEntry(sample);
+      expect(Object.prototype.hasOwnProperty.call(e, 'loop_name')).toBe(false);
+    });
+    it('TS-1: includes loop_name when CLAUDE_LOOP_NAME is set', () => {
+      process.env.CLAUDE_LOOP_NAME = 'worker-checkin';
+      const e = feed.buildUsageEntry(sample);
+      expect(e.loop_name).toBe('worker-checkin');
+    });
+  });
+});
+
+// SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C FR-2a (TS-3, TS-6)
+describe('sync-context-usage transformEntry (FR-2a: LONG-key fix + loop_name)', () => {
+  const feed = require('../../.claude/context-usage-feed.cjs');
+  let transformEntry;
+  beforeAll(async () => {
+    ({ transformEntry } = await import('../../scripts/sync-context-usage.js'));
+  });
+
+  it('TS-3: is exported and reads the LONG keys buildUsageEntry actually emits', () => {
+    const entry = { session_id: 's1', timestamp: '2026-08-29T00:00:00.000Z', model_id: 'claude-x', context_used: 1000, context_size: 2000, usage_percent: 50, input_tokens: 400, output_tokens: 100, cache_creation_tokens: 300, cache_read_tokens: 200, status: 'HEALTHY', compaction_detected: false, working_directory: 'C:/x' };
+    const t = transformEntry(entry);
+    expect(t.session_id).toBe('s1');
+    expect(t.timestamp).toBe('2026-08-29T00:00:00.000Z');
+    expect(t.usage_percent).toBe(50);
+    expect(t.cache_read_tokens).toBe(200);
+  });
+
+  it('TS-6: round-trip through buildUsageEntry -> transformEntry has zero undefined required fields', () => {
+    const built = feed.buildUsageEntry({ sessionId: 's1', modelId: 'claude-x', contextUsed: 1000, contextSize: 2000, usagePercent: 50, inputTokens: 400, outputTokens: 100, cacheCreationTokens: 300, cacheReadTokens: 200, status: 'HEALTHY', cwd: 'C:/x', now: new Date('2026-08-29T00:00:00Z') });
+    const t = transformEntry(built);
+    for (const key of ['session_id', 'timestamp', 'model_id', 'usage_percent', 'input_tokens', 'output_tokens', 'cache_creation_tokens', 'cache_read_tokens']) {
+      expect(t[key], `${key} should not be undefined`).not.toBeUndefined();
+    }
+  });
+
+  it('passes loop_name through when present, omits when absent', () => {
+    const withLoop = transformEntry({ session_id: 's1', timestamp: 't', loop_name: 'worker-checkin' });
+    expect(withLoop.loop_name).toBe('worker-checkin');
+    const withoutLoop = transformEntry({ session_id: 's1', timestamp: 't' });
+    expect(Object.prototype.hasOwnProperty.call(withoutLoop, 'loop_name')).toBe(false);
   });
 });

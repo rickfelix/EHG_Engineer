@@ -22,8 +22,12 @@ function shouldAppendUsage(prevState, next) {
 }
 
 // Build a JSONL entry matching scripts/sync-context-usage.js transformEntry field shape.
+// SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2): loop_name identifies a recurring task an
+// interactive Claude Code session is running (e.g. a /loop-driven fleet worker's check-in
+// cycle). Read from CLAUDE_LOOP_NAME, OMITTED from the entry (not set to null) when unset —
+// matches this function's existing pattern of falling back rather than emitting a null key.
 function buildUsageEntry({ sessionId, modelId, contextUsed, contextSize, usagePercent, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens, status, cwd, now }) {
-  return {
+  const entry = {
     session_id: sessionId || 'unknown',
     timestamp: (now instanceof Date ? now : new Date()).toISOString(),
     model_id: modelId || 'unknown',
@@ -38,6 +42,8 @@ function buildUsageEntry({ sessionId, modelId, contextUsed, contextSize, usagePe
     compaction_detected: false,
     working_directory: cwd || '',
   };
+  if (process.env.CLAUDE_LOOP_NAME) entry.loop_name = process.env.CLAUDE_LOOP_NAME;
+  return entry;
 }
 
 module.exports = { shouldAppendUsage, buildUsageEntry };

@@ -16,6 +16,12 @@
  *   node scripts/sync-context-usage.js --analyze    # Analyze compaction patterns
  *
  * Based on research: Token Accounting & Memory Utilization (Dec 2025)
+ *
+ * SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-1): this ccusage-style pipeline was extended
+ * rather than replaced with OpenTelemetry -- measured, not assumed: 0 of 62 package.json
+ * dependencies match /otel|opentelemetry|telemetry|tracing/, and the only repo hits for
+ * "opentelemetry" are archived (scripts/archive/codex-integration/), confirming no live OTel
+ * integration exists anywhere in this repo.
  * ============================================================================
  */
 
@@ -24,6 +30,7 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -91,24 +98,34 @@ async function getNewEntries(sinceLine = 0) {
 }
 
 /**
- * Transform local entry to database schema
+ * Transform local entry to database schema.
+ *
+ * SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2a, TESTING evidence f1af6634): this previously
+ * read SHORT keys (entry.session, entry.ts, entry.percent, ...) while the only real writer,
+ * .claude/context-usage-feed.cjs's buildUsageEntry, emits LONG keys matching the DB column
+ * names 1:1 (entry.session_id, entry.timestamp, entry.usage_percent, ...) -- a live JSONL
+ * census found 619,600 of 619,983 lines in the LONG shape, silently producing a row of mostly
+ * undefined fields (including the NOT NULL session_id) on every sync attempt. Read the LONG
+ * keys buildUsageEntry actually writes; pass loop_name through when present (FR-2).
  */
 function transformEntry(entry) {
-  return {
-    session_id: entry.session,
-    timestamp: entry.ts,
-    model_id: entry.model,
+  const transformed = {
+    session_id: entry.session_id,
+    timestamp: entry.timestamp,
+    model_id: entry.model_id,
     context_used: entry.context_used,
     context_size: entry.context_size,
-    usage_percent: entry.percent,
-    input_tokens: entry.input,
-    output_tokens: entry.output,
-    cache_creation_tokens: entry.cache_create,
-    cache_read_tokens: entry.cache_read,
+    usage_percent: entry.usage_percent,
+    input_tokens: entry.input_tokens,
+    output_tokens: entry.output_tokens,
+    cache_creation_tokens: entry.cache_creation_tokens,
+    cache_read_tokens: entry.cache_read_tokens,
     status: entry.status,
-    compaction_detected: entry.compaction,
-    working_directory: entry.cwd
+    compaction_detected: entry.compaction_detected,
+    working_directory: entry.working_directory,
   };
+  if (entry.loop_name) transformed.loop_name = entry.loop_name;
+  return transformed;
 }
 
 /**
@@ -310,15 +327,19 @@ async function analyzeCompaction() {
   console.log('═'.repeat(60) + '\n');
 }
 
-// CLI
-const args = process.argv.slice(2);
+// CLI — SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2a, TESTING evidence f1af6634): gated behind
+// isMainModule so importing this file (e.g. to reuse transformEntry/syncToDatabase from
+// worker-checkin.cjs, or from a test) does not unconditionally trigger a live sync as a
+// side effect of the import itself.
+if (isMainModule(import.meta.url)) {
+  const args = process.argv.slice(2);
 
-if (args.includes('--summary')) {
-  showSummary();
-} else if (args.includes('--analyze')) {
-  analyzeCompaction();
-} else if (args.includes('--help')) {
-  console.log(`
+  if (args.includes('--summary')) {
+    showSummary();
+  } else if (args.includes('--analyze')) {
+    analyzeCompaction();
+  } else if (args.includes('--help')) {
+    console.log(`
 LEO Protocol - Context Usage Sync
 
 Usage:
@@ -328,7 +349,10 @@ Usage:
   node scripts/sync-context-usage.js --help       Show this help
 
 Log file: .claude/logs/context-usage.jsonl
-  `);
-} else {
-  syncToDatabase();
+    `);
+  } else {
+    syncToDatabase();
+  }
 }
+
+export { transformEntry, syncToDatabase };
