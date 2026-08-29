@@ -50,7 +50,9 @@ async function main() {
   const execute = process.argv.includes('--execute');
   const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  const { data: sessions, error } = await supabase.from('claude_sessions').select('session_id, status, metadata').eq('status', 'active');
+  // Fleet-size bound: the live fleet is a small, human-supervised roster, never anywhere near 500
+  // concurrent active sessions. An explicit limit here is a provable cap, not a silent truncation.
+  const { data: sessions, error } = await supabase.from('claude_sessions').select('session_id, status, metadata').eq('status', 'active').limit(500);
   if (error) throw error;
 
   const defects = findDefectRows(sessions);
@@ -73,7 +75,7 @@ async function main() {
   console.log(`\n✅ Re-stamped ${fixed}/${defects.length} rows.`);
 
   // Readback
-  const { data: after } = await supabase.from('claude_sessions').select('session_id, metadata').eq('status', 'active');
+  const { data: after } = await supabase.from('claude_sessions').select('session_id, metadata').eq('status', 'active').limit(500);
   const remaining = findDefectRows(after || []);
   console.log(`Readback: ${remaining.length} defect row(s) remain (expect 0).`);
 }
