@@ -25,11 +25,17 @@
 -- auto-advance decisions fleet-wide. Fixing that RPC requires a chairman-gated SECURITY
 -- DEFINER migration (TIER-2, 3-factor gate) and is explicitly OUT OF SCOPE for this migration
 -- and this SD's locked scope -- tracked separately via the signal, not silently absorbed here.
+--
+-- QF-20260828-273: this file's original ::jsonb cast never matched the live column type
+-- (chairman_dashboard_config.hard_gate_stages is integer[], not jsonb) -- the merged file could
+-- never actually apply ('column is of type integer[] but expression is of type jsonb'). The
+-- coordinator applied the corrected integer[] form directly to the live DB on 2026-08-29 with
+-- post-apply verification; this file is corrected here so a future replay/fresh-env apply works.
 
 BEGIN;
 
 UPDATE chairman_dashboard_config
-SET hard_gate_stages = '[3,5,10,13,16,17,18,19,24,25,26]'::jsonb
+SET hard_gate_stages = ARRAY[3,5,10,13,16,17,18,19,24,25,26]::integer[]
 WHERE config_key = 'default';
 
 DO $$
@@ -39,7 +45,7 @@ BEGIN
   SELECT COUNT(*) INTO v_count
   FROM chairman_dashboard_config
   WHERE config_key = 'default'
-    AND hard_gate_stages = '[3,5,10,13,16,17,18,19,24,25,26]'::jsonb;
+    AND hard_gate_stages = ARRAY[3,5,10,13,16,17,18,19,24,25,26]::integer[];
 
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'POST-APPLY FAILED: expected exactly 1 chairman_dashboard_config row with config_key=default and the corrected hard_gate_stages, found %', v_count;
