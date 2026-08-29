@@ -20,6 +20,20 @@ tags: [documentation, eva]
 > the top-level stage-count literals only; a full per-stage content regeneration against the
 > live `venture_stages` SSOT is a separate, larger content-authoring effort out of this SD's
 > scope.
+>
+> **STAGES 23-27 CORRECTION (SD-LEO-INFRA-STAGE-TEMPLATE-DISPATCH-REMAINDER-001, 2026-08-28):**
+> this DRIFT SD's file-content shift for stages 23-27 has now shipped -- the "Marketing
+> Preparation" / "Launch Execution" content and `stage-23-launch-execution.js` /
+> `stage-24-metrics-learning.js` analysis-step names below never existed in the codebase and
+> should not be trusted. The live 23-27 range is: **23 dedicated_venture_uat** (`stage-23.js`,
+> new; wraps `lib/eva/uat-robustness-gate.js#checkUatRobustnessGate()`), **24
+> launch_readiness_gate** (`stage-24.js`, `analysis-steps/stage-23-launch-readiness.js` -- the
+> analysis-step FILE keeps its original name, only the owning `stage-NN.js` moved), **25
+> go_live** (`stage-25.js`, `analysis-steps/stage-24-go-live.js`), **26 post_launch_review**
+> (`stage-26.js`, `analysis-steps/stage-25-post-launch-review.js`), **27 growth_playbook**
+> (`stage-27.js`, new file; `analysis-steps/stage-26-growth-playbook.js`). See
+> `lib/eva/stage-templates/stage-key-registry.js` for the canonical stage_number->stage_key
+> binding these five files are checked against at registration time.
 
 ## Overview
 
