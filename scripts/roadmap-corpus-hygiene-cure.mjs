@@ -57,10 +57,14 @@ async function main() {
     console.log(`⚠️  ${report.standalone_unclassified_count} standalone rows are NOT classified (new since PRD authoring) — skipping them, not curing.`);
   }
 
+  const onlyFamily = process.argv.includes('--only-family');
   const toCure = [
     ...report.family_cure.map((r) => ({ ...r, classification: 'family-cure' })),
-    ...report.standalone_curable.map((r) => ({ ...r, classification: 'standalone-non-buildable' })),
+    ...(onlyFamily ? [] : report.standalone_curable.map((r) => ({ ...r, classification: 'standalone-non-buildable' }))),
   ];
+  if (onlyFamily) {
+    console.log(`--only-family: excluding ${report.standalone_curable_count} standalone-curable rows from this run.`);
+  }
 
   if (!execute) {
     console.log(`\nDRY RUN — would cure ${toCure.length} rows. Pass --execute to apply.`);
