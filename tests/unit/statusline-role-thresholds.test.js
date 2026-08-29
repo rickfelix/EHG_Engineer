@@ -184,8 +184,38 @@ describe('context-usage-feed: TS-8 burn-feed entry shape + throttle (SD-LEO-INFR
 describe('sync-context-usage transformEntry (FR-2a: LONG-key fix + loop_name)', () => {
   const feed = require('../../.claude/context-usage-feed.cjs');
   let transformEntry;
+  let MAX_ENTRIES_PER_SYNC;
   beforeAll(async () => {
-    ({ transformEntry } = await import('../../scripts/sync-context-usage.js'));
+    const mod = await import('../../scripts/sync-context-usage.js');
+    transformEntry = mod.transformEntry;
+    MAX_ENTRIES_PER_SYNC = mod.MAX_ENTRIES_PER_SYNC;
+  });
+
+  // TESTING finding F2 (evidence 0f1303ad): the module source must reference lastEntry.timestamp,
+  // not lastEntry.ts, in the state-save call — a source-pin since exercising syncToDatabase()
+  // itself requires a live DB.
+  it('F2: source no longer reads the SHORT-key lastEntry.ts for sync-state persistence', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
+    expect(src).not.toMatch(/lastSyncedTimestamp:\s*lastEntry\.ts\b/);
+    expect(src).toMatch(/lastSyncedTimestamp:\s*lastEntry\.timestamp/);
+  });
+
+  it('F3: exports a bounded MAX_ENTRIES_PER_SYNC constant', () => {
+    expect(typeof MAX_ENTRIES_PER_SYNC).toBe('number');
+    expect(MAX_ENTRIES_PER_SYNC).toBeGreaterThan(0);
+  });
+
+  // TESTING finding F1 (evidence 0f1303ad): sync state must never advance past a batch that
+  // failed to persist — source-pin since exercising the full syncToDatabase() batch loop
+  // requires a live/mocked supabase client the module does not currently inject.
+  it('F1: source stops advancing on the first batch error rather than skipping past it', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
+    expect(src).toMatch(/errors \+= batch\.length;\s*\n\s*break;/);
+    expect(src).toMatch(/if \(!lastPersistedEntry\)/);
   });
 
   it('TS-3: is exported and reads the LONG keys buildUsageEntry actually emits', () => {

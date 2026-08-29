@@ -39,6 +39,12 @@ const supabase = createSupabaseClient();
 const LOG_FILE = path.join(process.cwd(), '.claude/logs/context-usage.jsonl');
 const STATE_FILE = path.join(process.cwd(), '.claude/logs/.sync-state.json');
 const BATCH_SIZE = 100;
+// SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (TESTING finding F3, evidence 0f1303ad): now invoked
+// on every worker-checkin.cjs tick fleet-wide. Without a cap, the first post-merge tick against
+// a large never-synced backlog (measured: ~620k lines) would process the entire thing in one
+// call, risking a fleet-wide check-in stall. Bounding per-invocation work leaves the remainder
+// for subsequent ticks rather than trying to fix it all in one pass.
+const MAX_ENTRIES_PER_SYNC = 5000;
 
 /**
  * Load sync state (last synced line number)
@@ -138,18 +144,26 @@ async function syncToDatabase() {
   const state = loadSyncState();
   console.log(`Last synced line: ${state.lastSyncedLine}`);
 
-  const entries = await getNewEntries(state.lastSyncedLine);
+  const allEntries = await getNewEntries(state.lastSyncedLine);
 
-  if (entries.length === 0) {
+  if (allEntries.length === 0) {
     console.log('✅ No new entries to sync');
     return;
   }
 
-  console.log(`Found ${entries.length} new entries to sync`);
+  // TESTING finding F3 (evidence 0f1303ad): bound per-invocation work.
+  const entries = allEntries.slice(0, MAX_ENTRIES_PER_SYNC);
+  console.log(`Found ${allEntries.length} new entries to sync${allEntries.length > entries.length ? ` (processing first ${entries.length}, remainder deferred to next tick)` : ''}`);
 
   // Batch upload
   let synced = 0;
   let errors = 0;
+  // TESTING finding F1 (evidence 0f1303ad): the previous version advanced past every entry in
+  // this call regardless of per-batch errors, permanently skipping failed entries next run.
+  // Track the furthest LINE NUMBER actually persisted and STOP at the first batch failure —
+  // never advance state past a line that was not confirmed written, so a transient error is
+  // retried on the next tick instead of silently dropped forever.
+  let lastPersistedEntry = null;
 
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const batch = entries.slice(i, i + BATCH_SIZE);
@@ -164,16 +178,25 @@ async function syncToDatabase() {
     if (error) {
       console.error(`Error syncing batch ${i / BATCH_SIZE + 1}:`, error.message);
       errors += batch.length;
+      break; // stop advancing state past a confirmed failure
     } else {
       synced += batch.length;
+      lastPersistedEntry = batch[batch.length - 1];
     }
   }
 
-  // Update state
-  const lastEntry = entries[entries.length - 1];
+  // Update state — only as far as the last batch that actually persisted.
+  if (!lastPersistedEntry) {
+    console.log(`\n❌ Errors: ${errors} entries; sync state NOT advanced (retry next tick)`);
+    console.log('═'.repeat(60) + '\n');
+    return;
+  }
+  const lastEntry = lastPersistedEntry;
   saveSyncState({
     lastSyncedLine: lastEntry._lineNumber,
-    lastSyncedTimestamp: lastEntry.ts
+    // TESTING finding F2 (evidence 0f1303ad): was entry.ts, the same SHORT-key defect class
+    // FR-2a fixes elsewhere in this function — buildUsageEntry emits `timestamp`, never `ts`.
+    lastSyncedTimestamp: lastEntry.timestamp,
   });
 
   console.log(`\n✅ Synced: ${synced} entries`);
@@ -355,4 +378,4 @@ Log file: .claude/logs/context-usage.jsonl
   }
 }
 
-export { transformEntry, syncToDatabase };
+export { transformEntry, syncToDatabase, MAX_ENTRIES_PER_SYNC };
