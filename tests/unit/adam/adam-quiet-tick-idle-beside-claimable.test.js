@@ -6,6 +6,10 @@
  * checkIdleBesideClaimable() must now exclude role/non_fleet sessions from the
  * idle count (via the canonical isBuildForbiddenSession predicate) and return
  * the draft count under the honest name rawUnclaimedCount.
+ *
+ * SCOPE RIDER (coordinator census specimen 78a073be): a released shell (released_at
+ * set) can still be tool-fresh via the /clear-survivor daemon, so it must be excluded
+ * outright -- never counted as idle capacity regardless of how recent last_tool_at is.
  */
 import { describe, it, expect } from 'vitest';
 import { checkIdleBesideClaimable } from '../../../scripts/adam-quiet-tick.mjs';
@@ -63,5 +67,25 @@ describe('checkIdleBesideClaimable', () => {
     const sb = sbWith(0, []);
     const result = await checkIdleBesideClaimable(sb);
     expect(result).toBeNull();
+  });
+
+  it('excludes a released shell even when last_tool_at is fresh and AFTER released_at (the /clear-survivor daemon case)', async () => {
+    const releasedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const freshAfterRelease = new Date().toISOString(); // daemon-driven tool call, newer than released_at
+    const seats = [
+      { session_id: 'released-shell', released_at: releasedAt, last_tool_at: freshAfterRelease, metadata: {} },
+    ];
+    const sb = sbWith(9, seats);
+    const result = await checkIdleBesideClaimable(sb);
+    expect(result).toBeNull(); // released shell must never count as idle, regardless of last_tool_at ordering
+  });
+
+  it('still counts a genuine never-released fleet worker as idle', async () => {
+    const seats = [
+      { session_id: 'worker-1', released_at: null, last_tool_at: new Date().toISOString(), metadata: {} },
+    ];
+    const sb = sbWith(4, seats);
+    const result = await checkIdleBesideClaimable(sb);
+    expect(result).toEqual({ idleCount: 1, rawUnclaimedCount: 4 });
   });
 });

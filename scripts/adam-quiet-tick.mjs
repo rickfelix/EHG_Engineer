@@ -780,9 +780,11 @@ async function readSalientState(sb) {
 
 // QF-20260828-922: witnessed 08-28 -- the chairman caught 1 live-idle seat beside 4
 // claimable drafts before any role did. A seat's heartbeat_at/last_tool_at can be kept
-// artificially fresh post-release by the /clear-survivor daemon (a "shell"), so a seat
-// only counts as genuinely idle-and-available when its last real tool call happened
-// AFTER its most recent release (or it was never released at all).
+// artificially fresh post-release by the /clear-survivor daemon (a "shell"). QF-20260829-588
+// scope rider (coordinator census specimen 78a073be, 2026-08-29): the daemon's own activity
+// can push last_tool_at PAST released_at, so a last_tool_at-vs-released_at ordering check
+// cannot be trusted to detect a released shell -- any released_at value at all now excludes
+// the seat outright, regardless of last_tool_at.
 export async function checkIdleBesideClaimable(sb) {
   try {
     // QF-20260829-588: this is the RAW-UNCLAIMED draft count, not the dispatchable-leaf
@@ -802,12 +804,12 @@ export async function checkIdleBesideClaimable(sb) {
       .in('status', ['active', 'idle'])
       .gte('last_tool_at', cutoff)
       .limit(200);
-    // QF-20260829-588: role seats (adam/solomon/coordinator, metadata.non_fleet=true /
-    // role='adam' / is_coordinator=true) are legitimately idle by design -- they must
-    // never count as fleet-worker idle capacity here.
+    // QF-20260829-588: three-limb exclusion -- role seats (adam/solomon/coordinator,
+    // metadata.non_fleet=true / role='adam' / is_coordinator=true) are legitimately idle
+    // by design, and any seat with released_at set is a released shell, not a genuinely
+    // available fleet worker. None of the three ever count as idle fleet-worker capacity.
     const idleCount = (seats || []).filter(
-      (s) => !isBuildForbiddenSession(s.metadata)
-        && (!s.released_at || new Date(s.last_tool_at) > new Date(s.released_at))
+      (s) => !isBuildForbiddenSession(s.metadata) && !s.released_at
     ).length;
     return idleCount > 0 ? { idleCount, rawUnclaimedCount } : null;
   } catch { return null; }
