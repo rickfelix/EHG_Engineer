@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-29](#2026-08-29)
+  - [Infrastructure](#infrastructure-1)
 - [2026-08-28](#2026-08-28)
   - [Infrastructure](#infrastructure)
   - [Features](#features)
@@ -153,6 +155,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-29
+
+### Infrastructure
+
+- **New code-scored smoke-eval harness exercises the production Gemini config path across all 8 current purpose keys** - PR #7648 (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-H, sibling child)
+  - **What shipped**: `lib/eval/gemini-smoke-fixtures.mjs` derives its purpose list programmatically from `Object.keys(MODEL_DEFAULTS.google)` (never a hardcoded array) and builds 25 fixtures (3 per purpose + 1 explicitly `synthetic: true` timeout fixture), so a future sibling adding a 9th purpose key (e.g. a cost-governor) forces a loud fixture-count test failure instead of silently escaping coverage. `scripts/eval/gemini-smoke-eval.mjs` mirrors `scripts/eval/capability-runner.mjs`'s established pattern exactly: a pure `runPipeline(fixtures, executor)` with an injected executor, a `--dry-run` offline self-test (25 fixtures / 27 executor calls / 0 real network calls), and a `--baseline` flag that resolves `getGoogleModel(purpose)` for every purpose (pure config resolution, zero live API cost) and writes the committed reference snapshot `docs/reference/gemini-smoke-eval-baseline.json`. The timeout-fixture aggregation rule ("3 runs, 1 timeout fails") is a named exported constant pair (`TIMEOUT_FIXTURE_RUNS`/`TIMEOUT_FIXTURE_FAIL_THRESHOLD`) plus a pure `evaluateTimeoutFixture()` predicate, not an inline magic number.
+  - **Two spec specifics inherited from the parent SD's scope text could not be verified and were flagged, not guessed silently**: neither "the 2026-08-28 timeout clip" fixture nor "the 2.5-pin baseline" could be located anywhere in-repo or in any queryable DB table (`/signal prd-ambiguous`, signal 039cd683). This SD proceeds on an explicit, documented interpretation instead: the timeout fixture is clearly labeled synthetic (no fabricated real incident behind it), and the baseline is defined as a first-run snapshot of the purpose→model resolution that future weekly scans (a later sibling) diff against.
+  - **A prior LEAD-phase validation pass caught real design gaps before any code was written**: the initial scope framed the Google purpose count against `VALID_PURPOSES` (an 11-entry cross-provider export), which was a factually wrong label for what is actually an 8-entry Google-only subset; validation also required deriving the purpose list programmatically rather than hardcoding it, so a later sibling's 9th purpose key produces a loud test failure rather than silent under-coverage.
+  - **Verification**: LEAD-TO-PLAN 95%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 94%. `gemini-pin-lint.mjs` (sibling B's CI gate) reports 0 unallowlisted literal model-pin violations against the new runtime files. 14 new vitest tests; 121/121 passing across `tests/unit/eval/` + `lib/eval/` with zero regressions.
 
 ## 2026-08-28
 
