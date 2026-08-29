@@ -937,6 +937,25 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log(`   ✅ Merge witness verified: ${mergeWitness.prUrl} (head ${mergeWitness.headBranch}) MERGED + reachable from origin/main.`);
   }
 
+  // SD-LEO-INFRA-HANDOFF-UNREAD-DIRECTIVE-GATE-001: refuse to mark this QF completed
+  // past an unread coordinator amendment (QF-20260828-188, QF-20260828-255 specimens).
+  // Same acknowledged_at-IS-NULL discriminator as lib/fleet/blocker-drain-gate.mjs.
+  // --scope-accepted already signals an explicit human/session attestation, so it
+  // also covers this gate (mirrors handoff.js's --bypass-validation carve-out).
+  if (process.env.CLAUDE_SESSION_ID && !options.scopeAccepted) {
+    try {
+      const { findUnreadDirectives, decideUnreadDirectiveGate, formatUnreadDirectiveMessage } = await import('../../../lib/fleet/unread-directive-gate.mjs');
+      const claimedAt = qf.created_at || null;
+      const rows = await findUnreadDirectives(process.env.CLAUDE_SESSION_ID, qfId, claimedAt, null, { client: supabase });
+      if (decideUnreadDirectiveGate(rows) === 'blocked') {
+        console.error(`\n❌ ${formatUnreadDirectiveMessage(rows)}`);
+        process.exit(1);
+      }
+    } catch (e) {
+      console.warn(`\n⚠️  Unread-directive check failed (fail-open): ${e.message}`);
+    }
+  }
+
   // Update record
   console.log('🔄 Updating quick-fix record...\n');
 

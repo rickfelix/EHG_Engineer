@@ -155,6 +155,31 @@ if (args[0] === 'execute' && sdIdArg) {
     // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Fail-open on DB unavailability
     console.warn(`[handoff.js] ⚠️  Claim check failed (fail-open): ${e.message}`);
   }
+
+  // SD-LEO-INFRA-HANDOFF-UNREAD-DIRECTIVE-GATE-001: refuse to ship past an unread
+  // coordinator amendment to this SD (QF-20260828-188, QF-20260828-255 specimens).
+  // --bypass-validation (already resolved above) also covers this gate.
+  if (process.env.CLAUDE_SESSION_ID && !args.includes('--bypass-validation')) {
+    try {
+      const { findUnreadDirectives, decideUnreadDirectiveGate, formatUnreadDirectiveMessage } = await import('../lib/fleet/unread-directive-gate.mjs');
+      const { lazyServiceClient } = await import('../lib/supabase-client.js');
+      const client = lazyServiceClient();
+      const { data: sdRow } = await client
+        .from('strategic_directives_v2')
+        .select('metadata')
+        .eq('sd_key', sdIdArg)
+        .maybeSingle();
+      const claimHistory = sdRow?.metadata?.claim_history || [];
+      const myClaim = [...claimHistory].reverse().find((c) => c.session_id === process.env.CLAUDE_SESSION_ID);
+      const rows = await findUnreadDirectives(process.env.CLAUDE_SESSION_ID, sdIdArg, myClaim?.claimed_at || null, null, { client });
+      if (decideUnreadDirectiveGate(rows) === 'blocked') {
+        console.error(`[handoff.js] ❌ ${formatUnreadDirectiveMessage(rows)}`);
+        process.exit(1);
+      }
+    } catch (e) {
+      console.warn(`[handoff.js] ⚠️  Unread-directive check failed (fail-open): ${e.message}`);
+    }
+  }
 }
 
 // Execute
