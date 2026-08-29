@@ -1,0 +1,9 @@
+{
+  "entries": [
+    {
+      "file": "scripts/leo-create-sd.js",
+      "line": 177,
+      "note": "CLI help text: '--min-tier-rank <N>' is an argv placeholder, not a numeric comparison of a worker rank against a floor."
+    }
+  ]
+}

@@ -43,14 +43,19 @@ describe('QF-20260706-786: sd-start.js metadata.blocked_on_sd claim gate', () =>
     expect(body).toMatch(/if \(gate\.queryError\) return;/);
   });
 
-  it('is called right after enforceHumanActionGate on the initial claim path', () => {
-    expect(src).toMatch(/enforceHumanActionGate\(sd, effectiveId\);[^]{0,200}enforceBlockedOnSdGate\(sd, effectiveId\)/);
+  it('is called after enforceHumanActionGate (and, since FR-2, enforceTierGate) on the initial claim path', () => {
+    // SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2) inserted enforceTierGate between
+    // enforceHumanActionGate and enforceBlockedOnSdGate, widening the gap from 200 to 350 --
+    // the ordering invariant (both gates still run, in sequence) is what this pins, not an
+    // exact byte count.
+    expect(src).toMatch(/enforceHumanActionGate\(sd, effectiveId\);[^]{0,350}enforceBlockedOnSdGate\(sd, effectiveId\)/);
   });
 
   it('re-calls the gate after orchestrator child routing reassigns sd to a leaf (parity with enforceHumanActionGate)', () => {
     const idx = src.indexOf('Re-enforce cadence gate against the leaf');
     expect(idx).toBeGreaterThan(0);
-    const region = src.slice(idx, idx + 800);
+    // Widened from 800 to 1000 for the same FR-2 enforceTierGate insertion as above.
+    const region = src.slice(idx, idx + 1000);
     expect(region).toMatch(/enforceHumanActionGate\(sd, effectiveId\)/);
     expect(region).toMatch(/enforceBlockedOnSdGate\(sd, effectiveId\)/);
   });

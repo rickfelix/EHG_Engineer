@@ -36,10 +36,10 @@ export const KNOWN_SURFACES = [
   },
   {
     file: 'scripts/sd-start.js',
-    line: null,
-    symbol: '(claim primitive)',
-    posture: 'non-enforcing',
-    note: 'Zero tier code (grep -c tier = 0 as of SD authoring). The atomic claim primitive a worker calls by SD key -- bypasses every other gate. Wired to enforce by this SD (FR-2).',
+    line: 282,
+    symbol: 'enforceTierGate',
+    posture: 'enforcing',
+    note: 'Was zero tier code (grep -c tier = 0) as of SD authoring -- the atomic claim primitive a worker calls by SD key, bypassing every other gate. Wired to enforce by this SD (FR-2): calls tierBlocks(sd, workerTierRank, tieringActive) at both the direct-claim site and the leaf-routed claim site, reusing the same predicate the belt gauge and self-claim already honor.',
   },
   {
     file: 'scripts/lib/claimable-leaves.mjs',
