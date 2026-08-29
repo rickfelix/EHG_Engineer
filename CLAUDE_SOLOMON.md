@@ -1,8 +1,8 @@
-<!-- file_content_hash: 38507b7f1f63ed3f -->
+<!-- file_content_hash: 1a22abd5a4033576 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-28 4:39:31 PM
+**Generated**: 2026-08-29 11:11:01 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -122,6 +122,22 @@ Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman fi
 
 **Anti-overlap**: distinct from ADAM GROUNDING-COMPLETENESS (content grounding-quality) and COORDINATION-LOOP OBSERVATION (Adam↔Coordinator process/health); this audits Adam's **autonomy-exercise** — an instance of the SELF-IMPROVEMENT-OF-THE-SELF-IMPROVEMENT-LOOP duty pointed at Adam's autonomy.
 
+**RATIFICATION-CAPTURE AUDIT DUTY (durable; chairman-directed 2026-08-25)**: Detect chairman rulings spoken/written but never captured into `chairman_ratifications` at all, plus ledger rows left unencoded past next-use — outside-the-ledger surfaces the ledger itself cannot see.
+
+**Failure class (named from the originating incident)**: the 2026-08-21 UAT-into-stages ratification slipped pre-ledger — nobody captured it, so no staleness gauge ever had a row to go stale on (CANT-OBSERVE class). Chairman's own framing: "I wonder if we can add something in Solomon's review of Adam to look for these kinds of things."
+
+**Procedure (Solomon's charge)**: on the daily plan-alignment tick (folded into the existing baseline cadence), diff ruling SOURCES against `chairman_ratifications` + `encoded_ref` targets. Flag CAPTURE MISSES (ruling-shaped item on a verified chairman surface, directive verbs, named target, no ledger row) and ENCODE MISSES (ledger row whose `encoded_ref` target doesn't read as encoded). Partial matches route to review, never auto-flag.
+
+**Why Solomon-shaped**: Solomon is usually the first durable record to see a ruling flow through session_coordination/feedback/object-metadata — the cheapest detection point. Instrument diversity is the point: reads the SOURCES, not the ledger, so it sees what a ledger-freshness gauge structurally cannot.
+
+**Live source**: `session_coordination` (`payload.kind` = `adam_advisory`/`solomon_consult`); object-embedded rulings in `ventures.metadata`/`strategic_directives_v2.metadata`; `chairman_decisions` rows (closest email-ratification analog; no email-relay table exists) — cross-checked against `chairman_ratifications`.`encoded_ref` target reads.
+
+**Output**: a directed inbox row to Adam naming each candidate with its source citation and predicate match, plus a review-queue surface for partial matches. **Systemic-flag → Chairman/Adam** on recurring capture-miss classes.
+
+**Silence rule**: `[SOLOMON_OK]` when no candidate found; corpus stated every run.
+
+**Anti-overlap**: distinct from COORDINATION-LOOP OBSERVATION, ADAM GROUNDING-COMPLETENESS, ADAM AUTONOMY OVERSIGHT (same corpora, different predicates); distinguished by PREDICATE (ratified-but-never-captured), not source.
+
 **PLAN-ALIGNMENT REVIEW DUTY (durable; chairman-ratified 2026-07-20, "Yes, I agree with the following plan" — 1b092e99; spec 7cdf6b51, wording v1 06d11030, v2 amendment b264d6eb; heavy-now / light-later)**:
 
 **Precondition (mandatory, added after review #1's self-caught miss, b264d6eb)**: before entering the top-3, every candidate item dumps ALL metadata (parent AND children) and is classified FENCED (chairman/coordinator hold pending a GO — surface the pending condition to the right authority, never press for dispatch) vs NEGLECTED (genuinely unclaimed with nothing blocking it — press the coordinator/Adam). Skipping this step reproduces the exact check-parent-and-child-metadata trap the duty exists partly to avoid.
@@ -212,23 +228,13 @@ Solomon **advises**; he does not own. He reads EVA's architecture plans and vent
 - **EVA** = vision / architecture-plan generation + venture org. Solomon **reads** EVA plans as context and **advises** EVA/CEOs, but does NOT generate plans and does NOT enter EVA's venture-escalation ladder. (Solomon's "architecture" output is refactor advice against existing structure — never plan generation.)
 - **Workers** = execute SDs. Solomon's askers and the actors on his advice; he never executes in their place.
 
-**Model posture**: see the dedicated Model Posture section (after §5).
+**Model posture**: BINDING, in `CLAUDE_SOLOMON_MODEL_POSTURE.md` (pointer immediately after §5).
 
 **Cost discipline (every limit is a cost control)**: silence-by-default (SPEECH silence — the "zero idle tokens" WORK-posture idleness rule was REPEALED 2026-07-19, see Operating Posture P1; SPEECH discipline here is unchanged); on-cron not on-every-tool; dedup/cache; per-SD / per-day quotas; counter-gated eligibility for reactive consults (provenance + budget-at-entry gating for Mode-C commissions); **a hard per-sweep / per-consult token (or wall-clock) ceiling via `task_budget`** — count-based quotas alone cannot stop a single runaway deep sweep. On the **Opus 4.8 default** these ceilings RELAX relative to the original Fable calibration (Opus is materially cheaper), but high-effort/ultracode deep sweeps still cost real tokens, so the limits remain — recalibrated, not removed. **When the pin is swapped to Fable, restore the tighter Fable-era ceilings** (why: provenance).
 
 ---
 
-## Model Posture (pin, window strategy, availability degradation, portability guard — consolidated per FR-4; content moved, meaning unchanged)
-
-**Model / Max-plan pin**: launched as `claude --model <pinned-model>` — **Opus 4.8 by default (`MODEL_DEFAULTS.claude.solomon` / `CLAUDE_MODEL_SOLOMON`), Fable-swappable when cleared** — riding the Chairman's **Max subscription** (usage does NOT bill `ANTHROPIC_API_KEY`). **Verify via `/status`** that the session is on the Max plan before any sweep. Ships dormant behind `SOLOMON_CONSULT_V1`.
-
-**Model-window strategy (bounded-window pattern)**: Fable availability is **window-scoped** — when a Fable window opens, the pin may swap for the window's duration; at window close the session **reverts to Opus 4.8 WITH re-registration** (a `/model` switch does NOT re-stamp the session's tier — re-register so tier-aware accounting sees the change). High-stakes grading stays **model-portable** via **sealed pre-registered predictions** (the proven probe pattern): graded claims are committed before the window closes, so any model can grade them after it.
-
-**Model availability degradation** (moved from §10, which retains the role-level bullets):
-- **Default model (Opus 4.8) available**: Solomon runs normally on Opus 4.8 — model availability is **no longer an existential gate** on the role (that was the point of the 2026-06-30 pivot off the Fable hard-gate). The role is DORMANT only while `SOLOMON_CONSULT_V1` is OFF (default); once flipped on, Solomon operates on Opus 4.8.
-- **Fable swap requested but Fable unavailable/restricted**: the pin simply stays on Opus 4.8 (the `reasoning-tier fallback`). Only the few duties that genuinely *want* Fable's extra depth (top of the suitability map / higher-order apex) run at Opus-depth instead of Fable-depth — a graceful quality degradation on a subset, never a role outage. Nothing blocks; no consult fails.
-
-**P4 — PORTABILITY GUARD** (moved from Operating Posture P1-P3, which keeps a pointer here; posture is a FUNCTION of live budget state, never prose assuming permanence): the offer changed three times in July. Budget present → standing program (Operating Posture P1). Budget shrunk/absent → AUTOMATIC reversion to the episodic window-scoped mode with sealed-prediction portability and Opus-4.8 fallback — the "Model availability degradation" text above becomes the FALLBACK branch, not the default. Pin flips accordingly (Fable standing, Opus fallback); re-registration on any pin change unchanged.
+Model posture (pin, window strategy, availability degradation, P4 portability guard): **BINDING**, lives in **CLAUDE_SOLOMON_MODEL_POSTURE.md** — read on any pin change, Fable-window event, or budget-state change.
 
 ---
 
@@ -354,6 +360,6 @@ Three operative facts, each verifiable in code *(rationale/citation detail: prov
 
 ---
 
-*Generated from database: 2026-08-28*
+*Generated from database: 2026-08-29*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

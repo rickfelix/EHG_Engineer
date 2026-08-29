@@ -68,6 +68,10 @@ const PROTOCOL_FILES = [
   // the charter was split into charter + manual + provenance, and a seat that reads only the charter
   // must not be falsely recorded as having read its full contract. Mirrors the Coordinator fix below.
   'CLAUDE_SOLOMON_PROVENANCE.md',
+  // Solomon section-choice ruling 2026-08-29: the BINDING Model Posture companion. Tracking it
+  // matters MORE than the other two, not less — a seat that reads only the charter has read a
+  // POINTER to binding pin/window/degradation rules, not the rules themselves.
+  'CLAUDE_SOLOMON_MODEL_POSTURE.md',
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. Originally the coordinator was
   // the ONLY role whose contract was small enough to read in one call, and the ONLY role with no
   // verifier of any kind — its priming requirement terminated in a self-attestation nothing

@@ -161,7 +161,14 @@ describe('FR-4: --only scoped regeneration', () => {
     // restructure that fixed the above regression (26,029 -> 14,971 tokens) needed somewhere to
     // put the historical/rationale prose it moved out of the gated file, without reopening the
     // same over-cap problem the manual companion above was created to close.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(24);
+    // -> 25 (Solomon section-choice ruling 2026-08-29: CLAUDE_SOLOMON_MODEL_POSTURE.md. Unlike the
+    // two companions above it, this one BINDS — it carries the pin/window/degradation/P4 rules, and
+    // CLAUDE_SOLOMON.md keeps a pointer marking them binding. It exists because CLAUDE_SOLOMON.md
+    // went 73 tokens over the cap and assertSingleReadFit THROWS for that file, so the regen
+    // pipeline was wedged for EVERY seat until a section moved out. Counted here for the reason
+    // this assertion exists: a mapping entry alone renders NOWHERE, so a companion missing from
+    // KNOWN_GENERATED_FILES is content that silently left the protocol.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(25);
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');
@@ -171,6 +178,7 @@ describe('FR-4: --only scoped regeneration', () => {
     // The companions are the point of the A-GOVERN ruling: named explicitly so a future edit that
     // drops them from the generated set fails HERE rather than silently demoting governed content
     // back to an unread file.
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_SOLOMON_MODEL_POSTURE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_MANUAL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_PROVENANCE.md');
     // Same reasoning one file later: if CLAUDE_LEAD_MANUAL.md is ever dropped from the generated
