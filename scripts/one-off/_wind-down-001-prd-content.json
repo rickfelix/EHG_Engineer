@@ -1,0 +1,100 @@
+{
+  "executive_summary": "A fleet worker that finishes an SD and holds no active claim ends its turn via the Stop hook's wind-down/park path without ever re-checking the belt for claim-ready work -- directed assignments and self-claimable drafts then sit queued until the worker's NEXT check-in tick. A measured specimen showed three finisher seats idle for ~40 minutes beside two claim-ready drafts until the coordinator manually dispatched. This SD adds a SAME-TURN next-claim attempt to the Stop hook's ALLOW-PATH (scripts/hooks/stop-loop-wakeup-reminder.cjs): when a worker-shaped session ends its turn holding no claim, it makes exactly one call into the existing canonical checkin resolution path (worker-checkin.cjs's resolveCheckin) before parking, and if that call resolves a claim, blocks the stop and instructs the worker to continue building it immediately instead of going idle. Verified by 26 new unit tests including two regressions that catch a real defect found during review (an allowlist classifier that silently dropped two live, unconditionally-reachable claim-acquiring ladder rungs).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Same-turn next-claim attempt on the wind-down ALLOW-PATH",
+      "description": "In scripts/hooks/stop-loop-wakeup-reminder.cjs's main(), inside the existing `if (workerShaped)` ALLOW-PATH branch (the branch that already computes workerShaped and was about to call parkSessionRecoverable + recordWindDown), attempt ONE same-turn next-claim before parking: query for claim-ready work via the SAME canonical resolution ladder every worker /checkin uses (worker-checkin.cjs's resolveCheckin), and either continue building the claimed work (via a Stop-hook decision:'block') or fall through to the pre-existing park path unchanged.",
+      "priority": "critical",
+      "acceptance_criteria": ["The wind-down path provably attempts a next claim same-turn when workerShaped && !hasActiveClaim", "No claim predicate, guard, or priority rule is duplicated -- resolveCheckin is called, not re-implemented"]
+    },
+    {
+      "id": "FR-2",
+      "title": "Never attempt a second claim while one is already held",
+      "description": "shouldAttemptSameTurnClaim({hasActiveClaim, workerShaped}) returns true ONLY when workerShaped is true AND hasActiveClaim is false. A worker still holding an SD claim (mid-work, or armed-with-claim ending its turn) must never be diverted into this path -- it must finish or hand off its current claim per the existing wind-down handshake, never grab a second one.",
+      "priority": "critical",
+      "acceptance_criteria": ["shouldAttemptSameTurnClaim({hasActiveClaim:true, workerShaped:true}) === false", "shouldAttemptSameTurnClaim({hasActiveClaim:false, workerShaped:true}) === true"]
+    },
+    {
+      "id": "FR-3",
+      "title": "Honor all existing claim guards and directed-assignment priority",
+      "description": "Because the attempt delegates to resolveCheckin (the exact function scripts/worker-checkin.cjs's own /checkin CLI uses), every existing guard is inherited automatically: sweep-claim safety, peer/foreign-claimant guards, tier gates, canary fence, quota locks, and directed-assignment-before-self-claim priority. No new predicate is introduced that could diverge from the canonical ladder.",
+      "priority": "high",
+      "acceptance_criteria": ["A queued directed assignment plus a claim-ready draft: resolveCheckin's own internal step order resolves the directed assignment first; the caller (attemptSameTurnNextClaim) makes exactly one call and does not separately attempt self-claim"]
+    },
+    {
+      "id": "FR-4",
+      "title": "Correct claim-outcome classification (denylist, not allowlist)",
+      "description": "attemptSameTurnNextClaim classifies resolveCheckin's returned .action using a DENYLIST of non-claim terminal actions (idle, idle_fable_propose, error) -- anything else is treated as a real claim. This was corrected during review from an initial ALLOWLIST design that silently misclassified two live, unconditionally-reachable claim-acquiring ladder rungs (resume_final from recover-stranded-final.cjs, and resume_orphan from adopt-orphan.cjs -- neither gates on ctx.mySd) as none-claimable, which would have let a session take a real claim and then immediately park itself as idle, manufacturing a fresh orphan while the log line reported the opposite of what happened.",
+      "priority": "critical",
+      "acceptance_criteria": ["resolveCheckin returning action:'resume_final' or action:'resume_orphan' is classified outcome:'claimed'", "A hypothetical future ladder action not yet denylisted is claimed-by-default, never silently dropped", "Regression tests exist proving the original allowlist defect would have been caught (mutation-tested: reverting to the allowlist fails exactly 3 targeted tests)"]
+    },
+    {
+      "id": "FR-5",
+      "title": "Bounded, single-attempt, fail-open, budget-aware",
+      "description": "The attempt is bounded by a timeoutMs derived from the hook's existing work-budget tracking (remainingBudgetMs() - TELEMETRY_RESERVE_MS). A timeout, a timeoutMs<=0 (budget exhausted), a throwing resolution, or an idle/error resolution are all treated identically as 'none-claimable', falling through to the unchanged existing park+recordWindDown path. No polling loop or busy-wait is introduced -- exactly one attempt per wind-down.",
+      "priority": "high",
+      "acceptance_criteria": ["timeoutMs<=0 skips the resolveCheckin call entirely (never invoked)", "A slow resolution past timeoutMs reports none-claimable, not an error or a hang", "A throwing resolveCheckinFn reports none-claimable, never propagates"]
+    },
+    {
+      "id": "FR-6",
+      "title": "Single log line + dashboard-observable metadata stamp",
+      "description": "Every wind-down traversal of the workerShaped branch emits exactly one stderr log line: '[same-turn-next-claim] claimed:<key>' or '[same-turn-next-claim] none-claimable'. The same outcome is best-effort merged into claude_sessions.metadata.same_turn_claim_attempt={outcome, key, at} (mirroring the existing recordWindDown read-modify-merge pattern), making 'chose to exit after looking' distinguishable from 'never looked' on the same dashboard record.",
+      "priority": "medium",
+      "acceptance_criteria": ["Exactly one stderr line matching /\\[same-turn-next-claim\\]/ per allow-path traversal (source-pinned test)", "recordSameTurnClaimAttempt fails open on a DB error without throwing"]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Single-file source change", "description": "Only scripts/hooks/stop-loop-wakeup-reminder.cjs is modified. worker-checkin.cjs is read-only, consumed via its existing resolveCheckin export -- no changes to the claim ladder itself (explicit non-goal)." },
+    { "id": "TR-2", "title": "Independent kill switch", "description": "LEO_SAME_TURN_NEXT_CLAIM env var (default 'on') gates the new behavior independently of the pre-existing LEO_LOOP_WAKEUP_REMINDER enforcement flag and its own enforcementDisabled kill switch -- these are different concerns (dispatch efficiency vs. wakeup-arm enforcement) and must be rollback-able independently." },
+    { "id": "TR-3", "title": "No schema or migration changes", "description": "Pure application-code addition to an existing Stop hook plus a metadata JSON merge on the pre-existing claude_sessions.metadata column; no new tables or columns." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Claim-ready fixture present, no active claim, worker-shaped", "type": "unit", "expected": "attemptSameTurnNextClaim reports outcome:'claimed' via the single resolveCheckinFn call" },
+    { "id": "TS-2", "scenario": "Directed assignment + claim-ready draft both present", "type": "unit", "expected": "resolveCheckin's own priority resolves the directed assignment; attemptSameTurnNextClaim makes exactly one call and reports that outcome" },
+    { "id": "TS-3", "scenario": "Nothing claim-ready (resolveCheckin returns idle)", "type": "unit", "expected": "outcome:'none-claimable', falls through to unchanged park path" },
+    { "id": "TS-4", "scenario": "resume_final / resume_orphan claim actions (regression for the fixed defect)", "type": "unit", "expected": "Both classified outcome:'claimed', not silently dropped" },
+    { "id": "TS-5", "scenario": "Slow resolution exceeding timeoutMs, or already-exhausted budget (timeoutMs<=0)", "type": "unit", "expected": "outcome:'none-claimable', resolveCheckinFn never invoked when timeoutMs<=0" }
+  ],
+  "acceptance_criteria": [
+    "The wind-down path provably attempts a next-claim same-turn for a finisher holding no claim",
+    "All existing claim guards and directed-assignment priority are honored via delegation to resolveCheckin",
+    "Empty-belt wind-down behavior is unchanged except one log line",
+    "Every wind-down emits exactly one claimed:<key> or none-claimable line, observable on the claude_sessions dashboard record"
+  ],
+  "risks": [
+    { "risk": "Production timeout budget (~2s remaining after existing DB round-trips) may cause resolveCheckin to routinely time out under real load", "mitigation": "A timeout degrades identically to an empty belt (both report none-claimable and fall through to the unchanged park path) -- fail-open by design, no behavioral divergence, accepted per this SD's own success criterion 3", "severity": "low" },
+    { "risk": "resolveCheckin performs coordination side-effects (roll-call registration, message acks) beyond a pure claim query, now running on the wind-down path", "mitigation": "Accepted tradeoff: reusing the canonical, already-guarded checkin ladder is lower-risk than forking a parallel claim-only query that could drift from the guards it must honor (explicit non-goal: do not touch claim predicates)", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Every fleet worker session running under /loop that ends a turn via the Stop hook"],
+    "dependencies": ["scripts/worker-checkin.cjs's resolveCheckin (read-only dependency, unmodified)", "The pre-existing shouldParkRecoverable/workerShaped computation already present in the hook"],
+    "data_contracts": ["claude_sessions.metadata gains an additional same_turn_claim_attempt key (additive, non-breaking)"],
+    "runtime_config": ["LEO_SAME_TURN_NEXT_CLAIM=off disables the new behavior without a redeploy, falling back to the pre-existing park-only path"],
+    "observability_rollout": ["[same-turn-next-claim] stderr log line on every wind-down traversal; claude_sessions.metadata.same_turn_claim_attempt for dashboard/fleet-wide aggregation"]
+  },
+  "system_architecture": {
+    "summary": "Four new functions added to the existing Stop hook, wired into its pre-existing ALLOW-PATH branch; no new files, no new services.",
+    "components": [
+      { "name": "scripts/hooks/stop-loop-wakeup-reminder.cjs", "change": "adds isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt, and wires them into main()'s existing workerShaped ALLOW-PATH branch" },
+      { "name": "scripts/worker-checkin.cjs", "change": "none (read-only; resolveCheckin consumed via require)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Additive functions plus a single call-site insertion ahead of the pre-existing park logic, reusing the canonical claim-resolution path rather than duplicating it.",
+    "steps": [
+      "Add the kill-switch and pure predicate function",
+      "Add the bounded, fail-open attempt function delegating to resolveCheckin",
+      "Add the best-effort dashboard-observability metadata stamp function",
+      "Wire all three into main()'s existing workerShaped branch, ahead of parkSessionRecoverable",
+      "Fix the classifier to a denylist after VALIDATION caught an allowlist gap that dropped two live claim-acquiring actions",
+      "Add regression + wiring source-pin tests"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run: npx vitest run tests/unit/hooks/stop-loop-same-turn-next-claim.test.js", "expected_outcome": "All 26 tests pass, including the resume_final/resume_orphan/future-action regression cases" },
+    { "step_number": 2, "instruction": "Run: npx vitest run tests/unit/hooks/", "expected_outcome": "All 143 hook tests pass (no regression to the pre-existing 117 tests in the same directory)" },
+    { "step_number": 3, "instruction": "grep for 'isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim(' in scripts/hooks/stop-loop-wakeup-reminder.cjs", "expected_outcome": "Exactly one match, inside the workerShaped branch, ahead of the parkSessionRecoverable call" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-WORKER-WIND-DOWN-001" }
+}

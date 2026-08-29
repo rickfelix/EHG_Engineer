@@ -164,6 +164,108 @@ function isFlagEnabled() {
 }
 
 /**
+ * SD-LEO-INFRA-WORKER-WIND-DOWN-001: independent kill switch for the same-turn next-claim
+ * attempt below. Default ON (this SD's whole point is to ship it), but rollback-able without a
+ * redeploy — mirrors every other feature in this file having its own escape hatch. Deliberately
+ * NOT tied to the wakeup-reminder's own enforcementDisabled kill switch (a different concern:
+ * that one gates the BLOCK-on-unarmed behavior; this one gates dispatch efficiency).
+ */
+function isSameTurnClaimEnabled() {
+  const v = (process.env.LEO_SAME_TURN_NEXT_CLAIM || 'on').toLowerCase();
+  return v !== 'off' && v !== '0' && v !== 'false';
+}
+
+/**
+ * SD-LEO-INFRA-WORKER-WIND-DOWN-001 — pure: should this ALLOW-PATH stop attempt a SAME-TURN
+ * next-claim before parking? Sourced from a measured specimen: three finisher seats completed
+ * their children and sat idle-no-claim for ~40 minutes beside claim-ready work, because the
+ * worker /loop exits after wind-down and directed assignments queue until the NEXT checkin.
+ *
+ * Target population is narrow and deliberate: worker-shaped (see shouldParkRecoverable) AND
+ * holding NO active claim right now. A worker that still holds a claim must finish it or hand it
+ * off explicitly (the wind-down handshake) — this function must never fire for that population,
+ * or a finisher could grab a SECOND SD while still sitting on an unfinished first one.
+ * @param {{ hasActiveClaim?: boolean, workerShaped?: boolean }} args
+ * @returns {boolean}
+ */
+function shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped } = {}) {
+  return Boolean(workerShaped) && !hasActiveClaim;
+}
+
+/**
+ * SD-LEO-INFRA-WORKER-WIND-DOWN-001 — attempt ONE same-turn next-claim via the EXISTING
+ * canonical checkin resolution path (worker-checkin.cjs's resolveCheckin): the same directed-
+ * assignment-first, self-claim-second ladder every worker /checkin already uses. No claim
+ * predicate, guard, or priority rule is duplicated here — that is deliberate scope (this SD's
+ * non-goal list explicitly excludes touching the claim predicates themselves).
+ *
+ * Bounded by `timeoutMs` so a slow resolution can never blow the Stop hook's own work budget —
+ * a timeout (or timeoutMs<=0) is treated exactly like "nothing claimable": fail-open, no retry,
+ * no busy-wait. A single attempt, once, same turn — never a polling loop.
+ * @param {{ resolveCheckinFn: Function, sb: any, sessionId: string, timeoutMs: number }} args
+ * @returns {Promise<{outcome:'claimed'|'none-claimable', key: string|null, resolution: any}>}
+ */
+async function attemptSameTurnNextClaim({ resolveCheckinFn, sb, sessionId, timeoutMs }) {
+  const NONE = { outcome: 'none-claimable', key: null, resolution: null };
+  if (!(timeoutMs > 0)) return NONE;
+  const TIMEOUT = Symbol('same-turn-claim-timeout');
+  let resolution;
+  // Clear the race's loser explicitly (mirrors readStdinPayload's finish()): shutdown()
+  // deliberately never calls process.exit() on the normal path, so an unref'd/uncleared timer
+  // would otherwise pin the event loop open for the remainder of timeoutMs after a fast claim.
+  let timer = null;
+  try {
+    resolution = await Promise.race([
+      resolveCheckinFn(sb, sessionId),
+      new Promise((r) => { timer = setTimeout(() => r(TIMEOUT), timeoutMs); }),
+    ]);
+  } catch {
+    return NONE; // fail-open: an erroring resolution must never trap a worker mid-wind-down
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  if (resolution === TIMEOUT || !resolution) return NONE;
+  // INVERTED classifier (VALIDATION finding 0e479a8d): an ALLOWLIST of claim actions silently
+  // drops any FUTURE ladder rung that also acquires a claim, exactly as it already dropped TWO
+  // live ones — recover-stranded-final (rung 5.7, 'resume_final') and adopt-orphan (rung 5.8,
+  // 'resume_orphan') run UNCONDITIONALLY (no ctx.mySd gate) and both call tryClaim, so they ARE
+  // reachable for a claim-less caller. Only plain 'resume' (lib/checkin/steps/resume.cjs:248) is
+  // genuinely mySd-gated and therefore unreachable here — it still classifies correctly as
+  // 'claimed' below if that gate is ever loosened, since it is not in the denylist either.
+  // Denylist NON-claim terminals instead: anything
+  // NOT in this set is treated as a real claim, so a new rung that adds a new action string is
+  // claimed-by-default rather than silently misreported as 'none-claimable'.
+  const NON_CLAIM_ACTIONS = new Set(['idle', 'idle_fable_propose', 'error']);
+  if (resolution.action && !NON_CLAIM_ACTIONS.has(resolution.action)) {
+    const key = resolution.sd || resolution.qf || null;
+    return { outcome: 'claimed', key, resolution };
+  }
+  return { outcome: 'none-claimable', key: null, resolution };
+}
+
+/**
+ * SD-LEO-INFRA-WORKER-WIND-DOWN-001 — best-effort dashboard-observability stamp: makes "chose to
+ * exit idle after looking" distinguishable from "never looked" on the same claude_sessions record
+ * the rest of this file already annotates (mirrors recordWindDown's read-modify-merge pattern).
+ * Fail-open — any failure is logged and never blocks the stop.
+ * @param {{ outcome: 'claimed'|'none-claimable', key?: string|null }} args
+ */
+async function recordSameTurnClaimAttempt(supabase, sessionId, { outcome, key } = {}) {
+  try {
+    const { data: row } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    const metadata = { ...(row && row.metadata ? row.metadata : {}) };
+    metadata.same_turn_claim_attempt = { outcome, key: key || null, at: new Date().toISOString() };
+    await supabase.from('claude_sessions').update({ metadata }).eq('session_id', sessionId);
+  } catch (e) {
+    process.stderr.write(`[stop-loop-wakeup-reminder] same-turn-claim metadata (non-fatal): ${e.message}\n`);
+  }
+}
+
+/**
  * SD-LEO-INFRA-WORKER-ENGAGEMENT-ARM-PARK-001 — pure decision: on a Stop ALLOW-PATH (the hook is
  * letting this turn end without blocking), should we PARK the session recoverable rather than let it
  * cold-exit to zero? SEPARATION OF CONCERNS (the wind-down lesson): opting out of self-claim (stop
@@ -619,7 +721,31 @@ async function main() {
     // (:83) or the second-stop (:78), or a non-worker session. If this is a WORKER that could strand
     // work, PARK it recoverable (loop_state='awaiting_tick' + capped expected_silence_until) so
     // coordinator-revival / orphan-adoption re-engages it, instead of a cold-exit to zero workers.
-    if (shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled })) {
+    if (workerShaped) {
+      // SD-LEO-INFRA-WORKER-WIND-DOWN-001: before parking, attempt ONE same-turn next-claim for
+      // the specific population that would otherwise sit idle-beside-claimable-work — a finisher
+      // holding NO active claim. A claim-holder ending its turn (mid-work, or armed-with-claim)
+      // must never be diverted into grabbing a second SD here.
+      if (isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped })) {
+        const claimTimeoutMs = Math.max(0, remainingBudgetMs() - TELEMETRY_RESERVE_MS);
+        const { outcome, key, resolution } = await attemptSameTurnNextClaim({
+          resolveCheckinFn: require('../worker-checkin.cjs').resolveCheckin,
+          sb: supabase,
+          sessionId,
+          timeoutMs: claimTimeoutMs,
+        });
+        // Exactly ONE log line either way — the "chose to exit vs never looked" instrument.
+        process.stderr.write(`[same-turn-next-claim] ${outcome === 'claimed' ? `claimed:${key}` : 'none-claimable'}\n`);
+        await Promise.race([
+          recordSameTurnClaimAttempt(supabase, sessionId, { outcome, key }),
+          new Promise((r) => setTimeout(r, remainingBudgetMs())),
+        ]);
+        if (outcome === 'claimed') {
+          const detail = resolution && typeof resolution.message === 'string' ? `\n${resolution.message}` : '';
+          emitDecision({ decision: 'block', reason: `SAME-TURN NEXT-CLAIM: claimed ${key} via the wind-down handshake — no idle gap. Continue building it now.${detail}` });
+          return shutdown();
+        }
+      }
       await parkSessionRecoverable(sessionId, { armVerdict });
       // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): capture WHY this worker wound down
       // (same worker-gate as the park, so no false telemetry on a non-worker operator session).
@@ -644,4 +770,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt };
