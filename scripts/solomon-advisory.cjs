@@ -875,6 +875,34 @@ async function checkStaleChairmanRatifications(supabase) {
 }
 
 /**
+ * SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-A FR-5: non-blocking pre-send capture-miss seam.
+ * Sibling to checkStaleChairmanRatifications immediately above, but runs the OPPOSITE side of the
+ * predicate: that check reads the LEDGER (rows present, encoded_at stale) on the INBOX path; this
+ * one is where a future detector (Child C) will diff ruling SOURCES against the ledger to find
+ * rulings with NO row at all — a case the ledger itself cannot see. Ships now as a genuine,
+ * injectable, testable seam (not a no-op): a caller-supplied `detector` does the real diff; the
+ * DEFAULT detector is an honest no-op ({count:0}) until Child C wires the real one. Fail-soft by
+ * design — this sits in main()'s straight-line code OUTSIDE the try{} that wraps
+ * insertCoordinationRow, so a throw here would otherwise kill the send.
+ * @param {object} supabase
+ * @param {{thresholdHours?: number, detector?: (supabase:object, thresholdHours:number) => Promise<{count:number, rows?:Array}>}} [opts]
+ */
+async function checkRatificationCaptureMiss(supabase, { thresholdHours, detector } = {}) {
+  let DEFAULT_STALE_RATIFICATION_HOURS = 24;
+  try {
+    ({ DEFAULT_STALE_RATIFICATION_HOURS } = require('../lib/governance/ratification-stall.mjs'));
+  } catch { /* fall back to the local default above */ }
+  const effectiveThreshold = typeof thresholdHours === 'number' ? thresholdHours : DEFAULT_STALE_RATIFICATION_HOURS;
+  const runDetector = typeof detector === 'function' ? detector : async () => ({ count: 0, rows: [] });
+  try {
+    const result = await runDetector(supabase, effectiveThreshold);
+    return { count: result?.count || 0, rows: result?.rows || [] };
+  } catch (e) {
+    return { count: 0, rows: [], error: (e && e.message) || String(e) };
+  }
+}
+
+/**
  * On a Solomon (re)register/restart, re-target UNREAD rows destined for an OLD Solomon session to the
  * NEW one (comms survive the handoff). Mirrors drainAdamOutbound: idempotent (read_at IS NULL gate),
  * fail-open (never throws). Required by solomon-register.cjs's lazy-require. Exported.
@@ -1261,6 +1289,17 @@ async function main() {
     console.error(`WARN: quota WOULD HAVE REFUSED this send — ${quotaMeasurement.reason}. Measurement only; the send proceeds.`);
   }
 
+  // SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-A FR-5: measure-and-WARN only, never blocking —
+  // own try/catch since this runs outside the insertCoordinationRow try{} below.
+  try {
+    const captureMiss = await checkRatificationCaptureMiss(supabase);
+    if (captureMiss.count > 0) {
+      console.error(`WARN: ${captureMiss.count} ratification capture-miss candidate(s) detected. Measurement only; the send proceeds.`);
+    }
+  } catch (e) {
+    console.error(`WARN: ratification capture-miss check errored (non-blocking) — ${(e && e.message) || e}`);
+  }
+
   let inserted;
   try {
     const { data, error } = await insertCoordinationRow(
@@ -1376,6 +1415,7 @@ module.exports = {
   // existing assertion called buildAdvisoryPayload with named args and never crossed argv.
   bodyFromArgv, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS,
   resolveDecisionRequested, // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-1
+  checkRatificationCaptureMiss, // SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-A FR-5
 };
 
 if (require.main === module) {
