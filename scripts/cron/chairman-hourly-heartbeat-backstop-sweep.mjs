@@ -23,7 +23,10 @@
  * instead:
  *   1. READS sms_outbound_obligations for the MOST RECENT row per relevant kind
  *      (heartbeat_status = the live path, heartbeat_status_backstop = this sweep's own prior
- *      fills) created within a trailing lookback window.
+ *      fills) created since the current DUE SLOT's instant (QF-20260828-650: fixed ET slots —
+ *      SLOT_HOURS_ET = [6,9,12,15,18,21] — replaced the original trailing-lookback-window design
+ *      after the chairman moved the routine heartbeat cadence off a rolling window entirely; see
+ *      SLOT_HOURS_ET's doc comment for the full supersession history).
  *   2. Classifies coverage via an explicit status-decision table over ALL 8 statuses in the DDL
  *      CHECK (PLAN-phase TESTING sub-agent finding G1: mere row existence must not count as
  *      "filled" — a stuck status='owed' row is enqueued-but-never-delivered, exactly the
@@ -41,11 +44,12 @@
  *      (isSmsQuietHour, chairman-zone-aware, matching the drop-not-queue behavior already
  *      established for heartbeats) is therefore done HERE rather than inherited from
  *      sendChairmanSMS's rubric, since that pipeline is no longer invoked.
- *   4. Uses its OWN distinct kind (heartbeat_status_backstop) and a millisecond-timestamped
- *      dedupeKey (never a plain per-hour counter — avoids a same-key UPSERT collision between
- *      two near-simultaneous ticks) as defense-in-depth against this sweep's own overlapping
- *      runs, paired with a GHA concurrency group. It never shares a key/kind namespace with the
- *      live heartbeat path.
+ *   4. Uses its OWN distinct kind (heartbeat_status_backstop) and a PER-SLOT dedupeKey (QF-
+ *      20260828-650, coordinator directive c56e93cc rider a — no millisecond suffix; a slot's
+ *      coverage state is intentionally singular, so the dedupe_key UNIQUE constraint on
+ *      sms_outbound_obligations is itself the guard against a near-simultaneous double-enqueue
+ *      for the same slot), paired with a GHA concurrency group. It never shares a key/kind
+ *      namespace with the live heartbeat path.
  *
  * The resulting 'owed' obligation is drained by whatever credentialed process next calls
  * sendChairmanSMS for any reason (the reconciler claims any owed row, unscoped by kind) — this
@@ -91,7 +95,7 @@ const WINDOW_END_ZONE_HOUR = 23;
 // TESTING sub-agent finding G4): "how long is a stuck live-owed/sending row allowed to sit
 // before the backstop treats coverage as still unfilled?" (a fresh in-flight row gets a grace
 // period; a stale one does not count as coverage). It is NOT consulted for failed/undelivered
-// rows (those are always unfilled, any age) or for a null row (see LOOKBACK_MS below).
+// rows (those are always unfilled, any age) or for a null row (see the due-slot read in main()).
 export const STALENESS_GRACE_MS = 5 * 60 * 1000;
 
 // EXEC-phase TESTING sub-agent finding F1 (merge-blocking): an earlier revision of this file
@@ -101,23 +105,36 @@ export const STALENESS_GRACE_MS = 5 * 60 * 1000;
 // backstop SMS at the start of every awake hour regardless of live-path health — live data
 // shows the real heartbeat lands anywhere across the hour (measured minute-of-hour spread:
 // :00s=36, :10s=54, :20s=64, :30s=47, :40s=60, :50s=55 across 316 rows), so a calendar bucket
-// can never reliably contain it near the boundary. FIX: read a TRAILING window ("was there
-// coverage in roughly the last hour", not "in this fixed calendar hour") — timezone-agnostic
-// by construction (a pure duration subtracted from `now`), never empty purely because of where
-// the clock happens to sit relative to an artificial boundary. SLA_WINDOW_MS is the actual SLA
-// (the routine heartbeat cadence); STALENESS_GRACE_MS is added as the same buffer already used
-// for the in-flight grace check, so the two concepts stay consistent with one one another.
+// can never reliably contain it near the boundary. FIX: read relative to the DUE SLOT instant
+// (see SLOT_HOURS_ET below), not a fixed calendar-hour bucket — never empty purely because of
+// where the clock happens to sit relative to an artificial boundary.
 //
-// QF-20260828-188 (leg 1): chairman verbal 2026-08-28 ~06:4x ET (ratification 9eebe200, section
-// 601 c3, contract hash 59a88aa736a3181b) moved the ROUTINE heartbeat SMS from hourly to every
-// 3 hours; the live path and quiet-tick were retuned same-morning but this backstop's own SLA
-// window was missed, so it kept firing on the retired 1h cadence — a live send at 20:34:39Z
-// self-described as "hourly heartbeat check-in" while the contract had already been 3-hourly
-// for ~10 hours (Solomon pre-send verdict 62b23a90/f422647f). Re-tuned to match the ratified
-// contract; LOOKBACK_MS below (and therefore the coverage read + dedupe timestamp it feeds)
-// follows automatically.
-export const SLA_WINDOW_MS = 3 * 60 * 60 * 1000;
-export const LOOKBACK_MS = SLA_WINDOW_MS + STALENESS_GRACE_MS;
+// QF-20260828-188 (leg 1, now superseded): chairman verbal 2026-08-28 ~06:4x ET (ratification
+// 9eebe200) moved the routine heartbeat SMS from hourly to a 3-hourly TRAILING-WINDOW cadence
+// (SLA_WINDOW_MS=3h), which this file implemented. QF-20260828-650: chairman ratification
+// 7010e20f (23:12:51Z, CLAUDE_ADAM.md:273) superseded that AGAIN, same day, moving the routine
+// heartbeat to FIXED ET SLOTS (6/9/12/15/18/21) rather than a rolling window — Adam's slot cron
+// is armed and chairman-confirmed. Coordinator directive c56e93cc (binding, two Solomon riders):
+// RETARGET chosen over RETIRE (rider (b)'s retire-only-if condition — first fixing/verifying
+// scripts/adam-quiet-tick.mjs's now-stale 175min/3-hourly overdue check — is a comparable-or-
+// larger unit of work with more moving parts than retargeting this already-understood file).
+// Rider (a): dedupe keys must be PER-SLOT, not per-window — see dedupeKey construction in
+// main() below (no millisecond suffix; a slot's coverage state is intentionally singular).
+export const SLOT_HOURS_ET = [6, 9, 12, 15, 18, 21];
+
+/**
+ * The most recently-due slot hour at-or-before `zoneHour`, or undefined if `zoneHour` is before
+ * the first slot (SLOT_HOURS_ET[0]) — i.e. no slot has come due yet today.
+ * @param {number} zoneHour
+ * @returns {number|undefined}
+ */
+export function mostRecentDueSlotHour(zoneHour) {
+  let due;
+  for (const slot of SLOT_HOURS_ET) {
+    if (slot <= zoneHour) due = slot;
+  }
+  return due;
+}
 
 export function parseArgs(argv) {
   const args = { once: false, dryRun: false, help: false };
@@ -188,8 +205,8 @@ export function combineHourVerdict(liveVerdict, backstopVerdict) {
 }
 
 /**
- * Reads the most recent obligation row for `kind` created within the trailing lookback window
- * [sinceIso, now] (see LOOKBACK_MS/F1 above — deliberately NOT a fixed calendar-hour bucket).
+ * Reads the most recent obligation row for `kind` created since `sinceIso` — the current DUE
+ * SLOT's instant (see mostRecentDueSlotHour/main() above), not a fixed lookback duration.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  */
 async function fetchLatestRowForKind(supabase, kind, sinceIso) {
@@ -206,16 +223,16 @@ async function fetchLatestRowForKind(supabase, kind, sinceIso) {
 
 /**
  * Minimal, honest content — never a fabricated all-good (FR-4). Includes hourKey (EXEC-phase
- * TESTING sub-agent finding N2): during a sustained multi-hour outage, a fresh fill happens
- * roughly once per lookback window (see LOOKBACK_MS above) — without a distinguishing label
- * every one of those recovery-burst messages would be byte-identical and the chairman could
- * not tell which hours were actually covered.
+ * TESTING sub-agent finding N2, now the per-slot label under QF-20260828-650): during a
+ * sustained outage, a fresh fill happens roughly once per due slot — without a distinguishing
+ * label every one of those recovery-burst messages would be byte-identical and the chairman
+ * could not tell which slots were actually covered.
  */
 export function buildBackstopBody({ liveVerdict, backstopVerdict, hourKey }) {
   // QF-20260828-188 (leg 1): was "hourly heartbeat check-in" — self-described a cadence the
   // ratified contract (9eebe200) retired same-day. "routine" names the SMS class, not a cadence,
-  // so this body never drifts out of sync with the SLA window again.
-  return `[backstop ${hourKey}] Still here — routine heartbeat check-in (no live heartbeat reached within the SLA window; live=${liveVerdict}, prior-backstop=${backstopVerdict}).`;
+  // so this body never drifts out of sync with the live contract again.
+  return `[backstop ${hourKey}] Still here — routine heartbeat check-in (no live heartbeat reached for this slot; live=${liveVerdict}, prior-backstop=${backstopVerdict}).`;
 }
 
 export { etHourWindowUtc };
@@ -239,11 +256,11 @@ export async function main(argv = process.argv, deps = {}) {
 
   const { allowQuietHours, chairmanZone } = await resolveQuietHours(now);
 
-  // hourKey is a readable per-tick label for logs/dedupeKey only — it does NOT bound the
-  // coverage read (see LOOKBACK_MS/F1 above: the coverage read is a trailing window, not this
-  // calendar hour).
-  const { hourKey } = etHourWindowUtc(now, chairmanZone);
-  const zoneHour = Number(hourKey.slice(-2));
+  // nowHourKey is this tick's own zone-hour label, used only to derive zoneHour and the coarse
+  // window gate below — NOT the coverage-read/dedupe label (that's slotKey, derived after the
+  // due-slot lookup a few lines down).
+  const { hourKey: nowHourKey } = etHourWindowUtc(now, chairmanZone);
+  const zoneHour = Number(nowHourKey.slice(-2));
   if (zoneHour >= WINDOW_END_ZONE_HOUR || zoneHour < WINDOW_START_ZONE_HOUR) {
     log({ action: 'inert', reason: 'outside_coarse_window', zone_hour: zoneHour });
     return { exitCode: 0, action: 'inert', reason: 'outside_coarse_window' };
@@ -259,11 +276,30 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 0, action: 'inert', reason: 'quiet_hours' };
   }
 
+  // QF-20260828-650: fixed ET slots replace the 3-hourly trailing window. `dueSlotHour` is the
+  // most-recently-due slot at-or-before this tick's zone hour; undefined means no slot has come
+  // due yet today (zoneHour is inside the coarse window but before SLOT_HOURS_ET[0]).
+  const dueSlotHour = mostRecentDueSlotHour(zoneHour);
+  if (dueSlotHour === undefined) {
+    log({ action: 'inert', reason: 'before_first_slot', zone_hour: zoneHour });
+    return { exitCode: 0, action: 'inert', reason: 'before_first_slot' };
+  }
+  // slotKey reuses nowHourKey's date prefix ("YYYY-MM-DDT") with the DUE slot's hour, not the
+  // current zone hour — e.g. at zone hour 14, nowHourKey="2026-07-18T14" but dueSlotHour=12
+  // yields slotKey="2026-07-18T12". This is the per-tick label AND the per-slot dedupe basis.
+  const slotKey = `${nowHourKey.slice(0, -2)}${String(dueSlotHour).padStart(2, '0')}`;
+  const hourKey = slotKey; // downstream naming (log fields, buildBackstopBody arg) unchanged
+
   let supabase;
   try { supabase = deps.supabase || buildSupabase(); }
   catch (err) { logger.error?.(`[hourly-heartbeat-backstop] supabase client unavailable: ${err.message}`); return { exitCode: 2, action: 'no_supabase' }; }
 
-  const sinceIso = new Date(now.getTime() - LOOKBACK_MS).toISOString();
+  // The due slot's UTC instant, derived from this tick's own hour-start (etHourWindowUtc's
+  // startIso) offset backward by the zone-hour gap to the due slot — same DST-approximation
+  // tolerance already accepted elsewhere in this module (etHourWindowUtc's own docstring).
+  const { startIso: nowHourStartIso } = etHourWindowUtc(now, chairmanZone);
+  const dueSlotInstantMs = new Date(nowHourStartIso).getTime() - (zoneHour - dueSlotHour) * 60 * 60 * 1000;
+  const sinceIso = new Date(dueSlotInstantMs).toISOString();
   const fetchRow = deps.fetchLatestRowForKind || fetchLatestRowForKind;
   const [{ row: liveRow, error: liveErr }, { row: backstopRow, error: backstopErr }] = await Promise.all([
     fetchRow(supabase, LIVE_KIND, sinceIso),
@@ -288,10 +324,13 @@ export async function main(argv = process.argv, deps = {}) {
   }
 
   const body = (deps.buildBackstopBody || buildBackstopBody)({ liveVerdict, backstopVerdict, hourKey });
-  // Millisecond-timestamped, never a plain per-hour key — see file header for why (avoids a
-  // same-key UPSERT collision between two near-simultaneous ticks surfacing as a false
-  // transport-failure alert).
-  const dedupeKey = `${BACKSTOP_KIND}:${hourKey}:${now.getTime()}`;
+  // QF-20260828-650 (coordinator directive c56e93cc, rider a): PER-SLOT, no millisecond suffix —
+  // a slot's coverage state is intentionally singular, so the dedupe_key UNIQUE constraint
+  // (onConflict: 'dedupe_key', ignoreDuplicates: true — see enqueueChairmanSms) is itself the
+  // guard against a near-simultaneous double-enqueue for the SAME slot, replacing the old
+  // ms-timestamp defense-in-depth that the trailing-window design needed (every tick was its own
+  // window, so a live key HAD to be unique per attempt; a slot is unique per due-time instead).
+  const dedupeKey = `${BACKSTOP_KIND}:${hourKey}`;
 
   if (args.dryRun) {
     log({ action: 'dry_run', dedupe_key: dedupeKey, hour_key: hourKey, body_len: body.length });
