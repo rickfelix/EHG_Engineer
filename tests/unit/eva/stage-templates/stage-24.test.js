@@ -1,30 +1,36 @@
+// SD-LEO-INFRA-STAGE-TEMPLATE-DISPATCH-REMAINDER-001: this file's content previously
+// lived at stage-23.test.js, shifted with its template to stage-24 by the 27-stage
+// renumber (dedicated_venture_uat inserted at stage 23).
 import { describe, it, expect } from 'vitest';
 import stage24 from '../../../../lib/eva/stage-templates/stage-24.js';
 
-describe('stage-24.js — Go Live & Announce (stub)', () => {
-  it('has correct id, slug, title, version', () => {
+describe('stage-24.js — Launch Readiness Kill Gate (stub)', () => {
+  it('has correct id, slug, title, version, stageKey', () => {
     expect(stage24.id).toBe('stage-24');
-    expect(stage24.slug).toBe('go-live');
-    expect(stage24.title).toBe('Go Live & Announce');
-    expect(stage24.version).toBe('3.0.0');
+    expect(stage24.slug).toBe('launch-readiness');
+    expect(stage24.title).toBe('Launch Readiness Kill Gate');
+    expect(stage24.version).toBe('3.1.0');
+    expect(stage24.stageKey).toBe('launch_readiness_gate');
   });
 
   it('has expected defaultData shape', () => {
     expect(stage24.defaultData).toMatchObject({
-      launch_status: null,
-      channels_to_activate: [],
-      launched_at: null,
+      checklist: [],
+      verdict: null,
+      pass_count: 0,
+      fail_count: 0,
+      readiness_pct: 0,
     });
   });
 
   it('validate() always returns valid for any input', () => {
     expect(stage24.validate({})).toEqual({ valid: true, errors: [] });
     expect(stage24.validate(null)).toEqual({ valid: true, errors: [] });
-    expect(stage24.validate({ launch_status: 'live' })).toEqual({ valid: true, errors: [] });
+    expect(stage24.validate({ verdict: 'GO' })).toEqual({ valid: true, errors: [] });
   });
 
   it('computeDerived() returns data unchanged', () => {
-    const data = { launch_status: 'live', channels_to_activate: ['web'], launched_at: '2026-01-01' };
+    const data = { checklist: [], verdict: 'GO', readiness_pct: 100 };
     expect(stage24.computeDerived(data)).toEqual(data);
   });
 
@@ -37,7 +43,7 @@ describe('stage-24.js — Go Live & Announce (stub)', () => {
   });
 
   it('has schema with expected fields', () => {
-    expect(stage24.schema.launch_status).toBeDefined();
-    expect(stage24.schema.channels_to_activate).toBeDefined();
+    expect(stage24.schema.checklist).toBeDefined();
+    expect(stage24.schema.verdict).toBeDefined();
   });
 });
