@@ -1,0 +1,244 @@
+{
+  "executive_summary": "The claim_sd() Postgres RPC (live definition: database/migrations/20260717_claim_sd_phantom_session_guard.sql) has a live-foreign-peer guard on the SD branch (SD-LEO-FIX-CLAIM-RPC-REFUSE-001): if strategic_directives_v2.claiming_session_id names a still-live session whose claude_sessions.sd_key pointer has drifted away, a second self-claimer is refused with error='claimed_by_live_peer' rather than silently stomping the live claim. The QF branch (v_is_qf=TRUE) never got this guard — quick_fixes.claiming_session_id is read only for the terminal-status check, so a live QF holder whose session pointer drifts can be claimed out from under it. Separately, quick_fixes.started_at is stamped once by scripts/create-quick-fix.js at creation time (self-claim only) but claim_sd's QF UPDATE branch never touches it, so a QF claimed via the normal claim_sd path (scripts/qf-start.js, scripts/worker-checkin.cjs, lib/sd-creation/source-adapters/qf.js) never records a start time. This SD adds a new migration (database/migrations/20260828_claim_sd_qf_live_peer_guard.sql, already drafted and validation-agent-reviewed at LEAD phase) that layers a QF-branch live-peer guard mirroring the SD-side guard, and stamps started_at = COALESCE(started_at, NOW()) on QF claim. EXEC applies the migration and runs the new live-DB integration test suite (tests/database/claim-sd-qf-live-peer-guard.test.js, also already drafted).",
+
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "claim_sd() must refuse a QF claim with {success:false, error:'claimed_by_live_peer'} when quick_fixes.claiming_session_id names a session other than the caller whose claude_sessions heartbeat is < 900s old, unless p_force_takeover is true. Mirrors the SD-branch guard at database/migrations/20260717_claim_sd_phantom_session_guard.sql:229-244 variable-for-variable (new v_qf_claiming_id / v_qf_claim_hb_age locals).",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "A QF whose claiming_session_id names a live foreign session (heartbeat < 900s) is refused for a different caller session, with error='claimed_by_live_peer' and claimed_by/heartbeat_age_seconds in the response",
+        "quick_fixes.claiming_session_id is NOT changed by the refused attempt (net-zero write)",
+        "A stale (>=900s) foreign QF claim still falls through to drift/auto-stale takeover as before",
+        "--force (p_force_takeover=true) still overrides the guard and completes the claim",
+        "The QF-side claimant re-claiming its own QF (claimant == caller) is not affected by the guard",
+        "An unclaimed QF (claiming_session_id IS NULL) is not affected by the guard"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "claim_sd()'s QF UPDATE branch must stamp quick_fixes.started_at = COALESCE(started_at, NOW()) on every successful QF claim, preserving an already-recorded start time across any later takeover/re-claim rather than resetting it.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "A QF claimed via claim_sd() for the first time (started_at previously NULL) has started_at populated with a non-null timestamp after the claim",
+        "A QF re-claimed by the same or a different session after already having started_at set retains its ORIGINAL started_at value (not overwritten with a later NOW())"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "The fix must be delivered as a new migration file (database/migrations/20260828_claim_sd_qf_live_peer_guard.sql — already drafted at LEAD phase) that CREATE OR REPLACEs claim_sd() with the full live body of database/migrations/20260717_claim_sd_phantom_session_guard.sql preserved verbatim, plus exactly the two additive changes in FR-1/FR-2. No prior migration file may be edited in place.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Diffing the new migration's function body against 20260717's body shows only the FR-1/FR-2 additive hunks — every pre-existing guard, comment, and provenance note is byte-identical",
+        "The function signature (5 args, same defaults) is unchanged — CREATE OR REPLACE only, no DROP+CREATE needed",
+        "The migration includes the same post-apply verification DO block confirming exactly one claim_sd overload exists"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "EXEC must apply the migration to the live database via the canonical scripts/apply-migration.js prod-deploy path (3-factor guards), and confirm via a direct RPC probe (not just the migration script's own verification block) that both new behaviors are live.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "scripts/apply-migration.js database/migrations/20260828_claim_sd_qf_live_peer_guard.sql --prod-deploy completes with [MIGRATION_APPLY_PROD_PASS]",
+        "A manual post-apply RPC probe against a scratch QF row demonstrates a live-peer refusal (error='claimed_by_live_peer') and a started_at stamp on a fresh claim",
+        "PostgREST schema cache reload (NOTIFY pgrst) is confirmed to have taken effect (no PGRST203/stale-signature errors on the next claim_sd call from any live worker)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "tests/database/claim-sd-qf-live-peer-guard.test.js (already drafted at LEAD phase, validation-agent-reviewed) must pass against the live database after the migration is applied, covering: fresh-live-peer refusal, stale-peer takeover with an explicit claiming_session_id read-back proving the claim actually moved, --force override, self-resume passthrough, unclaimed-QF passthrough, and started_at stamp-on-first-claim + preserve-on-reclaim.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "npx vitest run tests/database/claim-sd-qf-live-peer-guard.test.js passes all 6 test cases against the live database (HAS_REAL_DB=true)",
+        "No regression in the existing SD-side sibling suites: npx vitest run tests/database/claim-sd-refuse-live-foreign.test.js tests/database/claim-sd-terminal-status.test.js pass identically to their pre-change baseline",
+        "Test fixtures are net-zero after the run (afterAll deletes the scratch quick_fixes row and both probe claude_sessions rows)"
+      ]
+    }
+  ],
+
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "No changes to any application code (scripts/qf-start.js, scripts/worker-checkin.cjs, lib/sd-creation/source-adapters/qf.js) — the fix is entirely inside the claim_sd() RPC body. Callers already handle {success:false, claimed_by, heartbeat_age_seconds} response shapes identically for the pre-existing SD-side claimed_by_live_peer error, so no caller-side branching changes are needed for the new QF-side error of the same shape."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "No new columns, tables, indexes, or RLS policies. quick_fixes.started_at and quick_fixes.claiming_session_id already exist (database/migrations/20251117_create_quick_fixes_table.sql). Function signature is unchanged (5 args, same defaults)."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "Out of scope, explicitly: extending the armed-silence-window (claimed_by_silenced_peer) guard or the sd_conflict_matrix blocking-conflict check to the QF branch. Both are pre-existing SD-only guard families noted during LEAD-phase investigation as the same general asymmetry class, but not named in this SD's title/scope — left for a future SD."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "Out of scope: reconciling with the staged, unapplied, chairman-gated database/migrations/20260816_claim_sd_tier_check.sql (SD-only tier-rank backstop). This SD's migration layers on top of the currently-live 20260717 definition; whoever eventually applies 20260816 will need to hand-merge it against this SD's body since only the last-applied CREATE OR REPLACE body wins."
+    }
+  ],
+
+  "system_architecture": {
+    "overview": "Single Postgres function modification via a new, additive-only migration file. No application-code changes. The migration CREATE OR REPLACEs the existing claim_sd(p_sd_id, p_session_id, p_track, p_force_takeover, p_client_gate_version) function, adding a QF-branch live-peer guard (mirroring the existing SD-branch guard) and a started_at stamp on the QF claim UPDATE.",
+    "components": [
+      {
+        "name": "claim_sd() QF-branch capture block",
+        "type": "SQL (plpgsql)",
+        "location": "database/migrations/20260828_claim_sd_qf_live_peer_guard.sql (ELSE branch of the v_is_qf conditional)",
+        "responsibility": "Read quick_fixes.claiming_session_id and, if it names a foreign session, its live heartbeat age — feeding the new guard below."
+      },
+      {
+        "name": "QF live-foreign-claim guard",
+        "type": "SQL (plpgsql)",
+        "location": "database/migrations/20260828_claim_sd_qf_live_peer_guard.sql (new IF block immediately after the existing SD-side guard)",
+        "responsibility": "Return {success:false, error:'claimed_by_live_peer'} when the QF-side claimant is a live foreign session and --force was not used."
+      },
+      {
+        "name": "QF claim UPDATE (started_at stamp)",
+        "type": "SQL (plpgsql)",
+        "location": "database/migrations/20260828_claim_sd_qf_live_peer_guard.sql (terminal IF v_is_qf THEN UPDATE quick_fixes block)",
+        "responsibility": "Set claiming_session_id, status='in_progress', and started_at=COALESCE(started_at, NOW()) on successful claim."
+      },
+      {
+        "name": "Live-DB integration test suite",
+        "type": "test file",
+        "location": "tests/database/claim-sd-qf-live-peer-guard.test.js (already drafted)",
+        "responsibility": "Verify the guard's boundary conditions and the started_at stamp against the live database, gated by HAS_REAL_DB."
+      }
+    ],
+    "data_flow": "scripts/qf-start.js / worker-checkin.cjs / lib/sd-creation/source-adapters/qf.js call the claim_sd RPC → advisory xact lock → phantom-session guard (unchanged) → QF-branch status+claiming_session_id SELECT ... FOR UPDATE (widened) → new live-peer heartbeat lookup → existing session-side already_claimed check (unchanged) → NEW QF live-peer guard → existing drift_recovery / auto_stale_takeover chain (unchanged) → claude_sessions UPDATE (unchanged) → quick_fixes UPDATE (now also stamps started_at) → response.",
+    "integration_points": [
+      {
+        "name": "scripts/qf-start.js",
+        "type": "internal",
+        "interaction": "Primary CLI caller; already surfaces data.error/data.claimed_by/data.heartbeat_age_seconds on any claim_sd failure, so the new claimed_by_live_peer error for QFs displays correctly with zero code changes."
+      },
+      {
+        "name": "scripts/worker-checkin.cjs",
+        "type": "internal",
+        "interaction": "Fleet check-in auto-assignment caller; same generic failure-handling path as qf-start.js."
+      },
+      {
+        "name": "lib/sd-creation/source-adapters/qf.js:219",
+        "type": "internal",
+        "interaction": "Fourth claim_sd caller for QF ids, discovered during LEAD-phase Explore. No code change needed."
+      },
+      {
+        "name": "scripts/read-quick-fix.js:141-142",
+        "type": "downstream consumer",
+        "interaction": "Displays qf.started_at conditionally — will now show a populated value for QFs claimed via the normal RPC path, not just self-claimed-at-creation QFs."
+      }
+    ]
+  },
+
+  "implementation_approach": {
+    "summary": "Two-phase EXEC plan. Phase 1: apply the already-drafted migration and confirm it is live via a manual RPC probe. Phase 2: run the already-drafted test suite plus the sibling SD-side suites for regression, and capture evidence.",
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Apply migration",
+        "steps": [
+          "node scripts/apply-migration.js database/migrations/20260828_claim_sd_qf_live_peer_guard.sql (dry-run) — confirm no parse errors, review destructive-DDL warnings (none expected)",
+          "node scripts/apply-migration.js database/migrations/20260828_claim_sd_qf_live_peer_guard.sql --prod-deploy — live apply",
+          "Confirm [MIGRATION_APPLY_PROD_PASS] and the function's own DO-block NOTICE confirming exactly one claim_sd overload"
+        ]
+      },
+      {
+        "phase": 2,
+        "name": "Verify",
+        "steps": [
+          "npx vitest run tests/database/claim-sd-qf-live-peer-guard.test.js — all 6 cases pass against the live DB",
+          "npx vitest run tests/database/claim-sd-refuse-live-foreign.test.js tests/database/claim-sd-terminal-status.test.js — no regression on the SD-side sibling suites",
+          "Capture pass/fail counts as test_evidence for the PLAN-TO-LEAD handoff"
+        ]
+      }
+    ]
+  },
+
+  "acceptance_criteria": [
+    "FR-1 QF live-peer guard refuses correctly and does not stomp a live foreign claim — verified live",
+    "FR-2 started_at stamped on first claim and preserved across re-claim — verified live",
+    "FR-3 migration is a pure additive CREATE OR REPLACE over the live 20260717 body — diff-verified (already done at LEAD phase by validation-agent)",
+    "FR-4 migration applied to the live database via the canonical apply-migration.js prod-deploy path",
+    "FR-5 all 6 new test cases plus both SD-side sibling suites pass with zero regressions",
+    "Russian Judge ≥70% on PRD; placeholder check passes; no TBD in any field"
+  ],
+
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "test_type": "integration",
+      "scenario": "Fresh-live-peer refusal: QF claimed by PEER (heartbeat 10s old, drifted session pointer). CALLER attempts claim_sd. Expected: success=false, error='claimed_by_live_peer', claimed_by=PEER, quick_fixes.claiming_session_id unchanged."
+    },
+    {
+      "id": "TS-2",
+      "test_type": "integration",
+      "scenario": "Stale-peer takeover: same setup but PEER heartbeat 1000s old. CALLER attempts claim_sd. Expected: success=true AND quick_fixes.claiming_session_id now equals CALLER (explicit read-back, not just success:true)."
+    },
+    {
+      "id": "TS-3",
+      "test_type": "integration",
+      "scenario": "--force override: PEER live (10s), CALLER passes p_force_takeover=true. Expected: success=true."
+    },
+    {
+      "id": "TS-4",
+      "test_type": "integration",
+      "scenario": "Self-resume: PEER (claimant) re-claims its own QF. Expected: success=true (guard requires claimant != caller)."
+    },
+    {
+      "id": "TS-5",
+      "test_type": "integration",
+      "scenario": "Unclaimed passthrough: quick_fixes.claiming_session_id is NULL. CALLER claims. Expected: success=true (guard requires a non-null foreign claimant)."
+    },
+    {
+      "id": "TS-6",
+      "test_type": "integration",
+      "scenario": "started_at stamp-and-preserve: fresh unclaimed QF (started_at NULL) claimed by CALLER — started_at becomes non-null. CALLER releases (session-side sd_key cleared) and re-claims the SAME QF — started_at is UNCHANGED from the first claim's value."
+    },
+    {
+      "id": "TS-7",
+      "test_type": "regression",
+      "scenario": "SD-side sibling suites (tests/database/claim-sd-refuse-live-foreign.test.js, tests/database/claim-sd-terminal-status.test.js) pass identically post-migration, confirming the additive change did not alter SD-branch behavior."
+    }
+  ],
+
+  "risks": [
+    {
+      "id": "R1",
+      "risk": "The migration accidentally alters SD-branch behavior (e.g. a misplaced brace changes control flow for both branches)",
+      "likelihood": "low",
+      "impact": "high",
+      "mitigation": "LEAD-phase validation-agent already diffed the migration against the live 20260717 body and confirmed exactly the two additive hunks with zero unintended drift. TS-7 re-verifies this live, post-apply.",
+      "rollback_plan": "CREATE OR REPLACE the function back to the exact 20260717 body (git-tracked, one command) — no data migration or column changes to unwind."
+    },
+    {
+      "id": "R2",
+      "risk": "PostgREST schema cache does not reload promptly after CREATE OR REPLACE, causing transient claim failures for live fleet workers immediately after apply",
+      "likelihood": "low",
+      "impact": "medium",
+      "mitigation": "Migration includes the same NOTIFY pgrst, 'reload schema' call used by every prior claim_sd migration (20260704, 20260712, 20260717) with no reported incidents. FR-4 explicitly requires confirming no PGRST203/stale-signature errors post-apply.",
+      "rollback_plan": "Re-issue NOTIFY pgrst manually if a stale cache is observed; no code rollback needed."
+    },
+    {
+      "id": "R3",
+      "risk": "Test fixture collision with concurrent CI runs against the same live database (the exact incident QF-20260612-167 already fixed for the SD-side sibling test)",
+      "likelihood": "low",
+      "impact": "low",
+      "mitigation": "The new test file reuses the identical hermetic per-run RUN_SUFFIX (process.pid + Date.now().toString(36)) session-id and scratch-row pattern that resolved QF-20260612-167 for the SD-side suite.",
+      "rollback_plan": "N/A — pattern already proven; no rollback needed."
+    }
+  ],
+
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-QF-CLAIM-PEER-GUARD-001",
+    "witness_files": [
+      "database/migrations/20260717_claim_sd_phantom_session_guard.sql",
+      "database/migrations/20260828_claim_sd_qf_live_peer_guard.sql",
+      "tests/database/claim-sd-qf-live-peer-guard.test.js"
+    ],
+    "lead_subagent_evidence": {
+      "explore": "95884b79-aa71-4569-b250-e06e4385090b",
+      "validation": "1912017f-01ad-4bf9-b836-aed7e6480975"
+    },
+    "estimated_loc_source": 40,
+    "estimated_loc_tests": 145,
+    "tier": "T3 (schema/RPC-adjacent, always Tier 3 per CLAUDE.md risk-keyword rule for database/migration changes)"
+  }
+}
