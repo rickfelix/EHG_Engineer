@@ -16,6 +16,7 @@
 import 'dotenv/config';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { isFalseCompletion } from '../lib/quality/false-completion-predicate.js';
+import { findEvidenceMigrationGaps } from '../lib/quality/migration-data-presence.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -37,7 +38,7 @@ async function fetchAllCompleted() {
       // 'progress' is a known-dead column (SD-LEO-INFRA-PROGRESS-COLUMN-DEAD-TWIN-001) --
       // 'progress_percentage' is the live one, kept here for diagnostic display only (it
       // plays no role in isFalseCompletion()'s actual predicate).
-      .select('sd_key, status, current_phase, completion_date, progress_percentage')
+      .select('id, sd_key, status, current_phase, completion_date, progress_percentage, metadata')
       .eq('status', 'completed')
       .range(from, from + 999);
     if (error) throw new Error(error.message);
@@ -51,11 +52,31 @@ async function fetchAllCompleted() {
 const assertMode = process.argv.includes('--assert');
 const rows = await fetchAllCompleted();
 const anomalous = rows.filter(isFalseCompletion);
+// QF-20260829-936 part 1: a coordinator-annotated dispute on a record that IS internally
+// consistent (so isFalseCompletion misses it) must still render somewhere.
+const disputed = rows.filter((sd) => sd.metadata?.completion_disputed);
 
-console.log(`false-completion census — completed SDs=${rows.length} anomalous=${anomalous.length}`);
+console.log(`false-completion census — completed SDs=${rows.length} anomalous=${anomalous.length} disputed=${disputed.length}`);
 for (const sd of anomalous) {
-  console.log(`  ${sd.sd_key}  current_phase=${sd.current_phase ?? 'null'} completion_date=${sd.completion_date ?? 'null'} progress_percentage=${sd.progress_percentage ?? 'null'}`);
+  const disputedFlag = sd.metadata?.completion_disputed ? ' [DISPUTED]' : '';
+  console.log(`  ${sd.sd_key}  current_phase=${sd.current_phase ?? 'null'} completion_date=${sd.completion_date ?? 'null'} progress_percentage=${sd.progress_percentage ?? 'null'}${disputedFlag}`);
 }
+for (const sd of disputed.filter((sd) => !anomalous.includes(sd))) {
+  console.log(`  ${sd.sd_key}  [DISPUTED] (record otherwise internally consistent)`);
+}
+
+// QF-20260829-936 part 2 (the deeper fix): a record can be internally consistent AND
+// substantively false when its own evidence names a migration whose data never landed.
+console.log('checking completed SDs\' evidence for named migrations with missing data...');
+const dataGaps = [];
+for (const sd of rows) {
+  const gaps = await findEvidenceMigrationGaps(supabase, sd.id);
+  for (const gap of gaps) dataGaps.push({ sd_key: sd.sd_key, ...gap });
+}
+for (const gap of dataGaps) {
+  console.log(`  ${gap.sd_key}  [DATA-ARTIFACT-ABSENT] ${gap.path} -> ${gap.table}.${gap.column} missing ${gap.missing.length}/${gap.expected}: ${gap.missing.join(', ')}`);
+}
+console.log(`data-artifact gaps found: ${dataGaps.length}`);
 
 if (!assertMode) {
   process.exit(0);
