@@ -20,9 +20,14 @@ describe('Sibling A db-content-parity-gate emits on drift (PLAN-TO-LEAD phase, n
     expect(src).toMatch(/!result\.pass\s+&&\s+!result\.skipped/);
   });
 
-  it('failure_category is db_content_drift', () => {
+  it('failure_category distinguishes genuine drift from an ID-resolution failure (SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 FR-4)', () => {
+    // Was a bare pin on 'db_content_drift', which PASSED even while an ID-form miss was
+    // mis-tagged with the SAME category as real drift (FR-4's actual defect). Behavioral
+    // coverage for the branch selection lives in tests/unit/handoff/id-form-normalization.test.js.
     const src = readFileSync(GATE, 'utf8');
     expect(src).toMatch(/failure_category:\s*'db_content_drift'/);
+    expect(src).toMatch(/failure_category:\s*'id_resolution_error'/);
+    expect(src).toMatch(/idResolutionError/);
   });
 
   it('PLAN-TO-LEAD executor consumes this gate (VALIDATION F-A-V-05 reconciliation)', () => {

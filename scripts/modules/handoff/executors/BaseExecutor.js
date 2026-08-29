@@ -429,6 +429,11 @@ export class BaseExecutor {
       const validationContext = {
         sdId,
         sd_id: sd?.id || sdId,  // Use UUID when available for database queries
+        // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-1): normalize BOTH ID forms once here
+        // so downstream gates/executors stop guessing which form sdId/sd_id actually holds.
+        // Retires the previously-dead ctx.sdKey fallback in db-content-parity-gate.js.
+        sdKey: sd?.sd_key || null,
+        sdUuid: sd?.id || null,
         sd: sd ? structuredClone(sd) : null,  // Deep copy to prevent mutation
         prd: prd ? structuredClone(prd) : null,  // SD-LEO-001: Include PRD in context for validators
         prdId: prd?.id,  // Also provide prdId for convenience

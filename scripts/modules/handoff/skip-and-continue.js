@@ -133,11 +133,18 @@ export async function markAsBlocked(supabase, sdId, blockingInfo) {
       can_unblock: true
     };
 
-    // Update SD status to blocked
+    // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-5): 'blocked' is NOT a member of the live
+    // strategic_directives_v2_status_check CHECK constraint (draft, active, in_progress,
+    // planning, review, pending_approval, completed, deferred, cancelled) — writing it here
+    // was guaranteed to raise a 23514 violation on every call, silently defeating the entire
+    // blocked-SD tracking feature. FIX DIRECTION (per the SD): change the WRITER, not the
+    // constraint — blocked_reason/blocked_at/blocked_by_gate/can_unblock/correlation_id in
+    // metadata are already the real, persistable discriminators; status was only decorative.
+    // status is therefore deliberately OMITTED from this update (left unchanged) rather than
+    // set to some other placeholder value.
     const { error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
-        status: 'blocked',
         metadata: blockedMetadata,
         lifecycle_write_token: CANONICAL_WRITER_STAMP,
         updated_at: new Date().toISOString()
@@ -146,8 +153,12 @@ export async function markAsBlocked(supabase, sdId, blockingInfo) {
       .eq('updated_at', currentSD.updated_at); // Optimistic lock
 
     if (updateError) {
-      // Check if it's an optimistic lock failure
-      if (updateError.message.includes('0 rows')) {
+      // Check if it's an optimistic lock failure. Checked by BOTH the PostgREST "0 rows"
+      // code (PGRST116, robust to message wording) and the legacy message substring (kept for
+      // backward compatibility with any caller still relying on the old detection) — per the
+      // SD's own risk note, a message-string-only check would silently misclassify a genuine
+      // hard failure as success if the wording ever changed.
+      if (updateError.code === 'PGRST116' || updateError.message.includes('0 rows')) {
         console.warn('   [skip-and-continue] Optimistic lock failed - SD may already be blocked');
         return { success: true, alreadyBlocked: true };
       }
