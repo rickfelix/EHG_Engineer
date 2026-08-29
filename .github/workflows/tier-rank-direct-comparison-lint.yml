@@ -1,0 +1,31 @@
+name: Tier-Rank Direct-Comparison Lint
+
+# SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2 acceptance criterion).
+# Diff-scoped scan for a hand-rolled min_tier_rank comparison outside the single shared predicate
+# (lib/fleet/tier-ladder.cjs's tierRankVerdict()). See scripts/lint/tier-rank-direct-comparison-lint.mjs
+# for the full design rationale and scripts/lint/tier-rank-direct-comparison-allowlist.json for
+# triaged non-comparison exceptions.
+#
+# BLOCKING FROM DAY ONE: an --all sweep against main reports zero unallowlisted violations already
+# (the shared predicate has exactly two real callers, both reused via tierBlocks()/
+# classifyDispatchIneligibility()), so this ships without an allow-fail bootstrap period.
+
+on:
+  pull_request: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tier-rank-direct-comparison-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Scan diff for unallowlisted direct min_tier_rank comparisons
+        run: node scripts/lint/tier-rank-direct-comparison-lint.mjs --diff
