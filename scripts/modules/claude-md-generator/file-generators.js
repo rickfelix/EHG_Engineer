@@ -314,6 +314,7 @@ function generateCore(data, fileMapping) {
 > Sub-agent routing enforced by PreToolUse hook. See \`scripts/hooks/pre-tool-enforce.cjs\`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
 > For Strunkian writing standards, see \`.strunkian-rules.json\` (enforced by \`scripts/docmon.js\` at pre-push; the former \`docs/reference/strunkian-writing-standards.md\` guide is retired).
+> For long-form reference (governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge rubric, built-in agent architecture, pattern search CLI), see CLAUDE_CORE_MANUAL.md.
 
 ---
 
@@ -625,6 +626,38 @@ function generateLeadManual(data, fileMapping) {
 }
 
 /**
+ * CLAUDE_CORE_MANUAL.md — SD-LEO-INFRA-STATIC-PREFIX-DIET-001 (burn-lever A4).
+ *
+ * CLAUDE_CORE.md measured ~94,414 bytes / ~39,051 harness tokens against the 25,000 cap — the
+ * heaviest file in the family, read by EVERY seat every session (it is not in MUST_FIT_SINGLE_READ
+ * only because its fix was deferred to a later SD; this is that SD).
+ *
+ * WHAT MAY MOVE HERE IS AN ALLOW-LIST, NOT A REGEX VERDICT (same discipline as
+ * CLAUDE_LEAD_MANUAL.md above). A keyword scan for MUST/MANDATORY/GATE/NEVER/ALWAYS/CRITICAL was
+ * run over every REFERENCE-tier candidate first, but several sections a naive reader would call
+ * "reference" (model_routing_guidance's live Haiku-ban, supabase_operations' raw-psql prohibition,
+ * application_architecture's EXEC-phase repo-navigation steps, genesis_codebase's dual-codebase
+ * fact, script_anti_patterns' one-off-script prohibition, migration_execution_protocol's
+ * DATABASE-sub-agent invocation rule, parent_child_overview's full-LEAD→PLAN→EXEC-per-child rule,
+ * execution_philosophy's testing/database-first rules, git_commit_guidelines' commit-format rule,
+ * session_verification's anti-hallucination protocol, database_first_enforcement_expanded's
+ * never-create-files rule, and stage_7_hard_block) each carry a live behavioral rule on individual
+ * content review and were EXCLUDED despite REFERENCE tagging or even despite failing the keyword
+ * scan (the scan is a tripwire that prompts the check, not the verdict itself). Only sections that
+ * survived both the scan AND a manual read — pure descriptive/procedural material with no
+ * "always do X" / "never do Y" clause — are listed in section-file-mapping.json's
+ * CLAUDE_CORE_MANUAL.md entry, each with an individual justification in `_move_justification`.
+ */
+function generateCoreManual(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_CORE_MANUAL.md', {
+    heading: 'Core Manual (reference companion)',
+    purpose: 'Long-form CORE reference — strategic governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge quality rubric, built-in agent architecture, pattern search CLI',
+    loadWhen: 'At the MOMENT OF DOING one of these procedures — not at every session start',
+    note: 'This companion carries REFERENCE ONLY. Every RULE that governs a session (Small PRs, Global Negative Constraints, Gate Failure Protocol, migration/model-routing/supabase-connection prohibitions, etc.) stays in CLAUDE_CORE.md and is in force whether or not this file is read.',
+  });
+}
+
+/**
  * CLAUDE_PLAN_MANUAL.md — the second half of SD-FDBK-INFRA-CLAUDE-LEAD-EXCEEDS-001.
  *
  * CLAUDE_PLAN.md measured 38,166 harness tokens against the 25,000 cap — the worst of the four
@@ -858,6 +891,7 @@ export {
   generateAdamManual,
   generateAdamProvenance,
   generateLeadManual,
+  generateCoreManual,
   generatePlanManual,
   generateCoordinator,
   generateCoordinatorManual,

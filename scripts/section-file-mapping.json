@@ -21,7 +21,6 @@
       "session_verification",
       "session_verification_quick_start",
       "mandatory_phase_transitions",
-      "builtin_agent_integration",
       "model_routing_guidance",
       "sub_agent_routing_reference",
       "signaling_friction",
@@ -31,13 +30,9 @@
       "ui_parity_requirement",
       "stage_7_hard_block",
       "git_commit_guidelines",
-      "pr_size_guidelines",
       "database_first_enforcement_expanded",
       "enforcement_rollout_default",
       "supabase_operations",
-      "database_column_reference",
-      "pattern_search_guide",
-      "ai_quality_russian_judge",
       "parent_child_overview",
       "child_sd_preflight_validation",
       "negative_constraints_global",
@@ -46,8 +41,6 @@
       "qf_lifecycle_reconciliation",
       "queue_ranking_unified",
       "genesis_codebase",
-      "governance_strategic_hierarchy",
-      "governance_chairman_ceo_roles",
       "cascade_invalidation_system",
       "db_ops_protocol",
       "gate_failure_protocol",
@@ -322,5 +315,26 @@
       "sub_agents",
       "quick-reference"
     ]
+  },
+  "CLAUDE_CORE_MANUAL.md": {
+    "description": "CORE reference companion (SD-LEO-INFRA-STATIC-PREFIX-DIET-001, burn-lever A4). Pure reference/procedure lifted out of CLAUDE_CORE.md so the always-read file shrinks toward the Read tool 25k single-call cap. RULES AND PROHIBITIONS DO NOT LIVE HERE — they stay in CLAUDE_CORE.md and bind whether or not this file is read.",
+    "sections": [
+      "governance_strategic_hierarchy",
+      "builtin_agent_integration",
+      "pattern_search_guide",
+      "ai_quality_russian_judge",
+      "pr_size_guidelines",
+      "governance_chairman_ceo_roles",
+      "database_column_reference"
+    ],
+    "_move_justification": {
+      "governance_strategic_hierarchy": "Descriptive 7-layer governance table (Mission/Constitution/etc + DB table + CLI command) — informational, no behavioral rule.",
+      "builtin_agent_integration": "Descriptive three-layer agent architecture table — informational, no behavioral rule.",
+      "pattern_search_guide": "CLI reference for searching the issue-pattern knowledge base — a how-to, consulted when actually searching, not a standing rule.",
+      "ai_quality_russian_judge": "Describes the AI quality-assessment rubric/scoring mechanism — informational about how scoring works, not an instruction to the reader.",
+      "pr_size_guidelines": "Elaboration/rationale for the PR-size tiers; the binding rule itself (Small PRs <=100 LOC target) already lives in CLAUDE.md Session Prologue.",
+      "governance_chairman_ceo_roles": "Descriptive role/authority reference (who owns what) — informational, no standing instruction to the reader.",
+      "database_column_reference": "Short JS usage-example snippet for a priority column gotcha — a reference tip, not a standing rule (its one CRITICAL-looking token is a code-comment string literal, not an instruction)."
+    }
   }
 }
