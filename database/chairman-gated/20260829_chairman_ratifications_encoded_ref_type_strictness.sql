@@ -15,10 +15,15 @@
 -- writing; this constraint is the DB-layer backstop against a future write path bypassing that
 -- check.
 --
--- Additive-only: does NOT retroactively validate the 4 existing numeric-typed rows (Postgres CHECK
--- constraints apply only to new/updated rows; those 4 rows cannot be UPDATEd anyway, since
--- chairman_ratifications_freeze() only allows UPDATE while encoded_at IS NULL, and all 4 are
--- already encoded).
+-- TESTING FINDING (HIGH, evidence 21dc1450-8f9a-4722-8b56-c849537d695c): a plain `ADD CONSTRAINT
+-- ... CHECK` validates ALL EXISTING ROWS by default -- Postgres does NOT limit a CHECK constraint
+-- to new/updated rows unless told to. Live-measured: 4 of 8 (now 10) chairman_ratifications rows
+-- currently violate this predicate (numeric section_id), so a plain ADD CONSTRAINT would FAIL
+-- outright against the live table. `NOT VALID` is required: it skips the existing-row scan (still
+-- enforces the predicate on every future INSERT/UPDATE, which is the actual goal here) without an
+-- explicit VALIDATE CONSTRAINT pass -- exactly right, since those rows cannot be corrected anyway
+-- (chairman_ratifications_freeze() blocks UPDATE while encoded_at IS NOT NULL, and all 4 already-
+-- affected rows are already encoded).
 
 ALTER TABLE chairman_ratifications
   DROP CONSTRAINT IF EXISTS cr_encoded_ref_shape;
@@ -33,4 +38,4 @@ ALTER TABLE chairman_ratifications
         OR jsonb_typeof(encoded_ref -> 'section_id') = 'string'
       )
     )
-  );
+  ) NOT VALID;
