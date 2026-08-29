@@ -3,7 +3,7 @@
  * SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-002-B
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   evaluateRealityGate,
   getBoundaryConfig,
@@ -16,55 +16,105 @@ import {
 } from '../../../lib/eva/reality-gates.js';
 import { createFaithfulRealtimeChannelMock } from '../../helpers/faithful-supabase-realtime-mock.js';
 
-function createMockDb(artifacts = []) {
+// QF-20260829-634: gate_boundary_config and venture_artifacts are two different
+// tables hitting this same mocked `supabase.from()`. boundaryRows feeds the
+// gate_boundary_config().select() read (leg 2/3 resolution); artifacts feeds the
+// venture_artifacts()...in() read (existing per-artifact PASS/BLOCK checks).
+// Passing boundaryRows=null simulates "no canonical row for this transition"
+// (map-miss, DB otherwise healthy) rather than a genuine DB error.
+function createMockDb(artifacts = [], boundaryRows = null) {
   return {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
-    })),
+    from: vi.fn((table) => {
+      if (table === 'gate_boundary_config') {
+        return { select: vi.fn().mockResolvedValue({ data: boundaryRows || [], error: null }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
+      };
+    }),
   };
 }
 
-function createErrorDb(message = 'DB connection failed') {
+// Genuine gate_boundary_config read failure (leg 2: must be distinguished from a
+// map-miss -- both used to collapse into the same deprecated-fallback branch).
+function createBoundaryErrorDb(message = 'DB connection failed') {
   return {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockResolvedValue({ data: null, error: { message } }),
-    })),
+    from: vi.fn((table) => {
+      if (table === 'gate_boundary_config') {
+        return { select: vi.fn().mockResolvedValue({ data: null, error: { message } }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
+      };
+    }),
+  };
+}
+
+// venture_artifacts fetch failure, with a HEALTHY canonical boundary row supplied --
+// isolates the pre-existing "DB error on artifact fetch" fail-closed path from the
+// leg-2/leg-3 boundary-config resolution path.
+function createErrorDb(message = 'DB connection failed', boundaryRows = null) {
+  return {
+    from: vi.fn((table) => {
+      if (table === 'gate_boundary_config') {
+        return { select: vi.fn().mockResolvedValue({ data: boundaryRows || [], error: null }) };
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: null, error: { message } }),
+      };
+    }),
   };
 }
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 describe('RealityGates', () => {
+  // _loadBoundaryFromDB caches gate_boundary_config for 60s at module scope.
+  // Without a reset, whichever test runs first "wins" the cache for every
+  // subsequent test in this file, regardless of that test's own mocked rows.
+  beforeEach(() => {
+    _resetBoundaryCacheForTest();
+  });
+
   describe('isGatedBoundary', () => {
-    // SD-LEO-INFRA-REALITY-GATE-ARTIFACT-001: boundaries 16->17 and 22->23 referenced here
-    // were never in current BOUNDARY_CONFIG (current entries: 5->6, 9->10, 12->13, 17->18, 23->24).
-    // Test data was stale long before this SD; updated to current canonical boundaries.
+    // QF-20260829-634 leg 1: BOUNDARY_CONFIG is now the designated-gated-boundary
+    // registry (6 keys, DB is the sole content authority). 24->25 is included --
+    // it previously had a DB canonical row but NO BOUNDARY_CONFIG key, so
+    // isGatedBoundary(24,25) silently returned false and a BLOCKED verdict from
+    // evaluateRealityGate would never actually stop the orchestrator (the exact
+    // incident class root-caused for 23->24 in escalation 5cd5d5c3).
     it('should return true for configured boundaries', () => {
       expect(isGatedBoundary(5, 6)).toBe(true);
       expect(isGatedBoundary(9, 10)).toBe(true);
       expect(isGatedBoundary(12, 13)).toBe(true);
       expect(isGatedBoundary(17, 18)).toBe(true);
       expect(isGatedBoundary(23, 24)).toBe(true);
+      expect(isGatedBoundary(24, 25)).toBe(true);
     });
 
     it('should return false for non-gated transitions', () => {
       expect(isGatedBoundary(1, 2)).toBe(false);
       expect(isGatedBoundary(7, 8)).toBe(false);
       expect(isGatedBoundary(20, 21)).toBe(false);
-      expect(isGatedBoundary(24, 25)).toBe(false);
     });
   });
 
   describe('getBoundaryConfig', () => {
-    it('should return config for valid boundary', () => {
+    // QF-20260829-634 leg 1: hardcoded required_artifacts content is RETIRED (empty)
+    // for every entry -- gate_boundary_config (DB) is the sole content authority.
+    // The key's presence is what matters now (registry membership for
+    // isGatedBoundary / the leg-3 designated-boundary check), not its content.
+    it('should return a retired (contentless) config for a designated boundary', () => {
       const config = getBoundaryConfig(5, 6);
       expect(config).toBeDefined();
       expect(config.description).toBe('SPARK → ENGINE');
-      expect(config.required_artifacts).toHaveLength(3);
+      expect(config.required_artifacts).toEqual([]);
     });
 
     it('should return null for non-gated boundary', () => {
@@ -112,6 +162,18 @@ describe('RealityGates', () => {
     });
   });
 
+  // QF-20260829-634: these tests now supply a real gate_boundary_config row for
+  // 5->6 (matching the canonical DB shape) so they exercise the DB-driven artifact
+  // evaluation path -- previously the mock had no gate_boundary_config stub at all,
+  // so `dbConfig` was always null and these tests were unknowingly exercising the
+  // now-retired hardcoded BOUNDARY_CONFIG fallback content instead.
+  const BOUNDARY_5_6_ROW = {
+    from_stage: 5, to_stage: 6,
+    required_artifacts: ['truth_problem_statement', 'truth_target_market_analysis', 'truth_value_proposition'],
+    quality_thresholds: { truth_problem_statement: 0.6, truth_target_market_analysis: 0.5, truth_value_proposition: 0.6 },
+    url_verification_required: false,
+  };
+
   describe('evaluateRealityGate - artifact checks', () => {
     it('should PASS when all required artifacts exist with sufficient quality', async () => {
       const artifacts = [
@@ -123,10 +185,11 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        supabase: createMockDb(artifacts),
+        supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
         logger: silentLogger,
       });
       expect(result.status).toBe('PASS');
+      expect(result.config_source).toBe('gate_boundary_config');
       expect(result.reasons).toHaveLength(0);
     });
 
@@ -138,7 +201,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        supabase: createMockDb(artifacts),
+        supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
         logger: silentLogger,
       });
       expect(result.status).toBe('BLOCKED');
@@ -157,7 +220,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        supabase: createMockDb(artifacts),
+        supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
         logger: silentLogger,
       });
       expect(result.status).toBe('BLOCKED');
@@ -176,7 +239,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        supabase: createMockDb(artifacts),
+        supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
         logger: silentLogger,
       });
       expect(result.status).toBe('BLOCKED');
@@ -187,16 +250,86 @@ describe('RealityGates', () => {
   });
 
   describe('evaluateRealityGate - DB errors (fail-closed)', () => {
-    it('should FAIL on database error', async () => {
+    it('should FAIL on database error fetching venture_artifacts', async () => {
+      // Canonical boundary row resolves fine; the venture_artifacts fetch itself fails.
       const result = await evaluateRealityGate({
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        supabase: createErrorDb('Connection timeout'),
+        supabase: createErrorDb('Connection timeout', [BOUNDARY_5_6_ROW]),
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
       expect(result.reasons[0].code).toBe(REASON_CODES.DB_ERROR);
+    });
+  });
+
+  describe('evaluateRealityGate - leg 2: genuine DB read failure vs map-miss', () => {
+    it('should FAIL CLOSED when gate_boundary_config itself errors for a designated boundary', async () => {
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 5,
+        toStage: 6,
+        supabase: createBoundaryErrorDb('gate_boundary_config unreachable'),
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('FAIL');
+      expect(result.passed).toBe(false);
+      expect(result.reasons[0].code).toBe(REASON_CODES.DB_ERROR);
+    });
+  });
+
+  describe('evaluateRealityGate - leg 3: absent canonical row on a designated boundary is LOUD', () => {
+    // The exact incident class root-caused in escalation 5cd5d5c3: gate_boundary_config
+    // read SUCCEEDS (no error) but returns no row for a designated boundary (e.g. lost
+    // during a stage renumbering). Must fail closed, never an advisory NOT_APPLICABLE pass.
+    it('should FAIL CLOSED, not advisory-pass, when a designated boundary has no canonical row', async () => {
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 23,
+        toStage: 24,
+        supabase: createMockDb([], null), // DB read succeeds; zero rows for 23->24
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('FAIL');
+      expect(result.passed).toBe(false);
+      expect(result.reasons[0].code).toBe(REASON_CODES.CANONICAL_ROW_MISSING);
+    });
+
+    it('should still advisory-pass a non-designated boundary with no canonical row', async () => {
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 1,
+        toStage: 2,
+        supabase: createMockDb([], null),
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('NOT_APPLICABLE');
+      expect(result.passed).toBe(true);
+    });
+  });
+
+  describe('evaluateRealityGate - explicit empty-requirements marker', () => {
+    // A canonical row that EXISTS with required_artifacts: [] is a deliberate
+    // "this boundary needs no artifacts" declaration, distinct from a genuinely
+    // absent row (leg 3, fails closed above). Must advisory-pass, not fail closed.
+    it('should PASS (not FAIL) when the canonical row explicitly declares no required artifacts', async () => {
+      const emptyMarkerRow = {
+        from_stage: 23, to_stage: 24,
+        required_artifacts: [],
+        quality_thresholds: {},
+        url_verification_required: false,
+      };
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 23,
+        toStage: 24,
+        supabase: createMockDb([], [emptyMarkerRow]),
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('PASS');
+      expect(result.passed).toBe(true);
+      expect(result.config_source).toBe('gate_boundary_config');
     });
   });
 
@@ -288,17 +421,19 @@ describe('RealityGates', () => {
   });
 
   describe('BOUNDARY_CONFIG', () => {
-    it('should have exactly 5 configured boundaries', () => {
-      expect(Object.keys(BOUNDARY_CONFIG)).toHaveLength(5);
+    // QF-20260829-634 leg 1: re-keyed to the full designated-boundary registry
+    // (adds 24->25, which had a DB canonical row but no BOUNDARY_CONFIG key).
+    it('should have exactly 6 configured boundaries', () => {
+      expect(Object.keys(BOUNDARY_CONFIG)).toEqual(['5->6', '9->10', '12->13', '17->18', '23->24', '24->25']);
     });
 
-    // SD-LEO-INFRA-REALITY-GATE-ARTIFACT-001: corrected boundary 17->18 has 1 artifact
-    // (system_devils_advocate_review); 23->24 has 1 (launch_readiness_checklist).
-    // The "exactly 3 per boundary" invariant was always inaccurate. Replaced with
-    // a per-boundary spot-check that 5->6, 9->10, 12->13 still have 3 artifacts.
-    it('should have at least 1 artifact per boundary', () => {
+    // Content is RETIRED (empty) for every entry -- gate_boundary_config (DB) is the
+    // sole content authority post-FR-2. Key presence alone now signals "designated
+    // Reality Gate boundary"; stale pre-renumber artifact types are never re-checked.
+    it('should have retired (empty) required_artifacts for every boundary', () => {
       for (const [_key, config] of Object.entries(BOUNDARY_CONFIG)) {
-        expect(config.required_artifacts.length).toBeGreaterThanOrEqual(1);
+        expect(config.required_artifacts).toEqual([]);
+        expect(config.description).toBeTruthy();
       }
     });
   });
@@ -309,7 +444,9 @@ describe('RealityGates', () => {
     });
 
     it('should export all REASON_CODES', () => {
-      expect(Object.keys(REASON_CODES)).toHaveLength(6);
+      // QF-20260829-634 leg 3: +CANONICAL_ROW_MISSING (absent canonical row on a
+      // designated boundary must be LOUD, distinct from a genuine DB_ERROR).
+      expect(Object.keys(REASON_CODES)).toHaveLength(7);
     });
   });
 

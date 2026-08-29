@@ -92,7 +92,15 @@ describe('FR-2: formatReasons serializes structured reasons (no [object Object])
 });
 
 // ── FR-3 ─────────────────────────────────────────────────────────────────────
-describe('FR-3: reality-gates 12->13 fallback requires the GTM artifact', () => {
+// QF-20260829-634 leg 1: the hardcoded BOUNDARY_CONFIG fallback content this
+// describe block originally pinned (IDENTITY_GTM_SALES_STRATEGY et al) is now
+// RETIRED for every boundary, including 12->13 -- gate_boundary_config (DB) is
+// the sole content authority. The GTM requirement these tests protect against
+// regressing still lives on, just relocated: it's asserted against the live DB
+// row content, not the deprecated in-code fallback. See gate_boundary_config
+// row '12->13' (identity_gtm_sales_strategy + engine_business_model_canvas +
+// identity_persona_brand) for the canonical source of truth.
+describe('FR-3: reality-gates 12->13 boundary is a designated Reality Gate with retired fallback content', () => {
   const src = readFileSync(
     resolve(dirname(fileURLToPath(import.meta.url)), '../../../lib/eva/reality-gates.js'),
     'utf8',
@@ -100,15 +108,14 @@ describe('FR-3: reality-gates 12->13 fallback requires the GTM artifact', () => 
   // isolate the '12->13' BOUNDARY_CONFIG block
   const block = src.slice(src.indexOf("'12->13'"), src.indexOf("'17->18'"));
 
-  it('includes IDENTITY_GTM_SALES_STRATEGY', () => {
-    expect(block).toMatch(/IDENTITY_GTM_SALES_STRATEGY/);
+  it('12->13 remains a designated boundary (key present) with content retired', () => {
+    expect(block).toMatch(/required_artifacts:\s*\[\]/);
   });
-  it('no longer demands the S14 blueprint artifacts at this boundary', () => {
+  it('no longer carries ANY hardcoded artifact-type content (stale or otherwise) for 12->13', () => {
+    expect(block).not.toMatch(/IDENTITY_GTM_SALES_STRATEGY/);
     expect(block).not.toMatch(/BLUEPRINT_TECHNICAL_ARCHITECTURE/);
     expect(block).not.toMatch(/BLUEPRINT_PROJECT_PLAN/);
-  });
-  it('re-verifies the upstream business-model + persona/brand artifacts', () => {
-    expect(block).toMatch(/ENGINE_BUSINESS_MODEL_CANVAS/);
-    expect(block).toMatch(/IDENTITY_PERSONA_BRAND/);
+    expect(block).not.toMatch(/ENGINE_BUSINESS_MODEL_CANVAS/);
+    expect(block).not.toMatch(/IDENTITY_PERSONA_BRAND/);
   });
 });
