@@ -224,31 +224,11 @@ describe('set-activity-state.cjs — degraded inputs must not throw (it runs on 
   });
 });
 
-describe('set-activity-state.cjs — the settings.json wiring it exists to serve', () => {
-  it('is invoked by all three hook events with node, and no PowerShell invocation remains', () => {
-    // The port only delivers its latency win if .claude/settings.json actually calls it. A
-    // green unit suite against an unreferenced file is the classic writer-without-consumer
-    // shape — assert the wire, not just the endpoint.
-    const settingsPath = path.resolve(__dirname, '../../../.claude/settings.json');
-    const raw = fs.readFileSync(settingsPath, 'utf8');
-
-    expect(raw).not.toMatch(/set-activity-state\.ps1/);
-
-    const commands = [];
-    const walk = (node) => {
-      if (Array.isArray(node)) return node.forEach(walk);
-      if (node && typeof node === 'object') {
-        if (typeof node.command === 'string') commands.push(node.command);
-        return Object.values(node).forEach(walk);
-      }
-    };
-    walk(JSON.parse(raw));
-
-    const activityCommands = commands.filter((c) => c.includes('set-activity-state'));
-    expect(activityCommands).toHaveLength(3); // PreToolUse, UserPromptSubmit, Stop
-    for (const cmd of activityCommands) {
-      expect(cmd).toMatch(/scripts\/hooks\/set-activity-state\.cjs/);
-      expect(cmd).not.toMatch(/powershell/i);
-    }
-  });
-});
+// NOTE (SD-LEO-INFRA-PRETOOLUSE-HOOK-LATENCY-001 split, coordinator disposition on signals
+// 119ef20b/54a68258): a "settings.json wiring" test lived here, asserting all 3 hook sites
+// call this file and no PowerShell invocation remains. .claude/settings.json is path-wide
+// reserved to SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001's chairman-gated ceremony lock
+// (ceremony-scope-lock-lint, FR-3/FR-4), so this PR does not touch it -- the wiring and its
+// test both live in follow-up/SD-LEO-INFRA-PRETOOLUSE-HOOK-LATENCY-001-settings-wiring (PR
+// #7665, held pending the chairman's ruling). This file alone is a writer without a wired
+// consumer until #7665 lands -- documented, not silently absorbed.
