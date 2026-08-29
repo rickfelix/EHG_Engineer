@@ -139,6 +139,33 @@ describe('FR-1 negative control — the fix teaches the chain to LOOK, it does n
   });
 });
 
+describe('QF-20260829-186 — recovery is not limited to current_phase=LEAD_FINAL', () => {
+  // THE BUG: recoverStrandedFinal hard-filtered .eq('current_phase', 'LEAD_FINAL'), so a
+  // pending_approval SD stranded one phase earlier at PLAN_VERIFICATION had NO recovery lane at
+  // all (the backlog ranker separately excludes status=pending_approval from the claimable belt,
+  // so this lane is the ONLY path back). Both phases are one handoff (LEAD-FINAL-APPROVAL) away.
+  it('adopts a row stranded at PLAN_VERIFICATION, not only LEAD_FINAL', async () => {
+    const claimed = [];
+    const planVerificationRow = { ...row('SD-PLANVERIFY-007'), current_phase: 'PLAN_VERIFICATION' };
+    const sb = fakeSb({ stranded: [planVerificationRow], claimed });
+    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    expect(r?.action).toBe('resume_final');
+    expect(r.sd).toBe('SD-PLANVERIFY-007');
+    expect(claimed).toEqual(['SD-PLANVERIFY-007']);
+    // The message names the row's actual phase rather than a hardcoded "LEAD_FINAL" label.
+    expect(r.message).toMatch(/pending_approval\/PLAN_VERIFICATION/);
+  });
+
+  it('still adopts a LEAD_FINAL row exactly as before (no regression to the original class)', async () => {
+    const claimed = [];
+    const sb = fakeSb({ stranded: [row('SD-LEADFINAL-008')], claimed });
+    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    expect(r?.action).toBe('resume_final');
+    expect(claimed).toEqual(['SD-LEADFINAL-008']);
+    expect(r.message).toMatch(/pending_approval\/LEAD_FINAL/);
+  });
+});
+
 describe('SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 FR-1 — recovery text names the safe-merge script', () => {
   // This site's prior text was bare `gh pr merge --delete-branch`, which merges server-side then
   // fails locally in a worktree -- teaching a false "merge failed" conclusion (the Bravo incident,

@@ -1042,6 +1042,11 @@ const STRANDED_CANDIDATE_LIMIT = 5;
 // Only recover SDs that have been parked a while, so we never race a worker mid-finalize (the brief
 // window between a transition and the next handoff). A genuinely stranded SD sits indefinitely.
 const STRANDED_MIN_AGE_MS = 5 * 60 * 1000;
+// QF-20260829-186: recoverStrandedFinal hard-filtered current_phase='LEAD_FINAL', so a
+// pending_approval SD stranded one phase earlier at PLAN_VERIFICATION had NO recovery lane at all
+// (the backlog ranker separately excludes status=pending_approval from the claimable belt, so this
+// lane is the only path back). Both phases are one handoff (LEAD-FINAL-APPROVAL) from shipped.
+const STRANDED_RECOVERABLE_PHASES = ['LEAD_FINAL', 'PLAN_VERIFICATION'];
 
 async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
   try {
@@ -1052,7 +1057,7 @@ async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
       // whole incident — this lane could not see a hold because it never read one.
       .select('sd_key, status, current_phase, updated_at, metadata, sd_type, target_application, parent_sd_id')
       .eq('status', 'pending_approval')
-      .eq('current_phase', 'LEAD_FINAL')
+      .in('current_phase', STRANDED_RECOVERABLE_PHASES)
       .is('claiming_session_id', null)
       .lt('updated_at', cutoffIso)            // parked > STRANDED_MIN_AGE_MS — not a mid-finalize race
       .order('updated_at', { ascending: true }) // oldest stranded first
@@ -1099,7 +1104,7 @@ async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
           // GitHub -- name scripts/gh-merge-safe.mjs instead. No specific PR# is available at this
           // point (this message covers whichever PR is currently open for the SD), so <PR#> is a
           // literal placeholder the reader fills in, same convention as this SD's doc-site fixes.
-          message: `Recovered stranded SD ${sd.sd_key} (was pending_approval/LEAD_FINAL with claim cleared — one handoff from shipped). Re-attach + finish: node scripts/sd-start.js ${sd.sd_key}, then node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key}. If PR_MERGE_VERIFICATION blocks, merge the PR first via node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch, then re-run.`
+          message: `Recovered stranded SD ${sd.sd_key} (was pending_approval/${sd.current_phase} with claim cleared — one handoff from shipped). Re-attach + finish: node scripts/sd-start.js ${sd.sd_key}, then node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key}. If PR_MERGE_VERIFICATION blocks, merge the PR first via node scripts/gh-merge-safe.mjs <PR#> --merge --delete-branch, then re-run.`
             // FR-2: soft holds go in the MESSAGE, not only in a field. The gate the incident needed
             // was readable by humans and invisible to the machine; a field a caller may or may not
             // print reproduces that. This is what a worker actually sees.
