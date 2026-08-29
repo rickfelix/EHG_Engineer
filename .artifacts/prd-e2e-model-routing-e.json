@@ -1,0 +1,164 @@
+{
+  "executive_summary": "Route one real e2e evidence-agent (testing-agent) run to a cheaper model via the Task-tool per-invocation override, and record the measured cost delta versus the Opus baseline in model_usage_log.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Invoke a real e2e-evidence testing-agent Task via the Agent tool with an explicit per-invocation model override (sonnet) instead of the compiled default (opus)",
+      "description": "Use the Agent tool's documented model parameter, which takes precedence over the agent definition's compiled frontmatter (.claude/agents/testing-agent.md, which always emits model: opus per scripts/generate-agent-md-from-db.js:54 MODEL_TIER_MAP). The invocation must perform genuine e2e verification work (not a stub) against the SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001 parent's evidence surface, so the resulting cost/quality data is representative.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": ["AC-1: Agent tool call includes model=sonnet override", "AC-2: The invoked agent performs real e2e evidence work and returns a substantive result (not a trivial echo)", "AC-3: The invocation's subagent_type/label is recorded for later reconciliation"]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Record the cheaper-tier run's actual token usage and cost in model_usage_log with tokens_source='caller'",
+      "description": "Since programmatic sub-agent execution paths (execute-subagent.js/executor.js) never call getLLMClient() for Task-tool agents, model_usage_log rows for testing-agent are self-logged via track-model-usage.js and carry empty metadata ({}). This FR requires deriving actual input/output token counts for the sonnet run from the session transcript (e.g. via scripts/effort-experiment/attribute-tokens.mjs, pinned to the specific agent-*.jsonl transcript file for this invocation to avoid misattribution under concurrent agents) and writing a model_usage_log row with populated metadata.input_tokens/output_tokens/duration_ms and metadata.tokens_source='caller'.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": ["AC-1: A model_usage_log row exists for this specific invocation with non-empty metadata.input_tokens and metadata.output_tokens", "AC-2: reported_model_name reflects the sonnet override, not opus", "AC-3: The transcript file used for attribution is explicitly named in the row's metadata to prevent silent misattribution to a concurrent agent's transcript"]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Compute and record the per-run cost delta between the sonnet run and a comparable recent Opus baseline",
+      "description": "Using lib/cost/llm-pricing.js rates (opus: $15/$75 per 1M in/out; sonnet: $3/$15 per 1M in/out), compute USD cost for both the new sonnet run and the most recent pre-existing Opus testing-agent run(s) in model_usage_log, and record both figures plus the percentage/absolute delta in the SD's completion evidence.",
+      "priority": "HIGH",
+      "acceptance_criteria": ["AC-1: A written cost comparison (opus baseline USD vs sonnet run USD) exists in completion evidence", "AC-2: The comparison cites the specific model_usage_log row ids used on both sides", "AC-3: The delta calculation uses lib/cost/llm-pricing.js rates, not hardcoded ad-hoc numbers"]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Do not modify the global MODEL_TIER_MAP flattening or leo_sub_agents.model_tier for TESTING",
+      "description": "Explore/Validation evidence confirmed the opus-for-all-tiers flattening in scripts/generate-agent-md-from-db.js:54 is a deliberate, documented architectural decision ('Thinking effort strategy: all agents use opus, effort is controlled via thinking budget'), not a defect. This SD must not alter that global policy; the cheaper-tier routing is scoped to a single explicit Task-tool invocation, using the harness's own per-call override, leaving the compiled-default behavior for all other invocations unchanged.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": ["AC-1: No diff touches scripts/generate-agent-md-from-db.js's MODEL_TIER_MAP", "AC-2: No diff touches leo_sub_agents.model_tier for any row", "AC-3: Completion evidence explicitly states the global policy was left intact and why"]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Record a completion-flag finding distinguishing the two separate 'model routing' mechanisms discovered in this codebase",
+      "description": "This investigation found two unrelated mechanisms both called 'model routing': (a) lib/sub-agent-executor/model-routing.js's effort-based thinking-budget routing (real, wired into lib/llm/client-factory.js, used only by EVA venture-pipeline stage code, not by LEO sub-agents), and (b) the compiled-agent-frontmatter model field used by Task-tool LEO sub-agent invocations (always opus by design). Future SDs referencing 'model routing' for LEO sub-agents should not conflate these two systems. File this as a completion-flag finding, not a fix.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": ["AC-1: Completion flags capture explicitly names both mechanisms and their actual consumers", "AC-2: No new SD is filed to 'fix' either mechanism as part of this SD"]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "Use the Agent tool's model parameter (this session's own harness capability) rather than any repo-level config change",
+      "rationale": "Confirmed via Explore evidence that no per-invocation override point exists inside this repo's generator/executor code path for Task-tool agents — the only override lever available without touching the deliberately-flattened global policy is the harness's own Agent-tool call parameter."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Pin token attribution to the exact transcript file for the sonnet-override invocation",
+      "rationale": "scripts/effort-experiment/attribute-tokens.mjs's default heuristic selects the most-recently-modified agent-*.jsonl within a time window, which is unreliable when multiple agents run concurrently in the same session (a documented false-positive risk from prior SD work in this session) — explicit --file targeting avoids misattributing another agent's tokens/cost to this run."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "Cost computation must use lib/cost/llm-pricing.js as the single source of per-token USD rates",
+      "rationale": "Avoids drift between this SD's evidence and any other cost-reporting tooling in the repo (llm-cost-report.mjs, cost-governor.mjs) that already depends on this same pricing table."
+    }
+  ],
+  "system_architecture": {
+    "overview": "No new production component is introduced. This SD exercises an existing harness-level capability (Task-tool per-invocation model override) for one real e2e-evidence-agent run, and adds a small measurement step (token attribution + cost delta) around that single invocation.",
+    "components": [
+      {"name": "Agent tool (Task-tool) invocation", "responsibility": "Executes the e2e evidence-agent (testing-agent) with an explicit model=sonnet override for this one run", "technology": "Claude Code harness Agent/Task tool"},
+      {"name": "scripts/effort-experiment/attribute-tokens.mjs", "responsibility": "Attributes real input/output token counts from the session transcript to this specific invocation", "technology": "Node.js CLI, reads agent-*.jsonl"},
+      {"name": "model_usage_log table (write)", "responsibility": "Stores the measured invocation's model/tokens/cost metadata for later reconciliation", "technology": "Supabase/Postgres"},
+      {"name": "lib/cost/llm-pricing.js", "responsibility": "Provides authoritative USD-per-1M-token rates used for the cost delta calculation", "technology": "Node.js module"}
+    ],
+    "data_flow": "Agent tool invokes testing-agent with model=sonnet -> agent performs real e2e evidence work, producing a transcript (agent-*.jsonl) -> attribute-tokens.mjs reads that specific transcript file and sums usage -> a model_usage_log row is written (source='manual'/tokens_source='caller') with the derived token counts and reported_model_name -> cost is computed from lib/cost/llm-pricing.js rates for both this row and a cited pre-existing Opus baseline row -> the comparison is recorded in SD completion evidence.",
+    "integration_points": ["Claude Code Agent/Task tool (this session's harness)", "Supabase model_usage_log table", "lib/cost/llm-pricing.js"]
+  },
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "Sonnet-override invocation completes and produces substantive e2e evidence", "test_type": "e2e", "given": "The Agent tool is called with subagent_type=testing-agent and model=sonnet", "when": "The agent performs real e2e verification work against the parent SD's evidence surface", "then": "The agent returns a non-trivial result and a corresponding agent-*.jsonl transcript file is created"},
+    {"id": "TS-2", "scenario": "Token attribution correctly targets the sonnet run's transcript, not a concurrent agent's", "test_type": "integration", "given": "Multiple agent-*.jsonl transcripts exist in the session directory from concurrent invocations", "when": "attribute-tokens.mjs is run with an explicit --file pointing at the sonnet run's transcript", "then": "The reported token counts match only the sonnet run's usage blocks, not a different agent's"},
+    {"id": "TS-3", "scenario": "model_usage_log row is written with populated metadata", "test_type": "integration", "given": "Token counts have been derived for the sonnet run", "when": "A model_usage_log row is inserted for this invocation", "then": "metadata.input_tokens and metadata.output_tokens are non-zero, reported_model_name reflects sonnet, and metadata.tokens_source='caller'"},
+    {"id": "TS-4", "scenario": "Cost delta calculation uses correct pricing rates", "test_type": "unit", "given": "lib/cost/llm-pricing.js rates (opus $15/$75, sonnet $3/$15 per 1M tokens) and the two rows' token counts", "when": "The delta is computed", "then": "The computed USD figures match a manual recomputation from the same token counts and rates"},
+    {"id": "TS-5", "scenario": "Global model-routing policy is left unmodified", "test_type": "integration", "given": "The pre-existing MODEL_TIER_MAP in scripts/generate-agent-md-from-db.js and leo_sub_agents.model_tier for TESTING", "when": "This SD's diff is reviewed", "then": "Neither the MODEL_TIER_MAP entries nor the TESTING row's model_tier value have changed"},
+    {"id": "TS-6", "scenario": "No compiled-frontmatter regression for other agents", "test_type": "regression", "given": "The compiled .claude/agents/testing-agent.md (and other agents) prior to this SD", "when": "node scripts/generate-agent-md-from-db.js is re-run after this SD's changes", "then": "All agents (including testing-agent) still compile with model: opus in their frontmatter, since no source changed"}
+  ],
+  "acceptance_criteria": [
+    "One real e2e-evidence testing-agent Task-tool invocation is executed with an explicit model=sonnet override, producing substantive (non-trivial) evidence output",
+    "A model_usage_log row exists for that specific invocation with populated token/cost metadata (metadata.tokens_source='caller'), citable by row id",
+    "A written cost comparison (opus baseline vs sonnet run, both citing specific model_usage_log row ids and using lib/cost/llm-pricing.js rates) is recorded in this SD's completion evidence",
+    "The global MODEL_TIER_MAP / leo_sub_agents.model_tier policy is verifiably unchanged by this SD's diff"
+  ],
+  "risks": [
+    {
+      "risk": "Sonnet-tier e2e evidence quality may be materially lower than the Opus baseline, making the cost comparison misleading if quality isn't also considered",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Record a qualitative note on evidence completeness/depth alongside the cost figures in completion evidence, rather than presenting cost savings as a pure win without the quality caveat",
+      "rollback_plan": "No rollback needed — this SD does not change the default routing for any other invocation; a single documented experimental run carries no lasting system risk"
+    },
+    {
+      "risk": "attribute-tokens.mjs's default transcript-selection heuristic misattributes tokens from a concurrent agent running in the same session window",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Always pass an explicit --file argument naming the exact transcript for the sonnet-override invocation rather than relying on the recency heuristic (TR-2)",
+      "rollback_plan": "If misattribution is discovered after the fact, re-derive token counts directly from the specific transcript file's usage blocks and correct the model_usage_log row's metadata"
+    },
+    {
+      "risk": "This narrow, single-run scope could be read as under-delivering the parent SD's broader framing ('route e2e evidence-agent invocations' — plural, ongoing) if not clearly documented as an intentionally scoped first measurement",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "Completion evidence explicitly states this SD delivers one measured data point per the parent's stated per-child criterion ('one criterion, not the center'), and that durable/global routing changes are explicitly out of scope pending a LEAD-level decision on the deliberate opus-for-all policy",
+      "rollback_plan": "Not applicable — no durable change is made that would need rolling back"
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {"phase": "Phase 1: Baseline capture", "description": "Query model_usage_log for the most recent representative Opus testing-agent row(s) to serve as the cost baseline", "deliverables": ["Baseline model_usage_log row id(s) and computed USD cost"]},
+      {"phase": "Phase 2: Sonnet-override run", "description": "Invoke the Agent tool with subagent_type=testing-agent and model=sonnet to perform one real e2e-evidence task against the parent SD's evidence surface", "deliverables": ["Completed agent transcript (agent-*.jsonl)", "Substantive e2e evidence output"]},
+      {"phase": "Phase 3: Measurement and recording", "description": "Attribute tokens from the pinned transcript file, compute cost via lib/cost/llm-pricing.js, write a model_usage_log row, and record the cost delta plus quality caveat in completion evidence", "deliverables": ["model_usage_log row with populated metadata", "Written cost-delta comparison in completion evidence"]}
+    ],
+    "technical_decisions": [
+      "Use the harness's own Agent-tool per-invocation model parameter rather than modifying repo-level MODEL_TIER_MAP or leo_sub_agents.model_tier, because the flattening to opus is a deliberate, documented architectural policy (confirmed by Explore/Validation evidence), not a defect to fix inside this narrowly-scoped child SD",
+      "Pin token attribution to an explicit transcript file rather than relying on attribute-tokens.mjs's recency heuristic, because this session runs concurrent agents whose transcripts could otherwise be misattributed"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {"name": "Parent SD SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001", "interaction": "Consumes this child's recorded cost-delta evidence as one of its measured criteria", "frequency": "Once, at this child's completion"}
+    ],
+    "dependencies": [
+      {"name": "model_usage_log table", "type": "downstream", "contract": "Row written with metadata.tokens_source='caller' and populated token counts", "failure_handling": "If the insert fails, completion evidence cites the raw transcript-derived numbers directly instead"}
+    ],
+    "data_contracts": [
+      {"contract_name": "model_usage_log row for this invocation", "schema": "id, session_id, sd_id, phase, subagent_type, subagent_configured_model, reported_model_name, reported_model_id, metadata (JSON: input_tokens, output_tokens, duration_ms, tokens_source, transcript_file)", "validation": "Manually verified by re-querying the row after insert", "versioning": "No schema change; uses existing model_usage_log columns"}
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "None — this is a one-time measured experiment, not a deployed code path change"
+    },
+    "observability_rollout": {
+      "monitoring": ["The written model_usage_log row is queryable like any other row for future cost analysis"],
+      "alerts": [],
+      "rollout_strategy": "Not applicable — single measured invocation, no rollout",
+      "rollback_trigger": "Not applicable",
+      "rollback_procedure": "Not applicable"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/sub-agent-executor/model-routing.js",
+      "lib/sub-agent-executor/phase-model-config.js",
+      "config/phase-model-config.json",
+      "scripts/generate-agent-md-from-db.js",
+      "lib/llm/client-factory.js",
+      "lib/cost/llm-pricing.js",
+      "scripts/execute-subagent.js",
+      "lib/sub-agent-executor.js",
+      "lib/sub-agent-executor/executor.js",
+      "scripts/track-model-usage.js",
+      "scripts/effort-experiment/attribute-tokens.mjs"
+    ],
+    "patterns_identified": [
+      "Two unrelated 'model routing' systems exist in this codebase: effort-based thinking-budget routing (lib/sub-agent-executor/model-routing.js + client-factory.js, real and consumed only by EVA venture-pipeline stage code) and compiled-agent-frontmatter model selection for Task-tool LEO sub-agents (always flattened to opus by scripts/generate-agent-md-from-db.js's MODEL_TIER_MAP, by deliberate design)",
+      "model_usage_log rows self-logged by track-model-usage.js for Task-tool agents (e.g. testing-agent) consistently carry empty metadata ({}), because self-logging happens before any work is done and the attribution mechanism is fail-soft",
+      "scripts/effort-experiment/attribute-tokens.mjs already exists as the canonical way to derive real token counts from a session transcript after the fact, but its default file-selection heuristic is unsafe under concurrent agents"
+    ],
+    "key_decisions": [
+      "Do not modify the global opus-for-all MODEL_TIER_MAP or leo_sub_agents.model_tier — confirmed via VALIDATION and Explore evidence to be deliberate, not a defect, and changing it has an unenumerated fleet-wide blast radius outside this child SD's narrow scope",
+      "Use the Agent tool's own per-invocation model parameter (a real, harness-native lever, not a workaround) as the mechanism satisfying the parent SD's per-child criterion of 'one real evidence run at a cheaper tier with a measured cost delta'"
+    ],
+    "exploration_date": "2026-08-29"
+  }
+}

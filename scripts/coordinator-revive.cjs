@@ -186,9 +186,14 @@ async function main() {
     console.log(`\nrevive-all: ${inserted} inserted, ${skipped} skipped (already pending), ${failed} failed`);
     // FR-1/FR-2: revive-all is the path most likely to be run unattended, which is where
     // the silence cost the most — 21 requests expired here without anyone noticing.
-    const allWarn = formatQueueWarning(await assessQueueHealth(supabase));
+    const allHealth = await assessQueueHealth(supabase);
+    const allWarn = formatQueueWarning(allHealth);
     if (allWarn) console.log(allWarn);
     if (failed > 0) process.exit(2);
+    if (actuatorIsDead(allHealth)) {
+      console.error('\nFAIL LOUD: the revival actuator has never consumed a request -- these rows will not be revived.');
+      process.exit(3);
+    }
     return;
   }
 
@@ -212,6 +217,10 @@ async function main() {
     console.log(`See docs/protocol/coordinator-worker-revival.md for the contract.`);
     const warn = formatQueueWarning(health);
     if (warn) console.log(warn);
+    if (actuatorIsDead(health)) {
+      console.error('\nFAIL LOUD: the revival actuator has never consumed a request -- this row will not be revived.');
+      process.exit(3);
+    }
   } else if (r.alreadyPending) {
     // FR-3: idempotency behaviour is unchanged — only how it READS. On a queue that has
     // never delivered, the blocking pending row is evidence of the dead consumer, not of
@@ -226,6 +235,10 @@ async function main() {
     console.log(`  Run: SELECT id, requested_at, expires_at FROM worker_spawn_requests WHERE requested_callsign='${callsign}' AND status='pending';`);
     const warn = formatQueueWarning(health);
     if (warn) console.log(warn);
+    if (actuatorIsDead(health)) {
+      console.error('\nFAIL LOUD: the revival actuator has never consumed a request -- this row will not be revived.');
+      process.exit(3);
+    }
   } else {
     console.error(`✗ Failed to insert revival request: ${r.error?.message || 'unknown error'}`);
     process.exit(2);
@@ -280,6 +293,17 @@ async function assessQueueHealth(supabase) {
 }
 
 /**
+ * FAIL-LOUD contract (QF-20260829-649): a queue that has NEVER fulfilled a single request
+ * across its whole history is dead-by-construction, not a transient gap -- reporting
+ * "requested" as if it were "will happen" is exactly the write-only-success illusion this
+ * QF exists to close. Unreadable health (null) is NOT treated as dead: silence about
+ * whether a consumer exists must never itself become a false failure.
+ */
+function actuatorIsDead(health) {
+  return Boolean(health && health.neverConsumed);
+}
+
+/**
  * Render the caller-facing warning. Returns '' when the queue has ever delivered, so a
  * working consumer produces no noise (TS-2 pins this off-switch).
  *
@@ -307,7 +331,7 @@ function formatQueueWarning(health) {
   return lines.join('\n');
 }
 
-module.exports = { NATO, findIdleCallsigns, reviveOne, insertSpawnRequest, isExpiredPendingRow, reapExpiredPendingRequests, assessQueueHealth, formatQueueWarning };
+module.exports = { NATO, findIdleCallsigns, reviveOne, insertSpawnRequest, isExpiredPendingRow, reapExpiredPendingRequests, assessQueueHealth, formatQueueWarning, actuatorIsDead };
 
 // Only run main() when invoked as CLI (not when require'd by tests).
 if (require.main === module) {
