@@ -4,7 +4,7 @@
  * closes that gap by checking ventures.orchestrator_state/workflow_status directly.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { checkVentureTraversalStalls, readVenturePark } from '../../../scripts/adam-quiet-tick.mjs';
+import { checkVentureTraversalStalls, readVenturePark, isChairmanApprovedTermination } from '../../../scripts/adam-quiet-tick.mjs';
 
 function readBuilder(data) {
   const b = {
@@ -28,14 +28,27 @@ function ventureBuilder(rows) {
     // same filtered { data, error } the prior direct-await produced, single (short) page.
     range: () => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }),
     then: (resolve, reject) => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
+    maybeSingle: () => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r)))[0] || null, error: null }),
   };
   return b;
 }
 
-function makeSupabase({ ventures = [], staleStageExecutions = new Set() } = {}) {
+/** Filter-applying chairman_decisions builder for QF-20260829-232's terminal-flip check. */
+function decisionsBuilder(rows) {
+  const filters = [];
+  const b = {
+    select: () => b,
+    eq: (col, val) => { filters.push((r) => r[col] === val); return b; },
+    then: (resolve, reject) => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
+  };
+  return b;
+}
+
+function makeSupabase({ ventures = [], staleStageExecutions = new Set(), terminalVentures = [], chairmanDecisions = [] } = {}) {
   return {
     from(table) {
-      if (table === 'ventures') return ventureBuilder(ventures);
+      if (table === 'ventures') return ventureBuilder([...ventures, ...terminalVentures]);
+      if (table === 'chairman_decisions') return decisionsBuilder(chairmanDecisions);
       if (table === 'stage_executions') {
         // Return a fresh row only for venture IDs NOT in staleStageExecutions —
         // i.e. actively-executing ventures have a recent stage_executions row.
@@ -183,5 +196,42 @@ describe('checkVentureTraversalStalls', () => {
     const sb = { from: () => { throw new Error('boom'); } };
     const prior = { v9: 123 };
     await expect(checkVentureTraversalStalls(sb, prior)).resolves.toMatchObject({ alerted: [], snapshot: prior });
+  });
+
+  describe('QF-20260829-232: exclusion-set-blind terminal-flip alarm', () => {
+    it('a watched venture that flips to cancelled by a non-chairman writer fires QUIET_TICK_VENTURE_TERMINAL_FLIP (the witnessed 10:44Z shape)', async () => {
+      const sb = makeSupabase({
+        terminalVentures: [{ id: 'v-altifyai', name: 'AltifyAI', status: 'cancelled', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: null }],
+        chairmanDecisions: [{ venture_id: 'v-altifyai', decision: 'cancel', status: 'rejected' }], // rejected veto, NOT an approved kill
+      });
+      const lines = [];
+      const log = vi.spyOn(console, 'log').mockImplementation((...a) => lines.push(a.join(' ')));
+      await checkVentureTraversalStalls(sb, { 'v-altifyai': Date.now() - 60_000 });
+      log.mockRestore();
+      const line = lines.find((l) => l.includes('QUIET_TICK_VENTURE_TERMINAL_FLIP'));
+      expect(line).toBeTruthy();
+      expect(line).toMatch(/venture=v-altifyai/);
+      expect(line).toMatch(/status=cancelled/);
+    });
+
+    it('a chairman-approved kill decision silences the alarm — that flip is governance, not anomaly', async () => {
+      const sb = makeSupabase({
+        terminalVentures: [{ id: 'v-sunset', name: 'Sunset Co', status: 'killed', orchestrator_state: 'blocked', updated_at: '2020-01-01', is_demo: false, deleted_at: null }],
+        chairmanDecisions: [{ venture_id: 'v-sunset', decision: 'kill', status: 'approved' }],
+      });
+      const lines = [];
+      const log = vi.spyOn(console, 'log').mockImplementation((...a) => lines.push(a.join(' ')));
+      await checkVentureTraversalStalls(sb, { 'v-sunset': Date.now() - 60_000 });
+      log.mockRestore();
+      expect(lines.find((l) => l.includes('QUIET_TICK_VENTURE_TERMINAL_FLIP'))).toBeUndefined();
+    });
+
+    it('isChairmanApprovedTermination: pure predicate — only an APPROVED kill/cancel/sunset counts', () => {
+      expect(isChairmanApprovedTermination([{ decision: 'kill', status: 'approved' }])).toBe(true);
+      expect(isChairmanApprovedTermination([{ decision: 'cancel', status: 'rejected' }])).toBe(false);
+      expect(isChairmanApprovedTermination([{ decision: 'pause', status: 'approved' }])).toBe(false);
+      expect(isChairmanApprovedTermination([])).toBe(false);
+      expect(isChairmanApprovedTermination(undefined)).toBe(false);
+    });
   });
 });
