@@ -127,6 +127,17 @@ Object creation: only AI Scan creates blueprints; the 3 canonical UI paths + own
 | Blueprint quality scoring | S14–16 / S16 promotion gate | `lib/eva/blueprint-scoring/scoreAndPersist` | ⚠️ unwired (no production caller) | **Defer** |
 | Experiment / outcome calibration | lifecycle kill gates (3/5/13) | `gate-signal-service.js`, `gate-outcome-bridge.js`, `evaluation_profile_outcomes` | ✅ wired, 0 outcomes | Keep (exercise post-launch) |
 
+**Addendum (SD-LEO-INFRA-ENCODE-CHAIRMAN-VENTURE-001, 2026-08-29)**: the "Chairman Constraints"
+qualitative filter layer (`chairman_constraints` table, evaluated by
+`lib/eva/stage-zero/synthesis/chairman-constraints.js`) had a pre-existing defect where the
+evaluator's switch matched lowercase snake_case literals but live `constraint_key` values are
+UPPER_SNAKE_CASE — every seeded production row fell to the unscored default branch, and
+`filter_type` was never read so `hard_reject` rows could never structurally block a venture.
+Both fixed. Four new doctrine-dimension rows encoded (ambition-as-moat/5-10X value, jagged-space
+targeting, edge-of-capability timing, technology-convergence), sourced from the chairman's
+2026-08-26 Card C decision. This layer remains architecturally separate from `venture_stages`,
+which has zero scoring columns.
+
 ---
 
 ## §6. Future Investigation: Strategic Frame Intelligence at Stage 0
