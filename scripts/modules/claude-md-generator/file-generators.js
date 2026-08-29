@@ -819,6 +819,34 @@ function generateSolomonProvenance(data, fileMapping) {
   });
 }
 
+/**
+ * CLAUDE_SOLOMON_MODEL_POSTURE.md — Solomon's section-choice ruling, 2026-08-29.
+ *
+ * The regen pipeline WEDGED: CLAUDE_SOLOMON.md went 73 tokens over the single-read cap and
+ * assertSingleReadFit THROWS for that file (it is on MUST_FIT_SINGLE_READ), so every encode by
+ * every seat failed until a section moved out. Solomon ruled on his own contract and chose
+ * "Model Posture" — ~600 tokens, 8x the deficit, so the next encode does not re-wedge.
+ *
+ * WHY THIS COMPANION IS NOT CLAUDE_SOLOMON_MANUAL.md, which already exists and would have needed
+ * no code at all: the Model Posture content BINDS (pin verification before a sweep, re-registration
+ * on any pin change, the P4 automatic-reversion rule). The MANUAL companion's own contract line
+ * says rules, prohibitions and durable duties DO NOT LIVE THERE. Routing binding content into the
+ * file that disclaims binding content would have bought a one-line diff by making the two
+ * companions mean the same thing. Hence a third companion whose stated contract is the opposite:
+ * this file BINDS, and the gated contract keeps a pointer to it.
+ *
+ * Read on any pin change, Fable-window event, or budget-state change — not at every session start,
+ * which is what makes it eligible to leave the gated file at all.
+ */
+function generateSolomonModelPosture(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_SOLOMON_MODEL_POSTURE.md', {
+    heading: 'Solomon Model Posture (binding companion)',
+    purpose: 'Model/Max-plan pin, bounded-window swap strategy, availability degradation, and the P4 portability guard',
+    loadWhen: 'On any pin change, Fable-window open/close, or budget-state change — before acting on model posture',
+    note: 'UNLIKE the MANUAL and PROVENANCE companions, this file BINDS. It was moved out of CLAUDE_SOLOMON.md for READ-CAP reasons only, and CLAUDE_SOLOMON.md carries a pointer marking it BINDING. Its clauses are in force whether or not this file is read; if you are changing the pin, you are required to read it.',
+  });
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
@@ -837,6 +865,7 @@ export {
   generateSolomon,
   generateSolomonManual,
   generateSolomonProvenance,
+  generateSolomonModelPosture,
   findCopiedSharedSections,
   assertSharedSectionsNotCopied
 };

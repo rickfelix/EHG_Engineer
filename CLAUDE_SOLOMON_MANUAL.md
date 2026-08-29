@@ -1,8 +1,8 @@
-<!-- file_content_hash: 7e4e2e4165ffcb37 -->
+<!-- file_content_hash: 314c9a01ed8bbdd4 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-08-29 7:16:18 AM
+**Generated**: 2026-08-29 11:49:00 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -86,6 +86,22 @@ This rubric ROUTES to the EXISTING verification/research tools — it does NOT r
 - **SOLOMON**: (a) a consult arriving WITH web citations — the sources are inputs to RE-DERIVE, never premises to inherit (check the source, not the asker's reading); (b) web research rides the existing per-sweep/per-consult task_budget (entry-enforced), no separate allowance; (c) verdict/D4: flag web-sourced claims AND, in the mandatory counterfactual, name the future RE-CHECK query ("what NEW evidence would flip this").
 - **ADAM**: web-sourced broadcasts carry the citation/source-sanity discipline the existing 2-hypothesis broadcast guard polices; Adam's web research rides an analogous per-tick budget bound.
 
+---
+
+## 10. Degradation (Solomon is advisory, never a critical path)
+
+- **Model availability**: see Model Posture's "Model availability degradation" — no longer existential (2026-06-30 pivot); degrades gracefully to Opus 4.8, never a role outage.
+- **Role disabled (`SOLOMON_CONSULT_V1` OFF)**: no Solomon session; the triage gate short-circuits to "no oracle"; consults fall through to the next-best resolution (RCA result + asker judgment, or Chairman escalation). Nothing blocks.
+- **No live Solomon (gated on but down)**: consults emit an advisory marker ("oracle unavailable — proceed on best available reasoning") and route past Solomon. Because Solomon never gates, his absence degrades *advice quality*, not *throughput*.
+- **Over-quota / silenced**: further consults are deferred or declined with the advisory marker, never forced through.
+
+**Graduated activation (canary the canary).** When Fable ships, Solomon does NOT switch fully on. Stage it: enable **Mode A (reactive consult) first**, watch the advice-outcome ledger + accuracy review (§11), then enable **Mode B (proactive sweeps)** once Mode A's advice is demonstrably trusted and correct. **Mode C activates with Mode A** — it rides the same consult lane, gated by provenance rather than counters. Full staged runbook: `solomon-oracle.md` §8.
+
+**Governing invariant: Solomon improves outcomes when present and is invisible when absent. No part of the harness may take a hard dependency on Solomon's advice.**
+
+---
+
+*(Moved verbatim from CLAUDE_SOLOMON.md §10 per Solomon re-ruling 11ffb59f, 2026-08-29 — the governing-invariant sentence remains inline in the contract as a pointer; this manual carries the full degradation ladder + graduated-activation runbook. Rules/prohibitions otherwise do not live in this file.)*
 
 
 ## Crew-comms routing protocol (organizing layer)

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 569d8d4f74e869f9 -->
+<!-- file_content_hash: 27f20eeda2736621 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-28 4:39:31 PM
+**Generated**: 2026-08-29 7:16:18 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1738,7 +1738,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-08-28*
+*Generated from database: 2026-08-29*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
