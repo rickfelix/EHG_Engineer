@@ -1,5 +1,7 @@
 /**
  * SD-LEO-INFRA-ADOPTED-RESUME-FINAL-001 (FR-2, TS-4)
+ * QF-20260829-934: age must derive from strand-ENTRY (the accepted PLAN-TO-LEAD handoff),
+ * never from updated_at -- an unrelated metadata write must not launder a long strand.
  *
  * lib/coordinator/strand-age-gauge.cjs — pending_approval/LEAD_FINAL strand-age gauge.
  * Read-only: no test may assert a mutation to strategic_directives_v2 or claiming_session_id.
@@ -9,7 +11,7 @@ import { planStrandAgeGauge, resolveThresholdMs, formatAge, DEFAULT_THRESHOLD_MS
 
 const NOW = Date.parse('2026-07-04T12:00:00Z');
 
-function makeSupabase({ candidates = [], handoffsBySdId = {} } = {}) {
+function makeSupabase({ candidates = [], entryHandoffsBySdId = {} } = {}) {
   const calls = { updates: [], deletes: [] };
   const from = (table) => {
     if (table === 'strategic_directives_v2') {
@@ -32,7 +34,7 @@ function makeSupabase({ candidates = [], handoffsBySdId = {} } = {}) {
         select: () => builder,
         eq: (col, val) => { if (col === 'sd_id') currentSdId = val; return builder; },
         order: () => builder,
-        limit: () => Promise.resolve({ data: handoffsBySdId[currentSdId] || [], error: null }),
+        limit: () => Promise.resolve({ data: entryHandoffsBySdId[currentSdId] || [], error: null }),
       };
       return builder;
     }
@@ -63,24 +65,49 @@ describe('formatAge', () => {
 });
 
 describe('planStrandAgeGauge (TS-4)', () => {
-  it('flags an SD stranded past the threshold, using updated_at', () => {
+  it('flags an SD stranded past the threshold, using the accepted PLAN-TO-LEAD handoff as strand-entry', () => {
     const supabase = makeSupabase({
       candidates: [
-        { sd_key: 'SD-STRANDED-001', id: 'uuid-1', updated_at: '2026-07-04T11:45:00Z', created_at: '2026-07-04T09:00:00Z' }, // 15min old
+        { sd_key: 'SD-STRANDED-001', id: 'uuid-1', updated_at: '2026-07-04T11:59:00Z', created_at: '2026-07-04T09:00:00Z' },
       ],
+      entryHandoffsBySdId: {
+        'uuid-1': [{ accepted_at: '2026-07-04T11:45:00Z', created_at: '2026-07-04T11:45:00Z' }], // 15min old
+      },
     });
     return planStrandAgeGauge(supabase, { nowMs: NOW }).then((gauge) => {
       expect(gauge.flagged).toHaveLength(1);
       expect(gauge.flagged[0].sd_key).toBe('SD-STRANDED-001');
-      expect(gauge.flagged[0].ageSource).toBe('updated_at');
+      expect(gauge.flagged[0].ageSource).toBe('strand_entry');
+    });
+  });
+
+  // QF-20260829-934 TS-1 -- the deciding scenario: an unrelated metadata write bumps
+  // updated_at to "now", but the SD's strand-entry handoff is old. Age must still reflect
+  // the old entry, not the fresh write.
+  it('is NOT reset by an unrelated write that bumps updated_at (the QF-20260829-934 specimen)', () => {
+    const supabase = makeSupabase({
+      candidates: [
+        { sd_key: 'SD-LAUNDERED-001', id: 'uuid-launder', updated_at: '2026-07-04T11:59:59Z', created_at: '2026-07-03T09:00:00Z' },
+      ],
+      entryHandoffsBySdId: {
+        'uuid-launder': [{ accepted_at: '2026-07-03T21:00:00Z', created_at: '2026-07-03T21:00:00Z' }], // 15h old
+      },
+    });
+    return planStrandAgeGauge(supabase, { nowMs: NOW }).then((gauge) => {
+      expect(gauge.rows[0].ageSource).toBe('strand_entry');
+      expect(gauge.rows[0].ageMs).toBeGreaterThan(14 * 60 * 60 * 1000); // ~15h, not ~1s
+      expect(gauge.flagged).toHaveLength(1);
     });
   });
 
   it('does NOT flag a fresh pending_approval/LEAD_FINAL SD younger than the threshold (no false positive)', () => {
     const supabase = makeSupabase({
       candidates: [
-        { sd_key: 'SD-FRESH-001', id: 'uuid-2', updated_at: '2026-07-04T11:58:00Z', created_at: '2026-07-04T11:00:00Z' }, // 2min old
+        { sd_key: 'SD-FRESH-001', id: 'uuid-2', updated_at: '2026-07-04T11:58:00Z', created_at: '2026-07-04T11:00:00Z' },
       ],
+      entryHandoffsBySdId: {
+        'uuid-2': [{ accepted_at: '2026-07-04T11:58:00Z', created_at: '2026-07-04T11:58:00Z' }], // 2min old
+      },
     });
     return planStrandAgeGauge(supabase, { nowMs: NOW }).then((gauge) => {
       expect(gauge.flagged).toHaveLength(0);
@@ -88,18 +115,29 @@ describe('planStrandAgeGauge (TS-4)', () => {
     });
   });
 
-  it('falls back to the latest sd_phase_handoffs.resolved_at when updated_at looks unreliable (predates created_at)', () => {
+  it('falls back to updated_at when no accepted PLAN-TO-LEAD handoff exists', () => {
     const supabase = makeSupabase({
       candidates: [
-        { sd_key: 'SD-UNRELIABLE-001', id: 'uuid-3', updated_at: '2026-07-01T00:00:00Z', created_at: '2026-07-04T09:00:00Z' },
+        { sd_key: 'SD-NOENTRY-001', id: 'uuid-3', updated_at: '2026-07-04T11:40:00Z', created_at: '2026-07-04T09:00:00Z' }, // 20min old
       ],
-      handoffsBySdId: {
-        'uuid-3': [{ resolved_at: '2026-07-04T11:40:00Z' }], // 20min old
-      },
+      entryHandoffsBySdId: {}, // no PLAN-TO-LEAD row found
     });
     return planStrandAgeGauge(supabase, { nowMs: NOW }).then((gauge) => {
       expect(gauge.flagged).toHaveLength(1);
-      expect(gauge.flagged[0].ageSource).toBe('latest_handoff_resolved_at');
+      expect(gauge.flagged[0].ageSource).toBe('updated_at_fallback');
+    });
+  });
+
+  it('falls back to created_at when neither an entry handoff nor a reliable updated_at exists', () => {
+    const supabase = makeSupabase({
+      candidates: [
+        { sd_key: 'SD-UNRELIABLE-001', id: 'uuid-4', updated_at: '2026-07-01T00:00:00Z', created_at: '2026-07-04T11:40:00Z' }, // updated_at predates created_at
+      ],
+      entryHandoffsBySdId: {},
+    });
+    return planStrandAgeGauge(supabase, { nowMs: NOW }).then((gauge) => {
+      expect(gauge.flagged).toHaveLength(1);
+      expect(gauge.flagged[0].ageSource).toBe('created_at_fallback');
     });
   });
 
@@ -114,8 +152,11 @@ describe('planStrandAgeGauge (TS-4)', () => {
   it('is read-only: never calls .update() or .delete() on strategic_directives_v2', () => {
     const supabase = makeSupabase({
       candidates: [
-        { sd_key: 'SD-STRANDED-002', id: 'uuid-4', updated_at: '2026-07-04T11:00:00Z', created_at: '2026-07-04T09:00:00Z' },
+        { sd_key: 'SD-STRANDED-002', id: 'uuid-5', updated_at: '2026-07-04T11:00:00Z', created_at: '2026-07-04T09:00:00Z' },
       ],
+      entryHandoffsBySdId: {
+        'uuid-5': [{ accepted_at: '2026-07-04T11:00:00Z', created_at: '2026-07-04T11:00:00Z' }],
+      },
     });
     return planStrandAgeGauge(supabase, { nowMs: NOW }).then(() => {
       expect(supabase._calls.updates).toEqual([]);
