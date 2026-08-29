@@ -5,6 +5,7 @@
 
 - [2026-08-29](#2026-08-29)
   - [Infrastructure](#infrastructure-1)
+  - [Infrastructure](#infrastructure)
 - [2026-08-28](#2026-08-28)
   - [Infrastructure](#infrastructure)
   - [Features](#features)
@@ -165,6 +166,11 @@
   - **Two spec specifics inherited from the parent SD's scope text could not be verified and were flagged, not guessed silently**: neither "the 2026-08-28 timeout clip" fixture nor "the 2.5-pin baseline" could be located anywhere in-repo or in any queryable DB table (`/signal prd-ambiguous`, signal 039cd683). This SD proceeds on an explicit, documented interpretation instead: the timeout fixture is clearly labeled synthetic (no fabricated real incident behind it), and the baseline is defined as a first-run snapshot of the purpose→model resolution that future weekly scans (a later sibling) diff against.
   - **A prior LEAD-phase validation pass caught real design gaps before any code was written**: the initial scope framed the Google purpose count against `VALID_PURPOSES` (an 11-entry cross-provider export), which was a factually wrong label for what is actually an 8-entry Google-only subset; validation also required deriving the purpose list programmatically rather than hardcoding it, so a later sibling's 9th purpose key produces a loud test failure rather than silent under-coverage.
   - **Verification**: LEAD-TO-PLAN 95%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 94%. `gemini-pin-lint.mjs` (sibling B's CI gate) reports 0 unallowlisted literal model-pin violations against the new runtime files. 14 new vitest tests; 121/121 passing across `tests/unit/eval/` + `lib/eval/` with zero regressions.
+- **handoff.js and complete-quick-fix.js now refuse to ship past an unread coordinator amendment to the active SD/QF** - PR #7649 (SD-LEO-INFRA-HANDOFF-UNREAD-DIRECTIVE-GATE-001)
+  - **What shipped**: `lib/fleet/unread-directive-gate.mjs` queries `session_coordination` for unacknowledged `coordinator_directive`/`work_assignment` rows targeting the executing session and the active SD/QF, created after the session's claim time — reusing the exact `acknowledged_at IS NULL` discriminator already proven in `lib/fleet/blocker-drain-gate.mjs` for the worker-side exit-4 `DRAIN_REQUIRED` case. Wired into `scripts/handoff.js execute` (before phase-transition dispatch) and `scripts/modules/complete-quick-fix/orchestrator.js` (before the completion write). `--bypass-validation` / `--scope-accepted` remain the audited overrides; the gate fails open on any DB error.
+  - **Motivated by two measured specimens**: QF-20260828-188 (amended twice mid-build, worker shipped the stale version, needed a follow-up QF) and QF-20260828-255 (a stranded-holds amendment ping landed post-completion; the coordinator had to execute the leg manually).
+  - **Corrected during EXEC against live schema, not assumed**: the SD proposal (and the LEAD-phase Explore evidence) assumed `session_coordination.target_sd` was the filter column and `message_type` discriminated `coordinator_directive` rows. Both were wrong — `target_sd` is always `null` in practice, and a `coordinator_directive` row's `message_type` reads `'INFO'` (non-discriminating). The real SD/QF key lives in `payload.sd`, the real kind in `payload.kind`; verified via live queries before writing the query, not assumed from the proposal text.
+  - **Verification**: `tests/unit/fleet/unread-directive-gate.test.js` (13 tests, including fixtures mirroring both specimens), full repo unit suite (177 files / 2221 tests, 1 pre-existing unrelated skip), and a live (non-mocked) smoke test against `session_coordination`.
 
 ## 2026-08-28
 
