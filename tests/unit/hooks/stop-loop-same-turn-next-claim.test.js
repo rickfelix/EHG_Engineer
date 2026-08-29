@@ -257,6 +257,26 @@ describe('formatCoordinatorMessagesForBlock (SD-LEO-INFRA-WORKER-WIND-DOWN-001, 
     const out = formatCoordinatorMessagesForBlock([{ kind: 'roll_call' }]);
     expect(out).toMatch(/ROLL_CALL/);
   });
+
+  // REGRESSION (SECURITY re-verify R1, 6c86b2e1): kind/subject/body are jsonb fields any fleet
+  // writer can populate with a non-string — a bare .toUpperCase() call threw on these inputs,
+  // which would have escaped to main()'s outer catch and silently dropped the ENTIRE block
+  // (including the just-claimed-SD continuation instruction on the claimed branch), for both
+  // outcomes, while the message row was already permanently marked acknowledged.
+  it('REGRESSION: a non-string kind never throws — coerced via String(), not a bare .toUpperCase()', () => {
+    expect(() => formatCoordinatorMessagesForBlock([{ kind: 5 }])).not.toThrow();
+    expect(() => formatCoordinatorMessagesForBlock([{ kind: { a: 1 } }])).not.toThrow();
+    expect(formatCoordinatorMessagesForBlock([{ kind: 5 }])).toMatch(/\[5\]/);
+  });
+
+  it('REGRESSION: a null/non-object entry in the array never throws — filtered out, not dereferenced', () => {
+    expect(() => formatCoordinatorMessagesForBlock([null])).not.toThrow();
+    expect(formatCoordinatorMessagesForBlock([null])).toBe('');
+    expect(() => formatCoordinatorMessagesForBlock(['not-an-object'])).not.toThrow();
+    // A mix of one malformed and one valid entry must still surface the valid one.
+    const out = formatCoordinatorMessagesForBlock([null, { kind: 'info', body: 'still delivered' }]);
+    expect(out).toMatch(/still delivered/);
+  });
 });
 
 describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" must be observable)', () => {

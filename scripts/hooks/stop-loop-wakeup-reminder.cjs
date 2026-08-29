@@ -258,12 +258,19 @@ async function attemptSameTurnNextClaim({ resolveCheckinFn, sb, sessionId, timeo
  */
 function formatCoordinatorMessagesForBlock(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return '';
-  const lines = messages.map((m, i) => {
-    const tag = m.chairman_directive ? 'CHAIRMAN DIRECTIVE' : (m.kind || 'message').toUpperCase();
-    const subject = m.subject ? ` — ${m.subject}` : '';
-    const body = m.body ? `\n   ${m.body}` : '';
-    return `  ${i + 1}. [${tag}]${subject}${body}`;
-  });
+  // SECURITY re-verify R1 (6c86b2e1): kind/subject/body are jsonb fields any fleet writer can
+  // populate with a non-string (or a null row) — coerce with String() rather than calling
+  // .toUpperCase() directly, and skip non-object entries, so a malformed row can never throw and
+  // silently drop the block (which would lose the just-claimed-SD continuation instruction too).
+  const lines = messages
+    .filter((m) => m && typeof m === 'object')
+    .map((m, i) => {
+      const tag = m.chairman_directive ? 'CHAIRMAN DIRECTIVE' : String(m.kind || 'message').toUpperCase();
+      const subject = m.subject ? ` — ${m.subject}` : '';
+      const body = m.body ? `\n   ${m.body}` : '';
+      return `  ${i + 1}. [${tag}]${subject}${body}`;
+    });
+  if (lines.length === 0) return '';
   return `\n\nCOORDINATOR MESSAGE(S) surfaced during this same-turn checkin (act on these before going idle):\n${lines.join('\n')}`;
 }
 
