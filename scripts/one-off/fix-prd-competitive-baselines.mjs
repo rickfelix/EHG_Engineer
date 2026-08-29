@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const PRD_ID = 'PRD-SD-LEO-INFRA-COMPETITIVE-BASELINES-RECURRING-001';
@@ -55,4 +56,6 @@ async function main() {
   console.log('✅ PRD corrected: FR-1,FR-2,FR-3,FR-4,FR-5,FR-6,FR-7 amended; test_scenarios expanded to 7 (TS-6, TS-7 added)');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

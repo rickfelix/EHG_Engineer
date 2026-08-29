@@ -24,10 +24,15 @@ import { isEligibleForBaselineResearch } from '../../lib/discovery/venture-eligi
  */
 export async function runRefresh(supabase, opts = {}) {
   const service = new CompetitiveBaselineService(supabase);
+  // Bounded per count-truncation-diff-lint: 92 active ventures at authoring time, well under
+  // this cap. A future breach would silently drop ventures from the daily refresh rather than
+  // erroring, so the cap is set far above current volume as an early-warning margin, not a
+  // tight fit.
   const { data: ventures, error } = await supabase
     .from('ventures')
     .select('id, name, status, is_demo')
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .limit(500);
   if (error) throw new Error(`Failed to list ventures: ${error.message}`);
 
   const eligible = (ventures || []).filter(isEligibleForBaselineResearch);
