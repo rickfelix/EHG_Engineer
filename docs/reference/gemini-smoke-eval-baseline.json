@@ -1,0 +1,24 @@
+{
+  "label": "gemini-smoke-eval-baseline",
+  "generated_at": "2026-08-29T04:44:43.065Z",
+  "purposes": [
+    "validation",
+    "classification",
+    "generation",
+    "fast",
+    "vision",
+    "reasoning",
+    "image-generation",
+    "creative-image-generation"
+  ],
+  "models": {
+    "validation": "gemini-2.5-flash",
+    "classification": "gemini-2.5-flash",
+    "generation": "gemini-2.5-flash",
+    "fast": "gemini-2.5-flash",
+    "vision": "gemini-2.5-flash",
+    "reasoning": "gemini-2.5-pro",
+    "image-generation": "gemini-2.5-flash",
+    "creative-image-generation": "gemini-2.5-flash"
+  }
+}
