@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-29T17:41:05.178Z",
-  "git_commit": "02ef304d",
-  "db_snapshot_hash": "6ff460d2f085b038",
+  "generated_at": "2026-08-29T17:51:13.002Z",
+  "git_commit": "1d40f268",
+  "db_snapshot_hash": "9c7f0f933db35829",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -13,18 +13,18 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 84780,
-      "bytes": 85323,
-      "estimated_tokens": 21195,
-      "content_hash": "1bba4392d01106b9",
+      "chars": 80464,
+      "bytes": 80981,
+      "estimated_tokens": 20116,
+      "content_hash": "4704f78e0bbc38a3",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
       "type": "full",
-      "chars": 10543,
-      "bytes": 10593,
-      "estimated_tokens": 2636,
-      "content_hash": "5acd8e25d6457852",
+      "chars": 15041,
+      "bytes": 15117,
+      "estimated_tokens": 3761,
+      "content_hash": "0ad595c810829edb",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_MANUAL.md"
     },
     "CLAUDE_LEAD.md": {
@@ -152,7 +152,7 @@
       "chars": 9611,
       "bytes": 9653,
       "estimated_tokens": 2403,
-      "content_hash": "b1192ccc94f327a0",
+      "content_hash": "c570dee8cbee3854",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
@@ -160,7 +160,7 @@
       "chars": 13747,
       "bytes": 13861,
       "estimated_tokens": 3437,
-      "content_hash": "c7c602d3d81f422f",
+      "content_hash": "0d2022b490b3a07a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
@@ -168,7 +168,7 @@
       "chars": 5551,
       "bytes": 5571,
       "estimated_tokens": 1388,
-      "content_hash": "4329ff35e3b16d97",
+      "content_hash": "c840c96fa6f62f61",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
@@ -176,7 +176,7 @@
       "chars": 8541,
       "bytes": 8581,
       "estimated_tokens": 2136,
-      "content_hash": "b4a7ff2fe75e22b6",
+      "content_hash": "e27339af81f169b8",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
@@ -184,7 +184,7 @@
       "chars": 10964,
       "bytes": 11046,
       "estimated_tokens": 2741,
-      "content_hash": "613addd20492bd0a",
+      "content_hash": "8d3fd5dcbf78dab4",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
@@ -192,7 +192,7 @@
       "chars": 17734,
       "bytes": 18042,
       "estimated_tokens": 4434,
-      "content_hash": "0359cef444310e9c",
+      "content_hash": "9ec1090315d91c92",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
@@ -200,7 +200,7 @@
       "chars": 8498,
       "bytes": 8566,
       "estimated_tokens": 2125,
-      "content_hash": "4fd3b3c02375a421",
+      "content_hash": "78e08260f9b4cd3a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
@@ -208,12 +208,12 @@
       "chars": 3959,
       "bytes": 3997,
       "estimated_tokens": 990,
-      "content_hash": "45f79961a8da1e6f",
+      "content_hash": "974cfdac07583301",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "c99a0101fb4f6a27",
+    "global": "6a74c8ac72a01c11",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -390,7 +390,7 @@
       "435": "dc205008f2747ac6",
       "436": "8115bd7ee9303db3",
       "439": "08a9d4b4ea40618b",
-      "444": "f53c571cc6b49f44",
+      "444": "2402edfe1a214928",
       "449": "86f83ca9a7afe8cc",
       "450": "cfff5396c378b19a",
       "452": "5bb15e4ce5af0b4e",
@@ -492,7 +492,8 @@
       "634": "6518b5f83a72be9e",
       "635": "4d256bd4f129b597",
       "636": "31efdc24eea9e73c",
-      "653": "29214fac1aff5e6f"
+      "653": "29214fac1aff5e6f",
+      "654": "daf0a7933d7819ec"
     },
     "meta": {
       "94": {
@@ -1884,6 +1885,11 @@
         "section_type": "solomon_model_posture",
         "target_file": null,
         "title": "Model Posture (pin, window strategy, availability degradation, portability guard)"
+      },
+      "654": {
+        "section_type": "migration_tier_policy_detail",
+        "target_file": null,
+        "title": "Tiered Auto-Apply Policy (SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001)"
       }
     }
   }

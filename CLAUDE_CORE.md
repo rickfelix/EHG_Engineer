@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1bba4392d01106b9 -->
+<!-- file_content_hash: 4704f78e0bbc38a3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-29 1:41:05 PM
+**Generated**: 2026-08-29 1:51:13 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -32,24 +32,8 @@ Task tool with subagent_type="database-agent":
 "Execute the migration file: database/migrations/YYYYMMDD_name.sql"
 ```
 
----
+> Full tiered auto-apply policy mechanics (TIER-1/TIER-2 definitions, feature-flag polarity, Adam-delegated-apply scope check): see CLAUDE_CORE_MANUAL.md.
 
-## Tiered Auto-Apply Policy (SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001)
-
-Handoff-time migration auto-apply is gated by a **fail-closed, allow-list tier classifier** (`scripts/lib/migration-tier-classifier.mjs`). The classifier is PURE (no DB/IO) and **default-deny**: a migration is auto-apply-eligible **only** when EVERY statement provably matches an additive allow rule.
-
-- **TIER-1 (auto-apply eligible)** — provably additive only: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX` (incl. CONCURRENTLY / IF NOT EXISTS), nullable `ADD COLUMN` with a constant-only default, `ENABLE ROW LEVEL SECURITY` / `CREATE POLICY`, and bare `CREATE FUNCTION`/`VIEW` (NOT `OR REPLACE`, no `SECURITY DEFINER`, body free of destructive SQL). These flow to the DATABASE sub-agent for execution (the mechanics above are unchanged).
-- **TIER-2 (chairman-gated)** — EVERYTHING ELSE: any `DROP`/`TRUNCATE`/`DELETE`/`UPDATE`/`RENAME`/`GRANT`/`REVOKE`, `ALTER COLUMN ... TYPE`, multi-action ALTER with a non-additive action, volatile or `NOT NULL` defaults, `CREATE OR REPLACE`, `SECURITY DEFINER`, `DO` blocks, named-`$tag$` function bodies hiding destructive SQL, and unparseable/under-split/ambiguous input. These are **never auto-applied** — they require the full 3-factor `@approved-by` chairman gate:
-  ```
-  node scripts/apply-migration.js <path> --prod-deploy
-  ```
-  (`--prod-deploy` + a single-use 1h token + an `-- @approved-by: <email>` header matching `git config user.email` — enforced by `scripts/lib/migration-guards.js`, which the tier classifier NEVER weakens.)
-
-**Default-deny safety contract**: a false TIER-1 verdict on a destructive migration would auto-apply it past the chairman gate, so the classifier is allow-list only, NEVER throws, and NEVER returns TIER-1 on any error/ambiguity path. Both auto-apply vectors are gated — SD-declared migrations AND uncommitted manual-update SQL.
-
-**Rollout**: the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag in `leo_feature_flags` — ONE representation every execution path sees, worktrees included. Polarity is INVERTED deliberately: the flag stores a BYPASS, so the evaluator’s `enabled=false` default (returned for `evaluation_error`, `flag_not_found`, `kill_switch_active`, `lifecycle_draft`) means *no bypass*, i.e. the gate is **ON**. It therefore FAILS CLOSED — an unreachable DB means the gate holds, never that destructive DDL auto-applies. `LEO_MIGRATION_TIER_GATE` is **deprecated and ignored** (it logs a removal notice): it is present in `.env` on every surface and is loaded regardless of cwd, so honouring it would short-circuit before every DB read and leave the flag permanently inert. The break-glass is `LEO_MIGRATION_TIER_GATE_FORCE_ON=1`, which can only force the gate ON — no env value turns it off. To disable the gate, disable the flag in the DB. NOTE (measured, and the opposite of what an earlier draft of this line claimed): the `risk_tier: high` approval requirement is enforced ONLY on `transitionLifecycleState` — `updateFlag({isEnabled:true})` and a raw service-role UPDATE both succeed with **zero** approvals, and no RLS policy, trigger or CHECK blocks them. This flag is protected by default-OFF, inverted polarity, service-role key custody and the `fn_audit_feature_flag_changes` audit trail — NOT by an enforced approval gate. Every tier decision is still audited fail-soft to `audit_log` as `MIGRATION_TIER_CLASSIFICATION`, and the audit row now reports the verdict actually used rather than re-deriving it from the environment. (SD-LEO-INFRA-TIER-GATE-FLAG-001)
-
-**Note on the Adam-delegated `--prod-deploy` flow (SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-C, 2026-07-18)**: `lib/migration/adam-delegated-apply.js` (GAP A, SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001) applies a STRICTER, SEPARATE scope check that excludes `create_policy`/`enable_rls` tokens — but this check only fires inside the Adam-persona kill-switch-gated delegated-apply path (`-- @delegated-by: adam` marker present AND `LEO_ADAM_DBAPPLY_DELEGATION=on`, default OFF). It does NOT narrow the general TIER-1 allow-list above for an ordinary EXEC-phase migration executed via the DATABASE sub-agent's `run-sql-migration.js` path — `CREATE POLICY`/`ENABLE ROW LEVEL SECURITY` on a brand-new table remain TIER-1 there. The two vectors were confused once already (RCA-verified) because both reuse tier-classifier language; treat them as distinct gates for distinct flows, not one rule with an exception.
 
 ## Cascade Invalidation System
 
