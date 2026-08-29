@@ -87,3 +87,13 @@ describe('runFullE2ESuite() — zero-infra short-circuit', () => {
     expect(result.reason).toContain(repo);
   });
 });
+
+describe('runFullE2ESuite() — missing repoPath fails loudly, never falls back to cwd', () => {
+  it('returns an error result (not a silent process.cwd() fallback) when repoPath is absent', async () => {
+    const result = await runFullE2ESuite('test-sd', {});
+    expect(result.error).toBeTruthy();
+    expect(result.error).toContain('repoPath');
+    expect(result.e2e_not_applicable).toBeUndefined();
+    expect(result.tests_executed).toBe(0);
+  });
+});
