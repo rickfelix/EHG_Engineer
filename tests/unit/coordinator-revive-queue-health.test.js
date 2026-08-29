@@ -13,12 +13,26 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require_ = createRequire(import.meta.url);
-const { formatQueueWarning } = require_('../../scripts/coordinator-revive.cjs');
+const { formatQueueWarning, actuatorIsDead } = require_('../../scripts/coordinator-revive.cjs');
 
 const DEAD = { total: 29, pending: 8, everFulfilled: 0, oldestPendingAt: '2026-06-30T10:45:49.440001+00:00', neverConsumed: true };
 const ALIVE = { total: 29, pending: 8, everFulfilled: 1, oldestPendingAt: '2026-06-30T10:45:49.440001+00:00', neverConsumed: false };
 
 describe('coordinator-revive queue health reporting', () => {
+  // QF-20260829-649: the fail-loud predicate itself, separate from the warning TEXT above.
+  it('actuatorIsDead is true only when the queue has never fulfilled anything', () => {
+    expect(actuatorIsDead(DEAD)).toBe(true);
+    expect(actuatorIsDead(ALIVE)).toBe(false);
+  });
+
+  it('actuatorIsDead treats unreadable health as NOT dead (absence of evidence != failure)', () => {
+    expect(actuatorIsDead(null)).toBe(false);
+  });
+
+  it('actuatorIsDead does not cry wolf on an empty queue', () => {
+    expect(actuatorIsDead({ total: 0, pending: 0, everFulfilled: 0, oldestPendingAt: null, neverConsumed: false })).toBe(false);
+  });
+
   // TS-1 — the deciding scenario. Without this, "requested" reads as "will happen".
   it('warns that the request may never be consumed when nothing has ever been fulfilled', () => {
     const w = formatQueueWarning(DEAD);
