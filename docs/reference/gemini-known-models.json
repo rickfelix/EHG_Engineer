@@ -1,0 +1,11 @@
+{
+  "_comment": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-I: committed known-models store diffed against by the weekly scan. Seeded from lib/config/model-config.js's MODEL_DEFAULTS.google distinct pins at authoring time. Updated by scripts/gemini-weekly-scan.mjs as new/changed models are observed -- this file and the feedback-table recommendation insert are the only two writes the scan performs (TR-2).",
+  "seeded_at": "2026-08-29",
+  "models": [
+    { "id": "gemini-3.7-flash", "displayName": "", "description": "" },
+    { "id": "gemini-2.5-flash", "displayName": "", "description": "" },
+    { "id": "gemini-2.5-pro", "displayName": "", "description": "" },
+    { "id": "gemini-3-pro-image-preview", "displayName": "", "description": "" },
+    { "id": "gemini-2.5-flash-image", "displayName": "", "description": "" }
+  ]
+}
