@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1a22abd5a4033576 -->
+<!-- file_content_hash: 7167726a821a4c90 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-29 11:11:01 AM
+**Generated**: 2026-08-29 11:28:27 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -309,18 +309,9 @@ Reuses the existing `session_coordination` **INFO lane** — no new transport.
 
 ---
 
-## 10. Degradation (Solomon is advisory, never a critical path)
+## 10. Degradation (pointer)
 
-- **Model availability**: see Model Posture's "Model availability degradation" — no longer existential (2026-06-30 pivot); degrades gracefully to Opus 4.8, never a role outage.
-- **Role disabled (`SOLOMON_CONSULT_V1` OFF)**: no Solomon session; the triage gate short-circuits to "no oracle"; consults fall through to the next-best resolution (RCA result + asker judgment, or Chairman escalation). Nothing blocks.
-- **No live Solomon (gated on but down)**: consults emit an advisory marker ("oracle unavailable — proceed on best available reasoning") and route past Solomon. Because Solomon never gates, his absence degrades *advice quality*, not *throughput*.
-- **Over-quota / silenced**: further consults are deferred or declined with the advisory marker, never forced through.
-
-**Graduated activation (canary the canary).** When Fable ships, Solomon does NOT switch fully on. Stage it: enable **Mode A (reactive consult) first**, watch the advice-outcome ledger + accuracy review (§11), then enable **Mode B (proactive sweeps)** once Mode A's advice is demonstrably trusted and correct. **Mode C activates with Mode A** — it rides the same consult lane, gated by provenance rather than counters. Full staged runbook: `solomon-oracle.md` §8.
-
-**Governing invariant: Solomon improves outcomes when present and is invisible when absent. No part of the harness may take a hard dependency on Solomon's advice.**
-
----
+§10 Degradation: Solomon is advisory, never a critical path — no part of the harness may take a hard dependency on Solomon's advice (GOVERNING INVARIANT, binding). Full degradation ladder + graduated-activation runbook: CLAUDE_SOLOMON_MANUAL.md.
 
 ## Web Research — binding constraints (procedure lives in the companion)
 

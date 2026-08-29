@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-29T15:23:20.733Z",
-  "git_commit": "1e7f1c7e",
+  "generated_at": "2026-08-29T15:28:27.630Z",
+  "git_commit": "ccbbf053",
   "db_snapshot_hash": "6ff460d2f085b038",
   "files": {
     "CLAUDE.md": {
@@ -109,18 +109,18 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 57658,
-      "bytes": 58158,
-      "estimated_tokens": 14415,
-      "content_hash": "1a22abd5a4033576",
+      "chars": 56455,
+      "bytes": 56950,
+      "estimated_tokens": 14114,
+      "content_hash": "7167726a821a4c90",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 11228,
-      "bytes": 11325,
-      "estimated_tokens": 2807,
-      "content_hash": "7e4e2e4165ffcb37",
+      "chars": 13017,
+      "bytes": 13125,
+      "estimated_tokens": 3255,
+      "content_hash": "314c9a01ed8bbdd4",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
@@ -205,7 +205,7 @@
     }
   },
   "section_digests": {
-    "global": "c71fd3ee7fe28a6d",
+    "global": "c99a0101fb4f6a27",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -466,7 +466,7 @@
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "643997adfb04e9af",
+      "611": "222ab9327ccc5fa8",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -477,7 +477,7 @@
       "622": "94a8df85a96ad041",
       "626": "f9a040104b9c6234",
       "627": "c1f5247af6cc9d08",
-      "629": "fbba3f3dba64e4a4",
+      "629": "be956924cf6f11a7",
       "630": "7851b31f692ec87c",
       "632": "f3ebf4de6f9fefbe",
       "633": "12cf4526e9c9fd09",
