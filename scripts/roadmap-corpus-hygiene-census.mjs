@@ -76,7 +76,7 @@ export async function runCensus(supabase) {
   const target = await fetchAllPaginated(
     supabase,
     'roadmap_wave_items',
-    'id, source_type, title, promoted_to_sd_key, item_disposition, lane, remainder_state, created_at',
+    'id, source_type, title, promoted_to_sd_key, item_disposition, lane, remainder_state, created_at, metadata',
     (q) => q.eq('remainder_state', 'promotable_now').is('promoted_to_sd_key', null)
   );
   const allRows = await fetchAllPaginated(
@@ -95,8 +95,16 @@ export async function runCensus(supabase) {
   const familyCure = [];
   const standaloneCurable = [];
   const standaloneUnclassified = [];
+  const externallyDispositioned = [];
 
   for (const row of target) {
+    // A concurrent process (e.g. Adam's distillation pass, charter 9164f966) may have
+    // already dispositioned this row with per-item judgment (deferred/dropped/promoted)
+    // between census runs. Never overwrite that with a blanket cure -- defer to it.
+    if (row.metadata?.distill_dispositioned_at) {
+      externallyDispositioned.push({ id: row.id, title: row.title, source_type: row.source_type });
+      continue;
+    }
     const siblings = familyMap.get(familyKey(row)) || [];
     const canonical = siblings.find((s) => s.id !== row.id && (s.promoted_to_sd_key || s.remainder_state === 'void'));
     if (canonical) {
@@ -113,9 +121,11 @@ export async function runCensus(supabase) {
     family_cure_count: familyCure.length,
     standalone_curable_count: standaloneCurable.length,
     standalone_unclassified_count: standaloneUnclassified.length,
+    externally_dispositioned_count: externallyDispositioned.length,
     family_cure: familyCure,
     standalone_curable: standaloneCurable,
     standalone_unclassified: standaloneUnclassified,
+    externally_dispositioned: externallyDispositioned,
   };
 }
 
@@ -126,6 +136,7 @@ async function main() {
   console.log(`  family-cure:               ${report.family_cure_count}`);
   console.log(`  standalone (curable):       ${report.standalone_curable_count}`);
   console.log(`  standalone (unclassified):  ${report.standalone_unclassified_count}`);
+  console.log(`  externally dispositioned:   ${report.externally_dispositioned_count} (skipped -- another process already handled these)`);
   if (report.standalone_unclassified_count > 0) {
     console.log('\n⚠️  New standalone rows found that were not part of the PRD-authoring manual review:');
     console.log(JSON.stringify(report.standalone_unclassified, null, 2));

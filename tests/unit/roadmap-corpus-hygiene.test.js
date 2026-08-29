@@ -110,6 +110,21 @@ describe('runCensus classification', () => {
     const familyCureIds = report.family_cure.map((r) => r.id);
     expect(familyCureIds).toContain('a');
   });
+
+  it('skips a row with metadata.distill_dispositioned_at set instead of cure-classifying it, even when it would otherwise match family-cure or standalone-curable', async () => {
+    const reviewedId = [...STANDALONE_NON_BUILDABLE_IDS][0];
+    const externallyHandled = makeRow({
+      id: reviewedId,
+      title: 'Race-window row',
+      metadata: { distill_dispositioned_at: '2026-08-29T11:23:28.532Z', distill_dispositioned_by: 'adam-f27a883d' },
+    });
+    const supabase = makeSupabaseStub([externallyHandled]);
+    const report = await runCensus(supabase);
+    expect(report.externally_dispositioned_count).toBe(1);
+    expect(report.externally_dispositioned[0].id).toBe(reviewedId);
+    expect(report.standalone_curable_count).toBe(0);
+    expect(report.family_cure_count).toBe(0);
+  });
 });
 
 describe('cureRow', () => {
