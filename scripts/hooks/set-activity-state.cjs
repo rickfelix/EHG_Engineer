@@ -21,20 +21,28 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Default matches .claude/statusline.cjs's LOG_DIR constant EXACTLY (an absolute canonical
- * path, deliberately not __dirname-relative: hooks fire from worktrees, but the statusline
- * that reads this file always renders the canonical checkout's state).
- *
- * LEO_ACTIVITY_STATE_FILE overrides it. Production NEVER sets it — the three invocation
- * sites in .claude/settings.json (PreToolUse/UserPromptSubmit/Stop) pass no env, so the
- * default applies and behavior is byte-identical to the hardcoded form. The override exists
- * so tests exercise THIS file rather than a path-rewritten copy of it (a copy would prove
- * nothing about what actually ships). Mirrors the LEO_RETRY_STATE_DIR seam in
- * scripts/hooks/retry-state-manager.cjs.
+ * Resolves the MAIN checkout's root — never the current worktree's — by stripping a
+ * trailing `.worktrees/<name>` segment from this file's own location. Hooks fire from
+ * whichever worktree is active, but the statusline that reads STATE_FILE always renders
+ * the canonical checkout's state, so every worktree must converge on the same path.
+ * No literal home path (no-literal-home-path-lint): computed, not hardcoded.
+ */
+function resolveMainRepoRoot() {
+  const hookRepoRoot = path.resolve(__dirname, '..', '..');
+  const match = hookRepoRoot.match(/^(.*)[/\\]\.worktrees[/\\][^/\\]+$/);
+  return match ? match[1] : hookRepoRoot;
+}
+
+/**
+ * LEO_ACTIVITY_STATE_FILE overrides the computed default. Production NEVER sets it — the
+ * three invocation sites in .claude/settings.json (PreToolUse/UserPromptSubmit/Stop) pass
+ * no env, so the default applies. The override exists so tests exercise THIS file rather
+ * than a path-rewritten copy of it (a copy would prove nothing about what actually ships).
+ * Mirrors the LEO_RETRY_STATE_DIR seam in scripts/hooks/retry-state-manager.cjs.
  */
 const STATE_FILE =
   process.env.LEO_ACTIVITY_STATE_FILE ||
-  'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/logs/.context-state.json';
+  path.join(resolveMainRepoRoot(), '.claude', 'logs', '.context-state.json');
 const LOG_DIR = path.dirname(STATE_FILE);
 
 const state = process.argv[2] || 'idle';
