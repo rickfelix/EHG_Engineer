@@ -405,7 +405,7 @@ process.exit(result ? 0 : 2);
 
 ### PreToolUse Hook: Activity State Tracking
 
-**Location**: `.claude/set-activity-state.ps1`
+**Location**: `scripts/hooks/set-activity-state.cjs`
 **Purpose**: Sets activity state to "running" when tools are used
 **Matcher**: All tools (`.*`)
 **Timeout**: 2 seconds
@@ -527,7 +527,7 @@ const SESSION_MARKER_FILE = path.join(os.tmpdir(), 'leo-checkpoints', `marker-${
 
 ### UserPromptSubmit Hook: Activity State Tracking
 
-**Location**: `.claude/set-activity-state.ps1`
+**Location**: `scripts/hooks/set-activity-state.cjs`
 **Purpose**: Sets activity state to "running" when user submits prompt
 **Timeout**: 2 seconds
 
