@@ -820,13 +820,16 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
   // ── Cross-Cutting Validation ──────────────────────────────────
 
   describe('Cross-cutting: Gate boundary coverage', () => {
-    it('verifies all 5 reality gate boundaries are defined', () => {
+    it('verifies all 6 reality gate boundaries are defined', () => {
+      // QF-20260829-634 leg 1: 24->25 added -- it had a DB canonical row but no
+      // BOUNDARY_CONFIG key, so isGatedBoundary(24,25) silently returned false.
       const boundaries = Object.keys(BOUNDARY_CONFIG);
       expect(boundaries).toContain('5->6');
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
       expect(boundaries).toContain('17->18');
       expect(boundaries).toContain('23->24');
+      expect(boundaries).toContain('24->25');
     });
 
     // SD-LEO-INFRA-MINUS-GATE-SSOT-001 (FR-1): corrected SSOT-derived sets — kill=[3,5,13,23]

@@ -9,7 +9,7 @@
  * - Reality gate integration with profileThresholds
  */
 
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import {
   resolveGateThreshold,
   resolveAllGateThresholds,
@@ -17,6 +17,7 @@ import {
 } from '../../../../lib/eva/stage-zero/profile-service.js';
 import {
   evaluateRealityGate,
+  _resetBoundaryCacheForTest,
 } from '../../../../lib/eva/reality-gates.js';
 
 describe('LEGACY_GATE_THRESHOLDS', () => {
@@ -174,16 +175,48 @@ describe('resolveAllGateThresholds', () => {
 describe('evaluateRealityGate with profileThresholds', () => {
   const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-  function createMockSupabase(artifacts = []) {
+  // _loadBoundaryFromDB caches gate_boundary_config for 60s at module scope --
+  // reset between tests so each test's own mocked row is actually consulted.
+  beforeEach(() => {
+    _resetBoundaryCacheForTest();
+  });
+
+  // QF-20260829-634: reality-gates.js now fails closed for a designated boundary
+  // (BOUNDARY_CONFIG key present) with no gate_boundary_config row -- the hardcoded
+  // BOUNDARY_CONFIG fallback content is retired. These tests exercise the
+  // profileThresholds override mechanism, not production artifact data, so the
+  // mock now supplies a synthetic-but-consistent canonical row per boundary
+  // matching the artifact_type/threshold values the tests already assert against.
+  const BOUNDARY_ROWS = {
+    '5->6': {
+      from_stage: 5, to_stage: 6,
+      required_artifacts: ['truth_problem_statement', 'truth_target_market_analysis', 'truth_value_proposition'],
+      quality_thresholds: { truth_problem_statement: 0.6, truth_target_market_analysis: 0.5, truth_value_proposition: 0.6 },
+      url_verification_required: false,
+    },
+    '12->13': {
+      from_stage: 12, to_stage: 13,
+      required_artifacts: ['engine_business_model_canvas', 'blueprint_technical_architecture', 'blueprint_project_plan'],
+      quality_thresholds: { engine_business_model_canvas: 0.7, blueprint_technical_architecture: 0.6, blueprint_project_plan: 0.5 },
+      url_verification_required: false,
+    },
+  };
+
+  function createMockSupabase(artifacts = [], boundaryKey = '5->6') {
     return {
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+      from: vi.fn((table) => {
+        if (table === 'gate_boundary_config') {
+          return { select: vi.fn().mockResolvedValue({ data: [BOUNDARY_ROWS[boundaryKey]], error: null }) };
+        }
+        return {
+          select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
+              }),
             }),
           }),
-        }),
+        };
       }),
     };
   }
@@ -227,7 +260,7 @@ describe('evaluateRealityGate with profileThresholds', () => {
       ventureId: 'test-uuid',
       fromStage: 12,
       toStage: 13,
-      supabase: createMockSupabase(artifacts),
+      supabase: createMockSupabase(artifacts, '12->13'),
       logger: silentLogger,
       profileThresholds: { engine_business_model_canvas: 0.8 },
     });
