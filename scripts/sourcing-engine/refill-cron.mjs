@@ -24,7 +24,7 @@ import { selectRefillBatch, promoteStagedCandidate, isDistilledOnly } from '../.
 import { pathToFileURL } from 'node:url';
 import { normalizeTitleForCompare, crossRefShippedTitleAdvisory } from '../../lib/sourcing-engine/refill-candidate-validity.js';
 import { readSourcingEngineFlagsFromDb } from '../lib/sourcing-engine-awareness.mjs';
-import { measureDemand, recordDemandDecision, resolveDemandFloor, recordProductionOutcome } from '../../lib/governance/demand-gate-emit.js';
+import { measureDemand, recordDemandDecision, resolveLiveDemandFloor, recordProductionOutcome } from '../../lib/governance/demand-gate-emit.js';
 import { formatDemandDecision } from '../../lib/governance/demand-gate.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — the staged-candidate read feeds
 // the promotion loop (a capped read silently drops promotable candidates with no error); the
@@ -128,11 +128,17 @@ export const REFILL_ENGINE = 'refill-auto-promote';
  * @returns {Promise<{sel: object, demand: object}>}
  */
 export async function gatedSelectRefillBatch(supabase, rows, opts = {}, env = process.env) {
+  // SD-LEO-INFRA-PROMOTION-FLOOR-PARAM-001: the floor now tracks live idle+freeing-soon worker
+  // capacity instead of a fixed 3, with an explicit BELT_DEMAND_FLOOR env override still winning
+  // and a fail-safe fallback to the static default on any capacity-read failure.
+  const { floor, source: floorSource, demandSoon } = await resolveLiveDemandFloor(supabase, env);
   const demand = await measureDemand(supabase, {
     engine: REFILL_ENGINE,
-    floor: resolveDemandFloor(env),
+    floor,
   });
-  await recordDemandDecision(supabase, demand);
+  // Provenance: a recorded floor=3 is otherwise indistinguishable as computed-vs-overridden-vs-
+  // fallback in a future incident investigation (LEAD-phase VALIDATION recommendation).
+  await recordDemandDecision(supabase, { ...demand, floor_source: floorSource, demand_soon: demandSoon });
   console.log(formatDemandDecision(demand));
   if (!demand || typeof demand.decision !== 'string') {
     // Unreachable via measureDemand, which always returns a decision. Present because the failure
