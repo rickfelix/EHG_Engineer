@@ -85,10 +85,11 @@
     "ignoreDirective": "<!-- docmon:legacy -->"
   },
 
+  "_generatedFileExclusionRuling": "Adam ruling 2026-08-29 (option A), on the coordinator escalation from PR #7682. CLAUDE*.md are RENDERS of leo_protocol_sections. A style gate that lints the render while the drift gate simultaneously REQUIRES committing that render is two gates fighting over an artifact neither owns; style authority belongs at the AUTHORING site (the DB write), and single-representation says bind there once, not at every render. Concrete trigger: CLAUDE_ADAM.md carried the chairman VERBATIM in a 2026-08-25 ratified constraint about UAT needing to be its own stage, and one word of that quote is blacklisted -- with CLAUDE*.md-protection separately forbidding a hand-edit and the next regen undoing one anyway, three gates left no legal move, which is why that file sat drifted on main. NAMED PRICE of this exclusion: a follow-on SD must add the style check at the DB-write site. BINDING RIDER: chairman VERBATIM quotes are NEVER style-lintable at ANY site -- the write-site check must carry a quoted-text exemption FROM BIRTH, so the narrower option-B principle survives inside option A shape.",
   "filePatterns": {
     "documentation": {
       "include": ["docs/**/*.md", "docs/**/*.txt", "**/LEO*.md", "**/CLAUDE*.md", "README.md"],
-      "exclude": ["docs/archive/**", "node_modules/**", ".git/**"]
+      "exclude": ["CLAUDE*.md", "**/CLAUDE*.md", "docs/archive/**", "node_modules/**", ".git/**"]
     },
     "commitMessages": {
       "enabled": true
