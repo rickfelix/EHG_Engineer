@@ -35,7 +35,7 @@ describe('chairman-sms-gate hold persistence (SD-LEO-INFRA-CHAIRMAN-DECISION-LAN
   it('a hold-and-surface outcome inserts a chairman_held_sends row carrying the SAME correlationId the consult seam produced', async () => {
     const supabase = makeFakeSupabaseForHold();
     const sender = { send: vi.fn() };
-    const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-hold-xyz', reason: 'solomon-consult-async::chairman-hold-pending-reconcile' });
+    const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-hold-xyz', reason: 'solomon-consult-async::chairman-hold-pending-reconcile', consultRowVerified: true });
 
     const r = await sendChairmanSMS(
       { type: 'decision', body: 'Approve the deploy?', options: [{ label: 'A' }, { label: 'B' }], decisionId: 'dec-hold-1', subject: '[TEST]' },
@@ -93,6 +93,29 @@ describe('chairman-sms-gate hold persistence (SD-LEO-INFRA-CHAIRMAN-DECISION-LAN
     );
 
     expect(supabase.inserted[0].consult_row_id).toBeNull();
+  });
+
+  // ── QF-20260828-255 ─────────────────────────────────────────────────────────────────────────
+  // Solomon advisory f02c00e7 / held-send 5ce0c4b5: persist-vs-return -- the hold must be
+  // distinguishable (loud, queryable) when its consult row was never verified to exist.
+  it('QF-20260828-255: hold_reason is stamped as "solomon-consult-hold-unverified" when the outcome did not verify its consult row', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = makeFakeSupabaseForHold();
+    const sender = { send: vi.fn() };
+    const runPreSendConsultLane = vi.fn().mockResolvedValue({
+      action: 'hold-and-surface', correlationId: 'corr-hold-unverified', reason: 'solomon-consult-timeout::chairman-hold-and-surface',
+      // consultRowVerified deliberately omitted -- the pre-fix, silently-trusting shape.
+    });
+
+    await sendChairmanSMS(
+      { type: 'decision', body: 'Approve X?' },
+      {},
+      { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+    );
+
+    expect(supabase.inserted[0].hold_reason).toBe('solomon-consult-hold-unverified');
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('QF-20260828-255'));
+    errSpy.mockRestore();
   });
 
   it('FR-3: persists reply_instruction/reply_id/no_reply_consequence from the message at hold time -- the fields the release path needs to satisfy the rubric a second time', async () => {
