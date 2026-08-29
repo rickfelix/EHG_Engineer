@@ -251,6 +251,9 @@ database/*.json
 # exemption config the artifact-type parity test reads offline
 # (SD-LEO-FIX-REGISTER-STAGE-REFINED-001)
 !database/artifact-type-parity-pending-chairman-gate.json
+# … and the uuid-column census is a COMMITTED artifact the ilike-on-uuid lint reads offline
+# (QF-20260829-440), regenerate via scripts/lint/uuid-column-census.mjs
+!database/uuid-columns-census.json
 
 # One-off root level scripts
 audit_rls.js
