@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0ad595c810829edb -->
+<!-- file_content_hash: 662a5e296821d64f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE_MANUAL.md — Core Manual (reference companion)
 
-**Generated**: 2026-08-29 1:51:13 PM
+**Generated**: 2026-08-29 2:17:30 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form CORE reference — strategic governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge quality rubric, built-in agent architecture, pattern search CLI
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every session start
@@ -243,8 +243,34 @@ Handoff-time migration auto-apply is gated by a **fail-closed, allow-list tier c
 
 **Note on the Adam-delegated `--prod-deploy` flow (SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-C, 2026-07-18)**: `lib/migration/adam-delegated-apply.js` (GAP A, SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001) applies a STRICTER, SEPARATE scope check that excludes `create_policy`/`enable_rls` tokens — but this check only fires inside the Adam-persona kill-switch-gated delegated-apply path (`-- @delegated-by: adam` marker present AND `LEO_ADAM_DBAPPLY_DELEGATION=on`, default OFF). It does NOT narrow the general TIER-1 allow-list above for an ordinary EXEC-phase migration executed via the DATABASE sub-agent's `run-sql-migration.js` path — `CREATE POLICY`/`ENABLE ROW LEVEL SECURITY` on a brand-new table remain TIER-1 there. The two vectors were confused once already (RCA-verified) because both reuse tier-classifier language; treat them as distinct gates for distinct flows, not one rule with an exception.
 
+## Sub-Agent Keyword Routing Table
+
+| Agent | Trigger Keywords | Best For |
+|-------|-----------------|----------|
+| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
+| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
+| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
+| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
+| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
+| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
+| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
+| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
+| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
+| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
+| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
+| stories-agent | user stories, acceptance criteria, epic | User story generation |
+| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
+| api-agent | api endpoint, rest api, graphql | API design and implementation |
+| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
+| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
+
+### Invocation Pattern
+```
+Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
+```
+
 ---
 
 *Generated from database: 2026-08-29*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=governance_strategic_hierarchy, builtin_agent_integration, pattern_search_guide, ai_quality_russian_judge, pr_size_guidelines, governance_chairman_ceo_roles, database_column_reference, migration_tier_policy_detail). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=governance_strategic_hierarchy, builtin_agent_integration, pattern_search_guide, ai_quality_russian_judge, pr_size_guidelines, governance_chairman_ceo_roles, database_column_reference, migration_tier_policy_detail, sub_agent_routing_table_detail). Do not hand-edit — edit the DB section and regenerate.*

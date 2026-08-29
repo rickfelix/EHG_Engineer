@@ -326,7 +326,8 @@
       "pr_size_guidelines",
       "governance_chairman_ceo_roles",
       "database_column_reference",
-      "migration_tier_policy_detail"
+      "migration_tier_policy_detail",
+      "sub_agent_routing_table_detail"
     ],
     "_move_justification": {
       "governance_strategic_hierarchy": "Descriptive 7-layer governance table (Mission/Constitution/etc + DB table + CLI command) — informational, no behavioral rule.",
@@ -336,7 +337,8 @@
       "pr_size_guidelines": "Elaboration/rationale for the PR-size tiers; the binding rule itself (Small PRs <=100 LOC target) already lives in CLAUDE.md Session Prologue.",
       "governance_chairman_ceo_roles": "Descriptive role/authority reference (who owns what) — informational, no standing instruction to the reader.",
       "database_column_reference": "Short JS usage-example snippet for a priority column gotcha — a reference tip, not a standing rule (its one CRITICAL-looking token is a code-comment string literal, not an instruction).",
-      "migration_tier_policy_detail": "Split out of migration_execution_protocol (leo_protocol_sections id=444) — the binding rule (invoke the DATABASE sub-agent) stays inline in CLAUDE_CORE.md; this is the TIER-1/TIER-2 classifier mechanics, feature-flag polarity detail, and Adam-delegated-apply scope-check nuance, consulted only when actually classifying a migration risk tier or auditing the flag."
+      "migration_tier_policy_detail": "Split out of migration_execution_protocol (leo_protocol_sections id=444) — the binding rule (invoke the DATABASE sub-agent) stays inline in CLAUDE_CORE.md; this is the TIER-1/TIER-2 classifier mechanics, feature-flag polarity detail, and Adam-delegated-apply scope-check nuance, consulted only when actually classifying a migration risk tier or auditing the flag.",
+      "sub_agent_routing_table_detail": "Split out of sub_agent_routing_reference (leo_protocol_sections id=538) — the binding Key Rules (Sonnet-only, invoke immediately, error-routing) and the MCP read/write split stay inline in CLAUDE_CORE.md; this is the 16-row agent/keyword lookup table + invocation pattern, explicitly labeled a \"quick reference\" in its own text with the canonical source being config/agent-keywords-routing.json."
     }
   }
 }

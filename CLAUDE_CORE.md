@@ -1,8 +1,8 @@
-<!-- file_content_hash: 7fd0262262ca3b98 -->
+<!-- file_content_hash: 00733980fb997340 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-29 1:55:20 PM
+**Generated**: 2026-08-29 2:17:30 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -520,29 +520,7 @@ All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). U
 
 > **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
 
-| Agent | Trigger Keywords | Best For |
-|-------|-----------------|----------|
-| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
-| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
-| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
-| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
-| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
-| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
-| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
-| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
-| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
-| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
-| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
-| stories-agent | user stories, acceptance criteria, epic | User story generation |
-| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
-| api-agent | api endpoint, rest api, graphql | API design and implementation |
-| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
-| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
-
-### Invocation Pattern
-```
-Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
-```
+> Full agent/keyword lookup table + invocation pattern: see CLAUDE_CORE_MANUAL.md (canonical routing source is `config/agent-keywords-routing.json`; this pointer is a convenience, not a new source of truth).
 
 ### MCP Read/Write Split
 MCP Supabase tools (execute_sql, list_tables, etc.) use a read-only role. Use them for reads/introspection.

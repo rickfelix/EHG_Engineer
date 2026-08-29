@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-29T17:55:20.049Z",
-  "git_commit": "3faa6ac0",
-  "db_snapshot_hash": "9c7f0f933db35829",
+  "generated_at": "2026-08-29T18:17:30.081Z",
+  "git_commit": "3baeb40b",
+  "db_snapshot_hash": "6b87240b55182e2b",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -13,18 +13,18 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 79144,
-      "bytes": 79649,
-      "estimated_tokens": 19786,
-      "content_hash": "7fd0262262ca3b98",
+      "chars": 77624,
+      "bytes": 78129,
+      "estimated_tokens": 19406,
+      "content_hash": "00733980fb997340",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
       "type": "full",
-      "chars": 15041,
-      "bytes": 15117,
-      "estimated_tokens": 3761,
-      "content_hash": "0ad595c810829edb",
+      "chars": 16838,
+      "bytes": 16914,
+      "estimated_tokens": 4210,
+      "content_hash": "662a5e296821d64f",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_MANUAL.md"
     },
     "CLAUDE_LEAD.md": {
@@ -152,7 +152,7 @@
       "chars": 9611,
       "bytes": 9653,
       "estimated_tokens": 2403,
-      "content_hash": "c570dee8cbee3854",
+      "content_hash": "a99644eb7255a191",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
@@ -160,7 +160,7 @@
       "chars": 13265,
       "bytes": 13375,
       "estimated_tokens": 3317,
-      "content_hash": "185a13b08f046055",
+      "content_hash": "ecbc9e10d99e6e8c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
@@ -168,7 +168,7 @@
       "chars": 5551,
       "bytes": 5571,
       "estimated_tokens": 1388,
-      "content_hash": "c840c96fa6f62f61",
+      "content_hash": "c679b7dcebd2cc9d",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
@@ -176,7 +176,7 @@
       "chars": 8541,
       "bytes": 8581,
       "estimated_tokens": 2136,
-      "content_hash": "e27339af81f169b8",
+      "content_hash": "9b5320e365cf6883",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
@@ -184,7 +184,7 @@
       "chars": 10964,
       "bytes": 11046,
       "estimated_tokens": 2741,
-      "content_hash": "8d3fd5dcbf78dab4",
+      "content_hash": "72f1b4ae332a5f23",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
@@ -192,7 +192,7 @@
       "chars": 17734,
       "bytes": 18042,
       "estimated_tokens": 4434,
-      "content_hash": "9ec1090315d91c92",
+      "content_hash": "713f01c398ed646a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
@@ -200,7 +200,7 @@
       "chars": 8498,
       "bytes": 8566,
       "estimated_tokens": 2125,
-      "content_hash": "78e08260f9b4cd3a",
+      "content_hash": "5c987752851941bf",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
@@ -208,12 +208,12 @@
       "chars": 3959,
       "bytes": 3997,
       "estimated_tokens": 990,
-      "content_hash": "974cfdac07583301",
+      "content_hash": "5ac4ca2c952bc516",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "9204fd01c3e9c3b9",
+    "global": "c1fd355766ed1404",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -434,7 +434,7 @@
       "526": "a6ad4a059caf827b",
       "529": "2d15257e180cc154",
       "531": "eb5ebce67138c499",
-      "538": "97573d76a94e5f98",
+      "538": "3ddc61ec2c2d9272",
       "539": "b539a095719b2087",
       "540": "2559404924b120a1",
       "541": "a2ec8a812765018a",
@@ -493,7 +493,8 @@
       "635": "4d256bd4f129b597",
       "636": "31efdc24eea9e73c",
       "653": "29214fac1aff5e6f",
-      "654": "daf0a7933d7819ec"
+      "654": "daf0a7933d7819ec",
+      "655": "59137a758bb13a65"
     },
     "meta": {
       "94": {
@@ -1890,6 +1891,11 @@
         "section_type": "migration_tier_policy_detail",
         "target_file": null,
         "title": "Tiered Auto-Apply Policy (SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001)"
+      },
+      "655": {
+        "section_type": "sub_agent_routing_table_detail",
+        "target_file": null,
+        "title": "Sub-Agent Keyword Routing Table"
       }
     }
   }
