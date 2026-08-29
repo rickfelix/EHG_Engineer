@@ -10,20 +10,33 @@ vi.mock('../../../lib/eva/utils/web-search.js', () => ({
 }));
 import { isSearchEnabled, search } from '../../../lib/eva/utils/web-search.js';
 
-function fakeSupabase({ rows = [], insertReturn }) {
+function fakeSupabase({ rows = [], insertReturn, existing = null }) {
   const inserted = [];
+  const updated = [];
   return {
     inserted,
+    updated,
     from(table) {
       const chain = {
         select: () => chain,
         eq: () => chain,
         order: () => Promise.resolve({ data: rows, error: null }),
+        maybeSingle: () => Promise.resolve({ data: existing, error: null }),
         insert: (payload) => {
           inserted.push(payload);
           return {
             select: () => ({
               single: () => Promise.resolve({ data: insertReturn ?? { id: 'new-id', ...payload }, error: null }),
+            }),
+          };
+        },
+        update: (payload) => {
+          updated.push(payload);
+          return {
+            eq: () => ({
+              select: () => ({
+                single: () => Promise.resolve({ data: { id: existing?.id, ...payload }, error: null }),
+              }),
             }),
           };
         },
@@ -103,5 +116,18 @@ describe('CompetitiveBaselineService staleness + create', () => {
     expect(written.citations).toHaveLength(1);
     expect(written.citations[0].source_url).toBe('https://acme.example.com');
     expect(written.epistemic_tag).toBe('OBSERVED');
+  });
+
+  it('TS-7: a repeat researchAndCreate for the same venture+competitor UPDATES the existing row, not a duplicate insert', async () => {
+    isSearchEnabled.mockReturnValue(true);
+    search.mockResolvedValue([{ title: 'Acme', url: 'https://acme.example.com', content: 'pricing info', score: 0.9 }]);
+    const sb = fakeSupabase({ rows: [], existing: { id: 'existing-row-1' } });
+    const service = new CompetitiveBaselineService(sb);
+    const now = new Date('2026-06-01T00:00:00.000Z');
+    await service.researchAndCreate('v1', 'Acme', { now: () => now });
+    expect(sb.inserted).toHaveLength(0);
+    expect(sb.updated).toHaveLength(1);
+    expect(sb.updated[0].venture_id).toBe('v1');
+    expect(sb.updated[0].competitor_name).toBe('Acme');
   });
 });
