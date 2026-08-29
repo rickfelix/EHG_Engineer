@@ -37,11 +37,12 @@ describe('sweep()', () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(files.has('lib/coordinator/dispatch.cjs')).toBe(true);
     expect(files.has('lib/fleet/claim-eligibility.cjs')).toBe(true);
-    // Confirms the SD's own measured claim: sd-start.js has ZERO tier-code hits pre-FR-2, and
-    // claimable-leaves.mjs's deferral comment doesn't literally spell any of the swept tokens
-    // (it says "tier axes"/"tier-FILTERED", not min_tier_rank/tier_rank/tierRank) -- both are
-    // documented in the KNOWN_SURFACES table by file:line citation instead, not by sweep hit.
-    expect(files.has('scripts/sd-start.js')).toBe(false);
+    // FR-2 wired sd-start.js's claim primitive to enforce (enforceTierGate, tierBlocks() call) --
+    // it now has genuine tier-code hits, flipping this from the pre-FR-2 zero-hits baseline.
+    expect(files.has('scripts/sd-start.js')).toBe(true);
+    // claimable-leaves.mjs's deferral comment still doesn't literally spell any of the swept
+    // tokens (it says "tier axes"/"tier-FILTERED", not min_tier_rank/tier_rank/tierRank) -- it
+    // is documented in the KNOWN_SURFACES table by file:line citation instead, not by sweep hit.
   });
 
   it('excludes .worktrees and node_modules paths', () => {
