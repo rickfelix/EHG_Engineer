@@ -393,6 +393,17 @@ BEGIN
 END;
 $function$;
 
+-- secdef-execute-revoke-lint (SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001 FR-6): this
+-- CREATE OR REPLACE re-emits a SECURITY DEFINER function, which the lint treats as a fresh grant
+-- surface requiring an explicit, self-documenting REVOKE/GRANT pair in THIS file -- it does not
+-- trust that live grants already happen to be correct. They do: confirmed via
+-- has_function_privilege() this SD's EXEC phase (anon=false, authenticated=true,
+-- service_role=true), matching the identical, already-lint-clean pattern on
+-- reject_chairman_decision and kill_venture. This statement documents and preserves that live
+-- state rather than changing it.
+REVOKE EXECUTE ON FUNCTION public.fn_write_kill_audit_trail(uuid, integer, text, uuid, text, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_write_kill_audit_trail(uuid, integer, text, uuid, text, uuid) TO authenticated, service_role;
+
 COMMIT;
 
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
