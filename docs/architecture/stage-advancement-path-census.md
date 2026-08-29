@@ -298,3 +298,33 @@ REPLACE`).
 `scripts/lint/stage-advancement-chokepoint-lint.mjs` (FR-5) fails a PR that introduces a new raw
 `current_lifecycle_stage` write outside the 8 locations enumerated above. See that script's own
 allowlist config for the exact matched patterns.
+
+## Kill-gate array-literal census (SD-LEO-INFRA-REJECT-PATH-VENTURE-001)
+
+A SIBLING literal class to the `current_lifecycle_stage` writes above: hardcoded kill-stage
+`ARRAY[3, 5, 13, ...]` literals gating a venture-kill side-effect, derived from `venture_stages`
+at authoring time instead of read live. This class escaped this census entirely until the
+2026-08-29 AltifyAI mechanical-kill incident, because it lives in **chairman-gated SQL and live pg
+function bodies** rather than the migration files this census was originally scoped to (see the
+FR-1 disposition notes above, which only enumerate `current_lifecycle_stage`-write paths). This is
+the census-closure this SD's own scope calls for.
+
+| # | Path | Location | Disposition |
+|---|------|----------|--------------|
+| 1 | `fn_chairman_decide` (kill-gate check) | `database/chairman-gated/20260803_chairman_decide_null_safe_and_type_honest.sql:216` | **FIXED** (SD-LEO-INFRA-REJECT-PATH-VENTURE-001) — `ARRAY[3,5,13,23]` replaced by `fn_is_kill_gate_stage()`, a new helper reading `venture_stages.gate_type='kill'` live. |
+| 2 | `reject_chairman_decision` (kill-gate check) | live function body (staged fix: `database/chairman-gated/20260829_reject_path_type_aware_and_live_kill_gate.sql`) | **FIXED** — same replacement; this function additionally gained a type-aware guard it previously lacked entirely. |
+| 3 | `fn_write_kill_audit_trail` (kill-gate check) | live function body (staged fix: same 20260829 migration) | **FIXED** — a FOURTH, previously-unnamed occurrence of the same literal, found only by reading the shared audit-trail helper both functions above call. |
+| 4 | `kill_venture()` | live function body | **AUDITED, CLEAN** — no hardcoded stage array; performs an unconditional, `fn_is_chairman()`-authorized explicit kill with no gate-stage branching at all, so this literal class does not apply. |
+
+**Why the 08-03 fix left this class untouched**: that migration made the decision *vocabulary*
+type-honest (which `decision` value a reject writes) and never touched the venture *side-effect*
+block at all — the array literal was orthogonal to what it was fixing, so a reviewer reading that
+diff had no reason to notice it. Root-caused in `SD-LEO-INFRA-REJECT-PATH-VENTURE-001`'s LEAD-phase
+Explore pass via direct `pg_get_functiondef` reads of all 4 live functions, not from static file
+review alone (the 4th site, `fn_write_kill_audit_trail`, is not named anywhere in that SD's own
+sourcing description — it surfaced only by reading the shared helper, not the two callers the
+incident report named).
+
+**Standing guard going forward**: any future kill-gate check MUST call `fn_is_kill_gate_stage()`
+rather than re-deriving the stage set inline — a repeat of this literal-drift class in a 5th
+function would mean this census section was written but not enforced.
