@@ -65,6 +65,9 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+// QF-20260829-588: canonical non-fleet predicate (lib/claim/build-forbidden-session.cjs) --
+// role seats (adam/solomon/coordinator) must not count as "idle" fleet workers.
+const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): surface which Claude account the fleet
 // is running under, and detect a genuine account switch across ticks.
 const { getAccountIdentity, detectAccountSwitch } = require('../lib/fleet/account-identity.cjs');
@@ -777,28 +780,38 @@ async function readSalientState(sb) {
 
 // QF-20260828-922: witnessed 08-28 -- the chairman caught 1 live-idle seat beside 4
 // claimable drafts before any role did. A seat's heartbeat_at/last_tool_at can be kept
-// artificially fresh post-release by the /clear-survivor daemon (a "shell"), so a seat
-// only counts as genuinely idle-and-available when its last real tool call happened
-// AFTER its most recent release (or it was never released at all).
-async function checkIdleBesideClaimable(sb) {
+// artificially fresh post-release by the /clear-survivor daemon (a "shell"). QF-20260829-588
+// scope rider (coordinator census specimen 78a073be, 2026-08-29): the daemon's own activity
+// can push last_tool_at PAST released_at, so a last_tool_at-vs-released_at ordering check
+// cannot be trusted to detect a released shell -- any released_at value at all now excludes
+// the seat outright, regardless of last_tool_at.
+export async function checkIdleBesideClaimable(sb) {
   try {
-    const { count: claimableCount } = await sb
+    // QF-20260829-588: this is the RAW-UNCLAIMED draft count, not the dispatchable-leaf
+    // extent (belt-skip classes like human_action_required/orchestrator/dep-blocked are
+    // still counted here) -- named accordingly so a reader does not compare it against a
+    // different extent (the two-extents class from the corpus-hygiene instrument-naming rider).
+    const { count: rawUnclaimedCount } = await sb
       .from('strategic_directives_v2')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'draft');
-    if (!claimableCount) return null;
+    if (!rawUnclaimedCount) return null;
     const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: seats } = await sb
       .from('claude_sessions')
-      .select('session_id, released_at, last_tool_at')
+      .select('session_id, released_at, last_tool_at, metadata')
       .is('sd_key', null)
       .in('status', ['active', 'idle'])
       .gte('last_tool_at', cutoff)
       .limit(200);
+    // QF-20260829-588: three-limb exclusion -- role seats (adam/solomon/coordinator,
+    // metadata.non_fleet=true / role='adam' / is_coordinator=true) are legitimately idle
+    // by design, and any seat with released_at set is a released shell, not a genuinely
+    // available fleet worker. None of the three ever count as idle fleet-worker capacity.
     const idleCount = (seats || []).filter(
-      (s) => !s.released_at || new Date(s.last_tool_at) > new Date(s.released_at)
+      (s) => !isBuildForbiddenSession(s.metadata) && !s.released_at
     ).length;
-    return idleCount > 0 ? { idleCount, claimableCount } : null;
+    return idleCount > 0 ? { idleCount, rawUnclaimedCount } : null;
   } catch { return null; }
 }
 
@@ -1106,7 +1119,7 @@ async function main() {
     // QF-20260828-922: idle capacity beside claimable work is a dispatch gap, not a no-op.
     const idleBesideClaimable = await checkIdleBesideClaimable(sb);
     if (idleBesideClaimable) {
-      console.log(`QUIET_TICK_IDLE_BESIDE_CLAIMABLE=adam idle=${idleBesideClaimable.idleCount} claimable=${idleBesideClaimable.claimableCount} — live-idle seat(s) beside claimable draft(s) on the belt; dispatch now (node scripts/worker-checkin.cjs) rather than leaving both sides waiting.`);
+      console.log(`QUIET_TICK_IDLE_BESIDE_CLAIMABLE=adam idle=${idleBesideClaimable.idleCount} raw_unclaimed=${idleBesideClaimable.rawUnclaimedCount} — live-idle fleet-worker seat(s) (role seats excluded) beside raw-unclaimed draft(s) on the belt (not the dispatchable-leaf extent); dispatch now (node scripts/worker-checkin.cjs) rather than leaving both sides waiting.`);
     }
 
     // SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001: a chairman-gated SD with no
