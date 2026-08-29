@@ -9,6 +9,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -91,7 +92,9 @@ async function main() {
   process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error('PROBE ERROR:', e.message);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('PROBE ERROR:', e.message);
+    process.exit(1);
+  });
+}
