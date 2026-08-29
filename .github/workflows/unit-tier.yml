@@ -10,6 +10,14 @@ on:
     branches: [main]
   pull_request:
 
+# QF-20260829-886: without this, a retrigger push doesn't cancel the in-flight run --
+# it stacks a second parallel run alongside it, so retriggering never actually restarts
+# anything (111/112 other workflows already carry a concurrency group; this was the
+# one exception).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit-tier:
     name: Run Unit Tier (quarantine-aware)
@@ -59,7 +67,9 @@ jobs:
         # in this step). continue-on-error: true so a first-ever run surfacing a pre-existing
         # collection bug in one of the 125 never-before-run files cannot suddenly block every
         # unrelated PR; this step exists purely to put the skip count where a reviewer can see it.
-        if: always()
+        # QF-20260829-886: !cancelled() so this doesn't run its own full vitest pass during the
+        # unwind of a run cancelled by the new concurrency group above.
+        if: always() && !cancelled()
         continue-on-error: true
         run: |
           npx vitest run --project db 2>&1 | tee db-tier-run.log || true
