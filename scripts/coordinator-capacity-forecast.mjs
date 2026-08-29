@@ -378,14 +378,55 @@ async function emitMaskedStallEscalation(f) {
 // (approved-wave-only, plan-of-record spine) — NOT the raw roadmap_wave_items table. A raw-table
 // census (used for corpus hygiene, not capacity forecasting) will read a larger, different count;
 // both are correct on their own extent and are not in contradiction with each other.
-async function countUnpromotedRoadmapItems(client) {
+// SD-LEO-INFRA-FORECASTER-UNPROMOTED-EXTENT-001: the returned count is now promotable_now ONLY.
+//
+// WHY THIS CHANGED, measured live 2026-08-29 against v_plan_of_record_remainder (261 rows):
+//   promotable_now 0 | gated_on_chairman 0 | in_flight_or_sequence_blocked 2
+//   satisfied_elsewhere 121 | void 138
+// The old three-state predicate therefore returned 2 while the genuinely promotable supply was
+// ZERO, and BOTH of those 2 were in-flight or sequence-blocked -- items nobody can distill.
+//
+// That is not a cosmetic overcount. classifyCorpusGatedDeficit() (scripts/lib/sourcing-engine-
+// awareness.mjs) downgrades a real DEFICIT to 'OK-CORPUS-GATED' when unpromotedCount > 0, and the
+// forecaster's Adam reach-out is gated on verdict.startsWith('DEFICIT'). A genuine belt shortfall
+// would therefore be SUPPRESSED and attributed to an "intentionally unpromoted corpus" that
+// contained nothing promotable -- the ask never goes out, and the suppression reads as a
+// considered verdict rather than a miscount.
+//
+// STATED PRECISELY, because the run that found this did NOT itself demonstrate the suppression:
+// corpusThin also requires autoRefillOn !== true, and auto-refill measured ON at the time, so the
+// gate did not fire on 2026-08-29. The defect is LATENT, not observed-firing -- it fires on any
+// tick where auto-refill is off, which is the exact configuration the corpus gate exists to serve.
+// Claiming an observed suppression here would be an assertion this patch never measured.
+//
+// The corpus gate's own words are "promotion is intentionally gated off". That describes
+// promotable_now under a dormant engine. gated_on_chairman is blocked on a DIFFERENT gate, and
+// in_flight_or_sequence_blocked is by definition not unpromoted -- neither is corpus awaiting
+// distillation, so neither belongs in the number that suppresses the ask.
+//
+// The other states are still READ and returned as a breakdown so nothing is hidden by the
+// narrowing: callers that want the full remainder extent can have it without a second query.
+// Returns null (not 0) on any read failure -- see the fail-soft note above; an unknown count and
+// an empty one must stay distinguishable, because hasBacklog treats unknown as "assume backlog".
+export async function countUnpromotedRoadmapItems(client) {
+  const b = await readRemainderBreakdown(client);
+  return b === null ? null : b.promotable_now;
+}
+
+/**
+ * Full remainder-state breakdown, or null if the view cannot be read.
+ * @returns {Promise<{promotable_now:number, gated_on_chairman:number, in_flight_or_sequence_blocked:number, total:number}|null>}
+ */
+export async function readRemainderBreakdown(client) {
   try {
     const rows = await fetchAllPaginated(() =>
       client
         .from('v_plan_of_record_remainder')
         .select('id, remainder_state')
         .in('remainder_state', ['promotable_now', 'gated_on_chairman', 'in_flight_or_sequence_blocked']));
-    return rows.length;
+    const out = { promotable_now: 0, gated_on_chairman: 0, in_flight_or_sequence_blocked: 0, total: rows.length };
+    for (const r of rows) if (r.remainder_state in out) out[r.remainder_state] += 1;
+    return out;
   } catch {
     return null;
   }
