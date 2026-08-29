@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-29T17:51:13.002Z -->
-<!-- git_commit: 1d40f268 -->
+<!-- generated_at: 2026-08-29T17:55:20.049Z -->
+<!-- git_commit: 3faa6ac0 -->
 <!-- db_snapshot_hash: 9c7f0f933db35829 -->
-<!-- file_content_hash: 0d2022b490b3a07a -->
+<!-- file_content_hash: 185a13b08f046055 -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
 
@@ -175,14 +175,7 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 
 **AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table and Chaining setting.
 
-**ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
-1. **Orchestrator completion** — after all children, when Chaining is OFF
-2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
-3. **Test failures after 2 retry attempts**
-4. **All children blocked**
-5. **Critical security or data-loss scenario** (includes DB/code status mismatch)
-
-**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation" rationalization, asking "which option?" or "should I do X or Y?" instead of executing. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING.
+**ONLY STOP IF** one of the 5 Canonical Pause Points applies — defined once in CLAUDE.md "Canonical Pause Points", not restated here. Everything else (scope size, phase boundaries, "warrants confirmation" rationalization) is explicitly NOT a stop condition per that same list.
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -294,5 +287,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-08-29 1:51:13 PM*
+*DIGEST generated: 2026-08-29 1:55:20 PM*
 *Protocol: 4.4.1*

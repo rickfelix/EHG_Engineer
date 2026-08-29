@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-29T17:51:13.002Z",
-  "git_commit": "1d40f268",
+  "generated_at": "2026-08-29T17:55:20.049Z",
+  "git_commit": "3faa6ac0",
   "db_snapshot_hash": "9c7f0f933db35829",
   "files": {
     "CLAUDE.md": {
@@ -13,10 +13,10 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 80464,
-      "bytes": 80981,
-      "estimated_tokens": 20116,
-      "content_hash": "4704f78e0bbc38a3",
+      "chars": 79144,
+      "bytes": 79649,
+      "estimated_tokens": 19786,
+      "content_hash": "7fd0262262ca3b98",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
@@ -157,10 +157,10 @@
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 13747,
-      "bytes": 13861,
-      "estimated_tokens": 3437,
-      "content_hash": "0d2022b490b3a07a",
+      "chars": 13265,
+      "bytes": 13375,
+      "estimated_tokens": 3317,
+      "content_hash": "185a13b08f046055",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
@@ -213,7 +213,7 @@
     }
   },
   "section_digests": {
-    "global": "6a74c8ac72a01c11",
+    "global": "9204fd01c3e9c3b9",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -318,7 +318,7 @@
       "312": "47a97e7ca854a28e",
       "315": "85757a0fe109468e",
       "316": "e0eb178d0a81ac28",
-      "317": "7f5c188709ac7334",
+      "317": "431a78b950469ce1",
       "318": "0ec59de5577d5fd8",
       "320": "b24e3e2f4b075d53",
       "321": "82d6263d718533f0",
@@ -353,7 +353,7 @@
       "372": "b22dee3afacbd3ce",
       "375": "8b08cc11ab858a95",
       "376": "2d6c6ac7b6c7a00f",
-      "377": "3ccae6ca7a8ca946",
+      "377": "198d28803cf8132c",
       "378": "8cef93059452a0d8",
       "384": "8544beddce1568f1",
       "388": "dc79234b779a4c8e",

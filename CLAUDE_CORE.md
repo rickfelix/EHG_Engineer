@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4704f78e0bbc38a3 -->
+<!-- file_content_hash: 7fd0262262ca3b98 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-29 1:51:13 PM
+**Generated**: 2026-08-29 1:55:20 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -740,14 +740,7 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 
 **AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table and Chaining setting.
 
-**ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
-1. **Orchestrator completion** — after all children, when Chaining is OFF
-2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
-3. **Test failures after 2 retry attempts**
-4. **All children blocked**
-5. **Critical security or data-loss scenario** (includes DB/code status mismatch)
-
-**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation" rationalization, asking "which option?" or "should I do X or Y?" instead of executing. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING.
+**ONLY STOP IF** one of the 5 Canonical Pause Points applies — defined once in CLAUDE.md "Canonical Pause Points", not restated here. Everything else (scope size, phase boundaries, "warrants confirmation" rationalization) is explicitly NOT a stop condition per that same list.
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -805,16 +798,7 @@ Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EX
 5. **Children execute sequentially** - Child B waits for Child A
 6. **Parent completes last** - after all children finish
 
-### Canonical Pause Points (Orchestrator / Parent)
-
-**Canonical Pause Points** (applies to AUTO-PROCEED, Continue Autonomously, and Orchestrator STOP):
-1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
-2. **Blocking error requiring human decision** — e.g., merge conflicts, ambiguous requirements escalated from EXEC
-3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
-4. **All children blocked** — no ready work remains, human decision required
-5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
-
-**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into children, PRD creation, large refactors, phase boundaries, or any "warrants confirmation" rationalization. If your reason is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+> The 5 Canonical Pause Points (the ONLY reasons to pause an orchestrator/parent) are defined once, in CLAUDE.md "Canonical Pause Points" — they apply here unchanged. Do not duplicate the list; if you need it, read CLAUDE.md.
 
 ### Child SD Completion Checklist
 - [ ] Child has PRD in `product_requirements_v2`
