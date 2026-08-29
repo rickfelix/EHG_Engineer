@@ -39,6 +39,7 @@ function decisionsBuilder(rows) {
   const b = {
     select: () => b,
     eq: (col, val) => { filters.push((r) => r[col] === val); return b; },
+    limit: () => b,
     then: (resolve, reject) => Promise.resolve({ data: rows.filter((r) => filters.every((f) => f(r))), error: null }).then(resolve, reject),
   };
   return b;

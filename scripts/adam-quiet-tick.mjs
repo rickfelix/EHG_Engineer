@@ -322,7 +322,7 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}, priorR
         if (snapshot[id]) continue;
         const { data: v } = await sb.from('ventures').select('id, name, status').eq('id', id).maybeSingle();
         if (!v || !TERMINAL_VENTURE_STATUSES.includes(v.status)) continue;
-        const { data: decisions } = await sb.from('chairman_decisions').select('decision, status').eq('venture_id', id);
+        const { data: decisions } = await sb.from('chairman_decisions').select('decision, status').eq('venture_id', id).limit(50);
         if (isChairmanApprovedTermination(decisions)) continue;
         console.log(`QUIET_TICK_VENTURE_TERMINAL_FLIP=adam venture=${id} name="${v.name}" status=${v.status}`);
       }
