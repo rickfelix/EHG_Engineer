@@ -31,8 +31,8 @@ production file outside this table (test files are expected and excluded from "u
 | `lib/coordinator/dispatch.cjs` | 806 | `assertWorkerTierAllowed` | **enforcing** | Calls `tierRankVerdict(workerRank, minRank)` unconditionally in the WORK_ASSIGNMENT dispatch path; throws `DISPATCH_ABOVE_WORKER_TIER` on refusal. |
 | `lib/fleet/claim-eligibility.cjs` | 351 | `tierAxes` | **enforcing** | Calls `tierRankVerdict` via `ctx.worker_tier_rank`/`ctx.tiering_active`; one of the `INELIGIBILITY_AXES` consumed by `classifyDispatchIneligibility`. ctx-gated: no-ops if `ctx.tiering_active !== true`. |
 | `lib/fleet/tier-claimable.cjs` | 100 | `claimableForTier` | **enforcing** | Filters via `tierBlocks()`, which force-passes `tiering_active:true` so an explicit per-SD floor is honored even with tiering globally off. |
-| `scripts/sd-start.js` | — | (claim primitive) | **non-enforcing** | Zero tier code as of SD authoring (`grep -c tier` = 0). The atomic claim primitive a worker calls by SD key — bypasses every other gate. **Wired to enforce by this SD (FR-2).** |
-| `scripts/lib/claimable-leaves.mjs` | 57 | `claimableDbFreeReason` | **deferred** | Calls `classifyDispatchIneligibility(d)` with NO ctx — tier axis provably inert. In-code comment cites `SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001` FR-5 as a deliberate LEAD-approved deferral. **This SD is the deferred decision landing (FR-2).** |
+| `scripts/sd-start.js` | 282 | `enforceTierGate` | **enforcing** | Was zero tier code as of SD authoring (`grep -c tier` = 0) — the atomic claim primitive a worker calls by SD key, bypassing every other gate. **Wired to enforce by this SD (FR-2)**: calls `tierBlocks(sd, workerTierRank, tieringActive)` at both the direct-claim site and the leaf-routed claim site. |
+| `scripts/lib/claimable-leaves.mjs` | 57 | `claimableDbFreeReason` | **deferred** | Calls `classifyDispatchIneligibility(d)` with NO ctx — tier axis provably inert. In-code comment cites `SD-LEO-INFRA-FORECASTER-CLAIMABLE-PREDICATE-001` FR-5 as a deliberate LEAD-approved deferral, **re-confirmed by this SD as still correctly categorized** (belt gauge is tier-DISPLAYED, not tier-FILTERED, by design) — not an FR-2 gap. |
 | `lib/checkin/steps/merged-pool-self-claim.cjs` | 100 | (merged-pool self-claim lane) | **enforcing** | Reads `ctx.tierCtx.worker_tier_rank`/`.tiering_active`, passes into `classifyDispatchIneligibility`/`tierBlocks`. Already threaded via `SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001`. |
 | `scripts/worker-checkin.cjs` | 1080 | `recoverStrandedFinal` | **enforcing** | Independent `tierBlocks(sd, tierCtx.worker_tier_rank, tierCtx.tiering_active)` call, distinct from the earlier `classifyDispatchIneligibility` call in the same function (which runs with NO tierCtx and is inert) and distinct from QF-20260829-186's phase-filter widening (same function, different defect class). |
 
@@ -46,10 +46,12 @@ production file outside this table (test files are expected and excluded from "u
 
 ## Shared predicate today (partial)
 
-`tierRankVerdict(workerTierRank, minTierRank)` (`lib/fleet/tier-ladder.cjs:381`) is the one shared
-low-level comparison, consumed today by `dispatch.cjs` and `claim-eligibility.cjs` directly, and
-transitively by `tier-claimable.cjs` via `classifyDispatchIneligibility`. `sd-start.js` and
-`claimable-leaves.mjs` bypass the whole stack — the gap FR-2 of this SD closes.
+`tierRankVerdict(workerTierRank, minTierRank, opts)` (`lib/fleet/tier-ladder.cjs`) is the one shared
+low-level comparison — now provenance-aware (FR-3, ruling 1B) — consumed today by `dispatch.cjs`
+and `claim-eligibility.cjs` directly, and transitively by `tier-claimable.cjs` and (as of FR-2)
+`sd-start.js` via `tierBlocks()`/`classifyDispatchIneligibility()`. `claimable-leaves.mjs` remains a
+deliberate, re-confirmed deferral (belt gauge is tier-displayed, not tier-filtered) — the only real
+gap FR-2 closed was `sd-start.js`.
 
 ## Sweep result
 

@@ -48,15 +48,18 @@ function fakeSb({ rows = [], claimed = [] }) {
   };
 }
 
+// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: these fixtures test the BINDING tier-floor enforcement
+// mechanism itself, not the provenance-advisory feature, so a scored row carries a
+// min_tier_rank_reason to stay binding (an advisory, unreasoned floor would never block a claim).
 const strandedRow = (sd_key, minTierRank) => ({
   sd_key, status: 'pending_approval', current_phase: 'LEAD_FINAL',
-  updated_at: OLD, metadata: minTierRank == null ? null : { min_tier_rank: minTierRank },
+  updated_at: OLD, metadata: minTierRank == null ? null : { min_tier_rank: minTierRank, min_tier_rank_reason: 'unit-test floor' },
   sd_type: 'infrastructure', target_application: 'EHG_Engineer', parent_sd_id: null,
 });
 
 const orphanRow = (sd_key, minTierRank) => ({
   sd_key, sd_type: 'infrastructure', status: 'draft', current_phase: 'LEAD',
-  metadata: minTierRank == null ? null : { min_tier_rank: minTierRank },
+  metadata: minTierRank == null ? null : { min_tier_rank: minTierRank, min_tier_rank_reason: 'unit-test floor' },
   updated_at: OLD, target_application: 'EHG_Engineer', parent_sd_id: null,
 });
 

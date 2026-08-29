@@ -25,13 +25,16 @@ const { ladderTopRank, deriveLiveLadder, __resetLadderCacheForTests } = require(
 const TOP = ladderTopRank(); // 4
 
 // A well-formed, base-eligible SD (real description so it is NOT a bare-shell). rank=undefined => unscored.
+// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: this file tests the BINDING tier-floor exclusion mechanism
+// itself (claimableForTier / tierClaimableBreakdown), not the provenance-advisory feature, so a
+// scored SD carries min_tier_rank_reason by default to stay binding.
 const sd = (sd_key, rank, extra = {}) => ({
   sd_key,
   sd_type: 'infrastructure',
   status: 'draft',
   title: `${sd_key} title`,
   description: `A substantive description for ${sd_key} that is not equal to the title.`,
-  metadata: rank === undefined ? {} : { min_tier_rank: rank },
+  metadata: rank === undefined ? {} : { min_tier_rank: rank, min_tier_rank_reason: 'unit-test floor' },
   ...extra,
 });
 

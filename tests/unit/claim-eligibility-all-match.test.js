@@ -69,7 +69,7 @@ describe('classifyAllDispatchIneligibility (FR-1 / TS-1)', () => {
   it('applies ctx-gated tier axes identically to the first-match form', () => {
     const tierGated = {
       sd_key: 'SD-TIER-001', sd_type: 'feature', status: 'draft',
-      metadata: { min_tier_rank: 4 },
+      metadata: { min_tier_rank: 4, min_tier_rank_reason: 'unit-test floor' },
     };
     const ctx = { tiering_active: true, worker_tier_rank: 2 };
     expect(classifyAllDispatchIneligibility(tierGated, ctx)).toEqual(['above_worker_tier']);
