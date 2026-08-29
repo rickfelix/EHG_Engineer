@@ -46,8 +46,10 @@ beforeEach(() => {
 });
 
 describe('constants', () => {
-  it('targets stage 23 with a dedicated decision_type', () => {
-    expect(PRODUCT_REVIEW_STAGE).toBe(23);
+  // SD-LEO-INFRA-STAGE-TEMPLATE-DISPATCH-REMAINDER-001: was 23 pre-renumber;
+  // dedicated_venture_uat now occupies 23, shifting Launch Readiness to 24.
+  it('targets stage 24 with a dedicated decision_type', () => {
+    expect(PRODUCT_REVIEW_STAGE).toBe(24);
     expect(PRODUCT_REVIEW_DECISION_TYPE).toBe('product_review');
   });
 });

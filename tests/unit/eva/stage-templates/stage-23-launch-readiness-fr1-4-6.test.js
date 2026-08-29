@@ -19,7 +19,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-import TEMPLATE_23 from '../../../../lib/eva/stage-templates/stage-23.js';
+// SD-LEO-INFRA-STAGE-TEMPLATE-DISPATCH-REMAINDER-001: Launch Readiness content
+// moved from stage-23.js to stage-24.js (dedicated_venture_uat now occupies 23).
+import TEMPLATE_23 from '../../../../lib/eva/stage-templates/stage-24.js';
 import {
   analyzeStage23LaunchReadiness,
   CATEGORIES,
@@ -156,7 +158,7 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
 
     it('TEMPLATE_23 wires the canonical analyzer at template level', () => {
       expect(typeof TEMPLATE_23.analysisStep).toBe('function');
-      expect(TEMPLATE_23.id).toBe('stage-23');
+      expect(TEMPLATE_23.id).toBe('stage-24');
       expect(TEMPLATE_23.slug).toBe('launch-readiness');
     });
   });
