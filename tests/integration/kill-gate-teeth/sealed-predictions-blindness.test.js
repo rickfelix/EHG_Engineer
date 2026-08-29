@@ -104,4 +104,64 @@ describeDb('kill_gate_sealed_predictions — two-sided blindness (real DB)', () 
       await client.query('RESET ROLE');
     }
   });
+
+  // REGRESSION (SECURITY finding 30b707e0, EXEC_TO_PLAN review): the original migration revoked
+  // only from PUBLIC. This project's ALTER DEFAULT PRIVILEGES grants anon/authenticated their own
+  // BY-NAME privileges on every new public table -- NOT via the PUBLIC pseudo-role -- so a
+  // PUBLIC-only revoke revoked a grant that was never there, leaving both new tables fully
+  // anon-readable/writable with RLS disabled. This is the more consequential half of the blindness
+  // proof: kill_gate_traversal_ro is not reachable from the internet, but anon is (it is the
+  // Supabase client's default unauthenticated role). A green suite that only exercised
+  // kill_gate_traversal_ro would have shipped an open table alongside a passing "blindness" test.
+  it('REGRESSION: DENIES anon (the internet-reachable default role) on the base table (real 42501)', async () => {
+    // SAVEPOINT taken BEFORE SET ROLE (SECURITY re-verify 4bd6b5bc): unlike kill_gate_traversal_ro
+    // (which has an explicit membership grant asserted elsewhere), nothing here proves SET ROLE
+    // anon itself cannot fail -- if it did, a savepoint taken only after it would never exist,
+    // and the finally block's ROLLBACK TO SAVEPOINT would itself error, cascading 25P02 into every
+    // later test in this file. Savepoint-first means SET ROLE's own failure is equally recoverable.
+    await client.query('SAVEPOINT before_anon_denied_select');
+    try {
+      await client.query('SET ROLE anon');
+      await expect(client.query('SELECT * FROM kill_gate_sealed_predictions')).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT before_anon_denied_select');
+      await client.query('RESET ROLE');
+    }
+  });
+
+  it('REGRESSION: DENIES anon EXECUTE on the discharged-predictions RPC', async () => {
+    await client.query('SAVEPOINT before_anon_denied_rpc');
+    try {
+      await client.query('SET ROLE anon');
+      await expect(client.query('SELECT * FROM kill_gate_teeth_discharged_predictions()')).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT before_anon_denied_rpc');
+      await client.query('RESET ROLE');
+    }
+  });
+
+  it('REGRESSION: DENIES anon on kill_gate_teeth_proof_records (the Solomon-facing report table)', async () => {
+    await client.query('SAVEPOINT before_anon_denied_records');
+    try {
+      await client.query('SET ROLE anon');
+      await expect(client.query('SELECT * FROM kill_gate_teeth_proof_records')).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT before_anon_denied_records');
+      await client.query('RESET ROLE');
+    }
+  });
+
+  it('the migration\'s own post-apply verification block does not raise inside this transaction', async () => {
+    // The migration's DO $verify$ block already ran during beforeAll's composable apply (it is
+    // part of the same SQL file). If any of its has_table_privilege/relrowsecurity assertions had
+    // failed, client.query(composable) in beforeAll would have thrown and migrationApplied would
+    // be false -- this is a structural confirmation, not a new query.
+    expect(migrationApplied).toBe(true);
+  });
 });

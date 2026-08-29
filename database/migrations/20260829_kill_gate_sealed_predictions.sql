@@ -21,11 +21,23 @@
 -- SUPABASE_SERVICE_ROLE_KEY used by nearly all server-side code (scripts, lib/eva/**, the
 -- stage-execution worker). The Postgres `service_role` in Supabase carries BYPASSRLS, so an
 -- RLS-policy-only blindness mechanism (`ENABLE ROW LEVEL SECURITY` + a `USING (discharged_at IS
--- NOT NULL)` policy) would be a NO-OP against that role -- it would be a fixture that "runs but
--- cannot observe its subject" (this codebase's own named class of blind guard). RLS-based
--- blindness was rejected for that reason.
+-- NOT NULL)` policy SCOPED TO kill_gate_traversal_ro's blindness question) would be a NO-OP
+-- against service_role -- it would be a fixture that "runs but cannot observe its subject" (this
+-- codebase's own named class of blind guard). RLS as THAT mechanism was rejected for that reason.
 --
--- Instead this uses PRIVILEGE-based blindness, which service_role's BYPASSRLS does NOT defeat
+-- RLS IS still enabled below (SECURITY finding 30b707e0, EXEC_TO_PLAN review) -- but as
+-- DEFENSE-IN-DEPTH against anon/authenticated, a DIFFERENT threat than the one the paragraph
+-- above addresses. This project's ALTER DEFAULT PRIVILEGES grants anon/authenticated their own
+-- BY-NAME privileges on every new public table (not via PUBLIC), so a REVOKE-only migration
+-- revoking merely `FROM PUBLIC` silently left both new tables anon-readable/writable -- caught by
+-- SECURITY review before this migration was ever applied. The load-bearing controls against
+-- anon/authenticated are the explicit BY-NAME `REVOKE ... FROM anon, authenticated, PUBLIC`
+-- statements below; RLS is the second, independent layer in case a future edit re-grants anon
+-- access without noticing the REVOKE was the thing actually doing the work. DO NOT remove either
+-- layer thinking the other one covers it -- they cover DIFFERENT roles for DIFFERENT reasons.
+--
+-- Instead this uses PRIVILEGE-based blindness for kill_gate_traversal_ro specifically, which
+-- service_role's BYPASSRLS does NOT defeat
 -- (BYPASSRLS only skips row-security policies; it does not grant table privileges that were
 -- never GRANTed):
 --   1. A dedicated, non-superuser, NOLOGIN, NOINHERIT role `kill_gate_traversal_ro` is created.
@@ -137,6 +149,29 @@ COMMENT ON TABLE kill_gate_sealed_predictions IS
   'must read ONLY via kill_gate_teeth_discharged_predictions(), never this base table directly -- '
   'see this migration file header for the two-sided blindness mechanism and its honest residual gap.';
 
+-- SECURITY finding 30b707e0 (EXEC_TO_PLAN review): `REVOKE ALL ... FROM PUBLIC` alone is
+-- INSUFFICIENT on this project. Measured live: this database's `ALTER DEFAULT PRIVILEGES` grants
+-- anon/authenticated their own BY-NAME privileges on every new public table (NOT via the PUBLIC
+-- pseudo-role), so a PUBLIC-only revoke revokes a grant that was never there and leaves both new
+-- tables anon-readable/writable with RLS disabled. This exact hazard is already documented and
+-- fixed correctly elsewhere in this repo -- see database/migrations/20260809_venture_demand_verdicts.sql's
+-- "POSTURE" comment ("RLS-with-no-policy blocks the ROWS ... but THE GRANT STILL EXISTS") -- and
+-- database/chairman-gated/20260816_defacl_anon_auth_axis.sql names this same recurring class
+-- ("removes a grant that was never there"). That closing migration is chairman-gated and NOT YET
+-- APPLIED, so it cannot be relied on here: this migration must be self-sufficient.
+ALTER TABLE kill_gate_sealed_predictions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS kill_gate_sealed_predictions_service_role ON kill_gate_sealed_predictions;
+CREATE POLICY kill_gate_sealed_predictions_service_role
+  ON kill_gate_sealed_predictions
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+REVOKE ALL ON kill_gate_sealed_predictions FROM anon, authenticated, PUBLIC;
+GRANT ALL ON kill_gate_sealed_predictions TO service_role;
+
 -- ----------------------------------------------------------------------------------------------
 -- 2. Privilege-based blindness: dedicated role + discharged-only SECURITY DEFINER function
 -- ----------------------------------------------------------------------------------------------
@@ -157,9 +192,6 @@ END $$;
 -- itself unable to assume the restricted identity. Membership does NOT flow the other way:
 -- kill_gate_traversal_ro never gains postgres/service_role's privileges.
 GRANT kill_gate_traversal_ro TO postgres, service_role;
-
--- Explicit and defensive: no role should have ambient access to the base table via PUBLIC.
-REVOKE ALL ON kill_gate_sealed_predictions FROM PUBLIC;
 
 -- SECURITY DEFINER function, not a view (see migration header for why a view does not work on
 -- this project). Runs with the privileges of its OWNER (whichever role applies this migration,
@@ -185,7 +217,11 @@ COMMENT ON FUNCTION kill_gate_teeth_discharged_predictions() IS
   'this result set (SECURITY DEFINER, filtered inside the function body), not merely filtered by '
   'an app-layer if-check on the caller''s side.';
 
-REVOKE ALL ON FUNCTION kill_gate_teeth_discharged_predictions() FROM PUBLIC;
+-- SECURITY finding 30b707e0: named explicitly, not just PUBLIC, for the same by-name-default-ACL
+-- reason as the table revoke above -- otherwise anon would EXECUTE this function (running as its
+-- owner) and read every discharged prediction's content despite never being GRANTed EXECUTE via
+-- the PUBLIC pseudo-role.
+REVOKE ALL ON FUNCTION kill_gate_teeth_discharged_predictions() FROM anon, authenticated, PUBLIC;
 GRANT EXECUTE ON FUNCTION kill_gate_teeth_discharged_predictions() TO kill_gate_traversal_ro;
 -- Deliberately NOT granting SELECT on kill_gate_sealed_predictions itself to this role -- that
 -- omission IS the blindness mechanism.
@@ -246,5 +282,49 @@ COMMENT ON TABLE kill_gate_teeth_proof_records IS
   'One row per gated-stage crossing: sealed prediction (post-discharge) vs. actual system_events '
   'observation. Queryable teeth-proof report surface for Solomon -- see '
   'lib/eva/kill-gate-teeth/firing-verification.js getTeethProofReport().';
+
+-- SECURITY finding 30b707e0: same by-name-default-ACL treatment as kill_gate_sealed_predictions
+-- above -- this table has no seal to protect, but it is a Solomon-facing report surface and must
+-- not be anon-writable/readable either.
+ALTER TABLE kill_gate_teeth_proof_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS kill_gate_teeth_proof_records_service_role ON kill_gate_teeth_proof_records;
+CREATE POLICY kill_gate_teeth_proof_records_service_role
+  ON kill_gate_teeth_proof_records
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+REVOKE ALL ON kill_gate_teeth_proof_records FROM anon, authenticated, PUBLIC;
+GRANT ALL ON kill_gate_teeth_proof_records TO service_role;
+
+-- VERIFY. CREATE TABLE/FUNCTION IF NOT EXISTS advertises an idempotence that HIDES A REAL
+-- FAILURE: if either object already existed in some other shape, the REVOKE/GRANT/RLS statements
+-- above still report success even if the ACHIEVED state differs from what this migration intends.
+-- Assert the actual, measured state rather than trust that issuing the right statements produced
+-- it (SECURITY finding 30b707e0's own root cause was exactly this gap: a REVOKE that "ran clean"
+-- while doing nothing, because it targeted a grant that was never there).
+DO $verify$
+BEGIN
+  IF has_table_privilege('anon', 'kill_gate_sealed_predictions', 'SELECT') THEN
+    RAISE EXCEPTION 'kill_gate_sealed_predictions: anon still has SELECT after REVOKE -- migration did not achieve blindness';
+  END IF;
+  IF has_table_privilege('authenticated', 'kill_gate_sealed_predictions', 'SELECT') THEN
+    RAISE EXCEPTION 'kill_gate_sealed_predictions: authenticated still has SELECT after REVOKE -- migration did not achieve blindness';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'kill_gate_sealed_predictions'::regclass) THEN
+    RAISE EXCEPTION 'kill_gate_sealed_predictions: RLS is not enabled';
+  END IF;
+  IF has_function_privilege('anon', 'kill_gate_teeth_discharged_predictions()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'kill_gate_teeth_discharged_predictions(): anon still has EXECUTE after REVOKE';
+  END IF;
+  IF has_table_privilege('anon', 'kill_gate_teeth_proof_records', 'SELECT') THEN
+    RAISE EXCEPTION 'kill_gate_teeth_proof_records: anon still has SELECT after REVOKE';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'kill_gate_teeth_proof_records'::regclass) THEN
+    RAISE EXCEPTION 'kill_gate_teeth_proof_records: RLS is not enabled';
+  END IF;
+END $verify$;
 
 COMMIT;
