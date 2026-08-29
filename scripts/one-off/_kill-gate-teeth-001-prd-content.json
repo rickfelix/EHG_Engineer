@@ -1,0 +1,183 @@
+{
+  "executive_summary": "This PRD covers the ALPHA-leg infrastructure for the kill-gate teeth-proof regime (docs/design/kill-gate-teeth-proof-spec.md): a Solomon-writable sealed-prediction registry with genuine DB-level traversal-side blindness, a firing-verification harness that compares discharged sealed predictions against actual gate behavior on the pinned `system_events` observation surface, an aggregate teeth-proof report queryable by Solomon, and a mechanical, fail-closed firing fence that can never arm during venture-1's (ApexNiche) traversal or any attended traversal. It does NOT run a live designed-to-fail venture probe -- that is a separate, later, chairman-gated activity per spec section 6. The kill set (currently stages 3/5/13/24) is derived live from venture_stages.gate_type='kill' at every read site, never hardcoded, per the measured tension with the gate-type-canonicalize invariant module. SC3's citation is corrected in this PRD (see FR-3) from the non-resolving '5c4528b0' identifier to the verified 'W3 packet ruling, coordination corr 5c4528b0' wording, co-citing beca4a47 and d580dac7, per Solomon's pre-LEAD discharge e9087f46 and VALIDATION's independent corroboration.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Sealed-prediction registry with genuine DB-level traversal-side blindness",
+      "description": "A `kill_gate_sealed_predictions` table (database/migrations/20260829_kill_gate_sealed_predictions.sql) stores sealed kill-predictions (sealed_hash sha256, sealer_identity in solomon/chairman, sealed_at, nullable pre-attach venture_id/criterion_id/expected_stage/expected_verdict, discharged_at + discharged_content set together at discharge). Traversal-side blindness is a REAL, two-sided Postgres privilege boundary, not an app-level if-check: a dedicated NOLOGIN role `kill_gate_traversal_ro` has ZERO grant on the base table (direct SELECT genuinely errors 42501 permission denied), and the ONLY read surface granted to it is a `kill_gate_teeth_discharged_predictions()` SECURITY DEFINER function that filters to `discharged_at IS NOT NULL` inside the function body. A plain view was tried first and measured (live, this project) to NOT provide this boundary -- Supabase force-persists `security_invoker=on` on every new view regardless of the requested option, which would check the INVOKING role's own (zero) table privileges instead of the owner's; a SECURITY DEFINER function is unaffected by that view-specific hardening and was verified end-to-end (SET ROLE + real query) before being adopted.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Direct SELECT against kill_gate_sealed_predictions under kill_gate_traversal_ro raises a real Postgres error with SQLSTATE 42501",
+        "SELECT via kill_gate_teeth_discharged_predictions() under the same role returns only rows with discharged_at IS NOT NULL",
+        "The two-sided test (tests/integration/kill-gate-teeth/sealed-predictions-blindness.test.js) exercises a real Postgres session (SET ROLE), never a mock, and is documented to only run against an explicitly designated non-production target per this repo's DB-tier safety convention"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Firing-verification harness produces matching teeth-proof records",
+      "description": "lib/eva/kill-gate-teeth/firing-verification.js compares a crossing's discharged sealed predictions (read via the FR-1 RPC) against the actual observed verdict. `system_events` is pinned as the PRIMARY authoritative observation surface, because lib/eva/lifecycle/thesis-kill-gate.js's logThesisKillEvent() writes a row on EVERY evaluation (THESIS_KILL_FIRED and THESIS_KILL_CANNOT_EVALUATE alike), unlike chairman_decisions which exists only for FIRED verdicts and is used here strictly as a secondary routing cross-check (was a fired criterion correctly minted to a thesis_kill_tier_b:<criterionId> decision row). Each crossing produces one `kill_gate_teeth_proof_records` row recording gate_type (live-derived), predicted_verdict, observed_verdict, observed_source='system_events', routed_to_decision, matched_prediction (true/false/null-when-uncovered), and the LEO_THESIS_KILL_GATE flag_mode active at evaluation time -- so an observe-mode record can never be misread as proof the gate blocked advancement.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A seeded fixture crossing with a discharged prediction and a matching system_events verdict yields matched_prediction=true",
+        "A seeded fixture crossing with a discharged prediction and a disagreeing system_events verdict yields matched_prediction=false",
+        "A crossing with no discharged prediction yields matched_prediction=null (uncovered, not silently omitted)",
+        "getTeethProofReport() aggregates records only over the live-derived kill stage set and returns a Solomon-queryable summary (total/matched/mismatched/uncovered)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Mechanical, fail-closed firing fence -- corrected SC3 citation (BINDING)",
+      "description": "lib/eva/kill-gate-teeth/firing-fence.js's evaluateFiringFence() refuses to arm for venture-1 (ApexNiche, name-matched, unconditional exclusion) and refuses by default for any traversal absent an explicit, non-fleet-sealed unattended attestation (a system_events row, event_type='PROBE_S0_S5_UNATTENDED_ATTESTATION', payload.sealed_by in solomon/chairman). A repo-wide search found NO existing attended/unattended tracking mechanism to reuse (ventures.is_demo/is_scaffolding answer a different question); per this PRD's explicit design requirement, the predicate is FAIL-CLOSED BY ABSENCE -- a missing, unreadable, or errored attestation read is refused, never treated as proof of unattendedness. BINDING CITATION CORRECTION (Solomon pre-LEAD discharge e9087f46, independently corroborated by VALIDATION on-instrument: '5c4528b0' resolves to ZERO rows in chairman_decisions and session_coordination): the SD's SC3 wording is corrected here from '...refuses citing ruling 5c4528b0...' to 'W3 packet ruling, coordination corr 5c4528b0', co-citing chairman_decisions rows beca4a47 and d580dac7 (both verified-real, decision_type=session_question, status=approved), so the fence's authority never rests on a single hard-to-search surface. This exact reworded citation appears verbatim as a code comment at the top of lib/eva/kill-gate-teeth/firing-fence.js.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "evaluateFiringFence() refuses (armed=false) when no unattended attestation exists for the venture",
+        "evaluateFiringFence() refuses unconditionally for a venture named ApexNiche even when a valid attestation is present",
+        "evaluateFiringFence() arms (armed=true) only when a non-venture-1 venture carries a valid solomon/chairman-sealed attestation",
+        "A read failure on either the venture-identity lookup or the attestation lookup refuses (fail-closed), never arms",
+        "The reworded citation 'W3 packet ruling, coordination corr 5c4528b0' co-citing beca4a47 and d580dac7 appears verbatim in lib/eva/kill-gate-teeth/firing-fence.js"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Kill set derived live from venture_stages.gate_type, never hardcoded",
+      "description": "lib/eva/kill-gate-teeth/kill-stage-set.js's deriveLiveKillStages() is the single authorized read site for kill-set membership: `SELECT stage_number FROM venture_stages WHERE gate_type = 'kill'` (currently {3,5,13,24}). This is documented as the correct surface, NOT venture_stages.work_type, despite scripts/modules/architectural-prevention/stage-gate-type-canonicalize-invariant.js declaring gate_type a lossy mirror of work_type for its OWN (decision_type classification) purpose -- work_type='decision_gate' conflates the 4 kill stages with promotion stages 10/16/17/25 and cannot express the kill/promotion distinction this module needs. Every other module in this SD (firing-verification.js, firing-fence.js's future BETA extensions) MUST call this shared helper rather than re-deriving or hardcoding the set.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "deriveLiveKillStages() returns the sorted, deduped stage_number list where gate_type='kill', reading live at call time",
+        "A grep census across lib/eva/kill-gate-teeth/**, database/migrations/20260829_kill_gate_sealed_predictions.sql shows zero hardcoded kill-stage-number literals used for kill-SET derivation outside kill-stage-set.js itself",
+        "kill-stage-set.js carries a code comment documenting the gate_type-vs-work_type tension so a future cleanup does not silently widen the kill set to 8 stages"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Single-representation stamp verified (no code change required)",
+      "description": "roadmap_wave_items row 10845036-5fa4-4c72-8a88-2152725bfe96 already carries promoted_to_sd_key=SD-LEO-INFRA-KILL-GATE-TEETH-001 with metadata.hold.lifted_at=2026-08-29T04:39:26.081Z, independently verified by both Solomon's pre-LEAD discharge (session_coordination e9087f46, predecessor pre-commitment ee96aac5) and VALIDATION's own instrument. This SD does not modify that row; this requirement exists to record that the stamp was verified, not fabricated, before LEAD-TO-PLAN, and must not be silently re-stamped by EXEC.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "roadmap_wave_items row 10845036 is confirmed (read-only) to carry promoted_to_sd_key=SD-LEO-INFRA-KILL-GATE-TEETH-001 at EXEC completion, unchanged from PLAN's verification",
+        "No script in this SD's deliverables writes to roadmap_wave_items"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No modification to the live kill-gate seam",
+      "description": "lib/eva/lifecycle/thesis-kill-gate.js and lib/eva/lifecycle/thesis-kill-evaluator.js are read-only inputs to this SD's observation tooling. This SD builds proof/observation infrastructure around that seam and never edits it -- the regime being proved must not also be the thing doing the proving."
+    },
+    {
+      "id": "TR-2",
+      "title": "Additive-only migration",
+      "description": "database/migrations/20260829_kill_gate_sealed_predictions.sql only CREATEs new tables/role/function; it does not ALTER any existing table. Applying it is a chairman/coordinator-reviewed step separate from this PRD's authoring (the ALPHA-builder session that authored it does not self-apply schema DDL to the shared production database)."
+    },
+    {
+      "id": "TR-3",
+      "title": "No live probe execution",
+      "description": "No code in this SD's scope creates, injects, or advances a real designed-to-fail venture. The ALPHA/BETA probe run itself is chairman-gated and out of scope per spec section 6; this SD ships only the harness the eventual run will use."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Two-sided blindness: base table denial",
+      "type": "integration",
+      "expected": "A real Postgres session assuming kill_gate_traversal_ro gets SQLSTATE 42501 on a direct SELECT against kill_gate_sealed_predictions"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Two-sided blindness: discharged-only RPC access",
+      "type": "integration",
+      "expected": "The same session's call to kill_gate_teeth_discharged_predictions() succeeds and returns only rows with discharged_at IS NOT NULL"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Firing-verification match/mismatch/uncovered classification",
+      "type": "unit",
+      "expected": "verifyFiringForCrossing() correctly classifies matched_prediction as true, false, or null per fixture combinations of sealed predictions and system_events rows"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Firing fence fail-closed default",
+      "type": "unit",
+      "expected": "evaluateFiringFence() refuses (armed=false) absent an explicit unattended attestation, and refuses unconditionally for ApexNiche even with one present"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Live kill-set derivation",
+      "type": "unit",
+      "expected": "deriveLiveKillStages() reads venture_stages.gate_type='kill' and returns the current live set, with no hardcoded stage list in the module"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "No production call site is actually forced through the kill_gate_traversal_ro role today; the blindness mechanism is proven but not yet wired into the live traversal path.",
+      "mitigation": "Documented explicitly in the migration's header comment and here as a residual gap; wiring a restricted connection into stage-advancement call sites is out of ALPHA-leg scope and tracked as future work, not silently absorbed.",
+      "severity": "medium"
+    },
+    {
+      "risk": "The kill gate ships LEO_THESIS_KILL_GATE=observe by default -- a FIRED verdict is logged but never blocks advancement, so a teeth-proof record's observed_verdict='fired' does not by itself prove the venture was actually stopped.",
+      "mitigation": "Every teeth-proof record persists flag_mode at evaluation time; report consumers (Solomon) must read flag_mode alongside observed_verdict and never infer blocking from a fired verdict under observe mode.",
+      "severity": "medium"
+    },
+    {
+      "risk": "No existing attended/unattended traversal tracking mechanism exists in this codebase; the firing fence's arming predicate depends on a NEW attestation event type that nothing yet writes.",
+      "mitigation": "Fail-closed-by-absence default: the fence never arms without that attestation, so the absence of a writer is safe (over-refusal), not a silent bypass. Writing the attestation is run-prep's job (chairman-gated, out of ALPHA-leg scope), documented explicitly in firing-fence.js.",
+      "severity": "low"
+    },
+    {
+      "risk": "Supabase force-hardens new views to security_invoker=on on this project, which silently defeats the classic 'view exposes owner privileges' blindness pattern used elsewhere in Postgres tooling.",
+      "mitigation": "Adopted a SECURITY DEFINER function instead (unaffected by that view-specific hardening), verified end-to-end against the live project before shipping; documented in the migration comment so a future author does not reintroduce a view-based version expecting the textbook default.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Solomon (queries kill_gate_teeth_proof_records / getTeethProofReport() for sealed-terms discharge duty)",
+      "A future PROBE-ALPHA/BETA run-prep harness (chairman-gated, not built in this SD) that will write sealed predictions, discharge them, and check evaluateFiringFence() before arming"
+    ],
+    "dependencies": [
+      "lib/eva/lifecycle/thesis-kill-gate.js (system_events writer, read-only dependency)",
+      "venture_stages.gate_type column (live kill-set source)",
+      "ventures table (venture identity lookup for the firing fence)"
+    ],
+    "data_contracts": [
+      "kill_gate_sealed_predictions (new table)",
+      "kill_gate_teeth_proof_records (new table)",
+      "kill_gate_teeth_discharged_predictions() (new SECURITY DEFINER RPC)",
+      "system_events.event_type='PROBE_S0_S5_UNATTENDED_ATTESTATION' (new contract, not yet written by any producer -- fail-closed until one exists)"
+    ],
+    "runtime_config": [
+      "None. This SD introduces no new feature flags; LEO_THESIS_KILL_GATE (pre-existing) is read, never set, by firing-verification.js"
+    ],
+    "observability_rollout": [
+      "kill_gate_teeth_proof_records is the durable, queryable rollout surface; no dashboard change in this SD's scope"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Three new pure/DB-backed modules under lib/eva/kill-gate-teeth/, one additive migration, zero changes to the live kill-gate seam.",
+    "components": [
+      { "name": "database/migrations/20260829_kill_gate_sealed_predictions.sql", "change": "NEW" },
+      { "name": "lib/eva/kill-gate-teeth/kill-stage-set.js", "change": "NEW" },
+      { "name": "lib/eva/kill-gate-teeth/firing-verification.js", "change": "NEW" },
+      { "name": "lib/eva/kill-gate-teeth/firing-fence.js", "change": "NEW" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the registry + blindness mechanism first (it gates everything else), then the verification harness against the pinned system_events surface, then the fence as an independent predicate module.",
+    "steps": [
+      "Author the migration: sealed-prediction table, teeth-proof-records table, kill_gate_traversal_ro role, kill_gate_teeth_discharged_predictions() SECURITY DEFINER function",
+      "Smoke-test the blindness mechanism live (rolled-back transaction) to confirm the real 42501 denial and the RPC's filtered access before writing the automated test",
+      "Implement kill-stage-set.js, firing-verification.js, firing-fence.js with unit tests",
+      "Write the two-sided blindness integration test gated by this repo's designated-non-prod-target convention",
+      "Hand off the migration file for coordinator review/apply (not self-applied)"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run `npx vitest run --project unit tests/unit/eva/kill-gate-teeth/`", "expected_outcome": "All firing-fence and firing-verification unit tests pass" },
+    { "step_number": 2, "instruction": "Run `npx vitest run --project db tests/integration/kill-gate-teeth/` without VITEST_DB_ALLOW_REF set", "expected_outcome": "The suite reports SKIPPED (3 skipped), never FAILED, matching this repo's DB-tier safety convention" },
+    { "step_number": 3, "instruction": "After the migration is applied by the coordinator, run `SELECT stage_number FROM venture_stages WHERE gate_type = 'kill' ORDER BY 1;` against the live DB", "expected_outcome": "Returns {3, 5, 13, 24}, matching deriveLiveKillStages()'s output" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-KILL-GATE-TEETH-001"
+  }
+}
