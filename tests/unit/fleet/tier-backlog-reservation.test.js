@@ -374,6 +374,22 @@ describe('FR-4 tierRankVerdict — the ONE shared tier-rank predicate', () => {
     expect(tierRankVerdict(5, 4)).toBeNull();
   });
 
+  // SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (coordinator review question, verified): a
+  // provenance-free FLOOR and a MISSING WORKER STAMP are different states. Ruling 1B makes the
+  // former advisory; the latter stays hard-binding regardless of hasProvenance, because provenance
+  // describes the SD's floor, not the worker's own rank -- an unknown worker rank cannot be
+  // compared to any floor at all, justified or not. This pins the two-sided distinction so a future
+  // edit that folds hasProvenance into the tier_stamp_missing branch (producing a HALF-advisory
+  // floor read as "the same fix, just the other verdict string") is caught immediately.
+  it('a provenance-free floor above the seat -> advisory (unblocked)', () => {
+    expect(tierRankVerdict(2, 4, { hasProvenance: false })).toBe('above_worker_tier_advisory');
+  });
+  it('a MISSING worker stamp on a scored SD -> tier_stamp_missing, EVEN with hasProvenance:true', () => {
+    expect(tierRankVerdict(undefined, 4, { hasProvenance: true })).toBe('tier_stamp_missing');
+    expect(tierRankVerdict(undefined, 4, { hasProvenance: false })).toBe('tier_stamp_missing');
+    expect(tierRankVerdict(NaN, 4)).toBe('tier_stamp_missing');
+  });
+
   // Source-pinned: proves BOTH call sites actually delegate to the shared function, not merely
   // that their outputs happen to coincide for the cases exercised above. A future edit that
   // reintroduces an inline `minRank > workerRank` comparison in either file, bypassing
