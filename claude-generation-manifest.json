@@ -1,203 +1,211 @@
 {
-  "generated_at": "2026-08-28T22:05:32.291Z",
-  "git_commit": "c71cc14d",
-  "db_snapshot_hash": "4e97d70f203a5729",
+  "generated_at": "2026-08-29T15:23:20.733Z",
+  "git_commit": "1e7f1c7e",
+  "db_snapshot_hash": "6ff460d2f085b038",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 19564,
-      "bytes": 19703,
-      "estimated_tokens": 4891,
+      "chars": 19565,
+      "bytes": 19704,
+      "estimated_tokens": 4892,
       "content_hash": "91b0c479ced58edc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 93829,
-      "bytes": 94414,
+      "chars": 93830,
+      "bytes": 94415,
       "estimated_tokens": 23458,
-      "content_hash": "569d8d4f74e869f9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_CORE.md"
+      "content_hash": "27f20eeda2736621",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 58425,
-      "bytes": 58621,
+      "chars": 58426,
+      "bytes": 58622,
       "estimated_tokens": 14607,
-      "content_hash": "932bb1927e57f071",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_LEAD.md"
+      "content_hash": "87e3e7e6f50795e1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
-      "chars": 8818,
-      "bytes": 8862,
+      "chars": 8819,
+      "bytes": 8863,
       "estimated_tokens": 2205,
-      "content_hash": "e22840b445d242fd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_LEAD_MANUAL.md"
+      "content_hash": "a48e3a2f2dac5c6b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 54854,
-      "bytes": 55111,
+      "chars": 54855,
+      "bytes": 55112,
       "estimated_tokens": 13714,
-      "content_hash": "e42b9e7c00c14c70",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_PLAN.md"
+      "content_hash": "d4821b12d516252e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
-      "chars": 38353,
-      "bytes": 38460,
+      "chars": 38354,
+      "bytes": 38461,
       "estimated_tokens": 9589,
-      "content_hash": "8e99be5578fd7c53",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_PLAN_MANUAL.md"
+      "content_hash": "0f7546c90b57103e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 92843,
-      "bytes": 93277,
+      "chars": 92844,
+      "bytes": 93278,
       "estimated_tokens": 23211,
-      "content_hash": "850ce3ad78d26a14",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_EXEC.md"
+      "content_hash": "b3355ff7d3722c0b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 56916,
-      "bytes": 57510,
-      "estimated_tokens": 14229,
-      "content_hash": "6fe34b2422ad84fb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_ADAM.md"
+      "chars": 59630,
+      "bytes": 60240,
+      "estimated_tokens": 14908,
+      "content_hash": "d6a43d6320e86ab3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 15698,
-      "bytes": 15842,
+      "chars": 15699,
+      "bytes": 15843,
       "estimated_tokens": 3925,
-      "content_hash": "c819d7a4816343be",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_ADAM_MANUAL.md"
+      "content_hash": "a8900fdcb52aa329",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 6924,
-      "bytes": 6988,
-      "estimated_tokens": 1731,
-      "content_hash": "c8e7d5ce7ed21301",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_ADAM_PROVENANCE.md"
+      "chars": 6925,
+      "bytes": 6989,
+      "estimated_tokens": 1732,
+      "content_hash": "735a838c7e956416",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 25532,
-      "bytes": 25726,
-      "estimated_tokens": 6383,
-      "content_hash": "23e77a4c164f5b06",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_COORDINATOR.md"
+      "chars": 25533,
+      "bytes": 25727,
+      "estimated_tokens": 6384,
+      "content_hash": "f4a2a6cef0bcd151",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
-      "chars": 4557,
-      "bytes": 4593,
+      "chars": 4558,
+      "bytes": 4594,
       "estimated_tokens": 1140,
-      "content_hash": "5f9ac10e80d68c81",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_COORDINATOR_MANUAL.md"
+      "content_hash": "289813add8b3f937",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
       "type": "full",
-      "chars": 2126,
-      "bytes": 2138,
+      "chars": 2127,
+      "bytes": 2139,
       "estimated_tokens": 532,
-      "content_hash": "6a4650a98ffc4c6c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_COORDINATOR_PROVENANCE.md"
+      "content_hash": "41f5a27dc517ce0d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 57667,
-      "bytes": 58178,
-      "estimated_tokens": 14417,
-      "content_hash": "38507b7f1f63ed3f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_SOLOMON.md"
+      "chars": 57658,
+      "bytes": 58158,
+      "estimated_tokens": 14415,
+      "content_hash": "1a22abd5a4033576",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 11227,
-      "bytes": 11324,
+      "chars": 11228,
+      "bytes": 11325,
       "estimated_tokens": 2807,
-      "content_hash": "abe142985347faf1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_SOLOMON_MANUAL.md"
+      "content_hash": "7e4e2e4165ffcb37",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 11727,
-      "bytes": 11838,
+      "chars": 11728,
+      "bytes": 11839,
       "estimated_tokens": 2932,
-      "content_hash": "dd5cce8f0eed87fd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_SOLOMON_PROVENANCE.md"
+      "content_hash": "63eb74200432567d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_PROVENANCE.md"
+    },
+    "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
+      "type": "full",
+      "chars": 3581,
+      "bytes": 3608,
+      "estimated_tokens": 896,
+      "content_hash": "16862a827ddc272b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
-      "bytes": 9653,
+      "chars": 9612,
+      "bytes": 9654,
       "estimated_tokens": 2403,
-      "content_hash": "8fc0f2bdd4dbd48a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_DIGEST.md"
+      "content_hash": "b1192ccc94f327a0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 13747,
-      "bytes": 13861,
+      "chars": 13748,
+      "bytes": 13862,
       "estimated_tokens": 3437,
-      "content_hash": "30ad549dcfdfc443",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "c7c602d3d81f422f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5551,
-      "bytes": 5571,
+      "chars": 5552,
+      "bytes": 5572,
       "estimated_tokens": 1388,
-      "content_hash": "b990f0910529803b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "4329ff35e3b16d97",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8541,
-      "bytes": 8581,
+      "chars": 8542,
+      "bytes": 8582,
       "estimated_tokens": 2136,
-      "content_hash": "ae83b7c52d1ad6e0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "b4a7ff2fe75e22b6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10964,
-      "bytes": 11046,
-      "estimated_tokens": 2741,
-      "content_hash": "35067cdaeb8169ed",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10965,
+      "bytes": 11047,
+      "estimated_tokens": 2742,
+      "content_hash": "613addd20492bd0a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 17734,
       "bytes": 18042,
       "estimated_tokens": 4434,
-      "content_hash": "3a6184a77855bea8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "0359cef444310e9c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 8498,
       "bytes": 8566,
       "estimated_tokens": 2125,
-      "content_hash": "cd0d1033a55e5c3c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "4fd3b3c02375a421",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
       "chars": 3959,
       "bytes": 3997,
       "estimated_tokens": 990,
-      "content_hash": "428330c031376e3c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001\\CLAUDE_SOLOMON_DIGEST.md"
+      "content_hash": "45f79961a8da1e6f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "12739027f49842d9",
+    "global": "c71fd3ee7fe28a6d",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -451,14 +459,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "4d7df263bbf0c7ec",
+      "601": "2a735511accb04a0",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "44bc3efdff5b9875",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "1d664b46b41c49d4",
+      "611": "643997adfb04e9af",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -475,7 +483,8 @@
       "633": "12cf4526e9c9fd09",
       "634": "6518b5f83a72be9e",
       "635": "4d256bd4f129b597",
-      "636": "31efdc24eea9e73c"
+      "636": "31efdc24eea9e73c",
+      "653": "29214fac1aff5e6f"
     },
     "meta": {
       "94": {
@@ -1862,6 +1871,11 @@
         "section_type": "solomon_provenance",
         "target_file": null,
         "title": "Solomon Provenance — dated rationale and originating incidents (companion)"
+      },
+      "653": {
+        "section_type": "solomon_model_posture",
+        "target_file": null,
+        "title": "Model Posture (pin, window strategy, availability degradation, portability guard)"
       }
     }
   }
