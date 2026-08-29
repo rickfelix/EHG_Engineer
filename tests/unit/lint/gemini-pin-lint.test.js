@@ -22,20 +22,21 @@ function libFile(dir, name, content) {
 const LINT_SCRIPT = join(process.cwd(), 'scripts/lint/gemini-pin-lint.mjs');
 
 describe('gemini-pin-lint: full-sweep sanity against the real repo', () => {
-  it('reports exactly the 24 KNOWN, not-yet-consolidated routing pins (allowlist covers the other 11 non-routing occurrences)', () => {
-    // 24 is not "0 violations" -- that is the point at THIS stage of the SD. The 5 sibling
-    // subsystem-consolidation SDs (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-C through -G) migrate these
-    // remaining pins onto model-config.js; the CI gate flips from allow-fail to blocking only once
-    // this count reaches 0 (tracked on SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-G). A regression that
-    // ADDS a new unallowlisted pin, or an allowlist entry drifting stale, changes this number --
-    // which is exactly what this pinned-count test is designed to catch.
+  it('reports exactly the 15 KNOWN, not-yet-consolidated routing pins (allowlist covers the other 11 non-routing occurrences)', () => {
+    // 15 is not "0 violations" -- that is the point at THIS stage of the SD. SD-LEO-ORCH-GEMINI-
+    // MODEL-SCAN-001-D consolidated the 9 pins in lib/testing/vision-qa-agent.js (24 -> 15). The
+    // remaining sibling subsystem-consolidation SDs (-E through -G) migrate the rest onto
+    // model-config.js; the CI gate flips from allow-fail to blocking only once this count reaches
+    // 0 (tracked on SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-G). A regression that ADDS a new
+    // unallowlisted pin, or an allowlist entry drifting stale, changes this number -- which is
+    // exactly what this pinned-count test is designed to catch.
     let output = '';
     try {
       execSync(`node "${LINT_SCRIPT}" --all`, { encoding: 'utf8', cwd: process.cwd() });
     } catch (err) {
       output = err.stdout?.toString() || err.message;
     }
-    expect(output).toMatch(/24 unallowlisted violation/);
+    expect(output).toMatch(/15 unallowlisted violation/);
   });
 
   it('the allowlist has zero stale entries against the real repo', () => {
