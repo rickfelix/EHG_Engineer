@@ -551,7 +551,9 @@
     "script": "scripts/lint/gemini-pin-lint.mjs",
     "rootFlag": null,
     "cwdScope": true,
-    "extraArgs": ["--all"],
+    "extraArgs": [
+      "--all"
+    ],
     "note": "SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B. No --root, but aimable via cwd the same way diagnostic-gauge-citation-lint is -- RUNTIME_DIRS resolve against process.cwd(), so the trial's tmp git-repo fixture tree is scanned directly.",
     "fixtures": [
       {
@@ -559,7 +561,10 @@
         "content": "// SEEDED DEFECT: a literal Gemini model-version string outside model-config.js and not in\n// scripts/lint/gemini-pin-allowlist.json -- the exact routing-pin shape this lint exists to block.\nexport function pickModel() {\n  return 'gemini-2.5-flash';\n}\n"
       }
     ],
-    "detectTokens": ["seeded-gemini-pin-defect", "gemini-2.5-flash"],
+    "detectTokens": [
+      "seeded-gemini-pin-defect",
+      "gemini-2.5-flash"
+    ],
     "observability_proof": {
       "input": "literal /['\\\"`]gemini-\\d[\\w.-]*['\\\"`]/ string matches, scanned line-by-line across lib/, scripts/, tests/ (RUNTIME_DIRS resolved against process.cwd()) via `node scripts/lint/gemini-pin-lint.mjs --all`, cross-checked by exact file:line against scripts/lint/gemini-pin-allowlist.json entries. Consumes no DB columns and no environment variables.",
       "seen": "Real positive observed against this repo's own live checkout at HEAD (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B, 2026-08-28, pre sibling-consolidation): `node scripts/lint/gemini-pin-lint.mjs --all`, run directly against the real tracked tree (not a temp-dir fixture), reported '24 unallowlisted violation(s) in 4129 file(s) checked' across lib/ai/multimodal-client.js (13), lib/testing/vision-qa-agent.js (9), lib/creative/providers/gemini.js (1), and lib/brainstorm/provider-rotation.js (1) -- the exact set the five sibling subsystem-consolidation SDs (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-C through -G) exist to migrate onto model-config.js; see PR #7623 test output (tests/unit/lint/gemini-pin-lint.test.js pins this count)."
@@ -580,10 +585,28 @@
         "content": "// SEEDED DEFECT: a hand-rolled min_tier_rank comparison outside the single shared predicate\n// (tierRankVerdict in lib/fleet/tier-ladder.cjs) -- the exact bypass shape this lint exists to\n// block, since it silently reintroduces always-binding behavior regardless of ruling 1B's\n// provenance-advisory branch and the TIER_FLOOR_PROVENANCE_ADVISORY reversal switch.\nfunction claimable(sd, workerRank) {\n  return sd.metadata.min_tier_rank > workerRank ? 'blocked' : 'ok';\n}\n"
       }
     ],
-    "detectTokens": ["seeded-tier-rank-comparison-defect", "min_tier_rank"],
+    "detectTokens": [
+      "seeded-tier-rank-comparison-defect",
+      "min_tier_rank"
+    ],
     "observability_proof": {
       "input": "a source line containing the literal `min_tier_rank` together with a numeric comparison operator (>, <, >=, <=), scanned line-by-line across lib/, scripts/, tests/ (RUNTIME_DIRS resolved against process.cwd()) via `node scripts/lint/tier-rank-direct-comparison-lint.mjs --all`, with postgrest ->/->> arrows and JS => arrow functions scrubbed before matching (both contain a bare > that is not a numeric comparison), cross-checked by exact file:line against scripts/lint/tier-rank-direct-comparison-allowlist.json entries. Consumes no DB columns and no environment variables.",
       "seen": "The scanner is proven non-blind (not silently returning 0 by construction) by its own authoring run against this repo's real tracked tree at HEAD (SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001, 2026-08-29): `node scripts/lint/tier-rank-direct-comparison-lint.mjs --all`, run directly against the real checkout (not a temp-dir fixture), initially matched 5 real lines containing min_tier_rank + a bare >/< (scripts/gauge-runner.mjs:196, scripts/leo-create-sd.js:177, lib/fleet/sd-tier-rank.mjs:175-177) before the ->/=>-scrubbing fix and the one genuine false positive (a `--min-tier-rank <N>` CLI help placeholder) were resolved down to 0 unallowlisted violations -- proving the matcher inspects real line content rather than vacuously passing. No GENUINE min_tier_rank-vs-worker-rank comparison exists anywhere outside tierRankVerdict() as of this writing (the shared predicate has exactly two real callers, both reused via tierBlocks()/classifyDispatchIneligibility()); see tests/unit/lint/tier-rank-direct-comparison-lint.test.js for the pinned 0-violation assertion."
+    }
+  },
+  {
+    "name": "ilike-on-uuid-lint",
+    "script": "scripts/lint/ilike-on-uuid-lint.mjs",
+    "seedTest": "tests/unit/lint/ilike-on-uuid-lint.test.js",
+    "note": "QF-20260829-440. The control it guards: Postgres has no ~~/~~* operator for uuid, so .ilike()/.like() on a uuid-typed column throws (or, behind a swallowed error, silently reads as a genuine zero-row result) -- the ILIKE-ON-UUID=FALSE-0ROWS trap, three seats bitten multiple times in one week. seedTest form rather than fixtures because the control ships as a PURE FUNCTION (findIlikeOnUuid) over source text plus an injected uuid-column Set, with no file-walking CLI root to aim a fixture dir at; the committed test carries both directions itself -- a fixture .ilike('id', ...) that must fire, a legitimate .ilike('title', ...) that must not, the escape-hatch comment, and a comment-only mention that must not be misread as live code.",
+    "neuter": {
+      "find": "findings.push({",
+      "replace": "if (false) findings.push({",
+      "why": "the lint stops reporting any finding, so the fixture test's FIRES assertion goes RED -- proving the control is what makes that test pass, not the test asserting its own premise."
+    },
+    "observability_proof": {
+      "input": "The SOURCE TEXT of a single .js/.mjs/.cjs file, passed directly to findIlikeOnUuid(source, uuidColumns, filePath) as a string, with block and line comments BLANKED (not deleted, so reported line numbers stay true) before matching -- the escape-hatch marker check runs against the ORIGINAL unblanked text, not the blanked copy. It consumes NO database columns and NO filesystem walk at the function level -- the caller supplies both the text and the uuid-column Set. Its OUTPUT SIGNAL is the returned array of findings, each {file, line, column, message}; an empty array means no ilike/like-on-uuid call was found in that text.",
+      "seen": "A REAL positive on REAL DEPLOYED SOURCE, not a temp-dir fixture: run against lib/commands/claim-command.js as it stands on origin/main, it returns exactly ONE finding, at line 120, column=session_id, from '.like('session_id', ...)'. session_id is a genuine uuid-typed column (database/uuid-columns-census.json) on a live call site -- one of 24 pre-existing findings measured across the repo 2026-08-29 via 'node scripts/lint/ilike-on-uuid-lint.mjs' (full sweep, no --diff), none of which are in this control's own diff. Two-sided in the same measurement: 0 findings on this PR's own new files."
     }
   }
 ]

@@ -1,0 +1,43 @@
+name: ilike-on-uuid lint
+
+# QF-20260829-440 — forbid .ilike()/.like() on a uuid-typed column (ILIKE-ON-UUID=FALSE-0ROWS
+# trap: three seats bitten multiple times this week; Postgres has no ~~/~~* operator for uuid).
+# Diff-only: scans only files changed vs the PR base, so the pre-existing backlog (24 findings,
+# measured 2026-08-29) never blocks a PR that didn't touch them — same tradeoff
+# schema-reference-lint.yml makes, for the identical reason.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'database/uuid-columns-census.json'
+      - 'scripts/lint/ilike-on-uuid-lint.mjs'
+      - '.github/workflows/ilike-on-uuid-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ilike-on-uuid-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run ilike-on-uuid lint (diff vs PR base)
+        env:
+          ILIKE_UUID_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          git fetch origin ${{ github.base_ref }} || true
+          node scripts/lint/ilike-on-uuid-lint.mjs --diff
