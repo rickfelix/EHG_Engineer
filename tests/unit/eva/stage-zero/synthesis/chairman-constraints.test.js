@@ -76,9 +76,11 @@ describe('applyChairmanConstraints — no unconditional passes (C5)', () => {
             eq: () => ({
               // QF-20260710-754 (Delta L2): live chairman_constraints columns —
               // constraint_key/name (loadConstraints maps them to {key,label,weight}).
-              order: () => Promise.resolve({
-                data: [{ constraint_key: 'unknown_future_constraint', name: 'Unknown', weight: 5, is_active: true }],
-                error: null,
+              order: () => ({
+                limit: () => Promise.resolve({
+                  data: [{ constraint_key: 'unknown_future_constraint', name: 'Unknown', weight: 5, is_active: true }],
+                  error: null,
+                }),
               }),
             }),
           }),

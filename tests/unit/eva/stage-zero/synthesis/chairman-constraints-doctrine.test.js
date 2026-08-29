@@ -20,7 +20,9 @@ function sbWithRows(rows) {
     from: () => ({
       select: () => ({
         eq: () => ({
-          order: () => Promise.resolve({ data: rows, error: null }),
+          order: () => ({
+            limit: () => Promise.resolve({ data: rows, error: null }),
+          }),
         }),
       }),
     }),

@@ -35,7 +35,9 @@ const fakeSupabase = {
   from: () => ({
     select: () => ({
       eq: () => ({
-        order: () => Promise.resolve({ data: POST_MIGRATION_ROWS, error: null }),
+        order: () => ({
+          limit: () => Promise.resolve({ data: POST_MIGRATION_ROWS, error: null }),
+        }),
       }),
     }),
   }),
