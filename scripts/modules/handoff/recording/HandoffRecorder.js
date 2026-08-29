@@ -24,6 +24,8 @@ import { NOT_MEASURED_SCORE } from '../gates/fr-delivery-classifier.js';
 // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 (FR-1/FR-3)
 import { buildPreflightRemediation, truncateValidationDetails, findPriorSaemRemediation } from './preflight-remediation.js';
 import { resolveClaimIdentity } from '../../../../lib/claim/claim-identity.js';
+// SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2)
+import { buildPhaseSnapshotWindow } from '../../../../lib/governance/phase-snapshot-window.mjs';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -974,6 +976,11 @@ export class HandoffRecorder {
       // CRITICAL: status MUST be set AFTER ...handoffContent spread operator.
       // ContentBuilder may return fields that could overwrite status if spread comes later.
       // By placing status AFTER the spread, we guarantee it's always 'pending_acceptance'.
+      // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2): pre-register the baseline window for
+      // the phase this row OPENS (to_phase), at the same moment the row itself is created —
+      // before any work in that phase has occurred. Database-side trigger enforces immutability.
+      const phaseSnapshotWindow = buildPhaseSnapshotWindow({ sdId: sdUuid, fromPhase, toPhase });
+
       const handoffRecord = {
         id: handoffId,
         sd_id: sdUuid,
@@ -987,6 +994,8 @@ export class HandoffRecorder {
         validation_passed: result.success !== false,
         validation_details: { ...(result.validation || {}), score_source: scoreSource },
         metadata,
+        window_registered_at: phaseSnapshotWindow.window_registered_at,
+        baseline_snapshot: phaseSnapshotWindow.baseline_snapshot,
         created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
       };
 
@@ -1001,9 +1010,23 @@ export class HandoffRecorder {
       }
 
       // Insert as pending
-      const { error: insertError } = await this.supabase
+      let { error: insertError } = await this.supabase
         .from('sd_phase_handoffs')
         .insert(handoffRecord);
+
+      // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D: window_registered_at/baseline_snapshot ship as a
+      // chairman-gated migration (database/chairman-gated/20260829_phase_snapshot_windows_agent_
+      // class_rates.sql) that this worker cannot self-apply. Until a human runs the apply
+      // ceremony, the live table lacks these columns — PostgREST reports that as PGRST204. Retry
+      // once without the two new fields rather than failing every handoff in the fleet on a
+      // supplementary, additive feature that isn't live yet.
+      if (insertError && insertError.code === 'PGRST204' && /window_registered_at|baseline_snapshot/.test(insertError.message || '')) {
+        console.warn('   ⚠️  sd_phase_handoffs.window_registered_at/baseline_snapshot not yet migrated — retrying insert without them');
+        const { window_registered_at: _wra, baseline_snapshot: _bs, ...handoffRecordNoWindow } = handoffRecord;
+        ({ error: insertError } = await this.supabase
+          .from('sd_phase_handoffs')
+          .insert(handoffRecordNoWindow));
+      }
 
       if (insertError) {
         // SD-LEARN-FIX-ADDRESS-PAT-AUTO-023: If INSERT fails due to session claim check
