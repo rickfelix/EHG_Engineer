@@ -244,6 +244,30 @@ async function attemptSameTurnNextClaim({ resolveCheckinFn, sb, sessionId, timeo
 }
 
 /**
+ * SD-LEO-INFRA-WORKER-WIND-DOWN-001 — SECURITY finding (evidence 4711ebbc): resolveCheckin's
+ * roll-call step (lib/checkin/steps/roll-call.cjs) unconditionally surfaces
+ * `ctx.base.coordinator_messages[]` AND consumes them as a side effect — an already-delivered
+ * advisory row is stamped acknowledged_at (permanently CONSUMED, never re-surfaced) the moment
+ * it is read. attemptSameTurnNextClaim previously discarded `resolution.coordinator_messages`
+ * entirely, so every same-turn-claim attempt silently burned a delivery slot: the row shows
+ * delivered/acknowledged in the DB, but the parking worker never saw the content. This formats
+ * them into the Stop-hook block reason so they are actually surfaced before the worker can stop.
+ * Pure — never throws, never touches the network.
+ * @param {Array<{subject?:string, body?:string, kind?:string, chairman_directive?:boolean}>} messages
+ * @returns {string} empty string when there is nothing to surface
+ */
+function formatCoordinatorMessagesForBlock(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return '';
+  const lines = messages.map((m, i) => {
+    const tag = m.chairman_directive ? 'CHAIRMAN DIRECTIVE' : (m.kind || 'message').toUpperCase();
+    const subject = m.subject ? ` — ${m.subject}` : '';
+    const body = m.body ? `\n   ${m.body}` : '';
+    return `  ${i + 1}. [${tag}]${subject}${body}`;
+  });
+  return `\n\nCOORDINATOR MESSAGE(S) surfaced during this same-turn checkin (act on these before going idle):\n${lines.join('\n')}`;
+}
+
+/**
  * SD-LEO-INFRA-WORKER-WIND-DOWN-001 — best-effort dashboard-observability stamp: makes "chose to
  * exit idle after looking" distinguishable from "never looked" on the same claude_sessions record
  * the rest of this file already annotates (mirrors recordWindDown's read-modify-merge pattern).
@@ -740,9 +764,21 @@ async function main() {
           recordSameTurnClaimAttempt(supabase, sessionId, { outcome, key }),
           new Promise((r) => setTimeout(r, remainingBudgetMs())),
         ]);
+        // SECURITY finding 4711ebbc: resolveCheckin's roll-call step CONSUMES (acks) any
+        // already-delivered coordinator message as a side effect of merely reading it — surface
+        // whatever it returned or that delivery is lost, regardless of which branch we take below.
+        const pendingMessages = resolution && Array.isArray(resolution.coordinator_messages) ? resolution.coordinator_messages : [];
+        const messageDetail = formatCoordinatorMessagesForBlock(pendingMessages);
         if (outcome === 'claimed') {
           const detail = resolution && typeof resolution.message === 'string' ? `\n${resolution.message}` : '';
-          emitDecision({ decision: 'block', reason: `SAME-TURN NEXT-CLAIM: claimed ${key} via the wind-down handshake — no idle gap. Continue building it now.${detail}` });
+          emitDecision({ decision: 'block', reason: `SAME-TURN NEXT-CLAIM: claimed ${key} via the wind-down handshake — no idle gap. Continue building it now.${detail}${messageDetail}` });
+          return shutdown();
+        }
+        if (messageDetail) {
+          // Nothing claimable, but a coordinator message was just consumed by the checkin read —
+          // block once to deliver it rather than letting the worker park having "seen" it in the
+          // DB but never in its own context.
+          emitDecision({ decision: 'block', reason: `SAME-TURN CHECKIN: nothing claimable, but the coordinator has message(s) for you.${messageDetail}` });
           return shutdown();
         }
       }
@@ -770,4 +806,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt, formatCoordinatorMessagesForBlock };

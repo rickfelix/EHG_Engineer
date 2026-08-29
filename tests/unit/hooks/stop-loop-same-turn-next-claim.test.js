@@ -14,6 +14,7 @@ const {
   shouldAttemptSameTurnClaim,
   attemptSameTurnNextClaim,
   recordSameTurnClaimAttempt,
+  formatCoordinatorMessagesForBlock,
 } = require(HOOK_PATH);
 
 describe('isSameTurnClaimEnabled (default-on kill switch)', () => {
@@ -219,6 +220,45 @@ describe('recordSameTurnClaimAttempt (SD-LEO-INFRA-WORKER-WIND-DOWN-001, SC-4 da
 // kill switch, log exactly once, and route a successful claim through the SAME block-decision
 // mechanism the wakeup reminder already uses — so a future refactor cannot silently detach the
 // call site from the functions these unit tests otherwise prove correct in isolation.
+// SECURITY finding 4711ebbc (EXEC_TO_PLAN review): resolveCheckin's roll-call step CONSUMES
+// (acks) an already-delivered advisory coordinator message as a side effect of merely reading
+// it. attemptSameTurnNextClaim's caller must surface whatever resolveCheckin returned, or that
+// delivery is permanently lost -- the row reads acknowledged in the DB, but the worker never saw
+// the content and parked instead of acting on it.
+describe('formatCoordinatorMessagesForBlock (SD-LEO-INFRA-WORKER-WIND-DOWN-001, SECURITY finding 4711ebbc)', () => {
+  it('returns empty string for no messages, undefined, or a non-array', () => {
+    expect(formatCoordinatorMessagesForBlock([])).toBe('');
+    expect(formatCoordinatorMessagesForBlock(undefined)).toBe('');
+    expect(formatCoordinatorMessagesForBlock(null)).toBe('');
+    expect(formatCoordinatorMessagesForBlock('not-an-array')).toBe('');
+  });
+
+  it('formats a plain advisory message with kind and subject', () => {
+    const out = formatCoordinatorMessagesForBlock([{ kind: 'work_assignment', subject: 'Build SD-X', body: 'please pick this up' }]);
+    expect(out).toMatch(/WORK_ASSIGNMENT/);
+    expect(out).toMatch(/Build SD-X/);
+    expect(out).toMatch(/please pick this up/);
+  });
+
+  it('tags a chairman directive distinctly regardless of its raw kind', () => {
+    const out = formatCoordinatorMessagesForBlock([{ kind: 'chairman_directive', chairman_directive: true, body: 'stand down' }]);
+    expect(out).toMatch(/CHAIRMAN DIRECTIVE/);
+    expect(out).toMatch(/stand down/);
+  });
+
+  it('numbers multiple messages in order', () => {
+    const out = formatCoordinatorMessagesForBlock([{ kind: 'info', body: 'first' }, { kind: 'info', body: 'second' }]);
+    expect(out.indexOf('1.')).toBeLessThan(out.indexOf('2.'));
+    expect(out).toMatch(/first/);
+    expect(out).toMatch(/second/);
+  });
+
+  it('tolerates a message with no subject/body (kind-only)', () => {
+    const out = formatCoordinatorMessagesForBlock([{ kind: 'roll_call' }]);
+    expect(out).toMatch(/ROLL_CALL/);
+  });
+});
+
 describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" must be observable)', () => {
   const src = require('node:fs').readFileSync(HOOK_PATH, 'utf8');
 
@@ -246,5 +286,16 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
     const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict });');
     expect(sameTurnIdx).toBeGreaterThan(-1);
     expect(parkIdx).toBeGreaterThan(sameTurnIdx);
+  });
+
+  // SECURITY finding 4711ebbc: a consumed coordinator message must be surfaced even on the
+  // none-claimable branch, ahead of the fall-through to a silent park.
+  it('surfaces consumed coordinator messages before falling through to a silent park', () => {
+    const messagesIdx = src.indexOf('formatCoordinatorMessagesForBlock(pendingMessages)');
+    const noneClaimableBlockIdx = src.indexOf('SAME-TURN CHECKIN: nothing claimable');
+    const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict });');
+    expect(messagesIdx).toBeGreaterThan(-1);
+    expect(noneClaimableBlockIdx).toBeGreaterThan(messagesIdx);
+    expect(parkIdx).toBeGreaterThan(noneClaimableBlockIdx);
   });
 });
