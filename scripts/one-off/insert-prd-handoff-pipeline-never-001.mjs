@@ -112,7 +112,7 @@ const prdContent = {
         technology: 'Node.js (scripts/modules/handoff/skip-and-continue.js)',
       },
     ],
-    data_flow: 'CLI argument (sdId, ambiguous form) -> BaseExecutor fetches the full SD row via Supabase -> validationContext is built (currently: sdId, sd_id=sd?.id||sdId, sd=full row; after fix: adds sdKey=sd?.sd_key, sdUuid=sd?.id) -> executeSpecific() and gate validators read from validationContext -> plan-to-lead/index.js:389 and db-content-parity-gate.js:157 currently bypass the normalized fields and re-derive from the raw sdId, silently mis-resolving when the CLI argument form does not match what each site assumes.',
+    data_flow: 'CLI argument (sdId, unnormalized form -- sd_key OR UUID) -> BaseExecutor fetches the full SD row via Supabase -> validationContext is built (currently: sdId, sd_id=sd?.id||sdId, sd=full row; after fix: adds sdKey=sd?.sd_key, sdUuid=sd?.id) -> executeSpecific() and gate validators read from validationContext -> plan-to-lead/index.js:389 and db-content-parity-gate.js:157 currently bypass the normalized fields and re-derive from the raw sdId, silently mis-resolving when the CLI argument form does not match what each site assumes.',
     integration_points: [
       'scripts/handoff.js (CLI entry point, passes the raw argument through to BaseExecutor)',
       'strategic_directives_v2 table (sd_key text column, id UUID primary key)',
