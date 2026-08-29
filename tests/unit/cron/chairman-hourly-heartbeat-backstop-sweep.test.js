@@ -24,8 +24,9 @@ import {
   classifyRowCoverage,
   combineHourVerdict,
   buildBackstopBody,
+  mostRecentDueSlotHour,
   STALENESS_GRACE_MS,
-  LOOKBACK_MS,
+  SLOT_HOURS_ET,
   LIVE_KIND,
   BACKSTOP_KIND,
 } from '../../../scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs';
@@ -111,6 +112,26 @@ describe('coarse window fixtures are valid (season sanity)', () => {
   });
 });
 
+describe('mostRecentDueSlotHour (QF-20260828-650: fixed ET slots)', () => {
+  it('SLOT_HOURS_ET is the chairman-ratified fixed schedule', () => {
+    expect(SLOT_HOURS_ET).toEqual([6, 9, 12, 15, 18, 21]);
+  });
+  it('zone hours 13/14 (MID_DAY/TOP_OF_HOUR/WINTER_MID_DAY) are due-slot 12', () => {
+    expect(mostRecentDueSlotHour(13)).toBe(12);
+    expect(mostRecentDueSlotHour(14)).toBe(12);
+  });
+  it('exactly on a slot hour returns that slot', () => {
+    expect(mostRecentDueSlotHour(15)).toBe(15);
+    expect(mostRecentDueSlotHour(21)).toBe(21);
+  });
+  it('zone hour 22 (IN_QUIET_HOURS_BUFFER) is due-slot 21', () => {
+    expect(mostRecentDueSlotHour(22)).toBe(21);
+  });
+  it('before the first slot (zone hour 5) returns undefined', () => {
+    expect(mostRecentDueSlotHour(5)).toBeUndefined();
+  });
+});
+
 describe('classifyRowCoverage — status-decision table (finding G1)', () => {
   const now = MID_DAY;
   it('null row (no prior send) -> unfilled', () => {
@@ -193,11 +214,10 @@ describe('TS-A — missed-hour: no qualifying row in the trailing window -> enqu
     expect(arg.kind).toBe(BACKSTOP_KIND);
     expect(arg.recipientPhone).toBe('+15555550123');
     expect(arg.decisionId).toBeNull();
-    // EXEC-phase TESTING sub-agent finding F3: the millisecond-timestamp suffix is
-    // load-bearing (it is what makes each real attempt's dedupeKey unique, avoiding a
-    // same-key UPSERT collision) — assert the exact key format, not merely that it contains
-    // the kind string, so a future "cleanup" to a tidy per-hour-only key fails this test.
-    expect(arg.dedupeKey).toBe(`${BACKSTOP_KIND}:2026-07-18T13:${MID_DAY.getTime()}`);
+    // QF-20260828-650 (coordinator directive c56e93cc, rider a): PER-SLOT dedupeKey, no
+    // millisecond suffix — MID_DAY (zone hour 13) is due-slot 12, so the key is keyed to slot
+    // 12, not to the current zone hour or the tick's own timestamp.
+    expect(arg.dedupeKey).toBe(`${BACKSTOP_KIND}:2026-07-18T12`);
   });
 });
 
@@ -236,8 +256,8 @@ describe('TS-C — G1 fix: live stuck at status=owed past the grace floor still 
   });
 });
 
-describe('TS-D — stale backstop retry: a prior failed backstop attempt is retried with a fresh key', () => {
-  it('retries via a new dedupeKey, distinct from the failed attempt', async () => {
+describe('TS-D — a prior failed backstop attempt for this slot is retried (classifyRowCoverage sees failed -> unfilled)', () => {
+  it('main() still calls enqueue — the per-slot dedupeKey (QF-20260828-650) means the actual re-insert outcome is decided by the DB UNIQUE constraint, not by main() minting a fresh key', async () => {
     const staleCreatedAt = new Date(MID_DAY.getTime() - STALENESS_GRACE_MS - 1000).toISOString();
     const rows = [{ kind: BACKSTOP_KIND, status: 'failed', created_at: staleCreatedAt }];
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-2' }));
@@ -292,32 +312,29 @@ describe('TS-J — F6 fix: the backstop\'s own OWED row, even very old, is never
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it('regression: during a SUSTAINED outage, the sweep re-fills roughly once per lookback window, never once per 15-minute tick', async () => {
+  it('regression (QF-20260828-650): during a SUSTAINED outage, the sweep re-fills once per DUE SLOT, never once per 15-minute tick', async () => {
     // Simulates a sustained outage: nothing ever dispatches the enqueued row (status stays
-    // 'owed' forever), and the sweep fires every 15 minutes for just past one LOOKBACK_MS.
-    // Before the F6 fix this produced one duplicate obligation per tick (since the 5-minute
-    // STALENESS_GRACE_MS expired well before the next tick). After the fix: the row is treated
-    // as coverage for as long as it remains inside the trailing LOOKBACK_MS window -- so a
-    // SECOND enqueue only happens once that window genuinely ages past the first attempt, which
-    // is the CORRECT behavior (covering the next full SLA window of the outage), not a
-    // duplicate-suppression bug. Tick count is derived from LOOKBACK_MS (QF-20260828-188 leg 1
-    // retuned it 65min->185min) rather than hardcoded, so this stays correct across SLA retunes.
+    // 'owed' forever), and the sweep fires every 15 minutes from MID_DAY (13:30 EDT, due-slot
+    // 12) through 15:00 EDT (crossing into due-slot 15). Before F6, this produced one duplicate
+    // obligation per tick. Under the per-slot design, the still-owed row for slot 12 suppresses
+    // every tick until the due-slot itself advances to 15 -- a SECOND enqueue only happens once
+    // the sweep is covering a genuinely different slot, not a duplicate-suppression bug.
     const TICK_MS = 15 * 60 * 1000;
-    const ticksToExceedLookback = Math.floor(LOOKBACK_MS / TICK_MS) + 1;
-    let lastRowCreatedAt = null;
+    const TICKS_TO_CROSS_SLOT_BOUNDARY = 6; // 6 * 15min = 90min: 13:30 EDT -> 15:00 EDT
+    let lastRow = null;
     const enqueue = vi.fn(async (_supabase, args) => {
-      lastRowCreatedAt = args.__nowForTest; // the sweep's own `now` at enqueue time
+      lastRow = { kind: BACKSTOP_KIND, status: 'owed', created_at: args.__nowForTest.toISOString() };
       return { enqueued: true, obligationId: 'ob-outage' };
     });
-    for (let tick = 0; tick <= ticksToExceedLookback; tick++) {
+    for (let tick = 0; tick <= TICKS_TO_CROSS_SLOT_BOUNDARY; tick++) {
       const now = new Date(MID_DAY.getTime() + tick * TICK_MS);
-      const rows = lastRowCreatedAt ? [{ kind: BACKSTOP_KIND, status: 'owed', created_at: lastRowCreatedAt.toISOString() }] : [];
+      const rows = lastRow ? [lastRow] : [];
       const enqueueWithNow = vi.fn((supabaseArg, args) => enqueue(supabaseArg, { ...args, __nowForTest: now }));
       await main(['node', 's', '--once'], baseDeps({ enqueue: enqueueWithNow, now, supabase: makeFilterAwareSupabase(rows) }));
     }
-    // Exactly 2: the initial fill (t=0) and one re-fill once the lookback window aged past it --
-    // NOT one-per-tick (the pre-fix defect) and NOT 1 (which would mean an outage lasting longer
-    // than the lookback window goes permanently uncovered).
+    // Exactly 2: the initial fill for slot 12 (t=0) and one re-fill once the tick sequence
+    // crosses into slot 15 (t=6, 15:00 EDT) -- NOT one-per-tick (the pre-fix defect) and NOT 1
+    // (which would mean the outage goes permanently uncovered past the first slot).
     expect(enqueue).toHaveBeenCalledTimes(2);
   });
 });
@@ -337,13 +354,13 @@ describe('buildBackstopBody — N2 fix: includes hourKey so a recovery burst is 
   });
 });
 
-describe('main() end-to-end: the enqueued body carries the current hourKey (N2 wiring)', () => {
-  it('the body passed to enqueue contains the same hourKey the sweep computed', async () => {
+describe('main() end-to-end: the enqueued body carries the due slotKey, not the current zone hour (N2 wiring)', () => {
+  it('the body passed to enqueue contains the slot label (12), not zone hour 13', async () => {
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
     await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase([]) }));
 
     const [, arg] = enqueue.mock.calls[0];
-    expect(arg.body).toContain('2026-07-18T13');
+    expect(arg.body).toContain('2026-07-18T12');
   });
 });
 
@@ -368,10 +385,15 @@ describe('G5 — negative selectivity control (kind)', () => {
   });
 });
 
-describe('TS-G — F1 fix: a live send just before an hour boundary still counts as coverage at the next hour\'s first tick', () => {
-  it('a delivered row 3 minutes before TOP_OF_HOUR suppresses the backstop at TOP_OF_HOUR exactly (trailing window spans the boundary)', async () => {
-    const justBefore = new Date(TOP_OF_HOUR.getTime() - 3 * 60 * 1000).toISOString();
-    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justBefore }];
+// MID_DAY (17:30Z = 13:30 EDT) is due-slot 12 (12:00 EDT). 12:00 EDT == 16:00Z. Both TOP_OF_HOUR
+// (18:00Z = 14:00 EDT) and MID_DAY share this same due-slot instant, since neither has crossed
+// the 15:00 EDT (19:00Z) boundary into the next slot yet.
+const DUE_SLOT_12_INSTANT_ISO = '2026-07-18T16:00:00.000Z';
+
+describe('TS-G — QF-20260828-650: coverage is read relative to the DUE SLOT instant, not a rolling window', () => {
+  it('a delivered row 3 minutes AFTER the due-slot instant counts as coverage at TOP_OF_HOUR (still slot 12)', async () => {
+    const justAfter = new Date(new Date(DUE_SLOT_12_INSTANT_ISO).getTime() + 3 * 60 * 1000).toISOString();
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justAfter }];
     const enqueue = vi.fn();
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: TOP_OF_HOUR, supabase: makeFilterAwareSupabase(rows) }));
 
@@ -380,7 +402,7 @@ describe('TS-G — F1 fix: a live send just before an hour boundary still counts
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it('regression guard: an EMPTY ledger at TOP_OF_HOUR still correctly triggers an enqueue (genuinely no coverage, not a calendar-bucket artifact)', async () => {
+  it('regression guard: an EMPTY ledger at TOP_OF_HOUR still correctly triggers an enqueue (genuinely no coverage)', async () => {
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: TOP_OF_HOUR, supabase: makeFilterAwareSupabase([]) }));
 
@@ -389,10 +411,10 @@ describe('TS-G — F1 fix: a live send just before an hour boundary still counts
   });
 });
 
-describe('TS-H — trailing-window boundary: a send older than LOOKBACK_MS genuinely does not count as coverage', () => {
-  it('a delivered row older than LOOKBACK_MS triggers an enqueue (real SLA breach, not a false positive)', async () => {
-    const tooOld = new Date(MID_DAY.getTime() - LOOKBACK_MS - 1000).toISOString();
-    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: tooOld }];
+describe('TS-H — due-slot boundary: a send from the PRIOR slot does not count as this slot\'s coverage', () => {
+  it('a delivered row 3 minutes BEFORE the due-slot instant (still in the prior slot) triggers an enqueue', async () => {
+    const justBefore = new Date(new Date(DUE_SLOT_12_INSTANT_ISO).getTime() - 3 * 60 * 1000).toISOString();
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justBefore }];
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
 
@@ -400,9 +422,8 @@ describe('TS-H — trailing-window boundary: a send older than LOOKBACK_MS genui
     expect(enqueue).toHaveBeenCalledTimes(1);
   });
 
-  it('a delivered row just within LOOKBACK_MS still counts as coverage', async () => {
-    const justWithin = new Date(MID_DAY.getTime() - LOOKBACK_MS + 1000).toISOString();
-    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justWithin }];
+  it('a delivered row exactly at the due-slot instant still counts as coverage', async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: DUE_SLOT_12_INSTANT_ISO }];
     const enqueue = vi.fn();
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
 
