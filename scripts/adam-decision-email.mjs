@@ -14,7 +14,11 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
-import { renderLeanDecisionEmail, filterStaleLeanDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
+import { renderLeanDecisionEmail, filterStaleLeanDecisions, DEAD_VENTURE_STATUSES, evaluatePrimaryDecisionEligibility } from '../lib/chairman/decision-layman.mjs';
+// QF-20260829-902 (Solomon amendment B): the canary is itself a writer-without-reader specimen
+// until something renders its last-verified time where a human sees it. checkCanaryFreshness is
+// the SAME predicate the canary's own absence-detection alarm uses (lib/notifications/channel-health-recorder.js) — no second staleness threshold.
+import { checkCanaryFreshness } from '../lib/notifications/channel-health-recorder.js';
 // SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001 (FR-3): attach measured venture build status so
 // decision-layman.mjs's pure renderer can flag a stale "built/deployed/live" claim in free-text
 // prose. deriveVentureBuildStatus (PURE) is used directly, not fetchVentureBuildStatusBatch,
@@ -51,7 +55,7 @@ function argValue(flag) {
 const primaryId = argValue('--decision');
 
 // ── Read the BASE chairman_decisions table (real decision_type + brief_data) ──
-const COLS = 'id,decision_type,summary,brief_data,lifecycle_stage,blocking,venture_id,recommendation,status,created_at';
+const COLS = 'id,decision_type,summary,brief_data,lifecycle_stage,blocking,venture_id,recommendation,status,created_at,updated_at';
 let rows = [];
 try {
   const { data, error } = await db.from('chairman_decisions')
@@ -61,7 +65,19 @@ try {
   // Ensure the escalated decision is present even if a race left it just outside the pending window.
   if (primaryId && !rows.some((r) => r.id === primaryId)) {
     const { data: one } = await db.from('chairman_decisions').select(COLS).eq('id', primaryId).maybeSingle();
-    if (one) rows = [one, ...rows];
+    if (one) {
+      // QF-20260829-902: the bypass above exists for a RACE (decided-or-created microseconds
+      // outside the pending window), not a blanket "send it regardless of status" — a 17h-stale
+      // already-decided row reached the chairman this way. Refuse LOUDLY (Solomon amendment A:
+      // the decision id + superseding status, so a refusal is positive evidence the guard fired,
+      // not an invisible skip) rather than silently dropping.
+      const verdict = evaluatePrimaryDecisionEligibility(one);
+      if (verdict.eligible) {
+        rows = [one, ...rows];
+      } else {
+        console.warn(`[adam-decision-email] REFUSED stale --decision override: id=${primaryId} status=${one.status} ageMs=${verdict.ageMs} — not sending an already-decided row.`);
+      }
+    }
   }
 } catch (e) {
   console.warn('[adam-decision-email] base read failed (fail-soft): ' + (e?.message || e));
@@ -137,7 +153,20 @@ const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
 const copyBlock = [LEAD_IN, '', ...numbered].join('\n');
 const n = lines.length;
 const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
-const footer = `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor` + (excludedCount > 0 ? ` ${EM} ${excludedCount} stale suppressed` : '');
+// QF-20260829-902 (Solomon amendment B): render the canary's own liveness, or this guard
+// inherits the exact "nobody is watching" property that let the stale send through. Fail-soft —
+// an unreadable health row must never block the decision email itself.
+let canaryLine = '';
+try {
+  const { data: health } = await db.from('chairman_email_channel_health').select('last_canary_verified_at').eq('id', 'singleton').maybeSingle(); // schema-lint-disable-line — SD-LEO-INFRA-CHAIRMAN-EMAIL-CHANNEL-001, chairman-apply-gated
+  const { stale } = checkCanaryFreshness(health || {});
+  canaryLine = health && health.last_canary_verified_at
+    ? ` ${EM} canary last verified ${new Date(health.last_canary_verified_at).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })} ET${stale ? ' (STALE)' : ''}`
+    : ` ${EM} canary NEVER verified`;
+} catch (e) {
+  console.warn('[adam-decision-email] canary liveness read skipped (fail-soft): ' + (e?.message || e));
+}
+const footer = `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor` + (excludedCount > 0 ? ` ${EM} ${excludedCount} stale suppressed` : '') + canaryLine;
 
 const text = [
   `${n} decision${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you.`,
