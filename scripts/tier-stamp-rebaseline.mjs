@@ -27,10 +27,19 @@ const SD_KEY = 'SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001';
 const CONFIRMED_MODEL = 'sonnet';
 const CONFIRMED_EFFORT = 'medium';
 
+const REBASELINE_SOURCE_TAG = `bulk_rebaseline:${SD_KEY}`;
+
+// A row is an UNCORRECTED defect when tier_rank is set with model/effort both unset AND it has
+// not already been re-stamped by this rebaseline. Model/effort deliberately stay unset after a
+// fix (we never fabricate per-seat model/effort telemetry we don't have) -- so the fixed/unfixed
+// distinction lives in tier_rank_source, not in model/effort presence. Without this exclusion,
+// a post-fix readback would re-match every row this script just corrected (caught live: the first
+// --execute run against production reported "3 defect rows remain" immediately after correctly
+// fixing all 3, because the original predicate never looked at tier_rank_source).
 export function findDefectRows(sessions) {
   return sessions.filter((s) => {
     const m = s.metadata || {};
-    return m.tier_rank != null && !m.model && !m.effort;
+    return m.tier_rank != null && !m.model && !m.effort && m.tier_rank_source !== REBASELINE_SOURCE_TAG;
   });
 }
 
@@ -41,7 +50,7 @@ export function buildRestamp(row) {
     metadata: {
       ...(row.metadata || {}),
       tier_rank: trueRank,
-      tier_rank_source: `bulk_rebaseline:${SD_KEY}`,
+      tier_rank_source: REBASELINE_SOURCE_TAG,
     },
   };
 }

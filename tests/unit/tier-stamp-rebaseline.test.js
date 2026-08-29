@@ -26,6 +26,16 @@ describe('findDefectRows', () => {
     const rows = [{ session_id: 'a', metadata: null }, { session_id: 'b' }];
     expect(findDefectRows(rows)).toHaveLength(0);
   });
+
+  it('REGRESSION (caught live on first production --execute): a row already fixed by buildRestamp is no longer a defect', () => {
+    // model/effort deliberately stay unset after a fix -- only tier_rank_source distinguishes
+    // "unfixed" from "fixed". Before this fix, a post-execute readback re-flagged every row it
+    // had just correctly repaired, reporting "3 defect rows remain" for a 3/3 successful run.
+    const beforeFix = { session_id: 'a', metadata: { tier_rank: 4 } };
+    const afterFix = buildRestamp(beforeFix);
+    expect(findDefectRows([beforeFix])).toHaveLength(1);
+    expect(findDefectRows([afterFix])).toHaveLength(0);
+  });
 });
 
 describe('buildRestamp', () => {
