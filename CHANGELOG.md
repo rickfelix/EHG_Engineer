@@ -6,6 +6,7 @@
 - [2026-08-29](#2026-08-29)
   - [Infrastructure](#infrastructure-1)
   - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix-1)
 - [2026-08-28](#2026-08-28)
   - [Infrastructure](#infrastructure)
   - [Features](#features)
@@ -190,6 +191,13 @@
   - **A live collision was caught before it caused data loss, not after**: while curing, an independent concurrent process ("Adam's distillation pass") turned out to be dispositioning the same 13 standalone rows with per-row judgment — including one row already legitimately promoted to a new SD (SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001). A blanket cure would have silently overwritten that promotion. Added a permanent guard (`metadata.distill_dispositioned_at` hard-skip) before any write reached the database, verified by spot-checking all 439 family-cure rows were untouched by the concurrent process before running.
   - **Two precedents cited in the SD's own sourcing narrative ("07-03 deferral ruling", "inherit_disposition batch-3 dedup precedent") do not exist anywhere in the codebase** — verified via repo-wide grep before use, flagged as a spec-conflict rather than trusted, and not cited as design justification; the cure instead grounds in the actual documented trigger contract.
   - **Verification**: `tests/unit/roadmap-corpus-hygiene.test.js` (10 tests covering classification + the collision guard). Cure executed from the coordinator's seat after 5+ local classifier denials of the production write, with an independently-verified readback: 439 rows carry `metadata.corpus_hygiene.sd_key`, all read `remainder_state='void'` via the trigger, and a re-run of the census after the cure returns 0 family-cure candidates (idempotency proven). Coordinator-capacity-forecast.mjs's awareness comment names both instrument extents (`v_plan_of_record_remainder` view vs raw table) so the two counts don't get conflated again.
+
+### Bugfix
+
+- **print-before-park Stop hook v4: bounded re-block (3x) replaces the single-fire pass-through that swallowed 3 chairman replies in one sitting** - PR #7670 (SD-ALTIFYAI-LEO-FIX-PRINT-BEFORE-PARK-001, escalated from QF-20260829-847)
+  - **What shipped**: v3 blocked a silent human-prompted stop once, then let a SECOND silent re-stop pass through unblocked (`stop_hook_active===true`), and the debt marker was cleared by the next turn's unrelated tick text — so the human's reply was never printed, 3x on 2026-08-29 (measured from live session `f27a883d`, ~13:07Z). v4 bounds the escape instead of removing it: `scripts/hooks/print-before-park.cjs` re-blocks the SAME turn (keyed by the owed human message's uuid via `lastHumanKey()`) up to `MAX_BLOCKS_PER_TURN=3` times before passing through, and the `REMINDER` text now instructs arm-wakeup-first-then-text so the print-before-park and loop-wakeup-reminder Stop hooks compose instead of competing.
+  - **Escalated from a Tier-2 quick-fix to a full SD mid-flight**: `complete-quick-fix.js`'s eligibility preflight (`lib/quick-fix/sensitive-path-registry.js`) refuses to autonomously complete any change touching `scripts/hooks/**` — by design, no bypass flag exists for that class. Code, tests, and the PR were already complete under the QF before the preflight refusal surfaced; `leo-create-sd.js --from-qf` carried the escalation through without redoing the implementation.
+  - **Verification**: 14 new unit + end-to-end tests (`scripts/hooks/__tests__/print-before-park.test.js`) covering the bounded counter (block/block/block/pass), counter reset on a new turnKey, debt-clear-on-text, and fail-open paths — including a subprocess replay driving the real hook script against a transcript fixture structurally verified against the actual `f27a883d` incident transcript. Full `scripts/hooks` suite: 424/425 passing (1 pre-existing unrelated todo), zero regressions.
 
 ## 2026-08-28
 
