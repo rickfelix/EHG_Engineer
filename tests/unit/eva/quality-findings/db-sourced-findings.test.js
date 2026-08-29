@@ -218,6 +218,9 @@ describe('produceJourneyWalkFindings', () => {
     expect(out).toEqual([]);
     expect(runVentureJourneyWalk).toHaveBeenCalledWith({
       sdId: 'orch-1',
+      // QF dcc36266 retro action item: ventureId threaded through so startSession()'s
+      // metadata.venture_id can match lib/eva/uat-robustness-gate.js's lookup.
+      ventureId: 'venture-1',
       ventureKey: 'ALTIFYAI',
       baseUrl: 'https://altifyai.example.com',
       journeySteps: [{ step_id: 's1', goal: 'do the thing' }],
