@@ -1,0 +1,46 @@
+# Weekly Gemini model scan — SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-I.
+#
+# Fetches the current Gemini model catalog, diffs against the committed known-models
+# store, smoke-evaluates GA candidates under a $5/cycle cost cap, and writes at most
+# one feedback-table recommendation per surviving candidate. Never auto-adopts, never
+# writes .env or lib/config/model-config.js. Never gates a PR (schedule + manual only),
+# matching this repo's established weekly-sweep convention (unit-tier-clock-skew.yml).
+
+name: Gemini Weekly Model Scan
+
+on:
+  schedule:
+    # Monday 06:00 UTC — on-the-hour weekly-workflow convention, offset from the
+    # Sunday 05:00 clock-skew sweep and the Sunday 06:00 pattern-maintenance sweep.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gemini-weekly-scan:
+    name: Scan for new Gemini models
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run weekly Gemini scan
+        env:
+          GOOGLE_AI_API_KEY: ${{ secrets.GOOGLE_AI_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/gemini-weekly-scan.mjs
