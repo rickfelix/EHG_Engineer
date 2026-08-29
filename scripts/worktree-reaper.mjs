@@ -1025,11 +1025,43 @@ function removeWorktree({ wtPath, repoRoot }) {
   // safeRecursiveRm unlinks symlinks/junctions FIRST, then recursively removes the rest.
   try {
     if (fs.existsSync(abs)) safeRecursiveRm(abs);
+    // QF-20260829-412: a LOCKED registration survives `git worktree prune` even
+    // once its directory is gone ("locked initializing" ghosts, measured live:
+    // countActiveWorktrees() counted them forever, shrinking the pool one slot
+    // per failed removal). The directory-absent check above already ran — by
+    // this line the on-disk tree is confirmed gone, so unlocking here can never
+    // clobber a peer mid-creation (that peer's directory would still exist).
+    // Unlock is best-effort: a non-locked entry errors harmlessly (ignored).
+    runGit(['worktree', 'unlock', abs], { cwd: repoRoot });
     runGit(['worktree', 'prune'], { cwd: repoRoot });
     return { ok: true, method: 'fs-rm+prune' };
   } catch (e) {
     return { ok: false, method: 'failed', error: String(e?.message || e) };
   }
+}
+
+/**
+ * QF-20260829-412 (Adam rider): reconcile at reaper START, not just at removal
+ * time, so a crashed prior run cannot strand the pool. Scans for registrations
+ * that are LOCKED with their on-disk directory ABSENT — the unambiguous ghost
+ * signature (a live "initializing" lock on an EXISTING directory means a peer
+ * is mid-creation and must never be touched). Unlock+prune is only ever applied
+ * to that ghost signature, never to a locked-and-present entry.
+ *
+ * @param {Array<{path: string, locked?: boolean}>} worktrees
+ * @param {{repoRoot: string, execute: boolean}} opts
+ * @returns {Array<{path: string, unlocked: boolean}>} candidates found (always
+ *   returned, even in dry-run — only acted on when execute is true)
+ */
+export function reconcileLockedGhosts(worktrees, { repoRoot, execute }) {
+  const ghosts = (worktrees || []).filter((wt) => wt.locked && !fs.existsSync(wt.path));
+  if (ghosts.length === 0) return ghosts;
+  if (!execute) return ghosts;
+  for (const wt of ghosts) {
+    runGit(['worktree', 'unlock', wt.path], { cwd: repoRoot });
+  }
+  runGit(['worktree', 'prune'], { cwd: repoRoot });
+  return ghosts;
 }
 
 // ── Output helpers ─────────────────────────────────────────────────────
@@ -1293,6 +1325,20 @@ export async function main(argv = process.argv) {
   }
 
   const allWorktrees = listActiveWorktrees(repoRoot);
+
+  // QF-20260829-412: reconcile LOCKED-ghost registrations (directory absent) at
+  // reaper START, so a prior run that crashed mid-removal cannot strand the pool
+  // until the next Stage-1/2 pass finds it. Always reported; only acted on when
+  // --execute is set (dry-run invariant preserved).
+  const lockedGhosts = reconcileLockedGhosts(allWorktrees, { repoRoot, execute: opts.execute });
+  if (lockedGhosts.length > 0) {
+    console.warn(JSON.stringify({
+      event: 'locked_ghost_reconcile',
+      count: lockedGhosts.length,
+      paths: lockedGhosts.map((wt) => wt.path),
+      acted: opts.execute,
+    }));
+  }
 
   // Phantom-only mode: preserves legacy cleanup-phantom-worktrees.js behavior.
   if (opts.phantomOnly) {
