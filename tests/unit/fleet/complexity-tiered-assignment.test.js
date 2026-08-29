@@ -75,19 +75,22 @@ describe('FR-2 tier ladder + worker tier resolution', () => {
 });
 
 // ---- TS-3: FR-3 above_worker_tier verdict ---------------------------------
+// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: these fixtures test the BINDING enforcement mechanism
+// itself, not the provenance-advisory feature, so a scored SD carries min_tier_rank_reason to
+// stay binding (an advisory, unreasoned floor would never produce 'above_worker_tier').
 describe('FR-3 above_worker_tier eligibility verdict', () => {
   it('returns above_worker_tier for a below-rung worker vs a higher-tier SD when tiering active', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBe('above_worker_tier');
   });
 
   it('returns null when the worker rung >= SD min rank (higher rung may take lower work)', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 1 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 1, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true })).toBeNull();
   });
 
   it('is byte-identical (no tier verdict) when ctx omits worker_tier_rank', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 4 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 4, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { cwd: '/repo' })).toBeNull();
     expect(classifyDispatchIneligibility(sd)).toBeNull();
   });
@@ -96,17 +99,22 @@ describe('FR-3 above_worker_tier eligibility verdict', () => {
     const sd = { sd_key: 'SD-X-001', metadata: {} };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBeNull();
   });
+
+  it('SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: a scored floor with NO reason is advisory (unblocked)', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3 } };
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBeNull();
+  });
 });
 
 // ---- QF-20260703-242: fail-closed (not fail-open) on a missing/non-finite worker tier stamp ----
 describe('QF-20260703-242 tier_stamp_missing fail-closed verdict', () => {
   it('refuses a tier-gated SD when tiering is active but worker_tier_rank is absent', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBe('tier_stamp_missing');
   });
 
   it('refuses a tier-gated SD when worker_tier_rank is present but non-finite (NaN)', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: NaN, tiering_active: true })).toBe('tier_stamp_missing');
   });
 
@@ -116,15 +124,20 @@ describe('QF-20260703-242 tier_stamp_missing fail-closed verdict', () => {
   });
 
   it('stays inert when tiering_active is not true, even with a missing stamp (degrade-to-1 preserved)', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { tiering_active: false })).toBeNull();
     expect(classifyDispatchIneligibility(sd, {})).toBeNull();
   });
 
   it('leaves the finite worker_tier_rank paths (above_worker_tier / null) byte-unchanged', () => {
-    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3 } };
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3, min_tier_rank_reason: 'unit-test floor' } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBe('above_worker_tier');
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true })).toBeNull();
+  });
+
+  it('tier_stamp_missing fires regardless of provenance (precedes the provenance check)', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
+    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBe('tier_stamp_missing');
   });
 });
 
@@ -164,7 +177,9 @@ function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coor
             return { data: null, error: null };
           }
           if (table === 'strategic_directives_v2') {
-            return { data: { metadata: { min_tier_rank: sdMinRank } }, error: null };
+            // SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: this fixture exercises assertWorkerTierAllowed's
+            // BINDING dispatch guard, so carries a reason to stay binding (advisory would never refuse).
+            return { data: { metadata: { min_tier_rank: sdMinRank, min_tier_rank_reason: 'unit-test floor' } }, error: null };
           }
           return { data: null, error: null };
         },
