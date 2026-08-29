@@ -282,7 +282,10 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // mistaken for the feedback ID positional. Closes 8a640d32 sibling parity.
       // QF-20260818-873: --backup-plan/--deletion-approved close the GR-DELETION-SAFEGUARD
       // sibling-parity gap (--security-reviewed had a flag at :143, this guardrail didn't).
-      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--backup-plan', '--deletion-approved', '--force-liveness', '--target-repos']);
+      // SD-FDBK-ENH-MINT-PIPELINE-WRITES-001 (FR-3): --strict-criteria opts INTO refusing the
+      // mint when the feedback body has no structured Success Criteria list (default is warn
+      // and proceed with the generic template — see feedback.js for why refuse-by-default broke).
+      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed', '--backup-plan', '--deletion-approved', '--force-liveness', '--target-repos', '--strict-criteria']);
       const feedbackId = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !fbFlagValuePositions.has(i) && !fbKnownFlags.has(arg)
       ) || args[1];
@@ -295,6 +298,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         deletionApproved: args.includes('--deletion-approved'),
         forceLiveness: fbForceLivenessIdx !== -1 ? args[fbForceLivenessIdx + 1] : null,
         targetRepos: fbTargetReposIdx !== -1 ? parseTargetReposArg(args[fbTargetReposIdx + 1]) : null,
+        strictCriteria: args.includes('--strict-criteria'),
       });
       exitFromResult(fbRes);
     } else if (args[0] === '--from-roadmap-item') {

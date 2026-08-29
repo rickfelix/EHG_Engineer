@@ -422,6 +422,14 @@ export function extractRisks(content) {
  * "## Success" / "## Success Criteria" sections; bullets map to {criterion, measure} objects.
  * Returns null when section absent so ENRICHMENT_WARNING can fire on defaulted success_criteria.
  *
+ * SD-FDBK-ENH-MINT-PIPELINE-WRITES-001: the bullet pattern used to match ONLY '-'/'*' markers,
+ * never numbered lists ('1. ...'). A numbered Success Criteria section (a common, legitimate
+ * convention -- e.g. the regression fixture that motivated this fix) silently extracted ZERO
+ * items, returning [] rather than null, so the caller's null-tracking (which drives the
+ * ENRICHMENT_WARNING above) never fired either -- the failure was doubly silent. Extended to
+ * match numbered items too, mirroring the working reference implementation already present at
+ * scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-criteria-traceability.js.
+ *
  * @param {string} content - Plan file content
  * @returns {Array<{criterion: string, measure: string}>|null} Array of criteria, or null when absent
  */
@@ -435,7 +443,7 @@ export function extractSuccessCriteria(content) {
 
   const criteria = [];
   const sectionContent = match[2];
-  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  const bulletPattern = /^(?:\d+\.\s+|[-*]\s+)(.+)$/gm;
   let bulletMatch;
   while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
     criteria.push({

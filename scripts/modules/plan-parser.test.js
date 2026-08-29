@@ -203,6 +203,65 @@ test('extractSuccessCriteria: AC-1.3 — parsePlanFile exposes successCriteria',
   assert.equal(parsed.successCriteria[0].criterion, 'The thing works');
 });
 
+// ---------- SD-FDBK-ENH-MINT-PIPELINE-WRITES-001 (FR-1): numbered-list support ----------
+// Root cause: the bullet pattern used to match ONLY '-'/'*', silently dropping numbered
+// Success Criteria sections (a common, legitimate convention) to an empty array rather than
+// extracting real content — the specimen this SD exists to close.
+
+test('extractSuccessCriteria: numbered list ("1. ... 2. ...") extracts all items', () => {
+  const content = '## Success Criteria\n1. First criterion\n2. Second criterion\n3. Third criterion\n';
+  const result = extractSuccessCriteria(content);
+  assert.deepEqual(result, [
+    { criterion: 'First criterion', measure: 'See plan for details' },
+    { criterion: 'Second criterion', measure: 'See plan for details' },
+    { criterion: 'Third criterion', measure: 'See plan for details' },
+  ]);
+});
+
+test('extractSuccessCriteria: bulleted list still extracts correctly (no regression)', () => {
+  const content = '## Success Criteria\n- First\n- Second\n';
+  const result = extractSuccessCriteria(content);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].criterion, 'First');
+});
+
+test('extractSuccessCriteria: mixed numbered and bulleted items both extract', () => {
+  const content = '## Success Criteria\n1. Numbered one\n- Bulleted one\n2. Numbered two\n';
+  const result = extractSuccessCriteria(content);
+  assert.deepEqual(result.map(c => c.criterion), ['Numbered one', 'Bulleted one', 'Numbered two']);
+});
+
+test('extractSuccessCriteria: double-digit numbering ("10. ...") extracts correctly', () => {
+  const content = '## Success Criteria\n' + Array.from({ length: 11 }, (_, i) => `${i + 1}. Item ${i + 1}`).join('\n') + '\n';
+  const result = extractSuccessCriteria(content);
+  // extractSuccessCriteria caps at 10 (slice(0, 10)) — confirms the 10th item (double-digit "10.") still matches.
+  assert.equal(result.length, 10);
+  assert.equal(result[9].criterion, 'Item 10');
+});
+
+test('extractSuccessCriteria: regression fixture (.artifacts/adam-plan-same-turn-next-claim.md shape) extracts all 4 real criteria', () => {
+  // Inlined rather than reading the untracked fixture file, so the test never depends on it existing.
+  const content = [
+    '# Worker wind-down same-turn-next-claim: finishers must attempt a next claim before loop exit',
+    '',
+    '## Success Criteria',
+    '1. The wind-down path provably attempts a next claim same-turn (unit test on the completion path with claim-ready work present).',
+    '2. All existing claim guards and directed-assignment priority are honored (unit-tested for the directed-wins case).',
+    '3. Empty-belt wind-down behavior is unchanged except the single none-claimable log line (no polling added).',
+    '4. The claimed-or-none log line exists on every wind-down, making "chose to exit" distinguishable from "never looked" on instruments.',
+    '',
+  ].join('\n');
+  const result = extractSuccessCriteria(content);
+  assert.equal(result.length, 4);
+  assert.match(result[0].criterion, /provably attempts a next claim/);
+  assert.match(result[3].criterion, /never looked/);
+  // Every extracted measure must be real placeholder text, never the [UNPOPULATED] sentinel or a generic template.
+  for (const c of result) {
+    assert.notEqual(c.measure, '[UNPOPULATED]');
+    assert.notEqual(c.criterion, 'All implementation items from plan are complete');
+  }
+});
+
 test('extractKeyChanges: AC-2.1 — no ## Changes section AND no files → null', () => {
   const content = '# Plan\n\n## Summary\n\nNothing about changes.\n';
   assert.equal(extractKeyChanges(content), null);
