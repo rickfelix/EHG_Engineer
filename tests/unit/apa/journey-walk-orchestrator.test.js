@@ -93,6 +93,10 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
 
     expect(preflightRun).toHaveBeenCalledTimes(1);
     expect(deps.startSession).toHaveBeenCalledWith('sd-1', expect.objectContaining({ triggeredBy: 'JOURNEY_WALK' }));
+    // QF dcc36266 retro action item: startSession must receive ventureId/stageNumber so
+    // lib/eva/uat-robustness-gate.js's metadata->>venture_id / metadata->>stage_number
+    // lookup can match this run.
+    expect(deps.startSession).toHaveBeenCalledWith('sd-1', expect.objectContaining({ ventureId: null, stageNumber: null }));
     expect(deps.recordResult).toHaveBeenCalledTimes(2);
     expect(deps.recordResult).toHaveBeenNthCalledWith(1, 'run-1', expect.objectContaining({ id: 'stp-1' }), 'PASS', expect.objectContaining({ errorMessage: undefined }));
     expect(deps.recordResult).toHaveBeenNthCalledWith(2, 'run-1', expect.objectContaining({ id: 'stp-2' }), 'FAIL', expect.objectContaining({ errorMessage: 'no verified UI mapping' }));
@@ -104,6 +108,22 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
     expect(result.passRate).toBe(50);
     expect(result.brokenAtStep).toBe('stp-2');
     expect(result.preflightResults).toEqual([{ name: 'land', success: true, url: 'http://fixture', renderedStateSummary: 'preflight ok' }]);
+  });
+
+  it('threads params.ventureId and params.stageNumber into startSession when supplied', async () => {
+    const { deps } = makeDeps();
+
+    await runVentureJourneyWalk({
+      sdId: 'sd-1',
+      ventureId: 'venture-42',
+      stageNumber: 20,
+      ventureKey: 'ALTIFYAI',
+      baseUrl: 'http://fixture',
+      journeySteps: STEPS,
+      deps,
+    });
+
+    expect(deps.startSession).toHaveBeenCalledWith('sd-1', expect.objectContaining({ ventureId: 'venture-42', stageNumber: 20 }));
   });
 
   it('records a failed preflight check without aborting the walk', async () => {
