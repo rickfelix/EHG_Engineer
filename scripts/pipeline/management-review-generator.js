@@ -299,7 +299,23 @@ async function gatherFridayPulseData() {
     .select('id', { count: 'exact', head: true })
     .gte('created_at', weekAgo);
 
-  return { blocked, stageCrossings, ventureFacing, harnessWork, overrideCount };
+  // SD-LEO-INFRA-BREAKAGE-ESCAPE-INSTRUMENT-001 (FR-5): reads the KR-2026-07-02 baseline
+  // banked by scripts/breakage-escape/compute-catch-rate.mjs --bank. Fails soft (not yet
+  // computed) rather than throwing if the instrument has never banked a value -- the pulse
+  // must never block on this one field.
+  let catchRate = null;
+  try {
+    const { data: kr } = await supabase
+      .from('key_results')
+      .select('current_value,status')
+      .eq('code', 'KR-2026-07-02')
+      .maybeSingle();
+    if (kr && kr.current_value > 0) catchRate = kr.current_value;
+  } catch {
+    catchRate = null;
+  }
+
+  return { blocked, stageCrossings, ventureFacing, harnessWork, overrideCount, catchRate };
 }
 
 async function gatherPipelineData(baselineData, sdData) {
@@ -361,6 +377,9 @@ function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureD
   lines.push(`- Venture-facing vs harness-work ratio (7d): ${pulseData.ventureFacing}:${pulseData.harnessWork}`);
   lines.push(`- Gate-decision overrides (7d): ${pulseData.overrideCount}`);
   lines.push('- Blocked-time attribution (chairman/tooling/fleet): UNKNOWN — no instrument exists');
+  // SD-LEO-INFRA-BREAKAGE-ESCAPE-INSTRUMENT-001 (FR-5): first day-one consumer of the
+  // defect-escape catch-rate instrument (KR-2026-07-02).
+  lines.push(`- Breakage catch-rate (KR-2026-07-02): ${pulseData.catchRate != null ? `${pulseData.catchRate}%` : 'not yet computed — run scripts/breakage-escape/compute-catch-rate.mjs --bank'}`);
 
   if (gapData && gapData.hasGaps) {
     lines.push('');
