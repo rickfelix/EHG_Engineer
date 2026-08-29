@@ -20,8 +20,9 @@ function makeSupabase(selectResult) {
   const chain = {
     from: vi.fn(() => chain),
     select: vi.fn(() => chain),
-    in: vi.fn(async () => selectResult),
+    in: vi.fn(() => chain),
     eq: vi.fn(() => chain),
+    limit: vi.fn(async () => selectResult),
   };
   return chain;
 }
@@ -77,14 +78,16 @@ describe('findEvidenceMigrationGaps', () => {
         if (table === 'sd_phase_handoffs') {
           return {
             select: vi.fn(() => ({
-              eq: vi.fn(async () => ({
-                data: [{ deliverables_manifest: `Applied ${REAL_MIGRATION}`, completeness_report: null, executive_summary: null }],
+              eq: vi.fn(() => ({
+                limit: vi.fn(async () => ({
+                  data: [{ deliverables_manifest: `Applied ${REAL_MIGRATION}`, completeness_report: null, executive_summary: null }],
+                })),
               })),
             })),
           };
         }
         // chairman_constraints presence check
-        return { select: vi.fn(() => ({ in: vi.fn(async () => ({ data: [], error: null })) })) };
+        return { select: vi.fn(() => ({ in: vi.fn(() => ({ limit: vi.fn(async () => ({ data: [], error: null })) })) })) };
       }),
     };
 
@@ -96,7 +99,9 @@ describe('findEvidenceMigrationGaps', () => {
     const supabase = {
       from: vi.fn(() => ({
         select: vi.fn(() => ({
-          eq: vi.fn(async () => ({ data: [{ deliverables_manifest: 'no migration here', completeness_report: null, executive_summary: null }] })),
+          eq: vi.fn(() => ({
+            limit: vi.fn(async () => ({ data: [{ deliverables_manifest: 'no migration here', completeness_report: null, executive_summary: null }] })),
+          })),
         })),
       })),
     };
