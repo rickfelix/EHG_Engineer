@@ -158,7 +158,7 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(row.drained_at).toBeTruthy();
   });
 
-  it('QF-20260828-188 leg 3: chairman no_match is ALSO mechanically routed to Adam (adam_action_required) and stamped resolved_at in the same tick', async () => {
+  it('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001: chairman no_match is ALSO mechanically routed to Adam (adam_action_required) and stamped routed_at (NOT resolved_at) in the same tick', async () => {
     insertCoordinationRow.mockClear();
     getActiveAdamId.mockClear();
     process.env.CHAIRMAN_PHONE = CHAIR;
@@ -171,7 +171,10 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(result.results.find((r) => r.id === 'stg-nomatch-adam').outcome).toBe('no_match');
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-nomatch-adam');
     expect(row.parked_at).toBeTruthy();
-    expect(row.resolved_at).toBeTruthy();
+    // SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001: routing is not handling. resolved_at must stay
+    // null so surfaceParkedChairmanSms's interrupt keeps firing until genuine handling.
+    expect(row.routed_at).toBeTruthy();
+    expect(row.resolved_at).toBeFalsy();
 
     expect(insertCoordinationRow).toHaveBeenCalledTimes(1);
     const [, args, opts] = insertCoordinationRow.mock.calls[0];
@@ -181,7 +184,7 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(opts.targetRoleHint).toBe('adam');
   });
 
-  it('QF-20260828-188 leg 3: rate_limited/expired/ambiguous stay park-only — no Adam routing, no resolved_at', async () => {
+  it('QF-20260828-188 leg 3: rate_limited/expired/ambiguous stay park-only — no Adam routing, no routed_at, no resolved_at', async () => {
     insertCoordinationRow.mockClear();
     process.env.CHAIRMAN_PHONE = CHAIR;
     const now = new Date().toISOString();
@@ -198,6 +201,7 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(result.results.find((r) => r.id === 'stg-ratelimit-noadam').outcome).toBe('rate_limited');
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-ratelimit-noadam');
     expect(row.parked_at).toBeTruthy();
+    expect(row.routed_at).toBeFalsy();
     expect(row.resolved_at).toBeFalsy();
     expect(insertCoordinationRow).not.toHaveBeenCalled();
   });
@@ -358,10 +362,10 @@ describe('checkAndApplyAutoSuspend — invalid_signature counter unaffected by F
 
 describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the same state', () => {
   it('a chairman rate_limited row drained now, surfaces on the very next tick — the two halves are wired, not just independently correct', async () => {
-    // QF-20260828-188 leg 3: was no_match, but no_match is now mechanically resolved in the same
-    // tick (routed to Adam, resolved_at stamped) — it no longer belongs in the "still needs a
-    // human to notice" surface this test proves. rate_limited stays park-only-unresolved, so it
-    // is the outcome that still exercises this chained wiring.
+    // QF-20260828-188 leg 3 / SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001: a no_match chairman row is
+    // mechanically routed to Adam (routed_at stamped) but resolved_at stays null -- it WOULD
+    // still surface here too. rate_limited never routes at all, so it is the cleanest outcome
+    // to exercise this chained wiring without conflating "routed" with "surfaced".
     process.env.CHAIRMAN_PHONE = CHAIR;
     const OTHER = '+15127770000';
     const priorLog = Array.from({ length: 5 }, (_, i) => ({
@@ -389,5 +393,45 @@ describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the 
     const surfaced = await surfaceParkedChairmanSms(sb);
     expect(surfaced.rows.map((r) => r.id)).toEqual(['stg-chain-chair']);
     expect(surfaced.rows.map((r) => r.id)).not.toContain('stg-chain-other');
+  });
+});
+
+describe('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001 regression guard: routed_at is never resolved_at', () => {
+  it('a no_match chairman row never has resolved_at set (routed_at is set instead), and stays surfaced', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-guard-1', provider_message_id: 'SM-guard-1', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'is this even in scope?', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    await drainSmsRelayStaging(sb);
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-guard-1');
+    // THE INVARIANT ITSELF: the mechanical route write path must NEVER also write resolved_at
+    // in the same tick. If a future edit re-fuses the two, this fails immediately.
+    expect(row.routed_at).toBeTruthy();
+    expect(row.resolved_at).toBeFalsy();
+    // ...and the interrupt (keyed on resolved_at IS NULL) still surfaces it -- routing alone
+    // never silences the alarm.
+    const surfaced = await surfaceParkedChairmanSms(sb);
+    expect(surfaced.rows.map((r) => r.id)).toContain('stg-guard-1');
+  });
+
+  it('explicit disposition (resolveParkedChairmanSmsRow) is what actually silences the interrupt for a routed row', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-guard-2', provider_message_id: 'SM-guard-2', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'still nothing recognized', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    await drainSmsRelayStaging(sb);
+    let surfaced = await surfaceParkedChairmanSms(sb);
+    expect(surfaced.rows.map((r) => r.id)).toContain('stg-guard-2');
+
+    await resolveParkedChairmanSmsRow(sb, 'stg-guard-2');
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-guard-2');
+    expect(row.resolved_at).toBeTruthy();
+
+    surfaced = await surfaceParkedChairmanSms(sb);
+    expect(surfaced.rows.map((r) => r.id)).not.toContain('stg-guard-2');
   });
 });
