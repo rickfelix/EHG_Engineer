@@ -98,15 +98,19 @@ describe('skip-and-continue markAsBlocked() optimistic lock (SD-LEO-INFRA-FIX-SK
     expect(lockFilter.val).not.toBeUndefined();
     expect(lockFilter.val).not.toBe('undefined');
 
-    // The update writes status=blocked with a fresh updated_at and blocked metadata.
-    expect(calls.updatePayload.status).toBe('blocked');
+    // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-5): status='blocked' is NOT a member of the
+    // live strategic_directives_v2_status_check CHECK constraint and was previously written
+    // unconditionally, guaranteeing a 23514 violation on every call. The fix omits status from
+    // the update entirely (left unchanged) and relies on the metadata discriminators instead.
+    expect(calls.updatePayload.status).toBeUndefined();
     expect(typeof calls.updatePayload.updated_at).toBe('string');
     expect(calls.updatePayload.metadata.can_unblock).toBe(true);
+    expect(calls.updatePayload.metadata.blocked_reason).toContain('GATE_EXAMPLE');
 
     expect(result).toEqual({ success: true });
   });
 
-  it('returns { success: true, alreadyBlocked: true } when the optimistic lock matches 0 rows', async () => {
+  it('returns { success: true, alreadyBlocked: true } when the optimistic lock matches 0 rows (legacy message-string detection)', async () => {
     const { client } = makeMockSupabase({
       row: { metadata: {}, status: 'active', updated_at: '2026-05-30T19:00:00.000Z' },
       updateError: { message: 'JSON object requested, multiple (or no) rows returned: 0 rows' }
@@ -116,10 +120,47 @@ describe('skip-and-continue markAsBlocked() optimistic lock (SD-LEO-INFRA-FIX-SK
     expect(result).toEqual({ success: true, alreadyBlocked: true });
   });
 
+  it('returns { success: true, alreadyBlocked: true } when the optimistic lock matches 0 rows via PostgREST code PGRST116 (SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 FR-5: robust to message wording)', async () => {
+    const { client } = makeMockSupabase({
+      row: { metadata: {}, status: 'active', updated_at: '2026-05-30T19:00:00.000Z' },
+      updateError: { code: 'PGRST116', message: 'some future rewording of the same condition' }
+    });
+
+    const result = await markAsBlocked(client, 'sd-uuid-2b', blockingInfo);
+    expect(result).toEqual({ success: true, alreadyBlocked: true });
+  });
+
   it('returns a failure (no throw) when the SD cannot be fetched', async () => {
     const { client } = makeMockSupabase({ row: null });
     const result = await markAsBlocked(client, 'sd-uuid-missing', blockingInfo);
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
+  });
+
+  it('a genuine (non-lock) update error is surfaced as failure, never silently converted to success (SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 FR-5)', async () => {
+    const { client } = makeMockSupabase({
+      row: { metadata: {}, status: 'active', updated_at: '2026-05-30T19:00:00.000Z' },
+      updateError: { code: '23514', message: 'new row for relation "strategic_directives_v2" violates check constraint "strategic_directives_v2_status_check"' }
+    });
+
+    const result = await markAsBlocked(client, 'sd-uuid-3', blockingInfo);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('check constraint');
+  });
+});
+
+describe('skip-and-continue markAsBlocked() never writes an unpersistable status (SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 FR-5)', () => {
+  it('the update payload never contains status:\'blocked\' (the value guaranteed-fails the live strategic_directives_v2_status_check CHECK constraint)', async () => {
+    const { client, calls } = makeMockSupabase({
+      row: { metadata: { existing: true }, status: 'active', updated_at: '2026-05-30T19:00:00.000Z' }
+    });
+
+    await markAsBlocked(client, 'sd-uuid-4', blockingInfo);
+
+    expect(calls.updatePayload).not.toHaveProperty('status');
+    // Existing metadata is preserved (spread), and the blocked discriminators are added.
+    expect(calls.updatePayload.metadata.existing).toBe(true);
+    expect(calls.updatePayload.metadata.can_unblock).toBe(true);
+    expect(calls.updatePayload.metadata.blocked_by_gate).toBe('GATE_EXAMPLE');
   });
 });

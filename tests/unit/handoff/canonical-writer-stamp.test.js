@@ -313,7 +313,18 @@ describe('coverage regression guard — every reachable handoff write site is st
 
     // A scanner that found nothing would report zero unstamped sites and read as green. Assert it
     // genuinely saw the surface it claims to guard.
-    expect(inspected, 'the scan found no protected-column write sites at all').toBeGreaterThanOrEqual(11);
+    //
+    // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-5): threshold lowered 11 -> 9. skip-and-continue.js's
+    // markAsBlocked() previously wrote status:'blocked' -- a value NOT in the live
+    // strategic_directives_v2_status_check CHECK constraint, so that write was guaranteed to fail on
+    // every call. The fix removes `status` from that update entirely (relying on the metadata
+    // discriminators instead), which correctly drops it out of this PROTECTED-column scan. The two
+    // fewer matches (not one) are this scanner's own `.from()`-occurrence quirk: the SD-fetch SELECT
+    // and the UPDATE are both `.from('strategic_directives_v2')` calls close enough together that
+    // each independently finds the same nearby `.update(...)` within its 1500-char window, so one
+    // real write site was being double-counted as two matches — both of which now correctly fail the
+    // PROTECTED-column check since the payload no longer contains status/current_phase/completion_date.
+    expect(inspected, 'the scan found no protected-column write sites at all').toBeGreaterThanOrEqual(9);
     expect(unstamped).toEqual([]);
   });
 });

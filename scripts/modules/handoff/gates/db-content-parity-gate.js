@@ -109,7 +109,11 @@ export async function validateDbContentParity(sdKey, supabaseClient) {
     .maybeSingle();
 
   if (error || !sd) {
-    return { pass: false, score: 0, mismatches: [shapeError(`SD lookup failed: ${error?.message || 'not found'}`)], skipped: false, sd_uuid: null };
+    // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-4): idResolutionError distinguishes "the SD
+    // row itself could not be resolved" from a genuine content mismatch (which sets no such
+    // flag) — the caller uses this to pick a distinct failure_category, since an ID-form miss
+    // is not evidence of real code/DB drift.
+    return { pass: false, score: 0, mismatches: [shapeError(`SD lookup failed: ${error?.message || 'not found'}`)], skipped: false, sd_uuid: null, idResolutionError: true };
   }
 
   const assertions = Array.isArray(sd.metadata?.db_content_assertions) ? sd.metadata.db_content_assertions : [];
@@ -154,7 +158,11 @@ export function createDbContentParityGate() {
   return {
     name: 'DB_CONTENT_PARITY',
     validator: async (ctx) => {
-      const sdKey = ctx.sdKey || ctx.sdId;
+      // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-3): prefer the SD row's real sd_key
+      // (already in scope via ctx.sd, populated by BaseExecutor's validationContext) over the
+      // raw, unnormalized ctx.sdId — ctx.sdKey alone was dead by construction (BaseExecutor
+      // never set it prior to FR-1), so a UUID-form ctx.sdId silently found zero rows here.
+      const sdKey = ctx.sd?.sd_key || ctx.sdKey || ctx.sdId;
       const result = await validateDbContentParity(sdKey);
       const mismatchSummaries = result.mismatches.map(
         (m) => `${m.table || '?'} WHERE ${JSON.stringify(m.row_filter || {})}: column=${m.column} expected=${JSON.stringify(m.expected)} actual=${JSON.stringify(m.actual)}`
@@ -172,8 +180,15 @@ export function createDbContentParityGate() {
             correlation_id: randomUUID(),
             sd_id: result.sd_uuid,
             validator_name: 'db_content_parity_gate',
-            failure_reason: `DB/code drift detected: ${mismatchSummaries.length} mismatch(es). ${mismatchSummaries[0] || ''}`,
-            failure_category: 'db_content_drift',
+            failure_reason: result.idResolutionError
+              ? `SD row could not be resolved for parity check: ${mismatchSummaries[0] || ''}`
+              : `DB/code drift detected: ${mismatchSummaries.length} mismatch(es). ${mismatchSummaries[0] || ''}`,
+            // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-4): an ID-resolution failure is not
+            // evidence of real code/DB drift — a distinct category keeps the two
+            // distinguishable to every downstream validation_audit_log reader (including
+            // bypass-rubric.js), rather than a guard rendering its subject's verdict when it
+            // never actually observed the subject.
+            failure_category: result.idResolutionError ? 'id_resolution_error' : 'db_content_drift',
             metadata: { gate: 'DB_CONTENT_PARITY', mismatch_count: mismatchSummaries.length, mismatches: mismatchSummaries.slice(0, 5), phase: 'PLAN-TO-LEAD' },
             execution_context: 'handoff/gates/db-content-parity-gate.js',
           });

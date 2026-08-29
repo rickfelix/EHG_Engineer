@@ -383,10 +383,14 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // Fallback query if gate didn't cache children
     if (!orchestratorAutoPass && children.length === 0) {
+      // SD-FDBK-ENH-HANDOFF-PIPELINE-NEVER-001 (FR-2): sdId is the raw, unnormalized CLI
+      // argument (sd_key or UUID depending on caller); parent_sd_id stores the UUID. Use
+      // sd?.id || sdId, matching the defensive idiom already used at lines 431/453/480 in
+      // this same file — without it, an sd_key-form invocation always finds zero children.
       const { data: queriedChildren } = await this.supabase
         .from('strategic_directives_v2')
         .select('id, title, status')
-        .eq('parent_sd_id', sdId);
+        .eq('parent_sd_id', sd?.id || sdId);
 
       children = queriedChildren || [];
       isOrchestrator = children.length > 0;
