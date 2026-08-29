@@ -58,8 +58,10 @@ describe('QF-20260627-108: tier-encoded callsign assignment', () => {
     expect(pickCallsignForTier(2, new Set(['Golf', 'Golf-3']))).toBe('Golf-2');
   });
 
-  it('callsignInTierBand detects a wrong-band callsign so the cron self-heals it', () => {
-    // The exact bug: a tier-2 worker still holding a tier-4 "Bravo" must be re-derived.
+  it('callsignInTierBand still detects a wrong-band callsign (pure predicate, no longer used to trigger a rename — QF-20260829-312)', () => {
+    // QF-20260829-312 removed this predicate from classifyWorkerNaming's rename decision (a
+    // callsign is now kept for a seat's lifetime regardless of tier band); the predicate itself
+    // is unchanged and still available for callers that only need band membership, not renaming.
     expect(callsignInTierBand('Bravo', 2)).toBe(false);
     expect(callsignInTierBand('Golf', 2)).toBe(true);
     expect(callsignInTierBand('Alpha', 4)).toBe(true);

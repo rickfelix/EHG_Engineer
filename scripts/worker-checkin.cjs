@@ -98,7 +98,7 @@ const { claimableForTier, claimableForRepo, tierBlocks } = require('../lib/fleet
 const { fetchLowerTierBacklogData, fetchFableWindowActive } = require('../lib/fleet/tier-backlog.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
-const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier, callsignInTierBand } = require('./assign-fleet-identities.cjs');
+const { NATO, COLORS, nextAvailable, isTestSessionId, tierRankOf, pickCallsignForTier } = require('./assign-fleet-identities.cjs');
 // SD-LEO-INFRA-RECLAIM-STEAL-LIVE-CLAIMANT-WIP-GUARD-001 (FR-3): stealer-side guard. The raw
 // v_active_sessions.is_alive flag FREEZES stale between short-lived CLI invocations (each
 // handoff.js/sd-start.js call starts+stops its own heartbeat interval) -- isSessionAlive() is
@@ -1627,15 +1627,14 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     const existing = myMeta.fleet_identity;
     // SD-LEO-INFRA-LAUNCHER-CAN-HOST-001 FR-6: the SECOND, previously unguarded clobber writer.
     // QF-20260724-521 added this canary skip to assign-fleet-identities.cjs:401 (the cron path) but
-    // NOT here, and this function applies the identical callsignInTierBand gate below. Canary sessions
-    // live outside the NATO tier-band scheme entirely -- canary-guard fail-closed REQUIRES a callsign
-    // starting with 'Canary-' -- so 'Canary-1' is in no NATO band, falls through to re-derive, and the
-    // canary is silently renamed to a NATO callsign mid-drill. Both writers must skip, or closing one
-    // just moves the clobber to the other.
+    // NOT here. Canary sessions live outside the NATO tier-band scheme entirely -- canary-guard
+    // fail-closed REQUIRES a callsign starting with 'Canary-', so an unskipped canary would fall
+    // through to re-derive and be silently renamed to a NATO callsign mid-drill. Both writers must
+    // skip, or closing one just moves the clobber to the other.
     //
-    // MUST be checked BEFORE the tier-band idempotency check below: that check returns early only for
-    // an in-band callsign, so placing this after it would let every canary reach the re-derive path
-    // first and the guard would never fire. Ordering is pinned by a test.
+    // MUST be checked BEFORE the identity idempotency check below: that check returns early for
+    // any already-assigned callsign, so placing this after it would let every canary reach the
+    // re-derive path first and the guard would never fire. Ordering is pinned by a test.
     //
     // Two independent conditions, matching the cron's: the account_profile stamp (authoritative, but
     // written only once FR-1/FR-3 land) OR the 'Canary-' callsign prefix (works today). Deliberately
@@ -1671,11 +1670,11 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
         ? { callsign: existing.callsign, color: existing.color }
         : null;
     }
-    // QF-20260627-108: idempotent ONLY when the existing callsign is in this worker's tier band
-    // (effort-encoded SoT). A wrong-band callsign (e.g. a tier-2 worker still holding "Bravo") falls
-    // through to re-derive, so check-in self-heals to the scheme just like the cron.
-    if (existing && existing.callsign && existing.color
-        && callsignInTierBand(existing.callsign, tierRankOf({ metadata: myMeta }))) {
+    // QF-20260829-312: idempotent whenever an identity is already assigned — a callsign is a
+    // lifetime IDENTITY, not a tier-derived label, so tier drift no longer triggers a re-derive
+    // here either (mirrors the cron's classifyWorkerNaming fix; both writers must agree, or
+    // closing one just moves the clobber to the other).
+    if (existing && existing.callsign && existing.color) {
       return { callsign: existing.callsign, color: existing.color };
     }
     // QF-20260703-665 (b): a re-band (existing callsign present but wrong tier band) is about to
@@ -1725,7 +1724,9 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
         message_type: 'SET_IDENTITY',
         subject: `Identity: ${callsign} (${color})`,
         body: `The coordinator assigned you callsign "${callsign}" with color "${color}" at check-in. Your statusline will update automatically.`,
-        payload: { color, callsign, display_name },
+        // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
+        // display only — it never feeds back into whether this worker gets renamed.
+        payload: { color, callsign, display_name, tier_rank: tierRankOf({ metadata: myMeta }) },
         sender_type: 'coordinator',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       });

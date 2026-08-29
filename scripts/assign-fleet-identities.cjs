@@ -380,11 +380,13 @@ function classifyWorkerNaming(worker, preRegisteredCanaries, forceReassign, isCa
   // renamed mid-drill. Delegated to the canonical predicate instead of re-typing the prefix test,
   // which already exists in five other places in this repo.
   if (isCanaryMd(worker.metadata)) return 'canary_metadata';
-  // QF-20260627-108 (FR-1): a worker is "assigned" ONLY if its callsign is in its tier band
-  // (effort-encoded SoT). A callsign from the wrong band (e.g. a tier-2 worker still holding
-  // "Bravo") is re-derived, so the chairman scheme self-heals instead of being preserved-wrong.
-  if (identity?.callsign && identity?.color && !forceReassign
-      && callsignInTierBand(identity.callsign, tierRankOf(worker))) {
+  // QF-20260829-312: a callsign is an IDENTITY, kept for a seat's lifetime; tier is a CURRENT
+  // ATTRIBUTE, read at display time only (see the tier_rank on the SET_IDENTITY payload below).
+  // callsignInTierBand is no longer consulted here — a worker with an already-assigned callsign
+  // stays 'in_band' regardless of tier-rank drift, so correcting a tier stamp never re-identifies
+  // a working seat (superseded QF-20260627-108's "self-heal by renaming" behavior, which is the
+  // exact bug this fix removes — see the incident write-up in this QF's description).
+  if (identity?.callsign && identity?.color && !forceReassign) {
     return 'in_band';
   }
   return 'needs_assignment';
@@ -663,7 +665,9 @@ async function main() {
           message_type: 'SET_IDENTITY',
           subject: `Identity update: ${id.callsign} now on ${currentSdLabel}`,
           body: `Your display name updated to "${expectedDisplayName}" (SD changed).`,
-          payload: { color: id.color, callsign: id.callsign, display_name: expectedDisplayName },
+          // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
+          // display only — it never feeds back into whether this worker gets renamed.
+          payload: { color: id.color, callsign: id.callsign, display_name: expectedDisplayName, tier_rank: tierRankOf(w) },
           sender_type: 'coordinator',
           expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
         });
@@ -758,7 +762,9 @@ async function main() {
         message_type: 'SET_IDENTITY',
         subject: `Identity: ${callsign} (${color})`,
         body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
-        payload: { color, callsign, display_name: displayName },
+        // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
+        // display only — it never feeds back into whether this worker gets renamed.
+        payload: { color, callsign, display_name: displayName, tier_rank: tierRankOf(worker) },
         sender_type: 'coordinator',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
       });

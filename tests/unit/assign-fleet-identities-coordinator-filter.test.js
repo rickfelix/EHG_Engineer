@@ -436,11 +436,13 @@ describe('QF-20260724-521: canary sessions are skipped from callsign reassignmen
     expect(out).toBe('canary_metadata');
   });
 
-  it('NEGATIVE CONTROL — the same out-of-band callsign IS reassigned for a non-canary', () => {
-    // Proves the verdict above comes from the canary signal and not from the callsign being
-    // out-of-band. Without this, a guard that protected every worker would pass both cases.
+  it('NEGATIVE CONTROL — a genuinely unassigned non-canary worker IS sent to needs_assignment', () => {
+    // Proves the verdict above comes from the canary signal, not from classifyWorkerNaming
+    // simply keeping everything (QF-20260829-312 removed the tier-band check entirely — an
+    // existing callsign is now ALWAYS kept regardless of tier, so a worker with NO assigned
+    // identity is the only remaining case that still reaches needs_assignment).
     const out = classifyWorkerNaming(
-      { session_id: 's-plain', metadata: { fleet_identity: { callsign: 'Canary-1', color: 'yellow' }, tier_rank: 1 } },
+      { session_id: 's-plain', metadata: { tier_rank: 1 } },
       new Set(), false, () => false,
     );
     expect(out).toBe('needs_assignment');
