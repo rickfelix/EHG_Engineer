@@ -9,11 +9,14 @@ const {
   decideCadence,
   detectSalientDelta,
   runCoresFailSoft,
+  computeStateHash,
+  shouldSkipHeavyPass,
   MAX_QUIESCENT_PARK_S,
   ACTIVE_MAX_S,
   PROMPT_CACHE_TTL_S,
   DIRECTIVE_WAKE_MIN_S,
   DIRECTIVE_WAKE_MAX_S,
+  HEAVY_PASS_NTH_TICK_FLOOR,
 } = require('../../../lib/coordinator/quiet-tick.cjs');
 
 describe('decideCadence (FR-5/FR-6)', () => {
@@ -207,5 +210,57 @@ describe('runCoresFailSoft (FR-1)', () => {
       { key: 'y', run: () => 'ok' },
     ]);
     expect(out.summary).toBe('x:ok y:ok');
+  });
+});
+
+describe('computeStateHash / shouldSkipHeavyPass (QF-20260829-373, A7 burn-lever)', () => {
+  it('is deterministic for the same 4 cheap counts', () => {
+    const counts = { maxInboxId: 42, claimsCount: 3, smsUndrainedCount: 0, escalationCount: 0 };
+    expect(computeStateHash(counts)).toBe(computeStateHash({ ...counts }));
+  });
+
+  it('changes when any single tracked count changes', () => {
+    const base = { maxInboxId: 42, claimsCount: 3, smsUndrainedCount: 0, escalationCount: 0 };
+    expect(computeStateHash({ ...base, maxInboxId: 43 })).not.toBe(computeStateHash(base));
+    expect(computeStateHash({ ...base, claimsCount: 4 })).not.toBe(computeStateHash(base));
+    expect(computeStateHash({ ...base, smsUndrainedCount: 1 })).not.toBe(computeStateHash(base));
+    expect(computeStateHash({ ...base, escalationCount: 1 })).not.toBe(computeStateHash(base));
+  });
+
+  it('returns null for a non-object input (never crashes the caller)', () => {
+    expect(computeStateHash(null)).toBeNull();
+    expect(computeStateHash(undefined)).toBeNull();
+  });
+
+  it('skips only when the hash matches the last one and no other override applies', () => {
+    const h = computeStateHash({ maxInboxId: 1, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0 });
+    expect(shouldSkipHeavyPass({ hash: h, lastHash: h, skipStreak: 0 })).toBe(true);
+  });
+
+  it('never skips on the first tick (no lastHash baseline)', () => {
+    const h = computeStateHash({ maxInboxId: 1, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0 });
+    expect(shouldSkipHeavyPass({ hash: h, lastHash: null, skipStreak: 0 })).toBe(false);
+  });
+
+  it('never skips when the hash changed (real state delta)', () => {
+    const a = computeStateHash({ maxInboxId: 1, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0 });
+    const b = computeStateHash({ maxInboxId: 2, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0 });
+    expect(shouldSkipHeavyPass({ hash: b, lastHash: a, skipStreak: 0 })).toBe(false);
+  });
+
+  it('BINDING (per Solomon): a hash-computation error ALWAYS forces a full pass, even with a matching hash', () => {
+    const h = computeStateHash({ maxInboxId: 1, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0 });
+    expect(shouldSkipHeavyPass({ hash: h, lastHash: h, skipStreak: 0, hashError: true })).toBe(false);
+  });
+
+  it('a null/undefined hash (fail-open equivalent of an error) never skips', () => {
+    expect(shouldSkipHeavyPass({ hash: null, lastHash: 'whatever', skipStreak: 0 })).toBe(false);
+  });
+
+  it('the Nth-tick safety floor forces a full pass once skipStreak reaches the floor', () => {
+    const h = computeStateHash({ maxInboxId: 1, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0 });
+    // skipStreak counts CONSECUTIVE prior skips; at floor-1 the next tick would be the Nth, so it must NOT skip.
+    expect(shouldSkipHeavyPass({ hash: h, lastHash: h, skipStreak: HEAVY_PASS_NTH_TICK_FLOOR - 1 })).toBe(false);
+    expect(shouldSkipHeavyPass({ hash: h, lastHash: h, skipStreak: HEAVY_PASS_NTH_TICK_FLOOR - 2 })).toBe(true);
   });
 });

@@ -64,7 +64,7 @@ const require = createRequire(import.meta.url);
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
-const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+const { decideCadence, detectSalientDelta, runCoresFailSoft, computeStateHash, shouldSkipHeavyPass } = require('../lib/coordinator/quiet-tick.cjs');
 // QF-20260829-588: canonical non-fleet predicate (lib/claim/build-forbidden-session.cjs) --
 // role seats (adam/solomon/coordinator) must not count as "idle" fleet workers.
 const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
@@ -765,6 +765,30 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
   }
 }
 
+// QF-20260829-373 (A7 burn-lever): the 4 cheap signals fed into computeStateHash(), read
+// BEFORE the heavy enumerations below so a quiet tick can skip them. Each count has its own
+// try/catch so one failing table read never blocks the others; hashError=true (any count
+// failed) is the fail-open signal shouldSkipHeavyPass() treats as "always force a full pass."
+async function readCheapStateCounts(sb) {
+  const out = { maxInboxId: 0, claimsCount: 0, smsUndrainedCount: 0, escalationCount: 0, hashError: false };
+  try {
+    const { data } = await sb.from('session_coordination').select('id').order('id', { ascending: false }).limit(1);
+    out.maxInboxId = (data && data[0] && data[0].id) || 0;
+  } catch { out.hashError = true; }
+  try {
+    const { count } = await sb.from('claude_sessions').select('session_id', { count: 'exact', head: true }).eq('status', 'active').not('sd_id', 'is', null);
+    out.claimsCount = count || 0;
+  } catch { out.hashError = true; }
+  try {
+    const { count } = await sb.from('sms_relay_staging').select('id', { count: 'exact', head: true }).is('drained_at', null);
+    out.smsUndrainedCount = count || 0;
+  } catch { out.hashError = true; }
+  try {
+    out.escalationCount = (await hasUndeliveredChairmanEscalation(sb)) ? 1 : 0;
+  } catch { out.hashError = true; }
+  return out;
+}
+
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
@@ -866,25 +890,45 @@ async function main() {
   const priorStallSnapshot = priorState.stallSnapshot || {};
   const priorVentureStallSnapshot = priorState.ventureStallSnapshot || {};
   const priorVentureRealBuildStallSnapshot = priorState.ventureRealBuildStallSnapshot || {};
+  const priorHashSkip = priorState.hashSkip || {};
+
+  // QF-20260829-373 (A7 burn-lever): compute the cheap state hash, then decide whether the
+  // heavy enumerations just below (task_ledger scan, ventures scan, ratification-regression
+  // git diffs) can be skipped this tick. surfaceInboxItems/surfaceSmsInbound/etc. further down
+  // are UNCONDITIONAL regardless of this decision — a directive or chairman SMS injected
+  // mid-quiet-streak is always surfaced next tick, independent of the heavy-pass skip.
+  const cheapState = await readCheapStateCounts(sb);
+  const stateHash = cheapState.hashError ? null : computeStateHash(cheapState);
+  const skipHeavyPass = shouldSkipHeavyPass({
+    hash: stateHash,
+    lastHash: priorHashSkip.lastHash,
+    skipStreak: priorHashSkip.skipStreak || 0,
+    hashError: cheapState.hashError,
+  });
+  if (skipHeavyPass) console.log('QUIET_TICK_HASH_SKIP=adam heavy enumerations skipped (state unchanged)');
 
   // Child B FR-2/FR-3: intended-hold-vs-genuine-stall check on critical-path parents every
   // tick. Only a genuine stall (per stall-detector.js's classifier) ever calls
   // recordPendingDecision — an intended hold or a quiet/hold period generates zero escalation.
   let stall = { snapshot: priorStallSnapshot, alerted: [] };
-  try {
-    const parents = await readCriticalPathParents(sb);
-    stall = await checkAndAlertStalls(sb, parents, priorStallSnapshot, {});
-  } catch (e) {
-    stall = { snapshot: priorStallSnapshot, alerted: [], error: e && e.message };
+  if (!skipHeavyPass) {
+    try {
+      const parents = await readCriticalPathParents(sb);
+      stall = await checkAndAlertStalls(sb, parents, priorStallSnapshot, {});
+    } catch (e) {
+      stall = { snapshot: priorStallSnapshot, alerted: [], error: e && e.message };
+    }
   }
 
   // QF-20260710-056: a venture stuck mid-traversal is the thing that matters most —
   // check it every tick, independent of the task_ledger stall watch above.
   let ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], realBuildSnapshot: priorVentureRealBuildStallSnapshot, realBuildStalled: [] };
-  try {
-    ventureStall = await checkVentureTraversalStalls(sb, priorVentureStallSnapshot, priorVentureRealBuildStallSnapshot);
-  } catch (e) {
-    ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], realBuildSnapshot: priorVentureRealBuildStallSnapshot, realBuildStalled: [], error: e && e.message };
+  if (!skipHeavyPass) {
+    try {
+      ventureStall = await checkVentureTraversalStalls(sb, priorVentureStallSnapshot, priorVentureRealBuildStallSnapshot);
+    } catch (e) {
+      ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], realBuildSnapshot: priorVentureRealBuildStallSnapshot, realBuildStalled: [], error: e && e.message };
+    }
   }
 
   // SD-LEO-FIX-ADAM-OUTBOUND-SILENCE-001: watch Adam's own outbound rows at a live
@@ -915,7 +959,8 @@ async function main() {
 
   // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-4: already-encoded ratifications whose
   // clause was silently reverted (whole-section removal or within-section marker-text deletion).
-  const regressedRatifications = await checkRatificationRegressions(sb);
+  // QF-20260829-373: gated by the heavy-pass skip — git subprocess spawns, not a cheap read.
+  const regressedRatifications = skipHeavyPass ? { rows: [], count: 0 } : await checkRatificationRegressions(sb);
 
   // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: evaluate the durable standing priority. Fail-soft like
   // its siblings above — and fail QUIET: a detector that cannot read its store reports 'unknown'
@@ -929,7 +974,14 @@ async function main() {
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
   const delta = detectSalientDelta(priorSalient, salient);
-  saveLastState({ salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot, ventureRealBuildStallSnapshot: ventureStall.realBuildSnapshot });
+  saveLastState({
+    salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot,
+    ventureRealBuildStallSnapshot: ventureStall.realBuildSnapshot,
+    // QF-20260829-373: skipStreak only counts CONSECUTIVE skips — a full pass (change, error,
+    // or hitting the floor) resets it, so the Nth-tick floor always measures from the last
+    // real enumeration, not from whenever the hash last happened to match.
+    hashSkip: { lastHash: stateHash || priorHashSkip.lastHash || null, skipStreak: skipHeavyPass ? (priorHashSkip.skipStreak || 0) + 1 : 0 },
+  });
 
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): cold-start rule — loadLastAccountIdentity()
   // returning null (no prior state file / first tick after deploy-restart) means
