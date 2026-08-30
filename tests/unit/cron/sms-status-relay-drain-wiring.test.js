@@ -146,3 +146,17 @@ describe('QF-20260830-603: abnormal-exit witness', () => {
     warnSpy.mockRestore();
   });
 });
+
+// QF-20260830-025: process.exit() called while the Supabase client still holds open libuv async
+// handles tears the process down mid-handle-close and libuv asserts (rc=127 on win32). Reproduced
+// deterministically 3/3 with a minimal repro (createClient + one query + process.exit(0)) vs. 0/3
+// without the exit call. Source-pin, not behavioral: the abort is a native libuv assertion that
+// only fires in a real child process, not observable inside vitest's worker.
+describe('QF-20260830-025: no process.exit() after Supabase work at CLI teardown', () => {
+  it('the success and fatal-catch paths set exitCode and let the event loop drain, never process.exit()', () => {
+    const src = stripComments(fs.readFileSync(RUNNER, 'utf8'));
+    const cliBlock = src.match(/if\s*\(\s*require\.main\s*===\s*module\s*\)\s*\{[\s\S]*/)[0];
+    expect(cliBlock, 'CLI teardown must not call process.exit() -- it aborts on win32 while the supabase client holds open handles').not.toMatch(/process\.exit\(/);
+    expect(cliBlock, 'success path must set process.exitCode = 0').toMatch(/process\.exitCode\s*=\s*0/);
+  });
+});
