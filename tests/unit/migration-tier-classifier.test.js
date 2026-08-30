@@ -78,6 +78,12 @@ const TIER2_CORPUS = [
   ['COMMENT ON COLUMN with a function-call value (not a literal)', 'COMMENT ON COLUMN foo.bar IS current_user;'],
   ['COMMENT ON COLUMN with a subquery value', 'COMMENT ON COLUMN foo.bar IS (SELECT description FROM meta LIMIT 1);'],
   ['COMMENT ON COLUMN concatenating two literals (not a single plain literal)', "COMMENT ON COLUMN foo.bar IS 'a' || 'b';"],
+  // ── QF-20260830-245: DROP CONSTRAINT IF EXISTS / ADD CONSTRAINT CHECK — narrow forms only ──
+  ['DROP CONSTRAINT without IF EXISTS (not the idempotent form)', 'ALTER TABLE t DROP CONSTRAINT t_check;'],
+  ['ADD CONSTRAINT CHECK with a function call in the array (executes at apply)', 'ALTER TABLE t ADD CONSTRAINT t_c CHECK (c = ANY (ARRAY[pg_sleep(1)]));'],
+  ['ADD CONSTRAINT CHECK with a column reference in the array', 'ALTER TABLE t ADD CONSTRAINT t_c CHECK (c = ANY (ARRAY[other_col]));'],
+  ['ADD CONSTRAINT CHECK, not an ANY(ARRAY[...]) shape (arbitrary expression)', 'ALTER TABLE t ADD CONSTRAINT t_c CHECK (c > 0 AND c < 100);'],
+  ['DROP CONSTRAINT smuggling a second destructive statement', 'ALTER TABLE t DROP CONSTRAINT IF EXISTS c;\nDROP TABLE other;'],
 ];
 
 // ── Provably-additive: every one of these MUST classify TIER-1 (auto-apply eligible) ──
@@ -105,6 +111,16 @@ ALTER TABLE eva_consultant_recommendations ADD COLUMN IF NOT EXISTS confidence_t
 CREATE INDEX IF NOT EXISTS idx_ecr_conf ON eva_consultant_recommendations(confidence_tier);
 COMMENT ON COLUMN eva_consultant_recommendations.distilled_sd_payload IS 'the distilled SD JSON payload (distiller writes; chairman reviews; disposition-gate checks).';
 `],
+  // ── QF-20260830-245: CHECK-widen (CLAUDE_ADAM.md sec 3b) — the real specimen, verbatim ──
+  ['CHECK-widen: real specimen (20260623_competitive_baselines_epistemic_tag_add_observed.sql)', `
+ALTER TABLE competitive_baselines
+  DROP CONSTRAINT IF EXISTS competitive_baselines_epistemic_tag_check;
+ALTER TABLE competitive_baselines
+  ADD CONSTRAINT competitive_baselines_epistemic_tag_check
+  CHECK (epistemic_tag = ANY (ARRAY['FACT'::text, 'ASSUMPTION'::text, 'SIMULATION'::text, 'UNKNOWN'::text, 'OBSERVED'::text]));
+`],
+  ['CHECK-widen: numeric/bool/null literals, no casts', 'ALTER TABLE t DROP CONSTRAINT IF EXISTS t_c;\nALTER TABLE t ADD CONSTRAINT t_c CHECK (n = ANY (ARRAY[1, 2, NULL, TRUE]));'],
+  ['DROP CONSTRAINT IF EXISTS alone (idempotent no-op half)', 'ALTER TABLE t DROP CONSTRAINT IF EXISTS t_c;'],
 ];
 
 describe('classifyMigration — TIER-2 (must never auto-apply)', () => {

@@ -218,6 +218,21 @@ function commandVerbCount(head) {
   return (stripParens(head).match(COMMAND_VERBS) || []).length;
 }
 
+/**
+ * commandVerbCount, exempting ALTER TABLE ... DROP CONSTRAINT — Postgres has no standalone
+ * "DROP CONSTRAINT" statement, so DROP there is always a sub-clause of the one ALTER, never a
+ * smuggled second command (QF-20260830-245). Recomputes with that exact phrase removed so ONLY
+ * this pairing is exempted; any other multi-verb combination still counts normally.
+ */
+function effectiveVerbCount(head) {
+  const n = commandVerbCount(head);
+  if (n <= 1) return n;
+  if (/^alter\s+table\b/.test(head) && /\bdrop\s+constraint\b/.test(head)) {
+    return commandVerbCount(head.replace(/\bdrop\s+constraint\b/, ''));
+  }
+  return n;
+}
+
 /** Split an ALTER action list on TOP-LEVEL commas (ignoring commas inside parens). */
 function splitTopLevelCommas(s) {
   const out = [];
@@ -355,7 +370,32 @@ function matchCommentOnColumn(head) {
   return { token: `comment_on_column:${m[1]}` };
 }
 
-const RULES = [matchCreateTableINE, matchCreateIndex, matchAdditiveAddColumn, matchPolicyOrEnableRls, matchCommentOnColumn];
+// Rule G — ALTER TABLE ... DROP CONSTRAINT IF EXISTS <name> (bare form only; QF-20260830-245).
+// CLAUDE_ADAM.md sec 3b names "CHECK-widen" as in-scope; this is half of that two-statement
+// idempotent pattern (drop-then-add-same-name). IF EXISTS is mandatory (parity with Rule A/B) so a
+// re-run, or a first-ever apply of an unversioned constraint, is a no-op rather than an error.
+function matchDropConstraintIfExists(head) {
+  const m = head.match(/^alter\s+table\s+(?:if\s+exists\s+)?([a-z0-9_."]+)\s+drop\s+constraint\s+if\s+exists\s+([a-z0-9_."]+)$/);
+  return m ? { token: `drop_constraint_if_exists:${m[1]}.${m[2]}` } : null;
+}
+
+// Rule H — ALTER TABLE ... ADD CONSTRAINT <name> CHECK (<col> = ANY (ARRAY[<literal>, ...])).
+// Narrow on purpose: only the exact enum-membership CHECK shape this repo's widen migrations use
+// (e.g. 20260623_competitive_baselines_epistemic_tag_add_observed.sql) — every array element must
+// be a plain literal (string/number/bool/null, optional cast), never a function call or column
+// reference, so the constraint body cannot execute anything at apply time. A narrower (not just
+// wider) set is equally safe: Postgres validates existing rows on ADD and errors cleanly if any
+// violate it — it can never silently mutate or drop data (QF-20260830-245).
+const ARRAY_LITERAL_ELEMENT = /^\s*(?:'(?:[^']|'')*'|-?\d+(?:\.\d+)?|true|false|null)\s*(?:::\s*[a-z_][\w ]*)?\s*$/i;
+function matchAddCheckConstraintEnumWiden(head) {
+  const m = head.match(/^alter\s+table\s+(?:if\s+exists\s+)?([a-z0-9_."]+)\s+add\s+constraint\s+([a-z0-9_."]+)\s+check\s*\(\s*([a-z0-9_."]+)\s*=\s*any\s*\(\s*array\s*\[(.+)\]\s*\)\s*\)$/);
+  if (!m) return null;
+  const elements = splitTopLevelCommas(m[4]);
+  if (!elements.length || !elements.every((e) => ARRAY_LITERAL_ELEMENT.test(e))) return null;
+  return { token: `add_check_constraint_enum_widen:${m[1]}.${m[2]}` };
+}
+
+const RULES = [matchCreateTableINE, matchCreateIndex, matchAdditiveAddColumn, matchPolicyOrEnableRls, matchCommentOnColumn, matchDropConstraintIfExists, matchAddCheckConstraintEnumWiden];
 
 /**
  * Classify a migration's risk tier. PURE; never throws; default-deny to TIER-2.
@@ -396,7 +436,7 @@ export function classifyMigration(sql) {
       // FC-3 (under-split): a single statement must carry exactly one command verb.
       // Catches the no-semicolon blob (two CREATEs) that a prefix-only head match
       // would false-pass, and any destructive command concatenated to an additive one.
-      if (commandVerbCount(head) > 1) return T2('multiple_commands_in_statement');
+      if (effectiveVerbCount(head) > 1) return T2('multiple_commands_in_statement');
       let r = null;
       for (const rule of RULES) { r = rule(head); if (r) break; }
       if (!r) r = matchSafeCreateFnView(head, raw); // Rule E needs the raw body, not just head
@@ -410,7 +450,11 @@ export function classifyMigration(sql) {
     // allow-listed head we matched) means a destructive statement slipped the
     // per-statement loop or the two parsers disagree on boundaries (FC-14) => TIER-2.
     // We do NOT trust the per-statement loop alone — both must agree.
-    const residueForbidden = FORBIDDEN_TOPLEVEL.test(residue);
+    // DROP CONSTRAINT IF EXISTS is a validated, narrow, idempotent ALTER-TABLE sub-clause
+    // (Rule G) — strip only that exact phrase before the sweep so it cannot mask a REAL
+    // top-level DROP TABLE/INDEX/POLICY/etc elsewhere in the file (QF-20260830-245).
+    const residueForCheck = residue.replace(/\bdrop\s+constraint\s+if\s+exists\s+[a-z0-9_."]+/gi, ' ');
+    const residueForbidden = FORBIDDEN_TOPLEVEL.test(residueForCheck);
     if (residueForbidden) {
       // Allow-listed heads never contain these verbs, so any hit is a real forbidden
       // token (or a parser disagreement) — fail closed.
