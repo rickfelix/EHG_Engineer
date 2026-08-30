@@ -55,6 +55,7 @@ import { createSDPRDDriftGate } from './gates/sd-prd-drift.js';
 
 // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
 import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+import { createRcaRequiredAfterRetriesGate } from '../../gates/rca-required-after-retries-gate.js';
 
 // Helper modules
 import { transitionPrdToExec, transitionSdToExec } from './state-transitions.js';
@@ -156,6 +157,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for the required set
     gates.push(createSubagentEvidenceGate(this.supabase));
+    gates.push(createRcaRequiredAfterRetriesGate(this.supabase));
 
     // Sub-Agent Repo Resolution Gate (SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-3)
     // Runs RIGHT AFTER subagent-evidence so the same rows it validated for

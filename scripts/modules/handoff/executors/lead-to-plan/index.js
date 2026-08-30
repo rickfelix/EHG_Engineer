@@ -53,6 +53,7 @@ import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
 
 // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
 import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+import { createRcaRequiredAfterRetriesGate } from '../../gates/rca-required-after-retries-gate.js';
 
 // Helper modules
 import { transitionSdToPlan } from './state-transitions.js';
@@ -110,6 +111,7 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for validation-agent + Explore
     gates.push(createSubagentEvidenceGate(this.supabase));
+    gates.push(createRcaRequiredAfterRetriesGate(this.supabase));
 
     // SD Transition Readiness Gate
     gates.push(createTransitionReadinessGate(this.supabase));
