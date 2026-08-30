@@ -173,25 +173,37 @@ async function seedStandaloneCrons() {
   if (error) throw new Error(`existing-owner lookup failed: ${error.message}`);
   const ownerByKey = new Map((existing || []).map((r) => [r.process_key, r.owner]));
 
-  return discovered.map((proc) => ({
-    process_key: proc.process_key,
-    display_name: proc.display_name,
-    owner: ownerByKey.get(proc.process_key) || 'coordinator-fleet',
-    process_type: 'standalone_cron',
-    expected_interval_seconds: proc.expected_interval_seconds,
-    liveness_source: 'self_stamped',
-    liveness_source_ref: {
-      ...(proc.cron ? { cron: proc.cron } : {}),
-      discovered_from: proc.source,
-      // QF-20260823-965: names the ONE invocation that proves this loop alive, when its script
-      // is a multi-section CLI (e.g. 'all' for fleet-dashboard.cjs) -- null for single-purpose
-      // scripts, where no section choice exists to be ambiguous about.
-      ...(proc.required_invocation ? { required_invocation: proc.required_invocation } : {}),
-    },
-    session_bound: proc.session_bound,
-    currently_expected_active: true,
-    updated_at: new Date().toISOString(),
-  }));
+  // QF-20260830-694: a gha_cron:* process runs entirely inside GitHub Actions' now-credential-
+  // free execution tier (SD-LEO-INFRA-CANONICAL-REPO-APP-001-era policy) -- it has no path to
+  // write last_fired_at itself, so seeding it self_stamped guarantees a false-dead registry row
+  // forever (measured: 4 gha_cron:* rows sat self_stamped with 5.6+ day-old timestamps while `gh
+  // run list` showed every one green). The github_actions_api source (already fully implemented
+  // in lib/periodic-liveness/gha-run-resolver.mjs + wired into periodic-liveness-watcher.mjs) is
+  // the correct observer for exactly this class -- route it there instead, keyed on
+  // liveness_source_ref.workflow_cron (the field name evaluateRow's gap-adjustment actually reads;
+  // the old `cron` key here was silently ignored by every consumer).
+  return discovered.map((proc) => {
+    const isGhaCron = proc.source === 'gha_cron';
+    return {
+      process_key: proc.process_key,
+      display_name: proc.display_name,
+      owner: ownerByKey.get(proc.process_key) || 'coordinator-fleet',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: proc.expected_interval_seconds,
+      liveness_source: isGhaCron ? 'github_actions_api' : 'self_stamped',
+      liveness_source_ref: {
+        ...(proc.cron ? { [isGhaCron ? 'workflow_cron' : 'cron']: proc.cron } : {}),
+        discovered_from: proc.source,
+        // QF-20260823-965: names the ONE invocation that proves this loop alive, when its script
+        // is a multi-section CLI (e.g. 'all' for fleet-dashboard.cjs) -- null for single-purpose
+        // scripts, where no section choice exists to be ambiguous about.
+        ...(proc.required_invocation ? { required_invocation: proc.required_invocation } : {}),
+      },
+      session_bound: proc.session_bound,
+      currently_expected_active: true,
+      updated_at: new Date().toISOString(),
+    };
+  });
 }
 
 async function main() {
