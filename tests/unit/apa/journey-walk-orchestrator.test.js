@@ -100,7 +100,20 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
     expect(deps.recordResult).toHaveBeenCalledTimes(2);
     expect(deps.recordResult).toHaveBeenNthCalledWith(1, 'run-1', expect.objectContaining({ id: 'stp-1' }), 'PASS', expect.objectContaining({ errorMessage: undefined }));
     expect(deps.recordResult).toHaveBeenNthCalledWith(2, 'run-1', expect.objectContaining({ id: 'stp-2' }), 'FAIL', expect.objectContaining({ errorMessage: 'no verified UI mapping' }));
-    expect(deps.completeSession).toHaveBeenCalledWith('run-1');
+    // coordinator directive ac40a109 / lib/eva/uat-robustness-gate.js: completeSession must
+    // receive a truthy controlPackEvidence (metadata.control_pack_evaluated=true) or a
+    // GREEN gate reads as proof the control pack ran when it never did. Derived from the
+    // walk's own real per-step outcomes (1 assertion per step, not fabricated).
+    expect(deps.completeSession).toHaveBeenCalledWith('run-1', {
+      manifest: [
+        { journeyId: 'stp-1', minimumAssertions: 1 },
+        { journeyId: 'stp-2', minimumAssertions: 1 },
+      ],
+      executedJourneys: [
+        { journeyId: 'stp-1', executedAssertions: 1 },
+        { journeyId: 'stp-2', executedAssertions: 1 },
+      ],
+    });
     expect(teardown).toHaveBeenCalledTimes(1);
 
     expect(result.status).toBe('fail'); // completedAllSteps: false
@@ -108,6 +121,35 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
     expect(result.passRate).toBe(50);
     expect(result.brokenAtStep).toBe('stp-2');
     expect(result.preflightResults).toEqual([{ name: 'land', success: true, url: 'http://fixture', renderedStateSummary: 'preflight ok' }]);
+  });
+
+  it('a step never reached by the walk is named in the manifest but absent from executedJourneys (never silently satisfied)', async () => {
+    const { deps } = makeDeps({
+      // Walk only produced ONE outcome even though STEPS defines two — mirrors a walk that
+      // broke before reaching stp-2 (browser-executor.js stops on the first failure).
+      runJourneyWalk: vi.fn(async () => ({
+        outcomes: [
+          { step: 'stp-1', url: 'http://fixture/one', renderedStateSummary: 'ok', success: true, failureReason: null },
+        ],
+        completedAllSteps: false,
+        brokenAtStep: 'stp-2',
+      })),
+    });
+
+    await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    const [, controlPackEvidence] = deps.completeSession.mock.calls[0];
+    expect(controlPackEvidence.manifest.map((m) => m.journeyId)).toEqual(['stp-1', 'stp-2']);
+    expect(controlPackEvidence.executedJourneys.map((e) => e.journeyId)).toEqual(['stp-1']);
+  });
+
+  it('honors an injected deps.controlPackEvidence instead of auto-deriving one', async () => {
+    const injected = { manifest: [], executedJourneys: [], fenceEvidence: { canExerciseApp: true, exclusionPredicateDeclared: true, exclusionPredicateAssertedInVentureCi: true } };
+    const { deps } = makeDeps({ controlPackEvidence: injected });
+
+    await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    expect(deps.completeSession).toHaveBeenCalledWith('run-1', injected);
   });
 
   it('threads params.ventureId and params.stageNumber into startSession when supplied', async () => {
