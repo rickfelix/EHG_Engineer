@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   decideCadence,
+  computeLoadedAndQuiet,
   detectSalientDelta,
   runCoresFailSoft,
   computeStateHash,
@@ -18,6 +19,57 @@ const {
   DIRECTIVE_WAKE_MAX_S,
   HEAVY_PASS_NTH_TICK_FLOOR,
 } = require('../../../lib/coordinator/quiet-tick.cjs');
+
+const LOADED_AND_QUIET_TRUE = {
+  idleNow: 0,
+  rawUnclaimed: 0,
+  openQfCount: 0,
+  claimableWithVerifyQfCount: 0,
+  unactionedDirective: false,
+  undeliveredEscalation: false,
+};
+
+describe('computeLoadedAndQuiet (SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-001 FR-7)', () => {
+  it('returns true when every clause holds', () => {
+    expect(computeLoadedAndQuiet(LOADED_AND_QUIET_TRUE)).toBe(true);
+  });
+
+  it('returns false when idleNow > 0 (an idle seat exists)', () => {
+    expect(computeLoadedAndQuiet({ ...LOADED_AND_QUIET_TRUE, idleNow: 1 })).toBe(false);
+  });
+
+  it('returns false when rawUnclaimed > 0 (an unclaimed SD exists)', () => {
+    expect(computeLoadedAndQuiet({ ...LOADED_AND_QUIET_TRUE, rawUnclaimed: 1 })).toBe(false);
+  });
+
+  it('returns false when openQfCount > 0 (an open QF exists)', () => {
+    expect(computeLoadedAndQuiet({ ...LOADED_AND_QUIET_TRUE, openQfCount: 1 })).toBe(false);
+  });
+
+  it('returns false when claimableWithVerifyQfCount > 0', () => {
+    expect(computeLoadedAndQuiet({ ...LOADED_AND_QUIET_TRUE, claimableWithVerifyQfCount: 1 })).toBe(false);
+  });
+
+  it('returns false when unactionedDirective is true', () => {
+    expect(computeLoadedAndQuiet({ ...LOADED_AND_QUIET_TRUE, unactionedDirective: true })).toBe(false);
+  });
+
+  it('returns false when undeliveredEscalation is true', () => {
+    expect(computeLoadedAndQuiet({ ...LOADED_AND_QUIET_TRUE, undeliveredEscalation: true })).toBe(false);
+  });
+
+  it('returns false when called with no argument, no throw', () => {
+    expect(computeLoadedAndQuiet()).toBe(false);
+    expect(computeLoadedAndQuiet({})).toBe(false);
+  });
+
+  it('is PURE: does not mutate its input', () => {
+    const input = { ...LOADED_AND_QUIET_TRUE };
+    const snapshot = { ...input };
+    computeLoadedAndQuiet(input);
+    expect(input).toEqual(snapshot);
+  });
+});
 
 describe('decideCadence (FR-5/FR-6)', () => {
   it('quiescent park never exceeds the 15-min cap', () => {
