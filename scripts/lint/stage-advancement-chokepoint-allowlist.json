@@ -54,6 +54,7 @@
     "database/migrations/20260716_high_consequence_stage_gates.sql",
     "database/migrations/20260722_high_consequence_actuation_completeness.sql",
     "database/migrations/20260722_stage_advancement_advance_venture_stage_gate_type_ssot.sql",
-    "database/migrations/20260722_EMERGENCY_ONLY_full_code_revert_advance_venture_stage.sql"
+    "database/migrations/20260722_EMERGENCY_ONLY_full_code_revert_advance_venture_stage.sql",
+    "database/chairman-gated/20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql"
   ]
 }

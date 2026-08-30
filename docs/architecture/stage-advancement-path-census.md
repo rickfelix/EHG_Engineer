@@ -328,3 +328,36 @@ incident report named).
 **Standing guard going forward**: any future kill-gate check MUST call `fn_is_kill_gate_stage()`
 rather than re-deriving the stage set inline — a repeat of this literal-drift class in a 5th
 function would mean this census section was written but not enforced.
+
+## Post-census addition (2026-08-30, SD-LEO-INFRA-DIRECTION-BLIND-KILL-001)
+
+`database/chairman-gated/20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql`
+(staged, chairman-gated, `@approved-by: PENDING`, never auto-applied) re-emits `CREATE OR REPLACE`
+bodies for both `advance_venture_stage()` (path #3 above) and `fn_advance_venture_stage()` (path
+#1, the chokepoint itself). The lint's static census-diff flagged the same 2
+`current_lifecycle_stage` write statements each function already carries — both are re-emissions
+of already-censused behavior, not new gaps:
+
+- `advance_venture_stage()`'s `SET current_lifecycle_stage = p_to_stage` — unchanged from path #3's
+  disposition; this `CREATE OR REPLACE` only adds direction-awareness to the function's
+  kill/promotion gate check (a NEW optional trailing `p_rollback_provenance` parameter) and derives
+  `transition_type` server-side from actual direction instead of trusting the caller. The write
+  itself is untouched.
+- `fn_advance_venture_stage()`'s `UPDATE ventures SET current_lifecycle_stage = p_to_stage, ...` —
+  unchanged from path #1's disposition; this `CREATE OR REPLACE` applies the identical
+  direction-aware restructuring to its own independent gate check (reusing the existing
+  `p_handoff_data` parameter for rollback provenance, no signature change) and fixes an
+  audit-honesty gap where `transition_type` was previously hardcoded to the literal `'normal'`
+  regardless of direction. The write itself is untouched.
+
+This is the root fix for the 2026-08-29 AltifyAI 24->23 rollback block: both functions'
+kill/promotion gate previously fired on EVERY departure from a gate stage regardless of direction,
+demanding an approved chairman decision even for a sanctioned retreat — which would have required
+fabricating a false approved-proceed row to satisfy. See the migration file's own header for the
+full incident narrative and this SD's `tests/unit/direction-aware-kill-gate-migration-shape.test.js`
+for the two-sided contract proof (forward crossing still hard-requires approval; rollback requires
+cited provenance, never a fabricated approval).
+
+`scripts/lint/stage-advancement-chokepoint-allowlist.json` updated to add this file (same
+disposition class as the 2026-08-25 and 2026-08-29 entries above: a staged, chairman-gated file
+re-emitting already-censused RPC bodies via `CREATE OR REPLACE`).
