@@ -48,6 +48,12 @@ const ALLOWLIST_EXACT = new Set([
   'lib/repo-paths.cjs',
   'lib/ship/auto-merge.mjs',
   'scripts/lint-repo-resolution-drift.mjs',
+  // SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001-F (FR-1): computeReposForSD's canonical
+  // implementation, extracted verbatim from the already-allowlisted (deferred) gates.js entry
+  // below -- the literal platform-repo strings are the SAME pre-existing content relocated to
+  // its new canonical home, not new drift. Genuinely a self-anchor now, same class as
+  // lib/repo-paths.js (both are the intentional named resolvers this lint exists to protect).
+  'lib/sub-agents/repo-target-resolver.js',
   // Deferred — pre-existing sites surfaced by this lint's first run (census: deferred-with-owner)
   'lib/deleteVentureFully.js',
   'lib/multi-repo/index.js',
