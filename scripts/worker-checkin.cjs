@@ -536,6 +536,14 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
   const out = [];
   for (const m of push) {
     const p = m.payload || {};
+    // QF-20260830-958: payload.actioned_at is the retirement stamp used by ack tools
+    // (coordinator-ack-adam.cjs, worker-ack-directive.cjs/worker-ack-advisory.cjs) — none of
+    // them touch the acknowledged_at DB column this function's own unackedOnly query filters
+    // on, so a row retired that way still passed through here, re-rendering verbatim. Skipping
+    // it here also removes the unattributed acknowledged_at write below: that stamp was this
+    // loop itself, self-triggered on the second pass of the very row it should never have
+    // re-surfaced.
+    if (p.actioned_at) continue;
     const kind = p.kind || null;
     const isDirective = !!(kind && ws.DIRECTIVE_KINDS.includes(kind));
     // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is in DIRECTIVE_KINDS,
