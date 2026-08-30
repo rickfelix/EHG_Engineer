@@ -55,7 +55,7 @@ import { resolve } from 'path';
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
 import { isFixtureVenture } from '../../../lib/eva/chairman-decision-watcher.js';
 import { _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
-import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
+import { insertGuarded, CLASSIFICATION, purgeStaleRealDbResidue } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -155,6 +155,9 @@ describe.skipIf(!HAS_REAL_DB)('High-consequence blocking gate — REAL DB, both 
   let ventureDaemonBlock, ventureDaemonAdvisory;
 
   beforeAll(async () => {
+    // QF-20260830-177: sweep any prior crashed run's residue before minting new fixtures.
+    await purgeStaleRealDbResidue(supabase, { namePrefix: 'HCGate-RealDB-' });
+
     // Flip Stage 6 to high-consequence for the duration of this suite only.
     const { error: flagErr } = await supabase
       .from('venture_stages').update({ is_high_consequence: true }).eq('stage_number', STAGE);

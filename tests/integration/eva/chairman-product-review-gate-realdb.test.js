@@ -56,7 +56,7 @@ vi.mock('../../../lib/eva/chairman-product-review.js', () => ({
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
 import { isFixtureVenture } from '../../../lib/eva/chairman-decision-watcher.js';
-import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
+import { insertGuarded, CLASSIFICATION, purgeStaleRealDbResidue } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
@@ -165,6 +165,9 @@ describe.skipIf(!HAS_REAL_DB)('Chairman product-review gate — REAL DB, both ch
   let ventureC; // adversarial coexistence
 
   beforeAll(async () => {
+    // QF-20260830-177: sweep any prior crashed run's residue before minting new fixtures.
+    await purgeStaleRealDbResidue(supabase, { namePrefix: 'ProductReviewGate-RealDB-' });
+
     ventureA = await createVenture('rpc');
     ventureB = await createVenture('worker');
     ventureC = await createVenture('adv');
