@@ -11,6 +11,7 @@ import {
   createOrUpsertNode, setStatus, setBlocker,
   rollupParentStatus, bubbleBlockers, sumTokenCost, syncParentRollupStatus,
   STATUSES, TIERS, SOURCE_KINDS,
+  encodeManualChildMeta, parseManualChildMeta, isManualChildStale, MANUAL_CHILD_REVIEW_WINDOW_DAYS,
 } from '../../../lib/adam/task-ledger.js';
 
 /** In-memory adam_task_ledger stub. upsert dedups on (source_kind, source_ref) like the UNIQUE key. */
@@ -92,17 +93,99 @@ describe('createOrUpsertNode — idempotent on (source_kind, source_ref)', () =>
   });
 });
 
+describe('QF-20260830-690: manual child owner + review_by hygiene', () => {
+  it('createOrUpsertNode REJECTS a manual child with no owner (fail-loud)', async () => {
+    const sb = makeSupabase();
+    await expect(createOrUpsertNode(sb, {
+      source_kind: 'manual', source_ref: 'r3', tier: 'child', title: 'sub',
+    })).rejects.toThrow(/owner/);
+  });
+
+  it('createOrUpsertNode encodes owner + a default 14-day review_by into risk when the caller omits review_by', async () => {
+    const sb = makeSupabase();
+    const before = Date.now();
+    const n = await createOrUpsertNode(sb, {
+      source_kind: 'manual', source_ref: 'r4', tier: 'child', title: 'sub', owner: 'hotel-5',
+    });
+    const meta = parseManualChildMeta(n.risk);
+    expect(meta.owner).toBe('hotel-5');
+    const days = (new Date(meta.review_by).getTime() - before) / (24 * 60 * 60 * 1000);
+    expect(days).toBeGreaterThan(MANUAL_CHILD_REVIEW_WINDOW_DAYS - 1);
+    expect(days).toBeLessThan(MANUAL_CHILD_REVIEW_WINDOW_DAYS + 1);
+  });
+
+  it('createOrUpsertNode respects an explicit review_by instead of defaulting', async () => {
+    const sb = makeSupabase();
+    const n = await createOrUpsertNode(sb, {
+      source_kind: 'manual', source_ref: 'r5', tier: 'child', title: 'sub',
+      owner: 'hotel-5', review_by: '2026-01-01T00:00:00.000Z',
+    });
+    expect(parseManualChildMeta(n.risk)).toEqual({ owner: 'hotel-5', review_by: '2026-01-01T00:00:00.000Z' });
+  });
+
+  it('APPENDS the meta tag onto an existing risk narrative rather than clobbering it', async () => {
+    const sb = makeSupabase();
+    const n = await createOrUpsertNode(sb, {
+      source_kind: 'manual', source_ref: 'r7', tier: 'child', title: 'sub',
+      owner: 'hotel-5', review_by: '2026-09-01T00:00:00.000Z',
+      risk: 'this row genuinely carries risk narrative text, do not lose it',
+    });
+    expect(n.risk).toContain('this row genuinely carries risk narrative text, do not lose it');
+    expect(parseManualChildMeta(n.risk)).toEqual({ owner: 'hotel-5', review_by: '2026-09-01T00:00:00.000Z' });
+  });
+
+  it('parent-tier and non-manual rows are never required to carry an owner', async () => {
+    const sb = makeSupabase();
+    await expect(createOrUpsertNode(sb, {
+      source_kind: 'manual', source_ref: 'r6', tier: 'parent', title: 'anchor',
+    })).resolves.toBeTruthy();
+    await expect(createOrUpsertNode(sb, {
+      source_kind: 'sourced_sd', source_ref: 'SD-9', tier: 'child', title: 'sub',
+    })).resolves.toBeTruthy();
+  });
+
+  it('isManualChildStale (PURE, two-sided): fires past the 7-day silence window, clears the moment updated_at moves', () => {
+    const now = Date.parse('2026-08-30T00:00:00.000Z');
+    const stale = {
+      tier: 'child', source_kind: 'manual', status: 'open',
+      updated_at: '2026-08-22T00:00:00.000Z', // 8 days untouched
+      risk: encodeManualChildMeta('hotel-5', '2027-01-01T00:00:00.000Z'), // review_by not yet due
+    };
+    expect(isManualChildStale(stale, now)).toBe(true);
+    const touched = { ...stale, updated_at: '2026-08-29T00:00:00.000Z' }; // 1 day — touching it clears the line
+    expect(isManualChildStale(touched, now)).toBe(false);
+  });
+
+  it('isManualChildStale also fires when review_by is overdue, even if recently touched', () => {
+    const now = Date.parse('2026-08-30T00:00:00.000Z');
+    const overdue = {
+      tier: 'child', source_kind: 'manual', status: 'in_progress',
+      updated_at: '2026-08-29T00:00:00.000Z', // touched yesterday
+      risk: encodeManualChildMeta('hotel-5', '2026-08-01T00:00:00.000Z'), // review_by already past
+    };
+    expect(isManualChildStale(overdue, now)).toBe(true);
+  });
+
+  it('isManualChildStale never fires for a parent-tier anchor or a done/cancelled child', () => {
+    const now = Date.parse('2026-08-30T00:00:00.000Z');
+    const parent = { tier: 'parent', source_kind: 'manual', status: 'open', updated_at: '2026-08-01T00:00:00.000Z' };
+    expect(isManualChildStale(parent, now)).toBe(false);
+    const done = { tier: 'child', source_kind: 'manual', status: 'done', updated_at: '2026-08-01T00:00:00.000Z' };
+    expect(isManualChildStale(done, now)).toBe(false);
+  });
+});
+
 describe('setStatus / setBlocker', () => {
   it('setStatus updates the node and rejects a non-enum status', async () => {
     const sb = makeSupabase();
-    const n = await createOrUpsertNode(sb, { source_kind: 'manual', source_ref: 'r1', tier: 'child', title: 'sub' });
+    const n = await createOrUpsertNode(sb, { source_kind: 'manual', source_ref: 'r1', tier: 'child', title: 'sub', owner: 'hotel-5' });
     await setStatus(sb, n.id, 'in_progress');
     expect(sb._ledger[0].status).toBe('in_progress');
     await expect(setStatus(sb, n.id, 'nope')).rejects.toThrow(/status/);
   });
   it('setBlocker materializes and clears a blocker', async () => {
     const sb = makeSupabase();
-    const n = await createOrUpsertNode(sb, { source_kind: 'manual', source_ref: 'r2', tier: 'child', title: 'sub' });
+    const n = await createOrUpsertNode(sb, { source_kind: 'manual', source_ref: 'r2', tier: 'child', title: 'sub', owner: 'hotel-5' });
     await setBlocker(sb, n.id, 'waiting on API key');
     expect(sb._ledger[0].blocker).toBe('waiting on API key');
     await setBlocker(sb, n.id, null);
