@@ -20,6 +20,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -87,7 +88,9 @@ async function main() {
   console.log(`Updated ${updated} row(s) total.${checkClassDeferred ? ' check_class rejected (migration not yet applied) — deferred to phase 2, probe relabeled only.' : ''}`);
 }
 
-main().catch((e) => {
-  console.error('FAILED:', e.message || e);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('FAILED:', e.message || e);
+    process.exit(1);
+  });
+}
