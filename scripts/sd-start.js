@@ -65,6 +65,8 @@ import { decideOwnConflictReattach } from '../lib/exec-context-guard.mjs';
 // base is behind origin/main, so a worker never silently builds on a stale base (a merge-as-is would
 // revert sibling work that landed after the base commit). Fail-open; reuses checkout-freshness.
 import { runStaleBaseGuard } from '../lib/worktree/stale-base-guard.mjs';
+// QF-20260830-380: post-provision worktree index integrity check (mass-deletion anomaly detector).
+import { checkWorktreeIndexIntegrity, renderIndexCorruptMessage } from '../lib/worktree/post-provision-integrity-check.mjs';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 import {
   evaluateInstallDecision,
@@ -1594,6 +1596,20 @@ async function main() {
       runStaleBaseGuard({ cwd: wtCwd, autoRebase });
     }
   } catch { /* fail-open: a stale-base check must never block sd-start */ }
+
+  // 4.8. QF-20260830-380: post-provision worktree index integrity check. A git command killed
+  // mid-write (e.g. a short Bash timeout) right after provisioning can leave a stale index.lock
+  // plus every tracked file staged-deleted; catch that here rather than letting the next command
+  // trust a corrupt tree silently.
+  try {
+    const wtCwd = worktreeInfo?.cwd || worktreeInfo?.worktree?.path || null;
+    if (wtCwd) {
+      const integrity = checkWorktreeIndexIntegrity({ cwd: wtCwd });
+      if (integrity.corrupt) {
+        console.error(`${colors.red}${renderIndexCorruptMessage(wtCwd, integrity)}${colors.reset}`);
+      }
+    }
+  } catch { /* fail-open: an integrity check must never block sd-start */ }
 
   // 4.9. SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Pre-claim health check
   // Verify handoff chain integrity before proceeding
