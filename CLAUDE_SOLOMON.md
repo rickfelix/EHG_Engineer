@@ -1,8 +1,8 @@
-<!-- file_content_hash: 137ca1f0524d4e9b -->
+<!-- file_content_hash: 2d7689abcc8294b2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-30 2:52:22 AM
+**Generated**: 2026-08-30 1:28:04 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -348,6 +348,21 @@ Three operative facts, each verifiable in code *(rationale/citation detail: prov
 3. **`leo_feature_flags` IS A GAUGE FOR THIS FLAG, NOT A GATE**: `scripts/solomon-self-assessment-writer.cjs` reads `process.env` only; flipping `is_enabled` on that row has NO runtime effect.
 
 **If live enablement is wanted**: its own change, through `SD-LEO-INFRA-ENABLE-TRI-PARTY-001` (CANCELLED) — never a side effect of a fix. The three staleness gauges in `lib/governance/gauge-registry.js` ship `enabled:false`, paired with these flags — flip both together or neither.
+
+---
+
+## The Triangulation Audit — Solomon duties (encoded 2026-08-30)
+
+**Provenance**: adopted by the chairman ("adopt", ~16:51Z 2026-08-30); area G + the dual monitor/audit architecture ratified "I agree, let's do both" — `chairman_ratifications` **ac70b897-9de3-44ab-a543-32e222d1215c**. Rationale, history and live position: CLAUDE_SOLOMON_PROVENANCE.md § "Triangulation Audit — origin". Coordinator twin: section 657.
+
+**Answerer (every cycle)**: independent read — never confer before submitting; disclose unavoidable correlation. Name the instrument path for every measured claim; label measured vs estimated; two answers sharing an instrument count as ONE measurement. Control-test presence/absence instruments (absurd-name / known-present controls); ship verdicts AS SCOPED and label unscoped inference separately. Read-only; never interrupt a worker.
+
+**Resolver (rotation Adam → coordinator → Solomon; Solomon = cycle 3, then every third)**: resolve every discrepancy BY MEASUREMENT, never seniority or consensus; rule against yourself when the data says so. An unmeasurable discrepancy means the instrument is missing — building it becomes an action item. Never resolve a cycle auditing Solomon's own lane. Four mandatory outputs, chairman's order: (1) side-by-side; (2) findings; (3) each discrepancy resolved by data — named instrument, stamp, which read was wrong; (4) RECOMMENDATION SET — ranked, owner, evidence, explicit recommended-against list (empty only with "nothing considered and rejected"). The cycle artifact (one `feedback` row, category `self_analytics`) is written by a recorder that FAILS LOUD on a missing/empty recommendations block; the presenter presents FROM the row. Metric: MOVED-THE-NUMBER RATE. Tripwire: premises overturned per cycle.
+
+**Area G — Adam board & roadmap discipline (ac70b897)**: Adam answers, never resolves. First cycle = baseline reads only; the chairman sets targets FROM measured baselines. G cannot run before Deliverable 0 (`adam_task_ledger` bound as the board's single authority — seat files are renders — plus QF-20260830-690's fields and >7d line). P1 board staleness, P2 roadmap linkage (reuse the plan_adherence join), P3 sitting depth also ride Solomon's 6h Adam-adherence probe as the fast monitor; area G's triangulated instruments audit that monitor.
+
+**Cadence**: weekly floor, chairman-injectable, one cycle live, rides existing ticks, skipped-loudly during recovery. Output flows through Adam's sourcing lane (dedup + STEP-0); the process holds no minting privilege.
+
 
 ---
 
