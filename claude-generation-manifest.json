@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-29T18:17:30.081Z",
-  "git_commit": "3baeb40b",
-  "db_snapshot_hash": "6b87240b55182e2b",
+  "generated_at": "2026-08-30T10:19:34.730Z",
+  "git_commit": "bee9c91a",
+  "db_snapshot_hash": "683d058bb52a5344",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -13,10 +13,10 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 77624,
-      "bytes": 78129,
-      "estimated_tokens": 19406,
-      "content_hash": "00733980fb997340",
+      "chars": 76860,
+      "bytes": 77367,
+      "estimated_tokens": 19215,
+      "content_hash": "349971835616a7c0",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
@@ -24,7 +24,7 @@
       "chars": 16838,
       "bytes": 16914,
       "estimated_tokens": 4210,
-      "content_hash": "662a5e296821d64f",
+      "content_hash": "703a81dd83760bd0",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_MANUAL.md"
     },
     "CLAUDE_LEAD.md": {
@@ -32,7 +32,7 @@
       "chars": 58425,
       "bytes": 58621,
       "estimated_tokens": 14607,
-      "content_hash": "87e3e7e6f50795e1",
+      "content_hash": "c8a2507c74eee2a4",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
@@ -40,7 +40,7 @@
       "chars": 8818,
       "bytes": 8862,
       "estimated_tokens": 2205,
-      "content_hash": "a48e3a2f2dac5c6b",
+      "content_hash": "a1cb6675a53d40d9",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
@@ -48,7 +48,7 @@
       "chars": 54854,
       "bytes": 55111,
       "estimated_tokens": 13714,
-      "content_hash": "d4821b12d516252e",
+      "content_hash": "309906841a681948",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
@@ -56,7 +56,7 @@
       "chars": 38353,
       "bytes": 38460,
       "estimated_tokens": 9589,
-      "content_hash": "0f7546c90b57103e",
+      "content_hash": "3fc55891ba64e497",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
@@ -64,15 +64,15 @@
       "chars": 92843,
       "bytes": 93277,
       "estimated_tokens": 23211,
-      "content_hash": "b3355ff7d3722c0b",
+      "content_hash": "87c675c44bab773a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 59629,
-      "bytes": 60239,
-      "estimated_tokens": 14908,
-      "content_hash": "d6a43d6320e86ab3",
+      "chars": 61652,
+      "bytes": 62276,
+      "estimated_tokens": 15413,
+      "content_hash": "391a57bfee3db5ab",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -80,7 +80,7 @@
       "chars": 15698,
       "bytes": 15842,
       "estimated_tokens": 3925,
-      "content_hash": "a8900fdcb52aa329",
+      "content_hash": "bb05df1a8a6ec820",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
@@ -88,15 +88,15 @@
       "chars": 6924,
       "bytes": 6988,
       "estimated_tokens": 1731,
-      "content_hash": "735a838c7e956416",
+      "content_hash": "f5949b1b7235d53c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 25532,
-      "bytes": 25726,
-      "estimated_tokens": 6383,
-      "content_hash": "f4a2a6cef0bcd151",
+      "chars": 27079,
+      "bytes": 27279,
+      "estimated_tokens": 6770,
+      "content_hash": "f47c1e0b408663be",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
@@ -104,7 +104,7 @@
       "chars": 4557,
       "bytes": 4593,
       "estimated_tokens": 1140,
-      "content_hash": "289813add8b3f937",
+      "content_hash": "1e4ab94efeab8a09",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
@@ -112,7 +112,7 @@
       "chars": 2126,
       "bytes": 2138,
       "estimated_tokens": 532,
-      "content_hash": "41f5a27dc517ce0d",
+      "content_hash": "ea7c58b62fc59328",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
@@ -120,7 +120,7 @@
       "chars": 56454,
       "bytes": 56949,
       "estimated_tokens": 14114,
-      "content_hash": "7167726a821a4c90",
+      "content_hash": "137ca1f0524d4e9b",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
@@ -128,7 +128,7 @@
       "chars": 13016,
       "bytes": 13124,
       "estimated_tokens": 3254,
-      "content_hash": "314c9a01ed8bbdd4",
+      "content_hash": "ddf3b9f517ea9f38",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
@@ -136,7 +136,7 @@
       "chars": 11727,
       "bytes": 11838,
       "estimated_tokens": 2932,
-      "content_hash": "63eb74200432567d",
+      "content_hash": "ef5d1a9a2a69e3bd",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
@@ -144,7 +144,7 @@
       "chars": 3580,
       "bytes": 3607,
       "estimated_tokens": 895,
-      "content_hash": "16862a827ddc272b",
+      "content_hash": "286b17c59e018e05",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
     },
     "CLAUDE_DIGEST.md": {
@@ -152,7 +152,7 @@
       "chars": 9611,
       "bytes": 9653,
       "estimated_tokens": 2403,
-      "content_hash": "a99644eb7255a191",
+      "content_hash": "5e65a820b43c377b",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
@@ -160,7 +160,7 @@
       "chars": 13265,
       "bytes": 13375,
       "estimated_tokens": 3317,
-      "content_hash": "ecbc9e10d99e6e8c",
+      "content_hash": "80d365787a16f29b",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
@@ -168,7 +168,7 @@
       "chars": 5551,
       "bytes": 5571,
       "estimated_tokens": 1388,
-      "content_hash": "c679b7dcebd2cc9d",
+      "content_hash": "d0f735185d211298",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
@@ -176,7 +176,7 @@
       "chars": 8541,
       "bytes": 8581,
       "estimated_tokens": 2136,
-      "content_hash": "9b5320e365cf6883",
+      "content_hash": "b0673c4038596f35",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
@@ -184,7 +184,7 @@
       "chars": 10964,
       "bytes": 11046,
       "estimated_tokens": 2741,
-      "content_hash": "72f1b4ae332a5f23",
+      "content_hash": "0800f19f60adecba",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
@@ -192,15 +192,15 @@
       "chars": 17734,
       "bytes": 18042,
       "estimated_tokens": 4434,
-      "content_hash": "713f01c398ed646a",
+      "content_hash": "aa4e99103525f07e",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
-      "chars": 8498,
-      "bytes": 8566,
-      "estimated_tokens": 2125,
-      "content_hash": "5c987752851941bf",
+      "chars": 9000,
+      "bytes": 9070,
+      "estimated_tokens": 2250,
+      "content_hash": "1b181d685faa10af",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
@@ -208,12 +208,12 @@
       "chars": 3959,
       "bytes": 3997,
       "estimated_tokens": 990,
-      "content_hash": "5ac4ca2c952bc516",
+      "content_hash": "22e323828ead337d",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "c1fd355766ed1404",
+    "global": "14e8ef384e8c3245",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -344,7 +344,7 @@
       "361": "676eb8472b459dde",
       "362": "973ecfa886452ba4",
       "363": "49dae90de190bf06",
-      "364": "6f412b7f8aa9c9eb",
+      "364": "9d8e99a6c28e14c4",
       "365": "d0f3fd2281b7fb22",
       "366": "9201b170e0f90729",
       "369": "999bfb4d0c2ec34f",
@@ -467,10 +467,10 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "2a735511accb04a0",
+      "601": "d7039b9c8bb9b647",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
-      "605": "44bc3efdff5b9875",
+      "605": "51d8411e1369713b",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
@@ -490,11 +490,12 @@
       "632": "f3ebf4de6f9fefbe",
       "633": "12cf4526e9c9fd09",
       "634": "6518b5f83a72be9e",
-      "635": "4d256bd4f129b597",
+      "635": "03664bd0f9d3fb90",
       "636": "31efdc24eea9e73c",
       "653": "29214fac1aff5e6f",
       "654": "daf0a7933d7819ec",
-      "655": "59137a758bb13a65"
+      "655": "59137a758bb13a65",
+      "656": "d2ccb43f1edf9602"
     },
     "meta": {
       "94": {
@@ -1896,6 +1897,11 @@
         "section_type": "sub_agent_routing_table_detail",
         "target_file": null,
         "title": "Sub-Agent Keyword Routing Table"
+      },
+      "656": {
+        "section_type": "genesis_codebase_detail",
+        "target_file": null,
+        "title": "Genesis Codebase Locations (detail)"
       }
     }
   }

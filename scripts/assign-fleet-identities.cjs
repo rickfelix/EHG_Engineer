@@ -380,11 +380,13 @@ function classifyWorkerNaming(worker, preRegisteredCanaries, forceReassign, isCa
   // renamed mid-drill. Delegated to the canonical predicate instead of re-typing the prefix test,
   // which already exists in five other places in this repo.
   if (isCanaryMd(worker.metadata)) return 'canary_metadata';
-  // QF-20260627-108 (FR-1): a worker is "assigned" ONLY if its callsign is in its tier band
-  // (effort-encoded SoT). A callsign from the wrong band (e.g. a tier-2 worker still holding
-  // "Bravo") is re-derived, so the chairman scheme self-heals instead of being preserved-wrong.
-  if (identity?.callsign && identity?.color && !forceReassign
-      && callsignInTierBand(identity.callsign, tierRankOf(worker))) {
+  // QF-20260829-312: a callsign is an IDENTITY, kept for a seat's lifetime; tier is a CURRENT
+  // ATTRIBUTE, read at display time only (see the tier_rank on the SET_IDENTITY payload below).
+  // callsignInTierBand is no longer consulted here — a worker with an already-assigned callsign
+  // stays 'in_band' regardless of tier-rank drift, so correcting a tier stamp never re-identifies
+  // a working seat (superseded QF-20260627-108's "self-heal by renaming" behavior, which is the
+  // exact bug this fix removes — see the incident write-up in this QF's description).
+  if (identity?.callsign && identity?.color && !forceReassign) {
     return 'in_band';
   }
   return 'needs_assignment';
@@ -663,7 +665,9 @@ async function main() {
           message_type: 'SET_IDENTITY',
           subject: `Identity update: ${id.callsign} now on ${currentSdLabel}`,
           body: `Your display name updated to "${expectedDisplayName}" (SD changed).`,
-          payload: { color: id.color, callsign: id.callsign, display_name: expectedDisplayName },
+          // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
+          // display only — it never feeds back into whether this worker gets renamed.
+          payload: { color: id.color, callsign: id.callsign, display_name: expectedDisplayName, tier_rank: tierRankOf(w) },
           sender_type: 'coordinator',
           expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
         });
@@ -722,6 +726,13 @@ async function main() {
     const sdLabel = worker.sd_key || 'idle';
     const displayName = `${callsign} | ${sdLabel}`;
 
+    // QF-20260829-976: capture the OUTGOING identity before it's overwritten below, so the
+    // SET_IDENTITY message can say whether this is a RENAME (a prior callsign existed and
+    // differs) or a first assignment (no prior identity at all). Without this, a worker mid-EXEC
+    // has no way to tell the message apart from an initial assignment and no reason to go back
+    // and correct a now-stale callsign already written into a commit/PR/evidence file.
+    const priorIdentity = worker.metadata?.fleet_identity || null;
+
     // Store identity in session metadata
     const metadata = { ...(worker.metadata || {}) };
     metadata.fleet_identity = {
@@ -756,9 +767,11 @@ async function main() {
         target_session: worker.session_id,
         target_sd: worker.sd_key || null,
         message_type: 'SET_IDENTITY',
-        subject: `Identity: ${callsign} (${color})`,
-        body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
-        payload: { color, callsign, display_name: displayName },
+        // QF-20260829-976: distinguishes a RENAME (prior callsign existed and differs) from a
+        // first assignment, so a worker mid-build can tell whether a now-stale callsign it wrote
+        // elsewhere needs correcting. See buildIdentityMessage's docblock for the two-sided
+        // contract this composes.
+        ...buildIdentityMessage({ priorIdentity, callsign, color, displayName, tierRank: tierRankOf(worker) }),
         sender_type: 'coordinator',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
       });
@@ -789,12 +802,42 @@ async function main() {
  * coordinator's account. A blank Account column is honest; a confidently-wrong one is worse than
  * blank, which is the whole failure class this QF is fixing.
  */
+/**
+ * QF-20260829-976: builds the SET_IDENTITY subject/body/payload, distinguishing a RENAME (a
+ * prior callsign existed and differs from the new one) from a first assignment (no prior
+ * identity at all). Pure — no DB access — so it's independently testable without mocking the
+ * naming loop. A first assignment must produce NO prior_callsign key and no rename wording; a
+ * rename must produce BOTH names in the subject/body AND prior_callsign in the payload.
+ * @param {{priorIdentity: {callsign:string}|null, callsign:string, color:string, displayName:string, tierRank:*}} params
+ * @returns {{subject:string, body:string, payload:object}}
+ */
+function buildIdentityMessage({ priorIdentity, callsign, color, displayName, tierRank }) {
+  const isRename = !!priorIdentity && priorIdentity.callsign !== callsign;
+
+  if (!isRename) {
+    return {
+      subject: `Identity: ${callsign} (${color})`,
+      body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
+      payload: { color, callsign, display_name: displayName, tier_rank: tierRank }
+    };
+  }
+
+  return {
+    subject: `Identity CHANGED: ${priorIdentity.callsign} -> ${callsign}`,
+    body: `The coordinator RENAMED your callsign from "${priorIdentity.callsign}" to "${callsign}" (color "${color}"). Your statusline will update automatically. You may also run: /color ${color}\n\nAny commit message, PR body, or evidence file you wrote referencing "${priorIdentity.callsign}" before this message was written is now stale — correct it if practical.\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
+    payload: {
+      color, callsign, display_name: displayName, tier_rank: tierRank,
+      prior_callsign: priorIdentity.callsign, renamed_at: new Date().toISOString()
+    }
+  };
+}
+
 function identityAccountUuid8(metadata, accountIdentity) {
   if (metadata && metadata.account_profile) return null;
   return (accountIdentity && accountIdentity.accountUuid8) || null;
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, planNamingRun, reserveCanaryLabels, identityNeedsRebroadcast, identityAccountUuid8 };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, planNamingRun, reserveCanaryLabels, identityNeedsRebroadcast, identityAccountUuid8, buildIdentityMessage };
 
 if (require.main === module) {
   main().then(async () => {

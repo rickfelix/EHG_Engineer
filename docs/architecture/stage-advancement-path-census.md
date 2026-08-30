@@ -298,3 +298,66 @@ REPLACE`).
 `scripts/lint/stage-advancement-chokepoint-lint.mjs` (FR-5) fails a PR that introduces a new raw
 `current_lifecycle_stage` write outside the 8 locations enumerated above. See that script's own
 allowlist config for the exact matched patterns.
+
+## Kill-gate array-literal census (SD-LEO-INFRA-REJECT-PATH-VENTURE-001)
+
+A SIBLING literal class to the `current_lifecycle_stage` writes above: hardcoded kill-stage
+`ARRAY[3, 5, 13, ...]` literals gating a venture-kill side-effect, derived from `venture_stages`
+at authoring time instead of read live. This class escaped this census entirely until the
+2026-08-29 AltifyAI mechanical-kill incident, because it lives in **chairman-gated SQL and live pg
+function bodies** rather than the migration files this census was originally scoped to (see the
+FR-1 disposition notes above, which only enumerate `current_lifecycle_stage`-write paths). This is
+the census-closure this SD's own scope calls for.
+
+| # | Path | Location | Disposition |
+|---|------|----------|--------------|
+| 1 | `fn_chairman_decide` (kill-gate check) | `database/chairman-gated/20260803_chairman_decide_null_safe_and_type_honest.sql:216` | **FIXED** (SD-LEO-INFRA-REJECT-PATH-VENTURE-001) — `ARRAY[3,5,13,23]` replaced by `fn_is_kill_gate_stage()`, a new helper reading `venture_stages.gate_type='kill'` live. |
+| 2 | `reject_chairman_decision` (kill-gate check) | live function body (staged fix: `database/chairman-gated/20260829_reject_path_type_aware_and_live_kill_gate.sql`) | **FIXED** — same replacement; this function additionally gained a type-aware guard it previously lacked entirely. |
+| 3 | `fn_write_kill_audit_trail` (kill-gate check) | live function body (staged fix: same 20260829 migration) | **FIXED** — a FOURTH, previously-unnamed occurrence of the same literal, found only by reading the shared audit-trail helper both functions above call. |
+| 4 | `kill_venture()` | live function body | **AUDITED, CLEAN** — no hardcoded stage array; performs an unconditional, `fn_is_chairman()`-authorized explicit kill with no gate-stage branching at all, so this literal class does not apply. |
+
+**Why the 08-03 fix left this class untouched**: that migration made the decision *vocabulary*
+type-honest (which `decision` value a reject writes) and never touched the venture *side-effect*
+block at all — the array literal was orthogonal to what it was fixing, so a reviewer reading that
+diff had no reason to notice it. Root-caused in `SD-LEO-INFRA-REJECT-PATH-VENTURE-001`'s LEAD-phase
+Explore pass via direct `pg_get_functiondef` reads of all 4 live functions, not from static file
+review alone (the 4th site, `fn_write_kill_audit_trail`, is not named anywhere in that SD's own
+sourcing description — it surfaced only by reading the shared helper, not the two callers the
+incident report named).
+
+**Standing guard going forward**: any future kill-gate check MUST call `fn_is_kill_gate_stage()`
+rather than re-deriving the stage set inline — a repeat of this literal-drift class in a 5th
+function would mean this census section was written but not enforced.
+
+## Post-census addition (2026-08-30, SD-LEO-INFRA-DIRECTION-BLIND-KILL-001)
+
+`database/chairman-gated/20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql`
+(staged, chairman-gated, `@approved-by: PENDING`, never auto-applied) re-emits `CREATE OR REPLACE`
+bodies for both `advance_venture_stage()` (path #3 above) and `fn_advance_venture_stage()` (path
+#1, the chokepoint itself). The lint's static census-diff flagged the same 2
+`current_lifecycle_stage` write statements each function already carries — both are re-emissions
+of already-censused behavior, not new gaps:
+
+- `advance_venture_stage()`'s `SET current_lifecycle_stage = p_to_stage` — unchanged from path #3's
+  disposition; this `CREATE OR REPLACE` only adds direction-awareness to the function's
+  kill/promotion gate check (a NEW optional trailing `p_rollback_provenance` parameter) and derives
+  `transition_type` server-side from actual direction instead of trusting the caller. The write
+  itself is untouched.
+- `fn_advance_venture_stage()`'s `UPDATE ventures SET current_lifecycle_stage = p_to_stage, ...` —
+  unchanged from path #1's disposition; this `CREATE OR REPLACE` applies the identical
+  direction-aware restructuring to its own independent gate check (reusing the existing
+  `p_handoff_data` parameter for rollback provenance, no signature change) and fixes an
+  audit-honesty gap where `transition_type` was previously hardcoded to the literal `'normal'`
+  regardless of direction. The write itself is untouched.
+
+This is the root fix for the 2026-08-29 AltifyAI 24->23 rollback block: both functions'
+kill/promotion gate previously fired on EVERY departure from a gate stage regardless of direction,
+demanding an approved chairman decision even for a sanctioned retreat — which would have required
+fabricating a false approved-proceed row to satisfy. See the migration file's own header for the
+full incident narrative and this SD's `tests/unit/direction-aware-kill-gate-migration-shape.test.js`
+for the two-sided contract proof (forward crossing still hard-requires approval; rollback requires
+cited provenance, never a fabricated approval).
+
+`scripts/lint/stage-advancement-chokepoint-allowlist.json` updated to add this file (same
+disposition class as the 2026-08-25 and 2026-08-29 entries above: a staged, chairman-gated file
+re-emitting already-censused RPC bodies via `CREATE OR REPLACE`).

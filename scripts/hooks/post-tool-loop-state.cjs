@@ -38,6 +38,10 @@ function isOff(v) {
   return f === 'off' || f === '0' || f === 'false';
 }
 
+// SD-LEO-INFRA-BURN-TELEMETRY-PER-001-B: extracted to lib/hooks/wake-metadata-patch.cjs
+// so it is unit-testable without triggering this file's top-level IIFE / process.exit(0).
+const { buildWakeMetadataPatch } = require('../../lib/hooks/wake-metadata-patch.cjs');
+
 (async () => {
   try {
     if (isOff(process.env.LEO_LOOP_STATE_SIGNAL)) return;
@@ -107,14 +111,8 @@ function isOff(v) {
         const priorMeta = typeof readSessionMetadata === 'function'
           ? await readSessionMetadata(sessionId)
           : null;
-        if (priorMeta && Number.isFinite(delaySeconds) && delaySeconds > 0) {
-          patch.metadata = {
-            ...priorMeta,
-            wake_armed_at: new Date(nowMs).toISOString(),
-            wake_delay_seconds: delaySeconds,
-            expected_wake_at: new Date(nowMs + delaySeconds * 1000).toISOString(),
-          };
-        }
+        const metaPatch = buildWakeMetadataPatch(priorMeta, delaySeconds, nowMs);
+        if (metaPatch) patch.metadata = metaPatch;
         await writeTelemetryAwait(sessionId, patch);
       } catch (e2) {
         process.stderr.write(`[post-tool-loop-state] silence-arm (non-fatal): ${e2.message}\n`);

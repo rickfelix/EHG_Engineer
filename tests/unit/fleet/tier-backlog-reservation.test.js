@@ -62,28 +62,32 @@ describe('FR-6 idleWorkerCensusByTier / lowerTierBacklog (pure)', () => {
 });
 
 // ---- TS-2: classifier branch -------------------------------------------------
+// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: these fixtures test the BACKLOG/enforcement mechanism
+// itself (not the provenance-advisory feature), so they carry min_tier_rank_reason to stay binding
+// -- otherwise the floor would be advisory and never reach the backlog axis at all.
 describe("FR-6 classifyDispatchIneligibility 'reserved_no_lower_backlog' branch", () => {
   const backlogPresent = { claimableBreakdown: { cumulative: { 1: 5 } }, idleCensus: { cumulative: { 1: 1 } } };
   const noBacklog = { claimableBreakdown: { cumulative: { 1: 1 } }, idleCensus: { cumulative: { 1: 1 } } };
+  const REASON = 'unit-test floor';
 
   it('admits a downward claim when the lower tier is genuinely backlogged', () => {
-    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1 } };
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: backlogPresent })).toBeNull();
   });
 
   it('reserves (blocks) a downward claim when the lower tier has no backlog', () => {
-    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1 } };
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: noBacklog }))
       .toBe('reserved_no_lower_backlog');
   });
 
   it('never reserves a claim AT the worker\'s own tier, regardless of backlog data', () => {
-    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 3 } };
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 3, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: noBacklog })).toBeNull();
   });
 
   it('above_worker_tier still takes precedence over the backlog axis', () => {
-    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 4 } };
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 4, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: backlogPresent }))
       .toBe('above_worker_tier');
   });
@@ -94,14 +98,19 @@ describe("FR-6 classifyDispatchIneligibility 'reserved_no_lower_backlog' branch"
   });
 
   it('is byte-identical WORK-DOWN-ALWAYS when ctx omits lower_tier_backlog_data (pre-FR-6 callers)', () => {
-    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1 } };
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true })).toBeNull();
   });
 
   it('degrade-to-1: the whole axis (including the new gate) is inert when tiering_active is not true', () => {
-    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1 } };
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: false, lower_tier_backlog_data: noBacklog })).toBeNull();
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, lower_tier_backlog_data: noBacklog })).toBeNull();
+  });
+
+  it('SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: an above-worker-tier floor with NO reason is advisory (unblocked)', () => {
+    const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 4 } };
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: noBacklog })).toBeNull();
   });
 });
 
@@ -176,11 +185,14 @@ function targetWorkerSession(tierRank) {
   };
 }
 
+// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: this helper's fixtures test the backlog/above-tier
+// ENFORCEMENT mechanics, not the provenance-advisory feature itself, so they carry a reason to
+// stay binding (an advisory, unreasoned floor would never reach these gates at all).
 function sdRow(key, minTierRank, { claimingSessionId = null } = {}) {
   return {
     sd_key: key, sd_type: 'infrastructure', status: 'in_progress', title: `Real SD ${key}`,
     description: 'A real description of reasonable length for belt-eligibility checks.',
-    metadata: { min_tier_rank: minTierRank }, target_application: 'EHG_Engineer',
+    metadata: { min_tier_rank: minTierRank, min_tier_rank_reason: 'unit-test floor' }, target_application: 'EHG_Engineer',
     claiming_session_id: claimingSessionId,
   };
 }
@@ -335,13 +347,47 @@ describe('FR-4 tierRankVerdict — the ONE shared tier-rank predicate', () => {
     expect(tierRankVerdict(NaN, 4)).toBe('tier_stamp_missing');
   });
 
-  it('workerTierRank below minTierRank -> above_worker_tier', () => {
-    expect(tierRankVerdict(2, 4)).toBe('above_worker_tier');
+  it('workerTierRank below minTierRank, provenance-bearing floor -> above_worker_tier (binding)', () => {
+    expect(tierRankVerdict(2, 4, { hasProvenance: true })).toBe('above_worker_tier');
+  });
+
+  it('SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: below minTierRank, NO provenance -> above_worker_tier_advisory (default)', () => {
+    expect(tierRankVerdict(2, 4)).toBe('above_worker_tier_advisory');
+    expect(tierRankVerdict(2, 4, {})).toBe('above_worker_tier_advisory');
+    expect(tierRankVerdict(2, 4, { hasProvenance: false })).toBe('above_worker_tier_advisory');
+  });
+
+  it('TIER_FLOOR_PROVENANCE_ADVISORY=off restores always-binding regardless of provenance', () => {
+    const prior = process.env.TIER_FLOOR_PROVENANCE_ADVISORY;
+    process.env.TIER_FLOOR_PROVENANCE_ADVISORY = 'off';
+    try {
+      expect(tierRankVerdict(2, 4)).toBe('above_worker_tier');
+      expect(tierRankVerdict(2, 4, { hasProvenance: false })).toBe('above_worker_tier');
+    } finally {
+      if (prior === undefined) delete process.env.TIER_FLOOR_PROVENANCE_ADVISORY;
+      else process.env.TIER_FLOOR_PROVENANCE_ADVISORY = prior;
+    }
   });
 
   it('workerTierRank at or above minTierRank -> null (allowed)', () => {
     expect(tierRankVerdict(4, 4)).toBeNull();
     expect(tierRankVerdict(5, 4)).toBeNull();
+  });
+
+  // SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (coordinator review question, verified): a
+  // provenance-free FLOOR and a MISSING WORKER STAMP are different states. Ruling 1B makes the
+  // former advisory; the latter stays hard-binding regardless of hasProvenance, because provenance
+  // describes the SD's floor, not the worker's own rank -- an unknown worker rank cannot be
+  // compared to any floor at all, justified or not. This pins the two-sided distinction so a future
+  // edit that folds hasProvenance into the tier_stamp_missing branch (producing a HALF-advisory
+  // floor read as "the same fix, just the other verdict string") is caught immediately.
+  it('a provenance-free floor above the seat -> advisory (unblocked)', () => {
+    expect(tierRankVerdict(2, 4, { hasProvenance: false })).toBe('above_worker_tier_advisory');
+  });
+  it('a MISSING worker stamp on a scored SD -> tier_stamp_missing, EVEN with hasProvenance:true', () => {
+    expect(tierRankVerdict(undefined, 4, { hasProvenance: true })).toBe('tier_stamp_missing');
+    expect(tierRankVerdict(undefined, 4, { hasProvenance: false })).toBe('tier_stamp_missing');
+    expect(tierRankVerdict(NaN, 4)).toBe('tier_stamp_missing');
   });
 
   // Source-pinned: proves BOTH call sites actually delegate to the shared function, not merely
@@ -351,8 +397,8 @@ describe('FR-4 tierRankVerdict — the ONE shared tier-rank predicate', () => {
   it('both claim-eligibility.cjs tierAxes and dispatch.cjs assertWorkerTierAllowed call tierRankVerdict', () => {
     const claimEligibilitySrc = readFileSync(new URL('../../../lib/fleet/claim-eligibility.cjs', import.meta.url), 'utf8');
     const dispatchSrc = readFileSync(new URL('../../../lib/coordinator/dispatch.cjs', import.meta.url), 'utf8');
-    expect(claimEligibilitySrc).toMatch(/tierRankVerdict\(ctx\.worker_tier_rank, minRank\)/);
-    expect(dispatchSrc).toMatch(/tierRankVerdict\(workerRank, minRank\)/);
+    expect(claimEligibilitySrc).toMatch(/tierRankVerdict\(ctx\.worker_tier_rank, minRank, \{ hasProvenance \}\)/);
+    expect(dispatchSrc).toMatch(/tierRankVerdict\(workerRank, minRank, \{ hasProvenance \}\)/);
   });
 });
 

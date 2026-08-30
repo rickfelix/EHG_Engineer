@@ -38,7 +38,9 @@ describe('FR-1: stamper SELECT carries no phantom column', () => {
 describe('FR-2: the tier-gate fails OPEN on an undefined min_tier_rank', () => {
   const unscored = { sd_key: 'SD-U', metadata: {} };               // no min_tier_rank
   const nonFinite = { sd_key: 'SD-NF', metadata: { min_tier_rank: 'x' } };
-  const ranked4 = { sd_key: 'SD-R4', metadata: { min_tier_rank: 4 } };
+  // SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: carries a reason to stay binding -- this fixture tests
+  // WORK-DOWN-NEVER-UP enforcement itself, not the provenance-advisory feature.
+  const ranked4 = { sd_key: 'SD-R4', metadata: { min_tier_rank: 4, min_tier_rank_reason: 'unit-test floor' } };
 
   it('classifyDispatchIneligibility does NOT block an undefined-rank SD (claimable by any rung incl. tier-1)', () => {
     for (const rung of [1, 2, 3, 4]) {

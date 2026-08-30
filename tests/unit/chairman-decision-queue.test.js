@@ -12,7 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   parseArgs, routeDecision, effectivePriority, sortPending, priorityRank,
-  partitionQueue, isTerminalRecord, isCorrectiveFinding,
+  partitionQueue, isTerminalRecord, isCorrectiveFinding, renderPendingLine,
 } from '../../lib/chairman/decision-queue.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -266,5 +266,50 @@ describe('QF-20260818-249 queue partitioning (records/correctives get their own 
     expect(out.records.length).toBe(15);
     expect(out.correctives.length).toBe(14);
     expect(out.pending.length).toBe(2);
+  });
+});
+
+describe('SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 AC-2 / PRD TS-3: a migration_apply pending decision is rendered by the REAL production render path', () => {
+  // The row shape below is EXACTLY what chairman_pending_decisions (built on
+  // chairman_all_decision_signals -> chairman_decisions branch, verified live via
+  // pg_get_viewdef) produces for a chairman_decisions row inserted by
+  // recordPendingDecision({ decisionType: 'migration_apply', title, ... }):
+  //   outer decision_type is hardcoded 'chairman_approval' by the view,
+  //   title = concat(cd.decision_type, ': ', left(cd.summary, 120)),
+  //   details.source_decision_type = cd.decision_type ('migration_apply'),
+  //   status = 'pending' (no hold recorded).
+  // This is the assertion Solomon amendment 06c7f195 / coordinator clause 8aaab70e require:
+  // the RENDERED output must CONTAIN the fixture item, not merely "the renderer ran".
+  const fixtureTitle = 'SD-LEO-INFRA-REJECT-PATH-VENTURE-001: apply chairman-gated migration database/chairman-gated/20260829_reject_path_type_aware_and_live_kill_gate.sql';
+  const fixtureRow = {
+    id: 'fixture-migration-apply-1',
+    decision_type: 'chairman_approval',
+    title: `migration_apply: ${fixtureTitle}`,
+    priority: 'critical',
+    status: 'pending',
+    blocking: false,
+    created_at: new Date().toISOString(),
+    recommendation: 'fix',
+    details: { source_decision_type: 'migration_apply' },
+  };
+
+  it('partitionQueue places the fixture in the pending lane (not swallowed as a record/corrective)', () => {
+    const { pending } = partitionQueue([fixtureRow]);
+    expect(pending).toHaveLength(1);
+    expect(pending[0].id).toBe('fixture-migration-apply-1');
+  });
+
+  it('renderPendingLine (the exact function scripts/chairman-decisions.mjs list calls per row) produces output containing the fixture title and decision id', () => {
+    const line = renderPendingLine(fixtureRow);
+    expect(line).toContain(fixtureRow.id);
+    expect(line).toContain(fixtureTitle);
+    expect(line).toContain('migration_apply');
+  });
+
+  it('a renderer that silently dropped this item class would fail this test (negative control: an empty pending set renders nothing)', () => {
+    const { pending } = partitionQueue([]);
+    const lines = pending.map((r) => renderPendingLine(r));
+    expect(lines).toHaveLength(0);
+    expect(lines.join('\n')).not.toContain(fixtureTitle);
   });
 });

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 00733980fb997340 -->
+<!-- file_content_hash: 349971835616a7c0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-29 2:17:30 PM
+**Generated**: 2026-08-30 6:19:34 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -732,27 +732,8 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 
 ## Genesis Codebase Locations
 
-**CRITICAL**: Genesis spans TWO codebases:
+**CRITICAL**: Genesis spans TWO codebases (EHG_Engineer for infra/patterns, EHG App for orchestrators/pipeline) — see CLAUDE_CORE_MANUAL.md for the full path table, quick-reference commands, and documentation links before touching Genesis code.
 
-| Codebase | Path | Contents |
-|----------|------|----------|
-| **EHG_Engineer** | `/lib/genesis/` | Infrastructure (quality gates, TTL, patterns) |
-| **EHG App** | `/lib/genesis/` | Orchestrators (ScaffoldEngine, repo-creator) |
-| **EHG App** | `/scripts/genesis/` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
-
-### Quick Reference
-| Task | Location |
-|------|----------|
-| Create simulation | `node /ehg/scripts/genesis/genesis-pipeline.js create "seed"` |
-| Ratify simulation | `POST /api/genesis/ratify` |
-| Query patterns | `EHG_Engineer/lib/genesis/pattern-library.js` |
-| Run quality gates | `EHG_Engineer/lib/genesis/quality-gates.js` |
-| Soul extraction (Stage 16) | `ehg/scripts/genesis/soul-extractor.js` |
-| Production gen (Stage 17) | `ehg/scripts/genesis/production-generator.js` |
-
-### Full Documentation
-- Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
-- Quick reference: `docs/reference/genesis-codebase-guide.md`
 
 ## Parent-Child SD Hierarchy
 
@@ -1470,7 +1451,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-08-29*
+*Generated from database: 2026-08-30*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

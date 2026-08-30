@@ -94,11 +94,13 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     expect(client.updates).toHaveLength(0);
   });
 
-  it('ORDERING PIN: the canary check runs BEFORE the tier-band idempotency check', async () => {
-    // Load-bearing. The tier-band check returns early only for an IN-BAND callsign; 'Canary-1' is in
-    // no band, so if the canary guard were placed after it, every canary would reach the re-derive
-    // path and the guard would never fire. A guard in the wrong position looks present and does
-    // nothing -- indistinguishable from correct unless the ordering itself is asserted.
+  it('ORDERING PIN: the canary check runs BEFORE the identity idempotency check', async () => {
+    // Load-bearing. QF-20260829-312 removed the tier-band gate from the idempotency check (an
+    // existing callsign is now always kept), but the ordering invariant still matters: if the
+    // canary guard ran AFTER the idempotency check, an unstamped canary with no callsign yet
+    // would fall through the idempotency check (no existing identity to keep) and reach the
+    // re-derive path, and the guard would never fire for it. A guard in the wrong position looks
+    // present and does nothing -- indistinguishable from correct unless ordering is asserted.
     const source = fs.readFileSync(path.join(HERE, '../../scripts/worker-checkin.cjs'), 'utf8');
     const fnStart = source.indexOf('async function assignFleetIdentityAtCheckin');
     expect(fnStart).toBeGreaterThan(-1);
@@ -124,11 +126,14 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     // spawn-time pre-registration disjunct so an UNSTAMPED canary (0-10s window, or reboot-respawn
     // where metadata is never written) is recognised before it can be renamed. This pin tracks the
     // delegation call instead of the removed literal; the ORDERING invariant it protects is unchanged.
+    // QF-20260829-312: the idempotency check itself no longer calls callsignInTierBand (tier-band
+    // membership no longer gates the rename decision) — the pin now tracks the replacement
+    // `existing.callsign && existing.color` condition instead.
     const canaryLine = codeLines.findIndex((l) => l.includes('isCanarySession(sb,'));
-    const tierBandLine = codeLines.findIndex((l) => l.includes('callsignInTierBand('));
+    const idempotencyLine = codeLines.findIndex((l) => l.includes('existing && existing.callsign && existing.color'));
     expect(canaryLine, 'canary guard not found in code').toBeGreaterThan(-1);
-    expect(tierBandLine, 'tier-band check not found in code').toBeGreaterThan(-1);
-    expect(canaryLine).toBeLessThan(tierBandLine);
+    expect(idempotencyLine, 'identity idempotency check not found in code').toBeGreaterThan(-1);
+    expect(canaryLine).toBeLessThan(idempotencyLine);
   });
 
   it('does NOT skip an ordinary worker — the guard must stay narrow', async () => {
@@ -142,13 +147,18 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     // The real discriminator is REACHABILITY, not the returned value. The canary branch returns BEFORE
     // the live-identity query used to pick a free slot; an ordinary worker must reach that query. So we
     // record whether it happened rather than inspecting the callsign.
+    //
+    // QF-20260829-312: the fixture must now be NAMELESS. Once assigned, a callsign is idempotent for
+    // life regardless of tier band, so an ESTABLISHED worker (with or without a canary-shaped callsign)
+    // never reaches the live query anymore — that's the fix. Only a genuinely unassigned, non-canary
+    // worker still exercises the reachability this test checks.
     let reachedLiveQuery = false;
     const client = fakeClient(
-      { fleet_identity: { callsign: 'Delta', color: 'red' }, tier_rank: 1 },
+      { tier_rank: 1 },
       { onLiveQuery: () => { reachedLiveQuery = true; } },
     );
     await assignFleetIdentityAtCheckin(client, 'sess-worker-1', null);
-    expect(reachedLiveQuery, 'an ordinary worker must NOT be short-circuited by the canary branch').toBe(true);
+    expect(reachedLiveQuery, 'an ordinary unassigned worker must NOT be short-circuited by the canary branch').toBe(true);
   });
 
   it('FR-7: an UNSTAMPED canary is protected by the pre-registration alone', async () => {
@@ -176,18 +186,25 @@ describe('FR-6 canary identity skip — the second clobber writer', () => {
     expect(reachedLiveQuery, 'an indeterminate check must not rename a nameless session').toBe(false);
   });
 
-  it('FR-7: but an ESTABLISHED worker still gets named when the check is indeterminate', async () => {
+  it('FR-7: an ESTABLISHED worker keeps its identity when the check is indeterminate (never frozen null)', async () => {
     // The other half, and the reason the fail-closed is SCOPED rather than blanket. A blanket version
     // would freeze naming for the entire fleet on any transient DB fault — and "every worker unnamed"
-    // reads as a quiet cron rather than a broken one. This pair pins the boundary in both directions;
-    // either test alone is satisfied by a guard that is simply always-on or always-off.
-    let reachedLiveQuery = false;
+    // reads as a quiet cron rather than a broken one.
+    //
+    // QF-20260829-312 changed WHAT proves this. Previously an established-but-out-of-band fixture
+    // reached the live re-derive query, which was the observable proof the indeterminate-established
+    // override worked. Now an established worker is idempotent regardless of tier band OR canary
+    // determinacy — it returns its existing identity via the idempotency check before the live query
+    // is ever reached, which is a STRONGER guarantee (not "gets re-named to something", but "is never
+    // touched at all"). The meaningful assertion is the RETURN VALUE: identity preserved, no update
+    // issued, and (unlike the old fixture) the live query is no longer reached either.
     const client = fakeClient(
       { fleet_identity: { callsign: 'Delta', color: 'red' }, tier_rank: 1 },
-      { preRegBroken: true, onLiveQuery: () => { reachedLiveQuery = true; } },
+      { preRegBroken: true },
     );
-    await assignFleetIdentityAtCheckin(client, 'sess-worker-2', null);
-    expect(reachedLiveQuery, 'an established worker must not be frozen by an unreadable check').toBe(true);
+    const r = await assignFleetIdentityAtCheckin(client, 'sess-worker-2', null);
+    expect(r).toEqual({ callsign: 'Delta', color: 'red' });
+    expect(client.updates).toHaveLength(0);
   });
 
   it('a CANARY is short-circuited before that same query (the positive half of the control)', async () => {

@@ -893,12 +893,32 @@ async function checkRatificationCaptureMiss(supabase, { thresholdHours, detector
     ({ DEFAULT_STALE_RATIFICATION_HOURS } = require('../lib/governance/ratification-stall.mjs'));
   } catch { /* fall back to the local default above */ }
   const effectiveThreshold = typeof thresholdHours === 'number' ? thresholdHours : DEFAULT_STALE_RATIFICATION_HOURS;
-  const runDetector = typeof detector === 'function' ? detector : async () => ({ count: 0, rows: [] });
+  // SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-C: real detector default, replacing the prior
+  // no-op. Lazy-required (not top-level) so a missing/broken detector module degrades to the
+  // pre-C no-op rather than crashing the whole advisory send.
+  const defaultDetector = (() => {
+    try {
+      const { detectRatificationCaptureMiss } = require('../lib/chairman/ratification-capture-detector.mjs');
+      return detectRatificationCaptureMiss;
+    } catch {
+      return async () => ({ count: 0, rows: [] });
+    }
+  })();
+  const runDetector = typeof detector === 'function' ? detector : defaultDetector;
   try {
     const result = await runDetector(supabase, effectiveThreshold);
-    return { count: result?.count || 0, rows: result?.rows || [] };
+    // SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-C: widened from {count, rows} to also surface
+    // the capture-miss/encode-miss/candidate breakdown. Safe w.r.t. the source-pin regexes in
+    // tests/unit/solomon-advisory-capture-miss-seam.test.js, which do not constrain the return shape.
+    return {
+      count: result?.count || 0,
+      rows: result?.rows || [],
+      captureMisses: result?.captureMisses || [],
+      encodeMisses: result?.encodeMisses || [],
+      candidates: result?.candidates || [],
+    };
   } catch (e) {
-    return { count: 0, rows: [], error: (e && e.message) || String(e) };
+    return { count: 0, rows: [], captureMisses: [], encodeMisses: [], candidates: [], error: (e && e.message) || String(e) };
   }
 }
 

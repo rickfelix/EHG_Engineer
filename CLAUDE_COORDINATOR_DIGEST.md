@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-29T18:17:30.081Z -->
-<!-- git_commit: 3baeb40b -->
+<!-- generated_at: 2026-08-30T09:28:30.784Z -->
+<!-- git_commit: 3d1f5b78 -->
 <!-- db_snapshot_hash: 6b87240b55182e2b -->
-<!-- file_content_hash: 5c987752851941bf -->
+<!-- file_content_hash: 2ed38dc71f61139f -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -62,9 +62,11 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 ## Coordinator loop-registry governance (STANDARD_LOOPS)
 
-**The coordinator's operational heartbeat is governed, not ad hoc.** All 34 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 35 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
 
-**2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 8 of the 34 loops (`sweep`, `unranked-gauge`, `singleton-relaunch`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Two GHA-backed loops (`relay-drain`, `sms-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
+**2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 8 of the 35 loops (`sweep`, `unranked-gauge`, `singleton-relaunch`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Three GHA-backed loops (`relay-drain`, `sms-relay-drain`, `sms-status-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
+
+**2026-08-30 addition (QF-20260830-988):** `sms-status-relay-drain` was registered (`currently_expected_active=true` in `periodic_process_registry`) but had no session-armed backup, so its own GHA-deprioritised cadence produced intermittent/perpetual OVERDUE alarms — the same class already fixed for `sms-relay-drain`. Armed with the identical carve-out posture; the drain runner remains a fail-soft no-op until `SMS_STATUS_RELAY_DRAIN_ENABLED` is set at go-live cutover.
 
 *This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
 

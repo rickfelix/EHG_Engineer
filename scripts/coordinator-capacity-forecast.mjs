@@ -100,7 +100,14 @@ async function main() {
   // with the drive-report sweep so leg4 can inject the SAME computeVerdict this forecast reads.
   // Extracted verbatim to scripts/lib/capacity-inputs.mjs — no arithmetic, predicate or query
   // changed. Its header records why re-deriving them at the sweep was the wrong half of the choice.
-  const inputs = await gatherCapacityInputs(sb, { now: Date.now() });
+  // SD-LEO-INFRA-FORECASTER-MEASURED-AT-001: capture the measurement instant ONCE and carry it into
+  // the Adam-facing ask. A deficit READ at 14:00 and ACTED ON at 17:00 is a different claim, and the
+  // ask previously carried no time at all — so a stale forecast and a live one were indistinguishable
+  // to its reader. Taken here, before the reads, so it stamps when the numbers were TRUE rather than
+  // when the message happened to be built.
+  const measuredAtMs = Date.now();
+  const measuredAt = new Date(measuredAtMs).toISOString();
+  const inputs = await gatherCapacityInputs(sb, { now: measuredAtMs });
   const {
     idleNow, freeingSoon, building, stalled,
     claimableCount, openQfCount, claimable, rows, workers, maskedIds,
@@ -223,7 +230,7 @@ async function main() {
       // (claimable.length === claimableCount by construction — scripts/lib/capacity-inputs.mjs:458 —
       // so beltDepth === claimable.length + openQfCount always; the header now states that sum
       // explicitly instead of only showing the combined total).
-      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, openQfCount, aboveTop, rows, awareness });
+      const sent = await reachAdam({ verdict, beltDepth, demandSoon, idleNow, freeingSoon, deficit, claimable, openQfCount, aboveTop, rows, awareness, measuredAt });
       if (sent) { writeCooldown(currentFp); console.log('  ACTION: ✅ sourcing request dispatched to Adam (cooldown started).'); }
       else console.log('  ACTION: ⚠ no live Adam session found to reach — surface to operator.');
     }
@@ -503,6 +510,18 @@ export function shouldPingAdam({ cd, sinceMin, cooldownMin, currentFp }) {
   return { ping: true, reason: 'state-changed-or-first' };
 }
 
+/**
+ * SD-LEO-INFRA-FORECASTER-MEASURED-AT-001: the ONE machine-readable freshness+triple line the Adam
+ * ask carries. Extracted as a pure function for one reason only — reachAdam does DB IO, so an
+ * inline template literal here would have NO regression guard, and this stamp disappearing is a
+ * SILENT failure: the ask still sends, still reads as authoritative, and simply stops saying when
+ * its numbers were true. That is the same write-without-consumer shape this stamp exists to close.
+ * @param {{measuredAt:string, beltDepth:number, demandSoon:number, deficit:number, verdict:string}} f
+ */
+export function formatMeasuredAtLine(f) {
+  return `MEASURED-AT ${f.measuredAt} | belt=${f.beltDepth} demand=${f.demandSoon} deficit=${f.deficit} verdict=${f.verdict}`;
+}
+
 async function reachAdam(f) {
   const { data: adam } = await sb.from('claude_sessions')
     .select('session_id')
@@ -538,6 +557,11 @@ async function reachAdam(f) {
     `If the engine is dormant while the roadmap is rich, the remediation is to PROPOSE/co-sponsor ACTIVATION (flip the SOURCING_* flags + apply dormant migrations) and/or Wave-0 distillation, escalating to the chairman — before any manual backfill. Otherwise: READ the per-capability vision gauge + MINE the dispositioned estate for the WEAKEST capabilities, then propose a shortlist of CONFLICT-FREE, non-gated, draft-ready SD candidates that move those weakest capabilities forward (NOT generic harness-backlog grooming), propose-only; I'll dispatch. Dedup vs in-flight + SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001.`,
     // FR-3 needle-movement: rank the sourcing shortlist by which rung it moves.
     `NEEDLE-MOVEMENT RANK: order the shortlist ACTIVE-RUNG-FIRST${activeRungKey ? ` (active build rung = ${activeRungKey})` : ''}, then highest-impact-on-rung-completion-first — candidates that advance the active rung's weakest capabilities top the list; future-rung work ranks below.`,
+    // SD-LEO-INFRA-FORECASTER-MEASURED-AT-001: the triple + the instant it was measured, on ONE
+    // machine-readable line. The prose above states the same numbers; this line exists so a reader
+    // (or a later audit) can tell a fresh ask from a stale one WITHOUT re-deriving anything, which
+    // the ask could not previously support at all.
+    formatMeasuredAtLine(f),
     `Reply via adam-advisory (correlation ${correlation_id}).`,
   ].filter(Boolean).join('\n');
   const res = await insertCoordinationRow(sb, {
@@ -545,7 +569,7 @@ async function reachAdam(f) {
     sender_session: process.env.CLAUDE_SESSION_ID,
     target_session: adamId,
     subject: `[COORD->ADAM] PREDICTIVE source_work — belt short by ${f.deficit} (${f.verdict})`,
-    payload: { kind: 'coordinator_request', topic: 'source_work', expects_reply: true, correlation_id, body, forecast: { belt: f.beltDepth, demand: f.demandSoon, deficit: f.deficit, verdict: f.verdict, sourcing_engine_on: f.awareness ? f.awareness.anyOn : null, unpromoted_roadmap_items: f.awareness ? f.awareness.countStr : null } },
+    payload: { kind: 'coordinator_request', topic: 'source_work', expects_reply: true, correlation_id, body, forecast: { measured_at: f.measuredAt, belt: f.beltDepth, demand: f.demandSoon, deficit: f.deficit, verdict: f.verdict, sourcing_engine_on: f.awareness ? f.awareness.anyOn : null, unpromoted_roadmap_items: f.awareness ? f.awareness.countStr : null } },
   });
   return !res.error;
 }

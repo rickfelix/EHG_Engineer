@@ -807,6 +807,9 @@ async function main() {
               color: msg.payload.color,
               callsign: msg.payload.callsign,
               display_name: msg.payload.display_name,
+              // QF-20260829-312: tier is a CURRENT ATTRIBUTE carried for display only — never
+              // used to decide whether this write happens (that would re-couple naming to tier).
+              tier_rank: msg.payload.tier_rank ?? null,
               assigned_at: new Date().toISOString()
             }));
           } catch { /* ignore write errors */ }

@@ -220,6 +220,7 @@ try {
 // Match per-session file by session ID. Never assume — always require ID match.
 let fleetCallsign = '';
 let fleetColor = '';
+let fleetTierRank = null;
 try {
   let identity = null;
   // sessionId comes from Claude Code's JSON input (line 77). With the session identity
@@ -239,6 +240,8 @@ try {
   if (identity) {
     fleetCallsign = identity.callsign || '';
     fleetColor = identity.color || '';
+    // QF-20260829-312: tier rendered as a DISPLAY attribute only — never fed back into naming.
+    fleetTierRank = Number.isFinite(identity.tier_rank) ? identity.tier_rank : null;
   }
 } catch (_) { /* intentionally silent */ }
 
@@ -251,7 +254,8 @@ if (fleetCallsign) {
   const FC = { red: `${ESC}[31m`, blue: `${ESC}[34m`, green: `${ESC}[32m`, yellow: `${ESC}[33m`,
     purple: `${ESC}[35m`, orange: `${ESC}[38;5;208m`, pink: `${ESC}[38;5;213m`, cyan: `${ESC}[36m` };
   const fc = FC[fleetColor] || '';
-  projectInfo = `${fc}${fleetCallsign}${fc ? RESET : ''} | ${projectInfo}`;
+  const tierSuffix = fleetTierRank != null ? ` T${fleetTierRank}` : '';
+  projectInfo = `${fc}${fleetCallsign}${tierSuffix}${fc ? RESET : ''} | ${projectInfo}`;
 }
 
 // Progress section (only show when WARNING or above)
