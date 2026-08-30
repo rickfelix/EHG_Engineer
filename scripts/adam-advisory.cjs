@@ -1258,8 +1258,21 @@ async function main() {
           buildSolomonConsultPayload,
           buildPreSendConsultBody,
           insertCoordinationRow: (row, opts) => insertCoordinationRow(supabase, row, opts),
-          // deps.recordLedger — adam_adherence_ledger capture (existing columns, no new ones).
-          recordLedger: async (l) => { await supabase.from('adam_adherence_ledger').insert({ run_id: crypto.randomUUID(), probe: l.probe, duty: l.duty || 'pre_send_consult', verdict: l.verdict, detail: l.detail, remediation_ref: l.remediation_ref || null }); },
+          // deps.recordLedger — adam_adherence_ledger capture. QF-20260830-762: check_class='consult'
+          // ships behind a chairman-delegated CHECK-widen (adam_adherence_ledger_check_class_check
+          // currently admits only NULL/duty/conduct) — mirrors the existing isMissingCheckClassColumn
+          // retry pattern in adam-self-adherence-review.mjs: try WITH check_class, and on the
+          // pre-migration constraint rejection retry WITHOUT it so the ledger row (the reconciliation
+          // anchor) still lands. Never silently drops the whole write.
+          recordLedger: async (l) => {
+            const base = { run_id: crypto.randomUUID(), probe: l.probe, duty: l.duty || 'pre_send_consult', verdict: l.verdict, detail: l.detail, remediation_ref: l.remediation_ref || null };
+            const { error } = await supabase.from('adam_adherence_ledger').insert({ ...base, check_class: l.check_class || null });
+            if (error && /check_class/i.test(error.message || '')) {
+              await supabase.from('adam_adherence_ledger').insert(base);
+            } else if (error) {
+              throw error;
+            }
+          },
           // near-miss feeder — a verdict-delta writes a governance situation to the shared
           // issue_patterns ledger using the {class, catch_layer} convention. Retained for the
           // SYNCHRONOUS path; the late-verdict path re-fires it from the reconciler (FR-8).

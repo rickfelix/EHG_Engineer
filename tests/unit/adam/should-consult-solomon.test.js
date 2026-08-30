@@ -105,13 +105,13 @@ describe('performBoundedConsult — FR-3 FAIL-OPEN (Adam never hard-blocked on S
     expect(result.degraded).toBe(true);
     expect(result.caution).toBe(true);
     expect(result.ledger).toMatchObject({
-      probe: 'decision_rubric',
+      probe: 'pre_send_consult',
       verdict: 'unknown',
       detail: 'solomon-consult-timeout::documented-proceed',
     });
     expect(recordLedger).toHaveBeenCalledTimes(1);
     expect(recordLedger).toHaveBeenCalledWith(
-      expect.objectContaining({ probe: 'decision_rubric', verdict: 'unknown' }),
+      expect.objectContaining({ probe: 'pre_send_consult', verdict: 'unknown' }),
     );
   });
 
@@ -236,7 +236,7 @@ describe('FR-5 — NO SELF-EXEMPTION (mechanism, not caller opt-in)', () => {
     });
     expect(degraded.action).toBe('proceed');
     expect(ledgerWrites).toHaveLength(1);
-    expect(ledgerWrites[0]).toMatchObject({ probe: 'decision_rubric', verdict: 'unknown' });
+    expect(ledgerWrites[0]).toMatchObject({ probe: 'pre_send_consult', verdict: 'unknown' });
 
     // There is no third exit that both proceeds/sends AND lacks consult/ledger evidence.
     const hasConsultEvidence = (r) => r.consultRecorded === true || Boolean(r.ledger);
@@ -290,7 +290,7 @@ describe('FR-5 — NO SELF-EXEMPTION (mechanism, not caller opt-in)', () => {
     // TS-12: the ledger row is the reconciliation ANCHOR — it must carry the correlation.
     expect(ledgerWrites).toHaveLength(1);
     expect(ledgerWrites[0]).toMatchObject({
-      probe: 'decision_rubric',
+      probe: 'pre_send_consult',
       duty: 'pre_send_consult',
       verdict: 'unknown',
       detail: 'solomon-consult-async::pending-reconcile',
