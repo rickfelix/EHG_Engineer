@@ -18,7 +18,8 @@
  * Usage: node scripts/sms-status-relay-drain.cjs [--dry-run]
  */
 require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const DRAIN_LIMIT = Number(process.env.SMS_STATUS_RELAY_DRAIN_LIMIT) || 50;
@@ -31,11 +32,53 @@ function isDrainEnabled() {
   return v === '1' || v === 'true' || v === 'on' || v === 'yes';
 }
 
+// QF-20260830-603: intermittent native libuv abort (win32 UV_HANDLE_CLOSING) observed on
+// runs where the drain is INERT (env unset) — i.e. before getSupabase() is even reached.
+// require('@supabase/supabase-js') was unconditional at module load; deferring it into
+// getSupabase() means the ~100% common pre-cutover inert path never touches that module's
+// async-handle setup at all, shrinking the surface for whatever native teardown race is
+// firing. Root-causing the libuv assertion itself is out of scope (never diagnose a native
+// abort from two log lines) — see the abnormal-exit witness below for the other half of the
+// two-sided fix contract (make the abort VISIBLE if it recurs, instead of eliminating it).
 function getSupabase() {
+  const { createClient } = require('@supabase/supabase-js');
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY; // drain is the TRUSTED side (reads staging, writes obligations)
   if (!url || !key) throw new Error('SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
   return createClient(url, key);
+}
+
+// QF-20260830-603: abnormal-exit witness. A native abort kills the process before the JS
+// fail-soft handler runs, so the durable evidence must be written OUTSIDE the DB round-trip
+// too (a DB write could race the same kill). A local marker file is near-instant and
+// synchronous: present at tick-start, removed at clean tick-end. A marker still present at
+// the START of the NEXT tick means the prior tick never finished cleanly — logged loudly
+// rather than silently retried, per the fix contract's "visible, not silent" requirement.
+const TICK_MARKER_PATH = path.join(__dirname, '..', '.artifacts', 'sms-status-relay-drain-tick.marker');
+function checkAbnormalExitWitness() {
+  try {
+    if (fs.existsSync(TICK_MARKER_PATH)) {
+      const staleAt = fs.readFileSync(TICK_MARKER_PATH, 'utf8').trim();
+      console.warn(`[sms-status-relay-drain] ABNORMAL EXIT DETECTED: previous tick started at ${staleAt} but never finished cleanly (likely a native abort or process kill mid-tick).`);
+    }
+  } catch (e) {
+    console.error(`[sms-status-relay-drain] abnormal-exit witness check failed (non-fatal): ${(e && e.message) || e}`);
+  }
+}
+function markTickStarted() {
+  try {
+    fs.mkdirSync(path.dirname(TICK_MARKER_PATH), { recursive: true });
+    fs.writeFileSync(TICK_MARKER_PATH, new Date().toISOString());
+  } catch (e) {
+    console.error(`[sms-status-relay-drain] tick-start marker write failed (non-fatal): ${(e && e.message) || e}`);
+  }
+}
+function markTickFinished() {
+  try {
+    fs.rmSync(TICK_MARKER_PATH, { force: true });
+  } catch (e) {
+    console.error(`[sms-status-relay-drain] tick-finish marker clear failed (non-fatal): ${(e && e.message) || e}`);
+  }
 }
 
 /** Surface a stall signal when staged rows pile up undrained (persistent-failure alarm). */
@@ -56,14 +99,18 @@ async function checkBacklogStall(supabase) {
 }
 
 async function main() {
+  checkAbnormalExitWitness();
+  markTickStarted();
   if (!isDrainEnabled()) {
     console.log('[sms-status-relay-drain] SMS_STATUS_RELAY_DRAIN_ENABLED not set — inert (pre-cutover no-op).');
+    markTickFinished();
     return;
   }
   const supabase = getSupabase();
   if (DRY_RUN) {
     console.log('[sms-status-relay-drain] --dry-run: enabled, no drain performed.');
     await checkBacklogStall(supabase);
+    markTickFinished();
     return;
   }
   try {
@@ -82,6 +129,7 @@ async function main() {
     console.error(`[sms-status-relay-drain] drain error (fail-soft, retry next tick): ${(e && e.message) || e}`);
   }
   await checkBacklogStall(supabase);
+  markTickFinished();
 }
 
 if (require.main === module) {
@@ -106,4 +154,7 @@ if (require.main === module) {
     });
 }
 
-module.exports = { isDrainEnabled, getSupabase, checkBacklogStall, main };
+module.exports = {
+  isDrainEnabled, getSupabase, checkBacklogStall, main,
+  TICK_MARKER_PATH, checkAbnormalExitWitness, markTickStarted, markTickFinished,
+};

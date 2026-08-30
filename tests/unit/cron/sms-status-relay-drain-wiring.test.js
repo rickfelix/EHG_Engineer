@@ -89,3 +89,50 @@ describe('sms-status-relay-drain FR-6 enable gate', () => {
     }
   });
 });
+
+// QF-20260830-603: intermittent native libuv abort (win32 UV_HANDLE_CLOSING) observed even on
+// INERT ticks (drain disabled) -- i.e. before getSupabase() is ever reached. Two-sided fix:
+// (1) lazy-require supabase-js so the ~100% common inert path never touches it; (2) a local-file
+// abnormal-exit witness so a future abort (inert or live) is logged loudly, not silently retried.
+describe('QF-20260830-603: lazy supabase-js require', () => {
+  it('the top-level module scope never requires @supabase/supabase-js -- only getSupabase() does', () => {
+    const src = stripComments(fs.readFileSync(RUNNER, 'utf8'));
+    const topLevelRequire = /^const\s*\{\s*createClient\s*\}\s*=\s*require\(\s*['"]@supabase\/supabase-js['"]\s*\)/m;
+    expect(src, 'supabase-js require must be lazy (inside getSupabase), not top-level').not.toMatch(topLevelRequire);
+    expect(src, 'getSupabase() must still require it when actually called').toMatch(
+      /function getSupabase\s*\([^)]*\)\s*\{[\s\S]*?require\(\s*['"]@supabase\/supabase-js['"]\s*\)/,
+    );
+  });
+});
+
+describe('QF-20260830-603: abnormal-exit witness', () => {
+  const { TICK_MARKER_PATH, checkAbnormalExitWitness, markTickStarted, markTickFinished } =
+    require('../../../scripts/sms-status-relay-drain.cjs');
+
+  afterEach(() => {
+    try { fs.rmSync(TICK_MARKER_PATH, { force: true }); } catch { /* best-effort cleanup */ }
+  });
+
+  it('markTickStarted writes a marker, markTickFinished removes it -- a clean tick leaves no trace', () => {
+    expect(fs.existsSync(TICK_MARKER_PATH)).toBe(false);
+    markTickStarted();
+    expect(fs.existsSync(TICK_MARKER_PATH)).toBe(true);
+    markTickFinished();
+    expect(fs.existsSync(TICK_MARKER_PATH)).toBe(false);
+  });
+
+  it('a marker left over from a prior (never-finished) tick is detected and logged loudly', () => {
+    markTickStarted(); // simulates a tick that started but was killed before markTickFinished()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    checkAbnormalExitWitness();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/ABNORMAL EXIT DETECTED/));
+    warnSpy.mockRestore();
+  });
+
+  it('no stale marker means no warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    checkAbnormalExitWitness();
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
