@@ -157,6 +157,9 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 TS-6: POSITIVE control — a lon
     expect(c.inserts[0].target_session).toBe('sess-new-1');
     expect(c.inserts[0].payload.signal_resolved).toBe(true);
     expect(c.inserts[0].payload.resolution_kind).toBe('disposition');
+    // QF-20260830-144: payload.kind must be an ADVISORY_KIND so worker-ack-advisory.cjs can
+    // retire this row — without it the row was unackable by either lane, forever.
+    expect(c.inserts[0].payload.kind).toBe('signal_resolved');
     expect(c.getRow('sig-1').payload.notification_sent).toBe(true);
     // MUTATION: require payload.routed_to_sd_key here too -> this fixture has none, so the
     // notification would never fire, and this is precisely the gap FR-4 exists to close.

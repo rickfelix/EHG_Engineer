@@ -2110,6 +2110,10 @@ async function notifySignalResolvedByDisposition(supabase) {
         subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → dispositioned`,
         body: `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator.`,
         payload: {
+          // QF-20260830-144: kind must be an ADVISORY_KIND (lib/fleet/worker-status.cjs) so
+          // worker-ack-advisory.cjs can retire this row — without it the row was unackable by
+          // either lane and re-presented on every /checkin forever.
+          kind: 'signal_resolved',
           signal_resolved: true,
           signal_type: sig.payload?.signal_type,
           original_body: (sig.body || '').slice(0, 500),
@@ -2210,6 +2214,8 @@ async function notifySignalResolvedByPromotion(supabase) {
         subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → ${sdKey}`,
         body: `Your earlier signal (\"${(sig.body || '').slice(0, 200)}\") contributed to SD ${sdKey}, which is now completed.`,
         payload: {
+          // QF-20260830-144: see disposition-path writer above for rationale.
+          kind: 'signal_resolved',
           signal_resolved: true,
           signal_type: sig.payload?.signal_type,
           original_body: (sig.body || '').slice(0, 500),

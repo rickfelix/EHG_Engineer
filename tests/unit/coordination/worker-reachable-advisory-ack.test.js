@@ -173,7 +173,9 @@ describe('SD-LEO-INFRA-WORKER-REACHABLE-ACK-001', () => {
       // kind into the advisory lane by default — the exclusion-set trap. An explicit frozen list
       // means a new kind joins nothing until someone names it.
       expect(Object.isFrozen(ADVISORY_KINDS)).toBe(true);
-      expect([...ADVISORY_KINDS].sort()).toEqual(['completion_nudge', 'coordinator_reply']);
+      // QF-20260830-144: signal_resolved added — SIGNAL_RESOLVED notification rows were being
+      // written with no kind at all, unackable by either lane, re-presenting forever.
+      expect([...ADVISORY_KINDS].sort()).toEqual(['completion_nudge', 'coordinator_reply', 'signal_resolved']);
       for (const k of ADVISORY_KINDS) expect(DIRECTIVE_KINDS).not.toContain(k);
     });
   });
