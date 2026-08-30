@@ -1018,7 +1018,7 @@ async function printPeriodicLiveness(client) {
   const sb = client || supabase;
   let { data: rows, error } = await sb
     .from('periodic_process_registry')
-    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at, expected_interval_seconds, grace_multiplier, liveness_source')
     .order('process_type', { ascending: true });
 
   console.log('PERIODIC-PROCESS LIVENESS');
@@ -1076,12 +1076,66 @@ async function printPeriodicLiveness(client) {
   // adversarial review on PR #5562).
   const ageOfHours = (ts) => (ts ? Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 3600000)) + 'h' : '—');
 
+  // Triangulation Audit cycle 2 / R3 (chairman-ratified 2026-08-30, ratification 2ab4b4bc):
+  // RENDER THE ARITHMETIC BESIDE last_state, NEVER last_state ALONE.
+  //
+  // WHY: last_state is written by the watcher, and the watcher's stamps for the
+  // github_actions_api class were measured lagging reality by hours (and absent entirely on 79-81
+  // active rows). Measured 2026-08-30T17:09:17Z: 55 of 232 active rows were overdue BY THE
+  // ARITHMETIC ON THEIR OWN COLUMNS while only 24 carried last_state=OVERDUE -- 144 read OK. A
+  // panel that renders only last_state therefore shows a healthy fleet that the same table's data
+  // contradicts, which is the exact class this panel exists to surface.
+  //
+  // The arithmetic is computed from the row's OWN columns (last_fired_at vs
+  // expected_interval_seconds * grace_multiplier) so it is independent of the watcher's judgement
+  // -- two instruments on one line. DISAGREEMENT IS THE SIGNAL: when the arithmetic says overdue
+  // (or never stamped) and last_state is not an alarm state, that gap is flagged explicitly rather
+  // than left for a reader to spot by comparing two columns.
+  //
+  // This does NOT replace last_state and must not: when the stamper works, last_state carries the
+  // watcher's 2+-signal evaluation, which the arithmetic cannot reproduce. Render both.
+  // SCOPED TO THE CLASSES THAT ACTUALLY STAMP last_fired_at, and the scope is load-bearing.
+  // Measured 2026-08-30T17:39:31Z across all 238 registry rows: github_actions_api 101/123 ever
+  // stamped, self_stamped 55/95 -- but eva_scheduler_heartbeat 0/17 and claude_sessions_heartbeat
+  // 0/3. For those two classes last_fired_at is NOT the liveness instrument (an external heartbeat
+  // table is), so a null there is BY DESIGN, not a miss. Flagging them would put a warning on 20
+  // rows that are working exactly as built -- and a gauge that cries wolf on a healthy path is the
+  // defect this same audit cycle raised against the dispatcher's drain warn. Caught here only
+  // because the first cut of this renderer did exactly that to all 20.
+  const ARITHMETIC_CLASSES = new Set(['github_actions_api', 'self_stamped']);
+  const ALARM_STATE = /^(OVERDUE|STALE|MISSING|FAIL)/i;
+  const arithmeticVerdict = (r) => {
+    if (!r.currently_expected_active) return null;
+    if (!ARITHMETIC_CLASSES.has(r.liveness_source)) return null;
+    if (!r.last_fired_at) return { text: 'NEVER-STAMPED', overdue: true };
+    if (!r.expected_interval_seconds) return null; // no declared cadence -- nothing to compute against
+    const ageSec = (Date.now() - Date.parse(r.last_fired_at)) / 1000;
+    const limitSec = r.expected_interval_seconds * (r.grace_multiplier || 2);
+    if (!(ageSec > limitSec)) return null;
+    const h = (s) => (s / 3600 >= 1 ? (s / 3600).toFixed(1) + 'h' : Math.round(s / 60) + 'm');
+    return { text: 'OVERDUE ' + h(ageSec) + '>' + h(limitSec), overdue: true };
+  };
+
   const others = rows.filter((r) => r.process_key !== '__watcher_self__');
+  let disagreements = 0;
   for (const r of others) {
     const state = !r.currently_expected_active
       ? 'INTENTIONALLY_DOWN'
       : (r.last_state || 'UNVERIFIED');
-    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8) + (r.display_name || r.process_key));
+    const arith = arithmeticVerdict(r);
+    let arithCol = '';
+    if (arith) {
+      const disagrees = !ALARM_STATE.test(state);
+      if (disagrees) disagreements++;
+      arithCol = (disagrees ? '!! ' : '   ') + arith.text;
+    }
+    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8)
+      + pad(arithCol, 26) + (r.display_name || r.process_key));
+  }
+  if (disagreements > 0) {
+    console.log('');
+    console.log('  !! ' + disagreements + ' row(s) where the ARITHMETIC on the row\'s own columns says overdue/never-stamped');
+    console.log('     but last_state does NOT. Trust the arithmetic and check the stamper before trusting last_state.');
   }
   console.log('');
   console.log('  Run scripts/periodic-liveness-watcher.mjs to refresh state.');
