@@ -3,11 +3,16 @@
 // relay-drain and sms-relay-drain are DELIBERATELY EXCLUDED (chairman-lane carve-out, GHA
 // copies measured degraded). This pins the ruling as data + behavior so a future edit can't
 // silently re-arm a dropped loop or forget to tear one down.
+//
+// QF-20260830-100: `singleton-relaunch` was RETIRED entirely (removed from STANDARD_LOOPS,
+// not merely re-armed) — its consumer half was never built and it fired 4x with zero
+// relaunches, feeding false periodic-liveness escalations. DROPPED_KEYS now pins the
+// remaining 7-member set from the original 8-member ruling.
 import { describe, it, expect } from 'vitest';
 import { STANDARD_LOOPS, parseArmedSet, renderLoops } from '../../scripts/coordinator-startup-check.mjs';
 
 const DROPPED_KEYS = [
-  'sweep', 'unranked-gauge', 'singleton-relaunch', 'relay-drop-gauge',
+  'sweep', 'unranked-gauge', 'relay-drop-gauge',
   'fleet-retro', 'row-growth', 'gauge-runner', 'feedback-sla',
 ];
 const CARVE_OUT_KEYS = ['relay-drain', 'sms-relay-drain'];
@@ -19,7 +24,7 @@ function byKey(key) {
 }
 
 describe('QF-20260822-510 — session_arm:false ruling data', () => {
-  it('all 8 dropped keys are gha_backed AND session_arm:false', () => {
+  it('all 7 dropped keys are gha_backed AND session_arm:false', () => {
     for (const key of DROPPED_KEYS) {
       const loop = byKey(key);
       expect(loop.gha_backed, `${key}.gha_backed`).toBe(true);
@@ -35,7 +40,7 @@ describe('QF-20260822-510 — session_arm:false ruling data', () => {
     }
   });
 
-  it('exactly 8 STANDARD_LOOPS entries carry session_arm:false', () => {
+  it('exactly 7 STANDARD_LOOPS entries carry session_arm:false', () => {
     const flagged = STANDARD_LOOPS.filter((l) => l.session_arm === false).map((l) => l.key);
     expect(flagged.sort()).toEqual([...DROPPED_KEYS].sort());
   });
@@ -55,7 +60,7 @@ describe('QF-20260822-510 — renderLoops respects session_arm:false', () => {
   it('recommends tearing down a dropped loop found LIVE (session cron left over from before the ruling)', () => {
     const armed = parseArmedSet(['--armed', DROPPED_KEYS.map((k) => byKey(k).script).join(',')], {});
     const out = renderLoops(armed);
-    expect(out).toMatch(/TEAR DOWN 8 standalone cron\(s\) dropped by QF-20260822-510/);
+    expect(out).toMatch(/TEAR DOWN 7 standalone cron\(s\) dropped by QF-20260822-510/);
     for (const key of DROPPED_KEYS) {
       const loop = byKey(key);
       expect(out).toContain(`CronDelete <prompt: ${JSON.stringify(loop.prompt)}>`);

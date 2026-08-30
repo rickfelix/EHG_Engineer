@@ -235,20 +235,15 @@ export const STANDARD_LOOPS = [
   // sustained idle and that is exactly the seat whose silence needs measuring.
   { key: 'capture-gate', folded: true, gha_backed: true, label: 'Coordinator forced-capture obligation (check-only)', script: 'role-capture-gate.mjs', cron: '13,43 * * * *',
     prompt: 'node scripts/role-capture-gate.mjs check --role coordinator' },
-  // QF-20260702-976: the OPERATING layer for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-A.
-  // The trigger + scheduler logic (lib/coordinator/singleton-relaunch-trigger.js, scripts/
-  // singleton-relaunch-scheduler.mjs, npm-wired as singleton-relaunch:run) shipped but nothing
-  // periodically invoked it — first live test 2026-07-02 DID-NOT-FIRE (0 singleton_relaunch_scheduled
-  // records despite a coordinator behind-59 + fleet-quiescent trigger window). This loop makes
-  // DETECTION + SCHEDULING operate (a durable singleton_relaunch_scheduled record + surfacing when
-  // behind-N + quiescent + target-idle) — it does NOT itself perform an end-to-end autonomous
-  // relaunch; the fresh-checkout spawn remains human-gated (see singleton-relaunch-trigger.js header
-  // for the two explicitly-deferred downstream gaps: target-idle awaiting_tick predicate handling,
-  // and the human-gated spawn step). Cheap (git + a few DB reads); offset from the other */15-ish
-  // loops so it doesn't cluster.
-  { key: 'singleton-relaunch', label: 'Singleton-relaunch quiescent-window scheduler (detection + scheduling only)', script: 'singleton-relaunch-scheduler.mjs', cron: '7,22,37,52 * * * *',
-    gha_backed: true, session_arm: false, // QF-20260822-510
-    prompt: 'npm run singleton-relaunch:run' },
+  // RETIRED (QF-20260830-100, chairman ruling A, 2026-08-30): the trigger+scheduler logic
+  // (lib/coordinator/singleton-relaunch-trigger.js, scripts/singleton-relaunch-scheduler.mjs,
+  // still npm-wired as singleton-relaunch:run, deliberately NOT deleted) armed real scheduling
+  // but the relaunch CONSUMER half was never built — it fired 4x (08-11 x2, 08-22 x2) with ZERO
+  // relaunches and fed false periodic-liveness escalations. Entry removed so neither this
+  // registry nor the GHA cron (.github/workflows/singleton-relaunch-cron.yml, schedule dropped,
+  // workflow_dispatch kept) rediscovers/reactivates the periodic_process_registry rows, which
+  // were retired (currently_expected_active=false) in the same QF. Reversible: re-add this
+  // entry + re-arm SINGLETON_RELAUNCH_SCHEDULING_ENABLED if the consumer half is ever built.
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: drains
   // the tracked relay-request queue deliberately (never processed inline in the active
   // thread) and writes the CONFIRM-ON-RELAY receipt. Frequent — a queued relay-request is

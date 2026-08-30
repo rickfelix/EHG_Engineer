@@ -1,13 +1,13 @@
 name: "Singleton-relaunch scheduler (cron)"
 
-# SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-2 — additive GHA-backed trigger for
-# STANDARD_LOOPS key `singleton-relaunch` (scripts/coordinator-startup-check.mjs). Always-on
-# so it survives a coordinator session death; the STANDARD_LOOPS session-armed entry stays
-# in place unchanged as a redundant backup (idempotent — an occasional double-fire is safe).
+# RETIRED (QF-20260830-100, chairman ruling A, 2026-08-30): the scheduled trigger is removed.
+# The relaunch CONSUMER half was never built — this fired 4x (08-11 x2, 08-22 x2) with ZERO
+# relaunches and fed false periodic-liveness escalations. workflow_dispatch is kept for a
+# manual dry-run/report-only run; the script and its lib are intentionally NOT deleted, so
+# re-adding a `schedule:` block here (and the STANDARD_LOOPS entry it mirrored) re-arms the
+# loop if the consumer half is ever built.
 
 on:
-  schedule:
-    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 
 permissions:
