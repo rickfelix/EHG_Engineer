@@ -1115,7 +1115,24 @@ async function printPeriodicLiveness(client) {
   // defect this same audit cycle raised against the dispatcher's drain warn. Caught here only
   // because the first cut of this renderer did exactly that to all 20.
   const ARITHMETIC_CLASSES = new Set(['github_actions_api', 'self_stamped']);
-  const ALARM_STATE = /^(OVERDUE|STALE|MISSING|FAIL)/i;
+  // THE ALARM SET IS THE WATCHER'S, NOT A GUESS. scripts/periodic-liveness-watcher.mjs's frozen
+  // STATE constant is {OK, OVERDUE, UNVERIFIED, INTENTIONALLY_DOWN} -- there is no STALE/MISSING/
+  // FAIL anywhere in this codebase. UNVERIFIED belongs here and its omission was a real bug (found
+  // in review of QF-20260830-920): emitPersistentUnverifiedSignal escalates a persistently-
+  // UNVERIFIED row to its owner "the same way an OVERDUE row is escalated", so the watcher treats
+  // sustained UNVERIFIED as equivalent severity. Leaving it out meant that when last_state was
+  // UNVERIFIED *and* the arithmetic said overdue -- i.e. THE TWO INSTRUMENTS AGREED, both alarming
+  // -- the row was still counted as a disagreement. Measured at review time: 43 of the reported
+  // disagreements were that false case.
+  //
+  // Held as a Set rather than a regex, and drift-pinned: tests/unit/periodic-liveness/
+  // panel-arithmetic-beside-last-state.test.js imports STATE from the watcher itself and asserts
+  // this set is a subset of it and contains exactly the states the watcher escalates. A hand-typed
+  // vocabulary duplicating an enum defined elsewhere is drift waiting to happen; the test is the
+  // single-representation enforcement without coupling this renderer to a module that opens a DB
+  // client at import time.
+  const ALARM_STATES = new Set(['OVERDUE', 'UNVERIFIED']);
+  const isAlarmState = (s) => ALARM_STATES.has(String(s).toUpperCase());
   const arithmeticVerdict = (r) => {
     if (!r.currently_expected_active) return null;
     if (!ARITHMETIC_CLASSES.has(r.liveness_source)) return null;
@@ -1137,7 +1154,7 @@ async function printPeriodicLiveness(client) {
     const arith = arithmeticVerdict(r);
     let arithCol = '';
     if (arith) {
-      const disagrees = !ALARM_STATE.test(state);
+      const disagrees = !isAlarmState(state);
       if (disagrees) disagreements++;
       arithCol = (disagrees ? '!! ' : '   ') + arith.text;
     }

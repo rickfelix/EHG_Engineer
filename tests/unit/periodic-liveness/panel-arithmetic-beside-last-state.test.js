@@ -73,8 +73,19 @@ describe('periodic-liveness panel: arithmetic rendered beside last_state', () =>
     expect(out).not.toMatch(/row\(s\) where the ARITHMETIC/);
   });
 
+  // This test originally paired NEVER-STAMPED with last_state='UNVERIFIED' and asserted the
+  // disagreement marker -- i.e. IT PINNED THE BUG the review later found. UNVERIFIED is an alarm
+  // state, so that pairing is agreement, not disagreement. Split into the two things it was
+  // conflating: NEVER-STAMPED renders regardless of last_state, and the marker depends on whether
+  // last_state is alarming.
   it('reports NEVER-STAMPED for an active stamping-class row with a null last_fired_at', async () => {
     const out = await render([row({ display_name: 'never-run', last_fired_at: null, last_state: 'UNVERIFIED' })]);
+    expect(out).toMatch(/NEVER-STAMPED/);
+    expect(out).not.toMatch(/!!/); // UNVERIFIED is itself an alarm — the instruments agree
+  });
+
+  it('marks NEVER-STAMPED as a disagreement when last_state is a non-alarm state', async () => {
+    const out = await render([row({ display_name: 'never-run-but-OK', last_fired_at: null, last_state: 'OK' })]);
     expect(out).toMatch(/NEVER-STAMPED/);
     expect(out).toMatch(/!!/);
   });
@@ -119,5 +130,49 @@ describe('periodic-liveness panel: arithmetic rendered beside last_state', () =>
   it('says nothing about truncation when the row count matches the head count', async () => {
     const out = await render([row({ display_name: 'complete' })], 1);
     expect(out).not.toMatch(/SHOWING/);
+  });
+
+  // REVIEW FINDING (QF-20260830-920, PR #7799): the first cut used a hand-typed regex
+  // /^(OVERDUE|STALE|MISSING|FAIL)/i. STALE/MISSING/FAIL do not exist anywhere in this codebase,
+  // and UNVERIFIED -- which DOES exist and which the watcher escalates to the owner "the same way
+  // an OVERDUE row is escalated" (emitPersistentUnverifiedSignal) -- was absent. So a row whose
+  // last_state was UNVERIFIED while the arithmetic also said overdue, i.e. BOTH INSTRUMENTS
+  // AGREEING, was counted as a disagreement. 43 of the reported disagreements were that case.
+  it('treats UNVERIFIED as an alarm state — arithmetic + UNVERIFIED is AGREEMENT, not disagreement', async () => {
+    const out = await render([row({ display_name: 'unverified-and-overdue', last_state: 'UNVERIFIED' })]);
+    expect(out).toMatch(/OVERDUE 1\.0h>30m/);   // the arithmetic still renders
+    expect(out).not.toMatch(/!!/);              // but the two instruments agree
+    expect(out).not.toMatch(/row\(s\) where the ARITHMETIC/);
+  });
+
+  it('still flags a genuine disagreement (arithmetic overdue vs last_state OK)', async () => {
+    const out = await render([row({ display_name: 'genuine', last_state: 'OK' })]);
+    expect(out).toMatch(/!!/);
+  });
+});
+
+// DRIFT PIN. The panel's alarm vocabulary must stay the watcher's, not a hand-typed copy that
+// silently rots the next time the enum changes. This imports the watcher's own frozen STATE and
+// asserts the relationship, rather than duplicating the list a third time.
+describe('alarm-state vocabulary is derived from the watcher, not guessed', () => {
+  it('the panel alarm set is a subset of the watcher STATE enum and is exactly the escalated states', async () => {
+    const { STATE } = await import('../../../scripts/periodic-liveness-watcher.mjs');
+    const watcherStates = new Set(Object.values(STATE));
+    expect(watcherStates).toEqual(new Set(['OK', 'OVERDUE', 'UNVERIFIED', 'INTENTIONALLY_DOWN']));
+    const panelAlarms = ['OVERDUE', 'UNVERIFIED'];
+    for (const a of panelAlarms) expect(watcherStates.has(a)).toBe(true);
+    // OK is never an alarm; INTENTIONALLY_DOWN is a retirement, not a breach.
+    expect(panelAlarms).not.toContain('OK');
+    expect(panelAlarms).not.toContain('INTENTIONALLY_DOWN');
+  });
+
+  it('the renderer source contains no invented state names', async () => {
+    const fs = await import('fs');
+    const src = fs.readFileSync('scripts/fleet-dashboard.cjs', 'utf8');
+    const alarmDecl = src.match(/const ALARM_STATES = new Set\(\[[^\]]*\]\)/);
+    expect(alarmDecl).not.toBeNull();
+    for (const invented of ['STALE', 'MISSING', 'FAIL']) {
+      expect(alarmDecl[0]).not.toContain(invented);
+    }
   });
 });
