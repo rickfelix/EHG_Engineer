@@ -32,8 +32,18 @@ describe('SMS status-drain machinery names its dispatcher', () => {
   it('the cron workflow exists, is scheduled, and its run step invokes the runner', () => {
     expect(fs.existsSync(WORKFLOW), `missing dispatcher workflow: ${WORKFLOW}`).toBe(true);
     const yml = fs.readFileSync(WORKFLOW, 'utf8');
-    expect(yml, 'workflow no longer runs scripts/sms-status-relay-drain.cjs').toMatch(/node\s+scripts\/sms-status-relay-drain\.cjs/);
+    // QF-20260830-922: the runner is invoked through run-with-exit-witness.cjs so a native
+    // abort at teardown is still observed from the parent side -- assert the target script is
+    // still named as the run step's argument, whether direct or wrapped.
+    expect(yml, 'workflow no longer references scripts/sms-status-relay-drain.cjs').toMatch(/scripts\/sms-status-relay-drain\.cjs/);
+    expect(yml, 'workflow no longer runs its step through node').toMatch(/run:\s*node\s+/);
     expect(yml, 'workflow lost its schedule trigger').toMatch(/schedule:/);
+  });
+
+  it('QF-20260830-922: the run step is wrapped through run-with-exit-witness.cjs', () => {
+    const yml = fs.readFileSync(WORKFLOW, 'utf8');
+    expect(yml, 'run step must invoke scripts/run-with-exit-witness.cjs with the drain script as its argument')
+      .toMatch(/run:\s*node\s+scripts\/run-with-exit-witness\.cjs\s+scripts\/sms-status-relay-drain\.cjs/);
   });
 
   it('the runner exists and dispatches drainSmsStatusStaging from lib/chairman/sms-bridge.js', () => {

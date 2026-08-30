@@ -290,9 +290,13 @@ export const STANDARD_LOOPS = [
   // is fail-soft and a documented no-op pre-cutover (SMS_STATUS_RELAY_DRAIN_ENABLED unset —
   // see docs/runbooks/sms-status-relay-drain-go-live.md), so arming this costs nothing today
   // and provides the same redundant coverage sms-relay-drain already gets.
+  // QF-20260830-922: prompt routed through run-with-exit-witness.cjs -- this drain's own
+  // in-process abnormal-exit witness (QF-20260830-603) was falsified by live coordinator runs
+  // (native teardown abort recurred, witness never fired because it observes from inside the
+  // process that dies). The wrapper observes the child's exit from the parent side instead.
   { key: 'sms-status-relay-drain', label: 'SMS status-callback relay-staging drain', script: 'sms-status-relay-drain.cjs', cron: '*/5 * * * *',
     gha_backed: true,
-    prompt: 'node scripts/sms-status-relay-drain.cjs' },
+    prompt: 'node scripts/run-with-exit-witness.cjs scripts/sms-status-relay-drain.cjs' },
   // FR-3: the drop-gauge — flags any inbound RELAY/DECISION/REVIEW row with no matching
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.
