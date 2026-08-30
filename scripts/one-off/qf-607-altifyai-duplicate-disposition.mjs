@@ -21,6 +21,7 @@
 // prefer reversible" caution).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -85,4 +86,6 @@ async function main() {
   console.log('[qf-607] DONE — single-row deletion_reason correction persisted, readback-verified, live-row duplicate count = 1.');
 }
 
-main().catch((e) => { console.error('[qf-607] FAILED:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('[qf-607] FAILED:', e.message); process.exit(1); });
+}
