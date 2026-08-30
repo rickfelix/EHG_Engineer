@@ -20,7 +20,7 @@ describe('NATO roster', () => {
 //   reap-then-retry path: first a 23505, then a success). Falls back to {insertResult,insertError}.
 // reapResult (optional): rows the update().select() returns (default [] = nothing reaped, so an
 //   idempotency hit stays alreadyPending — preserving the existing tests' expectation).
-function mockSupabase({ activeSessions = [], insertResult = null, insertError = null, insertSequence = null, reapResult = [], reapError = null }) {
+function mockSupabase({ activeSessions = [], insertResult = null, insertError = null, insertSequence = null, reapResult = [], reapError = null, coordInserts = null }) {
   let insertCalls = 0;
   return {
     from: (table) => {
@@ -52,23 +52,24 @@ function mockSupabase({ activeSessions = [], insertResult = null, insertError = 
               }
             })
           }),
-          // reap chain: update().eq('status').lte('expires_at').eq('requested_callsign').select('id')
+          // reap chain: update().eq('status').lte('expires_at').eq('requested_callsign').select('id').limit(999)
           update: () => {
             const chain = {
               eq: () => chain,
               lte: () => chain,
-              select: () => Promise.resolve({ data: reapResult, error: reapError })
+              select: () => ({ limit: () => Promise.resolve({ data: reapResult, error: reapError }) })
             };
             return chain;
           }
         };
       }
       if (table === 'session_coordination') {
-        // Best-effort broadcast — return promise-shaped no-op
+        // Best-effort broadcast — return promise-shaped no-op; captures rows when coordInserts is passed.
         return {
-          insert: () => ({
-            then: (cb) => Promise.resolve({ error: null }).then(cb)
-          })
+          insert: (row) => {
+            if (coordInserts) coordInserts.push(row);
+            return { then: (cb) => Promise.resolve({ error: null }).then(cb) };
+          }
         };
       }
       return null;
@@ -213,6 +214,31 @@ describe('reapExpiredPendingRequests() — FR-1', () => {
     const supabase = mockSupabase({ reapResult: null, reapError: { message: 'boom' } });
     const n = await reapExpiredPendingRequests(supabase, {});
     expect(n).toBe(0);
+  });
+
+  // QF-20260830-434: expiry used to be a silent status flip (37 of 47 historical rows
+  // expired with no signal anywhere). Reaping must now fail loud — one coordination row per
+  // reaped request, naming the request id, callsign, and age.
+  it('emits one fail-loud signal per reaped row, naming the request id, callsign and age', async () => {
+    const coordInserts = [];
+    const reapResult = [
+      { id: 'req-1', requested_callsign: 'Bravo', requested_at: '2026-08-30T14:00:00Z' },
+      { id: 'req-2', requested_callsign: 'Charlie', requested_at: '2026-08-30T14:30:00Z' },
+    ];
+    const supabase = mockSupabase({ reapResult, coordInserts });
+    const n = await reapExpiredPendingRequests(supabase, { nowIso: '2026-08-30T15:00:00Z' });
+    expect(n).toBe(2);
+    expect(coordInserts.length).toBe(2);
+    expect(coordInserts[0].payload).toMatchObject({ kind: 'spawn_request_expired', request_id: 'req-1', callsign: 'Bravo', age_min: 60 });
+    expect(coordInserts[0].target_session).toBe('broadcast'); // no requester on this fixture row
+    expect(coordInserts[1].payload).toMatchObject({ kind: 'spawn_request_expired', request_id: 'req-2', callsign: 'Charlie', age_min: 30 });
+  });
+
+  it('emits zero signals when nothing is reaped', async () => {
+    const coordInserts = [];
+    const supabase = mockSupabase({ reapResult: [], coordInserts });
+    await reapExpiredPendingRequests(supabase, {});
+    expect(coordInserts.length).toBe(0);
   });
 });
 

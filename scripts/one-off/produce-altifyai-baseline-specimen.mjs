@@ -19,7 +19,7 @@ import { generateReviewPacket } from '../../lib/eva/chairman-product-review.js';
 const ALTIFYAI_VENTURE_ID = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
 
 async function main() {
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const service = new CompetitiveBaselineService(supabase);
 
   const before = Date.now();

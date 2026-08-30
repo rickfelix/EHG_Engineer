@@ -1,8 +1,8 @@
-<!-- file_content_hash: ef5d1a9a2a69e3bd -->
+<!-- file_content_hash: e1587a8abbf196e4 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-08-30 2:52:22 AM
+**Generated**: 2026-08-30 1:28:04 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -86,6 +86,19 @@ Example of a lever that is itself a ratification question rather than an executi
 ## Chairman-interactive-Fable preemption — origin incident (FR-6 second pass)
 
 The "fleet is one account, his live use preempts everything" priority in the P1 preemption ladder traces to the original "pull back Fable" incident that motivated absolute-priority treatment for chairman-interactive use; the rule exists specifically so that incident class never recurs.
+
+
+---
+
+## Triangulation Audit — origin (2026-08-30)
+
+The recurring self-analytics process was commissioned by the chairman after the 2026-08-30 worker-efficiency triangulation (in his words: "this self-analytics is super powerful for self-improvement, and I would love to see more of it"). Solomon's design (advisory 611d2338) was adopted verbatim "adopt" (~16:51Z, ratification captured by the Adam scribe seat) with the chairman's amendment — four mandatory outputs, added after he had to ask for recommendations that the first pass ended without ("a cycle that ends at findings reads as unfinished"). Area G (Adam board & roadmap discipline) plus the dual monitor/audit architecture were ratified separately, verbatim "I agree, let's do both" — `chairman_ratifications` ac70b897-9de3-44ab-a543-32e222d1215c (17:02:28Z, scribe solomon).
+
+**Why both mechanisms, not one**: the 6h probe is the fast monitor (hours-latency, near-zero cost); area G is the deep measure whose triangulated instruments also audit the monitor itself. A probe that decays into reading a name instead of the thing is precisely what a same-instrument check cannot catch — 2026-08-30 alone produced four instances of gauges measuring something other than what their names claimed (claimableWithVerify, last_state, Solomon's WARN line, the self-adherence rubric's 904/1000 state-as-verdict rows).
+
+**Founding specimens** the rules encode: the resolver ruling against himself (Adam's A5 token-denominator claim vs the empty `context_usage_log` schema — QF-20260830-792); the unmeasurable-discrepancy rule (the missing per-seat token denominator becoming its own action item); the correlation-disclosure rule (the coordinator disclosing he saw Solomon's S3 framing before answering, which preserved rather than voided the audit); the shared-premise lesson (message-wake-works-regardless-of-band, priced into A9 by two seats, contradicted by two directives failing to wake a 3600s-parked seat).
+
+**Live position at encode time**: cycle 1 = the 2026-08-30 worker-efficiency triangulation (resolved by Adam; first re-measure Monday 2026-09-07, area A — the moved-the-number metric's first real reading). Cycle 2 = area C gauge honesty (chairman-injected 2026-08-30, coordinator resolves). Solomon resolves cycle 3. Board baseline at ratification: 10 items, oldest 12 days, groomed to 2 open + 1 blocked.
 
 
 ---

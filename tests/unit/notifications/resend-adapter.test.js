@@ -112,6 +112,26 @@ describe('resend-adapter', () => {
       expect(callBody.from).toBe('custom@ehg.ai');
     });
 
+    // QF-20260830-041: with NEITHER payload.from NOR RESEND_FROM_EMAIL set, the hardcoded
+    // fallback must be the verified/working sender (onboarding@resend.dev) every real chairman
+    // email path already relies on -- NOT the unverified chairman@ehg.ai domain that 403'd the
+    // canary silently for 7 weeks (root cause: the canary was the one caller with no explicit
+    // `from` override, so it alone exercised this fallback).
+    it('falls back to a verified sender when neither payload.from nor RESEND_FROM_EMAIL is set', async () => {
+      delete process.env.RESEND_FROM_EMAIL;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'msg-001' })
+      });
+
+      const sendEmail = await importSendEmail();
+      await sendEmail(basePayload);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.from).toContain('onboarding@resend.dev');
+      expect(callBody.from).not.toContain('chairman@ehg.ai');
+    });
+
     it('omits text field when not provided in payload', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

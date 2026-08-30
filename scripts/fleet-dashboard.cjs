@@ -238,6 +238,18 @@ async function loadData() {
     // Pre-migration clones don't have the table — silently empty.
   }
 
+  // QF-20260830-434: expired-unfulfilled worker_spawn_requests reaped silently (37 of 47
+  // historical rows, no signal anywhere) — a head-count gauge alongside the live-pending list
+  // above so an operator sees the backlog, not just the currently-live handful.
+  let expiredUnfulfilledCount = 0;
+  try {
+    const { count } = await supabase
+      .from('worker_spawn_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'expired');
+    expiredUnfulfilledCount = count ?? 0;
+  } catch (e) { /* degrade-safe: gauge reads 0 rather than crashing the dashboard */ }
+
   // QF-20260704-051: the "AVAILABLE FOR CLAIM" headline previously used a naive
   // status-only filter, so requires_human_action / dependency-blocked / orchestrator-parent
   // SDs counted as available even though the coordinator's own ranker would never dispatch
@@ -475,9 +487,10 @@ async function loadData() {
       // owner/release_condition: SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001 — the main list
       // must MARK gated rows (adversarial-review fix, PR #6178), not render them as
       // ordinary claimable open work while only the dedicated section knows better.
-      .select('id, title, status, claiming_session_id, created_at, owner, release_condition')
+      .select('id, title, status, claiming_session_id, created_at, owner, release_condition, pr_url')
       .in('status', ['open', 'in_progress'])
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(999); // count-truncation-diff-lint: explicit, provably-bounded cap (warnIfCapTruncated below still tripwires)
     // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs (ZZZ_/dunder residue)
     // must not inflate the QUICK FIXES (N) count or render as real open work.
     // Filter availability degrades to UNFILTERED rows (adversarial-review fix, PR #6186):
@@ -498,7 +511,8 @@ async function loadData() {
     mc, mcByWorker,
     executeTeams,
     quickFixes, // QF-20260525-836
-    revivalPending // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
+    revivalPending, // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
+    expiredUnfulfilledCount // QF-20260830-434
   };
 }
 
@@ -800,7 +814,12 @@ function printAvailable(d) {
 // FIXES section, so QFs aging with no PR went unseen. Display only.
 function printQuickFixes(d) {
   const qfs = d.quickFixes || [];
-  console.log('QUICK FIXES (' + qfs.length + ')');
+  // QF-20260830-559: in_progress covers both "being built" and "built, awaiting PR review" —
+  // derive the split so the header (and the wind-down handshake / capacity forecast reading
+  // this same data) can tell an available reviewable seat from a genuinely busy one.
+  const { isAwaitingReview } = require('../lib/fleet/qf-lifecycle-state.cjs');
+  const awaitingReviewCount = qfs.filter(isAwaitingReview).length;
+  console.log('QUICK FIXES (' + qfs.length + (awaitingReviewCount ? `, ${awaitingReviewCount} awaiting-review` : '') + ')');
   console.log('─'.repeat(72));
   if (qfs.length === 0) {
     console.log('  (no open quick-fixes)');
@@ -827,7 +846,8 @@ function printQuickFixes(d) {
     // badge them here so the primary list agrees with the worker-lane exclusion.
     const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
     const gatedBadge = isChairmanGatedQF(qf) ? ' ⛔CHAIRMAN-GATED' : '';
-    console.log('  ' + pad(qf.id, 18) + pad(qf.status, 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40) + gatedBadge);
+    const { deriveQfLifecycleState } = require('../lib/fleet/qf-lifecycle-state.cjs');
+    console.log('  ' + pad(qf.id, 18) + pad(deriveQfLifecycleState(qf), 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40) + gatedBadge);
   }
   console.log('');
 }
@@ -835,9 +855,17 @@ function printQuickFixes(d) {
 // ── Section: Revival Pending (SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001) ──
 function printRevivalPending(d) {
   const rows = d.revivalPending || [];
-  if (rows.length === 0) return; // zero-noise default
+  const expiredCount = d.expiredUnfulfilledCount || 0;
+  if (rows.length === 0 && expiredCount === 0) return; // zero-noise default
+  if (rows.length === 0) {
+    // QF-20260830-434: no LIVE pending request, but a nonzero expired-unfulfilled backlog is
+    // itself worth a line — that backlog is exactly what used to go unseen.
+    console.log(`REVIVAL PENDING (0 live, ${expiredCount} expired-unfulfilled)`);
+    console.log('');
+    return;
+  }
 
-  console.log('REVIVAL PENDING (' + rows.length + ')');
+  console.log('REVIVAL PENDING (' + rows.length + (expiredCount ? `, ${expiredCount} expired-unfulfilled` : '') + ')');
   console.log('─'.repeat(72));
   console.log('  ' + pad('Callsign', 12) + pad('Requested by', 24) + pad('Age', 12) + 'Expires in');
   console.log('  ' + '─'.repeat(68));
@@ -1016,9 +1044,9 @@ function printHealth(d) {
 // (SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-1, prerequisite for FR-4.)
 async function printPeriodicLiveness(client) {
   const sb = client || supabase;
-  let { data: rows, error } = await sb
+  let { data: rows, error, count: registryTotal } = await sb
     .from('periodic_process_registry')
-    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at, expected_interval_seconds, grace_multiplier, liveness_source', { count: 'exact' })
     .order('process_type', { ascending: true });
 
   console.log('PERIODIC-PROCESS LIVENESS');
@@ -1033,6 +1061,18 @@ async function printPeriodicLiveness(client) {
     console.log('  (registry empty)');
     console.log('');
     return;
+  }
+
+  // count-truncation-diff-lint / SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6: this read is
+  // unbounded by design -- the panel renders the WHOLE registry (238 rows at time of writing) -- so
+  // it asks for an exact head count and STATES any shortfall rather than silently rendering a
+  // capped subset. A warn-only tripwire was tried first and rejected: it sits outside the select's
+  // own statement window, so the control could not see it, and more importantly a warning is the
+  // weaker artifact. THIS PANEL EXISTS TO EXPOSE GAUGES THAT MISREPORT THEIR OWN COVERAGE; it must
+  // not itself render a truncated fleet without naming the number it could not show -- which would
+  // hide precisely the never-stamped population this change was built to surface.
+  if (typeof registryTotal === 'number' && rows.length < registryTotal) {
+    console.log(`  !! SHOWING ${rows.length} OF ${registryTotal} REGISTRY ROWS — this read was truncated; the rows below are NOT the whole fleet`);
   }
 
   // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-4: exclude e2e fixture residue from the panel.
@@ -1076,12 +1116,83 @@ async function printPeriodicLiveness(client) {
   // adversarial review on PR #5562).
   const ageOfHours = (ts) => (ts ? Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 3600000)) + 'h' : '—');
 
+  // Triangulation Audit cycle 2 / R3 (chairman-ratified 2026-08-30, ratification 2ab4b4bc):
+  // RENDER THE ARITHMETIC BESIDE last_state, NEVER last_state ALONE.
+  //
+  // WHY: last_state is written by the watcher, and the watcher's stamps for the
+  // github_actions_api class were measured lagging reality by hours (and absent entirely on 79-81
+  // active rows). Measured 2026-08-30T17:09:17Z: 55 of 232 active rows were overdue BY THE
+  // ARITHMETIC ON THEIR OWN COLUMNS while only 24 carried last_state=OVERDUE -- 144 read OK. A
+  // panel that renders only last_state therefore shows a healthy fleet that the same table's data
+  // contradicts, which is the exact class this panel exists to surface.
+  //
+  // The arithmetic is computed from the row's OWN columns (last_fired_at vs
+  // expected_interval_seconds * grace_multiplier) so it is independent of the watcher's judgement
+  // -- two instruments on one line. DISAGREEMENT IS THE SIGNAL: when the arithmetic says overdue
+  // (or never stamped) and last_state is not an alarm state, that gap is flagged explicitly rather
+  // than left for a reader to spot by comparing two columns.
+  //
+  // This does NOT replace last_state and must not: when the stamper works, last_state carries the
+  // watcher's 2+-signal evaluation, which the arithmetic cannot reproduce. Render both.
+  // SCOPED TO THE CLASSES THAT ACTUALLY STAMP last_fired_at, and the scope is load-bearing.
+  // Measured 2026-08-30T17:39:31Z across all 238 registry rows: github_actions_api 101/123 ever
+  // stamped, self_stamped 55/95 -- but eva_scheduler_heartbeat 0/17 and claude_sessions_heartbeat
+  // 0/3. For those two classes last_fired_at is NOT the liveness instrument (an external heartbeat
+  // table is), so a null there is BY DESIGN, not a miss. Flagging them would put a warning on 20
+  // rows that are working exactly as built -- and a gauge that cries wolf on a healthy path is the
+  // defect this same audit cycle raised against the dispatcher's drain warn. Caught here only
+  // because the first cut of this renderer did exactly that to all 20.
+  const ARITHMETIC_CLASSES = new Set(['github_actions_api', 'self_stamped']);
+  // THE ALARM SET IS THE WATCHER'S, NOT A GUESS. scripts/periodic-liveness-watcher.mjs's frozen
+  // STATE constant is {OK, OVERDUE, UNVERIFIED, INTENTIONALLY_DOWN} -- there is no STALE/MISSING/
+  // FAIL anywhere in this codebase. UNVERIFIED belongs here and its omission was a real bug (found
+  // in review of QF-20260830-920): emitPersistentUnverifiedSignal escalates a persistently-
+  // UNVERIFIED row to its owner "the same way an OVERDUE row is escalated", so the watcher treats
+  // sustained UNVERIFIED as equivalent severity. Leaving it out meant that when last_state was
+  // UNVERIFIED *and* the arithmetic said overdue -- i.e. THE TWO INSTRUMENTS AGREED, both alarming
+  // -- the row was still counted as a disagreement. Measured at review time: 43 of the reported
+  // disagreements were that false case.
+  //
+  // Held as a Set rather than a regex, and drift-pinned: tests/unit/periodic-liveness/
+  // panel-arithmetic-beside-last-state.test.js imports STATE from the watcher itself and asserts
+  // this set is a subset of it and contains exactly the states the watcher escalates. A hand-typed
+  // vocabulary duplicating an enum defined elsewhere is drift waiting to happen; the test is the
+  // single-representation enforcement without coupling this renderer to a module that opens a DB
+  // client at import time.
+  const ALARM_STATES = new Set(['OVERDUE', 'UNVERIFIED']);
+  const isAlarmState = (s) => ALARM_STATES.has(String(s).toUpperCase());
+  const arithmeticVerdict = (r) => {
+    if (!r.currently_expected_active) return null;
+    if (!ARITHMETIC_CLASSES.has(r.liveness_source)) return null;
+    if (!r.last_fired_at) return { text: 'NEVER-STAMPED', overdue: true };
+    if (!r.expected_interval_seconds) return null; // no declared cadence -- nothing to compute against
+    const ageSec = (Date.now() - Date.parse(r.last_fired_at)) / 1000;
+    const limitSec = r.expected_interval_seconds * (r.grace_multiplier || 2);
+    if (!(ageSec > limitSec)) return null;
+    const h = (s) => (s / 3600 >= 1 ? (s / 3600).toFixed(1) + 'h' : Math.round(s / 60) + 'm');
+    return { text: 'OVERDUE ' + h(ageSec) + '>' + h(limitSec), overdue: true };
+  };
+
   const others = rows.filter((r) => r.process_key !== '__watcher_self__');
+  let disagreements = 0;
   for (const r of others) {
     const state = !r.currently_expected_active
       ? 'INTENTIONALLY_DOWN'
       : (r.last_state || 'UNVERIFIED');
-    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8) + (r.display_name || r.process_key));
+    const arith = arithmeticVerdict(r);
+    let arithCol = '';
+    if (arith) {
+      const disagrees = !isAlarmState(state);
+      if (disagrees) disagreements++;
+      arithCol = (disagrees ? '!! ' : '   ') + arith.text;
+    }
+    console.log('  ' + pad(state, 20) + pad(r.process_type, 16) + pad(ageOfHours(r.last_fired_at), 8)
+      + pad(arithCol, 26) + (r.display_name || r.process_key));
+  }
+  if (disagreements > 0) {
+    console.log('');
+    console.log('  !! ' + disagreements + ' row(s) where the ARITHMETIC on the row\'s own columns says overdue/never-stamped');
+    console.log('     but last_state does NOT. Trust the arithmetic and check the stamper before trusting last_state.');
   }
   console.log('');
   console.log('  Run scripts/periodic-liveness-watcher.mjs to refresh state.');

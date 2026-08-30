@@ -237,10 +237,17 @@ export async function readSalientState(sb) {
     // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: GAUGE (only the count is used
     // below) — exact head-count avoids both the PostgREST 1000-row cap misreading openSignalCount
     // and an unbounded session_coordination row fetch (a named growing table).
+    // QF-20260830-278: no target_session filter meant the coordinator's OWN outbound rows (to
+    // Adam, to workers) counted as his open signals — the gauge inverted, rising the more he
+    // dispatched, and fired cross_party_ping at Adam about the coordinator's own outbox. Scope
+    // to rows addressed to this coordinator identity (or the broadcast-coordinator lane), same
+    // pattern as hasUnactionedDirective's target_session=coordinatorId filter above.
+    const coordinatorId = await getActiveCoordinatorId(sb).catch(() => null);
     const { count: sigCount } = await sb
       .from('session_coordination')
       .select('id', { count: 'exact', head: true })
       .or(orFilter)
+      .in('target_session', coordinatorId ? [coordinatorId, 'broadcast-coordinator'] : ['broadcast-coordinator'])
       .is('acknowledged_at', null)
       .gte('created_at', since);
     const renderedSig = renderCount(sigCount);

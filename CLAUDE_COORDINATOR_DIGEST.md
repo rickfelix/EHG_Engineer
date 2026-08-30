@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-30T16:00:32.491Z -->
-<!-- git_commit: 1d93266b -->
-<!-- db_snapshot_hash: f9db979c44bcb6c7 -->
-<!-- file_content_hash: 9ba80bc570257ca6 -->
+<!-- generated_at: 2026-08-30T17:22:33.522Z -->
+<!-- git_commit: 4ba4b050 -->
+<!-- db_snapshot_hash: 61c14ff33c55eee9 -->
+<!-- file_content_hash: c1cd93b439bb9824 -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -71,6 +71,29 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 **2026-08-30 retirement (QF-20260830-100, chairman ruling A):** `singleton-relaunch` was RETIRED ENTIRELY (removed from STANDARD_LOOPS, not merely dropped to `session_arm:false`) — its trigger+scheduler logic armed real scheduling but the relaunch CONSUMER half was never built (feedback 2026-08-03 "SINGLETON RELAUNCH NET DISCONNECTED IN THE MIDDLE"); it fired 4x (08-11 x2, 08-22 x2) with ZERO relaunches and fed false periodic-liveness escalations to the chairman. `.github/workflows/singleton-relaunch-cron.yml`'s schedule was dropped (`workflow_dispatch` kept); the `periodic_process_registry` rows (`gha_cron:singleton-relaunch-cron.yml`, `standard_loop:singleton-relaunch`) were retired (`currently_expected_active=false`) so a process that will never fire again accrues no misses. The scheduler script and its lib are deliberately NOT deleted — reversible if the consumer half is ever built.
 
 *This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
+
+## Triangulation Audit — coordinator duties (answerer every cycle, resolver on rotation)
+
+**The Triangulation Audit is a standing coordinator duty, not an optional exercise.** Chairman-ratified 2026-08-30 (verbatim "adopt"; relayed by Adam, design authored by Solomon). The coordinator participates in EVERY cycle as an ANSWERER, and RESOLVES on rotation.
+
+**Cadence and entry.** Weekly floor, chairman-injectable at any time, exactly ONE cycle live at a time. No new loops: the question rides Adam's Monday daily tick, answers ride the coordinator's existing tick and Solomon's inbox cadence, synthesis rides Adam's next daily. **A cycle is SKIPPED LOUDLY during fleet recovery** — drive restoration precedes analytics, and the skip is announced rather than silent.
+
+**Coordinator duties as ANSWERER (every cycle).**
+- Answer from an INDEPENDENT read. Never confer with the other answerers before submitting — two answers derived from one conversation are one measurement wearing two names.
+- **NAME THE INSTRUMENT PATH on every measured claim** (script, table, predicate, command). Instrument disclosure is what makes a discrepancy resolvable by data instead of by seniority.
+- Two answers that share an instrument COUNT AS ONE measurement. Where correlation is unavoidable, DISCLOSE it explicitly — never let a shared instrument pass as independent corroboration.
+- Measurement is READ-ONLY and must never interrupt a worker.
+
+**Coordinator duties as RESOLVER (rotation: Adam cycle 1 → COORDINATOR cycle 2 → Solomon cycle 3, repeating).**
+- The seat whose lane is under audit ANSWERS but NEVER RESOLVES. No seat audits itself.
+- Resolve every discrepancy BY MEASUREMENT against repo or DB — never by seniority or consensus. **Rule against yourself when the data says so.**
+- A discrepancy that CANNOT be measured means the INSTRUMENT IS MISSING, and building that instrument becomes an action item of the cycle.
+- Produce the four mandatory outputs, in the chairman's order: (1) side-by-side of the independent reads; (2) findings; (3) every discrepancy resolved by data, naming the settling instrument, its stamp, and which read was wrong; (4) the RECOMMENDATION SET — ranked, each entry carrying owner, the evidence it rests on, and an explicit recommended-against line.
+- **The recommendation set is structurally required**: the cycle's single durable artifact (one `feedback` row, category `self_analytics`) is written by a recorder that FAILS LOUD and refuses the write when the recommendations block is missing or empty. `recommended_against` is a required list; empty is allowed only with an explicit "nothing considered and rejected" line, so silence stays distinguishable from omission. A cycle without recommendations is structurally unpresentable, not presentable-but-thin.
+
+**Output routing.** Ranked action list with owners, never narrative. It flows through Adam's EXISTING sourcing lane under standard 
+
+*...truncated. Read full file for complete section.*
 
 ---
 *The coordinator is NOT a worker and NOT Adam. Full contract in CLAUDE_COORDINATOR.md.*
