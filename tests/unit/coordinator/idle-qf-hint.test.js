@@ -107,6 +107,27 @@ describe('eligibleIdleWorkers — sd_key + spin-up grace', () => {
   });
 });
 
+// QF-20260830-454: a seat executing dispatched work has no sd_key/qf-holder row, so it must be
+// excludable on the seat_busy_reservation kind alone (Hotel-5 specimen, directive 98f2a4b5).
+describe('eligibleIdleWorkers — seat_busy_reservation exclusion (Hotel-5 dispatched-work regression)', () => {
+  it('excludes a session with a live seat_busy_reservation even with no sd_key and no QF hold', () => {
+    const w = worker({ session_id: 'hotel-5' });
+    const seatBusy = new Set(['hotel-5']);
+    expect(eligibleIdleWorkers([w], NOW, new Set(), seatBusy)).toEqual([]);
+  });
+
+  it('[TWO-SIDED] includes a session NOT in seatBusySessionIds — unaffected by the new gate', () => {
+    const w = worker({ session_id: 'w-idle' });
+    const seatBusy = new Set(['some-other-session']);
+    expect(eligibleIdleWorkers([w], NOW, new Set(), seatBusy).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+
+  it('defaults to an empty seatBusySessionIds when omitted — backward compatible', () => {
+    const w = worker();
+    expect(eligibleIdleWorkers([w], NOW).map((x) => x.session_id)).toEqual([w.session_id]);
+  });
+});
+
 // SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001: recently-released shells must not receive a claim
 // hint mid-wind-down. Named regression fixture for the forcing incident (07:56:44Z, Hotel-5):
 // released, heartbeat fresh, no sd_key, past spin-up grace — everything else about the shape
@@ -146,6 +167,7 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
           eq() { return this; },
           is() { return this; },
           order() { return this; },
+          gt() { return this; }, // QF-20260830-454: seat_busy_reservation expires_at filter
           // The verified_at pre-flight probe's terminal call.
           limit() {
             if (table === 'quick_fixes' && selectedCols === 'verified_at') {

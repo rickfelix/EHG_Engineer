@@ -202,7 +202,7 @@ export async function emitDeliveryAlarm(supabase, {
   return { alarmed: true, ratio, dedup_key: dedupKey, event_id: res.id };
 }
 
-export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set()) {
+export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set()) {
   return (liveWorkers || []).filter((w) => {
     if (w.sd_key) return false; // already claiming something — not idle
     // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: sd_key is only the MIRROR of a past claim decision
@@ -211,6 +211,12 @@ export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new
     // hinted MORE work (measured: Bravo held QF-20260728-894 four days while idleWorkers=0
     // reported no one to worry about).
     if (qfHolderSessionIds.has(w.session_id)) return false;
+    // QF-20260830-454: a seat executing dispatched work has NO row on either claim table, so
+    // it is otherwise indistinguishable from genuinely idle — the machinery competing against
+    // its own dispatch (measured: Hotel-5, directive 98f2a4b5). seatBusySessionIds is sourced
+    // from the SAME seat_busy_reservation kind lib/checkin/steps/seat-busy-fence.cjs already
+    // drains worker-side, now also produced by lib/coordinator/dispatch.cjs's stampSeatBusyReservation.
+    if (seatBusySessionIds.has(w.session_id)) return false;
     // SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001: a session inside its post-release wind-down
     // window is not yet idle capacity — it just finished work and has not re-armed. Without
     // this check, liveFleetWorkers' released_at-inclusive everClaimed lets a recently-released
@@ -282,7 +288,25 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   } catch (e) {
     summary.undeliveredReasons.push('qf_holder_read_failed:' + (e?.message || 'unknown'));
   }
-  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds);
+  // QF-20260830-454: seats currently fenced BUSY on a dispatched WORK_ASSIGNMENT via the same
+  // seat_busy_reservation kind seat-busy-fence.cjs already reads worker-side. Fail-open to []
+  // (same posture as qfHolderSessionIds above) — a read failure must never crash the hint pass.
+  let seatBusySessionIds = new Set();
+  try {
+    const nowIso = new Date(nowMs).toISOString();
+    const { data: busyRows } = await supabase
+      .from('session_coordination')
+      .select('target_session, expires_at')
+      .eq('message_type', 'INFO')
+      .is('target_sd', null)
+      .eq('payload->>kind', 'seat_busy_reservation')
+      .gt('expires_at', nowIso)
+      .limit(200);
+    seatBusySessionIds = new Set((busyRows || []).map((r) => r.target_session).filter(Boolean));
+  } catch (e) {
+    summary.undeliveredReasons.push('seat_busy_read_failed:' + (e?.message || 'unknown'));
+  }
+  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
 
