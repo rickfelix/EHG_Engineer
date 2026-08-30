@@ -59,6 +59,7 @@ import { isStaleRatification, formatRatificationStaleLine } from '../lib/governa
 // a dozen inbound rows has been filed, not surfaced.
 import { evaluateStandingPriority } from '../lib/adam/standing-priority.js';
 import { runChairmanGatedDecisionRowGuard } from '../lib/chairman/chairman-gated-decision-row-guard.mjs';
+import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -1203,6 +1204,19 @@ async function main() {
     const idleBesideClaimable = await checkIdleBesideClaimable(sb);
     if (idleBesideClaimable) {
       console.log(`QUIET_TICK_IDLE_BESIDE_CLAIMABLE=adam idle=${idleBesideClaimable.idleCount} raw_unclaimed=${idleBesideClaimable.rawUnclaimedCount} — live-idle fleet-worker seat(s) (role seats excluded) beside raw-unclaimed draft(s) on the belt (not the dispatchable-leaf extent); dispatch now (node scripts/worker-checkin.cjs) rather than leaving both sides waiting.`);
+    }
+
+    // QF-20260830-933: a completion-ready orchestrator parent (all children terminal, PLAN-TO-LEAD
+    // accepted, unclaimed) is ~10 minutes of work but invisible to dispatchable_backlog_size (a
+    // different supply class). Gated on age>2h so a parent still inside its normal pickup window
+    // doesn't fire on every tick.
+    try {
+      const readyParents = await countCompletionReadyParents(sb);
+      if (readyParents.count > 0 && (readyParents.oldestAgeMs ?? 0) > 2 * 60 * 60 * 1000) {
+        console.log(`QUIET_TICK_COMPLETION_READY_PARENT=adam count=${readyParents.count} oldest_age_h=${(readyParents.oldestAgeMs / 3600000).toFixed(1)} keys=${readyParents.parents.map((p) => p.sd_key).join(',')} — dispatch a parent_completion WORK_ASSIGNMENT now (node scripts/run-parent-completion.mjs <SD-KEY>, worker-executed only).`);
+      }
+    } catch (e) {
+      console.error('QUIET_TICK_COMPLETION_READY_PARENT_ERROR=adam', e && e.message ? e.message : e);
     }
 
     // SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001: a chairman-gated SD with no

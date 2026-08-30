@@ -24,6 +24,7 @@ import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 // QF-20260725-089: the ONE belt-depth gauge, eligibility-gated. Never re-derive a depth count here.
 import { countDispatchableBacklog } from '../lib/fleet/belt-depth.cjs';
+import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: exact head-counts for the
 // gauge sites below (never rows.length on a capped read) + pagination for the sharpenings
@@ -91,6 +92,15 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
   // is preserved inside that helper via fetchAllPaginated.
   const { dispatchable: backlogSize, raw: rawUnclaimedDrafts } = await countDispatchableBacklog(supabase);
 
+  // QF-20260830-933: a completion-ready orchestrator parent (all children terminal, PLAN-TO-LEAD
+  // accepted, unclaimed) is a DIFFERENT supply class from dispatchable_backlog_size by construction
+  // (it's pending_approval, not draft) -- surfaced beside it so the belt/gauges read it as supply
+  // too. Fail-soft: this is an advisory KPI, never allowed to break the health probe.
+  let completionReadyParents = { count: 0, oldestAgeMs: null, parents: [] };
+  try {
+    completionReadyParents = await countCompletionReadyParents(supabase, { nowMs });
+  } catch { /* advisory only -- a query fault here must never break the health probe */ }
+
   // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 — SECURITY-EXEC re-review (residual on evidence row
   // 0962b994): a producer-side "private" field on the return object (_rows/_coordinatorId) is a
   // leak waiting for a THIRD caller to forget to strip it — main()'s --dry-run branch already
@@ -110,6 +120,8 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
     // QF-20260725-879: the UNFILTERED draft+unclaimed head-count, kept alongside the filtered
     // depth so the S4 raw-SQL cross-check can compare like with like (see its use below).
     raw_unclaimed_drafts: rawUnclaimedDrafts,
+    completion_ready_parents: completionReadyParents.count,
+    completion_ready_parents_oldest_age_ms: completionReadyParents.oldestAgeMs,
   };
 }
 
