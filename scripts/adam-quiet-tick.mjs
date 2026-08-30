@@ -60,6 +60,10 @@ import { isStaleRatification, formatRatificationStaleLine } from '../lib/governa
 import { evaluateStandingPriority } from '../lib/adam/standing-priority.js';
 import { runChairmanGatedDecisionRowGuard } from '../lib/chairman/chairman-gated-decision-row-guard.mjs';
 import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs';
+// QF-20260830-590: the required-loops predicate (ADAM_LOOPS/parseArmedSet/loopStatus) lives in
+// ONE place, consumed by both the startup check (point-in-time) and this tick (continuous) so
+// the two can never disagree on what "required" means.
+import { ADAM_LOOPS, parseArmedSet, loopStatus } from './adam-startup-check.mjs';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -829,6 +833,14 @@ async function readSalientState(sb) {
   return state;
 }
 
+// QF-20260830-590: pure predicate, exported for testability. Which required (non-folded)
+// ADAM_LOOPS keys are absent from the given armed set -- the SAME comparison
+// adam-startup-check.mjs's renderLoops() makes, just callable standalone so this tick can run
+// it every cycle instead of only at /adam startup.
+export function computeCronParityMissing(armed, loops = ADAM_LOOPS) {
+  return loops.filter((l) => !l.folded && loopStatus(l, armed) === 'MISSING').map((l) => l.key);
+}
+
 // QF-20260828-922: witnessed 08-28 -- the chairman caught 1 live-idle seat beside 4
 // claimable drafts before any role did. A seat's heartbeat_at/last_tool_at can be kept
 // artificially fresh post-release by the /clear-survivor daemon (a "shell"). QF-20260829-588
@@ -1217,6 +1229,26 @@ async function main() {
       }
     } catch (e) {
       console.error('QUIET_TICK_COMPLETION_READY_PARENT_ERROR=adam', e && e.message ? e.message : e);
+    }
+
+    // QF-20260830-590: the required-loops predicate previously ran ONLY at startup
+    // (adam-startup-check.mjs), so a cron lost mid-session (7-day harness expiry, CronDelete,
+    // restart) went unnoticed until the next /adam. Same predicate (ADAM_LOOPS/parseArmedSet/
+    // loopStatus, imported above -- never re-derived) run on every tick instead. Folded loops
+    // (composed into this very tick, never armed standalone) are excluded, matching
+    // adam-startup-check.mjs's own renderLoops() filter. Silent when no armed set is supplied
+    // (advisory only -- the harness prompt/env must opt in via --armed or ADAM_ARMED_CRONS,
+    // same contract adam-startup-check.mjs already uses).
+    try {
+      const armed = parseArmedSet(process.argv, process.env);
+      if (armed.provided) {
+        const missing = computeCronParityMissing(armed);
+        if (missing.length > 0) {
+          console.log(`QUIET_TICK_CRON_PARITY_MISSING=adam missing=${missing.join(',')} — ${missing.length} required loop(s) absent from the armed set; re-arm via CronCreate (node scripts/adam-startup-check.mjs for the exact spec).`);
+        }
+      }
+    } catch (e) {
+      console.error('QUIET_TICK_CRON_PARITY_ERROR=adam', e && e.message ? e.message : e);
     }
 
     // SD-LEO-INFRA-CHAIRMAN-GATED-SD-DECISION-ROW-GUARD-001: a chairman-gated SD with no
