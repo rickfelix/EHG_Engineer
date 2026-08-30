@@ -184,6 +184,12 @@ try {
     relayDropHtml = `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fdecea;border-left:4px solid #e74c3c;border-radius:3px"><b>⚠️ ${gauge.flagged} relay/decision/review row(s) unactioned past the drop window</b></p>`;
     relayDropText = `⚠️ ${gauge.flagged} relay/decision/review row(s) unactioned past the drop window\n\n`;
   }
+  // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-4: ORPHANED rendered distinctly from
+  // PENDING/flagged — a row's counterpartyLiveness is orthogonal to its action.
+  if (gauge.orphaned > 0) {
+    relayDropHtml += `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fdecea;border-left:4px solid #e67e22;border-radius:3px"><b>⚠️ ${gauge.orphaned} commitment(s) ORPHANED — counterparty released or dead/unreleased</b></p>`;
+    relayDropText += `⚠️ ${gauge.orphaned} commitment(s) ORPHANED — counterparty released or dead/unreleased\n\n`;
+  }
 } catch (e) {
   console.warn('[coordinator-email] relay-drop-gauge panel skipped:', e.message);
 }

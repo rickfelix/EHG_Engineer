@@ -658,6 +658,14 @@ async function main() {
         console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + Math.floor(d.ageMs / 60000) + 'm | ' + d.reason);
       });
     }
+    // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-4: ORPHANED rendered distinctly from
+    // PENDING/flagged — a row's counterpartyLiveness is orthogonal to its action.
+    if (gauge.orphaned > 0) {
+      console.log('\n[HOURLY-REVIEW] ORPHANED COMMITMENTS — ' + gauge.orphaned + ' row(s), counterparty released or dead/unreleased:');
+      gauge.decisions.filter(function (d) { return d.counterpartyLiveness === 'ORPHANED'; }).slice(0, 10).forEach(function (d) {
+        console.log('  ⚠ [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | action=' + d.action);
+      });
+    }
   } catch (e) {
     console.log('[HOURLY-REVIEW] relay-drop-gauge check skipped (non-fatal): ' + e.message);
   }

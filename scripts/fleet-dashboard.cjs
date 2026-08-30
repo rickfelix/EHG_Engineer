@@ -2697,20 +2697,34 @@ async function printRelayDropGauge() {
 
   const gauge = await planRelayDrops(supabase);
   const flagged = gauge.decisions.filter((d) => d.action === 'flag');
-  if (flagged.length === 0) {
+  // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-4: ORPHANED is rendered as its own
+  // section, distinct from PENDING/flagged — a row's counterpartyLiveness is orthogonal to
+  // its action, so an ORPHANED row can be 'pending' or 'flag' and must still surface here.
+  const orphaned = gauge.decisions.filter((d) => d.counterpartyLiveness === 'ORPHANED');
+
+  if (flagged.length === 0 && orphaned.length === 0) {
     console.log('  (no unactioned relay/decision/review rows past the drop-detection window)');
     console.log('');
     return;
   }
 
-  console.log('  ' + flagged.length + ' row(s) flagged — no matching outbound within the window:');
-  for (const d of flagged) {
-    const ageMin = Math.floor(d.ageMs / 60_000);
-    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
-    // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: byte-identical duplicate of the relay-drop line
-    // in scripts/coordinator-hourly-review.cjs. Fixed in the same change deliberately — leaving the
-    // copy truncated would keep the defect alive in the surface most people actually read.
-    console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + ageStr + ' | ' + d.reason);
+  if (flagged.length === 0) {
+    console.log('  0 row(s) flagged — no matching outbound within the window.');
+  } else {
+    console.log('  ' + flagged.length + ' row(s) flagged — no matching outbound within the window:');
+    for (const d of flagged) {
+      const ageMin = Math.floor(d.ageMs / 60_000);
+      const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+      // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: byte-identical duplicate of the relay-drop line
+      // in scripts/coordinator-hourly-review.cjs. Fixed in the same change deliberately — leaving the
+      // copy truncated would keep the defect alive in the surface most people actually read.
+      console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + ageStr + ' | ' + d.reason);
+    }
+  }
+
+  console.log('  ' + orphaned.length + ' row(s) ORPHANED — counterparty released or dead/unreleased:');
+  for (const d of orphaned) {
+    console.log('  ⚠ [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | action=' + d.action);
   }
   console.log('');
 }

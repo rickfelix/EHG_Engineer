@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCommitmentLiveness,
   decideRelayDrops,
+  decideCommitments,
   loadCounterpartySessions,
   COMMITMENT_LIVENESS_CUT_POINT_MINUTES,
   LIVENESS,
@@ -97,6 +98,28 @@ describe('decideRelayDrops counterpartyLiveness (FR-2, orthogonal field, never o
 
   it('TRACKED_INBOUND_KINDS is unchanged by this SD (B3: no widening, avoids the solomon_consult false-flag risk)', () => {
     expect(TRACKED_INBOUND_KINDS).toEqual([PAYLOAD_KINDS.RELAY_REQUEST, 'decision_request', 'review_request']);
+  });
+});
+
+describe('decideCommitments (FR-3: merges the commitments table into the single gauge view)', () => {
+  it('TS-5: a just-inserted open commitment (no due_by) is immediately queryable as pending, not flagged', () => {
+    const commitments = [{ id: 'c1', owner_session: 'coord-1', counterparty_session: 'w1', subject: 'do X', due_by: null, created_at: new Date(NOW - 1000).toISOString() }];
+    const decisions = decideCommitments(commitments, { now: NOW, windowMs: 15 * 60 * 1000 });
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].action).toBe('pending');
+    expect(decisions[0].source).toBe('commitment');
+  });
+
+  it('flags a commitment past its due_by', () => {
+    const commitments = [{ id: 'c2', owner_session: 'coord-1', counterparty_session: 'w1', subject: 'do X', due_by: new Date(NOW - 1000).toISOString(), created_at: new Date(NOW - 100000).toISOString() }];
+    const decisions = decideCommitments(commitments, { now: NOW });
+    expect(decisions[0].action).toBe('flag');
+  });
+
+  it('carries counterpartyLiveness via the same livenessOf resolver used for session_coordination rows', () => {
+    const commitments = [{ id: 'c3', owner_session: 'coord-1', counterparty_session: 'f27a883d', subject: 'x', due_by: null, created_at: new Date(NOW).toISOString() }];
+    const decisions = decideCommitments(commitments, { now: NOW, livenessOf: () => LIVENESS.ORPHANED });
+    expect(decisions[0].counterpartyLiveness).toBe(LIVENESS.ORPHANED);
   });
 });
 
