@@ -59,9 +59,15 @@ describe('wordpress-plugins fetchSignal (SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001 
 
   it('(a) returns readings shaped per the FamilyReading interface (money_in + stickiness, >=1 observation each)', async () => {
     global.fetch = mockFetchOk();
+    // Dates relative to Date.now() (not hardcoded absolutes) so this test stays inside the
+    // baseline/recent 90-day split as real calendar time advances -- a fixed absolute date
+    // eventually crosses the boundary and the "recent" row silently falls out of the recent
+    // window, making slope_90d_vs_baseline resolve to null instead of a number.
+    const now = Date.now();
+    const DAY_MS = 24 * 60 * 60 * 1000;
     const priorRows = [
-      { raw_value: 4000000, fetched_at: '2025-08-01T00:00:00.000Z' },
-      { raw_value: 4900000, fetched_at: '2026-06-01T00:00:00.000Z' },
+      { raw_value: 4000000, fetched_at: new Date(now - 200 * DAY_MS).toISOString() },
+      { raw_value: 4900000, fetched_at: new Date(now - 45 * DAY_MS).toISOString() },
     ];
     const supabase = buildSupabase({ rows: priorRows });
 
