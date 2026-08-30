@@ -65,13 +65,18 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         return { passed: true, score: 100, issues: [], details: { mode, attempt_index: attemptIndex } };
       }
 
-      const secondRejection = rejections[1];
+      // VALIDATION evidence 2013c6ad: anchor to the MOST RECENT rejection (not rejections[1],
+      // the 2nd-ever) so a fresh retry cycle re-arms the requirement -- on attempt 3 this is
+      // identical to the old anchor (only 2 rejections exist), but on attempt 5+ it correctly
+      // requires a diagnosis of the LATEST failure instead of letting one RCA run satisfy the
+      // gate forever after the 2nd rejection ever occurred.
+      const mostRecentRejection = rejections[rejections.length - 1];
       const { data: rcaRows, error: rcaError } = await supabase
         .from('sub_agent_execution_results')
         .select('id, created_at')
         .eq('sd_id', sdId)
         .eq('sub_agent_code', 'RCA')
-        .gt('created_at', secondRejection.created_at);
+        .gt('created_at', mostRecentRejection.created_at);
       if (rcaError) {
         return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
       }

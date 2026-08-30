@@ -9,7 +9,9 @@ function makeFakeSupabase({ configValue, rejections = [], rcaRows = [] } = {}) {
   const handoffsEq3 = () => ({ order: async () => ({ data: rejections, error: null }) });
   const handoffsEq2 = () => ({ eq: handoffsEq3 });
   const handoffsEq1 = () => ({ eq: handoffsEq2 });
-  const rcaEq2 = () => ({ gt: async () => ({ data: rcaRows, error: null }) });
+  const rcaEq2 = () => ({
+    gt: async (_col, cutoff) => ({ data: rcaRows.filter((r) => r.created_at > cutoff), error: null }),
+  });
   const rcaEq1 = () => ({ eq: rcaEq2 });
 
   return {
@@ -83,6 +85,38 @@ describe('rca-required-after-retries-gate', () => {
     const result = await gate.validator(CTX);
     expect(result.passed).toBe(true);
     expect(result.details.rca_evidence).toEqual(['rca-row-1']);
+  });
+
+  it('[VALIDATION 2013c6ad regression] 5th attempt: an RCA row after the 2nd-ever rejection but BEFORE the most recent (4th) rejection does NOT satisfy the gate -- the requirement re-arms on the latest retry cycle', async () => {
+    const rejections = [
+      { rejection_reason: 'r1', created_at: '2026-08-30T10:00:00Z' },
+      { rejection_reason: 'r2', created_at: '2026-08-30T11:00:00Z' },
+      { rejection_reason: 'r3', created_at: '2026-08-30T12:00:00Z' },
+      { rejection_reason: 'r4', created_at: '2026-08-30T13:00:00Z' },
+    ];
+    // This RCA row is fresh relative to r2 (the old, buggy anchor) but STALE relative to the
+    // most recent rejection r4 -- the fixed gate must still refuse.
+    const rcaRows = [{ id: 'stale-rca', created_at: '2026-08-30T11:30:00Z' }];
+    const gate = createRcaRequiredAfterRetriesGate(makeFakeSupabase({ configValue: 'blocking', rejections, rcaRows }));
+    const result = await gate.validator(CTX);
+    expect(result.passed).toBe(false);
+    expect(result.details.reason).toBe('RCA_REQUIRED_AFTER_2_RETRIES');
+    expect(result.details.attempt_index).toBe(5);
+    expect(result.details.prior_rejection_reasons).toEqual(['r3', 'r4']);
+  });
+
+  it('[VALIDATION 2013c6ad regression] 5th attempt: a fresh RCA row after the most recent (4th) rejection satisfies the gate', async () => {
+    const rejections = [
+      { rejection_reason: 'r1', created_at: '2026-08-30T10:00:00Z' },
+      { rejection_reason: 'r2', created_at: '2026-08-30T11:00:00Z' },
+      { rejection_reason: 'r3', created_at: '2026-08-30T12:00:00Z' },
+      { rejection_reason: 'r4', created_at: '2026-08-30T13:00:00Z' },
+    ];
+    const rcaRows = [{ id: 'fresh-rca', created_at: '2026-08-30T13:30:00Z' }];
+    const gate = createRcaRequiredAfterRetriesGate(makeFakeSupabase({ configValue: 'blocking', rejections, rcaRows }));
+    const result = await gate.validator(CTX);
+    expect(result.passed).toBe(true);
+    expect(result.details.rca_evidence).toEqual(['fresh-rca']);
   });
 
   it('3rd attempt, no fresh RCA row, advisory mode (default): still passes -- never blocks in advisory', async () => {
