@@ -2,14 +2,20 @@
 /**
  * FR-6 backfill for SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001.
  *
- * Re-dispositions the two 2026-08-29 specimen SDs (SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001,
- * SD-LEO-INFRA-REJECT-PATH-VENTURE-001) that shipped status=completed while their own
- * migrations were unapplied -- the exact defect this SD fixes.
+ * Re-dispositions the three 2026-08-29/30 specimen SDs (SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001,
+ * SD-LEO-INFRA-REJECT-PATH-VENTURE-001, SD-LEO-INFRA-DIRECTION-BLIND-KILL-001) that shipped
+ * status=completed while their own migrations were unapplied -- the exact defect this SD fixes.
+ * (SD-LEO-INFRA-DIRECTION-BLIND-KILL-001 added per a live success_criteria amendment; per
+ * VALIDATION sub-agent review, live-verified via classifyMigrationApplyState.)
  *
  * Writes are strictly additive/idempotent:
  *   - metadata.completion_integrity_flag (JSONB merge, never overwrites other metadata keys)
- *   - for the chairman-gated specimen only (sub-class B), a chairman_decisions row via the
- *     SAME idempotent recordPendingDecision() path FR-2 wires -- existence-checked first.
+ *   - for a chairman-gated specimen (sub-class B) STILL awaiting its ceremony (status is
+ *     CEREMONY_PENDING/NOT_APPLIED/PARTIAL at backfill time), a chairman_decisions row via the
+ *     SAME idempotent recordPendingDecision() path FR-2 wires -- existence-checked first. A
+ *     sub-class B specimen whose ceremony has ALREADY landed by backfill time (status=APPLIED)
+ *     gets the provenance flag only -- minting a decision for an already-resolved item would be
+ *     a spurious ask, not a fix.
  * Does NOT change strategic_directives_v2.status/current_phase, and does NOT apply either
  * pending migration (operator/ceremony lane, explicitly out of scope per the SD).
  *
@@ -24,12 +30,16 @@ import { recordPendingDecision as defaultRecordPendingDecision } from '../../lib
 
 export const RULING = '967e551d';
 
+// Statuses that mean "the migration is live" -- no chairman ceremony still outstanding.
+const RESOLVED_STATUSES = new Set(['APPLIED', 'NO_DDL']);
+
 export const SPECIMENS = [
   // database/migrations/ files are recorded by classifyMigrationApplyState using the BASENAME
   // only (no directory prefix) -- unlike database/chairman-gated/, which keeps the full
   // relative path so CHAIRMAN_GATED_PREFIX matching in verify-migration-apply-state.mjs works.
   { sdKey: 'SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001', file: '20260829_sms_relay_staging_routed_at_column.sql', subClass: 'A' },
   { sdKey: 'SD-LEO-INFRA-REJECT-PATH-VENTURE-001', file: 'database/chairman-gated/20260829_reject_path_type_aware_and_live_kill_gate.sql', subClass: 'B' },
+  { sdKey: 'SD-LEO-INFRA-DIRECTION-BLIND-KILL-001', file: 'database/chairman-gated/20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql', subClass: 'B' },
 ];
 
 /**
@@ -80,7 +90,8 @@ export async function runBackfill(supabase, {
     console.log(`${spec.sdKey}: sub-class ${spec.subClass}, file ${spec.file}, live status ${statusAtBackfill}`);
 
     if (dryRun) {
-      console.log(`  DRY-RUN: would set metadata.completion_integrity_flag and${spec.subClass === 'B' ? '' : ' NOT'} mint a chairman_decisions row.`);
+      const wouldMintDecision = spec.subClass === 'B' && !RESOLVED_STATUSES.has(statusAtBackfill);
+      console.log(`  DRY-RUN: would set metadata.completion_integrity_flag and${wouldMintDecision ? '' : ' NOT'} mint a chairman_decisions row.`);
       outcomes.push({ sdKey: spec.sdKey, action: 'dry_run' });
       continue;
     }
@@ -105,6 +116,15 @@ export async function runBackfill(supabase, {
 
     if (spec.subClass !== 'B') {
       outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_a' });
+      continue;
+    }
+
+    if (RESOLVED_STATUSES.has(statusAtBackfill)) {
+      // The ceremony already landed (independently, before this backfill ran) -- provenance
+      // flag only. Minting a chairman_decisions row for an already-resolved item would be a
+      // spurious ask, the same class of noise FR-2's idempotency guard exists to prevent.
+      console.log(`  live status is ${statusAtBackfill} -- ceremony already resolved, no decision minted.`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_b_already_resolved' });
       continue;
     }
 
