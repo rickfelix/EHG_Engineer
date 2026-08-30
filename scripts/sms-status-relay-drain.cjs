@@ -169,11 +169,14 @@ if (require.main === module) {
         console.error(`[sms-status-relay-drain] stampLastFired failed (non-fatal): ${err.message}`);
       }
     })
-    .then(() => process.exit(0))
+    // QF-20260830-025: process.exit() while the Supabase client still holds open libuv async
+    // handles tears the process down mid-handle-close and libuv asserts (rc=127 on Windows).
+    // Setting exitCode and returning lets the event loop drain the handles naturally.
+    .then(() => { process.exitCode = 0; })
     .catch((e) => {
       // main() is already fail-soft; guard the shell too so a transient never reds the host.
       console.error(`[sms-status-relay-drain] fatal (fail-soft exit 0): ${(e && e.message) || e}`);
-      process.exit(0);
+      process.exitCode = 0;
     });
 }
 
