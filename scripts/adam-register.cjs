@@ -233,9 +233,19 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       if (!isMissingFunctionError(r.error)) { retireBlocked = true; continue; } // real error — swept later
       // RPC absent (migration unapplied) — fall back to the same JS-merge tagging uses, so the prior
       // is actually retired instead of silently staying role=adam forever (QF-20260703-883).
+      // QF-20260830-189: also stamp released_at + status='released' in this SAME action -- without
+      // it, the retired seat's status stays whatever it last was (often 'active'/'idle'), so it
+      // never leaves the stuck-seat scan's population (fetchPopulation filters on status only) and
+      // renders as stuck forever. released_at is a plain timestamp, cleared on revival (not a
+      // tombstone) -- if this session ever does real fleet work again its own next heartbeat/checkin
+      // naturally re-stamps status='active', same as every other live session.
       const priorMeta = (bySessionId.get(sid) || {}).metadata || {};
       const { error: mergeErr } = await supabase.from('claude_sessions')
-        .update({ metadata: { ...priorMeta, role: 'adam_retired', non_fleet: true } }).eq('session_id', sid);
+        .update({
+          metadata: { ...priorMeta, role: 'adam_retired', non_fleet: true },
+          released_at: new Date().toISOString(),
+          status: 'released',
+        }).eq('session_id', sid);
       if (mergeErr) { retireBlocked = true; continue; }
       retired.push(sid);
       retireFallbackUsed.push(sid);
