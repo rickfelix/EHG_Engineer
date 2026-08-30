@@ -228,6 +228,61 @@ describe('printTeam — defensive (missing virtual session)', () => {
   });
 });
 
+describe('isStaleTeam / printTeam — stale team hiding (QF-20260830-076)', () => {
+  function staleTeam(uptimeSeconds) {
+    return {
+      team_id: 'dead-team',
+      status: 'stopping',
+      started_at: new Date(Date.now() - uptimeSeconds * 1000).toISOString(),
+      uptime_seconds: uptimeSeconds,
+      sds_completed: 0,
+      sds_failed: 0,
+      worker_count: 0,
+      active_workers: 0,
+      slots: []
+    };
+  }
+
+  test('isStaleTeam: no live workers + age > 24h -> stale', () => {
+    expect(banner.isStaleTeam(staleTeam(banner.STALE_TEAM_AGE_SECONDS + 1))).toBe(true);
+  });
+
+  test('isStaleTeam: no live workers but age <= 24h -> not stale', () => {
+    expect(banner.isStaleTeam(staleTeam(60))).toBe(false);
+  });
+
+  test('isStaleTeam: has live workers even if old -> not stale', () => {
+    const t = staleTeam(banner.STALE_TEAM_AGE_SECONDS + 1);
+    t.active_workers = 1;
+    expect(banner.isStaleTeam(t)).toBe(false);
+  });
+
+  test('printTeam: a 63-day-old stopping team with no live workers renders one summary line, not a banner box', () => {
+    const cap = captureLog();
+    const oldTeam = staleTeam(63 * 24 * 60 * 60);
+    banner.printTeam([oldTeam], bar, { log: cap.log });
+    const text = cap.text();
+    expect(text).toContain('1 dead team(s) hidden');
+    expect(text).not.toContain('╔');
+  });
+
+  test('printTeam: a mix of one live team and one stale team renders the live banner plus a summary line', () => {
+    const cap = captureLog();
+    const liveTeam = {
+      team_id: 'live', status: 'active',
+      started_at: new Date().toISOString(), uptime_seconds: 60,
+      sds_completed: 0, sds_failed: 0, worker_count: 1, active_workers: 1,
+      slots: [{ slot: 0, callsign: 'Alpha', color: 'blue', virtual_session_id: 'vs-1', sd_key: null, current_phase: null, progress: null, heartbeat_age_seconds: 5, session_status: 'active' }]
+    };
+    const oldTeam = staleTeam(100 * 24 * 60 * 60);
+    banner.printTeam([liveTeam, oldTeam], bar, { log: cap.log });
+    const text = cap.text();
+    expect(text).toContain('1 dead team(s) hidden');
+    expect(text).toContain('╔');
+    expect(text).toContain('ALPHA');
+  });
+});
+
 describe('loadExecuteTeams', () => {
   test('returns empty array when no active teams', async () => {
     const client = mockClient({ teams: [] });
