@@ -43,57 +43,67 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
     validator: async (ctx) => {
       const sdId = ctx?.sd_id ?? ctx?.sdId;
       const handoffType = ctx?.handoffType;
-      const mode = await readEnforcementMode(supabase);
+      // SECURITY evidence da4de941 (SEC-1): this gate is REQUIRED on all 4 transitions with no
+      // required:false opt-out. ValidationOrchestrator.validateGate converts an uncaught throw
+      // into passed:false, which would fail CLOSED fleet-wide on every handoff -- the opposite
+      // of the "fail-open on every DB read error" design intent stated throughout this file.
+      // Wrapping the whole body guarantees that intent holds even against an error shape this
+      // code doesn't already anticipate (not just the {data,error} pairs it explicitly checks).
+      try {
+        const mode = await readEnforcementMode(supabase);
 
-      if (mode === 'disabled' || !supabase || !sdId || !handoffType) {
-        return { passed: true, score: 100, issues: [], details: { mode, skipped: !sdId || !handoffType ? 'no-sd-or-type' : true } };
+        if (mode === 'disabled' || !supabase || !sdId || !handoffType) {
+          return { passed: true, score: 100, issues: [], details: { mode, skipped: !sdId || !handoffType ? 'no-sd-or-type' : true } };
+        }
+
+        const { data: rejections, error } = await supabase
+          .from('sd_phase_handoffs')
+          .select('rejection_reason, created_at')
+          .eq('sd_id', sdId)
+          .eq('handoff_type', handoffType)
+          .eq('status', 'rejected')
+          .order('created_at', { ascending: true });
+        if (error) {
+          return { passed: true, score: 100, issues: [`rejection-read-error: ${error.message}`], details: { mode } };
+        }
+
+        const attemptIndex = (rejections?.length || 0) + 1;
+        if (attemptIndex < 3) {
+          return { passed: true, score: 100, issues: [], details: { mode, attempt_index: attemptIndex } };
+        }
+
+        // VALIDATION evidence 2013c6ad: anchor to the MOST RECENT rejection (not rejections[1],
+        // the 2nd-ever) so a fresh retry cycle re-arms the requirement -- on attempt 3 this is
+        // identical to the old anchor (only 2 rejections exist), but on attempt 5+ it correctly
+        // requires a diagnosis of the LATEST failure instead of letting one RCA run satisfy the
+        // gate forever after the 2nd rejection ever occurred.
+        const mostRecentRejection = rejections[rejections.length - 1];
+        const { data: rcaRows, error: rcaError } = await supabase
+          .from('sub_agent_execution_results')
+          .select('id, created_at')
+          .eq('sd_id', sdId)
+          .eq('sub_agent_code', 'RCA')
+          .gt('created_at', mostRecentRejection.created_at);
+        if (rcaError) {
+          return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
+        }
+
+        const details = { mode, attempt_index: attemptIndex, rca_evidence: rcaRows?.map((r) => r.id) || [] };
+        if (rcaRows?.length > 0 || mode !== 'blocking') {
+          return { passed: true, score: 100, issues: [], details };
+        }
+
+        const priorReasons = rejections.slice(-2).map((r) => r.rejection_reason || '(no reason recorded)');
+        return buildFailResult({
+          score: 0,
+          max_score: 100,
+          issues: [`RCA_REQUIRED_AFTER_2_RETRIES: attempt ${attemptIndex} on ${handoffType} — prior rejections: ${priorReasons.join(' | ')}`],
+          remediation: `Run the RCA sub-agent (subagent_type="rca-agent") for this SD, then retry the ${handoffType} handoff.`,
+          details: { ...details, reason: 'RCA_REQUIRED_AFTER_2_RETRIES', prior_rejection_reasons: priorReasons },
+        });
+      } catch (e) {
+        return { passed: true, score: 100, issues: [`unexpected-error: ${e?.message || e}`], details: { skipped: 'unexpected-error' } };
       }
-
-      const { data: rejections, error } = await supabase
-        .from('sd_phase_handoffs')
-        .select('rejection_reason, created_at')
-        .eq('sd_id', sdId)
-        .eq('handoff_type', handoffType)
-        .eq('status', 'rejected')
-        .order('created_at', { ascending: true });
-      if (error) {
-        return { passed: true, score: 100, issues: [`rejection-read-error: ${error.message}`], details: { mode } };
-      }
-
-      const attemptIndex = (rejections?.length || 0) + 1;
-      if (attemptIndex < 3) {
-        return { passed: true, score: 100, issues: [], details: { mode, attempt_index: attemptIndex } };
-      }
-
-      // VALIDATION evidence 2013c6ad: anchor to the MOST RECENT rejection (not rejections[1],
-      // the 2nd-ever) so a fresh retry cycle re-arms the requirement -- on attempt 3 this is
-      // identical to the old anchor (only 2 rejections exist), but on attempt 5+ it correctly
-      // requires a diagnosis of the LATEST failure instead of letting one RCA run satisfy the
-      // gate forever after the 2nd rejection ever occurred.
-      const mostRecentRejection = rejections[rejections.length - 1];
-      const { data: rcaRows, error: rcaError } = await supabase
-        .from('sub_agent_execution_results')
-        .select('id, created_at')
-        .eq('sd_id', sdId)
-        .eq('sub_agent_code', 'RCA')
-        .gt('created_at', mostRecentRejection.created_at);
-      if (rcaError) {
-        return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
-      }
-
-      const details = { mode, attempt_index: attemptIndex, rca_evidence: rcaRows?.map((r) => r.id) || [] };
-      if (rcaRows?.length > 0 || mode !== 'blocking') {
-        return { passed: true, score: 100, issues: [], details };
-      }
-
-      const priorReasons = rejections.slice(-2).map((r) => r.rejection_reason || '(no reason recorded)');
-      return buildFailResult({
-        score: 0,
-        max_score: 100,
-        issues: [`RCA_REQUIRED_AFTER_2_RETRIES: attempt ${attemptIndex} on ${handoffType} — prior rejections: ${priorReasons.join(' | ')}`],
-        remediation: `Run the RCA sub-agent (subagent_type="rca-agent") for this SD, then retry the ${handoffType} handoff.`,
-        details: { ...details, reason: 'RCA_REQUIRED_AFTER_2_RETRIES', prior_rejection_reasons: priorReasons },
-      });
     },
   };
 }

@@ -153,4 +153,16 @@ describe('rca-required-after-retries-gate', () => {
     expect(result.passed).toBe(true);
     expect(result.issues[0]).toMatch(/rejection-read-error/);
   });
+
+  it('[SECURITY SEC-1] fails open (passes) on an unexpected synchronous throw, not just a {data,error} pair -- the gate is required:true, so an uncaught throw would fail CLOSED fleet-wide', async () => {
+    const supabase = {
+      from() {
+        throw new TypeError('unexpected shape');
+      },
+    };
+    const gate = createRcaRequiredAfterRetriesGate(supabase);
+    const result = await gate.validator(CTX);
+    expect(result.passed).toBe(true);
+    expect(result.issues[0]).toMatch(/unexpected-error/);
+  });
 });
