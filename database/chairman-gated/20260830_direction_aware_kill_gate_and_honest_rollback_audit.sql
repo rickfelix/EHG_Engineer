@@ -6,7 +6,7 @@
 -- chairman applies, via the 3-factor ceremony (--prod-deploy + single-use token + an
 -- @approved-by header matching git config user.email).
 --
--- @approved-by: PENDING
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- WHY THIS EXISTS
