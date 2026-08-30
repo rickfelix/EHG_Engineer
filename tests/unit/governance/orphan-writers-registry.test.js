@@ -15,6 +15,36 @@ describe('orphan-writers-registry: validateOrphanEntry (TS-1)', () => {
     expect(result.reason).toMatch(/predicate/i);
   });
 
+  it('reader-with-no-writer: passes with reader+producer_gap and no writer field (QF-20260830-853)', () => {
+    const result = validateOrphanEntry({
+      id: 'fixture-reader-no-writer',
+      entry_type: 'reader-with-no-writer',
+      reader: { file: 'fixture-reader.js', description: 'a reader' },
+      producer_gap: { description: 'nothing ever wrote this' },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('reader-with-no-writer: fails without a producer_gap', () => {
+    const result = validateOrphanEntry({
+      id: 'fixture-reader-no-gap',
+      entry_type: 'reader-with-no-writer',
+      reader: { file: 'fixture-reader.js', description: 'a reader' },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/producer_gap/);
+  });
+
+  it('reader-with-no-writer: fails without a reader (the inverse type still requires SOME consuming reader)', () => {
+    const result = validateOrphanEntry({
+      id: 'fixture-reader-no-writer-no-reader',
+      entry_type: 'reader-with-no-writer',
+      producer_gap: { description: 'nothing ever wrote this' },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/reader/i);
+  });
+
   it('fails a fixture entry with no reader declared', () => {
     const result = validateOrphanEntry({
       id: 'fixture-missing-reader',
@@ -87,6 +117,7 @@ describe('orphan-writers-registry: entry-type coverage (SD success criterion 2)'
     expect(types.has('wired-but-blind')).toBe(true);
     expect(types.has('no-stamper-wired')).toBe(true);
     expect(types.has('shipped-but-not-applied')).toBe(true);
+    expect(types.has('reader-with-no-writer')).toBe(true);
   });
 
   it('all 7 coordinator standard_loop process_keys are present, keyed by identity not a hardcoded count (TS-3)', () => {
@@ -101,6 +132,14 @@ describe('orphan-writers-registry: entry-type coverage (SD success criterion 2)'
     const entry = ORPHAN_ENTRIES.find((e) => e.entry_type === 'shipped-but-not-applied');
     expect(entry).toBeTruthy();
     expect(entry.predicate.latch).toBe(true);
+  });
+
+  it('the reader-with-no-writer specimen names its reader and the producer gap, with no writer field (QF-20260830-853)', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.entry_type === 'reader-with-no-writer');
+    expect(entry).toBeTruthy();
+    expect(entry.reader?.file).toBe('lib/checkin/steps/seat-busy-fence.cjs');
+    expect(entry.producer_gap?.description).toBeTruthy();
+    expect(entry.writer).toBeUndefined();
   });
 });
 
