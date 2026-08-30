@@ -117,14 +117,32 @@ const __dirname = path.dirname(__filename);
 // SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001-F (FR-1): extracted to
 // lib/sub-agents/repo-target-resolver.js so lib/-layer consumers (the TESTING
 // sub-agent) can resolve target repos without importing from
-// scripts/modules/handoff/executors/ (layering inversion). This MUST remain a
-// re-export-from passthrough (`export { X } from '...'`), never
-// `import { X } from '...'; export { X };` — see the createInvocationPathGate
-// passthrough comment above for why: Vitest's mock-hoisting transform rewrites
-// a locally-imported binding's `export { X };` getter into `undefined` when a
-// hoisting trigger token is present anywhere in this file's text, but the
-// direct `export ... from` form is immune.
-export { computeReposForSD } from '../../../../../lib/sub-agents/repo-target-resolver.js';
+// scripts/modules/handoff/executors/ (layering inversion).
+//
+// CORRECTED TWICE (both caught by tests, not by reasoning about the transform):
+//  1. A pure `export { X } from '...'` passthrough does NOT introduce a local binding X
+//     usable elsewhere in THIS module -- computeReposForSD is called internally at lines
+//     ~695 and ~1683 below, which the passthrough form leaves as an undefined bare reference
+//     (CI-caught: "computeReposForSD is not defined").
+//  2. The seemingly-obvious fix -- `import { X } from '...'; export { X };`, the SAME shape
+//     createSmokeTestGate/createAutomatedUatGate use a few lines above -- ALSO breaks under
+//     vitest specifically (plain `node --check`/`node -e` import works fine; a minimal
+//     vitest reproduction with zero mocks anywhere in the chain fails with `typeof X ===
+//     'undefined'`). This contradicts the file's own historical RCA above, which attributed
+//     the earlier incident specifically to a literal ("vi" + ".mock(") text trigger -- this
+//     file currently contains ZERO such tokens (verified via grep), yet the bug still
+//     reproduces. The RCA is evidently incomplete; some import-then-re-export shape is
+//     unreliable under THIS vite/vitest transform regardless of trigger tokens.
+// A LOCAL FUNCTION DECLARATION that delegates to the extracted implementation sidesteps
+// export-binding semantics entirely -- it is not a re-export of any kind, so no transform
+// quirk in either direction can touch it. Verified: the internal call sites, the external
+// named import in venture-aware-completion-gates.test.js /
+// lead-final-pr-merge-verification-cross-repo.test.js / pr-merge-verification.test.js, and a
+// minimal-vitest-repro all pass with this shape.
+import { computeReposForSD as computeReposForSDImpl } from '../../../../../lib/sub-agents/repo-target-resolver.js';
+export function computeReposForSD(sd) {
+  return computeReposForSDImpl(sd);
+}
 
 /**
  * Create Gate 1: PLAN-TO-LEAD handoff verification
