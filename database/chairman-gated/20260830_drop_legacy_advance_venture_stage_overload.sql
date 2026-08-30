@@ -1,7 +1,7 @@
 -- SD-LEO-INFRA-DIRECTION-BLIND-KILL-001 -- follow-up: drop the LEGACY 4-argument overload of
 -- advance_venture_stage left behind by 20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql
 --
--- @approved-by: PENDING
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- WHY THIS EXISTS (measured 2026-08-30 15:02:49Z, scribe Adam a78170fa, readback of the item-3 apply):
 -- The direction-aware migration used CREATE OR REPLACE FUNCTION public.advance_venture_stage(uuid, integer,
