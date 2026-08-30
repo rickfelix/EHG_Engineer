@@ -45,12 +45,16 @@ export async function runBackfill(supabase, { dryRun = false } = {}) {
       continue;
     }
 
-    const { error: updateErr } = await supabase
+    const { data: updated, error: updateErr } = await supabase
       .from('venture_artifacts')
       .update({ quality_score: 0, validation_status: 'rejected', updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
 
-    results.push({ id, action: updateErr ? 'ERROR' : 'CORRECTED', error: updateErr?.message });
+    // write-succeeded (no error) is not the same as rows-affected -- an .eq() match
+    // of zero rows returns error:null with an empty data array, not an error.
+    const action = updateErr ? 'ERROR' : (updated?.length ? 'CORRECTED' : 'ERROR_NO_ROWS_AFFECTED');
+    results.push({ id, action, error: updateErr?.message });
   }
   return results;
 }

@@ -21,10 +21,13 @@ function mockSupabaseFor(rowsById) {
         }),
       }),
       update: (patch) => ({
-        eq: (col, val) => {
-          if (rowsById[val]) Object.assign(rowsById[val], patch);
-          return Promise.resolve({ error: null });
-        },
+        eq: (col, val) => ({
+          select: async () => {
+            if (!rowsById[val]) return { data: [], error: null };
+            Object.assign(rowsById[val], patch);
+            return { data: [{ id: val }], error: null };
+          },
+        }),
       }),
     }),
   };
