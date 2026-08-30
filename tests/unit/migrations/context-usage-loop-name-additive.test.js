@@ -25,6 +25,15 @@ describe('20260829_context_usage_loop_name.sql — additive-only static guard', 
     expect(sql).toMatch(/CREATE OR REPLACE VIEW v_context_usage_by_loop/i);
   });
 
+  // SECURITY finding (evidence 15c8c79e): without security_invoker=on a view runs as its owner
+  // and can bypass RLS on the underlying tables.
+  it('both views explicitly declare security_invoker = on', () => {
+    const seatViewMatch = sql.match(/CREATE OR REPLACE VIEW v_context_usage_by_seat[\s\S]*?AS/i);
+    const loopViewMatch = sql.match(/CREATE OR REPLACE VIEW v_context_usage_by_loop[\s\S]*?AS/i);
+    expect(seatViewMatch[0]).toMatch(/security_invoker\s*=\s*on/i);
+    expect(loopViewMatch[0]).toMatch(/security_invoker\s*=\s*on/i);
+  });
+
   it('does not alter or drop any existing column other than adding the new one', () => {
     expect(sql).not.toMatch(/ALTER COLUMN/i);
     expect(sql).not.toMatch(/DROP CONSTRAINT/i);

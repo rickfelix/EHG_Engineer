@@ -10,7 +10,13 @@
 ALTER TABLE context_usage_log
   ADD COLUMN IF NOT EXISTS loop_name text;
 
-CREATE OR REPLACE VIEW v_context_usage_by_seat AS
+-- SECURITY finding (evidence 15c8c79e): without security_invoker=on a view runs as its OWNER
+-- and bypasses the RLS on its underlying tables — this repo's event trigger
+-- leo_enforce_view_security_invoker normally backfills this, but declaring it explicitly (as
+-- every other view in this repo already does, per the same finding: 188/188) does not depend
+-- on that trigger remaining enabled.
+CREATE OR REPLACE VIEW v_context_usage_by_seat
+  WITH (security_invoker = on) AS
 SELECT
   cul.session_id,
   cs.hostname,
@@ -24,7 +30,8 @@ FROM context_usage_log cul
 LEFT JOIN claude_sessions cs ON cs.session_id = cul.session_id
 ORDER BY cul.timestamp DESC;
 
-CREATE OR REPLACE VIEW v_context_usage_by_loop AS
+CREATE OR REPLACE VIEW v_context_usage_by_loop
+  WITH (security_invoker = on) AS
 SELECT
   loop_name,
   session_id,

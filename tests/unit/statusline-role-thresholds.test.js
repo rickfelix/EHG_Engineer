@@ -207,6 +207,16 @@ describe('sync-context-usage transformEntry (FR-2a: LONG-key fix + loop_name)', 
     expect(MAX_ENTRIES_PER_SYNC).toBeGreaterThan(0);
   });
 
+  // SECURITY finding (evidence 15c8c79e): the loop_name column ships as an unapplied migration
+  // file; without this fallback every upsert fails PGRST204 until a human applies it.
+  it('SECURITY: retries the upsert without loop_name on a PGRST204 error naming the column', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
+    expect(src).toMatch(/error\.code === 'PGRST204' && \/loop_name\/\.test/);
+    expect(src).toMatch(/loop_name: _drop, \.\.\.rest/);
+  });
+
   // TESTING finding F1 (evidence 0f1303ad): sync state must never advance past a batch that
   // failed to persist — source-pin since exercising the full syncToDatabase() batch loop
   // requires a live/mocked supabase client the module does not currently inject.
@@ -216,6 +226,18 @@ describe('sync-context-usage transformEntry (FR-2a: LONG-key fix + loop_name)', 
     const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
     expect(src).toMatch(/errors \+= batch\.length;\s*\n\s*break;/);
     expect(src).toMatch(/if \(!lastPersistedEntry\)/);
+  });
+
+  // SECURITY finding (evidence 15c8c79e): getNewEntries's LOG_FILE path is bound to
+  // process.cwd() at MODULE IMPORT time (a top-level const), so a chdir-based fixture test
+  // cannot retarget it after import without a larger refactor — source-pinned instead, same
+  // class as F1/F2 above.
+  it('SECURITY: getNewEntries stops reading (closes the stream) once maxEntries is reached, not just capping after a full read', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
+    expect(src).toMatch(/if \(maxEntries > 0 && entries\.length >= maxEntries\) \{\s*\n\s*rl\.close\(\);\s*\n\s*fileStream\.destroy\(\);\s*\n\s*break;/);
+    expect(src).toMatch(/getNewEntries\(state\.lastSyncedLine, MAX_ENTRIES_PER_SYNC\)/);
   });
 
   it('TS-3: is exported and reads the LONG keys buildUsageEntry actually emits', () => {

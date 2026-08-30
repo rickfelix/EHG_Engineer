@@ -68,9 +68,17 @@ function saveSyncState(state) {
 }
 
 /**
- * Parse JSONL file and return new entries since last sync
+ * Parse JSONL file and return new entries since last sync.
+ *
+ * SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (SECURITY finding, evidence 15c8c79e): maxEntries stops
+ * the READ itself once the cap is reached, closing the stream early — the previous version
+ * buffered the ENTIRE remainder (measured ~620k lines) into memory on every tick before
+ * MAX_ENTRIES_PER_SYNC sliced it down for upload, so the cap bounded upload cost but not read/
+ * memory cost.
+ * @param {number} [sinceLine]
+ * @param {number} [maxEntries] - stop reading once this many entries are collected (no cap when omitted/0)
  */
-async function getNewEntries(sinceLine = 0) {
+async function getNewEntries(sinceLine = 0, maxEntries = 0) {
   if (!fs.existsSync(LOG_FILE)) {
     console.log('No log file found at:', LOG_FILE);
     return [];
@@ -97,6 +105,12 @@ async function getNewEntries(sinceLine = 0) {
       });
     } catch (e) {
       console.warn(`Skipping malformed line ${lineNumber}:`, e.message);
+    }
+
+    if (maxEntries > 0 && entries.length >= maxEntries) {
+      rl.close();
+      fileStream.destroy();
+      break;
     }
   }
 
@@ -144,16 +158,17 @@ async function syncToDatabase() {
   const state = loadSyncState();
   console.log(`Last synced line: ${state.lastSyncedLine}`);
 
-  const allEntries = await getNewEntries(state.lastSyncedLine);
+  // TESTING finding F3 / SECURITY finding (evidence 0f1303ad, 15c8c79e): the cap is enforced by
+  // the READ itself (getNewEntries stops early) so a large backlog is never fully buffered into
+  // memory on a single tick, not just capped before upload.
+  const entries = await getNewEntries(state.lastSyncedLine, MAX_ENTRIES_PER_SYNC);
 
-  if (allEntries.length === 0) {
+  if (entries.length === 0) {
     console.log('✅ No new entries to sync');
     return;
   }
 
-  // TESTING finding F3 (evidence 0f1303ad): bound per-invocation work.
-  const entries = allEntries.slice(0, MAX_ENTRIES_PER_SYNC);
-  console.log(`Found ${allEntries.length} new entries to sync${allEntries.length > entries.length ? ` (processing first ${entries.length}, remainder deferred to next tick)` : ''}`);
+  console.log(`Found ${entries.length} new entries to sync${entries.length === MAX_ENTRIES_PER_SYNC ? ' (capped — remainder, if any, deferred to next tick)' : ''}`);
 
   // Batch upload
   let synced = 0;
@@ -169,11 +184,24 @@ async function syncToDatabase() {
     const batch = entries.slice(i, i + BATCH_SIZE);
     const transformed = batch.map(transformEntry);
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('context_usage_log')
       .upsert(transformed, {
         onConflict: 'session_id,timestamp'
       });
+
+    // SECURITY finding (evidence 15c8c79e): the loop_name column ships as a migration FILE
+    // that is not self-applicable by a worker session (prod DDL requires a human/authorized
+    // apply). Without this fallback, every upsert after this SD merges would fail PGRST204
+    // until that separate apply step lands, and F1's new stop-at-first-failure would then pin
+    // the sync permanently. Mirrors the established captureLedgerRow pattern (solomon-advisory.cjs):
+    // retry once without the not-yet-migrated column rather than failing capture entirely.
+    if (error && error.code === 'PGRST204' && /loop_name/.test(error.message || '')) {
+      const withoutLoopName = transformed.map(({ loop_name: _drop, ...rest }) => rest);
+      ({ error } = await supabase
+        .from('context_usage_log')
+        .upsert(withoutLoopName, { onConflict: 'session_id,timestamp' }));
+    }
 
     if (error) {
       console.error(`Error syncing batch ${i / BATCH_SIZE + 1}:`, error.message);
@@ -378,4 +406,4 @@ Log file: .claude/logs/context-usage.jsonl
   }
 }
 
-export { transformEntry, syncToDatabase, MAX_ENTRIES_PER_SYNC };
+export { transformEntry, syncToDatabase, getNewEntries, MAX_ENTRIES_PER_SYNC };
