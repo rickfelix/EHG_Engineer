@@ -8,7 +8,7 @@
  * never-claimed ghosts.
  */
 import { describe, it, expect } from 'vitest';
-import { everClaimed, isFleetWorker, liveFleetWorkers } from '../../../lib/fleet/genuine-worker.mjs';
+import { everClaimed, isFleetWorker, liveFleetWorkers, isRecentlyReleased, RECENTLY_RELEASED_WINDOW_MS } from '../../../lib/fleet/genuine-worker.mjs';
 
 const ME = 'coord-1';
 const fresh = () => new Date().toISOString();
@@ -108,5 +108,35 @@ describe('liveFleetWorkers (the over-count regression)', () => {
   it('returns [] for null/empty input (fail-open)', () => {
     expect(liveFleetWorkers(null, ME, Date.now())).toEqual([]);
     expect(liveFleetWorkers([], ME, Date.now())).toEqual([]);
+  });
+});
+
+// SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001: additive release-recency discriminator. Does NOT
+// change everClaimed/isFleetWorker/liveFleetWorkers (pinned above, still passing unchanged).
+describe('isRecentlyReleased — additive release-recency discriminator', () => {
+  const NOW = Date.parse('2026-08-30T09:00:00Z');
+
+  it('true for a session released just now', () => {
+    expect(isRecentlyReleased({ released_at: new Date(NOW).toISOString() }, NOW)).toBe(true);
+  });
+
+  // 07:56:44Z Hotel-5 incident shape: released_at non-null, well inside the window.
+  it('true for a session released within the tuned window (incident specimen: released 7min ago)', () => {
+    const releasedAt = new Date(NOW - 7 * 60 * 1000).toISOString();
+    expect(isRecentlyReleased({ released_at: releasedAt }, NOW)).toBe(true);
+  });
+
+  it('false for a session released outside the window (genuinely idle, long since released)', () => {
+    const releasedAt = new Date(NOW - RECENTLY_RELEASED_WINDOW_MS - 60_000).toISOString();
+    expect(isRecentlyReleased({ released_at: releasedAt }, NOW)).toBe(false);
+  });
+
+  it('false when released_at is null/absent (never released, or a true ghost)', () => {
+    expect(isRecentlyReleased({ released_at: null }, NOW)).toBe(false);
+    expect(isRecentlyReleased({}, NOW)).toBe(false);
+  });
+
+  it('false for an unparseable released_at (fail-open, mirrors isKnownWedged\'s fail-open contract)', () => {
+    expect(isRecentlyReleased({ released_at: 'not-a-date' }, NOW)).toBe(false);
   });
 });
