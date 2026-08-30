@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeCascadeHealth,
   recomputeKrGov31,
+  buildKrGov31Description,
   CASCADE_LAYERS,
   KR_CODE,
   RECOMPUTE_WRITER,
@@ -132,5 +133,34 @@ describe('recomputeKrGov31 — write semantics', () => {
     expect(r.passingCount).toBe(5);
     expect(captured.payload.current_value).toBe(5);
     expect(captured.payload.status).toBe('at_risk');
+  });
+});
+
+// QF-20260830-086: KR-GOV-3.1's description text drifted from current_value (read "2 of 6" while
+// the number said 5) because no writer ever rewrote the prose. buildKrGov31Description derives it
+// from the SAME per-layer result the number comes from, so they can never disagree again.
+describe('buildKrGov31Description — the number and the prose can never disagree', () => {
+  it('lists the passing layers and omits a pending note when all 6 pass', async () => {
+    const { layers } = await computeCascadeHealth(fullDeps());
+    const desc = buildKrGov31Description(layers, 6);
+    expect(desc).toContain('Currently 6 of 6 layers active (Mission, Constitution, Vision, Strategy, OKRs, SDs)');
+    expect(desc).not.toContain('pending');
+  });
+
+  it('names the failing layer in a pending note when one layer fails', async () => {
+    const { layers } = await computeCascadeHealth(fullDeps({ sb: { counts: { ...FULL_COUNTS, strategic_themes: 0 } } }));
+    const desc = buildKrGov31Description(layers, 5);
+    expect(desc).toContain('Currently 5 of 6 layers active (Mission, Constitution, Vision, OKRs, SDs)');
+    expect(desc).toContain('pending: Strategy');
+  });
+
+  it('recomputeKrGov31 apply=true writes a description matching the written current_value', async () => {
+    let captured = null;
+    const supabase = mockSb({ counts: { ...FULL_COUNTS, strategic_themes: 0 }, onUpdate: (u) => { captured = u; } });
+    const r = await recomputeKrGov31({ supabase, apply: true, now: '2026-08-30T00:00:00Z', validatorSource: ALL_MARKERS, currentYear: YEAR });
+    expect(r.passingCount).toBe(5);
+    expect(captured.payload.current_value).toBe(5);
+    expect(captured.payload.description).toContain('Currently 5 of 6 layers active');
+    expect(captured.payload.description).toContain('pending: Strategy');
   });
 });
