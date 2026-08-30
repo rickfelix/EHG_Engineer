@@ -1,8 +1,8 @@
-<!-- file_content_hash: 349971835616a7c0 -->
+<!-- file_content_hash: 5f94f8697899503a -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-30 6:19:34 AM
+**Generated**: 2026-08-30 6:28:05 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -224,49 +224,6 @@ npm run handoff:compliance SD-ID
 > Why: Skipping these commands is the most common cause of orphaned SDs — directives that appear in-progress but have no handoff records, making them invisible to the queue and unresumable by new sessions.
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
-
-## Claude Code Plan Mode Integration
-
-**Status**: ACTIVE | **Version**: 1.0.0
-
-### Overview
-Claude Code's Plan Mode integrates with LEO Protocol to provide:
-- **Automatic Permission Bundling** - Reduces prompts by 70-80%
-- **Intelligent Plan Generation** - SD-type aware action plans
-- **Phase Transition Automation** - Activates at phase boundaries
-
-### SD Type Profiles
-| SD Type | Workflow | Sub-Agents | PR Size Target |
-|---------|----------|------------|----------------|
-| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
-| `enhancement` | standard | VALIDATION | 75 (max 200) |
-| `bug` | fast | RCA | 50 (max 100) |
-| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
-| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
-| `security` | careful | SECURITY, RISK | 50 (max 150) |
-| `documentation` | light | DOCMON | no limit |
-
-### Permission Bundling by Phase
-| Phase | Pre-approved Actions |
-|-------|---------------------|
-| LEAD | SD queue commands, handoff scripts, git status |
-| PLAN | PRD generation, sub-agent orchestration, git branches |
-| EXEC | Tests, builds, git commit/push, handoff scripts |
-| VERIFY | Verification scripts, handoff scripts |
-| FINAL | Merge operations, archive commands |
-
-### Automatic Activation
-- **Session start**: If SD detected on current branch
-- **Phase boundaries**: Before each handoff execution
-
-### Configuration
-```json
-// .claude/leo-plan-mode-config.json
-{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
-```
-
-### Module Location
-`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
 ## Sub-Agent Model Routing
 
@@ -985,40 +942,6 @@ node scripts/handoff.js history SD-XXX-001
 
 ### Rule
 **Never patch a downstream stage to compensate for upstream data.** The fix belongs where the bad data originates.
-
-## Protocol Consistency Linter
-
-Static checks for the LEO Protocol CLAUDE.md family. Detects threshold drift, enum drift, version drift, duplicate authoritative lists, and other consistency violations.
-
-### Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run protocol:lint` | On-demand audit. Writes violations to `leo_lint_violations`. Exit non-zero on blocking violations. |
-| `npm run protocol:lint:test` | Run rule fixtures (positive/negative). CI uses this to verify rules. |
-| `npm run protocol:lint:promote <rule-id>` | Promote a warn-severity rule to block-severity. Requires 2+ clean regen runs. |
-
-### Auto-run
-The linter runs inside `generate-claude-md-from-db.js` after DB fetch and before file writes. Block-severity violations abort the regen — CLAUDE*.md files are not overwritten when drift is detected.
-
-### Bypass (rate-limited)
-```bash
-node scripts/generate-claude-md-from-db.js --skip-lint --skip-reason "<text>"
-```
-Limit: 3 bypasses per repository per week. All bypasses logged to `leo_lint_run_history`.
-
-### Where things live
-| Item | Location |
-|------|----------|
-| Declarative rules (JSON pattern) | `scripts/protocol-lint/rules/declarative/*.json` |
-| Code rules (semantic) | `scripts/protocol-lint/rules/code/*.mjs` |
-| Fixtures (positive + negative per rule) | `scripts/protocol-lint/fixtures/*.json` |
-| Engine | `scripts/protocol-lint/engine.mjs` |
-| Audit tables | `leo_lint_violations`, `leo_lint_run_history`, `leo_lint_rules` |
-
-### Adding a rule
-New rules ship at `severity='warn'`. After 2+ consecutive regen runs with zero violations on a rule, run `npm run protocol:lint:promote <rule-id>` to elevate to `severity='block'`. Every rule must include a positive fixture (triggers detection) and a negative fixture (does not trigger).
-
-*Added: SD-PROTOCOL-LINTER-001*
 
 ## 🗄️ Supabase Database Operations
 

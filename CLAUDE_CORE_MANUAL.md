@@ -1,8 +1,8 @@
-<!-- file_content_hash: 662a5e296821d64f -->
+<!-- file_content_hash: d31dea3fa04a2948 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE_MANUAL.md — Core Manual (reference companion)
 
-**Generated**: 2026-08-29 2:17:30 PM
+**Generated**: 2026-08-30 6:28:05 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form CORE reference — strategic governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge quality rubric, built-in agent architecture, pattern search CLI
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every session start
@@ -52,6 +52,49 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
+
+## Claude Code Plan Mode Integration
+
+**Status**: ACTIVE | **Version**: 1.0.0
+
+### Overview
+Claude Code's Plan Mode integrates with LEO Protocol to provide:
+- **Automatic Permission Bundling** - Reduces prompts by 70-80%
+- **Intelligent Plan Generation** - SD-type aware action plans
+- **Phase Transition Automation** - Activates at phase boundaries
+
+### SD Type Profiles
+| SD Type | Workflow | Sub-Agents | PR Size Target |
+|---------|----------|------------|----------------|
+| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
+| `enhancement` | standard | VALIDATION | 75 (max 200) |
+| `bug` | fast | RCA | 50 (max 100) |
+| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
+| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
+| `security` | careful | SECURITY, RISK | 50 (max 150) |
+| `documentation` | light | DOCMON | no limit |
+
+### Permission Bundling by Phase
+| Phase | Pre-approved Actions |
+|-------|---------------------|
+| LEAD | SD queue commands, handoff scripts, git status |
+| PLAN | PRD generation, sub-agent orchestration, git branches |
+| EXEC | Tests, builds, git commit/push, handoff scripts |
+| VERIFY | Verification scripts, handoff scripts |
+| FINAL | Merge operations, archive commands |
+
+### Automatic Activation
+- **Session start**: If SD detected on current branch
+- **Phase boundaries**: Before each handoff execution
+
+### Configuration
+```json
+// .claude/leo-plan-mode-config.json
+{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
+```
+
+### Module Location
+`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
 ## PR Size Guidelines
 
@@ -121,6 +164,40 @@ const solution = await kb.getSolution('PAT-003');
 - Critical severity: 5+ occurrences
 - High severity: 7+ occurrences
 - Increasing trend: 4+ occurrences
+
+## Protocol Consistency Linter
+
+Static checks for the LEO Protocol CLAUDE.md family. Detects threshold drift, enum drift, version drift, duplicate authoritative lists, and other consistency violations.
+
+### Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run protocol:lint` | On-demand audit. Writes violations to `leo_lint_violations`. Exit non-zero on blocking violations. |
+| `npm run protocol:lint:test` | Run rule fixtures (positive/negative). CI uses this to verify rules. |
+| `npm run protocol:lint:promote <rule-id>` | Promote a warn-severity rule to block-severity. Requires 2+ clean regen runs. |
+
+### Auto-run
+The linter runs inside `generate-claude-md-from-db.js` after DB fetch and before file writes. Block-severity violations abort the regen — CLAUDE*.md files are not overwritten when drift is detected.
+
+### Bypass (rate-limited)
+```bash
+node scripts/generate-claude-md-from-db.js --skip-lint --skip-reason "<text>"
+```
+Limit: 3 bypasses per repository per week. All bypasses logged to `leo_lint_run_history`.
+
+### Where things live
+| Item | Location |
+|------|----------|
+| Declarative rules (JSON pattern) | `scripts/protocol-lint/rules/declarative/*.json` |
+| Code rules (semantic) | `scripts/protocol-lint/rules/code/*.mjs` |
+| Fixtures (positive + negative per rule) | `scripts/protocol-lint/fixtures/*.json` |
+| Engine | `scripts/protocol-lint/engine.mjs` |
+| Audit tables | `leo_lint_violations`, `leo_lint_run_history`, `leo_lint_rules` |
+
+### Adding a rule
+New rules ship at `severity='warn'`. After 2+ consecutive regen runs with zero violations on a rule, run `npm run protocol:lint:promote <rule-id>` to elevate to `severity='block'`. Every rule must include a positive fixture (triggers detection) and a negative fixture (does not trigger).
+
+*Added: SD-PROTOCOL-LINTER-001*
 
 ## 📊 Database Column Quick Reference
 
@@ -269,8 +346,34 @@ Handoff-time migration auto-apply is gated by a **fail-closed, allow-list tier c
 Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
 ```
 
+## Genesis Codebase Locations (detail)
+
+## Genesis Codebase Locations
+
+**CRITICAL**: Genesis spans TWO codebases:
+
+| Codebase | Path | Contents |
+|----------|------|----------|
+| **EHG_Engineer** | `/lib/genesis/` | Infrastructure (quality gates, TTL, patterns) |
+| **EHG App** | `/lib/genesis/` | Orchestrators (ScaffoldEngine, repo-creator) |
+| **EHG App** | `/scripts/genesis/` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
+
+### Quick Reference
+| Task | Location |
+|------|----------|
+| Create simulation | `node /ehg/scripts/genesis/genesis-pipeline.js create "seed"` |
+| Ratify simulation | `POST /api/genesis/ratify` |
+| Query patterns | `EHG_Engineer/lib/genesis/pattern-library.js` |
+| Run quality gates | `EHG_Engineer/lib/genesis/quality-gates.js` |
+| Soul extraction (Stage 16) | `ehg/scripts/genesis/soul-extractor.js` |
+| Production gen (Stage 17) | `ehg/scripts/genesis/production-generator.js` |
+
+### Full Documentation
+- Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
+- Quick reference: `docs/reference/genesis-codebase-guide.md`
+
 ---
 
-*Generated from database: 2026-08-29*
+*Generated from database: 2026-08-30*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=governance_strategic_hierarchy, builtin_agent_integration, pattern_search_guide, ai_quality_russian_judge, pr_size_guidelines, governance_chairman_ceo_roles, database_column_reference, migration_tier_policy_detail, sub_agent_routing_table_detail). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=governance_strategic_hierarchy, builtin_agent_integration, pattern_search_guide, ai_quality_russian_judge, pr_size_guidelines, governance_chairman_ceo_roles, database_column_reference, migration_tier_policy_detail, sub_agent_routing_table_detail, infrastructure, protocol_lint_tooling, genesis_codebase_detail). Do not hand-edit — edit the DB section and regenerate.*

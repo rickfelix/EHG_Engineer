@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-30T10:19:34.730Z",
-  "git_commit": "bee9c91a",
+  "generated_at": "2026-08-30T10:28:05.119Z",
+  "git_commit": "4dad1bb9",
   "db_snapshot_hash": "683d058bb52a5344",
   "files": {
     "CLAUDE.md": {
@@ -13,18 +13,18 @@
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 76860,
-      "bytes": 77367,
-      "estimated_tokens": 19215,
-      "content_hash": "349971835616a7c0",
+      "chars": 73404,
+      "bytes": 73909,
+      "estimated_tokens": 18351,
+      "content_hash": "5f94f8697899503a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
       "type": "full",
-      "chars": 16838,
-      "bytes": 16914,
-      "estimated_tokens": 4210,
-      "content_hash": "703a81dd83760bd0",
+      "chars": 21440,
+      "bytes": 21518,
+      "estimated_tokens": 5360,
+      "content_hash": "d31dea3fa04a2948",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STATIC-PREFIX-DIET-001\\CLAUDE_CORE_MANUAL.md"
     },
     "CLAUDE_LEAD.md": {
