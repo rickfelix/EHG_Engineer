@@ -9,6 +9,7 @@ import {
   latestRunPerWorkflow,
   classifyGhaCronRows,
   observedGapStats,
+  shouldStampDecision,
 } from '../../../lib/periodic-liveness/gha-run-resolver.mjs';
 
 function run(overrides = {}) {
@@ -91,6 +92,22 @@ describe('classifyGhaCronRows', () => {
     ]);
     const [decision] = classifyGhaCronRows(latestByFile, ['gha_cron:periodic-liveness-watcher-cron.yml']);
     expect(decision).toEqual({ processKey: 'gha_cron:periodic-liveness-watcher-cron.yml', decision: 'stamp', ranAtIso: '2026-08-23T19:09:05Z' });
+  });
+});
+
+describe('shouldStampDecision (QF-20260830-795: a failed run is still an observed conclusion)', () => {
+  it('stamps a success decision', () => {
+    expect(shouldStampDecision({ decision: 'stamp', ranAtIso: '2026-08-30T00:00:00Z' })).toBe(true);
+  });
+  it('stamps an overdue (failed/cancelled) decision too -- this is the residual fix', () => {
+    expect(shouldStampDecision({ decision: 'overdue', ranAtIso: '2026-08-30T00:00:00Z' })).toBe(true);
+  });
+  it('never stamps no_data (nothing observed, nothing to stamp)', () => {
+    expect(shouldStampDecision({ decision: 'no_data' })).toBe(false);
+  });
+  it('is null-safe', () => {
+    expect(shouldStampDecision()).toBe(false);
+    expect(shouldStampDecision(undefined)).toBe(false);
   });
 });
 
