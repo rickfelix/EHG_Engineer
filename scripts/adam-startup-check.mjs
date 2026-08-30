@@ -279,6 +279,21 @@ export const ADAM_LOOPS = [
     cron: '50 */3 * * *',
     prompt: 'Adam decision-driving-sweep tick: read the pending chairman-decision queue (node scripts/chairman-decisions.mjs list) and DRIVE each pending decision toward resolution — for an un-surfaced decision that survives the pre-send rubric, send the SMS decision packet (labeled options + RECOMMENDED default + no-reply auto-default policy) via node scripts/adam-chairman-decision.mjs per the CHAIRMAN SMS CHANNEL DUTY; reconcile any in-flight no-reply retries (the ratified retry->auto-default clock, quiet-hours-paused); and re-surface chairman-gated blocks starving the belt (BELT-NEVER-DRY branch 3). Propose-only (CONST-002); if nothing is pending, STAY SILENT (silence-by-default).',
   },
+  {
+    // QF-20260830-939: THE TRIANGULATION AUDIT (leo_protocol_sections id=601, chairman
+    // in-terminal 2026-08-30 16:50Z, ratification 7b28b8f0) was armed by Adam only as a SESSION
+    // CronCreate (39d21902, '11 9 * * 1') — harness crons auto-expire after 7 days, so it would
+    // have died 2026-09-06, the day BEFORE the first scheduled cycle (2026-09-07). Same class as
+    // the belt-countdown duty that died with every session before SD-LEO-INFRA-ADAM-MACHINERY-
+    // CONSUMER-001. Registered here so a fresh /adam re-arms it every startup, and given a
+    // registry-stamped backstop (scripts/adam-triangulation-audit-stamp.mjs) so a missed Monday
+    // is visible to the liveness ladder, not silent.
+    key: 'triangulation-audit',
+    label: 'Weekly triangulation audit (Mon, chairman-injectable, one cycle live at a time; ratification 7b28b8f0)',
+    script: null, // agent-judgment tick — question/measurement/resolution, no single script
+    cron: '11 9 * * 1',
+    prompt: 'Adam triangulation-audit tick (chairman-ratified 2026-08-30 16:50Z, ratification 7b28b8f0): weekly recurring self-analytics process, one cycle live at a time — if a cycle is already in flight (chairman-injectable), skip this tick. Pose ONE neutral question (no embedded hypothesis) for this cycle\'s area, naming which instrument each answerer should use to measure it — rotate area per cycle: A protocol gates, B worker efficiency, C gauge honesty, D comms/message-wake, E sourcing quality, F fleet mechanics (a P0 finding re-audits its own area the next cycle). Send the SAME question identically to Solomon and to the coordinator (reply-needed), and independently answer it yourself — answerers never confer; a shared instrument counts as one measurement, and any correlation is disclosed. Every discrepancy is resolved by measurement against the repo/DB, never seniority or consensus, by the ROTATING resolver (Adam -> coordinator -> Solomon per the contract); the resolver rules against himself when the data says so, and an unmeasurable discrepancy is itself a missing-instrument action item. Then produce the FOUR MANDATORY OUTPUTS in order: (1) side-by-side of the three reads, (2) findings, (3) data-resolved discrepancies naming the settling instrument and which read fell, (4) RANKED RECOMMENDATIONS with owners, evidence, and a recommended-against line — route through Adam\'s sourcing lane under dedup + STEP-0 (P0 to belt, rest to feedback); the process itself holds no minting privilege of its own. Write exactly ONE feedback row for the cycle (category self_analytics), then run `node scripts/adam-triangulation-audit-stamp.mjs` to stamp the registry liveness backstop. SKIP LOUDLY (state why, never a silent no-op) during fleet recovery.',
+  },
 ];
 
 // Parse the armed-cron basenames/prompts the agent passes from its CronList output.
