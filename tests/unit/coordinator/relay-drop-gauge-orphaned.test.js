@@ -128,7 +128,7 @@ describe('loadCounterpartySessions (FR-1 IO shell, fail-soft)', () => {
     return {
       from() { return this; },
       select() { return this; },
-      in() { return Promise.resolve({ data: rows }); },
+      in() { return { limit: () => Promise.resolve({ data: rows }) }; },
     };
   }
 

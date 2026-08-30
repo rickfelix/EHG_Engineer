@@ -74,7 +74,8 @@ describe('resolveCommitment (FR-5 AC-2: the explicit re-own/drop mechanism)', ()
       update: vi.fn(() => chain),
       eq: vi.fn(() => chain),
       is: vi.fn(() => chain),
-      select: vi.fn(async () => ({ data, error })),
+      select: vi.fn(() => chain),
+      limit: vi.fn(async () => ({ data, error })),
     };
     return { from: () => chain, _chain: chain };
   }

@@ -27,7 +27,7 @@ describe('publishRotationCommitments (FR-5)', () => {
           return { select: () => ({ is: () => ({ limit: async () => ({ data: commitments }) }) }) };
         }
         if (table === 'claude_sessions') {
-          return { select: () => ({ in: async () => ({ data: ownerSessions }) }) };
+          return { select: () => ({ in: () => ({ limit: async () => ({ data: ownerSessions }) }) }) };
         }
         throw new Error(`unexpected table: ${table}`);
       },

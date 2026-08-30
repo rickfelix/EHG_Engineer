@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-08-30T15:14:05.162Z",
+ "generated_at": "2026-08-30T21:10:07.900Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 870,
+ "table_count": 871,
  "view_count": 192,
  "check_count": 1550,
  "tables": {
@@ -118,6 +118,7 @@
   "codebase_health_config": "{id,dimension,enabled,threshold_warning,threshold_critical,min_occurrences,max_sds_per_cycle,allowlist,metadata,created_at,updated_at}",
   "codebase_health_snapshots": "{id,dimension,score,trend_direction,findings,finding_count,metadata,target_application,scanned_at,created_at}",
   "codebase_semantic_index": "{id,file_path,entity_type,entity_name,code_snippet,semantic_description,embedding,line_start,line_end,language,application,indexed_at,last_updated}",
+  "commitments": "{id,owner_session,counterparty_session,subject,due_by,resolved_at,resolution,created_at}",
   "companies": "{id,name,description,logo_url,website,industry,settings,created_at,is_demo,mission,vision,portfolio_id}",
   "competitive_baselines": "{id,venture_id,competitor_name,baseline_type,pricing_data,feature_coverage,performance_metrics,epistemic_tag,created_at,updated_at,produced_at,expires_at,citations}",
   "competitor_intelligence": "{id,venture_id,global_competitor_id,competitor_url,competitor_name,source,four_buckets,competitive_intelligence,differentiation_strategy,differentiation_delta,sanitization_status,quality,created_by,created_at,updated_at}",
@@ -1291,7 +1292,7 @@
   "codebase_semantic_index.codebase_semantic_index_entity_type_check": "CHECK ((entity_type = ANY (ARRAY['function'::text, 'class'::text, 'component'::text, 'interface'::text, 'type'::text, 'utility'::text, 'module'::text, 'table'::text, 'view'::text])))",
   "codebase_semantic_index.codebase_semantic_index_language_check": "CHECK ((language = ANY (ARRAY['typescript'::text, 'javascript'::text, 'tsx'::text, 'jsx'::text, 'sql'::text, 'json'::text])))",
   "competitive_baselines.competitive_baselines_baseline_type_check": "CHECK ((baseline_type = ANY (ARRAY['COMPETITOR'::text, 'STATUS_QUO'::text])))",
-  "competitive_baselines.competitive_baselines_epistemic_tag_check": "CHECK ((epistemic_tag = ANY (ARRAY['FACT'::text, 'ASSUMPTION'::text, 'SIMULATION'::text, 'UNKNOWN'::text])))",
+  "competitive_baselines.competitive_baselines_epistemic_tag_check": "CHECK ((epistemic_tag = ANY (ARRAY['FACT'::text, 'ASSUMPTION'::text, 'SIMULATION'::text, 'UNKNOWN'::text, 'OBSERVED'::text])))",
   "competitor_intelligence.competitor_intelligence_sanitization_status_check": "CHECK ((sanitization_status = ANY (ARRAY['pending'::text, 'passed'::text, 'flagged'::text])))",
   "competitor_intelligence.competitor_intelligence_source_check": "CHECK ((source = ANY (ARRAY['teardown'::text, 'differentiation_research'::text, 'discovery'::text, 'manual'::text])))",
   "competitors.chk_competitors_lifecycle_stage": "CHECK ((lifecycle_stage = ANY (ARRAY['seed'::text, 'growth'::text, 'mature'::text, 'declining'::text])))",

@@ -661,7 +661,8 @@ async function publishRotationCommitments(supabase) {
     const { data: ownerSessions, error: ownerErr } = await supabase
       .from('claude_sessions')
       .select('session_id, released_at, last_tool_at, metadata')
-      .in('session_id', ownerIds);
+      .in('session_id', ownerIds)
+      .limit(200);
     if (ownerErr) process.stderr.write(`[session-register] rotation.owner_sessions_query_failed error=${ownerErr.message}\n`);
     const ownerById = {};
     for (const row of (ownerSessions || [])) ownerById[row.session_id] = row;
