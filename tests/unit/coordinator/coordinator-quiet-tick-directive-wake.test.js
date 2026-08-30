@@ -55,6 +55,21 @@ describe('hasUnactionedDirective (TS-3: directive-kind detection wires into the 
     expect(await hasUnactionedDirective(sb, null)).toBe(false);
     expect(sb.from).not.toHaveBeenCalled();
   });
+
+  it('QF-20260830-814: an unread row rerouted to payload.informational=true does NOT hard-wake (it is moot, and coordinator_reminder has no ack path that would ever clear it)', async () => {
+    const sb = buildSupabaseStub({ rows: [{ id: 'row-1', payload: { kind: 'coordinator_reminder', informational: true } }] });
+    expect(await hasUnactionedDirective(sb, 'coord-session-id')).toBe(false);
+  });
+
+  it('QF-20260830-814: a genuine (non-informational) unread directive still hard-wakes even alongside a moot informational row', async () => {
+    const sb = buildSupabaseStub({
+      rows: [
+        { id: 'row-1', payload: { kind: 'coordinator_reminder', informational: true } },
+        { id: 'row-2', payload: { kind: 'coordinator_request' } },
+      ],
+    });
+    expect(await hasUnactionedDirective(sb, 'coord-session-id')).toBe(true);
+  });
 });
 
 /**

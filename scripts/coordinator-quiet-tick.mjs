@@ -309,19 +309,26 @@ function saveLastState(s) {
  *
  * Fail-soft: a query error returns false (never blocks the tick, never forces a
  * false hard-wake on an unrelated DB hiccup).
+ *
+ * QF-20260830-814: a row rerouted into a DIRECTIVE_KINDS member (e.g. coordinator_reminder,
+ * which has NO ack path in the worker checkin flow -- see COORDINATOR_UNACKABLE_KINDS above)
+ * can never clear read_at through normal consumers, pinning the hard-wake cadence at
+ * DIRECTIVE_WAKE_MIN_S indefinitely on a row invisible to every peek surface. A row the
+ * sweep marks payload.informational=true is by definition moot (no action possible) --
+ * exclude it from the hard-wake check rather than let it hang the coordinator's cadence.
  */
 export async function hasUnactionedDirective(sb, coordinatorId) {
   if (!coordinatorId) return false;
   try {
     const { data, error } = await sb
       .from('session_coordination')
-      .select('id')
+      .select('id, payload')
       .eq('target_session', coordinatorId)
       .in('payload->>kind', DIRECTIVE_KINDS)
       .is('read_at', null)
-      .limit(1);
+      .limit(50);
     if (error) return false;
-    return Boolean(data && data.length > 0);
+    return Boolean((data || []).some((r) => !(r.payload && r.payload.informational === true)));
   } catch {
     return false;
   }
