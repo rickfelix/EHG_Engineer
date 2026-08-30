@@ -627,14 +627,23 @@ async function main() {
 
 /**
  * FR-5: on register, list every open (resolved_at IS NULL) commitment whose owner_session is
- * now a RELEASED seat, as one published block (fail-soft, never blocks SessionStart). This
- * fires on every SessionStart -- it is a publish-only surface, not an enforcement gate; a
+ * now ORPHANED (per FR-1's classifyCommitmentLiveness -- released_at set, OR classifySeat()
+ * dead-but-unreleased), as one published block (fail-soft, never blocks SessionStart).
+ *
+ * VALIDATION finding (PLAN_VERIFICATION, evidence 191ea9a9): the first cut of this function
+ * filtered only on `released_at IS NOT NULL`, which misses the exact specimen this whole SD
+ * exists to fix -- a dead-but-never-released owner seat (released_at=NULL, e.g. the frozen
+ * Adam seat f27a883d that motivated FR-1). Now reuses the same discriminator FR-1/FR-2
+ * already ship, so this hook and the gauge agree on what "orphaned" means.
+ *
+ * This fires on every SessionStart -- it is a publish-only surface, not an enforcement gate; a
  * commitment stays listed here until it is explicitly re-owned or resolved via the
- * commitments table.
+ * commitments table (see lib/coordinator/commitment-writer.cjs's resolveCommitment()).
  * @param {object} supabase
  */
 async function publishRotationCommitments(supabase) {
   try {
+    const { classifyCommitmentLiveness, LIVENESS } = require('../../lib/coordinator/relay-drop-gauge.cjs');
     const { data: openCommitments, error: commitmentsErr } = await supabase
       .from('commitments')
       .select('id, owner_session, subject, due_by')
@@ -649,14 +658,17 @@ async function publishRotationCommitments(supabase) {
     const ownerIds = [...new Set(openCommitments.map((c) => c.owner_session).filter(Boolean))];
     if (ownerIds.length === 0) return;
 
-    const { data: releasedOwners, error: releasedErr } = await supabase
+    const { data: ownerSessions, error: ownerErr } = await supabase
       .from('claude_sessions')
-      .select('session_id')
-      .in('session_id', ownerIds)
-      .not('released_at', 'is', null);
-    if (releasedErr) process.stderr.write(`[session-register] rotation.released_owners_query_failed error=${releasedErr.message}\n`);
-    const releasedIds = new Set((releasedOwners || []).map((r) => r.session_id));
-    const orphaned = openCommitments.filter((c) => releasedIds.has(c.owner_session));
+      .select('session_id, released_at, last_tool_at, metadata')
+      .in('session_id', ownerIds);
+    if (ownerErr) process.stderr.write(`[session-register] rotation.owner_sessions_query_failed error=${ownerErr.message}\n`);
+    const ownerById = {};
+    for (const row of (ownerSessions || [])) ownerById[row.session_id] = row;
+
+    const orphaned = openCommitments.filter((c) =>
+      classifyCommitmentLiveness(ownerById[c.owner_session] || null) === LIVENESS.ORPHANED
+    );
     if (orphaned.length === 0) return;
 
     const lines = orphaned.map((c) =>
@@ -665,7 +677,7 @@ async function publishRotationCommitments(supabase) {
     process.stderr.write(
       `[session-register] rotation.open_commitments n=${orphaned.length}\n` +
       `[SEAT ROTATION] ${orphaned.length} open commitment(s) from a retired predecessor seat -- ` +
-      `re-own or explicitly drop each:\n${lines.join('\n')}\n`
+      `re-own or explicitly drop each (resolveCommitment() in lib/coordinator/commitment-writer.cjs):\n${lines.join('\n')}\n`
     );
   } catch (e) {
     process.stderr.write(`[session-register] rotation.open_commitments_failed error=${e?.message || String(e)}\n`);
