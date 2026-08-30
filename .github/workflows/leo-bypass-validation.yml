@@ -48,8 +48,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # SD-LEO-INFRA-BYPASS-DETECTION-REQUIRED-001: on a pull_request run, scope validation to
+      # the SD the PR is actually about -- never the fleet-wide 7-day window. workflow_dispatch
+      # and push runs are untouched (they never had a PR to scope from).
+      - name: Resolve PR SD
+        id: resolve-pr-sd
+        if: github.event_name == 'pull_request'
+        env:
+          # A branch name is untrusted input (can carry $, backticks, ;, |) -- pass via env,
+          # never interpolate directly into the script body. Mirrors
+          # .github/workflows/story-gate-check.yml's own HEAD_REF handling.
+          HEAD_REF: ${{ github.head_ref }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/ci/resolve-pr-bypass-sd.mjs >> "$GITHUB_OUTPUT"
+
       - name: Run Bypass Detection
         id: bypass-detection
+        if: github.event_name != 'pull_request' || (steps.resolve-pr-sd.outputs.resolution == 'resolved')
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -61,11 +77,17 @@ jobs:
 
           # Determine arguments
           ARGS=""
-          if [ -n "${{ github.event.inputs.sd_id }}" ]; then
-            ARGS="--sd=${{ github.event.inputs.sd_id }}"
-          fi
-          if [ "${{ github.event.inputs.validate_all }}" == "true" ]; then
-            ARGS="$ARGS --all"
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Scoped to exactly the SD this PR resolved to (Resolve PR SD step, above).
+            ARGS="--sd=${{ steps.resolve-pr-sd.outputs.sd_uuid }}"
+          else
+            # workflow_dispatch / push: unchanged fleet-wide behavior.
+            if [ -n "${{ github.event.inputs.sd_id }}" ]; then
+              ARGS="--sd=${{ github.event.inputs.sd_id }}"
+            fi
+            if [ "${{ github.event.inputs.validate_all }}" == "true" ]; then
+              ARGS="$ARGS --all"
+            fi
           fi
 
           # Run the validator
@@ -75,6 +97,11 @@ jobs:
           EXIT_CODE=$?
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           exit $EXIT_CODE
+
+      - name: Skip annotation (non-SD / QF branch)
+        if: github.event_name == 'pull_request' && (steps.resolve-pr-sd.outputs.resolution == 'skip-no-key' || steps.resolve-pr-sd.outputs.resolution == 'skip-qf')
+        run: |
+          echo "::notice::Bypass detection skipped -- branch '${{ github.head_ref }}' resolved to '${{ steps.resolve-pr-sd.outputs.resolution }}' (no SD handoff timeline to validate)."
 
       - name: Upload JSON Report
         if: always()

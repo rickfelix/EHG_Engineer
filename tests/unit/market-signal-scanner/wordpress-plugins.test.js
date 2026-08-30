@@ -54,11 +54,19 @@ describe('wordpress-plugins fetchSignal (SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001 
   const originalFetch = global.fetch;
   afterEach(() => {
     global.fetch = originalFetch;
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('(a) returns readings shaped per the FamilyReading interface (money_in + stickiness, >=1 observation each)', async () => {
     global.fetch = mockFetchOk();
+    // QF-20260829-917: pin the clock so the fixture's baseline/recent rows stay inside
+    // their intended windows regardless of the real calendar date. Without this, the
+    // 'recent' row (2026-06-01) ages out of the live 90-day window over time and this
+    // strict assertion fails deterministically -- see (a2) below for the pinned-empty-
+    // window companion case this line is deliberately NOT widened to cover.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T00:00:00.000Z'));
     const priorRows = [
       { raw_value: 4000000, fetched_at: '2025-08-01T00:00:00.000Z' },
       { raw_value: 4900000, fetched_at: '2026-06-01T00:00:00.000Z' },
@@ -96,6 +104,27 @@ describe('wordpress-plugins fetchSignal (SD-LEO-INFRA-MARKET-SIGNAL-SCANNER-001 
 
     // The observation was persisted for future cycles (one insert per family).
     expect(supabase.insertedRows).toHaveLength(2);
+  });
+
+  // QF-20260829-917: the documented empty-recent-window companion to (a) -- when the
+  // pinned "now" pushes every prior row (including the one meant to be 'recent') strictly
+  // older than 90 days, recentAvg has no rows and computePercentSlope(null, baselineAvg)
+  // returns null per slope.js. Pinned deliberately, not left to depend on the live clock.
+  it('(a2) returns slope_90d_vs_baseline: null when the pinned clock pushes all prior rows out of the 90-day recent window', async () => {
+    global.fetch = mockFetchOk();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2027-01-01T00:00:00.000Z'));
+    const priorRows = [
+      { raw_value: 4000000, fetched_at: '2025-08-01T00:00:00.000Z' },
+      { raw_value: 4900000, fetched_at: '2026-06-01T00:00:00.000Z' },
+    ];
+    const supabase = buildSupabase({ rows: priorRows });
+
+    const result = await fetchSignal({ query: { term: 'akismet' }, supabase });
+
+    expect(result.errors).toEqual([]);
+    const moneyIn = result.readings.find((r) => r.family === 'money_in');
+    expect(moneyIn.slope_90d_vs_baseline).toBeNull();
   });
 
   it('(b) content_hash is a real sha256 of the raw detail response text', async () => {
