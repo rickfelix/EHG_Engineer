@@ -412,6 +412,14 @@ describe('FR-2: selectRecentDeadLetters (pure)', () => {
     ], { now: NOW });
     expect(r.map((x) => x.id)).toEqual(['newest', 'recent']);
   });
+
+  it('QF-20260830-482: drops a dead-lettered row the target already read (read_at set) — delivered, not gone', () => {
+    const r = receipts.selectRecentDeadLetters([
+      dl(iso(NOW - 5 * MIN), { id: 'unread', read_at: null }),
+      dl(iso(NOW - 5 * MIN), { id: 'read-and-flagged', read_at: iso(NOW - 19 * 60 * MIN) }),
+    ], { now: NOW });
+    expect(r.map((x) => x.id)).toEqual(['unread']);
+  });
 });
 
 // ───────────── SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — full-lane inbox drain ─────────────
