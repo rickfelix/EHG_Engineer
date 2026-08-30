@@ -73,9 +73,17 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 export const ET_ZONE = 'America/New_York';
 
-/** Inclusive ET hours the report may be produced in. 05:00-08:59 ET. */
+/**
+ * QF-20260830-478: FLOOR ONLY, not a ceiling. Measured 08-27 through 08-30: every GHA tick for
+ * this workflow landed after 08:59 ET (GitHub delivering the schedule late/sparse, cause
+ * unmeasured), so the 05:00-08:59 CEILING silently starved the producer for 4 straight days while
+ * every run exited green (`outside_et_window`, not a failure). The ceiling was always redundant
+ * with the sweep's own idempotence key (`windowKey` below, one report per ET calendar day,
+ * `already_produced` skip) — nothing upstream needs a ceiling to prevent duplicates, so removing
+ * it costs nothing and admits whichever tick actually lands. The 05:00 floor stays: it is the only
+ * real constraint (the report must not land pre-dawn).
+ */
 export const WINDOW_START_HOUR = 5;
-export const WINDOW_END_HOUR = 8;
 
 export const SD_KEY = 'SD-LEO-INFRA-DRIVE-LOOP-INSTRUMENT-001-B';
 export const ACTIVATION_TRIGGER = '.github/workflows/drive-report-cron.yml';
@@ -122,13 +130,13 @@ export function windowKey(nowMs) {
  */
 export function withinWindow(nowMs) {
   const { hour } = etParts(nowMs);
-  const inside = hour >= WINDOW_START_HOUR && hour <= WINDOW_END_HOUR;
+  const inside = hour >= WINDOW_START_HOUR;
   return {
     inside,
     etHour: hour,
     reason: inside
-      ? `${hour}:00 ET is inside the ${WINDOW_START_HOUR}:00-${WINDOW_END_HOUR}:59 ET window`
-      : `${hour}:00 ET is outside the ${WINDOW_START_HOUR}:00-${WINDOW_END_HOUR}:59 ET window — this is the other DST cron line firing, which is expected, not a fault`,
+      ? `${hour}:00 ET is at or after the ${WINDOW_START_HOUR}:00 ET floor`
+      : `${hour}:00 ET is before the ${WINDOW_START_HOUR}:00 ET floor — the report must not land pre-dawn`,
   };
 }
 

@@ -10,16 +10,25 @@ name: "Drive Report producer (5:00 ET self-healing cron)"
 # than a CronCreate: session-armed jobs die with the session and expire in 7 days. Its sibling
 # morning-brief-sms had exactly that defect and missed its very next fire.
 #
+# ── QF-20260830-478: FLOOR ONLY, WIDENED FOR LATE DELIVERY ──────────────────────────────────
+# Measured 08-27 through 08-30: every tick GitHub actually delivered for this workflow landed
+# after 08:59 ET (late/sparse schedule delivery, cause unmeasured), so the runner's OLD ceiling
+# (05:00-08:59 ET) silently starved the producer for 4 straight days while every run exited green
+# (`outside_et_window`). The runner now admits any tick at or after the 05:00 ET floor — nothing
+# upstream needs a ceiling, since the idempotence key (one report per ET calendar day) already
+# prevents duplicates regardless of how many ticks land. Widened both lines here from 4h to 7h so
+# a floor-only sweep has more ticks to land on if GitHub keeps delivering late.
+#
 # ── DUAL CRON LINES: THE DST HALF LIVES HERE, THE OTHER HALF LIVES IN THE RUNNER ────────────
 # GitHub cron is UTC and does not observe DST, so any single UTC schedule drifts an hour twice a
 # year. Both candidate schedules are registered PERMANENTLY, and scripts/cron/drive-report-sweep.mjs
-# gates on the America/New_York wall clock (withinWindow). Neither half is correct alone:
+# gates on the America/New_York wall clock (withinWindow). Neither half alone covers both offsets:
 #
-#   '*/15 9-12 * * *'   is 05:00-08:45 ET in EDT — and 04:00-07:45 ET in EST
-#   '*/15 10-13 * * *'  is 06:00-09:45 ET in EDT — and 05:00-08:45 ET in EST
+#   '*/15 9-15 * * *'   is 05:00-11:45 ET in EDT — and 04:00-10:45 ET in EST
+#   '*/15 10-16 * * *'  is 06:00-12:45 ET in EDT — and 05:00-11:45 ET in EST
 #
-# So in EITHER offset one line covers the window and the other spills an hour outside it; the
-# runner's ET-hour check discards the spill. The union, filtered, is exactly 05:00-08:59 ET all
+# So in EITHER offset one line's first hour falls before the 05:00 floor (discarded by the
+# runner) while the other covers it — the union, floor-filtered, is at-or-after 05:00 ET all
 # year. tests/unit/cron/drive-report-sweep.test.js asserts the ADMITTED SET across both offsets
 # rather than either line, because that is the property — the lines are only correct together.
 #
@@ -36,8 +45,8 @@ name: "Drive Report producer (5:00 ET self-healing cron)"
 
 on:
   schedule:
-    - cron: '*/15 9-12 * * *'    # covers 05:00-08:45 ET in EDT (summer)
-    - cron: '*/15 10-13 * * *'   # covers 05:00-08:45 ET in EST (winter)
+    - cron: '*/15 9-15 * * *'    # covers 05:00-11:45 ET in EDT (summer)
+    - cron: '*/15 10-16 * * *'   # covers 05:00-11:45 ET in EST (winter)
   workflow_dispatch:
 
 permissions:
@@ -58,7 +67,7 @@ concurrency:
 
 jobs:
   produce:
-    name: Produce the daily Drive Report (05:00-08:59 ET window)
+    name: Produce the daily Drive Report (05:00 ET floor, self-healing)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
