@@ -760,8 +760,11 @@ function printAvailable(d) {
       // QF-20260830-787: was a binary ternary (high-vs-else) over the 4-value priority enum,
       // so priority='critical' fell to the else branch and rendered MED — the row that most
       // needs a CRIT badge got the least alarming one. Map the full enum explicitly.
+      // QF-20260830-822: the unknown-value branch still defaulted to MED, silently preserving
+      // the same defect class for the NEXT unenumerated value (e.g. urgent/blocker) — an
+      // unrecognized priority now renders a loud `?<raw-value>` token instead of hiding as MED.
       const PRIORITY_BADGE = { critical: 'CRIT', high: 'HIGH', medium: 'MED', low: 'LOW' };
-      const prio = PRIORITY_BADGE[sd.priority] || 'MED';
+      const prio = PRIORITY_BADGE[sd.priority] || `?${sd.priority}`;
       console.log('    ' + pad(shortKey, 24) + pad(sd.title.substring(0, 38), 40) + prio);
     }
     if (d.unclaimedStandalone.length > displayed.length) {
