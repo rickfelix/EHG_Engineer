@@ -4,6 +4,7 @@
 // (per the column's own migration comment), so retired rows never accrue misses.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -46,4 +47,6 @@ async function main() {
   console.log('[qf-100] DONE — both rows retired (currently_expected_active=false) with provenance, readback-verified.');
 }
 
-main().catch((e) => { console.error('[qf-100] FAILED:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('[qf-100] FAILED:', e.message); process.exit(1); });
+}
