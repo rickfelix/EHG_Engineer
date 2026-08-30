@@ -1,9 +1,9 @@
 ---
 category: database
 status: approved
-version: 1.3.0
+version: 1.4.0
 author: rickfelix
-last_updated: 2026-08-25
+last_updated: 2026-08-30
 tags: [database, migrations, ci, governance]
 ---
 
@@ -84,6 +84,37 @@ read `NOT_APPLIED`/`PARTIAL` as **`CEREMONY_PENDING`** instead, carrying an `age
 is a distinct *label* (an expected wait-state, not silent neglect), not a distinct *lane*. It can
 be dispositioned `DEFERRED` or `RETIRED` exactly like any other gap, following the same
 adjudication process below.
+
+## `CHAIRMAN_APPLY_VERIFICATION`: ownership detection and WAIT semantics
+
+**Source**: SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 (2026-08-30).
+
+Two SDs (`SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001`, `SD-LEO-INFRA-REJECT-PATH-VENTURE-001`) shipped
+`status=completed` with unapplied migrations despite the `CHAIRMAN_APPLY_VERIFICATION` gate
+existing to catch exactly this. Root cause: the gate's migration-ownership detection
+(`scripts/modules/handoff/executors/lead-final-approval/gates.js` `createChairmanApplyVerificationGate`)
+matched a migration to its owning SD via `sdKeyOwnsFile()` (filename must literally embed the SD
+key) or an explicit `metadata.migration_files` declaration — a migration file named descriptively
+rather than after its SD key, with no declaration, silently resolved to `owned=[]` and the gate
+passed trivially with "no migration associated."
+
+**Fix — ownership widened (FR-1)**: a third source, `findMergedPrFileList()`
+(`chairman-apply-state.js`), unions the SD's actual merged-PR file list (via `gh pr view --json
+files`) into ownership detection. Additive only — never subtracts from `declared[]`/
+`sdKeyOwnsFile()`. Watch the basename-vs-fullpath split: `classifyMigrationApplyState()` records
+`database/migrations/` files by **basename only**, but `database/chairman-gated/` (and other
+`DEFAULT_EXTRA_ROOTS`) by **full repo-relative path** — the PR file list always returns full
+paths, so the union indexes both forms of each PR file.
+
+**Fix — verdict semantics (FR-2/FR-3)**: `CEREMONY_PENDING` now returns a `WAIT` verdict
+(`lib/handoff/wait-verdict.js`) instead of a hard FAIL, and mints a `chairman_decisions` row
+(`decision_type='migration_apply'`, idempotent) so the outstanding ceremony is visible on the
+chairman queue (`scripts/chairman-decisions.mjs list`) with a real, tested consumer — not a
+metadata-only whisper. Ordinary `NOT_APPLIED`/`PARTIAL` also routes through `WAIT` (mirrors the
+parent-orchestrator precedent), rather than a punitive FAIL that would burn retry budget on a
+known, re-checkable lifecycle state. A genuine classifier error remains a hard FAIL
+(`buildFailResult`) — the WAIT/FAIL boundary is: *determinate-but-not-yet-applied* waits,
+*indeterminate* fails.
 
 ## The four invariants
 

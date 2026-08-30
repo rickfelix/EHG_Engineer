@@ -179,6 +179,12 @@
   - **The four 2026-08-29 gate incidents are documented as unusable fixtures for this cohort**, not silently dropped — their record shape (`chairman_decisions`/`venture_stage_transitions`) is structurally incompatible with `opportunity_blueprints`. No gate-logic touched anywhere in this SD (scope fence held).
   - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 93%, EXEC-TO-PLAN 88%, PLAN-TO-LEAD 93%, LEAD-FINAL-APPROVAL 94%. 15 new unit tests (5 reader, 10 probe/filter) passing; full `tests/unit/vision/` suite (178 passed) shows zero regression from the shared-filter refactor.
 
+- **Closes a completion-integrity gap: two SDs shipped `completed` with their own migrations unapplied, past the exact gate meant to catch it** - PR #7733 (SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001)
+  - **Root cause**: `CHAIRMAN_APPLY_VERIFICATION`'s migration-ownership detection matched a migration to its SD only via a filename-embedded SD key or an explicit `metadata.migration_files` declaration. `SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001` and `SD-LEO-INFRA-REJECT-PATH-VENTURE-001` (2026-08-29) both shipped `completed` with unapplied migrations because neither filename embedded its SD key and neither declared the file — ownership silently resolved to `owned=[]` and the gate passed trivially.
+  - **Fix**: ownership detection widened with a third, additive source — the SD's actual merged-PR file list (`findMergedPrFileList`, `gh pr view --json files`). `CEREMONY_PENDING` (chairman-gated, awaiting ceremony) now returns a `WAIT` verdict and mints a real, idempotent `chairman_decisions` row (`decision_type='migration_apply'`) visible on the chairman queue — a named, tested consumer, not a metadata-only flag. Ordinary `NOT_APPLIED`/`PARTIAL` also routes through `WAIT` instead of a punitive FAIL, mirroring the parent-orchestrator precedent; genuine classifier errors remain a hard FAIL.
+  - **Backfill executed live**: all three 2026-08-29/30 specimens (adding `SD-LEO-INFRA-DIRECTION-BLIND-KILL-001`, discovered mid-implementation) carry `metadata.completion_integrity_flag` citing Solomon ruling 967e551d; a real pending `migration_apply` decision was minted for the specimen still awaiting its ceremony.
+  - **Verification**: LEAD-TO-PLAN 96%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 94%, LEAD-FINAL-APPROVAL 98%. Full regression sweep (`chairman`/`migration`/`lead-final`/`backfill` keyword scope) 229 files / 3163 tests passing, zero regressions.
+
 ## 2026-08-29
 
 ### Infrastructure
