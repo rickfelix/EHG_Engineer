@@ -1016,9 +1016,9 @@ function printHealth(d) {
 // (SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-1, prerequisite for FR-4.)
 async function printPeriodicLiveness(client) {
   const sb = client || supabase;
-  let { data: rows, error } = await sb
+  let { data: rows, error, count: registryTotal } = await sb
     .from('periodic_process_registry')
-    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at, expected_interval_seconds, grace_multiplier, liveness_source')
+    .select('process_key, display_name, process_type, currently_expected_active, last_fired_at, last_state, updated_at, expected_interval_seconds, grace_multiplier, liveness_source', { count: 'exact' })
     .order('process_type', { ascending: true });
 
   console.log('PERIODIC-PROCESS LIVENESS');
@@ -1033,6 +1033,18 @@ async function printPeriodicLiveness(client) {
     console.log('  (registry empty)');
     console.log('');
     return;
+  }
+
+  // count-truncation-diff-lint / SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6: this read is
+  // unbounded by design -- the panel renders the WHOLE registry (238 rows at time of writing) -- so
+  // it asks for an exact head count and STATES any shortfall rather than silently rendering a
+  // capped subset. A warn-only tripwire was tried first and rejected: it sits outside the select's
+  // own statement window, so the control could not see it, and more importantly a warning is the
+  // weaker artifact. THIS PANEL EXISTS TO EXPOSE GAUGES THAT MISREPORT THEIR OWN COVERAGE; it must
+  // not itself render a truncated fleet without naming the number it could not show -- which would
+  // hide precisely the never-stamped population this change was built to surface.
+  if (typeof registryTotal === 'number' && rows.length < registryTotal) {
+    console.log(`  !! SHOWING ${rows.length} OF ${registryTotal} REGISTRY ROWS — this read was truncated; the rows below are NOT the whole fleet`);
   }
 
   // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-4: exclude e2e fixture residue from the panel.

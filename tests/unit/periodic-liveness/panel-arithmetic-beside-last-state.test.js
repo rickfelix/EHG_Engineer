@@ -17,11 +17,11 @@ const require = createRequire(import.meta.url);
 const { printPeriodicLiveness } = require('../../../scripts/fleet-dashboard.cjs');
 
 /** Minimal stub of the supabase chain printPeriodicLiveness uses: .from().select().order(). */
-function stubClient(rows) {
+function stubClient(rows, count) {
   return {
     from: () => ({
       select: () => ({
-        order: () => Promise.resolve({ data: rows, error: null }),
+        order: () => Promise.resolve({ data: rows, error: null, count }),
       }),
     }),
   };
@@ -44,11 +44,11 @@ function row(over) {
   };
 }
 
-async function render(rows) {
+async function render(rows, count) {
   const lines = [];
   const spy = vi.spyOn(console, 'log').mockImplementation((...a) => lines.push(a.join(' ')));
   try {
-    await printPeriodicLiveness(stubClient(rows));
+    await printPeriodicLiveness(stubClient(rows, count));
   } finally {
     spy.mockRestore();
   }
@@ -105,5 +105,19 @@ describe('periodic-liveness panel: arithmetic rendered beside last_state', () =>
   it('still renders last_state itself — the arithmetic is added beside it, never substituted', async () => {
     const out = await render([row({ display_name: 'both-shown', last_state: 'OK' })]);
     expect(out).toMatch(/OK\s+standalone_cron/);
+  });
+
+  // The panel must never render a capped subset as if it were the fleet. A truncated liveness
+  // panel would hide the never-stamped population this change exists to surface -- the failure
+  // mode would be the fix's own subject matter, one layer up.
+  it('states the shortfall when the read returned fewer rows than the registry holds', async () => {
+    const out = await render([row({ display_name: 'only-one' })], 238);
+    expect(out).toMatch(/SHOWING 1 OF 238 REGISTRY ROWS/);
+    expect(out).toMatch(/NOT the whole fleet/);
+  });
+
+  it('says nothing about truncation when the row count matches the head count', async () => {
+    const out = await render([row({ display_name: 'complete' })], 1);
+    expect(out).not.toMatch(/SHOWING/);
   });
 });
