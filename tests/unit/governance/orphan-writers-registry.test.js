@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ORPHAN_ENTRIES, validateOrphanEntry, validateAllEntries } from '../../../lib/governance/orphan-writers-registry.js';
+import { ORPHAN_ENTRIES, ENTRY_TYPES, validateOrphanEntry, validateAllEntries } from '../../../lib/governance/orphan-writers-registry.js';
 import { DRAIN_DESCRIPTORS } from '../../../lib/governance/gauge-registry.js';
 
 describe('orphan-writers-registry: validateOrphanEntry (TS-1)', () => {
@@ -29,6 +29,29 @@ describe('orphan-writers-registry: validateOrphanEntry (TS-1)', () => {
   it('fails an entry missing id or entry_type', () => {
     expect(validateOrphanEntry({}).valid).toBe(false);
     expect(validateOrphanEntry({ id: 'x' }).valid).toBe(false);
+  });
+
+  it('fails an entry with an entry_type not in ENTRY_TYPES (QF-20260830-875: was truthiness-only before)', () => {
+    const result = validateOrphanEntry({
+      id: 'fixture-bogus-type',
+      entry_type: 'made-up-type',
+      writer: { kind: 'table', table: 'fixture_table' },
+      reader: { file: 'fixture-reader.js', description: 'a reader' },
+      predicate: { description: 'a predicate' },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/unknown entry_type/);
+  });
+
+  it('reader-with-no-writer: passes with writer:{kind:"absent"} (no schema change, per QF-20260830-875 design)', () => {
+    const result = validateOrphanEntry({
+      id: 'fixture-reader-no-writer',
+      entry_type: 'reader-with-no-writer',
+      writer: { kind: 'absent', description: 'nothing ever wrote this' },
+      reader: { file: 'fixture-reader.js', description: 'a reader' },
+      predicate: { description: 'zero rows ever appear for this reader to consume' },
+    });
+    expect(result.valid).toBe(true);
   });
 
   it('passes a well-formed fixture entry', () => {
@@ -84,9 +107,9 @@ describe('orphan-writers-registry: validateAllEntries', () => {
 describe('orphan-writers-registry: entry-type coverage (SD success criterion 2)', () => {
   it('has at least one real specimen per entry_type', () => {
     const types = new Set(ORPHAN_ENTRIES.map((e) => e.entry_type));
-    expect(types.has('wired-but-blind')).toBe(true);
-    expect(types.has('no-stamper-wired')).toBe(true);
-    expect(types.has('shipped-but-not-applied')).toBe(true);
+    for (const type of ENTRY_TYPES) {
+      expect(types.has(type)).toBe(true);
+    }
   });
 
   it('all 7 coordinator standard_loop process_keys are present, keyed by identity not a hardcoded count (TS-3)', () => {
@@ -101,6 +124,27 @@ describe('orphan-writers-registry: entry-type coverage (SD success criterion 2)'
     const entry = ORPHAN_ENTRIES.find((e) => e.entry_type === 'shipped-but-not-applied');
     expect(entry).toBeTruthy();
     expect(entry.predicate.latch).toBe(true);
+  });
+
+  it('the test-pins-the-defect specimen names the test file and the misunderstanding it protected (QF-20260830-875)', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.entry_type === 'test-pins-the-defect');
+    expect(entry).toBeTruthy();
+    expect(entry.writer?.file).toBe('tests/unit/periodic-liveness/panel-arithmetic-beside-last-state.test.js');
+    expect(entry.predicate?.description).toBeTruthy();
+  });
+
+  it('the query-never-ran specimen documents the swallowed error and the coerced-zero outcome (QF-20260830-875)', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.entry_type === 'query-never-ran');
+    expect(entry).toBeTruthy();
+    expect(entry.writer?.description).toMatch(/does not exist/);
+    expect(entry.predicate?.description).toMatch(/coerced/);
+  });
+
+  it('the reader-with-no-writer specimen uses writer:{kind:"absent"} rather than a schema change (QF-20260830-875)', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.entry_type === 'reader-with-no-writer');
+    expect(entry).toBeTruthy();
+    expect(entry.writer?.kind).toBe('absent');
+    expect(entry.reader?.file).toBe('lib/checkin/steps/seat-busy-fence.cjs');
   });
 });
 
