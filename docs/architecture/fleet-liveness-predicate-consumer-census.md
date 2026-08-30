@@ -166,3 +166,38 @@ Per-site change/no-change verdicts, for the follow-on SD to inherit directly:
 follow-on is narrow — confirm the one ambiguous site, document the divergence rationale as a
 cross-reference, and file the applications-duplicate disposition as its own tiny governed
 change. No wide predicate-substitution SD is warranted by this census's findings.
+
+## Follow-on resolution (QF-20260830-660): per-consumer dispatch-now vs reporting verdicts
+
+Every `liveFleetWorkers` consumer from the table above (sites #6–#13, plus the `isFleetWorker`
+sites in the earlier table) was traced to its downstream use and classified as either
+**dispatch-now** (needs the `isRecentlyReleased` shell-window exclusion, same class of bug that
+predicate was built for) or **reporting** (ever-worked history is the correct semantic; adding
+the exclusion would make a report hide a real shell window, which is itself a lie).
+
+| Site | Downstream use | Verdict | Action |
+|---|---|---|---|
+| `lib/fleet/tier-backlog.cjs:122` (`fetchLowerTierBacklogData`'s `idleWorkers`) | Feeds `classifyDispatchIneligibility`'s lower-tier-backlog gate — a live dispatch decision (whether a worker may claim a lower-tier SD) | **Dispatch-now** | **Fixed in this QF**: `isRecentlyReleased` now excludes just-released seats from `idleWorkers` (`released_at` added to the session select) |
+| `lib/fleet/tier-ladder.cjs:523` (`isTieringActive`'s live count) | Gates whether complexity-tiering enforcement is active at all (a count-vs-threshold check, not a per-worker dispatch pick) | Reporting-adjacent, no change | The activation threshold already fails toward `DISABLED` (degrade-to-1) on any uncertainty; a single just-released seat biasing the count by 1 for ≤15min does not misdirect a specific dispatch decision the way `idleWorkers` capacity would |
+| `scripts/adam-coordinator-health.mjs:83` | Coordinator health/utilization report | **Reporting** | No change |
+| `scripts/coordinator-audit.mjs:87` | Coordinator audit report (`liveIdle` count) | **Reporting** | No change |
+| `scripts/coordinator-email-summary.mjs:84` | Email digest live/idle counts | **Reporting** | No change |
+| `scripts/coordinator-idle-qf-hint.mjs:269` | Idle-QF-hint eligibility | **Dispatch-now** (already layered — this is the reference site the census flagged, not a gap) | No change |
+| `scripts/fleet-worker-pulse.mjs:73` | Telemetry pulse insert (`fleet_worker_pulse` table) | **Reporting** | No change |
+| `scripts/adam-exec-summary.mjs:173` | Chairman-facing exec summary gauge | **Reporting** | No change |
+| `lib/fleet/live-fleet-sessions.cjs:71` | Generic SSOT wrapper (`liveFleetSessions`/`liveFleetSessionCount`) — "what most gauges actually want" per its own docblock | Definition site, not itself a decision | No change; its own callers are covered individually above |
+
+**Two-sided verification** (`tests/unit/fleet/tier-backlog-reservation.test.js`): a fixture with
+a `released_at`-stamped shell-window seat is excluded from `fetchLowerTierBacklogData`'s idle
+census (dispatch-now), while the same fixture run through `liveFleetWorkers` directly (the
+reporting path) still counts it as live — confirming the exclusion is scoped to the one
+dispatch-facing consumer, not a blanket change to the shared predicate family.
+
+**Cross-reference comments shipped**: `isDispatchableFleetMember` (session-predicates.mjs) and
+`everClaimed` (genuine-worker.mjs) now each carry a standing comment pointing at the other's
+divergence rationale and this census document, so a future editor cannot remove one without
+reading the other's justification.
+
+**Result**: 1 of 9 `liveFleetWorkers` consumers needed the layering — matching this QF's own
+stated expectation of "few or none." UNIFY's C2 wide-substitution stays correctly dead; the
+applications-duplicate disposition remains its own separate, unexecuted follow-on.
