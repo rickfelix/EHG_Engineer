@@ -475,7 +475,7 @@ async function loadData() {
       // owner/release_condition: SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001 — the main list
       // must MARK gated rows (adversarial-review fix, PR #6178), not render them as
       // ordinary claimable open work while only the dedicated section knows better.
-      .select('id, title, status, claiming_session_id, created_at, owner, release_condition')
+      .select('id, title, status, claiming_session_id, created_at, owner, release_condition, pr_url')
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: true });
     // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs (ZZZ_/dunder residue)
@@ -800,7 +800,12 @@ function printAvailable(d) {
 // FIXES section, so QFs aging with no PR went unseen. Display only.
 function printQuickFixes(d) {
   const qfs = d.quickFixes || [];
-  console.log('QUICK FIXES (' + qfs.length + ')');
+  // QF-20260830-559: in_progress covers both "being built" and "built, awaiting PR review" —
+  // derive the split so the header (and the wind-down handshake / capacity forecast reading
+  // this same data) can tell an available reviewable seat from a genuinely busy one.
+  const { isAwaitingReview } = require('../lib/fleet/qf-lifecycle-state.cjs');
+  const awaitingReviewCount = qfs.filter(isAwaitingReview).length;
+  console.log('QUICK FIXES (' + qfs.length + (awaitingReviewCount ? `, ${awaitingReviewCount} awaiting-review` : '') + ')');
   console.log('─'.repeat(72));
   if (qfs.length === 0) {
     console.log('  (no open quick-fixes)');
@@ -827,7 +832,8 @@ function printQuickFixes(d) {
     // badge them here so the primary list agrees with the worker-lane exclusion.
     const { isChairmanGatedQF } = require('../lib/fleet/qf-gated-hold.cjs');
     const gatedBadge = isChairmanGatedQF(qf) ? ' ⛔CHAIRMAN-GATED' : '';
-    console.log('  ' + pad(qf.id, 18) + pad(qf.status, 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40) + gatedBadge);
+    const { deriveQfLifecycleState } = require('../lib/fleet/qf-lifecycle-state.cjs');
+    console.log('  ' + pad(qf.id, 18) + pad(deriveQfLifecycleState(qf), 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40) + gatedBadge);
   }
   console.log('');
 }
