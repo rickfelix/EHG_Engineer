@@ -757,7 +757,11 @@ function printAvailable(d) {
     const displayed = d.unclaimedStandalone.slice(0, DISPLAY_CAP);
     for (const sd of displayed) {
       const shortKey = sd.sd_key.replace('SD-LEO-', '').replace('SD-', '').substring(0, 22);
-      const prio = sd.priority === 'high' ? 'HIGH' : 'MED';
+      // QF-20260830-787: was a binary ternary (high-vs-else) over the 4-value priority enum,
+      // so priority='critical' fell to the else branch and rendered MED — the row that most
+      // needs a CRIT badge got the least alarming one. Map the full enum explicitly.
+      const PRIORITY_BADGE = { critical: 'CRIT', high: 'HIGH', medium: 'MED', low: 'LOW' };
+      const prio = PRIORITY_BADGE[sd.priority] || 'MED';
       console.log('    ' + pad(shortKey, 24) + pad(sd.title.substring(0, 38), 40) + prio);
     }
     if (d.unclaimedStandalone.length > displayed.length) {
