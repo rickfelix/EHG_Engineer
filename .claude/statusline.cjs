@@ -221,6 +221,7 @@ try {
 let fleetCallsign = '';
 let fleetColor = '';
 let fleetTierRank = null;
+let fleetStaleSuffix = '';
 try {
   let identity = null;
   // sessionId comes from Claude Code's JSON input (line 77). With the session identity
@@ -228,6 +229,10 @@ try {
   const csid = process.env.CLAUDE_SESSION_ID || sessionId;
   const perSessionFile = path.join(__dirname, `fleet-identity-${csid}.json`);
   if (fs.existsSync(perSessionFile)) {
+    // QF-20260830-156: a frozen seat's file stops updating with its hook — render staleness
+    // rather than silently trusting an arbitrarily old rebind-blind name.
+    const { staleSuffix } = require('./fleet-identity-staleness.cjs');
+    fleetStaleSuffix = staleSuffix(fs.statSync(perSessionFile).mtimeMs);
     identity = JSON.parse(fs.readFileSync(perSessionFile, 'utf8'));
   }
   // Fall back to shared file only if no per-session file matches
@@ -255,7 +260,7 @@ if (fleetCallsign) {
     purple: `${ESC}[35m`, orange: `${ESC}[38;5;208m`, pink: `${ESC}[38;5;213m`, cyan: `${ESC}[36m` };
   const fc = FC[fleetColor] || '';
   const tierSuffix = fleetTierRank != null ? ` T${fleetTierRank}` : '';
-  projectInfo = `${fc}${fleetCallsign}${tierSuffix}${fc ? RESET : ''} | ${projectInfo}`;
+  projectInfo = `${fc}${fleetCallsign}${tierSuffix}${fleetStaleSuffix}${fc ? RESET : ''} | ${projectInfo}`;
 }
 
 // Progress section (only show when WARNING or above)
