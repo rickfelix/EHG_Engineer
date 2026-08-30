@@ -42,8 +42,8 @@ describe('orphan-writers-registry: validateOrphanEntry (TS-1)', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('passes a refs_drain_descriptor entry that resolves to a real DRAIN_DESCRIPTORS key', () => {
-    const result = validateOrphanEntry({ id: 'fixture-ref', entry_type: 'wired-but-blind', refs_drain_descriptor: 'relay-drop' });
+  it('passes a refs_drain_descriptor entry pointing at a RESOLVED DRAIN_DESCRIPTORS key (has a consumer)', () => {
+    const result = validateOrphanEntry({ id: 'fixture-ref', entry_type: 'wired-but-blind', refs_drain_descriptor: 'solomon-advice-outcome-ledger' });
     expect(result.valid).toBe(true);
   });
 
@@ -51,6 +51,15 @@ describe('orphan-writers-registry: validateOrphanEntry (TS-1)', () => {
     const result = validateOrphanEntry({ id: 'fixture-bad-ref', entry_type: 'wired-but-blind', refs_drain_descriptor: 'does-not-exist' });
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/refs_drain_descriptor/);
+  });
+
+  it('fails a refs_drain_descriptor entry pointing at an UNRESOLVED descriptor (no consumer) unless explicitly known_orphan (V-1)', () => {
+    const unmarked = validateOrphanEntry({ id: 'fixture-unresolved', entry_type: 'wired-but-blind', refs_drain_descriptor: 'relay-drop' });
+    expect(unmarked.valid).toBe(false);
+    expect(unmarked.reason).toMatch(/no consumer declared/);
+
+    const marked = validateOrphanEntry({ id: 'fixture-unresolved-acked', entry_type: 'wired-but-blind', refs_drain_descriptor: 'relay-drop', known_orphan: true });
+    expect(marked.valid).toBe(true);
   });
 });
 

@@ -331,6 +331,14 @@ export const STANDARD_LOOPS = [
   { key: 'scripts-reachability', label: 'Scripts-estate reachability gauge (weekly)', script: 'scripts-reachability-gauge.mjs', cron: '40 9 * * 1',
     gha_backed: true,
     prompt: 'node scripts/scripts-reachability-gauge.mjs' },
+  // SD-LEO-INFRA-ORPHAN-WRITERS-REGISTRY-001 (FR-5): weekly known-orphan-count + notifier pass.
+  // Self-stamps periodic_process_registry (standard_loop:orphan-writers-triage) after computing
+  // verdicts (never before — the script must not mutate the rows it measures). VALIDATION
+  // sub-agent finding V-2 (PLAN_VERIFICATION): without this cron entry the triage pass had no
+  // invoker anywhere in the repo and its own self-registration would go OVERDUE in ~2 weeks —
+  // the exact fourth-orphan-specimen failure mode this SD exists to prevent.
+  { key: 'orphan-writers-triage', label: 'Orphan-writers registry weekly triage (count + notify)', script: 'orphan-writers-count.mjs', cron: '20 9 * * 1',
+    prompt: 'Run `node scripts/orphan-writers-count.mjs` then `node scripts/orphan-writers-notify.mjs`. Report the orphaned_count and any advisories_sent to the chairman weekly triage line.' },
   // SD-MAN-INFRA-RETENTION-OPS-FINISHER-001: weekly archive-not-delete retention enforcement
   // (machinery shipped + chairman-GO'd by SD-LEO-INFRA-RETENTION-POLICY-UNBOUNDED-001; 196k rows
   // archived in the first live soak). Prompt mirrors scripts/retention-enforce.js --arming-spec.
