@@ -178,9 +178,13 @@ function liveWorker(sessionId, { claimed = false, tierRank = null } = {}) {
 // worktree_path) so it counts toward isTieringActive's live-fleet total AND fetchLowerTierBacklogData's
 // idle census — a minimal { session_id, metadata } shape silently drops out of both live-fleet filters,
 // making isTieringActive() under-count and mask the very branch these tests exist to exercise.
+//
+// QF-20260830-737: carries a tier_rank_source, mirroring sdRow's min_tier_rank_reason above — these
+// fixtures test the backlog/above-tier ENFORCEMENT mechanics, not the worker-side provenance-advisory
+// feature itself, so the worker's rank must stay SOURCED to actually reach the refusal branches.
 function targetWorkerSession(tierRank) {
   return {
-    session_id: 'target-worker', status: 'active', metadata: { tier_rank: tierRank },
+    session_id: 'target-worker', status: 'active', metadata: { tier_rank: tierRank, tier_rank_source: 'unit-test-sourced' },
     heartbeat_at: new Date().toISOString(), sd_key: null, claimed_at: null,
     worktree_path: '/wt/target-worker', continuous_sds_completed: 1,
   };
