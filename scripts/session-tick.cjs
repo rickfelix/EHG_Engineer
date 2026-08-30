@@ -442,9 +442,6 @@ async function tickOnce() {
         cleanupAndExit(0);
       }
     }
-    // FR-1: a successful tick (POST/PATCH completed without throwing) clears the streak.
-    consecutivePatchFailures = 0;
-
     // SD-LEO-INFRA-ARMED-WAKEUP-NEVER-001: self-wake-overdue check, throttled to every Nth tick
     // (see SELF_WAKE_CHECK_EVERY_N_TICKS above). Fire-and-forget — checkSelfWakeOverdue is
     // internally best-effort/never-throws, and awaiting it here would add its GET+POST latency to
@@ -453,6 +450,9 @@ async function tickOnce() {
     if (tickCount % SELF_WAKE_CHECK_EVERY_N_TICKS === 0) {
       checkSelfWakeOverdue(supabaseUrl, supabaseKey);
     }
+
+    // FR-1: a successful tick (POST/PATCH completed without throwing) clears the streak.
+    consecutivePatchFailures = 0;
   } catch (err) {
     // Never crash the tick loop — next tick will retry. FR-1: make a PERSISTENT failure
     // observable instead of silently swallowing it every time.
