@@ -62,11 +62,69 @@ describe('completeSession() control-pack evidence', () => {
     expect(payload.metadata.control_pack_evaluated).toBe(false);
   });
 
-  it('supplying controlPackEvidence (even an empty object) stamps control_pack_evaluated=true', async () => {
+  // QF-20260830-666 (Solomon ruling 711cce6d): control_pack_evaluated now means ALL FOUR
+  // controls were evaluated, not merely "some evidence object was supplied" -- an empty object
+  // covers ZERO of the four controls, so it must read false, with all four named not_attempted.
+  it('supplying an EMPTY controlPackEvidence object covers zero controls -- control_pack_evaluated=false, all four not_attempted', async () => {
     state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
     await completeSession('run-1', {});
     const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.control_pack_evaluated).toBe(false);
+    expect(payload.metadata.control_pack_status).toEqual({
+      minimum_assertion_manifest: 'not_attempted',
+      live_deployment_binding: 'not_attempted',
+      canary_mutation_control: 'not_attempted',
+      fence_two_sidedness: 'not_attempted',
+    });
+  });
+
+  // The QF's own fixture: an honest 1-of-4 partial (assertion-manifest evidence only) must NOT
+  // silently pass as fully evaluated -- three controls stay not_attempted.
+  it('1-of-4 evidence (assertion manifest only) stamps control_pack_evaluated=false with three controls not_attempted', async () => {
+    state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    await completeSession('run-1', {
+      manifest: [{ journeyId: 'j1', minimumAssertions: 1 }],
+      executedJourneys: [{ journeyId: 'j1', executedAssertions: 5 }],
+    });
+    const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.control_pack_evaluated).toBe(false);
+    expect(payload.metadata.control_pack_status.minimum_assertion_manifest).toBe('evaluated');
+    expect(payload.metadata.control_pack_status.live_deployment_binding).toBe('not_attempted');
+    expect(payload.metadata.control_pack_status.canary_mutation_control).toBe('not_attempted');
+    expect(payload.metadata.control_pack_status.fence_two_sidedness).toBe('not_attempted');
+  });
+
+  it('4-of-4 evidence (every control attempted) stamps control_pack_evaluated=true', async () => {
+    state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    await completeSession('run-1', {
+      manifest: [{ journeyId: 'j1', minimumAssertions: 1 }],
+      executedJourneys: [{ journeyId: 'j1', executedAssertions: 5 }],
+      nonceWriteResult: { outcome: 'ok', echoedNonce: 'real-nonce' },
+      expectedNonce: 'real-nonce',
+      deploymentSha: 'abc1234',
+      canaryJourneyId: 'canary-1',
+      journeyResults: [{ journeyId: 'canary-1', status: 'FAIL' }, { journeyId: 'j1', status: 'PASS' }],
+      fenceEvidence: { canExerciseApp: true, exclusionPredicateDeclared: true, exclusionPredicateAssertedInVentureCi: true },
+    });
+    const payload = updateChain.update.mock.calls[0][0];
     expect(payload.metadata.control_pack_evaluated).toBe(true);
+    expect(Object.values(payload.metadata.control_pack_status)).toEqual(['evaluated', 'evaluated', 'evaluated', 'evaluated']);
+  });
+
+  it('a cited waiver exempts its named control from the required set without hiding it', async () => {
+    state.row = { id: 'run-1', total_tests: 10, passed_tests: 10, failed_tests: 0, skipped_tests: 0, metadata: {} };
+    await completeSession('run-1', {
+      manifest: [{ journeyId: 'j1', minimumAssertions: 1 }],
+      executedJourneys: [{ journeyId: 'j1', executedAssertions: 5 }],
+      nonceWriteResult: { outcome: 'ok', echoedNonce: 'real-nonce' },
+      expectedNonce: 'real-nonce',
+      deploymentSha: 'abc1234',
+      fenceEvidence: { canExerciseApp: true, exclusionPredicateDeclared: true, exclusionPredicateAssertedInVentureCi: true },
+      waivedControls: [{ control: 'canary_mutation_control', reason: 'no seeded canary journey available this cycle -- chairman-approved' }],
+    });
+    const payload = updateChain.update.mock.calls[0][0];
+    expect(payload.metadata.control_pack_evaluated).toBe(true);
+    expect(payload.metadata.control_pack_status.canary_mutation_control).toBe('waived: no seeded canary journey available this cycle -- chairman-approved');
   });
 
   it('TS-6 negative control: a clean run with passing control-pack evidence stays GREEN, not forced RED', async () => {

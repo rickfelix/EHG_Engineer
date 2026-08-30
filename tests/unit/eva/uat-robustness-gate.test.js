@@ -124,7 +124,30 @@ describe('checkUatRobustnessGate', () => {
     });
     const result = await checkUatRobustnessGate(supabase, 'venture-1', 20);
     expect(result.satisfied).toBe(false);
-    expect(result.reason).toMatch(/control-pack evidence was ever evaluated/);
+    expect(result.reason).toMatch(/not all required control-pack controls were evaluated/);
+  });
+
+  // QF-20260830-666: when control_pack_status is present, name the missing controls.
+  it('names the missing controls from control_pack_status when present', async () => {
+    const supabase = buildSupabase({
+      stageMetadata: MARKED_STAGE,
+      ventureMetadata: OPTED_IN_VENTURE,
+      run: {
+        id: 'run-1', status: 'completed',
+        metadata: {
+          quality_gate: 'GREEN', control_pack_evaluated: false,
+          control_pack_status: {
+            minimum_assertion_manifest: 'evaluated',
+            live_deployment_binding: 'not_attempted',
+            canary_mutation_control: 'not_attempted',
+            fence_two_sidedness: 'not_attempted',
+          },
+        },
+      },
+    });
+    const result = await checkUatRobustnessGate(supabase, 'venture-1', 20);
+    expect(result.satisfied).toBe(false);
+    expect(result.reason).toMatch(/missing: live_deployment_binding, canary_mutation_control, fence_two_sidedness/);
   });
 
   it('NEW-4 fix: GREEN with control_pack_evaluated entirely absent from metadata (the exact shape journey-walk-orchestrator.js\'s completeSession(testRun.id) call produces) does NOT satisfy', async () => {
