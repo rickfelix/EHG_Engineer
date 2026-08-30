@@ -253,7 +253,14 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
   const blockingIssues = issues.filter(i => i && i.severity !== 'info');
   return {
     passed: blockingIssues.length === 0,
-    issues
+    issues,
+    // SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 (FR-1): blockingIssues was computed above
+    // but never returned, so every consumer read the raw, unfiltered `issues` array --
+    // an info-severity entry (e.g. SMOKE_TEST_BYPASSED, USER_STORIES_BYPASSED) coexisting
+    // with a real blocking issue defeated .every()-style eligibility checks and
+    // contaminated rejection-reason text. Exposing the already-computed filter here lets
+    // callers consume the correct set without duplicating the severity!=='info' predicate.
+    blockingIssues
   };
 }
 
