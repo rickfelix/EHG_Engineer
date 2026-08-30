@@ -1073,6 +1073,11 @@ async function main() {
     quiescent,
     partyOffsetS: ADAM_PARTY_OFFSET_S,
     hasUndeliveredChairmanEscalation: undeliveredEscalation,
+    // QF-20260830-071 (burn-lever A3, chairman-ratified e3e5483d): Adam self-paces
+    // its active-band tick at ~15min instead of the shared 3-4.5min band tuned to
+    // the now-retired 5-min cache TTL. The coordinator's own quiet-tick call is NOT
+    // touched — it decides its own band separately (scripts/coordinator-quiet-tick.mjs).
+    desiredActiveS: 900,
   });
 
   const result = {
