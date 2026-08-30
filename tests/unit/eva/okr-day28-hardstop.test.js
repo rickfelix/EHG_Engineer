@@ -18,7 +18,9 @@ function mockSupabase({ existingDecision = [], krs = [], insertedId = 'decision-
       limit: vi.fn(() => Promise.resolve(
         table === 'chairman_decisions'
           ? { data: existingDecision, error: null }
-          : { data: [], error: null }
+          : table === 'key_results'
+            ? { data: krs, error: null }
+            : { data: [], error: null }
       )),
       insert: vi.fn((payload) => {
         insertCalls.push({ table, payload });
