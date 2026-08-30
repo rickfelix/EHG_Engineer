@@ -1,3 +1,4 @@
+-- @delegated-by: adam
 -- SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001
 --
 -- Additive-only: one nullable timestamptz column. Splits the "mechanically routed" moment
