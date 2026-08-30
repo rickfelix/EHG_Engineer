@@ -17,9 +17,11 @@
  *   1. scripts/hooks/post-completion-tail-enforcement.cjs (the tail-enforcement Stop hook itself)
  *   2. scripts/hooks/stop-subagent-enforcement/post-completion-validator.js (the witness check)
  *   3. scripts/hooks/stop-subagent-enforcement.js (the dispatcher that invokes #2)
- *   4. .claude/settings.json (path-level: any touch is flagged -- a full JSON diff to isolate a
- *      single Stop-hook array entry is more machinery than this guardrail needs; conservative
- *      over-flagging is preferred to silently missing a targeted entry removal)
+ *   4. .claude/settings.json -- CONTENT-level check (QF-20260830-283, chairman ratification
+ *      0daf3bd8/iii): hook command strings are worker-editable; the Stop-hook array and any hook
+ *      entry whose command references the completion/post-completion enforcement scripts stay
+ *      chairman-locked, as do the "permissions"/"statusLine" top-level keys and any hook entry
+ *      added/removed. See evaluateSettingsJsonChange in lib/governance/ceremony-scope-lock.js.
  *   5. scripts/capture-completion-flags.js -- CONTENT check, not a path-touch ban (legitimately
  *      edited for unrelated reasons in future SDs); fails only on a NET LOSS of the
  *      completion_flag_witness marker string in the diff.
@@ -31,10 +33,10 @@
  * evidence 40c35949: a hand-rolled execSync string-interpolation call here would have reproduced
  * the exact shell-injection sink class 5 prior SDs/QFs already closed elsewhere in this repo).
  *
- * KNOWN LIMITATION (VALIDATION evidence b1dbe3ce): PATH_BAN names exactly one settings surface,
- * `.claude/settings.json`. A hook registered instead through `.claude/settings.local.json` (a
- * real, supported override file for this exact tool) or a brand-new dispatcher file this lint has
- * never heard of would disable the ceremony without touching any banned path. Separately, the
+ * KNOWN LIMITATION (VALIDATION evidence b1dbe3ce): the settings.json content check names exactly
+ * one file, `.claude/settings.json`. A hook registered instead through `.claude/settings.local.json`
+ * (a real, supported override file for this exact tool) or a brand-new dispatcher file this lint
+ * has never heard of would disable the ceremony without touching any checked surface. Separately, the
  * witness-marker check is a bare occurrence COUNT (`hasNetWitnessMarkerLoss`), not a semantic
  * check: a rewrite that swaps `completion_flag_witness` for a differently-spelled but
  * functionally-identical marker, at the same call site, leaves the count net-zero and passes
@@ -45,7 +47,7 @@
  * Exit: 1 if any ceremony surface is touched, 0 otherwise.
  */
 import { makeHardenedGitRunner, VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
-import { evaluateCeremonyScopeLock, WITNESS_CONTENT_FILE } from '../../lib/governance/ceremony-scope-lock.js';
+import { evaluateCeremonyScopeLock, WITNESS_CONTENT_FILE, SETTINGS_JSON_PATH } from '../../lib/governance/ceremony-scope-lock.js';
 
 const runGit = makeHardenedGitRunner(process.cwd(), { timeout: 30000, maxBuffer: 32 * 1024 * 1024 });
 
@@ -72,6 +74,17 @@ function witnessDiffText(base, files) {
   }
 }
 
+function settingsJsonTexts(base, files) {
+  if (!files.includes(SETTINGS_JSON_PATH)) return null;
+  try {
+    const oldText = runGit(['show', `${base}:${SETTINGS_JSON_PATH}`]);
+    const newText = runGit(['show', `HEAD:${SETTINGS_JSON_PATH}`]);
+    return { oldText, newText };
+  } catch {
+    return null; // fails closed inside evaluateCeremonyScopeLock
+  }
+}
+
 function main() {
   let files;
   try {
@@ -81,7 +94,7 @@ function main() {
     process.exit(1);
   }
 
-  const result = evaluateCeremonyScopeLock(files, witnessDiffText(base, files));
+  const result = evaluateCeremonyScopeLock(files, witnessDiffText(base, files), settingsJsonTexts(base, files));
 
   if (result.pass) {
     console.log(`✅ capture-channel-ceremony-scope-lock-lint: no ceremony surface touched (base=${base})`);
@@ -98,6 +111,9 @@ function main() {
   }
   if (result.witnessMarkerLost) {
     console.error(`  ${WITNESS_CONTENT_FILE}: the completion_flag_witness marker string was removed/reduced in this diff.`);
+  }
+  if (result.settingsJsonProtectedKey) {
+    console.error(`  ${SETTINGS_JSON_PATH}: refused on protected key "${result.settingsJsonProtectedKey}" (ratification 0daf3bd8/iii permits hook command-string edits only).`);
   }
   process.exit(1);
 }
