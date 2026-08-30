@@ -14,14 +14,12 @@
     "description": "Essential context for ALL sessions (~11k tokens). Lean Core (2026-02-16).",
     "sections": [
       "migration_execution_protocol",
-      "infrastructure",
       "sub_agent_config",
       "script_anti_patterns",
       "application_architecture",
       "session_verification",
       "session_verification_quick_start",
       "mandatory_phase_transitions",
-      "builtin_agent_integration",
       "model_routing_guidance",
       "sub_agent_routing_reference",
       "signaling_friction",
@@ -31,13 +29,9 @@
       "ui_parity_requirement",
       "stage_7_hard_block",
       "git_commit_guidelines",
-      "pr_size_guidelines",
       "database_first_enforcement_expanded",
       "enforcement_rollout_default",
       "supabase_operations",
-      "database_column_reference",
-      "pattern_search_guide",
-      "ai_quality_russian_judge",
       "parent_child_overview",
       "child_sd_preflight_validation",
       "negative_constraints_global",
@@ -46,14 +40,11 @@
       "qf_lifecycle_reconciliation",
       "queue_ranking_unified",
       "genesis_codebase",
-      "governance_strategic_hierarchy",
-      "governance_chairman_ceo_roles",
       "cascade_invalidation_system",
       "db_ops_protocol",
       "gate_failure_protocol",
       "pipeline_debugging_protocol",
       "claim_heartbeat_protocol",
-      "protocol_lint_tooling",
       "gate_retrospective_invariants",
       "fleet_worker_loop_continuity",
       "machinery_class_activation_dod"
@@ -322,5 +313,36 @@
       "sub_agents",
       "quick-reference"
     ]
+  },
+  "CLAUDE_CORE_MANUAL.md": {
+    "description": "CORE reference companion (SD-LEO-INFRA-STATIC-PREFIX-DIET-001, burn-lever A4). Pure reference/procedure lifted out of CLAUDE_CORE.md so the always-read file shrinks toward the Read tool 25k single-call cap. RULES AND PROHIBITIONS DO NOT LIVE HERE — they stay in CLAUDE_CORE.md and bind whether or not this file is read.",
+    "sections": [
+      "governance_strategic_hierarchy",
+      "builtin_agent_integration",
+      "pattern_search_guide",
+      "ai_quality_russian_judge",
+      "pr_size_guidelines",
+      "governance_chairman_ceo_roles",
+      "database_column_reference",
+      "migration_tier_policy_detail",
+      "sub_agent_routing_table_detail",
+      "infrastructure",
+      "protocol_lint_tooling",
+      "genesis_codebase_detail"
+    ],
+    "_move_justification": {
+      "governance_strategic_hierarchy": "Descriptive 7-layer governance table (Mission/Constitution/etc + DB table + CLI command) — informational, no behavioral rule.",
+      "builtin_agent_integration": "Descriptive three-layer agent architecture table — informational, no behavioral rule.",
+      "pattern_search_guide": "CLI reference for searching the issue-pattern knowledge base — a how-to, consulted when actually searching, not a standing rule.",
+      "ai_quality_russian_judge": "Describes the AI quality-assessment rubric/scoring mechanism — informational about how scoring works, not an instruction to the reader.",
+      "pr_size_guidelines": "Elaboration/rationale for the PR-size tiers; the binding rule itself (Small PRs <=100 LOC target) already lives in CLAUDE.md Session Prologue.",
+      "governance_chairman_ceo_roles": "Descriptive role/authority reference (who owns what) — informational, no standing instruction to the reader.",
+      "database_column_reference": "Short JS usage-example snippet for a priority column gotcha — a reference tip, not a standing rule (its one CRITICAL-looking token is a code-comment string literal, not an instruction).",
+      "migration_tier_policy_detail": "Split out of migration_execution_protocol (leo_protocol_sections id=444) — the binding rule (invoke the DATABASE sub-agent) stays inline in CLAUDE_CORE.md; this is the TIER-1/TIER-2 classifier mechanics, feature-flag polarity detail, and Adam-delegated-apply scope-check nuance, consulted only when actually classifying a migration risk tier or auditing the flag.",
+      "sub_agent_routing_table_detail": "Split out of sub_agent_routing_reference (leo_protocol_sections id=538) — the binding Key Rules (Sonnet-only, invoke immediately, error-routing) and the MCP read/write split stay inline in CLAUDE_CORE.md; this is the 16-row agent/keyword lookup table + invocation pattern, explicitly labeled a \"quick reference\" in its own text with the canonical source being config/agent-keywords-routing.json.",
+      "infrastructure": "section_type=infrastructure (singleton row, title=\"Claude Code Plan Mode Integration\") — descriptive documentation of an automated feature (permission bundling, SD-type profiles, module location); no imperative for the reader, the feature runs on its own.",
+      "protocol_lint_tooling": "How to use/extend the protocol consistency linter (commands, bypass syntax, where rule files live) — relevant only when actually adding or debugging a lint rule, a rare maintenance activity, not general LEO work.",
+      "genesis_codebase_detail": "Split out of genesis_codebase (leo_protocol_sections id=364) — the one load-bearing fact (Genesis spans two codebases) stays inline as a short pointer in CLAUDE_CORE.md; the full path table, quick-reference commands, and doc links (relevant only when actually touching Genesis code) moved here."
+    }
   }
 }

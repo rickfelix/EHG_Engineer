@@ -34,7 +34,7 @@ describe.skipIf(!HAS_REAL_DB)('roadmap_wave_rollup trigger (QF-20260829-484)', (
     for (const key of [SD1, SD2]) {
       await supabase.from('strategic_directives_v2').insert({
         sd_key: key, id: key,
-        title: `TEST FIXTURE (QF-20260829-484): wave rollup scenario — safe to delete`,
+        title: 'TEST FIXTURE (QF-20260829-484): wave rollup scenario — safe to delete',
         description: 'Scratch SD created by tests/database/roadmap-wave-completion-rollup.test.js; deleted in afterAll.',
         rationale: 'Test fixture for QF-20260829-484 — auto-cleaned',
         status: 'draft', sd_type: 'bugfix', category: 'test_fixture', priority: 'low',
@@ -42,7 +42,7 @@ describe.skipIf(!HAS_REAL_DB)('roadmap_wave_rollup trigger (QF-20260829-484)', (
     }
 
     const { data: roadmap } = await supabase.from('strategic_roadmaps').insert({
-      title: `TEST FIXTURE (QF-20260829-484): wave rollup roadmap — safe to delete`,
+      title: 'TEST FIXTURE (QF-20260829-484): wave rollup roadmap — safe to delete',
       status: 'draft',
     }).select('id').single();
     roadmapId = roadmap.id;
