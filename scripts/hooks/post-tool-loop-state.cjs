@@ -41,6 +41,9 @@ function isOff(v) {
 // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-B: extracted to lib/hooks/wake-metadata-patch.cjs
 // so it is unit-testable without triggering this file's top-level IIFE / process.exit(0).
 const { buildWakeMetadataPatch } = require('../../lib/hooks/wake-metadata-patch.cjs');
+// QF-20260830-275 (A): local mirror of the armed delay so retry-state-manager can classify
+// re-invocation-caused repeats without a DB round-trip on the PreToolUse hot path.
+const { writeWakeArmMarker } = require('../../lib/hooks/wake-arm-marker.cjs');
 
 (async () => {
   try {
@@ -113,6 +116,7 @@ const { buildWakeMetadataPatch } = require('../../lib/hooks/wake-metadata-patch.
           : null;
         const metaPatch = buildWakeMetadataPatch(priorMeta, delaySeconds, nowMs);
         if (metaPatch) patch.metadata = metaPatch;
+        writeWakeArmMarker(sessionId, delaySeconds, nowMs);
         await writeTelemetryAwait(sessionId, patch);
       } catch (e2) {
         process.stderr.write(`[post-tool-loop-state] silence-arm (non-fatal): ${e2.message}\n`);
