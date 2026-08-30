@@ -56,16 +56,24 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
           return { passed: true, score: 100, issues: [], details: { mode, skipped: !sdId || !handoffType ? 'no-sd-or-type' : true } };
         }
 
-        const { data: rejections, error } = await supabase
+        // count-truncation-diff-lint: bounded read. Fetches the REJECTIONS_CAP most recent
+        // rejections (descending) then reverses to ascending -- attempt_index becomes a capped
+        // approximation (measured max is 13; this repo's own gotcha memory: a capped count is
+        // never claimed as an exact population count) but the anchor logic below only needs the
+        // MOST RECENT rejection and the two most recent reasons, both of which the descending
+        // fetch preserves exactly regardless of true total count.
+        const { data: rejectionsDesc, error } = await supabase
           .from('sd_phase_handoffs')
           .select('rejection_reason, created_at')
           .eq('sd_id', sdId)
           .eq('handoff_type', handoffType)
           .eq('status', 'rejected')
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false })
+          .limit(50);
         if (error) {
           return { passed: true, score: 100, issues: [`rejection-read-error: ${error.message}`], details: { mode } };
         }
+        const rejections = (rejectionsDesc || []).slice().reverse();
 
         const attemptIndex = (rejections?.length || 0) + 1;
         if (attemptIndex < 3) {
@@ -78,12 +86,15 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         // requires a diagnosis of the LATEST failure instead of letting one RCA run satisfy the
         // gate forever after the 2nd rejection ever occurred.
         const mostRecentRejection = rejections[rejections.length - 1];
+        // count-truncation-diff-lint: bounded read -- only existence (length > 0) and id list
+        // are used, so a small cap is sufficient regardless of true total RCA-row count.
         const { data: rcaRows, error: rcaError } = await supabase
           .from('sub_agent_execution_results')
           .select('id, created_at')
           .eq('sd_id', sdId)
           .eq('sub_agent_code', 'RCA')
-          .gt('created_at', mostRecentRejection.created_at);
+          .gt('created_at', mostRecentRejection.created_at)
+          .limit(20);
         if (rcaError) {
           return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
         }

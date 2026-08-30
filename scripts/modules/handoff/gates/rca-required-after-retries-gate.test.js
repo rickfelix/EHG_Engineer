@@ -6,11 +6,15 @@ function makeFakeSupabase({ configValue, rejections = [], rcaRows = [] } = {}) {
   const appConfigEq = () => ({
     maybeSingle: async () => ({ data: configValue !== undefined ? { value: configValue } : null, error: null }),
   });
-  const handoffsEq3 = () => ({ order: async () => ({ data: rejections, error: null }) });
+  // Gate fetches descending + limit, then reverses to ascending -- mock simulates that by
+  // handing back the fixture's ascending array reversed, so the round-trip is order-correct.
+  const handoffsEq3 = () => ({ order: () => ({ limit: async () => ({ data: [...rejections].reverse(), error: null }) }) });
   const handoffsEq2 = () => ({ eq: handoffsEq3 });
   const handoffsEq1 = () => ({ eq: handoffsEq2 });
   const rcaEq2 = () => ({
-    gt: async (_col, cutoff) => ({ data: rcaRows.filter((r) => r.created_at > cutoff), error: null }),
+    gt: (_col, cutoff) => ({
+      limit: async () => ({ data: rcaRows.filter((r) => r.created_at > cutoff), error: null }),
+    }),
   });
   const rcaEq1 = () => ({ eq: rcaEq2 });
 
@@ -137,7 +141,7 @@ describe('rca-required-after-retries-gate', () => {
   });
 
   it('fails open (passes) when the rejection-count read errors', async () => {
-    const handoffsEq3 = () => ({ order: async () => ({ data: null, error: { message: 'boom' } }) });
+    const handoffsEq3 = () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) });
     const handoffsEq2 = () => ({ eq: handoffsEq3 });
     const handoffsEq1 = () => ({ eq: handoffsEq2 });
     const appConfigEq = () => ({ maybeSingle: async () => ({ data: { value: 'blocking' }, error: null }) });
