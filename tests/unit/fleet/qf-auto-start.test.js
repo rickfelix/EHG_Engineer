@@ -174,3 +174,27 @@ describe('isClaimableWithVerify — complement of isAutoStartableQF on staleness
     expect(isClaimableWithVerify(qf({ created_at: 'not-a-date', verified_at: 'also-not-a-date' }), NOW)).toBe(false);
   });
 });
+
+// QF-20260830-901: the QF's own acceptance criteria fixture -- a row that only DESCRIBES a
+// migration/schema (an audit/gating QF citing a real path as evidence) is auto-startable; a row
+// whose scope genuinely PERFORMS a DDL change still forces Tier 3. Reproduces the specimen shape
+// (all five live false-positives were routing_tier=2 audit/gating QFs discussing an existing
+// migration path).
+describe('isAutoStartableQF — describes-a-migration vs performs-one (QF-20260830-901)', () => {
+  test('admits a row that only DISCUSSES/AUDITS an existing migration or schema (no change verb)', () => {
+    expect(isAutoStartableQF(qf({
+      title: 'SD completion cannot see shipped-but-not-applied migrations',
+      description: 'the completion path traces git and cannot distinguish a shipped migration file from schema_migrations_applied having a row for it',
+      routing_tier: 2,
+    }), NOW)).toBe(true);
+  });
+
+  test('still excludes a row whose scope PERFORMS a schema change (change verb present)', () => {
+    expect(isAutoStartableQF(qf({ description: 'run the migration to add the new column' }), NOW)).toBe(false);
+    expect(isAutoStartableQF(qf({ description: 'alter the users table schema' }), NOW)).toBe(false);
+  });
+
+  test('auth/security keywords are UNCHANGED — still default-escalate on any genuine mention, described or performed', () => {
+    expect(isAutoStartableQF(qf({ description: 'the auth token is logged in plaintext' }), NOW)).toBe(false);
+  });
+});
