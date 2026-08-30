@@ -19,11 +19,18 @@
  */
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { emitFeedback } from '../lib/governance/emit-feedback.js';
 import { evaluateEntry } from './orphan-writers-count.mjs';
 import { ORPHAN_ENTRIES } from '../lib/governance/orphan-writers-registry.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+
+// SECURITY sub-agent finding, EXEC-TO-PLAN: a cwd-relative path silently drops the advisory
+// (fail-soft) when invoked from a different working directory. Resolve from this file's own
+// location instead — this SD's own defect class is a write that succeeds and feeds nothing.
+const ADAM_ADVISORY_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'adam-advisory.cjs');
 
 const MISS_CATEGORY = 'orphan_writer_miss';
 const CONSECUTIVE_THRESHOLD = 2;
@@ -73,7 +80,7 @@ function sendAdvisory(body) {
     return { sent: false, reason: 'no_session_id' };
   }
   try {
-    execFileSync('node', ['scripts/adam-advisory.cjs', 'send', body, '--kind', 'adam_advisory'], { stdio: 'pipe' });
+    execFileSync('node', [ADAM_ADVISORY_SCRIPT, 'send', body, '--kind', 'adam_advisory'], { stdio: 'pipe' });
     return { sent: true };
   } catch (err) {
     console.warn(`[orphan-writers-notify] adam-advisory send failed (fail-soft): ${err.message}`);

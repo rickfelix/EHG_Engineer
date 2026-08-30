@@ -54,7 +54,9 @@ async function evaluateNoStamperWired(supabase, entry) {
  * REQUIRED with no query is unimplementable per FR-4a AC-2, "once true, no further advisories").
  * An entry with no registered check function falls back to MANUAL_CHECK_REQUIRED honestly.
  */
-const SHIPPED_BUT_NOT_APPLIED_CHECKS = {
+// Object.create(null): SECURITY sub-agent finding, EXEC-TO-PLAN — a plain-object-literal map
+// keyed by entry.id would resolve 'constructor'/'toString' via the prototype chain.
+const SHIPPED_BUT_NOT_APPLIED_CHECKS = Object.assign(Object.create(null), {
   async 'competitive-observed-tag-migration'(pgClient) {
     const { rows } = await pgClient.query(
       `SELECT pg_get_constraintdef(c.oid) AS def FROM pg_constraint c
@@ -64,7 +66,7 @@ const SHIPPED_BUT_NOT_APPLIED_CHECKS = {
     if (rows.length === 0) return { applied: false, detail: 'constraint not found' };
     return { applied: /OBSERVED/.test(rows[0].def), detail: rows[0].def };
   },
-};
+});
 
 async function evaluateShippedButNotApplied(entry, pgClientFactory) {
   const checkFn = SHIPPED_BUT_NOT_APPLIED_CHECKS[entry.id];
