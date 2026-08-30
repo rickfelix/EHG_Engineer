@@ -47,10 +47,11 @@ describe('printAvailable — priority badge maps the full 4-value enum (QF-20260
     expect(critLine).not.toMatch(/MED\s*$/);
   });
 
-  it('an unrecognized priority value falls back to MED rather than throwing or printing undefined', () => {
+  it('an unrecognized priority value renders a loud ?<raw-value> token rather than silently defaulting to MED (QF-20260830-822)', () => {
     const unclaimedStandalone = [sd('WEIRD-ITEM', 'somethingElse')];
     printAvailable({ unclaimedChildren: [], unclaimedStandalone });
     const critLine = output().split('\n').find((l) => l.includes('WEIRD-ITEM'));
-    expect(critLine).toMatch(/MED\s*$/);
+    expect(critLine).toMatch(/\?somethingElse\s*$/);
+    expect(critLine).not.toMatch(/MED\s*$/);
   });
 });
