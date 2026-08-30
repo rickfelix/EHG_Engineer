@@ -20,6 +20,7 @@ const HOOK_PATH = path.resolve(__dirname, '../print-before-park.cjs');
 const {
   decide, isHumanPrompt, hasNonEmptyText, REMINDER,
   readDebtRecord, writeDebt, clearDebt, lastHumanKey, endsOnText, debtPath, MAX_BLOCKS_PER_TURN,
+  isFinalBlockScheduleWakeup,
 } = require(HOOK_PATH); // require.main guard -> main() does NOT run on require
 
 // ── Synthetic replica of the real defect shape (session f27a883d, 2026-08-29T13:07:10Z) ──
@@ -54,6 +55,14 @@ function textEntry(uuid, text = 'Here is the reply the human was waiting on.') {
     message: { content: [{ type: 'text', text }] },
   };
 }
+function silentBashEntry(uuid) {
+  return {
+    type: 'assistant',
+    uuid,
+    timestamp: '2026-08-29T13:07:28.922Z',
+    message: { content: [{ type: 'tool_use', id: 'toolu_02x', name: 'Bash', input: { command: 'ls' } }] },
+  };
+}
 function loopPromptEntry() {
   return { type: 'user', isMeta: true, promptSource: 'system', timestamp: '2026-08-29T13:10:34.245Z' };
 }
@@ -70,6 +79,29 @@ describe('decide() — replayed transcript tail (session f27a883d ~13:07Z)', () 
   it('does NOT block once the assistant turn ends on non-empty text', () => {
     const entries = [humanEntry(), textEntry('a2')];
     expect(decide(entries)).toEqual(expect.objectContaining({ block: false }));
+  });
+});
+
+// ── QF-20260830-773: isFinalBlockScheduleWakeup shape predicate ─────────────
+describe('isFinalBlockScheduleWakeup() — the shape that must never be budget-released', () => {
+  it('true when the last assistant block is a ScheduleWakeup tool_use with no trailing text', () => {
+    const entries = [humanEntry(), silentToolUseEntry('a1')];
+    expect(isFinalBlockScheduleWakeup(entries)).toBe(true);
+  });
+
+  it('false for a DIFFERENT tool ending on the same shape (Bash) — narrowly scoped to ScheduleWakeup', () => {
+    const entries = [humanEntry(), silentBashEntry('a1')];
+    expect(isFinalBlockScheduleWakeup(entries)).toBe(false);
+  });
+
+  it('false once the turn ends on text after the arm', () => {
+    const entries = [humanEntry(), silentToolUseEntry('a1'), textEntry('a2')];
+    expect(isFinalBlockScheduleWakeup(entries)).toBe(false);
+  });
+
+  it('false for an empty transcript / no assistant entry', () => {
+    expect(isFinalBlockScheduleWakeup([])).toBe(false);
+    expect(isFinalBlockScheduleWakeup([humanEntry()])).toBe(false);
   });
 });
 
@@ -218,20 +250,33 @@ describe('end-to-end: main() replay against a synthetic session-f27a883d-shaped 
     });
   }
 
-  it('blocks up to MAX_BLOCKS_PER_TURN times, then passes through silently on the same silent turn', () => {
+  it('QF-20260830-773: a silent ScheduleWakeup ending is refused UNCONDITIONALLY -- past MAX_BLOCKS_PER_TURN, never budget-released', () => {
     // Invocation 1: fresh stop, stop_hook_active=false -> blocks (block #1).
     const out1 = invoke(false);
     expect(JSON.parse(out1)).toEqual(expect.objectContaining({ decision: 'block', reason: REMINDER }));
 
-    // Invocations 2 and 3: the model re-stopped silently again (transcript unchanged),
-    // Claude Code re-invokes with stop_hook_active=true -- still under the bound, blocks again.
-    const out2 = invoke(true);
-    expect(JSON.parse(out2)).toEqual(expect.objectContaining({ decision: 'block' }));
-    const out3 = invoke(true);
-    expect(JSON.parse(out3)).toEqual(expect.objectContaining({ decision: 'block' }));
+    // Invocations 2 and 3: still under the old bound, blocks again.
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));
 
-    // Invocation 4: bound exhausted (blocksSoFar >= MAX_BLOCKS_PER_TURN) -- passes through
-    // with NO stdout decision, so a genuinely wedged model cannot trap the session forever.
+    // Invocation 4 and 5: PAST the old MAX_BLOCKS_PER_TURN bound -- must STILL block, because
+    // the shape (human turn ending silently on ScheduleWakeup) is refused by shape, not budget.
+    // This is the exact regression the QF exists to close: this transcript previously passed
+    // through silently here, and that is precisely how 4 chairman replies were lost.
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block', reason: REMINDER }));
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block', reason: REMINDER }));
+  });
+
+  it('CONTROL: a non-ScheduleWakeup silent ending still uses the bounded budget escape (teeth preserved for other shapes)', () => {
+    fs.writeFileSync(transcriptPath, [humanEntry(), silentBashEntry('a1')].map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+    expect(JSON.parse(invoke(false))).toEqual(expect.objectContaining({ decision: 'block' })); // #1
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));  // #2
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));  // #3
+
+    // Invocation 4: bound exhausted for this NON-ScheduleWakeup shape -- passes through,
+    // exactly as before this QF, so a genuinely wedged model on an unrelated tool still
+    // cannot trap the session forever.
     const out4 = invoke(true);
     expect(out4.trim()).toBe('');
   });
