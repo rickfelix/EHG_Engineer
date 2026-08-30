@@ -1,8 +1,8 @@
-<!-- file_content_hash: d6a43d6320e86ab3 -->
+<!-- file_content_hash: 391a57bfee3db5ab -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-08-29 10:57:30 AM
+**Generated**: 2026-08-30 2:52:22 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -251,6 +251,11 @@ The north-star gauges (§5e) are **SUBORDINATE diagnostics** — they inform the
    **(b) "On" no longer means "floods".** The **four** producers that mint belt depth consult a **belt-DEMAND gate** (`lib/governance/demand-gate.js`): they produce only when their OWN lane’s depth is at or below a floor — the two SD minters read SD depth, the two QF minters read QF depth (SD-LEO-INFRA-GATE-SIDE-BELT-001), because the default gauge cannot see a quick_fix, and **an unreadable gauge is `unmeasurable` → WITHHOLD, never a licence to produce.** Every run emits its verdict to `audit_log`, so a correctly-quiet engine is distinguishable from a dead one.
    So if the arm is OFF, **PROPOSE activation as a CHAIRMAN decision** — it is genuinely his call, the arm having been set off by chairman directive — and cite the demand gate as why it is now safe. Do NOT substitute yourself for a dormant engine tick-after-tick; that masks the fact it is off and is unsustainable.
 4. **Hand-mining the VDR gauge is LAST-RESORT — and a SMELL.** Reaching for it means a layer above failed. Fix the upstream cause.
+5. **PREDICATE-PUBLICATION RULE (SD-LEO-INFRA-KILL-DUPLICATE-WORK-001, sourced after TWO 2026-08-30 re-mints of ten-week-old completed work): before ANY mint, run BOTH dedup predicates and publish BOTH results in the STEP-0 message — not merely available, a stated output every time.**
+   **(a) Predicate 1, non-terminal ("is-anyone-working")** — the existing claim/belt check for an in-flight SD covering this ask.
+   **(b) Predicate 2, completed ("was-this-built")** — call `checkAlreadyBuilt({supabase, io, title, description})` from `lib/sourcing-engine/manual-precheck.js` (reuses the SAME shipped router.js/dedup-autostamp.js matching machinery the automated belt-refill pipeline already runs — do not hand-roll a second dedup check). Returns `ALREADY-BUILT` + the completed `citedSdKey` when a matched SD is BOTH shipped AND VDR-outcome-realized; `re_emit` when shipped but the VDR gauge has not yet caught up (the anti-inflation-cap trap — reconcile+probe-flip the existing SD's gauge reading instead of minting a parallel rebuild); `NOT-FOUND` only when genuinely novel.
+   **(c) ROOT-CAUSE NOTE**: the two 2026-08-30 re-mints were not caused by a missing predicate — `routeCandidate()`/`stampCandidate()` already correctly matched against ALL existing SDs (completed or not). The gap was that a hand-fed mint never called it at all. This rule closes that gap at the STEP-0 entry point itself.
+   **(d) AMEND-SD NOTICE GAP (documented limitation, coordinator findings a1aaabc3/afdb2547)**: when an existing SD is annotated/re-premised (e.g. to redirect it toward a reconcile+probe-flip instead of a rebuild), NEITHER the current claimant NOR the SD's original author is automatically notified — the annotation is silent unless someone reads the row. WORKAROUND until a notification path ships: send a DIRECTED message (worker-signal / session_coordination) to the current claimant (if any) the moment an amend-sd annotation lands, citing the amended row explicitly. Do not rely on the annotation alone to be seen.
 
 **CLOSE-OUT-FIRST precedence (chairman 2026-08-19: "close out, then run the runway")**: when closing out in-flight/reviewable work competes with new sourcing, close-out ranks first; exec summaries carry the resolved-vs-added ratio.
 
@@ -433,6 +438,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-29*
+*Generated from database: 2026-08-30*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

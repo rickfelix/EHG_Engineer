@@ -1,8 +1,8 @@
-<!-- file_content_hash: 27f20eeda2736621 -->
+<!-- file_content_hash: c4ff0ab2b3121573 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-29 7:16:18 AM
+**Generated**: 2026-08-30 2:52:22 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -31,24 +31,8 @@ Task tool with subagent_type="database-agent":
 "Execute the migration file: database/migrations/YYYYMMDD_name.sql"
 ```
 
----
+> Full tiered auto-apply policy mechanics (TIER-1/TIER-2 definitions, feature-flag polarity, Adam-delegated-apply scope check): see CLAUDE_CORE_MANUAL.md.
 
-## Tiered Auto-Apply Policy (SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001)
-
-Handoff-time migration auto-apply is gated by a **fail-closed, allow-list tier classifier** (`scripts/lib/migration-tier-classifier.mjs`). The classifier is PURE (no DB/IO) and **default-deny**: a migration is auto-apply-eligible **only** when EVERY statement provably matches an additive allow rule.
-
-- **TIER-1 (auto-apply eligible)** — provably additive only: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX` (incl. CONCURRENTLY / IF NOT EXISTS), nullable `ADD COLUMN` with a constant-only default, `ENABLE ROW LEVEL SECURITY` / `CREATE POLICY`, and bare `CREATE FUNCTION`/`VIEW` (NOT `OR REPLACE`, no `SECURITY DEFINER`, body free of destructive SQL). These flow to the DATABASE sub-agent for execution (the mechanics above are unchanged).
-- **TIER-2 (chairman-gated)** — EVERYTHING ELSE: any `DROP`/`TRUNCATE`/`DELETE`/`UPDATE`/`RENAME`/`GRANT`/`REVOKE`, `ALTER COLUMN ... TYPE`, multi-action ALTER with a non-additive action, volatile or `NOT NULL` defaults, `CREATE OR REPLACE`, `SECURITY DEFINER`, `DO` blocks, named-`$tag$` function bodies hiding destructive SQL, and unparseable/under-split/ambiguous input. These are **never auto-applied** — they require the full 3-factor `@approved-by` chairman gate:
-  ```
-  node scripts/apply-migration.js <path> --prod-deploy
-  ```
-  (`--prod-deploy` + a single-use 1h token + an `-- @approved-by: <email>` header matching `git config user.email` — enforced by `scripts/lib/migration-guards.js`, which the tier classifier NEVER weakens.)
-
-**Default-deny safety contract**: a false TIER-1 verdict on a destructive migration would auto-apply it past the chairman gate, so the classifier is allow-list only, NEVER throws, and NEVER returns TIER-1 on any error/ambiguity path. Both auto-apply vectors are gated — SD-declared migrations AND uncommitted manual-update SQL.
-
-**Rollout**: the gate reads the `LEO_MIGRATION_TIER_GATE_BYPASS` flag in `leo_feature_flags` — ONE representation every execution path sees, worktrees included. Polarity is INVERTED deliberately: the flag stores a BYPASS, so the evaluator’s `enabled=false` default (returned for `evaluation_error`, `flag_not_found`, `kill_switch_active`, `lifecycle_draft`) means *no bypass*, i.e. the gate is **ON**. It therefore FAILS CLOSED — an unreachable DB means the gate holds, never that destructive DDL auto-applies. `LEO_MIGRATION_TIER_GATE` is **deprecated and ignored** (it logs a removal notice): it is present in `.env` on every surface and is loaded regardless of cwd, so honouring it would short-circuit before every DB read and leave the flag permanently inert. The break-glass is `LEO_MIGRATION_TIER_GATE_FORCE_ON=1`, which can only force the gate ON — no env value turns it off. To disable the gate, disable the flag in the DB. NOTE (measured, and the opposite of what an earlier draft of this line claimed): the `risk_tier: high` approval requirement is enforced ONLY on `transitionLifecycleState` — `updateFlag({isEnabled:true})` and a raw service-role UPDATE both succeed with **zero** approvals, and no RLS policy, trigger or CHECK blocks them. This flag is protected by default-OFF, inverted polarity, service-role key custody and the `fn_audit_feature_flag_changes` audit trail — NOT by an enforced approval gate. Every tier decision is still audited fail-soft to `audit_log` as `MIGRATION_TIER_CLASSIFICATION`, and the audit row now reports the verdict actually used rather than re-deriving it from the environment. (SD-LEO-INFRA-TIER-GATE-FLAG-001)
-
-**Note on the Adam-delegated `--prod-deploy` flow (SD-LEO-INFRA-INTELLIGENT-SWITCH-AUTOMATION-001-C, 2026-07-18)**: `lib/migration/adam-delegated-apply.js` (GAP A, SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001) applies a STRICTER, SEPARATE scope check that excludes `create_policy`/`enable_rls` tokens — but this check only fires inside the Adam-persona kill-switch-gated delegated-apply path (`-- @delegated-by: adam` marker present AND `LEO_ADAM_DBAPPLY_DELEGATION=on`, default OFF). It does NOT narrow the general TIER-1 allow-list above for an ordinary EXEC-phase migration executed via the DATABASE sub-agent's `run-sql-migration.js` path — `CREATE POLICY`/`ENABLE ROW LEVEL SECURITY` on a brand-new table remain TIER-1 there. The two vectors were confused once already (RCA-verified) because both reuse tier-classifier language; treat them as distinct gates for distinct flows, not one rule with an exception.
 
 ## Cascade Invalidation System
 
@@ -577,29 +561,7 @@ All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). U
 
 > **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
 
-| Agent | Trigger Keywords | Best For |
-|-------|-----------------|----------|
-| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
-| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
-| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
-| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
-| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
-| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
-| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
-| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
-| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
-| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
-| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
-| stories-agent | user stories, acceptance criteria, epic | User story generation |
-| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
-| api-agent | api endpoint, rest api, graphql | API design and implementation |
-| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
-| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
-
-### Invocation Pattern
-```
-Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
-```
+> Full agent/keyword lookup table + invocation pattern: see CLAUDE_CORE_MANUAL.md (canonical routing source is `config/agent-keywords-routing.json`; this pointer is a convenience, not a new source of truth).
 
 ### MCP Read/Write Split
 MCP Supabase tools (execute_sql, list_tables, etc.) use a read-only role. Use them for reads/introspection.
@@ -826,14 +788,7 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 
 **AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table and Chaining setting.
 
-**ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
-1. **Orchestrator completion** — after all children, when Chaining is OFF
-2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
-3. **Test failures after 2 retry attempts**
-4. **All children blocked**
-5. **Critical security or data-loss scenario** (includes DB/code status mismatch)
-
-**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation" rationalization, asking "which option?" or "should I do X or Y?" instead of executing. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING.
+**ONLY STOP IF** one of the 5 Canonical Pause Points applies — defined once in CLAUDE.md "Canonical Pause Points", not restated here. Everything else (scope size, phase boundaries, "warrants confirmation" rationalization) is explicitly NOT a stop condition per that same list.
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -931,16 +886,7 @@ Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EX
 5. **Children execute sequentially** - Child B waits for Child A
 6. **Parent completes last** - after all children finish
 
-### Canonical Pause Points (Orchestrator / Parent)
-
-**Canonical Pause Points** (applies to AUTO-PROCEED, Continue Autonomously, and Orchestrator STOP):
-1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
-2. **Blocking error requiring human decision** — e.g., merge conflicts, ambiguous requirements escalated from EXEC
-3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
-4. **All children blocked** — no ready work remains, human decision required
-5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
-
-**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into children, PRD creation, large refactors, phase boundaries, or any "warrants confirmation" rationalization. If your reason is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+> The 5 Canonical Pause Points (the ONLY reasons to pause an orchestrator/parent) are defined once, in CLAUDE.md "Canonical Pause Points" — they apply here unchanged. Do not duplicate the list; if you need it, read CLAUDE.md.
 
 ### Child SD Completion Checklist
 - [ ] Child has PRD in `product_requirements_v2`
@@ -1727,10 +1673,10 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 | `DEPENDENCY` | Dependency Management Sub-Agent | # Dependency Management Specialist Sub-Agent  **Identity**:  |
 | `SALES` | Sales Process Sub-Agent | Handles sales playbook development, pipeline management, obj |
 | `CRM` | CRM Sub-Agent | Handles customer relationship management, lead tracking, cus |
-| `AUDIT` | Self-Audit Agent | Read-only audit capability for SD health checks. Evaluates s |
-| `PRIORITIZATION_PLANNER` | Prioritization Planner | # Prioritization Planner Sub-Agent  **Identity**: You are a  |
 | `ORCHESTRATOR_CHILD` | Orchestrator Child Agent | Teammate agent for parallel child SD execution within an orc |
 | `STORIES` | User Story Context Engineering Sub-Agent | ## User Story Context Engineering v2.0.0 - Lessons Learned E |
+| `PRIORITIZATION_PLANNER` | Prioritization Planner | # Prioritization Planner Sub-Agent  **Identity**: You are a  |
+| `AUDIT` | Self-Audit Agent | Read-only audit capability for SD health checks. Evaluates s |
 | `JUDGE` | Constitutional Judge | Resolves conflicts between LEO agent recommendations using c |
 | `CLAIM` | Claim Management | SD claim status, release, and listing via /claim command |
 | `VETTING` | Vetting Engine | Constitutional vetting of proposals using AEGIS framework. R |
@@ -1738,7 +1684,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-08-29*
+*Generated from database: 2026-08-30*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
