@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-30](#2026-08-30)
+  - [Infrastructure](#infrastructure-2)
 - [2026-08-29](#2026-08-29)
   - [Infrastructure](#infrastructure-1)
   - [Infrastructure](#infrastructure)
@@ -157,6 +159,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-30
+
+### Infrastructure
+
+- **CRITICAL, blocker-of-blockers: LEO Protocol Bypass Detection required check no longer runs fleet-wide on every PR — one out-of-order handoff row in an unrelated SD can no longer block every open PR's merge path** - PR #7726 (SD-LEO-INFRA-BYPASS-DETECTION-REQUIRED-001)
+  - **What shipped**: `.github/workflows/leo-bypass-validation.yml`'s `pull_request` path previously built its validator args only from `workflow_dispatch`-only inputs, which are always empty on a PR run — so the validator ran unscoped against every non-completed SD updated in the last 7 days (`.limit(500)`), and one out-of-order handoff row anywhere in that window failed the required check on every open PR simultaneously (live: was blocking PR #7720, which touched none of it). `scripts/ci/resolve-pr-bypass-sd.mjs` resolves the PR's branch to its own SD via the existing canonical `branch-key-extractor.js` (reused, not reinvented) and scopes the validator to exactly that SD's UUID. Non-SD/QF branches skip with a `::notice::` annotation; an SD-branded branch resolving to nothing fails closed rather than silently passing. `workflow_dispatch`/`push` behavior is untouched.
+  - **Both sides of the fix proven live, not just unit-tested**: `--sd=<PR-7720's own unrelated SD>` passes clean; `--sd=<the 73b8cdb1 specimen>` still surfaces its finding when targeted directly — confirming the scoping narrows blast radius without weakening the check's own-SD bite. The specimen's `sd_phase_handoffs` row itself was never touched (read-only investigation only) — rewriting a historical audit row to green a gate was explicitly out of scope.
+  - **Self-referential verification**: this PR's own CI run exercised the modified workflow against itself — both "LEO Protocol Bypass Detection" and "Bypass Validation Result" passed green on the PR that changed them.
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 90%, EXEC-TO-PLAN 88%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 93%. `npx vitest run tests/unit/ci/resolve-pr-bypass-sd.test.js` 7/7 passing.
 
 ## 2026-08-29
 
