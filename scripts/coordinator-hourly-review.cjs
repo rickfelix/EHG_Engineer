@@ -646,7 +646,7 @@ async function main() {
     const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
     const gauge = await planRelayDrops(sb);
     if (gauge.flagged > 0) {
-      console.log('\n[HOURLY-REVIEW] RELAY/DECISION/REVIEW DROPS — ' + gauge.flagged + ' row(s) with no matching outbound within the window:');
+      console.log('\n[HOURLY-REVIEW] RELAY/DECISION/REVIEW/COMMITMENT DROPS — ' + gauge.flagged + ' row(s) with no matching outbound (or past due_by) within the window:');
       gauge.decisions.filter(function (d) { return d.action === 'flag'; }).slice(0, 10).forEach(function (d) {
         // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: id and correlation were printed as 8-char
         // prefixes here. This is the most likely literal source of the twice-repeated incident in
@@ -656,6 +656,14 @@ async function main() {
         // (The .slice(0, 10) on the line above caps the ARRAY to 10 rows and is untouched: it
         // shortens no identifier.)
         console.log('  • [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | unactioned ' + Math.floor(d.ageMs / 60000) + 'm | ' + d.reason);
+      });
+    }
+    // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-4: ORPHANED rendered distinctly from
+    // PENDING/flagged — a row's counterpartyLiveness is orthogonal to its action.
+    if (gauge.orphaned > 0) {
+      console.log('\n[HOURLY-REVIEW] ORPHANED COMMITMENTS — ' + gauge.orphaned + ' row(s), counterparty released or dead/unreleased:');
+      gauge.decisions.filter(function (d) { return d.counterpartyLiveness === 'ORPHANED'; }).slice(0, 10).forEach(function (d) {
+        console.log('  ⚠ [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | action=' + d.action);
       });
     }
   } catch (e) {

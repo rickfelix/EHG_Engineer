@@ -618,6 +618,71 @@ async function main() {
   // SD-LEO-INFRA-SESSION-TICK-DAEMONS-001 (FR-1). Last, and awaited only so its stderr lands
   // inside this hook's output — it cannot throw (fully wrapped) and cannot block startup.
   await closeRotatedOutSessions(supabase, sessionId, { parentPid });
+
+  // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-5 — seat rotation hook. Runs after
+  // closeRotatedOutSessions above (so a predecessor closed by THIS same tick is already
+  // released_at-stamped and visible to the query below).
+  await publishRotationCommitments(supabase);
+}
+
+/**
+ * FR-5: on register, list every open (resolved_at IS NULL) commitment whose owner_session is
+ * now ORPHANED (per FR-1's classifyCommitmentLiveness -- released_at set, OR classifySeat()
+ * dead-but-unreleased), as one published block (fail-soft, never blocks SessionStart).
+ *
+ * VALIDATION finding (PLAN_VERIFICATION, evidence 191ea9a9): the first cut of this function
+ * filtered only on `released_at IS NOT NULL`, which misses the exact specimen this whole SD
+ * exists to fix -- a dead-but-never-released owner seat (released_at=NULL, e.g. the frozen
+ * Adam seat f27a883d that motivated FR-1). Now reuses the same discriminator FR-1/FR-2
+ * already ship, so this hook and the gauge agree on what "orphaned" means.
+ *
+ * This fires on every SessionStart -- it is a publish-only surface, not an enforcement gate; a
+ * commitment stays listed here until it is explicitly re-owned or resolved via the
+ * commitments table (see lib/coordinator/commitment-writer.cjs's resolveCommitment()).
+ * @param {object} supabase
+ */
+async function publishRotationCommitments(supabase) {
+  try {
+    const { classifyCommitmentLiveness, LIVENESS } = require('../../lib/coordinator/relay-drop-gauge.cjs');
+    const { data: openCommitments, error: commitmentsErr } = await supabase
+      .from('commitments')
+      .select('id, owner_session, subject, due_by')
+      .is('resolved_at', null)
+      .limit(200);
+    // SEC-3/TESTING sibling finding (EXEC-phase review): a DB-side rejection resolves with
+    // {error} rather than throwing -- log it instead of silently treating it as "no open
+    // commitments" (this function's try/catch below only ever caught a transport throw).
+    if (commitmentsErr) process.stderr.write(`[session-register] rotation.commitments_query_failed error=${commitmentsErr.message}\n`);
+    if (!openCommitments || openCommitments.length === 0) return;
+
+    const ownerIds = [...new Set(openCommitments.map((c) => c.owner_session).filter(Boolean))];
+    if (ownerIds.length === 0) return;
+
+    const { data: ownerSessions, error: ownerErr } = await supabase
+      .from('claude_sessions')
+      .select('session_id, released_at, last_tool_at, metadata')
+      .in('session_id', ownerIds)
+      .limit(200);
+    if (ownerErr) process.stderr.write(`[session-register] rotation.owner_sessions_query_failed error=${ownerErr.message}\n`);
+    const ownerById = {};
+    for (const row of (ownerSessions || [])) ownerById[row.session_id] = row;
+
+    const orphaned = openCommitments.filter((c) =>
+      classifyCommitmentLiveness(ownerById[c.owner_session] || null) === LIVENESS.ORPHANED
+    );
+    if (orphaned.length === 0) return;
+
+    const lines = orphaned.map((c) =>
+      `  - [${c.id}] ${c.subject}${c.due_by ? ' (due ' + c.due_by + ')' : ''} -- was owned by ${String(c.owner_session).slice(0, 8)}`
+    );
+    process.stderr.write(
+      `[session-register] rotation.open_commitments n=${orphaned.length}\n` +
+      `[SEAT ROTATION] ${orphaned.length} open commitment(s) from a retired predecessor seat -- ` +
+      `re-own or explicitly drop each (resolveCommitment() in lib/coordinator/commitment-writer.cjs):\n${lines.join('\n')}\n`
+    );
+  } catch (e) {
+    process.stderr.write(`[session-register] rotation.open_commitments_failed error=${e?.message || String(e)}\n`);
+  }
 }
 
 // SD-LEO-INFRA-FIX-SESSION-REGISTER-001: only auto-invoke main() when this
@@ -656,4 +721,7 @@ module.exports = {
   resolveAccountIdentity, captureAccountIdentity,
   // SD-LEO-INFRA-SESSION-TICK-CLEAR-001 — exported so the pid stamp is testable in isolation.
   stampCcParentPid,
+  // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 FR-5 — exported so the rotation-commitments
+  // publish is testable without running SessionStart.
+  publishRotationCommitments,
 };
