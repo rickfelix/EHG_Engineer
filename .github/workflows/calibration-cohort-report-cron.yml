@@ -1,0 +1,50 @@
+name: "Calibration cohort report (cron)"
+
+# QF-20260830-884 — scheduled invoker for scripts/discovery/calibration-cohort-report.mjs
+# --stamp. SD-LEO-INFRA-REALIZE-GATE-CALIBRATION-001 shipped the reader + report script but
+# nothing ever ran it, so the vision-gauge probe ("Calibrate the gates", lib/vision/
+# vdr-registry.js) reads metadata.calibration_read_at forever null (REPAIR-WITHOUT-DATA).
+# Daily is enough — the calibration cohort (opportunity_blueprints.metadata.
+# calibration_cohort=true) changes slowly. GHA-only (no STANDARD_LOOPS mirror): this is a
+# new loop, not a migrated one, and the fleet's discovery/seeder auto-classifies a gha_cron:*
+# workflow as liveness_source='github_actions_api' (resolved from GHA run history, no manual
+# stamp writer needed) -- the QF-20260830-694 class defect this avoids is a gha_cron:* row
+# left self_stamped with nothing ever calling stampLastFired.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  calibration-cohort-report:
+    name: Calibration cohort report --stamp
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run calibration cohort report (stamps calibration_read_at)
+        run: node scripts/discovery/calibration-cohort-report.mjs --stamp
