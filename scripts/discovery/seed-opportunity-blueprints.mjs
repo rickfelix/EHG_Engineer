@@ -12,12 +12,12 @@
  * TESTING finding T-2: source_type must NOT be 'manual' -- reseed-queue.mjs's classify()
  * WOULD label a source_type='manual' row as e2e_fixture. Uses 'ai_generated' (matches the
  * existing real_idea convention reseed-queue.mjs's own comment names) since that is the
- * semantically correct label. CORRECTED (EXEC-phase TESTING, evidence ec2b314c, finding D1):
- * this classification does NOT actually protect a row from archival -- reseed-queue.mjs
- * archives EVERY is_active=true row unconditionally regardless of its classify() label, and
- * that label has no reader anywhere in the codebase today. Nothing in this SD or its
- * predecessor prevents a future reseed-queue.mjs --apply from re-archiving these 3 rows;
- * that is out of scope here and tracked as a completion-flag follow-up.
+ * semantically correct label. CORRECTED (EXEC-phase TESTING, evidence ec2b314c, finding D1;
+ * closed by PLAN_VERIFICATION VALIDATION, evidence cf18a4ae): source_type/classify() alone
+ * do NOT protect a row from archival -- reseed-queue.mjs archived EVERY is_active=true row
+ * unconditionally, and that label has no reader anywhere. Fixed at the actual point of risk
+ * instead: reseed-queue.mjs now excludes any row with metadata.calibration_read_at set
+ * (isCalibrationProtected()), which these 3 rows carry once stamped (see FR-4 below).
  *
  * TESTING finding T-3/T-4: writes via the REAL call chain -- saveBlueprintsToDatabase()
  * (which internally calls buildBlueprintRow()/evaluateIntakeBar()), not buildBlueprintRow()

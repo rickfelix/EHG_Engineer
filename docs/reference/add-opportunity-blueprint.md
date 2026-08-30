@@ -57,19 +57,16 @@ const result = await runProbe(entry.probe, { supabase });
   *if* seeded rows are later archived, the count reflects that honestly (drops back toward 0)
   rather than staying stale-green. This is a correctness property of the probe, not a
   protection for the rows themselves.
+- **Reseed-safe** (VALIDATION finding, evidence cf18a4ae): `scripts/discovery/reseed-queue.mjs`
+  previously archived **every** `is_active=true` row unconditionally, regardless of
+  `source_type` or `classify()`'s label — one `--apply` run would have silently re-zeroed the
+  gauge. It now excludes any row with `metadata.calibration_read_at` set
+  (`isCalibrationProtected()`/`partitionByCalibration()`) — a row already consumed by the
+  calibration cohort is realized ground truth, not a stale/fixture row to clear. Verified live:
+  running `reseed-queue.mjs` with the 3 seeded rows active reports "Protected (already
+  calibrated, excluded from sweep): 3 row(s)" and archives nothing.
 
-## What is NOT guarded (read before re-running `reseed-queue.mjs`)
-
-`scripts/discovery/reseed-queue.mjs` archives **every** `is_active=true` row in
-`opportunity_blueprints` unconditionally, regardless of `source_type` or its own
-`classify()` label — that label (`e2e_fixture`/`real_idea`) is written to
-`metadata.archive_classification` for record-keeping but has no reader anywhere in the
-codebase today. Choosing `source_type='ai_generated'` over `'manual'` is semantically
-correct but does **not** protect a seeded row from a future `reseed-queue.mjs --apply` run.
-If the active queue needs to survive a reseed, that requires new work (e.g. an explicit
-allowlist/exclusion in `reseed-queue.mjs`), not assumed here.
-
-Also: the seed script (`scripts/discovery/seed-opportunity-blueprints.mjs`) has no
+Remaining gap: the seed script (`scripts/discovery/seed-opportunity-blueprints.mjs`) has no
 re-run/idempotency guard — running it with `--apply` a second time inserts duplicate rows.
 
 ## Public readability (pre-existing, not introduced by this SD)
