@@ -16,6 +16,12 @@
  *   node scripts/sync-context-usage.js --analyze    # Analyze compaction patterns
  *
  * Based on research: Token Accounting & Memory Utilization (Dec 2025)
+ *
+ * SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-1): this ccusage-style pipeline was extended
+ * rather than replaced with OpenTelemetry -- measured, not assumed: 0 of 62 package.json
+ * dependencies match /otel|opentelemetry|telemetry|tracing/, and the only repo hits for
+ * "opentelemetry" are archived (scripts/archive/codex-integration/), confirming no live OTel
+ * integration exists anywhere in this repo.
  * ============================================================================
  */
 
@@ -24,6 +30,7 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -32,6 +39,12 @@ const supabase = createSupabaseClient();
 const LOG_FILE = path.join(process.cwd(), '.claude/logs/context-usage.jsonl');
 const STATE_FILE = path.join(process.cwd(), '.claude/logs/.sync-state.json');
 const BATCH_SIZE = 100;
+// SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (TESTING finding F3, evidence 0f1303ad): now invoked
+// on every worker-checkin.cjs tick fleet-wide. Without a cap, the first post-merge tick against
+// a large never-synced backlog (measured: ~620k lines) would process the entire thing in one
+// call, risking a fleet-wide check-in stall. Bounding per-invocation work leaves the remainder
+// for subsequent ticks rather than trying to fix it all in one pass.
+const MAX_ENTRIES_PER_SYNC = 5000;
 
 /**
  * Load sync state (last synced line number)
@@ -55,9 +68,17 @@ function saveSyncState(state) {
 }
 
 /**
- * Parse JSONL file and return new entries since last sync
+ * Parse JSONL file and return new entries since last sync.
+ *
+ * SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (SECURITY finding, evidence 15c8c79e): maxEntries stops
+ * the READ itself once the cap is reached, closing the stream early — the previous version
+ * buffered the ENTIRE remainder (measured ~620k lines) into memory on every tick before
+ * MAX_ENTRIES_PER_SYNC sliced it down for upload, so the cap bounded upload cost but not read/
+ * memory cost.
+ * @param {number} [sinceLine]
+ * @param {number} [maxEntries] - stop reading once this many entries are collected (no cap when omitted/0)
  */
-async function getNewEntries(sinceLine = 0) {
+async function getNewEntries(sinceLine = 0, maxEntries = 0) {
   if (!fs.existsSync(LOG_FILE)) {
     console.log('No log file found at:', LOG_FILE);
     return [];
@@ -85,30 +106,46 @@ async function getNewEntries(sinceLine = 0) {
     } catch (e) {
       console.warn(`Skipping malformed line ${lineNumber}:`, e.message);
     }
+
+    if (maxEntries > 0 && entries.length >= maxEntries) {
+      rl.close();
+      fileStream.destroy();
+      break;
+    }
   }
 
   return entries;
 }
 
 /**
- * Transform local entry to database schema
+ * Transform local entry to database schema.
+ *
+ * SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2a, TESTING evidence f1af6634): this previously
+ * read SHORT keys (entry.session, entry.ts, entry.percent, ...) while the only real writer,
+ * .claude/context-usage-feed.cjs's buildUsageEntry, emits LONG keys matching the DB column
+ * names 1:1 (entry.session_id, entry.timestamp, entry.usage_percent, ...) -- a live JSONL
+ * census found 619,600 of 619,983 lines in the LONG shape, silently producing a row of mostly
+ * undefined fields (including the NOT NULL session_id) on every sync attempt. Read the LONG
+ * keys buildUsageEntry actually writes; pass loop_name through when present (FR-2).
  */
 function transformEntry(entry) {
-  return {
-    session_id: entry.session,
-    timestamp: entry.ts,
-    model_id: entry.model,
+  const transformed = {
+    session_id: entry.session_id,
+    timestamp: entry.timestamp,
+    model_id: entry.model_id,
     context_used: entry.context_used,
     context_size: entry.context_size,
-    usage_percent: entry.percent,
-    input_tokens: entry.input,
-    output_tokens: entry.output,
-    cache_creation_tokens: entry.cache_create,
-    cache_read_tokens: entry.cache_read,
+    usage_percent: entry.usage_percent,
+    input_tokens: entry.input_tokens,
+    output_tokens: entry.output_tokens,
+    cache_creation_tokens: entry.cache_creation_tokens,
+    cache_read_tokens: entry.cache_read_tokens,
     status: entry.status,
-    compaction_detected: entry.compaction,
-    working_directory: entry.cwd
+    compaction_detected: entry.compaction_detected,
+    working_directory: entry.working_directory,
   };
+  if (entry.loop_name) transformed.loop_name = entry.loop_name;
+  return transformed;
 }
 
 /**
@@ -121,42 +158,73 @@ async function syncToDatabase() {
   const state = loadSyncState();
   console.log(`Last synced line: ${state.lastSyncedLine}`);
 
-  const entries = await getNewEntries(state.lastSyncedLine);
+  // TESTING finding F3 / SECURITY finding (evidence 0f1303ad, 15c8c79e): the cap is enforced by
+  // the READ itself (getNewEntries stops early) so a large backlog is never fully buffered into
+  // memory on a single tick, not just capped before upload.
+  const entries = await getNewEntries(state.lastSyncedLine, MAX_ENTRIES_PER_SYNC);
 
   if (entries.length === 0) {
     console.log('✅ No new entries to sync');
     return;
   }
 
-  console.log(`Found ${entries.length} new entries to sync`);
+  console.log(`Found ${entries.length} new entries to sync${entries.length === MAX_ENTRIES_PER_SYNC ? ' (capped — remainder, if any, deferred to next tick)' : ''}`);
 
   // Batch upload
   let synced = 0;
   let errors = 0;
+  // TESTING finding F1 (evidence 0f1303ad): the previous version advanced past every entry in
+  // this call regardless of per-batch errors, permanently skipping failed entries next run.
+  // Track the furthest LINE NUMBER actually persisted and STOP at the first batch failure —
+  // never advance state past a line that was not confirmed written, so a transient error is
+  // retried on the next tick instead of silently dropped forever.
+  let lastPersistedEntry = null;
 
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const batch = entries.slice(i, i + BATCH_SIZE);
     const transformed = batch.map(transformEntry);
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('context_usage_log')
       .upsert(transformed, {
         onConflict: 'session_id,timestamp'
       });
 
+    // SECURITY finding (evidence 15c8c79e): the loop_name column ships as a migration FILE
+    // that is not self-applicable by a worker session (prod DDL requires a human/authorized
+    // apply). Without this fallback, every upsert after this SD merges would fail PGRST204
+    // until that separate apply step lands, and F1's new stop-at-first-failure would then pin
+    // the sync permanently. Mirrors the established captureLedgerRow pattern (solomon-advisory.cjs):
+    // retry once without the not-yet-migrated column rather than failing capture entirely.
+    if (error && error.code === 'PGRST204' && /loop_name/.test(error.message || '')) {
+      const withoutLoopName = transformed.map(({ loop_name: _drop, ...rest }) => rest);
+      ({ error } = await supabase
+        .from('context_usage_log')
+        .upsert(withoutLoopName, { onConflict: 'session_id,timestamp' }));
+    }
+
     if (error) {
       console.error(`Error syncing batch ${i / BATCH_SIZE + 1}:`, error.message);
       errors += batch.length;
+      break; // stop advancing state past a confirmed failure
     } else {
       synced += batch.length;
+      lastPersistedEntry = batch[batch.length - 1];
     }
   }
 
-  // Update state
-  const lastEntry = entries[entries.length - 1];
+  // Update state — only as far as the last batch that actually persisted.
+  if (!lastPersistedEntry) {
+    console.log(`\n❌ Errors: ${errors} entries; sync state NOT advanced (retry next tick)`);
+    console.log('═'.repeat(60) + '\n');
+    return;
+  }
+  const lastEntry = lastPersistedEntry;
   saveSyncState({
     lastSyncedLine: lastEntry._lineNumber,
-    lastSyncedTimestamp: lastEntry.ts
+    // TESTING finding F2 (evidence 0f1303ad): was entry.ts, the same SHORT-key defect class
+    // FR-2a fixes elsewhere in this function — buildUsageEntry emits `timestamp`, never `ts`.
+    lastSyncedTimestamp: lastEntry.timestamp,
   });
 
   console.log(`\n✅ Synced: ${synced} entries`);
@@ -310,15 +378,19 @@ async function analyzeCompaction() {
   console.log('═'.repeat(60) + '\n');
 }
 
-// CLI
-const args = process.argv.slice(2);
+// CLI — SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2a, TESTING evidence f1af6634): gated behind
+// isMainModule so importing this file (e.g. to reuse transformEntry/syncToDatabase from
+// worker-checkin.cjs, or from a test) does not unconditionally trigger a live sync as a
+// side effect of the import itself.
+if (isMainModule(import.meta.url)) {
+  const args = process.argv.slice(2);
 
-if (args.includes('--summary')) {
-  showSummary();
-} else if (args.includes('--analyze')) {
-  analyzeCompaction();
-} else if (args.includes('--help')) {
-  console.log(`
+  if (args.includes('--summary')) {
+    showSummary();
+  } else if (args.includes('--analyze')) {
+    analyzeCompaction();
+  } else if (args.includes('--help')) {
+    console.log(`
 LEO Protocol - Context Usage Sync
 
 Usage:
@@ -328,7 +400,10 @@ Usage:
   node scripts/sync-context-usage.js --help       Show this help
 
 Log file: .claude/logs/context-usage.jsonl
-  `);
-} else {
-  syncToDatabase();
+    `);
+  } else {
+    syncToDatabase();
+  }
 }
+
+export { transformEntry, syncToDatabase, getNewEntries, MAX_ENTRIES_PER_SYNC };
