@@ -61,7 +61,7 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { listActiveWorktrees, countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
 // SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001 (FR-1/FR-4): reclaim unregistered .worktrees/ dirs.
-import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
+import { runOrphanSweep, resolveMinAgeMs } from '../lib/worktree-reaper/orphan-sweep.js';
 // QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
@@ -1180,11 +1180,24 @@ async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execu
     logger: (m) => process.stderr.write(m + '\n'),
   });
   const s = sweep.summary || {};
+  const byReason = s.excluded_by_reason || {};
   console.log(
     `🧹 Orphan sweep: scanned=${s.scanned ?? '?'} reapable=${s.reapable ?? '?'} ` +
     `archived=${s.reclaimed_count ?? 0} archived_bytes=${s.archived_bytes ?? 0} disk_freed=0 refused=${s.refused_count ?? 0} ` +
-    `excluded=${s.excluded_count ?? 0} failed=${s.failed_count ?? 0}${s.dry_run ? ' (dry-run)' : ''}`
+    `excluded=${s.excluded_count ?? 0} (${Object.entries(byReason).map(([r, n]) => `${r}=${n}`).join(', ') || 'none'}) ` +
+    `failed=${s.failed_count ?? 0}${s.dry_run ? ' (dry-run)' : ''}`
   );
+  // QF-20260830-415: if EVERY excluded dir shares 'too_recent', the individual directories are
+  // not the problem -- the recency threshold itself is. Name the exact env var and its resolved
+  // value so the next fleet-wide pool exhaustion self-diagnoses in one console line instead of
+  // requiring source-level instrumentation (measured live: WORKTREE_ORPHAN_MIN_AGE_MS left at a
+  // 10-year 2026-08-01 incident disarm, see .env comment for the documented revert condition).
+  if (s.reapable === 0 && (s.scanned || 0) > 0 && byReason.too_recent === s.scanned) {
+    console.log(
+      `⚠️  Every excluded dir is 'too_recent' -- check WORKTREE_ORPHAN_MIN_AGE_MS ` +
+      `(resolved=${resolveMinAgeMs()}ms). A stale incident-era disarm reads identically to a healthy sweep.`
+    );
+  }
   // FR-4 durable summary: best-effort audit_log row when an EXECUTE run acted OR REFUSED. Fail-soft.
   //
   // refused_count is in this gate deliberately. Without it, the one outcome that most needs a
