@@ -635,21 +635,26 @@ async function main() {
  */
 async function publishRotationCommitments(supabase) {
   try {
-    const { data: openCommitments } = await supabase
+    const { data: openCommitments, error: commitmentsErr } = await supabase
       .from('commitments')
       .select('id, owner_session, subject, due_by')
       .is('resolved_at', null)
       .limit(200);
+    // SEC-3/TESTING sibling finding (EXEC-phase review): a DB-side rejection resolves with
+    // {error} rather than throwing -- log it instead of silently treating it as "no open
+    // commitments" (this function's try/catch below only ever caught a transport throw).
+    if (commitmentsErr) process.stderr.write(`[session-register] rotation.commitments_query_failed error=${commitmentsErr.message}\n`);
     if (!openCommitments || openCommitments.length === 0) return;
 
     const ownerIds = [...new Set(openCommitments.map((c) => c.owner_session).filter(Boolean))];
     if (ownerIds.length === 0) return;
 
-    const { data: releasedOwners } = await supabase
+    const { data: releasedOwners, error: releasedErr } = await supabase
       .from('claude_sessions')
       .select('session_id')
       .in('session_id', ownerIds)
       .not('released_at', 'is', null);
+    if (releasedErr) process.stderr.write(`[session-register] rotation.released_owners_query_failed error=${releasedErr.message}\n`);
     const releasedIds = new Set((releasedOwners || []).map((r) => r.session_id));
     const orphaned = openCommitments.filter((c) => releasedIds.has(c.owner_session));
     if (orphaned.length === 0) return;

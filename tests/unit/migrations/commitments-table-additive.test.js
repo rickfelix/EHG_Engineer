@@ -17,7 +17,7 @@ describe('20260830_commitments_table.sql — additive-only static guard', () => 
   });
 
   it('uses CREATE TABLE IF NOT EXISTS (idempotent, never fails on re-apply)', () => {
-    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS commitments/i);
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS public\.commitments/i);
   });
 
   it('carries an @approved-by header for the migration-apply ceremony', () => {
@@ -28,5 +28,15 @@ describe('20260830_commitments_table.sql — additive-only static guard', () => 
     for (const col of ['owner_session', 'counterparty_session', 'subject', 'due_by', 'resolved_at', 'resolution']) {
       expect(sql).toMatch(new RegExp(col, 'i'));
     }
+  });
+
+  // SEC-1 (EXEC-phase SECURITY review): pg_default_acl grants anon/authenticated full DML on
+  // every new relation by default in this database -- a bare CREATE TABLE would let the
+  // public anon key forge or erase commitments (measured live against coordination_receipts).
+  it('SEC-1: enables RLS and revokes anon/authenticated, matching the chairman_held_sends precedent', () => {
+    expect(sql).toMatch(/ALTER TABLE public\.commitments ENABLE ROW LEVEL SECURITY/i);
+    expect(sql).toMatch(/CREATE POLICY commitments_service_role[\s\S]*TO service_role/i);
+    expect(sql).toMatch(/REVOKE ALL ON public\.commitments FROM anon, authenticated, PUBLIC/i);
+    expect(sql).toMatch(/GRANT ALL ON public\.commitments TO service_role/i);
   });
 });

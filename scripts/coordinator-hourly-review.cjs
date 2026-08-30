@@ -646,7 +646,7 @@ async function main() {
     const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
     const gauge = await planRelayDrops(sb);
     if (gauge.flagged > 0) {
-      console.log('\n[HOURLY-REVIEW] RELAY/DECISION/REVIEW DROPS — ' + gauge.flagged + ' row(s) with no matching outbound within the window:');
+      console.log('\n[HOURLY-REVIEW] RELAY/DECISION/REVIEW/COMMITMENT DROPS — ' + gauge.flagged + ' row(s) with no matching outbound (or past due_by) within the window:');
       gauge.decisions.filter(function (d) { return d.action === 'flag'; }).slice(0, 10).forEach(function (d) {
         // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: id and correlation were printed as 8-char
         // prefixes here. This is the most likely literal source of the twice-repeated incident in

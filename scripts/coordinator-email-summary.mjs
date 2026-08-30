@@ -181,8 +181,8 @@ try {
   const { planRelayDrops } = await import('../lib/coordinator/relay-drop-gauge.cjs');
   const gauge = await planRelayDrops(db);
   if (gauge.flagged > 0) {
-    relayDropHtml = `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fdecea;border-left:4px solid #e74c3c;border-radius:3px"><b>⚠️ ${gauge.flagged} relay/decision/review row(s) unactioned past the drop window</b></p>`;
-    relayDropText = `⚠️ ${gauge.flagged} relay/decision/review row(s) unactioned past the drop window\n\n`;
+    relayDropHtml = `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fdecea;border-left:4px solid #e74c3c;border-radius:3px"><b>⚠️ ${gauge.flagged} relay/decision/review/commitment row(s) unactioned past the drop window</b></p>`;
+    relayDropText = `⚠️ ${gauge.flagged} relay/decision/review/commitment row(s) unactioned past the drop window\n\n`;
   }
   // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-4: ORPHANED rendered distinctly from
   // PENDING/flagged — a row's counterpartyLiveness is orthogonal to its action.
