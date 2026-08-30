@@ -1,8 +1,8 @@
-<!-- file_content_hash: f47c1e0b408663be -->
+<!-- file_content_hash: 6ee878aba38ebb61 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-08-30 5:28:30 AM
+**Generated**: 2026-08-30 12:00:32 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -82,11 +82,13 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 ## Coordinator loop-registry governance (STANDARD_LOOPS)
 
-**The coordinator's operational heartbeat is governed, not ad hoc.** All 35 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 34 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
 
-**2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 8 of the 35 loops (`sweep`, `unranked-gauge`, `singleton-relaunch`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Three GHA-backed loops (`relay-drain`, `sms-relay-drain`, `sms-status-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
+**2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 7 of the 34 loops (`sweep`, `unranked-gauge`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Three GHA-backed loops (`relay-drain`, `sms-relay-drain`, `sms-status-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
 
 **2026-08-30 addition (QF-20260830-988):** `sms-status-relay-drain` was registered (`currently_expected_active=true` in `periodic_process_registry`) but had no session-armed backup, so its own GHA-deprioritised cadence produced intermittent/perpetual OVERDUE alarms — the same class already fixed for `sms-relay-drain`. Armed with the identical carve-out posture; the drain runner remains a fail-soft no-op until `SMS_STATUS_RELAY_DRAIN_ENABLED` is set at go-live cutover.
+
+**2026-08-30 retirement (QF-20260830-100, chairman ruling A):** `singleton-relaunch` was RETIRED ENTIRELY (removed from STANDARD_LOOPS, not merely dropped to `session_arm:false`) — its trigger+scheduler logic armed real scheduling but the relaunch CONSUMER half was never built (feedback 2026-08-03 "SINGLETON RELAUNCH NET DISCONNECTED IN THE MIDDLE"); it fired 4x (08-11 x2, 08-22 x2) with ZERO relaunches and fed false periodic-liveness escalations to the chairman. `.github/workflows/singleton-relaunch-cron.yml`'s schedule was dropped (`workflow_dispatch` kept); the `periodic_process_registry` rows (`gha_cron:singleton-relaunch-cron.yml`, `standard_loop:singleton-relaunch`) were retired (`currently_expected_active=false`) so a process that will never fire again accrues no misses. The scheduler script and its lib are deliberately NOT deleted — reversible if the consumer half is ever built.
 
 *This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
 
