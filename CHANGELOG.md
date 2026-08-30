@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-30](#2026-08-30)
+  - [Infrastructure](#infrastructure-2)
 - [2026-08-29](#2026-08-29)
   - [Infrastructure](#infrastructure-1)
   - [Infrastructure](#infrastructure)
@@ -157,6 +159,18 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-30
+
+### Infrastructure
+
+- **Stages the direction-aware fix for the AltifyAI 24→23 rollback block — a kill/promotion gate now only demands chairman approval on a forward crossing, never on a retreat out of it** - PR #7728 (SD-LEO-INFRA-DIRECTION-BLIND-KILL-001, chairman-gated, awaiting apply ceremony)
+  - **What shipped**: `database/chairman-gated/20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql` restructures both `advance_venture_stage()` and `fn_advance_venture_stage()`'s independent `gate_type IN ('kill','promotion')` checks to split on direction. Forward crossings (`p_to_stage > p_from_stage`) still hard-require an approved `chairman_decisions` row, unchanged. Rollbacks (`p_to_stage < p_from_stage`) instead require non-empty, cited provenance — a new optional `p_rollback_provenance` parameter on `advance_venture_stage`, and the existing `p_handoff_data.rollback_provenance` field on `fn_advance_venture_stage` (no signature change there). Both functions' `venture_stage_transitions` audit rows now derive `transition_type` server-side from actual direction, closing an independent honesty gap where `fn_advance_venture_stage` previously hardcoded the literal `'normal'` regardless of direction.
+  - **The exact mechanism that blocked the sanctioned rollback**: on 2026-08-29, retreating AltifyAI from stage 24 back to 23 (after a vacuous-pass advance) was refused with `gate_not_approved` — the same predicate that correctly demands approval before crossing a kill gate forward also demanded it before retreating out of one, which would have required fabricating a false approved-proceed row at the stage-24 kill gate to satisfy.
+  - **Requires the chairman's 3-factor apply ceremony before any production effect** — this PR ships the reviewed, tested SQL file only; it does not and cannot self-apply. Executing the AltifyAI rollback itself is an explicitly deferred, post-apply action, not attempted by this SD.
+  - **A real `stage-advancement-chokepoint-lint` finding was fixed, not bypassed**: the migration's `CREATE OR REPLACE` re-emits two already-censused `current_lifecycle_stage` writes; allowlisted and documented in `docs/architecture/stage-advancement-path-census.md` as a re-emission, not a new uncensused write.
+  - **A fleet-wide required-check blocker was found and fixed in-flight, unrelated to this SD's own scope**: `tests/unit/market-signal-scanner/wordpress-plugins.test.js` was a time-bomb test whose hardcoded absolute date fell out of a 90-day window as real calendar time advanced, failing the required "Run Unit Tier" CI check on every open PR. A stronger, independently-landed pinned-clock fix (QF-20260829-917) merged into main moments later; this SD merged main and took that fix wholesale rather than shipping a competing variant.
+  - **Verification**: LEAD-TO-PLAN, PLAN-TO-EXEC 90%, EXEC-TO-PLAN 87%, PLAN-TO-LEAD 90%, LEAD-FINAL-APPROVAL 94%. `npx vitest run tests/unit/direction-aware-kill-gate-migration-shape.test.js` 18/18 passing, proving the two-sided contract on both functions (forward crossing still hard-requires approval; rollback requires provenance, never a fabricated approval) and zero remaining direction-blind gate predicates.
 
 ## 2026-08-29
 
