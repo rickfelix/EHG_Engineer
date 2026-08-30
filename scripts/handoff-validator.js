@@ -9,6 +9,8 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import DynamicChecklistGenerator from './dynamic-checklist-generator.js';
 import SubAgentEnforcementSystem from './subagent-enforcement-system.js';
 import { checkRCAGate } from './root-cause-agent.js';
+import { enumerateMigrationsForSd, evaluateMigrationGate } from '../lib/migration/completion-migration-gate.js';
+import { getLatestSuccessForPath } from '../lib/migration-audit-reader.js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import dotenv from 'dotenv';
@@ -119,8 +121,34 @@ class HandoffValidator {
       }
     }
 
-    // Overall validity requires checklist, sub-agents, AND RCA gate
-    const isValid = isChecklistValid && subAgentCheck.valid && !rcaGateCheck.blocked;
+    // Migration application gate (QF-20260830-232): LEAD-FINAL-APPROVAL must not close
+    // an SD that shipped an unapplied, undeferred database/migrations/*.sql file.
+    let migrationGateCheck = { blocked: false, unresolved: [] };
+    if (handoffKey === 'LEAD-FINAL-APPROVAL') {
+      const { data: sdRow } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, metadata')
+        .eq('sd_key', sdId)
+        .maybeSingle();
+      if (sdRow) {
+        const { paths, unverifiable } = enumerateMigrationsForSd(sdRow.sd_key);
+        if (!unverifiable && paths.length > 0) {
+          migrationGateCheck = await evaluateMigrationGate(
+            { metadata: sdRow.metadata, paths },
+            (path) => getLatestSuccessForPath(path).then((r) => !!r)
+          );
+          if (migrationGateCheck.blocked) {
+            console.log('\n❌ Migration Application Gate: BLOCKED');
+            console.log(`   Unapplied, undeferred migrations: ${migrationGateCheck.unresolved.join(', ')}`);
+            console.log('   Fix: apply via scripts/apply-migration.js, or add a metadata.deferred_migrations[]');
+            console.log('   entry naming { migration_path, owner, due_date }.');
+          }
+        }
+      }
+    }
+
+    // Overall validity requires checklist, sub-agents, RCA gate, AND migration application gate
+    const isValid = isChecklistValid && subAgentCheck.valid && !rcaGateCheck.blocked && !migrationGateCheck.blocked;
     
     // Generate comprehensive report
     const report = {
@@ -136,10 +164,14 @@ class HandoffValidator {
         ...subAgentCheck.blockingItems,
         ...(rcaGateCheck.blocked ? rcaGateCheck.blockingRCRs.map(rcr =>
           `RCA Gate: ${rcr.severity_priority} - ${rcr.problem_statement} (RCR ${rcr.id})`
+        ) : []),
+        ...(migrationGateCheck.blocked ? migrationGateCheck.unresolved.map(path =>
+          `Migration Gate: ${path} not applied and not deferred`
         ) : [])
       ],
       subAgentResults: subAgentCheck,
       rcaGateResults: rcaGateCheck,
+      migrationGateResults: migrationGateCheck,
       recommendation: this.getRecommendation(isValid, status, threshold, subAgentCheck, rcaGateCheck)
     };
     
