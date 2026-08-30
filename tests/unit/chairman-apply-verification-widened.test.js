@@ -12,9 +12,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const classifyMigrationApplyState = vi.fn();
+// SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 (FR-1): see the sibling test file's identical
+// comment -- the gate now also consults findMergedPrFileList; default to empty/no-error.
+const findMergedPrFileList = vi.fn().mockResolvedValue({ files: [], error: null });
 vi.mock(
   '../../scripts/modules/handoff/executors/lead-final-approval/chairman-apply-state.js',
-  () => ({ classifyMigrationApplyState: (...a) => classifyMigrationApplyState(...a) })
+  () => ({
+    classifyMigrationApplyState: (...a) => classifyMigrationApplyState(...a),
+    findMergedPrFileList: (...a) => findMergedPrFileList(...a)
+  })
 );
 
 const { createChairmanApplyVerificationGate } = await import(
@@ -24,7 +30,10 @@ const { createChairmanApplyVerificationGate } = await import(
 const gate = () => createChairmanApplyVerificationGate();
 const sdWith = (metadata) => ({ sd: { sd_key: 'SD-TEST-001', metadata } });
 
-beforeEach(() => classifyMigrationApplyState.mockReset());
+beforeEach(() => {
+  classifyMigrationApplyState.mockReset();
+  findMergedPrFileList.mockReset().mockResolvedValue({ files: [], error: null });
+});
 
 describe('positive control: an UNGATED SD with its own NOT_APPLIED migration is blocked', () => {
   it('blocks, names the file + missing objects, and names the coordinator clearance path', async () => {
@@ -37,8 +46,13 @@ describe('positive control: an UNGATED SD with its own NOT_APPLIED migration is 
     });
     const r = await gate().validator(sdWith({}));
     expect(r.passed).toBe(false);
+    // SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 (FR-3): ordinary NOT_APPLIED now routes
+    // through buildWaitResult (parent-orchestrator WAIT precedent) instead of a hard FAIL --
+    // the SAME information (file, status, clearance path) now lives in wait_reason/remediation
+    // instead of issues[] (issues is empty for a WAIT, by design).
+    expect(r.wait).toBe(true);
     expect(r.score).toBe(0);
-    const text = r.issues.join('\n');
+    const text = `${r.wait_reason || ''}\n${r.remediation || ''}`;
     expect(text).toContain('20260101_SD-TEST-001_add_thing.sql');
     expect(text).toContain('NOT_APPLIED');
     // Applier-reachability (ruling condition 4): the refusal must say WHO clears it.
@@ -54,7 +68,8 @@ describe('positive control: an UNGATED SD with its own NOT_APPLIED migration is 
     });
     const r = await gate().validator(sdWith({}));
     expect(r.passed).toBe(false);
-    expect(r.issues.join('\n')).toContain('PARTIAL');
+    expect(r.wait).toBe(true);
+    expect(r.wait_reason).toContain('PARTIAL');
   });
 });
 
@@ -86,6 +101,7 @@ describe('fail-closed now reaches the ungated population', () => {
     classifyMigrationApplyState.mockResolvedValue({ files: [], error: 'connect ECONNREFUSED' });
     const r = await gate().validator(sdWith({}));
     expect(r.passed).toBe(false);
+    expect(r.wait).toBe(false); // AC-4.3: an indeterminate classifier state is a FAIL, never a WAIT
     expect(r.details.fail_closed).toBe(true);
   });
 
@@ -96,6 +112,7 @@ describe('fail-closed now reaches the ungated population', () => {
     });
     const r = await gate().validator(sdWith({ migration_files: ['20260101_typo.sql'] }));
     expect(r.passed).toBe(false);
+    expect(r.wait).toBe(false);
     expect(r.issues.join('\n')).toContain('20260101_typo.sql');
   });
 
@@ -103,6 +120,7 @@ describe('fail-closed now reaches the ungated population', () => {
     classifyMigrationApplyState.mockResolvedValue({ files: [], error: null });
     const r = await gate().validator(sdWith({ requires_chairman_apply: true }));
     expect(r.passed).toBe(false);
+    expect(r.wait).toBe(false);
     expect(r.details.fail_closed).toBe(true);
   });
 });
@@ -115,7 +133,8 @@ describe('gated refusals name the chairman ceremony (clearance path per class)',
     });
     const r = await gate().validator(sdWith({ requires_chairman_apply: true }));
     expect(r.passed).toBe(false);
-    const text = r.issues.join('\n');
+    expect(r.wait).toBe(true);
+    const text = `${r.wait_reason || ''}\n${r.remediation || ''}`;
     expect(text).toMatch(/REMEDIATION \(chairman-gated\)/);
     expect(text).toMatch(/chairman GO/);
   });
