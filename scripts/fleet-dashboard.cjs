@@ -2922,7 +2922,7 @@ async function printDeadLetters() {
   const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: rows, error } = await supabase
     .from('session_coordination')
-    .select('id, target_session, message_type, subject, payload, created_at')
+    .select('id, target_session, message_type, subject, payload, created_at, read_at')
     .eq('payload->>dead_letter', 'true')
     .gte('created_at', sinceIso)
     .order('created_at', { ascending: false })
