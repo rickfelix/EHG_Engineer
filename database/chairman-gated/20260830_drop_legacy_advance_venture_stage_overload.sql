@@ -1,0 +1,24 @@
+-- SD-LEO-INFRA-DIRECTION-BLIND-KILL-001 -- follow-up: drop the LEGACY 4-argument overload of
+-- advance_venture_stage left behind by 20260830_direction_aware_kill_gate_and_honest_rollback_audit.sql
+--
+-- @approved-by: PENDING
+--
+-- WHY THIS EXISTS (measured 2026-08-30 15:02:49Z, scribe Adam a78170fa, readback of the item-3 apply):
+-- The direction-aware migration used CREATE OR REPLACE FUNCTION public.advance_venture_stage(uuid, integer,
+-- integer, text, text) — a NEW parameter list. PostgreSQL identifies a function by name + argument TYPES, so
+-- this created a SECOND function beside the pre-existing 4-argument body
+-- advance_venture_stage(uuid, integer, integer, text) instead of replacing it. schema_migrations_applied
+-- object_diffs for that apply show advance_venture_stage before == after (len 6875, the old direction-blind
+-- body); the new 5-argument body is the one carrying p_rollback_provenance. Live consequence, measured via
+-- PostgREST: a 3- or 4-argument call now fails with "Could not choose the best candidate function between
+-- advance_venture_stage(uuid,integer,integer,text) and advance_venture_stage(uuid,integer,integer,text,text)";
+-- a fully-named 5-argument call resolves uniquely. Callers that omit p_rollback_provenance are broken until the
+-- legacy overload is gone, and the legacy overload still carries the direction-blind kill-gate check the SD fixed.
+--
+-- Destructive class (DROP) => CHAIRMAN-ONLY per CLAUDE_ADAM 3b/3c. Chairman verbal required per migration.
+--
+-- TWO-SIDED READBACK after apply: (1) a 4-argument call must resolve to the 5-argument function (default
+-- p_rollback_provenance NULL) and return venture_not_found for a null venture id — no ambiguity error;
+-- (2) the 5-argument call still resolves; (3) pg_proc holds exactly one advance_venture_stage.
+
+DROP FUNCTION IF EXISTS public.advance_venture_stage(uuid, integer, integer, text);
