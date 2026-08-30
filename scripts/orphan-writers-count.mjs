@@ -21,6 +21,7 @@ import { DRAIN_DESCRIPTORS } from '../lib/governance/gauge-registry.js';
 import { classifyStructural } from '../lib/governance/drain-inventory.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import createDatabaseClient from '../lib/supabase-connection.js';
 
 const SELF_ENTRY_ID = 'orphan-writers-triage-pass';
 const SELF_PROCESS_KEY = 'standard_loop:orphan-writers-triage';
@@ -46,13 +47,40 @@ async function evaluateNoStamperWired(supabase, entry) {
 }
 
 /**
- * shipped-but-not-applied is a one-time boolean latch — this repo does not have a generic
- * information_schema probe wired up for arbitrary migrations, so this evaluator reports
- * UNAVAILABLE with the predicate description surfaced for a human/coordinator to check,
- * rather than guessing at a query. A future SD may wire a concrete probe per specimen.
+ * shipped-but-not-applied is a one-time boolean latch. Per-specimen check functions live in
+ * SHIPPED_BUT_NOT_APPLIED_CHECKS keyed by entry id — each queries the concrete DDL effect via
+ * a direct pg client (createDatabaseClient), the same pattern scripts/verify-migration-apply-
+ * state.mjs already uses for constraint introspection (TESTING F-3: a hardcoded MANUAL_CHECK_
+ * REQUIRED with no query is unimplementable per FR-4a AC-2, "once true, no further advisories").
+ * An entry with no registered check function falls back to MANUAL_CHECK_REQUIRED honestly.
  */
-function evaluateShippedButNotApplied(entry) {
-  return { verdict: 'MANUAL_CHECK_REQUIRED', reason: entry.predicate?.description || 'no predicate description' };
+const SHIPPED_BUT_NOT_APPLIED_CHECKS = {
+  async 'competitive-observed-tag-migration'(pgClient) {
+    const { rows } = await pgClient.query(
+      `SELECT pg_get_constraintdef(c.oid) AS def FROM pg_constraint c
+         JOIN pg_namespace ns ON ns.oid = c.connamespace
+        WHERE ns.nspname = 'public' AND c.conname = 'competitive_baselines_epistemic_tag_check'`
+    );
+    if (rows.length === 0) return { applied: false, detail: 'constraint not found' };
+    return { applied: /OBSERVED/.test(rows[0].def), detail: rows[0].def };
+  },
+};
+
+async function evaluateShippedButNotApplied(entry, pgClientFactory) {
+  const checkFn = SHIPPED_BUT_NOT_APPLIED_CHECKS[entry.id];
+  if (!checkFn) {
+    return { verdict: 'MANUAL_CHECK_REQUIRED', reason: entry.predicate?.description || 'no predicate description' };
+  }
+  let pgClient;
+  try {
+    pgClient = await pgClientFactory();
+    const { applied, detail } = await checkFn(pgClient);
+    return { verdict: applied ? 'PASS' : 'ORPHANED', reason: detail };
+  } catch (err) {
+    return { verdict: 'UNAVAILABLE', reason: `applied-check query failed: ${err.message}` };
+  } finally {
+    if (pgClient) await pgClient.end().catch(() => {});
+  }
 }
 
 function evaluateRefsDrainDescriptor(entry) {
@@ -67,7 +95,7 @@ async function evaluateEntry(supabase, entry) {
     return evaluateNoStamperWired(supabase, entry);
   }
   if (entry.entry_type === 'shipped-but-not-applied') {
-    return evaluateShippedButNotApplied(entry);
+    return evaluateShippedButNotApplied(entry, () => createDatabaseClient('engineer', { verify: false }));
   }
   return { verdict: 'MANUAL_CHECK_REQUIRED', reason: 'no automated evaluator for this entry shape' };
 }

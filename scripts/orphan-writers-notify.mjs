@@ -29,8 +29,18 @@ const MISS_CATEGORY = 'orphan_writer_miss';
 const CONSECUTIVE_THRESHOLD = 2;
 
 /**
+ * Delete all tracked miss rows for an entry — called on PASS (the streak is broken) and
+ * after firing an advisory (so the NEXT advisory requires another full CONSECUTIVE_THRESHOLD
+ * streak, rather than re-firing on every subsequent run while still orphaned — TESTING F-2).
+ */
+async function resetMissStreak(supabase, entryId) {
+  const { error } = await supabase.from('feedback').delete().eq('category', MISS_CATEGORY).eq('metadata->>entry_id', entryId);
+  if (error) throw error;
+}
+
+/**
  * Record a miss row for this entry and return how many consecutive misses (including this
- * one) have been recorded for it, most-recent-first.
+ * one) have been recorded for it since the last reset (a PASS or a prior advisory fire).
  */
 async function recordMissAndCountConsecutive(supabase, entryId) {
   // dedup_key includes the run timestamp so consecutive windows on the same day each get
@@ -48,15 +58,13 @@ async function recordMissAndCountConsecutive(supabase, entryId) {
     dedup_key: `${entryId}::${runStamp}`,
   });
 
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from('feedback')
-    .select('created_at')
+    .select('id', { count: 'exact', head: true })
     .eq('category', MISS_CATEGORY)
-    .eq('metadata->>entry_id', entryId)
-    .order('created_at', { ascending: false })
-    .limit(CONSECUTIVE_THRESHOLD);
+    .eq('metadata->>entry_id', entryId);
   if (error) throw error;
-  return data?.length || 0;
+  return count || 0;
 }
 
 function sendAdvisory(body) {
@@ -95,7 +103,13 @@ async function main() {
       if (consecutiveCount >= CONSECUTIVE_THRESHOLD) {
         const body = `orphan-writers-registry: "${entry.id}" (entry_type=${entry.entry_type}) has been orphaned for ${consecutiveCount} consecutive windows. Writer: ${JSON.stringify(entry.writer || entry.refs_drain_descriptor)}. Reader: ${JSON.stringify(entry.reader || 'see DRAIN_DESCRIPTORS')}.`;
         advisoriesSent.push({ entry_id: entry.id, ...sendAdvisory(body) });
+        // Reset the streak after firing so a persisting orphan re-escalates every
+        // CONSECUTIVE_THRESHOLD windows rather than spamming an advisory on every run.
+        await resetMissStreak(supabase, entry.id);
       }
+    } else {
+      // PASS (or any non-miss verdict): the streak is broken — clear tracked misses.
+      await resetMissStreak(supabase, entry.id);
     }
   }
 
@@ -110,4 +124,4 @@ if (isMainModule(import.meta.url)) {
   });
 }
 
-export { recordMissAndCountConsecutive, sendAdvisory };
+export { recordMissAndCountConsecutive, resetMissStreak, sendAdvisory };
