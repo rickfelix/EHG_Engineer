@@ -22,6 +22,12 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+// QF-20260830-275 (B): attribution-aware detector — a repeat whose gap since the signature's
+// prior occurrence is shorter than the delay this session last armed via ScheduleWakeup is a
+// re-invocation-caused repeat (the harness woke the seat early), not a same-invocation blind
+// retry, and must not advance the hard-block counter. See lib/hooks/reinvocation-classifier.cjs.
+const { classifyGap } = require('../../lib/hooks/reinvocation-classifier.cjs');
+const { readWakeArmMarker } = require('../../lib/hooks/wake-arm-marker.cjs');
 
 const RETRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -482,8 +488,12 @@ function pruneStale(state, nowMs) {
       delete state.invocations[sig];
       // Drop the matching Control-3 progress fingerprint so it cannot leak past the window.
       if (state.progress && typeof state.progress === 'object') delete state.progress[sig];
+      if (state.countable && typeof state.countable === 'object') delete state.countable[sig];
     } else {
       state.invocations[sig] = ts;
+      if (state.countable && typeof state.countable === 'object' && Array.isArray(state.countable[sig])) {
+        state.countable[sig] = state.countable[sig].filter(t => nowMs - t <= RETRY_WINDOW_MS);
+      }
     }
   }
 }
@@ -625,6 +635,7 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     if (rcaAt) {
       state.invocations = {};
       state.progress = {};
+      state.countable = {};
       state.reset_at = rcaAt;
       rcaResetApplied = true;
     }
@@ -642,6 +653,7 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
       if (marker && (!state.reset_at || marker > state.reset_at)) {
         state.invocations = {};
         state.progress = {};
+        state.countable = {};
         state.reset_at = marker;
         rcaResetApplied = true;
       }
@@ -669,16 +681,33 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     }
   }
 
+  // QF-20260830-275 (B): classify this occurrence's gap from the signature's PRIOR occurrence
+  // against the delay this session last armed via ScheduleWakeup. A gap shorter than the arm
+  // is almost certainly the harness re-invoking early (over-firing), not a same-invocation
+  // blind retry — it is still recorded in `invocations` (audit/pruning) but excluded from
+  // `countable`, which is what drives the hard-block/auto-signal decision.
+  const priorTs = existing.length > 0 ? existing[existing.length - 1] : undefined;
+  const armMarker = readWakeArmMarker(sessionId);
+  const classification = priorTs === undefined
+    ? 'countable' // first sighting of this signature — nothing to compare against
+    : classifyGap({ gapMs: now - priorTs, armedDelaySeconds: armMarker && armMarker.delay_seconds });
+
+  if (!state.countable || typeof state.countable !== 'object') state.countable = {};
+  const countableExisting = Array.isArray(state.countable[signature]) ? state.countable[signature] : [];
+  if (classification !== 'reinvocation_caused') countableExisting.push(now);
+  state.countable[signature] = countableExisting;
+
   existing.push(now);
   state.invocations[signature] = existing;
 
   writeState(sessionId, state);
 
   return {
-    attempts: existing.length,
+    attempts: countableExisting.length,
     signature,
     rcaResetApplied,
     progressStalled,
+    reinvocationCausedCount: existing.length - countableExisting.length,
     commandText: toolName === 'Bash' && typeof toolInput?.command === 'string' ? toolInput.command : undefined,
     occurredAt: existing.map((ts) => new Date(ts).toISOString()),
   };

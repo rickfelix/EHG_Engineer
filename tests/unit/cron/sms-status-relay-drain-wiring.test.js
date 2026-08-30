@@ -32,8 +32,18 @@ describe('SMS status-drain machinery names its dispatcher', () => {
   it('the cron workflow exists, is scheduled, and its run step invokes the runner', () => {
     expect(fs.existsSync(WORKFLOW), `missing dispatcher workflow: ${WORKFLOW}`).toBe(true);
     const yml = fs.readFileSync(WORKFLOW, 'utf8');
-    expect(yml, 'workflow no longer runs scripts/sms-status-relay-drain.cjs').toMatch(/node\s+scripts\/sms-status-relay-drain\.cjs/);
+    // QF-20260830-922: the runner is invoked through run-with-exit-witness.cjs so a native
+    // abort at teardown is still observed from the parent side -- assert the target script is
+    // still named as the run step's argument, whether direct or wrapped.
+    expect(yml, 'workflow no longer references scripts/sms-status-relay-drain.cjs').toMatch(/scripts\/sms-status-relay-drain\.cjs/);
+    expect(yml, 'workflow no longer runs its step through node').toMatch(/run:\s*node\s+/);
     expect(yml, 'workflow lost its schedule trigger').toMatch(/schedule:/);
+  });
+
+  it('QF-20260830-922: the run step is wrapped through run-with-exit-witness.cjs', () => {
+    const yml = fs.readFileSync(WORKFLOW, 'utf8');
+    expect(yml, 'run step must invoke scripts/run-with-exit-witness.cjs with the drain script as its argument')
+      .toMatch(/run:\s*node\s+scripts\/run-with-exit-witness\.cjs\s+scripts\/sms-status-relay-drain\.cjs/);
   });
 
   it('the runner exists and dispatches drainSmsStatusStaging from lib/chairman/sms-bridge.js', () => {
@@ -87,5 +97,66 @@ describe('sms-status-relay-drain FR-6 enable gate', () => {
       process.env.SMS_STATUS_RELAY_DRAIN_ENABLED = v;
       expect(isDrainEnabled(), `expected "${v}" => enabled`).toBe(true);
     }
+  });
+});
+
+// QF-20260830-603: intermittent native libuv abort (win32 UV_HANDLE_CLOSING) observed even on
+// INERT ticks (drain disabled) -- i.e. before getSupabase() is ever reached. Two-sided fix:
+// (1) lazy-require supabase-js so the ~100% common inert path never touches it; (2) a local-file
+// abnormal-exit witness so a future abort (inert or live) is logged loudly, not silently retried.
+describe('QF-20260830-603: lazy supabase-js require', () => {
+  it('the top-level module scope never requires @supabase/supabase-js -- only getSupabase() does', () => {
+    const src = stripComments(fs.readFileSync(RUNNER, 'utf8'));
+    const topLevelRequire = /^const\s*\{\s*createClient\s*\}\s*=\s*require\(\s*['"]@supabase\/supabase-js['"]\s*\)/m;
+    expect(src, 'supabase-js require must be lazy (inside getSupabase), not top-level').not.toMatch(topLevelRequire);
+    expect(src, 'getSupabase() must still require it when actually called').toMatch(
+      /function getSupabase\s*\([^)]*\)\s*\{[\s\S]*?require\(\s*['"]@supabase\/supabase-js['"]\s*\)/,
+    );
+  });
+});
+
+describe('QF-20260830-603: abnormal-exit witness', () => {
+  const { TICK_MARKER_PATH, checkAbnormalExitWitness, markTickStarted, markTickFinished } =
+    require('../../../scripts/sms-status-relay-drain.cjs');
+
+  afterEach(() => {
+    try { fs.rmSync(TICK_MARKER_PATH, { force: true }); } catch { /* best-effort cleanup */ }
+  });
+
+  it('markTickStarted writes a marker, markTickFinished removes it -- a clean tick leaves no trace', () => {
+    expect(fs.existsSync(TICK_MARKER_PATH)).toBe(false);
+    markTickStarted();
+    expect(fs.existsSync(TICK_MARKER_PATH)).toBe(true);
+    markTickFinished();
+    expect(fs.existsSync(TICK_MARKER_PATH)).toBe(false);
+  });
+
+  it('a marker left over from a prior (never-finished) tick is detected and logged loudly', () => {
+    markTickStarted(); // simulates a tick that started but was killed before markTickFinished()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    checkAbnormalExitWitness();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/ABNORMAL EXIT DETECTED/));
+    warnSpy.mockRestore();
+  });
+
+  it('no stale marker means no warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    checkAbnormalExitWitness();
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+// QF-20260830-025: process.exit() called while the Supabase client still holds open libuv async
+// handles tears the process down mid-handle-close and libuv asserts (rc=127 on win32). Reproduced
+// deterministically 3/3 with a minimal repro (createClient + one query + process.exit(0)) vs. 0/3
+// without the exit call. Source-pin, not behavioral: the abort is a native libuv assertion that
+// only fires in a real child process, not observable inside vitest's worker.
+describe('QF-20260830-025: no process.exit() after Supabase work at CLI teardown', () => {
+  it('the success and fatal-catch paths set exitCode and let the event loop drain, never process.exit()', () => {
+    const src = stripComments(fs.readFileSync(RUNNER, 'utf8'));
+    const cliBlock = src.match(/if\s*\(\s*require\.main\s*===\s*module\s*\)\s*\{[\s\S]*/)[0];
+    expect(cliBlock, 'CLI teardown must not call process.exit() -- it aborts on win32 while the supabase client holds open handles').not.toMatch(/process\.exit\(/);
+    expect(cliBlock, 'success path must set process.exitCode = 0').toMatch(/process\.exitCode\s*=\s*0/);
   });
 });

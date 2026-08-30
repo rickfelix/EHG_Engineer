@@ -107,6 +107,27 @@ describe('eligibleIdleWorkers — sd_key + spin-up grace', () => {
   });
 });
 
+// SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001: recently-released shells must not receive a claim
+// hint mid-wind-down. Named regression fixture for the forcing incident (07:56:44Z, Hotel-5):
+// released, heartbeat fresh, no sd_key, past spin-up grace — everything else about the shape
+// looks like idle capacity except the recent release.
+describe('eligibleIdleWorkers — release-recency exclusion (07:56:44Z Hotel-5 shell-window regression)', () => {
+  it('excludes a session released within the recency window (the incident specimen)', () => {
+    const shell = worker({ session_id: 'hotel-5', released_at: new Date(NOW - 7 * 60 * 1000).toISOString() });
+    expect(eligibleIdleWorkers([shell], NOW)).toEqual([]);
+  });
+
+  it('includes a session released long ago (outside the window) — genuinely idle, still hintable', () => {
+    const longIdle = worker({ session_id: 'w-idle', released_at: new Date(NOW - 60 * 60 * 1000).toISOString() });
+    expect(eligibleIdleWorkers([longIdle], NOW).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+
+  it('includes a session that was never released (released_at null) — unaffected by the new gate', () => {
+    const neverReleased = worker({ session_id: 'w-fresh', released_at: null });
+    expect(eligibleIdleWorkers([neverReleased], NOW).map((x) => x.session_id)).toEqual(['w-fresh']);
+  });
+});
+
 describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live insert)', () => {
   function qfsForSelect(qfs, selectedCols) {
     if (selectedCols.includes('verified_at')) return qfs;

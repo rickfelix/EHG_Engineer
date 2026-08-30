@@ -25,12 +25,13 @@ const yaml = require('js-yaml');
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const workflowsDir = join(repoRoot, '.github', 'workflows');
 
-// The 13 SCRIPT-SHAPED loops migrated in this FR-2 batch.
+// The SCRIPT-SHAPED loops migrated in this FR-2 batch. `singleton-relaunch` was RETIRED
+// entirely (QF-20260830-100) — removed from STANDARD_LOOPS and its GHA cron's schedule
+// dropped (workflow_dispatch kept) — so it is no longer a live migration-parity subject.
 const MIGRATED_KEYS = [
   'sweep',
   'flag-review',
   'unranked-gauge',
-  'singleton-relaunch',
   'relay-drain',
   'relay-drop-gauge',
   'fleet-retro',

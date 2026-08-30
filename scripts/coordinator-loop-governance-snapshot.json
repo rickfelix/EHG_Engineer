@@ -5,7 +5,6 @@
   "session_arm_false_keys": [
     "sweep",
     "unranked-gauge",
-    "singleton-relaunch",
     "relay-drop-gauge",
     "fleet-retro",
     "row-growth",
@@ -14,7 +13,8 @@
   ],
   "gha_only_carve_out_keys": [
     "relay-drain",
-    "sms-relay-drain"
+    "sms-relay-drain",
+    "sms-status-relay-drain"
   ],
   "reversal_condition_through": "2026-08-25T22:00:00Z",
   "reversal_condition": "If any dropped loop's artifact goes stale beyond 2x its GHA cadence before this date, revert its session_arm to true (re-arm it as a session-owned loop) pending re-review.",

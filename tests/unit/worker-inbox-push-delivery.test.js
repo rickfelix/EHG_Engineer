@@ -149,6 +149,35 @@ describe('surfaceCoordinatorMessages — non-draining bounded delivery (FR-1/FR-
     } finally { ws.getMessagesForSession = orig; }
   });
 
+  it('QF-20260830-958: a row already retired via payload.actioned_at is NOT re-rendered, even though acknowledged_at is still null', async () => {
+    const sb = recordingSb();
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      {
+        id: 'retired-1', message_type: 'INFO',
+        payload: { kind: 'signal_resolved', actioned_at: '2026-08-30T10:43:16.669Z' },
+        created_at: '2026-06-13T01:00:00Z', read_at: '2026-06-13T01:30:00Z',
+      },
+    ];
+    try {
+      const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
+      expect(out).toEqual([]); // never re-rendered
+      expect(sb.updates).toEqual([]); // and no self-stamped acknowledged_at either (the unattributed-writer anomaly)
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('QF-20260830-958: a row WITHOUT payload.actioned_at still surfaces (two-sided — the fix does not over-suppress)', async () => {
+    const sb = recordingSb();
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      { id: 'live-1', message_type: 'INFO', payload: { kind: 'signal_resolved' }, created_at: '2026-06-13T01:00:00Z', read_at: null },
+    ];
+    try {
+      const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
+      expect(out.map(m => m.id)).toEqual(['live-1']);
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
   it('fail-open: getMessagesForSession throwing yields [] (never breaks checkin)', async () => {
     const sb = recordingSb();
     const orig = ws.getMessagesForSession;

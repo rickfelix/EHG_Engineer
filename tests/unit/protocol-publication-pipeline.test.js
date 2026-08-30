@@ -168,7 +168,12 @@ describe('FR-4: --only scoped regeneration', () => {
     // pipeline was wedged for EVERY seat until a section moved out. Counted here for the reason
     // this assertion exists: a mapping entry alone renders NOWHERE, so a companion missing from
     // KNOWN_GENERATED_FILES is content that silently left the protocol.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(25);
+    // -> 26 (SD-LEO-INFRA-STATIC-PREFIX-DIET-001, burn-lever A4: CLAUDE_CORE_MANUAL.md. Pure
+    // reference/procedure lifted out of CLAUDE_CORE.md — the heaviest always-read file in the
+    // family — toward the Read tool's 25k single-call cap. Unlike the Solomon Model Posture
+    // companion, this one does NOT bind: every rule stays in the gated CLAUDE_CORE.md file.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(26);
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_CORE_MANUAL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');

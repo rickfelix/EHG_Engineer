@@ -61,6 +61,64 @@ describe('decideCadence (FR-5/FR-6)', () => {
   });
 });
 
+describe('decideCadence desiredActiveS (QF-20260830-071, burn-lever A3)', () => {
+  it('omitted desiredActiveS is byte-identical to today\'s fixed active band (regression)', () => {
+    for (const offset of [0, 1, 50, 270, 420, 999]) {
+      const withOmitted = decideCadence({ quiescent: false, partyOffsetS: offset });
+      const withUndefined = decideCadence({ quiescent: false, partyOffsetS: offset, desiredActiveS: undefined });
+      const withZero = decideCadence({ quiescent: false, partyOffsetS: offset, desiredActiveS: 0 });
+      expect(withUndefined).toBe(withOmitted);
+      expect(withZero).toBe(withOmitted);
+      expect(withOmitted).toBeGreaterThanOrEqual(180);
+      expect(withOmitted).toBeLessThanOrEqual(ACTIVE_MAX_S);
+    }
+  });
+
+  it('Adam active tick (desiredActiveS=900, partyOffsetS=420) resolves to ~15 min, never the fixed 3-4.5min band', () => {
+    const d = decideCadence({ quiescent: false, partyOffsetS: 420, desiredActiveS: 900 });
+    expect(d).toBeGreaterThan(ACTIVE_MAX_S); // strictly past the old fixed band
+    expect(d).toBeLessThanOrEqual(900);
+    expect(d).toBeGreaterThanOrEqual(900 - 45);
+  });
+
+  it('coordinator active tick still resolves inside 180-270 when desiredActiveS is not passed (coordinator-quiet-tick.mjs untouched)', () => {
+    for (const offset of [0, 30, 90, 200]) {
+      const d = decideCadence({ quiescent: false, partyOffsetS: offset });
+      expect(d).toBeGreaterThanOrEqual(180);
+      expect(d).toBeLessThanOrEqual(270);
+    }
+  });
+
+  it('hard-wake (directive/escalation) is unchanged by desiredActiveS — 15-45s regardless', () => {
+    for (const offset of [0, 50, 420]) {
+      const d = decideCadence({ quiescent: false, partyOffsetS: offset, desiredActiveS: 900, hasUnactionedDirective: true });
+      expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+      expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+    }
+  });
+
+  it('quiescent band is unchanged by desiredActiveS', () => {
+    const withoutActive = decideCadence({ quiescent: true, partyOffsetS: 420 });
+    const withActive = decideCadence({ quiescent: true, partyOffsetS: 420, desiredActiveS: 900 });
+    expect(withActive).toBe(withoutActive);
+  });
+
+  it('never returns exactly 300s with desiredActiveS supplied (prompt-cache TTL invariant preserved)', () => {
+    for (let offset = 0; offset <= 1000; offset += 11) {
+      for (const desiredActiveS of [255, 300, 301, 345, 900]) {
+        const d = decideCadence({ quiescent: false, partyOffsetS: offset, desiredActiveS });
+        expect(d).not.toBe(300);
+        expect(d).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('a tiny desiredActiveS is floored at ACTIVE_MIN_S (180), never below it', () => {
+    const d = decideCadence({ quiescent: false, partyOffsetS: 0, desiredActiveS: 10 });
+    expect(d).toBeGreaterThanOrEqual(180);
+  });
+});
+
 describe('decideCadence hasUnactionedDirective hard-wake override (SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1)', () => {
   it('overrides a quiescent long park with a short hard-wake delay', () => {
     const d = decideCadence({ quiescent: true, hasUnactionedDirective: true });

@@ -19,6 +19,7 @@
 import { execFileSync } from 'child_process';
 import path from 'path';
 import { ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
+import { branchBelongsToSd, loadKeySet } from '../../../../../lib/git/branch-owner.js';
 
 /**
  * Classify every migration file as APPLIED | PARTIAL | NOT_APPLIED | NO_DDL.
@@ -57,4 +58,61 @@ export async function classifyMigrationApplyState() {
     // the same thing: we do not know. Fail closed.
     return { files: [], error: e.message };
   }
+}
+
+/**
+ * SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 (FR-1/TR-2): find migration-path files in the
+ * SD's own merged PR, as an ADDITIONAL ownership source alongside declared[]/sdKeyOwnsFile().
+ *
+ * Mirrors PR_MERGE_VERIFICATION's Scan C (gh pr list --state merged --search <sdKey>, then
+ * branch-owner-filtered) exactly in approach -- deliberately a small, standalone reimplementation
+ * rather than an import, because Scan C itself is ~450 lines of inline logic inside
+ * createPRMergeVerificationGate's validator with no extractable helper (measured: TESTING
+ * sub-agent prospective review, LEAD-phase). Reusing the SAME gh-CLI shape (not the same code)
+ * avoids a second independent notion of "the SD's PR" while avoiding an unscoped refactor.
+ *
+ * @param {string} sdKey
+ * @param {Array<{githubRepo: string}>} reposWithPaths - from computeReposForSD(sd) (caller-owned;
+ *   this module deliberately does not import gates.js, to avoid a circular import).
+ * @returns {Promise<{files: string[], error: string|null}>} `error` non-null means
+ *   could-not-determine -- callers must NOT treat this the same as "found nothing".
+ */
+export async function findMergedPrFileList(sdKey, reposWithPaths) {
+  if (!sdKey || !Array.isArray(reposWithPaths) || reposWithPaths.length === 0) {
+    return { files: [], error: null };
+  }
+  const keySet = await loadKeySet().catch(() => null);
+  const SCAN_LIMIT = 100;
+  let anyFailed = false;
+  for (const { githubRepo: repo } of reposWithPaths) {
+    try {
+      const listRaw = execFileSync(
+        'gh',
+        ['pr', 'list', '--repo', repo, '--state', 'merged', '--search', sdKey, '--json', 'number,headRefName', '--limit', String(SCAN_LIMIT)],
+        { encoding: 'utf8', timeout: 30000 }
+      );
+      const prs = JSON.parse(listRaw || '[]');
+      const matching = prs.filter((pr) => branchBelongsToSd(pr.headRefName, sdKey, keySet).belongs);
+      for (const pr of matching) {
+        try {
+          const filesRaw = execFileSync(
+            'gh',
+            ['pr', 'view', String(pr.number), '--repo', repo, '--json', 'files'],
+            { encoding: 'utf8', timeout: 30000 }
+          );
+          const parsed = JSON.parse(filesRaw || '{}');
+          const files = Array.isArray(parsed.files) ? parsed.files.map((f) => f.path).filter(Boolean) : [];
+          return { files, error: null };
+        } catch (_e) {
+          anyFailed = true;
+        }
+      }
+    } catch (_e) {
+      anyFailed = true;
+    }
+  }
+  if (anyFailed) {
+    return { files: [], error: 'PR file-list lookup failed for at least one repo (gh CLI error)' };
+  }
+  return { files: [], error: null };
 }

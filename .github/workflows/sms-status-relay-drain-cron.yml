@@ -49,4 +49,9 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Drain SMS status staging
-        run: node scripts/sms-status-relay-drain.cjs
+        # QF-20260830-922: routed through run-with-exit-witness.cjs -- an in-process witness
+        # inside the drain script is structurally blind to a native abort at process teardown
+        # (QF-20260830-603's falsification). The wrapper observes the child's exit from the
+        # PARENT side, so a native abort is still recorded even though the child's own JS exit
+        # handlers never run.
+        run: node scripts/run-with-exit-witness.cjs scripts/sms-status-relay-drain.cjs

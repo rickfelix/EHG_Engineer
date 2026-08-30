@@ -13,6 +13,7 @@ import { idleWorkerCensusByTier, lowerTierBacklog, fetchLowerTierBacklogData } f
 import { classifyDispatchIneligibility } from '../../../lib/fleet/claim-eligibility.cjs';
 import { assertWorkerTierAllowed } from '../../../lib/coordinator/dispatch.cjs';
 import { tierRankVerdict } from '../../../lib/fleet/tier-ladder.cjs';
+import { liveFleetWorkers } from '../../../lib/fleet/genuine-worker.mjs';
 import { readFileSync } from 'fs';
 
 const TOP = ladderTopRank();
@@ -217,6 +218,22 @@ describe('FR-6 fetchLowerTierBacklogData (shared DB-dependent fetcher)', () => {
   it('fails open (returns null) on a query fault, never throwing', async () => {
     const broken = { from() { throw new Error('boom'); } };
     await expect(fetchLowerTierBacklogData(broken)).resolves.toBeNull();
+  });
+
+  // QF-20260830-660 (census follow-on): a just-released seat is still a live everClaimed
+  // worker (correct for ever-worked reporting) but must NOT count as idle DISPATCH-NOW
+  // capacity here — this is the same false-negative isRecentlyReleased was built to close
+  // (07:56:44Z incident), now verified against this dispatch-facing consumer specifically.
+  it('two-sided: excludes a recently-released seat from idle DISPATCH-now capacity, but reporting-side liveFleetWorkers still counts it as live', async () => {
+    const shellWindowWorker = { ...liveWorker('w-shell'), released_at: new Date().toISOString() };
+    const liveWorkers = [shellWindowWorker];
+    const sds = [sdRow('SD-A', 1)];
+    const sb = stubSupabase({ liveWorkers, sds });
+    const result = await fetchLowerTierBacklogData(sb);
+    expect(result.idleCensus.cumulative[TOP]).toBe(0); // dispatch-now: excluded
+
+    const reportingLive = liveFleetWorkers(liveWorkers, null, Date.now());
+    expect(reportingLive.map((w) => w.session_id)).toContain('w-shell'); // reporting: still counted
   });
 });
 

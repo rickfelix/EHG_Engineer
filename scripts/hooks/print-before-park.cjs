@@ -215,6 +215,28 @@ function endsOnText(entries) {
   return false;
 }
 
+/**
+ * QF-20260830-773: is the LAST content block of the last assistant entry specifically a
+ * ScheduleWakeup tool_use (no trailing text)? This is the exact "arm and go silent" shape
+ * that must NEVER be released by the bounded re-block cap below — the ScheduleWakeup tool
+ * result itself reads "nothing more to do this turn," which is the false signal that made
+ * a human wait through 3 drained reminders with zero replies printed (Adam seat, 4 chairman
+ * replies lost in 25 min). An autonomous/loop-prompted tick ending the same way never
+ * reaches this check — decide() already permits its silence at the human/loop-prompt gate,
+ * so this predicate only matters once a block is already worth-considering.
+ */
+function isFinalBlockScheduleWakeup(entries) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].type === 'assistant') {
+      const c = entries[i].message && entries[i].message.content;
+      if (!Array.isArray(c) || c.length === 0) return false;
+      const last = c[c.length - 1];
+      return !!(last && last.type === 'tool_use' && last.name === 'ScheduleWakeup');
+    }
+  }
+  return false;
+}
+
 /** Stable key for "the human message this turn owes a reply to" — uuid preferred, ts fallback. */
 function lastHumanKey(entries) {
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -267,6 +289,14 @@ async function main() {
     writeDebt(sessionId,
       verdict.block ? verdict.why : 'carryover: prior blocked turn never printed',
       turnKey, blocksSoFar + 1);
+    // QF-20260830-773: the ScheduleWakeup-arm-and-go-silent shape is a SHAPE predicate,
+    // never a budget — do not count attempts, keep refusing until text appears. The
+    // MAX_BLOCKS_PER_TURN escape below still applies to every OTHER non-text ending
+    // (e.g. a genuinely wedged model stuck on an unrelated tool call), unchanged.
+    if (isFinalBlockScheduleWakeup(entries)) {
+      process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
+      return;
+    }
     if (payload.stop_hook_active === true && blocksSoFar >= MAX_BLOCKS_PER_TURN) return;
     process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
   } catch (e) {
@@ -282,4 +312,6 @@ module.exports = {
   decide, isHumanPrompt, isLoopPrompt, hasNonEmptyText, readTailEntries, REMINDER,
   // QF-20260829-847 (v4 bounded re-block): exported for unit testing the counter logic.
   readDebtRecord, writeDebt, clearDebt, lastHumanKey, endsOnText, debtPath, MAX_BLOCKS_PER_TURN,
+  // QF-20260830-773: exported for unit testing the unconditional-refusal shape predicate.
+  isFinalBlockScheduleWakeup,
 };

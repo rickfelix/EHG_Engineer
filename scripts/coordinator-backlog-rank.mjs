@@ -231,6 +231,11 @@ import { needleScore, rungProgressByKey, buildSdRungMap } from '../lib/vision/ne
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { planLinkageCompare } from '../lib/roadmap/plan-linkage-comparator.js';
 import { committingItemBandCompare } from '../lib/roadmap/committing-item-band.js';
+// SD-LEO-INFRA-GIVE-DISPATCH-RANKER-001: the sequence band (metadata.precedes_sd_key). See
+// lib/roadmap/precedes-band.js's header for the full placement/direction/cycle-safety rationale —
+// deliberately a SEPARATE representation from dependencies[].relation (never unify: that vocabulary
+// is claim-path-only and hard-blocks claimability, the exact inversion of this band's intent).
+import { buildPrecedesEdges, detectPrecedesCycles, sequenceCompare } from '../lib/roadmap/precedes-band.js';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -342,6 +347,19 @@ async function main() {
   }
   const needleOf = (d) => needleScore(sdRungMap[d.sd_key], { activeRungKey, rungProgressByKey: progByKey });
 
+  // SD-LEO-INFRA-GIVE-DISPATCH-RANKER-001: cycle-detection MUST run once, before sort(), never inside
+  // the comparator (a pairwise function cannot see the whole graph). An inconsistent comparator makes
+  // Array.prototype.sort's output implementation-defined for the WHOLE array, not just the cyclic
+  // members, so any cyclic edges are excluded for this pass and loudly logged.
+  const precedesEdges = buildPrecedesEdges(claimable);
+  const excludedPrecedesEdges = detectPrecedesCycles(precedesEdges);
+  if (excludedPrecedesEdges.size) {
+    const cyclicKeys = new Set();
+    for (const edge of excludedPrecedesEdges) edge.split('->').forEach((k) => cyclicKeys.add(k));
+    console.log(`[BACKLOG-RANK] ⚠️  precedes_sd_key CYCLE DETECTED among: ${[...cyclicKeys].join(', ')} — ` +
+      'excluding these edges from this pass (fix the ruling; the belt order for everything else is unaffected).');
+  }
+
   claimable.sort((a, b) => {
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs sort below EVERY
     // authored SD (rank-last), so a worker never self-claims a stub that cannot pass
@@ -393,6 +411,24 @@ async function main() {
     const pa = PRIORITY_W[String(a.priority || '').toLowerCase()] ?? 0;
     const pb = PRIORITY_W[String(b.priority || '').toLowerCase()] ?? 0;
     if (pb !== pa) return pb - pa;
+    // SD-LEO-INFRA-GIVE-DISPATCH-RANKER-001: the sequence tie-break (metadata.precedes_sd_key).
+    // CORRECTED PLACEMENT (VALIDATION evidence 9a4d9a74-4d04-4a76-bfd9-d9030c36706f, 2nd review pass):
+    // an earlier draft placed this right after unlockScore, ABOVE committingItemBand/productPivot/
+    // needle/priority — but every one of those bands is a deterministic function of a SINGLE item
+    // (unlockScore(a), criticalWalkBlocker(a), etc.), so once two items tie on all of them the tie is
+    // transitive (f(A)=f(B) and f(B)=f(C) implies f(A)=f(C) for a scalar function). A precedes edge
+    // sitting ABOVE those bands could therefore override an ordering the lower bands would otherwise
+    // impose transitively across three-plus items, producing A<B / B<C / C<A — a single ACYCLIC edge
+    // is sufficient (VALIDATION's counterexample: A precedes B; B<C and C<A both fall out of priority/
+    // age alone) — and Array.prototype.sort's output is implementation-defined once its comparator is
+    // not a total preorder, corrupting the WHOLE belt order, not just the two named SDs.
+    // Placed here — LAST, below every other tie-break, matching the SD's own title "among band equals"
+    // literally — a precedes edge can only ever separate two items every earlier comparator (including
+    // priority) already tied on. Within such a fully-tied set, ties are transitive all the way down, so
+    // detectPrecedesCycles()'s edge-local DFS (run once before sort(), see above) is now a SUFFICIENT
+    // transitivity guard, not merely a guard against operator-authored cycles.
+    const sc = sequenceCompare(a, b, excludedPrecedesEdges);
+    if (sc !== 0) return sc;
     return new Date(a.created_at) - new Date(b.created_at); // older first
   });
 

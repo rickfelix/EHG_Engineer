@@ -536,6 +536,14 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
   const out = [];
   for (const m of push) {
     const p = m.payload || {};
+    // QF-20260830-958: payload.actioned_at is the retirement stamp used by ack tools
+    // (coordinator-ack-adam.cjs, worker-ack-directive.cjs/worker-ack-advisory.cjs) — none of
+    // them touch the acknowledged_at DB column this function's own unackedOnly query filters
+    // on, so a row retired that way still passed through here, re-rendering verbatim. Skipping
+    // it here also removes the unattributed acknowledged_at write below: that stamp was this
+    // loop itself, self-triggered on the second pass of the very row it should never have
+    // re-surfaced.
+    if (p.actioned_at) continue;
     const kind = p.kind || null;
     const isDirective = !!(kind && ws.DIRECTIVE_KINDS.includes(kind));
     // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is in DIRECTIVE_KINDS,
@@ -1989,6 +1997,10 @@ function parseCheckinArgs(argv) {
 }
 
 async function main() {
+  // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-2): identifies this recurring task to the
+  // context-usage capture pipeline (.claude/context-usage-feed.cjs reads this env var).
+  // Never overrides a caller-set value (e.g. a different loop wrapping worker-checkin.cjs).
+  if (!process.env.CLAUDE_LOOP_NAME) process.env.CLAUDE_LOOP_NAME = 'worker-checkin';
   const sessionId = process.env.CLAUDE_SESSION_ID;
   if (!sessionId) {
     console.log(JSON.stringify({ ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' }, null, 2));
@@ -2011,6 +2023,12 @@ async function main() {
   try {
     const { tickSmsOutboundSweep } = require('../lib/checkin/sms-outbound-tick.cjs');
     await tickSmsOutboundSweep({ supabase: sb });
+  } catch { /* non-fatal — the real checkin result below must still print regardless */ }
+  // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (FR-3): fail-soft, same piggyback pattern as the
+  // SMS tick above — a sync failure must never block or fail the check-in itself.
+  try {
+    const { tickContextUsageSync } = require('../lib/checkin/context-usage-sync-tick.cjs');
+    await tickContextUsageSync();
   } catch { /* non-fatal — the real checkin result below must still print regardless */ }
   console.log(JSON.stringify(result, null, 2));
   // SD-LEO-INFRA-COMPLETION-TIER-SCRIPT-EXIT-001: this CLI previously hung past the

@@ -57,6 +57,9 @@ function makeFakeSupabase(seed = {}) {
   const tables = {
     sms_outbound_obligations: [...(seed.sms_outbound_obligations || [])],
     chairman_notifications: [...(seed.chairman_notifications || [])],
+    // QF-20260829-320: empty by default so every pre-existing test (none of which seeds this)
+    // sees no matching row -> decisionStatus undefined -> fail-toward-reask, unchanged behavior.
+    chairman_decisions: [...(seed.chairman_decisions || [])],
   };
   const missing = new Set(seed.missingTables || []);
   let seq = 0;
@@ -340,6 +343,41 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     // FR-2 AC-2: the re-ask carries a FRESH created_at, strictly newer than the stale original's.
     expect(new Date(reAsk.created_at).getTime()).toBeGreaterThan(new Date(originalCreatedAt).getTime());
     expect(original.last_error).toContain(reAsk.id);
+  });
+
+  it('QF-20260829-320 (i): a stale decision_question for an ALREADY-DECIDED decision (status=approved) is voided, never re-asked', async () => {
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-decided', kind: 'decision_question', decision_id: 'dec-decided', created_at: ago(7 * HOUR) }),
+      ],
+      chairman_decisions: [{ id: 'dec-decided', status: 'approved' }],
+    });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.reEmitted).toBe(0);
+    expect(summary.voided).toBe(1);
+    expect(provider.send).not.toHaveBeenCalled();
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('canceled');
+    expect(row.last_error).toMatch(/^voided_stale:.*decided:approved/);
+    // No new re-ask row was inserted.
+    expect(sb._tables.sms_outbound_obligations.length).toBe(1);
+  });
+
+  it('QF-20260829-320 (i): a stale decision_question for a GENUINELY PENDING decision (status=pending) still re-asks -- the fix must not silence real re-asks', async () => {
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-pending', kind: 'decision_question', decision_id: 'dec-pending', created_at: ago(7 * HOUR) }),
+      ],
+      chairman_decisions: [{ id: 'dec-pending', status: 'pending' }],
+    });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.reEmitted).toBe(1);
+    expect(summary.voided).toBe(0);
+    const original = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-pending');
+    expect(original.status).toBe('canceled');
+    expect(original.last_error).toMatch(/^re_asked_as:/);
   });
 
   it('SECURITY SEC-2 regression: repeated sweeps against the SAME stale decision produce exactly ONE re-ask, not one per sweep (amplification guard)', async () => {

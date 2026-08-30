@@ -39,6 +39,19 @@ const TICK_MS = Number(process.env.LEO_TICK_MS) || 30 * 1000;
 const PARENT_POLL_MS = Number(process.env.LEO_PARENT_POLL_MS) || 5 * 1000;
 const HTTP_TIMEOUT_MS = 3000;
 
+// SD-LEO-INFRA-ARMED-WAKEUP-NEVER-001: self-wake-overdue escalation. Checked every Nth tick
+// (not every tick) — it is a GET+conditional-POST/PATCH, materially heavier than the steady-state
+// heartbeat PATCH, and the condition it watches for (an armed_overdue deadline) only ever changes
+// on the order of minutes. Mirrors lib/fleet/genuine-worker.mjs's FREEZE_CUT_MINUTES calibration
+// exactly (same env var, same floor/default) so a seat's self-verdict never disagrees with what an
+// external observer (coordinator audit, fleet-down pager) would conclude about the SAME row.
+const SELF_WAKE_CHECK_EVERY_N_TICKS = Number(process.env.LEO_SELF_WAKE_CHECK_EVERY_N_TICKS) || 10;
+const FREEZE_CUT_MINUTES_FLOOR = 15;
+const FREEZE_CUT_MINUTES = Number(process.env.FLEET_FREEZE_CUT_MINUTES) >= FREEZE_CUT_MINUTES_FLOOR
+  ? Number(process.env.FLEET_FREEZE_CUT_MINUTES)
+  : 60;
+let tickCount = 0;
+
 // SD-FDBK-FIX-PARKED-LOOP-WORKER-001: survive CC parent-PID rotation. When the pinned
 // CC_PARENT_PID dies, re-discover a live Claude Code parent (via a claude_sessions.pid
 // re-query — see rediscoverParentPid() below) before concluding the session is dead.
@@ -240,6 +253,82 @@ function persistAdoptedPid(pid) {
 // revert to PATCH so steady-state cost is unchanged.
 let isFirstTick = true;
 
+/**
+ * SD-LEO-INFRA-ARMED-WAKEUP-NEVER-001: self-wake-overdue escalation. GETs this daemon's OWN
+ * owning session row, runs it through lib/fleet/stuck-seat-predicate.cjs's calibrated classifier
+ * (reused, not re-derived — see lib/fleet/self-wake-escalation.cjs header), and — only when the
+ * seat is positively STUCK with a RECORDED-and-PASSED wake deadline — writes a directed
+ * session_coordination row so the freeze is visible instead of silently patching heartbeat_at
+ * forever (the exact blind spot Hotel-2/Hotel-3 sat in 9-11h on 2026-08-29/30).
+ *
+ * RAW FETCH, DELIBERATELY, matching this file's existing convention (no supabase-js client, no
+ * lib/coordinator/dispatch.cjs import) — this daemon's dependency-minimalism is load-bearing (see
+ * the file's own top-of-file rationale for why a startup failure here must never cost the
+ * heartbeat). scripts/stale-session-sweep.cjs's raw session_coordination inserts are the existing,
+ * accepted precedent for a second insert lane bypassing the canonical dispatch choke point
+ * (lib/coordinator/dispatch.cjs:1108-1109 documents it as "a deliberately different ... lane").
+ *
+ * BEST-EFFORT, NEVER THROWS. A failure here must never take down the steady-state heartbeat PATCH
+ * that keeps this seat's row alive at all.
+ */
+async function checkSelfWakeOverdue(supabaseUrl, supabaseKey) {
+  try {
+    const base = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
+    const getUrl = `${base}?session_id=eq.${encodeURIComponent(sessionId)}` +
+      `&status=in.(active,idle,stale)&select=session_id,last_tool_at,loop_state,metadata`;
+    const getRes = await fetch(getUrl, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, Accept: 'application/json' },
+    });
+    if (!getRes.ok) return;
+    const rows = await getRes.json();
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (!row) return;
+
+    const { shouldSelfEscalate, buildSelfEscalationRow } = require('../lib/fleet/self-wake-escalation.cjs');
+    const nowMs = Date.now();
+    const verdict = shouldSelfEscalate(row, nowMs, FREEZE_CUT_MINUTES);
+    if (!verdict.shouldEscalate) return;
+
+    const escalationRow = buildSelfEscalationRow({
+      sessionId,
+      overdueMinutes: verdict.overdueMinutes,
+      toolSilentMinutes: verdict.toolSilentMinutes,
+      expectedWakeAt: verdict.expectedWakeAt,
+      fleetIdentity: (row.metadata && row.metadata.fleet_identity) || null,
+    });
+    const insertRes = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/session_coordination`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(escalationRow),
+    });
+    if (!insertRes.ok) return; // do not stamp the dedup key on a failed insert — retry next window
+
+    // Dedup key = the deadline itself (see self-wake-escalation.cjs), so a NEW future overdue
+    // deadline re-opens the guard automatically without ever clearing this field.
+    await fetch(`${base}?session_id=eq.${encodeURIComponent(sessionId)}&status=in.(active,idle,stale)`, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        metadata: { ...(row.metadata || {}), self_escalated_for_wake_at: verdict.expectedWakeAt },
+      }),
+    });
+  } catch (e) {
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      process.stderr.write(`[session-tick] self-wake-overdue check failed (non-fatal): ${e.message}\n`);
+    }
+  }
+}
+
 async function tickOnce() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -353,6 +442,15 @@ async function tickOnce() {
         cleanupAndExit(0);
       }
     }
+    // SD-LEO-INFRA-ARMED-WAKEUP-NEVER-001: self-wake-overdue check, throttled to every Nth tick
+    // (see SELF_WAKE_CHECK_EVERY_N_TICKS above). Fire-and-forget — checkSelfWakeOverdue is
+    // internally best-effort/never-throws, and awaiting it here would add its GET+POST latency to
+    // every steady-state tick's critical path for no benefit.
+    tickCount += 1;
+    if (tickCount % SELF_WAKE_CHECK_EVERY_N_TICKS === 0) {
+      checkSelfWakeOverdue(supabaseUrl, supabaseKey);
+    }
+
     // FR-1: a successful tick (POST/PATCH completed without throwing) clears the streak.
     consecutivePatchFailures = 0;
   } catch (err) {

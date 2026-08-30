@@ -83,6 +83,7 @@ export const RESPONSIBILITIES = [
 //   singleton-relaunch          | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic detection+scheduling only
 //   relay-drain                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic queue drain
 //   sms-relay-drain             | SCRIPT-SHAPED  | YES (sms-relay-drain-cron.yml) | QF-20260727-064: GHA-backed but session-armed ANYWAY — the workflow declares */5 and reports green while Actions deprioritisation makes the real cadence 1-3.7h (measured). The chairman's inbound lane cannot depend on a deprioritised runner.
+//   sms-status-relay-drain      | SCRIPT-SHAPED  | YES (sms-status-relay-drain-cron.yml) | QF-20260830-988: same class as sms-relay-drain above — registered (currently_expected_active=true) but had no session-armed backup for its own GHA-deprioritised cadence, causing intermittent/perpetual OVERDUE. Fail-soft, no-op pre-cutover (SMS_STATUS_RELAY_DRAIN_ENABLED unset).
 //   relay-drop-gauge           | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant gauge
 //   fleet-retro                | SCRIPT-SHAPED  | pending (FR-2 batch)      | capture is deterministic (label says capture/synthesis — FR-2 scopes strictly to the capture path; any judgment-shaped synthesis stays session-armed)
 //   row-growth                 | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic daily snapshot
@@ -114,6 +115,7 @@ export const RESPONSIBILITIES = [
 //   singleton-relaunch        | SAFE    | singleton-relaunch-scheduler.mjs defaults to dry-run/report-only (SINGLETON_RELAUNCH_SCHEDULING_ENABLED gate) and guards real writes behind its own stampLastFired marker
 //   relay-drain                | SAFE    | coordinator-relay-drain.cjs only selects UNDRAINED relay_request rows (relay-queue.cjs's drainOne marks a row drained as part of processing it) — a second concurrent run finds nothing left to drain
 //   sms-relay-drain             | SAFE    | QF-20260727-064. Verified IN THIS SCRIPT, not by analogy to relay-drain above (this table's own rule): lib/chairman/sms-bridge.js drainSmsRelayStaging selects `.is('drained_at', null)` (:803) and stamps `.update({drained_at})` per row as part of processing it (:817-819), so a redundant fire finds nothing left to drain. Additionally gated: the runner is a NO-OP unless SMS_RELAY_DRAIN_ENABLED is truthy, and is fail-soft (a drain error logs and exits 0)
+//   sms-status-relay-drain      | SAFE    | QF-20260830-988. Verified IN THIS SCRIPT: lib/chairman/sms-bridge.js drainSmsStatusStaging (~:1137) selects `.is('drained_at', null)` (:1145) then claims each row via `.update({drained_at}).eq('id',row.id).is('drained_at', null)` (:1153-1158) — a concurrent/redundant claim on an already-drained row returns zero rows and is skipped (:1160-1163), so a double-fire finds nothing left to drain. Additionally gated: NO-OP unless SMS_STATUS_RELAY_DRAIN_ENABLED is truthy, fail-soft on error
 //   relay-drop-gauge          | SAFE    | coordinator-relay-drop-gauge.cjs's own header: "Idempotent per (correlationId): a row already flagged for the same correlation is [skipped]"
 //   fleet-retro               | SAFE    | coordinator-fleet-retro.mjs's insert uses an explicit dedup key on the capture path (source_id/type-scoped)
 //   row-growth                | SAFE    | row-growth-snapshot.cjs is internally due-gated (~22h) per its own STANDARD_LOOPS comment above — an extra run inside the gate window is a documented no-op
@@ -124,11 +126,12 @@ export const RESPONSIBILITIES = [
 //   solomon-ledger-resurface     | SAFE    | solomon-ledger-pending-resurface.cjs's own header: capped to once per stale ledger row per day via payload.dedup_key checked before insert
 //   hourly-review               | SAFE*   | SD-LEO-INFRA-ALARM-HONESTY-001: both reminder legs call hasRecentReminder (query-before-insert on payload kind+topic+target+sender_type within a 55min window, newest-first, fail-open on read faults) — a SPACED double-fire (measured ~65min apart pre-fix) dedups to one delivered reminder. NOTE: unlike the 13 rows above, this one REQUIRED a code change to reach SAFE (the dedup is this SD's deliverable). *RESIDUAL, named not hidden: query-before-insert has a TOCTOU race with no unique index behind it — two CONCURRENT fires can both read absent and both insert (cost: one duplicate reminder). SAFE covers the spaced case the incident measured, not simultaneity.
 //
-// All 15 rows verified SAFE for an occasional session+GHA double-fire. The original 13 required
+// All 16 rows verified SAFE for an occasional session+GHA double-fire. The original 13 required
 // no code change — the additive migration pattern only works because those loops were already
 // built idempotent (a prerequisite the design doc's precedent, retention/backlog-rank, also relied
-// on). The two later rows are each verified in their own entry: sms-relay-drain (QF-20260727-064,
-// pre-existing drained_at stamping) and hourly-review (SD-LEO-INFRA-ALARM-HONESTY-001, which
+// on). The three later rows are each verified in their own entry: sms-relay-drain (QF-20260727-064,
+// pre-existing drained_at stamping), sms-status-relay-drain (QF-20260830-988, same pre-existing
+// drained_at stamping, one table over), and hourly-review (SD-LEO-INFRA-ALARM-HONESTY-001, which
 // BUILT the dedup — the one row whose SAFE verdict is a deliverable, not a discovery).
 // QF-20260822-510 — joint Adam+Solomon ruling (operator commission 60153bf2, executed by the
 // coordinator 2026-08-22 ~22:5xZ): drop the session-armed leg on the 8 gha_backed loops below
@@ -232,20 +235,15 @@ export const STANDARD_LOOPS = [
   // sustained idle and that is exactly the seat whose silence needs measuring.
   { key: 'capture-gate', folded: true, gha_backed: true, label: 'Coordinator forced-capture obligation (check-only)', script: 'role-capture-gate.mjs', cron: '13,43 * * * *',
     prompt: 'node scripts/role-capture-gate.mjs check --role coordinator' },
-  // QF-20260702-976: the OPERATING layer for SD-LEO-INFRA-COORDINATOR-ORCHESTRATED-SINGLETON-REFRESH-001-A.
-  // The trigger + scheduler logic (lib/coordinator/singleton-relaunch-trigger.js, scripts/
-  // singleton-relaunch-scheduler.mjs, npm-wired as singleton-relaunch:run) shipped but nothing
-  // periodically invoked it — first live test 2026-07-02 DID-NOT-FIRE (0 singleton_relaunch_scheduled
-  // records despite a coordinator behind-59 + fleet-quiescent trigger window). This loop makes
-  // DETECTION + SCHEDULING operate (a durable singleton_relaunch_scheduled record + surfacing when
-  // behind-N + quiescent + target-idle) — it does NOT itself perform an end-to-end autonomous
-  // relaunch; the fresh-checkout spawn remains human-gated (see singleton-relaunch-trigger.js header
-  // for the two explicitly-deferred downstream gaps: target-idle awaiting_tick predicate handling,
-  // and the human-gated spawn step). Cheap (git + a few DB reads); offset from the other */15-ish
-  // loops so it doesn't cluster.
-  { key: 'singleton-relaunch', label: 'Singleton-relaunch quiescent-window scheduler (detection + scheduling only)', script: 'singleton-relaunch-scheduler.mjs', cron: '7,22,37,52 * * * *',
-    gha_backed: true, session_arm: false, // QF-20260822-510
-    prompt: 'npm run singleton-relaunch:run' },
+  // RETIRED (QF-20260830-100, chairman ruling A, 2026-08-30): the trigger+scheduler logic
+  // (lib/coordinator/singleton-relaunch-trigger.js, scripts/singleton-relaunch-scheduler.mjs,
+  // still npm-wired as singleton-relaunch:run, deliberately NOT deleted) armed real scheduling
+  // but the relaunch CONSUMER half was never built — it fired 4x (08-11 x2, 08-22 x2) with ZERO
+  // relaunches and fed false periodic-liveness escalations. Entry removed so neither this
+  // registry nor the GHA cron (.github/workflows/singleton-relaunch-cron.yml, schedule dropped,
+  // workflow_dispatch kept) rediscovers/reactivates the periodic_process_registry rows, which
+  // were retired (currently_expected_active=false) in the same QF. Reversible: re-add this
+  // entry + re-arm SINGLETON_RELAUNCH_SCHEDULING_ENABLED if the consumer half is ever built.
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: drains
   // the tracked relay-request queue deliberately (never processed inline in the active
   // thread) and writes the CONFIRM-ON-RELAY receipt. Frequent — a queued relay-request is
@@ -279,6 +277,21 @@ export const STANDARD_LOOPS = [
   { key: 'sms-relay-drain', label: 'Chairman inbound SMS relay-staging drain', script: 'sms-relay-drain.cjs', cron: '*/5 * * * *',
     gha_backed: true,
     prompt: 'node scripts/sms-relay-drain.cjs' },
+  // QF-20260830-988: standard_loop:sms-status-relay-drain was registered
+  // (currently_expected_active=true) but never listed here, so it had no session-armed
+  // backup for sms-status-relay-drain-cron.yml's declared '*/5 * * * *' — the SAME
+  // GHA-deprioritisation class measured above for sms-relay-drain (real cadence far looser
+  // than 5 minutes on a busy repo), causing intermittent/perpetual OVERDUE. The drain runner
+  // is fail-soft and a documented no-op pre-cutover (SMS_STATUS_RELAY_DRAIN_ENABLED unset —
+  // see docs/runbooks/sms-status-relay-drain-go-live.md), so arming this costs nothing today
+  // and provides the same redundant coverage sms-relay-drain already gets.
+  // QF-20260830-922: prompt routed through run-with-exit-witness.cjs -- this drain's own
+  // in-process abnormal-exit witness (QF-20260830-603) was falsified by live coordinator runs
+  // (native teardown abort recurred, witness never fired because it observes from inside the
+  // process that dies). The wrapper observes the child's exit from the parent side instead.
+  { key: 'sms-status-relay-drain', label: 'SMS status-callback relay-staging drain', script: 'sms-status-relay-drain.cjs', cron: '*/5 * * * *',
+    gha_backed: true,
+    prompt: 'node scripts/run-with-exit-witness.cjs scripts/sms-status-relay-drain.cjs' },
   // FR-3: the drop-gauge — flags any inbound RELAY/DECISION/REVIEW row with no matching
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.

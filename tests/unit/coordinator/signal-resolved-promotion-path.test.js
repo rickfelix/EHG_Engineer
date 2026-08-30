@@ -127,6 +127,9 @@ describe("SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4: notifySignalResolvedByPromotion
     expect(c.inserts).toHaveLength(1);
     expect(c.inserts[0].target_session).toBe('sess-new-1');
     expect(c.inserts[0].payload.resulting_sd_key).toBe('SD-EXAMPLE-001');
+    // QF-20260830-144: payload.kind must be an ADVISORY_KIND so worker-ack-advisory.cjs can
+    // retire this row — without it the row was unackable by either lane, forever.
+    expect(c.inserts[0].payload.kind).toBe('signal_resolved');
     expect(c.getRow('sig-1').payload.notification_sent).toBe(true);
   });
 
