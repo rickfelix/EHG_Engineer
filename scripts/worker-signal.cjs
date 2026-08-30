@@ -39,6 +39,23 @@ const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.c
 const SIGNAL_TYPES = ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other'];
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
+// QF-20260830-948: the call-for-help path had no timeout on its Supabase client, so a dead
+// connection (witnessed: 78a073be, 23h pinned) hangs every await in this file indefinitely —
+// the harness turn never ends, and the seat's own ScheduleWakeup can't fire. Every createClient()
+// call site in this file goes through this wrapper so a stalled request surfaces a visible,
+// bounded error instead of hanging forever. Fire-and-forget send semantics are unchanged; only
+// the network await itself gets a deadline.
+const CLIENT_TIMEOUT_MS = Number(process.env.WORKER_SIGNAL_CLIENT_TIMEOUT_MS) > 0
+  ? Number(process.env.WORKER_SIGNAL_CLIENT_TIMEOUT_MS)
+  : 30_000;
+function createBoundedClient(url, key, timeoutMs = CLIENT_TIMEOUT_MS) {
+  // Official supabase-js option (postgrest-js `db.timeout`): "requests will automatically
+  // abort after this duration to prevent indefinite hangs." Verified more reliable than a
+  // hand-rolled AbortController fetch wrapper, which measurement showed does not reliably
+  // bound the underlying postgrest-js request/retry cycle.
+  return createClient(url, key, { db: { timeout: timeoutMs } });
+}
+
 // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-A / FR-1: BODY_HARD_CAP / REDACTION_PATTERNS /
 // redact / capBody MOVED to lib/shared/body-cap.cjs (bodies unchanged) so the INBOUND
 // aggregation hop (lib/coordinator/signal-router.cjs) enforces the SAME policy instead of
@@ -182,7 +199,7 @@ async function intentMain(flags, positional) {
     console.error('ERROR: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
     process.exit(1);
   }
-  const supabase = createClient(url, key);
+  const supabase = createBoundedClient(url, key);
 
   // Snapshot sender callsign + claimed sd_key (sd_key is the default --sd target).
   let senderCallsign = null;
@@ -353,7 +370,7 @@ async function requestMain(flags, positional) {
     console.error('ERROR: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
     process.exit(1);
   }
-  const supabase = createClient(url, key);
+  const supabase = createBoundedClient(url, key);
 
   const coordinatorId = await getActiveCoordinatorId(supabase);
   if (!coordinatorId) {
@@ -518,7 +535,7 @@ async function solomonConsultMain(flags, positional) {
     console.error('ERROR: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
     process.exit(1);
   }
-  const supabase = createClient(url, key);
+  const supabase = createBoundedClient(url, key);
 
   // Resolve the live Solomon, else buffer to the sentinel (drained on /solomon register).
   let solomonId = null;
@@ -655,7 +672,7 @@ async function main() {
     console.error('ERROR: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
     process.exit(1);
   }
-  const supabase = createClient(url, key);
+  const supabase = createBoundedClient(url, key);
 
   // Resolve coordinator (file-first, DB fallback). Null → buffer-broadcast sentinel.
   const coordinatorId = await getActiveCoordinatorId(supabase);
@@ -751,13 +768,36 @@ module.exports = {
   isSolomonConsultEnabled, buildSolomonConsultPayload, solomonConsultMain
 };
 
+// QF-20260830-948: main() can make several SEQUENTIAL bounded Supabase calls (coordinator
+// resolution, sender lookup, the insert itself); each is individually bounded by
+// createBoundedClient's db.timeout, but under a total network blackout the SUM can still run
+// past what a seat should ever wait on its own call-for-help path. This is the hard backstop —
+// a deadline on the WHOLE invocation, not just one request — so the process always surfaces a
+// visible, non-zero-exit error well inside a seat's wakeup cadence, never an indefinite hang.
+const OVERALL_DEADLINE_MS = Number(process.env.WORKER_SIGNAL_OVERALL_DEADLINE_MS) > 0
+  ? Number(process.env.WORKER_SIGNAL_OVERALL_DEADLINE_MS)
+  : 60_000;
+
 if (require.main === module) {
-  main().catch(err => {
-    if (err && err.code === 'BODY_TOO_LONG') {
-      console.error('ERROR:', err.message);
-      process.exit(2);
-    }
-    console.error('UNHANDLED:', err.message || err);
-    process.exit(1);
+  const deadline = new Promise((_, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`worker-signal.cjs exceeded its overall ${OVERALL_DEADLINE_MS}ms deadline — network is likely unreachable`)),
+      OVERALL_DEADLINE_MS
+    );
+    if (typeof timer.unref === 'function') timer.unref();
   });
+  Promise.race([main(), deadline])
+    // A resolved (or errored) main() can still leave the process alive if an aborted-timeout
+    // request left a lingering keep-alive handle in the fetch/undici connection pool — Node's
+    // event loop then never drains on its own. Every exit path here is explicit so the harness
+    // turn always ends, not just the promise.
+    .then(() => process.exit(0))
+    .catch(err => {
+      if (err && err.code === 'BODY_TOO_LONG') {
+        console.error('ERROR:', err.message);
+        process.exit(2);
+      }
+      console.error('UNHANDLED:', err.message || err);
+      process.exit(1);
+    });
 }
