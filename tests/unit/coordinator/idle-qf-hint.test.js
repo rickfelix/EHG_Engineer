@@ -107,6 +107,36 @@ describe('eligibleIdleWorkers — sd_key + spin-up grace', () => {
   });
 });
 
+// QF-20260830-885: claude_sessions.sd_key is a MIRROR nothing clears on SD completion (measured:
+// Hotel-3, directive dac88a87 — completed QF-20260830-795, both authoritative claim tables read
+// zero, yet sd_key still named the finished item and line 207's mirror-only check called him
+// busy). The coordinator's own acceptance bar: a fixture where sd_key is non-null AND that key
+// is completed/unclaimed on the authoritative table must yield idle=true.
+describe('eligibleIdleWorkers — sd_key staleness against the authoritative table (Hotel-3 regression)', () => {
+  it('a non-null sd_key whose session is NOT in sdHolderSessionIds (completed/unclaimed) still counts idle', () => {
+    const w = worker({ session_id: 'hotel-3', sd_key: 'SD-COMPLETED-001' });
+    const sdHolders = new Set(); // authoritative table: nothing claimed by hotel-3
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), sdHolders).map((x) => x.session_id)).toEqual(['hotel-3']);
+  });
+
+  it('[TWO-SIDED] a non-null sd_key whose session IS in sdHolderSessionIds still excludes (genuinely busy)', () => {
+    const w = worker({ session_id: 'hotel-3', sd_key: 'SD-LIVE-001' });
+    const sdHolders = new Set(['hotel-3']);
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), sdHolders)).toEqual([]);
+  });
+
+  it('fail-open: sdHolderSessionIds=null (authoritative read failed) falls back to the OLD mirror-only check', () => {
+    const w = worker({ session_id: 'hotel-3', sd_key: 'SD-X-001' });
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), null)).toEqual([]);
+  });
+
+  it('a null sd_key is unaffected by the authoritative set either way', () => {
+    const w = worker({ session_id: 'w-idle', sd_key: null });
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), new Set()).map((x) => x.session_id)).toEqual(['w-idle']);
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), null).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+});
+
 // QF-20260830-454: a seat executing dispatched work has no sd_key/qf-holder row, so it must be
 // excludable on the seat_busy_reservation kind alone (Hotel-5 specimen, directive 98f2a4b5).
 describe('eligibleIdleWorkers — seat_busy_reservation exclusion (Hotel-5 dispatched-work regression)', () => {
@@ -158,7 +188,7 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
   // verifiedAtMissing simulates the staged (not-yet-applied) verified_at column
   // (SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6): the pre-flight probe
   // (.select('verified_at').limit(1)) resolves 42703 when true, null-error otherwise.
-  function makeFakeSupabase({ sessions, qfs, verifiedAtMissing = false }) {
+  function makeFakeSupabase({ sessions, qfs, verifiedAtMissing = false, sdHolders = [] }) {
     return {
       from(table) {
         let selectedCols = '';
@@ -168,12 +198,18 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
           is() { return this; },
           order() { return this; },
           gt() { return this; }, // QF-20260830-454: seat_busy_reservation expires_at filter
+          not() { return this; }, // QF-20260830-885: strategic_directives_v2 claiming_session_id filter
           // The verified_at pre-flight probe's terminal call.
           limit() {
             if (table === 'quick_fixes' && selectedCols === 'verified_at') {
               return Promise.resolve(verifiedAtMissing
                 ? { data: null, error: { code: '42703', message: 'column quick_fixes.verified_at does not exist' } }
                 : { data: [], error: null });
+            }
+            // QF-20260830-885: the authoritative SD-holder read (.select('claiming_session_id')
+            // .not(...).limit(500)) terminates here, not at .then()/.range().
+            if (table === 'strategic_directives_v2' && selectedCols === 'claiming_session_id') {
+              return Promise.resolve({ data: sdHolders, error: null });
             }
             return Promise.resolve({ data: [], error: null });
           },
@@ -221,6 +257,29 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
 
   it('no idle workers -> zero hints, short-circuits before the QF query', async () => {
     const sb = makeFakeSupabase({ sessions: [], qfs: [qf()] });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.idleWorkers).toBe(0);
+    expect(summary.hinted).toBe(0);
+  });
+
+  // QF-20260830-885 end-to-end: the Hotel-3 specimen reproduced through the full core, not just
+  // the pure predicate — a worker whose sd_key mirror still names a completed item, but who
+  // holds zero rows on the authoritative strategic_directives_v2 table, must read idle and be
+  // hinted like any other free seat.
+  it('a completed worker whose sd_key mirror is stale still counts idle and gets hinted', async () => {
+    const staleMirrorWorker = worker({ session_id: 'hotel-3', sd_key: 'SD-COMPLETED-001' });
+    const sb = makeFakeSupabase({ sessions: [staleMirrorWorker], qfs: [qf()], sdHolders: [] });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.idleWorkers).toBe(1);
+    expect(summary.hinted).toBe(1);
+  });
+
+  it('[TWO-SIDED] a worker genuinely holding the SD on the authoritative table stays excluded', async () => {
+    const liveHolder = worker({ session_id: 'hotel-3', sd_key: 'SD-LIVE-001' });
+    const sb = makeFakeSupabase({
+      sessions: [liveHolder], qfs: [qf()],
+      sdHolders: [{ claiming_session_id: 'hotel-3' }],
+    });
     const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
     expect(summary.idleWorkers).toBe(0);
     expect(summary.hinted).toBe(0);
