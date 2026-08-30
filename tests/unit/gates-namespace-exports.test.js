@@ -34,10 +34,15 @@ describe('gates.js namespace — every re-exported gate factory resolves as a fu
       'createDeferredFollowupsGate',
       'createCrossSdFileOverlapTemporalShipGate',
       'createActivationInvariantGate',
+      // SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001-F (FR-1): computeReposForSD moved OUT of
+      // the control group below — it is now itself a re-export-from passthrough
+      // (`export { computeReposForSD } from '.../repo-target-resolver.js'`), the same immune
+      // form as the other entries in this list, but no longer a "locally-declared" export. It
+      // belongs in this defect-catching group, not the control group.
+      'computeReposForSD',
       // Locally-declared exports (not import-then-export re-exports) — included as a control
       // group: these were never susceptible to the specific defect above, so they should always
       // pass. If one of these ever fails, it's a different, genuinely new problem.
-      'computeReposForSD',
       'isNeverPushedSpecimen',
       'getRequiredGates',
       'createPRMergeVerificationGate',
