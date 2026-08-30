@@ -237,6 +237,18 @@ export function readVenturePark(v) {
   };
 }
 
+/**
+ * QF-20260829-232: exclusion-set-blind class. A venture under active watch flips to cancelled/
+ * killed by ANY writer and simply stops matching this tick's status='active' query -- the
+ * exclusion silently drops it from every census with zero alarm. Two-sided: a chairman-ordered
+ * kill (an approved kill/cancel/sunset decision for the venture) is governance, not anomaly, and
+ * must NOT alarm. Pure predicate -- caller supplies the chairman_decisions rows for the venture.
+ */
+export const TERMINAL_VENTURE_STATUSES = ['cancelled', 'killed'];
+export function isChairmanApprovedTermination(decisions = []) {
+  return (decisions || []).some((d) => ['kill', 'cancel', 'sunset'].includes(d.decision) && d.status === 'approved');
+}
+
 export async function checkVentureTraversalStalls(sb, priorSnapshot = {}, priorRealBuildSnapshot = {}) {
   const thresholdIso = new Date(Date.now() - VENTURE_STALL_THRESHOLD_MS).toISOString();
   const snapshot = {};
@@ -301,6 +313,20 @@ export async function checkVentureTraversalStalls(sb, priorSnapshot = {}, priorR
         }
       } catch { /* fail-soft: no real_build_stall alarm for this venture */ }
     }
+
+    // QF-20260829-232: a venture previously watched (priorSnapshot) that no longer appears in
+    // this tick's stall set may simply have progressed -- but if it flipped to a terminal status
+    // by a non-chairman writer, surface that transition once rather than silently dropping it.
+    try {
+      for (const id of Object.keys(priorSnapshot)) {
+        if (snapshot[id]) continue;
+        const { data: v } = await sb.from('ventures').select('id, name, status').eq('id', id).maybeSingle();
+        if (!v || !TERMINAL_VENTURE_STATUSES.includes(v.status)) continue;
+        const { data: decisions } = await sb.from('chairman_decisions').select('decision, status').eq('venture_id', id).limit(50);
+        if (isChairmanApprovedTermination(decisions)) continue;
+        console.log(`QUIET_TICK_VENTURE_TERMINAL_FLIP=adam venture=${id} name="${v.name}" status=${v.status}`);
+      }
+    } catch { /* fail-soft: no terminal-flip alarm this tick */ }
   } catch (e) {
     return { snapshot: priorSnapshot, alerted: [], realBuildSnapshot: priorRealBuildSnapshot, realBuildStalled: [], error: e && e.message };
   }
