@@ -212,7 +212,9 @@ describe('evaluateRealityGate with profileThresholds', () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
+                // QF-20260830-613: real supabase-js chains .limit() after .in() (a
+                // provably-bounded read per count-truncation-diff-lint); mock the same shape.
+                in: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: artifacts, error: null }) }),
               }),
             }),
           }),

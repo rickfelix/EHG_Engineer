@@ -20,7 +20,9 @@ function createMockDb(artifactRow) {
     from: () => ({
       select: function select() { return this; },
       eq: function eq() { return this; },
-      in: async () => ({ data: artifactRow ? [artifactRow] : [], error: null }),
+      // QF-20260830-613: real supabase-js chains .limit() after .in() (a provably-bounded
+      // read per count-truncation-diff-lint); mock the same shape.
+      in: () => ({ limit: async () => ({ data: artifactRow ? [artifactRow] : [], error: null }) }),
     }),
   };
 }

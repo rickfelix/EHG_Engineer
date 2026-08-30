@@ -31,7 +31,9 @@ function createMockDb(artifacts = [], boundaryRows = null) {
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
+        // QF-20260830-613: real supabase-js chains .limit() after .in() (a provably-bounded
+        // read per count-truncation-diff-lint); mock the same shape rather than resolving at .in().
+        in: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: artifacts, error: null }) }),
       };
     }),
   };
@@ -48,7 +50,7 @@ function createBoundaryErrorDb(message = 'DB connection failed') {
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: [], error: null }),
+        in: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: [], error: null }) }),
       };
     }),
   };
@@ -66,7 +68,7 @@ function createErrorDb(message = 'DB connection failed', boundaryRows = null) {
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: null, error: { message } }),
+        in: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: null, error: { message } }) }),
       };
     }),
   };
@@ -246,6 +248,95 @@ describe('RealityGates', () => {
       expect(result.passed).toBe(false);
       const missingScore = result.reasons.find(r => r.code === REASON_CODES.QUALITY_SCORE_MISSING);
       expect(missingScore).toBeDefined();
+    });
+
+    // QF-20260830-613: reproduces the measured specimen (Adam a78170fa / Solomon f823088b,
+    // 2026-08-30, venture 50763b6a) -- an honest launch_uat_report clears quality_score
+    // (70 >= 60) but self-reports {applies:true, satisfied:false}. Before this fix,
+    // existence + quality score alone let this artifact PASS silently.
+    const BOUNDARY_23_24_ROW = {
+      from_stage: 23, to_stage: 24,
+      required_artifacts: ['launch_uat_report'],
+      quality_thresholds: { launch_uat_report: 60 },
+      url_verification_required: false,
+    };
+
+    it('should BLOCK when an artifact clears quality_score but self-reports unsatisfied (the measured specimen)', async () => {
+      const artifacts = [
+        {
+          artifact_type: 'launch_uat_report',
+          quality_score: 70,
+          is_current: true,
+          content: JSON.stringify({ applies: true, satisfied: false, reason: 'no UAT run recorded' }),
+        },
+      ];
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 23,
+        toStage: 24,
+        supabase: createMockDb(artifacts, [BOUNDARY_23_24_ROW]),
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('BLOCKED');
+      expect(result.passed).toBe(false);
+      const unsatisfied = result.reasons.find(r => r.code === REASON_CODES.ARTIFACT_UNSATISFIED);
+      expect(unsatisfied).toBeDefined();
+      expect(unsatisfied.artifact_type).toBe('launch_uat_report');
+    });
+
+    it('[TWO-SIDED] should PASS an artifact with the same self-reported shape when satisfied:true', async () => {
+      const artifacts = [
+        {
+          artifact_type: 'launch_uat_report',
+          quality_score: 70,
+          is_current: true,
+          content: JSON.stringify({ applies: true, satisfied: true, reason: 'UAT run passed' }),
+        },
+      ];
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 23,
+        toStage: 24,
+        supabase: createMockDb(artifacts, [BOUNDARY_23_24_ROW]),
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('PASS');
+      expect(result.reasons).toHaveLength(0);
+    });
+
+    it('does not flag an artifact whose content has no {applies,satisfied} shape (ordinary artifacts unaffected)', async () => {
+      const artifacts = [
+        { artifact_type: 'launch_uat_report', quality_score: 70, is_current: true, content: '# UAT Report\n\nAll green.' },
+      ];
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 23,
+        toStage: 24,
+        supabase: createMockDb(artifacts, [BOUNDARY_23_24_ROW]),
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('PASS');
+    });
+  });
+
+  describe('_internal.parseSelfReportedVerdict (QF-20260830-613)', () => {
+    it('parses a well-formed {applies, satisfied} JSON verdict', () => {
+      const v = _internal.parseSelfReportedVerdict(JSON.stringify({ applies: true, satisfied: false }));
+      expect(v).toEqual({ hasVerdict: true, applies: true, satisfied: false });
+    });
+
+    it('[TWO-SIDED] non-JSON / plain-text content has no verdict opinion', () => {
+      expect(_internal.parseSelfReportedVerdict('# Just a markdown report')).toEqual({ hasVerdict: false, applies: null, satisfied: null });
+    });
+
+    it('JSON content missing the boolean `satisfied` key has no verdict opinion', () => {
+      expect(_internal.parseSelfReportedVerdict(JSON.stringify({ foo: 'bar' }))).toEqual({ hasVerdict: false, applies: null, satisfied: null });
+    });
+
+    it('null/undefined/empty content has no verdict opinion', () => {
+      expect(_internal.parseSelfReportedVerdict(null)).toEqual({ hasVerdict: false, applies: null, satisfied: null });
+      expect(_internal.parseSelfReportedVerdict(undefined)).toEqual({ hasVerdict: false, applies: null, satisfied: null });
+      expect(_internal.parseSelfReportedVerdict('')).toEqual({ hasVerdict: false, applies: null, satisfied: null });
     });
   });
 
@@ -446,7 +537,9 @@ describe('RealityGates', () => {
     it('should export all REASON_CODES', () => {
       // QF-20260829-634 leg 3: +CANONICAL_ROW_MISSING (absent canonical row on a
       // designated boundary must be LOUD, distinct from a genuine DB_ERROR).
-      expect(Object.keys(REASON_CODES)).toHaveLength(7);
+      // QF-20260830-613: +ARTIFACT_UNSATISFIED (present + quality-clearing artifact whose
+      // own content self-reports an unsatisfied applies/satisfied verdict).
+      expect(Object.keys(REASON_CODES)).toHaveLength(8);
     });
   });
 
