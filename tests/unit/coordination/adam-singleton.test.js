@@ -272,7 +272,7 @@ describe('detectMultipleAdams (pure, mirror of detectSplitBrain)', () => {
 // postgrest-fixture-store instead of a bulk-update stub, matching the new select-then-per-row
 // drainAdamOutbound implementation.
 function regStub({ selfSessionId = 'self', selfMeta = null, rowExists = true, allAdams = [], rpcError = null, drainRows = [] } = {}) {
-  const calls = { update: 0, insert: 0, rpc: [], drainSelect: 0 };
+  const calls = { update: 0, insert: 0, rpc: [], drainSelect: 0, updatePayloads: [] };
   let currentRowExists = rowExists;
   let currentMeta = selfMeta;
   const otherSessionsMeta = new Map(allAdams.map((a) => [a.session_id, { ...a.metadata }]));
@@ -312,6 +312,7 @@ function regStub({ selfSessionId = 'self', selfMeta = null, rowExists = true, al
       },
       update(payload) {
         calls.update += 1;
+        calls.updatePayloads.push(payload); // QF-20260830-189: full payload, not just .metadata
         const uchain = {
           eq(_col, val) {
             if (val === selfSessionId) { currentRowExists = true; currentMeta = payload.metadata; }
@@ -408,6 +409,14 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
     expect(r.retire_fallback_used).toEqual(['staleprior']);
     expect(r.retire_blocked).toBeUndefined();
     expect(calls.drainSelect).toBeGreaterThan(0); // FR-4 drain still ran for the JS-merge-retired prior
+    // QF-20260830-189: the JS-merge retire fallback must ALSO stamp released_at + status='released'
+    // in this same UPDATE, or the retired seat's status never leaves the stuck-seat scan's
+    // population (fetchPopulation filters on status IN ('active','idle') only) and renders as
+    // stuck forever.
+    const fallbackUpdate = calls.updatePayloads.find((p) => p.metadata && p.metadata.role === 'adam_retired');
+    expect(fallbackUpdate).toBeTruthy();
+    expect(fallbackUpdate.status).toBe('released');
+    expect(fallbackUpdate.released_at).toBeTruthy();
   });
 
   // ADVERSARIAL REVIEW (PR #7369): a released-but-heartbeat-not-yet-stale prior (heartbeat_at
