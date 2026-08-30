@@ -202,9 +202,17 @@ export async function emitDeliveryAlarm(supabase, {
   return { alarmed: true, ratio, dedup_key: dedupKey, event_id: res.id };
 }
 
-export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set()) {
+export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null) {
   return (liveWorkers || []).filter((w) => {
-    if (w.sd_key) return false; // already claiming something — not idle
+    // QF-20260830-885: claude_sessions.sd_key is a MIRROR nothing clears on SD completion
+    // (measured: Hotel-3, directive dac88a87 — completed QF-20260830-795, both authoritative
+    // claim tables read zero, yet sd_key still named the finished item and this line alone
+    // called him busy). When the caller supplies the authoritative sdHolderSessionIds set
+    // (strategic_directives_v2.claiming_session_id, the SAME table qfHolderSessionIds already
+    // reads for QFs), trust IT over the stale mirror. sdHolderSessionIds === null means the
+    // caller could not resolve it (fail-open to the OLD mirror-only behaviour, never silently
+    // treat every non-null mirror as idle on a read failure).
+    if (sdHolderSessionIds ? sdHolderSessionIds.has(w.session_id) : !!w.sd_key) return false;
     // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: sd_key is only the MIRROR of a past claim decision
     // (lib/claim/get-my-claims.cjs:8-15); QF ownership lives in quick_fixes.claiming_session_id
     // and mirrors NULL here. Without this check a QF holder counts as idle capacity and gets
@@ -306,7 +314,24 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   } catch (e) {
     summary.undeliveredReasons.push('seat_busy_read_failed:' + (e?.message || 'unknown'));
   }
-  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds);
+  // QF-20260830-885: the authoritative SD-side twin of qfHolderSessionIds above. null (not [])
+  // on a read failure so eligibleIdleWorkers can fail-open to the OLD mirror-only behaviour
+  // rather than silently trusting nothing-is-held on a query fault.
+  let sdHolderSessionIds = null;
+  try {
+    const { data: sdHolders } = await supabase
+      .from('strategic_directives_v2')
+      .select('claiming_session_id')
+      .not('claiming_session_id', 'is', null)
+      // Provably bounded: the live fleet is a small, human-supervised roster (mirrors
+      // scripts/tier-stamp-rebaseline.mjs's own fleet-size-bound rationale) -- 500 is a
+      // generous literal cap, far above any realistic simultaneously-claimed-SD count.
+      .limit(500);
+    sdHolderSessionIds = new Set((sdHolders || []).map((r) => r.claiming_session_id).filter(Boolean));
+  } catch (e) {
+    summary.undeliveredReasons.push('sd_holder_read_failed:' + (e?.message || 'unknown'));
+  }
+  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
 
