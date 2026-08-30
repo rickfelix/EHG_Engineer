@@ -1711,7 +1711,7 @@ async function printChairmanGatedQfs() {
     // adversarial finding — exact ilike silently lost it). Overmatches like 'vice-chairman'
     // are rejected by the client-side isChairmanGatedQF re-check below (exact after trim).
     .not('release_condition', 'is', null)
-    .ilike('owner', '%chairman%')
+    .ilike('owner', '%chairman%') // ilike-uuid-lint-disable-line: quick_fixes.owner is genuinely text-typed (free-form strings like 'chairman'/'coordinator a59441f4'), confirmed via live data read — the census's global column-name match is a false positive for this table
     .not('status', 'in', '(completed,cancelled,closed)')
     .order('created_at', { ascending: true })
     .limit(30);
