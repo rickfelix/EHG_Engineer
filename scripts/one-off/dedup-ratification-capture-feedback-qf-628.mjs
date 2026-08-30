@@ -15,6 +15,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const APPLY = process.argv.includes('--apply');
 const CATEGORIES = ['ratification_capture_candidate', 'ratification_capture_miss'];
@@ -142,7 +143,9 @@ async function main() {
   console.log(`Net change: ${totalPostCount - totalPreCount} (expected: -${toDeleteIds.length})`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
