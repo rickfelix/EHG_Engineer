@@ -144,6 +144,24 @@ resolves "which app owns this SD" by name lookup is confirmed to prefer the `act
 add an explicit `is_canonical` marker if both must persist for historical linkage. The
 merge/delete itself is a separate governed change, out of scope here.
 
+**Disposition executed (QF-20260830-607, disposition path (a), data-only, no DDL).** Every
+consumer that resolves `applications` by name was enumerated: `lib/repo-paths.js` (both
+functions) and `lib/eva/bridge/venture-provisioner.js` already prefer the live/active row over
+a soft-deleted/inactive one; `lib/fleet/qf-repo-fitness.js` and
+`lib/fleet/qf-target-application.js` filter on `status='active'`; the only two first-match, no-
+status-filter consumers (`lib/sd-creation/pipeline.js:1267`,
+`scripts/reroute-venture-to-bridge.mjs:77`) use the query solely as an existence check and never
+read which duplicate they matched, so first-match ambiguity there has zero behavioral effect.
+Measurement also found `f37300af...` was **already soft-deleted** (`deleted_at` set) before this
+QF, via an unrelated bulk `gate_boundary_config` action — its `deletion_reason` described that
+unrelated fix, not this duplicate-identity disposition, which was a data-quality gap (a future
+reader could misdiagnose why the row was tombstoned). `deletion_reason` was corrected to
+accurately record the duplicate-identity disposition and cross-reference `75c6da62...`
+(single-row, reversible; `status`/`deleted_at`/`deleted_by` left untouched). Regression
+confirmed: `applications` rows matching `%altify%` with `deleted_at IS NULL` now number exactly
+1 (`75c6da62...`). The `is_canonical`-column option was explicitly kept off the table for this
+pass per coordinator/Adam/Solomon disposition-path constraint.
+
 ## Follow-on substitution SD scoping (draft)
 
 Per-site change/no-change verdicts, for the follow-on SD to inherit directly:
