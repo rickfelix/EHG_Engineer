@@ -44,18 +44,14 @@ function extractCodes(reason) {
   return KNOWN_CODES.filter((code) => !INFO_CODES.has(code) && reason.includes(code));
 }
 
-async function main() {
-  const { days, asJson } = parseArgs(process.argv.slice(2));
-  const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data: rows, error } = await supabase
-    .from('sd_phase_handoffs')
-    .select('id, rejection_reason, created_at')
-    .not('rejection_reason', 'is', null)
-    .gte('created_at', since);
-  if (error) throw error;
-
+/**
+ * Pure ranking computation, extracted for unit testing (VALIDATION sub-agent finding
+ * VAL-3, PLAN_VERIFICATION: the denominator arithmetic previously lived inline in main()
+ * with zero test coverage -- reverting the TESTING-requested fix passed all tests).
+ * @param {{rejection_reason: string|null}[]} rows
+ * @returns {{total_rejected_rows:number, matched_rows:number, unmatched_rows:number, ranked:object[]}}
+ */
+function computeRanking(rows) {
   const touched = new Map();
   const soleBlocker = new Map();
   for (const code of KNOWN_CODES) {
@@ -84,6 +80,23 @@ async function main() {
     .map((code) => ({ code, touched: touched.get(code), soleBlocker: soleBlocker.get(code) }))
     .filter((r) => r.touched > 0)
     .sort((a, b) => b.soleBlocker - a.soleBlocker);
+
+  return { total_rejected_rows: totalRejectedRows, matched_rows: matchedRows, unmatched_rows: unmatchedRows, ranked };
+}
+
+async function main() {
+  const { days, asJson } = parseArgs(process.argv.slice(2));
+  const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { data: rows, error } = await supabase
+    .from('sd_phase_handoffs')
+    .select('id, rejection_reason, created_at')
+    .not('rejection_reason', 'is', null)
+    .gte('created_at', since);
+  if (error) throw error;
+
+  const { total_rejected_rows: totalRejectedRows, matched_rows: matchedRows, unmatched_rows: unmatchedRows, ranked } = computeRanking(rows);
 
   const summary = {
     measured_at: new Date().toISOString(),
@@ -118,4 +131,4 @@ if (isMainModule(import.meta.url)) {
   });
 }
 
-export { extractCodes, KNOWN_CODES, INFO_CODES };
+export { extractCodes, KNOWN_CODES, INFO_CODES, computeRanking };
