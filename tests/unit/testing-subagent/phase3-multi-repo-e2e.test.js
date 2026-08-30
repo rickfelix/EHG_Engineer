@@ -182,19 +182,19 @@ describe('executeE2ETests() — FR-2 routing: multi-repo path activates only for
   });
 });
 
-describe('executeE2ETests() — multi-repo routing with an injected resolver (real repos never touched)', () => {
-  it('TS-1: sdRow resolving to 2 distinct FAKE localPaths (via a stub resolver) routes to the multi-repo aggregation, no real Playwright spawn', async () => {
+describe('runMultiRepoE2ESuite() — wiring smoke test with stub repos (real repos never touched)', () => {
+  it('given 2 distinct FAKE localPaths, produces the multi-repo per_repo[] shape end-to-end', async () => {
     const repoA = makeScratchRepo();
     const repoB = makeScratchRepo();
     writeFileSync(path.join(repoA, 'package.json'), JSON.stringify({ scripts: {} }));
     writeFileSync(path.join(repoB, 'package.json'), JSON.stringify({ scripts: {} }));
 
-    // Exercise the exact routing decision executeE2ETests makes, independent of the real
-    // repo-target-resolver.js implementation (which always resolves to this machine's real
-    // EHG/EHG_Engineer checkouts — both of which DO have live Playwright infra and must never
-    // be spawned against from a unit test). dedupeRepos + aggregateE2EResults + runFullE2ESuite
-    // are the same functions executeE2ETests calls internally; this proves the same pipeline
-    // produces the multi-repo shape end-to-end against safe, zero-infra fixtures.
+    // Exercises dedupeRepos + runFullE2ESuite + aggregateE2EResults wired together exactly as
+    // executeE2ETests calls them, against safe zero-infra fixtures instead of this machine's
+    // real EHG/EHG_Engineer checkouts (both of which DO have live Playwright infra and must
+    // never be spawned against from a unit test). This does NOT exercise executeE2ETests'
+    // own routing decision (options.sdRow -> distinctRepos.length >= 2) -- see the mocked
+    // test in phase3-execute-e2e-tests-routing.test.js for that.
     const stubRepos = dedupeRepos([
       { githubRepo: 'stub/a', localPath: repoA },
       { githubRepo: 'stub/b', localPath: repoB }
