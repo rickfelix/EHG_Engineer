@@ -45,9 +45,11 @@ describe('adam-quiet-tick.mjs: hard-interrupt surfacing stays unconditional unde
     expect(callSiteIndent('await surfaceParkedChairmanSms(sb)')).toBe(2);
   });
 
-  it('skipHeavyPass only gates the 3 named heavy enumerations (readCriticalPathParents, checkVentureTraversalStalls, checkRatificationRegressions)', () => {
+  it('skipHeavyPass only gates the 4 named heavy enumerations (readCriticalPathParents, checkBoardStale, checkVentureTraversalStalls, checkRatificationRegressions)', () => {
     const gatedBlockCount = (SRC.match(/if \(!skipHeavyPass\)/g) || []).length;
-    expect(gatedBlockCount).toBe(2); // readCriticalPathParents+checkAndAlertStalls share one gate; checkVentureTraversalStalls has its own
+    // readCriticalPathParents+checkAndAlertStalls share one gate; checkBoardStale (QF-20260830-690,
+    // a full task_ledger scan) has its own; checkVentureTraversalStalls has its own.
+    expect(gatedBlockCount).toBe(3);
     expect(SRC).toContain('const regressedRatifications = skipHeavyPass ? { rows: [], count: 0 } : await checkRatificationRegressions(sb);');
   });
 

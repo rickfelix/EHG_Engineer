@@ -13,7 +13,7 @@
  */
 import { createRequire } from 'node:module';
 import 'dotenv/config';
-import { TABLE, rollupParentStatus, bubbleBlockers, sumTokenCost } from '../lib/adam/task-ledger.js';
+import { TABLE, rollupParentStatus, bubbleBlockers, sumTokenCost, isManualChildStale, parseManualChildMeta } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: unfiltered select('*') over the
 // whole ledger, rows are grouped/rendered (not just counted) — paginate.
@@ -75,7 +75,16 @@ export function buildBoardView(rows) {
     blockers: bubbleBlockers(children),
     tokenCost: sumTokenCost(children),
   }));
-  return { panels, totalTokenCost: panels.reduce((sum, p) => sum + (p.tokenCost || 0), 0) };
+  // QF-20260830-690: manual child board hygiene — surface the review_by column here too,
+  // not only in the tick's QUIET_TICK_BOARD_STALE line, so grooming can happen from this
+  // view directly (the chairman found ten stale items before the seat did).
+  const manualStale = (Array.isArray(rows) ? rows : [])
+    .filter((r) => isManualChildStale(r))
+    .map((r) => {
+      const meta = parseManualChildMeta(r.risk) || {};
+      return { id: r.id, title: r.title, owner: meta.owner || '(unassigned)', review_by: meta.review_by || '(none)', updated_at: r.updated_at };
+    });
+  return { panels, totalTokenCost: panels.reduce((sum, p) => sum + (p.tokenCost || 0), 0), manualStale };
 }
 
 function renderPanel(p) {
@@ -151,6 +160,15 @@ async function main() {
   } else {
     for (const p of view.panels) console.log(renderPanel(p));
     console.log(`  ─── total token cost: ${view.totalTokenCost} ───`);
+  }
+
+  // QF-20260830-690: manual child items past their 7-day silence window or overdue review_by.
+  if (view.manualStale.length > 0) {
+    console.log('');
+    console.log('  ─── STALE MANUAL ITEMS (groom now) ───');
+    for (const s of view.manualStale) {
+      console.log(`    [${s.id}] ${s.title} — owner: ${s.owner}, review_by: ${s.review_by}, updated_at: ${s.updated_at}`);
+    }
   }
 
   // Unconditional. A ledger failure above must not suppress the drive state, and vice versa —

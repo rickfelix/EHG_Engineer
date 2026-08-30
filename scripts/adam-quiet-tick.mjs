@@ -38,7 +38,7 @@ import { WATCHDOG_BODY_PREFIX, isWatchdogBody } from '../lib/comms/adam-outbound
 // unified consumption semantics and did not achieve it).
 import { fetchInboundBacklog, classifyBacklog, partitionByLiveness } from '../lib/adam/inbound-backlog.js';
 import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
-import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus } from '../lib/adam/task-ledger.js';
+import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus, isManualChildStale, parseManualChildMeta } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
 // retention mechanism (verified) and the ventures stall-scan below has no .limit() either —
@@ -190,6 +190,30 @@ export async function readCriticalPathParents(sb) {
     return data.map((row) => ({ ...row, inFlightNextStep: row.status === 'in_progress' }));
   } catch {
     return [];
+  }
+}
+
+// QF-20260830-690: manual child items (source_kind='manual') have no live object to
+// rehydrate from (reconcileBoard above only rehydrates PARENT rows), so they only move by
+// hand — the chairman found ten sitting 6-12 days stale before the seat did. This is a HARD
+// line (act-on-flagged-lines contract), not informational: silence on a manual child must be
+// impossible. Fail-soft: any read error degrades to n=0, never aborts the tick.
+export async function checkBoardStale(sb) {
+  try {
+    const rows = await fetchAllPaginated(() => sb
+      .from(TASK_LEDGER_TABLE)
+      .select('id, title, updated_at, status, tier, source_kind, risk')
+      .eq('tier', 'child')
+      .eq('source_kind', 'manual')
+      .in('status', ['open', 'in_progress', 'blocked'])
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    const items = rows.filter((r) => isManualChildStale(r)).map((r) => {
+      const meta = parseManualChildMeta(r.risk) || {};
+      return { id: r.id, title: r.title, owner: meta.owner || '(unassigned)', review_by: meta.review_by || '(none)', updated_at: r.updated_at };
+    });
+    return { count: items.length, items };
+  } catch (e) {
+    return { count: 0, items: [], error: e && e.message };
   }
 }
 
@@ -963,6 +987,13 @@ async function main() {
     }
   }
 
+  // QF-20260830-690: manual child board hygiene — a chairman-visible hard line the moment a
+  // manual item sits untouched past 7 days or its review_by passes.
+  let boardStale = { count: 0, items: [] };
+  if (!skipHeavyPass) {
+    boardStale = await checkBoardStale(sb);
+  }
+
   // QF-20260710-056: a venture stuck mid-traversal is the thing that matters most —
   // check it every tick, independent of the task_ledger stall watch above.
   let ventureStall = { snapshot: priorVentureStallSnapshot, alerted: [], realBuildSnapshot: priorVentureRealBuildStallSnapshot, realBuildStalled: [] };
@@ -1176,6 +1207,12 @@ async function main() {
     // would wake Adam to be told nothing is wrong, rebuilding the alert fatigue QF-638 removed.
     for (const s of stall.suppressed || []) {
       console.log(`QUIET_TICK_STALL_SUPPRESSED=adam node=${s.id} title="${s.title || ''}" tier=${s.tier} source_kind=${s.source_kind} reason=${s.reason} ticks=${s.ticks}`);
+    }
+    // QF-20260830-690: HARD line (act-on-flagged-lines contract) — the chairman found ten
+    // manual board items stale before the seat did; this makes that silence impossible.
+    if (boardStale.count > 0) {
+      const detail = boardStale.items.map((i) => `${i.id}:owner=${i.owner}:review_by=${i.review_by}`).join(',');
+      console.log(`QUIET_TICK_BOARD_STALE=adam n=${boardStale.count} items=${detail} — groom via node scripts/adam-pm-board.mjs (review_by column) or touch the item (status/blocker) to clear.`);
     }
     for (const v of ventureStall.alerted) {
       console.log(`QUIET_TICK_VENTURE_STALL_ALERT=adam venture=${v.id} name="${v.name}" state=${v.orchestrator_state} escalated=${v.escalated}`);

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { groupByParent, buildBoardView } from '../../../scripts/adam-pm-board.mjs';
+import { encodeManualChildMeta } from '../../../lib/adam/task-ledger.js';
 
 function fixtureRows() {
   return [
@@ -57,5 +58,22 @@ describe('buildBoardView', () => {
     const view = buildBoardView([]);
     expect(view.panels).toEqual([]);
     expect(view.totalTokenCost).toBe(0);
+    expect(view.manualStale).toEqual([]);
+  });
+
+  it('QF-20260830-690: surfaces stale manual children with their owner/review_by', () => {
+    const rows = [
+      ...fixtureRows(),
+      {
+        id: 'manual-1', tier: 'child', parent_id: 'parent-1', source_kind: 'manual',
+        title: 'groom me', status: 'open', updated_at: '2026-01-01T00:00:00.000Z',
+        risk: encodeManualChildMeta('hotel-5', '2026-01-15T00:00:00.000Z'),
+      },
+    ];
+    const view = buildBoardView(rows);
+    expect(view.manualStale).toEqual([{
+      id: 'manual-1', title: 'groom me', owner: 'hotel-5', review_by: '2026-01-15T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    }]);
   });
 });
