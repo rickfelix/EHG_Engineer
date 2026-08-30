@@ -51,6 +51,7 @@ import { evaluateRealBuildStall } from '../lib/governance/real-build-stall-alarm
 // SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive STALE escalation for a parked chairman
 // SMS row unresolved >=24h, layered onto the existing QUIET_TICK_SMS_PARKED line below.
 import { isStaleParkedSms } from '../lib/governance/parked-sms-stall.mjs';
+import { isPossiblyClippedSmsBody } from '../lib/chairman/sms-clipped-detector.js';
 // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: additive STALE escalation for a chairman
 // ratification unencoded >=24h, mirroring the parked-SMS-STALE pattern immediately above.
 import { isStaleRatification, formatRatificationStaleLine } from '../lib/governance/ratification-stall.mjs';
@@ -653,6 +654,8 @@ export async function surfaceSmsInbound(sb) {
         isChairman: chairmanPhone ? r.from_phone === chairmanPhone : true,
         signatureValid: r.signature_valid === true,
         ageMin: Math.floor((Date.now() - new Date(r.received_at).getTime()) / 60_000),
+        // QF-20260830-874: 1600 chars is the exact tell measured across 14 clipped specimens.
+        clipped: isPossiblyClippedSmsBody(r.body_raw),
         body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
       }));
     return { rows, count: rows.length, answeredUnknown };
@@ -686,6 +689,7 @@ export async function surfaceParkedChairmanSms(sb) {
       id: r.id,
       fromPhone: r.from_phone,
       ageMin: Math.floor((Date.now() - new Date(r.parked_at).getTime()) / 60_000),
+      clipped: isPossiblyClippedSmsBody(r.body_raw),
       body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
     }));
     return { rows, count: rows.length };
@@ -1303,7 +1307,8 @@ async function main() {
     const smsDrainEnabled = !['', '0', 'false', 'off', 'no']
       .includes(String(process.env.SMS_RELAY_DRAIN_ENABLED ?? '').trim().toLowerCase());
     for (const s of smsInbound.rows) {
-      const detail = `id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m body="${s.body}"`;
+      // QF-20260830-874: possibly-clipped tell surfaced explicitly, never silently.
+      const detail = `id=${s.id} from=${s.fromPhone} chairman=${s.isChairman} sig=${s.signatureValid} age=${s.ageMin}m clipped=${s.clipped} body="${s.body}"`;
       // QF-20260810-590: checked FIRST, unconditionally of the drain flag — a watchdog body is
       // never the chairman regardless of whether the drain is enabled.
       if (isWatchdogBody(s.body)) {
@@ -1337,7 +1342,7 @@ async function main() {
     // (unlike QUIET_TICK_SMS_INBOUND above, there is no inert-drain-flag case to downgrade for:
     // resolving a parked row is a CLI script, not gated on SMS_RELAY_DRAIN_ENABLED).
     for (const s of smsParked.rows) {
-      console.log(`QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
+      console.log(`QUIET_TICK_SMS_PARKED=adam id=${s.id} from=${s.fromPhone} age=${s.ageMin}m clipped=${s.clipped} body="${s.body}" — parked chairman SMS awaiting disposition; resolve via node scripts/resolve-parked-chairman-sms.cjs ${s.id}`);
       // SD-LEO-INFRA-PARKED-CHAIRMAN-SMS-001 FR-3: additive escalation — the line above fires
       // identically for a 2-minute-old row and a 6-day-old one, which is exactly how 356 rows
       // accumulated as unread noise. A distinct tag for anything >=24h makes a genuinely-overdue
