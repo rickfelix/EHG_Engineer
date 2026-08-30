@@ -6,29 +6,34 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  PATH_BAN, WITNESS_CONTENT_FILE, findBannedTouches, hasNetWitnessMarkerLoss, evaluateCeremonyScopeLock,
+  PATH_BAN, WITNESS_CONTENT_FILE, SETTINGS_JSON_PATH, findBannedTouches, hasNetWitnessMarkerLoss,
+  evaluateCeremonyScopeLock, evaluateSettingsJsonChange,
 } from '../../../lib/governance/ceremony-scope-lock.js';
+
+const BASE_SETTINGS = JSON.stringify({
+  env: { FOO: 'bar' },
+  statusLine: { type: 'command', command: 'node statusline.cjs' },
+  hooks: {
+    Stop: [{ hooks: [{ type: 'command', command: 'node scripts/hooks/post-completion-tail-enforcement.cjs', timeout: 10 }] }],
+    PostToolUse: [{ hooks: [{ type: 'command', command: 'node scripts/hooks/foo.cjs', timeout: 5 }] }],
+  },
+  permissions: { allow: [] },
+});
 
 describe('findBannedTouches', () => {
   it('names every ceremony surface -- TESTING-found gap items included, not just the original 2 files', () => {
-    // Confirms the surface actually covers the settings.json + dispatcher gap TESTING evidence
-    // 8c4733fd found in the original 3-file draft.
+    // Confirms the surface actually covers the dispatcher gap TESTING evidence 8c4733fd found.
+    // .claude/settings.json moved off this path-level list onto a content-level check
+    // (QF-20260830-283, ratification 0daf3bd8/iii) -- see evaluateSettingsJsonChange below.
     expect(PATH_BAN).toContain('scripts/hooks/post-completion-tail-enforcement.cjs');
     expect(PATH_BAN).toContain('scripts/hooks/stop-subagent-enforcement/post-completion-validator.js');
     expect(PATH_BAN).toContain('scripts/hooks/stop-subagent-enforcement.js');
-    expect(PATH_BAN).toContain('.claude/settings.json');
+    expect(PATH_BAN).not.toContain(SETTINGS_JSON_PATH);
   });
 
   it('flags a diff that touches the tail-enforcement hook', () => {
     const touches = findBannedTouches(['README.md', 'scripts/hooks/post-completion-tail-enforcement.cjs']);
     expect(touches).toEqual(['scripts/hooks/post-completion-tail-enforcement.cjs']);
-  });
-
-  it('flags a diff that touches the settings.json Stop-hook registration (the TESTING-found gap)', () => {
-    // Deleting/reordering a Stop-hook array entry disables the ceremony without touching either
-    // originally-named file -- this is the specific defect TESTING evidence 8c4733fd surfaced.
-    const touches = findBannedTouches(['.claude/settings.json']);
-    expect(touches).toEqual(['.claude/settings.json']);
   });
 
   it('flags a diff that touches the dispatcher (a second TESTING-found gap)', () => {
@@ -117,10 +122,20 @@ describe('evaluateCeremonyScopeLock — the combined verdict', () => {
     expect(result.bannedTouches).toEqual(['scripts/hooks/post-completion-tail-enforcement.cjs']);
   });
 
-  it('[TS-5b] fails on a diff removing the Stop-hook array entry from settings.json', () => {
-    const result = evaluateCeremonyScopeLock(['.claude/settings.json'], null);
+  it('[TS-5b] fails on a settings.json diff removing the Stop-hook entry, naming the protected key', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.hooks.Stop = [];
+    const result = evaluateCeremonyScopeLock(
+      [SETTINGS_JSON_PATH], null, { oldText: BASE_SETTINGS, newText: JSON.stringify(mutated) },
+    );
     expect(result.pass).toBe(false);
-    expect(result.bannedTouches).toEqual(['.claude/settings.json']);
+    expect(result.settingsJsonProtectedKey).toBe('hooks.Stop');
+  });
+
+  it('fails closed when settings.json changed but the diff text could not be resolved', () => {
+    const result = evaluateCeremonyScopeLock([SETTINGS_JSON_PATH], null, null);
+    expect(result.pass).toBe(false);
+    expect(result.settingsJsonProtectedKey).toMatch(/unresolvable/);
   });
 
   it('fails when the witness marker is net-removed, even with no banned path touched', () => {
@@ -134,5 +149,74 @@ describe('evaluateCeremonyScopeLock — the combined verdict', () => {
   it('passes when capture-completion-flags.js changed but the witness marker survives intact', () => {
     const result = evaluateCeremonyScopeLock(['scripts/capture-completion-flags.js'], null);
     expect(result.pass).toBe(true);
+  });
+});
+
+// QF-20260830-283 (chairman ratification 0daf3bd8/iii): four required fixtures.
+describe('evaluateSettingsJsonChange', () => {
+  it('[fixture 1] a command-string-only edit to a non-protected hook entry passes', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.hooks.PostToolUse[0].hooks[0].command = 'node scripts/hooks/foo.cjs --verbose';
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result).toEqual({ pass: true, protectedKey: null });
+  });
+
+  it('[fixture 2] a Stop-hook edit refuses, naming the key', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.hooks.Stop[0].hooks[0].command = 'node scripts/hooks/post-completion-tail-enforcement.cjs --loud';
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toBe('hooks.Stop');
+  });
+
+  it('[fixture 3] adding a hook entry refuses, naming the event', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.hooks.PostToolUse[0].hooks.push({ type: 'command', command: 'node scripts/hooks/new.cjs', timeout: 5 });
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toMatch(/hooks\.PostToolUse.*added\/removed/);
+  });
+
+  it('[fixture 4] an unrelated top-level key edit (env) refuses', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.env.FOO = 'baz';
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toBe('env');
+  });
+
+  it('refuses a permissions edit', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.permissions.allow = ['Bash(*)'];
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toBe('permissions');
+  });
+
+  it('refuses a statusLine edit', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.statusLine.command = 'node other.cjs';
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toBe('statusLine');
+  });
+
+  it('refuses a non-command field change on a non-protected hook entry (e.g. timeout)', () => {
+    const mutated = JSON.parse(BASE_SETTINGS);
+    mutated.hooks.PostToolUse[0].hooks[0].timeout = 999;
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toMatch(/non-command field changed/);
+  });
+
+  it('fails closed on unparseable JSON', () => {
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, '{not json');
+    expect(result.pass).toBe(false);
+    expect(result.protectedKey).toMatch(/unparseable/);
+  });
+
+  it('passes on a byte-identical settings.json (no-op diff)', () => {
+    const result = evaluateSettingsJsonChange(BASE_SETTINGS, BASE_SETTINGS);
+    expect(result).toEqual({ pass: true, protectedKey: null });
   });
 });
