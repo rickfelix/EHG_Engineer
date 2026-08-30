@@ -25,7 +25,7 @@
  * ============================================================================
  */
 
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
@@ -34,7 +34,15 @@ import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
-const supabase = createSupabaseClient();
+// QF-20260830-792: this script previously authenticated with the ANON key (createSupabaseClient),
+// which has no INSERT grant on context_usage_log -- only `authenticated` and `service_role` do
+// (database/migrations/20260317_rls_policy_tightening_phase1.sql section 3.5). Every sync tick has
+// been running fleet-wide since SD-LEO-INFRA-BURN-TELEMETRY-PER-001-C (wired into
+// worker-checkin.cjs's cadence) and silently failing every single time ("new row violates
+// row-level security policy") -- the WRITE side (statusline.cjs -> .claude/logs/context-usage.jsonl)
+// was never broken and has been accumulating real entries the whole time; only this sync's own
+// auth was wrong.
+const supabase = createSupabaseServiceClient();
 
 const LOG_FILE = path.join(process.cwd(), '.claude/logs/context-usage.jsonl');
 const STATE_FILE = path.join(process.cwd(), '.claude/logs/.sync-state.json');
@@ -179,10 +187,20 @@ async function syncToDatabase() {
   // never advance state past a line that was not confirmed written, so a transient error is
   // retried on the next tick instead of silently dropped forever.
   let lastPersistedEntry = null;
+  let skippedLegacy = 0;
 
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const batch = entries.slice(i, i + BATCH_SIZE);
-    const transformed = batch.map(transformEntry);
+    // QF-20260830-792: a small, permanent historical class (~383 of 619,983 lines, from before
+    // the SHORT-key-vs-LONG-key fix above) has no session_id at all -- the NOT NULL constraint
+    // rejects the WHOLE batch on the one bad row, and F1's stop-at-first-failure then pins the
+    // sync at line ~383 forever, unable to ever reach the 619,600 genuinely-valid entries after
+    // it. This is NOT a transient error to retry (backfill for these specific rows is not
+    // possible -- there is no session_id to recover) -- skip them and keep advancing.
+    const validBatch = batch.filter((e) => !!e.session_id);
+    skippedLegacy += batch.length - validBatch.length;
+    if (validBatch.length === 0) { lastPersistedEntry = batch[batch.length - 1]; continue; }
+    const transformed = validBatch.map(transformEntry);
 
     let { error } = await supabase
       .from('context_usage_log')
@@ -205,13 +223,14 @@ async function syncToDatabase() {
 
     if (error) {
       console.error(`Error syncing batch ${i / BATCH_SIZE + 1}:`, error.message);
-      errors += batch.length;
+      errors += validBatch.length;
       break; // stop advancing state past a confirmed failure
     } else {
-      synced += batch.length;
+      synced += validBatch.length;
       lastPersistedEntry = batch[batch.length - 1];
     }
   }
+  if (skippedLegacy > 0) console.log(`Skipped ${skippedLegacy} legacy entries with no session_id (unrecoverable historical rows -- not a retryable error)`);
 
   // Update state — only as far as the last batch that actually persisted.
   if (!lastPersistedEntry) {
