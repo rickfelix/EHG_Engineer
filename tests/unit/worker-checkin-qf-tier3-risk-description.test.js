@@ -77,9 +77,17 @@ describe('isAutoStartableQF — TIER3_RISK_RE scans description, not just title'
     ['authorization', 'missing Authorization on every call'],
     ['credentials', 'rotate the credentials for the sink'],
     ['migration', 'apply the pending migration first'],
-    ['schema', 'the schema drifted from the model'],
   ])('excludes when %s appears only in the description', (_kw, description) => {
     expect(isAutoStartableQF(qf({ description }), NOW)).toBe(false);
+  });
+
+  // QF-20260830-901: schema/migration is now context-aware (findSchemaKeywordWithVerbContext,
+  // lib/utils/work-item-router.js) -- a bare noun mention with no nearby change verb no longer
+  // excludes. auth/authorization/credentials above are UNCHANGED (default-escalate on any
+  // mention, per findRiskKeywordWithContext's explicit safety reasoning); only the schema/
+  // migration branch gained the verb-context distinction.
+  it('admits a description that only DISCUSSES a schema drift, with no change verb nearby (was a false positive)', () => {
+    expect(isAutoStartableQF(qf({ description: 'the schema drifted from the model' }), NOW)).toBe(true);
   });
 
   it('admits a genuinely low-risk QF whose title and description both lack risk keywords', () => {
