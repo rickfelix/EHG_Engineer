@@ -10,9 +10,14 @@
  * spof_assumption fields evaluateIntakeBar() actually reads (none exist as ventures columns).
  *
  * TESTING finding T-2: source_type must NOT be 'manual' -- reseed-queue.mjs's classify()
- * archives any row with source_type==='manual' as e2e_fixture on the next reseed run,
- * silently re-zeroing the gauge this SD exists to flip. Uses 'ai_generated' (matches the
- * existing real_idea convention reseed-queue.mjs's own comment names).
+ * WOULD label a source_type='manual' row as e2e_fixture. Uses 'ai_generated' (matches the
+ * existing real_idea convention reseed-queue.mjs's own comment names) since that is the
+ * semantically correct label. CORRECTED (EXEC-phase TESTING, evidence ec2b314c, finding D1):
+ * this classification does NOT actually protect a row from archival -- reseed-queue.mjs
+ * archives EVERY is_active=true row unconditionally regardless of its classify() label, and
+ * that label has no reader anywhere in the codebase today. Nothing in this SD or its
+ * predecessor prevents a future reseed-queue.mjs --apply from re-archiving these 3 rows;
+ * that is out of scope here and tracked as a completion-flag follow-up.
  *
  * TESTING finding T-3/T-4: writes via the REAL call chain -- saveBlueprintsToDatabase()
  * (which internally calls buildBlueprintRow()/evaluateIntakeBar()), not buildBlueprintRow()
@@ -20,6 +25,14 @@
  *
  * TESTING finding T-5: every blueprint preserves its source venture's kill_reason so a
  * reconsidered idea is never silently resurrected without its prior failure context.
+ * CAVEAT (EXEC-phase TESTING, finding D2): all 3 selected ventures' kill_reason mentions
+ * "testing"/administrative cancellation, not a market-signal kill -- this cohort calibrates
+ * blueprint SHAPE, not real kill-signal ground truth. kill_reason is preserved verbatim in
+ * metadata so this is visible, not concealed.
+ *
+ * NOTE (EXEC-phase TESTING, finding D4): this script has no re-run guard -- a second
+ * `--apply` inserts 3 more rows (plain .insert(), no idempotency check). Safe today (no
+ * duplicates exist), but re-running would pollute the calibration cohort. Do not re-run.
  *
  * Usage: node scripts/discovery/seed-opportunity-blueprints.mjs [--apply]
  * (dry-run by default; --apply writes to opportunity_blueprints)
@@ -55,6 +68,12 @@ const SELECTED_VENTURE_IDS = [
  * @returns {object} a blueprint row shaped for OpportunityDiscoveryService.saveBlueprintsToDatabase()
  */
 export function buildBlueprintFromVenture(v, baselineIds, nowIso = new Date().toISOString()) {
+  // Consumed by evaluateIntakeBar() (buildBlueprintRow's evaluateBar param reads top-level
+  // fields per intake-bar.js's `idea?.kill_assumption || idea?.metadata?.kill_assumption`).
+  const killAssumption = `If ${v.name}'s original blocker (${(v.kill_reason || 'unspecified').slice(0, 120)}) cannot be resolved this time, this reconsideration should be re-killed on the same grounds.`;
+  const spofAssumption = `Single point of failure: whatever caused the original cancellation (${(v.kill_reason || 'unspecified').slice(0, 80)}) recurs unaddressed.`;
+  const customerEvidence = `Prior venture attempt (id=${v.id}) reached cancellation; original problem_statement and target_market carried forward as sourcing evidence.`;
+
   return {
     title: `Reconsider: ${v.name}`,
     summary: `Sourced from cancelled venture "${v.name}" -- reconsideration candidate for the opportunity-blueprints cohort.`,
@@ -68,7 +87,7 @@ export function buildBlueprintFromVenture(v, baselineIds, nowIso = new Date().to
     business_model: null,
     differentiation: v.unique_value_proposition || null,
     // TESTING intake-bar check 1 (external_demand_signal) reads customer_evidence directly.
-    customer_evidence: `Prior venture attempt (id=${v.id}) reached cancellation; original problem_statement and target_market carried forward as sourcing evidence.`,
+    customer_evidence: customerEvidence,
     competitive_gaps: null,
     source_type: 'ai_generated',
     opportunity_box: null,
@@ -85,16 +104,24 @@ export function buildBlueprintFromVenture(v, baselineIds, nowIso = new Date().to
     chairman_status: 'pending_review',
     is_active: true,
     venture_id: v.id,
-    // Fields consumed by evaluateIntakeBar() (buildBlueprintRow's evaluateBar param reads
-    // top-level fields per intake-bar.js's `idea?.kill_assumption || idea?.metadata?.kill_assumption`).
-    kill_assumption: `If ${v.name}'s original blocker (${(v.kill_reason || 'unspecified').slice(0, 120)}) cannot be resolved this time, this reconsideration should be re-killed on the same grounds.`,
-    spof_assumption: `Single point of failure: whatever caused the original cancellation (${(v.kill_reason || 'unspecified').slice(0, 80)}) recurs unaddressed.`,
+    kill_assumption: killAssumption,
+    spof_assumption: spofAssumption,
     metadata: {
       source_venture_id: v.id,
       source_kill_reason: v.kill_reason || null,
       competitive_baseline_ids: baselineIds,
       seeded_by: 'SD-LEO-INFRA-SEED-OPPORTUNITY-BLUEPRINTS-001',
       seeded_at: nowIso,
+      // EXEC-phase TESTING finding S-2 (evidence 473afd4f): saveBlueprintsToDatabase()'s
+      // insert() allowlist does not include kill_assumption/spof_assumption/customer_evidence
+      // as top-level columns -- they were consumed transiently by evaluateIntakeBar() for
+      // SCORING and then silently discarded, contradicting FR-1's "documents" acceptance
+      // criterion. Duplicated here so they persist durably in metadata (which IS inserted,
+      // via buildBlueprintRow's `...(blueprint.metadata || {})` spread), without modifying
+      // buildBlueprintRow()/saveBlueprintsToDatabase() themselves (TR-1).
+      kill_assumption: killAssumption,
+      spof_assumption: spofAssumption,
+      customer_evidence: customerEvidence,
     },
   };
 }
