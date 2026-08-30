@@ -1,8 +1,8 @@
-<!-- file_content_hash: 137ca1f0524d4e9b -->
+<!-- file_content_hash: db72e52ebcd326ea -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-08-30 2:52:22 AM
+**Generated**: 2026-08-30 1:25:01 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -348,6 +348,35 @@ Three operative facts, each verifiable in code *(rationale/citation detail: prov
 3. **`leo_feature_flags` IS A GAUGE FOR THIS FLAG, NOT A GATE**: `scripts/solomon-self-assessment-writer.cjs` reads `process.env` only; flipping `is_enabled` on that row has NO runtime effect.
 
 **If live enablement is wanted**: its own change, through `SD-LEO-INFRA-ENABLE-TRI-PARTY-001` (CANCELLED) — never a side effect of a fix. The three staleness gauges in `lib/governance/gauge-registry.js` ship `enabled:false`, paired with these flags — flip both together or neither.
+
+---
+
+## The Triangulation Audit — Solomon duties (encoded 2026-08-30)
+
+**Provenance**: process adopted by the chairman verbatim "adopt" (~16:51Z 2026-08-30, ratification captured by the Adam scribe seat; design = advisory 611d2338 + the chairman's four-output amendment). Area G and the dual monitor/audit architecture ratified verbatim "I agree, let's do both" — `chairman_ratifications` row **ac70b897-9de3-44ab-a543-32e222d1215c** (2026-08-30T17:02:28Z, targets adam+solomon, scribe solomon). Coordinator's parallel encode: section 657 + amendment_1.
+
+### Answerer duties (every cycle)
+- Answer the cycle question with an INDEPENDENT read: never confer with another answerer before submitting; disclose any unavoidable correlation rather than hiding it.
+- NAME THE INSTRUMENT PATH (table, query, script, grep scope) for every measured claim; label measured vs estimated on every statement. Two answers sharing an instrument count as ONE measurement.
+- Control-test presence/absence instruments before trusting them (absurd-name control for presence reads; known-present control for absence reads). Ship verdicts AS SCOPED; label any unscoped inference separately — the recipient acts on the conclusion, not the measurement.
+- All measurement is read-only; nothing interrupts a worker seat.
+
+### Resolver duties (on rotation: Adam → coordinator → Solomon; Solomon resolves cycle 3, then every third)
+- Resolve every discrepancy BY MEASUREMENT against repo/DB — never by seniority or consensus; RULE AGAINST YOURSELF when the data says so.
+- A discrepancy that cannot be resolved by measurement means the instrument is missing; building that instrument becomes an action item.
+- Never resolve a cycle auditing Solomon's own lane (no seat audits itself; the audited lane answers but never resolves).
+- The cycle's four mandatory outputs, in the chairman's order: (1) side-by-side of the independent reads; (2) findings; (3) every discrepancy resolved by data — named instrument, stamp, and which read was wrong; (4) RECOMMENDATION SET — ranked, each with owner, evidence, and an explicit recommended-against list (empty only with an explicit "nothing considered and rejected" line). The cycle's durable artifact (one `feedback` row, category `self_analytics`) is written by a recorder that FAILS LOUD when the recommendations block is missing or empty — a cycle without recommendations cannot produce its artifact, and the presenter presents FROM the row.
+- The one process metric: MOVED-THE-NUMBER RATE — the fraction of prior cycles' actions whose target metric actually moved by that area's next re-measure. Secondary tripwire (not a metric): premises overturned per cycle; sustained zero triggers question-bank review.
+
+### Area G — Adam board & roadmap discipline (chairman-ordered coverage, ac70b897)
+- Adam ANSWERS on area G and never resolves it; the coordinator or Solomon resolves per rotation.
+- G's first cycle is BASELINE READS ONLY; the chairman sets N and every target FROM the measured baselines — never from a number encoded before it was measured.
+- G cannot run before its Deliverable 0: `adam_task_ledger` bound as the board's single durable authority (seat-state files are renders, never the authority), plus QF-20260830-690's owner/review_by fields and the >7d hard line. Adam binds; a duty nobody can measure is unenforceable by construction.
+- Dual architecture, and why it is not redundant: the three predicates — P1 board staleness (rides the existing daily pm_board probe over `adam_task_ledger`), P2 roadmap linkage of Adam-sourced SDs (reuses the coordinator-health `plan_adherence` join — one join, single representation), P3 sitting depth (`chairman_decisions` pending count + oldest age; the 3h decision-driving sweep is the acting half) — ALSO ride Solomon's 6h Adam-adherence probe as the fast MONITOR, while area G is the deep measure whose triangulated instruments AUDIT THAT MONITOR. A probe that decays into reading a name instead of the thing is precisely what a same-instrument check cannot catch.
+
+### Cadence and cost (unchanged from the ratified design)
+Weekly floor, chairman-injectable anytime; one cycle live at a time; rides existing ticks (no new always-on loops); cycles are SKIPPED-LOUDLY during fleet recovery — drive restoration precedes analytics. Output flows through Adam's existing sourcing lane under standard dedup + STEP-0; the process holds NO minting privilege of its own. Live position at encode time: cycle 1 = the 2026-08-30 worker-efficiency triangulation (resolved by Adam; first re-measure Monday 2026-09-07, area A); cycle 2 = area C gauge honesty (injected 2026-08-30, coordinator resolves); Solomon resolves cycle 3.
+
 
 ---
 
