@@ -1315,6 +1315,17 @@ async function main() {
     const captureMiss = await checkRatificationCaptureMiss(supabase);
     if (captureMiss.count > 0) {
       console.error(`WARN: ${captureMiss.count} ratification capture-miss candidate(s) detected. Measurement only; the send proceeds.`);
+      // QF-20260830-325 (Cycle-2 R7): the WARN above previously had no disposal path (stdout
+      // only, evidence: "76->78 candidates printed with nothing consuming them"). Routes to
+      // ONE deduped feedback row per breach window (see routeCaptureMissBreach's own doc) —
+      // never blocking, never throws into this try (its own internal try/catch already fails
+      // soft to false).
+      try {
+        const { routeCaptureMissBreach } = require('../lib/chairman/ratification-capture-detector.mjs');
+        await routeCaptureMissBreach(supabase, captureMiss.count);
+      } catch (routeErr) {
+        console.error(`WARN: capture-miss breach routing failed (non-blocking) — ${(routeErr && routeErr.message) || routeErr}`);
+      }
     }
   } catch (e) {
     console.error(`WARN: ratification capture-miss check errored (non-blocking) — ${(e && e.message) || e}`);
