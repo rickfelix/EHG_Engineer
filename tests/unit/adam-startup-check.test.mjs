@@ -24,7 +24,7 @@ import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('ADAM_LOOPS has the 15 expected tick loops with the expected keys', () => {
+test('ADAM_LOOPS has the 17 expected tick loops with the expected keys', () => {
   // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E);
   // belt-countdown added by SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2 — durable contract duty);
   // doc-drift + github-assessment added by SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (every-3-day propose-only duties);
@@ -39,8 +39,10 @@ test('ADAM_LOOPS has the 15 expected tick loops with the expected keys', () => {
   //   leo_protocol_sections id=601; was session-only + undetectable by missingDurableDuties until named).
   // capture-gate added by SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4, 2026-08-05) — folded
   //   (composed by adam-quiet-tick, never armed standalone), GHA-backed by role-capture-gate-cron.yml.
-  assert.equal(ADAM_LOOPS.length, 16);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'capture-gate', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms', 'decision-driving-sweep']);
+  // triangulation-audit added by QF-20260830-939 (durable contract duty, ratification 7b28b8f0 —
+  //   was session-only and would have died before its first Monday cycle).
+  assert.equal(ADAM_LOOPS.length, 17);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'capture-gate', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms', 'decision-driving-sweep', 'triangulation-audit']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
@@ -123,6 +125,33 @@ test('self-adherence loop runs the recurring self-adherence review (propose-only
   assert.ok(sa, 'self-adherence loop exists');
   assert.equal(sa.script, 'adam-self-adherence-review.mjs');
   assert.ok(sa.prompt.includes('adam-self-adherence-review'), 'runs the review script');
+});
+
+// QF-20260830-939: THE TRIANGULATION AUDIT was armed only as a session CronCreate that expires
+// before its first Monday cycle. TWO-SIDED per the QF: --armed without the key reads MISSING,
+// with it reads armed; the prompt carries every element named in the ratified contract (id=601,
+// ratification 7b28b8f0) and the registry-stamp backstop call.
+test('QF-20260830-939: triangulation-audit is a weekly Monday agent-judgment tick carrying the full contract shape', () => {
+  const ta = ADAM_LOOPS.find((l) => l.key === 'triangulation-audit');
+  assert.ok(ta, 'triangulation-audit loop exists');
+  assert.equal(ta.script, null, 'agent-judgment tick (no script)');
+  assert.equal(ta.cron, '11 9 * * 1', 'weekly Monday, matches the session cron this durably replaces');
+  assert.match(ta.prompt, /area .*A protocol gates.*B worker efficiency.*C gauge honesty.*D comms.*E sourcing quality.*F fleet mechanics/is, 'area rotation A-F present');
+  assert.match(ta.prompt, /neutral question/i);
+  assert.match(ta.prompt, /instrument/i);
+  assert.match(ta.prompt, /Solomon and to the coordinator \(reply-needed\)/, 'sent identically to Solomon + coordinator reply-needed');
+  assert.match(ta.prompt, /independently answer it yourself/i, 'Adam records its own read');
+  assert.match(ta.prompt, /Adam -> coordinator -> Solomon/, 'resolver rotation matches the ratified contract');
+  assert.match(ta.prompt, /FOUR MANDATORY OUTPUTS/);
+  assert.match(ta.prompt, /ONE feedback row.*category self_analytics/is);
+  assert.match(ta.prompt, /adam-triangulation-audit-stamp\.mjs/, 'stamps the registry liveness backstop');
+  assert.match(ta.prompt, /SKIP LOUDLY/, 'never a silent no-op during recovery');
+});
+
+test('QF-20260830-939: loopStatus is TWO-SIDED for triangulation-audit — MISSING without the key, armed with it', () => {
+  const ta = ADAM_LOOPS.find((l) => l.key === 'triangulation-audit');
+  assert.equal(loopStatus(ta, { provided: true, set: new Set(['something-else']) }), 'MISSING');
+  assert.equal(loopStatus(ta, { provided: true, set: new Set([ta.key]) }), 'armed');
 });
 
 test('governance-scan loop runs the flag-gated opportunity-scan', () => {
