@@ -19,13 +19,12 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { classifyMigrationApplyState } from '../modules/handoff/executors/lead-final-approval/chairman-apply-state.js';
-import { recordPendingDecision } from '../../lib/chairman/record-pending-decision.mjs';
+import { classifyMigrationApplyState as defaultClassify } from '../modules/handoff/executors/lead-final-approval/chairman-apply-state.js';
+import { recordPendingDecision as defaultRecordPendingDecision } from '../../lib/chairman/record-pending-decision.mjs';
 
-const RULING = '967e551d';
-const DRY_RUN = process.argv.includes('--dry-run');
+export const RULING = '967e551d';
 
-const SPECIMENS = [
+export const SPECIMENS = [
   // database/migrations/ files are recorded by classifyMigrationApplyState using the BASENAME
   // only (no directory prefix) -- unlike database/chairman-gated/, which keeps the full
   // relative path so CHAIRMAN_GATED_PREFIX matching in verify-migration-apply-state.mjs works.
@@ -33,12 +32,28 @@ const SPECIMENS = [
   { sdKey: 'SD-LEO-INFRA-REJECT-PATH-VENTURE-001', file: 'database/chairman-gated/20260829_reject_path_type_aware_and_live_kill_gate.sql', subClass: 'B' },
 ];
 
-async function main() {
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+/**
+ * Core backfill logic, dependency-injected for the unit tier (TESTABILITY per CLAUDE_EXEC.md
+ * "Testability-Aware Implementation"). The CLI entrypoint (main(), below) calls this with real
+ * collaborators; tests call it with mocked ones -- same code path, no duplicated logic.
+ *
+ * @param {Object} supabase
+ * @param {Object} [deps]
+ * @param {Function} [deps.classifyMigrationApplyState]
+ * @param {Function} [deps.recordPendingDecision]
+ * @param {boolean} [deps.dryRun=false]
+ * @returns {Promise<Array<{sdKey:string, action:string}>>} per-specimen outcome log
+ */
+export async function runBackfill(supabase, {
+  classifyMigrationApplyState = defaultClassify,
+  recordPendingDecision = defaultRecordPendingDecision,
+  dryRun = false,
+} = {}) {
+  const outcomes = [];
   const { files, error } = await classifyMigrationApplyState();
   if (error) {
     console.error(`BACKFILL ABORTED: classifier error: ${error}`);
-    process.exit(1);
+    return [{ sdKey: null, action: 'aborted_classifier_error', error }];
   }
 
   for (const spec of SPECIMENS) {
@@ -49,11 +64,13 @@ async function main() {
       .maybeSingle();
     if (sdErr || !sd) {
       console.error(`SKIP ${spec.sdKey}: SD not found (${sdErr?.message || 'no row'})`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'skip_not_found' });
       continue;
     }
 
     if (sd.metadata?.completion_integrity_flag) {
       console.log(`SKIP ${spec.sdKey}: completion_integrity_flag already present (idempotent no-op).`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'skip_already_flagged' });
       continue;
     }
 
@@ -62,8 +79,9 @@ async function main() {
 
     console.log(`${spec.sdKey}: sub-class ${spec.subClass}, file ${spec.file}, live status ${statusAtBackfill}`);
 
-    if (DRY_RUN) {
+    if (dryRun) {
       console.log(`  DRY-RUN: would set metadata.completion_integrity_flag and${spec.subClass === 'B' ? '' : ' NOT'} mint a chairman_decisions row.`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'dry_run' });
       continue;
     }
 
@@ -80,39 +98,55 @@ async function main() {
       .eq('id', sd.id);
     if (updErr) {
       console.error(`  FAILED to write completion_integrity_flag: ${updErr.message}`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'flag_write_failed', error: updErr.message });
       continue;
     }
     console.log('  ✅ completion_integrity_flag written.');
 
-    if (spec.subClass === 'B') {
-      const title = `${spec.sdKey}: apply chairman-gated migration ${spec.file}`;
-      const { data: existing, error: existErr } = await supabase
-        .from('chairman_decisions')
-        .select('id')
-        .eq('decision_type', 'migration_apply')
-        .eq('status', 'pending')
-        .eq('summary', title)
-        .limit(1);
-      if (existErr) {
-        console.error(`  chairman_decisions existence check failed: ${existErr.message}`);
-      } else if (existing && existing.length > 0) {
-        console.log(`  chairman_decisions row already exists (id=${existing[0].id}) — idempotent skip.`);
+    if (spec.subClass !== 'B') {
+      outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_a' });
+      continue;
+    }
+
+    const title = `${spec.sdKey}: apply chairman-gated migration ${spec.file}`;
+    const { data: existing, error: existErr } = await supabase
+      .from('chairman_decisions')
+      .select('id')
+      .eq('decision_type', 'migration_apply')
+      .eq('status', 'pending')
+      .eq('summary', title)
+      .limit(1);
+    if (existErr) {
+      console.error(`  chairman_decisions existence check failed: ${existErr.message}`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_b_decision_check_failed', error: existErr.message });
+    } else if (existing && existing.length > 0) {
+      console.log(`  chairman_decisions row already exists (id=${existing[0].id}) — idempotent skip.`);
+      outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_b_decision_already_exists', decisionId: existing[0].id });
+    } else {
+      const res = await recordPendingDecision(supabase, {
+        title,
+        decisionType: 'migration_apply',
+        context: { sd_key: spec.sdKey, migration_file: spec.file, status: statusAtBackfill, backfilled: true },
+        recommendation: 'fix',
+        blocking: false,
+      });
+      if (!res.recorded) {
+        console.error(`  FAILED to mint chairman_decisions row: ${res.error}`);
+        outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_b_decision_mint_failed', error: res.error });
       } else {
-        const res = await recordPendingDecision(supabase, {
-          title,
-          decisionType: 'migration_apply',
-          context: { sd_key: spec.sdKey, migration_file: spec.file, status: statusAtBackfill, backfilled: true },
-          recommendation: 'fix',
-          blocking: false,
-        });
-        if (!res.recorded) {
-          console.error(`  FAILED to mint chairman_decisions row: ${res.error}`);
-        } else {
-          console.log(`  ✅ chairman_decisions row minted (id=${res.id}).`);
-        }
+        console.log(`  ✅ chairman_decisions row minted (id=${res.id}).`);
+        outcomes.push({ sdKey: spec.sdKey, action: 'flagged_sub_class_b_decision_minted', decisionId: res.id });
       }
     }
   }
+  return outcomes;
 }
 
-main().catch((e) => { console.error('BACKFILL FAILED:', e); process.exit(1); });
+async function main() {
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  await runBackfill(supabase, { dryRun: process.argv.includes('--dry-run') });
+}
+
+if (process.argv[1] && process.argv[1].endsWith('backfill-completed-unapplied-migration-001.mjs')) {
+  main().catch((e) => { console.error('BACKFILL FAILED:', e); process.exit(1); });
+}
