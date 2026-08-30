@@ -19,6 +19,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -32,14 +33,19 @@ function classifyPair(rejected, accepted) {
 }
 
 async function main() {
-  const { data: rows, error } = await supabase
-    .from('sd_phase_handoffs')
-    .select('sd_id, handoff_type, status, rejection_reason, metadata, created_at')
-    .in('status', ['accepted', 'rejected'])
-    .order('sd_id', { ascending: true })
-    .order('handoff_type', { ascending: true })
-    .order('created_at', { ascending: true });
-  if (error) throw error;
+  // Ceremony-share math needs the FULL rejection/acceptance population -- a capped
+  // read would silently undercount and misreport the ratio, so this is a genuine
+  // bulk-processing read (fetchAllPaginated), not a gauge (SD-LEO-INFRA-COUNT-
+  // TRUNCATION-DISCIPLINE-001 FR-2/FR-3/FR-4).
+  const rows = await fetchAllPaginated(() =>
+    supabase
+      .from('sd_phase_handoffs')
+      .select('sd_id, handoff_type, status, rejection_reason, metadata, created_at')
+      .in('status', ['accepted', 'rejected'])
+      .order('sd_id', { ascending: true })
+      .order('handoff_type', { ascending: true })
+      .order('created_at', { ascending: true })
+  );
 
   const groups = new Map();
   for (const row of rows) {
