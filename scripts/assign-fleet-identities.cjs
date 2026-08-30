@@ -12,8 +12,31 @@
  *   node scripts/assign-fleet-identities.cjs --exclude-session <id>
  */
 
+const fs = require('fs');
+const path = require('path');
+
 const COLORS = ['blue', 'green', 'purple', 'orange', 'cyan', 'pink', 'yellow', 'red'];
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
+
+// QF-20260830-156: a callsign rebind only reaches a seat's OWN screen via its per-session
+// identity file — the coordination-inbox hook writes it, but only while that seat's own hook
+// keeps firing. A frozen seat (no tool calls) never consumes the SET_IDENTITY message, so its
+// stale file — and its statusline — never learn about the rebind. This writer (the rebind's
+// source of truth) now also refreshes the file directly, in the SAME action as the DB write,
+// so the screen does not depend on the seat being alive to learn its own name.
+const IDENTITY_DIR = path.resolve(__dirname, '../.claude');
+function identityFilePath(sessionId) {
+  return path.join(IDENTITY_DIR, `fleet-identity-${sessionId}.json`);
+}
+function buildIdentityFileContent({ callsign, color, display_name, tier_rank }) {
+  return { color, callsign, display_name, tier_rank: tier_rank ?? null, assigned_at: new Date().toISOString() };
+}
+function writeIdentityFile(sessionId, identity) {
+  if (!sessionId) return;
+  try {
+    fs.writeFileSync(identityFilePath(sessionId), JSON.stringify(buildIdentityFileContent(identity)));
+  } catch { /* best-effort mirror; the DB write above is the source of truth */ }
+}
 
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-C (FR-4): this file used to carry its OWN
 // hardcoded 4-rung TIER_CALLSIGNS map + a tierRankOf() that defaulted any unrecognized
@@ -655,6 +678,9 @@ async function main() {
         .from('claude_sessions')
         .update({ metadata })
         .eq('session_id', w.session_id);
+      // QF-20260830-156: same-action refresh — do not rely on the frozen seat's own hook to
+      // consume the SET_IDENTITY message below before its screen can learn the rebind.
+      writeIdentityFile(w.session_id, { ...expectedIdentity, tier_rank: tierRankOf(w) });
       // Send updated identity message so worker's local file refreshes
       // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
       await supabase
@@ -758,6 +784,8 @@ async function main() {
       console.error(`  Failed to update metadata for ${sessionCol(worker.session_id)}: ${updateErr.message}`);
       continue;
     }
+    // QF-20260830-156: same-action refresh, same reasoning as the rebroadcast loop above.
+    writeIdentityFile(worker.session_id, { callsign, color, display_name: displayName, tier_rank: tierRankOf(worker) });
 
     // Send SET_IDENTITY coordination message
     // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
@@ -837,7 +865,7 @@ function identityAccountUuid8(metadata, accountIdentity) {
   return (accountIdentity && accountIdentity.accountUuid8) || null;
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, planNamingRun, reserveCanaryLabels, identityNeedsRebroadcast, identityAccountUuid8, buildIdentityMessage };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable, extendCallsign, buildTierCallsignBands, tierRankOf, pickCallsignForTier, callsignInTierBand, classifyWorkerNaming, loadPreRegisteredCanaries, partitionWorkersForNaming, planNamingRun, reserveCanaryLabels, identityNeedsRebroadcast, identityAccountUuid8, buildIdentityMessage, identityFilePath, buildIdentityFileContent, writeIdentityFile, IDENTITY_DIR };
 
 if (require.main === module) {
   main().then(async () => {
