@@ -30,6 +30,16 @@ describe('buildBlueprintFromVenture (FR-1/FR-2, pure)', () => {
     expect(bp.venture_id).toBe(VENTURE_FIXTURE.id);
   });
 
+  // REGRESSION finding (evidence 4a293bdc): saveBlueprintsToDatabase()'s insert() allowlist
+  // drops problem_statement/solution_concept/venture_id -- lib/eva/stage-zero/paths/
+  // blueprint-browse.js selects exactly these columns and can auto-pick blueprints[0]. The
+  // builder must still produce them (main()'s follow-up UPDATE patches them in post-write).
+  it('carries solution_concept forward when the source venture has one', () => {
+    const withSolution = { ...VENTURE_FIXTURE, solution_approach: 'AI-generated staging' };
+    const built = buildBlueprintFromVenture(withSolution, [], FROZEN_NOW);
+    expect(built.solution_concept).toBe('AI-generated staging');
+  });
+
   it('TESTING T-5: preserves the source kill_reason in metadata (never silently resurrects a killed idea)', () => {
     expect(bp.metadata.source_kill_reason).toBe('cancel due to testing');
     expect(bp.metadata.source_venture_id).toBe(VENTURE_FIXTURE.id);

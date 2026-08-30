@@ -88,7 +88,14 @@ async function main() {
   rows = sweepable;
 
   if (!rows?.length) {
-    console.log('Active queue already empty — nothing to archive (reseed-ready).');
+    // REGRESSION finding (evidence 4a293bdc): this message previously read "already empty"
+    // even when protected (calibrated) rows remain active -- literally untrue once this SD
+    // seeded rows. Disambiguated for a parser, not just a human reading the line above.
+    console.log(
+      protectedRows.length
+        ? `Nothing sweepable — all ${protectedRows.length} active row(s) are calibration-protected (reseed-ready for the sweepable set).`
+        : 'Active queue already empty — nothing to archive (reseed-ready).'
+    );
     return;
   }
 

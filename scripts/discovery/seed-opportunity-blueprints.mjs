@@ -179,6 +179,24 @@ async function main() {
 
   const service = new OpportunityDiscoveryService();
   await service.saveBlueprintsToDatabase(blueprints);
+
+  // REGRESSION finding (evidence 4a293bdc): saveBlueprintsToDatabase()'s insert() allowlist
+  // does not include problem_statement/solution_concept/venture_id -- real opportunity_blueprints
+  // columns that lib/eva/stage-zero/paths/blueprint-browse.js actually selects and can
+  // auto-pick as blueprints[0] once is_active rows exist. Without this, the seeded rows read
+  // problem_statement=NULL there, producing an empty suggested_problem/suggested_solution on a
+  // now-reachable path. Patched via a follow-up UPDATE (TR-1 still holds -- no modification to
+  // saveBlueprintsToDatabase()/buildBlueprintRow() themselves).
+  for (const b of blueprints) {
+    const { error: patchErr } = await db
+      .from('opportunity_blueprints')
+      .update({ problem_statement: b.problem_statement, solution_concept: b.solution_concept, venture_id: b.venture_id })
+      .eq('title', b.title)
+      .eq('source_type', 'ai_generated')
+      .contains('tags', ['seed-opportunity-blueprints-001']);
+    if (patchErr) console.error(`  patch failed for "${b.title}":`, patchErr.message);
+  }
+
   console.log('\nDone.');
 }
 
