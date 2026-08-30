@@ -153,7 +153,9 @@ function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coor
     });
   }
   sessions.push(...extraSessions);
-  const targetSession = { session_id: 'target-worker', metadata: { tier_rank: workerTierRank } };
+  // QF-20260830-737: sourced, so assertWorkerTierAllowed's BINDING guard (line 180 comment below)
+  // actually stays binding rather than degrading to the new worker-side advisory path.
+  const targetSession = { session_id: 'target-worker', metadata: { tier_rank: workerTierRank, tier_rank_source: 'unit-test-sourced' } };
   const lastQuery = { in: null, gte: null, order: null, limit: null };
   return {
     rpc: async () => ({ data: coordinatorRpc, error: null }),
