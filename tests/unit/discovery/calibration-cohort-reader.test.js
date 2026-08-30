@@ -33,7 +33,11 @@ function buildFixtureRow(id, { failures = [], score = 5 } = {}) {
   };
 }
 
-/** Fake supabase client: .from(table).select().eq() resolves { data, error }; .update().eq() records writes. */
+/**
+ * Fake supabase client: .from(table).select().eq().range() resolves { data, error } (matching
+ * fetchAllPaginated's contract -- a single short page below pageSize ends the loop); .update().eq()
+ * records writes.
+ */
 function buildFakeSupabase(rows) {
   const updates = [];
   return {
@@ -41,13 +45,15 @@ function buildFakeSupabase(rows) {
     from(table) {
       return {
         select: () => ({
-          eq: async (col, val) => {
-            if (table !== 'opportunity_blueprints') return { data: [], error: null };
-            if (col === 'metadata->>calibration_cohort' && val === 'true') {
-              return { data: rows, error: null };
-            }
-            return { data: [], error: null };
-          },
+          eq: (col, val) => ({
+            range: async () => {
+              if (table !== 'opportunity_blueprints') return { data: [], error: null };
+              if (col === 'metadata->>calibration_cohort' && val === 'true') {
+                return { data: rows, error: null };
+              }
+              return { data: [], error: null };
+            },
+          }),
         }),
         update: (patch) => ({
           eq: async (col, id) => {
