@@ -81,6 +81,26 @@ function markTickFinished() {
   }
 }
 
+// QF-20260830-922: append-only completion witness. Coordinator live-run measurement (10
+// controlled runs) proved the native abort exits NON-ZERO (code 127) AFTER the drain's work
+// has already completed and printed its output — so a supervisor watching only the exit code
+// misclassifies a SUCCESSFUL tick as a failure (and 127 specifically misdirects debugging
+// toward a nonexistent "command not found" path problem). The start/finish marker above proves
+// nothing here: it is CLEARED on the very completion this witness needs to survive. An
+// append-only log — never truncated, never cleared — lets an external observer (see
+// scripts/run-with-exit-witness.cjs) correlate "did THIS run's pid append a completion entry
+// after it started" against the process's own exit code, to tell teardown-abort-after-
+// completion (work succeeded, abort is cosmetic) apart from a genuine mid-drain death.
+const COMPLETION_LOG_PATH = path.join(__dirname, '..', '.artifacts', 'sms-status-relay-drain-completions.ndjson');
+function markTickCompleted() {
+  try {
+    fs.mkdirSync(path.dirname(COMPLETION_LOG_PATH), { recursive: true });
+    fs.appendFileSync(COMPLETION_LOG_PATH, JSON.stringify({ ts: new Date().toISOString(), pid: process.pid }) + '\n');
+  } catch (e) {
+    console.error(`[sms-status-relay-drain] completion-log append failed (non-fatal): ${(e && e.message) || e}`);
+  }
+}
+
 /** Surface a stall signal when staged rows pile up undrained (persistent-failure alarm). */
 async function checkBacklogStall(supabase) {
   try {
@@ -104,6 +124,7 @@ async function main() {
   if (!isDrainEnabled()) {
     console.log('[sms-status-relay-drain] SMS_STATUS_RELAY_DRAIN_ENABLED not set — inert (pre-cutover no-op).');
     markTickFinished();
+    markTickCompleted();
     return;
   }
   const supabase = getSupabase();
@@ -111,6 +132,7 @@ async function main() {
     console.log('[sms-status-relay-drain] --dry-run: enabled, no drain performed.');
     await checkBacklogStall(supabase);
     markTickFinished();
+    markTickCompleted();
     return;
   }
   try {
@@ -130,6 +152,7 @@ async function main() {
   }
   await checkBacklogStall(supabase);
   markTickFinished();
+  markTickCompleted();
 }
 
 if (require.main === module) {
@@ -157,4 +180,5 @@ if (require.main === module) {
 module.exports = {
   isDrainEnabled, getSupabase, checkBacklogStall, main,
   TICK_MARKER_PATH, checkAbnormalExitWitness, markTickStarted, markTickFinished,
+  COMPLETION_LOG_PATH, markTickCompleted,
 };

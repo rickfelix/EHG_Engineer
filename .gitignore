@@ -548,3 +548,4 @@ scratchpad/
 .artifacts/venture-50763b6a-demand-test/
 .artifacts/sms-status-relay-drain-tick.marker
 .artifacts/abnormal-exit-witness.ndjson
+.artifacts/sms-status-relay-drain-completions.ndjson
