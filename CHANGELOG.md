@@ -5,6 +5,8 @@
 
 - [2026-08-30](#2026-08-30)
   - [Infrastructure](#infrastructure-2)
+  - [Features](#features-1)
+  - [Bugfix](#bugfix-2)
 - [2026-08-29](#2026-08-29)
   - [Infrastructure](#infrastructure-1)
   - [Infrastructure](#infrastructure)
@@ -273,6 +275,16 @@
   - **The same cross-repo TESTING `--full-e2e` harness gap recurred** (2nd SD in one session hitting the identical `repoPath` resolution failure); re-signaled citing the prior confirmation, proceeded via the same documented bypass.
   - **No new render work, no new surface, no new performance metrics** — exactly the outcome the SD's own out-of-scope text called for once the census corrected the premise.
   - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 88%, EXEC-TO-PLAN 71%*, PLAN-TO-LEAD 84%*, LEAD-FINAL-APPROVAL 92% (*both via the documented bypass). `ehg` PR #804: 9/9 tests passing (was 8/9 before the fixture fix). EHG_Engineer PR #7742: 3/3 new probe-flip tests passing; full `tests/unit/vision/` suite (169 passed, 2 pre-existing skips) shows zero regression.
+
+### Bugfix
+
+- **The retry-2-then-RCA rule stops being prose-only — a handoff gate now counts attempts and requires a diagnosis, not just another retry** - PR #7804 (SD-ALTIFYAI-LEO-FIX-ENFORCE-RATIFIED-RETRY-001, escalated from QF-20260830-657)
+  - **Measured, not assumed**: `sd_phase_handoffs` over 7 days showed 65 `(sd_id, from_phase, to_phase)` pairs with more than 2 attempts, max 13, with zero `sub_agent_execution_results` RCA rows for the max-attempt SD — CLAUDE.md's Canonical Pause Points #3 ("auto-retry exhausted after 2, RCA invoked before pause") existed only as prose; nothing in the handoff pipeline counted attempts or checked for an RCA row.
+  - **Escalated off the quick-fix path on purpose**: `complete-quick-fix.js`'s sensitive-path preflight correctly refused to autonomously merge the original QF, since its diff touched `scripts/modules/handoff/gates/**` — core, fleet-shared handoff-pipeline code the registry flags for full-SD review rather than an unreviewed QF merge. The escalation carried the already-implemented, already-tested code forward into a real LEAD→PLAN→EXEC→PLAN→LEAD cycle instead of restarting from scratch.
+  - **What shipped**: a new gate, `RCA_REQUIRED_AFTER_2_RETRIES`, requires a fresh RCA sub-agent evidence row created after the most recent rejection on the 3rd+ attempt at the same transition — refusing with the two prior rejection reasons named, not a blank denial. Ships **advisory-only** by default via an `app_config` cutover flag (mirrors the sibling `RCA_FEEDBACK_LOOP_GATE`'s proven rollout convention — a later promotion to blocking needs one `UPDATE`, no redeploy), wired into all four phase executors.
+  - **Two real bugs found and fixed during LEAD/EXEC review, not shipped as-is**: VALIDATION found the RCA-freshness anchor was pinned to the 2nd-ever rejection rather than the most recent one, so a single old RCA run would have satisfied the gate forever past the 4th attempt — fixed, with a regression test proving the old anchor fails the new sentinel case. SECURITY found the validator body wasn't wrapped in try/catch; since the gate runs required on all four transitions, an unanticipated throw would have failed it **closed** fleet-wide, the opposite of its own stated fail-open design — fixed, with a throw-injection regression test.
+  - **CI caught a third, real gap**: both new DB reads were unbounded — bounded to 50/20 rows respectively (the rejection-history read switched to descending-then-reverse so the most-recent-rejection anchor stays exact even when capped).
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 94%, EXEC-TO-PLAN 90%, PLAN-TO-LEAD 90%, LEAD-FINAL-APPROVAL 93%. VALIDATION PASS 88% (independently reproduced the measured claim exactly), Explore PASS 90%, TESTING PASS 92% twice (mutation-verified non-vacuous; 671/671 across the whole `scripts/modules/handoff/` suite), SECURITY PASS 88% (confirmed no SQL injection via live injection-shaped probes, no untrusted input reaches a query, no sensitive-data leak in refusal messages). 18/18 new unit tests.
 
 ## 2026-08-29
 
