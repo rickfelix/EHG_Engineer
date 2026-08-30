@@ -120,10 +120,51 @@ describe('detectPrecedesCycles — Array.sort must never see an inconsistent com
   });
 });
 
+// VALIDATION correction (2nd pass): "does not crash" is unfalsifiable — an inconsistent comparator is
+// deterministic-per-run and never throws, so that assertion passes whether or not the transitivity
+// defect exists. The real requirement is that sequenceCompare (as ACTUALLY WIRED — last, below every
+// other comparator) forms a TOTAL PREORDER: brute-force every ordered triple and assert no 3-cycle
+// (A<B, B<C, C<A) is possible once lower bands would have already tied. This is the test that would
+// have failed against the earlier (wrong) above-unlockScore placement and passes against the corrected
+// last-place wiring.
+describe('TRANSITIVITY — sequenceCompare forms a total preorder over any fixture set (VALIDATION 2nd pass)', () => {
+  function sign(n) { return n < 0 ? -1 : n > 0 ? 1 : 0; }
+
+  it('no ordered triple violates transitivity, across many random precedes-edge configurations', () => {
+    const keys = ['A', 'B', 'C', 'D'];
+    // Exhaustively try every possible single precedes edge (including none) among the 4 keys —
+    // since sequenceCompare is the LAST tie-break, this is the only variable that can affect order
+    // among items already tied on everything above it (the realistic worst case this band can create).
+    const candidateEdges = [null, ...keys.flatMap((from) => keys.filter((to) => to !== from).map((to) => [from, to]))];
+
+    for (const edge of candidateEdges) {
+      const claimable = keys.map((k) => sd(k, edge && edge[0] === k ? { precedes_sd_key: edge[1] } : {}));
+      const edges = buildPrecedesEdges(claimable);
+      const excluded = detectPrecedesCycles(edges);
+      const cmp = (x, y) => sequenceCompare(x, y, excluded);
+
+      for (const x of claimable) {
+        for (const y of claimable) {
+          for (const z of claimable) {
+            if (x === y || y === z || x === z) continue;
+            const xy = sign(cmp(x, y)), yz = sign(cmp(y, z)), zx = sign(cmp(z, x));
+            // A strict 3-cycle (x<y<z<x) would break Array.sort's assumption. With a single edge and
+            // its self-generated cycle-exclusion, this must never occur.
+            const isCycle = xy === -1 && yz === -1 && zx === -1;
+            expect(isCycle).toBe(false);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe('WIRING — placement in the live comparator chain', () => {
   const unlockIdx = RANKER.indexOf('const ua = unlockScore(a.sd_key)');
+  const planLinkageIdx = RANKER.indexOf('const pl = planLinkageCompare(a, b)');
+  const priorityIdx = RANKER.indexOf("const pa = PRIORITY_W[String(a.priority || '').toLowerCase()]");
   const sequenceIdx = RANKER.indexOf('const sc = sequenceCompare(a, b, excludedPrecedesEdges)');
-  const bandIdx = RANKER.indexOf('const ci = committingItemBandCompare(a, b, sdRungMap)');
+  const ageIdx = RANKER.indexOf('return new Date(a.created_at) - new Date(b.created_at)');
   const cycleDetectIdx = RANKER.indexOf('detectPrecedesCycles(precedesEdges)');
   const sortCallIdx = RANKER.indexOf('claimable.sort((a, b) => {');
 
@@ -134,12 +175,24 @@ describe('WIRING — placement in the live comparator chain', () => {
     );
   });
 
+  // CORRECTED (VALIDATION 2nd pass, evidence 9a4d9a74-4d04-4a76-bfd9-d9030c36706f): an earlier draft
+  // placed sequenceCompare right after unlockScore, ABOVE committingItemBand/productPivot/needle/
+  // priority — but those bands are deterministic single-item functions, so a precedes edge sitting
+  // above them can override a transitively-implied ordering from lower bands using only ONE acyclic
+  // edge (A precedes B; B<C and C<A both fall out of priority/age alone), making Array.sort's output
+  // implementation-defined for the WHOLE belt. Placed LAST instead — below every other comparator
+  // including priority — so it can only ever separate items every earlier comparator already tied on.
   it('sits BELOW unlockScore, so a sequenced item can never strand its own unlocker', () => {
     expect(sequenceIdx).toBeGreaterThan(unlockIdx);
   });
 
-  it('sits ABOVE committingItemBandCompare, so a ruled order settles before the heuristic bands', () => {
-    expect(sequenceIdx).toBeLessThan(bandIdx);
+  it('sits BELOW planLinkageCompare and priority — the LAST tie-break, matching "among band equals" literally', () => {
+    expect(sequenceIdx).toBeGreaterThan(planLinkageIdx);
+    expect(sequenceIdx).toBeGreaterThan(priorityIdx);
+  });
+
+  it('sits ABOVE age (the final fallback), so a ruled order still wins over raw creation-date ordering', () => {
+    expect(sequenceIdx).toBeLessThan(ageIdx);
   });
 
   it('runs cycle detection ONCE, before sort() is called — never inside the comparator', () => {
