@@ -38,6 +38,7 @@ import { checkBypassRateLimits, displayExecutionResult, printHandoffResultLines,
 import { detectBlockers, DETECTION_TIMEOUT_MS } from '../blocker-resolution.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../../sd-next/claim-analysis.js';
 import { writeCompactAfterHandoffFlag } from './compact-after-handoff.js';
+import { printSubagentEvidencePrecheck } from '../gates/subagent-evidence-precheck.js';
 
 // LEO 5.0 commands
 import {
@@ -557,6 +558,20 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     console.log(`   ⚠️  Could not run git check: ${e.message}`);
   }
 
+  // Step 1.4 (QF-20260830-878): print-only SUBAGENT_EVIDENCE pre-check, extending
+  // the existing `precheck` command word (not a new flag). Reuses the same
+  // resolver as the STEP 2 gate below — never a second required-agents list.
+  try {
+    await printSubagentEvidencePrecheck({
+      handoffType: (precheckType || '').toUpperCase(),
+      sd: workflowInfoForPrecheck?.sd,
+      sdId: precheckSdId,
+      supabase: createSupabaseServiceClient(),
+    });
+  } catch (e) {
+    console.log(`   ⚠️  Sub-agent evidence pre-check skipped (non-blocking): ${e?.message || e}`);
+  }
+
   // Step 1.5: Phase-specific proactive tips (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-107)
   const normalizedType = (precheckType || '').toUpperCase();
   if (normalizedType === 'EXEC-TO-PLAN') {
@@ -837,6 +852,22 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     console.warn('   Fix: prefix with session ID from sd-start output:');
     console.warn(`   CLAUDE_SESSION_ID=<uuid> node scripts/handoff.js execute ${handoffType} ${sdId}`);
     console.warn('');
+  }
+
+  // QF-20260830-878: print-only SUBAGENT_EVIDENCE pre-check, before any gate runs.
+  // Advisory only — never blocks execute, never changes required agents, never
+  // invokes a missing agent. Reuses the gate's own resolver (validateSubagentEvidence)
+  // via printSubagentEvidencePrecheck — never a second required-agents list.
+  try {
+    const precheckWorkflowInfo = await getSDWorkflow(sdId);
+    await printSubagentEvidencePrecheck({
+      handoffType: normalizedHandoffType,
+      sd: precheckWorkflowInfo?.sd,
+      sdId,
+      supabase: createSupabaseServiceClient(),
+    });
+  } catch (e) {
+    console.log(`   ⚠️  Sub-agent evidence pre-check skipped (non-blocking): ${e?.message || e}`);
   }
 
   // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 5 - Handoff Sequence Enforcement
