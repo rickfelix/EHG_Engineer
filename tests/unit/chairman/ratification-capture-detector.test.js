@@ -79,8 +79,10 @@ function makeFakeSupabase({ sessionCoordination = [], chairmanDecisions = [] } =
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const CANDIDATE_ITEM = {
-  id: 'msg-1',
+  id: '11111111-1111-4111-8111-111111111111',
   payload: { kind: 'adam_advisory' },
   subject: 'The chairman ruled on this',
   body: 'no named target here',
@@ -95,6 +97,7 @@ describe('ratification-capture-detector writer upsert (QF-20260830-628)', () => 
     expect(first.candidates).toHaveLength(1);
     expect(sb._feedbackRows).toHaveLength(1);
     expect(sb._feedbackRows[0].occurrence_count).toBe(1);
+    expect(sb._feedbackRows[0].source_id).toMatch(UUID_RE); // must satisfy feedback.source_id's UUID column type
 
     // Same message, re-evaluated on the next sweep cycle (unchanged corpus).
     const second = await detectCaptureMisses(sb, 24);
@@ -104,15 +107,15 @@ describe('ratification-capture-detector writer upsert (QF-20260830-628)', () => 
     expect(sb._feedbackRows[0].last_seen).toBeTruthy();
 
     // A genuinely new message still inserts as its own row.
-    const newItem = { ...CANDIDATE_ITEM, id: 'msg-2' };
+    const newItem = { ...CANDIDATE_ITEM, id: '22222222-2222-4222-8222-222222222222' };
     const sb2 = makeFakeSupabase({ sessionCoordination: [CANDIDATE_ITEM, newItem] });
-    // Seed sb2 with the already-persisted msg-1 row to simulate accumulated state.
+    // Seed sb2 with the already-persisted first-message row to simulate accumulated state.
     sb2._feedbackRows.push({ ...sb._feedbackRows[0] });
     await detectCaptureMisses(sb2, 24);
     expect(sb2._feedbackRows).toHaveLength(2);
     const ids = sb2._feedbackRows.map((r) => r.source_id);
-    expect(ids).toContain('adam_advisory:msg-1');
-    expect(ids).toContain('adam_advisory:msg-2');
+    expect(ids).toContain(CANDIDATE_ITEM.id);
+    expect(ids).toContain(newItem.id);
   });
 
   it('regression: one full cycle on an unchanged population adds zero net rows', async () => {
