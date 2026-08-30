@@ -19,6 +19,12 @@ import {
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
 const MIGRATION_PATH = path.join(REPO_ROOT, 'database/migrations/20260720_role_drain_sets_STAGED.sql');
+// QF-20260830-280: reconciliation kinds added AFTER the original seed migration land in their
+// own additive follow-up migrations (same INSERT ... ON CONFLICT DO NOTHING pattern), not by
+// editing the original file — so this parity check must scan every seed migration, not just one.
+const RECONCILIATION_MIGRATION_PATHS = [
+  path.join(REPO_ROOT, 'database/migrations/20260830_role_drain_sets_add_parent_completion.sql'),
+];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -108,7 +114,9 @@ describe('assertRegistryTablesExist (TS-4: canary shape)', () => {
 });
 
 describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
-  const migrationText = readFileSync(MIGRATION_PATH, 'utf8');
+  const migrationText = [MIGRATION_PATH, ...RECONCILIATION_MIGRATION_PATHS]
+    .map((p) => readFileSync(p, 'utf8'))
+    .join('\n');
 
   for (const role of ['solomon', 'adam', 'coordinator', 'worker']) {
     it(`every kind in DRAIN_SETS.${role} has a corresponding seed INSERT`, () => {
@@ -124,9 +132,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 69 (matches the migration DO-block ASSERT)', () => {
+  it('total seed row count is exactly 70 (69 from the original migration DO-block ASSERT + 1 reconciliation: parent_completion, QF-20260830-280)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(69);
+    expect(matches.length).toBe(70);
   });
 });

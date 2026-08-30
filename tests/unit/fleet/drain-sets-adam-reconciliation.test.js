@@ -32,10 +32,12 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // Pre-reconciliation counts (captured before FR-1 landed): solomon=12, coordinator=16, worker=17.
     // adam was 14 before FR-1 (DIRECTIVE_KINDS(9) + ADAM_ADVISORY + COORDINATOR_REPLY + CANARY_REQUEST
     // + comms_check + CROSS_PARTY_PING), now 22.
+    // worker=18 (not 17) as of QF-20260830-280: 'parent_completion' added, the kind
+    // directed-assignment.cjs's orchestrator-parent completion exception requires.
     expect(DRAIN_SETS.adam.length).toBe(22);
     expect(DRAIN_SETS.solomon.length).toBe(12);
     expect(DRAIN_SETS.coordinator.length).toBe(16);
-    expect(DRAIN_SETS.worker.length).toBe(17);
+    expect(DRAIN_SETS.worker.length).toBe(18);
   });
 
   it('the 8 reconciled kinds are present in DRAIN_SETS.adam', () => {
