@@ -26,6 +26,8 @@ import { buildPreflightRemediation, truncateValidationDetails, findPriorSaemReme
 import { resolveClaimIdentity } from '../../../../lib/claim/claim-identity.js';
 // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2)
 import { buildPhaseSnapshotWindow } from '../../../../lib/governance/phase-snapshot-window.mjs';
+// QF-20260830-312: ceremony-vs-real-fix measurability
+import { computeArtifactHash } from '../../../../lib/governance/artifact-content-hash.mjs';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -503,6 +505,13 @@ export class HandoffRecorder {
       };
     }
 
+    // QF-20260830-312: stamp the SD/PRD content hash on this rejection so a later
+    // acceptance can be classified SAME-HASH (bare re-run = ceremony) vs CHANGED.
+    execution.metadata = {
+      ...(execution.metadata || {}),
+      artifact_hash: await computeArtifactHash(this.supabase, sdUuid),
+    };
+
     try {
       // Pre-validate - for rejections, try to fix common issues
       const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', execution);
@@ -860,7 +869,9 @@ export class HandoffRecorder {
         execution_id: executionId,
         quality_score: normalizedScore,
         created_via: 'unified-handoff-system',
-        sub_agent_count: subAgentResults?.length || 0
+        sub_agent_count: subAgentResults?.length || 0,
+        // QF-20260830-312: same hash-on-every-attempt contract as recordFailure.
+        artifact_hash: await computeArtifactHash(this.supabase, sdUuid),
       };
 
       // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Log automated test evidence for UAT-exempt SDs
