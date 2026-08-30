@@ -477,7 +477,8 @@ async function loadData() {
       // ordinary claimable open work while only the dedicated section knows better.
       .select('id, title, status, claiming_session_id, created_at, owner, release_condition, pr_url')
       .in('status', ['open', 'in_progress'])
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(999); // count-truncation-diff-lint: explicit, provably-bounded cap (warnIfCapTruncated below still tripwires)
     // SD-LEO-FIX-FIXTURE-PREFIX-EXCLUSION-001: fixture-titled QFs (ZZZ_/dunder residue)
     // must not inflate the QUICK FIXES (N) count or render as real open work.
     // Filter availability degrades to UNFILTERED rows (adversarial-review fix, PR #6186):
