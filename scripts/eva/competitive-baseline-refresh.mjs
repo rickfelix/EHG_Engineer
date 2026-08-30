@@ -58,7 +58,10 @@ export async function runRefresh(supabase, opts = {}) {
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  // VALIDATION finding (EXEC-TO-PLAN): the cron workflow exports only SUPABASE_URL, not
+  // NEXT_PUBLIC_SUPABASE_URL -- the script silently exited 1 (swallowed by `|| true` in the
+  // workflow step) and the daily refresh never ran. Repo convention (lib/supabase-client.cjs).
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const result = await runRefresh(supabase, { dryRun });
   console.log(JSON.stringify(result, null, 2));
 }
