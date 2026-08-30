@@ -33,7 +33,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
-import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
+import { liveFleetWorkers, isRecentlyReleased } from '../lib/fleet/genuine-worker.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
@@ -211,6 +211,13 @@ export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new
     // hinted MORE work (measured: Bravo held QF-20260728-894 four days while idleWorkers=0
     // reported no one to worry about).
     if (qfHolderSessionIds.has(w.session_id)) return false;
+    // SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001: a session inside its post-release wind-down
+    // window is not yet idle capacity — it just finished work and has not re-armed. Without
+    // this check, liveFleetWorkers' released_at-inclusive everClaimed lets a recently-released
+    // shell pass through and receive a hint mid-wind-down (07:56:44Z Hotel-5 incident: released,
+    // heartbeat still fresh, no sd_key yet). Two-sided: a session released LONG ago is still
+    // genuinely idle and remains hintable — only the recency window excludes.
+    if (isRecentlyReleased(w, nowMs)) return false;
     const createdAt = w.created_at ? Date.parse(w.created_at) : NaN;
     return Number.isFinite(createdAt) && (nowMs - createdAt) >= SPIN_UP_GRACE_MS;
   });
