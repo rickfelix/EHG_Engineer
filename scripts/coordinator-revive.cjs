@@ -88,12 +88,27 @@ async function reapExpiredPendingRequests(supabase, { callsign = null, nowIso = 
     .eq('status', 'pending')
     .lte('expires_at', nowIso);
   if (callsign) q = q.eq('requested_callsign', callsign);
-  const { data, error } = await q.select('id');
+  const { data, error } = await q.select('id, requested_callsign, requested_by_session_id, requested_at').limit(999);
   if (error) {
     console.warn(`  [warn] reapExpiredPendingRequests failed: ${error.message}`);
     return 0;
   }
-  return (data || []).length;
+  const reaped = data || [];
+  // QF-20260830-434: expiry was a silent status flip — 42 of 47 historical rows never
+  // fulfilled and 37 expired with no signal to anyone. Fail loud on the writer side: one
+  // coordinator_directive per reaped row naming the request, requester, and age, so an
+  // expiry is visible the moment it happens instead of only discoverable via a census.
+  for (const row of reaped) {
+    const ageMin = Math.round((Date.parse(nowIso) - Date.parse(row.requested_at)) / 60000);
+    await insertCoordinationRow(supabase, {
+      target_session: row.requested_by_session_id || 'broadcast',
+      message_type: 'INFO',
+      subject: `Spawn request expired unfulfilled: ${row.requested_callsign}`,
+      body: `worker_spawn_requests row id=${row.id} for callsign ${row.requested_callsign} (requested by ${row.requested_by_session_id || 'unknown'}) expired unfulfilled after ${ageMin}m with no consumer. If the revival need still exists, re-file via coordinator-revive.cjs.`,
+      payload: { kind: 'spawn_request_expired', request_id: row.id, callsign: row.requested_callsign, age_min: ageMin },
+    }).catch((e) => console.warn(`  [warn] spawn-expiry signal failed for ${row.id}: ${e.message}`));
+  }
+  return reaped.length;
 }
 
 /** Raw single-row insert + best-effort broadcast. Returns { inserted, alreadyPending, error, row }. */

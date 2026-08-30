@@ -238,6 +238,18 @@ async function loadData() {
     // Pre-migration clones don't have the table — silently empty.
   }
 
+  // QF-20260830-434: expired-unfulfilled worker_spawn_requests reaped silently (37 of 47
+  // historical rows, no signal anywhere) — a head-count gauge alongside the live-pending list
+  // above so an operator sees the backlog, not just the currently-live handful.
+  let expiredUnfulfilledCount = 0;
+  try {
+    const { count } = await supabase
+      .from('worker_spawn_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'expired');
+    expiredUnfulfilledCount = count ?? 0;
+  } catch (e) { /* degrade-safe: gauge reads 0 rather than crashing the dashboard */ }
+
   // QF-20260704-051: the "AVAILABLE FOR CLAIM" headline previously used a naive
   // status-only filter, so requires_human_action / dependency-blocked / orchestrator-parent
   // SDs counted as available even though the coordinator's own ranker would never dispatch
@@ -499,7 +511,8 @@ async function loadData() {
     mc, mcByWorker,
     executeTeams,
     quickFixes, // QF-20260525-836
-    revivalPending // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
+    revivalPending, // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
+    expiredUnfulfilledCount // QF-20260830-434
   };
 }
 
@@ -842,9 +855,17 @@ function printQuickFixes(d) {
 // ── Section: Revival Pending (SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001) ──
 function printRevivalPending(d) {
   const rows = d.revivalPending || [];
-  if (rows.length === 0) return; // zero-noise default
+  const expiredCount = d.expiredUnfulfilledCount || 0;
+  if (rows.length === 0 && expiredCount === 0) return; // zero-noise default
+  if (rows.length === 0) {
+    // QF-20260830-434: no LIVE pending request, but a nonzero expired-unfulfilled backlog is
+    // itself worth a line — that backlog is exactly what used to go unseen.
+    console.log(`REVIVAL PENDING (0 live, ${expiredCount} expired-unfulfilled)`);
+    console.log('');
+    return;
+  }
 
-  console.log('REVIVAL PENDING (' + rows.length + ')');
+  console.log('REVIVAL PENDING (' + rows.length + (expiredCount ? `, ${expiredCount} expired-unfulfilled` : '') + ')');
   console.log('─'.repeat(72));
   console.log('  ' + pad('Callsign', 12) + pad('Requested by', 24) + pad('Age', 12) + 'Expires in');
   console.log('  ' + '─'.repeat(68));
