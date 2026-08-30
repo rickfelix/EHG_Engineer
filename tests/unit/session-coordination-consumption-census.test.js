@@ -34,6 +34,11 @@ const ALLOWED_WRITE_FILES = new Set([
   'scripts/stale-session-sweep.cjs',
   'scripts/hooks/coordination-inbox.cjs',
   'lib/coordinator/relay-queue.cjs',
+  // QF-20260830-084: stampActioned now also writes acknowledged_at (alongside its existing
+  // payload.actioned_at write) so the lane-pending gauge and every other acknowledged_at
+  // reader see the same retirement moment as the advisory selector — see census entry in
+  // docs/protocol/coordinator-adam-comms.md.
+  'lib/coordinator/adam-advisory-store.cjs',
   // SD-LEO-INFRA-SIGNAL-LANE-PER-001 (FR-4): lib/coordinator/signal-router.cjs REMOVED from this
   // allowlist — its only acknowledged_at write (stampRoutedToCoordinator) was an automated sweep
   // disposing a signal the instant it noticed it, the same defect class stampRouted() was fixed
