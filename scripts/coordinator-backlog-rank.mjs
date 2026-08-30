@@ -231,6 +231,11 @@ import { needleScore, rungProgressByKey, buildSdRungMap } from '../lib/vision/ne
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { planLinkageCompare } from '../lib/roadmap/plan-linkage-comparator.js';
 import { committingItemBandCompare } from '../lib/roadmap/committing-item-band.js';
+// SD-LEO-INFRA-GIVE-DISPATCH-RANKER-001: the sequence band (metadata.precedes_sd_key). See
+// lib/roadmap/precedes-band.js's header for the full placement/direction/cycle-safety rationale —
+// deliberately a SEPARATE representation from dependencies[].relation (never unify: that vocabulary
+// is claim-path-only and hard-blocks claimability, the exact inversion of this band's intent).
+import { buildPrecedesEdges, detectPrecedesCycles, sequenceCompare } from '../lib/roadmap/precedes-band.js';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -342,6 +347,19 @@ async function main() {
   }
   const needleOf = (d) => needleScore(sdRungMap[d.sd_key], { activeRungKey, rungProgressByKey: progByKey });
 
+  // SD-LEO-INFRA-GIVE-DISPATCH-RANKER-001: cycle-detection MUST run once, before sort(), never inside
+  // the comparator (a pairwise function cannot see the whole graph). An inconsistent comparator makes
+  // Array.prototype.sort's output implementation-defined for the WHOLE array, not just the cyclic
+  // members, so any cyclic edges are excluded for this pass and loudly logged.
+  const precedesEdges = buildPrecedesEdges(claimable);
+  const excludedPrecedesEdges = detectPrecedesCycles(precedesEdges);
+  if (excludedPrecedesEdges.size) {
+    const cyclicKeys = new Set();
+    for (const edge of excludedPrecedesEdges) edge.split('->').forEach((k) => cyclicKeys.add(k));
+    console.log(`[BACKLOG-RANK] ⚠️  precedes_sd_key CYCLE DETECTED among: ${[...cyclicKeys].join(', ')} — ` +
+      'excluding these edges from this pass (fix the ruling; the belt order for everything else is unaffected).');
+  }
+
   claimable.sort((a, b) => {
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs sort below EVERY
     // authored SD (rank-last), so a worker never self-claims a stub that cannot pass
@@ -362,6 +380,13 @@ async function main() {
     if (fa !== fb) return fb - fa;                          // critical-walk-blocker first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
+    // SD-LEO-INFRA-GIVE-DISPATCH-RANKER-001: the sequence band (metadata.precedes_sd_key). Placed
+    // BELOW unlockScore (never strands a critical-path unlocker or jumps a band — same placement rule
+    // every band here follows) and ABOVE every heuristic tie-break below it (a ruled ordering is a
+    // stronger signal than needle/pivot/priority/age). See lib/roadmap/precedes-band.js for the full
+    // rationale, direction convention, and why this is deliberately separate from dependencies[].relation.
+    const sc = sequenceCompare(a, b, excludedPrecedesEdges);
+    if (sc !== 0) return sc;
     // SD-LEO-INFRA-PLAN-POSITION-READABLE-001 (FR-3): the committing-item BAND. The roadmap join
     // already existed below (needleOf), but it sits after productPivotCompare and so can only break
     // ties — it can never lift a committing-item child across the harness band, which is what the
