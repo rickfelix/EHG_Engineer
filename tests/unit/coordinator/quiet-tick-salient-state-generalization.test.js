@@ -14,6 +14,7 @@ function makeMock({ drainSetsRows = null, drainSetsError = null, coordinationRow
         select() { return chain; },
         eq() { return chain; },
         or(filterStr) { captured.orFilter = filterStr; return chain; },
+        in(col, vals) { captured.inCol = col; captured.inVals = vals; return chain; }, // QF-20260830-278
         is() { return chain; },
         gte() { return chain; },
         then(res, rej) {
@@ -123,6 +124,20 @@ describe('readSalientState openSignalCount generalization (TS-4)', () => {
   it('never throws on a fully broken supabase client (fail-soft, matches the pre-existing try/catch contract)', async () => {
     const broken = { from() { throw new Error('boom'); } };
     await expect(readSalientState(broken)).resolves.toMatchObject({ openSignalCount: 0 });
+  });
+
+  // QF-20260830-278: the openSignalCount query previously had no target_session clause, so the
+  // coordinator's OWN outbound rows (to Adam, to workers) inflated his own open-signal count and
+  // fired cross_party_ping at Adam about the coordinator's own outbox. Fixture proves the query
+  // now scopes to rows addressed to this coordinator (or the broadcast-coordinator lane) --
+  // a fresh outbound row addressed to another session is excluded by the DB-side .in() filter,
+  // which this test asserts is constructed correctly (the mock DB does the actual scoping).
+  it('QF-20260830-278: scopes openSignalCount to target_session = [coordinatorId, broadcast-coordinator], excluding the coordinator\'s own outbound rows', async () => {
+    const captured = {};
+    const mock = makeMock({ drainSetsRows: [{ kind: 'coordinator_directive' }], coordinationRows: [], captured });
+    await readSalientState(mock);
+    expect(captured.inCol).toBe('target_session');
+    expect(captured.inVals).toContain('broadcast-coordinator');
   });
 });
 
