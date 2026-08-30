@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   etParts, windowKey, withinWindow, runDriveReportSweep, buildGather, scoreCapacityLeg, computeLeg2,
-  WINDOW_START_HOUR, WINDOW_END_HOUR, PROCESS_KEY, ACTIVATION_TRIGGER, SD_KEY,
+  WINDOW_START_HOUR, PROCESS_KEY, ACTIVATION_TRIGGER, SD_KEY,
 } from '../../../scripts/cron/drive-report-sweep.mjs';
 import { CLAIM_WINDOW_MS as LEG2_CLAIM_WINDOW_MS } from '../../../lib/drive-loop/score/leg2-uptake.js';
 import { armedProcessKey } from '../../../lib/machinery-class/armed-registration.js';
@@ -95,33 +95,35 @@ describe('TR-1 dual cron + wall-clock gate — the halves are only correct toget
     expect(etParts(Date.UTC(...JAN, 12, 0, 0)).hour, 'January must be UTC-5').toBe(7);
   });
 
-  it('admits EXACTLY the intended ET window in BOTH offsets', () => {
-    const expected = [];
-    for (let h = WINDOW_START_HOUR; h <= WINDOW_END_HOUR; h++) expected.push(h);
-    expect(admittedEtHours(...JULY), 'EDT coverage').toEqual(expected);
-    expect(admittedEtHours(...JAN), 'EST coverage').toEqual(expected);
+  it('QF-20260830-478: admits every scheduled hour AT OR AFTER the 05:00 ET floor, in BOTH offsets', () => {
+    // FLOOR ONLY, not a ceiling: any scheduled UTC hour whose ET wall-clock is >= WINDOW_START_HOUR
+    // is admitted. The two lines' union, floor-filtered, is exactly [5..12] ET in EDT and [5..11]
+    // ET in EST for the current schedule (*/15 9-15 and */15 10-16 UTC).
+    const july = [];
+    for (let h = 5; h <= 12; h++) july.push(h);
+    const jan = [];
+    for (let h = 5; h <= 11; h++) jan.push(h);
+    expect(admittedEtHours(...JULY), 'EDT coverage').toEqual(july);
+    expect(admittedEtHours(...JAN), 'EST coverage').toEqual(jan);
   });
 
-  it('DISCARDS exactly the spill hour each line produces in the offset it was not written for', () => {
+  it('DISCARDS exactly the hour(s) below the 05:00 ET floor each line produces in the offset it was not written for', () => {
     // The other half of "exactly": coverage alone would be satisfied by a gate that admitted
-    // everything. Each offset has a scheduled UTC hour that maps OUTSIDE the ET window.
-    //
-    // TIGHTENED from toBeGreaterThan(0) after the TESTING sub-agent pointed out that "at least
-    // one spill exists" also passes if the schedule were WIDENED to spill far more — the
-    // assertion named "discards the spill hour" while only proving some spill was discarded.
-    // The exact ET hours are asserted now: 09:00 in EDT, 04:00 in EST.
+    // everything. In EST one scheduled UTC hour maps to 04:00 ET, below the floor; in EDT the
+    // widened schedule no longer spills below the floor at all (the earliest UTC hour on either
+    // line already maps to >= 05:00 ET in EDT).
     const spillEtHours = (y, m, d) => scheduledUtcHours()
       .map((h) => withinWindow(Date.UTC(y, m, d, h, 0, 0)))
       .filter((g) => !g.inside)
       .map((g) => g.etHour)
       .sort((a, b) => a - b);
-    expect(spillEtHours(...JULY), 'EDT spills exactly 09:00 ET').toEqual([9]);
+    expect(spillEtHours(...JULY), 'EDT spills nothing below the floor').toEqual([]);
     expect(spillEtHours(...JAN), 'EST spills exactly 04:00 ET').toEqual([4]);
 
     const firstSpill = scheduledUtcHours()
-      .map((h) => withinWindow(Date.UTC(...JULY, h, 0, 0)))
+      .map((h) => withinWindow(Date.UTC(...JAN, h, 0, 0)))
       .find((g) => !g.inside);
-    expect(firstSpill.reason).toMatch(/expected, not a fault/);
+    expect(firstSpill.reason).toMatch(/before the .*ET floor/);
   });
 
   it('[MINUTE FIELD] both lines keep the */15 cadence that IS the self-healing window', () => {
@@ -134,18 +136,18 @@ describe('TR-1 dual cron + wall-clock gate — the halves are only correct toget
     }
   });
 
-  it('a tick outside the window is REPORTED as skipped and touches nothing', async () => {
+  it('a tick before the 05:00 ET floor is REPORTED as skipped and touches nothing', async () => {
     const calls = [];
     const r = await runDriveReportSweep({
-      nowMs: Date.UTC(...JULY, 22, 0, 0),          // 18:00 ET — nowhere near the window
+      nowMs: Date.UTC(...JULY, 7, 0, 0),          // 03:00 ET — genuinely before the floor
       produce: async () => { calls.push('produce'); return { written: true }; },
       gather: async () => ({}),
       persist: async () => ({ id: 'x' }),
       register: async () => { calls.push('register'); return { ok: true }; },
       stamp: async () => { calls.push('stamp'); },
     });
-    expect(r).toMatchObject({ ran: false, skipped: 'outside_et_window', et_hour: 18 });
-    expect(calls, 'an out-of-window tick must not register, stamp or produce').toEqual([]);
+    expect(r).toMatchObject({ ran: false, skipped: 'outside_et_window', et_hour: 3 });
+    expect(calls, 'a pre-floor tick must not register, stamp or produce').toEqual([]);
   });
 });
 
@@ -662,6 +664,23 @@ describe('[END-TO-END] the sweep drives the REAL producer — no stub in between
     expect(rows[0].sections.plan_position.remainder.value).toBe(42);
     // FR-2/FR-3: was 4; only stall_deltas remains unavailable (FR-4 CONDITIONAL, unowned predicate).
     expect(rows[0].metadata.unavailable_sections).toHaveLength(1);
+  });
+
+  it('[QF-20260830-478 TWO-SIDED] a LATE tick — 10:xx ET, which the old 05:00-08:59 ceiling would have discarded — still PRODUCES', async () => {
+    // The positive half of the QF's two-sided requirement: floor-only must actually admit a tick
+    // that would have starved under the old ceiling (exactly what happened live 08-27..08-30,
+    // when GitHub only ever delivered this workflow's schedule after 08:59 ET).
+    const rows = [];
+    const r = await runDriveReportSweep({
+      nowMs: Date.UTC(...JULY, 14, 0, 0),                       // 14:00 UTC = 10:00 ET — past the old ceiling
+      produce: produceDriveReport,
+      gather: realGather(),
+      persist: async (row) => { rows.push(row); return { id: `row-${rows.length}` }; },
+      findExisting: async () => null,
+    });
+
+    expect(rows, 'a late tick must still reach a write').toHaveLength(1);
+    expect(r).toMatchObject({ ran: true, written: true, run_id: 'drive-2026-07-15' });
   });
 
   it('the second tick of the same window writes NOTHING and reports the skip', async () => {
