@@ -61,11 +61,20 @@
  * Usage:
  *   node scripts/lint/require-main-guard-in-one-off-lint.mjs [--json] [--root <dir>]
  *   npm run lint:main-guard-one-off
+ *
+ * QF-20260830-870: default scan is now TRACKED-ONLY (git ls-files), matching what CI actually
+ * checks out -- a bare working-directory scan previously counted untracked local scratch as
+ * debt (71 local vs 2 tracked/CI, measured 2026-08-30). Two escape hatches:
+ *   --diff         scan only staged files (git diff --cached), or files changed vs
+ *                  origin/main when nothing is staged -- fast pre-commit use.
+ *   --working-dir  restore the old full-directory scan (untracked files included); the
+ *                  untracked subset is named explicitly so it's never mistaken for real debt.
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execFileSync } from 'node:child_process';
 import { Linter } from 'eslint';
 import rule from '../../eslint-rules/require-main-guard-in-one-off.js';
 
@@ -125,6 +134,38 @@ export function loadAllowlist(allowlistPath = ALLOWLIST_PATH) {
   return entries;
 }
 
+/** Run git, returning trimmed non-empty output lines (or [] on any failure -- fail-open). */
+function gitLines(args, cwd) {
+  try {
+    return execFileSync('git', args, { cwd, encoding: 'utf8' }).split('\n').map((l) => l.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function isCandidate(relPath) {
+  return SCAN_EXTENSIONS.has(path.extname(relPath))
+    && !EXCLUDE_FILE_RE.test(path.basename(relPath))
+    && !relPath.split('/').some((seg) => EXCLUDE_DIR_SEGMENTS.includes(seg));
+}
+
+/** Tracked files under SCAN_DIRS -- what CI actually checks out. */
+function trackedFiles(scanRoot) {
+  return gitLines(['ls-files', '--', ...SCAN_DIRS], scanRoot)
+    .filter(isCandidate)
+    .map((p) => path.join(scanRoot, p));
+}
+
+/** Staged files (pre-commit use), or files changed vs origin/main when nothing is staged. */
+function diffScopedFiles(scanRoot) {
+  const staged = gitLines(['diff', '--cached', '--name-only'], scanRoot);
+  const raw = staged.length > 0 ? staged : gitLines(['diff', '--name-only', 'origin/main...HEAD'], scanRoot);
+  return raw
+    .filter((p) => SCAN_DIRS.some((d) => p.startsWith(d + '/')) && isCandidate(p))
+    .map((p) => path.join(scanRoot, p))
+    .filter((f) => fs.existsSync(f));
+}
+
 function walk(dir, out) {
   let entries;
   try {
@@ -170,22 +211,34 @@ function main() {
 
   const allow = loadAllowlist();
 
-  const files = [];
-  for (const dir of SCAN_DIRS) {
-    walk(path.join(scanRoot, dir), files);
+  const diffMode = args.includes('--diff');
+  const workingDirMode = args.includes('--working-dir');
+
+  let files;
+  let untrackedCount = 0;
+  if (diffMode) {
+    files = diffScopedFiles(scanRoot);
+  } else if (workingDirMode) {
+    files = [];
+    for (const dir of SCAN_DIRS) walk(path.join(scanRoot, dir), files);
+    const tracked = new Set(trackedFiles(scanRoot));
+    untrackedCount = files.filter((f) => !tracked.has(f)).length;
+  } else {
+    files = trackedFiles(scanRoot);
   }
 
   const linter = new Linter({ cwd: scanRoot });
   const hits = files.flatMap((f) => lintFile(linter, f));
   const violations = hits.filter((h) => !(h.filePath in allow));
   const grandfathered = hits.filter((h) => h.filePath in allow);
+  const untrackedNote = workingDirMode ? ` (${untrackedCount} of these are UNTRACKED -- invisible to CI)` : '';
 
   if (jsonMode) {
-    console.log(JSON.stringify({ scanned: files.length, violations, grandfathered: grandfathered.length }, null, 2));
+    console.log(JSON.stringify({ scanned: files.length, untracked: workingDirMode ? untrackedCount : undefined, violations, grandfathered: grandfathered.length }, null, 2));
   } else if (violations.length === 0) {
-    console.log(`✅ require-main-guard-in-one-off-lint: 0 ungoverned violations across ${files.length} file(s) scanned (scripts/one-off/**/*.{mjs,cjs}); ${grandfathered.length} grandfathered.`);
+    console.log(`✅ require-main-guard-in-one-off-lint: 0 ungoverned violations across ${files.length} file(s) scanned${untrackedNote}; ${grandfathered.length} grandfathered.`);
   } else {
-    console.error(`❌ require-main-guard-in-one-off-lint: ${violations.length} violation(s) across ${files.length} file(s) scanned\n`);
+    console.error(`❌ require-main-guard-in-one-off-lint: ${violations.length} violation(s) across ${files.length} file(s) scanned${untrackedNote}\n`);
     for (const v of violations) {
       console.error(`  ${v.filePath}:${v.line}:${v.column}  ${v.message}`);
     }

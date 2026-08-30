@@ -25,9 +25,14 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 let fixtureRoot;
 
-function runDriver(root) {
+// QF-20260830-870: the driver's default scan is now TRACKED-ONLY (git ls-files), so it reports
+// zero files against these fixtures -- they live under a bare mkdtempSync() temp dir (or, for the
+// allowlist test below, a file created without `git add`), neither of which git tracks. These
+// tests exercise the LINT LOGIC on arbitrary files, not tracked-vs-untracked scoping, so they
+// pass --working-dir explicitly to restore the pre-QF full-directory scan behavior they assert on.
+function runDriver(root, extraArgs = ['--working-dir']) {
   try {
-    const stdout = execFileSync('node', [DRIVER, '--root', root, '--json'], { encoding: 'utf8' });
+    const stdout = execFileSync('node', [DRIVER, '--root', root, '--json', ...extraArgs], { encoding: 'utf8' });
     return { exitCode: 0, json: JSON.parse(stdout) };
   } catch (err) {
     // execFileSync throws on non-zero exit; stdout is still on the error object.
@@ -172,5 +177,43 @@ describe('require-main-guard-in-one-off-lint.mjs (driver, real subprocess)', () 
     // would produce an uncaught exception and a non-JSON stdout, which JSON.parse above would
     // have already failed on.
     expect([0, 1]).toContain(exitCode);
+  });
+});
+
+// QF-20260830-870: tracked-vs-untracked scoping, exercised against a REAL git repo fixture
+// (git ls-files requires one -- the mkdtempSync fixture above deliberately has no .git).
+describe('require-main-guard-in-one-off-lint.mjs -- tracked-only default (QF-20260830-870)', () => {
+  let gitRoot;
+
+  beforeAll(() => {
+    gitRoot = mkdtempSync(path.join(tmpdir(), 'require-main-guard-git-fixture-'));
+    execFileSync('git', ['init', '-q'], { cwd: gitRoot });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: gitRoot });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: gitRoot });
+    const oneOffDir = path.join(gitRoot, 'scripts', 'one-off');
+    mkdirSync(oneOffDir, { recursive: true });
+    writeFileSync(path.join(oneOffDir, 'tracked-unguarded.mjs'), 'async function main() {}\nmain();\n');
+    execFileSync('git', ['add', 'scripts/one-off/tracked-unguarded.mjs'], { cwd: gitRoot });
+    execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: gitRoot });
+    writeFileSync(path.join(oneOffDir, 'untracked-unguarded.mjs'), 'async function main() {}\nmain();\n');
+  });
+
+  afterAll(() => {
+    rmSync(gitRoot, { recursive: true, force: true });
+  });
+
+  it('default mode scans only the tracked file, leaving the untracked one invisible', () => {
+    const { json } = runDriver(gitRoot, []);
+    expect(json.scanned).toBe(1);
+    expect(json.violations.map((v) => path.basename(v.filePath))).toEqual(['tracked-unguarded.mjs']);
+  });
+
+  it('--working-dir scans both and names the untracked count', () => {
+    const { json } = runDriver(gitRoot, ['--working-dir']);
+    expect(json.scanned).toBe(2);
+    expect(json.untracked).toBe(1);
+    expect(json.violations.map((v) => path.basename(v.filePath)).sort()).toEqual(
+      ['tracked-unguarded.mjs', 'untracked-unguarded.mjs'],
+    );
   });
 });
