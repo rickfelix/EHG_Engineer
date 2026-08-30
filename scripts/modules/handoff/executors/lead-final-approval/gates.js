@@ -11,7 +11,6 @@ import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3/FR-4): branch→owner resolution replaces the anchored
 // regex. See lib/git/branch-owner.js for why a widened regex is provably impossible.
 import { branchBelongsToSd, loadKeySet, isRefCharsetSafe, OWNER_REASON, BRANCH_TYPE_TOKENS } from '../../../../../lib/git/branch-owner.js';
-import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective, isValidPreflightRetro } from '../../retro-filters.js';
 import { sdKeyOwnsFile } from './sd-key-file-ownership.js';
@@ -113,81 +112,36 @@ export { createActivationInvariantGate };
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Get repository path by name
- * @param {string} repoName - Repository name
- * @returns {string} Repository path
- */
-function getRepoPath(repoName) {
-  return resolveRepoPath(repoName) || ENGINEER_ROOT;
-}
-
-/**
- * Compute the list of repos to scan for a given SD's PR_MERGE_VERIFICATION.
- *
- * SD-LEO-INFRA-CROSS-REPO-MERGE-001: Closes the gate-side phantom-branch class
- * where single-repo SDs were blocked by stale branches in the OTHER repo.
- *
- * Precedence:
- *   1. sd.metadata.target_repos[] — explicit allowlist (canonical for cross-repo SDs)
- *   2. sd.target_application — single-repo derivation (case-insensitive)
- *   3. fallback to both repos with WARN log (legacy SDs without metadata)
- *
- * @param {Object} sd - Strategic Directive record
- * @returns {Array<{githubRepo: string, localPath: string}>}
- */
+// Compute the list of repos to scan for a given SD's PR_MERGE_VERIFICATION.
+//
+// SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001-F (FR-1): extracted to
+// lib/sub-agents/repo-target-resolver.js so lib/-layer consumers (the TESTING
+// sub-agent) can resolve target repos without importing from
+// scripts/modules/handoff/executors/ (layering inversion).
+//
+// CORRECTED TWICE (both caught by tests, not by reasoning about the transform):
+//  1. A pure `export { X } from '...'` passthrough does NOT introduce a local binding X
+//     usable elsewhere in THIS module -- computeReposForSD is called internally at lines
+//     ~695 and ~1683 below, which the passthrough form leaves as an undefined bare reference
+//     (CI-caught: "computeReposForSD is not defined").
+//  2. The seemingly-obvious fix -- `import { X } from '...'; export { X };`, the SAME shape
+//     createSmokeTestGate/createAutomatedUatGate use a few lines above -- ALSO breaks under
+//     vitest specifically (plain `node --check`/`node -e` import works fine; a minimal
+//     vitest reproduction with zero mocks anywhere in the chain fails with `typeof X ===
+//     'undefined'`). This contradicts the file's own historical RCA above, which attributed
+//     the earlier incident specifically to a literal ("vi" + ".mock(") text trigger -- this
+//     file currently contains ZERO such tokens (verified via grep), yet the bug still
+//     reproduces. The RCA is evidently incomplete; some import-then-re-export shape is
+//     unreliable under THIS vite/vitest transform regardless of trigger tokens.
+// A LOCAL FUNCTION DECLARATION that delegates to the extracted implementation sidesteps
+// export-binding semantics entirely -- it is not a re-export of any kind, so no transform
+// quirk in either direction can touch it. Verified: the internal call sites, the external
+// named import in venture-aware-completion-gates.test.js /
+// lead-final-pr-merge-verification-cross-repo.test.js / pr-merge-verification.test.js, and a
+// minimal-vitest-repro all pass with this shape.
+import { computeReposForSD as computeReposForSDImpl } from '../../../../../lib/sub-agents/repo-target-resolver.js';
 export function computeReposForSD(sd) {
-  const sdId = sd?.sd_key || sd?.id || 'unknown';
-  const all = [
-    { githubRepo: 'rickfelix/ehg', localPath: getRepoPath('EHG') },
-    { githubRepo: 'rickfelix/EHG_Engineer', localPath: getRepoPath('EHG_Engineer') }
-  ];
-
-  // Tier 1: explicit metadata.target_repos[] allowlist
-  const targetRepos = sd?.metadata?.target_repos;
-  if (Array.isArray(targetRepos) && targetRepos.length > 0) {
-    const allowed = targetRepos.map(r => String(r).toLowerCase().trim());
-    const result = all.filter(r => {
-      const shortName = r.githubRepo.split('/')[1].toLowerCase();
-      return allowed.includes(shortName) || allowed.includes(r.githubRepo.toLowerCase());
-    });
-    if (result.length > 0) {
-      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd?.target_application || 'NULL'} target_repos=${JSON.stringify(targetRepos)} scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
-      return result;
-    }
-  }
-
-  // Tier 2: derived from target_application (case-insensitive)
-  const ta = (typeof sd?.target_application === 'string') ? sd.target_application.toLowerCase().trim() : '';
-  if (ta) {
-    if (ta.includes('engineer')) {
-      const result = [all[1]]; // EHG_Engineer only
-      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} target_repos=NULL scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
-      return result;
-    }
-    if (ta === 'ehg' || ta === 'app' || ta === 'application') {
-      const result = [all[0]]; // EHG only
-      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} target_repos=NULL scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
-      return result;
-    }
-    // SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001 (FR-3): a venture target_application
-    // resolves to its SINGLE venture repo instead of falling through to the Tier-3
-    // both-platform-repos scan. github_repo + local_path come from the registry mirror
-    // (applications.github_repo is NULL for ventures; registry is kept in lockstep by the
-    // provisioner write-through) via the SYNC resolvers — computeReposForSD is synchronous.
-    const ventureGithub = resolveGitHubRepo(sd.target_application);
-    const ventureLocal = resolveRepoPath(sd.target_application);
-    if (ventureGithub && ventureLocal) {
-      const result = [{ githubRepo: ventureGithub, localPath: ventureLocal }];
-      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} resolved=venture scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
-      return result;
-    }
-    // Venture github_repo/local_path unresolved — fall through to Tier 3
-  }
-
-  // Tier 3: legacy fallback — scan both repos with WARN
-  console.warn(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} no target_application or target_repos — scanning both repos (legacy behavior)`);
-  return all;
+  return computeReposForSDImpl(sd);
 }
 
 /**
