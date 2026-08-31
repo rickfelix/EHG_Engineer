@@ -93,7 +93,7 @@ export const RESPONSIBILITIES = [
 //   roles-review                | JUDGMENT-SHAPED| no                        | coordinator self-review of duties
 //   gauge-runner                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic invariant-gauge execution surface
 //   feedback-sla                | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic SLA-breach reminder
-//   liveness-watcher            | SCRIPT-SHAPED  | PARTIAL (periodic-liveness-watcher-cron.yml owns self_stamped/eva_scheduler_heartbeat/github_actions_api classes) | this STANDARD_LOOPS entry keeps only the PID-anchored claude_sessions_heartbeat class a CI runner can't evaluate — FR-2 does NOT duplicate the already-GHA-backed classes
+//   liveness-watcher            | SCRIPT-SHAPED  | PARTIAL (periodic-liveness-watcher-cron.yml declares self_stamped/eva_scheduler_heartbeat/github_actions_api, but delivery drifts hours — QF-20260831-881 added self_stamped/eva_scheduler_heartbeat here too as a session-armed backup; github_actions_api stays GHA-exclusive, it needs the Actions API) | this STANDARD_LOOPS entry now covers claude_sessions_heartbeat (CI structurally can't) plus self_stamped/eva_scheduler_heartbeat (redundant safety net against GHA cron drift)
 //   solomon-ledger-resurface     | SCRIPT-SHAPED  | pending (FR-2 batch)      | deterministic aged-row resurface
 //
 // NOTE: the original SD scope text also named a "root-freshness" loop. It does not exist anywhere
@@ -429,12 +429,20 @@ export const STANDARD_LOOPS = [
   // same dashboard it renders — the tick-evidence mitigation the retention loop lacked.
   // Twice-hourly off-minute cadence (cheap single registry scan; idempotent re-run).
   // SD-LEO-INFRA-OPERATIVE-AGENT-OWNERSHIP-001-A (FR-5): class-split. The GHA durable invoker
-  // (.github/workflows/periodic-liveness-watcher-cron.yml) now owns timestamp-source rows
-  // (self_stamped/eva_scheduler_heartbeat); this dev-host entry keeps ONLY the PID-anchored
-  // role_session evaluation the venue note above justified — complementary filters, no row
-  // double-evaluated across the two venues.
-  { key: 'liveness-watcher', label: 'Periodic-process liveness watcher — role_session classes (dev-host venue)', script: 'periodic-liveness-watcher.mjs', cron: '17,47 * * * *',
-    prompt: 'LIVENESS_CLASSES=claude_sessions_heartbeat node scripts/periodic-liveness-watcher.mjs' },
+  // (.github/workflows/periodic-liveness-watcher-cron.yml) is the DECLARED owner of timestamp-
+  // source rows (self_stamped/eva_scheduler_heartbeat); this dev-host entry originally kept ONLY
+  // the PID-anchored role_session class the GHA venue structurally cannot evaluate.
+  //
+  // QF-20260831-881: that split left self_stamped/eva_scheduler_heartbeat rows with EXACTLY ONE
+  // evaluator — the GHA cron — and GH's actual schedule delivery for this workflow was measured
+  // at up to ~5h real gaps against its declared */15 cadence (same deprioritisation class as
+  // sms-relay-drain/sms-status-relay-drain above), so those rows sat at a frozen last-good
+  // last_state for hours with nothing to notice a dead emitter. self_stamped/eva_scheduler_heartbeat
+  // need no PID/network access (unlike github_actions_api, which stays GHA-exclusive — it needs
+  // GITHUB_TOKEN + the Actions API), so ADDING them here is safe: a harmless redundant evaluation,
+  // never a false-dead read, on top of the still-current GHA-backed classification.
+  { key: 'liveness-watcher', label: 'Periodic-process liveness watcher — role_session + timestamp-source classes (dev-host backup venue)', script: 'periodic-liveness-watcher.mjs', cron: '17,47 * * * *',
+    prompt: 'LIVENESS_CLASSES=claude_sessions_heartbeat,self_stamped,eva_scheduler_heartbeat node scripts/periodic-liveness-watcher.mjs' },
   // QF-20260705-797 (J1 adversarial sweep REFUTED-DORMANT, scoped to FR-1 of
   // SD-LEO-FIX-SOLOMON-RECOMMENDATION-GUARDRAIL-001): solomon-ledger-pending-resurface.cjs
   // shipped with an npm script only — no scheduled invoker anywhere — so aged
