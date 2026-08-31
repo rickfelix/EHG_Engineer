@@ -385,7 +385,12 @@ export class ValidationOrchestrator {
             // block -- e.g. exec_boundary_hold, which can legitimately outlast 24h/10
             // attempts. Exempt gates are never escalated to FAIL; ceiling stays computed
             // (harmless) but its result is ignored below.
-            const ceiling = gate.exemptFromWaitCeiling === true
+            // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-3: a gate may also carry the exemption
+            // on the specific WAIT RESULT rather than the whole gate config -- needed when
+            // one gate (e.g. prerequisite-check.js) emits several distinct WAIT reasons and
+            // only ONE of them (a genuinely-not-yet-attempted journey walk) should be exempt,
+            // while another (children-incomplete, from the same gate) must keep the ceiling.
+            const ceiling = (gate.exemptFromWaitCeiling === true || gateResult.exemptFromWaitCeiling === true)
               ? { exceeded: false, reason: null }
               : hasExceededMaxWait({
                 wait_attempts: prior.wait_attempts,

@@ -187,8 +187,26 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
       runJourneyWalk: vi.fn(async () => { throw new Error('unexpected walk crash'); }),
     });
 
-    await expect(runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps }))
-      .rejects.toThrow('unexpected walk crash');
+    // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-1: a throw after startSession() must be recorded
+    // as data (status='error'), never rethrown -- matches the module's own documented
+    // contract and the other stamped-result paths (skipped/blocked above).
+    const result = await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+    expect(result.status).toBe('error');
+    expect(result.reason).toBe('unexpected walk crash');
+    expect(result.testRunId).toBe('run-1'); // testRun was assigned before the throw
+    expect(teardown).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not crash with a TypeError when the throw happens BEFORE testRun is assigned', async () => {
+    const { deps, teardown } = makeDeps({
+      getVentureRegistration: vi.fn(() => { throw new Error('registration boom'); }),
+    });
+
+    const result = await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+    expect(result.status).toBe('error');
+    expect(result.reason).toBe('registration boom');
+    expect(result.testRunId).toBeNull(); // no testRun existed yet -- no TypeError, no crash
+    expect(deps.startSession).not.toHaveBeenCalled();
     expect(teardown).toHaveBeenCalledTimes(1);
   });
 });

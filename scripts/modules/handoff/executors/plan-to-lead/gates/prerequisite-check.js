@@ -305,6 +305,11 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
             journey_step_count: journeySteps.length,
             journey_walk_status: walkStatus,
           },
+          // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-3: exempt ONLY the genuinely-not-yet-attempted
+          // case (status='absent') from the 24h wall-clock ceiling -- a walk that was attempted
+          // and crashed (status='error', SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-1) is a real
+          // failure and must still escalate normally, not park forever with no alarm.
+          exemptFromWaitCeiling: walkStatus === 'absent',
         });
       }
     }
