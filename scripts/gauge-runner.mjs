@@ -74,6 +74,7 @@ import {
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
 import { findOverdueHolds } from '../lib/governance/hold-state-sweep.js';
+import { findOrphanedEscalatedQfs } from '../lib/governance/orphaned-escalated-qf-sweep.js';
 import { readHoldStateMode } from '../lib/governance/hold-state-contract.js';
 import { scanOpenQfsForOffCanonicalMints } from '../lib/fleet/off-canonical-mint-gauge.js';
 import { runCheck as checkWindDownRecurrence } from './gauges/wind-down-recurrence-check.mjs';
@@ -220,6 +221,17 @@ function buildDetectorResolvers(supabase) {
         mode: readHoldStateMode(),
         recentViolationCount: recentViolationCount || 0,
       };
+    },
+    // QF-20260831-191: escalated QFs with no linked SD -- the work sits in no lane, invisible.
+    'orphaned-escalated-qf': async () => {
+      const { data, error } = await supabase
+        .from('quick_fixes')
+        .select('id, created_at')
+        .eq('status', 'escalated')
+        .is('escalated_to_sd_id', null)
+        .limit(500);
+      if (error) throw new Error('orphaned-escalated-qf query failed: ' + error.message);
+      return findOrphanedEscalatedQfs(data, Date.now());
     },
     // Filesystem detector (stale-tree precedent): parses REVISIT-IF tags from live
     // source, so moved tags stay visible; tests/fixtures excluded by default so the

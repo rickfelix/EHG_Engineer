@@ -6,7 +6,7 @@
  * (never a second, drifting discriminant) — these tests pin the ACTING layer on top of it.
  */
 import { describe, it, expect } from 'vitest';
-import { shouldSelfEscalate, buildSelfEscalationRow } from '../../../lib/fleet/self-wake-escalation.cjs';
+import { shouldSelfEscalate, shouldClearSelfEscalation, buildSelfEscalationRow } from '../../../lib/fleet/self-wake-escalation.cjs';
 
 const NOW = Date.parse('2026-08-30T08:00:00Z');
 const TEST_CUT = 60;
@@ -85,6 +85,41 @@ describe('shouldSelfEscalate', () => {
   it('vacuity guard: a healthy, never-armed seat never escalates', () => {
     const v = shouldSelfEscalate(row({ toolSilentMin: 0 }), NOW, TEST_CUT);
     expect(v.shouldEscalate).toBe(false);
+  });
+});
+
+describe('shouldClearSelfEscalation (QF-20260831-587: cap-recovery)', () => {
+  it('CLEARS: the seat previously self-escalated and has since recovered (re-armed a fresh, pending deadline)', () => {
+    const oldWakeAt = new Date(NOW - 120 * 60000).toISOString();
+    const freshWakeAt = new Date(NOW + 10 * 60000).toISOString(); // armed, not yet due
+    const r = row({ toolSilentMin: 0, expectedWakeAt: freshWakeAt, selfEscalatedForWakeAt: oldWakeAt });
+    const v = shouldClearSelfEscalation(r, NOW, TEST_CUT);
+    expect(v.shouldClear).toBe(true);
+    expect(v.priorEscalatedForWakeAt).toBe(oldWakeAt);
+  });
+
+  it('does NOT clear: still stuck on the SAME deadline it already escalated for', () => {
+    const wakeAt = new Date(NOW - 15 * 60000).toISOString();
+    const r = row({ toolSilentMin: 90, expectedWakeAt: wakeAt, selfEscalatedForWakeAt: wakeAt });
+    const v = shouldClearSelfEscalation(r, NOW, TEST_CUT);
+    expect(v.shouldClear).toBe(false);
+  });
+
+  it('does NOT clear: never escalated in the first place (nothing to clear)', () => {
+    const r = row({ toolSilentMin: 0, expectedWakeAt: new Date(NOW + 10 * 60000).toISOString() });
+    const v = shouldClearSelfEscalation(r, NOW, TEST_CUT);
+    expect(v.shouldClear).toBe(false);
+    expect(v.priorEscalatedForWakeAt).toBeNull();
+  });
+
+  it('does NOT clear while a DIFFERENT deadline is ALSO currently overdue -- the seat is still positively stuck, so the caller escalates instead (never both in one tick)', () => {
+    const oldWakeAt = new Date(NOW - 120 * 60000).toISOString();
+    const newOverdueWakeAt = new Date(NOW - 15 * 60000).toISOString();
+    const r = row({ toolSilentMin: 90, expectedWakeAt: newOverdueWakeAt, selfEscalatedForWakeAt: oldWakeAt });
+    const clear = shouldClearSelfEscalation(r, NOW, TEST_CUT);
+    const escalate = shouldSelfEscalate(r, NOW, TEST_CUT);
+    expect(clear.shouldClear).toBe(false);
+    expect(escalate.shouldEscalate).toBe(true); // the caller's escalate-first branch handles this case
   });
 });
 

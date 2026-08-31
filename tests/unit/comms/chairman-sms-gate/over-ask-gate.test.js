@@ -68,6 +68,29 @@ describe('chairman-sms-gate over-ask gate (QF-20260725-652)', () => {
     expect(res.reason).not.toBe('over_ask_held');
   });
 
+  it('does NOT hold a report-framed reply to a chairman inbound request, even carrying decision vocabulary (QF-20260831-281)', async () => {
+    // Specimen shape (rscp-verdict-2 / rscp-ruling-ack): the chairman explicitly requested this
+    // content, and the body carries decision vocabulary (ruling/recommendation) as a REPORT of a
+    // past determination, not a fresh ask. Before this fix, the classifier keyed on the vocabulary
+    // alone and held it as an over-ask.
+    const sender = makeSender();
+    const body = 'Ruling ack: I recommend we keep the current cap — already actioned, reported for your records.';
+    const res = await sendChairmanSMS(
+      { type: 'status', body },
+      { ...DAYTIME, replyToInbound: true },
+      { sender, console: silentConsole() },
+    );
+    expect(res.reason).not.toBe('over_ask_held');
+    expect(sender.send).toHaveBeenCalled();
+  });
+
+  it('still HOLDS the same over-ask body when replyToInbound is NOT set — the exemption is scoped, not a blanket bypass', async () => {
+    const sender = makeSender();
+    const res = await sendChairmanSMS({ type: 'decision', body: OVER_ASK_BODY }, DAYTIME, { sender, console: silentConsole() });
+    expect(res.reason).toBe('over_ask_held');
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
   it('FAILS OPEN when the classifier throws — a gate bug never hard-blocks Adam', async () => {
     const sender = makeSender();
     const log = silentConsole();

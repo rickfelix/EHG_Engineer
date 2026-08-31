@@ -425,17 +425,17 @@ async function deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession
     }
   }
 
-  // QF-20260811-526: a missing correlation_id means THIS advisory can't carry a reply — it does NOT
-  // mean the row must stay unactioned. Exiting here (as this used to) skipped Stage 2 entirely,
-  // leaving a no-correlation advisory pending forever via the --reply path (worker signal a6067eb7;
-  // QF-20260728-468's filer measured three coordinator-health probes hit this). Fall through instead:
-  // main() proceeds to Stage 2 and reports the reply as skipped rather than sent. console.warn (not
-  // .error) deliberately — this is not a fatal branch, so it stays outside the 1:1
-  // fatal-console.error/process.exit pairing the reply-ordering test asserts on the rest of this fn.
+  // QF-20260811-526: a missing correlation_id means THIS advisory can't carry a MATCHABLE reply —
+  // it does NOT mean the reply body should be discarded. QF-20260831-605: the prior fix skipped the
+  // send entirely, which is the coordinator-ack-adam.cjs third instance of the QF-084
+  // retirement-predicate family — the row read as answered while the substance never landed
+  // anywhere. Send it as a directed session_coordination row instead (correlation_id: null in the
+  // payload — a matcher simply won't pair it with a specific await, but the body is addressable and
+  // never dropped). console.warn (not .error) deliberately — not fatal, so this stays outside the
+  // 1:1 fatal-console.error/process.exit pairing the reply-ordering test asserts on the rest of this fn.
   const correlationId = adv.payload && adv.payload.correlation_id;
   if (!correlationId) {
-    console.warn('  ⚠ --reply skipped: advisory carries no payload.correlation_id (not replyable) — proceeding to ack.');
-    return { skipped: true, reason: 'no_correlation_id' };
+    console.warn('  ⚠ advisory carries no payload.correlation_id (not matchable to a specific await) — sending as a directed reply instead of skipping.');
   }
 
   // FR-1: target the CURRENT live Adam, never a stale originating session.

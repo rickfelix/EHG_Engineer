@@ -37,7 +37,7 @@ describe('coordination-inbox hook ↔ /checkin handoff: coordinator push is NOT 
 });
 
 // A fake sb that records session_coordination UPDATEs so we can assert the read/ack stamping.
-function recordingSb({ setIdentityRow = null, sessionMeta = { role: 'worker' }, heldSd = null } = {}) {
+function recordingSb({ setIdentityRow = null, sessionMeta = { role: 'worker' }, heldSd = null, quickFixesById = {} } = {}) {
   const updates = []; // {id, patch}
   return {
     updates,
@@ -49,6 +49,12 @@ function recordingSb({ setIdentityRow = null, sessionMeta = { role: 'worker' }, 
         eq(col, val) { if (col === 'id') _eqId = val; return this; },
         gte() { return this; }, order() { return this; }, limit() { return this; },
         is() { return this; },
+        in(col, ids) {
+          const resolved = table === 'quick_fixes' && col === 'id'
+            ? { data: ids.filter((id) => quickFixesById[id]).map((id) => ({ id, status: quickFixesById[id].status })), error: null }
+            : { data: [], error: null };
+          return { limit: () => Promise.resolve(resolved) };
+        },
         maybeSingle() {
           if (table === 'claude_sessions') return Promise.resolve({ data: { metadata: sessionMeta, sd_key: heldSd }, error: null });
           if (table === 'strategic_directives_v2') return Promise.resolve({ data: { status: 'in_progress' }, error: null });
@@ -201,6 +207,42 @@ describe('surfaceCoordinatorMessages — non-draining bounded delivery (FR-1/FR-
       const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
       expect(out).toHaveLength(1);
       expect(out[0].body).toBe('the actual reply text lives here'); // NOT null
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('QF-20260831-032: an idle-absorb hint whose QF is already completed is suppressed and acked (stops resurfacing)', async () => {
+    const sb = recordingSb({ quickFixesById: { 'QF-DONE-1': { status: 'completed' } } });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      {
+        id: 'hint-1', message_type: 'INFO',
+        payload: { kind: 'coordinator_request', qf_id: 'QF-DONE-1' },
+        subject: 'Claim hint: QF-DONE-1 available (idle-absorb)',
+        created_at: '2026-08-31T07:00:00Z', read_at: '2026-08-31T07:00:00Z',
+      },
+    ];
+    try {
+      const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
+      expect(out).toEqual([]); // suppressed -- the referenced QF is no longer open
+      expect(sb.updates).toEqual([{ id: 'hint-1', patch: { acknowledged_at: expect.any(String) } }]); // acked so it never resurfaces again
+    } finally { ws.getMessagesForSession = orig; }
+  });
+
+  it('QF-20260831-032: an idle-absorb hint whose QF is still open still surfaces (two-sided — the fix does not over-suppress)', async () => {
+    const sb = recordingSb({ quickFixesById: { 'QF-OPEN-1': { status: 'open' } } });
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [
+      {
+        id: 'hint-2', message_type: 'INFO',
+        payload: { kind: 'coordinator_request', qf_id: 'QF-OPEN-1' },
+        subject: 'Claim hint: QF-OPEN-1 available (idle-absorb)',
+        created_at: '2026-08-31T07:00:00Z', read_at: '2026-08-31T07:00:00Z',
+      },
+    ];
+    try {
+      const out = await surfaceCoordinatorMessages(sb, 'sess-1', { role: 'worker' });
+      expect(out.map((m) => m.id)).toEqual(['hint-2']);
+      expect(sb.updates).toEqual([]); // directive kind, already delivered once -> no auto-ack (unchanged behavior)
     } finally { ws.getMessagesForSession = orig; }
   });
 
