@@ -18,7 +18,7 @@ import { buildCriteriaRows, EXPECTED_V1_RUNG_ID } from '../../scripts/seed-v1-au
 const NEW_LABELS = ['Automation-by-default', 'Active intelligence per stage', 'Cross-stage data contracts', 'CLI authoritative'];
 
 describe('VDR_REGISTRY — 4 new automation/intelligence entries (ordinals 17-20)', () => {
-  it('contains all 4 new capabilities as layer=process probes (3 code_grep + Automation-by-default upgraded to count_ratio)', () => {
+  it('contains all 4 new capabilities as layer=process probes (2 code_grep + 2 upgraded to count_ratio)', () => {
     for (const label of NEW_LABELS) {
       const e = VDR_REGISTRY.find((r) => r.capability === label);
       expect(e, `registry entry for "${label}"`).toBeTruthy();
@@ -27,6 +27,13 @@ describe('VDR_REGISTRY — 4 new automation/intelligence entries (ordinals 17-20
         // SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-5): upgraded off the floor to the realized rate.
         expect(e.probe.type).toBe('count_ratio');
         expect(e.probe.builtAt).toBe(0.8);
+      } else if (label === 'Cross-stage data contracts') {
+        // SD-LEO-INFRA-PHASE-DESIGN-CROSS-001: repointed from code_grep (permanently capped at
+        // partial by the anti-inflation rule) to a count_ratio over real audit_log contract_coverage
+        // enforcement telemetry -- builtAt is a measured-baseline-minus-headroom value, not the fixed
+        // 0.8 used by Automation-by-default, so it is asserted separately rather than pinned to 0.8.
+        expect(e.probe.type).toBe('count_ratio');
+        expect(e.probe.table).toBe('audit_log');
       } else {
         expect(e.probe.type).toBe('code_grep');
         expect(e.probe.builtWhen).toBe('present');
