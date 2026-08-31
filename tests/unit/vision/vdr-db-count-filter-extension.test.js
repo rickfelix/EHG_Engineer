@@ -90,14 +90,28 @@ describe('"Calibrate the gates" probe flip', () => {
     expect(entry.probe.filter['metadata->>calibration_read_at']).toEqual({ not: null });
   });
 
+  // SD-LEO-INFRA-SEED-OPPORTUNITY-BLUEPRINTS-001 (FR-5, TESTING finding T-8): min raised
+  // 1->3 and an is_active:true filter added, so a single stray/seeded row (or a future
+  // archive event on a seeded row) can never alone flip this capability green.
+  it('FR-5: is_active:true is part of the filter and min is raised to 3', () => {
+    expect(entry.probe.filter.is_active).toBe(true);
+    expect(entry.probe.min).toBe(3);
+  });
+
   it('honest-low: empty/unread cohort reads unbuilt via dbCountProbe, not fabricated built', async () => {
     const supabase = stubSupabase(0);
     const res = await dbCountProbe(entry.probe, { supabase });
     expect(res.status).toBe('unbuilt');
   });
 
-  it('built once >=1 row has been read (min:1 satisfied)', async () => {
+  it('a lone seeded row (count=1) reads partial, not built, post-FR-5 (min:3 not met)', async () => {
     const supabase = stubSupabase(1);
+    const res = await dbCountProbe(entry.probe, { supabase });
+    expect(res.status).toBe('partial');
+  });
+
+  it('built once >=3 rows have been read (min:3 satisfied)', async () => {
+    const supabase = stubSupabase(3);
     const res = await dbCountProbe(entry.probe, { supabase });
     expect(res.status).toBe('built');
   });
