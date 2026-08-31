@@ -242,6 +242,12 @@ export class HandoffOrchestrator {
           `Prerequisite preflight failed: ${blockingIssues.map(i => i.code).join(', ')}`
         );
         preflightResult.preflightIssues = blockingIssues;
+        // SD-FDBK-FIX-HARNESS-REVIEW-VALIDATION-001: without this, validation_audit_log
+        // (HandoffRecorder._logGovernanceAudit) always persisted metadata.failed_gate=null
+        // for every PREREQUISITE_PREFLIGHT_FAILED row -- 97% of 7d preflight failures were
+        // collapsed to an undiagnosable generic bucket even though the real code was already
+        // computed above and separately threaded into sd_phase_handoffs.validation_details.
+        preflightResult.failedGate = blockingIssues[0]?.code ?? null;
         await this.recorder.recordFailure(normalizedType, sdId, preflightResult, null);
         return preflightResult;
       }

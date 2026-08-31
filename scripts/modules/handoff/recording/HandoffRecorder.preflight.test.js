@@ -218,6 +218,41 @@ describe('HandoffRecorder — FR-1/FR-2/FR-3 wiring', () => {
     expect(acceptedRow.metadata.preflight_remediation).toBeTruthy();
   });
 
+  it('SD-FDBK-FIX-HARNESS-REVIEW-VALIDATION-001: a preflight rejection with failedGate set persists metadata.failed_gate on the validation_audit_log row (not null)', async () => {
+    const supabase = createMockSupabase({
+      strategic_directives_v2: [{ id: 'SD-T-008', sd_key: 'SD-T-008' }]
+    });
+    const recorder = new HandoffRecorder(supabase, fakeDeps());
+
+    // Shape matches HandoffOrchestrator.js's preflight rejection builder after the fix:
+    // failedGate is now set from blockingIssues[0].code alongside the existing preflightIssues.
+    await recorder.recordFailure('LEAD-TO-PLAN', 'SD-T-008', {
+      reasonCode: 'PREREQUISITE_PREFLIGHT_FAILED',
+      message: 'Prerequisite preflight failed: SUBAGENT_EVIDENCE_MISSING',
+      failedGate: 'SUBAGENT_EVIDENCE_MISSING',
+      preflightIssues: [{ code: 'SUBAGENT_EVIDENCE_MISSING', message: 'x', remediation: 'y', missingAgents: ['TESTING'] }]
+    }, null);
+
+    const auditRow = supabase.tables.validation_audit_log[0];
+    expect(auditRow.metadata.failed_gate).toBe('SUBAGENT_EVIDENCE_MISSING');
+  });
+
+  it('SD-FDBK-FIX-HARNESS-REVIEW-VALIDATION-001 regression: a preflight rejection with no failedGate still persists null (pre-fix behavior unchanged when absent)', async () => {
+    const supabase = createMockSupabase({
+      strategic_directives_v2: [{ id: 'SD-T-009', sd_key: 'SD-T-009' }]
+    });
+    const recorder = new HandoffRecorder(supabase, fakeDeps());
+
+    await recorder.recordFailure('LEAD-TO-PLAN', 'SD-T-009', {
+      reasonCode: 'PREREQUISITE_PREFLIGHT_FAILED',
+      message: 'Prerequisite preflight failed: SUBAGENT_EVIDENCE_MISSING',
+      preflightIssues: [{ code: 'SUBAGENT_EVIDENCE_MISSING', message: 'x', remediation: 'y', missingAgents: ['TESTING'] }]
+    }, null);
+
+    const auditRow = supabase.tables.validation_audit_log[0];
+    expect(auditRow.metadata.failed_gate).toBeNull();
+  });
+
   it('TS-6: an accepted handoff with no prior SAEM rejection carries no stamp', async () => {
     const supabase = createMockSupabase({
       strategic_directives_v2: [{ id: 'SD-T-006', sd_key: 'SD-T-006' }]
