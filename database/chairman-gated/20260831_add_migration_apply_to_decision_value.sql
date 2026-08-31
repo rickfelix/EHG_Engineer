@@ -6,7 +6,7 @@
 -- 3-factor ceremony (--prod-deploy + single-use token + an @approved-by header matching
 -- git config user.email).
 --
--- @approved-by: <pending -- apply via the chairman's 3-factor ceremony>
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- requires-chairman-apply
 --
