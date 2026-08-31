@@ -111,7 +111,9 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // commit) whenever ORPHAN_ENTRIES genuinely changes size; a silent change fails CI.
   // SD-LEO-INFRA-COMPLETION-GATE-DATA-001-B: 15 -> 17. Two new shipped-but-not-applied entries
   // (context-usage-log-leo-phase-tagging-migration, operator-cash-burn-manual-revenue-provenance-migration).
-  const PINNED_TOTAL_ENTRIES = 17;
+  // QF-20260831-313: 17 -> 18. One new seat-population-orphan mechanism-proof specimen
+  // (seat-population:fixture-dormant-seat-001).
+  const PINNED_TOTAL_ENTRIES = 18;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);
