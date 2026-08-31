@@ -16,6 +16,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const DECISION_ID = 'af7d6a00-295e-465f-a99c-414dc4aca283';
 
@@ -47,4 +48,6 @@ async function main() {
   console.log('Closed:', JSON.stringify(data, null, 2));
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e.message); process.exit(1); });
+}
