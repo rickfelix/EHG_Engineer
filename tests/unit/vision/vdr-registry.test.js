@@ -11,6 +11,9 @@ import {
   STATUS_SCORE,
 } from '../../../lib/vision/vdr-registry.js';
 import { runProbe } from '../../../lib/vision/vdr-probes.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // Build a CAPABILITY GAP markdown table from the registry labels so coherence passes by construction.
 function visionFixture(labels = VDR_REGISTRY.map((e) => e.capability)) {
@@ -209,5 +212,45 @@ describe('formatGaugeForSummary (FR-4/FR-5 single-source display mapping)', () =
   it('treats null/garbage gauge as unavailable (never throws)', () => {
     expect(formatGaugeForSummary(null).available).toBe(false);
     expect(formatGaugeForSummary(undefined).pct).toBeNull();
+  });
+});
+
+// SD-LEO-INFRA-PHASE-DESIGN-CROSS-001 (TS-1/TS-2/TS-4) — 'Cross-stage data contracts' probe repoint.
+describe("'Cross-stage data contracts' probe (SD-LEO-INFRA-PHASE-DESIGN-CROSS-001)", () => {
+  const entry = VDR_REGISTRY.find((e) => e.capability === 'Cross-stage data contracts');
+
+  it('uses probe.type=count_ratio, not code_grep (TS-2)', () => {
+    expect(entry).toBeDefined();
+    expect(entry.probe.type).toBe('count_ratio');
+  });
+
+  it('numerFilter is denomFilter plus exactly one key, with all shared keys identical (RATIO=SPANS invariant, TS-1)', () => {
+    const { denomFilter, numerFilter } = entry.probe;
+    const denomKeys = Object.keys(denomFilter);
+    const numerKeys = Object.keys(numerFilter);
+    expect(numerKeys.length).toBe(denomKeys.length + 1);
+    for (const k of denomKeys) {
+      expect(numerFilter[k]).toEqual(denomFilter[k]);
+    }
+    const extraKeys = numerKeys.filter((k) => !denomKeys.includes(k));
+    expect(extraKeys).toEqual(['metadata->>valid']);
+  });
+
+  it('rationale comment cites the fresh total, valid count, ratio, measurement date, and builtAt value (TS-4)', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '../../../lib/vision/vdr-registry.js'), 'utf8');
+    const idx = src.indexOf("capability: 'Cross-stage data contracts'");
+    expect(idx).toBeGreaterThan(-1);
+    // The rationale comment sits between the entry's opening brace and its probe field.
+    const probeIdx = src.indexOf('probe:', idx);
+    expect(probeIdx).toBeGreaterThan(idx);
+    const block = src.slice(idx, probeIdx);
+    expect(block).toMatch(/total=11525/);
+    expect(block).toMatch(/valid=11474/);
+    expect(block).toMatch(/ratio=0\.995575/);
+    expect(block).toMatch(/2026-08-31/);
+    expect(block).toMatch(/builtAt = round\(/);
+    expect(block).toMatch(/= 0\.991/);
+    expect(entry.probe.builtAt).toBe(0.991);
   });
 });
