@@ -983,3 +983,41 @@ is NULL, if either clause omits the resolver, if the resolver is not `SECURITY D
 `tests/integration/creative-asset-variant-scores-rls-crosstenant.db.test.js`, which performs the
 real authenticated-role cross-tenant INSERT and asserts 42501 — that suite is expected to fail its
 PREFLIGHT until this ceremony runs.
+
+## Applying `20260831_rls_lockdown_triage_three_failing_001.sql`
+
+**SD-LEO-FIX-TRIAGE-THREE-FAILING-001, leg (a).** security-linter-sentinel.yml (--strict) has
+failed every weekly/manual run since at least 2026-06-29 on REAL findings: 12 public tables with
+RLS disabled, one (`claim_rejects`) carrying a `session_id` column. Confirmed live via
+`information_schema.role_table_grants`: `venture_preview_instances` grants BOTH `anon` and
+`authenticated` full `SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE` with RLS off — an
+unauthenticated read/write/delete surface via PostgREST today. Confirmed via repo-wide grep that
+none of the 12 tables are referenced by any frontend/client code — every known consumer
+(`lib/venture-deploy/preview.js`, `lib/eva/stage-templates/analysis-steps/stage-24-go-live.js`,
+plus backend cron/automation) already uses the service role, which bypasses RLS regardless.
+
+### What it does
+- `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 12 tables (no policies added — default-deny
+  for anon/authenticated; service_role is unaffected).
+- `REVOKE INSERT, UPDATE, DELETE, TRUNCATE ... FROM anon, authenticated` on all 12 tables.
+- Mirrors `20260731_coordination_receipts_rls_posture.sql` exactly — same reasoning, same shape.
+
+Tables: `claim_rejects`, `coverage_matrix`, `coverage_matrix_rotation_runs`,
+`door_routing_ledger`, `north_star`, `scope_completion_chain`, `selection_postures`,
+`sourcing_chairman_queue`, `v_hc_flag_enabled`, `v_id`, `v_s22_flag_enabled`,
+`venture_preview_instances`.
+
+**Apply (chairman ceremony):**
+```bash
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260831_rls_lockdown_triage_three_failing_001.sql" \
+  --prod-deploy --allow-any-path
+```
+
+**Post-apply verification**: `node scripts/sentinels/audit-security-linter.mjs --strict` —
+`rls_disabled_in_public` and `sensitive_columns_exposed` should both drop to 0.
+
+Rollback: `20260831_rls_lockdown_triage_three_failing_001_DOWN.sql` — restores the exact
+pre-migration grants and re-disables RLS (re-opens the exposure; only apply if an undiscovered
+legitimate anon/authenticated caller surfaces post-apply).
