@@ -7,16 +7,30 @@
 import { describe, it, expect, vi } from 'vitest';
 import { stampLastFired, stampFromGithubActionsRun } from '../../../lib/periodic-liveness/stamp-last-fired.js';
 
-function fakeSupabase({ matchedRows, filterSpy }) {
+function fakeSupabase({ matchedRows, filterSpy, existingOnDisambiguate = null }) {
   return {
     from: () => ({
       update: (payload) => ({
         eq: (col1, val1) => ({
-          eq: (col2, val2) => ({
-            select: () => {
-              filterSpy?.({ payload, col1, val1, col2, val2 });
+          eq: (col2, val2) => {
+            const resolve = (orExpr) => {
+              filterSpy?.({ payload, col1, val1, col2, val2, orExpr });
               return Promise.resolve({ data: val2 === 'github_actions_api' || val2 === 'self_stamped' ? matchedRows : [], error: null });
-            },
+            };
+            return {
+              // github_actions_api path: .eq().eq().or().select()
+              or: (orExpr) => ({ select: () => resolve(orExpr) }),
+              // self_stamped path (stampLastFired): .eq().eq().select() directly, no .or()
+              select: () => resolve(undefined),
+            };
+          },
+        }),
+      }),
+      // The disambiguation existence-check (0-rows path): select().eq().eq().maybeSingle()
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: existingOnDisambiguate, error: null }),
           }),
         }),
       }),
@@ -36,7 +50,7 @@ describe('stampFromGithubActionsRun', () => {
   });
 
   it('is a no-op with a reason when the process_key is not registered as github_actions_api', async () => {
-    const supabase = fakeSupabase({ matchedRows: [] });
+    const supabase = fakeSupabase({ matchedRows: [], existingOnDisambiguate: null });
     const result = await stampFromGithubActionsRun(supabase, 'gha_cron:unregistered.yml', '2026-07-10T00:00:00Z');
     expect(result).toEqual({ stamped: false, reason: 'not_registered_as_github_actions_api' });
   });
@@ -45,6 +59,23 @@ describe('stampFromGithubActionsRun', () => {
     const supabase = fakeSupabase({ matchedRows: [] });
     await expect(stampFromGithubActionsRun(supabase, '', '2026-07-10T00:00:00Z')).rejects.toThrow(/requires a processKey/);
     await expect(stampFromGithubActionsRun(supabase, 'gha_cron:foo.yml', '')).rejects.toThrow(/requires ranAtIso/);
+  });
+
+  // SD-LEO-FIX-GHA-CRON-LIVENESS-001: MONOTONIC GUARD. A stale GitHub API batch must never
+  // regress an already-fresher last_fired_at backward.
+  it('filters the UPDATE to newer-or-null last_fired_at (the monotonic guard)', async () => {
+    const calls = [];
+    const supabase = fakeSupabase({ matchedRows: [{ process_key: 'gha_cron:foo.yml' }], filterSpy: (c) => calls.push(c) });
+    await stampFromGithubActionsRun(supabase, 'gha_cron:foo.yml', '2026-07-10T00:00:00Z');
+    expect(calls[0].orExpr).toBe('last_fired_at.is.null,last_fired_at.lt.2026-07-10T00:00:00Z');
+  });
+
+  it('is a correctly-skipped no-op (not an error, not "unregistered") when the row already carries a newer stamp', async () => {
+    // The monotonic-guard filter matches 0 rows because the row is already fresher, but the
+    // process_key IS registered -- the disambiguation existence check confirms that.
+    const supabase = fakeSupabase({ matchedRows: [], existingOnDisambiguate: { process_key: 'gha_cron:foo.yml' } });
+    const result = await stampFromGithubActionsRun(supabase, 'gha_cron:foo.yml', '2026-07-10T00:00:00Z');
+    expect(result).toEqual({ stamped: false, reason: 'not_newer_than_current_stamp' });
   });
 
   it('stampLastFired (existing self_stamped helper) is unaffected by the new sibling function', async () => {
