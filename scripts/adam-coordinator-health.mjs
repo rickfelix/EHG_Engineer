@@ -82,8 +82,38 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
     rows.find((s) => s.metadata?.is_coordinator === true || String(s.metadata?.is_coordinator) === 'true')
       ?.session_id || null;
   const live = liveFleetWorkers(rows, coordinatorId, nowMs);
-  const claimed = live.filter((s) => !!s.sd_key);
-  const idle = live.filter((s) => !s.sd_key);
+
+  // QF-20260831-568: sd_key is a MIRROR of a past claim decision, not the authoritative claim --
+  // it can read NULL while strategic_directives_v2.claiming_session_id (or quick_fixes, which never
+  // mirrors into claude_sessions at all) shows the seat genuinely claimed. Derive claimed/idle from
+  // the authoritative claim tables; keep sd_key only as a desync cross-check, never as the signal.
+  const liveIds = live.map((s) => s.session_id).filter(Boolean);
+  let authoritativeClaimedIds = new Set();
+  if (liveIds.length > 0) {
+    // Bounded by liveIds (the live-worker set, well under POSTGREST_MAX_ROWS) -- explicit limit
+    // makes that bound self-documenting rather than implicit (count-truncation-diff-lint).
+    const { data: sdClaims } = await supabase
+      .from('strategic_directives_v2')
+      .select('claiming_session_id')
+      .in('claiming_session_id', liveIds)
+      .in('status', IN_FLIGHT_STATUSES)
+      .limit(999);
+    const { data: qfClaims } = await supabase
+      .from('quick_fixes')
+      .select('claiming_session_id')
+      .in('claiming_session_id', liveIds)
+      .eq('status', 'in_progress')
+      .limit(999);
+    authoritativeClaimedIds = new Set(
+      [...(sdClaims || []), ...(qfClaims || [])].map((r) => r.claiming_session_id).filter(Boolean)
+    );
+  }
+  const claimed = live.filter((s) => authoritativeClaimedIds.has(s.session_id));
+  const idle = live.filter((s) => !authoritativeClaimedIds.has(s.session_id));
+  // Loud desync flag: a seat where the mirror disagrees with the authoritative claim state.
+  const mirror_desync_count = live.filter(
+    (s) => !!s.sd_key !== authoritativeClaimedIds.has(s.session_id)
+  ).length;
 
   // QF-20260725-089: this counted raw draft_unclaimed rows with NO eligibility gate, so HELD work
   // read as available and IDLE_WITH_BACKLOG fired against the coordinator for a dispatch gap that
@@ -116,6 +146,7 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
     live_workers: live.length,
     claimed: claimed.length,
     idle: idle.length,
+    mirror_desync_count,
     dispatchable_backlog_size: backlogSize,
     // QF-20260725-879: the UNFILTERED draft+unclaimed head-count, kept alongside the filtered
     // depth so the S4 raw-SQL cross-check can compare like with like (see its use below).
