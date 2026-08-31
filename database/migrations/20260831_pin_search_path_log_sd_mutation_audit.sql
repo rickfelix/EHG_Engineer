@@ -1,0 +1,21 @@
+-- @approved-by: rickfelix@example.com
+-- =============================================================================
+-- Pin search_path on log_sd_mutation_audit (function_search_path_mutable)
+-- SD-LEO-FIX-TRIAGE-THREE-FAILING-001, leg (a) mechanical subset
+-- =============================================================================
+-- security-linter-sentinel.yml (--strict) flags public.log_sd_mutation_audit() as a
+-- SECURITY DEFINER function without a pinned search_path -- the CVE-2018-1058
+-- privilege-escalation class (an unqualified name inside the function body could be
+-- shadowed by a caller-controlled schema).
+--
+-- Schema analysis (pg_get_functiondef inspected): a trigger function on
+-- strategic_directives_v2 that only references public.audit_log (unqualified INSERT)
+-- and jsonb_build_object/COALESCE/current_setting (pg_catalog builtins). No temp
+-- objects. Mirrors the established precedent
+-- (20260602_pin_search_path_security_definer_functions.sql): ALTER FUNCTION ... SET
+-- search_path is non-destructive to the body and takes effect on next call.
+--
+-- pinned path: public, pg_catalog
+-- =============================================================================
+
+ALTER FUNCTION public.log_sd_mutation_audit() SET search_path = public, pg_catalog;
