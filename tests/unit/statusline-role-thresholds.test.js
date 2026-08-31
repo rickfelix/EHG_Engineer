@@ -224,9 +224,9 @@ describe('sync-context-usage transformEntry (FR-2a: LONG-key fix + loop_name)', 
     const fs = require('node:fs');
     const path = require('node:path');
     const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
-    // QF-20260830-792: batch.length was narrowed to validBatch.length so the legacy-row-skip
-    // fix (rows filtered out for missing session_id) isn't double-counted as an error too.
-    expect(src).toMatch(/errors \+= validBatch\.length;\s*\n\s*break;/);
+    // QF-20260830-942: validBatch.length was narrowed to dedupedByKey.size so the same-batch
+    // (session_id,timestamp) dedup fix isn't double-counted as an error too.
+    expect(src).toMatch(/errors \+= dedupedByKey\.size;\s*\n\s*break;/);
     expect(src).toMatch(/if \(!lastPersistedEntry\)/);
   });
 

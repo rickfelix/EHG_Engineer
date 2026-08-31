@@ -200,7 +200,12 @@ async function syncToDatabase() {
     const validBatch = batch.filter((e) => !!e.session_id);
     skippedLegacy += batch.length - validBatch.length;
     if (validBatch.length === 0) { lastPersistedEntry = batch[batch.length - 1]; continue; }
-    const transformed = validBatch.map(transformEntry);
+    // QF-20260830-942: two lines in the same batch sharing (session_id, timestamp) make Postgres
+    // refuse the whole upsert ("ON CONFLICT DO UPDATE command cannot affect row a second time")
+    // -- it cannot apply DO UPDATE twice to the same conflict target in one statement. Dedupe by
+    // the same key the upsert conflicts on, keeping the LAST occurrence (latest write wins).
+    const dedupedByKey = new Map(validBatch.map((e) => [`${e.session_id}|${e.timestamp}`, e]));
+    const transformed = [...dedupedByKey.values()].map(transformEntry);
 
     let { error } = await supabase
       .from('context_usage_log')
@@ -223,10 +228,10 @@ async function syncToDatabase() {
 
     if (error) {
       console.error(`Error syncing batch ${i / BATCH_SIZE + 1}:`, error.message);
-      errors += validBatch.length;
+      errors += dedupedByKey.size;
       break; // stop advancing state past a confirmed failure
     } else {
-      synced += validBatch.length;
+      synced += dedupedByKey.size;
       lastPersistedEntry = batch[batch.length - 1];
     }
   }
