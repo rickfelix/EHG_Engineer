@@ -53,7 +53,7 @@ const POST_HANDOFF_SD_STATE = {
   'LEAD-FINAL-APPROVAL': { status: 'completed', current_phase: 'COMPLETED' },
 };
 
-async function reconcileSDStateAfterHandoff(handoffType, sdId, supabase) {
+export async function reconcileSDStateAfterHandoff(handoffType, sdId, supabase) {
   const expected = POST_HANDOFF_SD_STATE[handoffType.toUpperCase()];
   if (!expected || !sdId) return;
 

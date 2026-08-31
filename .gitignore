@@ -370,6 +370,9 @@ src/client/dist/
 .claude-code-config.json
 .claude-status-line
 .leo-status.json
+# SD-LEO-INFRA-LEO-PHASE-TAGGED-001: atomic tmp+rename write orphan if a process is killed
+# mid-write (rename never runs) -- lib/leo-status-file.js
+.leo-status.json.tmp-*
 
 # LEO stack server logs (regenerated on restart)
 .logs/

@@ -43,6 +43,14 @@ ORDER BY timestamp DESC;
 -- being silently absent the way a plain GROUP BY over context_usage_log alone would be
 -- (LEAD-phase VALIDATION confirmed today's aggregation functions silently omit zero-row
 -- groups; this view exists specifically so that failure mode cannot repeat for this data).
+--
+-- EXEC-phase TESTING (evidence c6cdd4ca) measured two DIFFERENT phase vocabularies:
+-- sd_phase_handoffs.to_phase uses the coarse {LEAD, PLAN, EXEC, COMPLETED, PLAN_PRD (legacy)}
+-- set, while context_usage_log.leo_phase (written from POST_HANDOFF_SD_STATE in
+-- execution-helpers.js) uses the finer {PLAN_PRD, EXEC, PLAN_VERIFICATION, LEAD_FINAL} set.
+-- An un-normalized join reported every PLAN/LEAD attempt as a false gap. Normalize the finer
+-- side down to the coarser one before joining -- PLAN_PRD/PLAN_VERIFICATION -> PLAN,
+-- LEAD_FINAL -> LEAD -- so the two vocabularies actually overlap.
 CREATE OR REPLACE VIEW v_leo_phase_telemetry_gaps
   WITH (security_invoker = on) AS
 WITH phase_attempts AS (
@@ -54,10 +62,18 @@ WITH phase_attempts AS (
   WHERE h.to_phase IS NOT NULL
 ),
 usage_counts AS (
-  SELECT sd_key, leo_phase, COUNT(*) AS row_count
+  SELECT
+    sd_key,
+    CASE leo_phase
+      WHEN 'PLAN_PRD' THEN 'PLAN'
+      WHEN 'PLAN_VERIFICATION' THEN 'PLAN'
+      WHEN 'LEAD_FINAL' THEN 'LEAD'
+      ELSE leo_phase
+    END AS leo_phase,
+    COUNT(*) AS row_count
   FROM context_usage_log
   WHERE sd_key IS NOT NULL AND leo_phase IS NOT NULL
-  GROUP BY sd_key, leo_phase
+  GROUP BY 1, 2
 )
 SELECT
   pa.sd_key,
