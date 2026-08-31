@@ -275,6 +275,19 @@ describe('produceJourneyWalkFindings', () => {
     expect(await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, {})).toEqual([]);
   });
 
+  it('SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-1/TS-9: a status=error walk result (a crash caught inside journey-walk-orchestrator.js, no longer thrown) emits a medium-severity finding, not [] and not a crash', async () => {
+    const supabase = makeSupabase({
+      ventures: { data: VENTURE_WITH_URL, error: null },
+      strategic_directives_v2: { data: [ORCH_WITH_STEPS], error: null },
+    });
+    const runVentureJourneyWalk = vi.fn(async () => ({ status: 'error', reason: 'unexpected walk crash', testRunId: 'run-3' }));
+    const out = await produceJourneyWalkFindings(supabase, 'venture-1', silentLogger, { runVentureJourneyWalk });
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe('medium');
+    expect(out[0].detail).toContain('reason=unexpected walk crash');
+    expect(out[0].detail).toContain('testRunId=run-3');
+  });
+
   it('is best-effort: returns [] when runVentureJourneyWalk itself throws', async () => {
     const supabase = makeSupabase({
       ventures: { data: VENTURE_WITH_URL, error: null },

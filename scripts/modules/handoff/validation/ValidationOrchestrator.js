@@ -385,7 +385,13 @@ export class ValidationOrchestrator {
             // block -- e.g. exec_boundary_hold, which can legitimately outlast 24h/10
             // attempts. Exempt gates are never escalated to FAIL; ceiling stays computed
             // (harmless) but its result is ignored below.
-            const ceiling = gate.exemptFromWaitCeiling === true
+            // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-3: a gate may also carry the exemption
+            // on the specific WAIT RESULT rather than the whole gate config -- needed when
+            // one gate (e.g. prerequisite-check.js) emits several distinct WAIT reasons and
+            // only ONE of them (a genuinely-not-yet-attempted journey walk) should be exempt,
+            // while another (children-incomplete, from the same gate) must keep the ceiling.
+            const waitCeilingExempt = gate.exemptFromWaitCeiling === true || gateResult.exemptFromWaitCeiling === true;
+            const ceiling = waitCeilingExempt
               ? { exceeded: false, reason: null }
               : hasExceededMaxWait({
                 wait_attempts: prior.wait_attempts,
@@ -416,10 +422,21 @@ export class ValidationOrchestrator {
               // FR-5: advance the wait accounting so the executor persists the new
               // count + first-wait anchor (first wait stamps "now"; subsequent waits
               // preserve the original anchor for the wall-clock guard).
-              results.waitMetadata = {
-                wait_attempts: prior.wait_attempts + 1,
-                first_wait_at: prior.first_wait_at || new Date().toISOString()
-              };
+              // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-3 (EXEC TESTING finding): an EXEMPT wait
+              // must NOT advance wait_attempts/first_wait_at -- _loadPriorWaitState keys only
+              // on (sd_id, handoff_type), with no gate/reason granularity, so an unfrozen
+              // counter accumulated during a legitimately-exempt journey-walk wait would
+              // silently carry over and falsely trip WAIT_LIMIT_EXCEEDED on a LATER,
+              // non-exempt WAIT from the same gate (e.g. children-incomplete) -- reproducing
+              // exactly the false-escalation class this SD exists to fix. Freeze the counter
+              // (persist prior unchanged) while exempt; only advance it on a real, ceiling-
+              // subject wait.
+              results.waitMetadata = waitCeilingExempt
+                ? { wait_attempts: prior.wait_attempts, first_wait_at: prior.first_wait_at }
+                : {
+                  wait_attempts: prior.wait_attempts + 1,
+                  first_wait_at: prior.first_wait_at || new Date().toISOString()
+                };
               // Still mark not-passed so handoff doesn't advance, but DO NOT set failedGate
               // (failedGate is a failure marker — wait is not a failure).
               results.passed = false;

@@ -701,7 +701,14 @@ export class HandoffRecorder {
         // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: persist wait-loop accounting
         // so the NEXT attempt's max-wait ceiling can detect a perpetually-stuck gate.
         wait_attempts: Number(result.waitMetadata?.wait_attempts) || 0,
-        first_wait_at: result.waitMetadata?.first_wait_at || new Date().toISOString()
+        // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-3 (PLAN_VERIFICATION finding): `||` cannot
+        // distinguish "no waitMetadata supplied" (legacy/first-ever-wait -- stamp now) from
+        // "waitMetadata supplied with first_wait_at deliberately frozen at null" (an EXEMPT
+        // wait, which must NOT start the wall-clock ceiling). The old `||` stamped "now" in
+        // BOTH cases, silently undoing the orchestrator's freeze at the persistence boundary
+        // -- the exact false-escalation class this SD exists to prevent, surviving through
+        // the anchor instead of the counter.
+        first_wait_at: result.waitMetadata ? (result.waitMetadata.first_wait_at ?? null) : new Date().toISOString()
       },
       created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
     };
