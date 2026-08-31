@@ -66,9 +66,17 @@ const OBSERVED_GAP_MARGIN = 1.2;
 
 function overdueThresholdMs(row, ghaGapStats) {
   const declaredGrace = Number(row.grace_multiplier);
+  // QF-20260831-020: a self_stamped row whose last_fired_at is itself produced by a GHA-cron-
+  // triggered invocation (liveness_source_ref.workflow_cron present -- the same signal
+  // gapAdjustedAgeMs already gates on below) inherits GitHub's own scheduling jitter exactly like
+  // a github_actions_api row does, but previously got NONE of the floor below. MEASURED: the
+  // adam-decision-scheduler-001 G3 gauge (self_stamped, expected_interval=3600s, grace=2 -> 2h
+  // threshold) alarmed OVERDUE on every cycle while its sibling github_actions_api row for the
+  // SAME cron stayed OK, because GHA delivery for that workflow jitters 3.5-8.5h.
+  const ghaTriggered = row.liveness_source === 'github_actions_api' || !!row.liveness_source_ref?.workflow_cron;
   // Math.max(NaN, N) is NaN -- a row with a missing grace_multiplier must not silently disable
   // the floor for this source (0, not NaN, preserves Math.max's usual behavior everywhere else).
-  let grace = row.liveness_source === 'github_actions_api'
+  let grace = ghaTriggered
     ? Math.max(Number.isFinite(declaredGrace) ? declaredGrace : 0, GHA_GRACE_MULTIPLIER_FLOOR)
     : declaredGrace;
   // QF-20260824-373: also floor at this cycle's OBSERVED worst-case gap (self-adjusting -- never

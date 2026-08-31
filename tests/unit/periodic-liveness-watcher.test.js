@@ -390,6 +390,37 @@ describe('evaluateRow', () => {
     expect(result.state).toBe(STATE.OVERDUE);
   });
 
+  // QF-20260831-020: a self_stamped row whose liveness_source_ref DOES carry workflow_cron (i.e.
+  // its last_fired_at is itself produced by a GHA-cron-triggered invocation) must get the SAME
+  // measured-delivery floor as a github_actions_api row -- the g3-armed adam-decision-scheduler
+  // gauge alarmed OVERDUE at 2h (300s... here 3600s*grace=2 threshold) while GHA delivery for the
+  // same workflow jitters 3.5-8.5h.
+  it('self_stamped: a row carrying liveness_source_ref.workflow_cron DOES get the GHA measured-delivery floor', async () => {
+    const firedAt = new Date('2026-08-23T15:00:00Z');
+    const now = new Date(firedAt.getTime() + 4 * 60 * 60 * 1000); // 4h later -- beyond 3600s*2=2h, within 3600s*6=6h floor
+    const row = selfStampedRow({
+      last_fired_at: firedAt.toISOString(),
+      expected_interval_seconds: 3600,
+      grace_multiplier: 2,
+      liveness_source_ref: { workflow_cron: '20 0-1,11-23 * * *' },
+    });
+    const result = await evaluateRow(row, { now: now.getTime() });
+    expect(result.state).toBe(STATE.OK);
+  });
+
+  it('self_stamped: a row carrying liveness_source_ref.workflow_cron still OVERDUEs once staleness exceeds the floor too', async () => {
+    const firedAt = new Date('2026-08-23T15:00:00Z');
+    const now = new Date(firedAt.getTime() + 7 * 60 * 60 * 1000); // 7h later -- beyond the 6h floor
+    const row = selfStampedRow({
+      last_fired_at: firedAt.toISOString(),
+      expected_interval_seconds: 3600,
+      grace_multiplier: 2,
+      liveness_source_ref: { workflow_cron: '20 0-1,11-23 * * *' },
+    });
+    const result = await evaluateRow(row, { now: now.getTime() });
+    expect(result.state).toBe(STATE.OVERDUE);
+  });
+
   // QF-20260824-373: the QF-631 fix's fixed GHA_GRACE_MULTIPLIER_FLOOR=6 (30min threshold on a
   // declared 300s workflow) recurred after shipping -- overnight GitHub scheduler throttling
   // produced WORSE gaps than the one daytime incident it was measured from. Real evidence: three
