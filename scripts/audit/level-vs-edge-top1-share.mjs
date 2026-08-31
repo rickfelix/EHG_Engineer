@@ -15,11 +15,16 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { pathToFileURL } from 'node:url';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 function parseArgs(argv) {
-  const days = Number(argv.find((a, i) => argv[i - 1] === '--days')) || 30;
-  const threshold = Number(argv.find((a, i) => argv[i - 1] === '--threshold')) || 0.5;
+  // `|| default` treats an explicit --days 0 / --threshold 0 as falsy and silently substitutes
+  // the default -- use an explicit undefined/NaN check instead (adversarial-review finding).
+  const rawDays = Number(argv.find((a, i) => argv[i - 1] === '--days'));
+  const rawThreshold = Number(argv.find((a, i) => argv[i - 1] === '--threshold'));
+  const days = Number.isFinite(rawDays) && argv.includes('--days') ? rawDays : 30;
+  const threshold = Number.isFinite(rawThreshold) && argv.includes('--threshold') ? rawThreshold : 0.5;
   return { days, threshold };
 }
 
@@ -32,6 +37,15 @@ function parseArgs(argv) {
  * catch (measured live: WAVE_LINKAGE_STARVATION's 21 repeats over 7 days reads as a mere 5.8%
  * against ~340 mostly-unique completion-flag/one-off keys, when the actual question is "of the
  * conditions that DO repeat, does one dominate").
+ *
+ * INTERPRETATION CAVEAT (adversarial-review finding on this same PR): with few surviving
+ * repeating-key groups, top1Share is mechanically pushed toward or past the 50% threshold by
+ * construction (e.g. exactly 2 groups always yields >=50% for the larger one) regardless of
+ * whether the leading group is actually pathological relative to overall traffic. This census
+ * is a signal for a human/coordinator to interpret alongside the group COUNT and the raw counts
+ * printed above, not a fully-automated pass/fail oracle in isolation -- a future caller wiring
+ * this into a hard CI gate should also require a minimum number of surviving groups (e.g. >=3)
+ * before treating top1Share as meaningful.
  *
  * @param {Array<object>} rows
  * @param {(row: object) => string|null} groupKeyOf
@@ -83,6 +97,9 @@ async function main() {
   console.log('[level-vs-edge-census] PASS');
 }
 
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || import.meta.url === new URL(`file:${process.argv[1]}`, 'file:').href) {
+// Idiomatic repo pattern (matches scripts/adam-triangulation-audit-stamp.mjs and others) --
+// adversarial review flagged the prior ad-hoc `file://` string-building guard as a known-fragile
+// Windows pattern (missing the third slash) that only worked here by accident of the `||` fallback.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => { console.error('[level-vs-edge-census] ERROR:', e?.message || e); process.exit(1); });
 }

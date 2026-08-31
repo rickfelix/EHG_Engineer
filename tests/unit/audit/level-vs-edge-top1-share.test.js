@@ -52,4 +52,14 @@ describe('computeTop1Share', () => {
     expect(res.total).toBe(2);
     expect(res.groups[0].key).toBe('x');
   });
+
+  it('ADVERSARIAL-REVIEW: the 2-group boundary mechanically yields >=50% for the larger group -- documented interpretation caveat, not a bug', () => {
+    // Regardless of the SIZE gap between the two groups, top1Share is pushed to/past 50% purely
+    // by having only 2 surviving repeating-key groups -- pins the documented caveat so a future
+    // caller wiring this into a hard gate is not surprised by it.
+    const rows = [row('a'), row('a'), row('b'), row('b')]; // even split
+    const res = computeTop1Share(rows, (r) => r.metadata?.dedup_key);
+    expect(res.groups.length).toBe(2);
+    expect(res.top1Share).toBeGreaterThanOrEqual(0.5);
+  });
 });

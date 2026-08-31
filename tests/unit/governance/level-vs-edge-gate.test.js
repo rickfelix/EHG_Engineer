@@ -29,4 +29,13 @@ describe('shouldEmitLevelRow', () => {
     expect(shouldEmitLevelRow({ previousLevel: 'starved', currentLevel: 'starved' })).toBe(false);
     expect(shouldEmitLevelRow({ previousLevel: 'starved', currentLevel: 'healthy' })).toBe(true);
   });
+
+  it('ADVERSARIAL-REVIEW FIX: an unchanged NaN level does NOT spuriously re-emit forever (Object.is, not strict !==)', () => {
+    expect(shouldEmitLevelRow({ previousLevel: NaN, currentLevel: NaN })).toBe(false);
+    expect(shouldEmitLevelRow({ previousLevel: NaN, currentLevel: 1 })).toBe(true);
+  });
+
+  it('DOCUMENTED CALLER TRAP: two structurally-identical but distinct object references still count as a transition -- callers must pass stable primitives, not freshly built objects', () => {
+    expect(shouldEmitLevelRow({ previousLevel: { starved: true }, currentLevel: { starved: true } })).toBe(true);
+  });
 });
