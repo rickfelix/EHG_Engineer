@@ -76,6 +76,7 @@ import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
 import { findOverdueHolds } from '../lib/governance/hold-state-sweep.js';
 import { findOrphanedEscalatedQfs } from '../lib/governance/orphaned-escalated-qf-sweep.js';
 import { readHoldStateMode } from '../lib/governance/hold-state-contract.js';
+import { scanOpenQfsForOffCanonicalMints } from '../lib/fleet/off-canonical-mint-gauge.js';
 import { runCheck as checkWindDownRecurrence } from './gauges/wind-down-recurrence-check.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the hold-state-overdue detector's
 // .limit(5000) still silently re-clamps to the PostgREST 1000-row cap on a table with 5000+ live
@@ -178,6 +179,9 @@ function buildDetectorResolvers(supabase) {
       return countUnrankedClaimableLeaves(claimable, Date.now());
     },
     'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
+    // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-2): QF-scoped only, see lib/fleet/off-canonical-
+    // mint-gauge.js docblock for why SDs are out of scope.
+    'off-canonical-qf-mint': async () => scanOpenQfsForOffCanonicalMints(supabase),
     // SD-LEO-INFRA-HOLD-STATE-CONTRACT-001 (FR-6). Filters server-side to rows carrying at
     // least one of the 3 review_at keys -- NOT a bare `.limit(N)` over "any non-null metadata"
     // row, which on a table with thousands of SDs (5000+ live) can silently truncate before an
@@ -194,7 +198,7 @@ function buildDetectorResolvers(supabase) {
         data = await fetchAllPaginated(() => supabase
           .from('strategic_directives_v2')
           .select('sd_key, status, metadata')
-          .or('metadata->>park_review_at.not.is.null,metadata->>exec_boundary_hold_review_at.not.is.null,metadata->>min_tier_rank_review_at.not.is.null')
+          .or('metadata->>park_review_at.not.is.null,metadata->>exec_boundary_hold_review_at.not.is.null,metadata->>min_tier_rank_review_at.not.is.null,metadata->>oracle_read_pending_review_at.not.is.null')
           .order('sd_key', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
       } catch (error) {
         throw new Error('hold-state-overdue query failed: ' + error.message);

@@ -37,6 +37,7 @@ import { liveFleetWorkers, isRecentlyReleased } from '../lib/fleet/genuine-worke
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { isOracleHeldQF } from '../lib/fleet/hold-writer.js';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -265,7 +266,7 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // still counts, which is the other half of this SD.
   // QF-20260808-782: skippedCapped/capUnknown are initialised to 0 rather than left undefined —
   // a counter that only appears once it fires cannot be distinguished from one that never ran.
-  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, claimableWithVerify: 0, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: 0, capUnknown: 0 };
+  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, heldSkipped: 0, claimableWithVerify: 0, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: 0, capUnknown: 0 };
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is unbounded and this
   // read has no heartbeat/status filter at all (the QF-763 `.order()` only avoids a STALENESS bias
@@ -373,6 +374,11 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   summary.claimableWithVerify = (qfs || []).filter(
     (qf) => isClaimableWithVerify(qf, nowMs) && !isHintExcludedGated(qf)
   ).length;
+  // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-6): heldSkipped is a NAMED SUBSET of skippedGated --
+  // a batch hold that fences 100% of open QFs must not be invisible to this pass's own summary.
+  // Computed BEFORE the ranked-empty early return, mirroring the claimableWithVerify precedent
+  // above (both exist so a coordinator reading a zero-ranked pass can tell WHY it was zero).
+  summary.heldSkipped = (qfs || []).filter((qf) => isOracleHeldQF(qf)).length;
   if (ranked.length === 0) return summary;
 
   return deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun });
@@ -528,6 +534,7 @@ async function main() {
   console.log(
     `IDLE_QF_HINT idleWorkers=${summary.idleWorkers} delivered=${summary.hinted} attempted=${summary.attempted}`
     + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}`
+    + ` heldSkipped=${summary.heldSkipped || 0}`
     + ` claimableWithVerify=${summary.claimableWithVerify || 0}`
     + ` skippedCapped=${summary.skippedCapped || 0} capUnknown=${summary.capUnknown || 0}${dryRun ? ' (dry-run)' : ''}`,
   );

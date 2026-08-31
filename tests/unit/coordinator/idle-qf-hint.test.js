@@ -255,6 +255,29 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
     expect(summary.skippedGated).toBe(1);
   });
 
+  // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-6): heldSkipped is a NAMED SUBSET of skippedGated,
+  // reported even when a batch hold fences 100% of open QFs (ranked.length === 0).
+  it('a batch-held oracle_read_pending QF is reported via heldSkipped, not just the generic skippedGated total', async () => {
+    const sb = makeFakeSupabase({
+      sessions: [worker()],
+      qfs: [qf({ id: 'QF-20260901-001', owner: 'chairman', release_condition: '[oracle_read_pending] review_at=2026-09-01T00:00:00Z :: awaiting Solomon' })],
+    });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.hinted).toBe(0);
+    expect(summary.skippedGated).toBe(1);
+    expect(summary.heldSkipped).toBe(1);
+  });
+
+  it('a genuine chairman-gated QF (not this SD\'s oracle marker) does not inflate heldSkipped', async () => {
+    const sb = makeFakeSupabase({
+      sessions: [worker()],
+      qfs: [qf({ owner: 'chairman', release_condition: 'EU-send-planned' })],
+    });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.skippedGated).toBe(1);
+    expect(summary.heldSkipped).toBe(0);
+  });
+
   it('no idle workers -> zero hints, short-circuits before the QF query', async () => {
     const sb = makeFakeSupabase({ sessions: [], qfs: [qf()] });
     const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });

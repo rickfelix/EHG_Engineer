@@ -21,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 27 seed entries (8 original + venture-capture-completeness, SD-LEO-INFRA-CAPTURE-FORWARD-GATE-001 + 6 loop-health-*, SD-LEO-INFRA-009-LEAF-PER-001 + 3 self-score-age stubs, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-4 + expired-premise-tags, SD-LEO-INFRA-BITTER-LESSON-AUDIT-001 + operator-cash-attestation-missing, QF-20260705-915 + plan-drift-coverage/plan-drift-mix, SD-LEO-INFRA-PLAN-DRIFT-GAUGE-001 + ghost-ceo, SD-LEO-GEN-SATELLITE-AGENT-LIFECYCLE-001 + hold-state-overdue, SD-LEO-INFRA-HOLD-STATE-CONTRACT-001 + fw3-cmv-rejecter-fake-separation, SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-D + wind-down-recurrence, SD-LEO-INFRA-WIND-DOWN-SURVEY-001 FR-3 + orphaned-escalated-qf, QF-20260831-191)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(27);
+  it('exports exactly 28 seed entries (27 prior + off-canonical-qf-mint, SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 FR-2, merged alongside orphaned-escalated-qf from QF-20260831-191)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(28);
   });
 
-  it('24 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('25 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(24);
+    expect(live).toHaveLength(25);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -102,9 +102,9 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 24 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 25 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(24);
+    expect(selected).toHaveLength(25);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'coordinator-sourced-sd',
@@ -118,6 +118,7 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'loop-health-D_convergence_clone',
       'loop-health-E_role_self_review',
       'loop-health-F_pat_registry',
+      'off-canonical-qf-mint',
       'operator-cash-attestation-missing',
       'orphaned-escalated-qf',
       'plan-drift-coverage',

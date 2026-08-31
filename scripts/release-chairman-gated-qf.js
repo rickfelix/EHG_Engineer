@@ -21,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { createRequire } from 'module';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { isOracleHeldQF } from '../lib/fleet/hold-writer.js';
 
 dotenv.config();
 const require = createRequire(import.meta.url);
@@ -55,6 +56,15 @@ export async function releaseChairmanGatedQf(qfId, { reason, releasingSessionId,
   if (!row) throw new Error(`Quick-fix not found: ${qfId}`);
   if (!isChairmanGatedQF(row)) {
     throw new Error(`${qfId} does not carry the chairman-gated-hold marker (owner='chairman' + release_condition) — nothing to release`);
+  }
+  // VALIDATION finding V-1: isChairmanGatedQF is prefix-agnostic — it accepted
+  // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001's oracle_read_pending marker (which ALSO uses
+  // owner='chairman', the only value qf-start.js's guard fires on) and released it with none of
+  // that marker's own rules (bounded-wait gate, consult-row citation). Route callers to the
+  // dedicated releaser instead of silently accepting a marker this script's `--reason`-only
+  // contract cannot enforce.
+  if (isOracleHeldQF(row)) {
+    throw new Error(`${qfId} carries the oracle_read_pending marker (SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001), not a genuine chairman gate — use scripts/release-oracle-hold.js instead, which enforces the bounded-wait/consult-row rules this script does not know about.`);
   }
 
   const stamp = `[GATED-RELEASE ${new Date().toISOString()}] by session ${releasingSessionId || '(unknown)'}: ${String(reason).trim()} (was: ${String(row.release_condition).replace(/\n/g, ' ').slice(0, 200)})`;
