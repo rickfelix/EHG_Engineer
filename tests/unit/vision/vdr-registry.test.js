@@ -254,3 +254,38 @@ describe("'Cross-stage data contracts' probe (SD-LEO-INFRA-PHASE-DESIGN-CROSS-00
     expect(entry.probe.builtAt).toBe(0.991);
   });
 });
+
+// SD-LEO-INFRA-PHASE-DESIGN-DECISION-001 (TS-1/TS-2/TS-3) — 'Decision Filter Engine' probe repoint.
+describe("'Decision Filter Engine' probe (SD-LEO-INFRA-PHASE-DESIGN-DECISION-001)", () => {
+  const entry = VDR_REGISTRY.find((e) => e.capability === 'Decision Filter Engine');
+
+  it('uses probe.type=db_count over audit_log chairman_forward_gate_score with a 90-day window (TS-1)', () => {
+    expect(entry).toBeDefined();
+    expect(entry.probe.type).toBe('db_count');
+    expect(entry.probe.table).toBe('audit_log');
+    expect(entry.probe.filter.event_type).toBe('chairman_forward_gate_score');
+    expect(entry.probe.filter.created_at.gteDaysAgo).toBe(90);
+  });
+
+  it('min floor is a real, positive, non-trivial number below the LEAD-phase all-time ceiling (TS-2)', () => {
+    // Bounded rather than pinned to the exact fresh EXEC-time count so this survives natural growth.
+    expect(typeof entry.probe.min).toBe('number');
+    expect(entry.probe.min).toBeGreaterThan(0);
+    expect(entry.probe.min).toBeLessThan(3748);
+  });
+
+  it('rationale comment documents the canary-mode/accuracy-gate deferral with the measured zero (TS-3)', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(__dirname, '../../../lib/vision/vdr-registry.js'), 'utf8');
+    const idx = src.indexOf("capability: 'Decision Filter Engine'");
+    expect(idx).toBeGreaterThan(-1);
+    const probeIdx = src.indexOf('probe:', idx);
+    expect(probeIdx).toBeGreaterThan(idx);
+    const block = src.slice(idx, probeIdx);
+    expect(block).toMatch(/canary/i);
+    expect(block).toMatch(/would_hold/);
+    expect(block).toMatch(/chairman/i);
+    // the "0" must sit adjacent to the zero-row finding, not just anywhere in the block
+    expect(block).toMatch(/0 of 3,748 rows/);
+  });
+});

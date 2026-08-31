@@ -76,42 +76,11 @@ describe('FR-2/FR-3: governance kr_status probes — score tracks the live KR si
   }
 });
 
-describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt on miss, unknown without a seam (never false-built)', () => {
-  const GREP_CAPS = [
-    // 'Govern-by-exception' was UPGRADED to a cross-table invert count_ratio by
-    // SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-4) — see the dedicated describe below; no longer code_grep.
-    // 'Decision Filter Engine' stays code_grep (HONEST band = partial) even after
-    // SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001 wired it as an ADVISORY forward filter: the ord-13
-    // required state is "gating" and CONST-002 forbids gating, so advisory wiring is not 'built'.
-    ['Decision Filter Engine', 'lib/eva', 'evaluateDecision'],
-  ];
-
-  for (const [cap, expectedPath, expectedPattern] of GREP_CAPS) {
-    it(`${cap} is wired to code_grep ${expectedPath} /${expectedPattern}/ in EHG_Engineer (layer process)`, () => {
-      const e = reg(cap);
-      expect(e.probe.type).toBe('code_grep');
-      expect(e.probe.repo).toBe('EHG_Engineer');
-      expect(e.probe.path).toBe(expectedPath);
-      expect(e.probe.pattern).toBe(expectedPattern);
-      expect(e.probe.builtWhen).toBe('present');
-      expect(e.layer).toBe('process');
-    });
-
-    it(`${cap} reads partial→unbuilt→unknown as the grep signal changes — and is NEVER built`, async () => {
-      const probe = reg(cap).probe;
-      // MATCHED → partial (code presence is intent, not realization — capped, never built)
-      const matched = await runProbe(probe, { grep: () => ({ matched: true, accessible: true }) });
-      expect(matched.status).toBe('partial');
-      expect(matched.status).not.toBe('built');
-      // NO MATCH → unbuilt
-      expect((await runProbe(probe, { grep: () => ({ matched: false, accessible: true }) })).status).toBe('unbuilt');
-      // INACCESSIBLE checkout → unknown (excluded, never guessed)
-      expect((await runProbe(probe, { grep: () => ({ matched: true, accessible: false }) })).status).toBe('unknown');
-      // NO grep seam at all → unknown (the adam-exec-summary email path)
-      expect((await runProbe(probe, {})).status).toBe('unknown');
-    });
-  }
-});
+// FR-2/FR-3 governance code_grep probes: the ONLY code_grep-cluster cap ('Decision Filter Engine')
+// was REPOINTED to db_count by SD-LEO-INFRA-PHASE-DESIGN-DECISION-001 (see the dedicated describe
+// below), and 'Govern-by-exception' was earlier upgraded to count_ratio by
+// SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-4). No governance capability remains on code_grep,
+// so this describe (formerly enumerating GREP_CAPS) is retired rather than left empty.
 
 describe('SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-4): Govern-by-exception is a cross-table invert count_ratio — built only on a genuinely-low LIVE bypass rate', () => {
   // Mock supabase head-count: returns a fixed count per table; chainable filters are no-ops.
@@ -149,13 +118,41 @@ describe('SD-LEO-INFRA-VDR-PROBE-RECALIBRATION-001 (FR-4): Govern-by-exception i
   });
 });
 
-describe('SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001: ord-13 stays HONEST partial (advisory wiring != gating)', () => {
-  it('Decision Filter Engine is NOT banded built — required state is gating, CONST-002 forbids gating', async () => {
-    const probe = reg('Decision Filter Engine').probe;
-    // The engine IS present (advisory-wired) → code_grep matches → partial, never built.
-    const matched = await runProbe(probe, { grep: () => ({ matched: true, accessible: true }) });
-    expect(matched.status).toBe('partial');
-    expect(matched.status).not.toBe('built');
+describe('SD-LEO-INFRA-PHASE-DESIGN-DECISION-001: Decision Filter Engine is a db_count probe over real advisory-execution coverage — a genuine realization signal (advisory wiring != gating, CONST-002 unaffected: this bands USAGE, not enforcement)', () => {
+  const probe = () => reg('Decision Filter Engine').probe;
+
+  it('is a db_count probe over audit_log, filtered to chairman_forward_gate_score in the trailing 90 days, with a positive min floor', () => {
+    const p = probe();
+    expect(p.type).toBe('db_count');
+    expect(p.table).toBe('audit_log');
+    expect(p.filter.event_type).toBe('chairman_forward_gate_score');
+    expect(p.filter.created_at.gteDaysAgo).toBe(90);
+    expect(p.min).toBeGreaterThan(0);
+  });
+
+  it('a coverage count at/above the min floor → built (real, sustained advisory-scoring usage, not gating)', async () => {
+    const p = probe();
+    const supabase = { from: () => ({ select() { return this; }, eq() { return this; }, gte() { return this; }, then(resolve) { resolve({ count: p.min, error: null }); } }) };
+    const r = await runProbe(p, { supabase });
+    expect(r.status).toBe('built');
+  });
+
+  it('a low-but-nonzero coverage count → partial (beginning, not yet realized)', async () => {
+    const p = probe();
+    const supabase = { from: () => ({ select() { return this; }, eq() { return this; }, gte() { return this; }, then(resolve) { resolve({ count: 1, error: null }); } }) };
+    const r = await runProbe(p, { supabase });
+    expect(r.status).toBe('partial');
+  });
+
+  it('zero coverage rows → unbuilt', async () => {
+    const p = probe();
+    const supabase = { from: () => ({ select() { return this; }, eq() { return this; }, gte() { return this; }, then(resolve) { resolve({ count: 0, error: null }); } }) };
+    const r = await runProbe(p, { supabase });
+    expect(r.status).toBe('unbuilt');
+  });
+
+  it('no supabase seam → unknown (never fabricated)', async () => {
+    expect((await runProbe(probe(), {})).status).toBe('unknown');
   });
 });
 
@@ -238,7 +235,10 @@ describe('FR-3: computeBuildGauge end-to-end — governance contributes, coheren
     // Govern-by-exception is now a count_ratio (FR-4); this mock returns a count error ⇒ honestly 'unknown'
     // (excluded), not fabricated. Its built/partial banding is covered by the dedicated FR-4 describe + live verification.
     expect(byCap['Govern-by-exception']).toBe('unknown');
-    expect(byCap['Decision Filter Engine']).toBe('partial');
+    // Decision Filter Engine is now db_count (SD-LEO-INFRA-PHASE-DESIGN-DECISION-001); this mock's
+    // `then` also resolves every table's count as an error ⇒ honestly 'unknown' (excluded), not
+    // fabricated. Its built/partial/unbuilt banding is covered by the dedicated describe above.
+    expect(byCap['Decision Filter Engine']).toBe('unknown');
     // governance lives in the 'process' layer breakdown
     expect(gauge.per_layer.process).not.toBeNull();
   });
