@@ -284,10 +284,27 @@ async function checkSelfWakeOverdue(supabaseUrl, supabaseKey) {
     const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
     if (!row) return;
 
-    const { shouldSelfEscalate, buildSelfEscalationRow } = require('../lib/fleet/self-wake-escalation.cjs');
+    const { shouldSelfEscalate, shouldClearSelfEscalation, buildSelfEscalationRow } = require('../lib/fleet/self-wake-escalation.cjs');
     const nowMs = Date.now();
     const verdict = shouldSelfEscalate(row, nowMs, FREEZE_CUT_MINUTES);
-    if (!verdict.shouldEscalate) return;
+    if (!verdict.shouldEscalate) {
+      // QF-20260831-587: this seat is no longer stuck on the deadline it once self-escalated
+      // about (recovered — re-armed, or the outage resolved). Disposition that specific open
+      // row so a recovered seat's history does not age into a false SLA breach. Best-effort:
+      // a failed PATCH here never blocks the steady-state heartbeat.
+      const clear = shouldClearSelfEscalation(row, nowMs, FREEZE_CUT_MINUTES);
+      if (clear.shouldClear) {
+        const q = `sender_session=eq.${encodeURIComponent(sessionId)}` +
+          `&payload->>kind=eq.self_escalation&payload->>expected_wake_at=eq.${encodeURIComponent(clear.priorEscalatedForWakeAt)}` +
+          `&acknowledged_at=is.null`;
+        await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/session_coordination?${q}`, {
+          method: 'PATCH',
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ acknowledged_at: new Date(nowMs).toISOString() }),
+        }).catch(() => { /* best-effort */ });
+      }
+      return;
+    }
 
     const escalationRow = buildSelfEscalationRow({
       sessionId,
