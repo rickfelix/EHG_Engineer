@@ -90,16 +90,20 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
   const liveIds = live.map((s) => s.session_id).filter(Boolean);
   let authoritativeClaimedIds = new Set();
   if (liveIds.length > 0) {
+    // Bounded by liveIds (the live-worker set, well under POSTGREST_MAX_ROWS) -- explicit limit
+    // makes that bound self-documenting rather than implicit (count-truncation-diff-lint).
     const { data: sdClaims } = await supabase
       .from('strategic_directives_v2')
       .select('claiming_session_id')
       .in('claiming_session_id', liveIds)
-      .in('status', IN_FLIGHT_STATUSES);
+      .in('status', IN_FLIGHT_STATUSES)
+      .limit(999);
     const { data: qfClaims } = await supabase
       .from('quick_fixes')
       .select('claiming_session_id')
       .in('claiming_session_id', liveIds)
-      .eq('status', 'in_progress');
+      .eq('status', 'in_progress')
+      .limit(999);
     authoritativeClaimedIds = new Set(
       [...(sdClaims || []), ...(qfClaims || [])].map((r) => r.claiming_session_id).filter(Boolean)
     );
