@@ -18,6 +18,8 @@ function stubSupabase() {
       const chain = {
         select() { return chain; },
         eq(_col, val) { chain._eq = val; return chain; },
+        is() { return chain; }, // QF-20260831-560: assertSendBackpressure's null check
+        gt() { return chain; }, // QF-20260831-560: assertSendBackpressure's expiry check
         limit() { return chain; },
         maybeSingle() {
           if (table === 'claude_sessions') {
@@ -26,7 +28,10 @@ function stubSupabase() {
           return Promise.resolve({ data: null, error: null });
         },
         insert(r) { chain._inserted = r; return chain; },
-        then(res, rej) { return Promise.resolve({ data: chain._inserted || null, error: null }).then(res, rej); },
+        then(res, rej) {
+          if (table === 'session_coordination') return Promise.resolve({ count: 0, data: chain._inserted || null, error: null }).then(res, rej);
+          return Promise.resolve({ data: chain._inserted || null, error: null }).then(res, rej);
+        },
       };
       return chain;
     },
