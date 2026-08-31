@@ -34,6 +34,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
@@ -43,6 +44,22 @@ export const SNAPSHOT_EVENT_TYPE = 'SCRIPTS_REACHABILITY_SNAPSHOT';
 export const GAUGE_DUE_MS = 6 * 24 * 60 * 60 * 1000; // ~6d => weekly cron tick, tolerant of jitter
 export const ORPHAN_GROWTH_ALERT_THRESHOLD = 10;     // alert when orphan_count grows by >= this vs prev
 export const LIST_CAP = 50;                          // cap new/resolved lists in payload + alert body
+// QF-20260831-387: scripts/one-off/ exists SOLELY to hold single-use scripts — an
+// unreferenced one-off is the convention working correctly, not debt. Excluded from the
+// alerting orphan_count/orphans_full; still counted separately (orphan_count_by_design).
+export const BY_DESIGN_ORPHAN_PREFIXES = ['scripts/one-off/'];
+
+/** git-tracked scripts/** paths (fail-open: null on any error => caller skips the filter).
+ *  MEASURED (QF-20260831-387): a shared-worktree run scans whatever untracked scratch files
+ *  happen to sit on disk from concurrent sessions — 85%+ of a sampled "new orphan" cohort
+ *  were untracked, not real estate growth. Restricting to `git ls-files` removes that noise
+ *  at the source instead of merely reclassifying it. */
+function trackedScriptSet(root) {
+  try {
+    const out = execFileSync('git', ['ls-files', 'scripts'], { cwd: root, encoding: 'utf8' });
+    return new Set(out.split('\n').filter(Boolean));
+  } catch { return null; }
+}
 
 const SKIP_DIRS = new Set(['node_modules', '.git']);
 const SCRIPT_EXT_RE = /\.(js|cjs|mjs|ts|sh|ps1|py)$/;
@@ -73,10 +90,14 @@ const isTest = (f) => TEST_RE.test(f) || f.includes('__tests__');
 export function scanScriptsEstate(root, nowMs = Date.now()) {
   const rel = (p) => path.relative(root, p).replace(/\\/g, '/');
 
-  // ---- inventory ----
+  // ---- inventory (git-tracked only — see trackedScriptSet doc comment) ----
+  const tracked = trackedScriptSet(root);
   const scriptFiles = [];
   for (const f of walk(path.join(root, 'scripts'))) {
-    if (SCRIPT_EXT_RE.test(f)) scriptFiles.push(rel(f));
+    if (!SCRIPT_EXT_RE.test(f)) continue;
+    const r = rel(f);
+    if (tracked && !tracked.has(r)) continue;
+    scriptFiles.push(r);
   }
 
   // ---- npm alias health ----
@@ -125,10 +146,15 @@ export function scanScriptsEstate(root, nowMs = Date.now()) {
     else orphans.push(f);
   }
 
-  // ---- orphan profile ----
+  // ---- by-design bucket split (QF-20260831-387): alerting population excludes intentional-orphan dirs ----
+  const isByDesign = (f) => BY_DESIGN_ORPHAN_PREFIXES.some((p) => f.startsWith(p));
+  const orphans_by_design = orphans.filter(isByDesign);
+  const orphans_intent = orphans.filter((f) => !isByDesign(f));
+
+  // ---- orphan profile (intent-only — by-design orphans are expected, not triage debt) ----
   const by_dir = {};
   const age_buckets = { '<30d': 0, '30-90d': 0, '90-180d': 0, '>180d': 0 };
-  for (const f of orphans) {
+  for (const f of orphans_intent) {
     const parts = f.split('/');
     const key = parts.length > 2 ? parts.slice(0, 2).join('/') : 'scripts/(top)';
     by_dir[key] = (by_dir[key] || 0) + 1;
@@ -146,11 +172,13 @@ export function scanScriptsEstate(root, nowMs = Date.now()) {
     total: scriptFiles.length,
     candidates: candidates.length,
     reachable: reachableCount,
-    orphan_count: orphans.length,
+    orphan_count: orphans_intent.length,          // alerting population (excludes by-design dirs)
+    orphan_count_total: orphans.length,
+    orphan_count_by_design: orphans_by_design.length,
     by_dir,
     age_buckets,
     broken_npm_aliases,
-    orphans_full: orphans.sort(),
+    orphans_full: orphans_intent.sort(),           // deltas/alerting key off this
   };
 }
 
