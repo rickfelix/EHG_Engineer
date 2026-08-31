@@ -14,6 +14,7 @@ import { CANONICAL_WRITER_STAMP } from '../lib/canonical-writer-stamp.js';
 import { createTaskHydrator } from '../../../../lib/tasks/index.js';
 import { validateBypassReason, extractBypassedGate } from '../bypass-rubric.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
+import { writeLeoStatusFile, clearLeoStatusFile } from '../../../../lib/leo-status-file.js';
 
 /**
  * SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 followup: post-handoff state
@@ -74,6 +75,18 @@ async function reconcileSDStateAfterHandoff(handoffType, sdId, supabase) {
       }
       return;
     }
+
+    // SD-LEO-INFRA-LEO-PHASE-TAGGED-001 (FR-1): tag the per-worktree state file with the
+    // phase this handoff just landed on, on EVERY handoff (not gated on the drift check
+    // below — that check is orthogonal, about the DB row, not the state file). Wrapped in
+    // its own try/catch so a write failure can never affect handoff reconciliation.
+    try {
+      if (handoffType.toUpperCase() === 'LEAD-FINAL-APPROVAL') {
+        clearLeoStatusFile(process.cwd());
+      } else {
+        writeLeoStatusFile(process.cwd(), { sdKey: sd.sd_key, leoPhase: expected.current_phase });
+      }
+    } catch { /* fail-soft: state-file tagging must never affect the handoff */ }
 
     const drift = sd.status !== expected.status || sd.current_phase !== expected.current_phase;
     if (!drift) return;

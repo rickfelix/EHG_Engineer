@@ -153,8 +153,20 @@ function transformEntry(entry) {
     working_directory: entry.working_directory,
   };
   if (entry.loop_name) transformed.loop_name = entry.loop_name;
+  // SD-LEO-INFRA-LEO-PHASE-TAGGED-001 (FR-3): carry sd_key/leo_phase through when present,
+  // same pattern as loop_name (omit rather than emit null when the writer didn't set them).
+  if (entry.sd_key) transformed.sd_key = entry.sd_key;
+  if (entry.leo_phase) transformed.leo_phase = entry.leo_phase;
   return transformed;
 }
+
+// SD-LEO-INFRA-LEO-PHASE-TAGGED-001 (FR-3): columns that may not exist yet in every
+// environment (the migration adding them is not auto-applied). Named individually because
+// a single PGRST204 error names exactly ONE missing column at a time (PostgREST's schema
+// cache reports the first offending column it finds, not the full set) — a fixed-set strip
+// like the original loop_name-only fallback would leave later columns un-stripped and the
+// retry would fail again on the next one.
+const OPTIONAL_UPSERT_COLUMNS = ['loop_name', 'sd_key', 'leo_phase'];
 
 /**
  * Sync new entries to database
@@ -213,17 +225,20 @@ async function syncToDatabase() {
         onConflict: 'session_id,timestamp'
       });
 
-    // SECURITY finding (evidence 15c8c79e): the loop_name column ships as a migration FILE
-    // that is not self-applicable by a worker session (prod DDL requires a human/authorized
-    // apply). Without this fallback, every upsert after this SD merges would fail PGRST204
-    // until that separate apply step lands, and F1's new stop-at-first-failure would then pin
-    // the sync permanently. Mirrors the established captureLedgerRow pattern (solomon-advisory.cjs):
-    // retry once without the not-yet-migrated column rather than failing capture entirely.
-    if (error && error.code === 'PGRST204' && /loop_name/.test(error.message || '')) {
-      const withoutLoopName = transformed.map(({ loop_name: _drop, ...rest }) => rest);
+    // SECURITY finding (evidence 15c8c79e); extended by SD-LEO-INFRA-LEO-PHASE-TAGGED-001
+    // (FR-3, PLAN TESTING finding #4, evidence ebbdddc5): loop_name/sd_key/leo_phase all ship
+    // as migration FILES not self-applicable by a worker session. Without this fallback, every
+    // upsert would fail PGRST204 until a human applies the migration, and F1's stop-at-first-
+    // failure would pin the sync permanently. PGRST204 names exactly one missing column per
+    // error, so retry by stripping whichever one is named, up to once per optional column.
+    let batchToRetry = transformed;
+    for (let attempt = 0; error && error.code === 'PGRST204' && attempt < OPTIONAL_UPSERT_COLUMNS.length; attempt++) {
+      const missingCol = OPTIONAL_UPSERT_COLUMNS.find((col) => new RegExp(col).test(error.message || ''));
+      if (!missingCol) break;
+      batchToRetry = batchToRetry.map(({ [missingCol]: _drop, ...rest }) => rest);
       ({ error } = await supabase
         .from('context_usage_log')
-        .upsert(withoutLoopName, { onConflict: 'session_id,timestamp' }));
+        .upsert(batchToRetry, { onConflict: 'session_id,timestamp' }));
     }
 
     if (error) {

@@ -13,6 +13,25 @@
 // becomes a query, not an investigation.
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
+// SD-LEO-INFRA-LEO-PHASE-TAGGED-001 (FR-2): read the per-worktree state file written by
+// sd-start.js/handoff.js (lib/leo-status-file.js). Callers must pass the SAME cwd value
+// used to locate .leo-status.json elsewhere in this file's caller (statusline.cjs resolves
+// it from the hook's own `data.cwd`, NOT process.cwd() — those can differ) — hence a
+// dedicated leoStatusCwd param rather than reusing the unrelated `cwd` field below (which
+// only feeds the working_directory JSONL field). Fail-soft: any read error yields {}.
+function readLeoStatus(leoStatusCwd) {
+  if (!leoStatusCwd) return {};
+  try {
+    const raw = fs.readFileSync(path.join(leoStatusCwd, '.leo-status.json'), 'utf8');
+    return JSON.parse(raw) || {};
+  } catch {
+    return {};
+  }
+}
+
 // Append only when the reading is meaningful: first sample, a percent change, or a
 // status transition. A repaint with identical percent+status is throttled (no append).
 function shouldAppendUsage(prevState, next) {
@@ -26,7 +45,7 @@ function shouldAppendUsage(prevState, next) {
 // interactive Claude Code session is running (e.g. a /loop-driven fleet worker's check-in
 // cycle). Read from CLAUDE_LOOP_NAME, OMITTED from the entry (not set to null) when unset —
 // matches this function's existing pattern of falling back rather than emitting a null key.
-function buildUsageEntry({ sessionId, modelId, contextUsed, contextSize, usagePercent, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens, status, cwd, now }) {
+function buildUsageEntry({ sessionId, modelId, contextUsed, contextSize, usagePercent, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens, status, cwd, now, leoStatusCwd }) {
   const entry = {
     session_id: sessionId || 'unknown',
     timestamp: (now instanceof Date ? now : new Date()).toISOString(),
@@ -43,7 +62,10 @@ function buildUsageEntry({ sessionId, modelId, contextUsed, contextSize, usagePe
     working_directory: cwd || '',
   };
   if (process.env.CLAUDE_LOOP_NAME) entry.loop_name = process.env.CLAUDE_LOOP_NAME;
+  const leoStatus = readLeoStatus(leoStatusCwd);
+  if (leoStatus.sd_key) entry.sd_key = leoStatus.sd_key;
+  if (leoStatus.leo_phase) entry.leo_phase = leoStatus.leo_phase;
   return entry;
 }
 
-module.exports = { shouldAppendUsage, buildUsageEntry };
+module.exports = { shouldAppendUsage, buildUsageEntry, readLeoStatus };

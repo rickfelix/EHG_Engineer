@@ -84,6 +84,7 @@ import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-
 import { shouldShowVenturePipelinePointer, VENTURE_PIPELINE_POINTER } from '../lib/leo/venture-pipeline-pointer.js';
 // SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: enforce declared dependencies at claim time.
 import { evaluateDependencyGate, formatDependencyRefusal, formatScopeConstraints } from '../lib/sd-start/dependency-gate.mjs';
+import { writeLeoStatusFile } from '../lib/leo-status-file.js';
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-3): claim-time fitness fail-fast (repo-match + premise +
 // preconditions). CJS module imported as default (Node CJS interop) for its named export.
 import sdFit from '../lib/fleet/sd-executable-here.cjs';
@@ -1657,6 +1658,15 @@ async function main() {
       await stampClaim(supabase, effectiveId, session.session_id, claimIdentity.source);
     } catch { /* fail-soft: stamping must never break the claim path */ }
   }
+
+  // SD-LEO-INFRA-LEO-PHASE-TAGGED-001 (FR-1): tag the per-worktree state file on
+  // attach/claim, so a worktree that never runs a handoff (e.g. only sd-start.js is
+  // ever run against it) still has a correct sd_key/leo_phase. Fail-soft, never
+  // affects the claim path.
+  try {
+    const wtCwd = worktreeInfo?.cwd || worktreeInfo?.worktree?.path || process.cwd();
+    writeLeoStatusFile(wtCwd, { sdKey: sd.sd_key || effectiveId, leoPhase: sd.current_phase || 'LEAD' });
+  } catch { /* fail-soft */ }
 
   // 5. Display SD info
   console.log(`\n${colors.green}✓ SD claimed successfully (${claimResult.claim.status})${colors.reset}`);

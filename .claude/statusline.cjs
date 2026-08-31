@@ -285,6 +285,10 @@ try {
     inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
     cacheCreationTokens: cacheCreation, cacheReadTokens: cacheRead,
     status, cwd: process.cwd(),
+    // SD-LEO-INFRA-LEO-PHASE-TAGGED-001 (FR-2): the SAME cwd used above (line ~202) to
+    // locate .leo-status.json for the AUTO-PROCEED display — NOT process.cwd(), which is
+    // this hook process's own cwd and can differ from the hook's reported `data.cwd`.
+    leoStatusCwd: cwd,
   });
   if (feed.shouldAppendUsage(prevState, entry)) {
     const logDir = path.join(__dirname, 'logs');
