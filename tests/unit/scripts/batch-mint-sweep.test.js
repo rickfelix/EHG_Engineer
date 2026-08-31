@@ -22,8 +22,10 @@ function fakeSupabase({ mints, existingHolds = [], updateResults = {} }) {
           },
           update: (payload) => ({
             eq: (col, id) => ({
-              select: () => ({
-                maybeSingle: async () => (updateResults[id] || { data: { id, ...payload }, error: null }),
+              or: () => ({
+                select: () => ({
+                  maybeSingle: async () => (updateResults[id] || { data: { id, ...payload }, error: null }),
+                }),
               }),
             }),
           }),

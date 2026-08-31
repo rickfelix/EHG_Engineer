@@ -18,13 +18,14 @@ import { releaseSdOracleHold, releaseQfOracleHold, isBoundedWaitElapsed, BOUNDED
 dotenv.config();
 
 export function parseReleaseOracleArgs(argv) {
-  const out = { sdKey: null, qfId: null, consultRowId: null, releasedBy: null, force: false };
+  const out = { sdKey: null, qfId: null, consultRowId: null, releasedBy: null, force: false, reason: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--sd') out.sdKey = argv[++i];
     else if (argv[i] === '--qf') out.qfId = argv[++i];
     else if (argv[i] === '--consult-row') out.consultRowId = argv[++i];
     else if (argv[i] === '--by') out.releasedBy = argv[++i];
     else if (argv[i] === '--force') out.force = true;
+    else if (argv[i] === '--reason') out.reason = argv[++i];
   }
   return out;
 }
@@ -40,24 +41,39 @@ async function lookupConsultRowCreatedAt(supabase, consultRowId) {
   return data.created_at;
 }
 
-export async function releaseOracleHold({ sdKey, qfId, consultRowId, releasedBy = 'system', force = false, supabaseClient, nowMs = Date.now() }) {
+export async function releaseOracleHold({ sdKey, qfId, consultRowId, releasedBy = 'system', force = false, reason = null, supabaseClient, nowMs = Date.now() }) {
   if (!sdKey && !qfId) throw new Error('one of --sd or --qf is required');
-  const consultRowCreatedAt = await lookupConsultRowCreatedAt(supabaseClient, consultRowId);
-  if (consultRowId && !consultRowCreatedAt) {
-    console.error(`[release-oracle-hold] WARNING: consult row ${consultRowId} not found — releasing without elapsed-wait provenance`);
-  } else if (consultRowCreatedAt) {
+  // SECURITY finding S-4: --force with no audit trail. Mirrors scripts/release-chairman-gated-qf.js's
+  // own refusal ("the release stamp is the audit trail") — a forced release must name WHY.
+  if (force && (!reason || !String(reason).trim())) {
+    throw new Error('--force requires --reason "<why this override is safe>" — the release stamp is the audit trail');
+  }
+  const consultRowCreatedAt = consultRowId ? await lookupConsultRowCreatedAt(supabaseClient, consultRowId) : null;
+
+  // SECURITY findings S-2: the prior gate only fired when a consult row was BOTH cited AND
+  // found — omitting --consult-row entirely, or citing a nonexistent id, released unconditionally
+  // with no gate at all (the two cheaper bypasses of the D-5 fix). This is now a fail-CLOSED
+  // default: release requires EITHER a cited, found, bounded-wait-elapsed consult row, OR an
+  // explicit --force (a deliberate, logged human/Solomon override — never a silent default).
+  if (!force) {
+    if (!consultRowId) {
+      return { merged: false, cause: 'no_consult_row_cited', error: 'no --consult-row cited — pass one, or --force for an explicit override' };
+    }
+    if (!consultRowCreatedAt) {
+      return { merged: false, cause: 'consult_row_not_found', error: `consult row ${consultRowId} not found — pass a valid row, or --force for an explicit override` };
+    }
     const elapsed = isBoundedWaitElapsed(consultRowCreatedAt, nowMs);
     console.log(`[release-oracle-hold] consult row ${consultRowId} created ${consultRowCreatedAt} — bounded wait elapsed: ${elapsed}`);
-    // TESTING finding D-5: the bounded wait was computed and printed but never enforced — a
-    // release at t=1min logged "elapsed: false" and released anyway. Now a genuine GATE: a cited
-    // consult row that has NOT yet cleared the bounded wait refuses the release unless --force is
-    // passed (the explicit human/Solomon override for a verdict that arrived early).
-    if (!elapsed && !force) {
+    if (!elapsed) {
       return {
         merged: false, cause: 'bounded_wait_not_elapsed',
         error: `consult row ${consultRowId} has not yet reached the ${BOUNDED_WAIT_MS / 60000}min bounded wait — pass --force to override with a cited verdict`,
       };
     }
+  } else if (consultRowId) {
+    console.log(`[release-oracle-hold] --force: consult row ${consultRowId} created ${consultRowCreatedAt || '(not found)'} — bound not enforced`);
+  } else {
+    console.error('[release-oracle-hold] WARNING: --force with no consult row cited — releasing with no elapsed-wait provenance at all');
   }
 
   if (sdKey) {
@@ -76,6 +92,7 @@ async function main() {
   );
   try {
     const result = await releaseOracleHold({ ...parsed, releasedBy: parsed.releasedBy || process.env.CLAUDE_SESSION_ID || 'system', supabaseClient: supabase, nowMs: Date.now() });
+    if (parsed.force) console.log(`[release-oracle-hold] --force reason: ${parsed.reason}`);
     if (!result.merged) {
       console.error(`[release-oracle-hold] FAILED (${result.cause}): ${result.error || 'no rows matched'}`);
       process.exit(1);

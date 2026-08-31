@@ -21,12 +21,20 @@ export async function runBatchMintSweep(supabase, { nowMs = Date.now() } = {}) {
 
   const { data: existing, error } = await supabase
     .from('quick_fixes')
-    .select('id, owner, release_condition')
+    .select('id, status, owner, release_condition')
     .in('id', Array.from(heldIds));
   if (error) throw new Error(`runBatchMintSweep: ${error.message}`);
+  const existingById = new Map((existing || []).map((r) => [r.id, r]));
   const alreadyHeld = new Set((existing || []).filter(isOracleHeldQF).map((r) => r.id));
-
-  const toHold = Array.from(heldIds).filter((id) => !alreadyHeld.has(id));
+  // SECURITY finding S-8 (write-amplification): a QF already flowed to a terminal status gains
+  // nothing from being stamped owner='chairman' — it only widens the population a write-side bug
+  // (S-1) or a manual release-hold call could touch. Skip terminal statuses entirely.
+  const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'wont_fix']);
+  const toHold = Array.from(heldIds).filter((id) => {
+    if (alreadyHeld.has(id)) return false;
+    const row = existingById.get(id);
+    return !row || !TERMINAL_STATUSES.has(row.status);
+  });
   const reviewAt = new Date(nowMs + BOUNDED_WAIT_MS).toISOString();
   const failed = [];
   for (const id of toHold) {

@@ -121,6 +121,7 @@ function fakeSupabase({ updateData = { id: 'QF-1', owner: 'chairman', release_co
       eq: (col, val) => { filters.push({ op: 'eq', col, val }); return chain(); },
       like: (col, val) => { filters.push({ op: 'like', col, val }); return chain(); },
       not: (col, op, val) => { filters.push({ op: 'not', col, val }); return chain(); },
+      or: (expr) => { filters.push({ op: 'or', expr }); return chain(); },
       select: () => ({
         maybeSingle: async () => {
           if (updateError) return { data: null, error: updateError };
@@ -149,6 +150,28 @@ describe('writeQfOracleHold / isOracleHeldQF / releaseQfOracleHold (FR-4)', () =
     expect(result.merged).toBe(true);
     expect(supabase.calls[0].payload.owner).toBe('chairman');
     expect(supabase.calls[0].payload.release_condition).toMatch(new RegExp(`^${QF_ORACLE_HOLD_PREFIX.replace(/[[\]]/g, '\\$&')}`));
+  });
+
+  // SECURITY finding S-1: an unconditioned write silently clobbered a GENUINE chairman gate,
+  // destroying its original release_condition text — then matched the D-4-hardened release guard,
+  // reopening the exact defect D-4 fixed, just via the write path instead of the release path.
+  it('S-1: the write WHERE clause guards against clobbering a genuine chairman gate', async () => {
+    const supabase = fakeSupabase();
+    await writeQfOracleHold(supabase, 'QF-1', { reviewAt: '2026-09-01T00:00:00Z', releaseCondition: 'x' });
+    expect(supabase.filters).toContainEqual({
+      op: 'or', expr: `owner.is.null,owner.neq.chairman,release_condition.like.${QF_ORACLE_HOLD_PREFIX}%`,
+    });
+  });
+
+  it('S-1: a row already carrying a genuine chairman gate does NOT match the write WHERE clause', async () => {
+    // Simulates a real Postgres row {owner:'chairman', release_condition:'EU-send-planned'} — the
+    // .or() clause (owner IS NULL OR owner != chairman OR condition LIKE prefix%) is FALSE for it,
+    // so the UPDATE matches zero rows and the write refuses rather than clobbering it.
+    const matchPredicate = () => false;
+    const supabase = fakeSupabase({ matchPredicate });
+    const result = await writeQfOracleHold(supabase, 'QF-GENUINE-CHAIRMAN-GATE', { reviewAt: '2026-09-01T00:00:00Z', releaseCondition: 'x' });
+    expect(result.merged).toBe(false);
+    expect(result.cause).toBe('silent_zero_row_no_op');
   });
 
   it('isOracleHeldQF distinguishes this SD marker from a genuine chairman gate', () => {
