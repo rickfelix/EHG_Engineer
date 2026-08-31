@@ -95,11 +95,30 @@ describe('computeUtilization (TS-1, TS-2)', () => {
       claude_sessions: [
         { session_id: 's1', sd_key: 'SD-EHG-FEAT-001', claimed_at: '2026-01-01', status: 'active', heartbeat_at: minutesAgo(1), metadata: {}, commits_since_claim: 0 },
       ],
-      strategic_directives_v2: [],
+      strategic_directives_v2: [{ id: 'SD-EHG-FEAT-001', status: 'active', claiming_session_id: 's1' }],
     });
     const result = await computeUtilization(supabase, { nowMs: Date.now() });
     expect(result.claimed).toBe(1);
     expect(result.idle).toBe(0);
+  });
+
+  it('QF-20260831-568: derives claimed/idle from the authoritative claim tables, not the sd_key mirror -- a NULL-mirror seat holding a real SD claim counts claimed, and a QF-claiming seat (which never mirrors into claude_sessions) also counts claimed', async () => {
+    const supabase = makeFakeSupabase({
+      claude_sessions: [
+        { session_id: 'desynced', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 1, status: 'active', heartbeat_at: minutesAgo(1), metadata: {} },
+        { session_id: 'qf-holder', sd_key: null, claimed_at: null, worktree_path: null, continuous_sds_completed: 1, status: 'active', heartbeat_at: minutesAgo(1), metadata: {} },
+      ],
+      strategic_directives_v2: [
+        { id: 'SD-X', status: 'in_progress', claiming_session_id: 'desynced' },
+      ],
+      quick_fixes: [
+        { id: 'QF-Y', status: 'in_progress', claiming_session_id: 'qf-holder' },
+      ],
+    });
+    const result = await computeUtilization(supabase);
+    expect(result.claimed).toBe(2);
+    expect(result.idle).toBe(0);
+    expect(result.mirror_desync_count).toBe(2);
   });
 
   it('counts a released (unclaimed) live worker as idle', async () => {
@@ -157,7 +176,7 @@ describe('computeUtilization (TS-1, TS-2)', () => {
           { session_id: 'stale2', sd_key: 'SD-OLD-2', status: 'active', heartbeat_at: '2025-12-02T00:00:00Z', metadata: {} },
           { session_id: 'fresh', sd_key: 'SD-NEW', status: 'active', heartbeat_at: minutesAgo(1), metadata: {} },
         ],
-        strategic_directives_v2: [],
+        strategic_directives_v2: [{ id: 'SD-NEW', status: 'active', claiming_session_id: 'fresh' }],
       },
       { capAt: { claude_sessions: 2 } },
     );
