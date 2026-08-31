@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-31T14:32:11.018Z",
-  "git_commit": "a5f9ad58",
+  "generated_at": "2026-08-31T17:46:11.612Z",
+  "git_commit": "18a22530",
   "db_snapshot_hash": "61c14ff33c55eee9",
   "files": {
     "CLAUDE.md": {
@@ -69,11 +69,11 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 68444,
-      "bytes": 69121,
-      "estimated_tokens": 17111,
-      "content_hash": "20b5b93319f225a1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adam-rule0-encode\\CLAUDE_ADAM.md"
+      "chars": 69601,
+      "bytes": 70282,
+      "estimated_tokens": 17401,
+      "content_hash": "da5d30be19685ec0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\rat-2ab4b4bc-encode\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -213,7 +213,7 @@
     }
   },
   "section_digests": {
-    "global": "9eb1ac7b6240f8b0",
+    "global": "d331b2632bf39f68",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -467,7 +467,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "f51c84b3af252b71",
+      "601": "7885e7124856b119",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "51d8411e1369713b",
