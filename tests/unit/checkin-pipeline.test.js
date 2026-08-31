@@ -27,6 +27,10 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       // already held. Demoting it below directed-assignment silently un-fences coordinator dispatch.
       'canary-claim-fence',
       'directed-assignment',
+      // QF-20260831-947 (fork b): a WORK_ASSIGNMENT just purged as orchestrator_parent-ineligible,
+      // with the parent independently completable, stops here instead of falling through to
+      // self-claim -- MECHANICAL suppression, no prose read required.
+      'directed-assignment-outranks-self-claim',
       'seat-busy-fence',
       // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: hoist {worker_tier_rank, tiering_active}
       // into ctx.tierCtx ONCE per tick, before recover-stranded-final/adopt-orphan, so both can
