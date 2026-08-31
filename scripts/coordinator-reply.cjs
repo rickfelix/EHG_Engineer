@@ -50,7 +50,11 @@ function buildReplyPayload({ correlationId, body, coordinatorSession }) {
 async function sendCoordinatorReply(supabase, { coordinatorSession, workerSession, correlationId, body, ttlMs = REPLY_DEFAULT_TTL_MS }) {
   const payload = buildReplyPayload({ correlationId, body, coordinatorSession });
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-  const subject = `[COORDINATOR_REPLY ${String(correlationId).slice(0, 8)}]`;
+  // QF-20260831-605: a directed reply with no correlation_id (the advisory it answers carried none)
+  // gets its own readable subject rather than the literal string "null".
+  const subject = correlationId
+    ? `[COORDINATOR_REPLY ${String(correlationId).slice(0, 8)}]`
+    : '[COORDINATOR_REPLY no-correlation]';
   return supabase
     .from('session_coordination')
     .insert({

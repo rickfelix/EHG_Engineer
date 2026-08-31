@@ -1,24 +1,18 @@
 /**
- * QF-20260811-526 — a no-correlation advisory must never stay pending forever via --reply.
+ * QF-20260811-526 (superseded by QF-20260831-605) — a no-correlation advisory must never stay
+ * pending forever via --reply, AND its reply body must never be silently discarded.
  *
- * deliverReplyOrExit used to process.exit(1) when the advisory carried no
- * payload.correlation_id, and that exit happened BEFORE main() reached Stage 2
- * (stampActionedGroup) — so a --reply attempt against a non-replyable advisory
- * silently left it unactioned forever. Worker signal a6067eb7 (sender c14a87ec)
- * measured three coordinator-health probes hitting exactly this, deliberately
- * excluded from the single-purpose QF-20260728-468/PR #6977.
+ * QF-20260811-526 fixed the first half: correlationId-missing used to process.exit(1) BEFORE
+ * main() reached Stage 2 (stampActionedGroup), leaving the advisory unactioned forever. The fix
+ * WARNED and returned { skipped: true }, which stopped the hang but discarded the reply body —
+ * the coordinator believed it had answered while the substance landed nowhere (measured live:
+ * coordinator report 2026-08-31, reply to 187f7922 dropped, content had to be re-sent on the
+ * directive lane; also self-reported at 9c514954). Third instance of the QF-084
+ * retirement-predicate family.
  *
- * Fix: correlationId-missing now WARNS and returns { skipped: true, reason }
- * instead of exiting, so main() falls through to Stage 2 regardless.
- *
- * Test strategy: deliverReplyOrExit's correlationId-missing branch returns
- * before touching supabase at all (it's checked before resolveAdamReplyTarget/
- * sendCoordinatorReply), so it's directly callable with a minimal fake advisory
- * and no live DB — no need for the source-text-inspection style the sibling
- * suite (coordinator-ack-adam-reply-ordering.test.js) uses for paths that
- * genuinely require a live coordinator/Adam session. The "Stage 2 still runs"
- * half of the contract IS asserted via source order there — this file adds the
- * direct behavioral proof for the specific branch this QF changes.
+ * QF-20260831-605 closes that: a missing correlation_id now WARNS (still non-fatal) and sends
+ * the reply as a directed session_coordination row (correlation_id: null in the payload — not
+ * matchable to a specific await, but addressable and never dropped) instead of skipping the send.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -27,8 +21,35 @@ import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
 const { deliverReplyOrExit } = require_('../../scripts/coordinator-ack-adam.cjs');
 
-describe('deliverReplyOrExit: no payload.correlation_id (QF-20260811-526)', () => {
-  it('returns { skipped: true } instead of exiting the process', async () => {
+const LIVE_ADAM = '11111111-1111-4111-8111-111111111111';
+
+/** Minimal fake supabase satisfying resolveAdamReplyTarget's claude_sessions election query
+ *  (fetchAllPaginated: select/gte/or/filter/order chain terminated by .range()) and
+ *  sendCoordinatorReply + verifyReplyDelivered's session_coordination insert/select. */
+function makeFakeSupabase() {
+  let inserted = null;
+  const chain = (rangeResult) => {
+    const api = {
+      select: () => api, gte: () => api, or: () => api, filter: () => api, order: () => api, eq: () => api,
+      insert: (row) => { inserted = { id: 'reply-row-1', created_at: new Date().toISOString(), ...row }; return api; },
+      range: async () => rangeResult,
+      single: async () => ({ data: inserted, error: null }),
+      maybeSingle: async () => ({ data: inserted ? { id: inserted.id } : null, error: null }),
+    };
+    return api;
+  };
+  return {
+    from(table) {
+      if (table === 'claude_sessions') {
+        return chain({ data: [{ session_id: LIVE_ADAM, heartbeat_at: new Date().toISOString(), metadata: { role: 'adam' } }], error: null });
+      }
+      return chain({ data: [], error: null });
+    },
+  };
+}
+
+describe('deliverReplyOrExit: no payload.correlation_id (QF-20260811-526, superseded by QF-20260831-605)', () => {
+  it('[SPECIMEN] sends the reply as a directed row instead of skipping it', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit should NOT be called for a missing correlation_id');
     });
@@ -36,19 +57,19 @@ describe('deliverReplyOrExit: no payload.correlation_id (QF-20260811-526)', () =
 
     const adv = { id: 'adv-1', sender_session: null, payload: {} };
     const result = await deliverReplyOrExit(
-      /* supabase */ {},
+      makeFakeSupabase(),
       { adv, replyBody: 'some reply body', coordinatorSession: 'coord-session-1' }
     );
 
     expect(exitSpy).not.toHaveBeenCalled();
-    expect(result).toEqual({ skipped: true, reason: 'no_correlation_id' });
+    expect(result).toMatchObject({ replyId: 'reply-row-1', adamSession: LIVE_ADAM, correlationId: undefined });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('correlation_id'));
 
     exitSpy.mockRestore();
     warnSpy.mockRestore();
   });
 
-  it('also skips (not exits) when payload is entirely absent', async () => {
+  it('also sends (not exits) when payload is entirely absent, resolving through a live Adam target', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit should NOT be called');
     });
@@ -56,12 +77,13 @@ describe('deliverReplyOrExit: no payload.correlation_id (QF-20260811-526)', () =
 
     const adv = { id: 'adv-2', sender_session: 'adam-coordinator-health-cron', payload: null };
     const result = await deliverReplyOrExit(
-      {},
+      makeFakeSupabase(),
       { adv, replyBody: 'body', coordinatorSession: 'coord-session-1' }
     );
 
     expect(exitSpy).not.toHaveBeenCalled();
-    expect(result).toEqual({ skipped: true, reason: 'no_correlation_id' });
+    expect(result.replyId).toBe('reply-row-1');
+    expect(result.adamSession).toBe(LIVE_ADAM);
 
     exitSpy.mockRestore();
     vi.restoreAllMocks();
@@ -70,7 +92,7 @@ describe('deliverReplyOrExit: no payload.correlation_id (QF-20260811-526)', () =
   it('REGRESSION CONTROL: still exits (never silently skips) when --reply has no body at all', async () => {
     // Distinguishes "nothing to reply to" (this QF's fix) from "caller misused --reply"
     // (unchanged, still fatal) — the two must not collapse into the same non-fatal path.
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+    vi.spyOn(process, 'exit').mockImplementation((code) => {
       throw new Error(`EXIT:${code}`);
     });
     vi.spyOn(console, 'error').mockImplementation(() => {});
