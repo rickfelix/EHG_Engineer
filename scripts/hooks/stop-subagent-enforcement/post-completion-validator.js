@@ -14,6 +14,8 @@
 import { execSync } from 'child_process';
 import { COMPLETION_FLAG, WITNESS_INDETERMINATE, isWitnessIndeterminate } from '../../../lib/governance/completion-flag-keys.js';
 import { emitFeedback } from '../../../lib/governance/emit-feedback.js';
+import { applyCompletionReadbackGate, ClaimMalformedError } from '../../../lib/checkers/completion-readback-gate.mjs';
+import { ReadbackCheckError } from '../../../lib/checkers/readback-checker.mjs';
 
 /**
  * SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001 / FR-4 + TR-6.
@@ -334,12 +336,38 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     await _flagMetadataObligations(supabase, sdKey, sd.id, obligationFindings);
   }
 
+  // SD-LEO-INFRA-COMPLETION-GATE-DATA-001-A FR-5: same trigger + kill-switch semantics
+  // as the QF completion path (scripts/modules/complete-quick-fix/orchestrator.js). This
+  // runs post-write (sd was already fetched with status='completed') -- a genuine mismatch
+  // or malformed claim escalates into missingRequired (BLOCK) exactly like a missing /ship;
+  // a would-have-blocked or unverifiable outcome is surfaced non-blocking via
+  // missingRecommended, same as every other advisory check above.
+  let readbackGateError = null;
+  try {
+    const readbackGateResult = await applyCompletionReadbackGate(sd.metadata, { logLabel: `SD ${sdKey}` });
+    if (readbackGateResult.status === 'WOULD_HAVE_BLOCKED') missingRecommended.push('READBACK_WOULD_HAVE_BLOCKED');
+    if (readbackGateResult.status === 'UNVERIFIABLE') missingRecommended.push('READBACK_UNVERIFIABLE');
+  } catch (err) {
+    if (err instanceof ClaimMalformedError) {
+      missingRequired.push('READBACK_CLAIM_MALFORMED');
+      readbackGateError = err;
+    } else if (err instanceof ReadbackCheckError) {
+      missingRequired.push('READBACK_GATE_BLOCKED');
+      readbackGateError = err;
+    } else {
+      throw err;
+    }
+  }
+
   // Output results
   if (missingRequired.length > 0) {
     console.error(`\n⚠️  Post-Completion Validation for ${sdKey}`);
     console.error(`   ❌ BLOCKING: Missing required post-completion commands: ${missingRequired.join(', ')}`);
     console.error('\n   LEO Protocol requires /ship before completing an SD with code changes.');
     console.error('   Action: Run /ship to commit, create PR, and merge the changes.');
+    if (readbackGateError) {
+      console.error(`   Readback gate: ${readbackGateError.message}`);
+    }
 
     const output = {
       decision: 'block',
