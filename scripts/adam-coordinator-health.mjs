@@ -236,8 +236,11 @@ export async function computeCoordinatorLiveness(supabase, { nowMs = Date.now() 
  */
 async function fetchLoopRegistryRows(supabase) {
   try {
-    const { data, error } = await supabase.from('loop_registry').select('loop_key, status, evaluated_at');
-    return error ? [] : (data || []);
+    const rows = await fetchAllPaginated(() => supabase
+      .from('loop_registry')
+      .select('loop_key, status, evaluated_at')
+      .order('loop_key', { ascending: true }));
+    return rows || [];
   } catch { return []; }
 }
 
