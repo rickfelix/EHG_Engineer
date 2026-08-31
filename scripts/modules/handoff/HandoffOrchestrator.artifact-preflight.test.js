@@ -117,4 +117,36 @@ describe('executeHandoff artifact-preflight wiring', () => {
     expect(executorExecute).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
   });
+
+  it('SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 TS-8: prerequisite preflight failure display loop still prints ALL issues (including info) while the durable rejection reason lists only blocking codes', async () => {
+    const { runPrerequisitePreflight } = await import('./pre-checks/prerequisite-preflight.js');
+    vi.mocked(runPrerequisitePreflight).mockResolvedValueOnce({
+      passed: false,
+      issues: [
+        { code: 'USER_STORIES_BYPASSED', severity: 'info', message: 'exempt', remediation: 'none' },
+        { code: 'SUBAGENT_EVIDENCE_MISSING', message: 'missing TESTING', remediation: 'run it' }
+      ],
+      blockingIssues: [
+        { code: 'SUBAGENT_EVIDENCE_MISSING', message: 'missing TESTING', remediation: 'run it' }
+      ]
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { orchestrator, executorExecute, recorder } = makeOrchestrator({ success: true });
+
+    const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-X-001');
+
+    // Display loop (operator visibility) still shows BOTH codes, unchanged.
+    const loggedLines = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(loggedLines).toContain('USER_STORIES_BYPASSED');
+    expect(loggedLines).toContain('SUBAGENT_EVIDENCE_MISSING');
+
+    // Durable rejection reason / recorded issues use blockingIssues ONLY.
+    expect(result.reasonCode).toBe('PREREQUISITE_PREFLIGHT_FAILED');
+    expect(result.message).toContain('SUBAGENT_EVIDENCE_MISSING');
+    expect(result.message).not.toContain('USER_STORIES_BYPASSED');
+    expect(result.preflightIssues.map((i) => i.code)).toEqual(['SUBAGENT_EVIDENCE_MISSING']);
+    expect(executorExecute).not.toHaveBeenCalled();
+
+    logSpy.mockRestore();
+  });
 });

@@ -28,6 +28,22 @@ import { isAutoInvokeEnabled, autoInvokeMissingSubAgents } from '../../../lib/ha
 import { executeSubAgent } from '../../../lib/sub-agent-executor.js';
 
 /**
+ * SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 (FR-1/FR-2): prerequisite-preflight.js now
+ * exposes blockingIssues (info-severity codes like SMOKE_TEST_BYPASSED/USER_STORIES_BYPASSED
+ * excluded) alongside the raw, unfiltered `issues`. Callers that decide eligibility or build
+ * rejection text must consume blockingIssues, not issues -- but a legacy/mocked preflight
+ * shape without blockingIssues must not crash, and must not silently re-widen eligibility by
+ * falling back to an empty array (TESTING sub-agent finding, PLAN-TO-EXEC). Falling back to
+ * `issues` reproduces pre-fix behavior exactly when blockingIssues is absent.
+ * @param {{issues?:object[], blockingIssues?:object[]}} preflight
+ * @returns {object[]}
+ */
+function getBlockingIssues(preflight) {
+  if (!preflight) return [];
+  return Array.isArray(preflight.blockingIssues) ? preflight.blockingIssues : (preflight.issues || []);
+}
+
+/**
  * QF-20260525-378: fold a FAILED prerequisite preflight into a precheck verdict
  * for parity with execute(), which HARD-FAILS on it. Precheck previously only
  * logged a failed preflight and returned success=result.passed from the gates
@@ -39,7 +55,7 @@ import { executeSubAgent } from '../../../lib/sub-agent-executor.js';
  */
 export function applyPreflightToVerdict(result, preflight) {
   const failed = !!preflight && preflight.passed === false;
-  const pfIssues = failed ? preflight.issues.map(i => `[${i.code}] ${i.message}`) : [];
+  const pfIssues = failed ? getBlockingIssues(preflight).map(i => `[${i.code}] ${i.message}`) : [];
   return {
     success: (result?.passed ?? false) && !failed,
     issues: [
@@ -63,12 +79,12 @@ export function applyPreflightToVerdict(result, preflight) {
  * @returns {string[]} deduped missing agent codes eligible for auto-invoke, or [] if ineligible
  */
 export function resolveMissingAgentsForAutoInvoke(preflight) {
-  if (!preflight || preflight.passed !== false || !Array.isArray(preflight.issues) || preflight.issues.length === 0) {
-    return [];
-  }
-  const allMissingClass = preflight.issues.every(i => i.code === 'SUBAGENT_EVIDENCE_MISSING');
+  if (!preflight || preflight.passed !== false) return [];
+  const blockingIssues = getBlockingIssues(preflight);
+  if (blockingIssues.length === 0) return [];
+  const allMissingClass = blockingIssues.every(i => i.code === 'SUBAGENT_EVIDENCE_MISSING');
   if (!allMissingClass) return [];
-  return [...new Set(preflight.issues.flatMap(i => i.missingAgents || []))];
+  return [...new Set(blockingIssues.flatMap(i => i.missingAgents || []))];
 }
 
 export class HandoffOrchestrator {
@@ -215,12 +231,17 @@ export class HandoffOrchestrator {
         console.log('   Fix these issues first, then retry the handoff.');
         console.log('');
 
-        // Record as failure with clear reason
+        // Record as failure with clear reason. SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001
+        // (FR-2): use blockingIssues here (not the raw, unfiltered issues above, which the
+        // console.log loop intentionally still iterates for operator visibility) so an
+        // info-severity code (e.g. USER_STORIES_BYPASSED) never contaminates the durable
+        // rejection reason or the eligibility-adjacent preflightIssues field.
+        const blockingIssues = getBlockingIssues(preflight);
         const preflightResult = ResultBuilder.rejected(
           'PREREQUISITE_PREFLIGHT_FAILED',
-          `Prerequisite preflight failed: ${preflight.issues.map(i => i.code).join(', ')}`
+          `Prerequisite preflight failed: ${blockingIssues.map(i => i.code).join(', ')}`
         );
-        preflightResult.preflightIssues = preflight.issues;
+        preflightResult.preflightIssues = blockingIssues;
         await this.recorder.recordFailure(normalizedType, sdId, preflightResult, null);
         return preflightResult;
       }

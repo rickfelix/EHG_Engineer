@@ -15,6 +15,29 @@ describe('resolveMissingAgentsForAutoInvoke', () => {
     expect(resolveMissingAgentsForAutoInvoke(preflight)).toEqual(['TESTING', 'SECURITY']);
   });
 
+  it('SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 TS-1: an info-severity issue coexisting with a real MISSING blocker is still eligible, using blockingIssues', () => {
+    const preflight = {
+      passed: false,
+      issues: [
+        { code: 'USER_STORIES_BYPASSED', severity: 'info', message: 'exempt' },
+        { code: 'SUBAGENT_EVIDENCE_MISSING', message: 'x', missingAgents: ['TESTING'] }
+      ],
+      blockingIssues: [
+        { code: 'SUBAGENT_EVIDENCE_MISSING', message: 'x', missingAgents: ['TESTING'] }
+      ]
+    };
+    expect(resolveMissingAgentsForAutoInvoke(preflight)).toEqual(['TESTING']);
+  });
+
+  it('SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 TS-6: legacy shape without blockingIssues falls back to issues (backward compatible)', () => {
+    const preflight = {
+      passed: false,
+      issues: [{ code: 'SUBAGENT_EVIDENCE_MISSING', message: 'x', missingAgents: ['TESTING', 'SECURITY'] }]
+      // no blockingIssues field -- must not crash, must reproduce pre-fix behavior
+    };
+    expect(resolveMissingAgentsForAutoInvoke(preflight)).toEqual(['TESTING', 'SECURITY']);
+  });
+
   it('dedupes missing agent codes across multiple issues', () => {
     const preflight = {
       passed: false,

@@ -264,6 +264,9 @@ describe('QF-20260423-666: passed filters info-severity entries', () => {
     expect(codes).toEqual(['USER_STORIES_BYPASSED']);
     expect(result.issues[0].severity).toBe('info');
     expect(result.passed).toBe(true);
+    // SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 (FR-1, TR-3): an info-only issue set must not
+    // appear in blockingIssues -- this is the fixture proving the fix removes contamination.
+    expect(result.blockingIssues).toEqual([]);
   });
 
   it('still returns passed=false when a non-info blocker is present (missing PRD on infra SD)', async () => {
@@ -282,6 +285,11 @@ describe('QF-20260423-666: passed filters info-severity entries', () => {
     expect(codes).toContain('PRD_MISSING');
     expect(codes).toContain('USER_STORIES_BYPASSED');
     expect(result.passed).toBe(false);
+    // SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 (FR-1, TR-3): a genuinely deficient result
+    // still rejects -- blockingIssues carries the real blocker but excludes the info entry.
+    const blockingCodes = result.blockingIssues.map((i) => i.code);
+    expect(blockingCodes).toEqual(['PRD_MISSING']);
+    expect(blockingCodes).not.toContain('USER_STORIES_BYPASSED');
   });
 
   it('returns passed=false for feature SD missing stories (USER_STORIES_MISSING has no info severity)', async () => {
