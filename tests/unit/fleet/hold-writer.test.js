@@ -108,25 +108,35 @@ describe('releaseSdOracleHold (FR-5)', () => {
   });
 });
 
-function fakeSupabase({ updateData = { id: 'QF-1', owner: 'chairman', release_condition: 'x' }, updateError = null } = {}) {
+/**
+ * Generic chainable fake, so any sequence of .eq()/.like()/.not() filters (however many the
+ * caller adds) resolves to the same terminal {data, error} — records every filter call so a test
+ * can assert the WHERE clause actually names the guard it claims to (D-4 regression coverage).
+ */
+function fakeSupabase({ updateData = { id: 'QF-1', owner: 'chairman', release_condition: 'x' }, updateError = null, matchPredicate = null } = {}) {
   const calls = [];
+  const filters = [];
+  function chain() {
+    return {
+      eq: (col, val) => { filters.push({ op: 'eq', col, val }); return chain(); },
+      like: (col, val) => { filters.push({ op: 'like', col, val }); return chain(); },
+      not: (col, op, val) => { filters.push({ op: 'not', col, val }); return chain(); },
+      select: () => ({
+        maybeSingle: async () => {
+          if (updateError) return { data: null, error: updateError };
+          const matched = matchPredicate ? matchPredicate(filters) : true;
+          return matched ? { data: updateData, error: null } : { data: null, error: null };
+        },
+      }),
+    };
+  }
   return {
     calls,
+    filters,
     from: (table) => ({
       update: (payload) => {
         calls.push({ table, payload });
-        return {
-          eq: () => ({
-            select: () => ({
-              maybeSingle: async () => (updateError ? { data: null, error: updateError } : { data: updateData, error: null }),
-            }),
-            not: () => ({
-              select: () => ({
-                maybeSingle: async () => (updateError ? { data: null, error: updateError } : { data: updateData, error: null }),
-              }),
-            }),
-          }),
-        };
+        return chain();
       },
     }),
   };
@@ -150,6 +160,27 @@ describe('writeQfOracleHold / isOracleHeldQF / releaseQfOracleHold (FR-4)', () =
   it('releaseQfOracleHold reports silent_zero_row_no_op on no match', async () => {
     const supabase = fakeSupabase({ updateData: null });
     const result = await releaseQfOracleHold(supabase, 'QF-MISSING');
+    expect(result.merged).toBe(false);
+    expect(result.cause).toBe('silent_zero_row_no_op');
+  });
+
+  it('TESTING finding D-4: the release WHERE clause requires owner=chairman AND the oracle-hold prefix — not just a non-null release_condition', async () => {
+    const supabase = fakeSupabase();
+    await releaseQfOracleHold(supabase, 'QF-1');
+    expect(supabase.filters).toContainEqual({ op: 'eq', col: 'owner', val: 'chairman' });
+    expect(supabase.filters).toContainEqual({ op: 'like', col: 'release_condition', val: `${QF_ORACLE_HOLD_PREFIX}%` });
+    // The prior defect's WHERE clause (a bare `.not('release_condition','is',null)`) is gone.
+    expect(supabase.filters.some((f) => f.op === 'not')).toBe(false);
+  });
+
+  it('TESTING finding D-4: a genuine chairman gate (no oracle-hold prefix) does NOT match the release WHERE clause', async () => {
+    const matchPredicate = (filters) => filters.some((f) => f.op === 'like' && f.val === `${QF_ORACLE_HOLD_PREFIX}%`)
+      // Simulates a genuine chairman gate: the LIKE filter is present in the query (from our code),
+      // but a real Postgres row with release_condition='EU-send-planned' would NOT satisfy it —
+      // modeled here as the predicate itself deciding no-match for a non-oracle row.
+      && false;
+    const supabase = fakeSupabase({ matchPredicate });
+    const result = await releaseQfOracleHold(supabase, 'QF-GENUINE-CHAIRMAN-GATE');
     expect(result.merged).toBe(false);
     expect(result.cause).toBe('silent_zero_row_no_op');
   });

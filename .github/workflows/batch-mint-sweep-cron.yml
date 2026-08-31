@@ -1,0 +1,45 @@
+name: "QF batch-mint sweep (cron)"
+
+# SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-1/FR-4): idempotent re-scan sweep that retroactively
+# holds ALL members of a >2-in-10-minute QF mint group by one creator — not just the mint that
+# crosses the threshold. TESTING finding D-2: this cron is the missing production consumer that
+# makes the detector + hold writer reachable at all (previously unwired, dead code).
+
+on:
+  schedule:
+    # Every 10 minutes — matches the detector's own BATCH_WINDOW_MS.
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  batch-mint-sweep:
+    name: QF batch-mint sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run batch-mint sweep
+        run: node scripts/cron/batch-mint-sweep.mjs

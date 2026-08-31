@@ -77,6 +77,36 @@ describe('detectBatchMintGroups', () => {
     expect(heldIds).toEqual(new Set(['QF-1', 'QF-2', 'QF-3']));
   });
 
+  it('TESTING finding D-6: chains a spread-but-continuous burst into one cluster (anchor-from-first missed this)', () => {
+    // 4 mints at t=0/9/11/12min: t=0..t=12 spans 12min (>10min), but every CONSECUTIVE gap
+    // (9, 2, 1) is <=10min, so this is one continuous burst and must be held in full.
+    const t0 = Date.parse('2026-08-01T00:00:00Z');
+    const mints = [
+      { id: 'QF-1', created_by: 'sess-A', created_at: new Date(t0).toISOString() },
+      { id: 'QF-2', created_by: 'sess-A', created_at: new Date(t0 + 9 * 60000).toISOString() },
+      { id: 'QF-3', created_by: 'sess-A', created_at: new Date(t0 + 11 * 60000).toISOString() },
+      { id: 'QF-4', created_by: 'sess-A', created_at: new Date(t0 + 12 * 60000).toISOString() },
+    ];
+    const { heldIds } = detectBatchMintGroups(mints);
+    expect(heldIds).toEqual(new Set(['QF-1', 'QF-2', 'QF-3', 'QF-4']));
+  });
+
+  it('a gap exceeding the window breaks the chain into separate clusters', () => {
+    const t0 = Date.parse('2026-08-01T00:00:00Z');
+    const mints = [
+      { id: 'QF-1', created_by: 'sess-A', created_at: new Date(t0).toISOString() },
+      { id: 'QF-2', created_by: 'sess-A', created_at: new Date(t0 + 5 * 60000).toISOString() },
+      { id: 'QF-3', created_by: 'sess-A', created_at: new Date(t0 + 5 * 60000 + BATCH_WINDOW_MS + 60000).toISOString() },
+      { id: 'QF-4', created_by: 'sess-A', created_at: new Date(t0 + 5 * 60000 + BATCH_WINDOW_MS + 2 * 60000).toISOString() },
+      { id: 'QF-5', created_by: 'sess-A', created_at: new Date(t0 + 5 * 60000 + BATCH_WINDOW_MS + 3 * 60000).toISOString() },
+    ];
+    const { heldIds, groups } = detectBatchMintGroups(mints);
+    // First cluster [QF-1, QF-2] has only 2 members -- not held. Second cluster [QF-3, QF-4, QF-5]
+    // has 3 -- held.
+    expect(heldIds).toEqual(new Set(['QF-3', 'QF-4', 'QF-5']));
+    expect(groups).toHaveLength(1);
+  });
+
   it('rows missing id/created_by/created_at are skipped rather than throwing', () => {
     expect(() => detectBatchMintGroups([{ id: 'QF-1' }, null, undefined])).not.toThrow();
     expect(detectBatchMintGroups([{ id: 'QF-1' }, null, undefined]).heldIds.size).toBe(0);

@@ -36,6 +36,13 @@ describe('detectOffCanonicalMints', () => {
     expect(hasRiskSignal({ title: 'fix a typo', description: '' })).toBe(false);
   });
 
+  it('TESTING minor finding: word-boundary matching, not substring — "author"/"urls" do not false-positive on auth/rls', () => {
+    expect(hasRiskSignal({ title: 'update the author bio page', description: '' })).toBe(false);
+    expect(hasRiskSignal({ title: 'fix broken urls in the sitemap', description: '' })).toBe(false);
+    expect(hasRiskSignal({ title: 'fix auth bug', description: '' })).toBe(true);
+    expect(hasRiskSignal({ title: 'tighten rls policy', description: '' })).toBe(true);
+  });
+
   it('handles empty/undefined input', () => {
     expect(detectOffCanonicalMints([]).count).toBe(0);
     expect(detectOffCanonicalMints(undefined).count).toBe(0);
