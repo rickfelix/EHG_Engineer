@@ -533,6 +533,22 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
   } catch { return []; }
   const push = (rows || []).filter(isCoordinatorPush);
   const now = new Date().toISOString();
+  // QF-20260831-032: an idle-absorb claim-hint (payload.qf_id) is a coordinator_request, a
+  // DIRECTIVE_KIND that is NEVER auto-acked below -- so once its QF is claimed/completed the row
+  // itself still has acknowledged_at=NULL and resurfaces on every subsequent /checkin forever,
+  // regardless of the QF's current status. Live-verify referenced QFs still status='open' before
+  // surfacing; a stale hint (completed/cancelled/deleted) is acked here so it stops recurring.
+  const qfIds = [...new Set(push.map((m) => m.payload && m.payload.qf_id).filter(Boolean))];
+  let staleQfIds = new Set();
+  if (qfIds.length) {
+    try {
+      // Provably bounded: qfIds is deduped from this ONE session's own unacked coordinator
+      // push (a small, per-worker set) -- 500 is a generous literal cap, never hit in practice.
+      const { data: qfRows } = await sb.from('quick_fixes').select('id, status').in('id', qfIds).limit(500);
+      const found = new Map((qfRows || []).map((r) => [r.id, r.status]));
+      staleQfIds = new Set(qfIds.filter((id) => found.get(id) !== 'open'));
+    } catch { /* fail-open: no filtering if the live status lookup fails */ }
+  }
   const out = [];
   for (const m of push) {
     const p = m.payload || {};
@@ -544,6 +560,10 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
     // loop itself, self-triggered on the second pass of the very row it should never have
     // re-surfaced.
     if (p.actioned_at) continue;
+    if (p.qf_id && staleQfIds.has(p.qf_id)) {
+      try { await sb.from('session_coordination').update({ acknowledged_at: now }).eq('id', m.id); } catch { /* best-effort */ }
+      continue;
+    }
     const kind = p.kind || null;
     const isDirective = !!(kind && ws.DIRECTIVE_KINDS.includes(kind));
     // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-B / FR-1: chairman_directive is in DIRECTIVE_KINDS,
