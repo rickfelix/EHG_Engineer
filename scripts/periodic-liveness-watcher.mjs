@@ -34,7 +34,7 @@ import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolv
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
 import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
 import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
-import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, shouldStampDecision } from '../lib/periodic-liveness/gha-run-resolver.mjs';
+import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
@@ -524,22 +524,39 @@ async function main({ includeFixtures = false } = {}) {
     } else {
       try {
         const runs = await fetchScheduledRuns(repo, token);
-        const latestByFile = latestRunPerWorkflow(runs);
-        ghaGapStats = observedGapStats(runs);
-        const classified = classifyGhaCronRows(latestByFile, ghaCronRows.map((r) => r.process_key));
-        for (const c of classified) {
-          ghaDecisions.set(c.processKey, c);
-          // QF-20260830-795: stamp on EVERY observed conclusion (success or failure), not just
-          // success -- a failing/cancelled scheduled run is still observed proof the process ran.
-          if (shouldStampDecision(c)) {
-            await stampFromGithubActionsRun(supabase, c.processKey, c.ranAtIso);
+        // SD-LEO-FIX-GHA-CRON-LIVENESS-001: always logged, every cycle -- its prior absence is
+        // exactly why the stale-batch defect below needed production-log forensics to diagnose.
+        const { oldest, newest } = batchTimeRange(runs);
+        console.log(`[periodic-liveness-watcher] gha_cron batch range: oldest=${oldest} newest=${newest} count=${runs.length}`);
+        // BATCH-FRESHNESS GUARD: MEASURED (production forensics) that GitHub's Actions run-list
+        // API occasionally returns a fully-formed but STALE batch (distinct ETag from fresh
+        // responses -- a different backend replica, not a client cache; observed up to weeks
+        // stale). Every downstream consumer trusted that batch as ground truth, so ONE stale
+        // fetch silently degraded every gha_cron:* row's classification for the cycle -- the
+        // "many unrelated rows aging in lockstep" symptom this SD was filed against. Reject the
+        // WHOLE batch rather than trust partial data; rows degrade to UNVERIFIED this cycle
+        // (never a false OVERDUE/OK), matching the existing "no_data" degrade philosophy below.
+        const freshness = isBatchFresh(runs, Date.now());
+        if (!freshness.fresh) {
+          console.error(`[periodic-liveness-watcher] gha_cron batch REJECTED as stale (newest entry ${Math.round((freshness.newestAgeMs ?? 0) / 60000)}min old) -- skipping gha_cron classification/stamping this cycle`);
+        } else {
+          const latestByFile = latestRunPerWorkflow(runs);
+          ghaGapStats = observedGapStats(runs);
+          const classified = classifyGhaCronRows(latestByFile, ghaCronRows.map((r) => r.process_key));
+          for (const c of classified) {
+            ghaDecisions.set(c.processKey, c);
+            // QF-20260830-795: stamp on EVERY observed conclusion (success or failure), not just
+            // success -- a failing/cancelled scheduled run is still observed proof the process ran.
+            if (shouldStampDecision(c)) {
+              await stampFromGithubActionsRun(supabase, c.processKey, c.ranAtIso);
+            }
           }
+          // QF-20260830-795 (a): the observer's population vs what it could actually resolve this
+          // cycle -- printed every run so a coverage gap (registered gha_cron rows this repo's own
+          // run history never mentions) is visible, not silently absorbed into a capped read.
+          const noDataCount = classified.filter((c) => c.decision === 'no_data').length;
+          console.log(`[periodic-liveness-watcher] gha_cron population=${ghaCronRows.length} resolved=${classified.length - noDataCount} no_data=${noDataCount}`);
         }
-        // QF-20260830-795 (a): the observer's population vs what it could actually resolve this
-        // cycle -- printed every run so a coverage gap (registered gha_cron rows this repo's own
-        // run history never mentions) is visible, not silently absorbed into a capped read.
-        const noDataCount = classified.filter((c) => c.decision === 'no_data').length;
-        console.log(`[periodic-liveness-watcher] gha_cron population=${ghaCronRows.length} resolved=${classified.length - noDataCount} no_data=${noDataCount}`);
       } catch (err) {
         // Degrades to today's exact state (rows stay UNVERIFIED, ghaDecisions stays empty) -- no
         // false OVERDUE/OK alarms (FR-2 acceptance criteria).

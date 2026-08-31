@@ -10,6 +10,8 @@ import {
   classifyGhaCronRows,
   observedGapStats,
   shouldStampDecision,
+  batchTimeRange,
+  isBatchFresh,
 } from '../../../lib/periodic-liveness/gha-run-resolver.mjs';
 
 function run(overrides = {}) {
@@ -182,5 +184,54 @@ describe('observedGapStats', () => {
   it('skips runs with no resolvable path, same as latestRunPerWorkflow', () => {
     const stats = observedGapStats([{ created_at: '2026-08-24T00:00:00Z', conclusion: 'success' }]);
     expect(stats.size).toBe(0);
+  });
+});
+
+// SD-LEO-FIX-GHA-CRON-LIVENESS-001: MEASURED (production forensics) that GitHub's Actions
+// run-list API occasionally returns a fully-formed but STALE batch (a distinct backend replica,
+// not a client cache -- observed up to weeks stale, HTTP 200, no error). Every downstream
+// consumer trusted the batch as ground truth, so ONE stale fetch silently degraded every
+// gha_cron:* row's classification for the cycle -- the "many unrelated rows aging in lockstep"
+// symptom this SD was filed against (one bad fetch, not N independent per-row failures).
+describe('batchTimeRange', () => {
+  it('returns the [oldest, newest] created_at across the batch', () => {
+    const runs = [
+      run({ created_at: '2026-08-24T00:00:00Z' }),
+      run({ created_at: '2026-08-31T16:00:00Z' }),
+      run({ created_at: '2026-08-20T00:00:00Z' }),
+    ];
+    expect(batchTimeRange(runs)).toEqual({ oldest: '2026-08-20T00:00:00Z', newest: '2026-08-31T16:00:00Z' });
+  });
+
+  it('is null-safe on an empty batch', () => {
+    expect(batchTimeRange([])).toEqual({ oldest: null, newest: null });
+  });
+});
+
+describe('isBatchFresh', () => {
+  const NOW = Date.parse('2026-08-31T16:30:00Z');
+
+  it('a batch whose newest entry is minutes old is fresh (the healthy case)', () => {
+    const runs = [run({ created_at: '2026-08-31T16:25:00Z' })];
+    const { fresh, newestAgeMs } = isBatchFresh(runs, NOW);
+    expect(fresh).toBe(true);
+    expect(newestAgeMs).toBe(5 * 60 * 1000);
+  });
+
+  it('a batch whose newest entry is weeks old is REJECTED (the reproduced production defect)', () => {
+    const runs = [run({ created_at: '2026-08-13T00:00:00Z' })];
+    expect(isBatchFresh(runs, NOW).fresh).toBe(false);
+  });
+
+  it('rejects right at the boundary and accepts just inside it', () => {
+    const threshold = 20 * 60 * 1000;
+    const justInside = [run({ created_at: new Date(NOW - threshold + 1000).toISOString() })];
+    const justOutside = [run({ created_at: new Date(NOW - threshold - 1000).toISOString() })];
+    expect(isBatchFresh(justInside, NOW, threshold).fresh).toBe(true);
+    expect(isBatchFresh(justOutside, NOW, threshold).fresh).toBe(false);
+  });
+
+  it('an empty batch is never fresh (no evidence is not evidence of freshness)', () => {
+    expect(isBatchFresh([], NOW)).toEqual({ fresh: false, newestAgeMs: null });
   });
 });
