@@ -104,6 +104,25 @@ describe('orphan-writers-registry: validateAllEntries', () => {
   });
 });
 
+describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)', () => {
+  // Chairman-ratified obligation 2ab4b4bc: "CI fails on silent growth OR shrink of the count."
+  // A rising number in month one reads as DISCOVERY, not decay -- the assertion forces the
+  // delta to be looked at, not suppressed. Bump this constant (and the reason in the same
+  // commit) whenever ORPHAN_ENTRIES genuinely changes size; a silent change fails CI.
+  const PINNED_TOTAL_ENTRIES = 15;
+
+  it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
+    expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);
+  });
+
+  it('the sms-delivery-status-source-strip specimen (QF-20260831-821) is present with its citation', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.id === 'sms-delivery-status-source-strip');
+    expect(entry).toBeTruthy();
+    expect(entry.entry_type).toBe('wired-but-blind');
+    expect(entry.evidence).toMatch(/6d1624eb/);
+  });
+});
+
 describe('orphan-writers-registry: entry-type coverage (SD success criterion 2)', () => {
   it('has at least one real specimen per entry_type', () => {
     const types = new Set(ORPHAN_ENTRIES.map((e) => e.entry_type));
