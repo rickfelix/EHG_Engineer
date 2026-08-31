@@ -83,3 +83,38 @@ describe('syncToDatabase legacy-row skip (QF-20260830-792)', () => {
     expect(JSON.parse(savedStateJson).lastSyncedLine).toBe(2);
   });
 });
+
+describe('syncToDatabase same-batch (session_id,timestamp) dedup (QF-20260830-942)', () => {
+  beforeEach(() => {
+    upsertMock.mockClear();
+    upsertMock.mockResolvedValue({ error: null });
+    writeFileSyncMock.mockClear();
+    readFileSyncMock.mockReturnValue(JSON.stringify({ lastSyncedLine: 0, lastSyncedTimestamp: null }));
+  });
+
+  it('collapses two lines sharing the same (session_id, timestamp) into one upserted row', async () => {
+    const dup = { session_id: 's1', timestamp: '2026-07-18T06:43:37.986Z', model_id: 'sonnet', input_tokens: 1 };
+    const dupNewer = { ...dup, input_tokens: 2 };
+    const other = { session_id: 's2', timestamp: '2026-07-18T06:43:38.000Z', model_id: 'sonnet' };
+    createReadStreamMock.mockReturnValue(jsonlStream([
+      JSON.stringify(dup),
+      JSON.stringify(dupNewer),
+      JSON.stringify(other),
+    ]));
+
+    await syncToDatabase();
+
+    // Without the dedup fix, Postgres would reject the whole upsert
+    // ("ON CONFLICT DO UPDATE command cannot affect row a second time"); here the mock succeeds,
+    // so we assert the CALL PAYLOAD was already collapsed to one row per key before upload.
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    const [upserted] = upsertMock.mock.calls[0];
+    expect(upserted).toHaveLength(2);
+    const s1Row = upserted.find((r) => r.session_id === 's1');
+    // Last occurrence wins.
+    expect(s1Row.input_tokens).toBe(2);
+
+    const [, savedStateJson] = writeFileSyncMock.mock.calls[0];
+    expect(JSON.parse(savedStateJson).lastSyncedLine).toBe(3);
+  });
+});
