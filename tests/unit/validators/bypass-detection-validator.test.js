@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateSDTimeline } from '../../../scripts/modules/bypass-detection-validator.js';
+import { validateSDTimeline, logValidationAuditEvents } from '../../../scripts/modules/bypass-detection-validator.js';
 
 // Post-grandfather-date timestamps (BYPASS_DETECTION_DEPLOYMENT_DATE = 2026-02-01)
 const T = (iso) => new Date(iso).toISOString();
@@ -110,5 +110,112 @@ describe('bypass-detection-validator: chain-aware pairing (QF-20260423-000)', ()
   it('returns empty findings when no handoffs exist', async () => {
     const findings = await validateSDTimeline('test-sd', makeSupabaseMock([]));
     expect(findings).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// SD-FDBK-FIX-HARNESS-REVIEW-BYPASS-001: logValidationAuditEvents() dedup on
+// (validator_name, artifact_id) -- 238/238 rows measured as one repeated finding
+// before this fix, because nothing prevented a re-insert on every qualifying push.
+// ────────────────────────────────────────────────────────────────────────────
+function makeAuditLogMock({ existingArtifactIds = [] } = {}) {
+  const insertCalls = [];
+  const selectCalls = [];
+  return {
+    insertCalls,
+    selectCalls,
+    from(table) {
+      if (table !== 'validation_audit_log') throw new Error(`unexpected table: ${table}`);
+      const state = { validatorName: null, artifactId: null };
+      const chain = {
+        select() { return chain; },
+        eq(col, val) {
+          if (col === 'validator_name') state.validatorName = val;
+          if (col === 'artifact_id') state.artifactId = val;
+          return chain;
+        },
+        limit() { return chain; },
+        maybeSingle() {
+          selectCalls.push({ validator_name: state.validatorName, artifact_id: state.artifactId });
+          const exists = existingArtifactIds.includes(state.artifactId);
+          return Promise.resolve({ data: exists ? { id: 'existing-row' } : null, error: null });
+        },
+        insert(payload) {
+          insertCalls.push(payload);
+          return Promise.resolve({ data: null, error: null });
+        }
+      };
+      return chain;
+    }
+  };
+}
+
+function makeFinding(overrides = {}) {
+  return {
+    sd_id: 'test-sd',
+    sd_type: 'infrastructure',
+    artifact_type: 'handoff_plan_to_lead',
+    artifact_id: 'artifact-1',
+    prerequisite_type: 'EXEC-TO-PLAN',
+    failure_category: 'bypass',
+    time_delta_seconds: -120,
+    ...overrides
+  };
+}
+
+describe('logValidationAuditEvents dedup (SD-FDBK-FIX-HARNESS-REVIEW-BYPASS-001)', () => {
+  it('does not re-insert a finding whose artifact_id already has a bypass_detection row', async () => {
+    const supabase = makeAuditLogMock({ existingArtifactIds: ['artifact-1'] });
+    await logValidationAuditEvents([makeFinding()], supabase);
+
+    expect(supabase.insertCalls).toHaveLength(0);
+    expect(supabase.selectCalls).toEqual([{ validator_name: 'bypass_detection', artifact_id: 'artifact-1' }]);
+  });
+
+  it('inserts a finding for a genuinely new artifact_id', async () => {
+    const supabase = makeAuditLogMock({ existingArtifactIds: ['some-other-artifact'] });
+    await logValidationAuditEvents([makeFinding({ artifact_id: 'artifact-2' })], supabase);
+
+    expect(supabase.insertCalls).toHaveLength(1);
+    expect(supabase.insertCalls[0].artifact_id).toBe('artifact-2');
+    expect(supabase.insertCalls[0].validator_name).toBe('bypass_detection');
+  });
+
+  it('still emits the console.log structured event even when the insert is skipped as a duplicate', async () => {
+    // tests/setup.unit.js already replaces global.console with a shared vi.fn() (not reset
+    // between tests in this file) -- clear it here rather than vi.spyOn a second layer on top,
+    // which would only capture calls made after the spy, on a mock whose call history from
+    // OTHER tests in this file is otherwise still accumulating.
+    console.log.mockClear();
+    const supabase = makeAuditLogMock({ existingArtifactIds: ['artifact-1'] });
+    await logValidationAuditEvents([makeFinding()], supabase);
+
+    const structuredCalls = console.log.mock.calls
+      .map(([arg]) => { try { return JSON.parse(arg); } catch { return null; } })
+      .filter((parsed) => parsed?.event === 'validation_failure');
+    expect(structuredCalls).toHaveLength(1);
+    expect(structuredCalls[0].artifact_id).toBe('artifact-1');
+  });
+
+  it('scopes the dedup check to validator_name=bypass_detection, not artifact_id alone', async () => {
+    // Simulates the measured shape: most validation_audit_log rows belong to OTHER
+    // validators and never match on validator_name, so they must not suppress a real
+    // bypass_detection insert even if an artifact_id happened to coincide.
+    const supabase = makeAuditLogMock({ existingArtifactIds: [] });
+    await logValidationAuditEvents([makeFinding({ artifact_id: 'artifact-3' })], supabase);
+
+    expect(supabase.selectCalls[0].validator_name).toBe('bypass_detection');
+    expect(supabase.insertCalls).toHaveLength(1);
+  });
+
+  it('handles multiple findings independently -- some deduped, some new', async () => {
+    const supabase = makeAuditLogMock({ existingArtifactIds: ['artifact-1'] });
+    await logValidationAuditEvents(
+      [makeFinding({ artifact_id: 'artifact-1' }), makeFinding({ artifact_id: 'artifact-4' })],
+      supabase
+    );
+
+    expect(supabase.insertCalls).toHaveLength(1);
+    expect(supabase.insertCalls[0].artifact_id).toBe('artifact-4');
   });
 });

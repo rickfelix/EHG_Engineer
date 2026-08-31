@@ -366,15 +366,31 @@ async function logValidationAuditEvents(findings, supabase) {
 
     // Try to log to audit table if it exists
     try {
-      await supabase.from('validation_audit_log').insert({
-        correlation_id: correlationId,
-        sd_id: finding.sd_id,
-        validator_name: 'bypass_detection',
-        failure_reason: `Artifact ${finding.artifact_type} created before prerequisite ${finding.prerequisite_type}`,
-        artifact_id: finding.artifact_id,
-        failure_category: finding.failure_category,
-        metadata: finding
-      });
+      // SD-FDBK-FIX-HARNESS-REVIEW-BYPASS-001: dedup on (validator_name, artifact_id) before
+      // inserting. Without this, a still-active SD's historical finding gets re-detected and
+      // re-inserted on every qualifying CI push forever (measured: 238/238 rows for one finding).
+      // artifact_id is a sd_phase_handoffs UUID primary key -- globally unique, so scoping by it
+      // alone cannot collide across SDs; validator_name is still required since most rows in this
+      // shared table belong to other validators with artifact_id=null.
+      const { data: existingRow } = await supabase
+        .from('validation_audit_log')
+        .select('id')
+        .eq('validator_name', 'bypass_detection')
+        .eq('artifact_id', finding.artifact_id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingRow) {
+        await supabase.from('validation_audit_log').insert({
+          correlation_id: correlationId,
+          sd_id: finding.sd_id,
+          validator_name: 'bypass_detection',
+          failure_reason: `Artifact ${finding.artifact_type} created before prerequisite ${finding.prerequisite_type}`,
+          artifact_id: finding.artifact_id,
+          failure_category: finding.failure_category,
+          metadata: finding
+        });
+      }
     } catch (_err) {
       // Table may not exist - that's OK, we logged to console
     }
@@ -386,6 +402,7 @@ export {
   runBypassDetection,
   validateSDTimeline,
   generateMarkdownSummary,
+  logValidationAuditEvents,
   CLOCK_SKEW_TOLERANCE_MS,
   BYPASS_DETECTION_DEPLOYMENT_DATE,
   PREREQUISITE_MAP
