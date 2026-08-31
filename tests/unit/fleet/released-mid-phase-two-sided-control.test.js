@@ -58,6 +58,8 @@ const AXIS_FIXTURES = {
   chairmanRatificationPending: { row: orphan({ metadata: { chairman_ratified: false } }), blocks: true },
   needsCoordinatorReview: { row: orphan({ metadata: { needs_coordinator_review: true } }), blocks: true },
   leadBlockerActive: { row: orphan({ metadata: { lead_blocker: { reason: 'awaiting chairman' } } }), blocks: true },
+  // QF-20260831-936: chairman-lane hold, the exact shape resume_orphan adopted past before this axis existed.
+  blockedFlag: { row: orphan({ metadata: { blocked: true } }), blocks: true },
   // CORRECTED AFTER EXEC REVIEW — this fixture asserted NOTHING. 'SD-DEMO-CLONE-001' matches
   // TEST_FIXTURE_KEY_RE, so heldReason returned truthy via test_fixture_key, not this axis; because
   // heldReason JOINS all matching axes, the case was green on a different axis's truthiness and the
