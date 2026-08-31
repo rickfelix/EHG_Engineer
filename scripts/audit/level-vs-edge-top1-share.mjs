@@ -11,6 +11,14 @@
  * per-venture-per-poll suppression condition; Hotel-3's bypass_detection re-log) live in
  * different tables/shapes and are explicitly BACKLOG to wire in, per the QF's own text.
  *
+ * KNOWN LIMITATION: this census only ever looks at `feedback` rows carrying
+ * `metadata.dedup_key` -- it cannot see level-vs-edge re-assertion happening through any OTHER
+ * emission path (a different table, a differently-shaped metadata field, or a condition that
+ * doesn't use dedup_key at all). It also cannot distinguish a genuinely pathological repeating
+ * condition from a legitimately-flappy-but-healthy one at small group counts (see the
+ * documented 2-group boundary caveat on computeTop1Share below) -- a human/coordinator reading
+ * the printed group breakdown is still required to interpret a FAIL, not just its exit code.
+ *
  * Usage: node scripts/audit/level-vs-edge-top1-share.mjs [--days N] [--threshold 0.5]
  */
 import 'dotenv/config';
