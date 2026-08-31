@@ -67,4 +67,30 @@ describe('findOverdueHolds', () => {
     expect(findOverdueHolds([], NOW)).toEqual({ count: 0, overdue: [] });
     expect(findOverdueHolds(undefined, NOW)).toEqual({ count: 0, overdue: [] });
   });
+
+  // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-7/TS-11): the 4th surface enrolled so a held item
+  // with no Solomon verdict and a disabled release cron is still surfaced as overdue.
+  it('TS-11: flags an overdue oracle_read_pending hold only while requires_human_action_reason is still set', () => {
+    const active = [{
+      sd_key: 'SD-ORACLE', status: 'in_progress',
+      metadata: { requires_human_action_reason: 'oracle_read_pending', oracle_read_pending_review_at: PAST },
+    }];
+    const { count, overdue } = findOverdueHolds(active, NOW);
+    expect(count).toBe(1);
+    expect(overdue[0].surface).toBe('oracle_read_pending');
+
+    const released = [{
+      sd_key: 'SD-ORACLE', status: 'in_progress',
+      metadata: { requires_human_action_reason: 'something_else', oracle_read_pending_review_at: PAST },
+    }];
+    expect(findOverdueHolds(released, NOW).count).toBe(0);
+  });
+
+  it('an oracle_read_pending hold whose review_at is still future is not flagged', () => {
+    const rows = [{
+      sd_key: 'SD-ORACLE-2', status: 'in_progress',
+      metadata: { requires_human_action_reason: 'oracle_read_pending', oracle_read_pending_review_at: FUTURE },
+    }];
+    expect(findOverdueHolds(rows, NOW).count).toBe(0);
+  });
 });
