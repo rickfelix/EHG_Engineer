@@ -23,6 +23,8 @@ function stubSupabase({ drainSetsError = null, drainSetsRows = null } = {}) {
       const chain = {
         select() { return chain; },
         eq(_col, val) { chain._eq = val; return chain; },
+        is() { return chain; }, // QF-20260831-560: assertSendBackpressure's null check
+        gt() { return chain; }, // QF-20260831-560: assertSendBackpressure's expiry check
         limit() { return chain; },
         maybeSingle() {
           if (table === 'claude_sessions') {
@@ -36,6 +38,7 @@ function stubSupabase({ drainSetsError = null, drainSetsRows = null } = {}) {
             if (drainSetsError) return Promise.resolve({ data: null, error: drainSetsError }).then(res, rej);
             return Promise.resolve({ data: drainSetsRows || [], error: null }).then(res, rej);
           }
+          if (table === 'session_coordination') return Promise.resolve({ count: 0, data: chain._inserted || null, error: null }).then(res, rej);
           return Promise.resolve({ data: chain._inserted || null, error: null }).then(res, rej);
         },
       };
