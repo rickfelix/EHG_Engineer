@@ -324,7 +324,16 @@ describe('coverage regression guard — every reachable handoff write site is st
     // each independently finds the same nearby `.update(...)` within its 1500-char window, so one
     // real write site was being double-counted as two matches — both of which now correctly fail the
     // PROTECTED-column check since the payload no longer contains status/current_phase/completion_date.
-    expect(inspected, 'the scan found no protected-column write sites at all').toBeGreaterThanOrEqual(9);
+    // SD-LEO-INFRA-LEO-PHASE-TAGGED-001: threshold lowered 9 -> 8. reconcileSDStateAfterHandoff's
+    // real write site in execution-helpers.js WAS being double-counted here too: its SELECT
+    // `.from('strategic_directives_v2')` sat close enough to the UPDATE's own `.from()` call that
+    // both independently matched the same nearby `.update(...)` within the 1500-char window (the
+    // exact quirk this comment block already documents for FR-5). Inserting the new state-file
+    // write block between the SELECT and the UPDATE pushed them past 1500 chars apart, so only the
+    // UPDATE's own `.from()` now finds it -- one real write site, one match, correctly stamped
+    // (asserted by `unstamped` staying empty below). Net: one fewer double-count, not one fewer
+    // stamped site.
+    expect(inspected, 'the scan found no protected-column write sites at all').toBeGreaterThanOrEqual(8);
     expect(unstamped).toEqual([]);
   });
 });
