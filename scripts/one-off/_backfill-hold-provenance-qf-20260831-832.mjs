@@ -43,8 +43,14 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 // A bare .select() silently truncates to PostgREST's 1000-row cap, which would have made this
 // backfill see ~9 fenced rows instead of the true 103 and report a false clean sweep -- caught
 // live while authoring this script (measured 9 vs the coordinator's independently-measured 103).
+//
+// .order('sd_key') is REQUIRED, not cosmetic: fetchAllPaginated pages via .range(offset, ...)
+// across separate queries, and Postgres gives no row-order guarantee across them without an
+// ORDER BY -- on this actively-written-to table, a row could shift between the page-N and
+// page-N+1 scans and fall through the gap uncounted (adversarial-review finding, this PR). An
+// explicit ORDER BY on an indexed unique column pins every page to a stable slice.
 const data = await fetchAllPaginated(() =>
-  supabase.from('strategic_directives_v2').select('sd_key,status,priority,metadata')
+  supabase.from('strategic_directives_v2').select('sd_key,status,priority,metadata').order('sd_key', { ascending: true })
 );
 
 const fenced = (data || []).filter((r) => isHumanActionRequested(r.metadata?.requires_human_action));

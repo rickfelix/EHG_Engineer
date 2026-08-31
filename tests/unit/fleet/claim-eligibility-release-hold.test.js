@@ -15,7 +15,7 @@ vi.mock('../../../lib/coordinator/safe-metadata-merge.mjs', () => ({
 }));
 
 const { mergeMetadataKeys } = await import('../../../lib/coordinator/safe-metadata-merge.mjs');
-const { releaseHold } = await import('../../../lib/fleet/claim-eligibility.cjs');
+const { releaseHold, classifyDispatchIneligibility, isHoldReleased } = await import('../../../lib/fleet/claim-eligibility.cjs');
 
 /** Fake supabase-js client for the readback SELECT: .from().select().eq().maybeSingle() */
 function fakeSb(readbackMetadata) {
@@ -80,5 +80,45 @@ describe('QF-20260831-832: releaseHold (write-side of the hold-predicate family)
     };
     const result = await releaseHold(sb, 'SD-FIXTURE-RELEASE-005', { releaser: 'chairman', reason: 'stale hold' });
     expect(result).toEqual({ released: true, sdKey: 'SD-FIXTURE-RELEASE-005' });
+  });
+});
+
+describe('QF-20260831-832 adversarial-review fix: the humanActionRequired GATE consults unfenced_at, not just the display layer', () => {
+  it('BEFORE-FIX REGRESSION PIN: a row with requires_human_action=true and a stamped, valid unfenced_at is NOT gated (the whole point of releaseHold)', () => {
+    const row = {
+      sd_key: 'SD-FIXTURE-GATE-001',
+      sd_type: 'feature',
+      status: 'in_progress',
+      metadata: {
+        requires_human_action: true,
+        requires_human_action_reason: 'awaiting chairman decision',
+        requires_human_action_at: '2026-08-01T00:00:00Z',
+        unfenced_at: '2026-08-02T00:00:00Z', // released AFTER the hold was set
+        unfenced_by: 'chairman',
+        unfenced_reason: 'decision made',
+      },
+    };
+    expect(isHoldReleased(row.metadata)).toBe(true);
+    expect(classifyDispatchIneligibility(row)).toBeNull();
+  });
+
+  it('still gates when unfenced_at PREDATES the hold (a stale/reused stamp, not a real release)', () => {
+    const row = {
+      sd_key: 'SD-FIXTURE-GATE-002',
+      sd_type: 'feature',
+      status: 'in_progress',
+      metadata: {
+        requires_human_action: true,
+        requires_human_action_at: '2026-08-05T00:00:00Z',
+        unfenced_at: '2026-08-01T00:00:00Z', // predates the (re-)set -- still held
+      },
+    };
+    expect(isHoldReleased(row.metadata)).toBe(false);
+    expect(classifyDispatchIneligibility(row)).toBe('human_action_required');
+  });
+
+  it('still gates when unfenced_at is absent (no release ever stamped)', () => {
+    const row = { sd_key: 'SD-FIXTURE-GATE-003', sd_type: 'feature', status: 'in_progress', metadata: { requires_human_action: true } };
+    expect(classifyDispatchIneligibility(row)).toBe('human_action_required');
   });
 });
