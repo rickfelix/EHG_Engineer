@@ -15,7 +15,8 @@ import path from 'node:path';
 const require_ = createRequire(import.meta.url);
 const REPO = path.resolve(__dirname, '../../..');
 const {
-  resolveAssignmentTarget, resolveAssignmentTargetKey, PROFILES, SOURCES, NEWLY_TAUGHT
+  resolveAssignmentTarget, resolveAssignmentTargetKey, describeUnreadableAssignment,
+  isCommandTargetAssignment, PROFILES, SOURCES, NEWLY_TAUGHT
 } = require_(path.join(REPO, 'lib/fleet/assignment-target.cjs'));
 
 const row = (over = {}) => ({ subject: '', body: '', payload: {}, ...over });
@@ -196,5 +197,50 @@ describe('registry auditability', () => {
     expect(resolveAssignmentTargetKey(agreeing, { profile: 'worker' })).toBe('QF-20260726-642');
     const disagreeing = row({ target_sd: 'QF-AAA-111', subject: 'take QF-BBB-222' });
     expect(resolveAssignmentTargetKey(disagreeing, { profile: 'worker' })).toBe('QF-BBB-222');
+  });
+});
+
+describe('QF-20260831-902: command-target WORK_ASSIGNMENT variant', () => {
+  const wa = (over = {}) => ({ message_type: 'WORK_ASSIGNMENT', subject: '', body: '', payload: {}, ...over });
+
+  it('isCommandTargetAssignment: a command + a valid premise_measured_at is command-target', () => {
+    const r = wa({ payload: { command: '/review-subsystem harness', premise_measured_at: '2026-08-31T12:00:00Z' } });
+    expect(isCommandTargetAssignment(r)).toBe(true);
+  });
+
+  it('isCommandTargetAssignment: false when premise_measured_at is missing (no defeating the guard by omission)', () => {
+    const r = wa({ payload: { command: '/review-subsystem harness' } });
+    expect(isCommandTargetAssignment(r)).toBe(false);
+  });
+
+  it('isCommandTargetAssignment: false when premise_measured_at is unparseable', () => {
+    const r = wa({ payload: { command: '/review-subsystem harness', premise_measured_at: 'not-a-date' } });
+    expect(isCommandTargetAssignment(r)).toBe(false);
+  });
+
+  it('isCommandTargetAssignment: false when command is empty/whitespace-only', () => {
+    expect(isCommandTargetAssignment(wa({ payload: { command: '', premise_measured_at: '2026-08-31T12:00:00Z' } }))).toBe(false);
+    expect(isCommandTargetAssignment(wa({ payload: { command: '   ', premise_measured_at: '2026-08-31T12:00:00Z' } }))).toBe(false);
+  });
+
+  it('THE FIX: describeUnreadableAssignment passes a valid /review-subsystem command-target dispatch (was refused before this QF)', () => {
+    const r = wa({
+      subject: '[REVIEW-DISPATCH] harness subsystem review',
+      payload: { command: '/review-subsystem harness', premise_measured_at: '2026-08-31T12:00:00Z' },
+    });
+    expect(describeUnreadableAssignment(r)).toBeNull();
+  });
+
+  it('a target-less NON-command assignment still warns/refuses (acceptance bar: no regression on the general case)', () => {
+    const r = wa({ subject: 'do the thing', payload: {} });
+    const result = describeUnreadableAssignment(r);
+    expect(result).not.toBeNull();
+    expect(result.detail).toMatch(/no resolvable target/);
+  });
+
+  it('a command with NO premise stamp falls through to ordinary resolution and still refuses (guard cannot be defeated by a bare command field)', () => {
+    const r = wa({ payload: { command: '/review-subsystem harness' } });
+    const result = describeUnreadableAssignment(r);
+    expect(result).not.toBeNull();
   });
 });
