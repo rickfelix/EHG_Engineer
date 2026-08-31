@@ -26,7 +26,9 @@ describe('enumerateMigrationsForSd', () => {
       paths: ['database/migrations/20260101_x.sql', 'database/migrations/20260102_y.sql'],
       unverifiable: false,
     });
-    expect(calls[0]).toContain('SD-TEST-001');
+    // calls[0] is the FR-3 fetch; the grep-by-SD-key call is calls[1].
+    expect(calls[0]).toMatch(/^git fetch origin main/);
+    expect(calls[1]).toContain('SD-TEST-001');
   });
 
   it('returns empty, verifiable when no commit mentions the SD (the ordinary case)', () => {
@@ -37,6 +39,29 @@ describe('enumerateMigrationsForSd', () => {
   it('[TWO-SIDED] surfaces unverifiable, never a silent pass, when git fails', () => {
     const git = () => { throw new Error('no repo'); };
     expect(enumerateMigrationsForSd('SD-TEST-003', { git })).toEqual({ paths: [], unverifiable: true });
+  });
+
+  it('fetches origin/main before grepping the log', () => {
+    const calls = [];
+    const git = (cmd) => { calls.push(cmd); return ''; };
+    enumerateMigrationsForSd('SD-TEST-004', { git });
+    expect(calls[0]).toMatch(/^git fetch origin main/);
+    expect(calls[1]).toMatch(/^git log origin\/main/);
+  });
+
+  it('[TS-1] returns unverifiable:true on a FETCH failure specifically, never silently falling through to git log', () => {
+    const calls = [];
+    const git = (cmd) => {
+      calls.push(cmd);
+      if (cmd.startsWith('git fetch')) throw new Error('network unreachable');
+      // If reached, this would have returned real matches -- proving the fetch failure
+      // short-circuits BEFORE git log runs, rather than silently passing through to it.
+      if (cmd.startsWith('git log')) return 'aaa\n';
+      return 'database/migrations/20260101_x.sql\n';
+    };
+    const result = enumerateMigrationsForSd('SD-TEST-005', { git });
+    expect(result).toEqual({ paths: [], unverifiable: true });
+    expect(calls).toEqual(['git fetch origin main --quiet']);
   });
 });
 

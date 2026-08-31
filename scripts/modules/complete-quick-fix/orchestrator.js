@@ -45,6 +45,8 @@ import { resolveFeedback, parseAndExpandFeedbackFooters } from '../../../lib/gov
 import { recordSdCompleted, recordQfCompleted } from '../../../lib/learning/outcome-tracker.js';
 import { checkResolverFreshness, logResolverFreshnessBanner } from '../../../lib/governance/check-resolver-freshness.js';
 import { execSync } from 'child_process';
+import { applyCompletionReadbackGate, ClaimMalformedError } from '../../../lib/checkers/completion-readback-gate.mjs';
+import { ReadbackCheckError } from '../../../lib/checkers/readback-checker.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -478,9 +480,14 @@ export async function completeQuickFix(qfId, options = {}) {
       if (reconcileErr) {
         console.log(`   ⚠️  Could not reconcile QF record (non-fatal): ${reconcileErr.message}`);
       }
+      // SD-LEO-INFRA-COMPLETION-GATE-DATA-001-A FR-4: an optional structured
+      // options.metadata.data_claim gates this reconcile-path completion the same way
+      // as the primary write below. No-op unless the caller passed a data_claim.
+      await applyCompletionReadbackGate(options.metadata, { logLabel: `QF ${qfId} reconcile` });
       return { ...qf, ...reconcileUpdate };
     }
   } catch (e) {
+    if (e instanceof ClaimMalformedError || e instanceof ReadbackCheckError) throw e;
     console.log(`   ℹ️  Already-merged witness probe skipped (will run normal pipeline): ${e.message}`);
   }
 
@@ -1050,6 +1057,13 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log('❌ Failed to update quick-fix:', updateError.message);
     process.exit(1);
   }
+
+  // SD-LEO-INFRA-COMPLETION-GATE-DATA-001-A FR-4: gate the primary completion write on
+  // an optional structured options.metadata.data_claim ({table, match, expectedFields}).
+  // No-op (BYPASSED) unless the caller passed one. A malformed claim always throws; a
+  // well-formed claim that fails readback throws only when LEO_READBACK_GATE_ENABLED=true
+  // (default: logs READBACK_WOULD_HAVE_BLOCKED and continues).
+  await applyCompletionReadbackGate(options.metadata, { logLabel: `QF ${qfId}` });
 
   // Release QF claim after successful completion
   try {

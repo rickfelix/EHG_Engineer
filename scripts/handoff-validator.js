@@ -123,6 +123,24 @@ class HandoffValidator {
 
     // Migration application gate (QF-20260830-232): LEAD-FINAL-APPROVAL must not close
     // an SD that shipped an unapplied, undeferred database/migrations/*.sql file.
+    //
+    // NO LIVE CALLER FROM scripts/handoff.js (SD-LEO-INFRA-COMPLETION-GATE-DATA-001-A
+    // FR-1): this ValidationChecklistManager class (and this LEAD-FINAL-APPROVAL branch
+    // specifically) has no caller in the canonical scripts/handoff.js entrypoint's
+    // LEAD-FINAL-APPROVAL flow — it has never executed there. The originally-suspected
+    // git-enumeration/stale-ref RCA is disproven FOR THIS BRANCH (never reached). The
+    // ACTUAL migration-completion verification for LEAD-FINAL-APPROVAL is a separate,
+    // well-tested mechanism: createChairmanApplyVerificationGate
+    // (scripts/modules/handoff/executors/lead-final-approval/gates.js), hardened by
+    // SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 (completed 2026-08-30) — that gate
+    // is authoritative for LEAD-FINAL-APPROVAL, not this one.
+    //
+    // This file's REAL live callers are leo-orchestrator-enforced.js (npm run
+    // leo:execute), PlanToExecVerifier (PLAN-to-EXEC only), verify-l2p, and a
+    // _deprecated/ file. See lib/migration/completion-migration-gate.js's module doc
+    // comment for the fuller writeup, including the stale-ref blind spot fixed there
+    // (FR-3) and the mirrored-but-unfixed gap in adam-coordinator-health.mjs's
+    // gitGrepMainForSd.
     let migrationGateCheck = { blocked: false, unresolved: [] };
     if (handoffKey === 'LEAD-FINAL-APPROVAL') {
       const { data: sdRow } = await this.supabase
