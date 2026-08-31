@@ -193,6 +193,23 @@ describe('preserveUntrackedFiles', () => {
     expect(res.skipped).toContain('.claude/state.json');
   });
 
+  it('QF-20260831-715: reports every exempt-regex exclusion loudly via logger (was silently dropped -- live incident: .claude/wake-arm-*.json vanished from 2 trees with zero report)', () => {
+    fs.mkdirSync(path.join(wtDir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(wtDir, '.claude', 'wake-arm-abc.json'), '{}');
+    const logs = [];
+
+    const res = preserveUntrackedFiles({
+      wtPath: wtDir,
+      preserveRoot,
+      untracked: ['.claude/wake-arm-abc.json'],
+      repoRoot: tmpDir,
+      logger: (m) => logs.push(m),
+    });
+
+    expect(res.skipped).toContain('.claude/wake-arm-abc.json');
+    expect(logs.some((m) => m.includes('.claude/wake-arm-abc.json') && m.includes('exclude'))).toBe(true);
+  });
+
   it('returns empty preserved list when untracked is empty', () => {
     const res = preserveUntrackedFiles({
       wtPath: wtDir,
