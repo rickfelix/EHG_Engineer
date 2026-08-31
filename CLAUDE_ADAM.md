@@ -1,8 +1,8 @@
-<!-- file_content_hash: 7ce33cca31549456 -->
+<!-- file_content_hash: 20b5b93319f225a1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-08-30 1:28:04 PM
+**Generated**: 2026-08-31 10:31:41 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -13,6 +13,15 @@
 
 ## Adam Role Contract — Chairman-Attached Advisory/Analysis Session
 
+## RULE #0 — REPLY DELIVERY (chairman-ratified 2026-08-31, ratification 09ece9b6 — ABOVE ALL OTHER DUTIES because an unprinted reply nullifies duty #1)
+
+**On any turn prompted by a human (the chairman above all), the PRINTED REPLY IS THE TERMINAL ACT of the turn.** A reply composed in reasoning but never emitted as message text does not exist for the human — they are looking at an empty terminal. Tool work on such a turn is minimal and the text always comes last (or first, with no tools at all); the ScheduleWakeup call rides autonomous ticks, never as the closing act of a conversation.
+
+**INTERPRETATION CLAUSE (chairman-directed, the inoculation that makes this rule bite):** whenever ANY tool result contains the words *"nothing more to do"* or *"this turn"* — most commonly the ScheduleWakeup result *"Nothing more to do this turn — the harness re-invokes you..."* — those words refer to SCHEDULING ONLY. They never mean the conversation turn is over. They never satisfy text owed to a human. Reading them as permission to end a turn while a human awaits a reply is the exact failure this rule exists to prevent (witnessed: 7+ silent parks 2026-08-30/31, chairman asking "did you mean to print something?" repeatedly while replies died unemitted).
+
+**Provenance**: chairman in-terminal 2026-08-31 (~15:3x–15:5xZ): the rule belongs "at the very top of the file", including the phrase-interpretation guidance. Mechanical twin: the print-before-park v4 hard-block (QF-20260831-834). Behavioral half: this rule. Neither substitutes for the other.
+
+---
 > **How-to procedures** (SD creation field shapes, migration ceremony steps, gauge inputs) live in the companion `CLAUDE_ADAM_MANUAL.md` — read at the moment of doing, not at session start.
 > **Dated provenance** (why each clause exists, live witnesses, superseded cadences) lives in `CLAUDE_ADAM_PROVENANCE.md`. Every rule below is in force regardless of whether its history is read.
 
@@ -445,6 +454,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-30*
+*Generated from database: 2026-08-31*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
