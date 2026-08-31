@@ -118,3 +118,65 @@ describe('syncToDatabase same-batch (session_id,timestamp) dedup (QF-20260830-94
     expect(JSON.parse(savedStateJson).lastSyncedLine).toBe(3);
   });
 });
+
+describe('syncToDatabase sd_key/leo_phase tagging (SD-LEO-INFRA-LEO-PHASE-TAGGED-001)', () => {
+  beforeEach(() => {
+    upsertMock.mockClear();
+    upsertMock.mockResolvedValue({ error: null });
+    writeFileSyncMock.mockClear();
+    readFileSyncMock.mockReturnValue(JSON.stringify({ lastSyncedLine: 0, lastSyncedTimestamp: null }));
+  });
+
+  it('carries sd_key/leo_phase through when present, omits them when absent', async () => {
+    const tagged = { session_id: 's1', timestamp: '2026-08-31T00:00:00Z', sd_key: 'SD-LEO-INFRA-LEO-PHASE-TAGGED-001', leo_phase: 'EXEC' };
+    const untagged = { session_id: 's2', timestamp: '2026-08-31T00:00:01Z' };
+    createReadStreamMock.mockReturnValue(jsonlStream([
+      JSON.stringify(tagged),
+      JSON.stringify(untagged),
+    ]));
+
+    await syncToDatabase();
+
+    const [upserted] = upsertMock.mock.calls[0];
+    const taggedRow = upserted.find((r) => r.session_id === 's1');
+    const untaggedRow = upserted.find((r) => r.session_id === 's2');
+    expect(taggedRow.sd_key).toBe('SD-LEO-INFRA-LEO-PHASE-TAGGED-001');
+    expect(taggedRow.leo_phase).toBe('EXEC');
+    expect('sd_key' in untaggedRow).toBe(false);
+    expect('leo_phase' in untaggedRow).toBe(false);
+  });
+
+  it('retries stripping sd_key alone when only sd_key is unmigrated (PGRST204)', async () => {
+    const entry = { session_id: 's1', timestamp: '2026-08-31T00:00:00Z', sd_key: 'SD-X-001', leo_phase: 'EXEC' };
+    createReadStreamMock.mockReturnValue(jsonlStream([JSON.stringify(entry)]));
+
+    upsertMock
+      .mockResolvedValueOnce({ error: { code: 'PGRST204', message: "Could not find the 'sd_key' column of 'context_usage_log' in the schema cache" } })
+      .mockResolvedValueOnce({ error: null });
+
+    await syncToDatabase();
+
+    expect(upsertMock).toHaveBeenCalledTimes(2);
+    const [retriedBatch] = upsertMock.mock.calls[1];
+    expect('sd_key' in retriedBatch[0]).toBe(false);
+    expect(retriedBatch[0].leo_phase).toBe('EXEC');
+  });
+
+  it('strips loop_name then sd_key across successive PGRST204 retries when both are unmigrated', async () => {
+    const entry = { session_id: 's1', timestamp: '2026-08-31T00:00:00Z', loop_name: 'fleet-loop', sd_key: 'SD-X-001', leo_phase: 'EXEC' };
+    createReadStreamMock.mockReturnValue(jsonlStream([JSON.stringify(entry)]));
+
+    upsertMock
+      .mockResolvedValueOnce({ error: { code: 'PGRST204', message: "Could not find the 'loop_name' column of 'context_usage_log' in the schema cache" } })
+      .mockResolvedValueOnce({ error: { code: 'PGRST204', message: "Could not find the 'sd_key' column of 'context_usage_log' in the schema cache" } })
+      .mockResolvedValueOnce({ error: null });
+
+    await syncToDatabase();
+
+    expect(upsertMock).toHaveBeenCalledTimes(3);
+    const [finalBatch] = upsertMock.mock.calls[2];
+    expect('loop_name' in finalBatch[0]).toBe(false);
+    expect('sd_key' in finalBatch[0]).toBe(false);
+    expect(finalBatch[0].leo_phase).toBe('EXEC');
+  });
+});

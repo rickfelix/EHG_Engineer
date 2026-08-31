@@ -207,14 +207,18 @@ describe('sync-context-usage transformEntry (FR-2a: LONG-key fix + loop_name)', 
     expect(MAX_ENTRIES_PER_SYNC).toBeGreaterThan(0);
   });
 
-  // SECURITY finding (evidence 15c8c79e): the loop_name column ships as an unapplied migration
-  // file; without this fallback every upsert fails PGRST204 until a human applies it.
-  it('SECURITY: retries the upsert without loop_name on a PGRST204 error naming the column', () => {
+  // SECURITY finding (evidence 15c8c79e); generalized by SD-LEO-INFRA-LEO-PHASE-TAGGED-001
+  // (FR-3, evidence ebbdddc5) from a loop_name-only check to a loop over every optional
+  // unmigrated column: loop_name/sd_key/leo_phase all ship as migration files that may not
+  // be applied yet; without this fallback every upsert fails PGRST204 until a human applies
+  // the relevant migration.
+  it('SECURITY: retries the upsert stripping whichever optional column a PGRST204 error names', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const src = fs.readFileSync(path.join(__dirname, '../../scripts/sync-context-usage.js'), 'utf8');
-    expect(src).toMatch(/error\.code === 'PGRST204' && \/loop_name\/\.test/);
-    expect(src).toMatch(/loop_name: _drop, \.\.\.rest/);
+    expect(src).toMatch(/error && error\.code === 'PGRST204'/);
+    expect(src).toMatch(/OPTIONAL_UPSERT_COLUMNS/);
+    expect(src).toMatch(/const OPTIONAL_UPSERT_COLUMNS = \['loop_name', 'sd_key', 'leo_phase'\]/);
   });
 
   // TESTING finding F1 (evidence 0f1303ad): sync state must never advance past a batch that
