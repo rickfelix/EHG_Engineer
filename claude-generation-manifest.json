@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-08-31T18:00:42.682Z",
-  "git_commit": "f7781959",
-  "db_snapshot_hash": "3b0ab293a2f7a6b3",
+  "generated_at": "2026-08-31T21:31:24.351Z",
+  "git_commit": "2a8fed97",
+  "db_snapshot_hash": "31be22b093949a93",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -69,11 +69,11 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 69601,
-      "bytes": 70282,
-      "estimated_tokens": 17401,
-      "content_hash": "da5d30be19685ec0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\rat-2ab4b4bc-encode\\CLAUDE_ADAM.md"
+      "chars": 73459,
+      "bytes": 74158,
+      "estimated_tokens": 18365,
+      "content_hash": "b1acd0ff04e82cda",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\gated-apply-0831\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -213,7 +213,7 @@
     }
   },
   "section_digests": {
-    "global": "4f143b2c14045d21",
+    "global": "13fcf60434a51006",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -467,14 +467,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "7885e7124856b119",
+      "601": "bd54aebc6661cdcc",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "51d8411e1369713b",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "203a3c31d13e175e",
+      "611": "5b12594c0f3e4cb8",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -496,7 +496,7 @@
       "654": "daf0a7933d7819ec",
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
-      "657": "4be6ad20ec3dfbb5"
+      "657": "11c9181c9e30ef9c"
     },
     "meta": {
       "94": {
