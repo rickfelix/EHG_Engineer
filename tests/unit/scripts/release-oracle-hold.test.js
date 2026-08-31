@@ -35,6 +35,19 @@ function chainableQfUpdate(result) {
   return () => step();
 }
 
+/**
+ * quick_fixes table mock exposing BOTH a read chain (select().eq().maybeSingle(), used by
+ * lookupQfOwnConsultRowId's auto-resolve probe) and a write chain (update()...maybeSingle()).
+ * ownConsultReleaseCondition defaults to null (no embedded citation), so auto-resolve is a no-op
+ * unless a test explicitly wants to exercise it.
+ */
+function qfTable({ updateResult, ownConsultReleaseCondition = null } = {}) {
+  return {
+    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { release_condition: ownConsultReleaseCondition }, error: null }) }) }),
+    update: chainableQfUpdate(updateResult),
+  };
+}
+
 describe('releaseOracleHold (FR-5)', () => {
   it('requires either --sd or --qf', async () => {
     await expect(releaseOracleHold({ supabaseClient: fakeSupabaseForLookup(null) })).rejects.toThrow(/--sd or --qf/);
@@ -46,7 +59,7 @@ describe('releaseOracleHold (FR-5)', () => {
       ...supabase,
       from: (table) => {
         if (table === 'session_coordination') return supabase.from(table);
-        return { update: chainableQfUpdate({ data: { id: 'QF-1' }, error: null }) };
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
     const nowMs = Date.parse('2026-08-01T01:00:00Z'); // 1h later, well past BOUNDED_WAIT_MS
@@ -61,7 +74,7 @@ describe('releaseOracleHold (FR-5)', () => {
       ...supabase,
       from: (table) => {
         if (table === 'session_coordination') return supabase.from(table);
-        return { update: chainableQfUpdate({ data: { id: 'QF-1' }, error: null }) };
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
     const nowMs = Date.parse('2026-08-01T00:00:00Z') + 1000; // 1s later — nowhere near the bound
@@ -76,7 +89,7 @@ describe('releaseOracleHold (FR-5)', () => {
       ...supabase,
       from: (table) => {
         if (table === 'session_coordination') return supabase.from(table);
-        return { update: chainableQfUpdate({ data: { id: 'QF-1' }, error: null }) };
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
     const nowMs = Date.parse('2026-08-01T00:00:00Z') + 1000;
@@ -92,7 +105,7 @@ describe('releaseOracleHold (FR-5)', () => {
       ...supabase,
       from: (table) => {
         if (table === 'session_coordination') return supabase.from(table);
-        return { update: chainableQfUpdate({ data: { id: 'QF-1' }, error: null }) };
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
     const result = await releaseOracleHold({ qfId: 'QF-1', consultRowId: null, supabaseClient: supabaseWithUpdate, nowMs: Date.now() });
@@ -106,7 +119,7 @@ describe('releaseOracleHold (FR-5)', () => {
       ...supabase,
       from: (table) => {
         if (table === 'session_coordination') return supabase.from(table);
-        return { update: chainableQfUpdate({ data: { id: 'QF-1' }, error: null }) };
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
     const result = await releaseOracleHold({ qfId: 'QF-1', consultRowId: 'nonexistent-row', supabaseClient: supabaseWithUpdate, nowMs: Date.now() });
@@ -120,7 +133,7 @@ describe('releaseOracleHold (FR-5)', () => {
       ...supabase,
       from: (table) => {
         if (table === 'session_coordination') return supabase.from(table);
-        return { update: chainableQfUpdate({ data: { id: 'QF-1' }, error: null }) };
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
     const result = await releaseOracleHold({ qfId: 'QF-1', consultRowId: null, force: true, reason: 'chairman verbal approval', supabaseClient: supabaseWithUpdate, nowMs: Date.now() });
@@ -131,6 +144,27 @@ describe('releaseOracleHold (FR-5)', () => {
   it('S-4: --force without --reason is refused (the release stamp must name why the override is safe)', async () => {
     await expect(releaseOracleHold({ qfId: 'QF-1', force: true, supabaseClient: fakeSupabaseForLookup(null), nowMs: Date.now() }))
       .rejects.toThrow(/--reason/);
+  });
+
+  // VALIDATION finding V-2: the release-side gate had no producer -- nothing wrote a consult row
+  // and cited it, so every real hold was releasable only via --force. Now the QF's OWN marker
+  // (embedded by batch-mint-sweep.mjs) is auto-resolved when --consult-row is omitted.
+  it('V-2: auto-resolves the consult row id embedded in the QF\'s own oracle-hold marker', async () => {
+    const consultRowId = '11111111-1111-1111-1111-111111111111';
+    const supabase = fakeSupabaseForLookup({ created_at: '2026-08-01T00:00:00Z' });
+    const supabaseWithUpdate = {
+      ...supabase,
+      from: (table) => {
+        if (table === 'session_coordination') return supabase.from(table);
+        return qfTable({
+          updateResult: { data: { id: 'QF-1' }, error: null },
+          ownConsultReleaseCondition: `[oracle_read_pending] review_at=2026-09-01T00:00:00Z consult=${consultRowId} :: batch mint detected`,
+        });
+      },
+    };
+    const nowMs = Date.parse('2026-08-01T01:00:00Z'); // well past the bound
+    const result = await releaseOracleHold({ qfId: 'QF-1', consultRowId: null, supabaseClient: supabaseWithUpdate, nowMs });
+    expect(result.merged).toBe(true);
   });
 
   it('sanity: BOUNDED_WAIT_MS is ~30 minutes', () => {

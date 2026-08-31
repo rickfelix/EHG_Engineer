@@ -10,12 +10,48 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'node:module';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { scanRecentQfMintsForBatches } from '../../lib/fleet/batch-mint-detector.js';
 import { writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS } from '../../lib/fleet/hold-writer.js';
 
-export async function runBatchMintSweep(supabase, { nowMs = Date.now() } = {}) {
+const require = createRequire(import.meta.url);
+const { getActiveSolomonId } = require('../../lib/coordinator/solomon-identity.cjs');
+
+/**
+ * VALIDATION finding V-2: the release-side bounded-wait gate had no producer — nothing ever
+ * opened a consult row and cited it, so every real hold was releasable only via --force. Opens
+ * ONE consult row per batch group (not per QF — the group is one conversation), targeting the
+ * active Solomon (or a broadcast sentinel if none is currently resolvable, matching
+ * presend-consult-lane.cjs's own fail-open pattern). Best-effort: a failed insert returns null
+ * and the caller falls back to consultRowId=null (writeQfOracleHold embeds 'none'), which is
+ * honest — release-oracle-hold.js already refuses a release with no cited row, fail-closed.
+ */
+async function openConsultRow(supabase, group) {
+  try {
+    const solomonId = await getActiveSolomonId(supabase, {}).catch(() => null);
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .insert({
+        sender_type: 'system',
+        sender_session: 'batch-mint-sweep',
+        target_session: solomonId || 'broadcast-solomon',
+        message_type: 'INFO',
+        subject: `[SOLOMON_CONSULT] batch-mint hold: ${group.creator}`,
+        body: `Batch-mint detector held ${group.memberIds.length} QF(s) (${group.memberIds.join(', ')}) minted by ${group.creator} within the 10-minute window anchored at ${group.anchorAt}. Review and reply to release early, or the bounded wait auto-permits release after ${BOUNDED_WAIT_MS / 60000} minutes.`,
+        payload: { kind: 'oracle_read_pending_consult', qf_ids: group.memberIds, creator: group.creator, consult_purpose: 'batch_mint_hold' },
+      })
+      .select('id, created_at')
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function runBatchMintSweep(supabase, { nowMs = Date.now(), openConsult = openConsultRow } = {}) {
   const { heldIds, groups } = await scanRecentQfMintsForBatches(supabase, { nowMs, fetchAll: fetchAllPaginated });
   if (heldIds.size === 0) return { scanned: true, groups: 0, held: 0, alreadyHeld: 0, failed: [] };
 
@@ -37,14 +73,25 @@ export async function runBatchMintSweep(supabase, { nowMs = Date.now() } = {}) {
   });
   const reviewAt = new Date(nowMs + BOUNDED_WAIT_MS).toISOString();
   const failed = [];
-  for (const id of toHold) {
-    const result = await writeQfOracleHold(supabase, id, {
-      reviewAt,
-      releaseCondition: `batch mint detected (group size ${groups.find((g) => g.memberIds.includes(id))?.memberIds.length || '?'})`,
-    });
-    if (!result.merged) failed.push({ id, cause: result.cause });
+  const toHoldSet = new Set(toHold);
+  let held = 0;
+  for (const group of groups) {
+    const groupToHold = group.memberIds.filter((id) => toHoldSet.has(id));
+    if (groupToHold.length === 0) continue;
+    // One consult row per GROUP (a shared conversation), not per QF — every member cites the
+    // same consult, matching the batch's real provenance rather than N independent requests.
+    const consultRow = await openConsult(supabase, group);
+    for (const id of groupToHold) {
+      const result = await writeQfOracleHold(supabase, id, {
+        reviewAt,
+        releaseCondition: `batch mint detected (group size ${group.memberIds.length})`,
+        consultRowId: consultRow?.id || null,
+      });
+      if (!result.merged) failed.push({ id, cause: result.cause });
+      else held += 1;
+    }
   }
-  return { scanned: true, groups: groups.length, held: toHold.length - failed.length, alreadyHeld: alreadyHeld.size, failed };
+  return { scanned: true, groups: groups.length, held, alreadyHeld: alreadyHeld.size, failed };
 }
 
 async function main() {

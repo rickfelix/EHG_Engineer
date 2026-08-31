@@ -13,7 +13,10 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
-import { releaseSdOracleHold, releaseQfOracleHold, isBoundedWaitElapsed, BOUNDED_WAIT_MS } from '../lib/fleet/hold-writer.js';
+import {
+  releaseSdOracleHold, releaseQfOracleHold, isBoundedWaitElapsed, BOUNDED_WAIT_MS,
+  extractConsultRowIdFromQfCondition,
+} from '../lib/fleet/hold-writer.js';
 
 dotenv.config();
 
@@ -41,12 +44,27 @@ async function lookupConsultRowCreatedAt(supabase, consultRowId) {
   return data.created_at;
 }
 
+/**
+ * VALIDATION finding V-2: auto-resolve the consult row a QF's OWN oracle-hold marker cites
+ * (embedded by batch-mint-sweep.mjs's writeQfOracleHold call) — an operator releasing a
+ * batch-detected hold should not have to separately hunt down the id.
+ */
+async function lookupQfOwnConsultRowId(supabase, qfId) {
+  const { data, error } = await supabase.from('quick_fixes').select('release_condition').eq('id', qfId).maybeSingle();
+  if (error || !data) return null;
+  return extractConsultRowIdFromQfCondition(data.release_condition);
+}
+
 export async function releaseOracleHold({ sdKey, qfId, consultRowId, releasedBy = 'system', force = false, reason = null, supabaseClient, nowMs = Date.now() }) {
   if (!sdKey && !qfId) throw new Error('one of --sd or --qf is required');
   // SECURITY finding S-4: --force with no audit trail. Mirrors scripts/release-chairman-gated-qf.js's
   // own refusal ("the release stamp is the audit trail") — a forced release must name WHY.
   if (force && (!reason || !String(reason).trim())) {
     throw new Error('--force requires --reason "<why this override is safe>" — the release stamp is the audit trail');
+  }
+  if (!consultRowId && qfId) {
+    consultRowId = await lookupQfOwnConsultRowId(supabaseClient, qfId);
+    if (consultRowId) console.log(`[release-oracle-hold] auto-resolved consult row ${consultRowId} from ${qfId}'s own oracle-hold marker`);
   }
   const consultRowCreatedAt = consultRowId ? await lookupConsultRowCreatedAt(supabaseClient, consultRowId) : null;
 

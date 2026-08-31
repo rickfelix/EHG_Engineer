@@ -125,4 +125,17 @@ describe('releaseChairmanGatedQf (FR-4 / TS-4, TS-5)', () => {
     await expect(releaseChairmanGatedQf('QF-Z', { supabaseClient: client }))
       .rejects.toThrow(/--reason/);
   });
+
+  // VALIDATION finding V-1 (SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001): isChairmanGatedQF is
+  // prefix-agnostic and accepted that SD's oracle_read_pending marker (also owner='chairman'),
+  // releasing it with none of that marker's own rules (bounded wait, consult-row citation).
+  test('V-1: refuses an oracle_read_pending-marked row, routing the caller to release-oracle-hold.js instead', async () => {
+    const client = mockSupabase({
+      id: 'QF-ORACLE', status: 'open', owner: 'chairman',
+      release_condition: '[oracle_read_pending] review_at=2026-09-01T00:00:00Z :: batch mint detected',
+    });
+    await expect(releaseChairmanGatedQf('QF-ORACLE', { reason: 'x', supabaseClient: client }))
+      .rejects.toThrow(/release-oracle-hold\.js/);
+    expect(client._updates).toHaveLength(0);
+  });
 });
