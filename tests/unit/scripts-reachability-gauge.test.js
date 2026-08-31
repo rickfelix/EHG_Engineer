@@ -4,10 +4,16 @@
 // statically against STANDARD_LOOPS and the teardown inventory.
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   computeDeltas,
   shouldAlert,
   isSnapshotDue,
+  scanScriptsEstate,
+  BY_DESIGN_ORPHAN_PREFIXES,
   SNAPSHOT_EVENT_TYPE,
   GAUGE_DUE_MS,
   ORPHAN_GROWTH_ALERT_THRESHOLD,
@@ -98,5 +104,34 @@ describe('cron wiring parity (arm + teardown both know the gauge)', () => {
 
   it('event type is the canonical series name', () => {
     expect(SNAPSHOT_EVENT_TYPE).toBe('SCRIPTS_REACHABILITY_SNAPSHOT');
+  });
+});
+
+// QF-20260831-387: scripts/one-off/ orphans are non-alerting by design; untracked scratch
+// files (ambient shared-worktree pollution) are excluded from the estate entirely.
+describe('scanScriptsEstate — by-design bucket + git-tracked-only filter', () => {
+  function makeRepo() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sre-gauge-'));
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: {} }));
+    fs.mkdirSync(path.join(root, 'scripts', 'one-off'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'scripts', 'one-off', 'once.mjs'), '// nothing references this\n');
+    fs.writeFileSync(path.join(root, 'scripts', 'tracked-orphan.mjs'), '// tracked, unreferenced\n');
+    fs.writeFileSync(path.join(root, 'scripts', 'untracked-scratch.mjs'), '// never committed\n');
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    execFileSync('git', ['add', 'package.json', 'scripts/one-off/once.mjs', 'scripts/tracked-orphan.mjs'], { cwd: root });
+    execFileSync('git', ['-c', 'user.email=t@t.com', '-c', 'user.name=t', 'commit', '-q', '-m', 'init'], { cwd: root });
+    return root;
+  }
+
+  it('buckets scripts/one-off/ as by-design and excludes untracked files from the estate', () => {
+    const root = makeRepo();
+    const scan = scanScriptsEstate(root);
+    expect(BY_DESIGN_ORPHAN_PREFIXES).toContain('scripts/one-off/');
+    expect(scan.orphans_full).toEqual(['scripts/tracked-orphan.mjs']); // alerting population: intent-only
+    expect(scan.orphan_count).toBe(1);
+    expect(scan.orphan_count_by_design).toBe(1);       // the one-off, counted but not alerting
+    expect(scan.orphan_count_total).toBe(2);
+    expect(scan.total).toBe(2);                         // untracked-scratch.mjs excluded entirely
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });
