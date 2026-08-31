@@ -52,7 +52,7 @@ describe('SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-3: journey-walk WAIT condition
     expect(result.passed).toBe(true);
   });
 
-  it('journey_steps present, no journey_walk_result at all → WAIT (absent)', async () => {
+  it('journey_steps present, no journey_walk_result at all → WAIT (absent), EXEMPT from the wait ceiling', async () => {
     const result = await runGate('p2', ALL_COMPLETE_CHILDREN, {
       journey_steps: [{ step_id: 'stp-aaaa-upload' }],
     });
@@ -61,9 +61,12 @@ describe('SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-3: journey-walk WAIT condition
     expect(result.wait_reason).toContain('absent');
     expect(result.details.journey_walk_status).toBe('absent');
     expect(result.details.journey_step_count).toBe(1);
+    // SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-3: genuinely-not-yet-attempted is the ONLY
+    // status exempted from the 24h WAIT ceiling.
+    expect(result.exemptFromWaitCeiling).toBe(true);
   });
 
-  it("journey_steps present, journey_walk_result.status='fail' → WAIT (fail)", async () => {
+  it("journey_steps present, journey_walk_result.status='fail' → WAIT (fail), NOT exempt", async () => {
     const result = await runGate('p3', ALL_COMPLETE_CHILDREN, {
       journey_steps: [{ step_id: 'stp-aaaa-upload' }, { step_id: 'stp-bbbb-generate' }],
       journey_walk_result: { status: 'fail', failed_step_id: 'stp-bbbb-generate' },
@@ -72,6 +75,17 @@ describe('SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001 FR-3: journey-walk WAIT condition
     expect(result.wait_reason).toContain("'fail'");
     expect(result.details.journey_walk_status).toBe('fail');
     expect(result.details.journey_step_count).toBe(2);
+    expect(result.exemptFromWaitCeiling).not.toBe(true);
+  });
+
+  it("SD-LEO-INFRA-FIX-JOURNEY-WALK-001 FR-1/FR-3: journey_walk_result.status='error' (a walk that was attempted and crashed) → WAIT, NOT exempt -- must still escalate normally, never park forever", async () => {
+    const result = await runGate('p3b', ALL_COMPLETE_CHILDREN, {
+      journey_steps: [{ step_id: 'stp-aaaa-upload' }],
+      journey_walk_result: { status: 'error', reason: 'unexpected walk crash' },
+    });
+    expect(result.wait).toBe(true);
+    expect(result.details.journey_walk_status).toBe('error');
+    expect(result.exemptFromWaitCeiling).not.toBe(true);
   });
 
   it("journey_steps present, journey_walk_result.status='pass' → PASS (no wait)", async () => {
