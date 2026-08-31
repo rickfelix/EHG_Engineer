@@ -267,18 +267,42 @@ describe('end-to-end: main() replay against a synthetic session-f27a883d-shaped 
     expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block', reason: REMINDER }));
   });
 
-  it('CONTROL: a non-ScheduleWakeup silent ending still uses the bounded budget escape (teeth preserved for other shapes)', () => {
+  // QF-20260831-834: this CONTROL previously drove a HUMAN-prompted transcript through the
+  // bounded budget escape and asserted the release -- that release WAS the chairman-witnessed
+  // silent-park defect (2026-08-30/31), just on a non-ScheduleWakeup shape instead of the
+  // ScheduleWakeup one QF-20260830-773 already closed. The escape now stays available ONLY for a
+  // genuine LOOP-prompted turn (auto-parking there is legitimate); rewritten below to prove that
+  // scope, with a new human-prompted assertion replacing the old (now-incorrect) expectation.
+  it('CONTROL: a non-ScheduleWakeup silent ending on a LOOP-prompted (engaged) turn still uses the bounded budget escape', () => {
+    // ENGAGED MODE requires a RECENT human message (within ENGAGED_WINDOW_MS of real Date.now())
+    // to even reach the ends-on-text check for a loop-prompted turn, so this fixture uses a
+    // fresh-timestamped human entry followed by the loop prompt -- pKind is 'loop' (the loop
+    // prompt is P), so humanPrompted is correctly false even though a human is "present" earlier.
+    const entries = [humanEntry(HUMAN_UUID, new Date().toISOString()), loopPromptEntry(), silentBashEntry('a1')];
+    fs.writeFileSync(transcriptPath, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+    expect(JSON.parse(invoke(false))).toEqual(expect.objectContaining({ decision: 'block' })); // #1
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));  // #2
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));  // #3
+
+    // Invocation 4: bound exhausted for this loop-prompted, NON-ScheduleWakeup shape -- passes
+    // through, so a genuinely wedged loop tick on an unrelated tool still cannot trap the session
+    // forever. Auto-parking is legitimate here because nobody is owed a reply.
+    const out4 = invoke(true);
+    expect(out4.trim()).toBe('');
+  });
+
+  it('QF-20260831-834: a non-ScheduleWakeup silent ending on a HUMAN-prompted turn is now hard-blocked past the old bound', () => {
     fs.writeFileSync(transcriptPath, [humanEntry(), silentBashEntry('a1')].map((e) => JSON.stringify(e)).join('\n') + '\n');
 
     expect(JSON.parse(invoke(false))).toEqual(expect.objectContaining({ decision: 'block' })); // #1
     expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));  // #2
     expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));  // #3
 
-    // Invocation 4: bound exhausted for this NON-ScheduleWakeup shape -- passes through,
-    // exactly as before this QF, so a genuinely wedged model on an unrelated tool still
-    // cannot trap the session forever.
-    const out4 = invoke(true);
-    expect(out4.trim()).toBe('');
+    // Invocations 4 and 5: PAST the old MAX_BLOCKS_PER_TURN bound -- must STILL block, because a
+    // human is owed a reply and this is exactly the failure the chairman witnessed 2026-08-30/31.
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));
+    expect(JSON.parse(invoke(true))).toEqual(expect.objectContaining({ decision: 'block' }));
   });
 
   it('a reply that finally prints text clears the debt for the next turn', () => {
