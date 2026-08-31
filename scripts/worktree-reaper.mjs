@@ -976,7 +976,16 @@ function preserveUntrackedFiles({ wtPath, preserveRoot, untracked, repoRoot, log
 
   for (const relRaw of untracked) {
     const rel = relRaw.replace(/^"|"$/g, ''); // git --porcelain quotes unicode
-    if (PRESERVE_EXEMPT_RE.test(rel)) { skipped.push(rel); continue; }
+    // QF-20260831-715: an exempt-regex match was pushed to `skipped` SILENTLY -- no logger
+    // call, unlike every other skip reason in this loop. Live incident: the reaper dropped
+    // .claude/wake-arm-*.json from 2 trees with zero report; only an independent quarantine
+    // pass caught it. Preserve is a FILTERED subset by design, but the filter must never be
+    // silent -- every excluded file is reported with its name and reason.
+    if (PRESERVE_EXEMPT_RE.test(rel)) {
+      logger?.(`preserve: exclude ${rel} (matches PRESERVE_EXEMPT_RE)`);
+      skipped.push(rel);
+      continue;
+    }
     const src = path.join(wtPath, rel);
     const tgt = path.join(dest, rel);
     try {
@@ -1009,6 +1018,18 @@ function preserveUntrackedFiles({ wtPath, preserveRoot, untracked, repoRoot, log
   return { dest, preserved, skipped };
 }
 
+// QF-20260831-715: EPERM/EBUSY from the primary removal is a LOCK-CONTENTION signature, not
+// an ordinary "already gone" refusal. Live incident (SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001):
+// removeWorktreeViaGit's `git worktree remove --force` failed on EPERM partway through its own
+// recursive delete, then the code below unconditionally retried with a SECOND destructive
+// pass (safeRecursiveRm) on top of that already-partial tree -- which ALSO hit a lock and
+// aborted, compounding one failure into a much worse one (dirty went 46 -> 3761: most of the
+// tracked tree had been destructively half-removed by two stacked attempts). Exported so the
+// exact live error string can be regression-pinned.
+export function isLockContentionError(msg) {
+  return /EPERM|EBUSY|resource busy|being used by another process/i.test(String(msg || ''));
+}
+
 function removeWorktree({ wtPath, repoRoot }) {
   const abs = path.resolve(wtPath);
   // QF-20260512-347: route through removeWorktreeViaGit so node_modules symlinks
@@ -1019,6 +1040,14 @@ function removeWorktree({ wtPath, repoRoot }) {
   // across 4 parallel sessions).
   const primary = removeWorktreeViaGit(abs, repoRoot, { allowFail: true });
   if (primary.ok) return { ok: true, method: 'git-worktree-remove' };
+  // QF-20260831-715: refuse the second destructive attempt on a lock-contention failure --
+  // the tree may already be partially removed, and retrying with a raw recursive rm only
+  // stacks a second partial mutation on top of the first. `partial: true` tells the caller
+  // this is NOT an ordinary "aborted, tree untouched" outcome; it must be reported loudly and
+  // routed to a recovery disposition rather than silently re-scanned as "just dirty" next tick.
+  if (isLockContentionError(primary.error)) {
+    return { ok: false, method: 'refused-second-attempt', error: primary.error, partial: true };
+  }
   // Fallback: git worktree can refuse when the dir is already partly gone; try junction-safe rm.
   // QF-20260508-102: raw fs.rmSync({recursive:true,force:true}) on Windows follows the worktree's
   // node_modules junction and wipes the main repo's node_modules — bricks every parallel session.
@@ -1036,7 +1065,11 @@ function removeWorktree({ wtPath, repoRoot }) {
     runGit(['worktree', 'prune'], { cwd: repoRoot });
     return { ok: true, method: 'fs-rm+prune' };
   } catch (e) {
-    return { ok: false, method: 'failed', error: String(e?.message || e) };
+    const msg = String(e?.message || e);
+    // Same lock-contention signature can surface here too (safeRecursiveRm itself hit a
+    // held file partway through). Tag it the same way so the caller never has to special-case
+    // which of the two removal attempts a partial failure came from.
+    return { ok: false, method: 'failed', error: msg, partial: isLockContentionError(msg) };
   }
 }
 
@@ -1654,6 +1687,25 @@ export async function main(argv = process.argv) {
       const rm = removeWorktree({ wtPath, repoRoot });
       if (!rm.ok) {
         console.log(`  ✗ ${path.basename(wtPath)} remove failed: ${rm.error}`);
+        // QF-20260831-715: a `partial: true` failure is NOT an ordinary abort -- the tree may
+        // now be half-removed (a lock-contention error mid-delete), which reads as an ordinary
+        // very-dirty worktree to every future scan. Emit a distinct, loud event instead of
+        // silently folding it into `aborted` so it can be routed to a recovery disposition
+        // (restore from the preserve copy, or complete the removal deliberately) rather than
+        // re-attempted as if it were a normal dirty tree.
+        if (rm.partial) {
+          console.log(`  ⚠ ${path.basename(wtPath)} LEFT IN A PARTIAL STATE -- needs recovery disposition, not a routine retry`);
+          emitJsonLine({
+            schema_version: SCHEMA_VERSION,
+            timestamp: new Date().toISOString(),
+            event: 'removal_left_partial_state',
+            worktree_path: wtPath,
+            method: rm.method,
+            error: rm.error,
+            preserved_count: preserve.preserved.length,
+            preserve_dest: preserve.dest,
+          });
+        }
         aborted++;
         continue;
       }
