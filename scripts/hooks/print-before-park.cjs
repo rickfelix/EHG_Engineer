@@ -98,7 +98,7 @@ function decide(entries) {
     if (isHumanPrompt(e)) { pIdx = i; pKind = 'human'; break; }
     if (isLoopPrompt(e)) { pIdx = i; pKind = 'loop'; break; }
   }
-  if (pIdx === -1) return { block: false, why: 'no prompt-like entry in tail window' };
+  if (pIdx === -1) return { block: false, why: 'no prompt-like entry in tail window', humanPrompted: false };
   if (pKind !== 'human') {
     // v3 ENGAGED MODE (8th witnessed instance, 2026-08-02): a loop turn can complete
     // chairman-relevant work (e.g. sourcing his ratified SD) and end silently — the
@@ -116,19 +116,25 @@ function decide(entries) {
       }
     }
     if (!lastHumanTs || Date.now() - lastHumanTs > ENGAGED_WINDOW_MS) {
-      return { block: false, why: 'loop turn, operator not recently engaged — silent NO-OP permitted' };
+      return { block: false, why: 'loop turn, operator not recently engaged — silent NO-OP permitted', humanPrompted: false };
     }
     // engaged: fall through to the ends-on-text requirement below
   }
+
+  // QF-20260831-834: humanPrompted is TRUE only when P itself is a genuine human
+  // prompt (pKind === 'human'), never for the engaged-loop fallthrough above (P is
+  // still a loop prompt there) -- main() uses this to decide whether the bounded
+  // 3-strike release below may ever apply to this turn.
+  const humanPrompted = pKind === 'human';
 
   // Human turn: the LAST assistant entry after P must carry non-empty text.
   let lastAssistant = null;
   for (let i = entries.length - 1; i > pIdx; i--) {
     if (entries[i].type === 'assistant') { lastAssistant = entries[i]; break; }
   }
-  if (!lastAssistant) return { block: true, why: 'human prompt with no assistant output at all' };
-  if (hasNonEmptyText(lastAssistant)) return { block: false, why: 'turn ends on assistant text' };
-  return { block: true, why: 'human-prompted turn ending on a non-text assistant block' };
+  if (!lastAssistant) return { block: true, why: 'human prompt with no assistant output at all', humanPrompted };
+  if (hasNonEmptyText(lastAssistant)) return { block: false, why: 'turn ends on assistant text', humanPrompted };
+  return { block: true, why: 'human-prompted turn ending on a non-text assistant block', humanPrompted };
 }
 
 const REMINDER = [
@@ -297,7 +303,14 @@ async function main() {
       process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
       return;
     }
-    if (payload.stop_hook_active === true && blocksSoFar >= MAX_BLOCKS_PER_TURN) return;
+    // QF-20260831-834: the bounded 3-strike release must NEVER apply to a genuinely
+    // human-prompted turn (verdict.humanPrompted) -- that soft-allow was exactly the
+    // silent-park failure mode witnessed repeatedly (chairman terminal, 2026-08-30/31).
+    // It stays available only for a loop/cron-prompted turn that got wedged on some
+    // OTHER non-text ending (verdict.humanPrompted === false), where auto-parking after
+    // N reminders is legitimate -- ScheduleWakeup-shaped endings are already covered
+    // unconditionally above regardless of this flag.
+    if (payload.stop_hook_active === true && blocksSoFar >= MAX_BLOCKS_PER_TURN && !verdict.humanPrompted) return;
     process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
   } catch (e) {
     process.stderr.write(`[print-before-park] ${e.message}\n`); // fail-open, never trap a stop
