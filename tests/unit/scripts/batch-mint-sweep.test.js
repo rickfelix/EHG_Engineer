@@ -17,8 +17,8 @@ function fakeSupabase({ mints, existingHolds = [], updateResults = {} }) {
               // "short" and fetchAllPaginated stops after one call — no need to track pages here.
               return { gte: () => ({ not: () => ({ range: async () => ({ data: mints, error: null }) }) }) };
             }
-            // the existing-holds lookup: select('id, owner, release_condition').in('id', [...])
-            return { in: async () => ({ data: existingHolds, error: null }) };
+            // the existing-holds lookup: select(...).in('id', [...]).limit(999)
+            return { in: () => ({ limit: async (n) => (n === 999 ? { data: existingHolds, error: null } : { data: [], error: null }) }) };
           },
           update: (payload) => ({
             eq: (col, id) => ({

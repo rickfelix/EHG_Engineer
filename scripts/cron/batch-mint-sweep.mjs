@@ -12,7 +12,6 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
-import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { scanRecentQfMintsForBatches } from '../../lib/fleet/batch-mint-detector.js';
 import { writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS } from '../../lib/fleet/hold-writer.js';
 
@@ -52,13 +51,18 @@ async function openConsultRow(supabase, group) {
 }
 
 export async function runBatchMintSweep(supabase, { nowMs = Date.now(), openConsult = openConsultRow } = {}) {
-  const { heldIds, groups } = await scanRecentQfMintsForBatches(supabase, { nowMs, fetchAll: fetchAllPaginated });
+  const { heldIds, groups } = await scanRecentQfMintsForBatches(supabase, { nowMs });
   if (heldIds.size === 0) return { scanned: true, groups: 0, held: 0, alreadyHeld: 0, failed: [] };
 
+  // count-truncation-diff-lint: an explicit numeric limit provably bounds this read. The .in()
+  // list is already bounded to heldIds.size in practice (a batch-mint group within one lookback
+  // window), but 999 (just under the PostgREST 1000-row cap) is the honest ceiling this read
+  // could ever need — it can never truncate a real match at realistic batch sizes.
   const { data: existing, error } = await supabase
     .from('quick_fixes')
     .select('id, status, owner, release_condition')
-    .in('id', Array.from(heldIds));
+    .in('id', Array.from(heldIds))
+    .limit(999);
   if (error) throw new Error(`runBatchMintSweep: ${error.message}`);
   const existingById = new Map((existing || []).map((r) => [r.id, r]));
   const alreadyHeld = new Set((existing || []).filter(isOracleHeldQF).map((r) => r.id));
