@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-08-31](#2026-08-31)
+  - [Infrastructure](#infrastructure-3)
 - [2026-08-30](#2026-08-30)
   - [Infrastructure](#infrastructure-2)
   - [Features](#features-1)
@@ -161,6 +163,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-08-31
+
+### Infrastructure
+
+- **A stuck orchestrator parent-completion led to three real fixes: journey-walk error swallowing, orchestrator vision-fidelity blindness, and a WAIT-ceiling counter leak** - PR #7867 (SD-LEO-INFRA-FIX-JOURNEY-WALK-001)
+  - **What shipped**: `lib/apa/journey-walk-orchestrator.js` no longer swallows an exception thrown after the walk session starts -- it now returns a `status='error'` result (never rethrows), guards against an unassigned test-run reference, isolates the audit DB write in its own try/catch, and sanitizes/caps the error text before it's persisted. `lib/sub-agents/vision-fidelity/severity-policy.js` gains a narrow `orchestrator:{mode:'warn'}` allowlist entry so `VISION_FIDELITY_GATE` stops fabricating a hard FAIL for orchestrator parents that structurally have zero real implementation evidence to measure (their PRD is a delegated-completion PRD, and no SD in the system carries a `branch_name` -- measured 0 of 5,955). `lib/handoff/wait-verdict.js`'s `buildWaitResult()` can now carry a per-*wait-reason* `exemptFromWaitCeiling` flag (not just per-gate), so a genuinely-not-yet-attempted journey walk is exempt from the 24h WAIT ceiling while a walk that was attempted and crashed still escalates normally.
+  - **Discovered via RCA, not filed cold**: this SD exists because `SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-002`'s PLAN-TO-LEAD handoff (all 11 children complete) kept failing with a confusing rejection message that read, at first glance, like cross-venture data contamination -- unrelated "alt text SaaS" vision content cited as a blocker. RCA measured the data directly and disproved that hypothesis (AltifyAI's own product genuinely is an alt-text generator; "AltifyAI" = Alt-text-ify + AI) before tracing the real three-part mechanism.
+  - **Four rounds of adversarial sub-agent review each found a real defect, fixed before merge**: LEAD-phase VALIDATION disproved the originally-proposed fix for the vision-fidelity gate (an "evidence-presence precondition" would have been unsound system-wide, not orchestrator-specific, since `branch_name` is null for every SD) and re-scoped it to a narrow allowlist entry. EXEC-phase TESTING (mutation-tested, not just read) found the WAIT-ceiling exemption's `wait_attempts` counter still advanced on the exempt branch, which would let attempts accumulated during a legitimate exempt wait later trip `WAIT_LIMIT_EXCEEDED` on an unrelated wait from the same gate -- fixed by freezing the counter. PLAN_VERIFICATION then found the freeze itself was undone one layer down: the handoff recorder's persistence write couldn't distinguish "no wait metadata supplied" from "wait metadata supplied with the timestamp anchor deliberately left null," so it re-stamped the anchor with "now" on every save -- reproducing the exact false-escalation failure mode this SD was built to close. Fixed by making the persistence layer honor an explicit null.
+  - **Verification**: LEAD-TO-PLAN 94%, PLAN-TO-EXEC 96%, EXEC-TO-PLAN 91%, PLAN-TO-LEAD 91%, LEAD-FINAL-APPROVAL 94%. TESTING PASS (mutation-verified), SECURITY PASS 95 (2 LOW findings fixed same-session), VALIDATION CONDITIONAL_PASS twice (both rounds' findings addressed), REGRESSION CONDITIONAL_PASS (zero regressions attributable to the change; 3-5 unrelated test-file flakes reproduced as pre-existing parallelism contention, not caused by this diff). 8 targeted test files / 120 tests, full unit tier 3660 files / 44,770 tests, 0 failures.
 
 ## 2026-08-30
 
