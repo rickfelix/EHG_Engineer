@@ -66,6 +66,29 @@ const SHIPPED_BUT_NOT_APPLIED_CHECKS = Object.assign(Object.create(null), {
     if (rows.length === 0) return { applied: false, detail: 'constraint not found' };
     return { applied: /OBSERVED/.test(rows[0].def), detail: rows[0].def };
   },
+  // SD-LEO-INFRA-COMPLETION-GATE-DATA-001-B: ALL-columns semantics, not ANY -- the two source
+  // migrations can land independently, so a partial-apply must still report ORPHANED (PLAN-phase
+  // TESTING finding, evidence dfc9ef51).
+  async 'context-usage-log-leo-phase-tagging-migration'(pgClient) {
+    const expected = ['loop_name', 'sd_key', 'leo_phase'];
+    const { rows } = await pgClient.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1 AND column_name = ANY($2::text[])`,
+      ['context_usage_log', expected]
+    );
+    const found = rows.map((r) => r.column_name);
+    return { applied: found.length === expected.length, detail: `found=[${found.join(',')}] expected=[${expected.join(',')}]` };
+  },
+  async 'operator-cash-burn-manual-revenue-provenance-migration'(pgClient) {
+    const expected = ['manual_revenue_usd', 'manual_revenue_last_synced_at'];
+    const { rows } = await pgClient.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1 AND column_name = ANY($2::text[])`,
+      ['operator_cash_burn_monthly', expected]
+    );
+    const found = rows.map((r) => r.column_name);
+    return { applied: found.length === expected.length, detail: `found=[${found.join(',')}] expected=[${expected.join(',')}]` };
+  },
 });
 
 async function evaluateShippedButNotApplied(entry, pgClientFactory) {
