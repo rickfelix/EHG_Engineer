@@ -1,0 +1,45 @@
+name: "Daily oracle-hold sampling audit (cron)"
+
+# SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-8): verifies the self-improvement loop is actually
+# happening (Solomon batch-read riders folded into next-batch standards) rather than merely
+# asserted, by sampling >=2 QFs that flowed in the trailing 24h and recording their ids in a
+# durable audit row (adam_adherence_ledger, probe=oracle_read_pending_sample).
+
+on:
+  schedule:
+    # Daily at 02:17 UTC — off-hour, off-minute to spread fleet cron load.
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  daily-sampling-audit:
+    name: Daily oracle-hold sampling audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run daily sampling audit
+        run: node scripts/cron/daily-sampling-audit.mjs
