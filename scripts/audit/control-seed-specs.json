@@ -595,6 +595,21 @@
     }
   },
   {
+    "name": "level-vs-edge-top1-share",
+    "script": "scripts/audit/level-vs-edge-top1-share.mjs",
+    "seedTest": "tests/unit/audit/level-vs-edge-top1-share.test.js",
+    "note": "QF-20260831-127. The control it guards: a standing condition re-asserted as a new row every evaluation cycle instead of a genuine edge/transition (measured: WAVE_LINKAGE_STARVATION, 164 rows since 07-11). seedTest form rather than fixtures because the control's certified output is a VERDICT over live production DB rows (feedback.metadata.dedup_key), not a code pattern in a scannable file -- there is no repo-tree root to aim a fixture directory at. The committed test carries both directions itself: a 'THE INCIDENT SHAPE' fixture (99 repeats of one key) that must read as a dominant top1Share, and a 'POST-FIX shape' fixture (three evenly-split repeating keys) that must NOT.",
+    "neuter": {
+      "find": ".sort((a, b) => b.count - a.count);",
+      "replace": ".sort((a, b) => a.count - b.count);",
+      "why": "reversing the sort makes groups[0] the SMALLEST repeating group instead of the largest, so the 'THE INCIDENT SHAPE' test's assertion that groups[0] is WAVE_LINKAGE_STARVATION (the dominant condition) goes RED -- proving the sort is what makes that test pass, not the test asserting its own premise."
+    },
+    "observability_proof": {
+      "input": "feedback rows where category='harness_backlog' and created_at is within the --days window (default 30), read via fetchAllPaginated against the live Supabase feedback table, grouped by metadata.dedup_key. Consumes no other columns; writes nothing.",
+      "seen": "Real positive observed in the deployment environment, run directly against production (not a temp-dir fixture) on 2026-08-31T19:11:01Z: `node scripts/audit/level-vs-edge-top1-share.mjs --days 30` returned top-1 share 89.2% for WAVE_LINKAGE_STARVATION (99/111 rows across repeating dedup keys) and exited 1 (FAIL) -- the exact live incident this control exists to name, not a constructed scenario."
+    }
+  },
+  {
     "name": "ilike-on-uuid-lint",
     "script": "scripts/lint/ilike-on-uuid-lint.mjs",
     "seedTest": "tests/unit/lint/ilike-on-uuid-lint.test.js",
