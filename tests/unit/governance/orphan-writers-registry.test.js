@@ -109,7 +109,9 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // A rising number in month one reads as DISCOVERY, not decay -- the assertion forces the
   // delta to be looked at, not suppressed. Bump this constant (and the reason in the same
   // commit) whenever ORPHAN_ENTRIES genuinely changes size; a silent change fails CI.
-  const PINNED_TOTAL_ENTRIES = 15;
+  // SD-LEO-INFRA-COMPLETION-GATE-DATA-001-B: 15 -> 17. Two new shipped-but-not-applied entries
+  // (context-usage-log-leo-phase-tagging-migration, operator-cash-burn-manual-revenue-provenance-migration).
+  const PINNED_TOTAL_ENTRIES = 17;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);
