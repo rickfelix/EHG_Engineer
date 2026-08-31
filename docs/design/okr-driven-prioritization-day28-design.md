@@ -66,7 +66,7 @@ const urgency = KR_URGENCY[kr.status] ?? 1.0;   // line 41
 ```
 
 ```js
-// priority-scorer.js:44-51 — the full 7-key table this was copied from
+// priority-scorer.js:44-51 — the full 7-key table SDNextSelector copied from
 krUrgency: {
   off_track: 3.0, at_risk: 2.0, on_track: 1.0,
   pending: 1.0, achieved: 0.0, missed: 0.0, default: 1.0,
@@ -82,7 +82,7 @@ rows currently carry `status='missed'` (live count, 2026-08-31); the divergence 
 the first one. The correct characterization is broader than "one bad default": **`SDNextSelector`
 inlines a 4-key subset of a 7-key table behind a nullish fallback** — any future status value
 `priority-scorer.js` adds will silently repeat this same class of bug in `SDNextSelector` unless
-the duplication itself is removed.
+someone removes the duplication itself.
 
 ### 2.3 Recommendation
 
@@ -107,7 +107,7 @@ description is the concrete spec:
 > ago); day-28 hard-stop (never)."*
 
 Live state (2026-08-31): `current_value=0`, `target_value=3`, **`status=off_track`**. `KR-GOV-3.3`
-itself is the substrate this design builds on — no new terminology is needed.
+itself is the substrate this design builds on — it needs no new terminology.
 
 ### 3.2 The sync path that would feed it is dormant
 
@@ -127,7 +127,7 @@ Each of KR-GOV-3.3's 3 stages maps to a distinct trigger, none of which this des
    reschedule that generator, not invent a new one.
 2. **Day 15, chairman review scheduling** — a calendar/SMS trigger into the existing chairman
    comms channel (per this repo's established SMS-cadence pattern), not a new comms mechanism.
-3. **Day 28, hard-stop SD creation** — the highest-leverage piece: schedule `okr-priority-sync.js`
+3. **Day 28, hard-stop SD creation** — the highest-impact piece: schedule `okr-priority-sync.js`
    (§3.2) to run on day 28, gating further SD creation on its output. This is where activating
    the dormant sync script and the day-28 hard stop are the same child SD (see §5, Child SD 2).
 
@@ -157,7 +157,7 @@ to run on day 28 of each month (cron or GitHub Actions `schedule:`), gating SD-c
 on its completed run, and wire `KR-GOV-3.3.current_value` to increment on successful stage
 completion so the KR's own tracking becomes self-updating rather than requiring manual edits.
 Depends on Child SD 1 landing first (the sync script uses `priority-scorer.js`; keeping the two
-scorers in sync during the transition would be wasted work).
+scorers in sync during the transition would waste effort).
 
 **Child SD 3 — Restore day 1-5 / day 15 automation.** Investigate and restore whatever last wrote
 `okr_generation_log` (stale 81+ days) for draft-OKR generation, and wire the day-15 chairman
