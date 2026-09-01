@@ -94,17 +94,38 @@ describe('fetchVerificationCode — TS-3 negative acceptance (R2-c)', () => {
       fetchVerificationCode({ aliasLocalPart: 'altifyai-uat', ImapFlowImpl, pollIntervalMs: 5, timeoutMs: 30 })
     ).rejects.toThrow(/no verification code found/);
   });
+
+  it('defense-in-depth: even if the IMAP SEARCH TO substring-match returns a wrong-alias message, the parsed recipient re-check rejects it (adversarial review finding -- RFC 3501 SEARCH TO is substring, not exact)', async () => {
+    const wrongAliasMessage =
+      'From: Clerk <noreply@clerk.dev>\r\nTo: venturesehg+other-venture-uat@gmail.com\r\nSubject: Your verification code\r\n\r\nYour code is 000111.';
+    const ImapFlowImpl = makeFakeImapFlowClass({
+      uidsByCall: [[5]],
+      sourcesByUid: { 5: wrongAliasMessage },
+    });
+    await expect(
+      fetchVerificationCode({ aliasLocalPart: 'altifyai-uat', ImapFlowImpl, pollIntervalMs: 5, timeoutMs: 30 })
+    ).rejects.toThrow(/no verification code found/);
+  });
 });
 
 describe('fetchVerificationCode — TS-4 ambiguous body', () => {
-  it('throws a descriptive ambiguous-match error rather than guessing', async () => {
+  it('throws a descriptive ambiguous-match error rather than guessing (deterministic across every retry, so it eventually times out with the detail preserved, not mislabeled as a connection failure)', async () => {
     const ImapFlowImpl = makeFakeImapFlowClass({
       uidsByCall: [[9]],
       sourcesByUid: { 9: messageWithCode('111111', ' Reference: 222222.') },
     });
     await expect(
-      fetchVerificationCode({ aliasLocalPart: 'altifyai-uat', ImapFlowImpl, pollIntervalMs: 5, timeoutMs: 5000 })
+      fetchVerificationCode({ aliasLocalPart: 'altifyai-uat', ImapFlowImpl, pollIntervalMs: 5, timeoutMs: 30 })
     ).rejects.toThrow(/ambiguous/);
+  });
+
+  it('does not treat an ambiguous match as a fatal connection failure — a later, superseding message can still resolve it', async () => {
+    const ImapFlowImpl = makeFakeImapFlowClass({
+      uidsByCall: [[9], [9], [10]],
+      sourcesByUid: { 9: messageWithCode('111111', ' Reference: 222222.'), 10: messageWithCode('999888') },
+    });
+    const code = await fetchVerificationCode({ aliasLocalPart: 'altifyai-uat', ImapFlowImpl, pollIntervalMs: 5, timeoutMs: 5000 });
+    expect(code).toBe('999888');
   });
 });
 
