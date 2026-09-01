@@ -190,6 +190,12 @@
   - **What shipped**: `docs/design/governance-cascade-invariant-design.md` — a Phase-0 design that explicitly disambiguates the new invariant work from the pre-existing `trigger_gr_governance_cascade` DB trigger (`supabase/migrations/20260302_governance_guardrail_triggers.sql:11-28`, pure SD-to-theme traceability), grounds its premise in the live-verified count of 106/414 (25.6%) `strategic_directives_v2` rows carrying a reasonless `metadata.roadmap_link_exception`, and explicitly defers `SD-LEO-INFRA-RATIFIED-DECISIONS-THREAD-DOWNSTREAM-001`'s propagation-plumbing scope rather than rebuilding it.
   - **Design-only, no code change**: no production file was touched — the deliverable is the design doc itself, scoping remediation (resolving the 106 reasonless rows) and a write-time check as follow-on child work.
   - **Verification**: LEAD-FINAL-APPROVAL 94%. Post-completion heal scored 100/100 against all five delivery dimensions.
+### Infrastructure
+
+- **The one real alarm from a 14.6h fleet output stall was undeliverable, then had its severity stripped by its own rescue path — both closed** - PR #7916 (SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-B, from chairman-ordered RCA 9a02a76d)
+  - **What shipped**: registered `reaper_starvation_alert` and its 3 sibling kinds in `DRAIN_SETS.coordinator` (`lib/fleet/worker-status.cjs`) plus a chairman-gated `role_drain_sets` seed migration; `orphan-reroute-sweep.js` now retargets a `severity==='high'` orphan to `coordinator_request` instead of downgrading it to the routine `coordinator_reminder` kind; its repeat-offender alarm now re-arms after a 6h freshness window instead of firing exactly once and going silent for 9 days; the starvation alert body now names the literal fix command (`npm run resync:safe`).
+  - **Why**: the alert that should have paged during the incident was structurally undeliverable to the coordinator, and the sweep that eventually rescued it stripped the severity that would have flagged it as urgent.
+  - **Verification**: LEAD-TO-PLAN 96%, PLAN-TO-EXEC 97%, EXEC-TO-PLAN 88%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 93% (bypassed only the known dead-`GEMINI_API_KEY` `RETROSPECTIVE_EXISTS` gate, harness bug logged separately). 276 files / 3374 tests, 0 regressions.
 
 ## 2026-08-31
 
