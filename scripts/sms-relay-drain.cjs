@@ -74,6 +74,15 @@ async function main() {
       for (const r of result.results || []) tally[r.outcome] = (tally[r.outcome] || 0) + 1;
       // NO SMS body text — only the drained count + the per-outcome tally keyed by drainSmsRelayStaging's outcome classes.
       console.log(`[sms-relay-drain] drained=${result.drained} tally=${JSON.stringify(tally)}`);
+      // QF-20260901-633: routedToAdam===false means a verified-chairman row parked but the
+      // mechanical Adam-lane route FAILED (fail-soft inside drainSmsRelayStaging) — that failure
+      // was previously indistinguishable from a normal outcome inside the tally above. A live
+      // specimen (staging row 0ba9b364, 2026-09-01) reached parked_at/resolved_at with routed_at
+      // NULL and nothing surfaced it. ESCALATE this distinctly, not as a normal count.
+      const routingFailures = (result.results || []).filter((r) => r.routedToAdam === false);
+      if (routingFailures.length > 0) {
+        console.error(`[sms-relay-drain] ESCALATION: ${routingFailures.length} verified-chairman row(s) failed to route to Adam (ids: ${routingFailures.map((r) => r.id).join(',')})`);
+      }
     }
   } catch (e) {
     // FR-2 fail-soft: log + do NOT crash; the next cron tick retries. Persistent failure is

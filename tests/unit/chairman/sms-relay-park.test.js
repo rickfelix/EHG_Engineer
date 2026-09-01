@@ -185,6 +185,32 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(opts.targetRoleHint).toBe('adam');
   });
 
+  it('QF-20260901-633: chairman no_match routedToAdam=true is exposed on the result entry (not just routed_at on the row) so the drain script can distinguish success', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-nomatch-flag', provider_message_id: 'SM-nomatch-flag', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'status?', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results.find((r) => r.id === 'stg-nomatch-flag').routedToAdam).toBe(true);
+  });
+
+  it('QF-20260901-633: a route attempt that FAILS sets routedToAdam=false and leaves routed_at null — reproduces the live specimen (staging row 0ba9b364, parked/resolved but never routed)', async () => {
+    insertCoordinationRow.mockImplementationOnce(async () => { throw new Error('simulated DISPATCH_BACKPRESSURE'); });
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-nomatch-fail', provider_message_id: 'SM-nomatch-fail', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'status?', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results.find((r) => r.id === 'stg-nomatch-fail').routedToAdam).toBe(false);
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-nomatch-fail');
+    expect(row.parked_at).toBeTruthy();
+    expect(row.routed_at).toBeFalsy();
+  });
+
   it('QF-20260831-346: chairman rate_limited now ALSO routes to Adam and stamps routed_at (NOT resolved_at) — closes the lane-divergence that let rate_limited rows resolve without ever being routed', async () => {
     insertCoordinationRow.mockClear();
     process.env.CHAIRMAN_PHONE = CHAIR;
