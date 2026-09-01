@@ -78,14 +78,14 @@ describe('eligibleQfCandidates — full pipeline exclusion (isAutoStartableQF + 
   });
 });
 
-describe('tierFitOk — conservative routing_tier vs worker-rank heuristic', () => {
+describe('tierFitOk — routing_tier vs worker-rank is advisory only (QF-20260831-419)', () => {
   it('a routing_tier-1 QF is fine for any worker', () => {
     expect(tierFitOk(qf({ routing_tier: 1 }), worker({ metadata: {} }))).toBe(true);
   });
 
-  it('a routing_tier-2 QF requires the top capability rung', () => {
+  it('a routing_tier-2 QF no longer blocks a non-top-rung worker (advisory, not enforced)', () => {
     const bottomRung = worker({ metadata: { tier_rank: 5 } });
-    expect(tierFitOk(qf({ routing_tier: 2 }), bottomRung)).toBe(false);
+    expect(tierFitOk(qf({ routing_tier: 2 }), bottomRung)).toBe(true);
     const topRung = worker({ metadata: { tier_rank: 1 } });
     expect(tierFitOk(qf({ routing_tier: 2 }), topRung)).toBe(true);
   });

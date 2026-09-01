@@ -1,18 +1,10 @@
 /**
- * QF-20260830-737 — worker-side tier_rank provenance advisory.
+ * QF-20260830-737 (superseded by QF-20260831-419) — worker-side tier_rank provenance advisory.
  *
- * Adam ruling (this row's own description is its record): a worker seat's tier_rank with no
- * recorded metadata.tier_rank_source is a number derived from an absence — the identical
- * principle that makes an unprovenanced SD-side min_tier_rank ADVISORY under ruling 1B
- * (SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 FR-3) must apply symmetrically to the worker side.
- * Measured specimen: Charlie 2b9045cc, tier_rank=4, tier_rank_source empty, hard-refused a
- * WORK_ASSIGNMENT at 17:16Z ("would be reserving capability on ungenuine cheap work") on a
- * stranded parent already unowned 27h.
- *
- * THE QF'S OWN FIXTURE: an unsourced rank dispatch logs advisory; a sourced rank still
- * refuses; stamping flips behaviour. Both real throw sites in assertWorkerTierAllowed are
- * covered — DISPATCH_RESERVED_NO_LOWER_BACKLOG (the specimen) and DISPATCH_ABOVE_WORKER_TIER
- * (the WORK-DOWN-NEVER-UP twin).
+ * QF-20260831-419 (chairman order, ratified by adam a78170fa): WORK-DOWN-NEVER-UP dispatch
+ * enforcement is retired entirely — assertWorkerTierAllowed never refuses on a tier mismatch
+ * (sourced or not), it only logs advisory. This file's provenance-gated REFUSE/advisory split
+ * no longer exists; all four scenarios below now resolve, logging advisory in every case.
  */
 import { describe, it, expect } from 'vitest';
 import { assertWorkerTierAllowed } from '../../../lib/coordinator/dispatch.cjs';
@@ -90,53 +82,59 @@ const row = (sdKey) => ({
   message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: sdKey },
 });
 
-describe('QF-20260830-737: DISPATCH_RESERVED_NO_LOWER_BACKLOG — worker-side provenance (the measured specimen)', () => {
-  it('a SOURCED unfavourable rank still REFUSES (control — enforcement unchanged when sourced)', async () => {
+describe('QF-20260831-419: reserved-no-lower-backlog refusal retired to advisory', () => {
+  it('a SOURCED unfavourable rank now ADMITS (advisory only, enforcement retired)', async () => {
     const tgt = targetSession(4, { sourced: true });
     const sd = sdRow('SD-LOWER-001', 1);
     const sb = stubSupabase({ liveWorkers: [idleWorker('w-1', 1), tgt], sds: [sd], targetSession: tgt, targetSd: sd });
-    await expect(assertWorkerTierAllowed(sb, row('SD-LOWER-001'))).rejects.toMatchObject({ code: 'DISPATCH_RESERVED_NO_LOWER_BACKLOG' });
+    const warnings = [];
+    const logger = { info: (m) => warnings.push(m), warn() {} };
+    await expect(assertWorkerTierAllowed(sb, row('SD-LOWER-001'), logger)).resolves.toBeUndefined();
+    expect(warnings.some((m) => /ADVISORY/.test(m) && /QF-20260831-419/.test(m))).toBe(true);
   });
 
-  it('[TWO-SIDED] the IDENTICAL scenario with an UNSOURCED rank logs advisory instead of refusing', async () => {
+  it('an UNSOURCED rank likewise admits with advisory', async () => {
     const tgt = targetSession(4, { sourced: false });
     const sd = sdRow('SD-LOWER-001', 1);
     const sb = stubSupabase({ liveWorkers: [idleWorker('w-1', 1), tgt], sds: [sd], targetSession: tgt, targetSd: sd });
     const warnings = [];
     const logger = { info: (m) => warnings.push(m), warn() {} };
     await expect(assertWorkerTierAllowed(sb, row('SD-LOWER-001'), logger)).resolves.toBeUndefined();
-    expect(warnings.some((m) => /ADVISORY/.test(m) && /QF-20260830-737/.test(m))).toBe(true);
+    expect(warnings.some((m) => /ADVISORY/.test(m) && /QF-20260831-419/.test(m))).toBe(true);
   });
 });
 
-describe('QF-20260830-737: DISPATCH_ABOVE_WORKER_TIER — worker-side provenance (WORK-DOWN-NEVER-UP twin)', () => {
-  it('a SOURCED below-floor rank still REFUSES (control)', async () => {
+describe('QF-20260831-419: above-worker-tier (WORK-DOWN-NEVER-UP) refusal retired to advisory', () => {
+  it('a SOURCED below-floor rank now ADMITS (advisory only, enforcement retired)', async () => {
     const tgt = targetSession(2, { sourced: true });
     const sd = sdRow('SD-ABOVE-001', 4);
     const sb = stubSupabase({ liveWorkers: [idleWorker('w-1', 1), tgt], sds: [sd], targetSession: tgt, targetSd: sd });
-    await expect(assertWorkerTierAllowed(sb, row('SD-ABOVE-001'))).rejects.toMatchObject({ code: 'DISPATCH_ABOVE_WORKER_TIER' });
+    const warnings = [];
+    const logger = { info: (m) => warnings.push(m), warn() {} };
+    await expect(assertWorkerTierAllowed(sb, row('SD-ABOVE-001'), logger)).resolves.toBeUndefined();
+    expect(warnings.some((m) => /ADVISORY/.test(m) && /QF-20260831-419/.test(m))).toBe(true);
   });
 
-  it('[TWO-SIDED] the IDENTICAL scenario with an UNSOURCED rank logs advisory instead of refusing', async () => {
+  it('an UNSOURCED rank likewise admits with advisory', async () => {
     const tgt = targetSession(2, { sourced: false });
     const sd = sdRow('SD-ABOVE-001', 4);
     const sb = stubSupabase({ liveWorkers: [idleWorker('w-1', 1), tgt], sds: [sd], targetSession: tgt, targetSd: sd });
     const warnings = [];
     const logger = { info: (m) => warnings.push(m), warn() {} };
     await expect(assertWorkerTierAllowed(sb, row('SD-ABOVE-001'), logger)).resolves.toBeUndefined();
-    expect(warnings.some((m) => /ADVISORY/.test(m) && /QF-20260830-737/.test(m))).toBe(true);
+    expect(warnings.some((m) => /ADVISORY/.test(m) && /QF-20260831-419/.test(m))).toBe(true);
   });
 });
 
-describe('QF-20260830-737: stamping flips behaviour (the QF\'s own acceptance bar, end-to-end)', () => {
-  it('the SAME fixture refuses when sourced and admits-with-advisory when the source is removed', async () => {
-    const sd = sdRow('SD-LOWER-001', 1);
-    const sourced = targetSession(4, { sourced: true });
-    const sbSourced = stubSupabase({ liveWorkers: [idleWorker('w-1', 1), sourced], sds: [sd], targetSession: sourced, targetSd: sd });
-    await expect(assertWorkerTierAllowed(sbSourced, row('SD-LOWER-001'))).rejects.toMatchObject({ code: 'DISPATCH_RESERVED_NO_LOWER_BACKLOG' });
+describe('QF-20260831-419: acceptance bar — a dispatch of a min_tier_rank=2 SD to a tier_rank=1 seat SUCCEEDS', () => {
+  it('the fixture succeeds regardless of provenance', async () => {
+    const sd = sdRow('SD-LOWER-001', 2);
+    const sourced = targetSession(1, { sourced: true });
+    const sbSourced = stubSupabase({ liveWorkers: [idleWorker('w-1', 4), sourced], sds: [sd], targetSession: sourced, targetSd: sd });
+    await expect(assertWorkerTierAllowed(sbSourced, row('SD-LOWER-001'))).resolves.toBeUndefined();
 
-    const unsourced = targetSession(4, { sourced: false });
-    const sbUnsourced = stubSupabase({ liveWorkers: [idleWorker('w-1', 1), unsourced], sds: [sd], targetSession: unsourced, targetSd: sd });
+    const unsourced = targetSession(1, { sourced: false });
+    const sbUnsourced = stubSupabase({ liveWorkers: [idleWorker('w-1', 4), unsourced], sds: [sd], targetSession: unsourced, targetSd: sd });
     await expect(assertWorkerTierAllowed(sbUnsourced, row('SD-LOWER-001'))).resolves.toBeUndefined();
   });
 });

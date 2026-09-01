@@ -54,11 +54,11 @@ describe('FR-5: an explicit-override mint REQUIRES a reason and stays binding at
     expect(() => stampPayloadForCreation({}, { explicitRank: 4 })).toThrow(/requires a recorded reason/);
   });
 
-  it('with a reason, the resulting stamp is provenance-bearing and BLOCKS a below-rung worker', () => {
+  it('with a reason, the stamp is still provenance-bearing but no longer blocks (QF-20260831-419: advisory only)', () => {
     const payload = stampPayloadForCreation({}, { explicitRank: 4, explicitReason: 'reserved for the fable rollout' });
     expect(payload.min_tier_rank).toBe(4);
     expect(payload.min_tier_rank_reason).toBe('reserved for the fable rollout');
     const sd = sdWith(payload);
-    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBe('above_worker_tier');
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBeNull();
   });
 });

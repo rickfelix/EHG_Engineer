@@ -51,21 +51,21 @@ describe('FR-2: the tier-gate fails OPEN on an undefined min_tier_rank', () => {
     }
   });
 
-  it('still blocks a FINITE min_tier_rank that exceeds the worker rung (WORK-DOWN-NEVER-UP preserved)', () => {
+  it('QF-20260831-419: no longer blocks a FINITE min_tier_rank that exceeds the worker rung (advisory only)', () => {
     expect(classifyDispatchIneligibility(ranked4, { tiering_active: true, worker_tier_rank: 3 }))
-      .toBe('above_worker_tier');
+      .not.toBe('above_worker_tier');
     // a worker at/above the rank is NOT blocked
     expect(classifyDispatchIneligibility(ranked4, { tiering_active: true, worker_tier_rank: 4 }))
       .not.toBe('above_worker_tier');
   });
 
-  it('claimableForTier includes an unscored SD for every rung, excludes a finite-above-rung one', () => {
+  it('claimableForTier includes an unscored SD for every rung, and now also the finite-above-rung one', () => {
     const pool = [unscored, ranked4];
     // preFiltered: true -> exercise the TIER axis only (these minimal stubs are not full base-eligible rows).
     const keys = (rung) => claimableForTier(pool, { workerTierRank: rung, tieringActive: true, preFiltered: true }).map((s) => s.sd_key);
     expect(keys(1)).toContain('SD-U');   // unscored reachable by tier-1
     expect(keys(3)).toContain('SD-U');
-    expect(keys(3)).not.toContain('SD-R4'); // rank-4 above a tier-3 worker
+    expect(keys(3)).toContain('SD-R4'); // rank-4 no longer excluded from a tier-3 worker
     expect(keys(4)).toContain('SD-R4');     // reachable by tier-4
   });
 });

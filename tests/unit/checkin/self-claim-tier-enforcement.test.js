@@ -29,13 +29,22 @@ const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 function fakeSb({ rows = [], claimed = [] }) {
   const payloads = { strategic_directives_v2: rows };
   const make = (table) => {
+    let statusFilter;
     const b = {
-      select: () => b, eq: () => b, is: () => b, lt: () => b, gt: () => b,
+      select: () => b,
+      eq: (col, val) => { if (table === 'strategic_directives_v2' && col === 'status') statusFilter = val; return b; },
+      is: () => b, lt: () => b, gt: () => b,
       order: () => b, limit: () => b, in: () => b, neq: () => b, not: () => b,
       maybeSingle: async () => ({ data: null, error: null }),
       single: async () => ({ data: null, error: null }),
       update: () => b, insert: () => b, upsert: () => b,
-      then: (res) => res({ data: payloads[table] ?? [], error: null }),
+      then: (res) => {
+        const data = payloads[table] ?? [];
+        // recoverStrandedFinal/adoptOrphanInProgress query the SAME mock table with different
+        // .eq('status', ...) filters — honor it here so a draft-status orphan row doesn't leak
+        // into recoverStrandedFinal's pending_approval-only query (real Supabase filters it).
+        return res({ data: statusFilter ? data.filter((r) => r.status === statusFilter) : data, error: null });
+      },
     };
     return b;
   };
@@ -68,21 +77,21 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
-describe('TS-1/TS-2 — a below-rung seat is refused a tier-restricted stranded/orphaned SD (tiering active)', () => {
-  it('recoverStrandedFinal skips a tier-4 SD for a tier-2 seat', async () => {
+describe('QF-20260831-419: a below-rung seat is no longer refused a tier-restricted stranded/orphaned SD (advisory only)', () => {
+  it('recoverStrandedFinal now recovers a tier-4 SD for a tier-2 seat', async () => {
     const claimed = [];
     const sb = fakeSb({ rows: [strandedRow('SD-TIER4-001', 4)], claimed });
     const r = await recoverStrandedFinal(sb, 'sess-1', {}, { worker_tier_rank: 2, tiering_active: true });
-    expect(claimed).not.toContain('SD-TIER4-001');
-    expect(r?.action).not.toBe('resume_final');
+    expect(claimed).toContain('SD-TIER4-001');
+    expect(r?.action).toBe('resume_final');
   });
 
-  it('adoptOrphanInProgress skips a tier-4 SD for a tier-2 seat', async () => {
+  it('adoptOrphanInProgress now adopts a tier-4 SD for a tier-2 seat', async () => {
     const claimed = [];
     const sb = fakeSb({ rows: [orphanRow('SD-TIER4-002', 4)], claimed });
     const r = await adoptOrphanInProgress(sb, 'sess-1', {}, { worker_tier_rank: 2, tiering_active: true });
-    expect(claimed).not.toContain('SD-TIER4-002');
-    expect(r?.action).not.toBe('resume_orphan');
+    expect(claimed).toContain('SD-TIER4-002');
+    expect(r?.action).toBe('resume_orphan');
   });
 });
 
@@ -104,44 +113,40 @@ describe('TS-3a — an UNSCORED SD stays reachable regardless of tiering state',
   });
 });
 
-describe('TS-3b — a SCORED SD\'s explicit floor is honored even when GLOBAL tiering is OFF', () => {
-  // This is the precedent SD-LEO-INFRA-BELT-CLAIMABLE-ACCURACY-FLOOR-001 established for the belt
-  // gauge and the exact reason FR-2 reuses tierBlocks() instead of a raw ctx spread: a naive
-  // {worker_tier_rank, tiering_active} spread into classifyDispatchIneligibility would NOT block
-  // here, because tierAxes short-circuits to null the instant tiering_active !== true.
-  it('recoverStrandedFinal still refuses a tier-4 SD for a tier-2 seat when tiering_active=false', async () => {
+describe('QF-20260831-419: a SCORED SD\'s explicit floor is no longer honored, tiering OFF or ON (retired)', () => {
+  it('recoverStrandedFinal now recovers a tier-4 SD for a tier-2 seat when tiering_active=false', async () => {
     const claimed = [];
     const sb = fakeSb({ rows: [strandedRow('SD-FLOOR-001', 4)], claimed });
     const r = await recoverStrandedFinal(sb, 'sess-1', {}, { worker_tier_rank: 2, tiering_active: false });
-    expect(claimed).not.toContain('SD-FLOOR-001');
-    expect(r?.action).not.toBe('resume_final');
+    expect(claimed).toContain('SD-FLOOR-001');
+    expect(r?.action).toBe('resume_final');
   });
 
-  it('adoptOrphanInProgress still refuses a tier-4 SD for a tier-2 seat when tiering_active=false', async () => {
+  it('adoptOrphanInProgress now adopts a tier-4 SD for a tier-2 seat when tiering_active=false', async () => {
     const claimed = [];
     const sb = fakeSb({ rows: [orphanRow('SD-FLOOR-002', 4)], claimed });
     const r = await adoptOrphanInProgress(sb, 'sess-1', {}, { worker_tier_rank: 2, tiering_active: false });
-    expect(claimed).not.toContain('SD-FLOOR-002');
-    expect(r?.action).not.toBe('resume_orphan');
+    expect(claimed).toContain('SD-FLOOR-002');
+    expect(r?.action).toBe('resume_orphan');
   });
 });
 
-describe('TS-4 — a SCORED SD is refused when tierCtx.worker_tier_rank is missing (fail-closed, no new axis)', () => {
-  it('recoverStrandedFinal refuses a scored SD when tierCtx carries no worker_tier_rank at all', async () => {
+describe('QF-20260831-419: a SCORED SD is no longer refused when tierCtx.worker_tier_rank is missing (advisory only)', () => {
+  it('recoverStrandedFinal now recovers a scored SD when tierCtx carries no worker_tier_rank at all', async () => {
     const claimed = [];
     const sb = fakeSb({ rows: [strandedRow('SD-NOSTAMP-001', 4)], claimed });
     // Simulates a tier-context producer failure: ctx.tierCtx = {} (no worker_tier_rank key).
     const r = await recoverStrandedFinal(sb, 'sess-1', {}, {});
-    expect(claimed).not.toContain('SD-NOSTAMP-001');
-    expect(r?.action).not.toBe('resume_final');
+    expect(claimed).toContain('SD-NOSTAMP-001');
+    expect(r?.action).toBe('resume_final');
   });
 
-  it('adoptOrphanInProgress refuses a scored SD when tierCtx carries no worker_tier_rank at all', async () => {
+  it('adoptOrphanInProgress now adopts a scored SD when tierCtx carries no worker_tier_rank at all', async () => {
     const claimed = [];
     const sb = fakeSb({ rows: [orphanRow('SD-NOSTAMP-002', 4)], claimed });
     const r = await adoptOrphanInProgress(sb, 'sess-1', {}, {});
-    expect(claimed).not.toContain('SD-NOSTAMP-002');
-    expect(r?.action).not.toBe('resume_orphan');
+    expect(claimed).toContain('SD-NOSTAMP-002');
+    expect(r?.action).toBe('resume_orphan');
   });
 
   it('but an UNSCORED SD is unaffected by a missing tierCtx (matches TS-3a)', async () => {
@@ -201,13 +206,14 @@ describe('recoverStrandedFinal/adoptOrphanInProgress reuse tierBlocks exactly �
   // Cross-checks the two lanes against the SAME shared helper with a spread of inputs, so a
   // future edit that reimplements the comparison inline (instead of calling tierBlocks) is caught
   // even if it happens to get one specific case right.
+  // QF-20260831-419: tierBlocks is now always non-blocking (enforcement retired to advisory).
   const cases = [
-    { worker: 1, min: 4, tiering: true, blocked: true },
+    { worker: 1, min: 4, tiering: true, blocked: false },
     { worker: 4, min: 4, tiering: true, blocked: false },
     { worker: 5, min: 4, tiering: true, blocked: false },
-    { worker: 1, min: 4, tiering: false, blocked: true }, // floor honored off
+    { worker: 1, min: 4, tiering: false, blocked: false },
     { worker: 4, min: null, tiering: true, blocked: false }, // unscored
-    { worker: undefined, min: 4, tiering: true, blocked: true }, // missing stamp, scored
+    { worker: undefined, min: 4, tiering: true, blocked: false }, // missing stamp, scored
   ];
   for (const c of cases) {
     it(`tierBlocks(worker=${c.worker}, min=${c.min}, tiering=${c.tiering}) => blocked=${c.blocked}`, async () => {
@@ -251,14 +257,14 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
     return { claimed, resolution, tierCtx: ctx.tierCtx, resolveWorkerTierRank, isTieringActive };
   }
 
-  it('ctx.tierCtx is populated before recover-stranded-final runs, and BLOCKS a tier-4 row for a tier-2 seat', async () => {
+  it('ctx.tierCtx is populated before recover-stranded-final runs, but no longer BLOCKS a tier-4 row for a tier-2 seat (advisory only)', async () => {
     const { claimed, resolution, tierCtx, resolveWorkerTierRank, isTieringActive } = await runLadder(
       [strandedRow('SD-WIRE-001', 4)],
       { workerTierRank: 2, tieringActive: true },
     );
     expect(tierCtx).toEqual({ worker_tier_rank: 2, tiering_active: true });
-    expect(claimed).not.toContain('SD-WIRE-001');
-    expect(resolution?.action).not.toBe('resume_final');
+    expect(claimed).toContain('SD-WIRE-001');
+    expect(resolution?.action).toBe('resume_final');
     // FR-1 AC-3 (relocate, not duplicate): the hoisted producer is the ONLY caller across the
     // whole ladder run -- if recover-stranded-final or adopt-orphan resolved their own tier rank
     // independently, these counts would exceed 1.
@@ -266,13 +272,13 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
     expect(isTieringActive).toHaveBeenCalledTimes(1);
   });
 
-  it('the SAME hoisted ctx.tierCtx also reaches adopt-orphan (step 9) for a tier-4 orphan', async () => {
+  it('the SAME hoisted ctx.tierCtx also reaches adopt-orphan (step 9) for a tier-4 orphan, no longer blocking', async () => {
     const { claimed, resolution } = await runLadder(
       [orphanRow('SD-WIRE-002', 4)],
       { workerTierRank: 2, tieringActive: true },
     );
-    expect(claimed).not.toContain('SD-WIRE-002');
-    expect(resolution?.action).not.toBe('resume_orphan');
+    expect(claimed).toContain('SD-WIRE-002');
+    expect(resolution?.action).toBe('resume_orphan');
   });
 
   it('a tier-eligible seat still reaches a real claim through the full wired ladder', async () => {
@@ -284,7 +290,7 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
     expect(claimed).toEqual(['SD-WIRE-003']);
   });
 
-  it('a hoisted-producer failure (fail-open ctx.tierCtx={}) still fails CLOSED on a scored SD via tierBlocks', async () => {
+  it('a hoisted-producer failure (fail-open ctx.tierCtx={}) no longer matters — tierBlocks is advisory-only now', async () => {
     const claimed = [];
     const ctx = {
       sb: fakeSb({ rows: [strandedRow('SD-WIRE-004', 4)], claimed }),
@@ -299,10 +305,9 @@ describe('TS-8 — the hoisted tier-context step wires ctx.tierCtx into the real
     };
     const resolution = await runSteps([tierContextStep, recoverStep], ctx);
     expect(ctx.tierCtx).toEqual({}); // the hoisted step's own fail-open contract
-    // The behavioral claim in this test's title: the empty tierCtx must not read as "unrestricted" --
-    // tierBlocks(sd, undefined, undefined) still blocks a SCORED SD via tier_stamp_missing.
-    expect(claimed).not.toContain('SD-WIRE-004');
-    expect(resolution?.action).not.toBe('resume_final');
+    // QF-20260831-419: tierBlocks(sd, undefined, undefined) no longer blocks (tier_stamp_missing retired to advisory).
+    expect(claimed).toContain('SD-WIRE-004');
+    expect(resolution?.action).toBe('resume_final');
   });
 
   it('an unscored SD is UNAFFECTED by the same hoisted-producer failure (two-sided control)', async () => {
