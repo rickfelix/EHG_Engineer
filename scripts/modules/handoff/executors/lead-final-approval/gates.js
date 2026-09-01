@@ -478,6 +478,11 @@ export function createRetrospectiveExistsGate(supabase) {
       const assessment = await validateSDCompletionReadiness(ctx.sd, retrospective);
 
       if (!assessment?.passed || assessment.score < minScore) {
+        // QF-20260901-068 — `passed=false` and `score<minScore` are two DISTINCT clauses; a
+        // score at/above minScore can still fail on the passed clause (retroQuality.passed),
+        // which is NOT score-derived. Naming the wrong clause misleads every downstream RCA.
+        const scoreClauseFailed = (assessment?.score ?? 0) < minScore;
+        const retroIssues = assessment?.retroQuality?.issues?.filter(i => i) || [];
         return {
           passed: false,
           score: assessment?.score ?? 0,
@@ -485,7 +490,9 @@ export function createRetrospectiveExistsGate(supabase) {
           issues: [
             assessment?.manual_review_required
               ? 'Retrospective could not be assessed (evaluator unavailable) — MANUAL REVIEW REQUIRED. A gate that cannot run has not passed.'
-              : `Retrospective assessed score ${assessment?.score ?? 0}% is below minimum ${minScore}%`
+              : scoreClauseFailed
+                ? `Retrospective assessed score ${assessment?.score ?? 0}% is below minimum ${minScore}%`
+                : `Retrospective quality check failed (score ${assessment?.score ?? 0}% meets the ${minScore}% minimum, but retrospective validation did not pass)${retroIssues.length ? `: ${retroIssues.join('; ')}` : ''}`
           ],
           warnings: assessment?.warnings || []
         };
