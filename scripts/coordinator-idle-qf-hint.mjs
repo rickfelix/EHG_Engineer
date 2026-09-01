@@ -68,16 +68,16 @@ export function isHintExcludedGated(qf) {
 }
 
 /**
- * Deliberately simple, conservative tier-fit: routing_tier is a QF SIZE/RISK axis (1=auto-
- * approve, 2=standard), not the same scale as worker capability tier_rank — no existing
- * primitive compares them (assertWorkerTierAllowed explicitly exempts QFs from tier gating
- * entirely). Reserve anything above the simplest routing tier for the fleet's top capability
- * rung; never the reverse (errs toward under-hinting complex work, never over-hinting it).
+ * QF-20260831-419 (chairman order): tier-fit ENFORCEMENT retired — routing_tier vs worker
+ * capability tier_rank is now advisory only (logged, never fences a hint). Any seat may
+ * receive a hint for any routing_tier.
  */
 export function tierFitOk(qf, workerSession) {
   const routingTier = Number(qf.routing_tier);
-  if (!Number.isFinite(routingTier) || routingTier <= 1) return true;
-  return resolveWorkerTierRank(workerSession) === 1;
+  if (Number.isFinite(routingTier) && routingTier > 1 && resolveWorkerTierRank(workerSession) !== 1) {
+    console.info(`[idle-qf-hint] ADVISORY (not blocking): routing_tier ${routingTier} QF hinted to a non-top-rung worker per QF-20260831-419.`);
+  }
+  return true;
 }
 
 /** Pure: idle, past-spin-up fleet workers eligible to receive a hint this tick. */
