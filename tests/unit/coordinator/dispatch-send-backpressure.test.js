@@ -113,6 +113,29 @@ describe('assertSendBackpressure (unit)', () => {
     await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
   });
 
+  // QF-20260901-023: a refused send previously vanished with no queryable trace. It must now
+  // be durably parked (readable by the recipient) instead of discarded.
+  it('parks the refused row instead of discarding it', async () => {
+    const { sb, inserted } = stubSupabase({ unanswered: BACKPRESSURE_UNANSWERED_LIMIT });
+    const row = { target_session: TARGET, payload: { kind: 'coordinator_update', body: 'do not lose me' } };
+    await expect(assertSendBackpressure(sb, row, silentLog)).rejects.toMatchObject({ code: 'DISPATCH_BACKPRESSURE' });
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].target_session).toBe(TARGET);
+    expect(inserted[0].payload.body).toBe('do not lose me');
+    expect(inserted[0].payload.backpressure_parked).toBe(true);
+    expect(inserted[0].payload.backpressure_parked_at).toEqual(expect.any(String));
+  });
+
+  // A parked row is queued-for-later, not live pressure -- it must not count toward the cap
+  // itself, or a capped target could never clear once its own parked backlog outnumbers the limit.
+  it('does not count parked rows in the candidate population', async () => {
+    const rows = Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT + 2 }, (_, i) => ({
+      id: `parked-${i}`, payload: { kind: 'coordinator_update', backpressure_parked: true },
+    }));
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+
   it('still refuses when the NON-exempt, non-reply population meets the limit', async () => {
     const rows = [
       { id: 'exempt-1', payload: { kind: 'collision_warning' } },
