@@ -931,14 +931,16 @@ async function getOriginMainHeadSha(repoRoot) {
 // never a false breach.
 async function fetchDurationsByType(sb) {
   try {
-    const { data, error } = await sb
+    // Full-history read via fetchAllPaginated (not a capped .limit()) -- a baseline gauge's
+    // fidelity depends on the sample size, so silently truncating history would quietly narrow
+    // every type's p95 as the table grows. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 pattern.
+    const data = await fetchAllPaginated(() => sb
       .from('strategic_directives_v2')
       .select('sd_type, created_at, completion_date')
       .eq('status', 'completed')
       .not('completion_date', 'is', null)
-      .not('sd_type', 'is', null)
-      .limit(2000);
-    if (error || !data) return {};
+      .not('sd_type', 'is', null));
+    if (!data) return {};
     const byType = {};
     for (const row of data) {
       const created = Date.parse(row.created_at);
