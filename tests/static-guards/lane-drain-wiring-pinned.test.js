@@ -122,6 +122,72 @@ describe('FR-4 wiring: the tick must feed the gauge an UNWINDOWED, uncapped lane
   });
 });
 
+/**
+ * SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002 FR-3 wiring. TESTING sub-agent finding T-1
+ * (evidence 4b0ec75d): scripts/coordinator-quiet-tick.mjs's main() is unexported and
+ * uncallable from a unit test, so the FR-3 call site is invisible to behavioural
+ * coverage — the parent SD's FR-7 shipped with the exact same shape and computeLoadedAndQuiet()
+ * sat at zero production callers while all 50 predicate tests stayed green. This guard
+ * pins the ORDERING (computed fresh, immediately before decideCadence) that no unit test
+ * of decideCadence or computeLoadedAndQuiet alone can see.
+ */
+function loadedAndQuietSpan(src) {
+  // Anchor on the ASSIGNMENT (the fresh-read call site), through to the decideCadence
+  // call it must feed — anchored on both ends per the FR-4 lane-query precedent above.
+  const start = src.indexOf('const loadedAndQuiet');
+  const end = src.indexOf('decideCadence(', start);
+  if (start === -1 || end === -1) return '';
+  return src.slice(start, end);
+}
+
+describe('FR-3 wiring: the coordinator tick must compute loadedAndQuiet fresh and feed it to decideCadence', () => {
+  const src = () => code(read('scripts/coordinator-quiet-tick.mjs'));
+
+  it('the loadedAndQuiet span is locatable (guard is not vacuous)', () => {
+    expect(loadedAndQuietSpan(src()).length).toBeGreaterThan(0);
+  });
+
+  it('main() calls resolveLoadedAndQuiet(), not a hand-rolled predicate', () => {
+    expect(loadedAndQuietSpan(src())).toMatch(/resolveLoadedAndQuiet\s*\(/);
+  });
+
+  it('resolveLoadedAndQuiet calls computeLoadedAndQuiet (not reimplemented inline)', () => {
+    const s = src();
+    const fnStart = s.indexOf('async function resolveLoadedAndQuiet');
+    const fnEnd = s.indexOf('\n}', fnStart);
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(s.slice(fnStart, fnEnd)).toMatch(/computeLoadedAndQuiet\s*\(/);
+  });
+
+  it('resolveLoadedAndQuiet calls gatherCapacityInputs (not a hand-rolled Supabase query)', () => {
+    const s = src();
+    const fnStart = s.indexOf('async function resolveLoadedAndQuiet');
+    const fnEnd = s.indexOf('\n}', fnStart);
+    expect(s.slice(fnStart, fnEnd)).toMatch(/gatherCapacityInputs\s*\(/);
+  });
+
+  it('decideCadence receives loadedAndQuiet in its input object', () => {
+    const s = src();
+    const start = s.indexOf('const delaySeconds = decideCadence(');
+    const end = s.indexOf(');', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(s.slice(start, end)).toMatch(/loadedAndQuiet/);
+  });
+
+  it('the loadedAndQuiet computation is NOT reused from the tick-start assessFleetActivity() read (ARM-time freshness)', () => {
+    // The defect this blocks: computing loadedAndQuiet near assessFleetActivity() (~line 389,
+    // tick start) instead of immediately before decideCadence() (~line 478) would be stale by
+    // construction (the same staleness class the coordinator voided twice on unrelated
+    // predictive-deficit caps). Anchor: the loadedAndQuiet assignment must appear AFTER the
+    // unactionedDirective/undeliveredEscalation Promise.all resolves, not before it.
+    const s = src();
+    const promiseAllIdx = s.indexOf('const [sessionDirective, chairmanDirective, undeliveredEscalation]');
+    const loadedIdx = s.indexOf('const loadedAndQuiet = await resolveLoadedAndQuiet');
+    expect(promiseAllIdx).toBeGreaterThan(-1);
+    expect(loadedIdx).toBeGreaterThan(promiseAllIdx);
+  });
+});
+
 describe('controls — these guards must be able to fail', () => {
   it('CONTROL: comment-stripping means prose cannot satisfy a wiring requirement', () => {
     const prose = '  // this file used to call orderSolomonInboxRows(rows) before it was removed';
