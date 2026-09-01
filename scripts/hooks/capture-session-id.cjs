@@ -381,19 +381,40 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     } finally { clearTimeout(getTimer); }
   } catch { /* fail-open: new session / GET unavailable -> no existing fields to preserve */ }
 
-  const body = JSON.stringify({
+  const mergedMetadata = { ...buildSessionMetadata(existingMetadata, ccPid, source, model), resume_uuid: sessionId };
+
+  // SD-ALTIFYAI-LEO-FIX-RAW-MODEL-NULL-001: PATCH-first, INSERT-if-zero-rows.
+  //
+  // The prior single-POST "upsert" (Prefer: resolution=merge-duplicates) omitted the
+  // on_conflict=session_id query param, so PostgREST resolved ON CONFLICT against the
+  // PRIMARY KEY (id) — which the body never supplies — instead of the actual unique
+  // session_id index. Every write to a PRE-EXISTING row raised 23505 (HTTP 409), and
+  // that 409 was silently swallowed (see the 4xx-bail branch below). Root cause: RCA
+  // agent ad18bd0a3fde5c499, live-verified via .artifacts/rca259-repro.mjs. Confirmed
+  // live: metadata.model/cc_pid/source/resume_uuid have NEVER persisted via this hook
+  // on any pre-existing row since it shipped (2026-07-01).
+  //
+  // A naive `?on_conflict=session_id` fix on the single POST was tested and rejected —
+  // verified live (.artifacts/rca259-destructive.mjs) that it RESURRECTS a released/idle
+  // row: status flips to 'active' while released_at stays set, exactly the hazard
+  // SD-LEO-INFRA-FIX-WINDOWS-SESSION-001 FR-3 already guards against (which is why
+  // scripts/session-tick.cjs uses ignore-duplicates + a PATCH fallback instead of a
+  // single merge-duplicates POST). This PATCH-first design mirrors that proven-safe
+  // pattern: PATCH never writes `status`, so an existing row's status/released_at can
+  // never be touched by this write path — only a genuine INSERT sets status='active'.
+  const patchBody = JSON.stringify({
+    heartbeat_at: now,
+    pid: Number.isFinite(pidNum) ? pidNum : null,
+    hostname: require('os').hostname(),
+    metadata: mergedMetadata,
+  });
+  const insertBody = JSON.stringify({
     session_id: sessionId,
     status: 'active',
     heartbeat_at: now,
     pid: Number.isFinite(pidNum) ? pidNum : null,
     hostname: require('os').hostname(),
-    // SD-LEO-INFRA-LEO-COMPLETION-001-D (FR-2): stamp the Claude Code resume token
-    // (metadata.resume_uuid) for EVERY captured session. The resume token IS the session UUID
-    // (`claude --resume <uuid>` takes claude_sessions.session_id), so resume_uuid := sessionId.
-    // Additive + merge-safe: buildSessionMetadata already get-then-merges the existing metadata
-    // (preserving fleet_identity/callsign/tier_rank), and this only adds the one extra key that
-    // loadLiveSlotIdentity (session-registry-adapter.js:87) and reboot-respawn read.
-    metadata: { ...buildSessionMetadata(existingMetadata, ccPid, source, model), resume_uuid: sessionId },
+    metadata: mergedMetadata,
   });
 
   const MAX_ATTEMPTS = 3;
@@ -406,6 +427,14 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
   let lastStatus = null;
   let lastError = null;
 
+  // 4xx (not 408/429) is a client-side error — no point retrying. Bail, but LOUDLY:
+  // a 4xx here is a request-shape bug, not a transient condition worth suppressing.
+  // This is what silently ate the original defect for 2 months.
+  const isNonRetryable4xx = (status) => status >= 400 && status < 500 && status !== 408 && status !== 429;
+  const logLoud4xx = (op, status, snippet) => {
+    console.error(`SessionStart:capture-session-id: upsert ${op} 4xx status=${status} body=${(snippet || '').slice(0, 300)}`);
+  };
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (BACKOFFS_MS[attempt - 1] > 0) {
       await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt - 1]));
@@ -414,33 +443,71 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PER_ATTEMPT_TIMEOUT_MS);
     try {
-      const res = await fetch(url, {
-        method: 'POST',
+      const patchRes = await fetch(`${url}?session_id=eq.${encodeURIComponent(sessionId)}`, {
+        method: 'PATCH',
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
           'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal',
+          Prefer: 'return=representation',
         },
-        body,
+        body: patchBody,
         signal: controller.signal,
       });
-      // Success: 2xx. Return immediately — no further attempts.
-      if (res.ok) {
-        clearTimeout(timer);
-        if (debug && attempt > 1) {
-          console.error(`SessionStart:capture-session-id: upsert OK on attempt ${attempt}/${MAX_ATTEMPTS}`);
+
+      if (patchRes.ok) {
+        const patched = await patchRes.json().catch(() => []);
+        if (Array.isArray(patched) && patched.length > 0) {
+          clearTimeout(timer);
+          if (debug && attempt > 1) {
+            console.error(`SessionStart:capture-session-id: upsert PATCH OK on attempt ${attempt}/${MAX_ATTEMPTS}`);
+          }
+          return;
         }
-        return;
-      }
-      lastStatus = res.status;
-      if (debug) {
-        console.error(`SessionStart:capture-session-id: upsert status=${res.status} attempt=${attempt}/${MAX_ATTEMPTS}`);
-      }
-      // 4xx (not 408/429) is a client-side error — no point retrying. Bail.
-      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+        // 0 rows matched — row does not exist yet. Fall back to INSERT, same attempt.
+        const insertRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: insertBody,
+          signal: controller.signal,
+        });
         clearTimeout(timer);
+        if (insertRes.ok) {
+          if (debug && attempt > 1) {
+            console.error(`SessionStart:capture-session-id: upsert INSERT-fallback OK on attempt ${attempt}/${MAX_ATTEMPTS}`);
+          }
+          return;
+        }
+        lastStatus = insertRes.status;
+        if (insertRes.status === 409) {
+          // Race: another writer inserted the row between our PATCH and this INSERT.
+          // Retry the loop — the next PATCH will find it. Not a client-error bail.
+          if (debug) console.error(`SessionStart:capture-session-id: upsert INSERT-fallback race (409) attempt=${attempt}/${MAX_ATTEMPTS}`);
+          continue;
+        }
+        if (isNonRetryable4xx(insertRes.status)) {
+          const insertBodyText = await insertRes.text().catch(() => '');
+          logLoud4xx('INSERT-fallback', insertRes.status, insertBodyText);
+          return;
+        }
+        if (debug) console.error(`SessionStart:capture-session-id: upsert INSERT-fallback status=${insertRes.status} attempt=${attempt}/${MAX_ATTEMPTS}`);
+        continue;
+      }
+
+      lastStatus = patchRes.status;
+      if (isNonRetryable4xx(patchRes.status)) {
+        const patchBodyText = await patchRes.text().catch(() => '');
+        clearTimeout(timer);
+        logLoud4xx('PATCH', patchRes.status, patchBodyText);
         return;
+      }
+      if (debug) {
+        console.error(`SessionStart:capture-session-id: upsert PATCH status=${patchRes.status} attempt=${attempt}/${MAX_ATTEMPTS}`);
       }
     } catch (err) {
       lastError = err;
@@ -453,9 +520,9 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
   }
 
   // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-2): exhaustion stderr is always-on.
-  // Per-attempt logs (lines 334/340/350) remain debug-gated to keep happy-path noise low,
-  // but exhaustion (3 retries failed) is never silent — operator-trust violation tracked
-  // across 5 prior reproductions of failure mode F.
+  // Per-attempt logs remain debug-gated to keep happy-path noise low, but exhaustion
+  // (3 retries failed) is never silent — operator-trust violation tracked across 5
+  // prior reproductions of failure mode F.
   console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
 }
 
