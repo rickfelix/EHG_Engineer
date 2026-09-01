@@ -1,0 +1,52 @@
+{
+  "executive_summary": "Chairman-ordered corrective (RCA 9a02a76d) fixing the specific reason the fleet's one real alarm during a 14.6h output stall never surfaced: reaper_starvation_alert (and its 3 siblings) were structurally undeliverable at role='coordinator' (never registered in role_drain_sets/DRAIN_SETS.coordinator), the orphan-reroute-sweep rescue that eventually moved the row destroyed its severity by re-typing it to a generic 'coordinator_reminder', and its own repeat-offender alarm fired exactly once and never re-raised across the 9 days that followed. This SD closes all three, plus rewrites the starvation alert body to name the literal one-command fix (npm run resync:safe).",
+  "functional_requirements": [
+    { "id": "FR-1", "title": "Register the 4 reaper alert kinds as coordinator-deliverable", "description": "reaper_starvation_alert, reaper_census_blind_alert, reaper_not_invoked_alert, reaper_rebuild_churn_alert added to DRAIN_SETS.coordinator (lib/fleet/worker-status.cjs) and to a chairman-gated role_drain_sets migration.", "priority": "critical", "acceptance_criteria": ["resolveRecognizedKinds({role:'coordinator'}) includes all 4 kinds.", "The migration file exists with the same INSERT ... ON CONFLICT DO NOTHING pattern as prior role_drain_sets reconciliations."] },
+    { "id": "FR-2", "title": "Severity-preserving orphan reroute", "description": "orphan-reroute-sweep.js retargets a payload.severity==='high' orphan to REROUTE_TO_KIND_HIGH_SEVERITY ('coordinator_request') instead of the routine REROUTE_TO_KIND ('coordinator_reminder').", "priority": "high", "acceptance_criteria": ["A severity=high orphan reroutes to coordinator_request.", "A non-high-severity orphan still reroutes to coordinator_reminder (no regression)."] },
+    { "id": "FR-3", "title": "Repeat-offender alarm re-arms over time", "description": "The dedup check for a repeat-offender (role,kind) pair narrows from 'any unread alarm ever' to a REPEAT_OFFENDER_REALARM_MS (6h) freshness window, so a persisting offender re-alarms instead of going silent after its first alert.", "priority": "high", "acceptance_criteria": ["A pair past the threshold with no alarm inside the re-arm window alarms again.", "A pair with a recent (in-window) unread alarm does not double-alarm."] },
+    { "id": "FR-4", "title": "Name the literal fix command in the starvation alert body", "description": "emitReaperStarvationAlert's non-blind, non-not-invoked, non-churn body names `npm run resync:safe` (scripts/safe-root-resync.mjs) as the first-line fix instead of vague 'investigate why fast-forward is blocked' prose.", "priority": "medium", "acceptance_criteria": ["The alert body string literal includes 'npm run resync:safe'.", "The safety contract (fetch+ff-merge only, stale-lock-clear gated behind two explicit flags) is described in the body."] },
+    { "id": "FR-5", "title": "Zero regressions across the fleet/coordinator unit surface", "description": "All existing behavior for non-high-severity reroutes, first-occurrence non-alarming, and the other 3 reaper alert kinds (blind/not-invoked/churn) is preserved unchanged.", "priority": "high", "acceptance_criteria": ["tests/unit/fleet/ and tests/unit/coordinator/ (276 files) pass with 0 failures.", "No existing test's expected values changed except the 2 count pins this SD deliberately bumps (coordinator drain-set count, migration seed-row count)."] }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Rewrite the starvation alert body", "description": "lib/coordinator/coordination-events.cjs's emitReaperStarvationAlert body names the literal sanctioned fix command (npm run resync:safe / scripts/safe-root-resync.mjs) instead of vague research-assignment prose." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "reaper_starvation_alert is now in DRAIN_SETS.coordinator and the seed migration", "type": "unit", "expected": "tests/unit/fleet/drain-set-registry.test.js and drain-sets-adam-reconciliation.test.js pass with updated counts." },
+    { "id": "TS-2", "scenario": "Severity-preserving reroute", "type": "unit", "expected": "tests/unit/fleet/orphan-reroute-sweep.test.js's new severity-high / severity-absent cases pass." },
+    { "id": "TS-3", "scenario": "Repeat-offender re-arm", "type": "unit", "expected": "orphan-reroute-sweep.test.js's re-alarm-past-threshold and recent-alarm-suppresses cases pass." },
+    { "id": "TS-4", "scenario": "Starvation alert body names the literal fix command", "type": "unit", "expected": "emitReaperStarvationAlert's non-blind/non-churn/non-not-invoked body string contains 'npm run resync:safe'." },
+    { "id": "TS-5", "scenario": "Full regression sweep", "type": "unit", "expected": "tests/unit/fleet/ + tests/unit/coordinator/ (276 files, 3374 tests) pass with 0 failures." }
+  ],
+  "acceptance_criteria": [
+    "All 4 reaper alert kinds deliverable to role='coordinator'.",
+    "A high-severity orphan never downgrades to a routine reminder kind.",
+    "A persisting repeat-offender re-alarms after the re-arm window, not never again.",
+    "Full fleet/coordinator unit suite (276 files) passes with zero regressions."
+  ],
+  "risks": [
+    { "risk": "The role_drain_sets migration is chairman-gated (@approved-by: PENDING) and not yet applied", "impact": "medium", "likelihood": "high", "mitigation": "DRAIN_SETS.coordinator (the in-memory fail-open fallback resolveRecognizedKinds reads when the DB table is unreadable/unapplied) already carries the fix, so the alert is deliverable today regardless of migration-apply timing; the migration closes the DB-authoritative path once approved." },
+    { "risk": "Re-arming the repeat-offender alarm on a 6h window could still under- or over-alarm for some traffic patterns", "impact": "low", "likelihood": "low", "mitigation": "6h was chosen to sit well inside the RCA's measured 6h35m-to-14.6h stall windows while still being coarser than any single sweep tick; adjustable via the exported REPEAT_OFFENDER_REALARM_MS constant if real-world tuning is needed." },
+    { "risk": "Ack-vocabulary unification and the orphan-reroute-sweep-cron last_state divergence (CAPA-4/6b) were descoped from this PR", "impact": "low", "likelihood": "medium", "mitigation": "Deliberately deferred as a fast-follow to keep this PR small and reviewable (LEO Small PRs guidance); tracked in the retrospective, not silently dropped." }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/fleet/worktree-reaper-tick.cjs (emits the alerts)", "the coordinator's generic inbox drain (consumes them)"],
+    "dependencies": ["RCA sub_agent_execution_results row 9a02a76d-96d9-4134-a185-1a089c1120a5"],
+    "data_contracts": ["session_coordination.payload.kind, payload.severity"],
+    "runtime_config": ["REPEAT_OFFENDER_REALARM_MS (6h), unchanged REPEAT_OFFENDER_THRESHOLD (2)"],
+    "observability_rollout": ["No rollout needed -- pure logic fix to an existing, already-running sweep and alert emitter."]
+  },
+  "system_architecture": {
+    "summary": "No new components. Fixes to 2 existing modules (orphan-reroute-sweep.js, coordination-events.cjs) plus a drain-set registration in worker-status.cjs + a chairman-gated migration.",
+    "components": []
+  },
+  "implementation_approach": {
+    "summary": "Direct, already-implemented fix (see git diff) covering FR-1/2/3 and TR-1, fully unit-tested.",
+    "steps": ["Register reaper kinds in DRAIN_SETS.coordinator + migration", "Add REROUTE_TO_KIND_HIGH_SEVERITY + severity-conditional selection", "Narrow repeat-offender dedup to a time window, change threshold check to >=", "Rewrite alert body with literal fix command", "Update/extend unit tests, verify zero regressions across tests/unit/fleet + tests/unit/coordinator"]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "node -e requiring lib/fleet/worker-status.cjs, print DRAIN_SETS.coordinator, grep for reaper_starvation_alert.", "expected_outcome": "Present." }
+  ],
+  "metadata": {
+    "lead_note": "Child B of orchestrator SD-LEO-INFRA-ACTIVATE-INERT-STALL-001. Ack-vocabulary unification and cron last_state divergence explicitly deferred as fast-follow."
+  }
+}
