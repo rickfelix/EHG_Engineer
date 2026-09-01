@@ -377,6 +377,29 @@ describe('QF self-claim: isAutoStartableQF predicate (FR-2)', () => {
     expect(isAutoStartableQF(freshQF('QF-1', { created_at: null }), Date.now())).toBe(false);
     expect(isAutoStartableQF(null, Date.now())).toBe(false);
   });
+  // QF-20260901-269 / Solomon ruling 1dfd49bd: sd_type/content_type ENUM VALUES in slash-pair
+  // notation (e.g. "security/retrospective") name a routing category, not a risk change, and
+  // must not force-exclude a QF whose persisted routing_tier already says non-risky.
+  it('accepts a routing_tier=2 QF whose description only names the (sd_type, content_type) enum pair (QF-20260830-735)', () => {
+    expect(isAutoStartableQF(freshQF('QF-20260830-735', {
+      routing_tier: 2,
+      title: 'Gate-threshold identity ambiguous for the (sd_type, content_type) pair',
+      description: 'the same (sd_type, content_type) pair: security/retrospective at 65, 70 and 75',
+    }), Date.now())).toBe(true);
+  });
+  it('still rejects a genuine risk mention even when sd_type/content_type context is present', () => {
+    expect(isAutoStartableQF(freshQF('QF-mixed', {
+      routing_tier: 2,
+      title: 'security/retrospective pair fix (sd_type, content_type)',
+      description: 'also rotate credentials for the auth service while here',
+    }), Date.now())).toBe(false);
+  });
+  it('still rejects "security/auth" phrasing when there is no sd_type/content_type enum context', () => {
+    expect(isAutoStartableQF(freshQF('QF-security-auth', {
+      routing_tier: 2,
+      title: 'redesign the security/auth flow',
+    }), Date.now())).toBe(false);
+  });
 });
 
 describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
