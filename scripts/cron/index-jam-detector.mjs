@@ -11,6 +11,7 @@
  *
  * Usage: node scripts/cron/index-jam-detector.mjs --repo <path> [--json] [--dwell-ms N]
  */
+import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
