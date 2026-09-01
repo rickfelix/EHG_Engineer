@@ -49,6 +49,12 @@ describe('SMS relay-drain machinery names its dispatcher', () => {
       .toMatch(/stampLastFired\(\s*getSupabase\(\)\s*,\s*['"]standard_loop:sms-relay-drain['"]\s*\)/);
   });
 
+  it('QF-20260901-633: the runner escalates on a failed Adam-route attempt distinctly from the normal per-outcome tally', () => {
+    const src = fs.readFileSync(RUNNER, 'utf8');
+    expect(src, 'runner no longer checks routedToAdam').toMatch(/routedToAdam\s*===\s*false/);
+    expect(src, 'runner lost its ESCALATION log line for failed routes').toMatch(/ESCALATION/);
+  });
+
   it('the recurring-tick exemption reason no longer carries the pre-fix CAVEAT (compensating control now wired)', () => {
     const exemptionsPath = path.join(repoRoot, 'scripts', 'hooks', 'recurring-tick-exemptions.json');
     const exemptions = JSON.parse(fs.readFileSync(exemptionsPath, 'utf8'));
