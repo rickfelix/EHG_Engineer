@@ -37,6 +37,19 @@ export function stateFileFor(repoPath) {
 }
 
 /**
+ * Normalize a repoPath into a single canonical state-file key.
+ *
+ * SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A: loadState/saveState previously keyed the persisted
+ * JSON blob by the literal repoPath string. Forward-slash and backslash-escaped spellings of the
+ * IDENTICAL path (e.g. "C:/x/y" vs "C:\\x\\y") were treated as different keys, splitting the
+ * dwell-counter state for one tree across two entries. path.resolve + a forward-slash rewrite
+ * collapses both spellings to the same key regardless of which style the caller passed.
+ */
+export function normalizeRepoPathKey(repoPath) {
+  return path.resolve(repoPath).split(path.sep).join('/');
+}
+
+/**
  * Resolve the git dir. TR-3: `.git` as a DIRECTORY means a main root; as a FILE it is a worktree
  * gitdir pointer. There are 17 worktrees — probing the wrong one, or globbing across all of them,
  * is how a detector becomes noisy.
@@ -91,17 +104,44 @@ export function observeIndexLock(repoPath) {
  * is a fresh process, so this cannot live in memory. Deliberately NOT a findings sink — the
  * detector's OUTPUT is the verdict and its exit code; this file is only carry-over.
  */
+/**
+ * Migrate legacy dual entries for the SAME repo (one keyed by the raw pre-normalization
+ * spelling, one by the normalized key) into a single normalized entry. Prefers whichever entry
+ * carries a non-null firstBlockedAtMs — the more informative of the two — per the LEAD-phase
+ * verification finding. Pure and idempotent: a store with no legacy spellings is returned as-is.
+ */
+export function migrateLegacyRepoPathKeys(all, repoPath, normalizedKey) {
+  if (!all || typeof all !== 'object') return all;
+  const legacyKeys = new Set([repoPath, repoPath.split('\\').join('/'), repoPath.split('/').join('\\')]);
+  legacyKeys.delete(normalizedKey);
+  let merged = all[normalizedKey];
+  for (const legacyKey of legacyKeys) {
+    const legacyEntry = all[legacyKey];
+    if (!legacyEntry) continue;
+    if (!merged || (merged.firstBlockedAtMs === null && legacyEntry.firstBlockedAtMs !== null)) {
+      merged = legacyEntry;
+    }
+    delete all[legacyKey];
+  }
+  if (merged) all[normalizedKey] = merged;
+  return all;
+}
+
 export function loadState(repoPath, file = stateFileFor(repoPath)) {
+  const normalizedKey = normalizeRepoPathKey(repoPath);
   try {
-    const all = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return all[repoPath] || undefined;
+    let all = JSON.parse(fs.readFileSync(file, 'utf8'));
+    all = migrateLegacyRepoPathKeys(all, repoPath, normalizedKey);
+    return all[normalizedKey] || undefined;
   } catch { return undefined; }
 }
 
 export function saveState(repoPath, nextState, file = stateFileFor(repoPath)) {
+  const normalizedKey = normalizeRepoPathKey(repoPath);
   let all = {};
   try { all = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* first run */ }
-  all[repoPath] = nextState;
+  all = migrateLegacyRepoPathKeys(all, repoPath, normalizedKey) || {};
+  all[normalizedKey] = nextState;
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(all, null, 2));
