@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-09-01](#2026-09-01)
+  - [Infrastructure](#infrastructure-5)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
   - [Infrastructure](#infrastructure-4)
@@ -170,6 +171,13 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-09-01
+
+### Infrastructure
+
+- **No axis measured whether the fleet was actually shipping, and no in-flight item could be flagged for running abnormally long -- both closed** - PR #7924 (SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C, from chairman-ordered RCA 9a02a76d)
+  - **What shipped**: `lib/adam/output-flow-gauge.js` (new) flags origin/main HEAD not advancing for 4h+ while the fleet is active, never during legitimate quiescence; `lib/adam/duration-baseline-gauge.js` (new, chairman-specified 2026-09-01) computes a median+p95 completion-duration baseline per sd_type from real history and FLAGS (never fails) an in-flight item past its type's p95, escalating on a 2nd consecutive breach; `lib/retention/session-coordination-ack-convergence.js` now exempts `severity=high` rows from the 14-day mechanical TTL auto-ack pass; the RCA's open escalation-duty spec question was investigated and resolved (documented on `leo_protocol_sections` id=632: not a conflict, two ladders for two different triggers).
+  - **Why**: during the incident `scripts/adam-quiet-tick.mjs`'s 33 existing QUIET_TICK_* axes were all input/liveness-oriented -- the tick read "2 active workers, 1 build" all night while nothing merged, and zero throughput was invisible.
+  - **Verification**: LEAD-TO-PLAN 95%, PLAN-TO-EXEC 97%, EXEC-TO-PLAN 85%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 93% (bypassed only the known dead-`GEMINI_API_KEY` `RETROSPECTIVE_EXISTS` gate, harness bug logged separately). 3211/3238 tests passing fleet-wide (4 unrelated pre-existing/flaky failures independently confirmed), 0 regressions attributable to this diff.
 
 ### Bugfix
 
