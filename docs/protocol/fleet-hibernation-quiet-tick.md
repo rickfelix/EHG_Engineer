@@ -15,7 +15,7 @@ live in [`lib/coordinator/quiet-tick.cjs`](../../lib/coordinator/quiet-tick.cjs)
 
 | Helper | FR | Guarantee |
 |--------|----|-----------|
-| `decideCadence({quiescent, partyOffsetS})` | FR-5/FR-6 | quiescent park ≤ 900s; active 180–270s; **never exactly 300s** (prompt-cache TTL) |
+| `decideCadence({quiescent, partyOffsetS, loadedAndQuiet})` | FR-5/FR-6 (FR-2 for the `loadedAndQuiet` band, SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002) | quiescent park ≤ 900s; active 180–270s; loaded-and-quiet 540–660s; **never exactly 300s** (prompt-cache TTL) |
 | `detectSalientDelta(prev, cur)` | FR-4 | a "still idle" status emits **no** cross-party ping; only a real belt 0↔non-zero / new signal / venture-1 change does |
 | `runCoresFailSoft(cores)` | FR-1 | one core throwing is logged and the tick **continues** the others |
 
@@ -116,6 +116,59 @@ on a `DIRECTIVE_KINDS` row on its *first poll* — a stand-in "delivered" marker
 row from any consumer gating on `read_at IS NULL` (including `hasUnactionedDirective` above)
 before it was ever genuinely actioned. It now stamps `delivered_at` instead, leaving
 `read_at` NULL until real action occurs.
+
+## LOADED_AND_QUIET wake band (SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-001/-002)
+
+A **fourth** `decideCadence` branch, distinct from the ACTIVE/QUIESCENT pair above, for the
+specific state where the fleet is fully claimed and the belt is empty but the tick is not
+truly quiescent (workers are present, just with nothing to do). Precedence:
+**hard-wake > quiescent > loaded-and-quiet > active**.
+
+| Helper | FR | Guarantee |
+|--------|----|-----------|
+| `computeLoadedAndQuiet(s)` | FR-7 (-001) | pure, fail-**closed** predicate: `idleNow===0 && rawUnclaimed===0 && openQfCount===0 && claimableWithVerifyQfCount===0 && !unactionedDirective && !undeliveredEscalation` — an omitted/unknown count is treated as unresolved, never as "clear" |
+| `decideCadence({..., loadedAndQuiet})` | FR-2 (-002) | when `loadedAndQuiet` is true (and neither hard-wake nor quiescent applies), yields `[540,660]`s instead of the `[180,270]`s ACTIVE band; omitted/false is byte-identical to prior behavior |
+
+**Why a fourth band, not a wider ACTIVE band.** The existing `desiredActiveS` lever
+(QF-20260830-071) only widens the ACTIVE ceiling with a span tied to a caller-supplied
+maximum. LOADED_AND_QUIET needs an independent 120s span anchored at a **fixed** 540s floor —
+strictly above `ACTIVE_MAX_S` (270) and strictly below `MAX_QUIESCENT_PARK_S` (900) — so it
+can never collapse into either existing band, and structurally cannot land on
+`PROMPT_CACHE_TTL_S` (300).
+
+**Wiring (-002 FR-3).** `computeLoadedAndQuiet()` shipped in -001 with **zero production
+callers** — an inert, unit-tested-only function, by design (see the shipping-order note
+below). -002 gives it its first call site: `scripts/coordinator-quiet-tick.mjs` exports
+`resolveLoadedAndQuiet(sb, {unactionedDirective, undeliveredEscalation})`, called with a
+**fresh** `gatherCapacityInputs()` read immediately before `decideCadence()` — never reused
+from the tick-start `assessFleetActivity()` read, which would be stale by the time
+`decideCadence()` runs. A capacity-read error fails **closed** (returns `false`, never
+widens the band). The call-site ordering is pinned by a static guard
+(`tests/static-guards/lane-drain-wiring-pinned.test.js`) because -001's own FR-7 shipped with
+the same unwired shape and stayed green across all 50 predicate unit tests the whole time —
+a unit test of the pure predicate cannot see whether its caller ever invokes it.
+
+**Registry durability (-002 FR-1).** `periodic_process_registry.standard_loop:inbox`'s
+`expected_interval_seconds` is machine-derived every seed run from the `inbox` entry's cron
+string in `STANDARD_LOOPS` (`scripts/coordinator-startup-check.mjs`) — a **DB-only** edit to
+the registry row reverts on the next `scripts/seed-periodic-process-registry.mjs` run. The
+cron was widened `*/2` → `*/4` (120s → 240s) so `expected_interval_seconds × grace_multiplier`
+(240×3=720s) durably clears the new band's 660s ceiling; a re-seed read-back, not a raw DB
+write, is the only way to verify this fix actually took.
+
+**Scope boundary: no preemption for a parked coordinator seat.** Widening the coordinator's
+own wake band does not change how directives reach it: `ScheduleWakeup` has no preemption
+path — a parked seat runs no tools, so no `PostToolUse` hook (`scripts/hooks/coordination-inbox.cjs`)
+observes a `session_coordination` INSERT until the park naturally expires. The hard-wake
+branch above still takes precedence at *decision* time, but cannot interrupt a park already
+armed. -001's PLAN phase found this and, correctly, shipped FR-7 alone (the inert predicate)
+while deferring the actual band widening — see -001's completed PRD FR-6 for the full finding
+and its predicted-and-confirmed-FAIL live measurement. -002 does **not** build the
+preemption mechanism; the resulting up-to-660s undelivered-directive-latency exposure **on
+the coordinator's own seat** was explicitly accepted by the coordinator rather than gated
+behind that build (`session_coordination` row `2dd84a5a-94db-401f-834c-f85d738dadb0`,
+`strategic_directives_v2.metadata.risk_acceptance_b` on SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002).
+A future SD may still build the preemption path; nothing here forecloses it.
 
 ## Smoke test (safe — no side effects)
 
