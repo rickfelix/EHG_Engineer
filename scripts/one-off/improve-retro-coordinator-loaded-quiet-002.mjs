@@ -132,7 +132,11 @@ async function main() {
   console.log('Retrospective updated:', JSON.stringify(data, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+import { isMainModule } from '../../lib/utils/is-main-module.js';
+
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
