@@ -42,11 +42,17 @@ export function stateFileFor(repoPath) {
  * SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A: loadState/saveState previously keyed the persisted
  * JSON blob by the literal repoPath string. Forward-slash and backslash-escaped spellings of the
  * IDENTICAL path (e.g. "C:/x/y" vs "C:\\x\\y") were treated as different keys, splitting the
- * dwell-counter state for one tree across two entries. path.resolve + a forward-slash rewrite
+ * dwell-counter state for one tree across two entries. A plain backslash-to-forward-slash rewrite
  * collapses both spellings to the same key regardless of which style the caller passed.
+ *
+ * Deliberately NOT path.resolve(): this repo's CI runs on Linux while the shared root it watches
+ * is a Windows path (C:\...) — path.resolve() treats a Windows-style path as RELATIVE on a POSIX
+ * host and silently prepends the runner's cwd, corrupting the key. A plain separator rewrite is
+ * platform-independent and sufficient: it only needs to collapse two spellings of the SAME input,
+ * never to resolve a path against a filesystem.
  */
 export function normalizeRepoPathKey(repoPath) {
-  return path.resolve(repoPath).split(path.sep).join('/');
+  return String(repoPath).split('\\').join('/');
 }
 
 /**

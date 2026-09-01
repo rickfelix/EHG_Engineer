@@ -1,6 +1,6 @@
 {
   "_comment": "SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-002 (FR-2, TR-6). Checked-in snapshot of scripts/coordinator-startup-check.mjs's STANDARD_LOOPS registry, drift-checked (never generated-from) by tests/unit/coordinator/coordinator-loop-governance-drift.test.js. When STANDARD_LOOPS changes, update THIS file AND the coordinator_role_contract DB row that cites these numbers (leo_protocol_sections, title 'Coordinator loop-registry governance (STANDARD_LOOPS)') in the SAME PR -- the test only proves this file matches the live array, not that the charter prose was updated to match this file.",
-  "total_loops": 35,
+  "total_loops": 37,
   "gha_backed_count": 16,
   "session_arm_false_keys": [
     "sweep",
