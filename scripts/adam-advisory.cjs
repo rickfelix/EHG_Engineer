@@ -56,6 +56,7 @@ const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
 const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
+const { CORRECTION_KINDS, CORRECTION_KIND_SET } = require('../lib/coordinator/message-kinds.cjs');
 // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument routing predicate
 // (consumes the -B framing_class contract; FRAMING_CLASSES matching now lives in the router).
 const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-router.cjs');
@@ -218,7 +219,7 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
 // Adding --part here by extending the index list would have been mirroring the defect onto a second
 // sender rather than fixing it, so both senders now derive exclusions from the flag NAMES via one
 // shared helper. Lists are per-PATH so no path strips another's flags out of a legitimate body.
-const VALUE_FLAGS = ['--to', '--kind', '--part', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout'];
+const VALUE_FLAGS = ['--to', '--kind', '--message-kind', '--part', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout'];
 const BOOL_FLAGS = ['--direct'];
 const STATUS_VALUE_FLAGS = ['--eta'];
 const SWEEP_VALUE_FLAGS = ['--window'];
@@ -227,7 +228,7 @@ const SWEEP_VALUE_FLAGS = ['--window'];
 // the right ones, which is exactly where the Solomon defect lived.
 const sendBodyFromArgv = (argv) => bodyFromArgv(argv, { valueFlags: VALUE_FLAGS, boolFlags: BOOL_FLAGS });
 
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind, partIndex, partTotal }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass, replyWindowMs, now, addressee, kind, messageKind, partIndex, partTotal }) {
   // request mode (expectsReply) is always live-handshake (synchronous, bounded-timeout await);
   // send mode defaults to fire-and-forget unless the sender opts into reply-needed via --reply-class
   // (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -246,6 +247,10 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   // vocabulary (harness | platform | venture:<id>). reuse_class classifies applicability
   // (scope_local | cross_scope); applies_to_scopes lists the scopes a cross-scope advisory
   // covers. The two-stage actioned_at ACK is unchanged.
+  // FR-1/parity with solomon-advisory.cjs: the correction sub-discriminator. Already
+  // CLI-validated against CORRECTION_KIND_SET above; omitted entirely when not supplied
+  // (byte-identical for every existing sender).
+  if (messageKind) payload.message_kind = messageKind;
   if (scopeKey) payload.scope_key = scopeKey;
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: 'direct' marks a row written straight
   // to the peer's session_id (--to solomon, ADAM_SOLOMON_TWOWAY_V1=on) instead of the default
@@ -1036,6 +1041,17 @@ async function main() {
     console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
     process.exit(2);
   }
+  // QF-20260901-047: --message-kind marks THIS send as a correction (retraction/amend/supersede)
+  // riding the same adam_advisory leg, so it reaches assertSendBackpressure's message_kind
+  // exemption (lib/coordinator/dispatch.cjs) — parity with solomon-advisory.cjs, which already had
+  // this. Deliberately validated against CORRECTION_KIND_SET, never the full MESSAGE_KIND_SET: Adam
+  // never issues a disposition (that's the coordinator's terminal verdict, not Adam's to mark).
+  const mkIdx = argv.indexOf('--message-kind');
+  const messageKindArg = mkIdx >= 0 ? argv[mkIdx + 1] || null : null;
+  if (messageKindArg && !CORRECTION_KIND_SET.has(messageKindArg)) {
+    console.error(`ERROR: --message-kind "${messageKindArg}" must be one of ${CORRECTION_KINDS.join(', ')}.`);
+    process.exit(2);
+  }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to solomon` — direct
   // 1-hop channel, gated by ADAM_SOLOMON_TWOWAY_V1 (default ON since QF-20260705-488; 'off' kills it).
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-4: --to also accepts
@@ -1163,7 +1179,7 @@ async function main() {
   }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg, partIndex: partIndexArg, partTotal: partTotalArg });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo, via, replyClass: replyClassArg, replyWindowMs, addressee, kind: kindArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg });
   // R1 (QF-20260703-964): the addressee-vs-target divergence WARN lives ONE place — the
   // insertCoordinationRow choke point (lib/coordinator/dispatch.cjs) — not duplicated here.
   // SD-REFILL-00XK256L: the 2-hypothesis-bar GATE. Block an UNATTESTED urgent model-availability
