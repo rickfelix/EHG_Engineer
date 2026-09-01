@@ -23,12 +23,51 @@ function isApprovalBoundarySd({ status, current_phase } = {}) {
   return status === 'pending_approval' || /^LEAD_FINAL/.test(current_phase || '');
 }
 
+const AWAITING_APPROVAL_STALE_MS = 10 * 60 * 1000;
+
+// QF-20260901-987: a worker blocked at a permission dialog (cd approval, commit approval, ...)
+// emits NO signal on any other instrument — heartbeat daemons keep heartbeat_at fresh regardless.
+// awaiting-approval-stamp.cjs/awaiting-approval-clear.cjs (PreToolUse/PostToolUse hooks) stamp
+// metadata.awaiting_approval_since for the duration of a tool call; for a normal call this window
+// is sub-second, so anything stale past 10min means the tool call is still open — almost always a
+// permission prompt with nobody answering it. Fails safe: a missing/malformed timestamp never
+// fires (that is silence from the hooks never having run, not evidence of a stall).
+function isAwaitingApprovalStale(session, now = Date.now()) {
+  const since = session && session.metadata && session.metadata.awaiting_approval_since;
+  if (!since) return false;
+  const ts = Date.parse(since);
+  if (Number.isNaN(ts)) return false;
+  return (now - ts) > AWAITING_APPROVAL_STALE_MS;
+}
+
+const LOOP_DEATH_HEARTBEAT_FRESH_MS = 5 * 60 * 1000;
+const LOOP_DEATH_LAST_TOOL_STALE_MS = 15 * 60 * 1000;
+
+// QF-20260901-987 (c): the chairman found five idle seats whose /loop had ended — the Stop-hook
+// ScheduleWakeup-arm chain died silently on their side, so no wakeup was ever armed and no further
+// turn ever fired. A live but loop-dead seat looks IDENTICAL to a working one on heartbeat alone
+// (the daemon keeps ticking independently of whether a turn is happening), so heartbeat freshness
+// cannot be the discriminator. loop_state='awaiting_tick' (set by post-tool-loop-state.cjs right
+// after a successful ScheduleWakeup) is the positive proof a wakeup IS armed; loop_state='exited'
+// is a deliberate, correct stop. Anything else (active/unknown/null) held for longer than a normal
+// turn takes, with the heartbeat daemon still fresh, means the last turn ended without arming a
+// wakeup -- the exact silent-arm-chain-death signature.
+function isLoopDead(session, now = Date.now()) {
+  if (!session) return false;
+  const state = session.loop_state;
+  if (state === 'awaiting_tick' || state === 'exited') return false;
+  const hbAt = session.heartbeat_at ? Date.parse(session.heartbeat_at) : NaN;
+  const toolAt = session.last_tool_at ? Date.parse(session.last_tool_at) : NaN;
+  if (Number.isNaN(hbAt) || Number.isNaN(toolAt)) return false;
+  return (now - hbAt) < LOOP_DEATH_HEARTBEAT_FRESH_MS && (now - toolAt) > LOOP_DEATH_LAST_TOOL_STALE_MS;
+}
+
 async function runAudit() {
   const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const now = Date.now();
 
   const { data: sess, error: se } = await sb.from('claude_sessions')
-    .select('session_id,sd_key,metadata,heartbeat_at,claimed_at').not('sd_key', 'is', null);
+    .select('session_id,sd_key,metadata,heartbeat_at,claimed_at,loop_state,last_tool_at').not('sd_key', 'is', null);
   if (se) { console.log('*** HOLDER QUERY FAILED: ' + se.message + ' — aborting, NOT reporting zero ***'); return; }
 
   const allHolders = (sess || []).filter((s) => s.sd_key);
@@ -51,6 +90,18 @@ async function runAudit() {
   for (const h of holders) {
     const cs = (h.metadata || {}).callsign || '?';
     const short = String(h.session_id).slice(0, 8);
+
+    if (isAwaitingApprovalStale(h, now)) {
+      const since = h.metadata.awaiting_approval_since;
+      console.log('  ' + cs + ' ' + short + ' *** HARD ALERT — awaiting_approval_since '
+        + ((now - Date.parse(since)) / 60000).toFixed(1) + 'min ago on ' + h.sd_key
+        + ' — permission dialog likely unanswered ***');
+    }
+    if (isLoopDead(h, now)) {
+      console.log('  ' + cs + ' ' + short + ' *** HARD ALERT — loop-dead on ' + h.sd_key
+        + ' (loop_state=' + (h.loop_state || 'null') + ', heartbeat fresh, last_tool_at stale)'
+        + ' — Stop-hook wakeup-arm chain likely died, needs manual /loop ***');
+    }
 
     const { data: sigs, error: e1 } = await sb.from('session_coordination')
       .select('created_at,payload').eq('sender_session', h.session_id)
@@ -139,4 +190,4 @@ async function runAudit() {
 
 if (require.main === module) runAudit();
 
-module.exports = { isApprovalBoundarySd };
+module.exports = { isApprovalBoundarySd, isAwaitingApprovalStale, isLoopDead };
