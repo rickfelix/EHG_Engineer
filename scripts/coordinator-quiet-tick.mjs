@@ -26,6 +26,7 @@ import { dirname, resolve, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import 'dotenv/config';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { gatherCapacityInputs } from './lib/capacity-inputs.mjs';
 import { renderCount, fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: coordinator leg reuses the SAME pure
 // staleness predicate as the Adam leg (scripts/adam-quiet-tick.mjs) so the >=24h definition
@@ -35,7 +36,7 @@ import { isStaleRatification } from '../lib/governance/ratification-stall.mjs';
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
-const { decideCadence, detectSalientDelta, runCoresFailSoft } = require('../lib/coordinator/quiet-tick.cjs');
+const { decideCadence, detectSalientDelta, runCoresFailSoft, computeLoadedAndQuiet } = require('../lib/coordinator/quiet-tick.cjs');
 // QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
 const { thresholdArgs } = require('../lib/coordination/resurface-threshold.cjs');
 const { getActiveCoordinatorId, refreshCoordinatorFlag } = require('../lib/coordinator/resolve.cjs');
@@ -376,6 +377,33 @@ export async function selfHealCoordinatorFlag(sb, {
   return false;
 }
 
+/**
+ * SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002 FR-3: compute the LOADED_AND_QUIET
+ * predicate from a FRESH gatherCapacityInputs() read (never reused from tick-start
+ * assessFleetActivity(), which runs well before decideCadence() and would be stale
+ * by construction), plus the already-computed directive/escalation flags. Exported
+ * so it has an independent test seam distinct from main() (TESTING sub-agent
+ * finding T-1, evidence 4b0ec75d) — main() itself stays a thin caller.
+ *
+ * Fail-closed: any error resolving capacity inputs returns false, never true — a
+ * telemetry gap must never silently widen the coordinator's own wake band.
+ */
+export async function resolveLoadedAndQuiet(sb, { unactionedDirective, undeliveredEscalation } = {}) {
+  try {
+    const capacity = await gatherCapacityInputs(sb, {});
+    return computeLoadedAndQuiet({
+      idleNow: capacity.idleNow,
+      rawUnclaimed: capacity.rawUnclaimed,
+      openQfCount: capacity.openQfCount,
+      claimableWithVerifyQfCount: capacity.claimableWithVerifyQfCount,
+      unactionedDirective,
+      undeliveredEscalation,
+    });
+  } catch {
+    return false; // fail-soft/fail-closed: never widen the band on a capacity-read error
+  }
+}
+
 async function main() {
   const asJson = process.argv.includes('--json');
   const sb = makeClient();
@@ -473,13 +501,21 @@ async function main() {
   const currentIdentity = getAccountIdentity();
   const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
 
+  // SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002 FR-3: computed FRESH, immediately
+  // before decideCadence(), never reused from the tick-start assessFleetActivity()
+  // read above (~30 lines earlier) to satisfy ARM-time freshness.
+  const loadedAndQuiet = await resolveLoadedAndQuiet(sb, { unactionedDirective, undeliveredEscalation });
+
   // FR-5/FR-6: self-paced next wake (capped at 15min when quiescent, never 300s;
-  // overridden to a short hard-wake band when a directive is pending, per FR-1 above).
+  // overridden to a short hard-wake band when a directive is pending, per FR-1 above;
+  // widened to [540,660] when loadedAndQuiet, per SD-LEO-INFRA-COORDINATOR-LOADED-
+  // QUIET-002 FR-2).
   const delaySeconds = decideCadence({
     quiescent,
     partyOffsetS: COORD_PARTY_OFFSET_S,
     hasUnactionedDirective: unactionedDirective,
     hasUndeliveredChairmanEscalation: undeliveredEscalation,
+    loadedAndQuiet,
   });
 
   try {
@@ -490,7 +526,8 @@ async function main() {
 
   const result = {
     mode: quiescent ? 'QUIESCENT' : 'ACTIVE',
-    modeReason: `${modeReason}${unactionedDirective ? ' [DIRECTIVE_HARD_WAKE]' : ''}${undeliveredEscalation ? ' [ESCALATION_HARD_WAKE]' : ''}`,
+    modeReason: `${modeReason}${unactionedDirective ? ' [DIRECTIVE_HARD_WAKE]' : ''}${undeliveredEscalation ? ' [ESCALATION_HARD_WAKE]' : ''}${loadedAndQuiet ? ' [LOADED_AND_QUIET_BAND]' : ''}`,
+    loadedAndQuiet,
     acct: acctLabel,
     cores: tick.summary,
     failedCount: tick.failedCount,

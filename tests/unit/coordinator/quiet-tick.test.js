@@ -17,8 +17,11 @@ const {
   PROMPT_CACHE_TTL_S,
   DIRECTIVE_WAKE_MIN_S,
   DIRECTIVE_WAKE_MAX_S,
+  LOADED_AND_QUIET_MIN_S,
+  LOADED_AND_QUIET_MAX_S,
   HEAVY_PASS_NTH_TICK_FLOOR,
 } = require('../../../lib/coordinator/quiet-tick.cjs');
+const { createHash } = require('node:crypto');
 
 const LOADED_AND_QUIET_TRUE = {
   idleNow: 0,
@@ -372,5 +375,92 @@ describe('computeStateHash / shouldSkipHeavyPass (QF-20260829-373, A7 burn-lever
     // skipStreak counts CONSECUTIVE prior skips; at floor-1 the next tick would be the Nth, so it must NOT skip.
     expect(shouldSkipHeavyPass({ hash: h, lastHash: h, skipStreak: HEAVY_PASS_NTH_TICK_FLOOR - 1 })).toBe(false);
     expect(shouldSkipHeavyPass({ hash: h, lastHash: h, skipStreak: HEAVY_PASS_NTH_TICK_FLOOR - 2 })).toBe(true);
+  });
+});
+
+describe('decideCadence loadedAndQuiet branch (SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002 FR-2/FR-4)', () => {
+  it('resolves the [540,660] band for every phase offset, never 300 (TS-1)', () => {
+    for (let offset = 0; offset <= 1000; offset += 13) {
+      const d = decideCadence({ quiescent: false, partyOffsetS: offset, loadedAndQuiet: true });
+      expect(d).toBeGreaterThanOrEqual(LOADED_AND_QUIET_MIN_S);
+      expect(d).toBeLessThanOrEqual(LOADED_AND_QUIET_MAX_S);
+      expect(d).not.toBe(PROMPT_CACHE_TTL_S);
+    }
+  });
+
+  it('band separation: loaded-and-quiet floor is strictly above the ACTIVE ceiling', () => {
+    expect(LOADED_AND_QUIET_MIN_S).toBeGreaterThan(ACTIVE_MAX_S);
+  });
+
+  it('band cap: loaded-and-quiet ceiling is strictly below the quiescent cap', () => {
+    expect(LOADED_AND_QUIET_MAX_S).toBeLessThan(MAX_QUIESCENT_PARK_S);
+  });
+
+  it('an open unclaimed row (loadedAndQuiet=false) forces the ACTIVE band even though every other condition would qualify (TS-2, the regression guard the SD text explicitly calls for)', () => {
+    // Caller computed loadedAndQuiet=false because rawUnclaimed>0 or openQfCount>0 — decideCadence
+    // itself never re-derives the predicate, it only trusts the boolean it is handed.
+    const d = decideCadence({ quiescent: false, partyOffsetS: 0, loadedAndQuiet: false });
+    expect(d).toBeGreaterThanOrEqual(180);
+    expect(d).toBeLessThanOrEqual(ACTIVE_MAX_S);
+  });
+
+  it('hard-wake beats loaded-and-quiet: hasUnactionedDirective=true still yields the 15-45s band (TS-4, branch precedence)', () => {
+    const d = decideCadence({ quiescent: false, partyOffsetS: 0, loadedAndQuiet: true, hasUnactionedDirective: true });
+    expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+    expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+  });
+
+  it('hard-wake via undeliveredEscalation also beats loaded-and-quiet', () => {
+    const d = decideCadence({ quiescent: false, partyOffsetS: 0, loadedAndQuiet: true, hasUndeliveredChairmanEscalation: true });
+    expect(d).toBeGreaterThanOrEqual(DIRECTIVE_WAKE_MIN_S);
+    expect(d).toBeLessThanOrEqual(DIRECTIVE_WAKE_MAX_S);
+  });
+
+  it('quiescent beats loaded-and-quiet: quiescent=true still yields the existing quiescent value regardless of loadedAndQuiet', () => {
+    const withoutLoaded = decideCadence({ quiescent: true, partyOffsetS: 0 });
+    const withLoaded = decideCadence({ quiescent: true, partyOffsetS: 0, loadedAndQuiet: true });
+    expect(withLoaded).toBe(withoutLoaded);
+  });
+
+  it('loadedAndQuiet omitted/false/undefined is byte-identical to today\'s 3-branch output for every existing fixture', () => {
+    for (const offset of [0, 1, 50, 270, 420, 999]) {
+      const baseline = decideCadence({ quiescent: false, partyOffsetS: offset });
+      const withFalse = decideCadence({ quiescent: false, partyOffsetS: offset, loadedAndQuiet: false });
+      const withUndefined = decideCadence({ quiescent: false, partyOffsetS: offset, loadedAndQuiet: undefined });
+      expect(withFalse).toBe(baseline);
+      expect(withUndefined).toBe(baseline);
+    }
+  });
+
+  it('golden-baseline regression: the pre-change digest is unchanged when loadedAndQuiet is omitted (FR-4 AC-4, TESTING evidence 4b0ec75d)', () => {
+    // Same iteration order the TESTING sub-agent used to compute the pre-change digest against
+    // the UNMODIFIED module (sub_agent_execution_results id 4b0ec75d-6408-4e8d-af3b-c7228a0c4995),
+    // so this hash is not self-referential — it was fixed BEFORE this branch existed.
+    const QUIESCENT = [true, false];
+    const PARTY_OFFSETS = [0, 1, 15, 45, 60, 90, 180, 270, 420, 600, 999];
+    const DESIRED_QUIESCENT = [undefined, 120, 300, 600, 900];
+    const DESIRED_ACTIVE = [undefined, 0, 255, 300, 900];
+    const DIRECTIVES = [false, true];
+    const ESCALATIONS = [false, true];
+    const values = [];
+    for (const quiescent of QUIESCENT) {
+      for (const partyOffsetS of PARTY_OFFSETS) {
+        for (const desiredQuiescentParkS of DESIRED_QUIESCENT) {
+          for (const desiredActiveS of DESIRED_ACTIVE) {
+            for (const hasUnactionedDirective of DIRECTIVES) {
+              for (const hasUndeliveredChairmanEscalation of ESCALATIONS) {
+                values.push(decideCadence({
+                  quiescent, partyOffsetS, desiredQuiescentParkS, desiredActiveS,
+                  hasUnactionedDirective, hasUndeliveredChairmanEscalation,
+                }));
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(values.length).toBe(2200);
+    const digest = createHash('sha256').update(values.join(',')).digest('hex');
+    expect(digest).toBe('adf594d5971a40e4d3702d4eb5500d6b34ac81f10ad968853144dd1cb00ba81a');
   });
 });
