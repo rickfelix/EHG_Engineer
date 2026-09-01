@@ -38,7 +38,7 @@ import { execSync } from 'child_process';
 import {
   computeOutcomeFlow, classifyFailureClasses, fetchStuckWithoutHold, fetchStaleUnreviewedHolds,
   deriveDispatchReasons, evaluateReasonBand, sampleFalseCompletions, selectCohort,
-  FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS,
+  FALSE_COMPLETION_SAMPLE, OUTCOME_WINDOW_DAYS, evaluateCoordinatorLoopLiveness,
 } from '../lib/oversight/coordinator-health-sharpenings.mjs';
 import { registerOversightLoop } from '../lib/oversight/coordinator-health-recompute.mjs';
 // SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): the canonical shared gate-side repo
@@ -260,6 +260,22 @@ export async function computeCoordinatorLiveness(supabase, { nowMs = Date.now() 
 }
 
 /**
+ * QF-20260831-150: fetch loop_registry's already-computed closure verdicts (loop_key, status,
+ * evaluated_at) — the independently cron-run closure verifier's output, not a re-derivation.
+ * Fail-soft: an unreadable table must never break the health probe; evaluateCoordinatorLoopLiveness
+ * treats an empty array as zero overdue loops rather than crashing.
+ */
+async function fetchLoopRegistryRows(supabase) {
+  try {
+    const rows = await fetchAllPaginated(() => supabase
+      .from('loop_registry')
+      .select('loop_key, status, evaluated_at')
+      .order('loop_key', { ascending: true }));
+    return rows || [];
+  } catch { return []; }
+}
+
+/**
  * Pure merge (QF-20260805-181). Liveness rides ON the integrity verdict rather than becoming a
  * second breach axis, so classifyBreach's `integrity_ok === false` test and the advisory's
  * divergent_fields rendering both carry it with no further wiring. ALARM goes to stderr so it
@@ -418,6 +434,8 @@ export function buildCoordinatorHealthAdvisoryRows(
     ...(reading.breach.firing_failure_classes || []).map((c) => `failure class ${c}`),
     reading.breach.band_breach && 'dispatch reason-code distribution outside band',
     reading.breach.recomputeBreach && 'raw-SQL recompute divergence (S4)',
+    reading.breach.loopLivenessBreach
+      && `${reading.loop_liveness.overdue_count} coordinator loop(s) overdue: ${reading.loop_liveness.overdue_loop_keys.join(', ')}`,
   ].filter(Boolean);
   const subject = `[ADAM-COORDINATOR-HEALTH] KPI breach: ${which.join('; ')}`;
   const body = `Coordinator-health probe reading at ${reading.timestamp}: utilization=${JSON.stringify(reading.utilization)}, plan_adherence=${JSON.stringify(reading.plan_adherence)}, integrity=${JSON.stringify(reading.integrity)}. Propose-only advisory — no dispatch action taken.`;
@@ -645,13 +663,19 @@ export async function runProbe(supabase, opts = {}) {
       recompute = { status: 'compared', ...cmp, probe: probeCounts, raw };
     } finally { await pg.end().catch(() => {}); }
   } catch (e) { recompute = { status: 'unavailable', recompute_ok: null, error: e.message }; }
+  // QF-20260831-150: a SECOND, independent liveness axis keyed on loop OUTPUT freshness
+  // (loop_registry, written by the cron-run closure verifier), not the tool-heartbeat axis above.
+  const loopRegistryFn = opts.loopRegistryRowsFn || fetchLoopRegistryRows;
+  const loopLiveness = evaluateCoordinatorLoopLiveness(await loopRegistryFn(supabase), { nowMs: opts.nowMs ?? Date.now() });
   const firingClasses = sharp.failureClasses.filter((c) => c.firing);
   const breach = {
     ...baseBreach,
-    breach: baseBreach.breach || firingClasses.length > 0 || sharp.bandVerdict?.band_ok === false || recompute.recompute_ok === false,
+    breach: baseBreach.breach || firingClasses.length > 0 || sharp.bandVerdict?.band_ok === false
+      || recompute.recompute_ok === false || loopLiveness.coordinator_loop_liveness_ok === false,
     firing_failure_classes: firingClasses.map((c) => c.cls),
     band_breach: sharp.bandVerdict?.band_ok === false,
     recomputeBreach: recompute.recompute_ok === false,
+    loopLivenessBreach: loopLiveness.coordinator_loop_liveness_ok === false,
   };
   const reading = {
     timestamp: new Date().toISOString(),
@@ -662,6 +686,7 @@ export async function runProbe(supabase, opts = {}) {
     failure_classes: sharp.failureClasses,
     dispatch_reasons: { ...(sharp.dispatchReasons || {}), band: sharp.bandVerdict },
     recompute,
+    loop_liveness: loopLiveness,
     breach,
     // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001 (FR-5): top-level, namespaced, additive. classifyBreach
     // (above) was already called with only {utilization, planAdherence, integrity} — it cannot see
