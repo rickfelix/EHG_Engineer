@@ -180,6 +180,12 @@
 
 ### Infrastructure
 
+- **Surface permission-prompt-blocked workers instead of reading as alive-idle** - SD-LEO-INFRA-PERMISSION-PROMPT-BLOCKED-001 (escalated from QF-20260901-987)
+  - A worker session blocked at an unanswered permission dialog (cd approval, commit approval, etc.) emitted no signal on any existing instrument — heartbeat daemons kept `heartbeat_at` fresh regardless, so the only way this stall was ever caught was a human walking the terminals.
+  - Added a `set_session_awaiting_approval` RPC plus PreToolUse/PostToolUse hooks (`awaiting-approval-stamp.cjs` / `awaiting-approval-clear.cjs`) that stamp/clear `claude_sessions.metadata.awaiting_approval_since` around every in-flight call of a permission-gated tool type (`Task` deliberately excluded — it shares its parent's `session_id` and would false-positive on long sub-agent calls).
+  - Two new hard-alert predicates (`isAwaitingApprovalStale`, `isLoopDead`) on the silent-holder audit are now wired into the automated `lib/governance/drive-state/axes/fleet-health.cjs` axis, so a stuck seat surfaces on the coordinator-visible `fleet_health` owed-action — not only via a hand-run script.
+  - Two independent, code-redeploy-free rollback switches: `LEO_AWAITING_APPROVAL_STAMP=off` and `LEO_FLEET_HEALTH_NEW_AXES=off`.
+
 - **Coordinator-to-Adam send-time backpressure exemption closes a one-way lane during collision/correction incidents** - SD-LEO-INFRA-CLOSE-COORDINATOR-ADAM-001
   - `assertSendBackpressure` now excludes exempt-kind and reply rows from the counted population (`lib/coordinator/dispatch.cjs`), and `DRAIN_SETS.adam` recognizes the 6 `BACKPRESSURE_EXEMPT_KINDS` (`lib/fleet/worker-status.cjs`), so a coordinator send of `collision_warning`/`amend_sd`/`disposition`/`retraction`/`amend`/`supersede` to Adam is no longer refused as `DISPATCH_UNTYPED_ADAM_KIND`.
   - A companion seed migration (`database/migrations/20260831_role_drain_sets_add_adam_backpressure_exempt.sql`) registers the same 6 kinds in `role_drain_sets` for the reader side, correctly staged behind a chairman-gated apply rather than self-applied.
