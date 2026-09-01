@@ -43,7 +43,7 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
     },
     async fill(selector, value) { calls.fill.push([selector, value]); },
     // clickNavigations lets a fixture simulate a click causing real navigation (e.g. an
-    // ambiguous "Continue" selector actually hitting "Continue with Google" and redirecting
+    // "Continue" selector that matches more than one button, actually hitting "Continue with Google" and redirecting
     // off-origin) -- the post-click url() call then reflects the new location, matching real
     // Playwright behavior where url() always reads the page's current location.
     async click(selector) {
@@ -333,7 +333,7 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
     expect(page.calls.fill).toEqual([]);
   });
 
-  it('fresh-E2E finding (2026-09-01, live run against altifyai.rickfelix2000.workers.dev): a post-submit redirect to a THIRD-PARTY origin (e.g. an ambiguous "Continue" selector hitting "Continue with Google") is never read as "authenticated" -- even though its path does not match the sign-in/login denylist', async () => {
+  it('fresh-E2E finding (2026-09-01, live run against altifyai.rickfelix2000.workers.dev): a post-submit redirect to a THIRD-PARTY origin (e.g. a "Continue" selector matching more than one button, hitting "Continue with Google") is never read as "authenticated" -- even though its path does not match the sign-in/login denylist', async () => {
     vi.useFakeTimers();
     try {
       process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });

@@ -58,7 +58,8 @@ test('AltifyAI sign-in reaches Clerk, and this SD\'s post-submit auth-detection 
   const preSubmitUrl = new URL(page.url());
   expect(preSubmitUrl.origin, 'must still be on the venture\'s own origin before submitting credentials').toBe(expectedOrigin);
 
-  // Use the exact submit button (not the ambiguous "Continue with Google" OAuth button --
+  // Use the exact submit button (not the "Continue with Google" OAuth button, which the
+  // pre-existing multi-match selector below can hit instead --
   // a pre-existing selector bug, out of this SD's scope, documented in the file header).
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
