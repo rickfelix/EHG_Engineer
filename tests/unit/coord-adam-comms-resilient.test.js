@@ -251,14 +251,24 @@ describe('FR-1: adam-advisory --reply-to echo', () => {
     expect(corr).toBe('C-9');
   });
 
-  it('resolveReplyToCorrelation: no matching row → value treated as the correlation itself', async () => {
-    const corr = await resolveReplyToCorrelation(mockRowSb(null), 'bare-corr');
-    expect(corr).toBe('bare-corr');
+  it('resolveReplyToCorrelation: no matching row, value IS a UUID → treated as the bare correlation', async () => {
+    const uuid = '11111111-2222-4333-8444-555555555555';
+    const corr = await resolveReplyToCorrelation(mockRowSb(null), uuid);
+    expect(corr).toBe(uuid);
   });
 
   it('resolveReplyToCorrelation: matching row WITHOUT correlation_id → throws REPLY_TO_NOT_REPLYABLE', async () => {
     await expect(resolveReplyToCorrelation(mockRowSb({ id: 'row-2', payload: {} }), 'row-2'))
       .rejects.toMatchObject({ code: 'REPLY_TO_NOT_REPLYABLE' });
+  });
+
+  // QF-20260901-479: a truncated prefix (e.g. an 8-char slice copied from a log line) previously
+  // fell through to "no matching row -> treat as the correlation itself" and silently mis-threaded.
+  it('resolveReplyToCorrelation: no matching row, value is NOT a UUID → throws REPLY_TO_UNRESOLVABLE', async () => {
+    await expect(resolveReplyToCorrelation(mockRowSb(null), 'bare-corr'))
+      .rejects.toMatchObject({ code: 'REPLY_TO_UNRESOLVABLE' });
+    await expect(resolveReplyToCorrelation(mockRowSb(null), 'a1b2c3d4'))
+      .rejects.toMatchObject({ code: 'REPLY_TO_UNRESOLVABLE' });
   });
 });
 
