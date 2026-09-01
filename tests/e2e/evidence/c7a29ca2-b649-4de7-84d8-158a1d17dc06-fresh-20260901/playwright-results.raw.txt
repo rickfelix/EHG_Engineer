@@ -1,3 +1,5 @@
+{ debug: true }
+[LEO Teardown] Evidence pack and cleanup disabled, skipping
 {
   "config": {
     "configFile": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\playwright.config.js",
