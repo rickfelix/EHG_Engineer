@@ -10,9 +10,13 @@
  * so stamping here and clearing there gives the watch-side audit (_coord-silent-holder-audit.cjs
  * isAwaitingApprovalStale()) a real signal instead of silence.
  *
- * Scoped to the SAME matcher as pre-tool-enforce.cjs (Task|Bash|Write|Edit|AskUserQuestion) — the
- * only tool classes a permission dialog can actually gate — so this does not add a DB round trip
- * to every Read/Glob/Grep call.
+ * Scoped to Bash|Write|Edit|MultiEdit|AskUserQuestion — the tool classes a permission dialog can
+ * actually gate — so this does not add a DB round trip to every Read/Glob/Grep call. Deliberately
+ * EXCLUDES Task: a sub-agent invoked via the Task tool shares the PARENT session's session_id
+ * (lib/hooks/session-id.cjs), so a long-running sub-agent (minutes, routinely >10min) would leave
+ * this stamp open on the parent row for its whole duration — indistinguishable from a genuinely
+ * stuck permission prompt via isAwaitingApprovalStale() (VALIDATION finding F4, sub-agent evidence
+ * 9fb7b181, SD-LEO-INFRA-PERMISSION-PROMPT-BLOCKED-001).
  *
  * Fire-and-forget via raw https (mirrors claim-heartbeat-on-tool.cjs): supabase-js's kept-alive
  * socket trips the Windows libuv UV_HANDLE_CLOSING assertion on a fire-every-tool hook.

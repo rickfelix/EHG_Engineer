@@ -5,7 +5,8 @@
  * Companion to awaiting-approval-stamp.cjs (PreToolUse). Fires only once the tool call has
  * actually completed — i.e. after any permission dialog resolved — so the stamped timestamp
  * from PreToolUse is cleared as soon as the wait is over. See that file's header for the full
- * root-cause writeup. Same matcher (Task|Bash|Write|Edit|AskUserQuestion) as the stamp hook.
+ * root-cause writeup. Same matcher (Bash|Write|Edit|MultiEdit|AskUserQuestion, excluding Task —
+ * see that file's header) as the stamp hook.
  */
 const https = require('https');
 

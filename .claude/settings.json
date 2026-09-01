@@ -210,7 +210,7 @@
         ]
       },
       {
-        "matcher": "Task|Bash|Write|Edit|MultiEdit|AskUserQuestion",
+        "matcher": "Bash|Write|Edit|MultiEdit|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
@@ -319,7 +319,12 @@
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/pre-tool-enforce.cjs",
             "timeout": 3
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|AskUserQuestion",
+        "hooks": [
           {
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/awaiting-approval-stamp.cjs",
