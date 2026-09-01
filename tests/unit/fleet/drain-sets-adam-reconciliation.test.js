@@ -52,4 +52,19 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
       expect(DRAIN_SETS.adam).toContain(kind);
     }
   });
+
+  // QF-20260831-769 / SD-LEO-INFRA-CLOSE-COORDINATOR-ADAM-001 FR-2 (PLAN-phase TESTING finding
+  // G1+G2): DRAIN_SETS.adam mirrors dispatch.cjs's BACKPRESSURE_EXEMPT_KINDS as raw literals, with
+  // no assert tying the two together and no assert on isAdamInboxRow itself. Without this, adding a
+  // 7th exempt kind to dispatch.cjs and forgetting DRAIN_SETS.adam drifts silently -- the coordinator
+  // loses that lane to Adam again, this SD's exact defect recurring. The 28-count pin above cannot
+  // catch it (it pins the mirror, not parity with the source).
+  it('DRAIN_SETS.adam is a superset of BACKPRESSURE_EXEMPT_KINDS (dispatch.cjs), and isAdamInboxRow admits all of them', () => {
+    const { BACKPRESSURE_EXEMPT_KINDS } = require('../../../lib/coordinator/dispatch.cjs');
+    const { isAdamInboxRow } = require('../../../scripts/adam-advisory.cjs');
+    for (const kind of BACKPRESSURE_EXEMPT_KINDS) {
+      expect(DRAIN_SETS.adam, `DRAIN_SETS.adam missing exempt kind: ${kind}`).toContain(kind);
+      expect(isAdamInboxRow({ payload: { kind } }), `isAdamInboxRow false for exempt kind: ${kind}`).toBe(true);
+    }
+  });
 });
