@@ -25,6 +25,7 @@ const MIGRATION_PATH = path.join(REPO_ROOT, 'database/migrations/20260720_role_d
 const RECONCILIATION_MIGRATION_PATHS = [
   path.join(REPO_ROOT, 'database/migrations/20260830_role_drain_sets_add_parent_completion.sql'),
   path.join(REPO_ROOT, 'database/migrations/20260831_role_drain_sets_add_adam_backpressure_exempt.sql'),
+  path.join(REPO_ROOT, 'database/migrations/20260901_role_drain_sets_add_reaper_alerts.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -133,9 +134,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 76 (69 from the original migration DO-block ASSERT + 1 reconciliation: parent_completion, QF-20260830-280 + 6 reconciliation: adam backpressure-exempt kinds, QF-20260831-769)', () => {
+  it('total seed row count is exactly 80 (69 from the original migration DO-block ASSERT + 1 reconciliation: parent_completion, QF-20260830-280 + 6 reconciliation: adam backpressure-exempt kinds, QF-20260831-769 + 4 reconciliation: coordinator reaper alert kinds, SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-B)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(76);
+    expect(matches.length).toBe(80);
   });
 });

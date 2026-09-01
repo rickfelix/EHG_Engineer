@@ -37,9 +37,13 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // to Adam is no longer refused as DISPATCH_UNTYPED_ADAM_KIND.
     // worker=18 (not 17) as of QF-20260830-280: 'parent_completion' added, the kind
     // directed-assignment.cjs's orchestrator-parent completion exception requires.
+    // coordinator=20 (not 16) as of SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-B: the 4 reaper
+    // alert kinds (reaper_starvation_alert / reaper_census_blind_alert / reaper_not_invoked_alert
+    // / reaper_rebuild_churn_alert) added — RCA 9a02a76d traced the incident to these being
+    // structurally undeliverable at role='coordinator'.
     expect(DRAIN_SETS.adam.length).toBe(28);
     expect(DRAIN_SETS.solomon.length).toBe(12);
-    expect(DRAIN_SETS.coordinator.length).toBe(16);
+    expect(DRAIN_SETS.coordinator.length).toBe(20);
     expect(DRAIN_SETS.worker.length).toBe(18);
   });
 
