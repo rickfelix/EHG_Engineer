@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 async function main() {
   const browser = await chromium.launch();
@@ -18,4 +19,6 @@ async function main() {
   await browser.close();
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch(err => { console.error(err); process.exit(1); });
+}
