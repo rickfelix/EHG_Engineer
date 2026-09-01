@@ -288,7 +288,7 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
   it('same-origin, different path is accepted (the check is origin equality, not exact-URL equality)', async () => {
     process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
     const executor = buildStepExecutor(step, 'RACEVENTURE');
-    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'http://fixture/sign-in' });
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'http://fixture/some/other/path' });
 
     await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
