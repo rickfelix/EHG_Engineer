@@ -181,6 +181,12 @@
   - Added a bounded ledger cross-check (target-overlap within a 72h window) and an echo check (text citing an existing ratification's id/prefix) on the flag path, plus tightened `NAMED_TARGET_RE`'s dotted-identifier alternative so filler like "e.g." no longer counts as a named target.
   - 8 new unit tests prove both acceptance directions: a genuine miss with no covering ledger row still flags; a covered or echoed item does not.
 
+- **Complete AltifyAI UAT Clerk 2FA sign-in via IMAP code fetch** - SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001
+  - Added a net-new, read-only IMAP Gmail code fetcher (`lib/apa/imap-code-fetcher.js`) so the AltifyAI UAT journey-walk harness can complete Clerk's 2FA email-code challenge instead of throwing unconditionally after password submit. Wired into `lib/apa/venture-step-executors.js`'s `fallbackExecutor` via a race between a code-challenge-input wait and an authenticated-URL poll, so `ctx.authenticated` is only set on a confirmed signal.
+  - A coordinator-required fresh, scoped live E2E run (`tests/e2e/altifyai-uat-fetch-001.spec.ts`) against the real deployed app found and led to fixing a real same-origin bug in this SD's own new `pollForAuthenticatedUrl()`: it checked only that the URL path didn't look like a sign-in screen, with no same-origin check, so a pre-existing (different SD) selector redirect to a third-party OAuth consent screen read as "authenticated." Fixed with a same-origin check and a mutation-verified regression test.
+  - The live run also found the fenced UAT mailbox's IMAP app password is currently invalid (Gmail `AUTHENTICATIONFAILED`) — an operational credential issue affecting every venture using the fenced-mailbox 2FA-fetch pattern, escalated separately for rotation.
+  - 58 unit tests plus the new live-scoped E2E spec.
+
 ### Infrastructure
 
 - **Surface permission-prompt-blocked workers instead of reading as alive-idle** - SD-LEO-INFRA-PERMISSION-PROMPT-BLOCKED-001 (escalated from QF-20260901-987)
