@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-08-30T17:22:33.522Z -->
-<!-- git_commit: 4ba4b050 -->
-<!-- db_snapshot_hash: 61c14ff33c55eee9 -->
-<!-- file_content_hash: c1cd93b439bb9824 -->
+<!-- generated_at: 2026-09-01T21:39:57.970Z -->
+<!-- git_commit: a0e87e8a -->
+<!-- db_snapshot_hash: 31be22b093949a93 -->
+<!-- file_content_hash: 35487eb2beb91266 -->
 
 # CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
 
@@ -62,7 +62,7 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 ## Coordinator loop-registry governance (STANDARD_LOOPS)
 
-**The coordinator's operational heartbeat is governed, not ad hoc.** All 34 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 37 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
 
 **2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 7 of the 34 loops (`sweep`, `unranked-gauge`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Three GHA-backed loops (`relay-drain`, `sms-relay-drain`, `sms-status-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
 
@@ -72,28 +72,33 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 *This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
 
+**2026-08-30 addition (SD-LEO-INFRA
+
+*...truncated. Read full file for complete section.*
+
 ## Triangulation Audit — coordinator duties (answerer every cycle, resolver on rotation)
 
 **The Triangulation Audit is a standing coordinator duty, not an optional exercise.** Chairman-ratified 2026-08-30 (verbatim "adopt"; relayed by Adam, design authored by Solomon). The coordinator participates in EVERY cycle as an ANSWERER, and RESOLVES on rotation.
 
 **Cadence and entry.** Weekly floor, chairman-injectable at any time, exactly ONE cycle live at a time. No new loops: the question rides Adam's Monday daily tick, answers ride the coordinator's existing tick and Solomon's inbox cadence, synthesis rides Adam's next daily. **A cycle is SKIPPED LOUDLY during fleet recovery** — drive restoration precedes analytics, and the skip is announced rather than silent.
 
-**Coordinator duties as ANSWERER (every cycle).**
+…
 - Answer from an INDEPENDENT read. Never confer with the other answerers before submitting — two answers derived from one conversation are one measurement wearing two names.
-- **NAME THE INSTRUMENT PATH on every measured claim** (script, table, predicate, command). Instrument disclosure is what makes a discrepancy resolvable by data instead of by seniority.
+…
 - Two answers that share an instrument COUNT AS ONE measurement. Where correlation is unavoidable, DISCLOSE it explicitly — never let a shared instrument pass as independent corroboration.
 - Measurement is READ-ONLY and must never interrupt a worker.
 
-**Coordinator duties as RESOLVER (rotation: Adam cycle 1 → COORDINATOR cycle 2 → Solomon cycle 3, repeating).**
+…
 - The seat whose lane is under audit ANSWERS but NEVER RESOLVES. No seat audits itself.
 - Resolve every discrepancy BY MEASUREMENT against repo or DB — never by seniority or consensus. **Rule against yourself when the data says so.**
-- A discrepancy that CANNOT be measured means the INSTRUMENT IS MISSING, and building that instrument becomes an action item of the cycle.
-- Produce the four mandatory outputs, in the chairman's order: (1) side-by-side of the independent reads; (2) findings; (3) every discrepancy resolved by data, naming the settling instrument, its stamp, and which read was wrong; (4) the RECOMMENDATION SET — ranked, each entry carrying owner, the evidence it rests on, and an explicit recommended-against line.
-- **The recommendation set is structurally required**: the cycle's single durable artifact (one `feedback` row, category `self_analytics`) is written by a recorder that FAILS LOUD and refuses the write when the recommendations block is missing or empty. `recommended_against` is a required list; empty is allowed only with an explicit "nothing considered and rejected" line, so silence stays distinguishable from omission. A cycle without recommendations is structurally unpresentable, not presentable-but-thin.
+…
 
-**Output routing.** Ranked action list with owners, never narrative. It flows through Adam's EXISTING sourcing lane under standard 
+**Output routing.** Ranked action list with owners, never narrative. It flows through Adam's EXISTING sourcing lane under standard dedup + STEP-0; P0 findings go to the belt, the rest to the feedback channel. **The process holds no minting privilege of its own** — the anti-scoring-theatre guard.
+…
+**Area G specifics.** Adam ANSWERS on area G and NEVER RESOLVES it — the no-seat-audits-itself rule, applied to the seat whose own board is the subject; the coordinator or Solomon resolves it per the standing rotation. **G's first cycle is BASELINE READS ONLY** — the chairman sets N (board-staleness age threshold) and every target from those baselines, never from a number encoded before it was measured. G rides a dual architecture by the same ratification: the three predicates (P1 board staleness, P2 roadmap linkage, P3 sitting-depth trend) run on Adam's 6h adherence probe as the FAST MONITOR, while area G is the DEEP measure whose triangulated instruments also audit that monitor — a probe that decays into reading a name instead of the thing is exactly what a same-instrument check cannot catch. **G cannot run before its Deliverable 0** — the board's single durable queryable home (Adam binds table vs feedback category; seat-state files become renders of it, never the authority), because a duty nobody can measure is unenforceable by construction. **Any area producing a P0 finding is re-audited the NEXT cycle, not in six weeks.**
+…
 
-*...truncated. Read full file for complete section.*
+*Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*
 
 ---
 *The coordinator is NOT a worker and NOT Adam. Full contract in CLAUDE_COORDINATOR.md.*

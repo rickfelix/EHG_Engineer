@@ -1,8 +1,8 @@
-<!-- file_content_hash: be947b1c00098223 -->
+<!-- file_content_hash: 80c8bffa44ef3e6f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-08-30 1:22:33 PM
+**Generated**: 2026-09-01 5:39:58 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -82,7 +82,7 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 ## Coordinator loop-registry governance (STANDARD_LOOPS)
 
-**The coordinator's operational heartbeat is governed, not ad hoc.** All 34 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 37 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
 
 **2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 7 of the 34 loops (`sweep`, `unranked-gauge`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Three GHA-backed loops (`relay-drain`, `sms-relay-drain`, `sms-status-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
 
@@ -91,6 +91,10 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 **2026-08-30 retirement (QF-20260830-100, chairman ruling A):** `singleton-relaunch` was RETIRED ENTIRELY (removed from STANDARD_LOOPS, not merely dropped to `session_arm:false`) — its trigger+scheduler logic armed real scheduling but the relaunch CONSUMER half was never built (feedback 2026-08-03 "SINGLETON RELAUNCH NET DISCONNECTED IN THE MIDDLE"); it fired 4x (08-11 x2, 08-22 x2) with ZERO relaunches and fed false periodic-liveness escalations to the chairman. `.github/workflows/singleton-relaunch-cron.yml`'s schedule was dropped (`workflow_dispatch` kept); the `periodic_process_registry` rows (`gha_cron:singleton-relaunch-cron.yml`, `standard_loop:singleton-relaunch`) were retired (`currently_expected_active=false`) so a process that will never fire again accrues no misses. The scheduler script and its lib are deliberately NOT deleted — reversible if the consumer half is ever built.
 
 *This table is DRIFT-CHECKED (never regenerated) against the live array by `tests/unit/coordinator/coordinator-loop-governance-drift.test.js`, via the checked-in snapshot `scripts/coordinator-loop-governance-snapshot.json`. When STANDARD_LOOPS changes, update the snapshot file AND this section together.*
+
+**2026-08-30 addition (SD-LEO-INFRA-ORPHAN-WRITERS-REGISTRY-001, FR-5):** `orphan-writers-triage` was registered (weekly, `20 9 * * 1`) to run `scripts/orphan-writers-count.mjs` + `scripts/orphan-writers-notify.mjs` — the SD's own registry-completeness triage pass now has a real invoker (VALIDATION sub-agent finding V-2: without this cron entry the pass's self-registered `periodic_process_registry` row had no way to ever be stamped, making the registry the fourth orphan specimen it exists to prevent).
+
+**2026-09-01 addition (SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A):** two entries added -- `index-jam-detector` (activates `standard_loop:index-jam-detector`, inert 35 days despite its own `activation_note` demanding this exact scheduler entry) and `safe-root-resync-fetch-ff-merge` (schedules ONLY the fetch+ff-merge half of `resync:safe`, never the clear-stale-index-lock step, per the parent SD's git-flow-expert refinement). Total loop count 35 -> 37.
 
 ## Triangulation Audit — coordinator duties (answerer every cycle, resolver on rotation)
 
@@ -121,6 +125,18 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 **Live position at encode time:** cycle 1 = the 2026-08-30 worker-efficiency triangulation, resolved by Adam. **First re-measure due Monday 2026-09-07 on area A** — the first real reading of the moved-the-number metric. **The coordinator resolves cycle 2.**
 
+**Cycle-2 resolution — CHAIRMAN-RATIFIED, and these three actions are the coordinator's own share (ratification `2ab4b4bc-1d86-486c-b266-3814d5f66d12`, ratified 2026-08-30T17:34:33.674Z; chairman in-terminal on the Adam seat after the cycle-2 area-C (gauge honesty) presentation, verbatim "I agree with your recommendations"; resolver: coordinator; record `feedback ee126bb3`; target_contracts adam/coordinator/solomon/protocol).**
+
+The chairman's WEEKLY NUMBER for gauge honesty is the **KNOWN-ORPHAN COUNT** — an orphan-writers registry naming each scheduled writer/probe/ledger's acting reader; the count is `reader:NONE` rows plus `reader:WIRED-BUT-BLIND` rows; a test-asserted baseline so silent growth OR shrink fails CI; **a rising number in the first month reads as DISCOVERY, not decay.** Adam mints the registry (R1, Solomon pattern owner) and the number rides his exec summaries.
+
+**The coordinator's ranked shares, R3 / R6 / R8:**
+- **R3 — render arithmetic-overdue BESIDE `last_state`.** The two disagree today: the fleet dashboard's periodic block shows rows where the arithmetic on the row's own columns says overdue/never-stamped while `last_state` reads OK (43 such rows measured 2026-08-31, GHA-cron-sourced). **Trust the arithmetic and check the stamper before trusting `last_state`** — rendering them side by side is what makes the disagreement visible instead of silently resolved in favour of the stale field. Related but distinct from R2 (the `github_actions_api` stamper itself), which executed as `SD-LEO-FIX-GHA-CRON-LIVENESS-001`.
+- **R6 (softened) — stop the drain warn crying wolf on the WORKING `WORK_ASSIGNMENT` lane, and register `parent_completion`** (`QF-20260830-280`). Measured 2026-08-31: the UNDELIVERED-OUTBOUND surface carried **646 unread rows at a live target, 617 of them (95.5%) `roll_call`** — a kind that is **UNACKABLE BY DESIGN** (`COORDINATOR_UNACKABLE_KINDS` in `scripts/coordinator-quiet-tick.mjs`, QF-20260728-694; it is `periodic-liveness-watcher`'s broadcast). **TWO surfaces — `fleet-dashboard.cjs inbox` and `coordinator-hourly-review.cjs` — both advise "re-send or nudge" on rows that can never be read.** The partition already built for the advisory lane (QF-20260621-174, which fired when genuine action-required asks were buried under status relays) was never applied here. **State it at its true weight: NOTHING HAS BEEN LOST.** Every work-delivery row buried under the noise was moot — the SD or QF completed by self-claim anyway, and an unread `work_assignment` reflects only that `read_at` is not stamped on that path, never non-delivery. **A noise/advice defect, not an incident.**
+- **R8 — the coordinator-review loop RE-SOLICITS from the CURRENT roster when respondents are released.** The operational text and its specimen already live in `CLAUDE_COORDINATOR_MANUAL.md` (coordinator_manual, "UNANSWERED is not UNANSWERABLE"): a solicitation targeted at a session id is correct for a seat-specific question, and **the defect is that nothing re-asks when the seat dies** — re-solicit from the current roster rather than retargeting the loop away from session ids; dispose dead-target rows explicitly (`disposition: 'unanswerable_target_dead'`) with released-at evidence so the gauge clears on truth. **This ratification ANCHORS that existing rule rather than restating it — R8 was already encoded in substance before it was ratified, and duplicating it here would have created two texts to drift apart.**
+
+*Scribe note: Adam encoded the adam+protocol shares into `adam_role_contract` (section 601, commit `985b5ba7a8f`, PR #7884) and Solomon his into `solomon_role_contract` (611). A paginated census of all 291 `leo_protocol_sections` on 2026-08-31T18:38Z found `2ab4b4bc` in those two sections and in NO coordinator section — the coordinator share was the last one outstanding, which is itself a completion-gate-class specimen on the governance ledger: the owning SD `SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001` sat `completed/COMPLETED` and unclaimed while a ratification under it went unencoded for over 24 hours.*
+
+
 ## Coordinator ↔ Adam Autonomous Partnership (shared role contract)
 
 **Coordinator ↔ Adam autonomous partnership (shared)** — On harness/sourcing work the COORDINATOR is the decider/manager for work-shaping, scope, tiering, dedup, and dispatch; ADAM authors the DRAFT SDs/QFs (DOC-001 — sourcing is Adam's lane) and routes shaping/scope/dispatch decisions to the coordinator, NOT up to the chairman. The two form a JOINT RATIONALE and PROCEED autonomously — operational calls are never bounced to the operator. Escalate to the chairman/operator ONLY for genuine AUTHORITY (vision, revenue, policy) or IRREVERSIBLE/destructive actions. (Unchanged: the chairman may direct either role directly.) Role-agnostic — a future role-session (e.g. Solomon) inherits this posture by inclusion.
@@ -131,6 +147,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-08-30*
+*Generated from database: 2026-09-01*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

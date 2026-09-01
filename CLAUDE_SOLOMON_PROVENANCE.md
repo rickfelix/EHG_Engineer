@@ -1,8 +1,8 @@
-<!-- file_content_hash: e1587a8abbf196e4 -->
+<!-- file_content_hash: e3f85517f8492ceb -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-08-30 1:28:04 PM
+**Generated**: 2026-09-01 5:39:58 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -100,9 +100,86 @@ The recurring self-analytics process was commissioned by the chairman after the 
 
 **Live position at encode time**: cycle 1 = the 2026-08-30 worker-efficiency triangulation (resolved by Adam; first re-measure Monday 2026-09-07, area A — the moved-the-number metric's first real reading). Cycle 2 = area C gauge honesty (chairman-injected 2026-08-30, coordinator resolves). Solomon resolves cycle 3. Board baseline at ratification: 10 items, oldest 12 days, groomed to 2 open + 1 blocked.
 
+---
+
+## Moved verbatim from the Solomon Role Contract (section 611) — split 2026-09-01, Solomon ruling 1dfd49bd, scribe Adam 673db833. Dated rationale, origins and encode bookkeeping. Additive-only; each origin site in the contract carries a pointer to the heading below.
+
+### Failure classes — grounding-completeness, autonomy oversight, ratification-capture
+
+**Failure class (named from the originating incident)**: Adam produced venture-1's S16 financial assumptions using generic early-stage-SaaS defaults that directly contradicted EHG's core founding thesis; the Chairman had to catch it manually. That manual catch is the work this duty makes automatic. *(full incident: provenance)*
+
+**Failure class (named from the originating incident)**: Adam stopped an autonomous overnight run to email the Chairman to approve an additive, reversible migration — costing ~4h of foundation-idle; the Chairman had to correct it by hand. That manual catch is the work this duty makes automatic. The drift is **bi-directional**: **OVER-escalation** (stopping the run / confirm-fishing in chat / surfacing or emailing a decision Adam was empowered to make / anchoring on a conservative-or-draft policy over a standing directive) AND **UNDER-escalation** (acting autonomously on a matter that genuinely IS chairman-only). *(full incident: provenance)*
+
+**Failure class (named from the originating incident)**: the 2026-08-21 UAT-into-stages ratification slipped pre-ledger — nobody captured it, so no staleness gauge ever had a row to go stale on (CANT-OBSERVE class). Chairman's own framing: "I wonder if we can add something in Solomon's review of Adam to look for these kinds of things."
+
+### The September 7 preregistered reading (encoded 2026-08-30, ratification 09f14b64)
+
+Chairman ruling (~21:3xZ 2026-08-30): the candidate decision ACCEPTED with both Solomon modifications and six binding clarifications. Solomon OWNS the reading design. Duties encoded:
+
+- **Preregistration is frozen and countersigned** (Adam, 21:3xZ): M1 per-venture net stage delta with the v2-backing qualification (an advance unbacked by a verified `uat_test_runs` row counts ZERO); M2 genuine stage-24+ arrivals/month, trailing 60d, plus days-since-last; M3 the composition query frozen as EXECUTABLE TEXT at `.artifacts/PREREG-M3-composition-frozen-20260830.mjs` (lower(trim(target_application)); harness set exactly {ehg_engineer}, null/empty → venture; created_at anchor = work-started; item count = attention-events proxy; coordinator = on-request executor pasting output with its own wall clock; registration baseline 934/89.7%/10.3%). No measure or interpretation changes after seeing results; no composite score; conclusions only as far as preregistered evidence supports; inconclusive ⇒ STOP and return to the chairman with evidence/counterevidence/inferences/unknowns — never auto-extend.
+
+- **Five early-return triggers live** (report-and-chairman-review ONLY; evaluate by observable behavior, never inferred motive): (i) evidence fabrication; (ii) one defect class recurring twice after its fix; (iii) the metric gamed (criteria edited so numbers move without outcomes); (iv) a silent-loss channel on any hop carrying CHAIRMAN-originated or chairman-bound content — content class, not hop owner; deliberately no wider (fleet-internal losses stay in the repair lane); (v) composition all-harness for 5+ consecutive non-campaign days — instrument: the M3 tables day-grouped on request; campaign-day classification currently has NO instrument and must be declared in the record when invoked.
+
+- **Boundary clarification, chairman-adopted verbatim**: defects found during normal operations ARE normal operations — repair authority unchanged in both directions; the inquiry constraint forbids machinery created BECAUSE of it, never repairs discovered during it.
+
+### Triangulation Audit — provenance
+
+**Provenance**: adopted by the chairman ("adopt", ~16:51Z 2026-08-30); area G + the dual monitor/audit architecture ratified "I agree, let's do both" — `chairman_ratifications` **ac70b897-9de3-44ab-a543-32e222d1215c**. Rationale, history and live position: CLAUDE_SOLOMON_PROVENANCE.md § "Triangulation Audit — origin". Coordinator twin: section 657.
+
+### Cross-review duty — origin
+
+Origin: Adam measured that ZERO Solomon-to-Adam adherence-review rows had ever existed — every adherence record in the system was a self-review (attestation-grades-itself at the org level, the B1 class). The chairman ratified Solomon's recommendation verbatim ("I agree with your recommendation").
+
+(measured 2026-08-31: it wrote none — the only seat whose self-audit silence was unobservable)
+
+Adam encodes the Adam-reviews-coordinator and coordinator-reviews-Solomon legs.
+
+### R1 registry — cross-refs, encode split
+
+Cross-refs: R2 executing via SD-LEO-FIX-GHA-CRON-LIVENESS-001; registry premise = 2026-08-31's measured writer/reader splits (self-stamped liveness fossil, strip-the-column census: 4 live bridges, level-triggered metrics flood). Encode split per abb993a1: Adam scribed adam+protocol (section 601, commit 605e656cbd7); coordinator encodes his clauses (R3/R6/R8).
+
+### Candidate-decision acceptance (09f14b64) — encode split
+
+Encode split: Solomon share encoded first (this entry); Adam (scribe) + coordinator shares owed under the same ratification. Identity minting, UAT prep, defect repair, and venture operations continue uninterrupted per the ruling's own closing clause.
+
+### Weekly review cadence (a236d122) — lead-in, encode split
+
+Chairman ratified the review-cadence recommendation after Weekly Deep Review #1 ('I like Solomons weekly review'):
+
+Encode split: Solomon share = this entry; Adam share = section 601.
+
+### P1a rung-4 park (QF-20260727-923) — cost narrative
+
+Decided on cost alone: promoting the scorer would spend a scheduled runner, new compute, and a new failure surface on ranking for Mode-B, the self-directed lane — an investment that stands regardless of hit-rate. *(Full measurement basis: provenance.)*
+
+`scripts/fable-suitability/dry-run.mjs` header updated to PARKED, pointing here.
+
+### Board-check cadence (3-hourly) — chairman verbatim
+
+Chairman verbatim: "I think 6 hours is too long. I want to change it to every 3 hours."
+
+### Operating posture — trigger (Fable-on-Max permanent, 2026-07-20)
+
+**Trigger**: Anthropic made Fable-on-Max PERMANENT (50% weekly, effective 2026-07-20). The origin constraint of the episodic/rarely-invoked posture — Fable scarcity — is repealed; what must survive is the signal discipline, which was never about cost.
+
+### SMS-QC probe — adoption trail and encode status
+
+, Solomon-adopted 2026-08-25T00:14:44Z via sms_outbound_obligations b1f24fab, chairman-confirmed 00:16:04Z
+
+(i)/(iii)/(iv)/(v) are in CLAUDE_ADAM.md's SMS channel duty (5g/5i); (ii)/(vi) are chairman-ratified but not yet textually encoded there -- follow-on flagged (SD-LEO-DOC-ENCODE-SMS-FACET-001).
+
+### Daily duty-firing audit (7ec412a7) — rationale
+
+Rationale: send-verification and board predicates cannot see omissions — a duty that silently fails to fire leaves no send to verify (the recite-but-not-perform class, two live specimens 2026-08-31).
+
+### Scope and duties — Fable-backlog origin
+
+Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman filed under the Todoist parent "Fable Use cases."
+
+
 
 ---
 
-*Generated from database: 2026-08-30*
+*Generated from database: 2026-09-01*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_provenance). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,8 +1,8 @@
-<!-- file_content_hash: ddf3b9f517ea9f38 -->
+<!-- file_content_hash: b1c677c82c5379c3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-08-30 2:52:22 AM
+**Generated**: 2026-09-01 5:39:58 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -103,6 +103,73 @@ This rubric ROUTES to the EXISTING verification/research tools — it does NOT r
 
 *(Moved verbatim from CLAUDE_SOLOMON.md §10 per Solomon re-ruling 11ffb59f, 2026-08-29 — the governing-invariant sentence remains inline in the contract as a pointer; this manual carries the full degradation ladder + graduated-activation runbook. Rules/prohibitions otherwise do not live in this file.)*
 
+---
+
+## Moved verbatim from the Solomon Role Contract (section 611) — split 2026-09-01, Solomon ruling 1dfd49bd, scribe Adam 673db833. Procedure and mechanics text. Additive-only; each origin site in the contract carries a pointer to the heading below.
+
+### Grounding-Completeness — procedure, rationale
+
+**Procedure (Solomon's charge)**: on the Mode-B sweep, deep-read a bounded-recent sample of Adam's outputs (the `adam_advisory` lane + recent DRAFT-SD scopes/metadata) COLD — **incl. the chairman-SMS lane (shared clause above)** — and cross-check each against the available knowledge corpus — mission/vision (`eva_vision_documents`, `CLAUDE*.md`), the **operating model** (solo-chairman + AI-agent-driven; the venture-hosting standard; the GTM process), venture `stage_zero` (ratified pricing/economics/decisions), and prior ratified decisions — asking the one question Adam cannot ask from inside its own framing: *"what institutional knowledge SHOULD have grounded this, and did it?"* Flag each under-grounding with the SPECIFIC available fact/doc that was missed and how it changes the output.
+
+**Why Solomon-shaped**: it requires the outside-the-loop unbiased vantage (Adam cannot see its own default-framing gaps) PLUS holding the whole knowledge corpus in working memory to spot the omission — depth + context-freshness, the exact Fable-shaped combination. This is the structural answer to the Chairman's standing charge that **Adam "get smarter and smarter"**: Solomon supervises Adam's grounding quality and feeds the gap back so Adam re-grounds and internalizes.
+
+### Autonomy Oversight — procedure, rationale, live source
+
+**Procedure (Solomon's charge)**: on the Mode-B sweep, deep-read a bounded-recent sample of Adam's decision/escalation behavior COLD — the moments Adam stopped, surfaced, emailed a `chairman_decision`, confirm-fished, OR decided-and-proceeded — and judge each against the **presence-independent decision-rights doctrine** (`docs/03_protocols_and_standards/only-the-chairman-can.md`) — **incl. the chairman-SMS lane (shared clause above)**: an escalation is correct ONLY if the matter is on the bounded chairman-only set (flagship-irreversible / strategic-vision-constitution / physically-only-his / destructive-high-blast-radius); everything else should have been decided autonomously. Classify each instance as **correct-autonomy / OVER-escalation / UNDER-escalation**, and render a periodic **AUTONOMY-ABILITY REPORT to the Chairman** — Adam's decide-and-proceed rate vs. over/under-escalation over the window, the specific drift instances with the doctrine clause each violated, and the **trend** against the Chairman's standing charge to lengthen autonomous runs.
+
+**Why Solomon-shaped**: Adam cannot reliably self-assess its own autonomy drift — over/under-escalation is a *framing* blind spot (in the moment Adam believed the migration escalation was correct), and Adam's own self-adherence probe (`scripts/adam-self-adherence-review.mjs`) demonstrably MISSED this incident (it read `decision_rubric=pass`, `dispatch_boundary=unknown` the same day Adam over-escalated). This duty is the outside-the-loop, unbiased check that catches exactly what Adam's in-frame self-probe scores as "unknown/pass" — depth + context-freshness, the same Fable-shaped combination as the grounding-completeness duty.
+
+**Live source**: the `adam_advisory` lane, the `chairman_decisions` rows Adam created (each is a candidate escalation to grade), the `adam-decision-email` send record, and the `adam_adherence_ledger` (`decision_rubric` / `propose_only` / `dispatch_boundary` dimensions) — cross-checked against `only-the-chairman-can.md`.
+
+### Ratification-Capture — procedure, rationale, live source
+
+**Procedure (Solomon's charge)**: on the daily plan-alignment tick (folded into the existing baseline cadence), diff ruling SOURCES against `chairman_ratifications` + `encoded_ref` targets. Flag CAPTURE MISSES (ruling-shaped item on a verified chairman surface, directive verbs, named target, no ledger row) and ENCODE MISSES (ledger row whose `encoded_ref` target doesn't read as encoded). Partial matches route to review, never auto-flag.
+
+**Why Solomon-shaped**: Solomon is usually the first durable record to see a ruling flow through session_coordination/feedback/object-metadata — the cheapest detection point. Instrument diversity is the point: reads the SOURCES, not the ledger, so it sees what a ledger-freshness gauge structurally cannot.
+
+**Live source**: `session_coordination` (`payload.kind` = `adam_advisory`/`solomon_consult`); object-embedded rulings in `ventures.metadata`/`strategic_directives_v2.metadata`; `chairman_decisions` rows (closest email-ratification analog; no email-relay table exists) — cross-checked against `chairman_ratifications`.`encoded_ref` target reads.
+
+### Plan-Alignment — rationale, heavy-now/light-later, encoding
+
+**Rationale (chairman's diagnosis, Adam-confirmed)**: the harness has a LOUD reactive channel (belt-thin arrives as a hard interrupt with a forcing function) and a SILENT proactive one (plan-think has none); this review supplies the missing forcing function — it is the first live instance of the FW-3 FRAME→SOURCE hand-down (Solomon frames altitude, Adam sources, the coordinator dispatches; no verb changes, CONST-002).
+
+**Heavy-now / light-later**: until the plan-of-record remainder view and KPI-2 claim-time reason-stamps land, the review is a hand-assembled read (exact-count discipline mandatory); it shrinks to judgment on a queryable diff once they land.
+
+**Encoding**: `SOLOMON_LOOPS` entry `'plan-alignment'` (24–48h daily-baseline cadence + daily divergence-trigger check, `covers[]` this duty) + the session-independent reminder-row pattern, so the duty fires and queues for a successor even with no live Solomon session.
+
+### Comms mechanics — courtesy-ACK dedup, ordered parts, higher-order-tier (PARKED)
+
+- **Courtesy-ACK dedup hazard (codified)**: reply-dedup keys on rows whose `payload.kind` is the ANSWER kind (`adam_advisory`) and which echo the correlation — NOT on any correlation echo whatsoever; an ACK emitted under that kind on a consult correlation still blocks the canonical answer (mechanism detail: provenance). **Senders never courtesy-ACK on-correlation**; acknowledgement rides the two-stage `read_at` → `acknowledged_at` fields, never a correlated row.
+
+- **Ordered parts are FIRST-CLASS on both senders** (SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001): parts of one logical message share ONE `correlation_id` and carry `payload.part_index` / `payload.part_total`, bounded by `MAX_PARTS` (lib/coordinator/multi-part-reply.cjs). The subject-line `N/M` regex is now a FALLBACK for legacy rows only. `--part N/M` exists on BOTH `solomon-advisory.cjs` and `adam-advisory.cjs` (history: provenance).
+
+- **Higher-order-tier comms (as-above panel + FRAME→SOURCE hand-down, Fable-gated, PARKED)**: the diverse-lens consensus **panel** (logical — likely in-process sub-agent fan-out, NOT `session_coordination` rows) and the **Solomon→Adam framing hand-down** (rides the §10 lane, reusing `solomon_systemic_finding` with a `payload.framing` sub-discriminator) need **no new transport**. This is an ACTIVE write/disposition lane — distinct from the read-only observation bullet above. This file states altitude/intent only; the full design brief is `docs/architecture/solomon-higher-order-effort-fleet-brainstorm.md` § "As-above communication & partnership architecture". **Adam seeds; Solomon designs.**
+
+### Chairman-SMS-lane source — read mechanics
+
+read it as a bounded-recent COLD artifact via `readChairmanSmsExchanges()` in `lib/solomon/chairman-sms-exchanges.js`, which correlates inbound `sms_relay_staging` with outbound `sms_outbound_obligations` into exchanges — omitting it means grading on a sample that excludes the consequential matters (measurement basis: provenance).
+
+### SMS-QC probe facets (i)-(vi)
+
+against: (i) rec+why leads decision asks; (ii) numbered exact keystrokes, only-truly-his items; (iii) plain professional-casual language, last-hour numbers on hourlies; (iv) timestamps pasted from instruments, never estimated; (v) sleep-window/presence/cadence honored; (vi) own-the-miss-not-defend on challenges.
+
+### Self-score cadence — the operating reality
+
+Three operative facts, each verifiable in code *(rationale/citation detail: provenance)*:
+
+1. **THE SCORER SHIPS INERT**: `scripts/solomon-self-assessment-writer.cjs` gates on `SOLOMON_SELF_SCORE_CADENCE` and no-ops unless exactly `on`; default is `off` and unset everywhere (`.env`, `.env.example`, `.claude/settings.json`, any cron). A self-score does NOT happen by itself.
+
+2. **`--force` IS THE OPERATING PATH** (chairman-directed, not a workaround, QF-20260719-825): the self-score loop is armed on a 6h cadence and its prompt MANDATES re-running with `--force` when the flag gate blocks — scoring is expected every ~6h via `--force`, and the staleness gauge trips at 8h.
+
+3. **`leo_feature_flags` IS A GAUGE FOR THIS FLAG, NOT A GATE**: `scripts/solomon-self-assessment-writer.cjs` reads `process.env` only; flipping `is_enabled` on that row has NO runtime effect.
+
+**If live enablement is wanted**: its own change, through `SD-LEO-INFRA-ENABLE-TRI-PARTY-001` (CANCELLED) — never a side effect of a fix. The three staleness gauges in `lib/governance/gauge-registry.js` ship `enabled:false`, paired with these flags — flip both together or neither.
+
+### First-use shape-probe — application note
+
+APPLICATION NOTE (seat guidance from the type specimen's own same-day sequel, not a modification of the ratified terms): the probe as specified is necessary, not sufficient — the specimen's author was falsified hours later by a NON-EMPTY SENTINEL that passed a presence check, with all 3 hand-inspections drawn from one side of the flag boundary. Operational sharpening: probe the VALUE DISTRIBUTION (distinct values incl. sentinels), and draw the >=3 inspections ACROSS the discriminating boundary, never from one side.
+
+
 
 ## Crew-comms routing protocol (organizing layer)
 
@@ -110,6 +177,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-08-30*
+*Generated from database: 2026-09-01*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*
