@@ -1,8 +1,8 @@
-<!-- file_content_hash: 5f94f8697899503a -->
+<!-- file_content_hash: 4e477060787fac50 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-08-30 6:28:05 AM
+**Generated**: 2026-09-01 5:39:58 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1227,9 +1227,9 @@ see `docs/architecture/solomon-activation-runbook.md`.
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-LEADTOPLAN-0f589709 | handoff_failure | [HIGH] high | 12 | [STABLE] | N/A |
 | PAT-RETRO-LEADTOPLAN-0f589709 | session_retrospective | [HIGH] high | 11 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-27a62713 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-HF-LEADTOPLAN-ded32ff4 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-AUTO-02123036 | process | [HIGH] high | 8 | [STABLE] | N/A |
 | PAT-HF-PLANTOLEAD-27a62713 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-ded32ff4 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1243,6 +1243,7 @@ see `docs/architecture/solomon-activation-runbook.md`.
 
 | Signal Type | Workers | Severity | Title |
 |-------------|---------|----------|-------|
+| feedback | 4 | low | SELF-IDENTIFY: I am idle but see 11 claimable item(s) I did  |
 | feedback | 4 | medium | online |
 | feedback | 3 | medium | model-stamped claude-sonnet-5 |
 
@@ -1374,7 +1375,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-08-30*
+*Generated from database: 2026-09-01*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
