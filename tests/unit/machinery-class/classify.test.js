@@ -47,6 +47,28 @@ describe('classifyMachineryClass — free-text lane', () => {
     const sd = { description: 'This SD explicitly ships no cron job, only a manual CLI helper.', key_changes: [] };
     expect(classifyMachineryClass(sd).machineryClass).toBe(false);
   });
+
+  it('does not classify a machinery mention inside an OUT OF SCOPE section as machinery-class (QF-20260901-817 live specimen)', () => {
+    const sd = {
+      key_changes: [],
+      description: 'Design-only deliverable settling which automation approach should be built later.',
+      scope: 'IN SCOPE (design-only deliverable, no production code touched):\n'
+        + '- Author a design doc settling the automation approach.\n'
+        + 'OUT OF SCOPE (explicit guardrails against scope creep into implementation):\n'
+        + '- Scheduling the sync script as a cron job -- a design recommendation only.\n'
+        + '- Building any part of the automation -- design only.',
+    };
+    expect(classifyMachineryClass(sd).machineryClass).toBe(false);
+  });
+
+  it('still classifies a genuine machinery mention BEFORE an OUT OF SCOPE heading', () => {
+    const sd = {
+      key_changes: [],
+      description: 'Ships a new watcher process that polls the queue every 30s.',
+      scope: 'OUT OF SCOPE:\n- Unrelated future work.',
+    };
+    expect(classifyMachineryClass(sd).machineryClass).toBe(true);
+  });
 });
 
 describe('classifyMachineryClass — non-machinery SDs (zero false gating)', () => {
