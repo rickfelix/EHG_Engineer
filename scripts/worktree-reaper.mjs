@@ -1456,13 +1456,24 @@ export async function main(argv = process.argv) {
   console.log('─'.repeat(header.length));
 
   for (const wt of allWorktrees) {
+    // AC6 (SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4) — GAUGE ONLY. Computed once here
+    // (using `wt` directly, since `wtInput` is not built until below) and folded into every
+    // early-continue branch's evidence, not just classifyWorktree()'s. TESTING sub-agent
+    // finding F-C, evidence 6d0d3296: the live specimen this SD exists because of
+    // (EHG_Engineer-scribe-doctrine) takes the reap-protected-marker branch below, which
+    // previously never computed the gauge at all — 0 real-world yield despite FR-4's claim.
+    // Never affects verdict/stage in any branch.
+    const siblingGauge = isOutsideWorktreesDir(wt, { repoRoot });
+
     // Never touch Cursor IDE worktrees (inherits existing convention).
     if (isCursorWorktree(wt.path)) {
+      const evidence = {};
+      if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
         reason: 'cursor_worktree_protected',
         claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
-        preserveCount: 0, shipStatus: 'cursor', evidence: {},
+        preserveCount: 0, shipStatus: 'cursor', evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
@@ -1474,12 +1485,14 @@ export async function main(argv = process.argv) {
     // classification, so a protected tree can never reach stage1/stage2 removal regardless of
     // whether its basename resolves to an sd_key or it carries a DB claim.
     if (hasReapProtectedMarker(wt.path)) {
+      const evidence = { marker: readReapProtectedMarker(wt.path) || {} };
+      if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
         reason: 'reap_protected_marker',
         claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
         preserveCount: 0, shipStatus: 'protected',
-        evidence: { marker: readReapProtectedMarker(wt.path) || {} },
+        evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
