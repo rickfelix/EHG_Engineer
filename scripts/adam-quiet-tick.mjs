@@ -65,6 +65,11 @@ import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs'
 // ONE place, consumed by both the startup check (point-in-time) and this tick (continuous) so
 // the two can never disagree on what "required" means.
 import { ADAM_LOOPS, parseArmedSet, loopStatus } from './adam-startup-check.mjs';
+// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C / RCA 9a02a76d: neither existing gauge measures
+// whether origin/main is actually ADVANCING (output-flow blind spot), nor whether an in-flight
+// item is running past its type's historical duration baseline (chairman-specified 2026-09-01).
+import { detectOutputFlowStall } from '../lib/adam/output-flow-gauge.js';
+import { buildBaselines, classifyDurationBreach, nextEscalationTier } from '../lib/adam/duration-baseline-gauge.js';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -906,6 +911,71 @@ export async function checkIdleBesideClaimable(sb) {
   } catch { return null; }
 }
 
+// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C: fail-soft origin/main HEAD reading for the
+// output-flow gauge. `git fetch` first so a long-lived process's local origin/main ref does
+// not go stale; both steps are bounded (5s timeout each) and any failure returns null, which
+// detectOutputFlowStall treats as "no usable reading" (never a false flag).
+async function getOriginMainHeadSha(repoRoot) {
+  try {
+    await execFileAsync('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: repoRoot, timeout: 5000 });
+    const out = await execFileAsync('git', ['rev-parse', 'origin/main'], { cwd: repoRoot, timeout: 5000 });
+    return out.stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C (chairman-specified 2026-09-01): historical
+// completion durations per sd_type, for the duration-baseline gauge. Fail-soft — an unreadable
+// history returns {} (empty baselines), which classifyDurationBreach treats as "no baseline",
+// never a false breach.
+async function fetchDurationsByType(sb) {
+  try {
+    // Full-history read via fetchAllPaginated (not a capped .limit()) -- a baseline gauge's
+    // fidelity depends on the sample size, so silently truncating history would quietly narrow
+    // every type's p95 as the table grows. SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 pattern.
+    const data = await fetchAllPaginated(() => sb
+      .from('strategic_directives_v2')
+      .select('sd_type, created_at, completion_date')
+      .eq('status', 'completed')
+      .not('completion_date', 'is', null)
+      .not('sd_type', 'is', null));
+    if (!data) return {};
+    const byType = {};
+    for (const row of data) {
+      const created = Date.parse(row.created_at);
+      const completed = Date.parse(row.completion_date);
+      if (!Number.isFinite(created) || !Number.isFinite(completed) || completed < created) continue;
+      (byType[row.sd_type] ||= []).push(completed - created);
+    }
+    return byType;
+  } catch {
+    return {};
+  }
+}
+
+// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C: in-flight (not yet completed) SDs, for the
+// duration-baseline breach check. Excludes orchestrator parents (their own children carry the
+// real elapsed-time signal) and draft SDs (not yet actively worked, so no clock has started).
+async function fetchInFlightItems(sb) {
+  try {
+    const { data, error } = await sb
+      .from('strategic_directives_v2')
+      .select('sd_key, sd_type, created_at')
+      .not('status', 'in', '("completed","cancelled","draft")')
+      .not('sd_type', 'is', null)
+      .is('parent_sd_id', null)
+      .limit(500);
+    if (error || !data) return [];
+    return data
+      .filter((r) => r.sd_type !== 'orchestrator')
+      .map((r) => ({ sd_key: r.sd_key, sd_type: r.sd_type, createdAtMs: Date.parse(r.created_at) }))
+      .filter((r) => Number.isFinite(r.createdAtMs));
+  } catch {
+    return [];
+  }
+}
+
 function loadLastState() {
   try { return JSON.parse(readFileSync(LAST_STATE_FILE, 'utf8')); } catch { return null; }
 }
@@ -1048,9 +1118,53 @@ async function main() {
   // reaches the coordinator on a real belt/venture delta, never a "still idle" status.
   const salient = await readSalientState(sb);
   const delta = detectSalientDelta(priorSalient, salient);
+
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C / RCA 9a02a76d: output-flow gauge. Cheap (two
+  // bounded git subprocess calls), so it runs every tick regardless of skipHeavyPass — the
+  // whole point is to catch a stall even during a run of otherwise-unchanged cheap state.
+  const priorOutputFlow = priorState.outputFlow || {};
+  const originMainHeadSha = await getOriginMainHeadSha(REPO_ROOT);
+  const outputFlow = detectOutputFlowStall({
+    headSha: originMainHeadSha,
+    priorHeadSha: priorOutputFlow.headSha || null,
+    priorFirstSeenAt: priorOutputFlow.firstSeenAt || null,
+    quiescent,
+  });
+
+  // Chairman-specified (2026-09-01): per-SD-type duration-baseline gauge. Gated by
+  // skipHeavyPass like its sibling heavy scans above — a full-history aggregate read + an
+  // in-flight enumeration, not a cheap check.
+  const priorDurationBreaches = priorState.durationBreaches || {};
+  let durationBreaches = priorDurationBreaches;
+  const durationBreachLines = [];
+  if (!skipHeavyPass) {
+    try {
+      const [durationsByType, inFlight] = await Promise.all([fetchDurationsByType(sb), fetchInFlightItems(sb)]);
+      const baselines = buildBaselines(durationsByType);
+      const nextBreaches = {};
+      const nowMs = Date.now();
+      for (const item of inFlight) {
+        const baseline = baselines[item.sd_type];
+        const { breached, ratio } = classifyDurationBreach({ elapsedMs: nowMs - item.createdAtMs, baseline });
+        const { tier, nextBreached } = nextEscalationTier({ breached, priorBreached: !!priorDurationBreaches[item.sd_key] });
+        if (nextBreached) nextBreaches[item.sd_key] = true;
+        if (tier !== 'none') {
+          const elapsedH = ((nowMs - item.createdAtMs) / 3600000).toFixed(1);
+          const p95H = baseline && Number.isFinite(baseline.p95) ? (baseline.p95 / 3600000).toFixed(1) : '?';
+          durationBreachLines.push(
+            `QUIET_TICK_DURATION_BASELINE_BREACH=adam sd_key=${item.sd_key} sd_type=${item.sd_type} elapsed_h=${elapsedH} p95_h=${p95H} ratio=${ratio ? ratio.toFixed(2) : '?'} n=${baseline.n} escalated=${tier === 'second'} — in-flight item running past its type's p95 baseline (flag, not fail; investigate worker health)${tier === 'second' ? ' — 2nd consecutive tick, Solomon-visible' : ''}.`
+          );
+        }
+      }
+      durationBreaches = nextBreaches;
+    } catch { /* fail-soft — durationBreaches stays at its prior value, no false clear */ }
+  }
+
   saveLastState({
     salient, stallSnapshot: stall.snapshot, ventureStallSnapshot: ventureStall.snapshot,
     ventureRealBuildStallSnapshot: ventureStall.realBuildSnapshot,
+    outputFlow: outputFlow.nextState,
+    durationBreaches,
     // QF-20260829-373: skipStreak only counts CONSECUTIVE skips — a full pass (change, error,
     // or hitting the floor) resets it, so the Nth-tick floor always measures from the last
     // real enumeration, not from whenever the hash last happened to match.
@@ -1160,6 +1274,9 @@ async function main() {
     pingFields: delta.fields,
     accountSwitch: acctSwitch.changed,
     accountSwitchNotified: acctSwitch.changed ? acctNotified : null,
+    outputFlowStalled: outputFlow.matched,
+    outputFlowStalledMs: outputFlow.stalledMs,
+    durationBaselineBreaches: durationBreachLines.length,
     nextWakeSeconds: delaySeconds,
   };
 
@@ -1199,6 +1316,15 @@ async function main() {
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
+    }
+    // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C / RCA 9a02a76d: the output-flow blind spot —
+    // no existing axis measured whether origin/main is actually advancing.
+    if (outputFlow.matched) {
+      const stalledH = (outputFlow.stalledMs / 3600000).toFixed(1);
+      console.log(`QUIET_TICK_OUTPUT_FLOW_STALL=adam stalled_h=${stalledH} head=${originMainHeadSha} — origin/main HEAD has not moved in ${stalledH}h while the fleet is active. FIX: check for a blocked reaper/merge chain (node scripts/safe-root-resync.mjs), not just input-availability gauges.`);
+    }
+    for (const line of durationBreachLines) {
+      console.log(line);
     }
     // QF-20260725-639: audit trail for ledger rows EXCLUDED from the stall class (parent-tier
     // anchors, advisory_thread comms). INFORMATIONAL ONLY — deliberately absent from the NO-OP
