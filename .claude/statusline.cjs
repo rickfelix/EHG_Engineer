@@ -94,9 +94,24 @@ function abbreviateModel(m) {
 const modelShort = abbreviateModel(model);
 
 // Context usage
-const contextUsed = inputTokens + outputTokens + cacheCreation + cacheRead;
+// QF-20260901-874: output_tokens is excluded per the documented context accounting
+// (total_input_tokens = input + cache_creation + cache_read) — including it double-counts.
+const contextUsed = inputTokens + cacheCreation + cacheRead;
 const usableContext = Math.max(1, Math.floor(contextSize * AUTOCOMPACT_PCT / 100));
-const percentUsed = Math.min(100, Math.floor(contextUsed * 100 / usableContext));
+// The official used_percentage (real % of the full window) is preferred when present.
+// percentUsed drives the bar position and the displayed number — it must never be
+// rescaled to the auto-compact threshold, or it saturates at 100% while real usage is
+// still well below the window size. compactionProximityPercent keeps the OLD rescaled
+// ratio (% of the way through the 80%-of-window auto-compact budget) purely for
+// WARNING/CRITICAL/EMERGENCY coloring, so "color = distance to the 80% compaction mark"
+// while "bar position = real usage" per the official Claude Code fields.
+const officialUsedPct = data.context_window && typeof data.context_window.used_percentage === 'number'
+  ? data.context_window.used_percentage
+  : null;
+const percentUsed = officialUsedPct != null
+  ? Math.min(100, Math.floor(officialUsedPct))
+  : Math.min(100, Math.floor(contextUsed * 100 / contextSize));
+const compactionProximityPercent = Math.min(100, Math.floor(contextUsed * 100 / usableContext));
 
 // Role-aware advisory thresholds (SD-LEO-INFRA-COORDINATOR-CRON-LIFECYCLE-001).
 // DEFAULT-OFF behind COORD_COMPACTION_THRESHOLD_V2 — when off, every role uses the
@@ -116,8 +131,8 @@ try {
 // job is pressing /compact when told, never tracking meters. A subtle ' !' was missable.
 let status = 'HEALTHY';
 let icon = '';
-if (percentUsed >= thresholds.emergency) { status = 'EMERGENCY'; icon = ' ‼ EMERGENCY — /compact NOW'; }
-else if (percentUsed >= thresholds.critical) { status = 'CRITICAL'; icon = ' *'; }
+if (compactionProximityPercent >= thresholds.emergency) { status = 'EMERGENCY'; icon = ' ‼ EMERGENCY — /compact NOW'; }
+else if (compactionProximityPercent >= thresholds.critical) { status = 'CRITICAL'; icon = ' *'; }
 
 // Progress bar
 const BAR_WIDTH = 20;
@@ -125,8 +140,8 @@ const filled = Math.floor(percentUsed * BAR_WIDTH / 100);
 const empty = BAR_WIDTH - filled;
 const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
 let barColor = GREEN;
-if (percentUsed >= thresholds.emergency) barColor = RED;
-else if (percentUsed >= thresholds.critical) barColor = YELLOW;
+if (compactionProximityPercent >= thresholds.emergency) barColor = RED;
+else if (compactionProximityPercent >= thresholds.critical) barColor = YELLOW;
 
 // Git info
 let gitBranch = '';
