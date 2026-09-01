@@ -15,6 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   resolveGitDir, observeIndexLock, loadState, saveState, stateFileFor,
+  normalizeRepoPathKey, migrateLegacyRepoPathKeys,
 } from '../../../scripts/cron/index-jam-detector.mjs';
 
 let tmp;
@@ -168,5 +169,49 @@ describe('state store round-trip (TR-7)', () => {
     saveState('C:/other/repo', { firstBlockedAtMs: 2, lockIdentity: 'B' }, stateFileFor(repo));
     const all = JSON.parse(fs.readFileSync(stateFileFor(repo), 'utf8'));
     expect(Object.keys(all)).toHaveLength(2);
+  });
+});
+
+// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A / FR-3, TS-3: forward-slash vs backslash-escaped
+// spellings of the IDENTICAL repo path were treated as different state-file keys, splitting the
+// dwell counter for one tree across two entries.
+describe('repoPath key normalization (FR-3)', () => {
+  it('normalizeRepoPathKey collapses forward-slash and backslash spellings of the same path', () => {
+    const forward = normalizeRepoPathKey('C:/x/y');
+    const backslash = normalizeRepoPathKey('C:\\x\\y');
+    expect(forward).toBe(backslash);
+  });
+
+  it('a forward-slash repoPath and a backslash-escaped repoPath for the SAME tree read/write the SAME state entry', () => {
+    const repo = mainRepo();
+    const forwardSpelling = repo.split('\\').join('/');
+    const backslashSpelling = repo.split('/').join('\\');
+
+    saveState(forwardSpelling, { firstBlockedAtMs: 111, lockIdentity: 'A' });
+    // The second call, with the OTHER spelling, must read back what the first call wrote.
+    expect(loadState(backslashSpelling, stateFileFor(repo))).toEqual({ firstBlockedAtMs: 111, lockIdentity: 'A' });
+
+    saveState(backslashSpelling, { firstBlockedAtMs: 222, lockIdentity: 'B' }, stateFileFor(repo));
+    const all = JSON.parse(fs.readFileSync(stateFileFor(repo), 'utf8'));
+    expect(Object.keys(all)).toHaveLength(1); // still ONE entry, not two
+    expect(loadState(forwardSpelling, stateFileFor(repo))).toEqual({ firstBlockedAtMs: 222, lockIdentity: 'B' });
+  });
+
+  it('migrateLegacyRepoPathKeys prefers the entry with a non-null firstBlockedAtMs when merging', () => {
+    const normalizedKey = normalizeRepoPathKey('C:/x/y');
+    const all = {
+      'C:/x/y': { firstBlockedAtMs: null, lockIdentity: null },
+      'C:\\x\\y': { firstBlockedAtMs: 999, lockIdentity: 'Z' },
+    };
+    const merged = migrateLegacyRepoPathKeys(all, 'C:/x/y', normalizedKey);
+    expect(Object.keys(merged)).toEqual([normalizedKey]);
+    expect(merged[normalizedKey]).toEqual({ firstBlockedAtMs: 999, lockIdentity: 'Z' });
+  });
+
+  it('migrateLegacyRepoPathKeys is a no-op when there are no legacy spellings to merge', () => {
+    const normalizedKey = normalizeRepoPathKey('C:/x/y');
+    const all = { [normalizedKey]: { firstBlockedAtMs: 1, lockIdentity: 'A' }, 'C:/unrelated': { firstBlockedAtMs: 2, lockIdentity: 'B' } };
+    const merged = migrateLegacyRepoPathKeys(all, 'C:/x/y', normalizedKey);
+    expect(merged).toEqual(all);
   });
 });

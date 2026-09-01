@@ -334,6 +334,36 @@ describe('TS-3: default non-destructive path', () => {
     expect(result.ok).toBe(false);
     expect(result.conflict).toBe(true);
   });
+
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A / TS-8: the scheduled periodic job passes
+  // skipLockClear:true so STEP 1.5 (clear-stale-index-lock) never runs — that step stays
+  // manual-only per the parent SD's git-flow-expert refinement (it can race a live lock
+  // creation). The manual CLI path (skipLockClear omitted, the existing default) is unchanged.
+  it('skipLockClear:true skips STEP 1.5 entirely — a fresh, non-empty lock is never touched by the scheduled path', async () => {
+    const CWD = SHARED_ROOT;
+    const execSpy = makeExecSpy([
+      { args_match: ['status', '--porcelain', '--untracked-files=no'], stdout: '' },
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '1\n' },
+    ]);
+    const stderrWrites = [];
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { stderrWrites.push(String(chunk)); return true; });
+
+    try {
+      const result = await safeRootResync({
+        exec: execSpy,
+        fs: makeFsSharedRoot(CWD),
+        cwd: CWD,
+        supabase: makeSupabaseSpy(),
+        skipLockClear: true,
+        ...noopRestoreSeams,
+      });
+      expect(result.ok).toBe(true);
+      expect(stderrWrites.some((line) => /skipLockClear=true.*skipped/i.test(line))).toBe(true);
+      expect(stderrWrites.some((line) => /cleared STALE/i.test(line))).toBe(false);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
 });
 
 // ─── TS-4: FR-2 coordinator pointer restore ─────────────────────────────────
