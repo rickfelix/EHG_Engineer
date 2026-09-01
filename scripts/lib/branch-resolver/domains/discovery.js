@@ -18,6 +18,18 @@ function normalizePath(inputPath) {
 }
 
 /**
+ * Strip a single `git branch -a` output line down to its bare branch name.
+ * Handles all marker shapes git can prepend: '* ' (current branch), '+ ' (checked out in
+ * another linked worktree), or none (plain listing) -- and normalizes the
+ * 'remotes/origin/' prefix away.
+ * @param {string} line - one raw line from `git branch -a`
+ * @returns {string}
+ */
+export function normalizeBranchLine(line) {
+  return line.trim().replace(/^[*+]?\s*/, '').replace('remotes/origin/', '');
+}
+
+/**
  * Discover feature branches from git that match the SD ID
  * @param {string} repoPath - Path to the repository
  * @param {string} sdId - Strategic Directive ID to search for
@@ -66,7 +78,7 @@ export function discoverBranchFromGit(repoPath, sdId, verbose = false) {
     if (branchOutput) {
       allBranches = branchOutput
         .split('\n')
-        .map(b => b.trim().replace(/^\*?\s*/, '').replace('remotes/origin/', ''))
+        .map(normalizeBranchLine)
         .filter(b => b && !b.includes('HEAD'))
         .filter((b, i, arr) => arr.indexOf(b) === i); // Dedupe
     }
