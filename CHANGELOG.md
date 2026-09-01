@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-01](#2026-09-01)
+  - [Infrastructure](#infrastructure-4)
 - [2026-08-31](#2026-08-31)
   - [Infrastructure](#infrastructure-3)
   - [Bugfix](#bugfix-3)
@@ -164,6 +166,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-01
+
+### Infrastructure
+
+- **Design doc settles what will detect unwired ratified-decision requirements, grounded in a live 106/414 drift specimen** (SD-LEO-INFRA-PHASE-DESIGN-GOVERNANCE-001)
+  - **What shipped**: `docs/design/governance-cascade-invariant-design.md` — a Phase-0 design that explicitly disambiguates the new invariant work from the pre-existing `trigger_gr_governance_cascade` DB trigger (`supabase/migrations/20260302_governance_guardrail_triggers.sql:11-28`, pure SD-to-theme traceability), grounds its premise in the live-verified count of 106/414 (25.6%) `strategic_directives_v2` rows carrying a reasonless `metadata.roadmap_link_exception`, and explicitly defers `SD-LEO-INFRA-RATIFIED-DECISIONS-THREAD-DOWNSTREAM-001`'s propagation-plumbing scope rather than rebuilding it.
+  - **Design-only, no code change**: no production file was touched — the deliverable is the design doc itself, scoping remediation (resolving the 106 reasonless rows) and a write-time check as follow-on child work.
+  - **Verification**: LEAD-FINAL-APPROVAL 94%. Post-completion heal scored 100/100 against all five delivery dimensions.
 
 ## 2026-08-31
 
