@@ -250,11 +250,16 @@ async function resolveParentSd(parentKey) {
  * DURABLE MIGRATION HEADER with no verification at any hop, and was false in all three parts
  * against pg_catalog — the named object did not exist in the database at all.
  */
+// SD-LEO-INFRA-HARNESS-BACKLOG-PER-001 (FR-5/3): 'completion_flag_finding' added —
+// same treatment as 'completion_flag_witness' immediately below. It is a write-time-
+// terminal category (per-flag closure findings from an already-completed SD, routed
+// there by capture-completion-flags.js's routeFlag() per FR-2) and must NEVER be
+// silently sourced into a new SD as if it were an open harness_backlog finding.
 const RELAYED_CLAIM_CATEGORIES = new Set([
   'harness_backlog', 'coordinator_review', 'coordinator_adam_review', 'fleet_retro',
   'invariant_gauge_finding', 'adam_adherence_drift', 'solomon_adherence_drift',
   'adam_solomon_health', 'adam_self_assessment', 'completion_flag', 'completion_flag_witness',
-  'wind_down_survey',
+  'completion_flag_finding', 'wind_down_survey',
 ]);
 
 /**
