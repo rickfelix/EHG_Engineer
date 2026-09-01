@@ -418,6 +418,20 @@ export async function checkTestEvidenceFreshness(sdId, maxAgeMinutes = 60) {
     };
   }
 
+  // QF-20260901-117: a negative age_minutes means completed_at is in the
+  // future relative to NOW() — local-vs-UTC clock skew on the write path,
+  // not genuinely fresh evidence. Refuse reuse so a real run is forced.
+  if (evidence.age_minutes !== null && evidence.age_minutes < 0) {
+    return {
+      isFresh: false,
+      evidence,
+      ageMinutes: evidence.age_minutes,
+      freshnessStatus: evidence.freshness_status,
+      reason: `Evidence age is negative (${evidence.age_minutes} min) — clock skew, refusing reuse`,
+      recommendation: 'Re-run tests; evidence has a future completed_at timestamp and cannot be trusted'
+    };
+  }
+
   const isFresh = evidence.freshness_status === 'FRESH' ||
     (evidence.age_minutes !== null && evidence.age_minutes <= maxAgeMinutes);
 
