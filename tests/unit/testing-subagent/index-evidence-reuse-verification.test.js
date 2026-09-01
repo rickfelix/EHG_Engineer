@@ -17,10 +17,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // vi.mock factories are hoisted above imports/const declarations; referencing outer
 // variables inside them requires vi.hoisted() so the reference is initialized in time.
-const { readArtifactMock, isArtifactFreshMock, classifyProvenanceMock } = vi.hoisted(() => ({
+const { readArtifactMock, isArtifactFreshMock, classifyProvenanceMock, computeArtifactShaMock } = vi.hoisted(() => ({
   readArtifactMock: vi.fn(),
   isArtifactFreshMock: vi.fn(),
-  classifyProvenanceMock: vi.fn()
+  classifyProvenanceMock: vi.fn(),
+  computeArtifactShaMock: vi.fn(() => null)
 }));
 
 vi.mock('../../../lib/sub-agents/testing/artifact-verification.js', async (importOriginal) => {
@@ -29,7 +30,8 @@ vi.mock('../../../lib/sub-agents/testing/artifact-verification.js', async (impor
     ...actual,
     readArtifact: (...args) => readArtifactMock(...args),
     isArtifactFresh: (...args) => isArtifactFreshMock(...args),
-    classifyProvenance: (...args) => classifyProvenanceMock(...args)
+    classifyProvenance: (...args) => classifyProvenanceMock(...args),
+    computeArtifactSha: (...args) => computeArtifactShaMock(...args)
   };
 });
 
@@ -131,6 +133,51 @@ describe('TESTING evidence-reuse: checkTestEvidence (test_runs path)', () => {
     expect(results.findings.phase3_execution.failed_tests).toBe(0);
     expect(results.verdict).toBe('PASS');
     expect(executeE2ETestsMock).not.toHaveBeenCalled();
+  });
+
+  it('FR-5 AC-4: a clean, fresh, runner-provenance artifact whose sha does NOT match the row\'s report_hash still reuses (non-blocking) but surfaces a warning naming the mismatch', async () => {
+    state.checkTestEvidenceFreshnessResult = {
+      isFresh: true,
+      ageMinutes: 5,
+      evidence: {
+        verdict: 'PASS', pass_rate: 100,
+        report_file_path: '/fake/evidence/playwright-results.json',
+        triggered_by: 'PLAYWRIGHT_REPORTER',
+        report_hash: 'expected-hash-from-original-ingest'
+      }
+    };
+    readArtifactMock.mockReturnValue({ expected: 51, unexpected: 0, skipped: 0, flaky: 0, startTime: '2026-09-01T22:00:00.000Z' });
+    isArtifactFreshMock.mockReturnValue(true);
+    classifyProvenanceMock.mockReturnValue(true);
+    computeArtifactShaMock.mockReturnValue('different-hash-borrowed-artifact');
+
+    const { execute } = await import('../../../lib/sub-agents/testing/index.js');
+    const results = await execute('test-sd-hash-mismatch', {}, { full_e2e: false });
+
+    expect(results.findings.phase3_execution.evidence_reused).toBe(true);
+    expect(results.warnings.some((w) => /report_hash|mismatch|substitution/i.test(w.issue))).toBe(true);
+  });
+
+  it('FR-5 AC-4: matching artifact_sha/report_hash produces no mismatch warning', async () => {
+    state.checkTestEvidenceFreshnessResult = {
+      isFresh: true,
+      ageMinutes: 5,
+      evidence: {
+        verdict: 'PASS', pass_rate: 100,
+        report_file_path: '/fake/evidence/playwright-results.json',
+        triggered_by: 'PLAYWRIGHT_REPORTER',
+        report_hash: 'same-hash'
+      }
+    };
+    readArtifactMock.mockReturnValue({ expected: 51, unexpected: 0, skipped: 0, flaky: 0, startTime: '2026-09-01T22:00:00.000Z' });
+    isArtifactFreshMock.mockReturnValue(true);
+    classifyProvenanceMock.mockReturnValue(true);
+    computeArtifactShaMock.mockReturnValue('same-hash');
+
+    const { execute } = await import('../../../lib/sub-agents/testing/index.js');
+    const results = await execute('test-sd-hash-match', {}, { full_e2e: false });
+
+    expect(results.warnings.some((w) => /report_hash|mismatch|substitution/i.test(w.issue))).toBe(false);
   });
 
   it('TS-3: the witnessed incident, reproduced — artifact contradicts a claimed-clean row, verdict is never PASS', async () => {

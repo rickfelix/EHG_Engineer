@@ -8,10 +8,12 @@
  * access in this suite (TR-3).
  */
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'crypto';
 import {
   readArtifact,
   computeArtifactSha,
   isArtifactFresh,
+  isReportHashMismatch,
   classifyProvenance,
   deriveCountsFromArtifact,
   RUNNER_TRIGGER_ALLOWLIST
@@ -74,19 +76,39 @@ describe('readArtifact', () => {
 });
 
 describe('computeArtifactSha', () => {
-  it('computes a stable sha256 over the raw bytes', () => {
-    const sha1 = computeArtifactSha('/fake/path.json', fakeReadFile('hello'));
-    const sha2 = computeArtifactSha('/fake/path.json', fakeReadFile('hello'));
-    const sha3 = computeArtifactSha('/fake/path.json', fakeReadFile('hello '));
-    expect(sha1).toBe(sha2);
-    expect(sha1).not.toBe(sha3);
+  it('computes a stable sha256, matching test-evidence-ingest.js\'s own computeReportHash method (sha256 of JSON.stringify(parsed)), so it is comparable to test_runs.report_hash', () => {
+    const report = { stats: { expected: 1, unexpected: 0, skipped: 0 } };
+    const sha1 = computeArtifactSha('/fake/path.json', fakeReadFile(JSON.stringify(report)));
+    const expected = createHash('sha256').update(JSON.stringify(JSON.parse(JSON.stringify(report)))).digest('hex');
+    expect(sha1).toBe(expected);
     expect(sha1).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('returns null on read failure or missing path, never throws', () => {
+  it('differs for genuinely different content', () => {
+    const sha1 = computeArtifactSha('/fake/path.json', fakeReadFile(JSON.stringify({ stats: { expected: 1, unexpected: 0, skipped: 0 } })));
+    const sha2 = computeArtifactSha('/fake/path.json', fakeReadFile(JSON.stringify({ stats: { expected: 2, unexpected: 0, skipped: 0 } })));
+    expect(sha1).not.toBe(sha2);
+  });
+
+  it('returns null on read failure, missing path, or malformed JSON, never throws', () => {
     expect(computeArtifactSha(null)).toBeNull();
     expect(() => computeArtifactSha('/x', () => { throw new Error('boom'); })).not.toThrow();
     expect(computeArtifactSha('/x', () => { throw new Error('boom'); })).toBeNull();
+    expect(computeArtifactSha('/x', fakeReadFile('{not valid json'))).toBeNull();
+  });
+});
+
+describe('isReportHashMismatch', () => {
+  it('FR-5 AC-4: reports a mismatch only when BOTH hashes are present and differ', () => {
+    expect(isReportHashMismatch('abc123', 'abc123')).toBe(false);
+    expect(isReportHashMismatch('abc123', 'def456')).toBe(true);
+  });
+
+  it('is never a mismatch when either side is absent (older rows predate this SD)', () => {
+    expect(isReportHashMismatch(null, 'def456')).toBe(false);
+    expect(isReportHashMismatch('abc123', null)).toBe(false);
+    expect(isReportHashMismatch(null, null)).toBe(false);
+    expect(isReportHashMismatch(undefined, undefined)).toBe(false);
   });
 });
 
