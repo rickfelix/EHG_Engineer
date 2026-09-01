@@ -208,6 +208,16 @@
             "timeout": 2
           }
         ]
+      },
+      {
+        "matcher": "Task|Bash|Write|Edit|MultiEdit|AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/awaiting-approval-clear.cjs",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "Stop": [
@@ -308,6 +318,11 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/pre-tool-enforce.cjs",
+            "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/awaiting-approval-stamp.cjs",
             "timeout": 3
           }
         ]
