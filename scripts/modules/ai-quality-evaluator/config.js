@@ -13,6 +13,16 @@ export const BAND_THRESHOLDS = {
 // SD-type-aware pass thresholds
 // PHASE 1: Start lenient, tighten based on data
 //
+// SINGLE SOURCE OF TRUTH (QF-20260830-735): this table, resolved through
+// getPassThreshold() in scoring.js, is the only place a threshold is read at
+// gate time -- there is no separate "threshold table" and no live ambiguity
+// here. v_ai_quality_tuning_recommendations.current_threshold is a DIFFERENT,
+// historical value: the pass_threshold recorded on each ai_quality_assessments
+// row at the time it was scored. A pair can show several distinct
+// current_threshold rows in that view simply because this table's value for
+// that pair changed over the 4-week window (see the tuning-QF comments below),
+// which is expected drift-history, not a live duplicate to resolve here.
+//
 // SHAPE (SD-LEO-INFRA-QUALITY-GATE-TYPE-001): each sd_type maps to an object with a mandatory
 // `default` (the threshold used when no content_type-specific override exists) plus optional
 // per-content_type overrides, e.g. `{ default: 55, prd: 60 }`. getPassThreshold() in scoring.js
