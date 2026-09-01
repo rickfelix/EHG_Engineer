@@ -5,13 +5,14 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const SD_KEY = 'SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001';
+const SD_UUID = 'c7a29ca2-b649-4de7-84d8-158a1d17dc06';
 
 // Real vitest run: `npx vitest run tests/unit/apa/imap-code-fetcher.test.js
 // tests/unit/apa/imap-code-fetcher-no-log.test.js tests/unit/apa/venture-step-executors.test.js`
 // 3 files passed (3), 51 tests passed (51), Duration 490ms. Executed 2026-09-01 ~17:10 local
 // (2026-09-01T21:xx UTC) from the SD's own worktree.
 const row = {
-  sd_id: SD_KEY,
+  sd_id: SD_UUID,
   tested: true,
   test_pass_rate: 100,
   test_count: 51,
@@ -38,7 +39,7 @@ async function main() {
   const { data: existing, error: selError } = await supabase
     .from('sd_testing_status')
     .select('id')
-    .eq('sd_id', SD_KEY)
+    .eq('sd_id', SD_UUID)
     .maybeSingle();
   if (selError) throw selError;
 
