@@ -1394,6 +1394,12 @@ async function main() {
       if (readyParents.count > 0 && (readyParents.oldestAgeMs ?? 0) > 2 * 60 * 60 * 1000) {
         console.log(`QUIET_TICK_COMPLETION_READY_PARENT=adam count=${readyParents.count} oldest_age_h=${(readyParents.oldestAgeMs / 3600000).toFixed(1)} keys=${readyParents.parents.map((p) => p.sd_key).join(',')} — dispatch a parent_completion WORK_ASSIGNMENT now (node scripts/run-parent-completion.mjs <SD-KEY>, worker-executed only).`);
       }
+      if (readyParents.held && readyParents.held.length > 0) {
+        // QF-20260901-357: informational only, deliberately absent from the hard-interrupt
+        // allowlist -- a documented hold (needs_coordinator_review / blocked_by_sd_key) is
+        // dispatch-blocked by design, never a "go dispatch this now" interrupt.
+        console.log(`QUIET_TICK_COMPLETION_READY_PARENT_HELD=adam count=${readyParents.held.length} keys=${readyParents.held.map((p) => `${p.sd_key}(${p.reason})`).join(',')} — held by a documented dispatch hold, no action needed.`);
+      }
     } catch (e) {
       console.error('QUIET_TICK_COMPLETION_READY_PARENT_ERROR=adam', e && e.message ? e.message : e);
     }
