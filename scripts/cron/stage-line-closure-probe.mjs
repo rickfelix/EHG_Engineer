@@ -40,6 +40,29 @@ export function isPidAlive(pid, kill = process.kill.bind(process)) {
   }
 }
 
+/**
+ * SD-LEO-FIX-TRIAGE-THREE-FALSE-001: is the scheduler deliberately not dispatching? Fail-quiet
+ * to null on ANY read error/shape mismatch (unreachable table, unexpected row shape) — this is
+ * a purely informational signal layered onto classifyStageLine's existing alarm, never a new
+ * alarm path of its own (see that module's doc comment for the full rationale).
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<boolean|null>}
+ */
+export async function readSchedulerObserveOnly(supabase) {
+  try {
+    const { data: hb, error } = await supabase
+      .from('eva_scheduler_heartbeat')
+      .select('metadata')
+      .eq('id', 1)
+      .maybeSingle();
+    if (error) return null;
+    return hb?.metadata?.observe_only === true;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const hoursArg = argv.indexOf('--silent-hours');
@@ -53,7 +76,8 @@ async function main() {
     return;
   }
 
-  const { data, error } = await createClient(url, key)
+  const supabase = createClient(url, key);
+  const { data, error } = await supabase
     .from('stage_executions')
     .select('created_at')
     .order('created_at', { ascending: false })
@@ -64,6 +88,8 @@ async function main() {
     return;
   }
 
+  const schedulerObserveOnly = await readSchedulerObserveOnly(supabase);
+
   const repoRoot = getRepoRoot();
   const pid = readWorkerPid(repoRoot);
   const verdict = classifyStageLine({
@@ -71,6 +97,7 @@ async function main() {
     pidAlive: isPidAlive(pid),
     lastExecutionAt: data && data[0] ? data[0].created_at : null,
     silentHours,
+    schedulerObserveOnly,
   });
 
   if (argv.includes('--json')) console.log(JSON.stringify({ ...verdict, pid, silentHours }, null, 2));
