@@ -31,10 +31,13 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
   it('DRAIN_SETS.adam grew by exactly 8 kinds (the reconciliation), no other role changed', () => {
     // Pre-reconciliation counts (captured before FR-1 landed): solomon=12, coordinator=16, worker=17.
     // adam was 14 before FR-1 (DIRECTIVE_KINDS(9) + ADAM_ADVISORY + COORDINATOR_REPLY + CANARY_REQUEST
-    // + comms_check + CROSS_PARTY_PING), now 22.
+    // + comms_check + CROSS_PARTY_PING), 22 after FR-1's 8-kind reconciliation, now 28 after
+    // QF-20260831-769 added the 6 BACKPRESSURE_EXEMPT_KINDS (collision_warning, amend_sd,
+    // disposition, retraction, amend, supersede) so a coordinator send of one of those kinds
+    // to Adam is no longer refused as DISPATCH_UNTYPED_ADAM_KIND.
     // worker=18 (not 17) as of QF-20260830-280: 'parent_completion' added, the kind
     // directed-assignment.cjs's orchestrator-parent completion exception requires.
-    expect(DRAIN_SETS.adam.length).toBe(22);
+    expect(DRAIN_SETS.adam.length).toBe(28);
     expect(DRAIN_SETS.solomon.length).toBe(12);
     expect(DRAIN_SETS.coordinator.length).toBe(16);
     expect(DRAIN_SETS.worker.length).toBe(18);

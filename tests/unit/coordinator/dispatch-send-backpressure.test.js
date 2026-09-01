@@ -16,17 +16,19 @@ const {
 const TARGET = '0f8d45d8-9531-4ab8-a1b9-6961c405e1ec';
 const silentLog = { warn() {}, error() {}, log() {} };
 
-/** Stub supabase: the backpressure head-count query resolves to `unanswered`; every other
- *  query (claude_sessions liveness, etc.) resolves benign-empty so insertCoordinationRow's
- *  other guards pass through untouched. */
-function stubSupabase({ unanswered = 0, throwOnCount = false, liveSessions = [TARGET] } = {}) {
+/** Stub supabase: the backpressure query selects `id, payload` rows; `rows` supplies the raw
+ *  candidate population directly, or `unanswered` is a shorthand for that many neutral
+ *  (non-exempt, non-reply) rows. Every other query (claude_sessions liveness, etc.) resolves
+ *  benign-empty so insertCoordinationRow's other guards pass through untouched. */
+function stubSupabase({ unanswered = 0, rows = null, throwOnCount = false, liveSessions = [TARGET] } = {}) {
   const inserted = [];
   const countCalls = [];
+  const candidateRows = rows || Array.from({ length: unanswered }, (_, i) => ({ id: `neutral-${i}`, payload: {} }));
   const sb = {
     from(table) {
       const chain = {
-        _table: table, _isCount: false, _eq: null,
-        select(_cols, opts) { chain._isCount = !!(opts && opts.count === 'exact'); return chain; },
+        _table: table, _isBackpressureSelect: false, _eq: null,
+        select(cols) { chain._isBackpressureSelect = table === 'session_coordination' && cols === 'id, payload'; return chain; },
         eq(col, val) { chain._eq = val; return chain; },
         is() { return chain; },
         gt() { return chain; },
@@ -41,9 +43,9 @@ function stubSupabase({ unanswered = 0, throwOnCount = false, liveSessions = [TA
         single() { return Promise.resolve({ data: inserted[inserted.length - 1] || null, error: null }); },
         insert(r) { inserted.push(r); return chain; },
         then(res, rej) {
-          if (table === 'session_coordination' && chain._isCount) {
+          if (table === 'session_coordination' && chain._isBackpressureSelect) {
             countCalls.push(true);
-            const out = throwOnCount ? { count: null, error: { message: 'transient boom' } } : { count: unanswered, error: null };
+            const out = throwOnCount ? { data: null, error: { message: 'transient boom' } } : { data: candidateRows, error: null };
             return Promise.resolve(out).then(res, rej);
           }
           return Promise.resolve({ data: inserted[inserted.length - 1] || null, error: null }).then(res, rej);
@@ -89,6 +91,37 @@ describe('assertSendBackpressure (unit)', () => {
   it('is a no-op with no target_session', async () => {
     const { sb } = stubSupabase({ unanswered: 999 });
     await expect(assertSendBackpressure(sb, { payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+
+  // QF-20260831-769: exempt-kind rows in the COUNTED population must not count as
+  // "unanswered" — they were previously counted despite the exemption existing, which let
+  // a target's own exempt sends (e.g. Adam's routine roll_call/collision traffic to the
+  // coordinator) permanently occupy the cap and choke every OTHER sender's routine lane.
+  it('does not count exempt-kind rows in the candidate population', async () => {
+    const rows = [...BACKPRESSURE_EXEMPT_KINDS].slice(0, BACKPRESSURE_UNANSWERED_LIMIT + 2)
+      .map((kind, i) => ({ id: `exempt-${i}`, payload: { kind } }));
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+
+  // A solicited correlated reply IS an answer, not a fresh unanswered ask — must not count.
+  it('does not count solicited correlated reply rows in the candidate population', async () => {
+    const rows = Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT + 2 }, (_, i) => ({
+      id: `reply-${i}`, payload: { kind: 'coordinator_update', reply_to: `corr-${i}` },
+    }));
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+
+  it('still refuses when the NON-exempt, non-reply population meets the limit', async () => {
+    const rows = [
+      { id: 'exempt-1', payload: { kind: 'collision_warning' } },
+      { id: 'reply-1', payload: { kind: 'coordinator_update', reply_to: 'corr-1' } },
+      ...Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT }, (_, i) => ({ id: `real-${i}`, payload: {} })),
+    ];
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog))
+      .rejects.toMatchObject({ code: 'DISPATCH_BACKPRESSURE' });
   });
 });
 
