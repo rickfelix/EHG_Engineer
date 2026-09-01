@@ -1,0 +1,21 @@
+{
+  "kind": "fresh_targeted_e2e_run",
+  "sd_key": "SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001",
+  "branch_head": "90e958fb4f457d872d29619cda01331db2f9a38f",
+  "startTime": "2026-09-01T21:53:34.518Z",
+  "endTime": "2026-09-01T21:54:11.547Z",
+  "base_url": "https://altifyai.rickfelix2000.workers.dev",
+  "final_page_url": "https://altifyai.rickfelix2000.workers.dev/register",
+  "persona_type": "existing",
+  "mailbox_alias_note": "VENTURE_UAT_GMAIL_USER (fetch mailbox) and VENTURE_UAT_TEST_ACCOUNT_ALTIFYAI_EXISTING.email (Clerk account) are DIFFERENT mailboxes -- a documented, chairman-flagged limitation, not a defect. A code-challenge branch is therefore expected to end in outcome.status=\"error\" with a mailbox/timeout message from lib/apa/imap-code-fetcher.js, not a false \"authenticated\" pass.",
+  "outcome": {
+    "status": "error",
+    "ctx_authenticated": false,
+    "executor_result": null,
+    "error": {
+      "message": "page.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"emailAddress\"], input[type=\"email\"]')\u001b[22m\n",
+      "stack": "page.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"emailAddress\"], input[type=\"email\"]')\u001b[22m\n\n    at fallbackExecutor (C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\lib\\apa\\venture-step-executors.js:209:16)\n    at async main (C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\scripts\\one-off\\fresh-e2e-altifyai-uat-fetch-001.mjs:44:20)"
+    }
+  },
+  "screenshot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\tests\\e2e\\evidence\\c7a29ca2-b649-4de7-84d8-158a1d17dc06-fresh-20260901\\final-state.png"
+}

@@ -1,0 +1,33 @@
+{
+  "kind": "fresh_targeted_e2e_run_corrected_selectors",
+  "sd_key": "SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001",
+  "branch_head": "90e958fb4f457d872d29619cda01331db2f9a38f",
+  "startTime": "2026-09-01T21:56:05.730Z",
+  "endTime": "2026-09-01T21:56:25.616Z",
+  "base_url": "https://altifyai.rickfelix2000.workers.dev",
+  "final_page_url": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S1360263911%3A1788299768434884&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=x2t87zlzurlpwinyeuja2j2smkq5mw81pzqs29pl&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAOeINYqw4z3FNblMeFKLcUc0xHHY-XNMgOi_TtIyquzvvBSwjAtEjxZmqakBCMv_50tfGB-tgR2XGfhpC0E--g4EWydgi9skSIN8i7-cAxy0yPQYaBVPU3ByRb51kjZSmljc-chHN-YtuK4MMRHTHPVLnEKtS1iRFladxOOW600b0uces-t3VJ348zdCUJE6ZHeKSk254FBUUhnDPfrsi_CdH_iBJwLVfCnOvBqpI5abC4bN8WIYslCoubWEKUv775yY5FlJ8GOABfslK1rz3bKXtxg0HQCJvpqtITKWXNs1P0oUs84z4F5N3AZMPUdfgKgK1m_7UQq4xBhgeT7mhBO2syBgvf9f_lsORdOBr2cVAgNYivF6I1vzWL2cMLmoRySCekRhtsf8IwmZd75E1kxKzI8xQ2QeSr7PAINMQwtFWk_PqdttfWdnsAMCRVCu22KObMMd_OC_YSJYzsPziNKDfEleDwgpGXkrKf_a4UFlSTIhV8%26flowName%3DGeneralOAuthFlow%26as%3DS1360263911%253A1788299768434884%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcduXQfwblQLn2n4vrzg-EDrc_0UD6PyJqsNx-kkgoZEdKFpXNBTBrsADu6VZ1mvn-xJvQ32bON6MVVBvnFHhU5cLyLQsgHXkrL_VwrckPp8OjMkhZo",
+  "persona_type": "existing",
+  "findings": [
+    {
+      "step": "sign_in_toggle_visible",
+      "value": true
+    },
+    {
+      "step": "credentials_submitted",
+      "value": true
+    },
+    {
+      "step": "post_submit_race",
+      "codeChallenge": false,
+      "authedDirect": true
+    }
+  ],
+  "prior_run_note": "A first attempt calling fallbackExecutor() unmodified hit a page.fill timeout on the PRE-EXISTING input[name=\"emailAddress\"] selector (from SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001, not this SD) -- the real Clerk form uses name=\"identifier\". Out of this SD's scope to fix; see results-first-attempt.json in this same evidence dir. This run corrects ONLY the test-script selector (not shipped product code) to reach and exercise this SD's actual new code (the post-submit race + fetchVerificationCode()).",
+  "mailbox_alias_note": "VENTURE_UAT_GMAIL_USER (fetch mailbox) and VENTURE_UAT_TEST_ACCOUNT_ALTIFYAI_EXISTING.email (Clerk account) are DIFFERENT mailboxes -- documented, chairman-flagged limitation. If a code challenge occurs, fetchVerificationCode is expected to fail loudly (no matching message will ever arrive), which is the honest expected environment-limited outcome here, not a defect.",
+  "outcome": {
+    "status": "authenticated_no_2fa_challenge",
+    "ctx_authenticated": true,
+    "error": null
+  },
+  "screenshot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\tests\\e2e\\evidence\\c7a29ca2-b649-4de7-84d8-158a1d17dc06-fresh-20260901\\final-state-corrected-selectors.png"
+}

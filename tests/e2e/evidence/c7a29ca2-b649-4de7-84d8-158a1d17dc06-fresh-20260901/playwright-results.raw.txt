@@ -1,0 +1,318 @@
+{ debug: true }
+[LEO Teardown] Evidence pack and cleanup disabled, skipping
+{
+  "config": {
+    "configFile": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\playwright.config.js",
+    "rootDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\tests\\e2e\\setup\\global-teardown.js",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "protocol": "LEO v4.4",
+      "purpose": "EHG_Engineer Dashboard E2E Testing",
+      "testingSubAgent": "activated",
+      "coverage": "e2e-dashboard",
+      "evidencePack": "enabled",
+      "humanLikeTesting": {
+        "enabled": true,
+        "fixtures": [
+          "accessibility",
+          "keyboard-oracle",
+          "console-capture",
+          "chaos-saboteur",
+          "visual-oracle",
+          "llm-ux-oracle",
+          "stringency-resolver"
+        ],
+        "stringency": "standard",
+        "llmModel": "factory-routed",
+        "budgetMonthlyUSD": 20
+      },
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/test-results/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "protocol": "LEO v4.4",
+          "purpose": "EHG_Engineer Dashboard E2E Testing",
+          "testingSubAgent": "activated",
+          "coverage": "e2e-dashboard",
+          "evidencePack": "enabled",
+          "humanLikeTesting": {
+            "enabled": true,
+            "fixtures": [
+              "accessibility",
+              "keyboard-oracle",
+              "console-capture",
+              "chaos-saboteur",
+              "visual-oracle",
+              "llm-ux-oracle",
+              "stringency-resolver"
+            ],
+            "stringency": "standard",
+            "llmModel": "factory-routed",
+            "budgetMonthlyUSD": 20
+          },
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/tests/e2e",
+        "testIgnore": [
+          "**/venture-creation/**",
+          "**/*.test.js",
+          "**/*.test.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/test-results/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "protocol": "LEO v4.4",
+          "purpose": "EHG_Engineer Dashboard E2E Testing",
+          "testingSubAgent": "activated",
+          "coverage": "e2e-dashboard",
+          "evidencePack": "enabled",
+          "humanLikeTesting": {
+            "enabled": true,
+            "fixtures": [
+              "accessibility",
+              "keyboard-oracle",
+              "console-capture",
+              "chaos-saboteur",
+              "visual-oracle",
+              "llm-ux-oracle",
+              "stringency-resolver"
+            ],
+            "stringency": "standard",
+            "llmModel": "factory-routed",
+            "budgetMonthlyUSD": 20
+          },
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/tests/e2e",
+        "testIgnore": [
+          "**/venture-creation/**",
+          "**/*.test.js",
+          "**/*.test.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/test-results/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "protocol": "LEO v4.4",
+          "purpose": "EHG_Engineer Dashboard E2E Testing",
+          "testingSubAgent": "activated",
+          "coverage": "e2e-dashboard",
+          "evidencePack": "enabled",
+          "humanLikeTesting": {
+            "enabled": true,
+            "fixtures": [
+              "accessibility",
+              "keyboard-oracle",
+              "console-capture",
+              "chaos-saboteur",
+              "visual-oracle",
+              "llm-ux-oracle",
+              "stringency-resolver"
+            ],
+            "stringency": "standard",
+            "llmModel": "factory-routed",
+            "budgetMonthlyUSD": 20
+          },
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/tests/e2e",
+        "testIgnore": [
+          "**/venture-creation/**",
+          "**/*.test.js",
+          "**/*.test.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/test-results/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "protocol": "LEO v4.4",
+          "purpose": "EHG_Engineer Dashboard E2E Testing",
+          "testingSubAgent": "activated",
+          "coverage": "e2e-dashboard",
+          "evidencePack": "enabled",
+          "humanLikeTesting": {
+            "enabled": true,
+            "fixtures": [
+              "accessibility",
+              "keyboard-oracle",
+              "console-capture",
+              "chaos-saboteur",
+              "visual-oracle",
+              "llm-ux-oracle",
+              "stringency-resolver"
+            ],
+            "stringency": "standard",
+            "llmModel": "factory-routed",
+            "budgetMonthlyUSD": 20
+          },
+          "actualWorkers": 1
+        },
+        "id": "Mobile Chrome",
+        "name": "Mobile Chrome",
+        "testDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/tests/e2e",
+        "testIgnore": [
+          "**/venture-creation/**",
+          "**/*.test.js",
+          "**/*.test.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/test-results/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "protocol": "LEO v4.4",
+          "purpose": "EHG_Engineer Dashboard E2E Testing",
+          "testingSubAgent": "activated",
+          "coverage": "e2e-dashboard",
+          "evidencePack": "enabled",
+          "humanLikeTesting": {
+            "enabled": true,
+            "fixtures": [
+              "accessibility",
+              "keyboard-oracle",
+              "console-capture",
+              "chaos-saboteur",
+              "visual-oracle",
+              "llm-ux-oracle",
+              "stringency-resolver"
+            ],
+            "stringency": "standard",
+            "llmModel": "factory-routed",
+            "budgetMonthlyUSD": 20
+          },
+          "actualWorkers": 1
+        },
+        "id": "Mobile Safari",
+        "name": "Mobile Safari",
+        "testDir": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001/tests/e2e",
+        "testIgnore": [
+          "**/venture-creation/**",
+          "**/*.test.js",
+          "**/*.test.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 12,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "altifyai-uat-fetch-001.spec.ts",
+      "file": "altifyai-uat-fetch-001.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "AltifyAI sign-in reaches Clerk, and this SD's post-submit auth-detection is origin-scoped",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18299,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-01T22:04:33.941Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001\\test-results\\artifacts\\altifyai-uat-fetch-001-Alt-eff9f--detection-is-origin-scoped-chromium\\trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9d3afc469481dd465a28-d8aedb9e82025faf1701",
+          "file": "altifyai-uat-fetch-001.spec.ts",
+          "line": 44,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-01T22:04:33.103Z",
+    "duration": 21905.852,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
