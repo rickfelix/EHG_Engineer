@@ -116,6 +116,20 @@ describe('convergeAckTTL', () => {
     await convergeAckTTL(supabase);
   });
 
+  it('SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C: exempts a severity=high row from mechanical TTL convergence', async () => {
+    const now = new Date('2026-07-13T00:00:00Z');
+    const { supabase, updates } = mockSupabase({
+      candidates: [
+        { id: 'row-high', payload: { kind: 'reaper_starvation_alert', severity: 'high' } },
+        { id: 'row-normal', payload: { kind: 'roll_call' } },
+      ],
+    });
+    const r = await convergeAckTTL(supabase, { now });
+    expect(r).toEqual({ converged: 1, error: null });
+    expect(updates).toHaveLength(1);
+    expect(updates[0].payload.kind).toBe('roll_call');
+  });
+
   it('reports the error and stops on an update failure', async () => {
     const { supabase } = mockSupabase({
       candidates: [{ id: 'row-1', payload: {} }],
