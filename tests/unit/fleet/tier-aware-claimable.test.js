@@ -40,15 +40,15 @@ const sd = (sd_key, rank, extra = {}) => ({
 
 const keys = (arr) => arr.map((x) => x.sd_key).sort().join(',');
 
-describe('claimableForTier — WORK-DOWN-NEVER-UP per rung (FR-4a/b)', () => {
+describe('QF-20260831-419: claimableForTier no longer filters by rung — WORK-DOWN-NEVER-UP retired', () => {
   const pool = [sd('A', 1), sd('B', 2), sd('C', 3), sd('D', 4), sd('E', 4), sd('U')]; // U unscored
 
-  it('tier-3 worker: includes rank<=3 and unscored, excludes rank-4', () => {
-    expect(keys(claimableForTier(pool, { workerTierRank: 3, tieringActive: true }))).toBe('A,B,C,U');
+  it('tier-3 worker: includes everything (rank floor no longer enforced)', () => {
+    expect(keys(claimableForTier(pool, { workerTierRank: 3, tieringActive: true }))).toBe('A,B,C,D,E,U');
   });
 
-  it('tier-1 worker: only rank-1 and unscored', () => {
-    expect(keys(claimableForTier(pool, { workerTierRank: 1, tieringActive: true }))).toBe('A,U');
+  it('tier-1 worker: also includes everything (rank floor no longer enforced)', () => {
+    expect(keys(claimableForTier(pool, { workerTierRank: 1, tieringActive: true }))).toBe('A,B,C,D,E,U');
   });
 
   it('top-tier worker: everything (unscored reachable by all)', () => {
@@ -74,14 +74,16 @@ describe('tierClaimableBreakdown — partition + cumulative invariants (FR-4c)',
     expect(bd.partitionSumsToAggregate).toBe(true);
   });
 
-  it('cumulative claimable-to-tier-N === unscored + sum of exact ranks 1..N', () => {
+  it('cumulative claimable-to-tier-N === unscored + sum of exact ranks 1..N (a data partition, no longer a claimability gate)', () => {
+    // QF-20260831-419: tierClaimableBreakdown's exact/cumulative partition is retained as
+    // TELEMETRY (stamps remain data) but claimableForTier no longer enforces it — a rung-r
+    // worker can now claim the FULL aggregate, not just cumulative[r].
     const bd = tierClaimableBreakdown(pool, { tieringActive: true });
     let running = bd.unscored;
     for (let r = 1; r <= TOP; r += 1) {
       running += bd.exact[r];
       expect(bd.cumulative[r]).toBe(running);
-      // and it must equal what claimableForTier returns for that rung
-      expect(claimableForTier(pool, { workerTierRank: r, tieringActive: true })).toHaveLength(running);
+      expect(claimableForTier(pool, { workerTierRank: r, tieringActive: true })).toHaveLength(bd.aggregate);
     }
   });
 
@@ -99,18 +101,16 @@ describe('tierClaimableBreakdown — partition + cumulative invariants (FR-4c)',
   });
 });
 
-describe('tiering OFF — global ladder inert, EXPLICIT floor still honored (FR-1, BELT-CLAIMABLE-ACCURACY-FLOOR-001)', () => {
+describe('QF-20260831-419: tiering OFF — explicit floor no longer honored (retired, was FR-1/BELT-CLAIMABLE-ACCURACY-FLOOR-001)', () => {
   const pool = [sd('A', 1), sd('D', 4), sd('U')]; // A: floor 1, D: floor 4, U: unscored
 
-  it('claimableForTier honors an explicit per-SD min_tier_rank even when tiering is off', () => {
-    // The GLOBAL rung ladder is inert with tiering off, but an explicitly-stamped floor is a FLOOR:
-    // rung r claims A iff r>=1, D iff r>=4, U (unscored) always. A rung-1 worker cannot take D(floor 4).
-    expect(claimableForTier(pool, { workerTierRank: 1, tieringActive: false })).toHaveLength(2); // A + U
-    expect(claimableForTier(pool, { workerTierRank: 3, tieringActive: false })).toHaveLength(2); // A + U (D still floored)
+  it('claimableForTier no longer honors an explicit per-SD min_tier_rank floor, tiering off or on', () => {
+    expect(claimableForTier(pool, { workerTierRank: 1, tieringActive: false })).toHaveLength(3); // A + D + U
+    expect(claimableForTier(pool, { workerTierRank: 3, tieringActive: false })).toHaveLength(3); // A + D + U
     expect(claimableForTier(pool, { workerTierRank: 4, tieringActive: false })).toHaveLength(3); // A + D + U
   });
 
-  it('breakdown cumulative honors explicit floors even when tiering is off (unscored + sum exact 1..r)', () => {
+  it('breakdown cumulative retains the old partition math as telemetry (unscored + sum exact 1..r) — data only', () => {
     const bd = tierClaimableBreakdown(pool, { tieringActive: false });
     expect(bd.cumulative[1]).toBe(2);   // U + A
     expect(bd.cumulative[3]).toBe(2);   // U + A (D floored at 4)
@@ -186,7 +186,8 @@ describe('K != 4 — invariants hold when the live fleet resizes the ladder (FR-
     for (let r = 1; r <= 2; r += 1) {
       running += bd.exact[r];
       expect(bd.cumulative[r]).toBe(running);
-      expect(claimableForTier(pool, { workerTierRank: r, tieringActive: true })).toHaveLength(running);
+      // QF-20260831-419: claimableForTier no longer filters by rung, so it always returns the full aggregate.
+      expect(claimableForTier(pool, { workerTierRank: r, tieringActive: true })).toHaveLength(bd.aggregate);
     }
     expect(bd.cumulative[2]).toBe(bd.aggregate);
   });
@@ -204,7 +205,8 @@ describe('K != 4 — invariants hold when the live fleet resizes the ladder (FR-
     expect(ladderTopRank()).toBe(6);
 
     const pool = [sd('A', 1), sd('F', 6), sd('U')];
-    expect(keys(claimableForTier(pool, { workerTierRank: 5, tieringActive: true }))).toBe('A,U');
+    // QF-20260831-419: claimableForTier no longer filters by rung — a rank-6 SD is now claimable at any rung.
+    expect(keys(claimableForTier(pool, { workerTierRank: 5, tieringActive: true }))).toBe('A,F,U');
     expect(keys(claimableForTier(pool, { workerTierRank: 6, tieringActive: true }))).toBe('A,F,U');
 
     const bd = tierClaimableBreakdown(pool, { tieringActive: true });

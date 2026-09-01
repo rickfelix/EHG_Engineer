@@ -66,14 +66,14 @@ describe('classifyAllDispatchIneligibility (FR-1 / TS-1)', () => {
     expect(classifyDispatchIneligibility(clean)).toBeNull();
   });
 
-  it('applies ctx-gated tier axes identically to the first-match form', () => {
+  it('QF-20260831-419: the ctx-gated tier axis no longer fires (retired to advisory) in either form', () => {
     const tierGated = {
       sd_key: 'SD-TIER-001', sd_type: 'feature', status: 'draft',
       metadata: { min_tier_rank: 4, min_tier_rank_reason: 'unit-test floor' },
     };
     const ctx = { tiering_active: true, worker_tier_rank: 2 };
-    expect(classifyAllDispatchIneligibility(tierGated, ctx)).toEqual(['above_worker_tier']);
-    expect(classifyDispatchIneligibility(tierGated, ctx)).toBe('above_worker_tier');
+    expect(classifyAllDispatchIneligibility(tierGated, ctx)).toEqual([]);
+    expect(classifyDispatchIneligibility(tierGated, ctx)).toBeNull();
     // ctx omitted => tier axis inert in both forms.
     expect(classifyAllDispatchIneligibility(tierGated)).toEqual([]);
   });

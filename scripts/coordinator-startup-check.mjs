@@ -464,6 +464,23 @@ export const STANDARD_LOOPS = [
   { key: 'idle-qf-hint', label: 'Idle-worker QF auto-hint (idle-capacity absorption into ranked open QFs)', script: 'coordinator-idle-qf-hint.mjs', cron: '5,15,25,35,45,55 * * * *',
     gha_backed: true,
     prompt: 'node scripts/coordinator-idle-qf-hint.mjs' },
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A (CAPA-1, RCA 9a02a76d): this is the scheduler entry
+  // standard_loop:index-jam-detector's own activation_note has demanded since 2026-07-28 —
+  // "Flip to true in the change that adds the scheduler entry." STRICTLY OBSERVATIONAL (see
+  // lib/git/index-jam-detector.js header): never opens, writes, or removes the index lock it
+  // watches. --repo names REPO_ROOT (this repo's own shared main root, resolved at module load
+  // above) explicitly, per the detector's own no-cwd-fallback contract.
+  { key: 'index-jam-detector', label: 'Shared-root git-index-jam detector (observational)', script: 'index-jam-detector.mjs', cron: '*/2 * * * *',
+    prompt: `node scripts/cron/index-jam-detector.mjs --repo "${REPO_ROOT}"` },
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A (CAPA-5): scripts/safe-root-resync.mjs (npm run
+  // resync:safe) had ZERO periodic_process_registry rows — scheduled nowhere, its own liveness
+  // unwatched. Schedules ONLY the fetch+ff-merge half (scripts/cron/safe-root-resync-scheduled.mjs,
+  // skipLockClear:true) — per the parent SD's git-flow-expert refinement, the clear-stale-index-
+  // lock step is excluded from the periodic job because it can race a live lock creation; that
+  // step stays manual-only via `npm run resync:safe`. Escalates on a second consecutive
+  // identical abort rather than retrying silently forever (FR-5).
+  { key: 'safe-root-resync-fetch-ff-merge', label: 'Shared-root fetch+ff-merge (safe half of resync:safe, escalation-tracked)', script: 'safe-root-resync-scheduled.mjs', cron: '*/10 * * * *',
+    prompt: `node scripts/cron/safe-root-resync-scheduled.mjs --repo "${REPO_ROOT}"` },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.

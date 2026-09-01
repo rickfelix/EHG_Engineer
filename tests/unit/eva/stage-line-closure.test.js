@@ -121,10 +121,57 @@ describe('classifyStageLine', () => {
       lastExecutionAt: '2026-07-25T08:30:00.000Z',
       now,
     });
-    expect(v).toEqual({ healthy: true, workerAbsent: false, lineSilent: false, reasons: [] });
+    expect(v).toEqual({ healthy: true, workerAbsent: false, lineSilent: false, observeOnlySilence: false, reasons: [] });
   });
 
   it('a host with no pidfile and no executions is healthy — nothing to report, no false alarm', () => {
     expect(classifyStageLine({}).healthy).toBe(true);
+  });
+});
+
+describe('classifyStageLine — schedulerObserveOnly (SD-LEO-FIX-TRIAGE-THREE-FALSE-001)', () => {
+  it('TS-1: a silent line with schedulerObserveOnly=true reports observeOnlySilence=true and an explanatory reason', () => {
+    const v = classifyStageLine({
+      lastExecutionAt: INCIDENT_LAST_EXEC,
+      now: INCIDENT_NOW,
+      schedulerObserveOnly: true,
+    });
+    expect(v.observeOnlySilence).toBe(true);
+    expect(v.reasons.join(' ')).toContain('observe-only');
+  });
+
+  it('TS-2: healthy/lineSilent are UNCHANGED by schedulerObserveOnly — the alarm never gets silenced', () => {
+    const withObserveOnly = classifyStageLine({
+      lastExecutionAt: INCIDENT_LAST_EXEC,
+      now: INCIDENT_NOW,
+      schedulerObserveOnly: true,
+    });
+    const without = classifyStageLine({
+      lastExecutionAt: INCIDENT_LAST_EXEC,
+      now: INCIDENT_NOW,
+      schedulerObserveOnly: false,
+    });
+    expect(withObserveOnly.healthy).toBe(false);
+    expect(withObserveOnly.lineSilent).toBe(true);
+    expect(without.healthy).toBe(false);
+    expect(without.lineSilent).toBe(true);
+  });
+
+  it('TS-3: schedulerObserveOnly=false/undefined/null all produce observeOnlySilence=false (regression guard)', () => {
+    for (const schedulerObserveOnly of [false, undefined, null]) {
+      const v = classifyStageLine({ lastExecutionAt: INCIDENT_LAST_EXEC, now: INCIDENT_NOW, schedulerObserveOnly });
+      expect(v.observeOnlySilence).toBe(false);
+    }
+  });
+
+  it('a healthy (non-silent) line never reports observeOnlySilence even when schedulerObserveOnly=true', () => {
+    const now = new Date('2026-07-25T09:00:00.000Z');
+    const v = classifyStageLine({
+      lastExecutionAt: '2026-07-25T08:30:00.000Z',
+      now,
+      schedulerObserveOnly: true,
+    });
+    expect(v.lineSilent).toBe(false);
+    expect(v.observeOnlySilence).toBe(false);
   });
 });

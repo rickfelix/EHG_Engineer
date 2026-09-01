@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import os from 'node:os';
 import {
   cronToIntervalSeconds,
   parseStandardLoops,
@@ -94,5 +96,40 @@ describe('discovery against the live repo (read-only)', () => {
   it('the new GHA invoker itself is discovered (watchdog is watched)', () => {
     const gha = discoverGhaCrons(repoRoot);
     expect(gha.some((p) => p.process_key === 'gha_cron:periodic-liveness-watcher-cron.yml')).toBe(true);
+  });
+
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A / FR-2: a scripts/cron/*.mjs file that is ALSO
+  // invoked by a STANDARD_LOOPS entry was previously double-discovered — once as the generic
+  // cron_script:<file> (no cadence, forced currently_expected_active=true on every reseed) and
+  // once as the real, hand-owned standard_loop:<key> row. Live check against THIS repo's actual
+  // registration: index-jam-detector.mjs is now wired into STANDARD_LOOPS, so its cron_script:*
+  // shadow must no longer be discovered at all.
+  it('a scripts/cron script already owned by a STANDARD_LOOPS entry is not ALSO discovered as cron_script:*', () => {
+    const all = discoverAllProcesses(repoRoot);
+    expect(all.some((p) => p.process_key === 'cron_script:index-jam-detector.mjs')).toBe(false);
+    expect(all.some((p) => p.process_key === 'standard_loop:index-jam-detector')).toBe(true);
+  });
+});
+
+describe('discoverAllProcesses dedup fixture — script owned by a STANDARD_LOOPS entry', () => {
+  let tmpRoot;
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'enum-dedup-'));
+    fs.mkdirSync(path.join(tmpRoot, 'scripts', 'cron'), { recursive: true });
+    fs.writeFileSync(path.join(tmpRoot, 'scripts', 'cron', 'owned.mjs'), '// fixture\n');
+    fs.writeFileSync(path.join(tmpRoot, 'scripts', 'cron', 'unowned.mjs'), '// fixture\n');
+    fs.writeFileSync(
+      path.join(tmpRoot, 'scripts', 'coordinator-startup-check.mjs'),
+      'export const STANDARD_LOOPS = [\n  { key: \'owned-loop\', label: \'Owned\', script: \'owned.mjs\', cron: \'*/5 * * * *\',\n    prompt: \'node scripts/cron/owned.mjs\' },\n];\n'
+    );
+  });
+  afterEach(() => { try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* best effort */ } });
+
+  it('excludes the cron_script:* shadow only for the script a STANDARD_LOOPS entry names, keeps the rest', () => {
+    const all = discoverAllProcesses(tmpRoot);
+    const keys = all.map((p) => p.process_key);
+    expect(keys).not.toContain('cron_script:owned.mjs');
+    expect(keys).toContain('cron_script:unowned.mjs');
+    expect(keys).toContain('standard_loop:owned-loop');
   });
 });

@@ -120,11 +120,14 @@ function buildValidatorSupabase({ feedbackRows = [], retros = [], prRecords = []
 // ---------------------------------------------------------------------------
 // TS-1 — routeFlag tuple mapping
 // ---------------------------------------------------------------------------
+// SD-LEO-INFRA-HARNESS-BACKLOG-PER-001 (FR-2): routeFlag's real-finding routing moved
+// from category='harness_backlog' to category='completion_flag_finding'. Updated in place
+// (not superseded elsewhere) since this IS the regression suite for routeFlag itself.
 describe('TS-1 routeFlag tuple mapping per class', () => {
-  it('harness/quirk/friction -> harness_backlog / enhancement / new', () => {
+  it('harness/quirk/friction -> completion_flag_finding / enhancement / new', () => {
     for (const type of ['harness', 'quirk', 'friction']) {
       expect(routeFlag({ type })).toEqual({
-        category: 'harness_backlog',
+        category: 'completion_flag_finding',
         feedbackType: 'enhancement',
         status: 'new',
       });
@@ -136,11 +139,12 @@ describe('TS-1 routeFlag tuple mapping per class', () => {
     expect(r.feedbackType).toBe('issue');
     expect(r.status).toBe('new');
     expect(r.category).not.toBe('harness_backlog'); // must NOT be excluded from /leo assist
+    expect(r.category).not.toBe('completion_flag_finding');
   });
 
   it('tied_to_sd -> base class routing + sd_id', () => {
     const r = routeFlag({ type: 'tied_to_sd', base_type: 'harness', sd_id: 'sd-uuid-9' });
-    expect(r.category).toBe('harness_backlog');
+    expect(r.category).toBe('completion_flag_finding');
     expect(r.feedbackType).toBe('enhancement');
     expect(r.sd_id).toBe('sd-uuid-9');
   });

@@ -6,7 +6,7 @@
  * TS-4: per-row and whole-tick fail-soft (never throws).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { sweepOrphanRows, isOrphanCandidate, REROUTE_TO_KIND, REPEAT_OFFENDER_THRESHOLD } from '../../../lib/fleet/orphan-reroute-sweep.js';
+import { sweepOrphanRows, isOrphanCandidate, REROUTE_TO_KIND, REROUTE_TO_KIND_HIGH_SEVERITY, REPEAT_OFFENDER_THRESHOLD } from '../../../lib/fleet/orphan-reroute-sweep.js';
 
 function buildSupabase({ candidates = [], priorReroutes = [], priorReroutesError = null, existingAlarms = [], updateResult = { data: [{ id: 'x' }], error: null } } = {}) {
   const updateCalls = [];
@@ -27,7 +27,7 @@ function buildSupabase({ candidates = [], priorReroutes = [], priorReroutesError
           }
           if (isAlarmDedupCheck) {
             return {
-              eq: () => ({ is: () => ({ limit: async () => ({ data: existingAlarms, error: null }) }) }),
+              eq: () => ({ is: () => ({ gt: () => ({ limit: async () => ({ data: existingAlarms, error: null }) }) }) }),
             };
           }
           return {
@@ -89,6 +89,35 @@ describe('sweepOrphanRows — TS-1 reroute with full audit stamp', () => {
     });
   });
 
+  it('a severity=high orphan reroutes to REROUTE_TO_KIND_HIGH_SEVERITY, not the routine kind', async () => {
+    const row = { id: 'row-hi', target_session: 'solomon-uuid', payload: { kind: 'reaper_starvation_alert', severity: 'high' }, created_at: new Date().toISOString() };
+    const sb = buildSupabase({ candidates: [row] });
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'coordinator' }),
+      resolveRecognizedKinds: recognizedFor({ coordinator: ['comms_check'] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow,
+    });
+    expect(out.rerouted).toBe(1);
+    const patch = sb.__updateCalls[0];
+    expect(patch.payload.kind).toBe(REROUTE_TO_KIND_HIGH_SEVERITY);
+    expect(patch.payload.severity).toBe('high'); // original severity field survives the payload spread too
+    expect(patch.payload.reroute.to_kind).toBe(REROUTE_TO_KIND_HIGH_SEVERITY);
+  });
+
+  it('a non-high-severity orphan still reroutes to the routine REROUTE_TO_KIND', async () => {
+    const row = { id: 'row-lo', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' }, created_at: new Date().toISOString() };
+    const sb = buildSupabase({ candidates: [row] });
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow,
+    });
+    expect(out.rerouted).toBe(1);
+    expect(sb.__updateCalls[0].payload.kind).toBe(REROUTE_TO_KIND);
+  });
+
   it('falls back to broadcast-coordinator when no coordinator is live', async () => {
     const row = { id: 'row-1', target_session: 'adam-uuid', payload: { kind: 'weird' }, created_at: new Date().toISOString() };
     const sb = buildSupabase({ candidates: [row] });
@@ -139,15 +168,36 @@ describe('sweepOrphanRows — TS-2 repeat-offender alarm', () => {
     expect(alarmOpts).toEqual({ targetRoleHint: 'coordinator' });
   });
 
-  // Adversarial-review fix: fires EXACTLY ONCE at the threshold, never again for later
-  // occurrences of the same (role,kind) pair (was `>=`, spamming one alarm per orphan).
-  it('does NOT re-alarm past the threshold (3rd occurrence, prior count already >= threshold)', async () => {
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-B / RCA 9a02a76d: past the threshold, a STILL-
+  // PERSISTING (role,kind) pair now re-alarms (was exactly-once, which let a real repeat
+  // offender go silent for 9 days after its single alarm). Re-alarm spam is bounded by the
+  // durable dedup window (REPEAT_OFFENDER_REALARM_MS), not by never firing again.
+  it('DOES re-alarm past the threshold (3rd occurrence) when no recent alarm exists for the pair', async () => {
     const row = { id: 'row-3', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
     const priorReroutes = [
       { payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } },
       { payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } },
     ];
-    const sb = buildSupabase({ candidates: [row], priorReroutes });
+    const sb = buildSupabase({ candidates: [row], priorReroutes, existingAlarms: [] });
+    const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
+      resolveRecognizedKinds: recognizedFor({ solomon: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow: localInsert,
+    });
+    expect(out.rerouted).toBe(1);
+    expect(out.alarmed).toBe(1);
+    expect(localInsert).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT re-alarm past the threshold when a recent (within-window) unread alarm already exists', async () => {
+    const row = { id: 'row-3', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
+    const priorReroutes = [
+      { payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } },
+      { payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } },
+    ];
+    const sb = buildSupabase({ candidates: [row], priorReroutes, existingAlarms: [{ id: 'recent-alarm' }] });
     const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
     const out = await sweepOrphanRows(sb, {
       resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
@@ -164,8 +214,11 @@ describe('sweepOrphanRows — TS-2 repeat-offender alarm', () => {
     const rowA = { id: 'row-a', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
     const rowB = { id: 'row-b', target_session: 'solomon-uuid', payload: { kind: 'mystery_kind' } };
     const priorReroutes = [{ payload: { reroute: { from_role: 'solomon', from_kind: 'mystery_kind' } } }]; // count=1 already
-    const sb = buildSupabase({ candidates: [rowA, rowB], priorReroutes });
-    const localInsert = vi.fn(async () => ({ data: [{ id: 'a' }], error: null }));
+    // Mutable, shared-by-reference: localInsert pushes into it so rowB's dedup check (read live
+    // off this same array) observes rowA's just-inserted alarm within the SAME tick.
+    const existingAlarms = [];
+    const sb = buildSupabase({ candidates: [rowA, rowB], priorReroutes, existingAlarms });
+    const localInsert = vi.fn(async () => { existingAlarms.push({ id: 'a' }); return { data: [{ id: 'a' }], error: null }; });
     const out = await sweepOrphanRows(sb, {
       resolveTargetRole: roleFor({ 'solomon-uuid': 'solomon' }),
       resolveRecognizedKinds: recognizedFor({ solomon: [] }),

@@ -3,7 +3,7 @@ import {
   deriveOutcomeFlow, classifyDispatchReason, deriveDispatchReasons, evaluateReasonBand,
   lacksHoldReason, hasStaleUnreviewedHold, sampleFalseCompletions, classifyFailureClasses,
   FAILURE_CLASSES, REASON_BAND, CONVERSION_FLOOR, LATENCY_CEILING_MS, MIN_COHORT_FOR_ALARM,
-  STALE_HOLD_CEILING_HOURS,
+  STALE_HOLD_CEILING_HOURS, evaluateCoordinatorLoopLiveness, MIN_OVERDUE_LOOPS_FOR_ALARM,
 } from '../../../lib/oversight/coordinator-health-sharpenings.mjs';
 
 const NOW = Date.parse('2026-07-16T12:00:00Z');
@@ -325,5 +325,65 @@ describe('QF-20260719-365 — rank-time reason-band stamp is authoritative', () 
     ]);
     expect(r.sd_dispatch_partition.direct_dispatch).toBe(2);
     expect(r.sd_dispatch_partition.self_claim).toBe(0);
+  });
+});
+
+describe('QF-20260831-150 evaluateCoordinatorLoopLiveness (loop OUTPUT freshness, not tool heartbeat)', () => {
+  const freshEvaluated = () => new Date(NOW - 60 * 60 * 1000).toISOString(); // 1h ago, within stale window
+
+  it('the exact regression fixture: heartbeat fresh + all loop outputs stale -> fires', () => {
+    // The bug this QF fixes: a coordinator can heartbeat perfectly fine while every registered
+    // loop's closure output has gone dark. This fixture models that: all loops "open" (upstream
+    // fired, closure edge never materialized), each evaluated recently by the independent verifier.
+    const loops = [
+      { loop_key: 'l1', status: 'open', evaluated_at: freshEvaluated() },
+      { loop_key: 'l2', status: 'open', evaluated_at: freshEvaluated() },
+      { loop_key: 'l3', status: 'open', evaluated_at: freshEvaluated() },
+    ];
+    const r = evaluateCoordinatorLoopLiveness(loops, { nowMs: NOW });
+    expect(r.coordinator_loop_liveness_ok).toBe(false);
+    expect(r.overdue_count).toBe(MIN_OVERDUE_LOOPS_FOR_ALARM);
+    expect(r.overdue_loop_keys).toEqual(['l1', 'l2', 'l3']);
+  });
+
+  it('below the alarm threshold -> ok, not a breach', () => {
+    const loops = [{ loop_key: 'l1', status: 'open', evaluated_at: freshEvaluated() }];
+    const r = evaluateCoordinatorLoopLiveness(loops, { nowMs: NOW });
+    expect(r.coordinator_loop_liveness_ok).toBe(true);
+    expect(r.overdue_count).toBe(1);
+  });
+
+  it('CLOSED and STARVED loops never count as overdue — only OPEN (fired but did not close)', () => {
+    const loops = [
+      { loop_key: 'closed', status: 'closed', evaluated_at: freshEvaluated() },
+      { loop_key: 'starved', status: 'starved', evaluated_at: freshEvaluated() },
+      { loop_key: 'unknown', status: 'unknown', evaluated_at: freshEvaluated() },
+    ];
+    const r = evaluateCoordinatorLoopLiveness(loops, { nowMs: NOW });
+    expect(r.overdue_count).toBe(0);
+    expect(r.coordinator_loop_liveness_ok).toBe(true);
+  });
+
+  it('a stale verdict (the closure verifier itself may be dark) is ignored, not trusted', () => {
+    const staleEvaluated = new Date(NOW - 72 * 60 * 60 * 1000).toISOString(); // 72h ago, past 48h window
+    const loops = [
+      { loop_key: 'l1', status: 'open', evaluated_at: staleEvaluated },
+      { loop_key: 'l2', status: 'open', evaluated_at: staleEvaluated },
+      { loop_key: 'l3', status: 'open', evaluated_at: staleEvaluated },
+    ];
+    const r = evaluateCoordinatorLoopLiveness(loops, { nowMs: NOW });
+    expect(r.overdue_count).toBe(0);
+    expect(r.coordinator_loop_liveness_ok).toBe(true);
+  });
+
+  it('a row with no evaluated_at (never run) is never counted overdue — nothing to trust yet', () => {
+    const loops = [{ loop_key: 'l1', status: 'open', evaluated_at: null }];
+    const r = evaluateCoordinatorLoopLiveness(loops, { nowMs: NOW });
+    expect(r.overdue_count).toBe(0);
+  });
+
+  it('FAIL-SOFT: non-array input never throws, reads as zero overdue', () => {
+    expect(() => evaluateCoordinatorLoopLiveness(null, { nowMs: NOW })).not.toThrow();
+    expect(evaluateCoordinatorLoopLiveness(undefined, { nowMs: NOW }).overdue_count).toBe(0);
   });
 });

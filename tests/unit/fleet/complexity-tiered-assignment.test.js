@@ -75,13 +75,12 @@ describe('FR-2 tier ladder + worker tier resolution', () => {
 });
 
 // ---- TS-3: FR-3 above_worker_tier verdict ---------------------------------
-// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001: these fixtures test the BINDING enforcement mechanism
-// itself, not the provenance-advisory feature, so a scored SD carries min_tier_rank_reason to
-// stay binding (an advisory, unreasoned floor would never produce 'above_worker_tier').
-describe('FR-3 above_worker_tier eligibility verdict', () => {
-  it('returns above_worker_tier for a below-rung worker vs a higher-tier SD when tiering active', () => {
+// QF-20260831-419: above_worker_tier enforcement retired to advisory-only, even for a
+// reasoned (provenance-bearing) floor — classifyDispatchIneligibility never fences on it now.
+describe('QF-20260831-419: above_worker_tier eligibility verdict no longer blocks', () => {
+  it('returns null for a below-rung worker vs a higher-tier SD when tiering active (advisory only)', () => {
     const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3, min_tier_rank_reason: 'unit-test floor' } };
-    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBe('above_worker_tier');
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBeNull();
   });
 
   it('returns null when the worker rung >= SD min rank (higher rung may take lower work)', () => {
@@ -106,16 +105,17 @@ describe('FR-3 above_worker_tier eligibility verdict', () => {
   });
 });
 
-// ---- QF-20260703-242: fail-closed (not fail-open) on a missing/non-finite worker tier stamp ----
-describe('QF-20260703-242 tier_stamp_missing fail-closed verdict', () => {
-  it('refuses a tier-gated SD when tiering is active but worker_tier_rank is absent', () => {
+// ---- QF-20260703-242 (superseded by QF-20260831-419): tier_stamp_missing/above_worker_tier
+// enforcement retired to advisory-only; classifyDispatchIneligibility never fences on either. ----
+describe('QF-20260831-419: tier_stamp_missing / above_worker_tier no longer block a claim', () => {
+  it('does not refuse a tier-gated SD when tiering is active but worker_tier_rank is absent', () => {
     const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2, min_tier_rank_reason: 'unit-test floor' } };
-    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBe('tier_stamp_missing');
+    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBeNull();
   });
 
-  it('refuses a tier-gated SD when worker_tier_rank is present but non-finite (NaN)', () => {
+  it('does not refuse a tier-gated SD when worker_tier_rank is present but non-finite (NaN)', () => {
     const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2, min_tier_rank_reason: 'unit-test floor' } };
-    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: NaN, tiering_active: true })).toBe('tier_stamp_missing');
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: NaN, tiering_active: true })).toBeNull();
   });
 
   it('does not fire for an unscored SD (no min_tier_rank) even with a missing stamp — nothing to gate', () => {
@@ -129,15 +129,15 @@ describe('QF-20260703-242 tier_stamp_missing fail-closed verdict', () => {
     expect(classifyDispatchIneligibility(sd, {})).toBeNull();
   });
 
-  it('leaves the finite worker_tier_rank paths (above_worker_tier / null) byte-unchanged', () => {
+  it('the finite worker_tier_rank paths no longer block either (above-tier or at-tier)', () => {
     const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 3, min_tier_rank_reason: 'unit-test floor' } };
-    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBe('above_worker_tier');
+    expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 1, tiering_active: true })).toBeNull();
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true })).toBeNull();
   });
 
-  it('tier_stamp_missing fires regardless of provenance (precedes the provenance check)', () => {
+  it('tier_stamp_missing no longer fires regardless of provenance', () => {
     const sd = { sd_key: 'SD-X-001', metadata: { min_tier_rank: 2 } };
-    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBe('tier_stamp_missing');
+    expect(classifyDispatchIneligibility(sd, { tiering_active: true })).toBeNull();
   });
 });
 
@@ -220,9 +220,9 @@ describe('FR-4 coordinator dispatch tier guard + FR-5 degrade-to-1', () => {
     payload: { assigned_sd: 'SD-NEEDS-OPUS-001' }, ...overrides,
   });
 
-  it('refuses an above-tier WORK_ASSIGNMENT when tiering is active', async () => {
+  it('QF-20260831-419: no longer refuses an above-tier WORK_ASSIGNMENT (advisory only)', async () => {
     const sb = stubSupabase({ liveWorkers: 2, workerTierRank: 1, sdMinRank: 3 });
-    await expect(assertWorkerTierAllowed(sb, row())).rejects.toMatchObject({ code: 'DISPATCH_ABOVE_WORKER_TIER' });
+    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
   });
 
   it('allows a work-down assignment (worker rung >= SD min rank)', async () => {

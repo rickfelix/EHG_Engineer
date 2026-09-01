@@ -204,6 +204,58 @@ describe('AXIS 5 fleet_health — WIRING (what a discriminator test cannot catch
   });
 });
 
+describe('AXIS 5 fleet_health — awaiting_approval/loop_dead surfacing (SD-LEO-INFRA-PERMISSION-PROMPT-BLOCKED-001 F1)', () => {
+  it('a seat with a stale awaiting_approval_since reaches stuck[] tagged reason=awaiting_approval', async () => {
+    const seats = [{ session_id: 'cccccccc-0000-0000-0000-000000000003', status: 'active',
+      last_tool_at: minsAgo(1), metadata: { awaiting_approval_since: minsAgo(15) } }];
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+    const seat = state.stuck.find((s) => s.session_id === seats[0].session_id);
+    expect(seat).toBeDefined();
+    expect(seat.reason).toBe('awaiting_approval');
+    const r = fleetAxis.classify(state, NOW);
+    expect(r.citation).toMatch(/reason=awaiting_approval/);
+  });
+
+  it('a seat with loop_state stuck non-terminal, fresh heartbeat, stale last_tool_at reaches stuck[] tagged reason=loop_dead', async () => {
+    const seats = [{ session_id: 'dddddddd-0000-0000-0000-000000000004', status: 'active',
+      loop_state: 'active', heartbeat_at: minsAgo(1), last_tool_at: minsAgo(20), metadata: {} }];
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+    const seat = state.stuck.find((s) => s.session_id === seats[0].session_id);
+    expect(seat).toBeDefined();
+    expect(seat.reason).toBe('loop_dead');
+  });
+
+  it('a seat already flagged by tool-silence is not duplicated by the newer axes', async () => {
+    const seats = [{ session_id: 'aaaaaaaa-0000-0000-0000-000000000005', status: 'active',
+      last_tool_at: minsAgo(600), metadata: { awaiting_approval_since: minsAgo(15) } }];
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+    const matches = state.stuck.filter((s) => s.session_id === seats[0].session_id);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].reason).toBe('tool_silence');
+  });
+
+  it('a healthy seat (fresh tool clock, no approval stamp, loop_state=awaiting_tick) does not appear in stuck[]', async () => {
+    const seats = [{ session_id: 'eeeeeeee-0000-0000-0000-000000000006', status: 'idle',
+      loop_state: 'awaiting_tick', heartbeat_at: minsAgo(1), last_tool_at: minsAgo(20), metadata: {} }];
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+    expect(state.stuck.find((s) => s.session_id === seats[0].session_id)).toBeUndefined();
+  });
+
+  it('LEO_FLEET_HEALTH_NEW_AXES=off reverts to pre-SD tool_silence-only behavior', async () => {
+    const seats = [{ session_id: 'ffffffff-0000-0000-0000-000000000007', status: 'active',
+      last_tool_at: minsAgo(1), metadata: { awaiting_approval_since: minsAgo(15) } }];
+    const prior = process.env.LEO_FLEET_HEALTH_NEW_AXES;
+    process.env.LEO_FLEET_HEALTH_NEW_AXES = 'off';
+    try {
+      const state = await fleetAxis.fetch(applyingFake({ claude_sessions: seats }), { now: NOW });
+      expect(state.stuck.find((s) => s.session_id === seats[0].session_id)).toBeUndefined();
+    } finally {
+      if (prior === undefined) delete process.env.LEO_FLEET_HEALTH_NEW_AXES;
+      else process.env.LEO_FLEET_HEALTH_NEW_AXES = prior;
+    }
+  });
+});
+
 describe('AXIS 6 learning_conversion — ships UNMEASURABLE, and that is the point', () => {
   it('reports UNMEASURABLE with a citation, and explicitly NOT clear', () => {
     const r = learnAxis.classify({ blocked: true }, NOW);

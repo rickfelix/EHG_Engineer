@@ -76,10 +76,10 @@ describe("FR-6 classifyDispatchIneligibility 'reserved_no_lower_backlog' branch"
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: backlogPresent })).toBeNull();
   });
 
-  it('reserves (blocks) a downward claim when the lower tier has no backlog', () => {
+  it('QF-20260831-419: no longer reserves (blocks) a downward claim when the lower tier has no backlog (advisory only)', () => {
     const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 1, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: noBacklog }))
-      .toBe('reserved_no_lower_backlog');
+      .toBeNull();
   });
 
   it('never reserves a claim AT the worker\'s own tier, regardless of backlog data', () => {
@@ -87,10 +87,10 @@ describe("FR-6 classifyDispatchIneligibility 'reserved_no_lower_backlog' branch"
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: noBacklog })).toBeNull();
   });
 
-  it('above_worker_tier still takes precedence over the backlog axis', () => {
+  it('QF-20260831-419: above_worker_tier no longer blocks (advisory only)', () => {
     const sd = { sd_key: 'SD-X', metadata: { min_tier_rank: 4, min_tier_rank_reason: REASON } };
     expect(classifyDispatchIneligibility(sd, { worker_tier_rank: 3, tiering_active: true, lower_tier_backlog_data: backlogPresent }))
-      .toBe('above_worker_tier');
+      .toBeNull();
   });
 
   it('unscored SDs are unaffected (no min_tier_rank -> no gate at all)', () => {
@@ -248,15 +248,15 @@ describe('FR-6 dispatch.cjs assertWorkerTierAllowed downward-claim (backlog) gat
     payload: { assigned_sd: 'SD-LOWER-001' },
   });
 
-  it('refuses a downward WORK_ASSIGNMENT when the lower tier has no backlog (reserve)', async () => {
+  it('QF-20260831-419: no longer refuses a downward WORK_ASSIGNMENT when the lower tier has no backlog (advisory only)', async () => {
     const targetSession = targetWorkerSession(4);
     const targetSd = sdRow('SD-LOWER-001', 1);
     // w-1 is idle AND native to rank 1 -> its idle capacity at/below rank 1 already covers the
-    // one claimable rank-1 SD, so rank 1 is NOT backlogged -> the tier-4 target should reserve.
+    // one claimable rank-1 SD, so rank 1 is NOT backlogged -> the reservation refusal is retired.
     const liveWorkers = [liveWorker('w-1', { tierRank: 1 }), targetSession];
     const sds = [targetSd];
     const sb = stubSupabase({ liveWorkers, sds, targetSession, targetSd });
-    await expect(assertWorkerTierAllowed(sb, row())).rejects.toMatchObject({ code: 'DISPATCH_RESERVED_NO_LOWER_BACKLOG' });
+    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
   });
 
   it('allows a downward WORK_ASSIGNMENT when the lower tier IS backlogged', async () => {
@@ -327,7 +327,7 @@ describe('FR-6 dispatch.cjs assertWorkerTierAllowed downward-claim (backlog) gat
 
 // ---- TS-5b: both-enforcement-sites-consistent -------------------------------
 describe('FR-6 both-enforcement-sites-consistent: same backlog data, same verdict', () => {
-  it('classifyDispatchIneligibility and assertWorkerTierAllowed agree given the same fetched backlog data', async () => {
+  it('QF-20260831-419: classifyDispatchIneligibility and assertWorkerTierAllowed agree — both now advisory-only, neither refuses', async () => {
     const targetSession = targetWorkerSession(4);
     const targetSd = sdRow('SD-LOWER-001', 1);
     const liveWorkers = [liveWorker('w-1', { tierRank: 1 }), targetSession]; // w-1 idle -> absorbs the one rank-1 SD
@@ -338,11 +338,11 @@ describe('FR-6 both-enforcement-sites-consistent: same backlog data, same verdic
     const selfClaimVerdict = classifyDispatchIneligibility(targetSd, {
       worker_tier_rank: 4, tiering_active: true, lower_tier_backlog_data: backlogData,
     });
-    expect(selfClaimVerdict).toBe('reserved_no_lower_backlog');
-    // The directed-dispatch path, using the SAME fetcher, must reach the SAME confirmed refusal.
+    expect(selfClaimVerdict).toBeNull();
+    // The directed-dispatch path, using the SAME fetcher, must reach the SAME (now permissive) outcome.
     await expect(assertWorkerTierAllowed(sb, {
       message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-LOWER-001' },
-    })).rejects.toMatchObject({ code: 'DISPATCH_RESERVED_NO_LOWER_BACKLOG' });
+    })).resolves.toBeUndefined();
   });
 });
 
@@ -428,17 +428,17 @@ describe('FR-4 above_worker_tier agreement between the two real call sites', () 
   // above_worker_tier case, reached via BOTH real entry points (not the extracted predicate in
   // isolation) so a fail-open catch-all elsewhere in either function cannot silently swallow a
   // block and still read green.
-  it('classifyDispatchIneligibility and assertWorkerTierAllowed both refuse the same above-tier claim', async () => {
+  it('QF-20260831-419: classifyDispatchIneligibility and assertWorkerTierAllowed agree — both now advisory-only, neither refuses the above-tier claim', async () => {
     const targetSession = targetWorkerSession(2);
     const targetSd = sdRow('SD-ABOVE-001', 4);
     const liveWorkers = [liveWorker('w-1'), targetSession];
     const sb = stubSupabase({ liveWorkers, sds: [targetSd], targetSession, targetSd });
 
     const selfClaimVerdict = classifyDispatchIneligibility(targetSd, { worker_tier_rank: 2, tiering_active: true });
-    expect(selfClaimVerdict).toBe('above_worker_tier');
+    expect(selfClaimVerdict).toBeNull();
     await expect(assertWorkerTierAllowed(sb, {
       message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-ABOVE-001' },
-    })).rejects.toMatchObject({ code: 'DISPATCH_ABOVE_WORKER_TIER' });
+    })).resolves.toBeUndefined();
   });
 
   it('both ALLOW the same at-or-above-tier claim (two-sided control)', async () => {

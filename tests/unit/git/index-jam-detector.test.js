@@ -336,4 +336,13 @@ describe('formatVerdict (FR-2)', () => {
     expect(msg).toMatch(/UNAVAILABLE/);
     expect(msg).toMatch(/Not a health verdict/i);
   });
+
+  // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A / TS-7: the detector is strictly observational and
+  // never tests writability (module header) — the JAMMED line must not claim a fact it never
+  // checked. It describes the observed symptom (persisted lock identity) instead.
+  it('does not assert "unwritable" as a checked fact — describes the observed lock-persistence symptom instead', () => {
+    const msg = formatVerdict('C:/repo', { verdict: VERDICT.JAMMED, jammedForMs: 189 * 60 * SEC });
+    expect(msg).not.toMatch(/unwritable/i);
+    expect(msg).toMatch(/SAME.*lock/i);
+  });
 });

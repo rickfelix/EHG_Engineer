@@ -230,6 +230,12 @@ This runtime (Claude Code) does **not** allow a sub-agent to spawn another sub-a
 
 Spawning a real expert sub-agent remains **preferred** whenever `Task` IS available (top-level / orchestrator-invoked RCA). Fall back to inline analysis only when spawning is genuinely unavailable — never use it to skip the rigor.
 
+### Blocking on Spawned Experts (MANDATORY — SD-LEO-FIX-RCA-EXPERT-WAIT-001)
+
+**Never compile the final report while a spawned expert is still running.** Use the synchronous `Task` tool for Step 2 — it blocks until the expert returns, so its findings are always available before you write the CAPA. If you instead spawn experts asynchronously (`TeamCreate`/`TaskCreate`, background teammates), you MUST poll `TaskGet`/`TaskList` until every spawned expert shows a terminal status before compiling. Do not label a still-running expert "NOT RETURNED" and proceed anyway.
+
+If a deadline genuinely forces early compilation with an expert still outstanding, mark `"experts_reconciled": false` in the payload and state the outstanding expert's ID. The moment that expert returns, you MUST re-open the RCA row and write a reconciliation addendum incorporating its findings (correcting or withdrawing any conclusion the late findings contradict) before the row is treated as final.
+
 ### Why This Is Mandatory
 
 - You are the **TRIAGE SPECIALIST**, not the domain expert
@@ -488,11 +494,12 @@ When invoked by the auto-trigger system (via `lib/rca/rca-orchestrator.js`), pro
   "confidence": 0.0-1.0,
   "experts_consulted": [
     {"expert": "database-agent", "findings": "...", "capa_items": ["..."]}
-  ]
+  ],
+  "experts_reconciled": true
 }
 ```
 
-**IMPORTANT**: The `experts_consulted` array must NEVER be empty. Every RCA must include at least one expert consultation.
+**IMPORTANT**: The `experts_consulted` array must NEVER be empty. Every RCA must include at least one expert consultation. `experts_reconciled` must be `true` (all spawned experts returned before compilation) or `false` with the outstanding expert named — never omitted. See "Blocking on Spawned Experts" above.
 
 ### Phase-1 Feedback-Loop Discipline (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-G)
 

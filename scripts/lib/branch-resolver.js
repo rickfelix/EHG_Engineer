@@ -146,7 +146,11 @@ export async function resolveBranch(supabase, sdId, options = {}) {
     // Step 3: Discover branch from git (delegated to domain)
     log('\n🔍 Step 2: Discovering branch from git...');
 
-    const discovery = discoverBranchFromGit(actualRepoPath, sdId, verbose);
+    // QF-20260831-960: git branch names are keyed on sd_key ('feat/<sd_key>'), never the
+    // caller-supplied sdId (often a UUID -- e.g. lib/sub-agents/testing/index.js passes the
+    // SD's UUID here). sd.sd_key was already fetched above; use it instead of sdId so
+    // discovery isn't guaranteed to miss whenever the caller identifies the SD by UUID.
+    const discovery = discoverBranchFromGit(actualRepoPath, sd.sd_key || sdId, verbose);
 
     if (!discovery.found) {
       // Step 3b: Intelligent fallback - check if branch was merged to main
