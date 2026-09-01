@@ -173,7 +173,10 @@
 
 ### Bugfix
 
-- **Ratification capture-miss detector cross-checks the ledger before flagging, instead of asserting a diff it never performed** - QF-20260901-704
+- **Fix silent write failures leaving raw_model=null on fleet seats** - SD-ALTIFYAI-LEO-FIX-RAW-MODEL-NULL-001
+  - `capture-session-id.cjs`'s `upsertSessionRow` used a single POST-with-merge-duplicates call that silently 409'd on every write to an already-existing `claude_sessions` row since 2026-07-01, so `metadata.model` (and every other field written on that path) never persisted for any session whose first write hit an existing row — downstream tier logic then fabricated a `WEAKEST_MODEL` default instead of reflecting a real measurement, on 4 of 6 fleet seats.
+  - Rewrote the write path to GET existing metadata, PATCH the row, and INSERT only as a fallback when the PATCH matches zero rows. The PATCH body deliberately omits the `status` key (only the INSERT fallback sets `status: 'active'`), preventing a naive `on_conflict=session_id` fix from resurrecting a released/idle row back to active. 4xx failures are now logged loudly instead of being swallowed.
+  - 13 new unit tests (`tests/unit/hooks/capture-session-id-upsert-retry.test.cjs`) cover retry/backoff, PATCH-vs-INSERT routing, and metadata preservation.
   - `buildCaptureMissRow`'s description asserted "has no corresponding chairman_ratifications row", but no code ever checked that. Every advisory matching the 3-part predicate (verified surface + directive verbs + named target) was flagged as a capture miss unconditionally, including advisories that merely quoted an already-captured ratification.
   - Added a bounded ledger cross-check (target-overlap within a 72h window) and an echo check (text citing an existing ratification's id/prefix) on the flag path, plus tightened `NAMED_TARGET_RE`'s dotted-identifier alternative so filler like "e.g." no longer counts as a named target.
   - 8 new unit tests prove both acceptance directions: a genuine miss with no covering ledger row still flags; a covered or echoed item does not.
