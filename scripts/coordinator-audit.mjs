@@ -66,6 +66,19 @@ const backlog = hb;
 const sourceable = sourceableBacklog(backlog);
 const high = sourceable.filter(r => ['high', 'critical'].includes((r.severity || '').toLowerCase()));
 
+// SD-LEO-INFRA-HARNESS-BACKLOG-PER-001 (FR-5/2): per-flag findings now write directly to
+// category='completion_flag_finding' (write-time-terminal, never sourceable — same treatment
+// as completion_flag_witness) instead of landing in harness_backlog and being filtered out by
+// sourceableBacklog() above. That means they no longer even appear in `backlog`/`hb`, so the
+// "auto-capture closure artifacts excluded" figure would silently start reading near-zero and
+// look like the closure-artifact problem vanished, when really it just moved queue. Read/
+// aggregate the new category explicitly so it stays visible as a terminal count, not silence.
+let cffCount = 0;
+try {
+  const cff = await fetchAllPaginated(() => db.from('feedback').select('id').eq('category', 'completion_flag_finding'));
+  cffCount = cff.length;
+} catch { cffCount = 0; }
+
 // (2) SD queue
 let sd;
 try {
@@ -108,7 +121,7 @@ const starving = sourceable.length > 0 && liveIdle > 0 && unclaimed.length < cap
 const toSource = starving ? Math.min(sourceable.length, capacity - unclaimed.length) : 0;
 
 console.log('[COORD-AUDIT] ' + new Date(t).toISOString());
-console.log('  HARNESS BACKLOG : ' + backlog.length + ' open (' + sourceable.length + ' sourceable, ' + high.length + ' high/critical; ' + (backlog.length - sourceable.length) + ' auto-capture closure artifacts excluded)');
+console.log('  HARNESS BACKLOG : ' + backlog.length + ' open (' + sourceable.length + ' sourceable, ' + high.length + ' high/critical; ' + (backlog.length - sourceable.length) + ' auto-capture closure artifacts excluded) + ' + cffCount + ' completion_flag_finding rows tracked separately (terminal, write-time-categorized, never sourceable)');
 for (const r of backlog.slice(0, 10)) console.log('      [' + r.status + '/' + (r.severity || '-') + '] ' + String(r.title || '').slice(0, 78));
 console.log('  SD QUEUE        : ' + sds.length + ' non-terminal | ' + claimed + ' claimed | ' + unclaimed.length + ' unclaimed | ' + stuck.length + ' stuck(in_progress,unclaimed)');
 console.log('  WORKERS         : ' + builders + ' building, ' + liveIdle + ' live-idle');

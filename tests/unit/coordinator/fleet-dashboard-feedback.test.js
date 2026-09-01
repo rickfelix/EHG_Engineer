@@ -120,12 +120,12 @@ describe('printFeedback — anti-flood guards', () => {
   });
 });
 
-describe('printFeedback — terminal-category exclusion (SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-1)', () => {
-  test('the untriaged query excludes harness_backlog AND the write-time-terminal categories', async () => {
+describe('printFeedback — terminal-category exclusion (SD-LEO-INFRA-HARNESS-BACKLOG-DRAIN-POLICY-001 FR-1, extended by SD-LEO-INFRA-HARNESS-BACKLOG-PER-001)', () => {
+  test('the untriaged query excludes harness_backlog AND all write-time-terminal categories, including completion_flag_finding', async () => {
     const sb = mockSupabase({ untriaged: [], backlog: [] });
     await printFeedback({}, { supabase: sb });
     const untriagedQuery = sb._recorded.find((q) => q.category_eq !== 'harness_backlog');
-    expect(untriagedQuery.category_not_in).toBe('(harness_backlog,completion_flag_witness,telemetry_aggregate,informational_note)');
+    expect(untriagedQuery.category_not_in).toBe('(harness_backlog,completion_flag_witness,telemetry_aggregate,informational_note,completion_flag_finding)');
   });
 });
 

@@ -77,16 +77,33 @@ function flagFindingText(flag) {
 }
 
 /**
+ * SD-LEO-INFRA-HARNESS-BACKLOG-PER-001 (FR-1/FR-2): the write-time-terminal category
+ * every REAL per-flag finding this script authors lands in, replacing 'harness_backlog'.
+ * Rows are identified as this script's own by title 'Completion flag (...) — <SD-KEY>'.
+ * This does NOT change any OTHER writer of category='harness_backlog' (worker-signal.cjs,
+ * lib/eva/lifecycle-sd-bridge.js, lib/coordinator/signal-router.cjs, lib/adam/*-watchdog.js) --
+ * those remain on harness_backlog, out of scope (TS-3).
+ * @private
+ */
+const COMPLETION_FLAG_FINDING_CATEGORY = 'completion_flag_finding';
+
+/**
  * TR-4: pure routing — map a flag to its destination tuple. Unit-testable in isolation.
  *
  * Classes:
- *   - 'harness' | 'quirk' | 'friction' -> harness_backlog / enhancement / new
+ *   - 'harness' | 'quirk' | 'friction' -> completion_flag_finding / enhancement / new
  *   - 'needs_decision'                 -> completion_flag (NON-harness) / issue / new
  *   - 'tied_to_sd'                     -> base class routing + sd_id = flag.sd_id
  *   - 'already_homed'                  -> { link_only: true } (NO new row)
  *
  * For 'tied_to_sd', the underlying class is read from flag.base_type (defaults to
  * 'harness' when unspecified).
+ *
+ * SD-LEO-INFRA-HARNESS-BACKLOG-PER-001 (FR-2): every REAL finding this script authors
+ * (harness/quirk/friction/default fallback, plus tied_to_sd's base routing) now lands in
+ * category='completion_flag_finding' instead of 'harness_backlog' -- mirroring the
+ * completion_flag_witness precedent for the zero-findings witness row. This is purely a
+ * routing change for rows THIS SCRIPT writes; no other harness_backlog writer is touched.
  *
  * @param {Object} flag
  * @param {string} flag.type
@@ -112,11 +129,11 @@ export function routeFlag(flag) {
 
   // Default / harness family.
   if (HARNESS_FLAG_TYPES.has(type)) {
-    return { category: 'harness_backlog', feedbackType: 'enhancement', status: 'new' };
+    return { category: COMPLETION_FLAG_FINDING_CATEGORY, feedbackType: 'enhancement', status: 'new' };
   }
 
-  // Unknown class: treat conservatively as harness-backlog (deferred), never silently drop.
-  return { category: 'harness_backlog', feedbackType: 'enhancement', status: 'new' };
+  // Unknown class: treat conservatively as a real finding (deferred), never silently drop.
+  return { category: COMPLETION_FLAG_FINDING_CATEGORY, feedbackType: 'enhancement', status: 'new' };
 }
 
 /**
