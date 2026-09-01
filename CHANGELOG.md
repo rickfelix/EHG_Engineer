@@ -4,6 +4,8 @@
 ## Table of Contents
 
 - [2026-09-01](#2026-09-01)
+  - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure)
   - [Infrastructure](#infrastructure-4)
 - [2026-08-31](#2026-08-31)
   - [Infrastructure](#infrastructure-3)
@@ -169,6 +171,19 @@
 
 ## 2026-09-01
 
+### Bugfix
+
+- **Ratification capture-miss detector cross-checks the ledger before flagging, instead of asserting a diff it never performed** - QF-20260901-704
+  - `buildCaptureMissRow`'s description asserted "has no corresponding chairman_ratifications row", but no code ever checked that. Every advisory matching the 3-part predicate (verified surface + directive verbs + named target) was flagged as a capture miss unconditionally, including advisories that merely quoted an already-captured ratification.
+  - Added a bounded ledger cross-check (target-overlap within a 72h window) and an echo check (text citing an existing ratification's id/prefix) on the flag path, plus tightened `NAMED_TARGET_RE`'s dotted-identifier alternative so filler like "e.g." no longer counts as a named target.
+  - 8 new unit tests prove both acceptance directions: a genuine miss with no covering ledger row still flags; a covered or echoed item does not.
+
+### Infrastructure
+
+- **Coordinator-to-Adam send-time backpressure exemption closes a one-way lane during collision/correction incidents** - SD-LEO-INFRA-CLOSE-COORDINATOR-ADAM-001
+  - `assertSendBackpressure` now excludes exempt-kind and reply rows from the counted population (`lib/coordinator/dispatch.cjs`), and `DRAIN_SETS.adam` recognizes the 6 `BACKPRESSURE_EXEMPT_KINDS` (`lib/fleet/worker-status.cjs`), so a coordinator send of `collision_warning`/`amend_sd`/`disposition`/`retraction`/`amend`/`supersede` to Adam is no longer refused as `DISPATCH_UNTYPED_ADAM_KIND`.
+  - A companion seed migration (`database/migrations/20260831_role_drain_sets_add_adam_backpressure_exempt.sql`) registers the same 6 kinds in `role_drain_sets` for the reader side, correctly staged behind a chairman-gated apply rather than self-applied.
+  - 3 new regression tests plus 2 updated count-pin tests guard both halves of the fix.
 ### Infrastructure
 
 - **Design doc settles what will detect unwired ratified-decision requirements, grounded in a live 106/414 drift specimen** (SD-LEO-INFRA-PHASE-DESIGN-GOVERNANCE-001)
