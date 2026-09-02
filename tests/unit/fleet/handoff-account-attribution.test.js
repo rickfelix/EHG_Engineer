@@ -8,21 +8,23 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { computeHandoffsByAccount, summarizeByAccount } = require('../../../lib/fleet/handoff-account-attribution.cjs');
 
+// computeHandoffsByAccount reads via fetchAllPaginated(), which calls
+// queryFactory().range(offset, end) and awaits its result directly -- .range() must resolve
+// { data, error }. Since every fixture array here is well under the 1000-row page size, one
+// .range() call always returns the full fixture and pagination stops after page 0.
 function fakeSupabase({ handoffs, handoffError = null, sessions, sessionError = null }) {
   return {
     from(table) {
       if (table === 'leo_handoff_executions') {
-        // A real Supabase query builder is thenable and chainable; await on the chain itself
-        // (not a terminal .then() call) resolves via this same object's .then().
         const chain = {
           eq: () => chain,
           gte: () => chain,
-          then: (resolve) => resolve({ data: handoffs, error: handoffError }),
+          range: async () => ({ data: handoffs, error: handoffError }),
         };
         return { select: () => chain };
       }
       if (table === 'claude_sessions') {
-        return { select: () => ({ in: () => ({ then: (resolve) => resolve({ data: sessions, error: sessionError }) }) }) };
+        return { select: () => ({ in: () => ({ range: async () => ({ data: sessions, error: sessionError }) }) }) };
       }
       throw new Error(`unexpected table ${table}`);
     },
@@ -83,7 +85,7 @@ describe('computeHandoffsByAccount', () => {
     const supabase = fakeSupabase({ handoffs: null, handoffError: { message: 'db unavailable' } });
     const { rows, error } = await computeHandoffsByAccount(supabase);
     expect(rows).toEqual([]);
-    expect(error).toBe('db unavailable');
+    expect(error).toContain('db unavailable');
   });
 
   it('no handoffs at all returns an empty result, not an error', async () => {
