@@ -75,6 +75,20 @@ describe('pre-tool-enforce — ENFORCEMENT 12e (worktree-add sibling guard)', ()
     expect(result.stderr).not.toMatch(/ENF-12e/);
   });
 
+  // SECURITY sub-agent finding S-1 (evidence c15134e8): the block previously entered its
+  // try{} and ran (require + `git rev-parse` execSync) for EVERY Bash call, not just a
+  // matched `git worktree add` -- loading 82 .env secret keys into the hook process on
+  // every call. Fixed by gating on the cheap, pure extractTargetPath() first. This test
+  // doesn't (can't, without mocking require) prove the heavy path was skipped, but it does
+  // confirm an UNRELATED command produces zero ENF-12e output and a clean exit, which the
+  // fix's shape (early `if (extractTargetPath(...))` before any heavy require) guarantees
+  // structurally -- see lib/__tests__/worktree-add-sibling-guard.test.js for `extractTargetPath`
+  // returning null on unrelated commands, the actual gate this depends on.
+  it('does not engage for an unrelated command (git status)', () => {
+    const result = runHook('Bash', { command: 'git status', cwd: repoRoot });
+    expect(result.stderr).not.toMatch(/ENF-12e/);
+  });
+
   it('ALLOWS the correct in-tree target when cwd is itself an SD/QF worktree (F-A regression, evidence c94b16a8)', () => {
     // The polarity-inversion bug: a naive .git-marker walk from an SD-worktree cwd stops at
     // that worktree's OWN .git FILE (worktrees carry a .git file, not a dir), wrongly treating
