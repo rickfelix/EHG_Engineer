@@ -339,7 +339,7 @@ describe('TS-3: default non-destructive path', () => {
   // skipLockClear:true so STEP 1.5 (clear-stale-index-lock) never runs — that step stays
   // manual-only per the parent SD's git-flow-expert refinement (it can race a live lock
   // creation). The manual CLI path (skipLockClear omitted, the existing default) is unchanged.
-  it('skipLockClear:true skips STEP 1.5 entirely — a fresh, non-empty lock is never touched by the scheduled path', async () => {
+  it('skipLockClear:true skips the general STEP 1.5 clear — a fresh, non-empty lock is never touched by the scheduled path', async () => {
     const CWD = SHARED_ROOT;
     const execSpy = makeExecSpy([
       { args_match: ['status', '--porcelain', '--untracked-files=no'], stdout: '' },
@@ -358,8 +358,43 @@ describe('TS-3: default non-destructive path', () => {
         ...noopRestoreSeams,
       });
       expect(result.ok).toBe(true);
-      expect(stderrWrites.some((line) => /skipLockClear=true.*skipped/i.test(line))).toBe(true);
+      // QF-20260902-780: skipLockClear now routes to the dwell-floor-gated zero-byte-only
+      // clear instead of doing nothing. makeFsSharedRoot() has no lock file (no statSync at
+      // all) — the new path fails closed to "absent" and prints nothing, same as before.
       expect(stderrWrites.some((line) => /cleared STALE/i.test(line))).toBe(false);
+      expect(stderrWrites.some((line) => /cleared ORPHANED 0-byte/i.test(line))).toBe(false);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it('skipLockClear:true + a genuinely orphaned 0-byte lock past the dwell floor → cleared (self-heals without a human)', async () => {
+    const CWD = SHARED_ROOT;
+    const execSpy = makeExecSpy([
+      { args_match: ['status', '--porcelain', '--untracked-files=no'], stdout: '' },
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '1\n' },
+    ]);
+    const stderrWrites = [];
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { stderrWrites.push(String(chunk)); return true; });
+    const baseFs = makeFsSharedRoot(CWD);
+    const lockPath = path.join(CWD, '.git', 'index.lock');
+    const unlinked = [];
+    const fs = {
+      ...baseFs,
+      statSync: (p) => {
+        if (p === lockPath) return { size: 0, mtimeMs: Date.now() - 200_000 }; // well past the 90s dwell floor
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      },
+      unlinkSync: (p) => { unlinked.push(p); },
+    };
+
+    try {
+      const result = await safeRootResync({
+        exec: execSpy, fs, cwd: CWD, supabase: makeSupabaseSpy(), skipLockClear: true, ...noopRestoreSeams,
+      });
+      expect(result.ok).toBe(true);
+      expect(unlinked).toEqual([lockPath]);
+      expect(stderrWrites.some((line) => /cleared ORPHANED 0-byte/i.test(line))).toBe(true);
     } finally {
       writeSpy.mockRestore();
     }

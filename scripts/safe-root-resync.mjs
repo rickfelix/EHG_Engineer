@@ -331,7 +331,21 @@ export async function safeRootResync(opts = {}) {
   // (an active git op) is left untouched. We only reach here when .git is a DIRECTORY (shared
   // root, guarded above), so we never touch a worktree's lock.
   if (skipLockClear) {
-    process.stderr.write('[safe-root-resync] skipLockClear=true — STEP 1.5 lock-clear skipped by caller\n');
+    // QF-20260902-780: the general (mtime-age, any-size) STEP 1.5 clear is still skipped here —
+    // an unattended scheduled run must never touch a non-zero lock, which may be a live op. But
+    // a genuinely orphaned 0-byte lock now self-heals too, gated on the jam detector's own
+    // measured dwell floor rather than being left to a human running the interactive resync.
+    try {
+      const { clearStaleZeroByteIndexLockAfterDwell } = await import('../lib/git/clear-stale-index-lock.mjs');
+      const lockResult = clearStaleZeroByteIndexLockAfterDwell({ repoRoot: cwd, fs: fsMod });
+      if (lockResult.cleared) {
+        process.stderr.write(
+          `[safe-root-resync] scheduled: cleared ORPHANED 0-byte .git/index.lock (age ${Math.round((lockResult.ageMs || 0) / 1000)}s, past dwell floor)\n`
+        );
+      }
+    } catch (e) {
+      process.stderr.write(`[safe-root-resync] scheduled zero-byte lock check skipped (non-fatal): ${e && e.message || e}\n`);
+    }
   } else {
     try {
       const { clearStaleGitIndexLock } = await import('../lib/git/clear-stale-index-lock.mjs');
