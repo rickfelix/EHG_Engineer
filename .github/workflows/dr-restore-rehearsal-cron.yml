@@ -68,6 +68,8 @@ jobs:
         # the prior manual `git diff --quiet` gate is redundant and dropped.
         if: always()
         uses: peter-evans/create-pull-request@v6
+        env:
+          HUSKY: '0'  # Disable pre-commit hooks for automated commits (matches schema-docs-update.yml)
         with:
           commit-message: |
             chore(dr): record restore rehearsal result
