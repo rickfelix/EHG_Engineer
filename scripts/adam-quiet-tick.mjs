@@ -20,7 +20,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
@@ -88,6 +88,14 @@ const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 // QF-20260719-138: emit the mechanical cross-party ping stub ourselves (mirror of
 // coordinator-quiet-tick.mjs) rather than instructing the agent to hand-insert it each tick.
 const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs');
+// SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce (not merely classify) the
+// role-aware compaction threshold. Default-OFF via COORD_CONTEXT_CEILING_ENFORCE_V1.
+const { checkContextCeiling } = require('../lib/fleet/context-ceiling-checker.cjs');
+const {
+  defaultReadLatestUsageRow,
+  defaultInvokeCompactSkill,
+  defaultPersistCeilingEvent,
+} = require('../lib/fleet/context-ceiling-default-deps.cjs');
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1019,6 +1027,33 @@ async function main() {
   const currentIdentity = getAccountIdentity();
   const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
 
+  // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce the role-aware compaction
+  // threshold instead of leaving it classified-but-unread (predecessor SD-LEO-INFRA-COORDINATOR-
+  // CRON-LIFECYCLE-001's .claude/compaction-thresholds.cjs is otherwise consumed ONLY by the
+  // statusline display path). Fail-soft like its siblings above -- never blocks the rest of the
+  // tick. Own session id comes from the same .claude/active-adam.json marker writeAdamMarker()
+  // stamps at Adam startup (scripts/adam-startup-check.mjs), not env.CLAUDE_SESSION_ID (this
+  // tick script has no guarantee that's set when run as a scheduled/background process).
+  let contextCeiling = { verdict: 'DISABLED' };
+  try {
+    const adamMarkerPath = resolve(__dirname, '..', '.claude', 'active-adam.json');
+    const adamMarker = existsSync(adamMarkerPath) ? JSON.parse(readFileSync(adamMarkerPath, 'utf8')) : null;
+    const ownSessionId = adamMarker && adamMarker.session_id;
+    if (ownSessionId) {
+      contextCeiling = await checkContextCeiling({
+        role: 'adam',
+        sessionId: ownSessionId,
+        deps: {
+          readLatestUsageRow: defaultReadLatestUsageRow,
+          invokeCompactSkill: defaultInvokeCompactSkill,
+          persistCeilingEvent: defaultPersistCeilingEvent,
+        },
+      });
+    }
+  } catch (e) {
+    contextCeiling = { verdict: 'ERROR', reason: e && e.message };
+  }
+
   // FR-1: inbox-monitor always runs (cheap, catch /signal); the offer-help core
   // is delta-gated below, so only the inbox core needs composing here.
   const tick = await runCoresFailSoft(buildCores());
@@ -1288,6 +1323,9 @@ async function main() {
     outputFlowStalledMs: outputFlow.stalledMs,
     durationBaselineBreaches: durationBreachLines.length,
     nextWakeSeconds: delaySeconds,
+    // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: 'DISABLED' unless
+    // COORD_CONTEXT_CEILING_ENFORCE_V1 is on; 'CEILING' means this tick just enforced compaction.
+    contextCeilingVerdict: contextCeiling.verdict,
   };
 
   // QF-20260719-138: a real salient delta emits the mechanical cross_party_ping stub HERE
