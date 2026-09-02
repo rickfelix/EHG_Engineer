@@ -5,6 +5,7 @@
 
 - [2026-09-02](#2026-09-02)
   - [Infrastructure](#infrastructure-5)
+  - [Bugfix](#bugfix-4)
 - [2026-09-01](#2026-09-01)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -204,6 +205,13 @@
   - New `lib/env-resolver.cjs` (`resolveEnvPath`) resolves the main worktree's root first via `git rev-parse --git-common-dir`, falling back to the old ancestor-walk only when the main root genuinely has no `.env` there (preserves today's behavior for a repo with no `.env` anywhere, verified for the altifyai venture repo).
   - Also fixes `lib/supabase-client.cjs`'s missing `quiet: true` on `dotenv.config()` (was printing its "injected env" banner to stdout, contaminating `--json` CLI output); removes `scripts/sd-start.js`'s own now-redundant direct `dotenv.config()` call.
   - New ESLint `no-restricted-imports`/`no-restricted-syntax` rules ban new direct `dotenv` imports (both `import` and CJS `require()`) under `lib/`, with a generated ratchet allowlist grandfathering the ~175 pre-existing importers — full migration deferred to a follow-up SD.
+
+### Bugfix
+
+- **Fix the DR restore rehearsal cron reading red on a healthy rehearsal** - SD-LEO-FIX-RESTORE-REHEARSAL-CRON-001
+  - `.github/workflows/dr-restore-rehearsal-cron.yml`'s witness-commit step pushed `ops/runbooks/disaster-recovery.md` directly to `main`, which GH006 branch protection refused — so a passing rehearsal read red for weeks purely on that final step, chronically since at least 2026-08-01.
+  - Replaced the direct push with a `peter-evans/create-pull-request@v6` step that opens a PR on a side branch instead, matching the existing convention already used by `housekeeping-weekly-report.yml`/`schema-docs-update.yml`; added `pull-requests: write` permission and a `HUSKY: '0'` guard (SECURITY sub-agent finding) so the `npm ci` in that step can't trip pre-commit hooks.
+  - Escalated from quick-fix QF-20260901-876 via the `--from-qf` mechanism because the fix touches `.github/workflows/**`, which the QF sensitive-path eligibility gate refuses to let complete as a QF; carried QF-20260901-876's already-built, CI-green PR #7983 as this SD's EXEC deliverable, with a fresh SECURITY review (not inherited from the QF).
 
 ## 2026-09-01
 
