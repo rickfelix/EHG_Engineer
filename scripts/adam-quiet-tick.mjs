@@ -785,7 +785,7 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     // REGRESSION finding (PLAN_VERIFICATION evidence row db85362a): moved inside the try so the
     // docblock's "Fail-soft throughout" claim is literally true for every statement in this
     // function, not just the ones after this line.
-    const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
+    const { detectRatificationRegression, detectMarkerMissing } = await import('../lib/chairman/ratification-regression-detector.mjs');
 
     const { data, error } = await sb
       .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
@@ -821,6 +821,7 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     } catch { /* fewer than 2 commits touched the manifest yet -- Stage 1 becomes a structural no-op */ }
 
     const regressed = [];
+    const markerInvalid = []; // QF-20260901-107: pre-existing bad markers, distinct from a true revert
     for (const row of data || []) {
       const sectionId = row.encoded_ref && row.encoded_ref.section_id;
       const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
@@ -828,10 +829,24 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       if (targetFile) {
         try { liveFileContent = readFileSync(join(repoRoot, targetFile), 'utf8'); } catch { /* file gone/unreadable -- detectMarkerMissing treats this as the marker being gone */ }
       }
-      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent });
+      // QF-20260901-107: only when the marker looks missing NOW is it worth the git-archaeology
+      // cost of asking whether it was ever there AT ENCODE TIME (distinguishes a writer defect
+      // from a real revert; see the detector's own docblock for why a hash comparison is unsound).
+      let encodeTimeFileContent;
+      if (targetFile && row.encoded_at && detectMarkerMissing(liveFileContent, row.marker_text)) {
+        try {
+          const log = (await execFileAsync('git', ['log', '--format=%H', '--before', row.encoded_at, '-n', '1', '--', targetFile], { cwd: repoRoot, timeout: 5000 })).stdout.trim();
+          const atEncodeHash = log.split('\n').filter(Boolean)[0];
+          if (atEncodeHash) {
+            encodeTimeFileContent = (await execFileAsync('git', ['show', `${atEncodeHash}:${targetFile}`], { cwd: repoRoot, timeout: 5000, maxBuffer: 8 * 1024 * 1024 })).stdout;
+          }
+        } catch { /* no commit at/before encoded_at, or git failed -- can't disambiguate, falls through to the normal stage2 verdict */ }
+      }
+      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent, encodeTimeFileContent });
       if (result.regressed) regressed.push({ ...row, ...result });
+      else if (result.markerInvalid) markerInvalid.push({ ...row, ...result });
     }
-    return { rows: regressed, count: regressed.length };
+    return { rows: regressed, count: regressed.length, markerInvalidRows: markerInvalid, markerInvalidCount: markerInvalid.length };
   } catch (e) {
     return { rows: [], count: 0, error: e && e.message };
   }
@@ -1586,6 +1601,13 @@ async function main() {
     for (const r of regressedRatifications.rows) {
       const sectionId = r.encoded_ref && r.encoded_ref.section_id;
       console.log(`QUIET_TICK_RATIFICATION_STALE=adam id=${r.id} REGRESSED stage1_section_removed=${r.stage1} stage2_marker_missing=${r.stage2} section=${sectionId} — an already-encoded chairman ratification's clause was silently reverted; re-encode via lib/chairman/ratification-writer.mjs markRatificationEncoded().`);
+    }
+    // QF-20260901-107: informational only, deliberately NOT part of the NO-OP gate above -- these
+    // rows never had a real marker (writer defect predating the fail-closed check), so re-encoding
+    // cannot fix them; correction rides a separate chairman-gated data-repair migration.
+    for (const r of (regressedRatifications.markerInvalidRows || [])) {
+      const sectionId = r.encoded_ref && r.encoded_ref.section_id;
+      console.log(`QUIET_TICK_RATIFICATION_MARKER_INVALID=adam id=${r.id} section=${sectionId} — marker_text was never present in the live section content (writer defect at encode time, not a reverted clause); needs the separate chairman-gated data-repair migration, not re-encoding.`);
     }
   }
   return result;
