@@ -642,6 +642,10 @@ CREATE TABLE quick_fixes (
   files_changed TEXT[],
   escalated_to_sd_id TEXT,
   escalation_reason TEXT,
+  routing_tier INTEGER,                    -- 1/2/3 (work-item-router.js); 3 = Tier-3 hit
+  disposition_reason_code TEXT,            -- free-text; required by Guard B (see below)
+  disposed_by TEXT,
+  disposed_at TIMESTAMPTZ,
   found_during TEXT,                       -- uat, production, development
   created_by TEXT DEFAULT 'QUICKFIX_AGENT',
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -667,6 +671,45 @@ and writes a bidirectional link + retires the QF as one logical operation
 - Once escalated, the QF is excluded from every claim/belt surface (`rankItems()`,
   `loadOpenQuickFixes()`, `selfClaimQuickFix()`) by its `status` alone — the SD becomes the
   sole canonical, claimable track for that fix.
+
+### The Single Status Writer (`setQuickFixStatus`) and `needs_sd`
+
+The `--from-qf` path above is only correct because `escalated_to_sd_id` is set in the SAME
+write as `status: 'escalated'`. Several OTHER call sites (the mint-time Tier-3 classifier, the
+post-hoc keyword classifier, the coordinator's stale-QF sweep) hit `status='escalated'` at a
+point where no SD exists yet to link — writing that status without a link produces a row
+invisible to every belt reader (SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001, the incident this
+section documents: 31 stranded rows discovered 2026-09-02).
+
+All 8 known `quick_fixes.status` writers now route through one function,
+`lib/quick-fix/status-writer.cjs`'s `setQuickFixStatus(supabase, qfId, patch, opts)`, which
+enforces:
+
+- **Guard A**: refuses `status: 'escalated'` unless `escalated_to_sd_id` is present in the SAME
+  patch — there is no auto-substitution.
+- **Guard B**: refuses a transition FROM `escalated` (to any status), or `open→closed`, or
+  `open→cancelled`, unless the patch supplies `disposition_reason_code` + `disposed_by` +
+  `disposed_at`. `open→completed` is explicitly exempt (already evidenced by the
+  `completed_requires_verification` CHECK constraint).
+- **Guard C**: `escalation_reason` is append-only (concatenated, never overwritten).
+- **Optimistic concurrency**: the update is conditioned on the row's observed `status`; a
+  0-row result throws `QF_STATUS_CONFLICT` rather than silently no-op'ing.
+
+A Tier-3 hit with no SD yet (mint-time classification, or the post-hoc keyword classifier)
+writes `status: 'open'` with `routing_tier: 3` instead of `'escalated'` — the **`needs_sd`**
+shape. `isNeedsSdRow(row)` (same module) is the single canonical predicate for this derived
+state: `row.status === 'open' && row.routing_tier === 3 && row.escalated_to_sd_id == null`.
+Three consumers share this exact predicate (never independently re-implemented) so a
+`needs_sd` row survives indefinitely instead of being silently reaped, auto-cancelled, or
+claimed as an ordinary QF: the stale-sweep's fence query
+(`coordinator-stale-qf-disposition-sweep.mjs`), the SD-completion auto-cancel SQL trigger's JS
+mirror (`qf-link-resolution.mjs`), and the belt's self-claim ranker (`rank-items.js`).
+`needs_sd` is a **derived** predicate, not a stored column.
+
+A stranded row (`status='escalated' AND escalated_to_sd_id IS NULL`) can be drained back to
+the `needs_sd` shape via `node scripts/one-off/backfill-stranded-escalated-qfs.mjs`
+(`--dry-run` default, `--live` to write; the live mode refuses unless the FR-3/FR-4 downstream
+fixes above are detected present in the running code).
 
 ---
 
