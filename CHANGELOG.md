@@ -226,6 +226,15 @@
   - **Why**: the alert that should have paged during the incident was structurally undeliverable to the coordinator, and the sweep that eventually rescued it stripped the severity that would have flagged it as urgent.
   - **Verification**: LEAD-TO-PLAN 96%, PLAN-TO-EXEC 97%, EXEC-TO-PLAN 88%, PLAN-TO-LEAD 95%, LEAD-FINAL-APPROVAL 93% (bypassed only the known dead-`GEMINI_API_KEY` `RETROSPECTIVE_EXISTS` gate, harness bug logged separately). 276 files / 3374 tests, 0 regressions.
 
+### Infrastructure
+
+- **TESTING sub-agent's evidence-reuse fast-path now verifies the artifact instead of trusting a DB row's own pass/fail counts** - SD-FDBK-INFRA-TESTING-EVIDENCE-REUSE-001
+  - A hand-written or fabricated `test_runs`/`sd_testing_status` row could certify an unqualified `PASS` with no real test execution behind it: witnessed on 2026-09-01 (SD-LEO-FIX-ALTIFYAI-UAT-FETCH-001), a row claiming 51/51 passed while the real Playwright artifact showed 481 expected / 1276 unexpected / 1673 skipped.
+  - `checkTestEvidence`/`checkApiTestEvidence` (`lib/sub-agents/testing/index.js`) now require, before reusing a row's counts: shape-validated artifact parsing (new `lib/sub-agents/testing/artifact-verification.js`, refusing vitest-shaped or malformed reports rather than coercing `undefined>0` to false), two-sided freshness (artifact `startTime` at/after the evaluated commit AND not after real "now" — closing the same unsigned-age defect class an independent peer QA review found this fix itself initially repeated), an allowlisted runner provenance check (capping a non-runner source at `CONDITIONAL_PASS`, FR-4), and a sha256 report-hash binding between the artifact and the row's own `report_hash` (non-blocking warning on mismatch).
+  - The FR-4 provenance cap and its "not cached" recommendation both originally keyed on only one of two reuse-flag mechanisms (`evidence_reused` vs. the older `from_cache` cache path in `phase3-execution.js`'s `getCachedTestResults`), silently exempting the older path from every new check — both fixed to cover either flag, per an adversarial peer QA review conducted across several rounds against the live PR.
+  - Landed alongside a concurrently-merged, independently-scoped SD (SD-FDBK-INFRA-TESTING-SUB-AGENT-001, above) that rewrote a different function (`checkForNonUISdType`) in the same file; resolved as a routine merge, no logical overlap between the two fixes.
+  - 40+ new/updated unit tests across `tests/unit/testing-subagent/` and `tests/unit/sub-agent-executor/`; 241 combined tests pass with zero regressions.
+
 ## 2026-08-31
 
 ### Infrastructure
