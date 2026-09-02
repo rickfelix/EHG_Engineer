@@ -75,8 +75,23 @@ export function computeMarkInvalid(sd, { reason, actor, offendingHandoffId = nul
   return { updates: { metadata: nextMeta, updated_at: ts }, ts };
 }
 
-async function resolveSD(supabase, input) {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Matches scripts/lib/sd-id-resolver.js's UUID_OR_KEY_REGEX key-branch shape.
+const SD_KEY_RE = /^SD-[A-Z0-9-]+$/i;
+
+export async function resolveSD(supabase, input) {
+  const isUuid = UUID_RE.test(input);
+  // SECURITY review finding S2 (EXEC-TO-PLAN evidence, measured 2026-09-02): the non-UUID
+  // branch interpolated `input` into a PostgREST .or() filter string unvalidated. A value like
+  // "NO-SUCH-KEY,status.eq.completed" was accepted as an ADDITIONAL OR-clause rather than part
+  // of the sd_key match, letting an arbitrary --sd-id argument mark an unrelated (order-
+  // dependent, .limit(1).single()) SD's completion evidence invalid -- this script is the ONLY
+  // sanctioned writer of that flag, so this was a live filter-injection path into the reopen
+  // unlock. Reject anything that isn't a genuine UUID or SD-KEY shape before it ever reaches
+  // the query string.
+  if (!isUuid && !SD_KEY_RE.test(input)) {
+    throw new Error(`Invalid --sd-id format (expected a UUID or SD-KEY, got: ${JSON.stringify(input)})`);
+  }
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .select('id, uuid_id, sd_key, status, metadata')

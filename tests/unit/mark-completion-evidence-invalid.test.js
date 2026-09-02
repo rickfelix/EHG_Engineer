@@ -3,11 +3,12 @@
  * scripts/mark-completion-evidence-invalid.js: the ONLY sanctioned writer of
  * strategic_directives_v2.metadata.completion_evidence_invalid.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   parseArgs,
   refusalReason,
   computeMarkInvalid,
+  resolveSD,
 } from '../../scripts/mark-completion-evidence-invalid.js';
 
 const NOW_ISO = '2026-09-02T18:30:00.000Z';
@@ -82,5 +83,51 @@ describe('computeMarkInvalid', () => {
     const long = 'x'.repeat(2000);
     const { updates } = computeMarkInvalid({ metadata: {} }, { reason: long, actor: 'a', nowIso: NOW_ISO });
     expect(updates.metadata.completion_evidence_invalid_reason.length).toBe(1000);
+  });
+});
+
+// SECURITY review finding S2 (EXEC-TO-PLAN evidence, measured 2026-09-02): resolveSD's
+// non-UUID branch previously interpolated --sd-id unvalidated into a PostgREST .or() filter
+// string. This script is the ONLY sanctioned writer of completion_evidence_invalid, so an
+// unguarded filter meant an arbitrary --sd-id argument could mark an UNRELATED SD's evidence
+// invalid and unlock its completed->active reopen.
+describe('resolveSD (FR-5) — PostgREST filter injection guard', () => {
+  function mockSupabase(row) {
+    const or = vi.fn(() => ({
+      limit: vi.fn(() => ({
+        single: vi.fn(async () => ({ data: row, error: row ? null : { message: 'not found' } })),
+      })),
+    }));
+    const select = vi.fn(() => ({ or }));
+    const from = vi.fn(() => ({ select }));
+    return { from, _or: or };
+  }
+
+  it('rejects an --sd-id value that injects an additional OR clause', async () => {
+    const sb = mockSupabase({ id: 'x', sd_key: 'SD-DECOY-001', status: 'completed' });
+    await expect(resolveSD(sb, 'NO-SUCH-KEY,status.eq.completed')).rejects.toThrow(/Invalid --sd-id format/);
+    expect(sb._or).not.toHaveBeenCalled();
+  });
+
+  it('rejects other PostgREST metacharacter payloads (comma, dot-operator, parens)', async () => {
+    const sb = mockSupabase(null);
+    for (const payload of ['SD-X,or(status.eq.completed)', 'a.eq.b', 'SD-X)or(id.eq.y']) {
+      await expect(resolveSD(sb, payload)).rejects.toThrow(/Invalid --sd-id format/);
+    }
+  });
+
+  it('accepts a well-formed SD-KEY and queries sd_key.eq.<value> verbatim', async () => {
+    const sb = mockSupabase({ id: 'x', sd_key: 'SD-XXX-001', status: 'active' });
+    const sd = await resolveSD(sb, 'SD-XXX-001');
+    expect(sd.sd_key).toBe('SD-XXX-001');
+    expect(sb._or).toHaveBeenCalledWith('sd_key.eq.SD-XXX-001');
+  });
+
+  it('accepts a well-formed UUID and queries the uuid_id/id OR-branch verbatim', async () => {
+    const sb = mockSupabase({ id: 'x', uuid_id: '64cba683-adb9-47f0-ae62-8238f4e3b9c0', status: 'active' });
+    const uuid = '64cba683-adb9-47f0-ae62-8238f4e3b9c0';
+    const sd = await resolveSD(sb, uuid);
+    expect(sd.uuid_id).toBe(uuid);
+    expect(sb._or).toHaveBeenCalledWith(`uuid_id.eq.${uuid},id.eq.${uuid}`);
   });
 });

@@ -766,7 +766,18 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     // bypass_ledger already tolerated a key-form sdId via its own sd_key column; the emitted
     // validation_audit_log row has no sd_key column at all, so a key-invoked bypass (the common
     // CLI form) previously wrote that row with sd_id=NULL -- unlinked to the SD entirely.
-    const { sdId: resolvedSdUuid } = await resolveSdInputOrNull(sdId, supabaseForBypassLedger);
+    //
+    // SECURITY review finding S1 (EXEC-TO-PLAN evidence, measured 2026-09-02): strategic_directives_v2.id
+    // is polymorphic -- 22.7% of live SDs (1,364/6,008) carry a key-form id, not a UUID string.
+    // resolvedSdUuid (= resolveSdInputOrNull's sdId, i.e. row.id) is therefore NOT safe for
+    // bypass_ledger.sd_id, which is a strict UUID column: a key-form id threw
+    // "22P02 invalid input syntax for type uuid" on insert, silently caught below as a warning,
+    // which skipped the entire fail-closed audit-log emission block -- zero audit rows for
+    // roughly a quarter of SDs, in the SD whose purpose is bypass auditing. uuid_id (like
+    // sd_transition_audit's own FK target) is the always-a-real-UUID column; use it here.
+    // validation_audit_log.sd_id is VARCHAR(100) and accepts either shape, so resolvedSdUuid
+    // (matching strategic_directives_v2.id's own convention) is still correct there, unchanged.
+    const { sdId: resolvedSdUuid, sd: resolvedSdRow } = await resolveSdInputOrNull(sdId, supabaseForBypassLedger);
     if (!resolvedSdUuid) {
       console.warn(`   ⚠️  bypass audit: could not resolve "${sdId}" to a UUID — validation_audit_log row will still be unlinked (sd_id NULL)`);
     }
@@ -775,7 +786,7 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
       .insert({
         bypass_type: 'validation_bypass',
         bypass_reason: bypassReason,
-        sd_id: resolvedSdUuid,
+        sd_id: resolvedSdRow?.uuid_id || null,
         sd_key: typeof sdId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
         phase: handoffType,
         bypass_actor: process.env.CLAUDE_SESSION_ID || 'unknown',
@@ -784,7 +795,17 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
       .select('id, correlation_id')
       .single();
     if (ledgerErr) {
-      console.warn(`   ⚠️  bypass_ledger insert failed: ${ledgerErr.message} — proceeding with shape check, parity check will catch`);
+      // FAIL-CLOSED: matches the paired audit-emission failure below, and the module's own
+      // documented design intent ("FAIL-CLOSED-WITH-RETRY ... caller MUST FAIL handoff") --
+      // silently warning and proceeding (the pre-fix behavior) meant a bypass could complete
+      // with zero audit trail whenever this insert failed for any reason.
+      console.error('');
+      console.error('❌ BYPASS LEDGER WRITE FAILED (FAIL-CLOSED)');
+      console.error('═'.repeat(50));
+      console.error(`   ${ledgerErr.message}`);
+      console.error('   Resolution: retry the handoff once DB connectivity is restored.');
+      console.error('');
+      return { success: false };
     }
     if (ledgerRow) {
       try {
