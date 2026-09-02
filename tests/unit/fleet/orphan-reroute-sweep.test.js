@@ -64,6 +64,12 @@ describe('isOrphanCandidate (pure)', () => {
   it('a kind present in the recognized set is not an orphan', () => {
     expect(isOrphanCandidate({ kind: 'known', recognizedKinds: ['known'] })).toBe(false);
   });
+  // QF-20260901-097: claim_boundary_released is an INFORMATIONAL_KINDS entry (deliberately
+  // undrained at every role) — it must never be treated as orphan just because it's absent
+  // from a role's recognized/drain set, the way it was rerouted 16x in 14 days before this fix.
+  it('an informational kind is never an orphan even if absent from the recognized set', () => {
+    expect(isOrphanCandidate({ kind: 'claim_boundary_released', recognizedKinds: [] })).toBe(false);
+  });
 });
 
 describe('sweepOrphanRows — TS-1 reroute with full audit stamp', () => {
@@ -305,6 +311,21 @@ describe('sweepOrphanRows — TS-3 idempotency / non-orphan skips', () => {
       insertRow,
     });
     expect(out.rerouted).toBe(0);
+  });
+
+  // QF-20260901-097 regression: the exact live incident — claim_boundary_released targeting
+  // the coordinator role, which never had it in a recognized drain set, was rerouted 16x/14d.
+  it('skips an INFORMATIONAL_KINDS row targeting a role that does not recognize it (QF-20260901-097)', async () => {
+    const row = { id: 'row-1', target_session: 'broadcast-coordinator', payload: { kind: 'claim_boundary_released' } };
+    const sb = buildSupabase({ candidates: [row] });
+    const out = await sweepOrphanRows(sb, {
+      resolveTargetRole: roleFor({ 'broadcast-coordinator': 'coordinator' }),
+      resolveRecognizedKinds: recognizedFor({ coordinator: [] }),
+      getActiveCoordinatorId: coordinatorId,
+      insertRow,
+    });
+    expect(out.rerouted).toBe(0);
+    expect(sb.__updateCalls).toHaveLength(0);
   });
 
   it('skips a row whose target role cannot be resolved (e.g. a worker session)', async () => {
