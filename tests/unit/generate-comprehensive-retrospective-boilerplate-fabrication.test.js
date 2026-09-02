@@ -40,8 +40,67 @@ describe('QF-20260822-453: no fixed boilerplate string arrays survive in the sou
   });
 });
 
+describe('SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-144: whatNeedsImprovement filler is derived from real per-SD context', () => {
+  // The sibling QF-20260822-453 never touched whatNeedsImprovement, which is why its 3 old
+  // universal literal strings kept getting re-detected by /learn as "recurring patterns"
+  // (PAT-LES-1e4dde82cf3e, PAT-LES-835b015f7a0f) long after -453 shipped -- the strings were
+  // byte-identical filler across dozens of retrospectives, not a real repeated codebase gap.
+  const block = region('const challengeFiller = () =>', 'const whatNeedsImprovement =');
+
+  it('never re-introduces the old universal literal strings', () => {
+    expect(src).not.toMatch(/Documentation could be enhanced with more visual diagrams/);
+    expect(src).not.toMatch(/Testing coverage could be expanded to include edge cases/);
+    expect(src).not.toMatch(/Performance benchmarks could be added for future comparison/);
+  });
+
+  it('cites sub-agent verdicts, PRD stats, handoff pattern count, and SD key', () => {
+    expect(block).toMatch(/subAgentAnalysis\.consulted/);
+    expect(block).toMatch(/prdAnalysis\.test_scenarios/);
+    expect(block).toMatch(/handoffInsights\.patterns\.length/);
+    expect(block).toMatch(/sd\.sd_key/);
+  });
+
+  it('always returns exactly 3 entries (keeps the >=3-item trigger threshold satisfied)', () => {
+    // Count top-level array-literal commas via depth tracking (backticks, (), [], {} all
+    // nest correctly) -- more robust than a fixed-shape regex against the entry text itself.
+    const openIdx = block.indexOf('=> [') + 3;
+    const closeIdx = block.indexOf('\n  ];', openIdx);
+    expect(closeIdx, 'closing "];" not found for challengeFiller').toBeGreaterThan(openIdx);
+    const inner = block.slice(openIdx + 1, closeIdx);
+    let depth = 0;
+    let inBacktick = false;
+    let topLevelCommas = 0;
+    for (const ch of inner) {
+      if (ch === '`') inBacktick = !inBacktick;
+      if (inBacktick) continue;
+      if ('([{'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth--;
+      else if (ch === ',' && depth === 0) topLevelCommas++;
+    }
+    expect(topLevelCommas).toBe(2); // 3 entries = 2 separating commas
+  });
+
+  it('is invoked as a function (not a static array) when filling the gap', () => {
+    expect(src).toMatch(/\.\.\.challengeFiller\(\)/);
+  });
+
+  it('is a plain string array (not wrapped in {text, is_boilerplate} objects, unlike whatWentWell/keyLearnings) -- the DB trigger reads it positionally', () => {
+    const wniBlock = region('const whatNeedsImprovement =', 'Ensure at least 5 learnings');
+    expect(wniBlock).not.toMatch(/is_boilerplate/);
+  });
+
+  it('never uses dismissive phrasing the DB trigger penalizes (ILIKE %no significant% / %nothing%, see 20251016_fix_quality_validation_trigger_conditional.sql)', () => {
+    expect(block.toLowerCase()).not.toMatch(/no significant/);
+    expect(block.toLowerCase()).not.toMatch(/nothing/);
+  });
+});
+
 describe('QF-20260822-453: achievement filler is derived from real per-SD context', () => {
-  const block = region('const achievementFiller = () =>', 'const learningFiller = () =>');
+  // Tightened to end at 'const challengeFiller = () =>' (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-144):
+  // the old end-anchor 'const learningFiller = () =>' also swallowed the whatNeedsImprovement/
+  // challengeFiller block inserted between them. Must still include the whatWentWell if/else
+  // block below the declaration, where achievementFiller() is actually invoked.
+  const block = region('const achievementFiller = () =>', 'const challengeFiller = () =>');
 
   it('cites sub-agent verdicts, PRD stats, handoff pattern count, and SD metadata', () => {
     expect(block).toMatch(/subAgentAnalysis\.consulted/);
