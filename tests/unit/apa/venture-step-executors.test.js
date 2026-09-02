@@ -39,6 +39,10 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
           if (state === 'visible' && visible) return;
           throw new Error(`waitFor timeout: "${selector}" not ${state}`);
         },
+        // isVisible() is a real Playwright locator method (synchronous-outcome check, never
+        // throws) -- used post-waitFor to determine WHICH alternative in a multi-selector set
+        // actually matched (FR-3, resolveVisibleSelector in the source module).
+        isVisible: async () => visible,
         // .first() scopes to a single node in real Playwright (avoiding a strict-mode
         // violation on a multi-match locator) -- for this fixture it's a same-shape no-op.
         first() { return locator; },
@@ -132,7 +136,7 @@ describe('getTestCredential() — dual persona (M2, Solomon/Oracle completeness 
 
 describe('getVentureRegistration()', () => {
   it('returns an empty-but-shaped default for an unregistered venture', () => {
-    expect(getVentureRegistration('NOT-REGISTERED-XYZ')).toEqual({ preflightChecks: [], stepOverrides: {} });
+    expect(getVentureRegistration('NOT-REGISTERED-XYZ')).toEqual({ preflightChecks: [], stepOverrides: {}, authOrigins: [] });
   });
 
   it('returns the registered venture config, case-insensitively', () => {
@@ -167,7 +171,7 @@ describe('buildStepExecutor() fallback — no registered override', () => {
 
     expect(page.calls.goto).toEqual(['http://fixture/register']);
     expect(page.calls.click).toContain('text=Already have an account? Sign in');
-    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
     expect(page.calls.fill).toContainEqual(['input[name="password"], input[type="password"]', 'pw']);
   });
 
@@ -197,7 +201,7 @@ describe('buildStepExecutor() fallback — persona.type selects the credential s
 
     await expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
-    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
   });
 
   it('persona.type "fresh" signs in with the _FRESH credential, not the _EXISTING one', async () => {
@@ -208,8 +212,8 @@ describe('buildStepExecutor() fallback — persona.type selects the credential s
 
     await expect(executor(page, { type: 'fresh' }, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
-    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'fresh@example.com']);
-    expect(page.calls.fill).not.toContainEqual(['input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'fresh@example.com']);
+    expect(page.calls.fill).not.toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
   });
 
   it('an unrecognized persona.type value falls back to "existing" rather than throwing', async () => {
@@ -219,7 +223,7 @@ describe('buildStepExecutor() fallback — persona.type selects the credential s
 
     await expect(executor(page, { type: 'bogus' }, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
-    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'existing@example.com']);
   });
 
   it('the "auth required" error names which persona type was missing', async () => {
@@ -307,7 +311,7 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
     await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
 
-    expect(page.calls.fill).toContainEqual(['input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
   });
 
   it('SEC-003 subdomain-prefix residual (found by a second security-agent re-verification): a host that merely STARTS WITH the expected origin is rejected, not accepted', async () => {
@@ -362,6 +366,73 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('buildStepExecutor() fallback — SEC-003 authOrigins allowlist (FR-5, additive only)', () => {
+  const step = { step_id: 'stp-abc123-do-a-thing', goal: 'do a thing' };
+  const ENV_KEY = 'VENTURE_UAT_TEST_ACCOUNT_ALLOWLISTVENTURE_EXISTING';
+  const TOGGLE = 'text=Already have an account? Sign in';
+  afterEach(() => { delete process.env[ENV_KEY]; });
+
+  it('accepts a currentOrigin that is NOT the expected baseUrl origin but IS in the venture-specific authOrigins allowlist', async () => {
+    vi.useFakeTimers();
+    try {
+      process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+      registerVenture('ALLOWLISTVENTURE', { authOrigins: ['https://trusted-auth.example'] });
+      const executor = buildStepExecutor(step, 'ALLOWLISTVENTURE');
+      const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'https://trusted-auth.example/sign-in' });
+
+      // The allowlist only governs the SEC-003 credential-fill guard (this test's scope); the
+      // mock never simulates Clerk redirecting back to baseUrl afterward, so the bounded
+      // post-submit auth-confirmation wait times out -- that outcome, not full authentication,
+      // proves the allowlist did its one job: the fill step was reached at all.
+      const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/auth required.*neither a verification-code challenge nor an authenticated-state signal/i);
+      await vi.advanceTimersByTimeAsync(16000);
+      await assertion;
+
+      // Reached the fill step -- the allowlisted origin did not trip the SEC-003 refusal.
+      expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still refuses an origin that is neither the expected baseUrl origin NOR in the allowlist -- the allowlist is additive, never a loosened comparison', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    registerVenture('ALLOWLISTVENTURE', { authOrigins: ['https://trusted-auth.example'] });
+    const executor = buildStepExecutor(step, 'ALLOWLISTVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'https://attacker.example/phish' });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/refusing to submit credentials.*navigated away from expected origin/i);
+
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('a prefix-match on an allowlisted origin string is still rejected -- allowlist membership is exact-string, never startsWith/includes', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    registerVenture('ALLOWLISTVENTURE', { authOrigins: ['https://trusted-auth.example'] });
+    const executor = buildStepExecutor(step, 'ALLOWLISTVENTURE');
+    // "https://trusted-auth.example.evil.com" is NOT in the allowlist array by exact string
+    // equality, even though it shares the allowlisted origin as a prefix.
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'https://trusted-auth.example.evil.com/sign-in' });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/refusing to submit credentials.*navigated away from expected origin/i);
+
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('a venture with no authOrigins configured behaves exactly as before -- every off-origin refused (regression guard)', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    registerVenture('ALLOWLISTVENTURE', {}); // no authOrigins key at all
+    const executor = buildStepExecutor(step, 'ALLOWLISTVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'https://trusted-auth.example/sign-in' });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/refusing to submit credentials.*navigated away from expected origin/i);
   });
 });
 
@@ -424,6 +495,13 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     expect(config.stepOverrides).toEqual({});
   });
 
+  // FR-5: the venture's own sign-in toggle navigates off-origin to this Clerk-hosted domain --
+  // reviewed and allowlisted here so SEC-003 can accept it without loosening origin equality.
+  it('allowlists exactly the reviewed Clerk-hosted auth origin, nothing broader', () => {
+    const config = getVentureRegistration('ALTIFYAI');
+    expect(config.authOrigins).toEqual(['https://neat-foxhound-5152.accounts.dev']);
+  });
+
   it('land preflight passes when the "Start free" CTA renders', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
     const land = preflightChecks.find((c) => c.name === 'land');
@@ -471,14 +549,42 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     expect(result.renderedStateSummary).toMatch(/Start free/);
   });
 
-  it('signupFormRenders accepts the identifier field alongside the email selectors', async () => {
+  it('signupFormRenders accepts the identifier field alongside the email selectors, and matchedSelector records the SPECIFIC alternative (FR-3) not the whole selector-set string', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
     const check = preflightChecks.find((c) => c.name === 'signupFormRenders');
-    const page = makeMockPage({ locatorCounts: { 'input[name="emailAddress"], input[type="email"], input[name="identifier"]': 1 } });
+    const page = makeMockPage({
+      locatorCounts: {
+        'input[name="identifier"], input[name="emailAddress"], input[type="email"]': 1,
+        'input[name="identifier"]': 1,
+      },
+    });
 
     const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
     expect(result.renderedStateSummary).toMatch(/Clerk/);
-    expect(result.matchedSelector).toContain('identifier');
+    expect(result.matchedSelector).toBe('input[name="identifier"]');
+  });
+
+  it('signupFormRenders matchedSelector resolves to whichever alternative actually rendered, not always identifier (FR-3 regression guard)', async () => {
+    const { preflightChecks } = getVentureRegistration('ALTIFYAI');
+    const check = preflightChecks.find((c) => c.name === 'signupFormRenders');
+    const page = makeMockPage({
+      locatorCounts: {
+        'input[name="identifier"], input[name="emailAddress"], input[type="email"]': 1,
+        'input[name="identifier"]': 0,
+        'input[name="emailAddress"]': 1,
+      },
+    });
+
+    const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
+    expect(result.matchedSelector).toBe('input[name="emailAddress"]');
+  });
+
+  it('signupFormRenders fails when none of the selector-set alternatives render', async () => {
+    const { preflightChecks } = getVentureRegistration('ALTIFYAI');
+    const check = preflightChecks.find((c) => c.name === 'signupFormRenders');
+    const page = makeMockPage({ locatorCounts: {} });
+
+    await expect(check.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/no email\/identifier field rendered/);
   });
 
   it('uploadRouteReachable passes now that /upload resolves live (QF-20260901-385: premise inverted, measured 2026-09-02)', async () => {
