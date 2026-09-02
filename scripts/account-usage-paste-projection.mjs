@@ -19,6 +19,7 @@ import { composeCapacityCliReport } from '../lib/fleet/exec-email-capacity-line.
 const require_ = createRequire(import.meta.url);
 const { getAccountIdentity } = require_('../lib/fleet/account-identity.cjs');
 const { METERS } = require_('../lib/fleet/account-usage-burn-projection.cjs');
+const { isPasteLedgerMissingError, pasteLedgerMissingMessage } = require_('../lib/fleet/account-usage-paste-ledger-status.cjs');
 
 async function main() {
   const arg = process.argv[2];
@@ -34,6 +35,18 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
   const io = { supabase };
+
+  // QF-20260902-914: probe the table ONCE, before any meter loop -- a per-meter "(unavailable
+  // this run)" made a 5-day-blind construction defect (the migration was never applied) look
+  // identical to a transient cache miss. Table-absent is a distinct, LOUD, non-zero-exit failure.
+  // account_usage_pastes is defined by the staged, chairman-gated migration this QF exists to
+  // detect the absence of -- intentionally not yet in the live schema snapshot.
+  const { error: probeError } = await supabase.from('account_usage_pastes').select('id').limit(1); // schema-lint-disable-line
+  if (probeError && isPasteLedgerMissingError(probeError)) {
+    console.error(`account-usage-paste-projection: ${pasteLedgerMissingMessage()}`);
+    process.exitCode = 1;
+    return;
+  }
 
   console.log(`Account ${accountUuid8} — capacity projection`);
   console.log('-'.repeat(50));

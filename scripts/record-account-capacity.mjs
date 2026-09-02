@@ -27,6 +27,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { recordCapacityReading, rankAccountsByHeadroom } = require('../lib/fleet/account-capacity-gauge.cjs');
 const { recordUsagePaste } = require('../lib/fleet/account-usage-paste-writer.cjs');
+const { isPasteLedgerMissingError, pasteLedgerMissingMessage } = require('../lib/fleet/account-usage-paste-ledger-status.cjs');
 const { maybeEmitExhaustionAdvisory } = require('../lib/fleet/account-usage-exhaustion-advisory.cjs');
 const { METERS } = require('../lib/fleet/account-usage-burn-projection.cjs');
 
@@ -74,7 +75,13 @@ async function main() {
     promoNote,
   }, { supabase });
   if (!ledgerResult.ok) {
-    console.error(`record-account-capacity: ledger write failed (headroom gauge above still succeeded): ${ledgerResult.error}`);
+    // QF-20260902-914: a PGRST205 schema-cache miss on this specific table has meant "the
+    // migration was never applied" for 5 days straight -- never render it as a generic/transient
+    // failure again. Every OTHER ledger-write failure keeps its original, unenriched message.
+    const message = isPasteLedgerMissingError(ledgerResult.error)
+      ? pasteLedgerMissingMessage()
+      : `ledger write failed (headroom gauge above still succeeded): ${ledgerResult.error}`;
+    console.error(`record-account-capacity: ${message}`);
     process.exitCode = 1;
     return;
   }
