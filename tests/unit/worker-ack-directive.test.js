@@ -4,7 +4,7 @@
  * deliberately blocks auto-ack in surfaceCoordinatorMessages). This is the sanctioned
  * worker-side ack: stamps acknowledged_at + payload.actioned_at/actioned_by on the row.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { ackDirective } = require('../../scripts/worker-ack-directive.cjs');
@@ -83,5 +83,16 @@ describe('ackDirective (QF-20260724-556)', () => {
     const sb = stubSupabase(row);
     await ackDirective(sb, ROW_ID, { sessionId: WORKER_SESSION, note: 'landed the fix in PR #6428' });
     expect(sb._updates[0].payload.actioned_note).toBe('landed the fix in PR #6428');
+  });
+
+  // QF-20260902-166: the correction kinds (amend, retraction, supersede) are ADVISORY, not
+  // directives — a correction is deliver-not-consume informational, never a genuine-action
+  // requirement. This path must keep refusing them (they ack only via ackAdvisory), so the
+  // lane separation this file's other refusal tests already prove holds for the new kinds too.
+  it.each(['amend', 'retraction', 'supersede'])('refuses to ack a %s row (correction kinds are advisory, not directives)', async (kind) => {
+    const row = { id: ROW_ID, payload: { kind }, target_session: WORKER_SESSION, acknowledged_at: null };
+    const sb = stubSupabase(row);
+    await expect(ackDirective(sb, ROW_ID, { sessionId: WORKER_SESSION })).rejects.toMatchObject({ code: 'NOT_A_DIRECTIVE' });
+    expect(sb._updates).toHaveLength(0);
   });
 });
