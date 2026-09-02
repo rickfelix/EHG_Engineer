@@ -14,6 +14,7 @@ import {
   isZombieOnMain,
   isNested,
   hasOrphanSD,
+  hasHardKeep,
   isPatchEquivalentToMain,
   isIdle,
   isOutsideWorktreesDir,
@@ -331,6 +332,82 @@ describe('hasOrphanSD (AC3)', () => {
     expect(res.matched).toBe(false);
     expect(res.reason).toBe('sdkey_found');
     expect(callCount).toBeGreaterThanOrEqual(2);
+  });
+
+  // ── QF-20260902-837: .worktrees/adhoc/ is a purpose-named pool, never an orphan-sd
+  // candidate — the basename carries no key by design, so it must route to the age rule
+  // instead of orphan-sd, regardless of what the lookup maps contain.
+
+  it('AC2: exempts a clean, pushed .worktrees/adhoc/ worktree from orphan-sd (routes to age rule)', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/adhoc/altifyai-s23-walk', key: 'altifyai-s23-walk' },
+      { sdMap: new Set(['SD-SOMETHING-ELSE']), qfMap: new Set(), readFile: readFileStub(null) },
+    );
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('adhoc_pool_exempt');
+  });
+
+  it('AC2: exempts .worktrees/adhoc/ on a Windows-style backslash path', () => {
+    const res = hasOrphanSD(
+      { path: 'C:\\repo\\.worktrees\\adhoc\\altifyai-s23-walk', key: 'altifyai-s23-walk' },
+      { sdMap: new Set(), qfMap: new Set(), readFile: readFileStub(null) },
+    );
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('adhoc_pool_exempt');
+  });
+
+  it('AC3: an SD-keyed worktree with no DB row is still orphan-sd (adhoc exemption unchanged for non-adhoc paths)', () => {
+    const res = hasOrphanSD(
+      { path: '/repo/.worktrees/SD-GONE', key: 'SD-GONE' },
+      { sdMap: new Set(['SD-SOMETHING-ELSE']), qfMap: new Set(), readFile: readFileStub(null) },
+    );
+    expect(res.matched).toBe(true);
+    expect(res.reason).toBe('sdkey_not_in_db');
+  });
+});
+
+// ── hasHardKeep ─────────────────────────────────────────────────────────
+
+describe('hasHardKeep (QF-20260902-837)', () => {
+  it('AC1: keeps when unpushedCount > 0, all else clear', () => {
+    const res = hasHardKeep({ unpushedCount: 1, dirtyCount: 0, locked: false, liveSessionResident: false });
+    expect(res.matched).toBe(true);
+    expect(res.reason).toBe('hard_keep_unpushed_dirty_resident_or_locked');
+    expect(res.evidence).toEqual({
+      unpushed_count: 1, dirty_count: 0, locked: false, live_session_resident: false,
+    });
+  });
+
+  it('keeps when the tree is dirty, all else clear', () => {
+    const res = hasHardKeep({ unpushedCount: 0, dirtyCount: 3, locked: false, liveSessionResident: false });
+    expect(res.matched).toBe(true);
+    expect(res.evidence.dirty_count).toBe(3);
+  });
+
+  it('keeps when a live session is resident, all else clear', () => {
+    const res = hasHardKeep({ unpushedCount: 0, dirtyCount: 0, locked: false, liveSessionResident: true });
+    expect(res.matched).toBe(true);
+    expect(res.evidence.live_session_resident).toBe(true);
+  });
+
+  it('keeps when the worktree is locked, all else clear', () => {
+    const res = hasHardKeep({ unpushedCount: 0, dirtyCount: 0, locked: true, liveSessionResident: false });
+    expect(res.matched).toBe(true);
+    expect(res.evidence.locked).toBe(true);
+  });
+
+  it('AC2: does not match when all four measured values are clear (falls through to the age rule)', () => {
+    const res = hasHardKeep({ unpushedCount: 0, dirtyCount: 0, locked: false, liveSessionResident: false });
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('hard_keep_clear');
+  });
+
+  it('treats missing/undefined fields as clear, not as a match', () => {
+    const res = hasHardKeep({});
+    expect(res.matched).toBe(false);
+    expect(res.evidence).toEqual({
+      unpushed_count: 0, dirty_count: 0, locked: false, live_session_resident: false,
+    });
   });
 });
 
