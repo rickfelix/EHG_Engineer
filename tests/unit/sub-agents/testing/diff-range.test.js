@@ -50,4 +50,13 @@ describe('parseDiffRange (FR-8)', () => {
   it('rejects a range with more than one ".." separator', () => {
     expect(parseDiffRange('abc..def..ghi')).toBeNull();
   });
+
+  // TESTING sub-agent finding #4 (EXEC-TO-PLAN evidence review): SAFE_REV alone permits a
+  // leading '-', which git then parses as an option (e.g. --output=...) rather than a
+  // revision -- argument injection, not shell injection, but still rejected.
+  it('rejects a leading "-" on either side (argument injection into git, not shell)', () => {
+    expect(parseDiffRange('--output=/tmp/x..--output=/tmp/y')).toBeNull();
+    expect(parseDiffRange('-abc..def')).toBeNull();
+    expect(parseDiffRange('abc..-def')).toBeNull();
+  });
 });

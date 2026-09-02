@@ -20,6 +20,8 @@
  * Phase: LEAD-FINAL-APPROVAL
  */
 
+import { isBypassResolved } from '../../../../../../lib/handoff/bypass-stamp.js';
+
 const GATE_NAME = 'LEARNING_OR_BYPASS_RESOLVED';
 
 /**
@@ -53,10 +55,7 @@ async function findUnresolvedPhaseChainBypasses(supabase, sdId) {
   }
 
   const bypassed = (data || []).filter((row) => row?.metadata?.bypass);
-  const unresolved = bypassed.filter((row) => {
-    const b = row.metadata.bypass;
-    return !b.pattern_id && !b.followup_sd_key;
-  });
+  const unresolved = bypassed.filter((row) => !isBypassResolved(row.metadata.bypass));
 
   return {
     unresolved: unresolved.map((row) => ({
