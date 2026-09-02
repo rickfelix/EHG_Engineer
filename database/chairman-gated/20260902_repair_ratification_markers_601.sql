@@ -1,4 +1,4 @@
--- @approved-by: <chairman-email>  (CHAIRMAN CEREMONY — verbal approval per CLAUDE_ADAM.md 3c; scribe adam:673db833)
+-- @approved-by: rickfelix2000@gmail.com  (CHAIRMAN CEREMONY — verbal approval per CLAUDE_ADAM.md 3c; scribe adam:673db833)
 -- Purpose: correct marker_text on 15 section-601 chairman_ratifications rows whose markers are ceremony prose that never appeared in CLAUDE_ADAM.md (false REGRESSED on the ratification gauge since 2026-08-31; Solomon ruling f8971c1b; QF-20260901-107 fixes the writer/detector).
 -- Each new value was verified at generation time (2026-09-02T00:45:49.961Z) as a literal substring of BOTH the live CLAUDE_ADAM.md (manifest hash 3e962228d707b94d) and DB section 601; ruling text, encoded_at and encoded_ref are untouched.
 -- The append-only trigger only permits NULL-to-set transitions, so it is disabled for this statement block and re-enabled in the same transaction. READBACK: SELECT id, marker_text FROM chairman_ratifications WHERE id IN (...) must return the values below.
