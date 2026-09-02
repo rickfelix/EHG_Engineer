@@ -48,7 +48,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
-const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
@@ -211,7 +211,11 @@ function extractEmbeddedPeerDirective(rawPeerArg, rawBody) {
 // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: the known-kinds allowlist a caller may
 // explicitly stamp via --kind. Sourced from the SAME shared constants every drain already
 // filters on (lib/fleet/worker-status.cjs) -- never a second hand-maintained list.
-const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
+// QF-20260902-467: also includes BACKPRESSURE_EXEMPT_KINDS (lib/coordinator/dispatch.cjs,
+// the SSOT the backpressure refusal text itself names) so an incident kind like
+// collision_warning -- meant to bypass DISPATCH_BACKPRESSURE -- is not rejected before it
+// ever reaches that check.
+const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS, ...BACKPRESSURE_EXEMPT_KINDS]);
 
 // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 — flag names, not argv indices.
 //
@@ -1057,7 +1061,7 @@ async function main() {
   const kIdx = argv.indexOf('--kind');
   const kindArg = kIdx >= 0 ? argv[kIdx + 1] || null : null;
   if (kindArg && !KNOWN_SEND_KINDS.has(kindArg)) {
-    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
+    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs, or BACKPRESSURE_EXEMPT_KINDS in lib/coordinator/dispatch.cjs).`);
     process.exit(2);
   }
   // QF-20260901-479: `--message-kind retraction|amend|supersede` posts a correction on the SAME
@@ -1174,10 +1178,13 @@ async function main() {
   // byte-identical to before.
   const target = isDirectTarget ? peerArg : defaultTarget;
   const via = isDirectTarget ? 'direct' : defaultVia;
-  // QF-20260719-387: read back the resolved target's registered role and hard-error on a
-  // recipient-class mismatch (--to solomon -> role=solomon; default -> the active coordinator).
-  // An R1 direct raw-session target has no recipient class (expectedRole null -> print-only).
-  await assertTargetRole(supabase, { target, expectedRole: isDirectTarget ? null : (toSolomon ? 'solomon' : 'coordinator') });
+  // QF-20260719-387: target-role recipient-class check (--to solomon -> role=solomon; default ->
+  // the active coordinator; an R1 direct raw-session target has no recipient class, expectedRole
+  // null -> print-only). QF-20260902-100: the CALL moved below, past every gate that can still
+  // refuse this send (alarm bar, outbound gate, pre-send consult) -- assertTargetRole's own
+  // "target-role verified" print used to run HERE, before those gates, so a later refusal still
+  // read as delivered to a reader grepping the tail. Moving the call (not the function) keeps
+  // role-comms-guard.cjs and its own tests untouched.
   const addressee = peerArg || 'coordinator';
   const senderCallsign = await snapshotSender(supabase, sessionId);
 
@@ -1237,7 +1244,10 @@ async function main() {
     if (gate.tripped) {
       const outboundAttested = argv.includes('--outbound-verified') || process.env.ADAM_OUTBOUND_VERIFIED === '1';
       if (gate.verdict === 'block' && !outboundAttested) {
-        console.error(`\n[adam-advisory] ⛔ ADAM OUTBOUND GATE blocked this send:\n  - ${gate.reasons.join('\n  - ')}\n` +
+        // QF-20260902-100: lead with a stable, grep-able token -- the old text carried none of
+        // ERROR/refus/PARK, so a reader grepping the tail for those saw only the (now-later)
+        // target-role line and cited a refused consult as delivered.
+        console.error(`\nERROR: NOT SENT — rationale bar: ${gate.reasons.join('; ')}\n` +
           `Fix the outbound (add rationale / own the decision / consult Solomon), or attest with --outbound-verified (or ADAM_OUTBOUND_VERIFIED=1).\n`);
         process.exit(4);
       }
@@ -1362,6 +1372,13 @@ async function main() {
     return;
   }
 
+  // QF-20260902-100: run LAST, immediately before the insert -- after every gate above that can
+  // still refuse or skip this send (alarm bar, outbound gate, pre-send consult, dedup). Still
+  // exits 4 immediately on its own role-mismatch refusal (unchanged); deferPrint:true holds the
+  // SUCCESS line instead of printing it here -- it prints only once the row id exists below,
+  // alongside correlation_id, per the coordinator's acceptance clause on this QF.
+  const targetRoleLine = await assertTargetRole(supabase, { target, expectedRole: isDirectTarget ? null : (toSolomon ? 'solomon' : 'coordinator'), deferPrint: true });
+
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS
   // (DISPATCH_TARGET_*) on a bad/dead target instead of returning {error}, so wrap it
   // and map err.code to a clean message + non-zero exit (no raw stack, no silent loss).
@@ -1385,6 +1402,7 @@ async function main() {
 
   console.log('✓ Adam advisory sent');
   console.log('  advisory_id:', inserted.id);
+  console.log(targetRoleLine); // QF-20260902-100: held until the row id above exists
   console.log('  target:', target);
   console.log('  correlation_id:', payload.correlation_id, replyTo ? '(echoed from --reply-to)' : '(replyable)');
   if (replyTo) console.log('  reply_to:', replyTo);

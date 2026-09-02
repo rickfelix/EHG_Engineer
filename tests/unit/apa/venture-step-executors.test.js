@@ -12,9 +12,20 @@ import {
   getVentureRegistration,
   getTestCredential,
   buildStepExecutor,
+  buildClerkTestModeIdentity,
+  CLERK_TEST_MODE_FIXED_CODE,
 } from '../../../lib/apa/venture-step-executors.js';
+import * as imapCodeFetcher from '../../../lib/apa/imap-code-fetcher.js';
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, buttonTexts = ['Continue'] } = {}) {
+// QF-20260902-512: neither existing test in this file ever reaches the code-challenge branch
+// (none makes the code input locator visible), so this mock is inert for them -- only the new
+// "auth provider test mode" describe block below exercises it.
+vi.mock('../../../lib/apa/imap-code-fetcher.js', () => ({
+  fetchVerificationCode: vi.fn(),
+  fetchVerificationCodeDetailed: vi.fn(),
+}));
+
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, buttonTexts = ['Continue'], bodyText = '' } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
   return {
@@ -72,6 +83,10 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
         // .first() scopes to a single node in real Playwright (avoiding a strict-mode
         // violation on a multi-match locator) -- for this fixture it's a same-shape no-op.
         first() { return locator; },
+        // QF-20260902-512 re-keyed STEP 1: only page.locator('body').innerText() is ever
+        // called by the source module (a generic post-submit-state snapshot on the "neither"
+        // auth failure) -- this fixture just echoes the configured bodyText.
+        innerText: async () => bodyText,
       };
       return locator;
     },
@@ -162,7 +177,7 @@ describe('getTestCredential() — dual persona (M2, Solomon/Oracle completeness 
 
 describe('getVentureRegistration()', () => {
   it('returns an empty-but-shaped default for an unregistered venture', () => {
-    expect(getVentureRegistration('NOT-REGISTERED-XYZ')).toEqual({ preflightChecks: [], stepOverrides: {}, authOrigins: [] });
+    expect(getVentureRegistration('NOT-REGISTERED-XYZ')).toEqual({ preflightChecks: [], stepOverrides: {}, authOrigins: [], authProviderTestMode: 'production' });
   });
 
   it('returns the registered venture config, case-insensitively', () => {
@@ -668,5 +683,111 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     const page = makeMockPage({ gotoResponses: { 'http://altifyai.fixture/upload': { status: () => 404 } } });
 
     await expect(check.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/expected a reachable route/);
+  });
+});
+
+describe('buildClerkTestModeIdentity()', () => {
+  it('inserts a "+clerk_test" marker into the email local-part, leaving the password untouched', () => {
+    expect(buildClerkTestModeIdentity({ email: 'tester@example.com', password: 'pw' }))
+      .toEqual({ email: 'tester+clerk_test@example.com', password: 'pw' });
+  });
+
+  it('throws on a malformed email rather than silently producing a bogus identity', () => {
+    expect(() => buildClerkTestModeIdentity({ email: 'not-an-email', password: 'pw' })).toThrow(/not a valid address/);
+  });
+});
+
+// QF-20260902-512: auth_provider_test_mode branches the code-challenge leg between Clerk's
+// documented test-mode fixed code (no IMAP poll) and the existing mailbox-OTP path, and stamps
+// forensics (challenge_kind/retrieval_path/auth_mode/mailbox_census) on the thrown error the
+// same never-fabricated way clickedButtonText already is.
+describe('buildStepExecutor() fallback — authProviderTestMode (QF-20260902-512)', () => {
+  const step = { step_id: 'stp-abc123-do-a-thing', goal: 'do a thing' };
+  const CODE_INPUT = 'input[name="code"], input[autocomplete="one-time-code"]';
+  const TOGGLE = 'text=Already have an account? Sign in';
+  const EXISTING_KEY = 'VENTURE_UAT_TEST_ACCOUNT_AUTHMODEVENTURE_EXISTING';
+
+  beforeEach(() => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    imapCodeFetcher.fetchVerificationCode.mockReset();
+    imapCodeFetcher.fetchVerificationCodeDetailed.mockReset();
+  });
+  afterEach(() => { delete process.env[EXISTING_KEY]; });
+
+  it('clerk_development: fills the +clerk_test identity and the fixed code, never calling the IMAP fetcher', async () => {
+    registerVenture('AUTHMODEVENTURE', { authProviderTestMode: 'clerk_development' });
+    const executor = buildStepExecutor(step, 'AUTHMODEVENTURE');
+    const page = makeMockPage({
+      locatorCounts: { [TOGGLE]: 1 },
+      waitForVisible: { [CODE_INPUT]: true },
+      currentUrl: 'http://fixture/dashboard',
+    });
+
+    let caught;
+    try {
+      await executor(page, {}, { baseUrl: 'http://fixture', authenticated: false });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester+clerk_test@example.com']);
+    expect(page.calls.fill).toContainEqual([CODE_INPUT, CLERK_TEST_MODE_FIXED_CODE]);
+    expect(imapCodeFetcher.fetchVerificationCodeDetailed).not.toHaveBeenCalled();
+    expect(imapCodeFetcher.fetchVerificationCode).not.toHaveBeenCalled();
+
+    // Run-row forensics (Solomon ruling 59a5315d item 2): stamped on the thrown error the same
+    // never-fabricated way clickedButtonText already is.
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.challengeKind).toBe('email-code');
+    expect(caught.retrievalPath).toBe('clerk_test_mode');
+    expect(caught.authMode).toBe('clerk_test_mode');
+    expect(caught.mailboxCensus).toBeNull();
+  });
+
+  it('production (default): signs in with the unmodified credential and calls the IMAP fetcher, stamping the mailbox census', async () => {
+    imapCodeFetcher.fetchVerificationCodeDetailed.mockResolvedValue({ code: '135790', messagesSeen: 4 });
+    registerVenture('AUTHMODEVENTURE', {}); // no authProviderTestMode -- defaults to production
+    const executor = buildStepExecutor(step, 'AUTHMODEVENTURE');
+    const page = makeMockPage({
+      locatorCounts: { [TOGGLE]: 1 },
+      waitForVisible: { [CODE_INPUT]: true },
+      currentUrl: 'http://fixture/dashboard',
+    });
+
+    let caught;
+    try {
+      await executor(page, {}, { baseUrl: 'http://fixture', authenticated: false });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
+    expect(page.calls.fill).toContainEqual([CODE_INPUT, '135790']);
+    expect(imapCodeFetcher.fetchVerificationCodeDetailed).toHaveBeenCalledWith({ aliasLocalPart: expect.any(String) });
+
+    expect(caught.challengeKind).toBe('email-code');
+    expect(caught.retrievalPath).toBe('imap');
+    expect(caught.authMode).toBe('mailbox_otp');
+    expect(caught.mailboxCensus).toBe(4);
+  });
+
+  it('re-keyed STEP 1 (Adam 2026-09-02T09:59:55Z): when neither the code challenge nor an authenticated signal appears, the thrown error carries a generic post-submit page-text snapshot -- never a guessed Clerk-specific selector', async () => {
+    vi.useFakeTimers();
+    try {
+      registerVenture('AUTHMODEVENTURE', { authProviderTestMode: 'clerk_development' });
+      const executor = buildStepExecutor(step, 'AUTHMODEVENTURE');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/sign-in', // matches NOT_YET_AUTHENTICATED_PATH_RE -- authedDirect must read false
+        bodyText: 'Too many requests. Please try again later.',
+      });
+
+      const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/neither a verification-code challenge nor an authenticated-state signal.*Too many requests/s);
+      await vi.advanceTimersByTimeAsync(16000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

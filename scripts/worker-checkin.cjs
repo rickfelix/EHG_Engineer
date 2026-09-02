@@ -692,7 +692,10 @@ async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
 // would blind the safety-critical guard even when factory_lane was itself genuinely selectable.
 // Layered now, matching belt-depth.cjs's own probe: strip verified_at FIRST and retry (keeping
 // factory_lane); only strip factory_lane too if THAT retry also 42703s.
-const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application, verified_at'; // schema-lint-disable-line: factory_lane + verified_at staged, see comment above
+// SD-LEO-FIX-SELF-CLAIM-PREDICATE-001: compliance_details carries the risk-review stamp
+// isAutoStartableQF now reads to conditionally allow a risk-noun-hit row through self-claim.
+// Long-established column (780+ rows pre-dating this SD) -- no 42703 fallback needed.
+const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routing_tier, title, description, severity, not_before, factory_lane, owner, release_condition, target_application, verified_at, compliance_details'; // schema-lint-disable-line: factory_lane + verified_at staged, see comment above
     let { data: qfs, error: qfErr } = await sb
       .from('quick_fixes')
       .select(QF_CANDIDATE_COLUMNS)

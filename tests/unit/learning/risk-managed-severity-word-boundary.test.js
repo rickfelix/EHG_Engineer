@@ -59,3 +59,50 @@ describe('QF-20260823-174: isBoilerplateImprovement skips "Risk managed:" narrat
     expect(isBoilerplateImprovement('No significant challenges documented')).toBe(true);
   });
 });
+
+describe('SD-LEARN-FIX-ADDRESS-PAT-LES-008: isBoilerplateImprovement filters the legacy generator literals via anchored matching', () => {
+  // The generator side (scripts/generate-comprehensive-retrospective.js) was already fixed
+  // by SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-144 / QF-20260822-453 (see
+  // generate-comprehensive-retrospective-boilerplate-fabrication.test.js). This covers a
+  // SECOND, still-live agent-authored producer of the same 3 literals -- measured against
+  // the full retrospectives corpus (9,321 retros / 48,944 improvement items) by two rounds
+  // of sub-agent evidence (sub_agent_execution_results rows 3f4812ab.../d6ab2756...).
+  const KNOWN_BAD_MUST_FILTER = [
+    'Documentation could be enhanced with more visual diagrams',
+    'Testing coverage could be expanded to include edge cases',
+    'Performance benchmarks could be added for future comparison',
+    'Documentation could be enhanced with more visual diagrams (auto-extracted boilerplate item, low priority).',
+    'Performance benchmarks could be added for future comparison (auto-extracted boilerplate item, low priority).',
+  ];
+
+  // Measured false positives from the corpus -- naive substring/includes() matching would
+  // wrongly filter these, including two real harness defect reports that merely begin with
+  // similar phrasing to the fabricated boilerplate.
+  const FALSE_POSITIVES_MUST_NOT_FILTER = [
+    'Documentation could be enhanced with more visual diagrams of the Kind-A/Kind-B predicate classification',
+    'Testing coverage could be expanded to include edge cases around the deferred dispatch_state DDL interaction once that follow-on SD lands',
+    'Documentation could be enhanced with more visual diagrams of the purpose-key routing table.',
+    'Documentation could be enhanced with more visual diagrams of the defense-in-depth (app-layer + DB-layer) enforcement flow.',
+    'Documentation could be enhanced with more visual diagrams of the wrapper\'s control flow.',
+    'Documentation could be enhanced with more visual diagrams in future architecture materializations.',
+    "THE RETROSPECTIVE GENERATOR IS ITSELF A HARNESS DEFECT SOURCE: it rejects sd_key and accepts only the UUID `id` despite advertising `<SD-ID>`; it destroyed 4 lessons with `s.solution.toLowerCase is not a function`; and it awarded quality_score 90 to content containing 'Progress achieved: 0%' and 'Documentation could be enhanced with more visual diagrams'.",
+  ];
+
+  it.each(KNOWN_BAD_MUST_FILTER)('filters known-bad literal: %s', (text) => {
+    expect(isBoilerplateImprovement(text)).toBe(true);
+  });
+
+  it.each(FALSE_POSITIVES_MUST_NOT_FILTER)('does NOT filter measured false positive: %s', (text) => {
+    expect(isBoilerplateImprovement(text)).toBe(false);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isBoilerplateImprovement('testing coverage could be expanded to include edge cases')).toBe(true);
+  });
+
+  it('does not falsely filter due to punctuation-before-suffix stripping order (suffix ends in "." itself)', () => {
+    expect(isBoilerplateImprovement(
+      'Testing coverage could be expanded to include edge cases (auto-extracted boilerplate item, low priority).'
+    )).toBe(true);
+  });
+});

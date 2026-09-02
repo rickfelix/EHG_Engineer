@@ -160,10 +160,34 @@ export function determineSeverity(text, impact) {
  * already avoided by design, not an open defect, and should never itself
  * become a new issue_patterns row.
  */
+// SD-LEARN-FIX-ADDRESS-PAT-LES-008: a second, agent-authored producer (not the
+// generator fixed by SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-144 / QF-20260822-453)
+// still emits these 3 legacy literals, sometimes with an "(auto-extracted
+// boilerplate item, low priority)." suffix. Anchored (normalize-then-strict-
+// equal) matching only -- substring/includes() was measured against the full
+// retrospectives corpus and produces false positives, including real harness
+// defect reports that merely begin with similar phrasing.
+const LEGACY_BOILERPLATE_LITERALS = new Set([
+  'documentation could be enhanced with more visual diagrams',
+  'testing coverage could be expanded to include edge cases',
+  'performance benchmarks could be added for future comparison',
+]);
+const AUTO_EXTRACTED_SUFFIX_RE = /\s*\(auto-extracted boilerplate item,\s*low priority\)\.?\s*$/i;
+
+function isLegacyBoilerplateLiteral(text) {
+  // Strip the suffix BEFORE stripping trailing punctuation -- the suffix
+  // itself ends in ".", so stripping punctuation first would leave a
+  // dangling ")" fragment that AUTO_EXTRACTED_SUFFIX_RE can no longer match.
+  const withoutSuffix = text.replace(AUTO_EXTRACTED_SUFFIX_RE, '');
+  const normalized = withoutSuffix.trim().replace(/[.\s]+$/, '').toLowerCase();
+  return LEGACY_BOILERPLATE_LITERALS.has(normalized);
+}
+
 export function isBoilerplateImprovement(text) {
   if (!text || text.length < 20) return true;
   if (text === 'No significant challenges documented') return true;
   if (/^Risk managed:/i.test(text)) return true;
+  if (isLegacyBoilerplateLiteral(text)) return true;
   return false;
 }
 
