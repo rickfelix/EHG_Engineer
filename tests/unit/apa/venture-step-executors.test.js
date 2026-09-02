@@ -843,7 +843,10 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
         (v) => { throw new Error(`expected executor to throw, but it resolved with ${JSON.stringify(v)}`); },
         (err) => { caught = err; },
       );
-      await vi.advanceTimersByTimeAsync(16000);
+      // Two sequential real-timer 15s polls now: the sign-in leg's race, then the sign-up leg's
+      // own race (Solomon fix shape 85cd494b) -- both must fully elapse before the mocked
+      // signUpCodeChallenge (instant) and the dashboard-navigating verify click resolve things.
+      await vi.advanceTimersByTimeAsync(32000);
       await capture;
 
       expect(caught).toBeInstanceOf(Error);
@@ -865,7 +868,45 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
     }
   });
 
-  it('follow-up (MEASURED live 2026-09-02T11:43Z, uat_test_runs 8747cf25): if the sign-up leg never reaches a code step, the thrown error carries a post-signup page-text snapshot too', async () => {
+  it('Solomon fix shape (directive 85cd494b): a dev instance that signs the identity in WITHOUT ever asking for a code is a real success (auth_mode=clerk_signup_noverify), not misread as a rejected form', async () => {
+    vi.useFakeTimers();
+    try {
+      process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+      registerVenture('NOACCTVENTURE', { authProviderTestMode: 'clerk_development' });
+      const executor = buildStepExecutor(step, 'NOACCTVENTURE');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/sign-in',
+        bodyText: "Couldn't find your account.",
+        // No code challenge ever appears, but the sign-up submit click itself lands on an
+        // authenticated URL (2nd Continue click = the sign-up submit).
+        waitForVisibleSequence: { [CODE_INPUT]: [false, false] },
+        clickNavigationsSequence: { Continue: [undefined, 'http://fixture/dashboard'] },
+      });
+
+      let caught;
+      const capture = executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }).then(
+        (v) => { throw new Error(`expected executor to throw, but it resolved with ${JSON.stringify(v)}`); },
+        (err) => { caught = err; },
+      );
+      // Only the sign-in leg's race needs the full 15s -- the sign-up leg's authedDirect signal
+      // resolves on its first check since the submit click already landed on /dashboard.
+      await vi.advanceTimersByTimeAsync(16000);
+      await capture;
+
+      expect(caught.message).toMatch(/authenticated, but no verified UI mapping/i);
+      expect(caught.authBranch).toBe('sign_up');
+      expect(caught.challengeKind).toBe('authenticated');
+      expect(caught.retrievalPath).toBe('clerk_test_mode');
+      expect(caught.authMode).toBe('clerk_signup_noverify');
+      // No code was ever filled -- this path never reaches the verification step.
+      expect(page.calls.fill).not.toContainEqual([CODE_INPUT, CLERK_TEST_MODE_FIXED_CODE]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('follow-up (MEASURED live 2026-09-02T11:43Z, uat_test_runs 8747cf25): if the sign-up leg reaches neither signal, the thrown error carries a post-signup page-text snapshot too', async () => {
     vi.useFakeTimers();
     try {
       process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
@@ -879,8 +920,8 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
       });
 
       const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
-        .rejects.toThrow(/signed up the \+clerk_test identity.*no verification-code step appeared.*post-signup page text.*Couldn't find your account/s);
-      await vi.advanceTimersByTimeAsync(16000);
+        .rejects.toThrow(/signed up the \+clerk_test identity.*neither a verification-code challenge nor an authenticated-state signal appeared.*post-signup page text.*Couldn't find your account/s);
+      await vi.advanceTimersByTimeAsync(32000);
       await assertion;
     } finally {
       vi.useRealTimers();
