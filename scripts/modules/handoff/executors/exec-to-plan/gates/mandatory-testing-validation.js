@@ -27,6 +27,27 @@ import { execSync } from 'child_process';
 import { isMeasuredExecution } from '../../../../../../lib/sub-agents/testing/test-execution-record.js';
 
 /**
+ * SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: resolve the "measured" state of a TESTING
+ * result row into three DISTINCT outcomes: `true`/object (measured, real evidence — including the
+ * legacy "measured as a fact-object" shape some rows carry), `false` (explicitly measured and
+ * found unmeasured), or `null` (checked, and there is genuinely nothing to measure — neither a
+ * test_execution block nor a metadata.measured key exists at all).
+ *
+ * Pure function, exported for direct unit testing without mocking the full gate's supabase calls.
+ * Previously this resolved to `undefined` in the null case, which `=== false` never matches, so
+ * the row silently fell through to "TESTING validation passed" (100/100) with zero evidence
+ * backing it (database-agent finding, mandatory-testing-validation.js:304, 2026-09-02).
+ * @param {{metadata?: {test_execution?: unknown, measured?: unknown}}} result
+ * @returns {boolean|object|null}
+ */
+export function resolveMeasuredState(result) {
+  const testExecution = result?.metadata?.test_execution;
+  const hasMeasuredKey = result?.metadata?.measured !== undefined;
+  if (testExecution !== undefined) return isMeasuredExecution(testExecution);
+  return hasMeasuredKey ? result.metadata.measured : null;
+}
+
+/**
  * FR-3: Resolve test-runner exit info for WAIT classification.
  * Prefers executor-supplied ctx.testRunner = { exitCode, output|stderr|message };
  * falls back to the stored TESTING result row's exit fields (metadata.exit_code /
@@ -295,15 +316,16 @@ export function createMandatoryTestingValidationGate(supabase) {
       }
 
       // 9b. SD-FDBK-INFRA-TESTING-SUB-AGENT-001: an unmeasured verdict (metadata.measured===false)
-      // must never satisfy this gate identically to a genuinely measured PASS. A row that carries
-      // NO measured key (older evidence, or a sub-agent path that doesn't set it) is treated as
-      // measured — this only narrows behavior for the specific defect this SD fixes, it never
-      // widens a failure onto evidence this gate already trusted before today.
+      // must never satisfy this gate identically to a genuinely measured PASS.
       // SC#6: prefer the structured field (source-agnostic — works for either writer path);
       // fall back to the ad-hoc boolean for rows written before test_execution existed.
-      const testExecution = result.metadata?.test_execution;
-      const measured = testExecution !== undefined ? isMeasuredExecution(testExecution) : result.metadata?.measured;
-      if (measured === false) {
+      // SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: see resolveMeasuredState()'s doc comment.
+      const measured = resolveMeasuredState(result);
+      const isNoEvidenceAtAll = measured === null;
+      if (measured === false || isNoEvidenceAtAll) {
+        const reasonText = isNoEvidenceAtAll
+          ? 'carries neither a test_execution block nor a metadata.measured flag — no real test evidence backs it'
+          : 'carries metadata.measured=false — no real test evidence backs it';
         if (isAdvisoryMode) {
           // ADVISORY tier: same honest-but-non-blocking shape as the missing-row ADVISORY path
           // above — surfaced, not silently trusted, but this SD introduces no new blocking tier.
@@ -314,20 +336,20 @@ export function createMandatoryTestingValidationGate(supabase) {
             score: 70,
             max_score: 100,
             issues: [],
-            warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD carries metadata.measured=false — no real test evidence backs it`],
-            details: { advisory: true, reason: `${sdType} SD TESTING verdict is unmeasured`, tier: 'ADVISORY', measured: false }
+            warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD ${reasonText}`],
+            details: { advisory: true, reason: `${sdType} SD TESTING verdict is unmeasured`, tier: 'ADVISORY', measured: isNoEvidenceAtAll ? null : false }
           };
         }
         // REQUIRED tier: reuse the SAME ERR_TESTING_REQUIRED-class blocking path already used
         // for a missing row — an unmeasured row is absence of real evidence, not a new severity.
-        console.log(`   ❌ ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} for ${sdType} SD carries metadata.measured=false (no real test evidence)`);
+        console.log(`   ❌ ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} for ${sdType} SD ${reasonText}`);
         return {
           passed: false,
           score: 0,
           max_score: 100,
-          issues: [`ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} carries metadata.measured=false — required tier needs measured test evidence, not an unmeasured verdict`],
+          issues: [`ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} ${reasonText} — required tier needs measured test evidence, not an unmeasured verdict`],
           warnings: [],
-          details: { tier: 'REQUIRED', measured: false }
+          details: { tier: 'REQUIRED', measured: isNoEvidenceAtAll ? null : false }
         };
       }
 
