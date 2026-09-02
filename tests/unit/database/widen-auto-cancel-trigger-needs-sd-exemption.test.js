@@ -80,6 +80,29 @@ describe('FR-4: SQL trigger needs_sd exemption (widen_auto_cancel_trigger)', () 
     expect(migration).toMatch(/POST-APPLY VERIFICATION QUERY/);
     expect(migration).toMatch(/ROLLBACK TRIGGER CONDITION/);
   });
+
+  // SECURITY finding (escalation-writer-exec-security, evidence e18315d5-83cd-4565-8d85-ae4f55d50c18):
+  // CREATE OR REPLACE FUNCTION resets every attribute except ownership/grants -- naively cloning
+  // the 20260525 origin migration (which predates the search_path hardening sweep) would have
+  // silently reverted live pg_proc.proconfig's `search_path=public, extensions` pin on apply.
+  // Fixed per the SD-LEO-INFRA-FIX-CREATE-REPLACE-001 pattern: restate the pin in the CREATE OR
+  // REPLACE itself, and self-verify it post-apply.
+  it('the live function body restates the search_path hardening pin (does not silently revert it)', () => {
+    const liveBody = extractFunctionBody(migration, 'fn_auto_close_quick_fixes_on_sd_completion');
+    expect(liveBody).toMatch(/SET search_path TO 'public', 'extensions'/);
+  });
+
+  it('the ROLLBACK block also restates the pin (a rollback CREATE OR REPLACE would otherwise re-strip it)', () => {
+    const rollbackCodeStart = migration.indexOf('-- CREATE OR REPLACE FUNCTION fn_auto_close_quick_fixes_on_sd_completion()');
+    const rollbackCodeEnd = migration.indexOf('-- $$ LANGUAGE plpgsql;', rollbackCodeStart);
+    const rollbackCode = migration.slice(rollbackCodeStart, rollbackCodeEnd);
+    expect(rollbackCode).toMatch(/SET search_path TO 'public', 'extensions'/);
+  });
+
+  it('carries a $verify_search_path$ self-verification block asserting the pin survived apply', () => {
+    expect(migration).toMatch(/DO \$verify_search_path\$/);
+    expect(migration).toMatch(/'search_path=public, extensions' = ANY\(v_config\)/);
+  });
 });
 
 // TS-10 (required, PLAN-testing BLOCKER 1): parametrized SQL/JS predicate-equivalence
