@@ -135,17 +135,13 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
  * FRAMING_CLASSES) is stamped as payload.framing_class alongside payload.oracle=true — a
  * sub-discriminator on the SAME leg (no new kind), per FW-3 design doc §6c. Omitted entirely when
  * not provided (byte-identical to pre-SD behavior for every existing sender).
- * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1): `informational` stamps
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1), INVERTED by QF-20260902-813: `decision`
+ * (new, explicit opt-in) / `informational` (legacy synonym for the now-default false) stamp
  * payload.decision_requested UNCONDITIONALLY (always a real boolean, unlike this payload's other
- * optional keys) via resolveDecisionRequested(). DELIBERATELY INDEPENDENT of reply_class/replyTo —
- * two derived signals (expectsReply, then resolvedReplyClass) were independently measured against
- * live Solomon traffic and disproven before this one was chosen: both collapse to
- * 'fire-and-forget' for effectively all live Solomon sends (resolvedReplyClass even discards
- * replyClass outright when replyTo is set, the line above), so deriving decision_requested from
- * either would have suppressed the large majority of advisories that demonstrably needed and got a
- * real disposition. See tests/fixtures/solomon-ledger-decision-requested-counterexample.json.
+ * optional keys) via resolveDecisionRequested() -- see that function's docstring for the full
+ * default-flip rationale. See tests/fixtures/solomon-ledger-decision-requested-counterexample.json.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal, informational }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal, informational, decision }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -156,7 +152,7 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     sender_callsign: senderCallsign || null,
     repo: repo || null,
     reply_class: resolvedReplyClass,
-    decision_requested: resolveDecisionRequested({ informational }),
+    decision_requested: resolveDecisionRequested({ informational, decision }),
   };
   if (framingClass) payload.framing_class = framingClass;
   // FR-1/FR-4 (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C): the correction discriminator. NOTE what
@@ -206,19 +202,23 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
 }
 
 /**
- * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1): does this advisory REQUEST a decision?
- * Default TRUE — `--informational` is the explicit opt-OUT. Default-true is deliberate, not
- * incidental: on the day this ships, before Solomon has adopted the flag, every send is
- * unflagged — under a default-false design that would classify 100% of real dispositions as
- * "no decision needed" (measured against the 34-row counter-example fixture), reproducing the
- * exact suppression failure that disqualified the two prior candidate signals. Default-true is a
- * provable no-op for every existing consumer, and makes the FALSE-count (not the true-count) the
- * real, non-gameable adoption metric once Solomon starts using the flag. Strict `!== true` so a
- * non-boolean parse result (e.g. the string 'true') never silently no-ops the signal. Exported for
- * tests.
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1), INVERTED by QF-20260902-813: does this
+ * advisory REQUEST a decision? Was default-TRUE (`--informational` the explicit opt-OUT); the
+ * adoption metric that default-true existed to measure has now run its course, and the default
+ * itself became the bug -- MEASURED 2026-09-02: 150 rows sitting decision='pending' in
+ * solomon_advice_outcome_ledger because nearly every consult ANSWER (an answer that closes the
+ * loop, asks nothing further) was still stamped decision_requested=true and entered the
+ * pending-decision count. Now default-FALSE, with `--decision` the explicit opt-IN for a send
+ * that genuinely asks the recipient to decide. `--decision` wins over everything, including a
+ * reply_to answer (an answer CAN still ask a follow-up decision). `informational` is kept as a
+ * legacy, redundant-but-harmless synonym for "not a decision ask" -- already the new default, so
+ * passing it changes nothing, but existing callers are not broken. Strict `=== true` on both
+ * flags so a non-boolean parse result never silently flips the signal. Exported for tests.
  */
-function resolveDecisionRequested({ informational } = {}) {
-  return informational !== true;
+function resolveDecisionRequested({ informational, decision } = {}) {
+  if (decision === true) return true;
+  if (informational === true) return false;
+  return false;
 }
 
 /**
@@ -987,7 +987,9 @@ const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-clas
 // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001: --informational added here, not just parsed at the
 // call site — this list is what sendBodyFromArgv strips, so an entry missing here reproduces the
 // exact --part/--message-kind body-leak defect documented above, for this flag instead.
-const BOOL_FLAGS = ['--direct', '--informational'];
+// QF-20260902-813: --decision added here too, for the same reason --informational was — omitting
+// it here would leak the flag into the message body (the --part/--message-kind defect class).
+const BOOL_FLAGS = ['--direct', '--informational', '--decision'];
 // The status sub-command has its own narrower parse. Keeping it separate stops a legitimate '--eta'
 // token inside a message body from being stripped by the send path — the same asymmetry the leak
 // caused, pointing the other way.
@@ -1045,7 +1047,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick] [--message-kind retraction|amend|supersede] [--part N/M]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick] [--message-kind retraction|amend|supersede] [--part N/M] [--decision]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -1199,6 +1201,9 @@ async function main() {
   // argv.indexOf(...) >= 0, matching --direct's own convention above (not .includes()) — the
   // flag-drift guard (tests/unit/helpers/parsed-flags.js) only recognizes argv.indexOf('--flag').
   const informationalArg = argv.indexOf('--informational') >= 0;
+  // QF-20260902-813: explicit opt-in for a send that genuinely asks the recipient to decide --
+  // wins over the now-default-false decision_requested, including on a reply_to answer.
+  const decisionArg = argv.indexOf('--decision') >= 0;
   // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: partIdx and mkIdx were MISSING here,
   // so --part and --message-kind and their values fell through into the message BODY. Proven by
   // execution before fixing: `send --part 2/3 --message-kind amend "real body here"` produced
@@ -1275,7 +1280,7 @@ async function main() {
   // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
   let payload;
   try {
-    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg, informational: informationalArg });
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg, informational: informationalArg, decision: decisionArg });
   } catch (e) {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
