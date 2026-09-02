@@ -47,9 +47,11 @@ function findRepoRoot() {
 }
 
 async function bypassLedgerPresent() {
-  // information_schema probe — fail-soft path
+  // information_schema probe — fail-soft path. exec_sql returns TABLE(result jsonb), a
+  // single row; .single() unwraps that row to { result: [...] } (canonical shape, mirrors
+  // leo-create-sd.js).
   const { data, error } = await supabase
-    .rpc('exec_sql', { sql_query: "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='bypass_ledger' LIMIT 1" })
+    .rpc('exec_sql', { sql_text: "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='bypass_ledger' LIMIT 1" })
     .single();
   if (error) {
     // exec_sql RPC may not exist in this env — fall back to direct probe via table query.
@@ -62,7 +64,7 @@ async function bypassLedgerPresent() {
     }
     return true;
   }
-  return Array.isArray(data) ? data.length > 0 : Boolean(data);
+  return Array.isArray(data?.result) && data.result.length > 0;
 }
 
 async function readBypassLedgerEnum() {

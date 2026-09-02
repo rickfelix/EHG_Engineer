@@ -85,7 +85,7 @@ async function executeMigration(filename) {
   // Try using exec_sql RPC function first
   try {
     const { error } = await supabase.rpc('exec_sql', {
-      sql_query: sql
+      sql_text: sql
     });
 
     if (error) {

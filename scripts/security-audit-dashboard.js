@@ -29,16 +29,19 @@ function log(msg = '') {
 }
 
 async function checkRlsCoverage() {
-  const { data: tables } = await supabase.rpc('exec_sql', {
-    sql: `
+  // exec_sql returns [{ result: [...] }] (canonical shape, mirrors leo-create-sd.js).
+  const { data, error } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT relname as tablename, relrowsecurity as rls_enabled
       FROM pg_class
       WHERE relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
         AND relkind = 'r'
-    `
+    `.trim()
   });
+  if (error) console.error('checkRlsCoverage: exec_sql error:', error.message);
 
-  if (!tables) return { total: 0, enabled: 0, coverage: 0 };
+  const tables = data?.[0]?.result;
+  if (!Array.isArray(tables)) return { total: 0, enabled: 0, coverage: 0 };
 
   const total = tables.length;
   const enabled = tables.filter(t => t.rls_enabled).length;
@@ -47,17 +50,19 @@ async function checkRlsCoverage() {
 
 async function checkFnIsChairman() {
   const { data, error } = await supabase.rpc('exec_sql', {
-    sql: `
+    sql_text: `
       SELECT routine_name, routine_type
       FROM information_schema.routines
       WHERE routine_schema = 'public'
         AND routine_name = 'fn_is_chairman'
-    `
+    `.trim()
   });
+  if (error) console.error('checkFnIsChairman: exec_sql error:', error.message);
 
+  const rows = data?.[0]?.result;
   return {
-    exists: data && data.length > 0,
-    type: data?.[0]?.routine_type || 'N/A',
+    exists: Array.isArray(rows) && rows.length > 0,
+    type: rows?.[0]?.routine_type || 'N/A',
   };
 }
 

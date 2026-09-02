@@ -16,6 +16,7 @@ import {
   applyCoordinatorLiveness,
   COORDINATOR_LIVENESS_MAX_AGE_MINUTES,
   computeSharpenings,
+  gitGrepMainForSd,
 } from '../../../scripts/adam-coordinator-health.mjs';
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
 import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
@@ -250,6 +251,46 @@ describe('computeSharpenings FALSE_COMPLETION sample (FR-5 wiring)', () => {
 
     expect(applicationsQueried).toBe(false);
     expect(gitGrep).toHaveBeenCalledWith('SD-PLATFORM-WIRING-001', expect.any(String));
+  });
+});
+
+/**
+ * QF-20260813-510: a single git-grep timeout/exception must not be the final word -- git
+ * operations under concurrent load can transiently fail. A retry trades latency for fewer
+ * noisy 'unverifiable' readings; it does not change FALSE_COMPLETION safety (that was already
+ * guaranteed by the 'unverifiable' exclusion above, in place before this QF).
+ */
+describe('gitGrepMainForSd retry-once (QF-20260813-510)', () => {
+  it('a transient failure on the first attempt is retried once and succeeds', () => {
+    const exec = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('ETIMEDOUT'); })
+      .mockImplementationOnce(() => 'abc1234\n');
+
+    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(true);
+    expect(exec).toHaveBeenCalledTimes(2);
+  });
+
+  it('two consecutive failures return "unverifiable", not a crash', () => {
+    const exec = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('ETIMEDOUT'); })
+      .mockImplementationOnce(() => { throw new Error('ETIMEDOUT'); });
+
+    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe('unverifiable');
+    expect(exec).toHaveBeenCalledTimes(2);
+  });
+
+  it('a genuine first-attempt hit never triggers a retry', () => {
+    const exec = vi.fn(() => 'def5678\n');
+
+    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(true);
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
+
+  it('a genuine not-found (empty output, no exception) never triggers a retry', () => {
+    const exec = vi.fn(() => '');
+
+    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(false);
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 });
 

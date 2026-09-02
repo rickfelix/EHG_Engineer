@@ -37,9 +37,11 @@ const REMEDIATED_VIEWS = [
  * Helper to execute raw SQL via exec_sql RPC or fallback
  */
 async function execSql(sql) {
-  // Try exec_sql RPC first
-  const { data, error } = await supabase.rpc('exec_sql', { sql });
-  if (!error) return data;
+  // Try exec_sql RPC first. exec_sql returns [{ result: [...] }] (canonical shape,
+  // mirrors leo-create-sd.js) -- unwrap so callers see the same row-array shape the
+  // raw_query fallback below already returns.
+  const { data, error } = await supabase.rpc('exec_sql', { sql_text: sql.trim() });
+  if (!error) return data?.[0]?.result;
 
   // Fallback: try raw_query
   const { data: d2, error: e2 } = await supabase.rpc('raw_query', { query_text: sql });

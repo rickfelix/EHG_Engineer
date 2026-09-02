@@ -10,12 +10,13 @@ const migrationPath = path.resolve(__dirname, '../../database/migrations/2026051
 const sql = fs.readFileSync(migrationPath, 'utf8');
 
 console.log('Applying migration via supabase.rpc(exec_sql)...');
-const { data, error } = await supabase.rpc('exec_sql', { query: sql });
+// exec_sql returns [{ result: [...] }] (canonical shape, mirrors leo-create-sd.js).
+const { data, error } = await supabase.rpc('exec_sql', { sql_text: sql });
 if (error) {
   console.error('ERROR:', error.message, '(code:', error.code, ')');
   process.exit(1);
 }
-console.log('Migration applied. RPC result:', JSON.stringify(data, null, 2).slice(0, 500));
+console.log('Migration applied. RPC result:', JSON.stringify(data?.[0]?.result, null, 2).slice(0, 500));
 
 // Verify the view exists
 const { data: rows, error: vErr } = await supabase

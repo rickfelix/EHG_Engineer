@@ -664,6 +664,7 @@
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
+    "@clerk/testing": "^2.2.32",
     "@doist/todoist-api-typescript": "^6.4.0",
     "@google/stitch-sdk": "^0.1.0",
     "@octokit/rest": "^22.0.1",
