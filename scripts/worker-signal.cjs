@@ -31,6 +31,19 @@ const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { computeReplyExpectedBy } = require('../lib/coordinator/reply-class.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 
+// QF-20260902-160: a landed:true error means the content already reached the target (parked or a
+// same-correlation dupe) — DELIVERED, not a failure. Reporting it as "ERROR: failed to insert"
+// (exit 1) is what trained callers to resend and duplicate an ask that already landed.
+function reportDispatchError(e, label) {
+  if (e && e.landed) {
+    console.error(`[worker-signal] DELIVERED (not a failure) — ${e.message}`);
+    process.exit(0);
+  }
+  const code = e && e.code ? `${e.code}: ` : '';
+  console.error(`ERROR: failed to insert ${label}: ${code}${(e && e.message) || e}`);
+  process.exit(1);
+}
+
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): 'unfit' — a worker reporting an assignment it cannot
 // execute HERE/NOW (repo mismatch / closed premise / missing input precondition). Replaces the
 // free-text release so the coordinator can route systematically; carries a structured payload
@@ -262,9 +275,7 @@ async function intentMain(flags, positional) {
     }
     inserted = data;
   } catch (e) {
-    const code = e && e.code ? `${e.code}: ` : '';
-    console.error(`ERROR: failed to insert intent: ${code}${(e && e.message) || e}`);
-    process.exit(1);
+    reportDispatchError(e, 'intent');
   }
 
   console.log('✓ Intent broadcast');
@@ -411,9 +422,7 @@ async function requestMain(flags, positional) {
       process.exit(1);
     }
   } catch (e) {
-    const code = e && e.code ? `${e.code}: ` : '';
-    console.error(`ERROR: failed to insert request: ${code}${(e && e.message) || e}`);
-    process.exit(1);
+    reportDispatchError(e, 'request');
   }
 
   console.log('✓ Request sent; awaiting coordinator reply');
@@ -579,9 +588,7 @@ async function solomonConsultMain(flags, positional) {
       process.exit(1);
     }
   } catch (e) {
-    const code = e && e.code ? `${e.code}: ` : '';
-    console.error(`ERROR: failed to insert solomon-consult: ${code}${(e && e.message) || e}`);
-    process.exit(1);
+    reportDispatchError(e, 'solomon-consult');
   }
 
   console.log('✓ Solomon consult sent (oracle is propose-only; you remain the actor)');
@@ -741,9 +748,7 @@ async function main() {
     }
     inserted = data;
   } catch (e) {
-    const code = e && e.code ? `${e.code}: ` : '';
-    console.error(`ERROR: failed to insert signal: ${code}${(e && e.message) || e}`);
-    process.exit(1);
+    reportDispatchError(e, 'signal');
   }
 
   console.log('✓ Signal sent');
