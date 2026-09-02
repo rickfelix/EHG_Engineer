@@ -68,7 +68,7 @@ export function claimableDbFreeReason(d) {
  * call this (it would duplicate the SD read + add per-child fetches) — it reuses the pure
  * predicates above on its already-fetched rows. This wrapper is unchanged behaviourally from its
  * former home in coordinator-backlog-rank.mjs.
- * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[], humanActionHolds: Array<{sd_key: string, provenance: object|null}> }>}
+ * @returns {Promise<{ error?: object, sds: object[], byKey: Map, depStatus: object, claimable: object[], humanActionHolds: Array<{sd_key: string, provenance: object|null, hasUnfenceCondition: boolean}> }>}
  */
 export async function computeClaimableLeaves(sb, opts = {}) {
   const log = opts.quiet ? () => {} : console.log;
@@ -120,8 +120,13 @@ export async function computeClaimableLeaves(sb, opts = {}) {
         case 'human_action_required': {
           humanActionSkips++;
           const prov = resolveHoldProvenance(d.metadata);
-          humanActionHolds.push({ sd_key: d.sd_key, provenance: prov });
-          log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key} [${formatHoldProvenance(prov)}]`);
+          // SD-LEO-FIX-HUMAN-ACTION-FENCES-001: a fence with no stated release condition
+          // "removes the mechanism that would prompt its own review" (the SD's own framing) —
+          // surface it here, at the one place every humanActionHolds consumer (fleet-dashboard.cjs,
+          // adam-coordinator-health.mjs) already reads, instead of requiring each to re-derive it.
+          const hasUnfenceCondition = typeof d.metadata?.unfence_condition === 'string' && d.metadata.unfence_condition.trim().length > 0;
+          humanActionHolds.push({ sd_key: d.sd_key, provenance: prov, hasUnfenceCondition });
+          log(`  [skip] requires human action — not worker-claimable (not idle-belt depth): ${d.sd_key} [${formatHoldProvenance(prov)}]${hasUnfenceCondition ? '' : ' [NO UNFENCE CONDITION]'}`);
           break;
         }
         default:
