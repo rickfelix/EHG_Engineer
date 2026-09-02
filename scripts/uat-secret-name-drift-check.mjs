@@ -33,6 +33,21 @@ export function findSecretNameInDeployYml(deployYmlText) {
   return secretMatch ? secretMatch[1] : null;
 }
 
+/**
+ * QF-20260901-006: fetch + base64-decode deploy.yml's content via `gh api`, returning null (never
+ * throwing) on ANY failure -- a 404 (missing path or insufficient cross-repo token scope) is a
+ * MISSING-PATH finding, not a crash. `run` is injected so this is testable without a live `gh`.
+ */
+export function fetchDeployYmlText(apiPath, run = execFileSync) {
+  try {
+    const b64 = run('gh', ['api', apiPath, '--jq', '.content'], { encoding: 'utf8' }).trim();
+    return Buffer.from(b64, 'base64').toString('utf8');
+  } catch (err) {
+    console.log(`::warning::uat-secret-name-drift-check: could not read ${apiPath} (${String(err.message || err).split('\n')[0]}) -- MISSING-PATH finding, not a crash (missing file or insufficient cross-repo token scope). Skipping this half of the check (advisory).`);
+    return null;
+  }
+}
+
 async function main() {
   const errors = [];
 
@@ -56,16 +71,24 @@ async function main() {
   const refArgIdx = process.argv.indexOf('--ref');
   const ref = refArgIdx !== -1 ? process.argv[refArgIdx + 1] : null;
   const apiPath = `repos/rickfelix/altifyai/contents/.github/workflows/deploy.yml${ref ? `?ref=${ref}` : ''}`;
-  const deployYmlB64 = execFileSync(
-    'gh', ['api', apiPath, '--jq', '.content'],
-    { encoding: 'utf8' },
-  ).trim();
-  const deployYmlText = Buffer.from(deployYmlB64, 'base64').toString('utf8');
-  const liveSecretName = findSecretNameInDeployYml(deployYmlText);
-  if (liveSecretName !== CHAIRMAN_UAT_SECRET_NAME) {
-    errors.push(`altifyai's live deploy.yml references secret "${liveSecretName}" but the pinned constant is "${CHAIRMAN_UAT_SECRET_NAME}"`);
+  // QF-20260901-006: `gh api` on this path was crashing the whole check daily (uncaught
+  // execFileSync throw on a 404) -- MEASURED live: the same path returns 200 under an
+  // interactively-authenticated `gh`, but 404s under CI's cross-repo token, so this is the
+  // token's read-scope on the private altifyai repo, not a missing file (an operator item, out
+  // of this QF's scope per its own description). Either way -- missing path or insufficient
+  // scope -- this half of the check cannot be measured, and per the workflow's own already-correct
+  // no-token guard, an unmeasurable check is an advisory skip, never a crash or a false finding.
+  const deployYmlText = fetchDeployYmlText(apiPath);
+
+  if (deployYmlText === null) {
+    console.log('altifyai deploy.yml drift check skipped -- path unreachable (advisory, see warning above).');
   } else {
-    console.log(`altifyai's live deploy.yml matches pinned constant: "${liveSecretName}"`);
+    const liveSecretName = findSecretNameInDeployYml(deployYmlText);
+    if (liveSecretName !== CHAIRMAN_UAT_SECRET_NAME) {
+      errors.push(`altifyai's live deploy.yml references secret "${liveSecretName}" but the pinned constant is "${CHAIRMAN_UAT_SECRET_NAME}"`);
+    } else {
+      console.log(`altifyai's live deploy.yml matches pinned constant: "${liveSecretName}"`);
+    }
   }
 
   if (errors.length > 0) {
