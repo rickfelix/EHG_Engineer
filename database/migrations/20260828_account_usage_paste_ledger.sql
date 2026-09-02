@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Ceremony: chairman verbal "apply" at the Adam terminal 2026-09-02 ~14:3xZ (decision 182a7499); scribe adam:673db833; the committed 2026-08-28 content is unchanged below this header.
 -- Chairman-pasted /usage ledger, for burn-projection history.
 -- SD-LEO-INFRA-USAGE-PASTE-LEDGER-001.
 --
