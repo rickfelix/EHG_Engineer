@@ -38,11 +38,16 @@ describe('computeLiveReadiness (TS-10): no caching/memoization between invocatio
   });
 
   it('a second invocation reflects NEW data the first invocation did not see (no stale snapshot)', async () => {
+    // QF-20260901-004: computeAdoptionReadiness walks back lookbackDays=60 from a live
+    // Date.now()-derived `today`, so a hardcoded absolute merge date ages out of the window
+    // and silently fails this assertion once >60 days have passed since authoring (confirmed:
+    // '2026-07-04' aged out exactly 60 days later, on 2026-09-02). Relative-to-now instead.
+    const mergedAt = `${new Date().toISOString().slice(0, 10)}T12:00:00Z`;
     let callCount = 0;
     const fetchMerges = (owner, name) => {
       callCount++;
       // Second pass (calls 3-4, since 2 repos x 2 passes) simulates a brand-new merge landing.
-      if (callCount > 2) return [{ repo: `${owner}/${name}`.toLowerCase(), prNumber: 99, mergedAt: '2026-07-04T12:00:00Z' }];
+      if (callCount > 2) return [{ repo: `${owner}/${name}`.toLowerCase(), prNumber: 99, mergedAt }];
       return [];
     };
     const supabase = { from: () => ({ select: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }) }) };
