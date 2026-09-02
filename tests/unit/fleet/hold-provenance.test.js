@@ -178,3 +178,39 @@ describe('computeClaimableLeaves — returns humanActionHolds with provenance (d
     expect(result.humanActionHolds).toEqual([]);
   });
 });
+
+describe('SD-LEO-FIX-HUMAN-ACTION-FENCES-001: computeClaimableLeaves flags holds missing unfence_condition', () => {
+  it('hasUnfenceCondition is true when metadata.unfence_condition is a non-empty string', async () => {
+    const rows = [{
+      sd_key: 'SD-HELD-CONDITIONED-001', title: 'held with condition', status: 'draft', sd_type: 'feature', priority: 'high',
+      created_at: '2026-07-01T00:00:00Z', current_phase: 'LEAD', claiming_session_id: null, dependencies: null, parent_sd_id: null,
+      metadata: { requires_human_action: true, requires_human_action_reason: 'awaiting chairman decision', unfence_condition: 'UNFENCE: chairman go/defer' },
+    }];
+    const sb = fakeSbForRows({ data: rows });
+    const result = await computeClaimableLeaves(sb, { quiet: true });
+    expect(result.humanActionHolds[0].hasUnfenceCondition).toBe(true);
+  });
+
+  it('hasUnfenceCondition is false for the exact live-witnessed shape (a bare fence, 3 of 8 current holds, 2026-09-02): no unfence_condition and no reason', async () => {
+    const rows = [{
+      sd_key: 'SD-HELD-BARE-001', title: 'held bare', status: 'draft', sd_type: 'bugfix', priority: 'high',
+      created_at: '2026-09-02T01:13:44Z', current_phase: 'LEAD', claiming_session_id: null, dependencies: null, parent_sd_id: null,
+      metadata: { requires_human_action: true },
+    }];
+    const sb = fakeSbForRows({ data: rows });
+    const result = await computeClaimableLeaves(sb, { quiet: true });
+    expect(result.humanActionHolds[0].hasUnfenceCondition).toBe(false);
+    expect(result.humanActionHolds[0].provenance).toBeNull();
+  });
+
+  it('hasUnfenceCondition is false for a whitespace-only unfence_condition (not a real condition)', async () => {
+    const rows = [{
+      sd_key: 'SD-HELD-BLANK-001', title: 'held blank condition', status: 'draft', sd_type: 'feature', priority: 'high',
+      created_at: '2026-07-01T00:00:00Z', current_phase: 'LEAD', claiming_session_id: null, dependencies: null, parent_sd_id: null,
+      metadata: { requires_human_action: true, unfence_condition: '   ' },
+    }];
+    const sb = fakeSbForRows({ data: rows });
+    const result = await computeClaimableLeaves(sb, { quiet: true });
+    expect(result.humanActionHolds[0].hasUnfenceCondition).toBe(false);
+  });
+});
