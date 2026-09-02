@@ -1,10 +1,10 @@
 ---
-category: protocol
-status: draft
-version: 1.0.0
-author: Rick Felix
-last_updated: 2026-09-02
-tags: [protocol, auto-generated]
+Category: Protocol
+Status: Draft
+Version: 1.0.0
+Author: Rick Felix
+Last Updated: 2026-09-02
+Tags: [protocol, auto-generated]
 ---
 # LEO Protocol v4.4.2/v4.4.3 - Testing Governance Enhancement
 
