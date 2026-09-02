@@ -140,7 +140,7 @@ describe('classifyStageLine — schedulerObserveOnly (SD-LEO-FIX-TRIAGE-THREE-FA
     expect(v.reasons.join(' ')).toContain('observe-only');
   });
 
-  it('TS-2: healthy/lineSilent are UNCHANGED by schedulerObserveOnly — the alarm never gets silenced', () => {
+  it('QF-20260901-840: observe-only silence is healthy (lineSilent stays true, unlike a real stall)', () => {
     const withObserveOnly = classifyStageLine({
       lastExecutionAt: INCIDENT_LAST_EXEC,
       now: INCIDENT_NOW,
@@ -151,10 +151,23 @@ describe('classifyStageLine — schedulerObserveOnly (SD-LEO-FIX-TRIAGE-THREE-FA
       now: INCIDENT_NOW,
       schedulerObserveOnly: false,
     });
-    expect(withObserveOnly.healthy).toBe(false);
+    expect(withObserveOnly.healthy).toBe(true);
     expect(withObserveOnly.lineSilent).toBe(true);
     expect(without.healthy).toBe(false);
     expect(without.lineSilent).toBe(true);
+  });
+
+  it('QF-20260901-840: workerAbsent still fails healthy even when the scheduler is observe-only', () => {
+    const v = classifyStageLine({
+      pid: 40684,
+      pidAlive: false,
+      lastExecutionAt: INCIDENT_LAST_EXEC,
+      now: INCIDENT_NOW,
+      schedulerObserveOnly: true,
+    });
+    expect(v.observeOnlySilence).toBe(true);
+    expect(v.workerAbsent).toBe(true);
+    expect(v.healthy).toBe(false);
   });
 
   it('TS-3: schedulerObserveOnly=false/undefined/null all produce observeOnlySilence=false (regression guard)', () => {
