@@ -60,6 +60,8 @@ import qfAutoStartCjs from '../lib/fleet/qf-auto-start.cjs';
 const { STALE_QF_DAYS } = qfAutoStartCjs;
 import { checkQuickFixCitation, OUTCOMES } from '../lib/eva/quick-fix-citation-checker.js';
 import { emitFeedback } from '../lib/governance/emit-feedback.js';
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: single canonical quick_fixes.status writer.
+import { setQuickFixStatus, isNeedsSdRow } from '../lib/quick-fix/status-writer.cjs';
 
 export const SWEEP_ACTOR = 'coordinator-stale-qf-disposition-sweep';
 export const FINGERPRINT_TYPE = 'quick_fix_stale_disposition_sweep';
@@ -71,7 +73,9 @@ const PAGE_SIZE = 1000;
 // Columns that only exist after the staged migration (FR-1) is applied. Every OTHER column
 // referenced below (title, description, severity, escalation_reason, etc.) is pre-existing.
 const POST_MIGRATION_COLUMNS = 'disposition, disposition_reason_code, disposed_at, disposed_by, verified_at, duplicate_of_id';
-const BASE_CANDIDATE_COLUMNS = 'id, status, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, type, created_at, started_at, target_application, claiming_session_id, pr_url, commit_sha, escalation_reason, escalated_to_sd_id';
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-3): routing_tier added so isNeedsSdRow can be
+// evaluated against fetched candidates (escalated_to_sd_id was already present).
+const BASE_CANDIDATE_COLUMNS = 'id, status, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, type, created_at, started_at, target_application, claiming_session_id, pr_url, commit_sha, escalation_reason, escalated_to_sd_id, routing_tier';
 
 export function parseArgs(argv) {
   const args = { apply: false, json: false, h2Confirmed: null, seatCount: null };
@@ -285,31 +289,47 @@ async function fetchPastFenceCandidates(supabase, { columnsExist, nowMs }) {
   // is what makes the whole pipeline deterministic and unit-testable (TR-4).
   const fenceMs = STALE_QF_DAYS * 24 * 3600 * 1000;
   return rows.filter((r) => {
+    // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-3, in-memory post-filter -- REQUIRED, not a
+    // server-side query filter; see PRD TS-6 for why): a needs_sd row (routing_tier=3, awaiting
+    // an SD) is explicitly marked as such, never generic forgotten-open-work stale-fence fodder.
+    // Without this exclusion the sweep would immediately re-close a row this SD's other writers
+    // just rescued into the open+routing_tier=3 shape.
+    if (isNeedsSdRow(r)) return false;
     const createdMs = pgTimestampMs(r.created_at);
     return Number.isFinite(createdMs) && (nowMs - createdMs) >= fenceMs;
   });
 }
 
 async function closeDuplicate(supabase, qf, survivorId, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/duplicate_of_id/disposed_at/disposed_by staged, see FR-1 migration
-    disposition: 'duplicate_of',
-    duplicate_of_id: survivorId,
-    disposed_at: new Date(nowMs).toISOString(),
-    disposed_by: SWEEP_ACTOR,
-    status: 'closed',
-  }).eq('id', qf.id);
-  if (error) throw new Error(`closeDuplicate(${qf.id}): ${error.message}`);
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: routes through the single canonical writer
+  // (open->closed with disposition fields already supplied here -- Guard B is satisfied,
+  // no behavior change).
+  try {
+    await setQuickFixStatus(supabase, qf.id, {
+      disposition: 'duplicate_of',
+      duplicate_of_id: survivorId,
+      disposition_reason_code: 'duplicate_of',
+      disposed_at: new Date(nowMs).toISOString(),
+      disposed_by: SWEEP_ACTOR,
+      status: 'closed',
+    });
+  } catch (e) {
+    throw new Error(`closeDuplicate(${qf.id}): ${e.message}`);
+  }
 }
 
 async function closePremiseResolved(supabase, qf, reasonCode, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/disposed_at/disposed_by staged, see FR-1 migration
-    disposition: 'premise_resolved',
-    disposition_reason_code: reasonCode,
-    disposed_at: new Date(nowMs).toISOString(),
-    disposed_by: SWEEP_ACTOR,
-    status: 'closed',
-  }).eq('id', qf.id);
-  if (error) throw new Error(`closePremiseResolved(${qf.id}): ${error.message}`);
+  try {
+    await setQuickFixStatus(supabase, qf.id, {
+      disposition: 'premise_resolved',
+      disposition_reason_code: reasonCode,
+      disposed_at: new Date(nowMs).toISOString(),
+      disposed_by: SWEEP_ACTOR,
+      status: 'closed',
+    });
+  } catch (e) {
+    throw new Error(`closePremiseResolved(${qf.id}): ${e.message}`);
+  }
 }
 
 async function closePremiseUnverifiedStale(supabase, qf, nowMs, reasonCode = 'inconclusive') {
@@ -347,14 +367,18 @@ async function closePremiseUnverifiedStale(supabase, qf, nowMs, reasonCode = 'in
   // FR-4's "names the instrument" intent for every disposition, not only premise_resolved. The
   // TTL re-lapse caller (a time-based closure, not a fresh citation check) passes its own
   // 'ttl_relapsed:<days>' code instead.
-  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/disposed_at/disposed_by staged, see FR-1 migration
-    disposition: 'premise_unverified_stale',
-    disposition_reason_code: reasonCode,
-    disposed_at: new Date(nowMs).toISOString(),
-    disposed_by: SWEEP_ACTOR,
-    status: 'closed',
-  }).eq('id', qf.id);
-  if (error) throw new Error(`closePremiseUnverifiedStale(${qf.id}): ${error.message}`);
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: routes through the single canonical writer.
+  try {
+    await setQuickFixStatus(supabase, qf.id, {
+      disposition: 'premise_unverified_stale',
+      disposition_reason_code: reasonCode,
+      disposed_at: new Date(nowMs).toISOString(),
+      disposed_by: SWEEP_ACTOR,
+      status: 'closed',
+    });
+  } catch (e) {
+    throw new Error(`closePremiseUnverifiedStale(${qf.id}): ${e.message}`);
+  }
 }
 
 async function markReVerified(supabase, qf, reasonCode, nowMs) {
@@ -370,16 +394,27 @@ async function markReVerified(supabase, qf, reasonCode, nowMs) {
 }
 
 async function markPromoted(supabase, qf, reasonCode, pathCount, nowMs) {
-  const { error } = await supabase.from('quick_fixes').update({ // schema-lint-disable-line: disposition/disposition_reason_code/verified_at/disposed_at/disposed_by staged, see FR-1 migration
-    disposition: 'promoted',
-    disposition_reason_code: reasonCode,
-    verified_at: new Date(nowMs).toISOString(),
-    disposed_at: new Date(nowMs).toISOString(),
-    disposed_by: SWEEP_ACTOR,
-    status: 'escalated',
-    escalation_reason: `Auto-promoted by ${SWEEP_ACTOR}: citation check confirmed the premise is STILL PRESENT with ${pathCount} distinct extracted path(s), exceeding the ${REVERIFIED_FILE_THRESHOLD}-path re_verified threshold. ${reasonCode}.`,
-  }).eq('id', qf.id);
-  if (error) throw new Error(`markPromoted(${qf.id}): ${error.message}`);
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (root fix): this function never creates an SD,
+  // so it MUST NOT write status='escalated' (the writer refuses that without
+  // escalated_to_sd_id -- this is the exact root-cause bug the SD closes: 'promoted' rows were
+  // the majority of the 16 rows measured stranded at status='escalated' with no linked SD).
+  // Stays status='open', routing_tier=3 -- the needs_sd shape (see isNeedsSdRow) -- disposition
+  // fields are still stamped for audit even though the transition here is open->open (Guard B
+  // does not fire on a same-status no-op, but the fields remain informative).
+  try {
+    await setQuickFixStatus(supabase, qf.id, {
+      disposition: 'promoted',
+      disposition_reason_code: reasonCode,
+      verified_at: new Date(nowMs).toISOString(),
+      disposed_at: new Date(nowMs).toISOString(),
+      disposed_by: SWEEP_ACTOR,
+      status: 'open',
+      routing_tier: 3,
+      escalation_reason: `Auto-promoted by ${SWEEP_ACTOR}: citation check confirmed the premise is STILL PRESENT with ${pathCount} distinct extracted path(s), exceeding the ${REVERIFIED_FILE_THRESHOLD}-path re_verified threshold. ${reasonCode}. Awaiting SD (routing_tier=3, needs_sd).`,
+    });
+  } catch (e) {
+    throw new Error(`markPromoted(${qf.id}): ${e.message}`);
+  }
 }
 
 async function runTtlRelapsePass(supabase, { nowMs, columnsExist, apply }) {

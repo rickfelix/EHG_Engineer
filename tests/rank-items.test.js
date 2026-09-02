@@ -1,9 +1,19 @@
 /**
  * rank-items tests — Phase 1 (SDs only; QF ranking added in Phase 3).
  * SD: SD-LEO-INFRA-UNIFY-QUICK-FIX-001
+ *
+ * SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-6, PLAN-testing BLOCKER 2): converted from
+ * node:test to vitest. This file was written against node:test (`node --test` passes 28/28)
+ * but is quarantined from vitest ("No test suite found" -- node:test suites are invisible to
+ * vitest's runner) with no other npm script or CI workflow running it under node --test, so
+ * all 28 pre-existing assertions -- including the escalated-exclusion regression test this SD
+ * depends on for TS-7 -- were CI-invisible. Converting to vitest (this repo's dominant test
+ * runner) closes that gap as a documented side effect of this SD (tracked separately as
+ * SD-REFILL-00CO4E8Q); its quarantine-manifest entry is removed in the same change. Every
+ * assertion below is a mechanical node:assert/strict -> vitest expect() translation with no
+ * behavior change, plus one new fixture case for the needs_sd shape (FR-5/TS-7).
  */
-import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, it, expect } from 'vitest';
 import {
   rankItems,
   SEVERITY_TO_RANK,
@@ -31,8 +41,8 @@ describe('rankItems — Phase 1 baseline parity', () => {
       sd({ id: 'u2', sd_key: 'SD-A-002', status: 'cancelled' }),
       sd({ id: 'u3', sd_key: 'SD-A-003', status: 'draft', category: 'infrastructure' }),
     ]);
-    assert.equal(result.tracks.A.length, 1);
-    assert.equal(result.tracks.A[0].sd_key, 'SD-A-003');
+    expect(result.tracks.A.length).toBe(1);
+    expect(result.tracks.A[0].sd_key).toBe('SD-A-003');
   });
 
   it('derives track from baseline, then metadata.execution_track, then category, then STANDALONE', () => {
@@ -46,10 +56,10 @@ describe('rankItems — Phase 1 baseline parity', () => {
       sd({ sd_key: 'SD-NONE-001' }),
     ], { baselineItemsMap: baselineMap });
 
-    assert.equal(result.tracks.C.find(x => x.sd_key === 'SD-BL-001')?.sd_key, 'SD-BL-001', 'baseline wins');
-    assert.equal(result.tracks.B[0].sd_key, 'SD-META-001', 'metadata wins over category');
-    assert.equal(result.tracks.C.find(x => x.sd_key === 'SD-CAT-001')?.sd_key, 'SD-CAT-001', 'category-based');
-    assert.equal(result.tracks.STANDALONE[0].sd_key, 'SD-NONE-001', 'no signal → STANDALONE');
+    expect(result.tracks.C.find(x => x.sd_key === 'SD-BL-001')?.sd_key).toBe('SD-BL-001'); // baseline wins
+    expect(result.tracks.B[0].sd_key).toBe('SD-META-001'); // metadata wins over category
+    expect(result.tracks.C.find(x => x.sd_key === 'SD-CAT-001')?.sd_key).toBe('SD-CAT-001'); // category-based
+    expect(result.tracks.STANDALONE[0].sd_key).toBe('SD-NONE-001'); // no signal → STANDALONE
   });
 
   it('applies vision gap weight to composite_rank', () => {
@@ -64,10 +74,9 @@ describe('rankItems — Phase 1 baseline parity', () => {
 
     const [first, second] = result.tracks.A;
     // LOW vision → larger gap_weight → smaller composite_rank → higher priority
-    assert.ok(first.composite_rank < second.composite_rank,
-      'low-vision SD ranks first (smaller composite_rank because gap_weight grows the denominator)');
-    assert.equal(first.sd_key, 'SD-LOW-VISION', 'low-vision gap closes first');
-    assert.equal(second.sd_key, 'SD-HIGH-VISION');
+    expect(first.composite_rank < second.composite_rank).toBe(true);
+    expect(first.sd_key).toBe('SD-LOW-VISION'); // low-vision gap closes first
+    expect(second.sd_key).toBe('SD-HIGH-VISION');
   });
 
   it('blends OKR score — higher OKR pulls composite_rank lower (higher priority)', () => {
@@ -82,10 +91,10 @@ describe('rankItems — Phase 1 baseline parity', () => {
     ], { baselineItemsMap: baselineMap, okrScoreMap });
 
     const [first] = result.tracks.A;
-    assert.equal(first.sd_key, 'SD-OKR-HIGH', 'OKR-aligned SD ranks first');
+    expect(first.sd_key).toBe('SD-OKR-HIGH'); // OKR-aligned SD ranks first
     // With default 0.30 blend: 500 - (90 * 0.30) = 473
-    assert.equal(first.composite_rank, 500 - (90 * 0.30));
-    assert.equal(first.okr_score, 90);
+    expect(first.composite_rank).toBe(500 - (90 * 0.30));
+    expect(first.okr_score).toBe(90);
   });
 
   it('applies policy boost multiplier when venture_id has a policy weight', () => {
@@ -103,9 +112,9 @@ describe('rankItems — Phase 1 baseline parity', () => {
     ], { baselineItemsMap: baselineMap, policyBoostMap });
 
     const [first, second] = result.tracks.A;
-    assert.equal(first.sd_key, 'SD-CASH', 'more-boosted venture ranks first');
-    assert.equal(first.composite_rank, 300 * 0.4);
-    assert.equal(second.composite_rank, 300 * 0.9);
+    expect(first.sd_key).toBe('SD-CASH'); // more-boosted venture ranks first
+    expect(first.composite_rank).toBe(300 * 0.4);
+    expect(second.composite_rank).toBe(300 * 0.9);
   });
 
   it('urgency band dominates composite_rank (P0 before everything else)', () => {
@@ -118,24 +127,24 @@ describe('rankItems — Phase 1 baseline parity', () => {
       sd({ sd_key: 'SD-P3-LOW-RANK', category: 'infrastructure', metadata: { urgency_band: 'P3' } }),
     ], { baselineItemsMap: baselineMap });
 
-    assert.equal(result.tracks.A[0].sd_key, 'SD-P0-BIG-RANK');
-    assert.equal(result.tracks.A[1].sd_key, 'SD-P3-LOW-RANK');
+    expect(result.tracks.A[0].sd_key).toBe('SD-P0-BIG-RANK');
+    expect(result.tracks.A[1].sd_key).toBe('SD-P3-LOW-RANK');
   });
 
   it('sequence_rank defaults to 9999 when SD has no baseline entry', () => {
     const result = rankItems([
       sd({ sd_key: 'SD-ORPHAN-001', category: 'infrastructure', status: 'in_progress' }),
     ]);
-    assert.equal(result.tracks.A[0].sequence_rank, 9999);
-    assert.equal(result.orphanBaseline.length, 1, 'orphan warning emitted for non-draft missing baseline');
-    assert.equal(result.orphanBaseline[0].sd_key, 'SD-ORPHAN-001');
+    expect(result.tracks.A[0].sequence_rank).toBe(9999);
+    expect(result.orphanBaseline.length).toBe(1); // orphan warning emitted for non-draft missing baseline
+    expect(result.orphanBaseline[0].sd_key).toBe('SD-ORPHAN-001');
   });
 
   it('does not emit orphan warning for draft SDs missing from baseline', () => {
     const result = rankItems([
       sd({ sd_key: 'SD-DRAFT-001', category: 'infrastructure', status: 'draft' }),
     ]);
-    assert.equal(result.orphanBaseline.length, 0);
+    expect(result.orphanBaseline.length).toBe(0);
   });
 
   it('collects misplacedDeps when dependency info lives in metadata but column is empty', () => {
@@ -147,8 +156,8 @@ describe('rankItems — Phase 1 baseline parity', () => {
         metadata: { depends_on: ['SD-UPSTREAM-001'] },
       }),
     ]);
-    assert.equal(result.misplacedDeps.length, 1);
-    assert.equal(result.misplacedDeps[0].sd_key, 'SD-MISPLACED-001');
+    expect(result.misplacedDeps.length).toBe(1);
+    expect(result.misplacedDeps[0].sd_key).toBe('SD-MISPLACED-001');
   });
 
   it('preserves baseline fields on the output item (spread before sd fields)', () => {
@@ -160,9 +169,9 @@ describe('rankItems — Phase 1 baseline parity', () => {
     ], { baselineItemsMap: baselineMap });
 
     const ranked = result.tracks.B[0];
-    assert.equal(ranked.sprint, 'S1', 'baseline field carried through');
-    assert.equal(ranked.title, 'Feature work', 'sd field wins on conflict');
-    assert.equal(ranked.sequence_rank, 42);
+    expect(ranked.sprint).toBe('S1'); // baseline field carried through
+    expect(ranked.title).toBe('Feature work'); // sd field wins on conflict
+    expect(ranked.sequence_rank).toBe(42);
   });
 
   it('attaches actuals from context by sd_key or id', () => {
@@ -170,7 +179,7 @@ describe('rankItems — Phase 1 baseline parity', () => {
     const result = rankItems([
       sd({ sd_key: 'SD-ACT-001', category: 'infrastructure' }),
     ], { actuals });
-    assert.deepEqual(result.tracks.A[0].actual, { effort: 5 });
+    expect(result.tracks.A[0].actual).toEqual({ effort: 5 });
   });
 
   it('sorts within track: band → score (desc) → composite_rank (asc)', () => {
@@ -186,9 +195,9 @@ describe('rankItems — Phase 1 baseline parity', () => {
     ], { baselineItemsMap: baselineMap });
 
     // P1-B and P1-C share higher urgency_score than P1-A; within that, composite_rank breaks the tie.
-    assert.equal(result.tracks.A[0].sd_key, 'SD-P1-B', 'first: highest urgency_score, tied composite_rank');
-    assert.equal(result.tracks.A[1].sd_key, 'SD-P1-C');
-    assert.equal(result.tracks.A[2].sd_key, 'SD-P1-A', 'last: lower urgency_score');
+    expect(result.tracks.A[0].sd_key).toBe('SD-P1-B'); // first: highest urgency_score, tied composite_rank
+    expect(result.tracks.A[1].sd_key).toBe('SD-P1-C');
+    expect(result.tracks.A[2].sd_key).toBe('SD-P1-A'); // last: lower urgency_score
   });
 });
 
@@ -202,7 +211,7 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
    * (bug/polish/documentation) remains untouched; we set kind='qf' as the
    * rankItems discriminator alongside it.
    */
-  function qf({ id = 'QF-X', severity = 'medium', type = 'bug', created_at = FRESH, branch_name = null, status = 'open', title = 'Some QF' } = {}) {
+  function qf({ id = 'QF-X', severity = 'medium', type = 'bug', created_at = FRESH, branch_name = null, status = 'open', title = 'Some QF', routing_tier = null, escalated_to_sd_id = null } = {}) {
     return {
       kind: 'qf',
       id,
@@ -212,48 +221,50 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
       type,                // DB column — bug/polish/documentation
       created_at,
       branch_name,
+      routing_tier,
+      escalated_to_sd_id,
     };
   }
 
   // --- severity / urgency helpers ---
 
   it('SEVERITY_TO_RANK exports match PRD-specified values', () => {
-    assert.equal(SEVERITY_TO_RANK.critical, 100);
-    assert.equal(SEVERITY_TO_RANK.high,     200);
-    assert.equal(SEVERITY_TO_RANK.medium,   500);
-    assert.equal(SEVERITY_TO_RANK.low,      1000);
+    expect(SEVERITY_TO_RANK.critical).toBe(100);
+    expect(SEVERITY_TO_RANK.high).toBe(200);
+    expect(SEVERITY_TO_RANK.medium).toBe(500);
+    expect(SEVERITY_TO_RANK.low).toBe(1000);
   });
 
   it('qfUrgencyBand — critical always P0', () => {
-    assert.equal(qfUrgencyBand('critical', FRESH, NOW), 'P0');
-    assert.equal(qfUrgencyBand('critical', OLD,   NOW), 'P0');
+    expect(qfUrgencyBand('critical', FRESH, NOW)).toBe('P0');
+    expect(qfUrgencyBand('critical', OLD, NOW)).toBe('P0');
   });
 
   it('qfUrgencyBand — medium/high aged > 7 days escalates to P0; low does not', () => {
-    assert.equal(qfUrgencyBand('medium', OLD, NOW), 'P0');
-    assert.equal(qfUrgencyBand('high',   OLD, NOW), 'P0');
-    assert.equal(qfUrgencyBand('low',    OLD, NOW), 'P3');
+    expect(qfUrgencyBand('medium', OLD, NOW)).toBe('P0');
+    expect(qfUrgencyBand('high', OLD, NOW)).toBe('P0');
+    expect(qfUrgencyBand('low', OLD, NOW)).toBe('P3');
   });
 
   it('qfUrgencyBand — fresh QFs map severity → band directly', () => {
-    assert.equal(qfUrgencyBand('high',   FRESH, NOW), 'P1');
-    assert.equal(qfUrgencyBand('medium', FRESH, NOW), 'P2');
-    assert.equal(qfUrgencyBand('low',    FRESH, NOW), 'P3');
+    expect(qfUrgencyBand('high', FRESH, NOW)).toBe('P1');
+    expect(qfUrgencyBand('medium', FRESH, NOW)).toBe('P2');
+    expect(qfUrgencyBand('low', FRESH, NOW)).toBe('P3');
   });
 
   // --- track inference (qfTrack helper) ---
 
   it('qfTrack — bug/polish default to C, documentation to STANDALONE', () => {
-    assert.equal(qfTrack({ type: 'bug' }),           'C');
-    assert.equal(qfTrack({ type: 'polish' }),        'C');
-    assert.equal(qfTrack({ type: 'documentation' }), 'STANDALONE');
-    assert.equal(qfTrack({ type: 'something-new' }), 'STANDALONE');
+    expect(qfTrack({ type: 'bug' })).toBe('C');
+    expect(qfTrack({ type: 'polish' })).toBe('C');
+    expect(qfTrack({ type: 'documentation' })).toBe('STANDALONE');
+    expect(qfTrack({ type: 'something-new' })).toBe('STANDALONE');
   });
 
   it('qfTrack — bug/polish promoted to A when branch_name contains infra keyword', () => {
-    assert.equal(qfTrack({ type: 'bug',    branch_name: 'quick-fix/QF-INFRA-REAPER' }), 'A');
-    assert.equal(qfTrack({ type: 'polish', branch_name: 'quick-fix/QF-HOOK-FIX' }),    'A');
-    assert.equal(qfTrack({ type: 'bug',    branch_name: 'quick-fix/QF-RANDOM' }),       'C', 'no keyword → stays C');
+    expect(qfTrack({ type: 'bug', branch_name: 'quick-fix/QF-INFRA-REAPER' })).toBe('A');
+    expect(qfTrack({ type: 'polish', branch_name: 'quick-fix/QF-HOOK-FIX' })).toBe('A');
+    expect(qfTrack({ type: 'bug', branch_name: 'quick-fix/QF-RANDOM' })).toBe('C'); // no keyword → stays C
   });
 
   // --- TS-3: P0 bug QF outranks medium-priority SDs in Track C ---
@@ -265,25 +276,25 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
       qf({ id: 'QF-001', severity: 'critical', type: 'bug' }),
     ];
     const { tracks } = rankItems(items, { now: NOW });
-    assert.equal(tracks.C.length, 3);
-    assert.equal(tracks.C[0].id, 'QF-001', 'P0 QF tops Track C');
-    assert.equal(tracks.C[0].urgency_band, 'P0');
+    expect(tracks.C.length).toBe(3);
+    expect(tracks.C[0].id).toBe('QF-001'); // P0 QF tops Track C
+    expect(tracks.C[0].urgency_band).toBe('P0');
   });
 
   // --- TS-4: Type distribution mapping ---
 
   it('TS-4: bug=89 / polish=8 / documentation=6 distribution routes correctly', () => {
     const items = [
-      qf({ id: 'QF-BUG',   type: 'bug' }),
-      qf({ id: 'QF-POL',   type: 'polish' }),
-      qf({ id: 'QF-DOC',   type: 'documentation' }),
+      qf({ id: 'QF-BUG', type: 'bug' }),
+      qf({ id: 'QF-POL', type: 'polish' }),
+      qf({ id: 'QF-DOC', type: 'documentation' }),
       qf({ id: 'QF-OTHER', type: 'something-new' }),
     ];
     const { tracks } = rankItems(items, { now: NOW });
-    assert.deepEqual(tracks.C.map(x => x.id).sort(), ['QF-BUG', 'QF-POL']);
-    assert.deepEqual(tracks.STANDALONE.map(x => x.id).sort(), ['QF-DOC', 'QF-OTHER']);
-    assert.equal(tracks.A.length, 0);
-    assert.equal(tracks.B.length, 0);
+    expect(tracks.C.map(x => x.id).sort()).toEqual(['QF-BUG', 'QF-POL']);
+    expect(tracks.STANDALONE.map(x => x.id).sort()).toEqual(['QF-DOC', 'QF-OTHER']);
+    expect(tracks.A.length).toBe(0);
+    expect(tracks.B.length).toBe(0);
   });
 
   // --- TS-5: Track A inference via branch heuristic ---
@@ -294,10 +305,10 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
       qf({ id: 'QF-NORMAL', type: 'bug', branch_name: 'quick-fix/QF-NORMAL' }),
     ];
     const { tracks } = rankItems(items, { now: NOW });
-    assert.equal(tracks.A.length, 1);
-    assert.equal(tracks.A[0].id, 'QF-INFRA');
-    assert.equal(tracks.C.length, 1);
-    assert.equal(tracks.C[0].id, 'QF-NORMAL');
+    expect(tracks.A.length).toBe(1);
+    expect(tracks.A[0].id).toBe('QF-INFRA');
+    expect(tracks.C.length).toBe(1);
+    expect(tracks.C[0].id).toBe('QF-NORMAL');
   });
 
   // --- Ranking semantics for mixed SD+QF fleets ---
@@ -305,14 +316,12 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
   it('Mixed fleet: sort within track treats SDs and QFs uniformly', () => {
     const items = [
       sd({ sd_key: 'SD-P2', category: 'quality', metadata: { urgency_band: 'P2' } }),
-      qf({ id: 'QF-HI',    severity: 'high', type: 'bug' }),   // P1 urgency
-      qf({ id: 'QF-LO',    severity: 'low',  type: 'bug' }),   // P3 urgency
+      qf({ id: 'QF-HI', severity: 'high', type: 'bug' }),   // P1 urgency
+      qf({ id: 'QF-LO', severity: 'low', type: 'bug' }),    // P3 urgency
     ];
     const { tracks } = rankItems(items, { now: NOW });
-    assert.deepEqual(
-      tracks.C.map(x => x.sd_key || x.id),
-      ['QF-HI', 'SD-P2', 'QF-LO'],
-      'P1 QF < P2 SD < P3 QF by urgency_numeric'
+    expect(tracks.C.map(x => x.sd_key || x.id)).toEqual(
+      ['QF-HI', 'SD-P2', 'QF-LO'] // P1 QF < P2 SD < P3 QF by urgency_numeric
     );
   });
 
@@ -323,21 +332,21 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
       sd({ id: 'QF-LOOKALIKE', sd_key: 'SD-LOOKALIKE', category: 'quality' }),
     ];
     const { tracks } = rankItems(items, { now: NOW });
-    assert.equal(tracks.C.length, 2);
+    expect(tracks.C.length).toBe(2);
     const qfRanked = tracks.C.find(x => x.id === 'QF-A');
-    assert.equal(qfRanked.kind, 'qf');
+    expect(qfRanked.kind).toBe('qf');
     const sdRanked = tracks.C.find(x => x.sd_key === 'SD-LOOKALIKE');
-    assert.equal(sdRanked.kind, 'sd');
+    expect(sdRanked.kind).toBe('sd');
   });
 
   it('QF with non-open status is filtered out', () => {
     const items = [
       qf({ id: 'QF-COMPLETED', status: 'completed' }),
-      qf({ id: 'QF-OPEN',      status: 'open' }),
+      qf({ id: 'QF-OPEN', status: 'open' }),
     ];
     const { tracks } = rankItems(items, { now: NOW });
     const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
-    assert.deepEqual(allIds, ['QF-OPEN']);
+    expect(allIds).toEqual(['QF-OPEN']);
   });
 
   // SD-LEO-INFRA-QF-SD-ESCALATION-LINK-CANONICAL-TRACK-001 FR-3: named regression case —
@@ -351,22 +360,42 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
     ];
     const { tracks } = rankItems(items, { now: NOW });
     const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
-    assert.ok(!allIds.includes('QF-ESCALATED'), 'escalated QF must not appear on any track');
-    assert.ok(allIds.includes('QF-IN-PROGRESS'), 'in_progress QF should still be ranked');
-    assert.ok(allIds.includes('SD-CANONICAL'), 'the canonical SD should still be ranked');
+    expect(allIds.includes('QF-ESCALATED')).toBe(false); // escalated QF must not appear on any track
+    expect(allIds.includes('QF-IN-PROGRESS')).toBe(true); // in_progress QF should still be ranked
+    expect(allIds.includes('SD-CANONICAL')).toBe(true); // the canonical SD should still be ranked
+  });
+
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 FR-5/TS-7: a needs_sd row (status='open',
+  // routing_tier=3, escalated_to_sd_id NULL) is excluded from self-claim even though its
+  // status alone (open) would otherwise pass the existing filter above -- it already failed
+  // the Tier-3 (>=75 LOC) quick-fix cap and is awaiting an SD, not claimable as an ordinary
+  // quick-fix. Discriminates the full isNeedsSdRow conjunction, not routing_tier alone: an
+  // otherwise-identical routing_tier=NULL row (ordinary QF) and a routing_tier=3 row that
+  // HAS escalated_to_sd_id set (already linked) are both still ranked normally.
+  it('TS-7: needs_sd-shaped QF (open, routing_tier=3, escalated_to_sd_id=NULL) is excluded from self-claim', () => {
+    const items = [
+      qf({ id: 'QF-NEEDS-SD', status: 'open', routing_tier: 3, escalated_to_sd_id: null }),
+      qf({ id: 'QF-ORDINARY', status: 'open', routing_tier: null, escalated_to_sd_id: null }),
+      qf({ id: 'QF-TIER3-LINKED', status: 'open', routing_tier: 3, escalated_to_sd_id: 'SD-LEO-EXAMPLE-001' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
+    expect(allIds.includes('QF-NEEDS-SD')).toBe(false); // needs_sd row excluded from self-claim
+    expect(allIds.includes('QF-ORDINARY')).toBe(true); // ordinary open QF unaffected (no regression)
+    expect(allIds.includes('QF-TIER3-LINKED')).toBe(true); // tier=3 but linked -> no longer needs_sd
   });
 });
 
 // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-5: venture-build queue isolation.
 describe('isVentureBuildSD + venture queue isolation (FR-5)', () => {
   it('isVentureBuildSD: only non-platform target_application is a venture', () => {
-    assert.equal(isVentureBuildSD({ target_application: null }), false);
-    assert.equal(isVentureBuildSD({ target_application: '' }), false);
-    assert.equal(isVentureBuildSD({ target_application: 'ehg' }), false);
-    assert.equal(isVentureBuildSD({ target_application: 'EHG' }), false);
-    assert.equal(isVentureBuildSD({ target_application: 'EHG_Engineer' }), false);
-    assert.equal(isVentureBuildSD({ target_application: 'CronLinter' }), true);
-    assert.equal(isVentureBuildSD({ target_application: 'Canvas AI' }), true);
+    expect(isVentureBuildSD({ target_application: null })).toBe(false);
+    expect(isVentureBuildSD({ target_application: '' })).toBe(false);
+    expect(isVentureBuildSD({ target_application: 'ehg' })).toBe(false);
+    expect(isVentureBuildSD({ target_application: 'EHG' })).toBe(false);
+    expect(isVentureBuildSD({ target_application: 'EHG_Engineer' })).toBe(false);
+    expect(isVentureBuildSD({ target_application: 'CronLinter' })).toBe(true);
+    expect(isVentureBuildSD({ target_application: 'Canvas AI' })).toBe(true);
   });
 
   it('routes venture-build SDs to ventureTrack, NOT the platform tracks', () => {
@@ -380,11 +409,11 @@ describe('isVentureBuildSD + venture queue isolation (FR-5)', () => {
     const platformIds = [...result.tracks.A, ...result.tracks.B, ...result.tracks.C, ...result.tracks.STANDALONE].map(x => x.sd_id);
     const ventureIds = result.ventureTrack.map(x => x.sd_id);
 
-    assert.ok(Array.isArray(result.ventureTrack), 'ventureTrack is an array');
-    assert.deepEqual(ventureIds.sort(), ['SD-VEN-1', 'SD-VEN-2']);
-    assert.ok(!platformIds.includes('SD-VEN-1') && !platformIds.includes('SD-VEN-2'), 'venture SDs absent from platform tracks');
-    assert.ok(platformIds.includes('SD-PLAT-1') && platformIds.includes('SD-PLAT-2'), 'platform SDs present in platform tracks');
-    assert.ok(result.ventureTrack.every(x => x.track === 'VENTURE'), 'ventureTrack entries marked track=VENTURE');
+    expect(Array.isArray(result.ventureTrack)).toBe(true); // ventureTrack is an array
+    expect(ventureIds.sort()).toEqual(['SD-VEN-1', 'SD-VEN-2']);
+    expect(!platformIds.includes('SD-VEN-1') && !platformIds.includes('SD-VEN-2')).toBe(true); // venture SDs absent from platform tracks
+    expect(platformIds.includes('SD-PLAT-1') && platformIds.includes('SD-PLAT-2')).toBe(true); // platform SDs present in platform tracks
+    expect(result.ventureTrack.every(x => x.track === 'VENTURE')).toBe(true); // ventureTrack entries marked track=VENTURE
   });
 
   it('completed/cancelled venture SDs are excluded from both tracks and ventureTrack', () => {
@@ -393,8 +422,8 @@ describe('isVentureBuildSD + venture queue isolation (FR-5)', () => {
       sd({ id: 'SD-VEN-CANCEL', sd_key: 'SD-VEN-CANCEL', status: 'cancelled', target_application: 'Canvas AI' }),
     ];
     const result = rankItems(items, {});
-    assert.equal(result.ventureTrack.length, 0);
+    expect(result.ventureTrack.length).toBe(0);
     const platformIds = [...result.tracks.A, ...result.tracks.B, ...result.tracks.C, ...result.tracks.STANDALONE];
-    assert.equal(platformIds.length, 0);
+    expect(platformIds.length).toBe(0);
   });
 });

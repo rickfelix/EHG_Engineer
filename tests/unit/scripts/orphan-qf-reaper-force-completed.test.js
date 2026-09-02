@@ -32,14 +32,20 @@ describe('orphan-qf-reaper.mjs — force_completed coverage (QF-847 static guard
     return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   }
 
-  // Robust to formatting: count `.update({` blocks targeting quick_fixes that
+  // Robust to formatting: count writer-call blocks targeting quick_fixes that
   // also contain `force_completed: true` somewhere in the same block (until
   // the matching `})`). Both sites must qualify.
+  //
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: both sites now route through the single
+  // canonical writer (setQuickFixStatus(supabase, qf.id, {...})) instead of a raw
+  // .update({...}) call — the object literal being scanned is the writer's patch argument,
+  // not a Supabase update() call, but its column shape (and the invariants below) are
+  // unchanged.
   function findUpdateBlocks(src) {
     const blocks = [];
     let cursor = 0;
     while (true) {
-      const start = src.indexOf('.update({', cursor);
+      const start = src.indexOf('setQuickFixStatus(supabase, qf.id, {', cursor);
       if (start === -1) break;
       // Find matching closing `})` by tracking braces, naive but sufficient
       let depth = 1;
@@ -234,13 +240,20 @@ describe('orphan-qf-reaper.mjs — force_completed coverage (QF-847 static guard
     });
   });
 
-  // FR-2: idempotency .eq('status', qf.status) chain pinned on both UPDATE call sites.
+  // FR-2: idempotency guard on both UPDATE call sites.
+  //
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: the literal `.eq('id', qf.id).eq('status',
+  // qf.status)` chain this test used to pin no longer lives in orphan-qf-reaper.mjs — both
+  // sites now delegate the write (and its optimistic-concurrency guard) to the single
+  // canonical writer, which conditions its own update on `.eq('status', observedStatus)`
+  // internally (pinned directly by tests/unit/quick-fix/status-writer.test.js) and throws
+  // QF_STATUS_CONFLICT on a 0-row race. Idempotency is therefore still guaranteed on both
+  // sites — proven by import + call-site count rather than a source-level .eq() scan.
   describe('FR-2: idempotency guard on both UPDATE blocks', () => {
-    it('source contains exactly two .eq(\'id\', qf.id).eq(\'status\', qf.status) chains', () => {
-      // Match `.eq('id', qf.id)` followed (allowing whitespace/newlines) by `.eq('status', qf.status)`
-      const re = /\.eq\(\s*['"]id['"]\s*,\s*qf\.id\s*\)\s*\.eq\(\s*['"]status['"]\s*,\s*qf\.status\s*\)/g;
-      const matches = source.match(re) || [];
-      expect(matches.length).toBe(2);
+    it('both call sites delegate their idempotency guard to the single canonical writer', () => {
+      expect(source).toMatch(/import\s*\{[^}]*setQuickFixStatus[^}]*\}\s*from\s*['"]\.\.\/lib\/quick-fix\/status-writer\.cjs['"]/);
+      const calls = source.match(/setQuickFixStatus\(supabase, qf\.id, \{/g) || [];
+      expect(calls.length).toBe(2);
     });
   });
 

@@ -388,6 +388,11 @@ src/client/dist/
 # Generated query outputs (regenerable from scripts)
 /output/
 
+# SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: backfill-stranded-escalated-qfs.mjs writes a
+# timestamped manifest per run (dry-run and --live alike) -- audit trail for a revert, not a
+# committed artifact. Not covered by the root-anchored /output/ rule above.
+scripts/one-off/output/
+
 # Archived bootstrap scripts (local reference only)
 /docs/archive/
 

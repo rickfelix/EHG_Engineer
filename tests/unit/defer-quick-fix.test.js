@@ -7,7 +7,7 @@ import { parseDeferArgs, validateNotBefore, deferQuickFix } from '../../scripts/
 describe('parseDeferArgs', () => {
   it('parses QF id, --not-before value, and --reopen flag', () => {
     const parsed = parseDeferArgs(['QF-X', '--not-before', '2026-07-05T21:00:00Z', '--reopen']);
-    expect(parsed).toEqual({ showHelp: false, qfId: 'QF-X', notBefore: '2026-07-05T21:00:00Z', reopen: true, reason: null, owner: null, releaseCondition: null });
+    expect(parsed).toEqual({ showHelp: false, qfId: 'QF-X', notBefore: '2026-07-05T21:00:00Z', reopen: true, reason: null, owner: null, releaseCondition: null, dispositionReasonCode: null, disposedBy: null });
   });
 
   it('defaults reopen to false when omitted', () => {
@@ -56,9 +56,12 @@ describe('deferQuickFix', () => {
     const eq = vi.fn().mockReturnThis();
     const select = vi.fn().mockReturnThis();
     const single = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
+    // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: setQuickFixStatus's internal lookup+update use
+    // maybeSingle(), not single() -- mirror the same resolution so --reopen exercises it too.
+    const maybeSingle = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
     return {
-      client: { from: () => ({ update, eq, select, single }) },
-      update, eq, select, single,
+      client: { from: () => ({ update, eq, select, single, maybeSingle }) },
+      update, eq, select, single, maybeSingle,
     };
   }
 
@@ -73,10 +76,32 @@ describe('deferQuickFix', () => {
     expect(result.id).toBe('QF-X');
   });
 
-  it('updates both not_before and status=open when reopen=true', async () => {
+  it('updates not_before via the plain update, then status=open via the single canonical writer', async () => {
+    // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: --reopen is now a SEPARATE call through
+    // setQuickFixStatus, split from the plain not_before/claiming_session_id update.
     const stub = makeSupabaseStub({ id: 'QF-X', status: 'open', not_before: '2026-07-05T21:00:00.000Z' });
-    await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { reopen: true, supabaseClient: stub.client });
-    expect(stub.update).toHaveBeenCalledWith({ claiming_session_id: null, not_before: '2026-07-05T21:00:00.000Z', status: 'open' });
+    const result = await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { reopen: true, supabaseClient: stub.client });
+    expect(stub.update).toHaveBeenCalledWith({ claiming_session_id: null, not_before: '2026-07-05T21:00:00.000Z' });
+    expect(stub.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'open' }));
+    expect(result.status).toBe('open');
+  });
+
+  it('SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: --reopen on an escalated row without --disposition-reason-code/--disposed-by throws QF_STATUS_DISPOSITION_REQUIRED', async () => {
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'escalated', not_before: '2026-07-05T21:00:00.000Z' });
+    await expect(deferQuickFix('QF-X', '2026-07-05T21:00:00Z', { reopen: true, supabaseClient: stub.client }))
+      .rejects.toMatchObject({ code: 'QF_STATUS_DISPOSITION_REQUIRED' });
+  });
+
+  it('SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: --reopen on an escalated row WITH both flags succeeds', async () => {
+    const stub = makeSupabaseStub({ id: 'QF-X', status: 'escalated', not_before: '2026-07-05T21:00:00.000Z' });
+    const result = await deferQuickFix('QF-X', '2026-07-05T21:00:00Z', {
+      reopen: true, supabaseClient: stub.client,
+      dispositionReasonCode: 'manual_reopen', disposedBy: 'operator',
+    });
+    expect(result.status).toBe('escalated'); // stub always echoes fixture status; real DB would reflect 'open'
+    expect(stub.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'open', disposition_reason_code: 'manual_reopen', disposed_by: 'operator',
+    }));
   });
 
   it('throws when the row is not found', async () => {
