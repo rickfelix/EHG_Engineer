@@ -24,8 +24,9 @@
  */
 
 import crypto from 'node:crypto';
-import { critiquePlanProposal, COULD_NOT_CHECK } from '../../../../../../lib/eva/devils-advocate.js';
+import { critiquePlanProposal, COULD_NOT_CHECK, computeContentHash, buildCritiqueUserPrompt } from '../../../../../../lib/eva/devils-advocate.js';
 import { runInvariantChecks } from '../../../../../../lib/eva/invariant-library.js';
+import { getOpenAIModel } from '../../../../../../lib/config/model-config.js';
 
 const MAX_FINDING_PREVIEW = 3;
 const OVERRIDE_LOOKBACK_DAYS = 14;
@@ -123,6 +124,30 @@ export async function validatePrePlanCritique(ctx) {
     }
   } catch {
     archLoadStatus = 'load_failed';
+  }
+
+  // QF-20260902-181: refuse re-execute while content_hash is unchanged since the last blocking
+  // verdict — 23 handoffs in the 7-day cohort retried 4-5x within minutes on unchanged content
+  // (finding COUNT is the wrong key here — the critic is nondeterministic — content_hash, the
+  // same predicate findActiveOverride already binds on, is the correct one). Replays the prior
+  // findings and STILL persists a row (never a silent skip); only fires when no override applies.
+  const { prdRawText, archRawText } = buildCritiqueUserPrompt({ prdContent: prdSections, archContent, sdContext: {} });
+  const retryHash = computeContentHash({ prdRawText, archRawText, archLoadStatus, model: getOpenAIModel('validation') });
+  const lastBlock = await findLastBlockingCritique(supabase, sd.id);
+  if (lastBlock && lastBlock.content_hash === retryHash) {
+    const { override } = await findActiveOverride(supabase, sd.id, retryHash);
+    if (!override) {
+      const msg = `Re-execute refused: content_hash unchanged since the last blocking critique ` +
+        `(${lastBlock.id}, ${lastBlock.created_at}) — replaying prior findings. Fix the plan ` +
+        '(changes the hash) or record an audited override.';
+      console.log(`   ⚠️  ${msg}`);
+      await persistCritique(supabase, {
+        sd_id: sd.id, prd_id: prdId, findings: lastBlock.findings || [], overall_severity: 'block',
+        model_used: lastBlock.model_used, token_usage: null, content_hash: retryHash,
+        metadata: { retry_refused: true, replayed_from: lastBlock.id },
+      }, [msg]);
+      return { pass: false, score: SCORE_BY_OUTCOME.block, max_score: 100, issues: [msg], warnings: [msg] };
+    }
   }
 
   // FR-2: invariant library — deterministic, runs even when the LLM half cannot.
@@ -413,6 +438,27 @@ async function findActiveOverride(supabase, sdId, currentContentHash) {
   } catch {
     // Fail-closed: an unreadable override table means NO override — the block stands.
     return { override: null, schemaMissing: false };
+  }
+}
+
+/**
+ * QF-20260902-181: the retry guard's source of truth — the most recent BLOCK-severity
+ * plan_critiques row for this SD, whatever content_hash it carries. Fail-open on any read
+ * error (null): a lookup failure must never itself manufacture a refusal.
+ */
+async function findLastBlockingCritique(supabase, sdId) {
+  try {
+    const { data, error } = await supabase
+      .from('plan_critiques')
+      .select('id, content_hash, findings, model_used, created_at') // schema-lint-disable-line
+      .eq('sd_id', sdId)
+      .eq('overall_severity', 'block')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error || !data || data.length === 0) return null;
+    return data[0];
+  } catch {
+    return null;
   }
 }
 
