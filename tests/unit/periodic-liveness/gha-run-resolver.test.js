@@ -75,10 +75,22 @@ describe('classifyGhaCronRows', () => {
     expect(decision.decision).toBe('overdue');
   });
 
-  it('a cancelled/timed_out latest run also classifies OVERDUE (any non-success conclusion)', () => {
-    const latestByFile = latestRunPerWorkflow([run({ path: '.github/workflows/foo.yml', conclusion: 'cancelled' })]);
+  it('a timed_out latest run also classifies OVERDUE (genuine dead-cron evidence)', () => {
+    const latestByFile = latestRunPerWorkflow([run({ path: '.github/workflows/foo.yml', conclusion: 'timed_out' })]);
     const [decision] = classifyGhaCronRows(latestByFile, ['gha_cron:foo.yml']);
     expect(decision.decision).toBe('overdue');
+  });
+
+  it('QF-20260901-308: a cancelled latest run classifies unverified_skipped, NOT overdue (GitHub-side decision, not process death)', () => {
+    const latestByFile = latestRunPerWorkflow([run({ path: '.github/workflows/foo.yml', conclusion: 'cancelled' })]);
+    const [decision] = classifyGhaCronRows(latestByFile, ['gha_cron:foo.yml']);
+    expect(decision.decision).toBe('unverified_skipped');
+  });
+
+  it('QF-20260901-308: a skipped latest run classifies unverified_skipped, NOT overdue', () => {
+    const latestByFile = latestRunPerWorkflow([run({ path: '.github/workflows/foo.yml', conclusion: 'skipped' })]);
+    const [decision] = classifyGhaCronRows(latestByFile, ['gha_cron:foo.yml']);
+    expect(decision.decision).toBe('unverified_skipped');
   });
 
   it('no matching run for a process_key -> no_data (degrades to UNVERIFIED upstream, never a false alarm)', () => {
@@ -101,8 +113,11 @@ describe('shouldStampDecision (QF-20260830-795: a failed run is still an observe
   it('stamps a success decision', () => {
     expect(shouldStampDecision({ decision: 'stamp', ranAtIso: '2026-08-30T00:00:00Z' })).toBe(true);
   });
-  it('stamps an overdue (failed/cancelled) decision too -- this is the residual fix', () => {
+  it('stamps an overdue (failed/timed_out) decision too -- this is the residual fix', () => {
     expect(shouldStampDecision({ decision: 'overdue', ranAtIso: '2026-08-30T00:00:00Z' })).toBe(true);
+  });
+  it('QF-20260901-308: stamps an unverified_skipped decision too -- a skipped/cancelled run is still observed proof it fired', () => {
+    expect(shouldStampDecision({ decision: 'unverified_skipped', ranAtIso: '2026-09-01T00:00:00Z' })).toBe(true);
   });
   it('never stamps no_data (nothing observed, nothing to stamp)', () => {
     expect(shouldStampDecision({ decision: 'no_data' })).toBe(false);
