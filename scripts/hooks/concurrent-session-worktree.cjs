@@ -31,6 +31,7 @@ const { drainAndExit } = require('../../lib/hooks/drain-undici.cjs'); // QF-2026
 const { createClient } = require('@supabase/supabase-js');
 const { detectCodebase } = require('./lib/detect-context.cjs');
 const { stampBranch } = require('../../lib/session-writer.cjs');
+const { checkNodeModulesFreshness } = require('../../lib/fleet/node-modules-freshness.cjs');
 
 // PID liveness check — complements heartbeat for sessions still loading context
 function isProcessRunning(pid) {
@@ -728,6 +729,23 @@ async function main() {
   // bails below, so it fires on `main` and inside worktrees regardless of DB availability —
   // the exact cases the prior placement (after both bails) silently skipped.
   checkBranchFreshness(getBranch());
+
+  // QF-20260901-083: the shared root node_modules store (JUNCTIONed into every worktree, so
+  // this check is correct from process.cwd() whether that's the main repo or a worktree) can
+  // drift behind package-lock.json with nothing to detect it -- a locked-but-never-installed
+  // dependency throws ERR_MODULE_NOT_FOUND mid-run, misread as a venture/credential problem.
+  // Detection + naming the additive `npm install` only -- never runs it, never blocks (the
+  // banned repair is a clean install: its rm -rf follows the junction and wipes the shared
+  // store, harness 95022758; per-spec import-aware dispatch blocking is a separate, deferred SD).
+  try {
+    const freshness = checkNodeModulesFreshness(process.cwd());
+    if (!freshness.fresh) {
+      console.log('');
+      console.log('⚠️  node_modules store is behind package-lock.json:');
+      console.log(`   Drifted: ${freshness.drifted.slice(0, 5).join(', ')}${freshness.drifted.length > 5 ? ` (+${freshness.drifted.length - 5} more)` : ''}`);
+      console.log(`   Fix (additive, never a clean install): ${freshness.installCommand}`);
+    }
+  } catch { /* advisory only — never block session start on this check */ }
 
   // Skip if already inside a worktree — prevents nested worktree creation.
   // Must be checked BEFORE concurrent detection, not after.
