@@ -106,7 +106,12 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
-  it('passes when TESTING executed with PASS verdict', async () => {
+  it('passes when TESTING executed with PASS verdict, but only score 70 -- no test_execution/measured evidence exists (SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3)', async () => {
+    // Supersedes the pre-FR-3 expectation of score:100 for this exact fixture (no metadata at
+    // all). A bare PASS with no evidence structure is honestly scored 70 with a warning now,
+    // never silently treated as a fully-measured 100 -- but it is STILL passed:true; this SD
+    // never flips absence to a hard-reject. See the REQUIRED-tier "measured=true" test below for
+    // the genuine positive control (a PASS WITH real evidence still scores 100 unchanged).
     const freshDate = new Date(Date.now() - 3600000).toISOString(); // 1h ago
     const testingRow = { id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate };
 
@@ -127,7 +132,7 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
     const result = await gate.validator(ctx);
 
     expect(result.passed).toBe(true);
-    expect(result.score).toBe(100);
+    expect(result.score).toBe(70);
     expect(result.details.verdict).toBe('PASS');
   });
 
@@ -283,6 +288,18 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
       expect(result.details.measured).toBe(false);
     });
 
+    it('SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: ADVISORY tier + PASS verdict + no test_execution/measured key → stays ADVISORY (score 70), never a NEW blocking tier', async () => {
+      getValidationRequirements.mockReturnValue({ sd_type: 'infrastructure', requiresTesting: false, skipCodeValidation: false });
+      execSync.mockReturnValue('scripts/foo.js\n');
+      withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate() }); // no metadata at all
+      const ctx = { sd: createMockSD({ sd_type: 'infrastructure', id: 'uuid-no-evidence-advisory' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(70);
+      expect(result.details.tier).toBe('ADVISORY');
+      expect(result.details.measured).toBeNull();
+    });
+
     it('REQUIRED tier + PASS verdict + measured=true → passes exactly as today (score 100)', async () => {
       withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate(), metadata: { measured: true, executed: 5, passed: 5, failed: 0 } });
       const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-measured-pass' }) };
@@ -291,12 +308,19 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
       expect(result.score).toBe(100);
     });
 
-    it('a row with NO measured key at all (older evidence) is treated as measured — backward compatible', async () => {
+    it('SUPERSEDED by SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: a row with NO measured key at all is now honestly scored 70 (still passing, never hard-rejected)', async () => {
+      // Original SD-FDBK-INFRA-TESTING-SUB-AGENT-001 backward-compat contract: this fixture
+      // scored 100 (treated identically to a genuinely measured PASS). RCA (2026-09-02) found
+      // this shape is ~73%+ of live TESTING rows in the gate's own freshness window, not a rare
+      // legacy case -- narrowing the score to 70 with a warning satisfies FR-3's acceptance
+      // criteria ("no longer silently scores 100/100 as if measured") without flipping absence
+      // to a hard-reject, which remains explicitly out of scope for this SD.
       withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate() }); // no metadata at all
       const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-no-measured-key' }) };
       const result = await gate.validator(ctx);
       expect(result.passed).toBe(true);
-      expect(result.score).toBe(100);
+      expect(result.score).toBe(70);
+      expect(result.details.measured).toBeNull();
     });
 
     // SC#6: the structured field takes precedence over the ad-hoc boolean when both are present

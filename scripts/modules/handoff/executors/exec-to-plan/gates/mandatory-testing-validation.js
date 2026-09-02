@@ -319,13 +319,8 @@ export function createMandatoryTestingValidationGate(supabase) {
       // must never satisfy this gate identically to a genuinely measured PASS.
       // SC#6: prefer the structured field (source-agnostic — works for either writer path);
       // fall back to the ad-hoc boolean for rows written before test_execution existed.
-      // SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: see resolveMeasuredState()'s doc comment.
       const measured = resolveMeasuredState(result);
-      const isNoEvidenceAtAll = measured === null;
-      if (measured === false || isNoEvidenceAtAll) {
-        const reasonText = isNoEvidenceAtAll
-          ? 'carries neither a test_execution block nor a metadata.measured flag — no real test evidence backs it'
-          : 'carries metadata.measured=false — no real test evidence backs it';
+      if (measured === false) {
         if (isAdvisoryMode) {
           // ADVISORY tier: same honest-but-non-blocking shape as the missing-row ADVISORY path
           // above — surfaced, not silently trusted, but this SD introduces no new blocking tier.
@@ -336,20 +331,42 @@ export function createMandatoryTestingValidationGate(supabase) {
             score: 70,
             max_score: 100,
             issues: [],
-            warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD ${reasonText}`],
-            details: { advisory: true, reason: `${sdType} SD TESTING verdict is unmeasured`, tier: 'ADVISORY', measured: isNoEvidenceAtAll ? null : false }
+            warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD carries metadata.measured=false — no real test evidence backs it`],
+            details: { advisory: true, reason: `${sdType} SD TESTING verdict is unmeasured`, tier: 'ADVISORY', measured: false }
           };
         }
         // REQUIRED tier: reuse the SAME ERR_TESTING_REQUIRED-class blocking path already used
         // for a missing row — an unmeasured row is absence of real evidence, not a new severity.
-        console.log(`   ❌ ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} for ${sdType} SD ${reasonText}`);
+        console.log(`   ❌ ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} for ${sdType} SD carries metadata.measured=false (no real test evidence)`);
         return {
           passed: false,
           score: 0,
           max_score: 100,
-          issues: [`ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} ${reasonText} — required tier needs measured test evidence, not an unmeasured verdict`],
+          issues: [`ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} carries metadata.measured=false — required tier needs measured test evidence, not an unmeasured verdict`],
           warnings: [],
-          details: { tier: 'REQUIRED', measured: isNoEvidenceAtAll ? null : false }
+          details: { tier: 'REQUIRED', measured: false }
+        };
+      }
+
+      // SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: `measured === null` means "checked, and
+      // neither test_execution nor a metadata.measured key exists" -- distinct from `false`
+      // (explicitly measured and found unmeasured). This is DELIBERATELY NEVER BLOCKING, in
+      // EITHER tier -- flipping absence from warn to hard-reject is explicitly OUT OF SCOPE for
+      // this SD (LEAD-narrowed scope; this migration's own comment: "would immediately break
+      // ~27 evidence writes/day ... deliberately deferred"). RCA measurement (2026-09-02):
+      // ~73% of TESTING rows in the gate's own <24h freshness window carry neither key, and many
+      // of those DO carry real measurement facts under other key names (tests_run,
+      // vitest_summary, primary_suite_tests_passed, ...) this check does not look at -- so the
+      // warning below says "block absent", never "no evidence exists", which would be false.
+      if (measured === null) {
+        console.log(`   ⚠️  TESTING verdict ${result.verdict} for ${sdType} SD has no test_execution/measured key (never a blocker)`);
+        return {
+          passed: true,
+          score: 70,
+          max_score: 100,
+          issues: [],
+          warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD carries no test_execution block and no metadata.measured flag — this check cannot confirm measured evidence (other fields may still exist under different key names; presence-enforcement is explicitly out of scope for this SD)`],
+          details: { advisory: true, reason: `${sdType} SD TESTING row has no test_execution/measured key`, tier: isAdvisoryMode ? 'ADVISORY' : 'REQUIRED', measured: null, verdict: result.verdict }
         };
       }
 
