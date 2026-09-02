@@ -3,15 +3,18 @@
  * SD: SD-LEO-INFRA-UNIFY-QUICK-FIX-001
  *
  * SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-6, PLAN-testing BLOCKER 2): converted from
- * node:test to vitest. This file was written against node:test (`node --test` passes 28/28)
- * but is quarantined from vitest ("No test suite found" -- node:test suites are invisible to
+ * node:test to vitest. This file WAS written against node:test (`node --test` passed 28/28)
+ * and WAS quarantined from vitest ("No test suite found" -- node:test suites are invisible to
  * vitest's runner) with no other npm script or CI workflow running it under node --test, so
  * all 28 pre-existing assertions -- including the escalated-exclusion regression test this SD
- * depends on for TS-7 -- were CI-invisible. Converting to vitest (this repo's dominant test
- * runner) closes that gap as a documented side effect of this SD (tracked separately as
- * SD-REFILL-00CO4E8Q); its quarantine-manifest entry is removed in the same change. Every
+ * depends on for TS-7 -- were CI-invisible. Converted to vitest (this repo's dominant test
+ * runner) to close that gap as a documented side effect of this SD (tracked separately as
+ * SD-REFILL-00CO4E8Q); its quarantine-manifest entry was removed in the same change. Every
  * assertion below is a mechanical node:assert/strict -> vitest expect() translation with no
  * behavior change, plus one new fixture case for the needs_sd shape (FR-5/TS-7).
+ * NOTE: tests/unit/quarantine-classify-node-test.test.js used to cite THIS file as its live
+ * node:test fixture; repointed to tests/review-gate.test.js (a still-genuine node:test file)
+ * in the same commit as this conversion.
  */
 import { describe, it, expect } from 'vitest';
 import {
