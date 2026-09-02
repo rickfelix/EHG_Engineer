@@ -339,6 +339,15 @@ describe('evaluateRow', () => {
     expect(result.reason).toBe('latest_scheduled_run_failed');
   });
 
+  it('QF-20260901-308: an "unverified_skipped" decision (latest scheduled run skipped/cancelled) -> UNVERIFIED, not OVERDUE', async () => {
+    const row = ghaCronRow();
+    const ghaDecisions = new Map([[row.process_key, { processKey: row.process_key, decision: 'unverified_skipped', ranAtIso: OLD_TS }]]);
+    const result = await evaluateRow(row, { ghaDecisions });
+    expect(result.state).toBe(STATE.UNVERIFIED);
+    expect(result.reason).toBe('latest_scheduled_run_skipped');
+    expect(result.last_fired_at).toBe(OLD_TS);
+  });
+
   it('github_actions_api: TS-3 no decision available (resolver fetch failed / not in map) -> UNVERIFIED, degrades to today\'s state', async () => {
     const row = ghaCronRow();
     const result = await evaluateRow(row, { ghaDecisions: new Map() });

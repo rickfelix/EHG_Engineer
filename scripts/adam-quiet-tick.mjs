@@ -20,7 +20,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import 'dotenv/config';
 import { rehydrateBoard } from '../lib/adam/task-rehydrate.js';
 import { checkAndAlertStalls } from '../lib/adam/stall-alert.js';
@@ -88,6 +88,14 @@ const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 // QF-20260719-138: emit the mechanical cross-party ping stub ourselves (mirror of
 // coordinator-quiet-tick.mjs) rather than instructing the agent to hand-insert it each tick.
 const { emitCrossPartyPing } = require('../lib/coordinator/cross-party-ping.cjs');
+// SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce (not merely classify) the
+// role-aware compaction threshold. Default-OFF via COORD_CONTEXT_CEILING_ENFORCE_V1.
+const { checkContextCeiling } = require('../lib/fleet/context-ceiling-checker.cjs');
+const {
+  defaultReadLatestUsageRow,
+  defaultInvokeCompactSkill,
+  defaultPersistCeilingEvent,
+} = require('../lib/fleet/context-ceiling-default-deps.cjs');
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -777,7 +785,7 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     // REGRESSION finding (PLAN_VERIFICATION evidence row db85362a): moved inside the try so the
     // docblock's "Fail-soft throughout" claim is literally true for every statement in this
     // function, not just the ones after this line.
-    const { detectRatificationRegression } = await import('../lib/chairman/ratification-regression-detector.mjs');
+    const { detectRatificationRegression, detectMarkerMissing } = await import('../lib/chairman/ratification-regression-detector.mjs');
 
     const { data, error } = await sb
       .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
@@ -813,6 +821,7 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     } catch { /* fewer than 2 commits touched the manifest yet -- Stage 1 becomes a structural no-op */ }
 
     const regressed = [];
+    const markerInvalid = []; // QF-20260901-107: pre-existing bad markers, distinct from a true revert
     for (const row of data || []) {
       const sectionId = row.encoded_ref && row.encoded_ref.section_id;
       const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
@@ -820,10 +829,24 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       if (targetFile) {
         try { liveFileContent = readFileSync(join(repoRoot, targetFile), 'utf8'); } catch { /* file gone/unreadable -- detectMarkerMissing treats this as the marker being gone */ }
       }
-      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent });
+      // QF-20260901-107: only when the marker looks missing NOW is it worth the git-archaeology
+      // cost of asking whether it was ever there AT ENCODE TIME (distinguishes a writer defect
+      // from a real revert; see the detector's own docblock for why a hash comparison is unsound).
+      let encodeTimeFileContent;
+      if (targetFile && row.encoded_at && detectMarkerMissing(liveFileContent, row.marker_text)) {
+        try {
+          const log = (await execFileAsync('git', ['log', '--format=%H', '--before', row.encoded_at, '-n', '1', '--', targetFile], { cwd: repoRoot, timeout: 5000 })).stdout.trim();
+          const atEncodeHash = log.split('\n').filter(Boolean)[0];
+          if (atEncodeHash) {
+            encodeTimeFileContent = (await execFileAsync('git', ['show', `${atEncodeHash}:${targetFile}`], { cwd: repoRoot, timeout: 5000, maxBuffer: 8 * 1024 * 1024 })).stdout;
+          }
+        } catch { /* no commit at/before encoded_at, or git failed -- can't disambiguate, falls through to the normal stage2 verdict */ }
+      }
+      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent, encodeTimeFileContent });
       if (result.regressed) regressed.push({ ...row, ...result });
+      else if (result.markerInvalid) markerInvalid.push({ ...row, ...result });
     }
-    return { rows: regressed, count: regressed.length };
+    return { rows: regressed, count: regressed.length, markerInvalidRows: markerInvalid, markerInvalidCount: markerInvalid.length };
   } catch (e) {
     return { rows: [], count: 0, error: e && e.message };
   }
@@ -1018,6 +1041,33 @@ async function main() {
   // null when the config is missing/malformed).
   const currentIdentity = getAccountIdentity();
   const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
+
+  // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce the role-aware compaction
+  // threshold instead of leaving it classified-but-unread (predecessor SD-LEO-INFRA-COORDINATOR-
+  // CRON-LIFECYCLE-001's .claude/compaction-thresholds.cjs is otherwise consumed ONLY by the
+  // statusline display path). Fail-soft like its siblings above -- never blocks the rest of the
+  // tick. Own session id comes from the same .claude/active-adam.json marker writeAdamMarker()
+  // stamps at Adam startup (scripts/adam-startup-check.mjs), not env.CLAUDE_SESSION_ID (this
+  // tick script has no guarantee that's set when run as a scheduled/background process).
+  let contextCeiling = { verdict: 'DISABLED' };
+  try {
+    const adamMarkerPath = resolve(__dirname, '..', '.claude', 'active-adam.json');
+    const adamMarker = existsSync(adamMarkerPath) ? JSON.parse(readFileSync(adamMarkerPath, 'utf8')) : null;
+    const ownSessionId = adamMarker && adamMarker.session_id;
+    if (ownSessionId) {
+      contextCeiling = await checkContextCeiling({
+        role: 'adam',
+        sessionId: ownSessionId,
+        deps: {
+          readLatestUsageRow: defaultReadLatestUsageRow,
+          invokeCompactSkill: defaultInvokeCompactSkill,
+          persistCeilingEvent: defaultPersistCeilingEvent,
+        },
+      });
+    }
+  } catch (e) {
+    contextCeiling = { verdict: 'ERROR', reason: e && e.message };
+  }
 
   // FR-1: inbox-monitor always runs (cheap, catch /signal); the offer-help core
   // is delta-gated below, so only the inbox core needs composing here.
@@ -1288,6 +1338,9 @@ async function main() {
     outputFlowStalledMs: outputFlow.stalledMs,
     durationBaselineBreaches: durationBreachLines.length,
     nextWakeSeconds: delaySeconds,
+    // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: 'DISABLED' unless
+    // COORD_CONTEXT_CEILING_ENFORCE_V1 is on; 'CEILING' means this tick just enforced compaction.
+    contextCeilingVerdict: contextCeiling.verdict,
   };
 
   // QF-20260719-138: a real salient delta emits the mechanical cross_party_ping stub HERE
@@ -1548,6 +1601,13 @@ async function main() {
     for (const r of regressedRatifications.rows) {
       const sectionId = r.encoded_ref && r.encoded_ref.section_id;
       console.log(`QUIET_TICK_RATIFICATION_STALE=adam id=${r.id} REGRESSED stage1_section_removed=${r.stage1} stage2_marker_missing=${r.stage2} section=${sectionId} — an already-encoded chairman ratification's clause was silently reverted; re-encode via lib/chairman/ratification-writer.mjs markRatificationEncoded().`);
+    }
+    // QF-20260901-107: informational only, deliberately NOT part of the NO-OP gate above -- these
+    // rows never had a real marker (writer defect predating the fail-closed check), so re-encoding
+    // cannot fix them; correction rides a separate chairman-gated data-repair migration.
+    for (const r of (regressedRatifications.markerInvalidRows || [])) {
+      const sectionId = r.encoded_ref && r.encoded_ref.section_id;
+      console.log(`QUIET_TICK_RATIFICATION_MARKER_INVALID=adam id=${r.id} section=${sectionId} — marker_text was never present in the live section content (writer defect at encode time, not a reverted clause); needs the separate chairman-gated data-repair migration, not re-encoding.`);
     }
   }
   return result;

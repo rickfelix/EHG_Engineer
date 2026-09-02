@@ -86,7 +86,7 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
     });
 
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
     expect(capture.insertedTable).toBe('sub_agent_execution_results');
     expect(verifyReadback).toHaveBeenCalledTimes(1);
@@ -113,7 +113,7 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
     });
 
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
     expect(capture.updated).not.toBeNull(); // the update branch, not insert, actually ran
     expect(verifyReadback).toHaveBeenCalledTimes(1);
@@ -143,7 +143,7 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
     let thrown = null;
     let result;
     try {
-      result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+      result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
     } catch (e) {
       thrown = e;
     }
@@ -173,7 +173,7 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
 
-    const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
     expect(result.id).toBe('existing-row-id');
     const readbackLogs = errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('READBACK-CHECK-FAILED'));

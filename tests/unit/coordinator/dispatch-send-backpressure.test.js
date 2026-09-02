@@ -127,6 +127,71 @@ describe('assertSendBackpressure (unit)', () => {
     expect(inserted[0].payload.backpressure_parked_at).toEqual(expect.any(String));
   });
 
+  // QF-20260901-039 (coordinator-measured live specimen, directive 415d36d9/2135b402): a
+  // parked row genuinely LANDS, but the unconditional throw gave a caller no way to tell that
+  // apart from "nothing landed, safe to retry" -- a caller retrying on ANY thrown error
+  // duplicated content that was never lost. The thrown error must carry the parked row's id
+  // and a landed flag so a caller can branch instead of guessing.
+  it('stamps landed:true and the parked row id on the thrown error when the park insert succeeds', async () => {
+    const sb = {
+      from(table) {
+        const chain = {
+          select(cols) { chain._isBackpressureSelect = table === 'session_coordination' && cols === 'id, payload'; return chain; },
+          eq() { return chain; },
+          is() { return chain; },
+          gt() { return chain; },
+          limit() { return chain; },
+          insert() { return chain; },
+          single() { return Promise.resolve({ data: { id: 'parked-row-42' }, error: null }); },
+          then(res) {
+            if (chain._isBackpressureSelect) {
+              return Promise.resolve({ data: Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT }, (_, i) => ({ id: `n-${i}`, payload: {} })), error: null }).then(res);
+            }
+            return Promise.resolve({ data: null, error: null }).then(res);
+          },
+        };
+        return chain;
+      },
+    };
+    let caught;
+    try {
+      await assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toMatchObject({ code: 'DISPATCH_BACKPRESSURE', landed: true, parkedRowId: 'parked-row-42' });
+  });
+
+  it('stamps landed:false (no parkedRowId) when the park insert itself fails', async () => {
+    const sb = {
+      from(table) {
+        const chain = {
+          select(cols) { chain._isBackpressureSelect = table === 'session_coordination' && cols === 'id, payload'; return chain; },
+          eq() { return chain; },
+          is() { return chain; },
+          gt() { return chain; },
+          limit() { return chain; },
+          insert() { return chain; },
+          single() { return Promise.resolve({ data: null, error: { message: 'insert failed' } }); },
+          then(res) {
+            if (chain._isBackpressureSelect) {
+              return Promise.resolve({ data: Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT }, (_, i) => ({ id: `n-${i}`, payload: {} })), error: null }).then(res);
+            }
+            return Promise.resolve({ data: null, error: null }).then(res);
+          },
+        };
+        return chain;
+      },
+    };
+    let caught;
+    try {
+      await assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toMatchObject({ code: 'DISPATCH_BACKPRESSURE', landed: false, parkedRowId: null });
+  });
+
   // A parked row is queued-for-later, not live pressure -- it must not count toward the cap
   // itself, or a capped target could never clear once its own parked backlog outnumbers the limit.
   it('does not count parked rows in the candidate population', async () => {

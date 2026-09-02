@@ -25,7 +25,6 @@ import { bestEffortReleaseSd } from '../lib/fleet/best-effort-release.mjs';
 import { getRepoRoot, isInsideWorktree } from '../lib/repo-paths.js';
 import os from 'os';
 import path from 'node:path';
-import dotenv from 'dotenv';
 import { getOrCreateSession } from '../lib/session-manager.mjs'; // (updateHeartbeat import was long-dead — dropped with the FR-5/FR-6 extraction lint pass)
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
@@ -92,8 +91,15 @@ import sdFit from '../lib/fleet/sd-executable-here.cjs';
 // fail-fast (a missing-precondition block proposes a code/run split — never created here).
 import unfitTriage from '../lib/fleet/unfit-triage.cjs';
 
-dotenv.config();
-
+// SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001 (FR-4): this file's own bare `dotenv.config()`
+// (cwd-relative, no ancestor walk) was a direct source of the bug FR-1 fixes -- invoked from
+// inside a worktree, it read THAT worktree's stale propagateEnvFile .env copy instead of the
+// live main-repo one. The `createSupabaseServiceClient` import above (line 15) already runs
+// lib/supabase-client.js's own module-level env resolution -- via the FIXED git-boundary-safe
+// resolver -- during ITS module evaluation, which ES modules guarantee completes before this
+// file's own top-level body (where the old dotenv.config() call lived) begins executing. So
+// removing the redundant call here doesn't just delete dead code: it removes the one remaining
+// direct cwd-dotenv load on this entry point's own critical path.
 const supabase = createSupabaseServiceClient();
 
 // SD-ARCH-HOTSPOT-SD-START-001: the claim gate/queue phases live in shared
@@ -109,12 +115,9 @@ const { verifyHandoffIntegrity: verifyHandoffIntegrityGate } = cjsRequire('../li
 const { evaluateCadenceGate } = cjsRequire('../lib/claim/gates/cadence-gate.cjs');
 const queueResolver = cjsRequire('../lib/claim/queue-resolver.cjs');
 const { classifyAllDispatchIneligibility, liveClaimWriteFenceReason, CLAIM_WRITE_FENCE_AXES, execBoundaryHoldReason } = cjsRequire('../lib/fleet/claim-eligibility.cjs');
-// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2): sd-start.js is the CLAIM PRIMITIVE and had ZERO
-// tier enforcement (confirmed by census — scripts/tier-floor-census.mjs — as a genuine gap, not a
-// deferral). tierBlocks() is the SAME reuse-not-rederive helper worker-checkin.cjs's tier-context
-// step uses, so this claim path and the self-claim path share one tier decision, not two.
-const { resolveWorkerTierRank, isTieringActive } = cjsRequire('../lib/fleet/tier-ladder.cjs');
-const { tierBlocks } = cjsRequire('../lib/fleet/tier-claimable.cjs');
+// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2)'s claim-time tier gate (enforceTierGate) was
+// retired to advisory-only by QF-20260831-419, then DELETED by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001
+// (chairman ratification 20dc072b). sd-start.js no longer gates a claim on seat tier.
 // SD-ARCH-HOTSPOT-SD-START-001 FR-7: dispatch-authorization polarity gate (flag-gated, observe-first).
 const dispatchAuthGate = cjsRequire('../lib/claim/gates/dispatch-authorization.cjs');
 
@@ -262,33 +265,6 @@ async function enforceBlockedOnSdGate(sd, effectiveId) {
     console.log(`   metadata.blocked_on_sd=${blockedOn} (status=${hit.status}) — dependency not yet completed.`);
     console.log(`\n${colors.bold}Action:${colors.reset} Wait for ${blockedOn} to complete, or pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
     process.exit(1);
-  }
-}
-
-// SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2): claim-time tier gate, at parity with the
-// self-claim/stranded/orphan lanes (tier-context.cjs / worker-checkin.cjs). Reuses tierBlocks()
-// rather than hand-rolling a comparison, so a provenance-free floor (ruling 1B) is advisory here
-// too -- the same predicate the belt gauge and self-claim already honor. Fail-open on a resolution
-// fault (never strand a claim on a transient DB/session-read error); fail-closed only when the
-// gate genuinely computes a block.
-async function enforceTierGate(sd, effectiveId) {
-  const sessionId = process.env.CLAUDE_SESSION_ID || null;
-  if (!sessionId) return; // no session context to resolve a worker rank from -- nothing to gate
-  try {
-    const { data: session } = await supabase
-      .from('claude_sessions')
-      .select('metadata')
-      .eq('session_id', sessionId)
-      .maybeSingle();
-    const workerTierRank = resolveWorkerTierRank({ metadata: session?.metadata || {} });
-    const tieringActive = await isTieringActive(supabase);
-    if (!tierBlocks(sd, workerTierRank, tieringActive)) return;
-    console.log(`\n${colors.red}${colors.bold}🚫 ${effectiveId} requires a higher tier rank than this seat${colors.reset}`);
-    console.log(`   metadata.min_tier_rank=${sd?.metadata?.min_tier_rank} — this seat resolves to tier_rank=${workerTierRank}.`);
-    console.log(`   ${colors.dim}Pick a different SD with ${colors.cyan}npm run sd:next${colors.dim}, or self-report a stronger --model/--effort at check-in if this stamp is stale.${colors.reset}`);
-    process.exit(1);
-  } catch (e) {
-    console.warn(`${colors.dim}(tier gate skipped — resolution error, fail-open: ${e.message})${colors.reset}`);
   }
 }
 
@@ -669,9 +645,6 @@ async function main() {
   // 1.2. QF-20260703-295: reject direct claims on HELD SDs (metadata.requires_human_action).
   enforceHumanActionGate(sd, effectiveId);
 
-  // 1.2b. SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2): claim-primitive tier gate.
-  await enforceTierGate(sd, effectiveId);
-
   // 1.3. QF-20260706-786: independently re-verify metadata.blocked_on_sd against live status.
   await enforceBlockedOnSdGate(sd, effectiveId);
 
@@ -819,9 +792,6 @@ async function main() {
       // (findUnclaimedChild) does not filter on requires_human_action, so a HELD
       // child routed to via the parent must still be refused here.
       enforceHumanActionGate(sd, effectiveId);
-      // SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001 (FR-2): same re-check for a leaf's own tier floor —
-      // the parent's floor (if any) does not bind the child, so this must re-evaluate against sd.
-      await enforceTierGate(sd, effectiveId);
       // QF-20260706-786: same re-check for a leaf's own metadata.blocked_on_sd.
       await enforceBlockedOnSdGate(sd, effectiveId);
       } // close else (route-to-leaf)

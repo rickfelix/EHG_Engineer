@@ -114,7 +114,7 @@ describe('storeSubAgentResults stamps metadata.evaluated_commit_sha (FR-2 wiring
 
   it('stamps a real SHA when the caller-supplied metadata names a real repo_path', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       metadata: { repo_path: process.cwd() },
@@ -125,7 +125,7 @@ describe('storeSubAgentResults stamps metadata.evaluated_commit_sha (FR-2 wiring
 
   it('a caller-supplied metadata.evaluated_commit_sha is NOT trusted -- overwritten by what this writer actually observed', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       metadata: { repo_path: process.cwd(), evaluated_commit_sha: 'forged0000000000000000000000000000000000' },
@@ -136,7 +136,7 @@ describe('storeSubAgentResults stamps metadata.evaluated_commit_sha (FR-2 wiring
 
   it('SECURITY finding, row 28b7921b: prefers executed_from_cwd over repo_path -- repo_path is canonicalized to the repo ROOT (worktree segment stripped by resolve-repo.js toCanonicalRepoPath), so preferring it would stamp the wrong SHA for any worktree-scoped SD', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       // repo_path deliberately points somewhere with NO git repo, to prove it is not consulted
@@ -149,7 +149,7 @@ describe('storeSubAgentResults stamps metadata.evaluated_commit_sha (FR-2 wiring
 
   it('falls back to repo_path when executed_from_cwd is absent', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       metadata: { repo_path: process.cwd() },
@@ -160,7 +160,7 @@ describe('storeSubAgentResults stamps metadata.evaluated_commit_sha (FR-2 wiring
 
   it('stamps null (never throws) when no repo_path/executed_from_cwd is present', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
     expect(capture.inserted.metadata.evaluated_commit_sha).toBeNull();
   });
 });

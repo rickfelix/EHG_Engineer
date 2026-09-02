@@ -89,7 +89,7 @@ describe('FR-4: the writer records verdict ABSENCE as a value, not an omitted ke
 
   it('OPPOSITE POLARITY: a real verdict is recorded verbatim, not overwritten by the sentinel', async () => {
     const { storeSubAgentResults, ABSENT_VERDICT } = await import('../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-PRESENT-001', null, { verdict: 'PASS', confidence: 90 }, { phase: 'EXEC' });
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-PRESENT-001', null, { verdict: 'PASS', confidence: 90 }, { phase: 'EXEC' });
     expect(rows[0].metadata.original_verdict).toBe('PASS');
     expect(rows[0].metadata.original_verdict).not.toBe(ABSENT_VERDICT);
     expect(rows[0].verdict).toBe('PASS');

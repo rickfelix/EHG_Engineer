@@ -11,10 +11,8 @@ import { describe, it, expect } from 'vitest';
 import { ladderTopRank } from '../../../lib/fleet/tier-ladder.cjs';
 import { idleWorkerCensusByTier, lowerTierBacklog, fetchLowerTierBacklogData } from '../../../lib/fleet/tier-backlog.cjs';
 import { classifyDispatchIneligibility } from '../../../lib/fleet/claim-eligibility.cjs';
-import { assertWorkerTierAllowed } from '../../../lib/coordinator/dispatch.cjs';
 import { tierRankVerdict } from '../../../lib/fleet/tier-ladder.cjs';
 import { liveFleetWorkers } from '../../../lib/fleet/genuine-worker.mjs';
-import { readFileSync } from 'fs';
 
 const TOP = ladderTopRank();
 
@@ -241,110 +239,11 @@ describe('FR-6 fetchLowerTierBacklogData (shared DB-dependent fetcher)', () => {
   });
 });
 
-// ---- TS-4/TS-5: dispatch.cjs assertWorkerTierAllowed downward-claim gate ----
-describe('FR-6 dispatch.cjs assertWorkerTierAllowed downward-claim (backlog) gate', () => {
-  const row = () => ({
-    message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker',
-    payload: { assigned_sd: 'SD-LOWER-001' },
-  });
-
-  it('QF-20260831-419: no longer refuses a downward WORK_ASSIGNMENT when the lower tier has no backlog (advisory only)', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = sdRow('SD-LOWER-001', 1);
-    // w-1 is idle AND native to rank 1 -> its idle capacity at/below rank 1 already covers the
-    // one claimable rank-1 SD, so rank 1 is NOT backlogged -> the reservation refusal is retired.
-    const liveWorkers = [liveWorker('w-1', { tierRank: 1 }), targetSession];
-    const sds = [targetSd];
-    const sb = stubSupabase({ liveWorkers, sds, targetSession, targetSd });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('allows a downward WORK_ASSIGNMENT when the lower tier IS backlogged', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = sdRow('SD-LOWER-001', 1);
-    // Two live workers total (tiering active), but NO idle worker at all -> any claimable
-    // work at rank 1 is unabsorbed -> genuinely backlogged.
-    const liveWorkers = [liveWorker('w-1', { claimed: true }), targetSession];
-    const sds = [targetSd, sdRow('SD-W1', 4, { claimingSessionId: 'w-1' })];
-    const sb = stubSupabase({ liveWorkers, sds, targetSession, targetSd });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('never gates an at-own-tier WORK_ASSIGNMENT on backlog', async () => {
-    const targetSession = targetWorkerSession(1);
-    const targetSd = sdRow('SD-LOWER-001', 1);
-    const liveWorkers = [liveWorker('w-1'), liveWorker('w-2'), targetSession];
-    const sds = [targetSd];
-    const sb = stubSupabase({ liveWorkers, sds, targetSession, targetSd });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('fails open (allows) when fetchLowerTierBacklogData cannot resolve backlog data', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = sdRow('SD-LOWER-001', 1);
-    // A supabase whose claude_sessions single-row + bulk queries work (so isTieringActive() itself
-    // resolves true, actually reaching the downward-claim branch) but whose strategic_directives_v2
-    // BULK read throws (breaks fetchLowerTierBacklogData specifically, not the outer tiering check).
-    const sb = {
-      from(table) {
-        const api = {
-          select() { return api; }, not() { return api; }, in() { return api; },
-          gte() { return api; }, order() { return api; }, limit() { return api; }, filter() { return api; },
-          eq(col, val) { api._filters = { ...(api._filters || {}), [col]: val }; return api; },
-          async maybeSingle() {
-            if (table === 'claude_sessions' && api._filters?.session_id === 'target-worker') return { data: targetSession, error: null };
-            if (table === 'strategic_directives_v2' && api._filters?.sd_key === 'SD-LOWER-001') return { data: targetSd, error: null };
-            return { data: null, error: null };
-          },
-          then(resolve) {
-            if (table === 'claude_sessions') return resolve({ data: [liveWorker('w-1'), targetSession], error: null });
-            throw new Error('strategic_directives_v2 bulk fetch broken');
-          },
-        };
-        return api;
-      },
-    };
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('degrade-to-1: with < 2 live workers the backlog gate is inert, downward assignment allowed', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = sdRow('SD-LOWER-001', 1);
-    const liveWorkers = [targetSession]; // only 1 live worker -> isTieringActive() false
-    const sds = [targetSd];
-    const sb = stubSupabase({ liveWorkers, sds, targetSession, targetSd });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('unscored SD (no min_tier_rank) is unaffected by the backlog gate', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = { sd_key: 'SD-LOWER-001', metadata: {} };
-    const liveWorkers = [liveWorker('w-1'), liveWorker('w-2'), targetSession];
-    const sb = stubSupabase({ liveWorkers, sds: [], targetSession, targetSd });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-});
-
-// ---- TS-5b: both-enforcement-sites-consistent -------------------------------
-describe('FR-6 both-enforcement-sites-consistent: same backlog data, same verdict', () => {
-  it('QF-20260831-419: classifyDispatchIneligibility and assertWorkerTierAllowed agree — both now advisory-only, neither refuses', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = sdRow('SD-LOWER-001', 1);
-    const liveWorkers = [liveWorker('w-1', { tierRank: 1 }), targetSession]; // w-1 idle -> absorbs the one rank-1 SD
-    const sds = [targetSd];
-    const sb = stubSupabase({ liveWorkers, sds, targetSession, targetSd });
-
-    const backlogData = await fetchLowerTierBacklogData(sb);
-    const selfClaimVerdict = classifyDispatchIneligibility(targetSd, {
-      worker_tier_rank: 4, tiering_active: true, lower_tier_backlog_data: backlogData,
-    });
-    expect(selfClaimVerdict).toBeNull();
-    // The directed-dispatch path, using the SAME fetcher, must reach the SAME (now permissive) outcome.
-    await expect(assertWorkerTierAllowed(sb, {
-      message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-LOWER-001' },
-    })).resolves.toBeUndefined();
-  });
-});
+// FR-6/TS-4/TS-5's dispatch.cjs assertWorkerTierAllowed downward-claim (backlog) gate tests, and
+// TS-5b's both-enforcement-sites-consistent test, were retired: assertWorkerTierAllowed was
+// DELETED by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (chairman ratification 20dc072b). The
+// classifyDispatchIneligibility-side coverage of the (now-removed) reserved_no_lower_backlog
+// branch remains above ("FR-6 classifyDispatchIneligibility 'reserved_no_lower_backlog' branch").
 
 // ---- SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001 (FR-4/TS-5): shared tier-rank predicate ----
 //
@@ -411,45 +310,18 @@ describe('FR-4 tierRankVerdict — the ONE shared tier-rank predicate', () => {
     expect(tierRankVerdict(NaN, 4)).toBe('tier_stamp_missing');
   });
 
-  // Source-pinned: proves BOTH call sites actually delegate to the shared function, not merely
-  // that their outputs happen to coincide for the cases exercised above. A future edit that
-  // reintroduces an inline `minRank > workerRank` comparison in either file, bypassing
-  // tierRankVerdict, is caught here even before any behavioral test would notice.
-  it('both claim-eligibility.cjs tierAxes and dispatch.cjs assertWorkerTierAllowed call tierRankVerdict', () => {
-    const claimEligibilitySrc = readFileSync(new URL('../../../lib/fleet/claim-eligibility.cjs', import.meta.url), 'utf8');
-    const dispatchSrc = readFileSync(new URL('../../../lib/coordinator/dispatch.cjs', import.meta.url), 'utf8');
-    expect(claimEligibilitySrc).toMatch(/tierRankVerdict\(ctx\.worker_tier_rank, minRank, \{ hasProvenance \}\)/);
-    expect(dispatchSrc).toMatch(/tierRankVerdict\(workerRank, minRank, \{ hasProvenance \}\)/);
-  });
+  // SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (ratification 20dc072b): the reachability pin proving
+  // BOTH call sites delegated to tierRankVerdict is retired -- dispatch.cjs's call site
+  // (assertWorkerTierAllowed) was deleted, and claim-eligibility.cjs's tierAxes no longer calls
+  // tierRankVerdict either (its dead above_worker_tier/tier_stamp_missing branches were deleted;
+  // the two still-live branches, fable_window_downward_claim_blocked and unverified_seat_capability,
+  // never called tierRankVerdict to begin with). tierRankVerdict itself is DECIDED KEPT (not
+  // deleted): it remains a correctly-tested, exported pure utility in tier-ladder.cjs with no
+  // current production caller -- available for reintroduction rather than removed outright, since
+  // deleting it would also require resolving its lint-rule entanglement
+  // (scripts/lint/tier-rank-direct-comparison-lint.mjs), which is out of this SD's scope.
 });
 
-describe('FR-4 above_worker_tier agreement between the two real call sites', () => {
-  // Complements the existing backlog-only agreement test above (line ~295) with the more common
-  // above_worker_tier case, reached via BOTH real entry points (not the extracted predicate in
-  // isolation) so a fail-open catch-all elsewhere in either function cannot silently swallow a
-  // block and still read green.
-  it('QF-20260831-419: classifyDispatchIneligibility and assertWorkerTierAllowed agree — both now advisory-only, neither refuses the above-tier claim', async () => {
-    const targetSession = targetWorkerSession(2);
-    const targetSd = sdRow('SD-ABOVE-001', 4);
-    const liveWorkers = [liveWorker('w-1'), targetSession];
-    const sb = stubSupabase({ liveWorkers, sds: [targetSd], targetSession, targetSd });
-
-    const selfClaimVerdict = classifyDispatchIneligibility(targetSd, { worker_tier_rank: 2, tiering_active: true });
-    expect(selfClaimVerdict).toBeNull();
-    await expect(assertWorkerTierAllowed(sb, {
-      message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-ABOVE-001' },
-    })).resolves.toBeUndefined();
-  });
-
-  it('both ALLOW the same at-or-above-tier claim (two-sided control)', async () => {
-    const targetSession = targetWorkerSession(4);
-    const targetSd = sdRow('SD-ELIGIBLE-001', 4);
-    const liveWorkers = [liveWorker('w-1'), targetSession];
-    const sb = stubSupabase({ liveWorkers, sds: [targetSd], targetSession, targetSd });
-
-    expect(classifyDispatchIneligibility(targetSd, { worker_tier_rank: 4, tiering_active: true })).toBeNull();
-    await expect(assertWorkerTierAllowed(sb, {
-      message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker', payload: { assigned_sd: 'SD-ELIGIBLE-001' },
-    })).resolves.toBeUndefined();
-  });
-});
+// FR-4's "above_worker_tier agreement between the two real call sites" describe block is retired:
+// both tests called assertWorkerTierAllowed, deleted by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001
+// (chairman ratification 20dc072b).
