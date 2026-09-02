@@ -1505,11 +1505,17 @@ async function isSdInFlight(sb, sdKey, mySessionId) {
 
 /**
  * FR-2 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): CAS-guarded clear of a stale claim that
- * points at a terminal/parked SD. Mirrors lib/claim-validity-gate.js:351-355. Two writes, each
+ * points at a terminal/parked SD. Mirrors lib/claim-validity-gate.js:351-355. Three writes, each
  * guarded by THIS session_id so it can NEVER clobber a peer that legitimately took over:
  *   (1) claude_sessions — co-null sd_key + worktree_path + worktree_branch TOGETHER
  *       (the ck_claude_sessions_worktree_state_consistency constraint rejects a partial clear);
  *   (2) strategic_directives_v2 — clear is_working_on / active_session_id / claiming_session_id.
+ *   (3) quick_fixes — clear claiming_session_id (QF-20260824-154: sdKey CAN be a QF-shaped id --
+ *       self_claimed_qf writes a QF id into claude_sessions.sd_key -- and (2)'s predicate never
+ *       matches a quick_fixes row, so without this a stale QF claim's OWN claiming_session_id was
+ *       never released here: a soft-orphan invisible to dispatch until some OTHER path happened
+ *       to clear it. The predicate itself is the guard, same design as (2), so it safely no-ops
+ *       for an SD-shaped sdKey (no matching quick_fixes row).
  * Never throws (fail-open): a failure just leaves the stale pointer, and self-claim still proceeds.
  */
 async function selfHealStaleClaim(sb, sessionId, sdKey) {
@@ -1524,6 +1530,12 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
       .update({ is_working_on: false, active_session_id: null, claiming_session_id: null })
       .eq('sd_key', sdKey)
       .eq('claiming_session_id', sessionId); // CAS: only while the SD is still ours
+  } catch { /* fail-open */ }
+  try {
+    await sb.from('quick_fixes')
+      .update({ claiming_session_id: null })
+      .eq('id', sdKey)
+      .eq('claiming_session_id', sessionId); // CAS: only while the QF is still ours
   } catch { /* fail-open */ }
   // SD-LEO-FEAT-FLEET-SESSION-LIFECYCLE-001 / FR-1b slice 5, behind
   // LEO_RELEASE_WORKITEM_RESET (default OFF). A genuine hand-back: this session is abandoning
