@@ -15,6 +15,8 @@ import {
   buildClerkTestModeIdentity,
   CLERK_TEST_MODE_FIXED_CODE,
   getClerkTestingKeys,
+  submitCodeStep,
+  redactCodeStepText,
 } from '../../../lib/apa/venture-step-executors.js';
 import * as imapCodeFetcher from '../../../lib/apa/imap-code-fetcher.js';
 import * as clerkTesting from '@clerk/testing/playwright';
@@ -35,13 +37,53 @@ vi.mock('@clerk/testing/playwright', () => ({
   setupClerkTestingToken: vi.fn(),
 }));
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '' } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '', codeFormButtons = null, hasCodeForm = true, codeInputCompletes = true, fillNavigations = {} } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
   // QF-20260902-614: getByRole('button', ...) is called fresh at each of the source module's
   // 3 submit points (sign-in, sign-up, verify) -- a per-matchedText count here (not a
   // per-locator-instance one) lets clickNavigationsSequence answer differently per submit.
   const clickCallCounts = {};
+  // QF-20260902-952: shared by both the named getByRole(button, {name}) locator below AND the
+  // role-only button roster (submitCodeStep's code-form scan) so a click on either path
+  // advances the SAME clickNavigationsSequence index, in physical call order.
+  function clickButtonByText(matchedText) {
+    calls.click.push(matchedText ?? '<no-match>');
+    if (matchedText !== undefined) {
+      const seq = clickNavigationsSequence[matchedText];
+      if (seq) {
+        const idx = clickCallCounts[matchedText] || 0;
+        clickCallCounts[matchedText] = idx + 1;
+        const dest = seq[Math.min(idx, seq.length - 1)];
+        if (dest !== undefined) url = dest;
+      } else if (Object.prototype.hasOwnProperty.call(clickNavigations, matchedText)) {
+        url = clickNavigations[matchedText];
+      }
+    }
+  }
+  // QF-20260902-952: the button roster submitCodeStep's role-only getByRole('button') scan
+  // sees -- defaults to buttonTexts (visible+enabled) so a fixture that never sets this new
+  // option behaves exactly as it did before this helper existed.
+  function buttonRoster() {
+    return codeFormButtons ?? buttonTexts.map((t) => ({ name: t, visible: true, enabled: true }));
+  }
+  function makeRosterLocator() {
+    const buttons = buttonRoster();
+    const nth = (i) => {
+      const b = buttons[i];
+      return {
+        textContent: async () => (b ? b.name : null),
+        isVisible: async () => !!(b && b.visible),
+        isEnabled: async () => !!(b && b.enabled),
+        click: async () => clickButtonByText(b ? b.name : undefined),
+        waitFor: async ({ state } = {}) => {
+          if (state === 'visible' && b && b.visible) return;
+          throw new Error(`waitFor timeout: role-only button[${i}] not ${state}`);
+        },
+      };
+    };
+    return { count: async () => buttons.length, nth, first: () => nth(0) };
+  }
   return {
     calls,
     async goto(gotoUrl) {
@@ -54,26 +96,16 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
     // Playwright's DOM-order resolution -- this is the exact mechanism QF-20260902-206 depends
     // on: Clerk's live card renders "Continue with Google" before "Continue", so a caller must
     // match by EXACT name (never a substring) to land on the right button.
+    // QF-20260902-952: name omitted entirely -> role-only lookup, used by submitCodeStep's
+    // code-form button scan (any accessible name).
     getByRole(role, { name } = {}) {
       if (role !== 'button') throw new Error(`mock getByRole: unsupported role "${role}"`);
+      if (name === undefined) return makeRosterLocator();
       const matches = (text) => (name instanceof RegExp ? name.test(text) : text === name);
       const matchedText = buttonTexts.find(matches);
       const exists = matchedText !== undefined;
       const locator = {
-        click: async () => {
-          calls.click.push(matchedText ?? `<getByRole:no-match:${name}>`);
-          if (matchedText !== undefined) {
-            const seq = clickNavigationsSequence[matchedText];
-            if (seq) {
-              const idx = clickCallCounts[matchedText] || 0;
-              clickCallCounts[matchedText] = idx + 1;
-              const dest = seq[Math.min(idx, seq.length - 1)];
-              if (dest !== undefined) url = dest;
-            } else if (Object.prototype.hasOwnProperty.call(clickNavigations, matchedText)) {
-              url = clickNavigations[matchedText];
-            }
-          }
-        },
+        click: async () => clickButtonByText(matchedText),
         textContent: async () => matchedText ?? null,
         waitFor: async ({ state } = {}) => {
           if (state === 'visible' && exists) return;
@@ -118,10 +150,30 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
         // called by the source module (a generic post-submit-state snapshot on the "neither"
         // auth failure) -- this fixture just echoes the configured bodyText.
         innerText: async () => bodyText,
+        // QF-20260902-952: nested scoping (page.locator(codeInput).locator('xpath=ancestor::
+        // form[1]')) -- hasCodeForm toggles whether a form ancestor "exists" in the fixture;
+        // its role-only getByRole('button') shares the same roster as the page-wide fallback.
+        locator() {
+          const formCount = hasCodeForm ? 1 : 0;
+          return {
+            count: async () => formCount,
+            getByRole(role2) {
+              if (role2 !== 'button') throw new Error(`mock getByRole: unsupported role "${role2}"`);
+              return makeRosterLocator();
+            },
+          };
+        },
       };
       return locator;
     },
-    async fill(selector, value) { calls.fill.push([selector, value]); },
+    async fill(selector, value) {
+      calls.fill.push([selector, value]);
+      // QF-20260902-952: simulates an auto-submitting control whose fill alone (no click)
+      // flips the URL -- e.g. Clerk's OTP card completing on the sixth digit.
+      if (Object.prototype.hasOwnProperty.call(fillNavigations, selector)) {
+        url = fillNavigations[selector];
+      }
+    },
     // clickNavigations lets a fixture simulate a click causing real navigation (e.g. an
     // "Continue" selector that matches more than one button, actually hitting "Continue with Google" and redirecting
     // off-origin) -- the post-click url() call then reflects the new location, matching real
@@ -133,8 +185,138 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       }
     },
     url: () => url,
+    // QF-20260902-952: submitCodeStep's DOM-completion check. codeInputCompletes=false
+    // simulates the input never reporting its own completion state within the timeout.
+    async waitForFunction() {
+      if (codeInputCompletes) return true;
+      throw new Error('waitForFunction timeout: code input never reported completion');
+    },
   };
 }
+
+// QF-20260902-952: direct fixture tests for the shared code-step helper, per the ticket's own
+// FIX section -- "unit tests on fixtures: button named Verify email -> clicked and passes; no
+// button plus URL flip -> passes as auto-submit; no button and no flip -> fails with the
+// census in the message".
+describe('submitCodeStep() (QF-20260902-952)', () => {
+  const CODE_INPUT = 'input[name="code"], input[autocomplete="one-time-code"]';
+  const EXPECTED_ORIGIN = 'http://fixture';
+
+  it('a button named "Verify email" within the code form is clicked and the step passes', async () => {
+    vi.useFakeTimers();
+    try {
+      const page = makeMockPage({
+        currentUrl: 'http://fixture/sign-in',
+        codeFormButtons: [{ name: 'Verify email', visible: true, enabled: true }],
+        clickNavigationsSequence: { 'Verify email': ['http://fixture/dashboard'] },
+      });
+      // The mock never auto-submits (url only flips on click), so the first auth-vs-submit
+      // race must fully elapse before submitCodeStep falls back to clicking.
+      const capture = submitCodeStep(page, EXPECTED_ORIGIN, '424242');
+      await vi.advanceTimersByTimeAsync(16000);
+      const result = await capture;
+      expect(result.authenticated).toBe(true);
+      expect(result.branch).toBe('clicked:Verify email');
+      expect(result.clickedButtonText).toBe('Verify email');
+      expect(page.calls.fill).toContainEqual([CODE_INPUT, '424242']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('no button in the code form, but the URL flips after fill -- passes as auto-submit, never clicks', async () => {
+    const page = makeMockPage({
+      currentUrl: 'http://fixture/sign-in',
+      codeFormButtons: [],
+      fillNavigations: { [CODE_INPUT]: 'http://fixture/dashboard' },
+    });
+    const result = await submitCodeStep(page, EXPECTED_ORIGIN, '424242');
+    expect(result.authenticated).toBe(true);
+    expect(result.branch).toBe('auto_submit');
+    expect(result.clickedButtonText).toBeNull();
+    expect(page.calls.click).toEqual([]);
+  });
+
+  it('no button and no URL flip -- fails, and the after-snapshot carries the button census', async () => {
+    vi.useFakeTimers();
+    try {
+      const page = makeMockPage({
+        currentUrl: 'http://fixture/sign-in', // never changes -- neither signal ever fires
+        codeFormButtons: [],
+      });
+      const capture = submitCodeStep(page, EXPECTED_ORIGIN, '424242');
+      await vi.advanceTimersByTimeAsync(16000);
+      const result = await capture;
+      expect(result.authenticated).toBe(false);
+      expect(result.branch).toBe('neither');
+      expect(result.snapshotAfter.buttons).toEqual([]);
+      // This is exactly the payload both call sites embed in their thrown error message --
+      // proving the census is genuinely available to appear in a real failure's error text.
+      expect(JSON.stringify(result.snapshotAfter.buttons)).toBe('[]');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a disabled button is never clicked -- treated as "not a submit yet", not a click target', async () => {
+    vi.useFakeTimers();
+    try {
+      const page = makeMockPage({
+        currentUrl: 'http://fixture/sign-in',
+        codeFormButtons: [{ name: 'Verify', visible: true, enabled: false }],
+      });
+      const capture = submitCodeStep(page, EXPECTED_ORIGIN, '424242');
+      await vi.advanceTimersByTimeAsync(16000);
+      const result = await capture;
+      expect(result.authenticated).toBe(false);
+      expect(result.branch).toBe('neither');
+      expect(page.calls.click).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stamps a before/after snapshot with page url and the redacted page text', async () => {
+    vi.useFakeTimers();
+    try {
+      const page = makeMockPage({
+        currentUrl: 'http://fixture/sign-in',
+        codeFormButtons: [{ name: 'Verify email', visible: true, enabled: true }],
+        clickNavigationsSequence: { 'Verify email': ['http://fixture/dashboard'] },
+        bodyText: 'Enter the code sent to tester+clerk_test@example.com',
+      });
+      const capture = submitCodeStep(page, EXPECTED_ORIGIN, '424242');
+      await vi.advanceTimersByTimeAsync(16000);
+      const result = await capture;
+      expect(result.snapshotBefore.url).toBe('http://fixture/sign-in');
+      expect(result.snapshotBefore.page_text).toBe('Enter the code sent to [email]');
+      expect(result.snapshotAfter.url).toBe('http://fixture/dashboard');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('redactCodeStepText() (QF-20260902-952)', () => {
+  it('redacts the entered code value', () => {
+    expect(redactCodeStepText('your code is 424242 today', '424242')).toBe('your code is [code] today');
+  });
+
+  it('redacts an email address', () => {
+    expect(redactCodeStepText('sent to tester+clerk_test@example.com', null)).toBe('sent to [email]');
+  });
+
+  it('grep-assert: never lets an sk_/pk_ key through, live or test', () => {
+    const text = redactCodeStepText('leaked sk_test_abc123 and pk_live_def456 in the page', null);
+    expect(text).not.toMatch(/\b(sk|pk)_(test|live)_\w+/);
+    expect(text).toBe('leaked [key] and [key] in the page');
+  });
+
+  it('passes through null/empty unchanged', () => {
+    expect(redactCodeStepText(null, '424242')).toBeNull();
+    expect(redactCodeStepText('', '424242')).toBe('');
+  });
+});
 
 describe('getTestCredential()', () => {
   const ENV_KEY = 'VENTURE_UAT_TEST_ACCOUNT_TESTVENTURE';
@@ -915,10 +1097,12 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
         (v) => { throw new Error(`expected executor to throw, but it resolved with ${JSON.stringify(v)}`); },
         (err) => { caught = err; },
       );
-      // Two sequential real-timer 15s polls now: the sign-in leg's race, then the sign-up leg's
-      // own race (Solomon fix shape 85cd494b) -- both must fully elapse before the mocked
-      // signUpCodeChallenge (instant) and the dashboard-navigating verify click resolve things.
-      await vi.advanceTimersByTimeAsync(32000);
+      // THREE sequential 15s races now, not two: the sign-in leg's race, the sign-up leg's own
+      // race (Solomon fix shape 85cd494b), and submitCodeStep's own auth-vs-submit race
+      // (QF-20260902-952) -- the code input never auto-submits in this fixture (only the
+      // explicit "3rd Continue click" navigates to /dashboard), so submitCodeStep's poll must
+      // fully elapse before it falls back to clicking the code-form submit.
+      await vi.advanceTimersByTimeAsync(48000);
       await capture;
 
       expect(caught).toBeInstanceOf(Error);

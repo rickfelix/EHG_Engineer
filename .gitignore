@@ -374,6 +374,10 @@ src/client/dist/
 # NOTE: scripts/one-off/_* and .rca/_* are deliberately NOT ignored — 175 and 6 such files are already
 # tracked, so committing _-prefixed scripts there is established practice; ignoring would silently block it.
 .claude/last-outcome-*.json
+# .claude/wake-arm-*.json: QF-20260902-685 (Solomon sharpening) — ScheduleWakeup arm-silence
+# markers, per-session harness state, never committed (0 tracked). Left unprotected before this,
+# so the SAME class of file both complete-quick-fix.js incidents swept in was also leakable.
+.claude/wake-arm-*.json
 .prd-payloads/_*
 .claude-code-config.json
 .claude-status-line
