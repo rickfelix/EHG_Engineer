@@ -992,20 +992,30 @@ RLS disabled, one (`claim_rejects`) carrying a `session_id` column. Confirmed li
 `information_schema.role_table_grants`: `venture_preview_instances` grants BOTH `anon` and
 `authenticated` full `SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE` with RLS off — an
 unauthenticated read/write/delete surface via PostgREST today. Confirmed via repo-wide grep that
-none of the 12 tables are referenced by any frontend/client code — every known consumer
+none of the remaining tables are referenced by any frontend/client code — every known consumer
 (`lib/venture-deploy/preview.js`, `lib/eva/stage-templates/analysis-steps/stage-24-go-live.js`,
 plus backend cron/automation) already uses the service role, which bypasses RLS regardless.
 
+**CORRECTED 2026-09-02 (SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001):** this file originally included
+`north_star` and `scope_completion_chain` in the blanket enable+revoke below — a regression against
+the earlier, independently-verified `20260825_enable_rls_chronic_red_guard_zero_consumer_tables.sql`
+(below), which had already found and documented that both tables have real live consumers a bare
+no-policy RLS-enable would silently break. Both were removed from this file's executable
+statements; they are closed correctly instead by
+`20260902_security_linter_sentinel_north_star_and_chain.sql` (below) plus the pre-existing
+`database/migrations/20260616_security_hygiene_rls_searchpath.sql`. **The file below now covers
+10 tables, not 12** — see the file's own header for the full correction rationale.
+
 ### What it does
-- `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 12 tables (no policies added — default-deny
-  for anon/authenticated; service_role is unaffected).
-- `REVOKE INSERT, UPDATE, DELETE, TRUNCATE ... FROM anon, authenticated` on all 12 tables.
+- `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on the 10 tables listed below (no policies added —
+  default-deny for anon/authenticated; service_role is unaffected).
+- `REVOKE INSERT, UPDATE, DELETE, TRUNCATE ... FROM anon, authenticated` on the same 10 tables.
 - Mirrors `20260731_coordination_receipts_rls_posture.sql` exactly — same reasoning, same shape.
 
 Tables: `claim_rejects`, `coverage_matrix`, `coverage_matrix_rotation_runs`,
-`door_routing_ledger`, `north_star`, `scope_completion_chain`, `selection_postures`,
-`sourcing_chairman_queue`, `v_hc_flag_enabled`, `v_id`, `v_s22_flag_enabled`,
-`venture_preview_instances`.
+`door_routing_ledger`, `selection_postures`, `sourcing_chairman_queue`, `v_hc_flag_enabled`,
+`v_id`, `v_s22_flag_enabled`, `venture_preview_instances`. (`north_star` and
+`scope_completion_chain` removed — see the correction note above.)
 
 **Apply (chairman ceremony):**
 ```bash
@@ -1016,8 +1026,48 @@ MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
 ```
 
 **Post-apply verification**: `node scripts/sentinels/audit-security-linter.mjs --strict` —
-`rls_disabled_in_public` and `sensitive_columns_exposed` should both drop to 0.
+`rls_disabled_in_public` should drop by 10 (the remaining 2 close via the paired migration below)
+and `sensitive_columns_exposed` should drop to 0.
 
 Rollback: `20260831_rls_lockdown_triage_three_failing_001_DOWN.sql` — restores the exact
 pre-migration grants and re-disables RLS (re-opens the exposure; only apply if an undiscovered
-legitimate anon/authenticated caller surfaces post-apply).
+legitimate anon/authenticated caller surfaces post-apply). **⚠️ KNOWN GAP, not yet fixed**: as of
+this writing the DOWN file still lists `north_star` and `scope_completion_chain` even though the
+UP file no longer touches either — applying it as-is would incorrectly DISABLE RLS and re-GRANT
+write access on those two tables, undoing the separate `20260902` migration's work. Regenerate the
+DOWN file to match the corrected UP file's 10-table list before ever using it. Tracked as a
+completion-flag finding on SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001.
+
+## Applying `20260902_security_linter_sentinel_north_star_and_chain.sql`
+
+**SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001.** Closes the 2 tables `20260831` above deliberately
+excludes (`north_star`, `scope_completion_chain`) plus the `function_search_path_mutable` finding
+for `set_session_awaiting_approval` (a fresh SECURITY DEFINER regression from
+`database/migrations/20260901_session_awaiting_approval_rpc.sql`, discovered live — the SD was
+originally scoped assuming only 1 mutable-search_path function existed; measurement found 2).
+
+### What it does
+- `north_star`: `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` + a real `SELECT` policy for
+  `anon, authenticated` scoped to `status = 'chairman_ratified'` (matching the real consumer's own
+  query filter, `ehg` repo's `useNorthStar.ts`) + the matching write-grant `REVOKE`.
+- `scope_completion_chain`: write-grant `REVOKE` only — its `ENABLE ROW LEVEL SECURITY` + read
+  policy are staged separately in `database/migrations/20260616_security_hygiene_rls_searchpath.sql`
+  (apply both together for this table's full closure; this file's own `DO $verify$` block prints a
+  non-blocking `RAISE WARNING` if that other file has not landed yet).
+- `set_session_awaiting_approval`: `ALTER FUNCTION ... SET search_path = public, pg_catalog`.
+
+**Apply (chairman ceremony):**
+```bash
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260902_security_linter_sentinel_north_star_and_chain.sql" \
+  --prod-deploy --allow-any-path
+```
+
+**Post-apply verification**: `node scripts/sentinels/audit-security-linter.mjs --strict` — combined
+with `20260831` above and `database/migrations/20260616_security_hygiene_rls_searchpath.sql`, all 3
+finding classes (`rls_disabled_in_public`, `sensitive_columns_exposed`,
+`function_search_path_mutable`) should read 0.
+
+No separate rollback file — see the migration's own header for the (small, purely additive)
+DOWN statements if ever needed (drop the policy, re-grant, re-disable RLS, unset search_path).

@@ -6,6 +6,7 @@
 - [2026-09-02](#2026-09-02)
   - [Infrastructure](#infrastructure-5)
   - [Bugfix](#bugfix)
+  - [Security](#security)
 - [2026-09-01](#2026-09-01)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -218,6 +219,13 @@
   - `scripts/generate-comprehensive-retrospective.js`'s `whatNeedsImprovement` fallback used 3 hardcoded, SD-agnostic literal strings whenever an SD had fewer than 3 real handoff challenges. Because the same strings landed in dozens of unrelated retrospectives, `/learn`'s pattern-detector clustered the identical text as two false "recurring patterns" (37 occurrences each) — not evidence of a real, repeated documentation or performance gap.
   - The sibling fillers (`achievementFiller`, `learningFiller`, `actionFiller`) were already fixed by QF-20260822-453 to derive per-SD-specific text; `whatNeedsImprovement` was never migrated to that pattern, which is why the defect class kept recurring after that fix shipped.
   - Adds `challengeFiller()` mirroring the existing pattern: always returns exactly 3 entries (preserves the DB trigger's `>=3`-item scoring threshold), avoids phrasing the trigger penalizes, and keeps the plain-string-array shape the DB trigger reads positionally.
+
+### Security
+
+- **Stage RLS remediation for all 12 security-linter-sentinel findings** - SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001
+  - `security-linter-sentinel.yml --strict` had failed every scheduled run for weeks on 3 real, enforced findings: 12 public tables with RLS disabled (including `venture_preview_instances`, a live unauthenticated read/write/delete surface via PostgREST), 1 with a `session_id` column exposed, and 2 SECURITY DEFINER functions with a mutable `search_path`. All 3 are now closed by staged migrations covering every flagged table with a correctly-scoped fix (a real read policy for the 2 tables with live consumers, bare enable+revoke for the other 10) — none applied to prod by the worker; all await the chairman's 3-factor apply ceremony.
+  - Found and corrected a live regression in a pre-existing, unapplied staged migration from a different, already-completed SD (`database/chairman-gated/20260831_rls_lockdown_triage_three_failing_001.sql`): it had blindly re-included `north_star` and `scope_completion_chain` in a blanket no-policy RLS-enable+revoke, which would have silently broken `north_star`'s real live anon-key browser consumer and the `scope_completion_chain` UNION branch of `writer_consumer_asymmetry_witnesses` — exactly what an earlier, evidence-verified migration had deliberately excluded both tables to avoid.
+  - No `exempted-tables.json` changes: every flagged table gets a real, narrowly-scoped RLS fix instead of a permanent app-level exemption.
 
 ## 2026-09-01
 
