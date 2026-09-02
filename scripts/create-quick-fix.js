@@ -403,7 +403,7 @@ async function createQuickFix(options = {}) {
   // exists (backlog b06e04f8). The common no-feedback-id path is behaviorally
   // identical — insert simply moves ahead of the skipped pre-claim.
 
-  // Route once; the same decision drives initial status (escalated vs open) and is reused below.
+  // Route once; the same decision drives initial status and is reused below.
   const scopeText = [expected, actual].filter(Boolean).join('\n');
   const routingDecision = await routeWorkItem({
     estimatedLoc,
@@ -413,7 +413,14 @@ async function createQuickFix(options = {}) {
     entryPoint: 'create-quick-fix',
   }, supabase);
   const isTier3 = routingDecision.tier === 3;
-  const initialStatus = isTier3 ? 'escalated' : 'open';
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 follow-up: a fresh Tier-3 mint never has an SD
+  // to link at creation time, so writing status='escalated' here produced the exact stranded
+  // shape (escalated, escalated_to_sd_id NULL) that SD's single-writer invariant exists to
+  // prevent -- this mint-time path was an 8th call site the SD's original 7-site inventory
+  // missed. Stays 'open' with routing_tier=3 (the needs_sd shape: isNeedsSdRow in
+  // lib/quick-fix/status-writer.cjs), matching classify-quick-fix.js's identical fix for the
+  // identical situation (Tier-3 hit, no SD yet).
+  const initialStatus = 'open';
 
   // QF-20260902-185: the id's random 3-digit daily suffix has no collision retry, so on
   // a busy day (34+ QF-<date>-* rows already minted) a fresh mint can land on a taken
@@ -576,7 +583,7 @@ async function createQuickFix(options = {}) {
     console.log('   2. Run: node scripts/add-prd-to-database.js SD-XXX');
     console.log('   3. Follow full LEAD→PLAN→EXEC workflow\n');
     console.log(`✅ Quick-fix record created: ${qfId}`);
-    console.log('   Status: ESCALATED (requires full SD)');
+    console.log('   Status: open, routing_tier=3 (awaiting SD -- requires full SD)');
     return { escalated: true, qfId, data };
   }
 
