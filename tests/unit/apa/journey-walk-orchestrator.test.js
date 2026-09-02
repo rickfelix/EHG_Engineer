@@ -48,7 +48,7 @@ function makeDeps(overrides = {}) {
     ...overrides,
   };
 
-  return { deps, teardown, supabaseUpdate, supabaseSingle, sdMetadata };
+  return { deps, teardown, supabaseUpdate, supabaseSingle, sdMetadata, supabase, fromChain };
 }
 
 describe('runVentureJourneyWalk() — no journey steps', () => {
@@ -244,5 +244,22 @@ describe('runVentureJourneyWalk() — stamps metadata.journey_walk_result', () =
     const result = await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
     expect(result.status).toBe('fail');
     expect(result.testRunId).toBe('run-1');
+  });
+
+  it('QF-20260901-063: looks up by sd_key when sdId is a human-readable SD-KEY (not a UUID)', async () => {
+    const { deps, fromChain } = makeDeps();
+
+    await runVentureJourneyWalk({ sdId: 'SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-002', ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    expect(fromChain.eq).toHaveBeenCalledWith('sd_key', 'SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-002');
+  });
+
+  it('QF-20260901-063: looks up by id when sdId is a UUID (e.g. orchestrator.id from db-sourced-findings.js)', async () => {
+    const uuid = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
+    const { deps, fromChain } = makeDeps();
+
+    await runVentureJourneyWalk({ sdId: uuid, ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    expect(fromChain.eq).toHaveBeenCalledWith('id', uuid);
   });
 });
