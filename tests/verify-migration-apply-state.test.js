@@ -11,6 +11,7 @@ import {
   extractDdlFacts, orderMigrations, foldLifecycle, classifyFiles, ARTIFACT_RE,
   isRecent, partitionRecentGaps, migrationDateToken, RETIRED_BEFORE,
   hasAnyDbCredential, OUTCOME, summarizeResults, DEFAULT_EXTRA_ROOTS,
+  partitionBlockingFailSet,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -226,6 +227,49 @@ describe('summarizeResults — CEREMONY_PENDING counts as a gap (FR-3)', () => {
     const { summary, gaps } = summarizeResults(results, { scanned: 5 });
     expect(summary).toMatchObject({ applied: 1, partial: 1, not_applied: 1, no_ddl: 1, ceremony_pending: 1 });
     expect(gaps.map((g) => g.file).sort()).toEqual(['b.sql', 'c.sql', 'database/chairman-gated/e.sql']);
+  });
+});
+
+// QF-20260824-600 (ladder decision e38f6e14, approved by Adam 0549d739): the drift-guard's
+// blocking predicate must warn (not block) on a CEREMONY_PENDING chairman-gated file, while
+// every other committed-but-unapplied migration keeps hard-blocking. The fixture pair below
+// is the QF's own literal ask: (a) chairman-gated blank-approval -> non-blocking; (b) ordinary
+// unapplied migration -> still blocking.
+describe('partitionBlockingFailSet — CEREMONY_PENDING warns, does not block (QF-20260824-600)', () => {
+  it('fixture (a): a chairman-gated CEREMONY_PENDING-only fail set is non-blocking (would run green)', () => {
+    const failSet = [{ file: 'database/chairman-gated/20260824_gated.sql', status: 'CEREMONY_PENDING', missing: [] }];
+    const { ceremonyPendingFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
+    expect(blockingFailSet).toHaveLength(0);
+    expect(ceremonyPendingFailSet).toHaveLength(1);
+  });
+
+  it('fixture (b): an ordinary unapplied migration outside chairman-gated stays blocking (would run red)', () => {
+    const failSet = [{ file: '20260824_ordinary.sql', status: 'NOT_APPLIED', missing: [] }];
+    const { ceremonyPendingFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
+    expect(blockingFailSet).toHaveLength(1);
+    expect(ceremonyPendingFailSet).toHaveLength(0);
+  });
+
+  it('a MIX of both in the same run still blocks -- CEREMONY_PENDING never masks a real gap', () => {
+    const failSet = [
+      { file: 'database/chairman-gated/20260824_gated.sql', status: 'CEREMONY_PENDING', missing: [] },
+      { file: '20260824_ordinary.sql', status: 'NOT_APPLIED', missing: [] },
+    ];
+    const { ceremonyPendingFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
+    expect(blockingFailSet.map((g) => g.file)).toEqual(['20260824_ordinary.sql']);
+    expect(ceremonyPendingFailSet).toHaveLength(1);
+  });
+
+  it('an empty fail set partitions to two empty sets', () => {
+    const { ceremonyPendingFailSet, blockingFailSet } = partitionBlockingFailSet([]);
+    expect(blockingFailSet).toHaveLength(0);
+    expect(ceremonyPendingFailSet).toHaveLength(0);
+  });
+
+  it('PARTIAL status outside chairman-gated (never CEREMONY_PENDING, per classifyFiles) still blocks', () => {
+    const failSet = [{ file: '20260824_half_applied.sql', status: 'PARTIAL', missing: [{ cls: 'table', name: 'x' }] }];
+    const { blockingFailSet } = partitionBlockingFailSet(failSet);
+    expect(blockingFailSet).toHaveLength(1);
   });
 });
 
