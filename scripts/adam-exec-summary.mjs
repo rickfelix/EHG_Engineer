@@ -349,6 +349,22 @@ try {
   console.warn('[adam-email] ops-actuals lines skipped (fail-soft): ' + (e?.message || e));
 }
 
+// ── 2f. PER-ACCOUNT COST METRIC (SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-4) ──
+// Completed handoffs attributed to a named account via claude_sessions.metadata, joined on
+// leo_handoff_executions.created_by = session_id. Fail-soft: never throws, degrades to [].
+// A host_default-sourced attribution is rendered distinctly from a measured one (coordinator
+// ruling 1cbade73) -- never presented as an equally-authoritative per-account read.
+let accountHandoffLines = [];
+try {
+  const { computeHandoffsByAccount, summarizeByAccount } = await import('../lib/fleet/handoff-account-attribution.cjs');
+  const { rows } = await computeHandoffsByAccount(db, {});
+  accountHandoffLines = summarizeByAccount(rows)
+    .filter((s) => s.source !== 'unattributed')
+    .map((s) => `${s.account_org_name || s.account_uuid8}${s.source === 'host_default' ? ' (host-default, unverified)' : ''}: ${s.completed_handoffs} completed handoff(s)`);
+} catch (e) {
+  console.warn('[adam-email] account-handoff lines skipped (fail-soft): ' + (e?.message || e));
+}
+
 // ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
 const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
 const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
@@ -432,6 +448,8 @@ const text = [
   // SD-LEO-INFRA-USAGE-PASTE-LEDGER-001 (FR-3): 0-3 lines, silent when no active risk.
   ...capacityLines.map((l) => '   ' + l),
   ...(opsActualsLines.length ? ['', 'Venture actuals:', ...opsActualsLines.map((l) => '   ' + l)] : []),
+  // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 (FR-4): completed handoffs per named account.
+  ...(accountHandoffLines.length ? ['', 'Completed handoffs by account:', ...accountHandoffLines.map((l) => '   ' + l)] : []),
   ...(recentText ? ['', recentText] : []),
   ...(decisionsLine ? [decisionsLine] : []),
   '',
@@ -468,6 +486,11 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   (opsActualsLines.length
     ? `<p style="font-size:13px;font-weight:600;margin:8px 0 0">Venture actuals:</p>` +
       opsActualsLines.map((l) => `<div style="font-size:12px;color:#444;margin:2px 0 0">${esc(l)}</div>`).join('')
+    : '') +
+  // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 (FR-4): completed handoffs per named account.
+  (accountHandoffLines.length
+    ? `<p style="font-size:13px;font-weight:600;margin:8px 0 0">Completed handoffs by account:</p>` +
+      accountHandoffLines.map((l) => `<div style="font-size:12px;color:#444;margin:2px 0 0">${esc(l)}</div>`).join('')
     : '') +
   recentHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
