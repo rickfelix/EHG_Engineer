@@ -233,6 +233,37 @@ describe('assertSendBackpressure (unit)', () => {
     await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
   });
 
+  // QF-20260902-962: the WORKER_SIGNAL friction lane never sets payload.kind — it keys on
+  // payload.signal_type — so it never matched the kind-keyed exemption and was refused as
+  // routine backpressure, which was witnessed becoming a --bypass-validation false completion.
+  it('every worker-signal type bypasses the limit even when choked (signal_type exemption)', async () => {
+    for (const signalType of ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other']) {
+      const { sb } = stubSupabase({ unanswered: BACKPRESSURE_UNANSWERED_LIMIT + 5 });
+      await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { signal_type: signalType } }, silentLog)).resolves.toBeUndefined();
+    }
+  });
+
+  it('a signal_type bypass logs loudly (never a quiet exemption)', async () => {
+    const { sb } = stubSupabase({ unanswered: 99 });
+    const lines = [];
+    await assertSendBackpressure(sb, { target_session: TARGET, payload: { signal_type: 'harness-bug' } }, { warn: (m) => lines.push(m) });
+    expect(lines.join('\n')).toMatch(/BACKPRESSURE_EXEMPT/);
+  });
+
+  it('a routine advisory (no signal_type) is still refused at the cap', async () => {
+    const { sb } = stubSupabase({ unanswered: BACKPRESSURE_UNANSWERED_LIMIT });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { kind: 'coordinator_update' } }, silentLog))
+      .rejects.toMatchObject({ code: 'DISPATCH_BACKPRESSURE' });
+  });
+
+  it('does not count signal_type rows in the candidate population', async () => {
+    const rows = Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT + 2 }, (_, i) => ({
+      id: `signal-${i}`, payload: { signal_type: 'harness-bug' },
+    }));
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+
   it('still refuses when the NON-exempt, non-reply population meets the limit', async () => {
     const rows = [
       { id: 'exempt-1', payload: { kind: 'collision_warning' } },
