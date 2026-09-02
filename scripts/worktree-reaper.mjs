@@ -82,6 +82,7 @@ import {
   isZombieOnMain,
   isNested,
   hasOrphanSD,
+  hasHardKeep,
   isPatchEquivalentToMain,
   isIdle,
   isOutsideWorktreesDir,
@@ -1547,6 +1548,34 @@ export async function main(argv = process.argv) {
       records.push(rec);
       emitJsonLine(rec);
       console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, verdict: 'keep:active', preserveCount: 0 }));
+      continue;
+    }
+
+    // QF-20260902-837 (Solomon sharpening 755354cc): a worktree carrying unpushed commits,
+    // a dirty tree, a live claude_sessions resident (worktree_path match + fresh heartbeat),
+    // or a git worktree lock is a HARD KEEP evaluated BEFORE the basename/orphan-sd/idle
+    // rule -- the 'idle' category is age-only and does not know about any of these, so
+    // without this gate a live-but-idle ad-hoc worktree still reaches stage2_remove. All
+    // four measured values are printed so a future --execute is auditable.
+    const residency = await heartbeatResidencyBlocksRemoval(supabase, wt.path, { logger: () => {} });
+    const hardKeep = hasHardKeep({
+      unpushedCount,
+      dirtyCount: dirty.dirtyCount,
+      locked: wt.locked,
+      liveSessionResident: residency.blocked,
+    });
+    if (hardKeep.matched) {
+      const evidence = { hard_keep: hardKeep.evidence };
+      if (residency.detail) evidence.hard_keep.live_session_detail = residency.detail;
+      const rec = buildRecord({
+        schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict: 'keep',
+        reason: 'hard_keep_unpushed_dirty_resident_or_locked', claim_status: 'n/a',
+        dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, preserveCount: 0,
+        shipStatus: 'not_on_main', evidence,
+      });
+      records.push(rec);
+      emitJsonLine(rec);
+      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, verdict: 'keep:hard', preserveCount: 0 }));
       continue;
     }
 
