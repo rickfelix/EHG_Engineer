@@ -110,24 +110,33 @@ describe('QF-20260815-288: pre-push EHG_ALLOW_MAIN_PUSH bypass (spawns the real 
 });
 
 describe('QF-20260815-288: the DR-rehearsal workflow sets the bypass on its push', () => {
-  // QF-20260815-099 (PR #7038, merged) fixed this same defect first, via a different (and
-  // better) mechanism than this QF's original patch: EHG_ALLOW_MAIN_PUSH set on the step's
-  // env: block rather than inlined on the push line, and the silent `|| echo "Push skipped"`
-  // fallback REMOVED entirely so a future, unrelated push failure fails the job loudly instead
-  // of hiding behind a green check. This QF was rebased onto that merged fix and shrunk to its
-  // one genuine delta (the spawned-hook tests above); this wiring check now verifies the
-  // ACTUAL merged mechanism instead of the superseded inline-prefix one.
-  it('the "Commit runbook update" step sets EHG_ALLOW_MAIN_PUSH=1 via env: and pushes without a silent fallback', () => {
+  // QF-20260815-099 (PR #7038, merged) fixed a pre-push-hook block on the CI bot's DIRECT push
+  // to main by setting EHG_ALLOW_MAIN_PUSH=1 on that step. QF-20260901-876 replaced the direct
+  // push entirely: branch protection (GH006, a server-side rule distinct from the local
+  // .husky/pre-push hook this describe block's sibling above exercises) was chronically refusing
+  // that same push, so the step now opens a PR via peter-evans/create-pull-request@v6, which
+  // pushes to a side branch (chore/dr-rehearsal-witness), not main -- EHG_ALLOW_MAIN_PUSH's
+  // job (clearing a *main*-branch push block) no longer applies to this workflow. This pin now
+  // verifies the actual current mechanism instead of the superseded direct-push one.
+  it('the runbook-update step opens a PR via create-pull-request instead of pushing to main', () => {
     const yaml = fs.readFileSync(WORKFLOW, 'utf8');
-    const stepStart = yaml.indexOf('Commit runbook update');
+    const stepStart = yaml.indexOf('Open PR for runbook update');
     expect(stepStart, 'workflow step renamed or removed -- update this test to match').toBeGreaterThan(-1);
     const step = yaml.slice(stepStart, stepStart + 2000);
-    expect(step, 'the step must set the bypass via its env: block').toMatch(/EHG_ALLOW_MAIN_PUSH:\s*['"]?1['"]?/);
-    const pushLine = step.split('\n').find((l) => l.trim() === 'git push' || l.includes('git push'));
-    expect(pushLine, 'no git push line found in the Commit runbook update step').toBeTruthy();
-    // Fail-loud by design (#7038): a future push failure must fail the job, not hide behind
-    // a swallowed-error green check -- the exact silent-failure shape this whole QF family exists
-    // to close.
-    expect(pushLine).not.toContain('|| echo');
+    expect(step, 'the step must use create-pull-request, not a direct push').toMatch(/peter-evans\/create-pull-request@v6/);
+    expect(step, 'the step must target the runbook file').toMatch(/ops\/runbooks\/disaster-recovery\.md/);
+    // The mechanism this test used to pin (EHG_ALLOW_MAIN_PUSH + a literal `git push` to main)
+    // must be gone from this step -- its presence would mean the direct-push regression is back.
+    expect(step).not.toMatch(/EHG_ALLOW_MAIN_PUSH/);
+    expect(step.split('\n').some((l) => l.trim() === 'git push')).toBe(false);
+  });
+
+  it('the job has pull-requests: write permission for create-pull-request to open the PR', () => {
+    const yaml = fs.readFileSync(WORKFLOW, 'utf8');
+    const permissionsStart = yaml.indexOf('permissions:');
+    const jobsStart = yaml.indexOf('jobs:');
+    expect(permissionsStart, 'permissions: block not found').toBeGreaterThan(-1);
+    const permissions = yaml.slice(permissionsStart, jobsStart > -1 ? jobsStart : permissionsStart + 500);
+    expect(permissions).toMatch(/pull-requests:\s*write/);
   });
 });

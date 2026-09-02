@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}
@@ -57,30 +58,30 @@ jobs:
         if: always()
         run: node scripts/dr/stamp-rehearsal-result.mjs dr-rehearsal-report.json
 
-      - name: Commit runbook update
+      - name: Open PR for runbook update
+        # QF-20260901-876: branch protection (GH006) refuses a direct push to main,
+        # so a green rehearsal was reading red purely on this witness-commit step.
+        # peter-evans/create-pull-request@v6 (already used by
+        # housekeeping-weekly-report.yml / schema-docs-update.yml for the same
+        # CI-bot record-keeping shape) pushes to a side branch and opens a PR
+        # instead -- it already no-ops cleanly when there is nothing to commit, so
+        # the prior manual `git diff --quiet` gate is redundant and dropped.
         if: always()
+        uses: peter-evans/create-pull-request@v6
         env:
-          # QF-20260815-099: .husky/pre-push's work-tracking guard also blocks this
-          # branch=main push in non-interactive mode (no SD-*/QF-* branch name to
-          # match) — a second, separate hook from the pre-commit one below. Same
-          # narrow justification: additive-only, single-file, CI-bot-authored
-          # record-keeping push, not real development work.
-          EHG_ALLOW_MAIN_PUSH: '1'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          if git diff --quiet ops/runbooks/disaster-recovery.md; then
-            echo "No runbook changes to commit"
-          else
-            git add ops/runbooks/disaster-recovery.md
-            # Narrow, additive-only, single-file, CI-bot-authored record-keeping commit.
-            # Stage 0 of .husky/pre-commit unconditionally blocks commits on branch=main
-            # with no CI-actor exception; this bypasses ONLY that hook for this one commit,
-            # not the branch-guard itself, which stays enforced for real development work.
-            git commit --no-verify -m "chore(dr): record $(date -u +%Y-%m-%d) restore rehearsal result
+          HUSKY: '0'  # Disable pre-commit hooks for automated commits (matches schema-docs-update.yml)
+        with:
+          commit-message: |
+            chore(dr): record restore rehearsal result
 
-          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-          Co-Authored-By: GitHub Actions <noreply@github.com>"
-            git push
-          fi
+            Co-Authored-By: GitHub Actions <noreply@github.com>
+          add-paths: ops/runbooks/disaster-recovery.md
+          branch: chore/dr-rehearsal-witness
+          delete-branch: true
+          title: "chore(dr): record restore rehearsal result"
+          body: |
+            Automated witness update from the DR restore rehearsal cron
+            (`.github/workflows/dr-restore-rehearsal-cron.yml`). See
+            `ops/runbooks/disaster-recovery.md` §7 for the latest result.
