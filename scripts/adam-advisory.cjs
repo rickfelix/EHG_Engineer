@@ -48,7 +48,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
-const { insertCoordinationRow, isSentinelTarget } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
@@ -56,7 +56,6 @@ const { enqueueRelayRequest } = require('../lib/coordinator/relay-queue.cjs');
 const { bodyFromArgv } = require('../lib/coordinator/argv-body.cjs');
 const { MAX_PARTS } = require('../lib/coordinator/multi-part-reply.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, ADAM_EXCLUDED_KINDS, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
-const { CORRECTION_KINDS, CORRECTION_KIND_SET } = require('../lib/coordinator/message-kinds.cjs');
 // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument routing predicate
 // (consumes the -B framing_class contract; FRAMING_CLASSES matching now lives in the router).
 const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-router.cjs');
@@ -65,6 +64,9 @@ const { routeFraming, FRAMING_ROUTES } = require('../lib/governance/fw3-framing-
 const { readCanonicalBody } = require('../lib/coordination/lane-contract.cjs');
 // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C: sender-stamped reply_class SSOT.
 const { REPLY_CLASSES, isValidReplyClass, computeReplyExpectedBy, checkAndPingOverdueReplies, reconcileLateVerdicts, alreadyAnswered } = require('../lib/coordinator/reply-class.cjs');
+// QF-20260901-479: --message-kind, mirroring solomon-advisory.cjs — the discriminator the dedup
+// guard (alreadyAnswered) already reads off payload.message_kind, which Adam had no way to set.
+const { MESSAGE_KINDS, MESSAGE_KIND_SET } = require('../lib/coordinator/message-kinds.cjs');
 // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
 // full-lane tick (env vars are not reliably propagated to cron subprocesses).
 const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
@@ -219,7 +221,7 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
 // Adding --part here by extending the index list would have been mirroring the defect onto a second
 // sender rather than fixing it, so both senders now derive exclusions from the flag NAMES via one
 // shared helper. Lists are per-PATH so no path strips another's flags out of a legitimate body.
-const VALUE_FLAGS = ['--to', '--kind', '--message-kind', '--part', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout'];
+const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout'];
 const BOOL_FLAGS = ['--direct'];
 const STATUS_VALUE_FLAGS = ['--eta'];
 const SWEEP_VALUE_FLAGS = ['--window'];
@@ -247,10 +249,6 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   // vocabulary (harness | platform | venture:<id>). reuse_class classifies applicability
   // (scope_local | cross_scope); applies_to_scopes lists the scopes a cross-scope advisory
   // covers. The two-stage actioned_at ACK is unchanged.
-  // FR-1/parity with solomon-advisory.cjs: the correction sub-discriminator. Already
-  // CLI-validated against CORRECTION_KIND_SET above; omitted entirely when not supplied
-  // (byte-identical for every existing sender).
-  if (messageKind) payload.message_kind = messageKind;
   if (scopeKey) payload.scope_key = scopeKey;
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: 'direct' marks a row written straight
   // to the peer's session_id (--to solomon, ADAM_SOLOMON_TWOWAY_V1=on) instead of the default
@@ -261,6 +259,16 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   if (addressee) payload.addressee = addressee;
   if (reuseClass) payload.reuse_class = reuseClass;
   if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
+  // QF-20260901-479: the correction discriminator (mirrors solomon-advisory.cjs). Lets a
+  // retraction/amend/supersede re-post on a correlation the plain dedup would otherwise refuse.
+  // Validated against the shared allowlist so a typo fails loudly instead of silently minting an
+  // undrained lane; omitted entirely when not supplied (byte-identical for every existing sender).
+  if (messageKind != null) {
+    if (!MESSAGE_KIND_SET.has(String(messageKind))) {
+      throw new Error(`INVALID_MESSAGE_KIND: "${messageKind}" (expected one of: ${MESSAGE_KINDS.join(', ')})`);
+    }
+    payload.message_kind = String(messageKind);
+  }
   // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1: ordered parts of ONE logical consult
   // share a correlation_id and carry first-class part_index/part_total — the capability Solomon
   // already had and Adam did not, which is why "one correlation convention" was not expressible at
@@ -337,6 +345,12 @@ async function resolveScopeForSend(supabase, repoPath) {
  * (echoed as-is). Row lookup is best-effort: if no row matches, the value is treated as the
  * correlation itself. Throws only when a matching ROW exists but carries no correlation_id
  * (not replyable — surfacing that beats silently inventing a correlation). Exported for tests.
+ *
+ * QF-20260901-479: a value that matches NO row is only accepted as a bare correlation when it is
+ * itself a well-formed UUID. Both row ids and correlation_ids are UUIDs everywhere else in this
+ * lane, so anything else (a truncated 8-char prefix, a typo) is refused loudly instead of being
+ * adopted as a literal correlation that nothing will ever answer — the exact "8-char prefix
+ * mis-thread" Solomon hit sending on a value copied from a truncated log line.
  */
 async function resolveReplyToCorrelation(supabase, value) {
   if (!value) return null;
@@ -357,6 +371,11 @@ async function resolveReplyToCorrelation(supabase, value) {
       throw e;
     }
     return corr;
+  }
+  if (!FULL_UUID_RE.test(String(value))) {
+    const e = new Error(`"${value}" matches no session_coordination row and is not a well-formed UUID — pass a full row id / correlation UUID, not a truncated prefix (a prefix silently mis-threads instead of failing).`);
+    e.code = 'REPLY_TO_UNRESOLVABLE';
+    throw e;
   }
   return value;
 }
@@ -912,7 +931,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>] [--kind <recognized_kind>]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>] [--kind <recognized_kind>]  |  replies [--background]  |  inbox [--background] [--window <Nh|Nd>] [--sweep [--window 24h]]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>] [--to solomon|<session_id>] [--kind <recognized_kind>] [--message-kind retraction|amend|supersede|disposition] [--part N/M]  |  request "<question>" [--timeout <ms>] [--to solomon|<session_id>] [--kind <recognized_kind>]  |  replies [--background]  |  inbox [--background] [--window <Nh|Nd>] [--sweep [--window 24h]]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
 
@@ -1041,15 +1060,16 @@ async function main() {
     console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
     process.exit(2);
   }
-  // QF-20260901-047: --message-kind marks THIS send as a correction (retraction/amend/supersede)
-  // riding the same adam_advisory leg, so it reaches assertSendBackpressure's message_kind
-  // exemption (lib/coordinator/dispatch.cjs) — parity with solomon-advisory.cjs, which already had
-  // this. Deliberately validated against CORRECTION_KIND_SET, never the full MESSAGE_KIND_SET: Adam
-  // never issues a disposition (that's the coordinator's terminal verdict, not Adam's to mark).
+  // QF-20260901-479: `--message-kind retraction|amend|supersede` posts a correction on the SAME
+  // correlation the plain dedup guard would otherwise refuse. Mirrors solomon-advisory.cjs's parse.
+  // QF-20260901-047: this same discriminator is what reaches assertSendBackpressure's
+  // message_kind exemption (lib/coordinator/dispatch.cjs), keyed there on the narrower
+  // CORRECTION_KIND_SET (never the full MESSAGE_KIND_SET, so 'disposition' never exempts
+  // itself from backpressure) — independent of what this CLI accepts.
   const mkIdx = argv.indexOf('--message-kind');
   const messageKindArg = mkIdx >= 0 ? argv[mkIdx + 1] || null : null;
-  if (messageKindArg && !CORRECTION_KIND_SET.has(messageKindArg)) {
-    console.error(`ERROR: --message-kind "${messageKindArg}" must be one of ${CORRECTION_KINDS.join(', ')}.`);
+  if (messageKindArg && !MESSAGE_KIND_SET.has(messageKindArg)) {
+    console.error(`ERROR: --message-kind must be one of ${MESSAGE_KINDS.join(', ')} (got "${messageKindArg}").`);
     process.exit(2);
   }
   // SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: `send/request --to solomon` — direct
@@ -1338,7 +1358,7 @@ async function main() {
   // it. Adam has no originator-CC leg to heal (grep: ensureOriginatorCc is Solomon-only), so the
   // heal branch is deliberately absent rather than copied.
   if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
-    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.`);
+    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending. To send anyway: re-send with --message-kind amend|supersede|retraction (a correction), or --part N/M (an ordered part of the same consult).`);
     return;
   }
 

@@ -44,7 +44,7 @@ const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { capBody, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
-const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, FULL_UUID_RE } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
@@ -547,6 +547,11 @@ async function snapshotSender(supabase, sessionId) {
 /**
  * Resolve `--reply-to <value>` (a row id OR a bare correlation) to the correlation to echo. Mirrors
  * adam-advisory.resolveReplyToCorrelation. Throws only when a matching row carries no correlation_id.
+ *
+ * QF-20260901-479: a value matching NO row is only accepted as a bare correlation when it is
+ * itself a well-formed UUID — otherwise refused loudly (this is the "22:44Z 8-char prefix
+ * mis-thread" incident: a truncated prefix was silently adopted as a literal correlation that
+ * nothing would ever answer, instead of failing at the CLI).
  */
 async function resolveReplyToCorrelation(supabase, value) {
   if (!value) return null;
@@ -559,6 +564,11 @@ async function resolveReplyToCorrelation(supabase, value) {
     const corr = row.payload && row.payload.correlation_id;
     if (!corr) { const e = new Error(`row ${value} carries no payload.correlation_id (not replyable)`); e.code = 'REPLY_TO_NOT_REPLYABLE'; throw e; }
     return corr;
+  }
+  if (!FULL_UUID_RE.test(String(value))) {
+    const e = new Error(`"${value}" matches no session_coordination row and is not a well-formed UUID — pass a full row id / correlation UUID, not a truncated prefix (a prefix silently mis-threads instead of failing).`);
+    e.code = 'REPLY_TO_UNRESOLVABLE';
+    throw e;
   }
   return value;
 }
@@ -1281,7 +1291,7 @@ async function main() {
   // an ordinary answer, which reproduces the previous call exactly.
   if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
     const healed = await ensureOriginatorCc(supabase, { replyRef: replyToArg || replyTo, replyTo, target, sessionId, subject, payload, expiresAt });
-    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending.${healed.inserted ? ` (healed missing originator CC -> ${healed.originator})` : ''}`);
+    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending. To send anyway: re-send with --message-kind amend|supersede|retraction (a correction), or --part N/M (an ordered part of the same consult).${healed.inserted ? ` (healed missing originator CC -> ${healed.originator})` : ''}`);
     if (healed.error) console.error('WARN: originator CC heal failed (re-run the same --reply-to to retry):', healed.error);
     return;
   }
