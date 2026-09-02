@@ -25,7 +25,6 @@ import { bestEffortReleaseSd } from '../lib/fleet/best-effort-release.mjs';
 import { getRepoRoot, isInsideWorktree } from '../lib/repo-paths.js';
 import os from 'os';
 import path from 'node:path';
-import dotenv from 'dotenv';
 import { getOrCreateSession } from '../lib/session-manager.mjs'; // (updateHeartbeat import was long-dead — dropped with the FR-5/FR-6 extraction lint pass)
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
@@ -92,8 +91,15 @@ import sdFit from '../lib/fleet/sd-executable-here.cjs';
 // fail-fast (a missing-precondition block proposes a code/run split — never created here).
 import unfitTriage from '../lib/fleet/unfit-triage.cjs';
 
-dotenv.config();
-
+// SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001 (FR-4): this file's own bare `dotenv.config()`
+// (cwd-relative, no ancestor walk) was a direct source of the bug FR-1 fixes -- invoked from
+// inside a worktree, it read THAT worktree's stale propagateEnvFile .env copy instead of the
+// live main-repo one. The `createSupabaseServiceClient` import above (line 15) already runs
+// lib/supabase-client.js's own module-level env resolution -- via the FIXED git-boundary-safe
+// resolver -- during ITS module evaluation, which ES modules guarantee completes before this
+// file's own top-level body (where the old dotenv.config() call lived) begins executing. So
+// removing the redundant call here doesn't just delete dead code: it removes the one remaining
+// direct cwd-dotenv load on this entry point's own critical path.
 const supabase = createSupabaseServiceClient();
 
 // SD-ARCH-HOTSPOT-SD-START-001: the claim gate/queue phases live in shared
