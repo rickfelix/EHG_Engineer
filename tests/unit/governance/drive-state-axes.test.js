@@ -449,6 +449,68 @@ describe('AXIS 1 chairman_decisions — blind to CRITICAL is the defect this axi
     expect(r.state).not.toBe(STATE.CLEAR);
     expect(r.reason).toBe('empty_decision_population');
   });
+
+  // QF-20260902-427: chairman_pending_decisions' Source 5 (the feedback union) contaminates the
+  // pending population with decision_type='flag_review' telemetry — 47 of 47 live rows on
+  // 2026-09-02, aged 8+ days, read as pending DECISIONS and aged into a false STALLED. Mirrors
+  // the exclusion get_pending_chairman_items already applies at its own consumer boundary.
+  describe('flag_review exclusion (QF-20260902-427)', () => {
+    it('excludeUntrustedDecisionTypes drops only flag_review rows, keeping real decisions', () => {
+      const rows = [
+        { id: 'f1', decision_type: 'flag_review' },
+        { id: 'f2', decision_type: 'flag_review' },
+        { id: 'r1', decision_type: 'chairman_approval' },
+        { id: 'r2', decision_type: 'gate_decision' },
+      ];
+      const kept = chairAxis.excludeUntrustedDecisionTypes(rows);
+      expect(kept.map((r) => r.id)).toEqual(['r1', 'r2']);
+    });
+
+    it('a fixture population of N flag_review + M real decisions classifies to M', () => {
+      const flagReview = Array.from({ length: 5 }, (_, i) => (
+        { id: `f${i}`, title: 'auto-filed telemetry', priority: 'critical', decision_type: 'flag_review', created_at: hoursAgo(200) }
+      ));
+      const real = [
+        { id: 'r1', title: 'real approval', priority: 'high', decision_type: 'chairman_approval', created_at: hoursAgo(1) },
+      ];
+      const pending = chairAxis.excludeUntrustedDecisionTypes([...flagReview, ...real]);
+      expect(pending).toHaveLength(1);
+      expect(pending[0].id).toBe('r1');
+      const r = chairAxis.classify({ pending }, NOW);
+      // The one real decision is fresh (1h), so the axis correctly reads CLEAR, not STALLED —
+      // the pre-fix behaviour would have aged the 5 flag_review rows (200h) into STALLED.
+      expect(r.state).toBe(STATE.CLEAR);
+      expect(r.in_motion).toBe(1);
+      expect(r.stalled).toBe(0);
+    });
+
+    it('an all-flag_review population reduces to 0 real decisions — UNMEASURABLE, never STALLED-from-telemetry', () => {
+      const allFlagReview = Array.from({ length: 47 }, (_, i) => (
+        { id: `f${i}`, title: 'auto-filed telemetry', priority: 'critical', decision_type: 'flag_review', created_at: hoursAgo(200) }
+      ));
+      const pending = chairAxis.excludeUntrustedDecisionTypes(allFlagReview);
+      expect(pending).toHaveLength(0);
+      const r = chairAxis.classify({ pending }, NOW);
+      expect(r.state).toBe(STATE.UNMEASURABLE);
+      expect(r.state).not.toBe(STATE.STALLED);
+      expect(r.reason).toBe('empty_decision_population');
+    });
+
+    it('fetch() applies the exclusion before classify() ever sees a flag_review row', async () => {
+      const flagReview = { id: 'f1', title: 'telemetry', priority: 'critical', decision_type: 'flag_review', created_at: hoursAgo(200) };
+      const real = { id: 'r1', title: 'real', priority: 'high', decision_type: 'chairman_approval', created_at: hoursAgo(1) };
+      const fakeSupabase = {
+        from: () => ({
+          select: () => ({
+            limit: async () => ({ data: [flagReview, real], error: null }),
+          }),
+        }),
+      };
+      const state = await chairAxis.fetch(fakeSupabase, { now: NOW });
+      expect(state.pending).toHaveLength(1);
+      expect(state.pending[0].id).toBe('r1');
+    });
+  });
 });
 
 describe('AXIS 3 roadmap_motion — motion is a RATE, and state however complete is not a rate', () => {
