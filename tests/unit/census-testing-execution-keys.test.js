@@ -17,6 +17,11 @@ describe('census-testing-execution-keys.mjs is structurally read-only (TS-6)', (
     const source = readFileSync(SCRIPT_PATH, 'utf8');
     expect(source).not.toMatch(/\.(insert|update|delete|upsert)\s*\(/);
   });
+
+  it('CI count-truncation-diff-lint finding: the DB read is paginated, not a bare unbounded .select()', () => {
+    const source = readFileSync(SCRIPT_PATH, 'utf8');
+    expect(source).toMatch(/fetchAllPaginated/);
+  });
 });
 
 describe('censusExecutionKeys — key-detection heuristic (TS-6)', () => {

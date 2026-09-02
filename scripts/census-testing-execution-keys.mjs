@@ -28,6 +28,7 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { getSupabaseClient } from '../lib/sub-agent-executor/supabase-client.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const EXECUTION_KEY_PATTERN = /test|exec|pass|fail|skip|mutat|coverage|assert|spec|suite|e2e|unit|regression/i;
 
@@ -61,13 +62,19 @@ async function main() {
   const supabase = await getSupabaseClient();
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data: rows, error } = await supabase
-    .from('sub_agent_execution_results')
-    .select('metadata')
-    .eq('sub_agent_code', 'TESTING')
-    .gte('created_at', since);
-
-  if (error) throw error;
+  // VALIDATION sub-agent advisory (SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001 EXEC-TO-PLAN review):
+  // a bare .select() is silently capped at PostgREST's 1000-row default -- fine while this
+  // window's population sits below that, but the census's own point is that the population
+  // grows, so a raw fetch that could someday truncate must not be the read path. Paginate.
+  const rows = await fetchAllPaginated(() =>
+    supabase
+      .from('sub_agent_execution_results')
+      .select('metadata')
+      .eq('sub_agent_code', 'TESTING')
+      .gte('created_at', since)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }) // unique tiebreaker for stable paging
+  );
 
   const counts = censusExecutionKeys(rows || []);
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
