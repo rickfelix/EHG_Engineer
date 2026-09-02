@@ -65,3 +65,24 @@ describe('QF-20260902-100: outbound-gate refusal is grep-able (correlation_id|ER
     expect(SRC).not.toMatch(/ADAM OUTBOUND GATE blocked this send/);
   });
 });
+
+// Coordinator acceptance clause (directive 68833b2e, 2026-09-02): target-role and correlation_id
+// must print ONLY after the session_coordination insert returns a row id -- not merely after the
+// last refusal gate. assertTargetRole's SUCCESS line is now held (deferPrint:true) and printed
+// explicitly once inserted.id exists, alongside correlation_id.
+describe('QF-20260902-100: target-role print is held until the row id exists (coordinator acceptance clause)', () => {
+  const assertCallIdx = SRC.indexOf('await assertTargetRole(supabase,');
+  const insertedIdPrintIdx = SRC.indexOf("console.log('  advisory_id:', inserted.id);");
+  const heldLinePrintIdx = SRC.indexOf('console.log(targetRoleLine);');
+
+  it('the call passes deferPrint:true (no longer prints inside assertTargetRole itself)', () => {
+    const callSite = SRC.slice(assertCallIdx, SRC.indexOf(');', assertCallIdx) + 1);
+    expect(callSite).toMatch(/deferPrint:\s*true/);
+  });
+
+  it('the held line prints AFTER inserted.id is printed, not merely after the call site', () => {
+    expect(insertedIdPrintIdx).toBeGreaterThan(-1);
+    expect(heldLinePrintIdx).toBeGreaterThan(-1);
+    expect(heldLinePrintIdx).toBeGreaterThan(insertedIdPrintIdx);
+  });
+});

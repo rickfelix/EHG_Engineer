@@ -1369,10 +1369,11 @@ async function main() {
   }
 
   // QF-20260902-100: run LAST, immediately before the insert -- after every gate above that can
-  // still refuse or skip this send (alarm bar, outbound gate, pre-send consult, dedup). Its
-  // "target-role verified" print (on success) now lands right next to the row's own existence,
-  // never ahead of a refusal that hasn't happened yet.
-  await assertTargetRole(supabase, { target, expectedRole: isDirectTarget ? null : (toSolomon ? 'solomon' : 'coordinator') });
+  // still refuse or skip this send (alarm bar, outbound gate, pre-send consult, dedup). Still
+  // exits 4 immediately on its own role-mismatch refusal (unchanged); deferPrint:true holds the
+  // SUCCESS line instead of printing it here -- it prints only once the row id exists below,
+  // alongside correlation_id, per the coordinator's acceptance clause on this QF.
+  const targetRoleLine = await assertTargetRole(supabase, { target, expectedRole: isDirectTarget ? null : (toSolomon ? 'solomon' : 'coordinator'), deferPrint: true });
 
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS
   // (DISPATCH_TARGET_*) on a bad/dead target instead of returning {error}, so wrap it
@@ -1397,6 +1398,7 @@ async function main() {
 
   console.log('✓ Adam advisory sent');
   console.log('  advisory_id:', inserted.id);
+  console.log(targetRoleLine); // QF-20260902-100: held until the row id above exists
   console.log('  target:', target);
   console.log('  correlation_id:', payload.correlation_id, replyTo ? '(echoed from --reply-to)' : '(replyable)');
   if (replyTo) console.log('  reply_to:', replyTo);
