@@ -99,6 +99,22 @@ describe('buildMainlinePhase3TestExecution -- provenance stamping (SD-LEARN-FIX-
     expect(result.source).toBe('reused');
   });
 
+  it('TESTING sub-agent review (evidence 24ae08ab): from_cache is a co-equal reuse signal to evidence_reused -- a cached artifact_sha is never recomputed/relabeled as fresh', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'mainline-te-'));
+    const reportPath = path.join(dir, 'playwright-results.json');
+    // Deliberately wrong on disk vs the claimed hash -- proves reuse, not recomputation.
+    writeFileSync(reportPath, JSON.stringify({ stats: { expected: 1, unexpected: 0, skipped: 0 } }));
+
+    const phase3 = {
+      tests_executed: 5, tests_passed: 5, failed_tests: 0, skipped_tests: 0,
+      report_url: reportPath, from_cache: true, artifact_sha: 'claimed-cached-sha',
+    };
+    const result = buildMainlinePhase3TestExecution(phase3);
+
+    expect(result.source).toBe('reused');
+    expect(result.artifact_sha).toBe('claimed-cached-sha');
+  });
+
   it('TS-2b: a reused run with no artifact_sha on phase3 omits provenance entirely rather than fabricating one', () => {
     const phase3 = { tests_executed: 5, tests_passed: 5, failed_tests: 0, skipped_tests: 0, report_url: '/some/path.json', evidence_reused: true };
     const result = buildMainlinePhase3TestExecution(phase3);
