@@ -14,8 +14,10 @@ import {
   buildStepExecutor,
   buildClerkTestModeIdentity,
   CLERK_TEST_MODE_FIXED_CODE,
+  getClerkTestingKeys,
 } from '../../../lib/apa/venture-step-executors.js';
 import * as imapCodeFetcher from '../../../lib/apa/imap-code-fetcher.js';
+import * as clerkTesting from '@clerk/testing/playwright';
 
 // QF-20260902-512: neither existing test in this file ever reaches the code-challenge branch
 // (none makes the code input locator visible), so this mock is inert for them -- only the new
@@ -23,6 +25,14 @@ import * as imapCodeFetcher from '../../../lib/apa/imap-code-fetcher.js';
 vi.mock('../../../lib/apa/imap-code-fetcher.js', () => ({
   fetchVerificationCode: vi.fn(),
   fetchVerificationCodeDetailed: vi.fn(),
+}));
+
+// QF-20260902-935: clerkSetup performs a REAL Clerk Backend API call given a real secret key --
+// never let a unit test near that. Inert for every test outside this file's own testing-token
+// describe block (none else registers authProviderTesting).
+vi.mock('@clerk/testing/playwright', () => ({
+  clerkSetup: vi.fn(),
+  setupClerkTestingToken: vi.fn(),
 }));
 
 function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '' } = {}) {
@@ -210,7 +220,7 @@ describe('getTestCredential() — dual persona (M2, Solomon/Oracle completeness 
 
 describe('getVentureRegistration()', () => {
   it('returns an empty-but-shaped default for an unregistered venture', () => {
-    expect(getVentureRegistration('NOT-REGISTERED-XYZ')).toEqual({ preflightChecks: [], stepOverrides: {}, authOrigins: [], authProviderTestMode: 'production' });
+    expect(getVentureRegistration('NOT-REGISTERED-XYZ')).toEqual({ preflightChecks: [], stepOverrides: {}, authOrigins: [], authProviderTestMode: 'production', authProviderTesting: null });
   });
 
   it('returns the registered venture config, case-insensitively', () => {
@@ -1023,5 +1033,140 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('getClerkTestingKeys() — QF-20260902-935', () => {
+  const SECRET_VAR = 'VENTURE_UAT_CLERK_SECRET_KEY_KEYVENTURE';
+  const PUBLISHABLE_VAR = 'VENTURE_UAT_CLERK_PUBLISHABLE_KEY_KEYVENTURE';
+  afterEach(() => {
+    delete process.env[SECRET_VAR];
+    delete process.env[PUBLISHABLE_VAR];
+  });
+
+  it('returns ok:false, reason missing_keys when neither var is set', () => {
+    expect(getClerkTestingKeys('KEYVENTURE')).toEqual({ ok: false, reason: 'missing_keys' });
+  });
+
+  it('returns ok:false, reason missing_keys when only one of the pair is set', () => {
+    process.env[SECRET_VAR] = 'sk_test_abc';
+    expect(getClerkTestingKeys('KEYVENTURE')).toEqual({ ok: false, reason: 'missing_keys' });
+  });
+
+  it('returns the keys when both are present and correctly prefixed', () => {
+    process.env[SECRET_VAR] = 'sk_test_abc';
+    process.env[PUBLISHABLE_VAR] = 'pk_test_xyz';
+    expect(getClerkTestingKeys('KEYVENTURE')).toEqual({ ok: true, secretKey: 'sk_test_abc', publishableKey: 'pk_test_xyz' });
+  });
+
+  it('Solomon condition 2: fails loud, naming the env var, on a present secret key of the wrong class -- never the value', () => {
+    process.env[SECRET_VAR] = 'sk_live_realkey';
+    process.env[PUBLISHABLE_VAR] = 'pk_test_xyz';
+    expect(() => getClerkTestingKeys('KEYVENTURE')).toThrow(new RegExp(`${SECRET_VAR}.*sk_test_`));
+    expect(() => getClerkTestingKeys('KEYVENTURE')).not.toThrow(/sk_live_realkey/);
+  });
+
+  it('Solomon condition 2: fails loud, naming the env var, on a present publishable key of the wrong class', () => {
+    process.env[SECRET_VAR] = 'sk_test_abc';
+    process.env[PUBLISHABLE_VAR] = 'pk_live_realkey';
+    expect(() => getClerkTestingKeys('KEYVENTURE')).toThrow(new RegExp(`${PUBLISHABLE_VAR}.*pk_test_`));
+    expect(() => getClerkTestingKeys('KEYVENTURE')).not.toThrow(/pk_live_realkey/);
+  });
+});
+
+// QF-20260902-935 (chairman decision 62beeaaa): Clerk Testing Tokens instead of ever touching
+// the Turnstile widget. Ticket item (6): keys present installs the token before navigation;
+// keys absent stamps the skip reason; a non-Clerk venture never calls it.
+describe('buildStepExecutor() fallback — authProviderTesting: clerk_testing_token (QF-20260902-935)', () => {
+  const step = { step_id: 'stp-abc123-do-a-thing', goal: 'do a thing' };
+  const TOGGLE = 'text=Already have an account? Sign in';
+  const EXISTING_KEY = 'VENTURE_UAT_TEST_ACCOUNT_TOKENVENTURE_EXISTING';
+  const SECRET_VAR = 'VENTURE_UAT_CLERK_SECRET_KEY_TOKENVENTURE';
+  const PUBLISHABLE_VAR = 'VENTURE_UAT_CLERK_PUBLISHABLE_KEY_TOKENVENTURE';
+
+  beforeEach(() => {
+    clerkTesting.clerkSetup.mockReset().mockResolvedValue(undefined);
+    clerkTesting.setupClerkTestingToken.mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    delete process.env[EXISTING_KEY];
+    delete process.env[SECRET_VAR];
+    delete process.env[PUBLISHABLE_VAR];
+  });
+
+  it('keys present: installs the testing token before the first navigation', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    process.env[SECRET_VAR] = 'sk_test_abc';
+    process.env[PUBLISHABLE_VAR] = 'pk_test_xyz';
+    registerVenture('TOKENVENTURE', { authProviderTesting: 'clerk_testing_token' });
+    const executor = buildStepExecutor(step, 'TOKENVENTURE');
+    // Toggle absent -- SEC-001 refuses right after the goto, but the testing-token setup (which
+    // runs BEFORE that goto) must have already fired by then.
+    const page = makeMockPage();
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/could not confirm a sign-in affordance/i);
+
+    expect(clerkTesting.clerkSetup).toHaveBeenCalledWith({ secretKey: 'sk_test_abc', publishableKey: 'pk_test_xyz', dotenv: false });
+    expect(clerkTesting.setupClerkTestingToken).toHaveBeenCalledWith({ page });
+    expect(page.calls.goto).toEqual(['http://fixture/register']);
+  });
+
+  it('security-agent review REC-2: clears ambient CLERK_TESTING_TOKEN/CLERK_FAPI before clerkSetup, so a stray env var from a prior process/venture can never bypass the sk_test_ gate', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    process.env[SECRET_VAR] = 'sk_test_abc';
+    process.env[PUBLISHABLE_VAR] = 'pk_test_xyz';
+    process.env.CLERK_TESTING_TOKEN = 'poison-token-from-another-venture';
+    process.env.CLERK_FAPI = 'poison-fapi.example.com';
+    try {
+      registerVenture('TOKENVENTURE', { authProviderTesting: 'clerk_testing_token' });
+      const executor = buildStepExecutor(step, 'TOKENVENTURE');
+      const page = makeMockPage();
+
+      await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/could not confirm a sign-in affordance/i);
+
+      expect(process.env.CLERK_TESTING_TOKEN).toBeUndefined();
+      expect(process.env.CLERK_FAPI).toBeUndefined();
+    } finally {
+      delete process.env.CLERK_TESTING_TOKEN;
+      delete process.env.CLERK_FAPI;
+    }
+  });
+
+  it('keys absent: skips the leg with a fail-loud error (never a silent/vacuous pass) and stamps auth_mode=skipped_missing_keys', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    registerVenture('TOKENVENTURE', { authProviderTesting: 'clerk_testing_token' });
+    const executor = buildStepExecutor(step, 'TOKENVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 } });
+
+    let caught;
+    try {
+      await executor(page, {}, { baseUrl: 'http://fixture', authenticated: false });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).toMatch(/VENTURE_UAT_CLERK_SECRET_KEY_TOKENVENTURE\/VENTURE_UAT_CLERK_PUBLISHABLE_KEY_TOKENVENTURE are not both set/);
+    expect(caught.authMode).toBe('skipped_missing_keys');
+    expect(clerkTesting.clerkSetup).not.toHaveBeenCalled();
+    expect(clerkTesting.setupClerkTestingToken).not.toHaveBeenCalled();
+    // Fails BEFORE ever reaching the form -- never a vacuous pass dressed up as a skip.
+    expect(page.calls.goto).toEqual([]);
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('a venture without authProviderTesting set never calls the Clerk testing-token setup', async () => {
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    registerVenture('TOKENVENTURE', {}); // no authProviderTesting -- defaults to null
+    const executor = buildStepExecutor(step, 'TOKENVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 } });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+
+    expect(clerkTesting.clerkSetup).not.toHaveBeenCalled();
+    expect(clerkTesting.setupClerkTestingToken).not.toHaveBeenCalled();
   });
 });
