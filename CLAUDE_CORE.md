@@ -1,8 +1,8 @@
-<!-- file_content_hash: 41b8a13cebb5fbcc -->
+<!-- file_content_hash: e36fafedcc02bfbe -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-02 2:27:02 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1227,7 +1227,7 @@ see `docs/architecture/solomon-activation-runbook.md`.
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-LEADTOPLAN-0f589709 | handoff_failure | [HIGH] high | 12 | [STABLE] | N/A |
 | PAT-RETRO-LEADTOPLAN-0f589709 | session_retrospective | [HIGH] high | 11 | [STABLE] | N/A |
-| PAT-AUTO-02123036 | process | [HIGH] high | 8 | [STABLE] | N/A |
+| PAT-AUTO-02123036 | process | [HIGH] high | 9 | [STABLE] | N/A |
 | PAT-HF-PLANTOLEAD-27a62713 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
 | PAT-HF-LEADTOPLAN-ded32ff4 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
 
@@ -1245,8 +1245,9 @@ see `docs/architecture/solomon-activation-runbook.md`.
 |-------------|---------|----------|-------|
 | feedback | 4 | low | SELF-IDENTIFY: I am idle but see 11 claimable item(s) I did  |
 | feedback | 4 | medium | online |
-| feedback | 3 | low | SELF-IDENTIFY: I am idle but see 11 claimable item(s) I did  |
-| feedback | 3 | medium | model-stamped claude-sonnet-5 |
+| feedback | 3 | low | SELF-IDENTIFY: I am idle but see 10 claimable item(s) I did  |
+| feedback | 3 | low | SELF-IDENTIFY: I am idle but see 12 claimable item(s) I did  |
+| feedback | 3 | low | SELF-IDENTIFY: I am idle but see 12 claimable item(s) I did  |
 
 *Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
 
