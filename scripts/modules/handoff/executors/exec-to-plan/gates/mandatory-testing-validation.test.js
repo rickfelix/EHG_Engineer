@@ -240,4 +240,63 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
       expect(result.wait).toBe(false);
     });
   });
+
+  // ─── SD-FDBK-INFRA-TESTING-SUB-AGENT-001 FR-3: measured-honesty ────────────
+  // An unmeasured verdict (metadata.measured===false) must never satisfy this gate
+  // identically to a genuinely measured PASS -- but this SD introduces no NEW blocking
+  // tier: a REQUIRED-tier unmeasured row reuses the existing ERR_TESTING_REQUIRED-class
+  // path already used for a MISSING row, and an ADVISORY-tier unmeasured row stays
+  // ADVISORY (score 70), exactly as a missing row already did.
+  describe('FR-3 measured-honesty (SD-FDBK-INFRA-TESTING-SUB-AGENT-001)', () => {
+    const freshDate = () => new Date(Date.now() - 3600000).toISOString();
+    const withTestingRow = (row) => {
+      const chainable = (val) => {
+        const c = {
+          select: () => c, eq: () => c, order: () => c, limit: () => c,
+          single: () => Promise.resolve(val),
+          then: (fn) => Promise.resolve(val).then(fn),
+        };
+        return c;
+      };
+      mockFrom.mockReturnValue({ select: () => chainable({ data: [row], error: null }) });
+    };
+
+    it('REQUIRED tier + PASS verdict but measured=false → ERR_TESTING_REQUIRED-class failure (no new error code)', async () => {
+      withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate(), metadata: { measured: false } });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-unmeasured-required' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.score).toBe(0);
+      expect(result.issues[0]).toMatch(/ERR_TESTING_REQUIRED/);
+      expect(result.details.measured).toBe(false);
+    });
+
+    it('ADVISORY tier + PASS verdict but measured=false → stays ADVISORY (score 70), not silently trusted', async () => {
+      getValidationRequirements.mockReturnValue({ sd_type: 'infrastructure', requiresTesting: false, skipCodeValidation: false });
+      execSync.mockReturnValue('scripts/foo.js\n'); // code changes detected -> advisory-eligible
+      withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate(), metadata: { measured: false } });
+      const ctx = { sd: createMockSD({ sd_type: 'infrastructure', id: 'uuid-unmeasured-advisory' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(70);
+      expect(result.details.tier).toBe('ADVISORY');
+      expect(result.details.measured).toBe(false);
+    });
+
+    it('REQUIRED tier + PASS verdict + measured=true → passes exactly as today (score 100)', async () => {
+      withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate(), metadata: { measured: true, executed: 5, passed: 5, failed: 0 } });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-measured-pass' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+    });
+
+    it('a row with NO measured key at all (older evidence) is treated as measured — backward compatible', async () => {
+      withTestingRow({ id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate() }); // no metadata at all
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-no-measured-key' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+    });
+  });
 });

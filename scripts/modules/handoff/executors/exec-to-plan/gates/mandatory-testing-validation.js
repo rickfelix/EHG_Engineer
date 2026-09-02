@@ -290,6 +290,40 @@ export function createMandatoryTestingValidationGate(supabase) {
         };
       }
 
+      // 9b. SD-FDBK-INFRA-TESTING-SUB-AGENT-001: an unmeasured verdict (metadata.measured===false)
+      // must never satisfy this gate identically to a genuinely measured PASS. A row that carries
+      // NO measured key (older evidence, or a sub-agent path that doesn't set it) is treated as
+      // measured — this only narrows behavior for the specific defect this SD fixes, it never
+      // widens a failure onto evidence this gate already trusted before today.
+      const measured = result.metadata?.measured;
+      if (measured === false) {
+        if (isAdvisoryMode) {
+          // ADVISORY tier: same honest-but-non-blocking shape as the missing-row ADVISORY path
+          // above — surfaced, not silently trusted, but this SD introduces no new blocking tier.
+          console.log(`   ⚠️  TESTING verdict ${result.verdict} is UNMEASURED for ${sdType} SD (ADVISORY MODE)`);
+          console.log('   → This is a warning, not a blocker');
+          return {
+            passed: true,
+            score: 70,
+            max_score: 100,
+            issues: [],
+            warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD carries metadata.measured=false — no real test evidence backs it`],
+            details: { advisory: true, reason: `${sdType} SD TESTING verdict is unmeasured`, tier: 'ADVISORY', measured: false }
+          };
+        }
+        // REQUIRED tier: reuse the SAME ERR_TESTING_REQUIRED-class blocking path already used
+        // for a missing row — an unmeasured row is absence of real evidence, not a new severity.
+        console.log(`   ❌ ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} for ${sdType} SD carries metadata.measured=false (no real test evidence)`);
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [`ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} carries metadata.measured=false — required tier needs measured test evidence, not an unmeasured verdict`],
+          warnings: [],
+          details: { tier: 'REQUIRED', measured: false }
+        };
+      }
+
       // 10. TESTING validation passed
       console.log('   ✅ TESTING validation passed');
       console.log(`      Verdict: ${result.verdict}`);
