@@ -37,9 +37,10 @@ describe('sweep()', () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(files.has('lib/coordinator/dispatch.cjs')).toBe(true);
     expect(files.has('lib/fleet/claim-eligibility.cjs')).toBe(true);
-    // FR-2 wired sd-start.js's claim primitive to enforce (enforceTierGate, tierBlocks() call) --
-    // it now has genuine tier-code hits, flipping this from the pre-FR-2 zero-hits baseline.
-    expect(files.has('scripts/sd-start.js')).toBe(true);
+    // SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (ratification 20dc072b) deleted enforceTierGate and its
+    // tierBlocks() call from sd-start.js entirely -- zero tier-code hits remain, reverting to the
+    // pre-FR-2 (SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001) baseline this file started from.
+    expect(files.has('scripts/sd-start.js')).toBe(false);
     // claimable-leaves.mjs's deferral comment still doesn't literally spell any of the swept
     // tokens (it says "tier axes"/"tier-FILTERED", not min_tier_rank/tier_rank/tierRank) -- it
     // is documented in the KNOWN_SURFACES table by file:line citation instead, not by sweep hit.

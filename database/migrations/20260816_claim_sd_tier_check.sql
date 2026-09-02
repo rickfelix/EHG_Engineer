@@ -1,3 +1,20 @@
+-- ============================================================================
+-- SUPERSEDED — DO NOT APPLY. SD-FDBK-INFRA-RETIRE-SEAT-TIER-001, chairman
+-- ratification 20dc072b (2026-09-01): seat-tier dispatch enforcement was
+-- retired FLEET-WIDE (the WORK-DOWN-NEVER-UP guard, the DISPATCH_ABOVE_
+-- WORKER_TIER refusal, and min_tier_rank claim gating were all DELETED from
+-- lib/coordinator/dispatch.cjs, lib/fleet/claim-eligibility.cjs, and
+-- lib/fleet/tier-claimable.cjs). Applying this migration would re-instate
+-- the exact refusal this ratification retired, SERVER-SIDE, one layer below
+-- every JS mechanism that used to enforce it — with no JS code left anywhere
+-- in the repo to explain why a claim is being refused. tier_rank/
+-- min_tier_rank remain as advisory data (read by OTHER, still-live rulings
+-- unrelated to this one — see lib/fleet/claim-eligibility.cjs's
+-- fable_window_downward_claim_blocked and unverified_seat_capability
+-- branches), so the DATA those columns hold is still meaningful; only THIS
+-- FUNCTION BODY'S refusal behavior is retired. Original content preserved
+-- below, unmodified, for audit trail. Never apply this file.
+-- ============================================================================
 -- @approved-by: STAGED ONLY -- NOT APPLIED. Chairman-gated DDL; apply only at a future ceremony.
 -- SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001 (FR-5)
 --

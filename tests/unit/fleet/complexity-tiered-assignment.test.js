@@ -12,7 +12,6 @@ import { describe, it, expect } from 'vitest';
 import { computeMinTierRank } from '../../../lib/fleet/sd-tier-rank.mjs';
 import { LADDER, ladderTopRank, clamp, resolveWorkerTierRank, isTieringActive, MIN_LIVE_FOR_TIERING } from '../../../lib/fleet/tier-ladder.cjs';
 import { classifyDispatchIneligibility } from '../../../lib/fleet/claim-eligibility.cjs';
-import { assertWorkerTierAllowed } from '../../../lib/coordinator/dispatch.cjs';
 
 const TOP = ladderTopRank();
 
@@ -214,34 +213,9 @@ function stubSupabase({ liveWorkers = 2, workerTierRank = 1, sdMinRank = 3, coor
   };
 }
 
-describe('FR-4 coordinator dispatch tier guard + FR-5 degrade-to-1', () => {
-  const row = (overrides = {}) => ({
-    message_type: 'WORK_ASSIGNMENT', target_session: 'target-worker',
-    payload: { assigned_sd: 'SD-NEEDS-OPUS-001' }, ...overrides,
-  });
-
-  it('QF-20260831-419: no longer refuses an above-tier WORK_ASSIGNMENT (advisory only)', async () => {
-    const sb = stubSupabase({ liveWorkers: 2, workerTierRank: 1, sdMinRank: 3 });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('allows a work-down assignment (worker rung >= SD min rank)', async () => {
-    const sb = stubSupabase({ liveWorkers: 2, workerTierRank: 4, sdMinRank: 3 });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('FR-5: with < 2 live workers, tiering is OFF and the above-tier assignment is allowed', async () => {
-    const sb = stubSupabase({ liveWorkers: 1, workerTierRank: 1, sdMinRank: 4 });
-    await expect(assertWorkerTierAllowed(sb, row())).resolves.toBeUndefined();
-  });
-
-  it('ignores non-WORK_ASSIGNMENT rows and SD-less / QF rows', async () => {
-    const sb = stubSupabase({ liveWorkers: 2, workerTierRank: 1, sdMinRank: 4 });
-    await expect(assertWorkerTierAllowed(sb, row({ message_type: 'INFO' }))).resolves.toBeUndefined();
-    await expect(assertWorkerTierAllowed(sb, row({ payload: { assigned_sd: 'QF-20260101-001' } }))).resolves.toBeUndefined();
-    await expect(assertWorkerTierAllowed(sb, row({ payload: {}, target_sd: undefined }))).resolves.toBeUndefined();
-  });
-});
+// FR-4's "coordinator dispatch tier guard" describe block is retired: all four tests called
+// assertWorkerTierAllowed, deleted by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (chairman ratification
+// 20dc072b). FR-5's degrade-to-1 invariant remains covered by the 'FR-5 isTieringActive' block below.
 
 describe('FR-5 isTieringActive', () => {
   it('is true at >= MIN_LIVE_FOR_TIERING live workers, false below', async () => {
