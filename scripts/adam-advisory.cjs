@@ -1062,6 +1062,10 @@ async function main() {
   }
   // QF-20260901-479: `--message-kind retraction|amend|supersede` posts a correction on the SAME
   // correlation the plain dedup guard would otherwise refuse. Mirrors solomon-advisory.cjs's parse.
+  // QF-20260901-047: this same discriminator is what reaches assertSendBackpressure's
+  // message_kind exemption (lib/coordinator/dispatch.cjs), keyed there on the narrower
+  // CORRECTION_KIND_SET (never the full MESSAGE_KIND_SET, so 'disposition' never exempts
+  // itself from backpressure) — independent of what this CLI accepts.
   const mkIdx = argv.indexOf('--message-kind');
   const messageKindArg = mkIdx >= 0 ? argv[mkIdx + 1] || null : null;
   if (messageKindArg && !MESSAGE_KIND_SET.has(messageKindArg)) {

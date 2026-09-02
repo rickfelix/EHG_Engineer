@@ -105,6 +105,20 @@ describe('FR-1: scope-tagged advisory payload', () => {
     expect(p.applies_to_scopes).toBeUndefined();
   });
 
+  it('omits message_kind when not supplied (byte-identical for every existing sender)', () => {
+    const p = buildAdvisoryPayload({ body: 'plain advisory', senderCallsign: 'Adam', repo: '/r' });
+    expect(p.message_kind).toBeUndefined();
+  });
+
+  // QF-20260901-047: parity with solomon-advisory.cjs — the Adam lane can now mark a correction
+  // (retraction/amend/supersede), which reaches assertSendBackpressure's message_kind exemption
+  // (lib/coordinator/dispatch.cjs) instead of parking behind the unanswered-row cap.
+  it('carries the message_kind correction sub-discriminator when supplied', () => {
+    const p = buildAdvisoryPayload({ body: 'retracting my prior claim', senderCallsign: 'Adam', repo: '/r', messageKind: 'retraction' });
+    expect(p.message_kind).toBe('retraction');
+    expect(p.kind).toBe('adam_advisory'); // still rides the same leg — no new top-level kind
+  });
+
   it('exports resolveScopeForSend and it is fail-soft (returns {} when scope enumeration throws)', async () => {
     expect(typeof resolveScopeForSend).toBe('function');
     // A supabase stub whose query path throws — resolveScopeForSend must swallow it and
