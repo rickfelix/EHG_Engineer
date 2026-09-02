@@ -7,16 +7,18 @@
  * injectable readFile parameter fed a synthetic implementation -- no real filesystem
  * access in this suite (TR-3).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'crypto';
 import {
   readArtifact,
   computeArtifactSha,
+  readArtifactWithSha,
   isArtifactFresh,
   isReportHashMismatch,
   classifyProvenance,
   deriveCountsFromArtifact,
-  RUNNER_TRIGGER_ALLOWLIST
+  RUNNER_TRIGGER_ALLOWLIST,
+  MAX_ARTIFACT_BYTES
 } from '../../../lib/sub-agents/testing/artifact-verification.js';
 
 function fakeReadFile(content) {
@@ -109,6 +111,36 @@ describe('isReportHashMismatch', () => {
     expect(isReportHashMismatch('abc123', null)).toBe(false);
     expect(isReportHashMismatch(null, null)).toBe(false);
     expect(isReportHashMismatch(undefined, undefined)).toBe(false);
+  });
+});
+
+describe('size cap (DoS hardening)', () => {
+  it('refuses an artifact exceeding MAX_ARTIFACT_BYTES rather than parsing an unbounded file', () => {
+    const oversized = 'x'.repeat(MAX_ARTIFACT_BYTES + 1);
+    expect(readArtifact('/fake/huge.json', fakeReadFile(oversized))).toBeNull();
+    expect(computeArtifactSha('/fake/huge.json', fakeReadFile(oversized))).toBeNull();
+    expect(readArtifactWithSha('/fake/huge.json', fakeReadFile(oversized))).toEqual({ artifact: null, sha: null });
+  });
+});
+
+describe('readArtifactWithSha (TOCTOU hardening)', () => {
+  it('reads the file exactly once, deriving both the artifact and its sha from the SAME bytes', () => {
+    const report = { stats: { expected: 51, unexpected: 0, skipped: 0, flaky: 0, startTime: '2026-09-01T22:00:00.000Z' } };
+    const raw = JSON.stringify(report);
+    const readFile = vi.fn(() => raw);
+
+    const { artifact, sha } = readArtifactWithSha('/fake/path.json', readFile);
+
+    expect(readFile).toHaveBeenCalledTimes(1);
+    expect(artifact).toEqual({ expected: 51, unexpected: 0, skipped: 0, flaky: 0, startTime: '2026-09-01T22:00:00.000Z' });
+    expect(sha).toBe(createHash('sha256').update(JSON.stringify(JSON.parse(raw))).digest('hex'));
+  });
+
+  it('returns {artifact:null, sha:null} on missing path, read failure, or malformed JSON, never throws', () => {
+    expect(readArtifactWithSha(null)).toEqual({ artifact: null, sha: null });
+    expect(() => readArtifactWithSha('/x', () => { throw new Error('boom'); })).not.toThrow();
+    expect(readArtifactWithSha('/x', () => { throw new Error('boom'); })).toEqual({ artifact: null, sha: null });
+    expect(readArtifactWithSha('/x', fakeReadFile('{not valid json'))).toEqual({ artifact: null, sha: null });
   });
 });
 

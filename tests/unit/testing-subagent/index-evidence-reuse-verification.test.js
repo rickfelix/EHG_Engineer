@@ -12,6 +12,11 @@
  * per-test to control the artifact scenario deterministically; deriveCountsFromArtifact is
  * left REAL (already covered by artifact-verification.test.js) so the counts flowing
  * through this integration path are the genuine formula, not a test double.
+ *
+ * index.js's verifyArtifact() calls the combined readArtifactWithSha() (single read, to
+ * close a TOCTOU window -- security review, SD-FDBK-INFRA-TESTING-EVIDENCE-REUSE-001), so
+ * that is what's mocked here; it's composed from the same readArtifactMock/
+ * computeArtifactShaMock knobs each test already configures, so per-test setup is unchanged.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -31,7 +36,8 @@ vi.mock('../../../lib/sub-agents/testing/artifact-verification.js', async (impor
     readArtifact: (...args) => readArtifactMock(...args),
     isArtifactFresh: (...args) => isArtifactFreshMock(...args),
     classifyProvenance: (...args) => classifyProvenanceMock(...args),
-    computeArtifactSha: (...args) => computeArtifactShaMock(...args)
+    computeArtifactSha: (...args) => computeArtifactShaMock(...args),
+    readArtifactWithSha: (...args) => ({ artifact: readArtifactMock(...args), sha: computeArtifactShaMock(...args) })
   };
 });
 
