@@ -24,6 +24,10 @@
 
 import { scoreToBand, bandToNumeric } from '../auto-proceed/urgency-scorer.js';
 import { scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-5): the ONE canonical needs_sd predicate,
+// shared verbatim with FR-3's stale-sweep fence and FR-4's SQL-mirror exclusion (see TS-11)
+// so this exclusion cannot independently drift from the other two.
+import { isNeedsSdRow } from '../../../lib/quick-fix/status-writer.cjs';
 
 /**
  * QF severity → sequence_rank. Lower rank = higher priority, matching the SD
@@ -320,6 +324,11 @@ export function rankItems(items, context = {}) {
 function rankQF(qf, now) {
   if (!qf || !qf.id) return null;
   if (qf.status && !['open', 'in_progress'].includes(qf.status)) return null;
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-5): a needs_sd row (status='open',
+  // routing_tier=3, escalated_to_sd_id NULL) provably already failed the Tier-3 (>=75 LOC)
+  // quick-fix cap -- it must never be self-claimable as an ordinary quick-fix, even though
+  // its status alone would otherwise pass the check above.
+  if (isNeedsSdRow(qf)) return null;
 
   const severity = (qf.severity || 'low').toLowerCase();
   const sequenceRank = SEVERITY_TO_RANK[severity] ?? SEVERITY_TO_RANK.low;

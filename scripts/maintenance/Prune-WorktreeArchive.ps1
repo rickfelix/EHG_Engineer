@@ -18,10 +18,12 @@
       * Pure local filesystem. No network, no DB, no git history reads.
       * Runs once per day; deletes only the small daily backlog.
 
-    THREE SAFETY GUARDS (any one alone protects live work):
+    FOUR SAFETY GUARDS (any one alone protects live work):
       1. SCOPE   - only operates on direct children of _archive.
       2. LIVE    - skips any path that 'git worktree list' reports as active.
       3. RECENCY - never deletes an entry modified within -SafetyHours.
+      4. SAFE    - re-checks git state INSIDE the candidate: skips a dirty tree,
+                   unpushed commits, or an unresolvable git state (fail-safe).
 
     Deletion routes through the fleet's CANONICAL junction-safe routine
     (lib/worktree-manager.js safeRecursiveRmWithRetry, via safe-rm-tree.mjs): it unlinks
@@ -75,6 +77,29 @@ function Write-Log([string]$msg) {
 
 function Get-FreeGB { return [math]::Round((Get-PSDrive C).Free / 1GB, 2) }
 
+# GUARD 4 (SAFE): re-check git state INSIDE the candidate directory before it can be
+# deleted. An archived worktree is only safe to prune if it is both clean (no
+# uncommitted changes) and fully pushed (no commits ahead of its upstream / origin
+# main) -- exactly the state removeWorktree()/cleanupWorktree() in
+# lib/worktree-manager.js require before they'll archive it in the first place.
+# Fail-safe: any command error (e.g. a stranded .git pointer after 'git worktree
+# prune' tore down the admin dir post-rename) is treated as UNSAFE, never as clean.
+# Returns one of: safe | dirty | unpushed | git-error
+function Test-GitSafeToDelete([string]$path) {
+    $statusOut = cmd.exe /c "git -C `"$path`" status --porcelain 2>&1"
+    if ($LASTEXITCODE -ne 0) { return 'git-error' }
+    if (($statusOut | Where-Object { $_ -and $_.Trim() -ne '' }) ) { return 'dirty' }
+
+    $aheadOut = cmd.exe /c "git -C `"$path`" log `"@{upstream}..HEAD`" --oneline 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        $aheadOut = cmd.exe /c "git -C `"$path`" log origin/main..HEAD --oneline 2>&1"
+        if ($LASTEXITCODE -ne 0) { return 'git-error' }
+    }
+    if (($aheadOut | Where-Object { $_ -and $_.Trim() -ne '' })) { return 'unpushed' }
+
+    return 'safe'
+}
+
 # Junction-safe recursive delete via the fleet's CANONICAL routine
 # (lib/worktree-manager.js safeRecursiveRmWithRetry, invoked through safe-rm-tree.mjs):
 # it unlinks every nested junction/symlink BEFORE fs.rmSync, so a node_modules junction
@@ -127,6 +152,7 @@ $ageCutoff    = $now.AddDays(-$RetentionDays)
 $safetyCutoff = $now.AddHours(-$SafetyHours)
 $candidates = New-Object System.Collections.Generic.List[object]
 $skippedRecent = 0; $skippedActive = 0; $skippedScope = 0
+$skippedDirty = 0; $skippedUnpushed = 0; $skippedGitError = 0
 
 for ($i = 0; $i -lt $entries.Count; $i++) {
     $e = $entries[$i]
@@ -146,6 +172,13 @@ for ($i = 0; $i -lt $entries.Count; $i++) {
     # GUARD 2 (LIVE): never touch an active git worktree.
     if ($active.ContainsKey($full.ToLower())) { $skippedActive++; continue }
 
+    # GUARD 4 (SAFE): never touch a dirty tree, unpushed commits, or an
+    # unresolvable git state (fail-safe = skip, never delete on error).
+    $safety = Test-GitSafeToDelete $full
+    if ($safety -eq 'dirty') { $skippedDirty++; Write-Log ('  skipped-dirty      ' + $e.Name); continue }
+    if ($safety -eq 'unpushed') { $skippedUnpushed++; Write-Log ('  skipped-unpushed   ' + $e.Name); continue }
+    if ($safety -eq 'git-error') { $skippedGitError++; Write-Log ('  skipped-git-error  ' + $e.Name); continue }
+
     $reason = 'beyond-keep-' + $MaxKeep
     if ($tooOld) { $reason = 'age-over-' + $RetentionDays + 'd' }
     $ageDays = [math]::Round(($now - $e.LastWriteTime).TotalDays, 1)
@@ -155,7 +188,7 @@ for ($i = 0; $i -lt $entries.Count; $i++) {
 $mode = 'DRY-RUN'
 if ($Execute) { $mode = 'EXECUTE' }
 $freeBefore = Get-FreeGB
-Write-Log ('START  mode=' + $mode + '  scanned=' + $entries.Count + '  candidates=' + $candidates.Count + '  skipped(recent=' + $skippedRecent + ' active=' + $skippedActive + ' scope=' + $skippedScope + ')  free=' + $freeBefore + 'GB  policy=keep-under-' + $RetentionDays + 'd-newest-' + $MaxKeep + '-safety-' + $SafetyHours + 'h')
+Write-Log ('START  mode=' + $mode + '  scanned=' + $entries.Count + '  candidates=' + $candidates.Count + '  skipped(recent=' + $skippedRecent + ' active=' + $skippedActive + ' scope=' + $skippedScope + ' dirty=' + $skippedDirty + ' unpushed=' + $skippedUnpushed + ' git-error=' + $skippedGitError + ')  free=' + $freeBefore + 'GB  policy=keep-under-' + $RetentionDays + 'd-newest-' + $MaxKeep + '-safety-' + $SafetyHours + 'h')
 if ($entries.Count -gt $HighWater) { Write-Log ('WARN  backlog ' + $entries.Count + ' exceeds high-water ' + $HighWater + ' - consider tightening retention.') }
 
 if ($candidates.Count -eq 0) {

@@ -572,7 +572,11 @@ async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
     // QF-20260703-672: coordinator_reply/work_assignment writers put content in payload.body only —
     // the top-level body column stays null for those kinds. Fall back to payload so /checkin's JSON
     // (the worker's actual decision input) carries the real text instead of forcing a side DB query.
-    out.push({ id: m.id, message_type: m.message_type, kind, chairman_directive: isChairmanDirective, subject: m.subject || p.subject || null, body: m.body || p.body || null, created_at: m.created_at });
+    // QF-20260902-152: surface whether THIS row was already delivered once before this call
+    // (m.read_at set on entry, before the stamping below) — the caller needs this to tell a
+    // freshly-unread row from one that already fired a block last turn and is only re-surfacing
+    // because it is still short of the acknowledged_at bar (unackedOnly).
+    out.push({ id: m.id, message_type: m.message_type, kind, chairman_directive: isChairmanDirective, subject: m.subject || p.subject || null, body: m.body || p.body || null, created_at: m.created_at, read_at: m.read_at || null });
     try {
       if (!m.read_at) {
         // first authoritative delivery — mark DELIVERED, leave unacked so it re-surfaces once

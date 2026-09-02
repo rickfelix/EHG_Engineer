@@ -25,6 +25,7 @@ tags: [deployment, auto-generated]
   - [Approaching Stale Sessions](#approaching-stale-sessions)
 - [Troubleshooting](#troubleshooting)
   - [Manual Claim Release (Single Table — As of v5.0.0)](#manual-claim-release-single-table-as-of-v500)
+  - [Releasing ONE of Several Held Claims (release_sd_by_key, retarget_sd_claim)](#releasing-one-of-several-held-claims-release_sd_by_key-retarget_sd_claim)
   - [Issue: Session Claim Rejected (GATE_MULTI_SESSION_CLAIM_CONFLICT)](#issue-session-claim-rejected-gate_multi_session_claim_conflict)
   - [Issue: Heartbeat Not Starting](#issue-heartbeat-not-starting)
   - [Issue: Consecutive Heartbeat Failures](#issue-consecutive-heartbeat-failures)
@@ -82,11 +83,11 @@ tags: [deployment, auto-generated]
 
 **Category**: Deployment
 **Status**: Approved
-**Version**: 5.0.0
+**Version**: 5.3.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-02-18
+**Last Updated**: 2026-09-02
 **Tags**: session-management, operations, monitoring, troubleshooting, ship-safety, git-operations
-**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001, SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001
+**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001, SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001, SD-LEO-INFRA-RELEASE-KEY-SESSION-001
 
 ## Overview
 
@@ -299,6 +300,48 @@ WHERE session_id = 'session_abc123';
 SELECT * FROM v_active_sessions WHERE sd_id = 'SD-XXX-001';
 -- Should return 0 rows
 ```
+
+### Releasing ONE of Several Held Claims (release_sd_by_key, retarget_sd_claim)
+
+**As of SD-LEO-INFRA-RELEASE-KEY-SESSION-001**: `release_sd()` releases only whatever
+`claude_sessions.sd_key` currently POINTS AT — it takes no key argument. A session that holds
+one claim as the pointer AND other claims as SECONDARY holds
+(`strategic_directives_v2.claiming_session_id` / `quick_fixes.claiming_session_id`, independent
+of the scalar pointer) could not release one specific secondary hold without a hand edit.
+
+**`release_sd_by_key(p_session_id, p_sd_key, p_reason)`** releases ONLY the named claim row:
+
+```sql
+SELECT release_sd_by_key('session_abc123', 'SD-XXX-001', 'freed for coordinator redirect');
+-- {"success": true, "released_sd_key": "SD-XXX-001", "reason": "...", "released_at": "..."}
+```
+
+A session that does NOT hold the named key gets a NAMED refusal (never a silent no-op):
+
+```sql
+SELECT release_sd_by_key('session_abc123', 'SD-NOT-MINE-001', 'test');
+-- {"success": false, "error": "sd_mismatch", "held_sd_key": "SD-XXX-001", "message": "..."}
+```
+
+**`retarget_sd_claim(p_session_id, p_release_sd_key, p_claim_sd_key, p_reason)`** releases one
+key and claims another for the same session, ATOMICALLY (zero effects on any refusal — the
+release is rolled back if the claim is refused):
+
+```sql
+SELECT retarget_sd_claim('session_abc123', 'SD-OLD-001', 'SD-NEW-002', 'stale-session sweep retarget');
+-- {"success": true, "released_sd_key": "SD-OLD-001", "claimed_sd_key": "SD-NEW-002", "retargeted_at": "..."}
+```
+
+**Callers**: `lib/checkin/steps/release-request.cjs` (checkin `release_request` path) and
+`scripts/stale-session-sweep.cjs`'s `CLAIM_BOUNDARY_PROBE` branch both call the JS wrapper
+`bestEffortReleaseSdByKey(supabase, sessionId, sdKey, reason, log)` from
+`lib/fleet/best-effort-release.mjs` — never the raw RPC directly (enforced by
+`scripts/lint/require-release-sd-wrapper-lint.mjs`). `release_sd` is unchanged and remains the
+call for the single-hold path.
+
+**Migration**: `database/migrations/20260902_release_sd_by_key.sql` (additive; `release_sd` and
+`claim_sd` untouched). Verify live deployment with
+`node scripts/one-off/verify-release-sd-by-key.mjs`.
 
 ---
 
@@ -1467,6 +1510,7 @@ candidate fast-follow).
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 5.3.0 | 2026-09-02 | Added `release_sd_by_key`/`retarget_sd_claim` (SD-LEO-INFRA-RELEASE-KEY-SESSION-001): a multi-hold seat can now release or retarget ONE specific claim without a hand edit. Additive migration `database/migrations/20260902_release_sd_by_key.sql`; wired into `release-request.cjs` and the sweep's `CLAIM_BOUNDARY_PROBE` via `bestEffortReleaseSdByKey`. `release_sd` unchanged for the single-hold path. Migration not yet applied to prod at time of writing — see the SD's apply-path note (delegated additive path or chairman ceremony). |
 | 5.2.1 | 2026-07-10 | SWEEP_PASS_REGISTRY kill-switch given an owned, machine-readable retirement record (`SWEEP_PASS_REGISTRY_RETIREMENT`) and a CI parity test (`tests/ci/sweep-legacy-twin-parity.test.js`) pinning the three genuinely duplicated legacy twins to their pass-module counterparts (SD-LEO-INFRA-SWEEP-LEGACY-KILL-SWITCH-RETIRE-001, PR #5818). No runtime behavior change. |
 | 5.2.0 | 2026-07-09 | Sweep re-architecture (SD-ARCH-HOTSPOT-SWEEP-001, PR #5755): `main()` decomposed into ordered pass-registry (`lib/sweep/`) with per-pass isolation + `critical` rethrow, `SWEEP_PASS_REGISTRY=off` kill-switch, `evaluateSourceSideSignals` promoted to module-level pure helper. Includes QF-20260709-968 (CLAIM_FIX treats SD-row claim as authoritative over session-row binding). Cross-seat build: Golf-2 → Bravo handover with adversarial review gate (2 CRITICALs fixed pre-merge). |
 | 5.1.0 | 2026-06-04 | Added Cross-Session De-confliction Protocol behind default-OFF flag `CROSS_SESSION_DECONFLICTION` (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001): FR-1 typed INTENT broadcast, FR-2 sweep collision detection, FR-3 targeted de-confliction reply + `acknowledged_at` stamp, FR-4 lone-signal ack+route. Enum-safe (reuses INFO/COACHING), migration-free. PR #4222. |

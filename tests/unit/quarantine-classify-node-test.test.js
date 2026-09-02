@@ -8,8 +8,13 @@ describe('classifyFile node:test detection (SD-REFILL-00CO4E8Q)', () => {
   const NO_SUITE = 'Error: No test suite found in file X';
 
   it('a node:test file with a no-suite error -> node-test-runner', () => {
-    // tests/rank-items.test.js imports from 'node:test' (a real node:test file in this repo).
-    expect(classifyFile('tests/rank-items.test.js', [NO_SUITE])).toBe('node-test-runner');
+    // tests/review-gate.test.js imports from 'node:test' (a real node:test file in this
+    // repo). SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 converted the PREVIOUS fixture here
+    // (tests/rank-items.test.js) to vitest, which made this assertion deterministically
+    // return 'suite-load-error' instead of 'node-test-runner' -- repointed to a still-genuine
+    // node:test file (also currently quarantined for the identical node-test-runner reason,
+    // per tests/quarantine-manifest.json) so the fixture premise stays true.
+    expect(classifyFile('tests/review-gate.test.js', [NO_SUITE])).toBe('node-test-runner');
   });
 
   it('a non-node:test file with a missing-module error stays suite-load-error', () => {

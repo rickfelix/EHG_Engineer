@@ -80,3 +80,26 @@ describe('ackAdvisory — signal_resolved lane (QF-20260830-144)', () => {
     await expect(ackAdvisory(sb, ROW_ID, { sessionId: WORKER_SESSION })).rejects.toMatchObject({ code: 'NOT_AN_ADVISORY' });
   });
 });
+
+// QF-20260902-166 — the three backpressure-exempt CORRECTION kinds (amend, retraction,
+// supersede) had no ack path at all: DIRECTIVE_KINDS and ADVISORY_KINDS both omitted them,
+// so a coordinator correction row stayed permanently un-acked (read_at set, acknowledged_at
+// never) while the coordinator's ONLY backpressure-exempt lane for a correction was amend.
+describe('ackAdvisory — correction lane (QF-20260902-166)', () => {
+  it.each(['amend', 'retraction', 'supersede'])('acknowledges a %s row cleanly (the fix)', async (kind) => {
+    const row = { id: ROW_ID, payload: { kind }, target_session: WORKER_SESSION, acknowledged_at: null };
+    const sb = stubSupabase(row);
+    const result = await ackAdvisory(sb, ROW_ID, { sessionId: WORKER_SESSION });
+    expect(result.alreadyAcked).toBe(false);
+    expect(result.kind).toBe(kind);
+    expect(sb._updates).toHaveLength(1);
+    expect(sb._updates[0].acknowledged_at).toBeTruthy();
+  });
+
+  it('an unknown kind is still refused (the guard is not accidentally widened)', async () => {
+    const row = { id: ROW_ID, payload: { kind: 'not_a_real_kind' }, target_session: WORKER_SESSION, acknowledged_at: null };
+    const sb = stubSupabase(row);
+    await expect(ackAdvisory(sb, ROW_ID, { sessionId: WORKER_SESSION })).rejects.toMatchObject({ code: 'NOT_AN_ADVISORY' });
+    expect(sb._updates).toHaveLength(0);
+  });
+});

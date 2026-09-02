@@ -392,6 +392,11 @@ src/client/dist/
 # Generated query outputs (regenerable from scripts)
 /output/
 
+# SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: backfill-stranded-escalated-qfs.mjs writes a
+# timestamped manifest per run (dry-run and --live alike) -- audit trail for a revert, not a
+# committed artifact. Not covered by the root-anchored /output/ rule above.
+scripts/one-off/output/
+
 # Archived bootstrap scripts (local reference only)
 /docs/archive/
 
@@ -564,3 +569,8 @@ scratchpad/
 .artifacts/sms-status-relay-drain-tick.marker
 .artifacts/abnormal-exit-witness.ndjson
 .artifacts/sms-status-relay-drain-completions.ndjson
+
+# SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001 (security-agent OBS-1): a test-only chairman-gated
+# fixture is written+removed in tests/integration/migration-apply-state-ledger-wiring.test.js;
+# this makes a stray leftover (hard process kill mid-test) invisible to `git add -A` too.
+database/chairman-gated/__test-*

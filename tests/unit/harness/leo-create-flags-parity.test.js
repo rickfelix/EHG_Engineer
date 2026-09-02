@@ -166,10 +166,10 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
       expect(catchBlock).toMatch(/UPDATE quick_fixes SET status='escalated'/);
     });
 
-    it('the wrapped update fn throws explicitly on a Supabase error (supabase-js does not throw on its own)', () => {
+    it('the wrapped update fn routes through the single canonical writer, which throws explicitly on a Supabase error (SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 -- supabase-js does not throw on its own; the explicit-throw guarantee now lives inside setQuickFixStatus, covered by tests/unit/quick-fix/status-writer.test.js, rather than inline at each call site)', () => {
       const idx = src.indexOf('async function createFromQF');
       const body = src.slice(idx, idx + 5500);
-      expect(body).toMatch(/if\s*\(updErr\)\s*throw new Error\(updErr\.message\);/);
+      expect(body).toMatch(/await setQuickFixStatus\(supabase, qf\.id, \{/);
     });
   });
 
