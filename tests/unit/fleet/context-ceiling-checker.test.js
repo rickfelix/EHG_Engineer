@@ -71,6 +71,37 @@ describe('checkContextCeiling -- TS-1: a seat over its ceiling', () => {
   });
 });
 
+describe('checkContextCeiling -- coordinator ruling 04cf607d: same-turn = calling seat acts on the printed line', () => {
+  it('QUIET_TICK_CONTEXT_CEILING is emitted EXACTLY ONCE per crossing, and is grep-distinct from any other log line', async () => {
+    const readLatestUsageRow = vi.fn()
+      .mockResolvedValueOnce(freshRow(96))
+      .mockResolvedValueOnce(freshRow(20));
+    const invokeCompactSkill = vi.fn(async () => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await checkContextCeiling({
+      role: 'coordinator',
+      sessionId: 's-1',
+      env: ENFORCE_ENV,
+      deps: { readLatestUsageRow, invokeCompactSkill },
+    });
+
+    // Exactly once: a calling seat's own turn must see this line a single time per crossing --
+    // a duplicate would be ambiguous about whether one compaction or two was requested.
+    const ceilingLines = logSpy.mock.calls.filter((c) => String(c[0]).includes('QUIET_TICK_CONTEXT_CEILING'));
+    expect(ceilingLines).toHaveLength(1);
+
+    // Grep-distinct: the exact token QUIET_TICK_CONTEXT_CEILING must not collide with a
+    // same-prefix-but-different token (e.g. a hypothetical *_ENFORCED variant) elsewhere in the
+    // same output -- a grep for the bare token must match this line and only this line.
+    const wholeOutput = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    const matches = wholeOutput.match(/QUIET_TICK_CONTEXT_CEILING\b/g) || [];
+    expect(matches).toHaveLength(1);
+
+    logSpy.mockRestore();
+  });
+});
+
 describe('checkContextCeiling -- TS-2: a seat under its ceiling stays silent', () => {
   it('emits nothing and never invokes the compact skill', async () => {
     const readLatestUsageRow = vi.fn(async () => freshRow(40));
