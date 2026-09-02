@@ -39,7 +39,8 @@ import { preloadGateContext, getGateNumberForRule } from './validator-registry/g
 
 // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (program L5): gate-verdict cache —
 // PASS-only reuse across handoff retries for gates with declared pure inputs.
-import { probeVerdictCache } from '../gate-verdict-cache.js';
+// QF-20260902-476: also FAIL-REPLAY for the narrow, versioned FAIL_REPLAY_GATES set.
+import { probeVerdictCache, GATE_CODE_VERSION } from '../gate-verdict-cache.js';
 
 // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-5/TR-4): max-wait ceiling guard.
 // Escalates a perpetually-WAITing gate to FAIL after N consecutive waits OR a
@@ -309,14 +310,22 @@ export class ValidationOrchestrator {
             probe = probeVerdictCache(gate.name, context, context._verdictCache);
           } catch { /* fail-open */ }
           if (probe.hit) {
-            console.log(`   ♻️  ${gate.name}: reused prior PASS verdict (cache_hit, identical declared inputs)`);
-            const gateResult = { ...probe.priorResult, cache_hit: true, input_hash: probe.inputHash };
+            const isFailReplay = probe.mode === 'fail_replay';
+            console.log(isFailReplay
+              ? `   ♻️  ${gate.name}: reused prior FAIL verdict (fail_replay — edit the SD to re-evaluate)`
+              : `   ♻️  ${gate.name}: reused prior PASS verdict (cache_hit, identical declared inputs)`);
+            const gateResult = {
+              ...probe.priorResult, cache_hit: true, input_hash: probe.inputHash,
+              ...(isFailReplay ? { fail_replay: true } : {}),
+            };
             return Promise.resolve({ gate, gateResult });
           }
           return this.validateGate(gate.name, gate.validator, context)
             .then(gateResult => {
               if (probe.inputHash && gateResult && typeof gateResult === 'object') {
                 gateResult.input_hash = probe.inputHash;
+                const codeVersion = GATE_CODE_VERSION[gate.name];
+                if (codeVersion != null) gateResult.code_version = codeVersion;
               }
               return { gate, gateResult };
             });
