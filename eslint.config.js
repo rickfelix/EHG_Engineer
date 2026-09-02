@@ -1,8 +1,17 @@
+import { readFileSync } from 'node:fs';
 import boundaries from 'eslint-plugin-boundaries';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
 import playwright from 'eslint-plugin-playwright';
 import playwrightSelectors from './tools/eslint-rules/playwright-selectors/index.js';
+
+// SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001 (FR-3): ratchet allowlist of lib/ files that
+// already import dotenv directly (pre-existing, ~175 files -- bulk migration deferred, TR-1).
+// Regenerate via `node scripts/generate-dotenv-legacy-allowlist.mjs` after migrating a file
+// off direct dotenv, so it drops out and the rule starts protecting it going forward.
+const dotenvLegacyAllowlist = JSON.parse(
+  readFileSync(new URL('./tools/eslint-rules/dotenv-legacy-allowlist.json', import.meta.url), 'utf8')
+);
 
 // WHY THE RULES IN eslint-rules/ ARE NOT REGISTERED HERE — SD-LEO-INFRA-ONE-GENUINELY-DEAD-001.
 //
@@ -275,6 +284,42 @@ export default [
           { group: ['**/decision-log-store*'], importNames: ['insertEntry'], message: 'sd-reader.js (and other read-only modules) must not write via the Phase 2 envelope (T7 boundary). Use lib/eva-support/sd-decision-log-writer.js for Phase 3 audit rows.' },
         ],
       }],
+    },
+  },
+  // SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001 / FR-3: ban NEW direct `dotenv`/`dotenv/config`
+  // imports under lib/ outside the two sanctioned shared-loader files. This does NOT
+  // retroactively fix the ~175 pre-existing direct importers (dotenvLegacyAllowlist grandfathers
+  // them in `ignores` -- bulk migration deferred, TR-1); it only stops the population from
+  // growing. Companion CI test: tests/ci/dotenv-eslint-restricted-imports-config.test.js
+  // (mirrors tests/ci/eva-support-eslint-restricted-imports-config.test.js).
+  {
+    files: ['lib/**/*.{js,mjs,cjs}'],
+    ignores: [
+      'lib/supabase-client.js',
+      'lib/supabase-client.cjs',
+      ...dotenvLegacyAllowlist,
+    ],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: [
+          { name: 'dotenv', message: 'Direct dotenv imports read the CURRENT working directory\'s .env, which is wrong inside a git worktree (reads a stale propagateEnvFile snapshot instead of the live main-repo secret). Use resolveEnvPath from lib/env-resolver.cjs (as lib/supabase-client.js/.cjs already do) instead.' },
+          { name: 'dotenv/config', message: 'Direct dotenv/config side-effect imports read the CURRENT working directory\'s .env, which is wrong inside a git worktree. Use resolveEnvPath from lib/env-resolver.cjs (as lib/supabase-client.js/.cjs already do) instead.' },
+        ],
+      }],
+      // no-restricted-imports only covers ES `import`/`export` syntax -- a CJS
+      // `require('dotenv')` call is a plain CallExpression it never sees. Ban that
+      // form separately (TESTING review finding: without this, a brand-new .cjs file
+      // sails through the ban above undetected).
+      'no-restricted-syntax': ['error',
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='dotenv']",
+          message: 'Direct require(\'dotenv\') reads the CURRENT working directory\'s .env, which is wrong inside a git worktree. Use resolveEnvPath from lib/env-resolver.cjs (as lib/supabase-client.cjs already does) instead.',
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='dotenv/config']",
+          message: 'Direct require(\'dotenv/config\') reads the CURRENT working directory\'s .env, which is wrong inside a git worktree. Use resolveEnvPath from lib/env-resolver.cjs instead.',
+        },
+      ],
     },
   },
 ];
