@@ -44,7 +44,7 @@ const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { capBody, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
-const { insertCoordinationRow, FULL_UUID_RE } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
@@ -116,7 +116,9 @@ const SOLOMON_PER_DAY_MAX = Number.isFinite(SOLOMON_PER_DAY_MAX_ENV) ? SOLOMON_P
 
 // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: mirrors adam-advisory.cjs's KNOWN_SEND_KINDS
 // allowlist exactly -- same shared source (lib/fleet/worker-status.cjs), never a second list.
-const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
+// QF-20260902-467: also includes BACKPRESSURE_EXEMPT_KINDS (lib/coordinator/dispatch.cjs) --
+// kept identical to the Adam lane so the two never drift.
+const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS, ...BACKPRESSURE_EXEMPT_KINDS]);
 
 /**
  * Build the Solomon advisory payload. INVARIANT: payload.kind=adam_advisory by default (reuses the
@@ -1140,7 +1142,7 @@ async function main() {
   const kIdx = argv.indexOf('--kind');
   const kindArg = kIdx >= 0 ? argv[kIdx + 1] || null : null;
   if (kindArg && !KNOWN_SEND_KINDS.has(kindArg)) {
-    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
+    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs, or BACKPRESSURE_EXEMPT_KINDS in lib/coordinator/dispatch.cjs).`);
     process.exit(2);
   }
   // SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C / FR-1: `--message-kind retraction` posts a
