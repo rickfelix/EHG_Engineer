@@ -18,10 +18,15 @@
  * the command or follows a true shell separator (; & | ( \n && ||) is operative -- a MENTION of a
  * one-off path inside grep/cat/git-commit-message/etc. is never blocked, matching FR-3.
  *
- * KNOWN GAP (documented, not silently claimed closed): a dynamically-built import specifier
- * (string concatenation, a variable holding the path) is invisible to this regex-based detector.
- * The manifest + this control are defense-in-depth for the LITERAL bare-import shape that caused
- * the incident, not a proof against every possible obfuscation.
+ * KNOWN GAPS (documented, not silently claimed closed; security-agent EXEC review, SEC-F2): this
+ * is a regex-based literal-shape detector, not a parser, so it is blind to: a dynamically-built
+ * import specifier (string concatenation, a variable holding the path); any prefix before `node`
+ * on the same command (an env var assignment, `npx`, `timeout`, `nohup`); a non-node runtime
+ * (`tsx`, `bun`); file-indirection (a wrapper script that itself imports the target); a
+ * `file://`/absolute-path specifier; and an uppercase path segment (matching is case-sensitive).
+ * Every gap degrades to today's (pre-ENF-18) status quo, never worse. The manifest + this control
+ * are defense-in-depth for the highest-frequency LITERAL bare-import shape that caused the
+ * incident, not a proof against every possible obfuscation.
  */
 
 const path = require('path');

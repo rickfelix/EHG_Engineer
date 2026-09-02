@@ -17,6 +17,7 @@ on:
     paths:
       - 'scripts/one-off/**/*.mjs'
       - 'scripts/one-off/**/*.cjs'
+      - 'scripts/one-off/**/*.js'
       - 'eslint-rules/require-main-guard-in-one-off.js'
       - 'scripts/lint/generate-one-off-mutate-key-manifest.mjs'
       - 'scripts/lint/one-off-mutate-key-manifest.json'
