@@ -39,7 +39,9 @@ async function main() {
   // QF-20260902-914: probe the table ONCE, before any meter loop -- a per-meter "(unavailable
   // this run)" made a 5-day-blind construction defect (the migration was never applied) look
   // identical to a transient cache miss. Table-absent is a distinct, LOUD, non-zero-exit failure.
-  const { error: probeError } = await supabase.from('account_usage_pastes').select('id').limit(1);
+  // account_usage_pastes is defined by the staged, chairman-gated migration this QF exists to
+  // detect the absence of -- intentionally not yet in the live schema snapshot.
+  const { error: probeError } = await supabase.from('account_usage_pastes').select('id').limit(1); // schema-lint-disable-line
   if (probeError && isPasteLedgerMissingError(probeError)) {
     console.error(`account-usage-paste-projection: ${pasteLedgerMissingMessage()}`);
     process.exitCode = 1;
