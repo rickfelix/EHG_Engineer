@@ -495,16 +495,25 @@ export async function persistReading(supabase, reading) {
  * SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-5): optional repoPath probes that
  * repo's origin/main instead of the ambient cwd (EHG_Engineer). Omitting repoPath
  * is byte-identical to the pre-fix behavior.
+ *
+ * QF-20260813-510: git operations under this session's concurrent Bash load can
+ * transiently time out — a single retry before giving up trades a few seconds of
+ * latency for fewer 'unverifiable' readings (already excluded from FALSE_COMPLETION
+ * either way; this reduces noise, not risk).
  */
-export function gitGrepMainForSd(sdKey, repoPath) {
+export function gitGrepMainForSd(sdKey, repoPath, exec = execSync) {
+  const run = () => exec(`git log origin/main --grep="${String(sdKey).replace(/["\\$`]/g, '')}" -1 --format=%h`, {
+    encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
+    ...(repoPath ? { cwd: repoPath } : {}),
+  });
   try {
-    const out = execSync(`git log origin/main --grep="${String(sdKey).replace(/["\\$`]/g, '')}" -1 --format=%h`, {
-      encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
-      ...(repoPath ? { cwd: repoPath } : {}),
-    });
-    return out.trim().length > 0;
+    return run().trim().length > 0;
   } catch {
-    return 'unverifiable';
+    try {
+      return run().trim().length > 0;
+    } catch {
+      return 'unverifiable';
+    }
   }
 }
 
