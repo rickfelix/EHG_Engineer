@@ -163,3 +163,83 @@ describe('FR-6 wiring — a corrupt ledger must never fail the gate OPEN', () =>
     }
   });
 });
+
+// SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001 (FR-2) — --json mode's stdout-purity contract, exercised
+// against a REAL ceremony-pending gap rather than trusted by comment.
+//
+// A CHAIRMAN-GATED FIXTURE, DETERMINISTICALLY FORCED. Rather than depending on the ambient repo
+// already having a real chairman-gated migration pending ceremony (true today, not guaranteed at
+// every future run), this plants one: any file under database/chairman-gated/ with real DDL that
+// is certainly not applied to the live schema gets classified CEREMONY_PENDING (FR-2 of
+// SD-LEO-INFRA-APPLY-STATE-CEREMONY-PENDING-001, verify-migration-apply-state.mjs:499-505),
+// deterministically populating ceremonyPendingFailSet for this run regardless of ambient state.
+//
+// spawnSync used directly here (NOT the shared runVerifier() above), because that helper
+// deliberately COMBINES stdout+stderr -- the one thing this test exists to tell apart.
+describe('FR-2 (SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001) — --json stdout stays pure JSON with a ceremony-pending gap present', () => {
+  const FIXTURE = path.join(ROOT, 'database', 'chairman-gated', '__test-fixture-ceremony-pending-stdout-purity.sql');
+
+  function runVerifierSeparateStreams(args) {
+    const r = spawnSync('node', [VERIFIER, ...args], { cwd: ROOT, encoding: 'utf8', timeout: 240000 });
+    return { stdout: r.stdout || '', stderr: r.stderr || '', code: r.status ?? -1 };
+  }
+
+  /**
+   * The EXACT consumer parse this test exists to protect (chairman-apply-state.js:45-51):
+   * anchor on the first line whose column 0 is '{', then slice to the END of the string and
+   * JSON.parse. Deliberately NOT the brace-matching parser used elsewhere in this file --
+   * validation-agent's explicit finding was that a brace-matched assertion would PASS even with
+   * the bug present (it tolerates trailing content by construction), making it a dead test for
+   * this specific regression.
+   */
+  function parseLikeChairmanApplyState(stdout) {
+    const lines = stdout.split(/\r?\n/);
+    const start = lines.findIndex((l) => l.startsWith('{'));
+    if (start === -1) throw new Error('no JSON object found on stdout');
+    return JSON.parse(lines.slice(start).join('\n'));
+  }
+
+  beforeAll(() => {
+    fs.mkdirSync(path.dirname(FIXTURE), { recursive: true });
+    fs.writeFileSync(
+      FIXTURE,
+      'CREATE TABLE __test_fixture_ceremony_pending_stdout_purity (id int);\n',
+      'utf8',
+    );
+  });
+
+  afterAll(() => {
+    if (fs.existsSync(FIXTURE)) fs.rmSync(FIXTURE);
+  });
+
+  it('the fixture actually produces a ceremony-pending gap (sanity check the seed, not just the fix)', () => {
+    const { stdout, stderr } = runVerifierSeparateStreams(['--json']);
+    const report = parseLikeChairmanApplyState(stdout);
+    const fixtureEntry = (report.files || []).find((f) => String(f.file).includes('__test-fixture-ceremony-pending-stdout-purity'));
+    expect(fixtureEntry, 'fixture file not found in classifier output at all').toBeTruthy();
+    expect(fixtureEntry.status).toBe('CEREMONY_PENDING');
+    // The warning must exist SOMEWHERE (proves the seed reached the code path this test
+    // targets) -- which stream it's on is exactly what the next test asserts.
+    expect(stdout + stderr).toContain('chairman-gated migration(s) awaiting ceremony');
+  }, 300000);
+
+  it('--json stdout is pure JSON: the ceremony-pending warning is NOT on stdout', () => {
+    const { stdout } = runVerifierSeparateStreams(['--json']);
+    expect(stdout).not.toContain('::warning::');
+    // The real regression: this must not throw.
+    expect(() => parseLikeChairmanApplyState(stdout)).not.toThrow();
+  }, 300000);
+
+  it('--json stdout is pure JSON: parsing it end-to-end returns a populated files[] array (the actual chairman-apply-state.js contract)', () => {
+    const { stdout } = runVerifierSeparateStreams(['--json']);
+    const report = parseLikeChairmanApplyState(stdout);
+    expect(Array.isArray(report.files)).toBe(true);
+    expect(report.files.length).toBeGreaterThan(0);
+  }, 300000);
+
+  it('the warning still lands on stdout in the ceremony-pending case', () => {
+    const { stdout } = runVerifierSeparateStreams([]);
+    expect(stdout).toContain('::warning::');
+    expect(stdout).toContain('chairman-gated migration(s) awaiting ceremony');
+  }, 300000);
+});
