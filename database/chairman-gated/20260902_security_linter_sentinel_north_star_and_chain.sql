@@ -115,6 +115,7 @@ DECLARE
   v_north_star_write_grants integer;
   v_chain_write_grants integer;
   v_session_fn_searchpath text[];
+  v_chain_rls_enabled boolean;
 BEGIN
   SELECT c.relrowsecurity,
          (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid)
@@ -157,6 +158,22 @@ BEGIN
   IF v_session_fn_searchpath IS NULL
      OR NOT EXISTS (SELECT 1 FROM unnest(v_session_fn_searchpath) x WHERE x LIKE 'search_path=%') THEN
     RAISE EXCEPTION 'VERIFY FAILED: set_session_awaiting_approval search_path not pinned';
+  END IF;
+
+  -- SECURITY review (EXEC, SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001, finding SEC-1): this file
+  -- owns only scope_completion_chain's write-grant revoke, not its RLS-enable/policy (that half
+  -- ships separately in database/migrations/20260616_security_hygiene_rls_searchpath.sql, to
+  -- avoid duplicate/racing authorship). A non-blocking NOTICE (not a RAISE EXCEPTION -- this file
+  -- must not hard-fail on a companion file's apply order) flags the ceremony operator if
+  -- scope_completion_chain's RLS is not yet enabled, so applying this file alone is never read as
+  -- full closure for that table.
+  SELECT c.relrowsecurity
+    INTO v_chain_rls_enabled
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relname = 'scope_completion_chain';
+
+  IF v_chain_rls_enabled IS DISTINCT FROM true THEN
+    RAISE WARNING 'scope_completion_chain RLS is NOT yet enabled -- apply database/migrations/20260616_security_hygiene_rls_searchpath.sql too for full closure (this file only revoked its write grants)';
   END IF;
 
   RAISE NOTICE 'VERIFY OK: north_star RLS+policy+revoke present; scope_completion_chain revoke present; set_session_awaiting_approval search_path pinned';
