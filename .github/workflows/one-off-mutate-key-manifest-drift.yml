@@ -1,0 +1,39 @@
+name: scripts/one-off Mutate+Key Manifest Drift Check
+
+# SD-LEO-FIX-TEST-FIXTURE-LANE-001
+#
+# ENF-18's runtime block (scripts/hooks/lib/one-off-bare-import.cjs) decides dangerous-vs-allowed
+# purely from the committed manifest at scripts/lint/one-off-mutate-key-manifest.json -- it never
+# scans live (measured NFR: pre-tool-enforce.cjs baseline is already 729-1094ms; no latency budget
+# for a live corpus walk). A stale manifest silently widens what ENF-18 allows: a newly-added
+# unguarded mutate+key one-off file that isn't in the committed manifest is treated as
+# `not_in_dangerous_manifest` -> allow, exactly the incident shape this SD exists to close. This
+# workflow re-runs the same generator in --check mode and fails the PR the moment the committed
+# manifest disagrees with a fresh scan, so drift is caught at merge time, not discovered later by
+# a bypassed guard.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/one-off/**/*.mjs'
+      - 'scripts/one-off/**/*.cjs'
+      - 'eslint-rules/require-main-guard-in-one-off.js'
+      - 'scripts/lint/generate-one-off-mutate-key-manifest.mjs'
+      - 'scripts/lint/one-off-mutate-key-manifest.json'
+      - '.github/workflows/one-off-mutate-key-manifest-drift.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifest-drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Verify committed manifest matches a fresh scan
+        run: node scripts/lint/generate-one-off-mutate-key-manifest.mjs --check
