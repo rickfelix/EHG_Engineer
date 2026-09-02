@@ -45,6 +45,8 @@
  *   node scripts/coordinator-ack-adam.cjs --advisory <id> --disposition deferred --defer-trigger "next chairman weekly review"
  */
 require('dotenv').config();
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
@@ -361,6 +363,46 @@ async function recordLedgerDecision(supabase, { correlationId, disposition, deci
   return { recorded: true, tailsInherited, outcomeRef: resolvedOutcomeRef };
 }
 
+/**
+ * QF-20260902-298: resolve the correlation_id for a solomon_advice_outcome_ledger row given
+ * either an explicit --correlation-id or a --ledger-row id, read straight off the ledger table --
+ * no coordinator-targeted adam_advisory row required (fetchAdvisory's session_coordination read
+ * can never see a Solomon-to-Adam ledger row that never had one). Exported for tests.
+ */
+async function resolveLedgerCorrelationId(supabase, { ledgerRowId, explicitCorrelationId }) {
+  if (explicitCorrelationId) return { correlationId: explicitCorrelationId };
+  const { data, error } = await supabase
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
+    .select('correlation_id')
+    .eq('id', ledgerRowId)
+    .maybeSingle();
+  if (error || !data) return { error: `ledger row not found: ${ledgerRowId}` };
+  return { correlationId: data.correlation_id };
+}
+
+/** Real reconcile run (spawned, never blocks the decision already recorded). */
+function spawnReconcile() {
+  try { execFileSync('node', [path.join(__dirname, 'solomon-ledger-reconcile.cjs')], { stdio: 'inherit' }); }
+  catch (e) { console.error('NOTE: reconcile run failed (decision still recorded):', e.message); }
+}
+
+/**
+ * QF-20260902-298: disposition a solomon_advice_outcome_ledger row directly, with no
+ * coordinator-targeted advisory in play — the SAME recordLedgerDecision patch builder the
+ * --advisory path uses, so decision_by/decision_at/outcome linkage (FR-3/FR-5) are identical.
+ * runReconcile is injected (defaults to the real spawn) so tests never shell out. Never calls
+ * process.exit — main() does that off the returned {ok, reason}. Exported for tests.
+ */
+async function runLedgerOnlyDisposition(supabase, { ledgerRowId, explicitCorrelationId, disposition, coordinatorSession, deferTrigger, outcomeRef, noArtifact, runReconcile = spawnReconcile }) {
+  if (!disposition) return { ok: false, reason: '--ledger-row/--correlation-id requires --disposition <accepted|rejected|partial|deferred>' };
+  const resolved = await resolveLedgerCorrelationId(supabase, { ledgerRowId, explicitCorrelationId });
+  if (resolved.error) return { ok: false, reason: resolved.error };
+  const result = await recordLedgerDecision(supabase, { correlationId: resolved.correlationId, disposition, decidedBy: coordinatorSession, deferTrigger, outcomeRef, noArtifact });
+  if (!result.recorded) return { ok: false, reason: result.reason };
+  runReconcile();
+  return { ok: true, correlationId: resolved.correlationId, tailsInherited: result.tailsInherited, outcomeRef: result.outcomeRef };
+}
+
 function parseArgs(argv) {
   const args = argv.slice(2);
   const flags = {};
@@ -473,14 +515,8 @@ async function deliverReplyOrExit(supabase, { adv, replyBody, coordinatorSession
 async function main() {
   const { flags, positional } = parseArgs(process.argv);
   const advisoryId = typeof flags.advisory === 'string' ? flags.advisory : null;
-  if (!advisoryId) {
-    console.error('Usage: node scripts/coordinator-ack-adam.cjs --advisory <id> [--reply "<reply body>"]');
-    process.exit(2);
-  }
-  const wantsReply = flags.reply !== undefined;
-  const replyBody = typeof flags.reply === 'string'
-    ? [flags.reply, ...positional].join(' ').trim()
-    : positional.join(' ').trim();
+  const ledgerRowId = typeof flags['ledger-row'] === 'string' ? flags['ledger-row'] : null;
+  const explicitCorrelationId = typeof flags['correlation-id'] === 'string' ? flags['correlation-id'] : null;
 
   const coordinatorSession = process.env.CLAUDE_SESSION_ID;
   if (!coordinatorSession) { console.error('ERROR: CLAUDE_SESSION_ID required (SessionStart hook).'); process.exit(1); }
@@ -488,6 +524,35 @@ async function main() {
   let supabase;
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
+
+  // QF-20260902-298: --ledger-row/--correlation-id WITHOUT --advisory dispositions a
+  // solomon_advice_outcome_ledger row directly — closes the gap named in the ticket, where a
+  // Solomon-to-Adam ledger row has no coordinator-targeted advisory for --advisory to find.
+  if (!advisoryId && (ledgerRowId || explicitCorrelationId)) {
+    const disposition = typeof flags.disposition === 'string' ? flags.disposition : null;
+    const deferTrigger = typeof flags['defer-trigger'] === 'string' ? flags['defer-trigger'] : null;
+    const outcomeRef = typeof flags['outcome-ref'] === 'string' ? flags['outcome-ref'] : null;
+    const noArtifact = flags['no-artifact'] !== undefined ? flags['no-artifact'] : null;
+    const outcome = await runLedgerOnlyDisposition(supabase, { ledgerRowId, explicitCorrelationId, disposition, coordinatorSession, deferTrigger, outcomeRef, noArtifact });
+    if (!outcome.ok) { console.error('ERROR:', outcome.reason); process.exit(1); }
+    console.log('✓ Ledger decision recorded');
+    console.log('  correlation_id:', outcome.correlationId);
+    console.log('  decision:', disposition);
+    if (outcome.outcomeRef) console.log('  outcome_ref:', outcome.outcomeRef);
+    if (outcome.tailsInherited > 0) console.log('  tails inherited:', outcome.tailsInherited);
+    return;
+  }
+
+  if (!advisoryId) {
+    console.error('Usage: node scripts/coordinator-ack-adam.cjs --advisory <id> [--reply "<reply body>"]');
+    console.error('   or: node scripts/coordinator-ack-adam.cjs --ledger-row <id> --disposition <accepted|rejected|partial|deferred> [...]');
+    console.error('   or: node scripts/coordinator-ack-adam.cjs --correlation-id <id> --disposition <accepted|rejected|partial|deferred> [...]');
+    process.exit(2);
+  }
+  const wantsReply = flags.reply !== undefined;
+  const replyBody = typeof flags.reply === 'string'
+    ? [flags.reply, ...positional].join(' ').trim()
+    : positional.join(' ').trim();
 
   const { row: adv, error: fErr } = await fetchAdvisory(supabase, advisoryId);
   if (fErr) { console.error('ERROR: advisory lookup failed:', fErr.message); process.exit(1); }
@@ -569,7 +634,8 @@ async function main() {
 
 module.exports = {
   isMatchableRef, parseArgs, recordLedgerDecision, inheritTailDecisions, VALID_DISPOSITIONS, resolveOutcomeRef, isNoArtifactRef, NO_ARTIFACT_MARKER, LINKAGE_REQUIRED_DISPOSITIONS, deliverReplyOrExit,
-  normalizeDecisionBy, DECISION_BY_MAX_LEN }; // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-2
+  normalizeDecisionBy, DECISION_BY_MAX_LEN, // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-2
+  resolveLedgerCorrelationId, runLedgerOnlyDisposition }; // QF-20260902-298
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

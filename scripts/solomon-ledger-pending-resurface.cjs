@@ -149,7 +149,11 @@ function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST
   // bodyless_row, and this kind is not in LEGITIMATELY_BODYLESS_KINDS.
   const body = [
     `${items.length} Solomon ledger item(s) still pending, oldest ${oldestAge}h.`,
-    'Disposition individually by correlation_id.',
+    // QF-20260902-298: name the actual command, not just the key -- "by correlation_id" alone
+    // sent a writer to --advisory (which reads adam_advisory, not this ledger, and fails "not
+    // found" on a row with no coordinator-targeted advisory). --ledger-row takes the bracketed
+    // [id] on each line below directly, no advisory lookup involved.
+    'Disposition individually: node scripts/coordinator-ack-adam.cjs --ledger-row <id> --disposition <accepted|rejected|partial|deferred> [--outcome-ref <artifact-id> | --no-artifact "<reason>"]',
     '',
     ...lines,
     ...(truncated ? ['', `NOTE: list truncated to ${maxItems} of ${all.length} pending items; ${all.length - kept.length} omitted.`] : []),
