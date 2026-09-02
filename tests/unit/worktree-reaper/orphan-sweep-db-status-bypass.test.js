@@ -68,15 +68,17 @@ describe('fetchTerminalStatusKeys', () => {
     const supabase = {
       from: vi.fn((table) => ({
         select: () => ({
-          in: async () => {
-            if (table === 'strategic_directives_v2') {
-              return { data: [{ sd_key: 'SD-DONE', status: 'completed' }, { sd_key: 'SD-LIVE', status: 'executing' }] };
-            }
-            if (table === 'quick_fixes') {
-              return { data: [{ id: 'QF-DONE', status: 'cancelled' }, { id: 'QF-LIVE', status: 'in_progress' }] };
-            }
-            return { data: [] };
-          },
+          in: () => ({
+            limit: async () => {
+              if (table === 'strategic_directives_v2') {
+                return { data: [{ sd_key: 'SD-DONE', status: 'completed' }, { sd_key: 'SD-LIVE', status: 'executing' }] };
+              }
+              if (table === 'quick_fixes') {
+                return { data: [{ id: 'QF-DONE', status: 'cancelled' }, { id: 'QF-LIVE', status: 'in_progress' }] };
+              }
+              return { data: [] };
+            },
+          }),
         }),
       })),
     };
@@ -85,7 +87,7 @@ describe('fetchTerminalStatusKeys', () => {
   });
 
   it('fails closed to an empty set when the DB call throws', async () => {
-    const supabase = { from: () => ({ select: () => ({ in: async () => { throw new Error('db down'); } }) }) };
+    const supabase = { from: () => ({ select: () => ({ in: () => ({ limit: async () => { throw new Error('db down'); } }) }) }) };
     const result = await fetchTerminalStatusKeys(supabase, ['SD-DONE']);
     expect(result.size).toBe(0);
   });
