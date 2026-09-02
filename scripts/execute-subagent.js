@@ -55,6 +55,11 @@ export function parseArgs() {
       // in adaptive-validation.js instead of reaching the manual override it names.
       const value = args[++i];
       parsed.options.validation_mode = typeof value === 'string' ? value : null;
+    } else if (arg === '--diff-range') {
+      // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-8): same explicit-string-flag pattern as
+      // --phase/--validation-mode above -- a bare boolean coercion would drop the range.
+      const value = args[++i];
+      parsed.options.diff_range = typeof value === 'string' ? value : null;
     } else if (arg.startsWith('--')) {
       // Boolean flag (e.g., --full-e2e)
       const flagName = arg.slice(2).replace(/-/g, '_');
@@ -90,6 +95,10 @@ OPTIONAL FLAGS (sub-agent specific):
   --phase <phase>         Explicit SD phase to stamp on the stored evidence row
                           (e.g. EXEC_TO_PLAN). Optional -- omitted calls derive
                           phase from the SD's own current_phase automatically.
+  --diff-range <range>    Post-merge re-verify mode (TESTING): explicit
+                          "<from>..<to>" git range to use instead of the default
+                          main...HEAD (which is empty once the branch is merged).
+                          e.g. --diff-range abc1234~1..abc1234
 
 UTILITY OPTIONS:
   --list, -l              List all available sub-agents

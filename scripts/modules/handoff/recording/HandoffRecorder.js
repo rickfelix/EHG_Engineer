@@ -28,6 +28,8 @@ import { resolveClaimIdentity } from '../../../../lib/claim/claim-identity.js';
 import { buildPhaseSnapshotWindow } from '../../../../lib/governance/phase-snapshot-window.mjs';
 // QF-20260830-312: ceremony-vs-real-fix measurability
 import { computeArtifactHash } from '../../../../lib/governance/artifact-content-hash.mjs';
+// SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): shared pure core with BaseExecutor.js's bypass stamp.
+import { deriveBypassAwareRecordFields, buildPersistedBypassMetadata } from '../../../../lib/handoff/bypass-stamp.js';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -222,7 +224,18 @@ export class HandoffRecorder {
     }
     const normalizedScore = this._normalizeValidationScore(rawScore);
 
+    // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): result.bypassed is stamped by BaseExecutor.js
+    // (and, for executors that self-stamp, threaded through it unmodified) whenever a required
+    // gate failure was overridden via --bypass-validation. A bypassed acceptance must never be
+    // recorded as validation_passed=true or score_source='measured' -- those are exactly the
+    // two fields every downstream gate/role reads to decide whether a handoff genuinely passed.
+    const { isBypassed, scoreSource: bypassAwareScoreSource, validationPassed } = deriveBypassAwareRecordFields(result, scoreSource);
+    scoreSource = bypassAwareScoreSource;
+
     console.log(`🔍 Validation score: ${rawScore}% (normalized: ${normalizedScore}%, source: ${scoreSource})`);
+    if (isBypassed) {
+      console.log(`   ⚠️  BYPASSED handoff — validation_passed will be recorded false (reason: ${result.bypassReason || 'none given'})`);
+    }
 
     const execution = {
       id: executionId,
@@ -234,7 +247,7 @@ export class HandoffRecorder {
       handoff_type: handoffType,
       status: 'accepted',
       validation_score: normalizedScore,
-      validation_passed: true,
+      validation_passed: validationPassed,
       // FIX: Store validation summary instead of full result to prevent bloat
       validation_details: {
         summary: {
@@ -247,7 +260,9 @@ export class HandoffRecorder {
         },
         verified_at: new Date().toISOString(),
         verifier: 'unified-handoff-system.js',
-        score_source: scoreSource
+        score_source: scoreSource,
+        // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): never fabricated -- absent when not bypassed.
+        ...(isBypassed ? { bypass: buildPersistedBypassMetadata(result, { actor: recorderIdentity() }) } : {})
       },
       accepted_at: new Date().toISOString(),
       created_by: recorderIdentity()
@@ -286,7 +301,10 @@ export class HandoffRecorder {
             status: 'accepted',
             accepted_at: execution.accepted_at,
             validation_score: execution.validation_score,
-            validation_passed: true,
+            // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): mirror execution.validation_passed --
+            // the pending-row upsert path is a second write site for the SAME acceptance and
+            // must carry the identical bypass-awareness, not its own hardcoded true.
+            validation_passed: execution.validation_passed,
             validation_details: { ...execution.validation_details, upserted_by_recorder: true }
           };
           const { error: updateError } = await this.supabase
@@ -867,6 +885,12 @@ export class HandoffRecorder {
       }
       const normalizedScore = this._normalizeValidationScore(rawScore);
 
+      // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): same bypass-awareness as recordSuccess --
+      // this is the SECOND persisted row for the same acceptance (sd_phase_handoffs), and
+      // FR-4's LEAD-FINAL-APPROVAL check reads metadata.bypass from exactly this row.
+      const { isBypassed, scoreSource: bypassAwareScoreSource, validationPassed } = deriveBypassAwareRecordFields(result, scoreSource);
+      scoreSource = bypassAwareScoreSource;
+
       const handoffId = randomUUID();
 
       // Build metadata with gate-specific validation results for downstream handoffs
@@ -879,6 +903,10 @@ export class HandoffRecorder {
         sub_agent_count: subAgentResults?.length || 0,
         // QF-20260830-312: same hash-on-every-attempt contract as recordFailure.
         artifact_hash: await computeArtifactHash(this.supabase, sdUuid),
+        // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): never fabricated -- absent when not
+        // bypassed. FR-4's LEAD-FINAL-APPROVAL check reads .bypass.pattern_id/followup_sd_key
+        // from exactly this shape to decide whether the bypass has a resolved follow-up.
+        ...(isBypassed ? { bypass: buildPersistedBypassMetadata(result, { actor: recorderIdentity() }) } : {})
       };
 
       // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Log automated test evidence for UAT-exempt SDs
@@ -1009,7 +1037,9 @@ export class HandoffRecorder {
         // AFTER spread: These fields MUST override anything in handoffContent
         status: 'pending_acceptance', // Always start as pending, update to accepted below
         validation_score: normalizedScore,
-        validation_passed: result.success !== false,
+        // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): a bypassed run is never validation_passed,
+        // regardless of result.success (bypass IS how it reached success in the first place).
+        validation_passed: result.success !== false && validationPassed,
         validation_details: { ...(result.validation || {}), score_source: scoreSource },
         metadata,
         window_registered_at: phaseSnapshotWindow.window_registered_at,
