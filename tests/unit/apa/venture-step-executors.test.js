@@ -793,10 +793,10 @@ describe('buildStepExecutor() — Object.hasOwn guard against inherited step_id 
 });
 
 describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
-  it('registers 4 preflight checks and zero step overrides (no fine-grained selector work done yet)', () => {
+  it('registers 4 preflight checks and the stp-4de9 step override (QF-20260902-884)', () => {
     const config = getVentureRegistration('ALTIFYAI');
     expect(config.preflightChecks.map((c) => c.name)).toEqual(['land', 'signupFormRenders', 'uploadRouteReachable', 'feedbackWidget']);
-    expect(config.stepOverrides).toEqual({});
+    expect(Object.keys(config.stepOverrides)).toEqual(['stp-4de9-upload-a-single-imag']);
   });
 
   // FR-5: the venture's own sign-in toggle navigates off-origin to this Clerk-hosted domain --
@@ -908,6 +908,103 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     const page = makeMockPage({ gotoResponses: { 'http://altifyai.fixture/upload': { status: () => 404 } } });
 
     await expect(check.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/expected a reachable route/);
+  });
+});
+
+// QF-20260902-884: the stp-4de9 stepOverride. Grounded in a hydration-aware live re-census
+// (Solomon directive f67e4e9d) that corrected this session's own earlier false-premise finding
+// -- /generate DOES render a real upload workspace once React mounts.
+describe('buildStepExecutor() — ALTIFYAI stp-4de9 override (QF-20260902-884)', () => {
+  const step = { step_id: 'stp-4de9-upload-a-single-imag', goal: 'upload a single image from my computer' };
+  const TOGGLE = 'text=Already have an account? Sign in';
+  const EXISTING_KEY = 'VENTURE_UAT_TEST_ACCOUNT_ALTIFYAI_EXISTING';
+  const SECRET_VAR = 'VENTURE_UAT_CLERK_SECRET_KEY_ALTIFYAI';
+  const PUBLISHABLE_VAR = 'VENTURE_UAT_CLERK_PUBLISHABLE_KEY_ALTIFYAI';
+
+  beforeEach(() => {
+    clerkTesting.clerkSetup.mockReset().mockResolvedValue(undefined);
+    clerkTesting.setupClerkTestingToken.mockReset().mockResolvedValue(undefined);
+    process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    process.env[SECRET_VAR] = 'sk_test_abc';
+    process.env[PUBLISHABLE_VAR] = 'pk_test_xyz';
+  });
+  afterEach(() => {
+    delete process.env[EXISTING_KEY];
+    delete process.env[SECRET_VAR];
+    delete process.env[PUBLISHABLE_VAR];
+  });
+
+  it('fires only for this exact step_id -- a different step_id on ALTIFYAI resolves the generic fallback, never this override', () => {
+    const otherStep = { step_id: 'stp-0001-some-other-step', goal: 'do something else' };
+    const executor = buildStepExecutor(otherStep, 'ALTIFYAI');
+    const overrideExecutor = buildStepExecutor(step, 'ALTIFYAI');
+    expect(executor).not.toBe(overrideExecutor);
+  });
+
+  it('fires only for ALTIFYAI -- the identical step_id on an unregistered venture resolves the generic fallback', () => {
+    const overrideExecutor = buildStepExecutor(step, 'ALTIFYAI');
+    const genericExecutor = buildStepExecutor(step, 'SOMEUNREGISTEREDVENTURE');
+    expect(genericExecutor).not.toBe(overrideExecutor);
+  });
+
+  it('authenticates via the SAME generic auth flow (never re-implemented), then confirms the real /generate upload workspace and stamps stepOverrideUsed', async () => {
+    const executor = buildStepExecutor(step, 'ALTIFYAI');
+    const page = makeMockPage({
+      locatorCounts: { [TOGGLE]: 1, 'input[type="file"]': 1 },
+      buttonTexts: ['Continue'],
+      clickNavigations: { Continue: 'http://fixture/dashboard' },
+    });
+
+    const result = await executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: false });
+
+    expect(result.stepOverrideUsed).toBe(true);
+    expect(result.matchedSelector).toBe('input[type="file"]');
+    expect(result.renderedStateSummary).toMatch(/upload workspace rendered on \/generate/);
+    expect(page.calls.goto).toContain('http://fixture/generate');
+    // Real auth flow ran (never re-implemented): the toggle was confirmed and credentials filled.
+    expect(page.calls.click).toContain(TOGGLE);
+    expect(clerkTesting.setupClerkTestingToken).toHaveBeenCalledWith({ page });
+  });
+
+  it('does not re-run auth when ctx.authenticated is already true (a prior step already signed in)', async () => {
+    const executor = buildStepExecutor(step, 'ALTIFYAI');
+    const page = makeMockPage({ locatorCounts: { 'input[type="file"]': 1 } });
+
+    const result = await executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true });
+
+    expect(result.stepOverrideUsed).toBe(true);
+    // No /register navigation, no credential fill -- auth was never re-attempted.
+    expect(page.calls.goto).not.toContain('http://fixture/register');
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('propagates a genuine auth failure unmodified (never masks a real failure as "no UI mapping")', async () => {
+    const executor = buildStepExecutor(step, 'ALTIFYAI');
+    // Toggle never renders -- SEC-001 refuses before any credential is submitted.
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 0 } });
+
+    await expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/could not confirm a sign-in affordance/i);
+    expect(page.calls.fill).toEqual([]);
+  });
+
+  it('throws when no input[type="file"] renders on /generate after the wait (never fabricates a pass)', async () => {
+    vi.useFakeTimers();
+    try {
+      const executor = buildStepExecutor(step, 'ALTIFYAI');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1, 'input[type="file"]': 0 },
+        buttonTexts: ['Continue'],
+        clickNavigations: { Continue: 'http://fixture/dashboard' },
+      });
+
+      const assertion = expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/no input\[type="file"\] rendered.*after 15s/i);
+      await vi.advanceTimersByTimeAsync(15000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
