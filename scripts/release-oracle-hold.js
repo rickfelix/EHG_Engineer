@@ -15,7 +15,7 @@ import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import {
   releaseSdOracleHold, releaseQfOracleHold, isBoundedWaitElapsed, BOUNDED_WAIT_MS,
-  extractConsultRowIdFromQfCondition,
+  extractConsultRowIdFromQfCondition, printRemainingIneligibility,
 } from '../lib/fleet/hold-writer.js';
 
 dotenv.config();
@@ -116,6 +116,9 @@ async function main() {
       process.exit(1);
     }
     console.log(`[release-oracle-hold] released (${result.cause})`);
+    if (parsed.sdKey) {
+      await printRemainingIneligibility(supabase, parsed.sdKey, { logPrefix: '[release-oracle-hold]' });
+    }
   } catch (e) {
     console.error('[release-oracle-hold] ERROR:', e.message);
     process.exit(1);

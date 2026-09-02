@@ -8,8 +8,20 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   BOUNDED_WAIT_MS, isBoundedWaitElapsed, classifyMergeFailure,
   writeSdOracleHold, releaseSdOracleHold, writeQfOracleHold, releaseQfOracleHold,
-  isOracleHeldQF, QF_ORACLE_HOLD_PREFIX,
+  isOracleHeldQF, QF_ORACLE_HOLD_PREFIX, printRemainingIneligibility,
 } from '../../../lib/fleet/hold-writer.js';
+
+function fakeSupabaseForRow(row) {
+  return {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: row, error: null }),
+        }),
+      }),
+    }),
+  };
+}
 
 function fakePgClient({ rowCount = 1, queryError = null, selectRows = [] } = {}) {
   const queries = [];
@@ -63,6 +75,7 @@ describe('writeSdOracleHold (FR-4)', () => {
       reviewAt: '2026-09-01T00:00:00Z',
       releaseCondition: 'awaiting Solomon oracle read',
       consultRowId: 'consult-row-1',
+      premisePredicate: 'classifyDispatchIneligibility returns null',
       createClientFn,
     });
 
@@ -75,6 +88,8 @@ describe('writeSdOracleHold (FR-4)', () => {
       human_decider: 'solomon',
       oracle_read_pending_review_at: '2026-09-01T00:00:00Z',
       oracle_read_pending_consult_row_id: 'consult-row-1',
+      premise_recheck_by: '2026-09-01T00:00:00Z',
+      premise_predicate: 'classifyDispatchIneligibility returns null',
     });
   });
 
@@ -82,10 +97,24 @@ describe('writeSdOracleHold (FR-4)', () => {
     const client = fakePgClient({ rowCount: 0 });
     const createClientFn = vi.fn(async () => client);
     const result = await writeSdOracleHold('SD-WRONG-KEY', {
-      reviewAt: '2026-09-01T00:00:00Z', releaseCondition: 'x', createClientFn,
+      reviewAt: '2026-09-01T00:00:00Z', releaseCondition: 'x', premisePredicate: 'x', createClientFn,
     });
     expect(result.merged).toBe(false);
     expect(result.cause).toBe('silent_zero_row_no_op');
+  });
+
+  // QF-20260902-868: a hold without premisePredicate is refused by the writer -- the hourly
+  // review must always have a re-measurable line, never a hold that only names WHY without HOW
+  // to re-check it.
+  it('refuses to write a hold with no premisePredicate', async () => {
+    const client = fakePgClient({ rowCount: 1 });
+    const createClientFn = vi.fn(async () => client);
+    const result = await writeSdOracleHold('SD-TEST-002', {
+      reviewAt: '2026-09-01T00:00:00Z', releaseCondition: 'awaiting Solomon oracle read', createClientFn,
+    });
+    expect(result.merged).toBe(false);
+    expect(result.cause).toBe('missing_premise_predicate');
+    expect(client.queries.length).toBe(0);
   });
 });
 
@@ -206,5 +235,38 @@ describe('writeQfOracleHold / isOracleHeldQF / releaseQfOracleHold (FR-4)', () =
     const result = await releaseQfOracleHold(supabase, 'QF-GENUINE-CHAIRMAN-GATE');
     expect(result.merged).toBe(false);
     expect(result.cause).toBe('silent_zero_row_no_op');
+  });
+});
+
+// QF-20260902-868: a release only clears ONE predicate -- specimen incident where
+// unactionable_venture_remediation kept refusing a row after its needs_coordinator_review hold
+// was released, silently, because the release path never re-checked the eligibility classifier.
+describe('printRemainingIneligibility (QF-20260902-868)', () => {
+  it('prints and returns the remaining verdict when a released row is still refused by a DIFFERENT axis', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = fakeSupabaseForRow({
+      sd_key: 'SD-LEO-FIX-REMEDIATION-001',
+      metadata: {},
+      target_application: 'SomeVentureApp',
+    });
+    const remaining = await printRemainingIneligibility(supabase, 'SD-LEO-FIX-REMEDIATION-001');
+    expect(remaining).toBe('unactionable_venture_remediation');
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('unactionable_venture_remediation'));
+    spy.mockRestore();
+  });
+
+  it('returns null silently when the released row is now fully claimable', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = fakeSupabaseForRow({
+      sd_key: 'SD-NOW-CLAIMABLE-001',
+      status: 'active',
+      current_phase: 'LEAD',
+      metadata: {},
+      target_application: 'EHG_Engineer',
+    });
+    const remaining = await printRemainingIneligibility(supabase, 'SD-NOW-CLAIMABLE-001');
+    expect(remaining).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
