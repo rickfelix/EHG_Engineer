@@ -14,13 +14,14 @@ import {
   buildStepExecutor,
 } from '../../../lib/apa/venture-step-executors.js';
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current' } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {} } = {}) {
   const calls = { goto: [], fill: [], click: [] };
+  let url = currentUrl;
   return {
     calls,
-    async goto(url) {
-      calls.goto.push(url);
-      const configured = gotoResponses[url];
+    async goto(gotoUrl) {
+      calls.goto.push(gotoUrl);
+      const configured = gotoResponses[gotoUrl];
       if (configured === undefined) return { status: () => 200 };
       return configured;
     },
@@ -41,8 +42,17 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       };
     },
     async fill(selector, value) { calls.fill.push([selector, value]); },
-    async click(selector) { calls.click.push(selector); },
-    url: () => currentUrl,
+    // clickNavigations lets a fixture simulate a click causing real navigation (e.g. an
+    // "Continue" selector that matches more than one button, actually hitting "Continue with Google" and redirecting
+    // off-origin) -- the post-click url() call then reflects the new location, matching real
+    // Playwright behavior where url() always reads the page's current location.
+    async click(selector) {
+      calls.click.push(selector);
+      if (Object.prototype.hasOwnProperty.call(clickNavigations, selector)) {
+        url = clickNavigations[selector];
+      }
+    },
+    url: () => url,
   };
 }
 
@@ -288,7 +298,7 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
   it('same-origin, different path is accepted (the check is origin equality, not exact-URL equality)', async () => {
     process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
     const executor = buildStepExecutor(step, 'RACEVENTURE');
-    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'http://fixture/sign-in' });
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, currentUrl: 'http://fixture/some/other/path' });
 
     await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
       .rejects.toThrow(/authenticated, but no verified UI mapping/i);
@@ -321,6 +331,33 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
       .rejects.toThrow(/could not be parsed to verify its origin/i);
 
     expect(page.calls.fill).toEqual([]);
+  });
+
+  it('fresh-E2E finding (2026-09-01, live run against altifyai.rickfelix2000.workers.dev): a post-submit redirect to a THIRD-PARTY origin (e.g. a "Continue" selector matching more than one button, hitting "Continue with Google") is never read as "authenticated" -- even though its path does not match the sign-in/login denylist', async () => {
+    vi.useFakeTimers();
+    try {
+      process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+      const executor = buildStepExecutor(step, 'RACEVENTURE');
+      // Real repro: page.click('button:has-text("Continue")') matched "Continue with Google"
+      // and landed on accounts.google.com/v3/signin/identifier -- a path that contains none of
+      // NOT_YET_AUTHENTICATED_PATH_RE's tokens (sign-in/login/register/verify/factor/mfa/
+      // challenge), so a path-only check reads it as authenticated. It must not: the origin is
+      // not the venture's own.
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/register',
+        clickNavigations: { 'button:has-text("Continue")': 'https://accounts.google.com/v3/signin/identifier?client_id=abc' },
+      });
+
+      const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/auth required.*neither a verification-code challenge nor an authenticated-state signal/i);
+      // Both 15s bounded waits (code-challenge locator, authenticated-URL poll) must exhaust
+      // for the fallback executor to resolve; advance fake time past both.
+      await vi.advanceTimersByTimeAsync(16000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
