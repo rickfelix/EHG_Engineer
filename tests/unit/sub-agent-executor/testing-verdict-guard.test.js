@@ -31,6 +31,24 @@ describe('validateTestExecutionShape (pure function)', () => {
       .toThrow(/tests_executed/);
   });
 
+  it('SEC-4 (evidence a600d8e5): a malformed-field error message truncates a huge caller-supplied value rather than persisting it verbatim', () => {
+    const huge = { tests_executed: 'x'.repeat(10000), tests_passed: 10, tests_failed: 0, tests_skipped: 0 };
+    let thrown;
+    try {
+      validateTestExecutionShape({ sub_agent_code: 'TESTING', verdict: 'PASS', metadata: { test_execution: huge } });
+    } catch (e) { thrown = e; }
+    expect(thrown).toBeDefined();
+    expect(thrown.message.length).toBeLessThan(1000);
+    expect(thrown.message).toContain('(truncated)');
+  });
+
+  it('SEC-4: a malformed-field error never throws a secondary exception for a circular caller-supplied value', () => {
+    const circular = { tests_executed: 10, tests_passed: 10, tests_failed: 0, tests_skipped: 0 };
+    circular.tests_skipped = circular; // circular reference in place of a number -> also malformed
+    expect(() => validateTestExecutionShape({ sub_agent_code: 'TESTING', verdict: 'PASS', metadata: { test_execution: circular } }))
+      .toThrow(/tests_skipped/);
+  });
+
   it('TS-3b: throws when tests_executed is present and numeric but zero -- not a genuine measured run', () => {
     const zero = buildTestExecution({ executed: 0, passed: 0, failed: 0, skipped: 0 });
     expect(() => validateTestExecutionShape({ sub_agent_code: 'TESTING', verdict: 'PASS', metadata: { test_execution: zero } }))
