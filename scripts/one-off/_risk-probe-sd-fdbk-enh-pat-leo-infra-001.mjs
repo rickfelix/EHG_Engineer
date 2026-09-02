@@ -9,15 +9,15 @@ const supabase = createClient(
 
 // 1. Function overload check
 console.log('--- 1. Function overload check (pg_proc) ---');
-const { data: procs, error: e1 } = await supabase.rpc('exec_sql', {
-  query: `SELECT p.oid, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+const { data: procsRaw, error: e1 } = await supabase.rpc('exec_sql', {
+  sql_text: `SELECT p.oid, p.proname, pg_get_function_identity_arguments(p.oid) AS args
             FROM pg_proc p
             JOIN pg_namespace n ON n.oid = p.pronamespace
            WHERE p.proname = 'update_sd_after_lead_evaluation'
              AND n.nspname = 'public';`
 });
 if (e1) console.log('exec_sql RPC error:', e1.message);
-else console.log(JSON.stringify(procs, null, 2));
+else console.log(JSON.stringify(procsRaw?.[0]?.result, null, 2));
 
 // 2. Count existing SDs at status='active'
 console.log('\n--- 2. SDs at status=active ---');
@@ -42,36 +42,37 @@ console.log('Count:', ipCount);
 
 // 4. status CHECK constraint
 console.log('\n--- 4. status column CHECK constraint ---');
-const { data: checkCons, error: e5 } = await supabase.rpc('exec_sql', {
-  query: `SELECT conname, pg_get_constraintdef(oid) AS def
+const { data: checkConsRaw, error: e5 } = await supabase.rpc('exec_sql', {
+  sql_text: `SELECT conname, pg_get_constraintdef(oid) AS def
             FROM pg_constraint
            WHERE conrelid = 'public.strategic_directives_v2'::regclass
              AND contype = 'c';`
 });
 if (e5) console.log('exec_sql error:', e5.message);
-else console.log(JSON.stringify(checkCons, null, 2));
+else console.log(JSON.stringify(checkConsRaw?.[0]?.result, null, 2));
 
 // 5. Triggers
 console.log('\n--- 5. Triggers on strategic_directives_v2 ---');
-const { data: triggers, error: e6 } = await supabase.rpc('exec_sql', {
-  query: `SELECT tgname, tgenabled, pg_get_triggerdef(oid) AS def
+const { data: triggersRaw, error: e6 } = await supabase.rpc('exec_sql', {
+  sql_text: `SELECT tgname, tgenabled, pg_get_triggerdef(oid) AS def
             FROM pg_trigger
            WHERE tgrelid = 'public.strategic_directives_v2'::regclass
              AND NOT tgisinternal;`
 });
 if (e6) console.log('exec_sql error:', e6.message);
-else console.log(JSON.stringify(triggers, null, 2));
+else console.log(JSON.stringify(triggersRaw?.[0]?.result, null, 2));
 
 // 6. Current function body
 console.log('\n--- 6. Current function body ---');
-const { data: fnBody, error: e7 } = await supabase.rpc('exec_sql', {
-  query: `SELECT pg_get_functiondef(p.oid) AS def
+const { data: fnBodyRaw, error: e7 } = await supabase.rpc('exec_sql', {
+  sql_text: `SELECT pg_get_functiondef(p.oid) AS def
             FROM pg_proc p
             JOIN pg_namespace n ON n.oid = p.pronamespace
            WHERE p.proname = 'update_sd_after_lead_evaluation'
              AND n.nspname = 'public'
            LIMIT 1;`
 });
+const fnBody = fnBodyRaw?.[0]?.result;
 if (e7) console.log('exec_sql error:', e7.message);
 else if (fnBody && fnBody.length) console.log(fnBody[0].def);
 else console.log('(no rows)');

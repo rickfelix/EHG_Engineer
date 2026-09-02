@@ -21,17 +21,21 @@ const SNAPSHOT_PATH = join(__dirname, '..', 'docs', 'database', 'schema-snapshot
 const supabase = createSupabaseServiceClient();
 
 async function captureSchema() {
+  // exec_sql returns [{ result: [...] }] (canonical shape, mirrors leo-create-sd.js).
+
   // Get all tables
-  const { data: tables, error: tablesErr } = await supabase.rpc('exec_sql', {
-    query: `
+  const { data: tablesRaw, error: tablesErr } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT table_name, table_type
       FROM information_schema.tables
       WHERE table_schema = 'public'
       ORDER BY table_name
-    `,
+    `.trim(),
   });
+  const tables = tablesRaw?.[0]?.result;
 
-  if (tablesErr) {
+  if (tablesErr || !Array.isArray(tables)) {
+    if (tablesErr) console.error('captureSchema: exec_sql error:', tablesErr.message);
     // Fallback: query pg_tables directly
     const { data: pgTables } = await supabase
       .from('pg_catalog.pg_tables')
@@ -42,8 +46,8 @@ async function captureSchema() {
   }
 
   // Get all enum types
-  const { data: enums } = await supabase.rpc('exec_sql', {
-    query: `
+  const { data: enumsRaw, error: enumsErr } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT t.typname AS enum_name,
              array_agg(e.enumlabel ORDER BY e.enumsortorder) AS values
       FROM pg_type t
@@ -52,12 +56,14 @@ async function captureSchema() {
       WHERE n.nspname = 'public'
       GROUP BY t.typname
       ORDER BY t.typname
-    `,
+    `.trim(),
   });
+  if (enumsErr) console.error('captureSchema: enums exec_sql error:', enumsErr.message);
+  const enums = enumsRaw?.[0]?.result;
 
   // Get CHECK constraints on status-like fields
-  const { data: checks } = await supabase.rpc('exec_sql', {
-    query: `
+  const { data: checksRaw, error: checksErr } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT tc.table_name, cc.constraint_name, cc.check_clause
       FROM information_schema.check_constraints cc
       JOIN information_schema.table_constraints tc
@@ -66,8 +72,10 @@ async function captureSchema() {
         AND (cc.check_clause LIKE '%status%' OR cc.check_clause LIKE '%state%'
              OR cc.check_clause LIKE '%phase%' OR cc.check_clause LIKE '%type%')
       ORDER BY tc.table_name
-    `,
+    `.trim(),
   });
+  if (checksErr) console.error('captureSchema: checks exec_sql error:', checksErr.message);
+  const checks = checksRaw?.[0]?.result;
 
   return {
     capturedAt: new Date().toISOString(),
@@ -145,7 +153,7 @@ async function main() {
         process.exit(1);
       }
     } else if (command === 'status') {
-      console.log(`Current schema:`);
+      console.log('Current schema:');
       console.log(`  Tables: ${schema.tableCount}`);
       console.log(`  Enums: ${schema.enumCount}`);
       console.log(`  CHECK constraints (status-like): ${schema.checkConstraintCount}`);

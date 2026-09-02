@@ -25,9 +25,11 @@ async function main() {
 
   console.log('\n=== Enum Coverage Audit ===\n');
 
+  // exec_sql returns [{ result: [...] }] (canonical shape, mirrors leo-create-sd.js).
+
   // Get existing enum types
-  const { data: enums } = await supabase.rpc('exec_sql', {
-    query: `
+  const { data: enumsRaw, error: enumsError } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT t.typname AS enum_name,
              array_agg(e.enumlabel ORDER BY e.enumsortorder) AS values
       FROM pg_type t
@@ -36,31 +38,37 @@ async function main() {
       WHERE n.nspname = 'public'
       GROUP BY t.typname
       ORDER BY t.typname
-    `,
+    `.trim(),
   });
+  if (enumsError) console.error('enum types: exec_sql error:', enumsError.message);
+  const enums = enumsRaw?.[0]?.result;
 
   // Get columns that look like status fields
-  const { data: columns } = await supabase.rpc('exec_sql', {
-    query: `
+  const { data: columnsRaw, error: columnsError } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT c.table_name, c.column_name, c.data_type, c.udt_name
       FROM information_schema.columns c
       WHERE c.table_schema = 'public'
         AND (${STATUS_PATTERNS.map(p => `c.column_name LIKE '%${p}%'`).join(' OR ')})
       ORDER BY c.table_name, c.column_name
-    `,
+    `.trim(),
   });
+  if (columnsError) console.error('status columns: exec_sql error:', columnsError.message);
+  const columns = columnsRaw?.[0]?.result;
 
   // Get CHECK constraints
-  const { data: checks } = await supabase.rpc('exec_sql', {
-    query: `
+  const { data: checksRaw, error: checksError } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT tc.table_name, cc.constraint_name, cc.check_clause
       FROM information_schema.check_constraints cc
       JOIN information_schema.table_constraints tc
         ON cc.constraint_name = tc.constraint_name
       WHERE tc.table_schema = 'public'
       ORDER BY tc.table_name
-    `,
+    `.trim(),
   });
+  if (checksError) console.error('check constraints: exec_sql error:', checksError.message);
+  const checks = checksRaw?.[0]?.result;
 
   // Analysis
   const enumNames = new Set((enums || []).map(e => e.enum_name));
