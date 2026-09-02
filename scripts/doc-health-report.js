@@ -92,60 +92,41 @@ function countMdFiles(dir, results = []) {
   return results;
 }
 
-function runValidationScript(scriptName) {
+// Best-effort JSON extraction: prefer the `--- JSON RESULTS ---` marker (validate-doc-links.js),
+// falling back to parsing the raw stdout as JSON (validate-doc-metadata.js / detect-duplicate-docs.js
+// print bare JSON with no marker under --format=json, which the marker-only regex never matched --
+// every call through this path silently returned null regardless of the child's actual exit code).
+export function extractJson(output) {
+  const marker = output.match(/--- JSON RESULTS ---\n([\s\S]+)$/);
+  const jsonStr = (marker ? marker[1] : output).trim();
+  let lastBrace = jsonStr.lastIndexOf('}');
+  while (lastBrace > 0) {
+    try {
+      return JSON.parse(jsonStr.substring(0, lastBrace + 1));
+    } catch (_e) {
+      lastBrace = jsonStr.lastIndexOf('}', lastBrace - 1);
+    }
+  }
   try {
-    const output = execSync(`node scripts/${scriptName} --json 2>&1`, {
+    return JSON.parse(jsonStr);
+  } catch (_e) {
+    return null;
+  }
+}
+
+function runValidationScript(scriptName, flag = '--json') {
+  try {
+    const output = execSync(`node scripts/${scriptName} ${flag} 2>&1`, {
       cwd: ROOT_DIR,
       encoding: 'utf8',
       timeout: 300000,  // 5 minutes for large codebases
       maxBuffer: 50 * 1024 * 1024  // 50MB buffer for large outputs
     });
-
-    // Extract JSON from output - be more careful with parsing
-    const jsonMatch = output.match(/--- JSON RESULTS ---\n([\s\S]+)$/);
-    if (jsonMatch) {
-      try {
-        // Try to find where JSON ends (look for closing brace followed by non-JSON)
-        const jsonStr = jsonMatch[1].trim();
-        // Find the last closing brace that makes valid JSON
-        let lastBrace = jsonStr.lastIndexOf('}');
-        while (lastBrace > 0) {
-          try {
-            const candidate = jsonStr.substring(0, lastBrace + 1);
-            return JSON.parse(candidate);
-          } catch (_e) {
-            lastBrace = jsonStr.lastIndexOf('}', lastBrace - 1);
-          }
-        }
-        // Try parsing the whole thing
-        return JSON.parse(jsonStr);
-      } catch (_e) {
-        return null;
-      }
-    }
-    return null;
+    return extractJson(output);
   } catch (error) {
-    // Try to parse JSON from error output
-    const output = error.stdout || error.message || '';
-    const jsonMatch = output.match(/--- JSON RESULTS ---\n([\s\S]+)$/);
-    if (jsonMatch) {
-      try {
-        const jsonStr = jsonMatch[1].trim();
-        let lastBrace = jsonStr.lastIndexOf('}');
-        while (lastBrace > 0) {
-          try {
-            const candidate = jsonStr.substring(0, lastBrace + 1);
-            return JSON.parse(candidate);
-          } catch (_e) {
-            lastBrace = jsonStr.lastIndexOf('}', lastBrace - 1);
-          }
-        }
-        return JSON.parse(jsonStr);
-      } catch (_e) {
-        return null;
-      }
-    }
-    return null;
+    // A non-zero exit (e.g. VALIDATION_FAILED) or a timeout both land here; either way the child
+    // may still have printed a complete JSON report before exiting -- try it before giving up.
+    return extractJson(error.stdout || error.message || '');
   }
 }
 
@@ -183,21 +164,27 @@ function calculateOrganizationScore() {
   };
 }
 
-function calculateCompletenessScore() {
-  const result = runValidationScript('validate-doc-metadata.js');
-  if (!result) {
-    return { score: 0, details: { error: 'Could not run metadata validation' } };
+export function calculateCompletenessScore() {
+  // QF-20260901-962: this validator only recognizes --format=json (bare --json is silently
+  // ignored, so it ran in text mode and this always read as a crash). Its report also nests
+  // counts under summary.{valid,invalid} (see scripts/modules/docmon/reporter.js createReport),
+  // not the top-level valid/missing this used to read -- both were undefined, so a SUCCESSFUL
+  // parse would still have silently scored 100% regardless of how many files were compliant.
+  const result = runValidationScript('validate-doc-metadata.js', '--format=json');
+  if (!result || !result.summary) {
+    return { score: 0, details: { error: 'Could not run metadata validation', unverified: true } };
   }
 
-  const total = (result.valid?.length || 0) + (result.missing?.length || 0);
-  const valid = result.valid?.length || 0;
+  const valid = result.summary.valid || 0;
+  const missing = result.summary.invalid || 0;
+  const total = valid + missing;
   const score = total > 0 ? Math.round((valid / total) * 100) : 100;
 
   return {
     score,
     details: {
       withMetadata: valid,
-      missingMetadata: result.missing?.length || 0,
+      missingMetadata: missing,
       totalFiles: total
     }
   };
@@ -257,17 +244,24 @@ function calculateLinkHealthScore() {
   };
 }
 
-function calculateDuplicationScore() {
+export function calculateDuplicationScore() {
+  // QF-20260901-962: the O(n^2) scan over the full docs/ corpus routinely exceeds
+  // runValidationScript's 5-minute timeout on this repo (measured: still running past 290s),
+  // so this reads as UNVERIFIED far more often than not -- that must not silently score 100%
+  // (a false "no duplicates" claim) nor display NaN%. It is excluded from the overall grade
+  // instead (see calculateOverallScore). result.exactFilename/fuzzyTitle/totalFiles never
+  // existed on the real output shape ({ stats: { files_scanned }, duplicates: [{ method }] },
+  // see detect-duplicate-docs.js) -- a successful parse would previously always compute
+  // totalFiles=1 and exactDuplicates=0, i.e. a fabricated 100% no matter what ran.
   const result = runValidationScript('detect-duplicate-docs.js');
-  if (!result) {
-    return { score: 100, details: { error: 'Could not run duplicate detection' } };
+  if (!result || !result.stats) {
+    return { score: 100, details: { error: 'Could not run duplicate detection', duplicateRate: 0, unverified: true } };
   }
 
-  // Only count exact filename duplicates (true duplicates that need consolidation)
-  // Fuzzy title and content similarity are warnings, not violations
-  const exactDuplicates = result.exactFilename?.length || 0;
-  const fuzzyTitleMatches = result.fuzzyTitle?.length || 0;
-  const totalFiles = result.totalFiles || 1;
+  const duplicates = result.duplicates || [];
+  const exactDuplicates = duplicates.filter((d) => d.method === 'filename').length;
+  const fuzzyMatches = duplicates.length - exactDuplicates;
+  const totalFiles = result.stats.files_scanned || 1;
 
   // Score based on exact duplicates (true violations)
   const duplicateRate = (exactDuplicates / totalFiles) * 100;
@@ -277,7 +271,7 @@ function calculateDuplicationScore() {
     score,
     details: {
       duplicateGroups: exactDuplicates,
-      fuzzyMatches: fuzzyTitleMatches,
+      fuzzyMatches,
       totalFiles,
       duplicateRate: Math.round(duplicateRate * 10) / 10
     }
@@ -359,12 +353,16 @@ function calculateSubCategorizationScore() {
   };
 }
 
-function calculateOverallScore(metrics) {
+// QF-20260901-962: a metric whose underlying validator crashed/timed out is UNVERIFIED, not
+// measured -- it must not contribute a grade (0%, or a stale/misleading number) to the composite.
+// Excluded from both the numerator and the denominator so the overall score reflects only the
+// metrics that actually ran.
+export function calculateOverallScore(metrics) {
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const [key, weight] of Object.entries(WEIGHTS)) {
-    if (metrics[key]) {
+    if (metrics[key] && !metrics[key].details?.unverified) {
       weightedSum += metrics[key].score * weight;
       totalWeight += weight;
     }
@@ -424,10 +422,14 @@ function generateReport() {
     const metric = metrics[key];
     const threshold = THRESHOLDS[key];
     const weight = Math.round(WEIGHTS[key] * 100);
-    const status = metric.score >= threshold ? '✅' : '⚠️';
-    const scoreDisplay = key === 'duplication'
-      ? `${100 - metric.details.duplicateRate}%`
-      : `${metric.score}%`;
+    // QF-20260901-962: an unverified metric (crashed/timed-out validator) prints as UNVERIFIED,
+    // never as a percentage -- a percent here previously read as a measurement that never ran.
+    const status = metric.details?.unverified ? '❓' : metric.score >= threshold ? '✅' : '⚠️';
+    const scoreDisplay = metric.details?.unverified
+      ? 'UNVERIFIED (excluded from grade)'
+      : key === 'duplication'
+        ? `${100 - metric.details.duplicateRate}%`
+        : `${metric.score}%`;
 
     console.log(`${status} ${label}`);
     console.log(`   Score: ${scoreDisplay} (target: ${threshold}%, weight: ${weight}%)`);
@@ -669,4 +671,7 @@ function main() {
   process.exit(report.overallScore >= 70 ? 0 : 1);
 }
 
-main();
+// QF-20260901-962: guard so the module can be imported for unit tests without running the full
+// (multi-minute) scan and calling process.exit -- mirrors the same convention already used by
+// scripts/validate-doc-metadata.js.
+if (process.argv[1] === __filename) main();
