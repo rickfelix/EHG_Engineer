@@ -56,6 +56,21 @@ beforeAll(() => {
       "  return bestEffortReleaseSd(supabase, sessionId, 'manual', console.log, { expectedSdKey: sdKey });\n" +
       '}\n',
   );
+  // SD-LEO-INFRA-RELEASE-KEY-SESSION-001 (FR-5): release_sd_by_key must be caught by the same
+  // guard, and its wrapper (bestEffortReleaseSdByKey) must not be flagged.
+  writeFileSync(
+    path.join(fixtureRoot, 'scripts', 'bad-raw-by-key-call.mjs'),
+    'export async function doIt(supabase, sessionId, sdKey) {\n' +
+      "  await supabase.rpc('release_sd_by_key', { p_session_id: sessionId, p_sd_key: sdKey, p_reason: 'x' });\n" +
+      '}\n',
+  );
+  writeFileSync(
+    path.join(fixtureRoot, 'scripts', 'good-wrapped-by-key-call.mjs'),
+    "import { bestEffortReleaseSdByKey } from '../lib/fleet/best-effort-release.mjs';\n" +
+      'export async function doIt(supabase, sessionId, sdKey) {\n' +
+      "  return bestEffortReleaseSdByKey(supabase, sessionId, sdKey, 'manual', console.log);\n" +
+      '}\n',
+  );
   // The one structural exemption -- must be excluded outright, not merely allowlisted.
   writeFileSync(
     path.join(libFleetDir, 'best-effort-release.mjs'),
@@ -87,6 +102,19 @@ describe('require-release-sd-wrapper-lint.mjs (driver, real subprocess)', () => 
     const { json } = runDriver(fixtureRoot);
     const flagged = new Set(json.violations.map((v) => v.filePath));
     expect(flagged.has('scripts/good-wrapped-call.mjs')).toBe(false);
+  });
+
+  it("flags a raw, unallowlisted rpc('release_sd_by_key', ...) call site (FR-5)", () => {
+    const { exitCode, json } = runDriver(fixtureRoot);
+    expect(exitCode).toBe(1);
+    const flagged = json.violations.map((v) => v.filePath);
+    expect(flagged).toContain('scripts/bad-raw-by-key-call.mjs');
+  });
+
+  it('does not flag a call already routed through bestEffortReleaseSdByKey (FR-5)', () => {
+    const { json } = runDriver(fixtureRoot);
+    const flagged = new Set(json.violations.map((v) => v.filePath));
+    expect(flagged.has('scripts/good-wrapped-by-key-call.mjs')).toBe(false);
   });
 
   it('structurally exempts lib/fleet/best-effort-release.mjs\'s own internal call (never counted, never needs an allowlist entry)', () => {

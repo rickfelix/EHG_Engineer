@@ -11,9 +11,17 @@
  *
  * SD-LEO-INFRA-CLAIM-SURFACE-SYNC-002 (FR-4).
  *
+ * SD-LEO-INFRA-RELEASE-KEY-SESSION-001 (FR-5): also flags a raw `.rpc('release_sd_by_key', ...)`
+ * call. release_sd_by_key is a sibling RPC serving the same guard's purpose (a named-claim
+ * release with a lock-time CAS) -- it escaped this rule entirely until this change, which is
+ * exactly the class of bug this lint exists to prevent. The sanctioned wrapper is
+ * bestEffortReleaseSdByKey(supabase, sessionId, sdKey, reason, log), also in
+ * lib/fleet/best-effort-release.mjs.
+ *
  * AST-based (not a text/regex scan): only a real CallExpression whose callee is a `.rpc`
- * member access with a string-literal first argument `'release_sd'` is flagged, so a comment
- * or a string mentioning "release_sd" elsewhere in a file is never a false positive.
+ * member access with a string-literal first argument naming one of the guarded RPCs is
+ * flagged, so a comment or a string mentioning these names elsewhere in a file is never a
+ * false positive.
  *
  * DELIBERATELY NARROW, matching this repo's established checker style (see
  * eslint-rules/require-main-guard-in-one-off.js): a computed member access
@@ -25,13 +33,36 @@
  * @module eslint-rules/require-release-sd-wrapper
  */
 
-function isReleaseSdRpcCall(node) {
-  if (!node || node.type !== 'CallExpression') return false;
+const GUARDED_RPCS = {
+  release_sd: {
+    messageId: 'rawReleaseSdCall',
+    message:
+      "Raw rpc('release_sd', ...) call. release_sd is SESSION-scoped, not SD-scoped -- it releases " +
+      'WHATEVER the session currently holds (QF-20260726-593). Route through ' +
+      'bestEffortReleaseSd(supabase, sessionId, reason, log, {expectedSdKey}) from ' +
+      'lib/fleet/best-effort-release.mjs instead, or add a reason+count entry to ' +
+      'scripts/lint/require-release-sd-wrapper-allowlist.json if this site is a known, ' +
+      'pending-retrofit exception.',
+  },
+  release_sd_by_key: {
+    messageId: 'rawReleaseSdByKeyCall',
+    message:
+      "Raw rpc('release_sd_by_key', ...) call. Route through " +
+      'bestEffortReleaseSdByKey(supabase, sessionId, sdKey, reason, log) from ' +
+      'lib/fleet/best-effort-release.mjs instead (SD-LEO-INFRA-RELEASE-KEY-SESSION-001), or add ' +
+      'a reason+count entry to scripts/lint/require-release-sd-wrapper-allowlist.json if this ' +
+      'site is a known, pending-retrofit exception.',
+  },
+};
+
+function guardedRpcNameOf(node) {
+  if (!node || node.type !== 'CallExpression') return null;
   const callee = node.callee;
-  if (!callee || callee.type !== 'MemberExpression' || callee.computed) return false;
-  if (!callee.property || callee.property.type !== 'Identifier' || callee.property.name !== 'rpc') return false;
+  if (!callee || callee.type !== 'MemberExpression' || callee.computed) return null;
+  if (!callee.property || callee.property.type !== 'Identifier' || callee.property.name !== 'rpc') return null;
   const firstArg = node.arguments[0];
-  return !!firstArg && firstArg.type === 'Literal' && firstArg.value === 'release_sd';
+  if (!firstArg || firstArg.type !== 'Literal') return null;
+  return Object.prototype.hasOwnProperty.call(GUARDED_RPCS, firstArg.value) ? firstArg.value : null;
 }
 
 export default {
@@ -39,19 +70,14 @@ export default {
     type: 'problem',
     docs: {
       description:
-        "Require callers of the release_sd RPC to go through lib/fleet/best-effort-release.mjs's bestEffortReleaseSd(expectedSdKey) instead of calling supabase.rpc('release_sd', ...) directly",
+        "Require callers of the release_sd / release_sd_by_key RPCs to go through lib/fleet/best-effort-release.mjs's wrappers instead of calling supabase.rpc(...) directly",
       category: 'Possible Errors',
       recommended: true,
       url: 'https://github.com/rickfelix/EHG_Engineer/blob/main/eslint-rules/require-release-sd-wrapper.js',
     },
     messages: {
-      rawReleaseSdCall:
-        "Raw rpc('release_sd', ...) call. release_sd is SESSION-scoped, not SD-scoped -- it releases " +
-        'WHATEVER the session currently holds (QF-20260726-593). Route through ' +
-        'bestEffortReleaseSd(supabase, sessionId, reason, log, {expectedSdKey}) from ' +
-        'lib/fleet/best-effort-release.mjs instead, or add a reason+count entry to ' +
-        'scripts/lint/require-release-sd-wrapper-allowlist.json if this site is a known, ' +
-        'pending-retrofit exception.',
+      rawReleaseSdCall: GUARDED_RPCS.release_sd.message,
+      rawReleaseSdByKeyCall: GUARDED_RPCS.release_sd_by_key.message,
     },
     schema: [],
   },
@@ -59,8 +85,9 @@ export default {
   create(context) {
     return {
       CallExpression(node) {
-        if (isReleaseSdRpcCall(node)) {
-          context.report({ node, messageId: 'rawReleaseSdCall' });
+        const name = guardedRpcNameOf(node);
+        if (name) {
+          context.report({ node, messageId: GUARDED_RPCS[name].messageId });
         }
       },
     };
