@@ -69,4 +69,45 @@ describe('TS-6: PASS with unexpected>0 is impossible, through the real consumer 
     const artifact = { expected: 48, unexpected: 0, skipped: 0, flaky: 3 };
     expect(runThroughRealConsumers(artifact, { provenanceOk: true })).toBe('PASS');
   });
+
+  // Peer QA review (test-expert-reuse): the FR-4 provenance cap keyed on `evidence_reused`
+  // alone, which the OLDER, separate getCachedTestResults cache path (phase3-execution.js)
+  // never sets -- it sets `from_cache: true` with no provenance_verified field at all. That
+  // let a cached-but-unverified reuse fall through to an unqualified PASS@95, bypassing the
+  // exact invariant FR-4 exists to enforce. Exercises the REAL generateVerdict, not a mock,
+  // against the actual shape getCachedTestResults produces (tests_executed/tests_passed/
+  // failed_tests/from_cache/cache_age_minutes -- see phase3-execution.js:389-395).
+  it('FR-4 (peer-QA-found bypass): a from_cache result with no provenance_verified is capped at CONDITIONAL_PASS, never an unqualified PASS', () => {
+    const cachedResults = {
+      findings: {
+        phase3_execution: {
+          tests_executed: 51,
+          tests_passed: 51,
+          failed_tests: 0,
+          from_cache: true,
+          cache_age_minutes: 12
+        }
+      },
+      critical_issues: [],
+      warnings: [],
+      verdict: 'PASS',
+      confidence: 100
+    };
+    const verdict = generateVerdict(cachedResults, 'retrospective');
+    expect(verdict.verdict).toBe('CONDITIONAL_PASS');
+  });
+
+  it('a real (non-reused, non-cached) execution is unaffected: PASS with no provenance_verified field at all', () => {
+    const realResults = {
+      findings: {
+        phase3_execution: { tests_executed: 51, tests_passed: 51, failed_tests: 0 }
+      },
+      critical_issues: [],
+      warnings: [],
+      verdict: 'PASS',
+      confidence: 100
+    };
+    const verdict = generateVerdict(realResults, 'retrospective');
+    expect(verdict.verdict).toBe('PASS');
+  });
 });
