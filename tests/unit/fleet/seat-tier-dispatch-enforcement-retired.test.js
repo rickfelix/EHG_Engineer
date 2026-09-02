@@ -86,6 +86,12 @@ describe('SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (ratification 20dc072b): retirement
     );
     expect(src).toMatch(/SUPERSEDED — DO NOT APPLY/);
     expect(src).toMatch(/20dc072b/);
+    // @chairman-gated exempts this permanently-diverging file from
+    // scripts/check-migration-readiness.mjs's pre-merge drift-vs-live gate (which otherwise
+    // red-blocks any PR touching a staged migration whose body has drifted from the live
+    // function) -- required because this file is intentionally never applied, so its drift
+    // vs. live only grows over time. See parseChairmanGatedMarker() in that script.
+    expect(src).toMatch(/^-- @chairman-gated\s*$/m);
     // The original @approved-by gate line is preserved verbatim below the tombstone marker --
     // this SD adds a marker, it does not alter the pre-existing staging gate.
     expect(src).toMatch(/@approved-by: STAGED ONLY -- NOT APPLIED/);

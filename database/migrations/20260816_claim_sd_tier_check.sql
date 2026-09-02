@@ -1,5 +1,10 @@
+-- @chairman-gated
 -- ============================================================================
--- SUPERSEDED — DO NOT APPLY. SD-FDBK-INFRA-RETIRE-SEAT-TIER-001, chairman
+-- SUPERSEDED — DO NOT APPLY, EVER. This migration is permanently retired, not
+-- merely pending a future ceremony (the @chairman-gated marker above only
+-- exempts this file's now-permanent drift-vs-live from
+-- scripts/check-migration-readiness.mjs's pre-merge readiness gate; it grants
+-- no future apply-eligibility). SD-FDBK-INFRA-RETIRE-SEAT-TIER-001, chairman
 -- ratification 20dc072b (2026-09-01): seat-tier dispatch enforcement was
 -- retired FLEET-WIDE (the WORK-DOWN-NEVER-UP guard, the DISPATCH_ABOVE_
 -- WORKER_TIER refusal, and min_tier_rank claim gating were all DELETED from
