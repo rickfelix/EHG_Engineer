@@ -275,6 +275,35 @@ function formatCoordinatorMessagesForBlock(messages) {
 }
 
 /**
+ * QF-20260902-152 — pure decision: should the same-turn-checkin's "coordinator has message(s)"
+ * path BLOCK the stop, and with what reason? Extracted so the fixture cases the QF names
+ * (armed+routine=no-block, unarmed+any=block, armed+hard-interrupt=block-with-reason) are
+ * unit-testable without a real DB session, matching this file's existing pattern for
+ * shouldRemind/shouldAttemptSameTurnClaim.
+ *
+ * Filtering happens BEFORE the arm check: a row already delivered once (m.read_at truthy) and
+ * not a hard-interrupt kind is dropped entirely — it must never re-fire the block on a rapid
+ * same-turn re-invocation, armed or not. What survives filtering is the ONLY thing either
+ * printed informationally or named in a block reason — blockWorthyMessages is a strict subset
+ * of pendingMessages, never a second independent representation of "what's pending".
+ *
+ * @param {{ pendingMessages: Array, armVerdict?: 'armed'|'unarmed'|'unknown' }} args
+ * @returns {{ block: boolean, reason: string|null, detail: string }} detail is '' when there is
+ *   nothing block-worthy; block is true only when the stop must actually halt.
+ */
+function decideMessageBlock({ pendingMessages, armVerdict }) {
+  const blockWorthyMessages = (Array.isArray(pendingMessages) ? pendingMessages : []).filter(
+    (m) => m && (!m.read_at || HARD_INTERRUPT_KINDS.has(m.kind))
+  );
+  const detail = formatCoordinatorMessagesForBlock(blockWorthyMessages);
+  if (!detail) return { block: false, reason: null, detail: '' };
+  const hasHardInterrupt = blockWorthyMessages.some((m) => HARD_INTERRUPT_KINDS.has(m.kind));
+  if (armVerdict === 'armed' && !hasHardInterrupt) return { block: false, reason: null, detail };
+  const reason = armVerdict === 'armed' ? 'unacked hard-interrupt row present' : 'not armed for this turn';
+  return { block: true, reason, detail };
+}
+
+/**
  * SD-LEO-INFRA-WORKER-WIND-DOWN-001 — best-effort dashboard-observability stamp: makes "chose to
  * exit idle after looking" distinguishable from "never looked" on the same claude_sessions record
  * the rest of this file already annotates (mirrors recordWindDown's read-modify-merge pattern).
@@ -598,6 +627,12 @@ const HOOK_WORK_BUDGET_MS = 6000;
 // silently starved the more important one: MEASURED, the write got timed out at the cap.
 const TELEMETRY_RESERVE_MS = 2500;
 
+// QF-20260902-152: kinds that must interrupt the same-turn checkin even while armed — matches
+// lib/fleet/worker-status.cjs's DIRECTIVE_KINDS members reserved for hard-stop/sequencing use
+// (fence_notice) and the chairman-directive channel, not the full directive set (a routine
+// coordinator_request/coordinator_reminder must NOT override an armed wait).
+const HARD_INTERRUPT_KINDS = new Set(['fence_notice', 'chairman_directive']);
+
 async function main() {
   const hookStartedAt = Date.now();
   const remainingBudgetMs = () => Math.max(0, HOOK_WORK_BUDGET_MS - (Date.now() - hookStartedAt));
@@ -775,18 +810,21 @@ async function main() {
         // already-delivered coordinator message as a side effect of merely reading it — surface
         // whatever it returned or that delivery is lost, regardless of which branch we take below.
         const pendingMessages = resolution && Array.isArray(resolution.coordinator_messages) ? resolution.coordinator_messages : [];
-        const messageDetail = formatCoordinatorMessagesForBlock(pendingMessages);
         if (outcome === 'claimed') {
           const detail = resolution && typeof resolution.message === 'string' ? `\n${resolution.message}` : '';
+          const messageDetail = formatCoordinatorMessagesForBlock(pendingMessages);
           emitDecision({ decision: 'block', reason: `SAME-TURN NEXT-CLAIM: claimed ${key} via the wind-down handshake — no idle gap. Continue building it now.${detail}${messageDetail}` });
           return shutdown();
         }
-        if (messageDetail) {
-          // Nothing claimable, but a coordinator message was just consumed by the checkin read —
-          // block once to deliver it rather than letting the worker park having "seen" it in the
-          // DB but never in its own context.
-          emitDecision({ decision: 'block', reason: `SAME-TURN CHECKIN: nothing claimable, but the coordinator has message(s) for you.${messageDetail}` });
+        const messageDecision = decideMessageBlock({ pendingMessages, armVerdict });
+        if (messageDecision.block) {
+          emitDecision({ decision: 'block', reason: `SAME-TURN CHECKIN (${messageDecision.reason}): nothing claimable, but the coordinator has message(s) for you.${messageDecision.detail}` });
           return shutdown();
+        }
+        if (messageDecision.detail) {
+          // Armed: let the armed wake carry these rows instead of forcing an immediate
+          // re-invocation ~30s later that ignores the delay the worker deliberately chose.
+          process.stderr.write(`[same-turn-checkin] armed — surfacing informationally, not blocking:${messageDecision.detail}\n`);
         }
       }
       await parkSessionRecoverable(sessionId, { armVerdict });
@@ -813,4 +851,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt, formatCoordinatorMessagesForBlock };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt, formatCoordinatorMessagesForBlock, decideMessageBlock, HARD_INTERRUPT_KINDS };

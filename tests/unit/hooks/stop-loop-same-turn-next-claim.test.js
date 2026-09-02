@@ -15,6 +15,7 @@ const {
   attemptSameTurnNextClaim,
   recordSameTurnClaimAttempt,
   formatCoordinatorMessagesForBlock,
+  decideMessageBlock,
 } = require(HOOK_PATH);
 
 describe('isSameTurnClaimEnabled (default-on kill switch)', () => {
@@ -296,7 +297,11 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
   });
 
   it('routes a successful claim through decision:"block" (same mechanism as the wakeup reminder)', () => {
-    expect(src).toMatch(/outcome === 'claimed'[\s\S]{0,200}emitDecision\(\{ decision: 'block'/);
+    // QF-20260902-152 widened the gap between the two anchors slightly (a pendingMessages
+    // const + a messageDetail line now sit between them) — 400 chars comfortably covers that
+    // without loosening the assertion's intent (still requires emitDecision to follow the
+    // FIRST 'claimed' check reasonably closely, not merely appear anywhere in the file).
+    expect(src).toMatch(/outcome === 'claimed'[\s\S]{0,400}emitDecision\(\{ decision: 'block'/);
   });
 
   it('falls through to the pre-existing park+recordWindDown path when nothing was claimed', () => {
@@ -311,11 +316,83 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
   // SECURITY finding 4711ebbc: a consumed coordinator message must be surfaced even on the
   // none-claimable branch, ahead of the fall-through to a silent park.
   it('surfaces consumed coordinator messages before falling through to a silent park', () => {
-    const messagesIdx = src.indexOf('formatCoordinatorMessagesForBlock(pendingMessages)');
-    const noneClaimableBlockIdx = src.indexOf('SAME-TURN CHECKIN: nothing claimable');
+    const messagesIdx = src.indexOf('decideMessageBlock({ pendingMessages, armVerdict })');
+    const noneClaimableBlockIdx = src.indexOf('SAME-TURN CHECKIN (${messageDecision.reason}): nothing claimable');
     const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict });');
     expect(messagesIdx).toBeGreaterThan(-1);
     expect(noneClaimableBlockIdx).toBeGreaterThan(messagesIdx);
     expect(parkIdx).toBeGreaterThan(noneClaimableBlockIdx);
+  });
+});
+
+// QF-20260902-152 — the fixture cases named in the QF's own fix description: an armed same-turn
+// checkin must not force a ~30s re-invocation over a routine unacked row (it re-surfaces once, at
+// the armed wakeup, informationally), a read-and-answered row must never re-fire the block at
+// all, and a hard-interrupt row (fence_notice/chairman_directive) still blocks even while armed.
+describe('decideMessageBlock (QF-20260902-152, same-turn checkin block gating)', () => {
+  const FRESH = { kind: 'coordinator_request', subject: 'hi', body: 'please act', read_at: null };
+  const ALREADY_READ = { kind: 'coordinator_request', subject: 'hi', body: 'please act', read_at: '2026-09-02T00:00:00Z' };
+  const FENCE = { kind: 'fence_notice', chairman_directive: false, body: 'do not run PLAN-TO-EXEC yet', read_at: null };
+  const FENCE_ALREADY_READ = { ...FENCE, read_at: '2026-09-02T00:00:00Z' };
+  const DIRECTIVE = { kind: 'chairman_directive', chairman_directive: true, body: 'stand down', read_at: null };
+
+  it('no messages → never blocks', () => {
+    expect(decideMessageBlock({ pendingMessages: [], armVerdict: 'unarmed' })).toMatchObject({ block: false, detail: '' });
+    expect(decideMessageBlock({ pendingMessages: undefined, armVerdict: 'armed' })).toMatchObject({ block: false, detail: '' });
+  });
+
+  it('armed + a single fresh routine row → NO block, surfaced informationally only', () => {
+    const r = decideMessageBlock({ pendingMessages: [FRESH], armVerdict: 'armed' });
+    expect(r.block).toBe(false);
+    expect(r.reason).toBeNull();
+    expect(r.detail).toMatch(/please act/);
+  });
+
+  it('unarmed + a fresh routine row → blocks, reason names "not armed"', () => {
+    const r = decideMessageBlock({ pendingMessages: [FRESH], armVerdict: 'unarmed' });
+    expect(r.block).toBe(true);
+    expect(r.reason).toBe('not armed for this turn');
+    expect(r.detail).toMatch(/please act/);
+  });
+
+  it('unknown arm state + a fresh routine row → blocks (treated the same as unarmed, never silently allowed)', () => {
+    const r = decideMessageBlock({ pendingMessages: [FRESH], armVerdict: 'unknown' });
+    expect(r.block).toBe(true);
+  });
+
+  it('armed + an already-read routine row → NO block AND not even surfaced (read-and-answered never re-fires)', () => {
+    const r = decideMessageBlock({ pendingMessages: [ALREADY_READ], armVerdict: 'armed' });
+    expect(r).toMatchObject({ block: false, reason: null, detail: '' });
+  });
+
+  it('unarmed + an already-read routine row → still no block (filtered before the arm check, not merely while armed)', () => {
+    const r = decideMessageBlock({ pendingMessages: [ALREADY_READ], armVerdict: 'unarmed' });
+    expect(r).toMatchObject({ block: false, reason: null, detail: '' });
+  });
+
+  it('armed + a fresh fence_notice → blocks even while armed, reason names the hard interrupt', () => {
+    const r = decideMessageBlock({ pendingMessages: [FENCE], armVerdict: 'armed' });
+    expect(r.block).toBe(true);
+    expect(r.reason).toBe('unacked hard-interrupt row present');
+    expect(r.detail).toMatch(/PLAN-TO-EXEC/);
+  });
+
+  it('armed + an ALREADY-READ fence_notice → still blocks (hard interrupts are never filtered by read_at)', () => {
+    const r = decideMessageBlock({ pendingMessages: [FENCE_ALREADY_READ], armVerdict: 'armed' });
+    expect(r.block).toBe(true);
+    expect(r.reason).toBe('unacked hard-interrupt row present');
+  });
+
+  it('armed + a chairman_directive → blocks even while armed', () => {
+    const r = decideMessageBlock({ pendingMessages: [DIRECTIVE], armVerdict: 'armed' });
+    expect(r.block).toBe(true);
+    expect(r.reason).toBe('unacked hard-interrupt row present');
+  });
+
+  it('armed + one already-read routine row AND one fresh hard-interrupt row → blocks, detail names only the hard interrupt', () => {
+    const r = decideMessageBlock({ pendingMessages: [ALREADY_READ, FENCE], armVerdict: 'armed' });
+    expect(r.block).toBe(true);
+    expect(r.detail).toMatch(/PLAN-TO-EXEC/);
+    expect(r.detail).not.toMatch(/please act/);
   });
 });
