@@ -1,8 +1,8 @@
-<!-- file_content_hash: debf1193d466a7ad -->
+<!-- file_content_hash: d44f0ced081b0eb3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-02 2:27:02 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -425,6 +425,13 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Anti-Pattern**: Backend implementation without corresponding UI to display results
 **Why Wrong**: LEO v4.3.3 UI Parity Gate blocks features users can't see
 **Correct Approach**: Every backend field must have corresponding UI component
+
+
+### NC-EXEC-006: No Bare Import/Require of a scripts/one-off/** File
+**Anti-Pattern**: Running `node -e "import('./scripts/one-off/some-script.mjs')"` (or `require(...)`, or an ESM/CJS interop check) against a scripts/one-off/** file to inspect it, check its exports, or verify module-format compatibility
+**Why Wrong**: Incident 2026-08-21 — a sub-agent's bare `import()` of scripts/one-off/backfill-solomon-ledger-decision-by.mjs, intended only as an ESM/CJS interop check, executed the file's top-level, unguarded DB mutation for real: a live 1,241-row prod `decision_by` overwrite. Many scripts/one-off/** files hold SUPABASE_SERVICE_ROLE_KEY and mutate the DB unconditionally at import time with no `if (import.meta.url === ...)` main-guard — importing IS executing.
+**Correct Approach**: Never import or require a scripts/one-off/** file to inspect it. To check exports/format, read the file's source directly (Read tool / `cat`) or run it `node scripts/one-off/foo.mjs` (direct execution, not a bare import, is the file's normal invocation and is unaffected). ENF-18 (`scripts/hooks/pre-tool-enforce.cjs`, SD-LEO-FIX-TEST-FIXTURE-LANE-001) blocks a bare import/require of any file the committed manifest (`scripts/lint/one-off-mutate-key-manifest.json`) marks dangerous (mutates + holds the service-role key + unguarded); a genuine, reviewed need to import one anyway requires `LEO_ALLOW_ONE_OFF_IMPORT="<ticket>: <reason>"`, never a workaround.
+
 </negative_constraints>
 
 ## Phase-Specific Sub-Agent Guidance: EXEC
