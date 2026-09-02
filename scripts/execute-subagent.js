@@ -49,6 +49,12 @@ export function parseArgs() {
       // which would silently coerce this to `true` and drop the phase value.
       const value = args[++i];
       parsed.options.phase = typeof value === 'string' ? value : null;
+    } else if (arg === '--validation-mode') {
+      // QF-20260902-796: same coercion bug as --phase above -- was silently dropped to
+      // `true`, so `--validation-mode retrospective` threw "Invalid validation_mode: true"
+      // in adaptive-validation.js instead of reaching the manual override it names.
+      const value = args[++i];
+      parsed.options.validation_mode = typeof value === 'string' ? value : null;
     } else if (arg.startsWith('--')) {
       // Boolean flag (e.g., --full-e2e)
       const flagName = arg.slice(2).replace(/-/g, '_');
