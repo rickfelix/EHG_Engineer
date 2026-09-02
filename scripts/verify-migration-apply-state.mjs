@@ -806,7 +806,14 @@ async function main() {
   // (advisory) but never flip the marker or fail the gate; CEREMONY_PENDING gaps likewise
   // print (still in `gaps`/the report above) but never flip it either (QF-20260824-600).
   if (ceremonyPendingFailSet.length) {
-    console.log(`::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`);
+    // --json keeps stdout pure JSON for piping (see the marker-line comment below) -- this
+    // annotation was unconditionally on console.log and broke that contract, appending a
+    // trailing non-JSON line after the closing `}` that every JSON.parse'ing caller
+    // (chairman-apply-state.js and three others) chokes on with "Unexpected non-whitespace
+    // character after JSON". Route to stderr in --json mode, matching the marker line's own
+    // precedent immediately below.
+    const warn = `::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`;
+    if (asJson) console.error(warn); else console.log(warn);
   }
   const marker = blockingFailSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
   // --json keeps stdout pure JSON for piping; the marker goes to stderr there.
