@@ -61,7 +61,7 @@ import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { listActiveWorktrees, countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
 // SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001 (FR-1/FR-4): reclaim unregistered .worktrees/ dirs.
-import { runOrphanSweep, resolveMinAgeMs } from '../lib/worktree-reaper/orphan-sweep.js';
+import { runOrphanSweep, resolveMinAgeMs, fetchTerminalStatusKeys } from '../lib/worktree-reaper/orphan-sweep.js';
 // QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
 import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
@@ -1214,13 +1214,17 @@ async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execu
   if (execute && !supabase) {
     console.log('🧹 Orphan sweep: Supabase unavailable — running DRY-RUN (cannot verify active-claim ownership).');
   }
-  const sweep = runOrphanSweep({
+  const sweep = await runOrphanSweep({
     repoRoot,
     worktreesDir,
     execute: effectiveExecute,
     liveOwners,
     emit: emitJsonLine,
     logger: (m) => process.stderr.write(m + '\n'),
+    // QF-20260901-005: a dir refused on high_content/cap_exceeded (a real node_modules copy
+    // in an old tree) is reclassified reapable when its SD/QF is already completed/cancelled —
+    // the DB status is the evidence the work is done, not the tree's byte count.
+    resolveTerminalStatusKeys: (keys) => fetchTerminalStatusKeys(supabase, keys),
   });
   const s = sweep.summary || {};
   const byReason = s.excluded_by_reason || {};
