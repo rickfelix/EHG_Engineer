@@ -99,6 +99,85 @@ describe('computeReactivation — guards (FR-3)', () => {
   });
 });
 
+// SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-5/FR-7): the guarded, audited path to uncomplete a
+// falsely-completed SD -- completed -> active at current_phase=LEAD_FINAL, gated on
+// metadata.completion_evidence_invalid===true, never on status alone.
+describe('computeReactivation — uncomplete a false pass (SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 FR-5)', () => {
+  const falselyCompletedSd = (overrides = {}) => ({
+    id: '64cba683-adb9-47f0-ae62-8238f4e3b9c0',
+    sd_key: 'SD-LEO-FIX-HUMAN-ACTION-FENCES-001',
+    status: 'completed',
+    current_phase: 'COMPLETED',
+    completion_date: '2026-09-02T14:32:07.000Z',
+    metadata: { completion_evidence_invalid: true, some_other_key: 'preserved' },
+    ...overrides,
+  });
+
+  it('succeeds when status=completed AND completion_evidence_invalid=true: active/LEAD_FINAL, completion_date cleared', () => {
+    const r = computeReactivation(falselyCompletedSd(), { toStatus: 'active', reason: 'run 1a1b3087 bypass false pass', nowIso: NOW_ISO });
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('uncomplete_false_pass');
+    expect(r.guardStatus).toBe('completed');
+    expect(r.updates.status).toBe('active');
+    expect(r.updates.current_phase).toBe('LEAD_FINAL');
+    expect(r.updates.completion_date).toBeNull();
+    expect(r.updates.metadata.uncompleted_at).toBe(NOW_ISO);
+    expect(r.updates.metadata.uncomplete_reason).toBe('run 1a1b3087 bypass false pass');
+  });
+
+  it('leaves completion_evidence_invalid=true (durable marker, never cleared)', () => {
+    const r = computeReactivation(falselyCompletedSd(), { toStatus: 'active', nowIso: NOW_ISO });
+    expect(r.updates.metadata.completion_evidence_invalid).toBe(true);
+    // Prior unrelated metadata preserved, not clobbered.
+    expect(r.updates.metadata.some_other_key).toBe('preserved');
+  });
+
+  it('REFUSES (terminal) when status=completed but completion_evidence_invalid is absent', () => {
+    const r = computeReactivation(falselyCompletedSd({ metadata: {} }), { toStatus: 'active', nowIso: NOW_ISO });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('not_deferred');
+    expect(r.terminal).toBe(true);
+    expect(r.currentStatus).toBe('completed');
+  });
+
+  it('REFUSES when completion_evidence_invalid is false (not just absent)', () => {
+    const r = computeReactivation(falselyCompletedSd({ metadata: { completion_evidence_invalid: false } }), { toStatus: 'active', nowIso: NOW_ISO });
+    expect(r.ok).toBe(false);
+    expect(r.terminal).toBe(true);
+  });
+
+  it('does NOT take this path for a --to target other than active (e.g. draft) — falls through to the terminal refusal', () => {
+    const r = computeReactivation(falselyCompletedSd(), { toStatus: 'draft', nowIso: NOW_ISO });
+    expect(r.ok).toBe(false);
+    expect(r.terminal).toBe(true);
+  });
+
+  it('pre_state/post_state capture the transition for the audit row', () => {
+    const r = computeReactivation(falselyCompletedSd(), { toStatus: 'active', nowIso: NOW_ISO });
+    expect(r.pre_state).toEqual({ status: 'completed', current_phase: 'COMPLETED', completion_date: '2026-09-02T14:32:07.000Z' });
+    expect(r.post_state).toEqual({ status: 'active', current_phase: 'LEAD_FINAL', completion_date: null, uncompleted_at: NOW_ISO });
+  });
+});
+
+describe('buildReactivationAudit — transitionType for the uncomplete path (FR-5)', () => {
+  it('emits transition_type=UNCOMPLETE_FALSE_PASS when explicitly requested', () => {
+    const row = buildReactivationAudit({
+      sdId: 'uuid-1',
+      pre_state: { status: 'completed' },
+      post_state: { status: 'active' },
+      requestId: 'req-1',
+      nowIso: NOW_ISO,
+      transitionType: 'UNCOMPLETE_FALSE_PASS',
+    });
+    expect(row.transition_type).toBe('UNCOMPLETE_FALSE_PASS');
+  });
+
+  it('defaults to REACTIVATE when transitionType is omitted (unchanged for the existing path)', () => {
+    const row = buildReactivationAudit({ sdId: 'uuid-1', pre_state: { status: 'deferred' }, requestId: 'req-1', nowIso: NOW_ISO });
+    expect(row.transition_type).toBe('REACTIVATE');
+  });
+});
+
 describe('resolveArgs — argv parsing (SD-LEO-INFRA-REACTIVATE-SD-ARGV-FIX-001)', () => {
   // BUG 1/2 regression: the documented default-to-draft invocation (no --to) must
   // resolve the SD-key positional and default target=draft, instead of dropping it.

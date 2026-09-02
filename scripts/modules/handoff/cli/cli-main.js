@@ -759,14 +759,23 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     // emitValidationAuditLog helper provides writer-consumer symmetry with bypass_ledger.audit_log_id.
     const { randomUUID } = await import('crypto');
     const { emitValidationAuditLog } = await import('../../../lib/emit-validation-audit-log.mjs');
+    const { resolveSdInputOrNull } = await import('../../../lib/sd-id-resolver.js');
     const supabaseForBypassLedger = createSupabaseServiceClient();
     const ledgerCorrelationId = randomUUID();
+    // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-3): resolve ONCE, use for BOTH writes below.
+    // bypass_ledger already tolerated a key-form sdId via its own sd_key column; the emitted
+    // validation_audit_log row has no sd_key column at all, so a key-invoked bypass (the common
+    // CLI form) previously wrote that row with sd_id=NULL -- unlinked to the SD entirely.
+    const { sdId: resolvedSdUuid } = await resolveSdInputOrNull(sdId, supabaseForBypassLedger);
+    if (!resolvedSdUuid) {
+      console.warn(`   ⚠️  bypass audit: could not resolve "${sdId}" to a UUID — validation_audit_log row will still be unlinked (sd_id NULL)`);
+    }
     const { data: ledgerRow, error: ledgerErr } = await supabaseForBypassLedger
       .from('bypass_ledger')
       .insert({
         bypass_type: 'validation_bypass',
         bypass_reason: bypassReason,
-        sd_id: typeof sdId === 'string' && /^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
+        sd_id: resolvedSdUuid,
         sd_key: typeof sdId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
         phase: handoffType,
         bypass_actor: process.env.CLAUDE_SESSION_ID || 'unknown',
@@ -782,7 +791,7 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
         const audit = await emitValidationAuditLog({
           supabase: supabaseForBypassLedger,
           correlation_id: ledgerRow.correlation_id,
-          sd_id: typeof sdId === 'string' && /^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
+          sd_id: resolvedSdUuid,
           validator_name: 'cli_main_bypass_validation',
           failure_reason: `--bypass-validation invoked for ${handoffType}: ${bypassReason}`,
           failure_category: 'bypass',
@@ -1052,6 +1061,11 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     prdId,
     bypassValidation,
     bypassReason,
+    // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-4): previously validated (validateBypassShape
+    // above) but never threaded past this function -- nothing downstream could ever answer
+    // "was this bypass linked to a follow-up?" without these two values.
+    patternId,
+    followupSdKey,
     noCache
   });
 

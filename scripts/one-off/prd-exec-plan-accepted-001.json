@@ -1,0 +1,269 @@
+{
+  "executive_summary": "A bypassed EXEC-TO-PLAN handoff (handoff.js execute EXEC-TO-PLAN --bypass-validation) is currently byte-identical, on every row downstream gates and roles read, to a genuinely validated one -- because the one real choke point (BaseExecutor.js's bypass fall-through, at two sites) logs a warning and falls straight into the success return without mutating the result object, so gateResults.passed=false never survives into HandoffRecorder.js. Two SDs (SD-LEO-FIX-HUMAN-ACTION-FENCES-001 and others) reached status=completed on a BLOCKED required TESTING verdict this way. This SD stamps the bypass at its origin, persists that stamp faithfully through the recorder into both leo_handoff_executions and sd_phase_handoffs, adds a per-SD LEAD-FINAL-APPROVAL refusal when any phase in the chain carries an unresolved bypass, fixes the SD-linkage gap on the audit-log side of a key-invoked bypass, narrowly corrects advisory-mode sub-agent evidence handling so a BLOCKED required verdict can never read as a pass, and builds the guarded, audited path to uncomplete the false completions already on record.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Stamp bypassed:true on the result at the real choke point",
+      "description": "scripts/modules/handoff/executors/BaseExecutor.js has two sites (~line 348, the coordinator-authority fence bypass; and ~lines 641-649/820-830, the general gate-failure bypass under options.bypassValidation) where a required-gate failure is logged to stdout and execution falls through into the success return WITHOUT the returned result object recording that a bypass occurred. Add result.bypassed = true (plus result.bypassReason and result.bypassedGates, the list of gate names that were failing when the bypass fired) at both sites. This does NOT change control flow -- execution still proceeds under bypass exactly as today; only the result's truthfulness changes.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A handoff run with --bypass-validation over a gate_results set containing a required:true failure returns/persists a result with bypassed===true",
+        "A handoff run with NO bypass flag and all required gates passing is unaffected: bypassed is absent/false, existing behavior unchanged"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Persist the bypass stamp faithfully in HandoffRecorder (both persisted rows)",
+      "description": "lib/handoff/HandoffRecorder.js's recordSuccess() (writing leo_handoff_executions) hardcodes validation_passed: true regardless of result.bypassed, and never records a bypassed field. The separate sd_phase_handoffs insert (same file) computes validation_passed: result.success !== false, also ignoring result.bypassed. Fix BOTH: when result.bypassed===true, leo_handoff_executions.validation_passed must be false (or a distinct value never read as 'passed' by any downstream consumer) and the row must carry the bypass stamp (bypassReason, bypassedGates) in its own metadata/validation_details field; the HandoffRecorder scoreSource computation (currently only 'measured'/'not_measured') gains a third value 'bypassed', used whenever result.bypassed===true regardless of the numeric score. Apply the identical correction to the sd_phase_handoffs insert's validation_passed derivation and stamp metadata.bypass = { reason, actor, gates, bypassed_at } on that row (this is the field FR-4's LEAD-FINAL-APPROVAL check reads). Executors that already correctly self-stamp bypassed:true on their own result (plan-to-exec/index.js, grill-convergence.js, activation-invariant-gate.js, integration-contract-gate.js) must now have that stamp actually survive into both rows, since today the recorder drops it regardless of source.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "leo_handoff_executions.validation_passed is never true for a row where the executor result carried bypassed===true",
+        "sd_phase_handoffs.metadata.bypass is populated (reason, actor, gates, bypassed_at) whenever the corresponding handoff was bypassed",
+        "A genuinely passing (non-bypassed) handoff's leo_handoff_executions.validation_passed and sd_phase_handoffs.validation_passed are unchanged from current behavior"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fix SD linkage on the validation_audit_log emission for a key-invoked bypass",
+      "description": "scripts/modules/handoff/cli/cli-main.js already resolves an SD key to its UUID correctly before the bypass_ledger insert, but the paired emitValidationAuditLog(...) call (~line 785) is not given that resolved UUID when the CLI was invoked with an SD KEY rather than a UUID -- and validation_audit_log has no sd_key column at all, so the audit row lands with sd_id=NULL and zero SD linkage. Resolve the SD identifier to its UUID once, before EITHER write, and pass the resolved UUID to both the bypass_ledger insert and the emitValidationAuditLog call.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Invoking handoff.js execute <PHASE> <SD-KEY> --bypass-validation (SD KEY form, not UUID) produces a validation_audit_log row with a non-null sd_id matching the SD",
+        "The existing UUID-invocation form continues to produce a correctly-linked row (no regression)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "LEAD-FINAL-APPROVAL refuses completion while any phase in the SD's chain was bypassed without a linked follow-up",
+      "description": "scripts/modules/handoff/executors/lead-final-approval/gates/learning-or-bypass-resolved-gate.js is the only existing per-SD-scoped bypass-aware LEAD-FINAL gate, but it reads validation_audit_log filtered on validator_name IN ('bypass_rubric','bypass_shape') and is warn-only by default (ENFORCE_LEARNING_GATE=false) -- a different signal than the sd_phase_handoffs.metadata.bypass stamp FR-2 introduces. Add a NEW, clearly-separated check inside this gate (or a sibling gate function, kept in the same file to avoid a second registration): read every sd_phase_handoffs row for this SD where metadata.bypass is present, and REFUSE completion (real failure, not warn-only) unless every such bypass carries a linked follow-up per the existing --pattern-id/--followup-sd-key shape already enforced at bypass time by bypass-rubric.js (ENFORCE_BYPASS_SHAPE, already flipped true). Keep this as an independent code path from the existing validator_name-based check so the two signals are never conflated.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "LEAD-FINAL-APPROVAL fails (not warns) for an SD carrying an unresolved bypass (no linked --pattern-id/--followup-sd-key) anywhere in its phase chain",
+        "LEAD-FINAL-APPROVAL passes normally for an SD whose bypasses (if any) all carry a linked follow-up, and for an SD with no bypasses at all",
+        "The existing validator_name-based (bypass_rubric/bypass_shape) check in the same gate file is unmodified and continues to run"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Guarded, audited path to uncomplete a false completion",
+      "description": "scripts/reactivate-sd.js today only reopens an SD from status='deferred' (VALID_REACTIVATION_TARGETS already includes 'active'; TERMINAL_STATUSES only decorates the refusal message, it does not independently gate). Add a second, narrowly-guarded branch: allow status='completed' -> 'active' at current_phase='LEAD_FINAL', ONLY when the SD's metadata.completion_evidence_invalid === true. On success: clear completion_date, write an sd_transition_audit row (transition_type='UNCOMPLETE_FALSE_PASS', pre_state/post_state as the existing buildReactivationAudit shape already does) capturing who/why/the offending handoff id, and leave metadata.completion_evidence_invalid in place (not cleared) as a durable marker that this SD was once falsely completed. Refuse (with a clear reason) when status='completed' and the flag is absent/false -- do not silently no-op. Because metadata.completion_evidence_invalid has no existing writer anywhere in the codebase, this SD must ALSO add a minimal, audited setter (a new small script, e.g. scripts/mark-completion-evidence-invalid.js) that a coordinator/operator runs with --sd-id and --reason to set the flag (and itself writes an audit trail entry), so the reopen path in reactivate-sd.js is reachable rather than dead by construction.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "reactivate-sd.js --to active on a status='completed' SD with metadata.completion_evidence_invalid=true succeeds: status becomes 'active', current_phase becomes 'LEAD_FINAL', completion_date is cleared, and an sd_transition_audit row is written",
+        "reactivate-sd.js --to active on a status='completed' SD WITHOUT that flag is refused exactly as today (no new silent success path)",
+        "scripts/mark-completion-evidence-invalid.js sets the flag on a given SD with an auditable reason, and refuses without a --reason"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Advisory verdict_mode never converts a BLOCKED/rejecting required sub-agent verdict into a pass",
+      "description": "scripts/modules/handoff/gates/subagent-evidence-gate.js resolveSubagentVerdictMode() defaults to 'advisory' for every SD (not bugfix-scoped as the originating report assumed). In advisory mode, a BLOCKED verdict on a required sub-agent currently returns passed:true, score:100 (~lines 621-630) -- an in-code comment measures this affects 32/313 SDs. Narrowly correct this: advisory mode may continue to soften MISSING evidence (no verdict recorded at all) to a pass, but a REJECTING verdict (BLOCKED, FAIL, or any non-passing recorded verdict) on a required sub-agent must never be converted to passed:true under advisory mode -- it fails the gate exactly as block mode would. This is a correctness fix to the advisory softening, not a change to the advisory/block default itself, and its blast radius must be independently assessed by the SECURITY sub-agent at EXEC-TO-PLAN (this SD's fresh_security_evidence_required flag) given the 32-SD figure.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Advisory mode + a required sub-agent recorded with a BLOCKED verdict => gate fails (passed:false), not passed:true/score:100",
+        "Advisory mode + a required sub-agent with NO recorded verdict at all (missing evidence) => existing softened-pass behavior is unchanged",
+        "Block mode (SUBAGENT_VERDICT_MODE=block) behavior is completely unchanged by this fix"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "Regression tests proving the false-completion class is closed",
+      "description": "Build/reconstruct a gate_results fixture equivalent to the SD-LEO-FIX-HUMAN-ACTION-FENCES-001 handoff row 1a1b3087 (45 gates, MANDATORY_TESTING_VALIDATION and 2D:testingSubAgentVerified both failing, required:true) and prove it is rejected end-to-end through the real accept path (bypassed and stamped as such, never persisted as validation_passed=true) whether reached via a plain failing run, the preflight-remediation retry route, or an explicit --bypass-validation invocation. Also prove a genuinely passing fixture still accepts normally (no regression), and that a bugfix SD carrying a BLOCKED TESTING verdict anywhere in its chain cannot reach status='completed' end-to-end (LEAD-FINAL-APPROVAL refuses per FR-4).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The 1a1b3087-equivalent fixture is rejected/stamped-bypassed on every route exercised by the test suite",
+        "A genuinely passing 45-gate fixture still results in an accepted, non-bypassed handoff",
+        "An end-to-end test drives a bugfix SD with a BLOCKED required TESTING verdict through to LEAD-FINAL-APPROVAL and asserts refusal"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema migration required",
+      "description": "sd_phase_handoffs.metadata and strategic_directives_v2.metadata are both existing JSONB columns; the new bypass and completion_evidence_invalid keys are additive JSONB fields, not new columns. leo_handoff_executions gains no new column either -- the bypass stamp reuses its existing validation_details/metadata JSONB field."
+    },
+    {
+      "id": "TR-2",
+      "title": "Reuse existing bypass infrastructure, no new tables or flags",
+      "description": "Reuse bypass_ledger, ENFORCE_BYPASS_SHAPE (already true in the root .env per Adam's fleet rule), and the existing --pattern-id/--followup-sd-key shape enforcement. No new environment flag is introduced by FR-1 through FR-5; FR-6 is a logic correction inside the existing advisory branch, not a new flag."
+    },
+    {
+      "id": "TR-3",
+      "title": "Forward-looking only, no retroactive backfill in this SD's scope",
+      "description": "This SD fixes the mechanism going forward. It does not retroactively re-stamp or re-score the ~43/439 already-completed SDs that carry a bypass mark, or the specific false-completion specimens (SD-LEO-FIX-HUMAN-ACTION-FENCES-001 etc.) -- those are uncompleted via FR-5's guarded path as a separate, explicit operator action per specimen, tracked outside this SD."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "BaseExecutor stamps bypassed:true on gate-failure fall-through (both sites)",
+      "type": "unit",
+      "expected": "result.bypassed===true, result.bypassedGates lists the failing required gate(s), for both the ~348 authority-fence site and the ~641-649 general bypass site"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "HandoffRecorder never records validation_passed=true for a bypassed result",
+      "type": "unit",
+      "expected": "Given result.bypassed===true, both the leo_handoff_executions insert and the sd_phase_handoffs insert carry validation_passed=false (or an equivalent never-read-as-passed value) and scoreSource='bypassed'"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "sd_phase_handoffs.metadata.bypass is populated on a bypassed handoff",
+      "type": "unit",
+      "expected": "metadata.bypass = { reason, actor, gates, bypassed_at } present and correctly shaped on the persisted row"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "A genuinely passing (non-bypassed) handoff is unaffected",
+      "type": "unit",
+      "expected": "validation_passed remains true, scoreSource remains 'measured', no bypass metadata is written -- byte-identical to pre-fix behavior"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "cli-main.js links a key-invoked bypass's validation_audit_log row to the SD",
+      "type": "unit",
+      "expected": "Invoking with an SD KEY (not UUID) under --bypass-validation produces a validation_audit_log row with sd_id resolved to the correct UUID, not NULL"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "LEAD-FINAL-APPROVAL refuses completion over an unresolved bypass in the phase chain",
+      "type": "unit",
+      "expected": "gates/learning-or-bypass-resolved-gate.js's new check returns passed=false (real failure) when any sd_phase_handoffs row for the SD carries metadata.bypass with no linked --pattern-id/--followup-sd-key"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "LEAD-FINAL-APPROVAL passes when all bypasses carry a linked follow-up, or there are none",
+      "type": "unit",
+      "expected": "The new check returns passed=true; the pre-existing validator_name-based check in the same gate file is unaffected and still runs"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "reactivate-sd.js reopens a false-completed SD only when the flag is set",
+      "type": "unit",
+      "expected": "status='completed' + metadata.completion_evidence_invalid=true --to active succeeds (status=active, current_phase=LEAD_FINAL, completion_date cleared, sd_transition_audit row written); the same call without the flag is refused with no state change"
+    },
+    {
+      "id": "TS-9",
+      "scenario": "scripts/mark-completion-evidence-invalid.js sets the flag with an audit trail",
+      "type": "unit",
+      "expected": "Given --sd-id and --reason, the flag is set and an auditable record is written; omitting --reason is refused"
+    },
+    {
+      "id": "TS-10",
+      "scenario": "Advisory mode never converts a BLOCKED required verdict to a pass",
+      "type": "unit",
+      "expected": "A required sub-agent recorded with verdict=BLOCKED under advisory mode yields passed=false from subagent-evidence-gate.js; a required sub-agent with NO recorded verdict at all still softens to passed=true under advisory exactly as before"
+    },
+    {
+      "id": "TS-11",
+      "scenario": "End-to-end: the 1a1b3087-equivalent fixture never reaches completed",
+      "type": "integration",
+      "expected": "A bugfix SD driven through EXEC-TO-PLAN with the 45-gate BLOCKED-TESTING fixture (plain run, preflight-remediation retry, and explicit bypass) never reaches sd_phase_handoffs.validation_passed=true nor strategic_directives_v2.status='completed'"
+    },
+    {
+      "id": "TS-12",
+      "scenario": "End-to-end: a genuinely passing SD still completes normally",
+      "type": "integration",
+      "expected": "A fixture SD with all required gates genuinely passing reaches LEAD-FINAL-APPROVAL and status='completed' with no behavior change from before this SD"
+    }
+  ],
+  "acceptance_criteria": [
+    "A handoff accepted via --bypass-validation over a failing required gate persists bypassed=true / scoreSource='bypassed' on BOTH leo_handoff_executions and sd_phase_handoffs -- never validation_passed=true",
+    "LEAD-FINAL-APPROVAL refuses to complete an SD carrying any unresolved bypass (no linked follow-up SD/pattern) anywhere in its phase chain",
+    "A completed SD with metadata.completion_evidence_invalid=true can be reopened via reactivate-sd.js to active/LEAD_FINAL with an audited sd_transition_audit row and completion_date cleared; without that flag, reopening a completed SD is refused exactly as today",
+    "Advisory verdict_mode on GATE_SUBAGENT_EVIDENCE never converts a BLOCKED/rejecting required-agent verdict into a pass; only genuinely missing evidence may still be softened",
+    "A key-invoked (SD-key, not UUID) --bypass-validation run writes a validation_audit_log row correctly linked to the SD (sd_id resolved, never NULL)",
+    "The 1a1b3087-equivalent 45-gate BLOCKED-TESTING fixture is proven, by test, to never reach a completed status through any route (plain, retry, or explicit bypass)"
+  ],
+  "risks": [
+    {
+      "risk": "HandoffRecorder.js's validation_passed derivation is read by many existing consumers; a change scoped too broadly could regress passing handoffs",
+      "mitigation": "The change is strictly additive/conditional: validation_passed only differs from today's value when result.bypassed===true. A non-bypassed successful run's derivation and output are byte-identical to current behavior, covered by TS-4/TS-12.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Extending gates/learning-or-bypass-resolved-gate.js risks conflating the new sd_phase_handoffs.metadata.bypass check with the existing validation_audit_log-based check",
+      "mitigation": "Implement the new check as an independently-testable code path within the same file (kept as one gate registration), never merging the two signals into a single conditional.",
+      "severity": "low"
+    },
+    {
+      "risk": "FR-6's advisory-mode correctness fix touches a path affecting an estimated 32/313 SDs; narrowing it incorrectly could newly fail SDs that were passing on a softened BLOCKED verdict",
+      "mitigation": "Scope strictly to REJECTING verdicts (BLOCKED/FAIL); the MISSING-evidence softening path is explicitly left untouched. Fresh SECURITY sub-agent evidence is required at EXEC-TO-PLAN specifically to independently assess this blast radius before merge.",
+      "severity": "medium"
+    },
+    {
+      "risk": "metadata.completion_evidence_invalid has no existing writer; FR-5's reopen path is unreachable unless the setter script is also built in this SD",
+      "mitigation": "FR-5 explicitly includes scripts/mark-completion-evidence-invalid.js as in-scope deliverable, not a follow-up, closing the dead-by-construction gap identified during LEAD validation.",
+      "severity": "high"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "The LEO Protocol handoff pipeline for every future SD/QF phase transition (EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL and any other bypass-eligible handoff)",
+      "Coordinator/chairman tooling and dashboards that read sd_phase_handoffs/leo_handoff_executions to assess completion integrity",
+      "Any future gate or report that wants a trustworthy per-SD bypass signal (now sourced from sd_phase_handoffs.metadata.bypass rather than reconstructed ad hoc)"
+    ],
+    "dependencies": [
+      "bypass_ledger table and its existing insert path in cli-main.js (unchanged shape, only the SD-linkage fix in FR-3)",
+      "ENFORCE_BYPASS_SHAPE flag (already flipped true in the root .env by Adam per the chairman root-cause directive)",
+      "SUBAGENT_VERDICT_MODE / subagent-evidence-gate.js advisory/block infrastructure (unchanged default, FR-6 is a logic correction inside the existing advisory branch)"
+    ],
+    "data_contracts": [
+      "sd_phase_handoffs.metadata gains an additive JSONB key 'bypass' ({reason, actor, gates, bypassed_at}) -- no column/migration change",
+      "strategic_directives_v2.metadata gains an additive JSONB key 'completion_evidence_invalid' (boolean) -- no column/migration change",
+      "leo_handoff_executions gains no new column; the bypass stamp is carried in its existing validation_details/metadata JSONB field with a new scoreSource value 'bypassed'"
+    ],
+    "runtime_config": [
+      "No new environment flags introduced. Reuses ENFORCE_BYPASS_SHAPE (already true) and the existing SUBAGENT_VERDICT_MODE default (unchanged)."
+    ],
+    "observability_rollout": [
+      "New fields are visible immediately on the next handoff run after merge -- verified by the unit/integration tests in FR-7/TS-1..TS-12",
+      "Live verification against the real false-completion specimens (e.g. SD-LEO-FIX-HUMAN-ACTION-FENCES-001) happens via FR-5's guarded uncomplete path as a separate, explicit operator action once this SD ships -- not a blocking step of this SD's own EXEC/PLAN-TO-LEAD/LEAD-FINAL-APPROVAL cycle"
+    ]
+  },
+  "system_architecture": {
+    "summary": "One choke-point fix (BaseExecutor.js) whose stamp is threaded through the existing recorder (HandoffRecorder.js) into both persisted rows, read back by a new per-SD check in an existing LEAD-FINAL gate, paired with a small SD-linkage fix in the CLI's audit emission, a narrow advisory-mode correctness fix, and a new guarded/audited reopen path plus its setter script.",
+    "components": [
+      { "name": "scripts/modules/handoff/executors/BaseExecutor.js", "change": "Stamp bypassed:true/bypassReason/bypassedGates on the result at both bypass fall-through sites (~348, ~641-649/820-830)" },
+      { "name": "lib/handoff/HandoffRecorder.js", "change": "Read result.bypassed; correct validation_passed derivation and add scoreSource='bypassed' for both leo_handoff_executions.recordSuccess() and the sd_phase_handoffs insert; write metadata.bypass on sd_phase_handoffs" },
+      { "name": "scripts/modules/handoff/cli/cli-main.js", "change": "Resolve the SD identifier to its UUID once, before both the bypass_ledger insert and the emitValidationAuditLog call, fixing the sd_id=NULL orphan for key-invoked bypasses" },
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/gates/learning-or-bypass-resolved-gate.js", "change": "Add a new, independently-testable per-SD check that reads sd_phase_handoffs.metadata.bypass across the SD's phase chain and refuses (real failure) completion when any bypass lacks a linked follow-up" },
+      { "name": "scripts/modules/handoff/gates/subagent-evidence-gate.js", "change": "In advisory mode, a REJECTING (BLOCKED/FAIL) required-agent verdict fails the gate instead of being softened to passed:true; MISSING-evidence softening is unchanged" },
+      { "name": "scripts/reactivate-sd.js", "change": "New guarded branch: completed -> active at current_phase=LEAD_FINAL, gated on metadata.completion_evidence_invalid===true, clearing completion_date and writing an sd_transition_audit row" },
+      { "name": "scripts/mark-completion-evidence-invalid.js", "change": "NEW: minimal audited setter for metadata.completion_evidence_invalid, required --sd-id and --reason" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Fix the truth at its source (BaseExecutor), make the recorder honest about it (HandoffRecorder, both persisted rows), close the one linkage gap in the CLI's audit emission, teach the one existing per-SD LEAD-FINAL gate to refuse on an unresolved bypass, narrowly correct the advisory-mode softening bug, and build the audited path to undo a false completion plus the setter that makes it reachable -- in that dependency order so each step is testable against the previous one's real output.",
+    "steps": [
+      "FR-1: BaseExecutor.js stamps bypassed on the result (both sites) -- unit-tested in isolation first, since every later step depends on this signal existing",
+      "FR-2: HandoffRecorder.js reads and persists the stamp on both leo_handoff_executions and sd_phase_handoffs -- unit-tested against FR-1's real stamped result shape",
+      "FR-3: cli-main.js SD-linkage fix for the audit-log emission -- independent, can land in parallel with FR-2",
+      "FR-4: extend gates/learning-or-bypass-resolved-gate.js to read FR-2's sd_phase_handoffs.metadata.bypass and refuse completion -- depends on FR-2 being in place",
+      "FR-6: narrow advisory-mode correctness fix in subagent-evidence-gate.js -- independent of FR-1/2/3/4, can land in parallel; SECURITY sub-agent evidence gathered for this step specifically",
+      "FR-5: reactivate-sd.js guarded reopen branch plus scripts/mark-completion-evidence-invalid.js -- independent, but logically closes the loop opened by FR-4 (an SD that FR-4 would now correctly refuse to complete, or was falsely completed before this SD shipped, needs an undo path)",
+      "FR-7: regression tests proving the 1a1b3087-equivalent fixture is rejected on every route and a genuinely passing fixture is unaffected, plus the end-to-end LEAD-FINAL-APPROVAL refusal test"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run a handoff (e.g. EXEC-TO-PLAN) with --bypass-validation against a gate_results fixture containing a required:true failure",
+      "expected_outcome": "The persisted sd_phase_handoffs row carries metadata.bypass populated and validation_passed=false; leo_handoff_executions.validation_passed is also false with scoreSource='bypassed'"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Attempt LEAD-FINAL-APPROVAL on that same SD without a linked --pattern-id/--followup-sd-key on the bypass",
+      "expected_outcome": "LEAD-FINAL-APPROVAL fails with a clear reason naming the unresolved bypass -- the SD does not reach status='completed'"
+    },
+    {
+      "step_number": 3,
+      "instruction": "On an existing SD whose status is already 'completed', set metadata.completion_evidence_invalid=true via scripts/mark-completion-evidence-invalid.js, then run scripts/reactivate-sd.js --to active on it",
+      "expected_outcome": "The SD reopens to status='active', current_phase='LEAD_FINAL', completion_date is cleared, and a new sd_transition_audit row records the reactivation with the reason"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001"
+  }
+}

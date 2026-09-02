@@ -493,43 +493,46 @@ describe('validateSubagentEvidence — verdict enforcement (block mode)', () => 
   });
 });
 
-// (5) THE CONTROL: the default must be safe. Without this, the change is
-// fleet-fatal on day one — every SD whose latest evidence row is a tombstone
-// would suddenly be unable to hand off.
-describe('validateSubagentEvidence — advisory mode is the DEFAULT and does not block', () => {
+// (5) SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-6) retitled this block: advisory mode is still the
+// default, but it no longer means "a rejecting verdict does not block" -- that softening was
+// the run-1a1b3087-class defect. What advisory still controls: nothing observable left in this
+// gate (missing/nonEvidence/failing all now block unconditionally; unknown always fail-opens).
+describe('validateSubagentEvidence — a REJECTING verdict blocks even under the advisory default', () => {
   beforeEach(() => {
     delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE;
     delete process.env.SUBAGENT_VERDICT_MODE;
   });
   afterEach(() => { delete process.env.SUBAGENT_VERDICT_MODE; });
 
-  it('FAIL verdict warns but PASSES when SUBAGENT_VERDICT_MODE is unset', async () => {
+  // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-6, run 1a1b3087 class): a RECORDED rejecting verdict
+  // (FAIL/BLOCKED/...) must fail the gate in EVERY mode -- advisory only ever softened MISSING
+  // evidence, never a verdict that was actually written and says no. REPLACES the two tests that
+  // used to assert the opposite (advisory-mode softening of a rejecting verdict), which was
+  // exactly the mechanism SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 exists to close.
+  it('FAIL verdict FAILS even when SUBAGENT_VERDICT_MODE is unset (advisory default)', async () => {
     const supabase = makeSupabase({
       phaseStart: PHASE_START_ISO,
       evidenceRows: [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'FAIL' }]
     });
     const result = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
-    expect(result.passed).toBe(true);
-    expect(result.score).toBe(100);
-    expect(result.issues).toEqual([]);
-    expect(result.warnings[0]).toMatch(/\[ADVISORY\].*SUBAGENT_EVIDENCE_BAD_VERDICT/);
-    expect(result.warnings.join(' ')).toMatch(/SUBAGENT_VERDICT_MODE=block/);
+    expect(result.passed).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_BAD_VERDICT');
     expect(result.details.verdict_mode).toBe('advisory');
-    // The violation is still recorded — advisory means "surfaced", not "ignored".
     expect(result.details.failing).toEqual([
       expect.objectContaining({ agent: 'TESTING', verdict: 'FAIL' })
     ]);
   });
 
-  it('explicit SUBAGENT_VERDICT_MODE=advisory also passes', async () => {
+  it('BLOCKED verdict FAILS under explicit SUBAGENT_VERDICT_MODE=advisory too', async () => {
     process.env.SUBAGENT_VERDICT_MODE = 'advisory';
     const supabase = makeSupabase({
       phaseStart: PHASE_START_ISO,
       evidenceRows: [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'BLOCKED' }]
     });
     const result = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase);
-    expect(result.passed).toBe(true);
+    expect(result.passed).toBe(false);
     expect(result.details.verdict_mode).toBe('advisory');
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_BAD_VERDICT');
   });
 
   it('a passing verdict produces no advisory noise', async () => {
@@ -706,22 +709,25 @@ describe('non-evidence blocks unconditionally (SD-LEO-INFRA-EXPLORE-UNREGISTERED
     expect(classifyVerdict('ERROR')).toBe('nonevidence');   // still a distinct class
   });
 
-  it('RETAINED TWO-SIDED CONTROL: the mode flag is still consulted — on a REJECTING verdict', async () => {
-    // MOVED, not deleted. The QF-20260804-926 version of this control used an ERROR row, which no
-    // longer discriminates now that non-evidence blocks in both modes. Dropping it outright would
-    // have left the suite with only one-sided "ERROR blocks" assertions — and those stay green even
-    // if resolveSubagentVerdictMode stops being consulted at all, which is exactly the regression a
-    // control exists to catch.
-    //
-    // A FAIL verdict is the right carrier: it is the REJECTING class, which this SD deliberately
-    // left mode-gated. Same input, two modes, opposite outcomes.
+  it('SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-6): a REJECTING verdict now fails IDENTICALLY in both modes', async () => {
+    // REPLACES the prior two-sided control, which asserted the OPPOSITE (block vs advisory
+    // producing different outcomes on a FAIL verdict) -- that was exactly the mechanism this SD
+    // closes. A recorded rejecting verdict (BLOCKED/FAIL/...) on a required agent is no longer
+    // negotiable in either mode: run 1a1b3087 (MANDATORY_TESTING_VALIDATION / 2D:testingSubAgent
+    // Verified BLOCKED) must fail the gate the same way whether SUBAGENT_VERDICT_MODE is 'block'
+    // or unset (advisory default). `missing` (true absence) and `nonEvidence` (crash tombstone)
+    // were ALREADY unconditional before this SD (see the tests above) -- this fix brings `failing`
+    // into that same unconditional set, so SUBAGENT_VERDICT_MODE no longer changes this gate's
+    // observable outcome for ANY class. Same input, two modes, same outcome.
     const failRow = [{ sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'FAIL' }];
     const supabase = () => makeSupabase({ phaseStart: PHASE_START_ISO, evidenceRows: failRow });
     process.env.SUBAGENT_VERDICT_MODE = 'block';
     const blocked = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase());
     delete process.env.SUBAGENT_VERDICT_MODE;
     const advisory = await validateSubagentEvidence({ sd: makeSD(), handoffType: 'PLAN-TO-EXEC' }, supabase());
-    expect(blocked.passed).not.toBe(advisory.passed);
+    expect(blocked.passed).toBe(false);
+    expect(advisory.passed).toBe(false);
+    expect(blocked.passed).toBe(advisory.passed);
   });
 });
 

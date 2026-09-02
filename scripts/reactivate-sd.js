@@ -49,6 +49,36 @@ export function computeReactivation(sd, { toStatus = 'draft', reason = null, now
   if (!VALID_REACTIVATION_TARGETS.has(toStatus)) {
     throw new Error(`computeReactivation: invalid --to status '${toStatus}' (allowed: ${[...VALID_REACTIVATION_TARGETS].join(', ')})`);
   }
+
+  // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-5): a SEPARATE, narrowly-guarded path -- reopening a
+  // FALSELY completed SD. Distinct from the 'deferred'-only reactivation below (different source
+  // status, different target current_phase, clears completion_date, never clears the flag that
+  // gates it). Checked BEFORE the deferred guard so status='completed' does not fall through to
+  // the terminal refusal below UNLESS the flag is genuinely absent/false -- in which case it
+  // falls through to that SAME terminal refusal, unchanged (no new silent-success path).
+  if (sd.status === 'completed' && toStatus === 'active') {
+    if (sd?.metadata?.completion_evidence_invalid !== true) {
+      return { ok: false, reason: 'not_deferred', terminal: true, currentStatus: sd.status };
+    }
+    const ts = nowIso || new Date().toISOString();
+    const priorMeta = (sd.metadata && typeof sd.metadata === 'object' && !Array.isArray(sd.metadata)) ? sd.metadata : {};
+    const nextMeta = { ...priorMeta, uncompleted_at: ts };
+    if (reason) nextMeta.uncomplete_reason = String(reason).slice(0, 500);
+    // completion_evidence_invalid is DELIBERATELY left true (never cleared here) -- a durable
+    // marker that this SD was once falsely completed, per FR-5's own acceptance criteria.
+    const updates = {
+      status: 'active',
+      current_phase: 'LEAD_FINAL',
+      completion_date: null,
+      metadata: nextMeta,
+      updated_at: ts,
+      lifecycle_write_token: 'sd:reactivate',
+    };
+    const pre_state = { status: sd.status, current_phase: sd.current_phase ?? null, completion_date: sd.completion_date ?? null };
+    const post_state = { status: 'active', current_phase: 'LEAD_FINAL', completion_date: null, uncompleted_at: ts };
+    return { ok: true, kind: 'uncomplete_false_pass', guardStatus: 'completed', updates, pre_state, post_state, blockerCleared: false };
+  }
+
   if (sd.status !== 'deferred') {
     return { ok: false, reason: 'not_deferred', terminal: TERMINAL_STATUSES.has(sd.status), currentStatus: sd.status };
   }
@@ -66,21 +96,23 @@ export function computeReactivation(sd, { toStatus = 'draft', reason = null, now
   const updates = { status: toStatus, metadata: nextMeta, updated_at: ts, lifecycle_write_token: 'sd:reactivate' };
   const pre_state = { status: sd.status, current_phase: sd.current_phase ?? null, blocker_status: priorBlocker?.status ?? null };
   const post_state = { status: toStatus, reactivated_at: ts, blocker_status: priorBlocker ? 'cleared' : null };
-  return { ok: true, updates, pre_state, post_state, blockerCleared: !!priorBlocker };
+  return { ok: true, kind: 'reactivate', guardStatus: 'deferred', updates, pre_state, post_state, blockerCleared: !!priorBlocker };
 }
 
 /**
  * PURE: build the sd_transition_audit insert row for a reactivation.
  * sd_id (uuid) + request_id (text) are NOT NULL on the table.
  */
-export function buildReactivationAudit({ sdId, pre_state, post_state, sessionId = null, requestId, nowIso }) {
+export function buildReactivationAudit({ sdId, pre_state, post_state, sessionId = null, requestId, nowIso, transitionType = 'REACTIVATE' }) {
   if (!sdId) throw new Error('buildReactivationAudit: sdId is required');
   if (!requestId) throw new Error('buildReactivationAudit: requestId is required (request_id is NOT NULL)');
   if (!pre_state) throw new Error('buildReactivationAudit: pre_state is required (pre_state is NOT NULL)');
   const ts = nowIso || new Date().toISOString();
   return {
     sd_id: sdId,
-    transition_type: 'REACTIVATE',
+    // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-5): 'UNCOMPLETE_FALSE_PASS' for the new reopen
+    // path, still 'REACTIVATE' for the pre-existing deferred->X path (default unchanged).
+    transition_type: transitionType,
     session_id: sessionId,
     request_id: requestId,
     pre_state,
@@ -184,22 +216,30 @@ async function main() {
     process.exit(0);
   }
 
-  // Guarded atomic flip — only applies if the SD is STILL 'deferred'.
+  // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-5): guard status is plan-specific -- 'deferred' for
+  // the pre-existing reactivation path, 'completed' for the new uncomplete-false-pass path.
+  // Same concurrent-safety contract either way: the guarded UPDATE only applies if the SD is
+  // STILL in the state the plan was computed against.
+  const guardStatus = plan.guardStatus || 'deferred';
   const { data: updated, error: upErr } = await supabase
     .from('strategic_directives_v2')
     .update(plan.updates)
     .eq('id', sd.id)
-    .eq('status', 'deferred')
+    .eq('status', guardStatus)
     .select('sd_key, status');
   if (upErr) {
     console.error(`❌ Failed to reactivate ${sd.sd_key}:`, upErr.message);
     process.exit(1);
   }
   if (!updated || updated.length === 0) {
-    console.log(`ℹ️  ${sd.sd_key} was no longer 'deferred' at write time (concurrent change) — no-op.`);
+    console.log(`ℹ️  ${sd.sd_key} was no longer '${guardStatus}' at write time (concurrent change) — no-op.`);
     process.exit(0);
   }
-  console.log(`✓ ${sd.sd_key} reactivated: status=${toStatus}, metadata.reactivated_at stamped${plan.blockerCleared ? ', metadata.blocker.status=cleared' : ''}`);
+  if (plan.kind === 'uncomplete_false_pass') {
+    console.log(`✓ ${sd.sd_key} UNCOMPLETED (false pass): status=active, current_phase=LEAD_FINAL, completion_date cleared, metadata.completion_evidence_invalid retained`);
+  } else {
+    console.log(`✓ ${sd.sd_key} reactivated: status=${toStatus}, metadata.reactivated_at stamped${plan.blockerCleared ? ', metadata.blocker.status=cleared' : ''}`);
+  }
 
   // Emit the sd_transition_audit row (loud-but-non-fatal — the flip already landed).
   const auditRow = buildReactivationAudit({
@@ -209,15 +249,16 @@ async function main() {
     post_state: plan.post_state,
     sessionId: process.env.CLAUDE_SESSION_ID || null,
     requestId: randomUUID(),
+    transitionType: plan.kind === 'uncomplete_false_pass' ? 'UNCOMPLETE_FALSE_PASS' : 'REACTIVATE',
   });
   const { error: auditErr } = await supabase.from('sd_transition_audit').insert(auditRow);
   if (auditErr) {
     console.warn(`⚠️  sd_transition_audit write for ${sd.sd_key} failed (non-fatal — SD already reactivated):`, auditErr.message);
   } else {
-    console.log(`✓ sd_transition_audit: REACTIVATE recorded for ${sd.sd_key}`);
+    console.log(`✓ sd_transition_audit: ${auditRow.transition_type} recorded for ${sd.sd_key}`);
   }
 
-  console.log('\n✅ Reactivation complete.');
+  console.log(plan.kind === 'uncomplete_false_pass' ? '\n✅ Uncomplete (false-pass reopen) complete.' : '\n✅ Reactivation complete.');
 }
 
 // Only run main() when invoked directly (not when imported by tests).

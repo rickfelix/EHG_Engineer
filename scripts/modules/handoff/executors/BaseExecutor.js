@@ -31,6 +31,7 @@ import { createTraceContext, startSpan, endSpan, persist } from '../../../../lib
 
 // SD-MAN-GEN-CORRECTIVE-VISION-GAP-009: CLI authority tracking
 import { trackWriteSource } from '../../../../lib/eva/cli-write-gate.js';
+import { buildBypassStamp, applyBypassToResult } from '../../../../lib/handoff/bypass-stamp.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -81,6 +82,12 @@ export class BaseExecutor {
     console.log(`🔍 ${this.handoffType} HANDOFF EXECUTION`);
     console.log('-'.repeat(30));
 
+    // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-1): a bypass fall-through below sets this instead
+    // of silently continuing -- the ONLY place either bypass site's continuation can end up is
+    // the success return at the bottom of this method, so a single function-scope variable
+    // threaded through both sites is sufficient (never mutated after the success return reads
+    // it). Never set for a non-bypassed run: absence, not false, is the default.
+    let bypassInfo = null;
     // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Create trace context for this execution
     let traceCtx, rootSpan;
     try {
@@ -347,6 +354,17 @@ export class BaseExecutor {
         if (fenceReason) {
           if (options.bypassValidation) {
             console.log(`\n⚠️  BYPASS ACTIVE: coordinator-authority fence (${fenceReason}) overridden — emergency path, audited.`);
+            // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-1): stamp the bypass -- this fall-through
+            // used to leave the eventual result indistinguishable from a genuine pass. FR-4:
+            // patternId/followupSdKey threaded through so LEAD-FINAL-APPROVAL can verify a
+            // linked follow-up exists.
+            bypassInfo = buildBypassStamp({
+              source: 'authority_fence',
+              reason: options.bypassReason || fenceReason,
+              gate: 'GATE_COORDINATOR_AUTHORITY_FENCE',
+              patternId: options.patternId,
+              followupSdKey: options.followupSdKey,
+            });
           } else {
             try { endSpan(rootSpan, { result: 'authority_fence' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
             return ResultBuilder.gateFailure('GATE_COORDINATOR_AUTHORITY_FENCE', {
@@ -646,6 +664,18 @@ export class BaseExecutor {
           console.log(`   Issues: ${gateResults.issues.length}`);
           console.log('   Proceeding despite validation failures...');
           console.log('');
+          // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-1): stamp the bypass -- this is the choke
+          // point that let a required:true gate failure (e.g. a BLOCKED TESTING verdict) reach
+          // the success return below with no trace that it was ever overridden. FR-4: see the
+          // authority_fence site above for patternId/followupSdKey.
+          bypassInfo = buildBypassStamp({
+            source: 'gate_failure',
+            reason: options.bypassReason,
+            gate: gateResults.failedGate,
+            issues: gateResults.issues,
+            patternId: options.patternId,
+            followupSdKey: options.followupSdKey,
+          });
           // Continue execution despite gate failure
         } else {
           // SD-LEO-ENH-AUTO-PROCEED-001-07: Check for skip-and-continue conditions (post-retry)
@@ -817,7 +847,9 @@ export class BaseExecutor {
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End root span and persist
       try { endSpan(rootSpan, { result: 'success' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
-      return {
+      // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-1): applyBypassToResult never clobbers an
+      // executor's own correct self-stamp (e.g. plan-to-exec/index.js) when bypassInfo is null.
+      return applyBypassToResult({
         success: true,
         ...executionResult,
         gateResults: gateResults.gateResults,
@@ -826,8 +858,8 @@ export class BaseExecutor {
         totalScore: gateResults.totalScore,
         maxScore: gateResults.totalMaxScore,
         gateCount: gateResults.gateCount,
-        warnings: gateResults.warnings
-      };
+        warnings: gateResults.warnings,
+      }, bypassInfo);
 
     } catch (error) {
       // QF-20260423-200: Log with full diagnostic context (was: just error.message)

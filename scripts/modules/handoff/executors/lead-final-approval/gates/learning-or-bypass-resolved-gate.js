@@ -23,6 +23,53 @@
 const GATE_NAME = 'LEARNING_OR_BYPASS_RESOLVED';
 
 /**
+ * SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-4): independent per-SD check, deliberately kept
+ * separate from the validator_name-based validation_audit_log check below so the two bypass
+ * signals (audit-log entries vs the sd_phase_handoffs.metadata.bypass stamp FR-2 introduces)
+ * are never conflated into one conditional.
+ *
+ * Reads every sd_phase_handoffs row for the SD carrying metadata.bypass (stamped by
+ * HandoffRecorder whenever BaseExecutor's bypass fall-through fired) and REFUSES completion --
+ * a real failure, never warn-only -- unless every such bypass carries a linked follow-up
+ * (pattern_id or followup_sd_key, captured at bypass time by bypass-rubric.js's
+ * validateBypassShape and threaded through by this SD's own FR-4 changes).
+ *
+ * @param {object} supabase
+ * @param {string} sdId
+ * @returns {Promise<{ unresolved: Array<object>, total: number }>}
+ */
+async function findUnresolvedPhaseChainBypasses(supabase, sdId) {
+  const { data, error } = await supabase
+    .from('sd_phase_handoffs')
+    .select('id, handoff_type, metadata')
+    .eq('sd_id', sdId)
+    .limit(200);
+
+  if (error) {
+    // Fail-closed is the wrong call here (a DB hiccup should not itself block every
+    // completion) — but silence is also wrong, so this is surfaced by the caller as a
+    // warning, never as a silent pass.
+    return { unresolved: [], total: 0, queryError: error.message };
+  }
+
+  const bypassed = (data || []).filter((row) => row?.metadata?.bypass);
+  const unresolved = bypassed.filter((row) => {
+    const b = row.metadata.bypass;
+    return !b.pattern_id && !b.followup_sd_key;
+  });
+
+  return {
+    unresolved: unresolved.map((row) => ({
+      handoff_id: row.id,
+      handoff_type: row.handoff_type,
+      reason: row.metadata.bypass.reason || null,
+      gates: row.metadata.bypass.gates || null,
+    })),
+    total: bypassed.length,
+  };
+}
+
+/**
  * Create the learning-or-bypass-resolved gate.
  *
  * @param {object} supabase - Supabase client (required — gate queries audit tables)
@@ -47,6 +94,35 @@ export function createLearningOrBypassResolvedGate(supabase) {
           issues: [],
           warnings: ['No sd_id in context — gate skipped'],
         };
+      }
+
+      // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-4): checked FIRST and independently. Unlike the
+      // existing check below (which honours ENFORCE_LEARNING_GATE's warn-only default), an
+      // unresolved phase-chain bypass is a hard failure on every route -- this is precisely the
+      // class of false completion (run 1a1b3087 / SD-LEO-FIX-HUMAN-ACTION-FENCES-001) this SD
+      // exists to close, so it is never negotiable via the learning-gate soak flag.
+      const phaseChainCheck = await findUnresolvedPhaseChainBypasses(supabase, sdId);
+      if (phaseChainCheck.unresolved.length > 0) {
+        const summary = phaseChainCheck.unresolved
+          .map((u) => `${u.handoff_type} (gates: ${(u.gates || []).join(', ') || 'unknown'})`)
+          .join('; ');
+        const message = `${phaseChainCheck.unresolved.length} bypassed handoff(s) in this SD's phase chain have no linked follow-up (--pattern-id/--followup-sd-key): ${summary}. Completion is refused while a bypass in the chain is unresolved -- link each via a follow-up SD/pattern, or genuinely fix the underlying gate and re-run without --bypass-validation.`;
+        console.log(`   ❌ BLOCK (unconditional): ${message}`);
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [message],
+          warnings: [],
+          details: {
+            reason: 'UNRESOLVED_PHASE_CHAIN_BYPASS',
+            unresolved_bypasses: phaseChainCheck.unresolved,
+            total_bypasses_in_chain: phaseChainCheck.total,
+          },
+        };
+      }
+      if (phaseChainCheck.queryError) {
+        console.log(`   ⚠️  phase-chain bypass check could not query sd_phase_handoffs: ${phaseChainCheck.queryError} — continuing to the existing audit-log check`);
       }
 
       // (b) Check audit_log for bypass entries tied to this SD

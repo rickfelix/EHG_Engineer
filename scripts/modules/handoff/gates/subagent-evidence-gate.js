@@ -606,32 +606,23 @@ export async function validateSubagentEvidence(ctx, supabase) {
     const summary = failing.map(f => `${f.agent}=${f.verdict}`).join(', ');
     const headline = `SUBAGENT_EVIDENCE_BAD_VERDICT: latest evidence for ${summary} does not indicate a pass`;
     const remediation = `Re-run the sub-agent(s) (${failing.map(f => f.agent).join(', ')}) for SD ${sdKey} and let them write a fresh passing row — the gate reads the LATEST row per agent, so a successful re-run supersedes the failed one. Accepted verdicts: ${[...ACCEPT_VERDICTS].join('/')}.`;
-    console.log(`   ${mode === 'block' ? '❌' : '⚠️ '} ${headline} (mode: ${mode})`);
 
-    if (mode === 'block') {
-      return buildFailResult({
-        score: 0,
-        max_score: 100,
-        issues: [headline],
-        details: { reason: 'SUBAGENT_EVIDENCE_BAD_VERDICT', ...verdictDetails },
-        remediation
-      });
-    }
-
-    // advisory (default): warn, do not fail — a gate that has been presence-only
-    // since it shipped must not start blocking in-flight SDs without an opt-in.
-    return {
-      passed: true,
-      score: 100,
+    // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-6): a REJECTING verdict (BLOCKED, FAIL, ...) on a
+    // required agent fails the gate on EVERY route, mode included. This block used to be the
+    // ONE place SUBAGENT_VERDICT_MODE=advisory converted a recorded rejection into passed:true
+    // (a run 1a1b3087-class specimen measured 2026-09: TESTING=BLOCKED, gate still passed at
+    // score 100). SUBAGENT_VERDICT_MODE still governs everything it always has -- `missing`
+    // (true absence, handled elsewhere in this file) is UNTOUCHED by this change, and remains
+    // whatever this file's own missing-evidence branch already does. Only a RECORDED rejection
+    // is no longer negotiable, in either mode.
+    console.log(`   ❌ ${headline} (mode: ${mode}, no longer softened by advisory)`);
+    return buildFailResult({
+      score: 0,
       max_score: 100,
-      issues: [],
-      warnings: [
-        `[ADVISORY] ${headline}. ${remediation}`,
-        'Enforcement is opt-in: set SUBAGENT_VERDICT_MODE=block to FAIL on non-passing sub-agent evidence.',
-        ...unknownWarnings
-      ],
-      details: verdictDetails
-    };
+      issues: [headline],
+      details: { reason: 'SUBAGENT_EVIDENCE_BAD_VERDICT', ...verdictDetails },
+      remediation
+    });
   }
 
   // FR-2: race-window WAIT. If the phase started within RACE_WINDOW_SECONDS the
