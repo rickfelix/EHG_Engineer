@@ -61,18 +61,15 @@ export function isRenormalizationDirty(parsed) {
 // non-empty rationale (enforced below) and the list's length is asserted by a test
 // (tests/unit/eol-renormalization-lint.test.js) -- so a silent, unreviewed addition fails loudly
 // instead of the allowlist rotting into a blanket suppression.
-export const ALLOWLIST = [
-  {
-    path: 'database/migrations/20251221_rls_delete_policy_fixes.sql',
-    rationale: 'Migration file: a line-ending-only change could still alter a chairman-approval '
-      + 'content hash (see .gitattributes’ own comment on its *.sql eol=lf pin). Deferred to a '
-      + 'separate follow-up, not fixed by SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001.',
-  },
-  {
-    path: 'docs/chairman-decision-queue-capture-2026-08-03/fn_chairman_decide.LIVE.sql',
-    rationale: 'Same approval-hash sensitivity as the migration file above.',
-  },
-];
+//
+// QF-20260902-487 removed the 2 entries formerly here (database/migrations/
+// 20251221_rls_delete_policy_fixes.sql and docs/chairman-decision-queue-capture-2026-08-03/
+// fn_chairman_decide.LIVE.sql): both were renormalized (git ls-files --eol now reads i/lf for
+// both, verified zero content lines under `git diff --ignore-all-space`), and neither contains a
+// live `@approved-by:` marker or is referenced by exact filename anywhere else in the repo
+// (searched) -- the generic hash-sensitivity risk this allowlist historically cited for
+// migration files did not apply to either file's actual content.
+export const ALLOWLIST = [];
 // NOTE (QF-20260901-018): lib/agents/venture-ceo-factory.js is deliberately NOT added here.
 // It remains a genuine, tracked violation held by a live FR-6 scope fence (see
 // tests/static-guards/eol-mixed-crlf-ratchet.test.js's baseline + docblock) -- a temporary,
