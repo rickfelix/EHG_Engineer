@@ -23,6 +23,8 @@ vi.mock('../../../lib/worktree-reaper/detectors.js', () => ({
   // cases exercise the merged-PR-backed path (the empty-evidence absorbed-no-PR case is advisory).
   isPatchEquivalentToMain: vi.fn(async () => ({ matched: true, reason: 'patch_equivalent_via_squash', evidence: { merged_pr_count: 1 } })),
   isIdle: vi.fn(() => ({ matched: false })),
+  // SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4 (AC6) — GAUGE ONLY, never pushed to categories.
+  isOutsideWorktreesDir: vi.fn(() => ({ matched: false })),
 }));
 
 import { classifyWorktree, stageForCategories, loadSdKeySets } from '../../../scripts/worktree-reaper.mjs';

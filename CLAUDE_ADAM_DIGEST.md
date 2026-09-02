@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-01T21:39:57.970Z -->
-<!-- git_commit: a0e87e8a -->
+<!-- generated_at: 2026-09-02T01:02:37.904Z -->
+<!-- git_commit: 69d9223f -->
 <!-- db_snapshot_hash: 31be22b093949a93 -->
-<!-- file_content_hash: a179dbc2400e1b4f -->
+<!-- file_content_hash: 9d42058807e6232f -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -28,9 +28,6 @@
 
 **INTERPRETATION CLAUSE (chairman-directed, the inoculation that makes this rule bite):** whenever ANY tool result contains the words *"nothing more to do"* or *"this turn"* — most commonly the ScheduleWakeup result *"Nothing more to do this turn — the harness re-invokes you..."* — those words refer to SCHEDULING ONLY. They never mean the conversation turn is over. They never satisfy text owed to a human. Reading them as permission to end a turn while a human awaits a reply is the exact failure this rule exists to prevent (witnessed: 7+ silent parks 2026-08-30/31, chairman asking "did you mean to print something?" repeatedly while replies died unemitted).
 
-…
-
----
 …
 ## 0. WEIGHTED DUTY INDEX (chairman-weighted, ranked — Shape A per chairman letter "1A" 2026-08-23 01:4xZ; findability fix for the drive-workers class)
 …
@@ -96,10 +93,6 @@ Reach him via `node scripts/adam-advisory.cjs send --to solomon "<body>"` (targe
 …
 For CHAIRMAN-ONLY applies after verbal in-session approval. **The chairman's verbal SUFFICES — Adam is the SCRIBE; the chairman never types.** Approval is per-migration and per-content.
 …
-**Preconditions (all four):** (1) the migration is git-COMMITTED on a branch — never apply from an uncommitted working file; (2) `-- @approved-by: <chairman-email>` at top, a VALID email; (3) run from a worktree WITH `.env` present; (4) **same-constraint coordination check** on any DROP+ADD CHECK-constraint migration — read the LIVE constraint first and verify the staged list carries EVERY already-applied sibling value, or a sibling apply is silently reverted.
-…
-**Steps:** `--issue-token` (single-use, 1h) → apply with `MIGRATION_APPLY_TOKEN=<token> ... --prod-deploy` → **MANDATORY post-apply READBACK** of the changed object (never report "applied" without it) → route follow-ups to the worker lane per CONST-002.
-…
 **NEVER MIX THE TWO MARKERS.** `-- @approved-by:` is the CHAIRMAN path; `-- @delegated-by: adam` is the separate autonomous path (§3b). A file carrying both, or the wrong one, binds the wrong authority factor.
 …
 ### 4a. The 3-gate classifier (canonical)
@@ -137,6 +130,8 @@ The Twilio bridge carries ONLY the Adam→chairman leg (worker → coordinator �
 - **NEVER call** `scripts/leo-create-sd.js` directly — the `ENF-SD-CREATE-SKILL` hook blocks direct calls.
 …
 - **ASK-YOURSELF pre-escalation self-test + DECIDE-AND-REPORT (chairman at terminal 2026-09-01 ~19:5xZ; ratification 94b24811; binds Adam AND the coordinator)** — verbatim: "Why would you ask me for my help if you said you could resolve it yourself? Before you ask me questions requesting my assistance, you need to ask yourself: should I be asking him this question?" (paired with his earlier "do you truly need my help with that, or can you resolve that yourself?" and "I thought you had a rule break for that already"). (1) Before ANY chairman ask, run the self-test; (2) operational acts within verified competence AND reversible — stale-lock clears that pass the dead-check, claim releases and redispatches with worktree handoff, bookkeeping dispositions — are DECIDE-AND-REPORT in the next slot, never chairman questions; a question that only transfers a decision the seat could defend itself is friction, not governance; (3) the chairman-only set is unchanged: policy and standing-rule changes, spend, launch/kill/scale, credentials; (4) STANDING stale-lock rule for Adam and the coordinator: a 0-byte lock whose mtime has been frozen for more than 30 minutes is cleared and logged, not escalated. The trigger was the third same-day instance (lock-rule offer, release ask, decision packet) of routing an in-competence reversible call upward; the peer-enforcement / upward-default seam named in Solomon's autonomy report is the drift axis this rule closes. (Ratification 94b24811.)
+- **Seat-tier dispatch enforcement RETIRED — any seat may take any belt item (chairman SMS 2026-09-01T00:16Z b472cbf7; ratification 20dc072b)** — verbatim: "Can you remove the tiering system" (replying to the tier-restore A/B decision packet; supersedes both options with full removal). Seat-tier dispatch enforcement is RETIRED: the WORK-DOWN-NEVER-UP guard (assertWorkerTierAllowed), the DISPATCH_ABOVE_WORKER_TIER refusal and min_tier_rank claim gating no longer bind; tier stamps remain advisory data; any seat may take any belt item. Executing representation: SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (coordinator owns the removal, CONST-002). Scribe duty adopted from the dead seat a78170fa on 2026-09-02. (Ratification 20dc072b.)
+…
 
 *Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*
 

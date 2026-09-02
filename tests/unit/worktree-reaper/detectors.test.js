@@ -16,6 +16,7 @@ import {
   hasOrphanSD,
   isPatchEquivalentToMain,
   isIdle,
+  isOutsideWorktreesDir,
 } from '../../../lib/worktree-reaper/detectors.js';
 
 // ── isZombieOnMain ─────────────────────────────────────────────────────
@@ -102,6 +103,54 @@ describe('isNested (AC2)', () => {
     });
     expect(res.matched).toBe(true);
     expect(res.evidence.depth).toBe(3);
+  });
+});
+
+// ── isOutsideWorktreesDir ──────────────────────────────────────────────
+// SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4 (AC6)
+
+describe('isOutsideWorktreesDir (AC6)', () => {
+  const repoRoot = 'C:/repo';
+
+  it('matches a registered sibling worktree outside .worktrees/', () => {
+    const res = isOutsideWorktreesDir(
+      { path: 'C:/EHG_Engineer-qf-117' },
+      { repoRoot }
+    );
+    expect(res.matched).toBe(true);
+    expect(res.reason).toBe('sibling_outside_worktrees_dir');
+  });
+
+  it('does not match a worktree under .worktrees/qf/<id>', () => {
+    const res = isOutsideWorktreesDir(
+      { path: 'C:/repo/.worktrees/qf/QF-1' },
+      { repoRoot }
+    );
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('inside_worktrees_dir');
+  });
+
+  it('does not match a worktree under .worktrees/sd/<key>', () => {
+    const res = isOutsideWorktreesDir(
+      { path: 'C:/repo/.worktrees/sd/SD-X' },
+      { repoRoot }
+    );
+    expect(res.matched).toBe(false);
+  });
+
+  it('closes the separator-anchor bypass: a path merely sharing the .worktrees prefix is still a sibling', () => {
+    const res = isOutsideWorktreesDir(
+      { path: 'C:/repo/.worktrees-evil/x' },
+      { repoRoot }
+    );
+    expect(res.matched).toBe(true);
+    expect(res.reason).toBe('sibling_outside_worktrees_dir');
+  });
+
+  it('does not match when repoRoot is missing from ctx (fail-safe, never a false sibling flag)', () => {
+    const res = isOutsideWorktreesDir({ path: 'C:/EHG_Engineer-qf-117' }, {});
+    expect(res.matched).toBe(false);
+    expect(res.reason).toBe('no_repo_root');
   });
 });
 

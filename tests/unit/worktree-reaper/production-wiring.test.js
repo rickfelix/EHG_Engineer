@@ -34,6 +34,10 @@ vi.mock('../../../lib/worktree-reaper/detectors.js', () => ({
   hasOrphanSD: vi.fn(() => ({ matched: false })),
   isPatchEquivalentToMain: vi.fn(async () => ({ matched: false, reason: 'skipped', evidence: {} })),
   isIdle: vi.fn(() => ({ matched: false })),
+  // SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4 (AC6) — GAUGE ONLY, never pushed to
+  // categories/hasStage1/hasStage2 by classifyWorktree; see tests/unit/worktree-reaper/
+  // detectors.test.js's isOutsideWorktreesDir describe block for the detector's own coverage.
+  isOutsideWorktreesDir: vi.fn(() => ({ matched: false })),
 }));
 
 import { classifyWorktree } from '../../../scripts/worktree-reaper.mjs';

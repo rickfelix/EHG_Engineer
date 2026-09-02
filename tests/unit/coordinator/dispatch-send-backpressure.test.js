@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 const {
   assertSendBackpressure, insertCoordinationRow, BACKPRESSURE_EXEMPT_KINDS, BACKPRESSURE_UNANSWERED_LIMIT,
 } = require('../../../lib/coordinator/dispatch.cjs');
+const { CORRECTION_KINDS, DISPOSITION_KIND } = require('../../../lib/coordinator/message-kinds.cjs');
 
 const TARGET = '0f8d45d8-9531-4ab8-a1b9-6961c405e1ec';
 const silentLog = { warn() {}, error() {}, log() {} };
@@ -132,6 +133,37 @@ describe('assertSendBackpressure (unit)', () => {
     const rows = Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT + 2 }, (_, i) => ({
       id: `parked-${i}`, payload: { kind: 'coordinator_update', backpressure_parked: true },
     }));
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
+  });
+
+  // QF-20260901-047: advisory-lane corrections carry the discriminator as payload.message_kind
+  // (payload.kind is force-stamped to 'adam_advisory'), so they never matched the kind-keyed
+  // exemption above and were parked behind the cap like a routine send.
+  it('every correction message_kind bypasses the limit even when choked (message_kind exemption)', async () => {
+    for (const messageKind of CORRECTION_KINDS) {
+      const { sb } = stubSupabase({ unanswered: BACKPRESSURE_UNANSWERED_LIMIT + 5 });
+      await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { kind: 'adam_advisory', message_kind: messageKind } }, silentLog)).resolves.toBeUndefined();
+    }
+  });
+
+  it('a plain advisory (kind=adam_advisory, no message_kind) is still refused at the cap', async () => {
+    const { sb } = stubSupabase({ unanswered: BACKPRESSURE_UNANSWERED_LIMIT });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { kind: 'adam_advisory' } }, silentLog))
+      .rejects.toMatchObject({ code: 'DISPATCH_BACKPRESSURE' });
+  });
+
+  // 'disposition' is NOT a correction (message-kinds.cjs's own documented trap: it must never
+  // exempt itself from a guard it exists to be locked by) — it stays refused at the cap.
+  it('message_kind=disposition is NOT exempt — still refused at the cap', async () => {
+    const { sb } = stubSupabase({ unanswered: BACKPRESSURE_UNANSWERED_LIMIT });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { kind: 'adam_advisory', message_kind: DISPOSITION_KIND } }, silentLog))
+      .rejects.toMatchObject({ code: 'DISPATCH_BACKPRESSURE' });
+  });
+
+  it('does not count correction message_kind rows in the candidate population', async () => {
+    const rows = CORRECTION_KINDS.map((messageKind, i) => ({ id: `corr-${i}`, payload: { kind: 'adam_advisory', message_kind: messageKind } }))
+      .concat(Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT - 1 }, (_, i) => ({ id: `neutral-${i}`, payload: {} })));
     const { sb } = stubSupabase({ rows });
     await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
   });

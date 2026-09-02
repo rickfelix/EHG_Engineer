@@ -101,10 +101,16 @@ If qualified for quick-fix:
    node scripts/read-quick-fix.js QF-YYYYMMDD-NNN
    ```
 
-2. **Create branch:**
+2. **Create/attach the worktree (SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001):**
    ```bash
-   git checkout -b qf/QF-YYYYMMDD-NNN
+   git worktree add .worktrees/qf/QF-YYYYMMDD-NNN -b qf/QF-YYYYMMDD-NNN
    ```
+   Never `git checkout -b` in the shared root — it mutates the coordinator's checked-out
+   branch mid-tick and is blocked by ENFORCEMENT 17 (the shared-tree hijack guard). Never a
+   hand-typed sibling path like `../EHG_Engineer-qf-<id>` either — it registers OUTSIDE the
+   repo root (every Read/Edit inside it then freezes the seat on the outside-working-directory
+   permission prompt) and is blocked by ENFORCEMENT 12e (the worktree-placement guard).
+   `.worktrees/qf/<id>` is the only sanctioned path; `cd` into it before continuing below.
 
 3. **Implement fix:**
    - Keep changes ≤50 LOC (hard cap)
