@@ -2,6 +2,12 @@
 -- SD: SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-4)
 -- Amends: 20260525_auto_close_quick_fixes_on_sd_completion.sql
 --   (fn_auto_close_quick_fixes_on_sd_completion / trg_auto_close_quick_fixes_on_sd_completion)
+-- @chairman-gated: staged only, NOT applied to prod by this SD -- requires the standard
+--   chairman apply ceremony (see check-migration-readiness.mjs's CHAIRMAN-GATED-EXEMPT-001
+--   convention: this dedicated marker line downgrades the CREATE OR REPLACE body-divergence
+--   check from a merge-blocking FAIL_DRIFT to an advisory EXPECTED_PENDING, since live !=
+--   migration is the deliberately intended state at merge time for a staged-not-applied
+--   migration, not drift).
 --
 -- Problem: fn_auto_close_quick_fixes_on_sd_completion cancels every quick_fixes row
 -- linked via resolution_sd_id to a completing SD, EXCEPT status IN
