@@ -523,6 +523,15 @@ export function autoDetectGitInfo(testDir, options = {}) {
         console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via gh PR file list)`);
       }
     }
+
+    // QF-20260902-685: the PR's own file list is GROUND TRUTH for "what this QF touched" --
+    // authoritative and immune to whatever happens to be sitting untracked/dirty in the local
+    // worktree. Exposed here so the caller can pass it into analyzeGitDiff() as declared scope,
+    // bypassing local git/working-tree scanning entirely on the reconcile path (the exact path
+    // both witnessed incidents fell through to).
+    if (Array.isArray(pr.files)) {
+      result.prFiles = pr.files.map((f) => f?.path).filter((p) => typeof p === 'string' && p.length > 0);
+    }
     return result;
   }
 
@@ -583,13 +592,50 @@ export function autoDetectGitInfo(testDir, options = {}) {
 }
 
 /**
+ * QF-20260902-685 (bullet 2): refuse to run the file-scoping/staging pipeline from a SHARED
+ * checkout (the main repo root, or any non-isolated tree) rather than an isolated per-QF
+ * worktree. Reuses isInQFWorktree's already-proven structural signal (same one the shared-tree-
+ * contention guard and the working-tree-fallback fence already rely on) rather than a second,
+ * DB-driven applications.local_path comparison -- one representation of "is this isolated",
+ * not two that could drift.
+ * @param {string} testDir
+ * @param {string} qfId
+ * @returns {{refused:boolean, message?:string}}
+ */
+export function refuseIfSharedRoot(testDir, qfId) {
+  if (isInQFWorktree(testDir)) return { refused: false };
+  const suggestedPath = `.worktrees/${qfId}`;
+  return {
+    refused: true,
+    message: `[QF_SHARED_ROOT_REFUSED] Completing ${qfId} from '${testDir}' is refused -- this is not an isolated QF worktree. ` +
+      'A shared checkout always carries other sessions or the harness own untracked state (e.g. concurrent dirty files, ' +
+      'dot-directory session markers), which the file-scoping step could sweep into the commit. ' +
+      `Run: node scripts/session-worktree.js --sd-key ${qfId} --branch qf/${qfId}, then re-run this completion from ${suggestedPath}.`
+  };
+}
+
+/**
  * Analyze git diff for file changes
  * @param {string} testDir - Directory to run git commands in
  * @param {string} qfDescription - Quick-fix description for matching files
+ * @param {string[]|null} [declaredFiles] - QF-20260902-685: the QF's DECLARED file scope (e.g.
+ *   autoDetectGitInfo's gitInfo.prFiles, sourced from the merged PR's own file list). When
+ *   provided, this IS filesChanged -- local git/working-tree scanning (branch diff AND the
+ *   working-tree fallback) is skipped entirely, so worktree noise can never be swept in. `null`/
+ *   omitted preserves the pre-existing local-scan behavior for callers with no PR yet.
  * @returns {object} Diff analysis with filesChanged, insertions, deletions
  */
-export function analyzeGitDiff(testDir, qfDescription = '') {
+export function analyzeGitDiff(testDir, qfDescription = '', declaredFiles = null) {
   console.log('\n📊 Git Diff Auto-Analysis\n');
+
+  if (Array.isArray(declaredFiles)) {
+    const filesChanged = [...new Set(declaredFiles)];
+    console.log('   ℹ️  Using the merged PR’s own declared file list (never local worktree state).');
+    console.log(`   Files Changed: ${filesChanged.length}`);
+    filesChanged.forEach((file) => console.log(`      - ${file}`));
+    console.log();
+    return { filesChanged, diffAnalysis: { files: filesChanged, diffSourceTier: 'pr-file-list' } };
+  }
 
   let filesChanged = [];
   // QF-20260823-098: default diffSourceTier to null (not undefined-via-missing-key) up
