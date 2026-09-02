@@ -397,9 +397,6 @@ async function createQuickFix(options = {}) {
     }
   }
 
-  // Generate ID
-  const qfId = generateQuickFixId();
-
   // QF-20260526-106: route + INSERT the quick_fixes row BEFORE the per-feedback-row
   // pre-claim. The pre-claim sets feedback.quick_fix_id = qfId, which the
   // fk_feedback_quick_fix constraint rejects unless the quick_fixes row already
@@ -418,8 +415,16 @@ async function createQuickFix(options = {}) {
   const isTier3 = routingDecision.tier === 3;
   const initialStatus = isTier3 ? 'escalated' : 'open';
 
-  {
-    const { error: insertErr } = await supabase
+  // QF-20260902-185: the id's random 3-digit daily suffix has no collision retry, so on
+  // a busy day (34+ QF-<date>-* rows already minted) a fresh mint can land on a taken
+  // suffix and fail on quick_fixes_pkey (23505), forcing a manual re-run. Redraw and
+  // retry, bounded, logging each collision; a non-23505 error still fails immediately.
+  const MAX_ID_ATTEMPTS = 5;
+  let qfId;
+  let insertErr;
+  for (let attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt++) {
+    qfId = generateQuickFixId();
+    ({ error: insertErr } = await supabase
       .from('quick_fixes')
       .insert({
         id: qfId,
@@ -437,11 +442,14 @@ async function createQuickFix(options = {}) {
         routing_tier: routingDecision.tier,
         routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
         created_at: new Date().toISOString()
-      });
-    if (insertErr) {
-      console.log('❌ Failed to create quick-fix record:', insertErr.message);
-      process.exit(1);
-    }
+      }));
+    if (!insertErr) break;
+    if (insertErr.code !== '23505') break;
+    console.warn(`⚠️  [ID_COLLISION] ${qfId} already exists (attempt ${attempt}/${MAX_ID_ATTEMPTS}), redrawing...`);
+  }
+  if (insertErr) {
+    console.log('❌ Failed to create quick-fix record:', insertErr.message);
+    process.exit(1);
   }
 
   // SD-FDBK-INFRA-PER-FEEDBACK-ROW-001 / FR-1+FR-3: atomic per-feedback-row pre-claim.
