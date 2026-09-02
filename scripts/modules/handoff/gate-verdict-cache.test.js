@@ -23,6 +23,7 @@ import {
   loadPriorGateResults,
   GATE_INPUT_EXTRACTORS,
   SD_CONTENT_FIELDS,
+  GATE_CODE_VERSION,
 } from './gate-verdict-cache.js';
 
 const SD = {
@@ -108,6 +109,71 @@ describe('probeVerdictCache', () => {
     } finally {
       delete GATE_INPUT_EXTRACTORS.__THROWY__;
     }
+  });
+});
+
+describe('GATE_MECHANISM_CLAIM_VERIFIER (QF-20260902-476: FAIL-REPLAY)', () => {
+  const GATE = 'GATE_MECHANISM_CLAIM_VERIFIER';
+
+  function mechCtx(overrides = {}) {
+    return { sd: { ...SD, description: 'plain SD, no mechanism claim', ...overrides } };
+  }
+
+  function mechHash(ctx) {
+    return computeInputHash(GATE_INPUT_EXTRACTORS[GATE](ctx));
+  }
+
+  it('PASS reuse: identical inputs (including metadata.mechanism_verifications) hit', () => {
+    const ctx = mechCtx({ metadata: { mechanism_verifications: [{ verified_by: 'a', verified_at: 'x.js:1' }] } });
+    const hash = mechHash(ctx);
+    const prior = { [GATE]: { passed: true, score: 100, input_hash: hash } };
+    const probe = probeVerdictCache(GATE, ctx, { enabled: true, prior });
+    expect(probe.hit).toBe(true);
+    expect(probe.mode).toBe('pass_reuse');
+  });
+
+  it('FAIL-REPLAY: identical hash + matching code_version → replayed without re-running', () => {
+    const ctx = mechCtx();
+    const hash = mechHash(ctx);
+    const prior = {
+      [GATE]: { passed: false, score: 0, issues: ['MECHANISM_CLAIM_UNVERIFIED: ...'], input_hash: hash, code_version: GATE_CODE_VERSION[GATE] },
+    };
+    const probe = probeVerdictCache(GATE, ctx, { enabled: true, prior });
+    expect(probe.hit).toBe(true);
+    expect(probe.mode).toBe('fail_replay');
+    expect(probe.priorResult.issues[0]).toMatch(/MECHANISM_CLAIM_UNVERIFIED/);
+  });
+
+  it('FAIL-REPLAY refused: mismatched code_version (verifier logic changed) forces a re-run', () => {
+    const ctx = mechCtx();
+    const hash = mechHash(ctx);
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, code_version: (GATE_CODE_VERSION[GATE] || 1) + 1 } };
+    expect(probeVerdictCache(GATE, ctx, { enabled: true, prior }).hit).toBe(false);
+  });
+
+  it('editing the SD (changed description) invalidates a cached FAIL — re-run required', () => {
+    const ctx = mechCtx();
+    const hash = mechHash(ctx);
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, code_version: GATE_CODE_VERSION[GATE] } };
+    const editedCtx = mechCtx({ description: 'edited spine, verified at foo.js:1 by me' });
+    expect(probeVerdictCache(GATE, editedCtx, { enabled: true, prior }).hit).toBe(false);
+  });
+
+  it('editing only metadata.mechanism_verifications invalidates a cached FAIL (structured remediation path is hashed)', () => {
+    const ctx = mechCtx();
+    const hash = mechHash(ctx);
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, code_version: GATE_CODE_VERSION[GATE] } };
+    const citedCtx = mechCtx({ metadata: { mechanism_verifications: [{ verified_by: 'me', verified_at: 'x.js:1' }] } });
+    expect(probeVerdictCache(GATE, citedCtx, { enabled: true, prior }).hit).toBe(false);
+  });
+
+  it('a non-opted-in gate never fail-replays, even with a matching hash', () => {
+    const ctx = { sd: SD };
+    const hash = computeInputHash(
+      Object.fromEntries(SD_CONTENT_FIELDS.map(f => [f, (ctx.sd[f] ?? null)]))
+    );
+    const prior = { GATE_SD_QUALITY: { passed: false, score: 0, input_hash: hash, code_version: 1 } };
+    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior }).hit).toBe(false);
   });
 });
 

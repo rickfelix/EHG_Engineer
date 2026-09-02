@@ -26,6 +26,27 @@
  * All three share one OVER-INCLUSIVE extractor: the union of every SD field
  * any of them evaluates. Over-inclusion is SAFE — an unrelated content-field
  * change only costs a cache miss, never a stale reuse.
+ *
+ * QF-20260902-476: GATE_MECHANISM_CLAIM_VERIFIER (mechanism-claim-verifier.js,
+ * also verified pure — 0 supabase/.from()/LLM references) gets its OWN
+ * extractor rather than reusing extractSdContent verbatim: the verifier also
+ * reads sd.rationale (folded into SD_CONTENT_FIELDS, over-inclusive-safe for
+ * the other three gates too) and sd.metadata.mechanism_verifications, which is
+ * NOT a top-level SD field and would otherwise be invisible to the hash — an
+ * SD author citing a verifier via that structured field (the gate's own
+ * remediation message's primary path) would then never bust the cache,
+ * defeating "a later run after editing the SD re-evaluates".
+ *
+ * FAIL-REPLAY (Solomon amend 75558b62): a registered gate's cached FAIL is
+ * replayed (never re-executed) when the declared-input hash is unchanged
+ * AND GATE_CODE_VERSION[gate] matches the version stamped on that cached row.
+ * The version check is required because the input hash says nothing about
+ * whether the VERIFIER'S OWN LOGIC changed since that FAIL was produced — an
+ * input-only key would keep replaying a FAIL after the gate itself was fixed.
+ * PASS reuse is unaffected and keeps its existing input-only key (a fixed
+ * verifier only ever makes PASS more likely, so reusing an old PASS stays
+ * safe). Bump the version here whenever a FAIL_REPLAY_GATES gate's rule set
+ * changes.
  */
 
 import crypto from 'node:crypto';
@@ -40,6 +61,7 @@ export const SD_CONTENT_FIELDS = [
   'description',
   'sd_type',
   'scope',
+  'rationale',
   'strategic_objectives',
   'dependencies',
   'implementation_guidelines',
@@ -59,12 +81,30 @@ function extractSdContent(ctx) {
   return out;
 }
 
+/** GATE_MECHANISM_CLAIM_VERIFIER's inputs: extractSdContent PLUS the
+ * structured metadata field its remediation path writes to. */
+function extractMechanismClaimInputs(ctx) {
+  const base = extractSdContent(ctx);
+  if (base == null) return null;
+  const sd = ctx.sd;
+  return { ...base, mechanism_verifications: sd.metadata?.mechanism_verifications ?? null };
+}
+
 /** Opt-in registry: gate name → input extractor (ctx) => object|null. */
 export const GATE_INPUT_EXTRACTORS = {
   GATE_SD_METRICS_SUFFICIENCY: extractSdContent,
   GATE_SD_QUALITY: extractSdContent,
   GATE_PLACEHOLDER_CONTENT_DETECTION: extractSdContent,
+  GATE_MECHANISM_CLAIM_VERIFIER: extractMechanismClaimInputs,
 };
+
+/** Per-gate code-version stamp, required for FAIL-REPLAY (see module docblock). */
+export const GATE_CODE_VERSION = {
+  GATE_MECHANISM_CLAIM_VERIFIER: 1,
+};
+
+/** Gates allowed to replay a cached FAIL (opt-in, deliberately narrow — see NON-GOALS). */
+export const FAIL_REPLAY_GATES = new Set(['GATE_MECHANISM_CLAIM_VERIFIER']);
 
 /** Deterministic stringify — recursive sorted keys, stable across key order. */
 export function stableStringify(value) {
@@ -114,13 +154,24 @@ export function probeVerdictCache(gateName, context, cacheCfg) {
 
   const prior = cacheCfg.prior && cacheCfg.prior[gateName];
   if (!prior) return { hit: false, inputHash };
-  // PASS-only reuse; identical declared-input hash required.
-  if (prior.passed !== true) return { hit: false, inputHash };
   if (prior.input_hash !== inputHash) return { hit: false, inputHash };
-  // Never reuse skipped/wait shapes even if marked passed.
+  // Never reuse skipped/wait shapes, passed or not.
   if (prior.wait === true || prior.skipReason) return { hit: false, inputHash };
 
-  return { hit: true, priorResult: prior, inputHash };
+  if (prior.passed === true) {
+    return { hit: true, mode: 'pass_reuse', priorResult: prior, inputHash };
+  }
+
+  // FAIL-REPLAY: only for gates opted in AND whose code hasn't changed since
+  // the cached FAIL was produced (see GATE_CODE_VERSION / module docblock).
+  if (prior.passed === false && FAIL_REPLAY_GATES.has(gateName)) {
+    const codeVersion = GATE_CODE_VERSION[gateName];
+    if (codeVersion != null && prior.code_version === codeVersion) {
+      return { hit: true, mode: 'fail_replay', priorResult: prior, inputHash };
+    }
+  }
+
+  return { hit: false, inputHash };
 }
 
 /**
