@@ -194,17 +194,23 @@ async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
  */
 function resolveAccountFromConfigDir() {
   const dir = process.env.CLAUDE_CONFIG_DIR;
+  // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-1 (coordinator ruling 1cbade73): the discriminator
+  // between "no per-profile scope was ever in play" (safe to read the host default) and "a named
+  // profile was expected but CLAUDE_CONFIG_DIR never arrived" (the exact QF-20260726-514 hazard —
+  // stay unresolved, never guess) is build-session-launch.cjs's FLEET_LAUNCH_PROFILE_INTENT env
+  // var, NOT CLAUDE_CONFIG_DIR's mere absence (which both cases share). A 'named' intent with no
+  // dir means the profile-scoped launch is broken; refuse exactly like the pre-FR-3 behavior did.
+  if (!dir && process.env.FLEET_LAUNCH_PROFILE_INTENT === 'named') return null;
   try {
     const { getAccountIdentity } = require('../../lib/fleet/account-identity.cjs');
-    // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-3: CLAUDE_CONFIG_DIR unset no longer refuses
-    // outright. The fleet runs ONE account at a time (never concurrent multi-account on one
-    // host — see the SD's own witnessed mechanism), so the host-default ~/.claude.json IS the
-    // unambiguous answer for a session that either deliberately chose build-session-launch.cjs's
-    // HOST_DEFAULT_PROFILE sentinel (which itself never sets CLAUDE_CONFIG_DIR) or was never
-    // routed through the fleet's profile-scoped spawn path at all (a plain interactive session,
-    // like the ones this fix was verified against). Both cases are observably identical and both
-    // are safe to resolve this way. When dir IS set, this still reads ONLY that scoped path,
-    // unchanged — the original QF-20260726-514 multi-profile-concurrency protection is intact.
+    // FR-3: CLAUDE_CONFIG_DIR unset (with no 'named' intent above) no longer refuses outright.
+    // The fleet runs ONE account at a time (never concurrent multi-account on one host — see the
+    // SD's own witnessed mechanism), so the host-default ~/.claude.json IS the unambiguous answer
+    // for a session that either deliberately chose the HOST_DEFAULT_PROFILE sentinel (which itself
+    // never sets CLAUDE_CONFIG_DIR) or was never routed through the fleet's profile-scoped spawn
+    // path at all (a plain interactive session, like the ones this fix was verified against).
+    // When dir IS set, this still reads ONLY that scoped path, unchanged — the original
+    // QF-20260726-514 multi-profile-concurrency protection is intact.
     const id = dir ? getAccountIdentity(path.join(dir, '.claude.json')) : getAccountIdentity();
     if (!id || !id.email) return null;
     return {
@@ -297,6 +303,13 @@ async function captureAccountIdentity(supabase, sessionId) {
     const meta = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
       ? data.metadata : {};
     if (meta.account_email) return;                   // already captured — nothing to do
+    // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-1 (coordinator ruling 1cbade73): stamp whether a
+    // NAMED per-profile identity was expected for this seat — set true only when
+    // build-session-launch.cjs recorded that intent; absent (not false) otherwise, matching this
+    // module's "absent, not invented" convention. Consumers (e.g. the FR-4 join/metering) must
+    // never treat a host_default-sourced account_email the same as a measured per-profile one
+    // without this label traveling with it.
+    const launchProfileExpected = process.env.FLEET_LAUNCH_PROFILE_INTENT === 'named' ? true : undefined;
     const acct = resolveAccountIdentity();
     if (!acct) {
       // QF-20260727-013: RECORD THE DARKNESS. Leaving the identity keys absent is still right —
@@ -305,11 +318,14 @@ async function captureAccountIdentity(supabase, sessionId) {
       // and that is why a 100%-dark instrument survived unnoticed from 2026-07-26: nothing said
       // it was dark. This key answers only "did we ask and fail", so the identity fields keep
       // their honest absence while the failure itself stops being silent.
+      const patch = { ...meta, account_unresolved_at: new Date().toISOString() };
+      if (launchProfileExpected) patch.launch_profile_expected = true;
       await supabase.from('claude_sessions')
-        .update({ metadata: { ...meta, account_unresolved_at: new Date().toISOString() } })
+        .update({ metadata: patch })
         .eq('session_id', sessionId);
       return;
     }
+    if (launchProfileExpected) acct.launch_profile_expected = true;
     await supabase.from('claude_sessions')
       .update({ metadata: { ...meta, ...acct } })
       .eq('session_id', sessionId);

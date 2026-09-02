@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildSessionLaunch, assertLaunchContract, resolveClaudeCmd, resolveRepoRoot, LaunchResolveError,
+  HOST_DEFAULT_PROFILE,
 } from '../../../lib/fleet/build-session-launch.cjs';
 
 const PROFILES = 'C:\\fleet\\profiles';
@@ -28,6 +29,32 @@ describe('buildSessionLaunch — the canonical launch contract', () => {
   it('accepts a pre-resolved profileDir (back-compat with spawn-control)', () => {
     const inv = buildSessionLaunch({ callsign: 'W', profileDir: 'D:\\p\\x', cwd: 'R:\\r' });
     expect(inv.env.CLAUDE_CONFIG_DIR).toBe('D:\\p\\x');
+  });
+
+  // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-1 (coordinator ruling 1cbade73): the intent
+  // marker session-register.cjs uses to distinguish a lost named profile from a deliberate
+  // host-default/no-scope launch.
+  describe('FLEET_LAUNCH_PROFILE_INTENT propagation', () => {
+    it('is "named" when a real profile name resolves', () => {
+      const inv = buildSessionLaunch({ callsign: 'W', profile: 'canary', cwd: 'R:\\r' }, { env: { FLEET_ACCOUNT_PROFILES_DIR: PROFILES } });
+      expect(inv.env.FLEET_LAUNCH_PROFILE_INTENT).toBe('named');
+    });
+
+    it('is "named" for a pre-resolved profileDir too (back-compat path)', () => {
+      const inv = buildSessionLaunch({ callsign: 'W', profileDir: 'D:\\p\\x', cwd: 'R:\\r' });
+      expect(inv.env.FLEET_LAUNCH_PROFILE_INTENT).toBe('named');
+    });
+
+    it('is "host-default" for the HOST_DEFAULT_PROFILE sentinel, and CLAUDE_CONFIG_DIR stays unset', () => {
+      const inv = buildSessionLaunch({ callsign: 'W', profile: HOST_DEFAULT_PROFILE, cwd: 'R:\\r' }, { env: {} });
+      expect(inv.env.FLEET_LAUNCH_PROFILE_INTENT).toBe('host-default');
+      expect(inv.env.CLAUDE_CONFIG_DIR).toBeUndefined();
+    });
+
+    it('is absent (not a string "null") when no profile/profileDir intent is given at all', () => {
+      const inv = buildSessionLaunch({ role: 'worker', callsign: 'Bravo', cwd: 'R:\\repo' });
+      expect(inv.env.FLEET_LAUNCH_PROFILE_INTENT).toBeUndefined();
+    });
   });
 
   it('FAILS LOUD when a requested profile cannot resolve (no silent no-isolation launch)', () => {

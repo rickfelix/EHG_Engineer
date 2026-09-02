@@ -49,14 +49,18 @@ function writeClaudeJson(dir, { email, org, uuid }) {
 
 const ORIGINAL_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR;
 const ORIGINAL_USERPROFILE = process.env.USERPROFILE;
+const ORIGINAL_LAUNCH_INTENT = process.env.FLEET_LAUNCH_PROFILE_INTENT;
 beforeEach(() => {
   if (ORIGINAL_CONFIG_DIR === undefined) delete process.env.CLAUDE_CONFIG_DIR;
   else process.env.CLAUDE_CONFIG_DIR = ORIGINAL_CONFIG_DIR;
+  delete process.env.FLEET_LAUNCH_PROFILE_INTENT;
   vi.restoreAllMocks();
 });
 afterEach(() => {
   if (ORIGINAL_USERPROFILE === undefined) delete process.env.USERPROFILE;
   else process.env.USERPROFILE = ORIGINAL_USERPROFILE;
+  if (ORIGINAL_LAUNCH_INTENT === undefined) delete process.env.FLEET_LAUNCH_PROFILE_INTENT;
+  else process.env.FLEET_LAUNCH_PROFILE_INTENT = ORIGINAL_LAUNCH_INTENT;
 });
 
 describe('QF-013 / FR-3 — profile-scoped or host-default, never a mismatch', () => {
@@ -96,6 +100,34 @@ describe('QF-013 / FR-3 — profile-scoped or host-default, never a mismatch', (
       account_uuid8: 'bbbbbbbb',
       account_auth_method: 'config_dir',
     });
+  });
+
+  it('coordinator ruling 1cbade73: a NAMED profile intent with no CLAUDE_CONFIG_DIR stays unresolved -- the host-default fallback must NOT fire for a lost fleet profile', () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    process.env.FLEET_LAUNCH_PROFILE_INTENT = 'named'; // build-session-launch.cjs expected a named profile
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr1-lostprofile-'));
+    writeClaudeJson(dir, { email: 'should-not-be-read@example.com', org: 'Org', uuid: 'eeeeeeee-1111-2222-3333-444444444444' });
+    process.env.USERPROFILE = dir; // a real, readable host-default identity exists but must be ignored
+    const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
+      throw new Error('claude CLI unavailable');
+    });
+    const got = resolveAccountIdentity();
+    spy.mockRestore();
+    expect(got).toBeNull();
+  });
+
+  it('a host-default intent (or no intent at all) with no CLAUDE_CONFIG_DIR still resolves via the host default', () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    process.env.FLEET_LAUNCH_PROFILE_INTENT = 'host-default'; // deliberate no-isolation choice
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr1-hostdefault-intent-'));
+    writeClaudeJson(dir, { email: 'host-default-intent@example.com', org: 'Org', uuid: 'ffffffff-1111-2222-3333-444444444444' });
+    process.env.USERPROFILE = dir;
+    const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
+      throw new Error('claude CLI unavailable');
+    });
+    const got = resolveAccountIdentity();
+    spy.mockRestore();
+    expect(got).toMatchObject({ account_email: 'host-default-intent@example.com', account_uuid8: 'ffffffff' });
   });
 
   it('CONTROL — with CLAUDE_CONFIG_DIR set to a real profile, the fallback DOES resolve', () => {
@@ -172,5 +204,39 @@ describe('QF-013 — darkness is recorded', () => {
     const sb = fakeSupabase({ account_email: 'already@example.com' });
     await captureAccountIdentity(sb, 'sess-1');
     expect(sb.writes).toEqual([]);
+  });
+
+  it('stamps launch_profile_expected=true only when FLEET_LAUNCH_PROFILE_INTENT=named, even on the unresolved-darkness write', async () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    process.env.FLEET_LAUNCH_PROFILE_INTENT = 'named';
+    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr1-expected-'));
+    process.env.USERPROFILE = emptyDir; // irrelevant here -- 'named' refuses before any file read
+    const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
+      throw new Error('claude CLI unavailable');
+    });
+    const sb = fakeSupabase({ model: 'opus' });
+    await captureAccountIdentity(sb, 'sess-1');
+    spy.mockRestore();
+
+    expect(sb.writes).toHaveLength(1);
+    const meta = sb.writes[0].metadata;
+    expect(meta.account_unresolved_at).toEqual(expect.any(String));
+    expect(meta.launch_profile_expected).toBe(true);
+  });
+
+  it('does NOT stamp launch_profile_expected when no fleet launch intent is present (absent, not false)', async () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.FLEET_LAUNCH_PROFILE_INTENT;
+    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr1-notexpected-'));
+    process.env.USERPROFILE = emptyDir;
+    const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
+      throw new Error('claude CLI unavailable');
+    });
+    const sb = fakeSupabase({ model: 'opus' });
+    await captureAccountIdentity(sb, 'sess-1');
+    spy.mockRestore();
+
+    expect(sb.writes).toHaveLength(1);
+    expect('launch_profile_expected' in sb.writes[0].metadata).toBe(false);
   });
 });
