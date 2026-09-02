@@ -98,6 +98,16 @@ export function isEngagementBasePopulationMember(session, coordinatorId) {
     if (String(session.metadata?.is_coordinator) === 'true') return false; // stored as JSON string in some rows
     if (session.metadata?.non_fleet) return false;
     if (isFixtureSession(session)) return false;
+    // QF-20260902-563: a released shell whose SessionStart hook still emits a fresh heartbeat
+    // (the released-shells-mask-vacancy class) was never excluded by identity alone, so it
+    // stayed in the population and, once last_tool_at aged past the ZOMBIE cut point,
+    // misclassified as a live wedge. The column of record for "is this seat still occupied" is
+    // status, not heartbeat freshness or a validator-lag-prone is_alive flag (Solomon row
+    // cf3e5a2c: is_alive reads false on 4 of 8 genuinely active heartbeating rows and true on 7
+    // released ones). A present-but-non-active/idle status (released/stale/ended/...) excludes
+    // outright; a MISSING status fails open toward "member", matching this predicate's existing
+    // fail-open convention for malformed rows.
+    if (session.status != null && session.status !== 'active' && session.status !== 'idle') return false;
     return true;
   } catch {
     return true; // fail toward "member" — never hide a real worker from the census

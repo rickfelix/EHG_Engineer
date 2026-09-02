@@ -79,6 +79,28 @@ describe('isEngagementBasePopulationMember — the single dedicated base-populat
     expect(isEngagementBasePopulationMember(null, 'coord')).toBe(false); // explicit null guard, not garbage-tolerant
     expect(isEngagementBasePopulationMember(undefined, 'coord')).toBe(false);
   });
+
+  // QF-20260902-563: a released shell whose SessionStart hook still emits a fresh heartbeat
+  // stayed in the population before this fix, and once last_tool_at aged past the ZOMBIE cut
+  // point, misclassified as a live wedge — 58 "zombies" in a fleet of 6.
+  it('excludes a released session even with a fresh heartbeat (QF-20260902-563 root cause)', () => {
+    expect(isEngagementBasePopulationMember(session({ status: 'released', heartbeat_at: new Date(NOW - 30_000).toISOString() }), 'coord')).toBe(false);
+  });
+
+  it('excludes stale/ended statuses the same way as released -- population membership is an allowlist of live-ish statuses, not a released-only blocklist', () => {
+    expect(isEngagementBasePopulationMember(session({ status: 'stale' }), 'coord')).toBe(false);
+    expect(isEngagementBasePopulationMember(session({ status: 'ended' }), 'coord')).toBe(false);
+  });
+
+  it('INCLUDES active and idle statuses (never key on is_alive -- Solomon row cf3e5a2c: is_alive reads false on genuinely active rows and true on released ones)', () => {
+    expect(isEngagementBasePopulationMember(session({ status: 'active' }), 'coord')).toBe(true);
+    expect(isEngagementBasePopulationMember(session({ status: 'idle' }), 'coord')).toBe(true);
+  });
+
+  it('fails open toward "member" when status is missing entirely, matching this predicate\'s existing malformed-row convention', () => {
+    expect(isEngagementBasePopulationMember(session({ status: undefined }), 'coord')).toBe(true);
+    expect(isEngagementBasePopulationMember(session({ status: null }), 'coord')).toBe(true);
+  });
 });
 
 describe('classifySessionBucket — precedence and the three corrected defects', () => {
@@ -307,6 +329,44 @@ describe('classifyEngagementBuckets — population accounting and the closed TR-
     });
     expect(result.unmeasured).toBeUndefined(); // per-session catch handles this, not the outer one
     expect(result.unknown).toBe(2);
+  });
+
+  // QF-20260902-563 root-cause regression: exactly the three fixture shapes measured live
+  // (58 zombies in a fleet of 6, engagement-base population 65 vs a status census of 8 active
+  // + 1 idle) -- a released fresh-heartbeat shell must never count at all, while both real
+  // ZOMBIE shapes (a live-but-tool-stale active row, and a hard-wedged dead-heartbeat row
+  // that still holds an unreleased claim) keep classifying correctly.
+  it('a released fresh-heartbeat shell is excluded entirely; an active stale-tool row and a dead-heartbeat unreleased claim both still classify ZOMBIE', () => {
+    const releasedFresh = session({
+      session_id: 'released-fresh',
+      status: 'released',
+      heartbeat_at: new Date(NOW - 30_000).toISOString(), // fresh -- the exact bug this QF fixes
+    });
+    const activeStaleTool = session({
+      session_id: 'active-stale-tool',
+      status: 'active',
+      loop_state: 'active',
+      heartbeat_at: new Date(NOW - 30_000).toISOString(), // fresh heartbeat, tool-silent
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      sd_key: 'SD-X', // holds a claim -- unreleased
+    });
+    const deadHeartbeatUnreleasedClaim = session({
+      session_id: 'dead-hb-unreleased-claim',
+      status: 'active', // never released -- claim still held
+      loop_state: 'active',
+      heartbeat_at: new Date(NOW - 20 * 60_000).toISOString(), // dead -- past ENGAGEMENT_LIVE_WINDOW_MS
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      sd_key: 'SD-Y',
+    });
+
+    const result = classifyEngagementBuckets(
+      [releasedFresh, activeStaleTool, deadHeartbeatUnreleasedClaim],
+      { coordinatorId: 'coord', now: NOW, isClaimed: () => false } // isClaimed=false so ZOMBIE precedence (not ENGAGED) is what's under test
+    );
+
+    expect(result.population).toBe(2); // releasedFresh excluded entirely -- not even UNKNOWN
+    expect(result.zombie).toBe(2);
+    expect(result.engaged).toBe(0);
   });
 });
 
