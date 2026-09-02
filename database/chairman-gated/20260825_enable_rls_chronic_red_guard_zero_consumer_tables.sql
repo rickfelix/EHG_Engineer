@@ -27,6 +27,16 @@
 -- Enable RLS on the ZERO-live-consumer subset of the sentinel's rls_disabled_in_public
 -- findings (SD-LEO-INFRA-CHRONIC-RED-GUARD-001, FR-2)
 -- =============================================================================
+-- SUPERSEDED 2026-09-02 (SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001): all 9 tables below are
+-- also covered by database/chairman-gated/20260831_rls_lockdown_triage_three_failing_001.sql
+-- (a strict superset -- same 9 ENABLE ROW LEVEL SECURITY statements PLUS v_id PLUS the
+-- matching REVOKE INSERT/UPDATE/DELETE/TRUNCATE statements this file does not have). Apply
+-- 20260831 instead of this file for full closure in one ceremony; if this file is applied
+-- first, 20260831's later ENABLE statements for these 9 tables become harmless no-ops
+-- (idempotent), so applying both is not unsafe, just redundant. Kept in place rather than
+-- deleted -- it belongs to a different, already-completed SD and its evidence trail should
+-- not be erased.
+-- =============================================================================
 -- Consumer verification (per FR-2/TR-4's requirement -- documented, not assumed): a teammate
 -- session ("rls-dep-census") ran a full code-search census across both EHG_Engineer and ehg
 -- repos for every one of the 12 live rls_disabled_in_public tables, tracing each function's

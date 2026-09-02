@@ -22,11 +22,11 @@ const zoneStub = async () => ({ zone: 'America/New_York', source: 'test_stub' })
 const runPreSendConsultLane = async () => ({ action: 'send' });
 
 describe('chairman-SMS gate — fail-closed guarantee (acceptance b / TS-1, TS-3)', () => {
-  it('HOLDS a rubric-FAILING decision — no send (fail-closed)', async () => {
+  it('DROPS a rubric-FAILING decision — no send (fail-closed) (QF-20260902-939: a non-quiet-hours rubric block on a decision is DROPPED, not held, with no chairman_held_sends row)', async () => {
     const sender = { send: vi.fn().mockResolvedValue({ sid: 'x' }) };
     const r = await sendChairmanSMS({ type: 'decision', body: 'unformatted' }, {}, { evaluate: blockEval, sender, resolveChairmanZone: zoneStub });
     expect(r.sent).toBe(false);
-    expect(r.held).toBe(true);
+    expect(r.dropped).toBe(true);
     expect(sender.send).not.toHaveBeenCalled(); // never reached the sender
   });
   it('HOLDS a decision when the rubric THROWS (fail-closed, NOT fail-open)', async () => {

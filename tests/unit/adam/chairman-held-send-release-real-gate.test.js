@@ -170,7 +170,8 @@ describe('releaseHeldSend end-to-end through the REAL rubric (FR-3 + FR-4 combin
 
     expect(sender.send).not.toHaveBeenCalled();
     expect(outcome.action).toBe('dispatch_not_sent_unclaimed');
-    expect(outcome.sendResult).toMatchObject({ sent: false, held: true, reason: 'blocked' });
+    // QF-20260902-939: a non-quiet-hours rubric block on a decision is DROPPED, not held/queued.
+    expect(outcome.sendResult).toMatchObject({ sent: false, dropped: true, reason: 'blocked' });
     // The load-bearing assertion (V-1 fix): pin this to the SPECIFIC rubric checks the missing
     // reply fields trip, not merely "some blocking finding fired" -- a generic 'blocked' shape
     // would pass identically whether the block came from the missing reply fields or from an
