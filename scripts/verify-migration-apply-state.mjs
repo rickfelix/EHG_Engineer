@@ -533,6 +533,22 @@ export function summarizeResults(results, { scanned, excludedDown = 0, droppedLa
   return { summary, gaps };
 }
 
+/**
+ * QF-20260824-600 (ladder decision e38f6e14, approved by Adam 0549d739): splits a fail set
+ * (recentGaps/activeGaps, already including CEREMONY_PENDING per FR-3's "must flow into gaps"
+ * contract above) into the DELIBERATE-wait subset (a chairman-gated file merged and awaiting
+ * its own apply ceremony -- non-blocking) and the genuinely-blocking subset (every other
+ * committed-but-unapplied migration -- unaffected). `gaps`/the printed report/summary counts
+ * are untouched by this split; only the --strict exit + GAPS/PASS marker + breakage alert
+ * consume blockingFailSet.
+ */
+export function partitionBlockingFailSet(failSet) {
+  return {
+    ceremonyPendingFailSet: failSet.filter((g) => g.status === 'CEREMONY_PENDING'),
+    blockingFailSet: failSet.filter((g) => g.status !== 'CEREMONY_PENDING'),
+  };
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -686,6 +702,8 @@ async function main() {
   const legacyGaps = activeGaps.filter((g) => !isRecent(g.file, cutoff));
   const failSet = recentOnly ? recentGaps : activeGaps;
 
+  const { ceremonyPendingFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
+
   // FR-3: the machine-checkable definition of done. 117 of the 126 gap files sit behind
   // RETIRED_BEFORE and can NEVER turn the gate red, so "every file has a decision" is
   // invisible to a PASS/GAPS exit for 93% of the corpus. This count is computed over ALL
@@ -765,7 +783,7 @@ async function main() {
   // run (`npm run migration:apply-state`, no flags) is read-only and writes NO alert — a parked-but-not-
   // _DOWN migration is an expected gap, not a CRITICAL incident. Emit only when the operator has declared
   // the gaps actionable via --alert or --strict (strict already treats gaps as a failure exit).
-  if (failSet.length > 0 && (args.includes('--alert') || strict)) {
+  if (blockingFailSet.length > 0 && (args.includes('--alert') || strict)) {
     // emitBreakageAlert's BODY is fail-soft, but its MODULE LOAD is not: the require sits
     // outside that boundary, and emit-breakage-alert.cjs top-level-requires alert-writer.cjs.
     // A broken file there would throw past main() into the entry catch, print INFRA_ERROR, and
@@ -775,22 +793,26 @@ async function main() {
       const { createRequire } = await import('node:module');
       const { emitBreakageAlert } = createRequire(import.meta.url)('../lib/breakage/emit-breakage-alert.cjs');
       await emitBreakageAlert('migration-fail', 'migration-apply-state', {
-        message: `migration-apply-state: ${failSet.length} ${recentOnly ? 'recent ' : ''}committed-not-deployed migration gap(s)`,
-        sourceEntityId: failSet[0] ? failSet[0].file : null,
-        metadata: { gap_count: failSet.length, recent_only: recentOnly, gaps: failSet.map((g) => ({ file: g.file, status: g.status })) },
+        message: `migration-apply-state: ${blockingFailSet.length} ${recentOnly ? 'recent ' : ''}committed-not-deployed migration gap(s)`,
+        sourceEntityId: blockingFailSet[0] ? blockingFailSet[0].file : null,
+        metadata: { gap_count: blockingFailSet.length, recent_only: recentOnly, gaps: blockingFailSet.map((g) => ({ file: g.file, status: g.status })) },
       });
     } catch (e) {
       console.error(`Breakage alert failed (non-fatal, gate verdict unaffected): ${e.message}`);
     }
   }
 
-  // failSet drives the marker + strict exit: with --recent-only, legacy gaps print
-  // (advisory) but never flip the marker or fail the gate.
-  const marker = failSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
+  // blockingFailSet drives the marker + strict exit: with --recent-only, legacy gaps print
+  // (advisory) but never flip the marker or fail the gate; CEREMONY_PENDING gaps likewise
+  // print (still in `gaps`/the report above) but never flip it either (QF-20260824-600).
+  if (ceremonyPendingFailSet.length) {
+    console.log(`::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`);
+  }
+  const marker = blockingFailSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
   // --json keeps stdout pure JSON for piping; the marker goes to stderr there.
   if (asJson) console.error(`[${marker}]`);
   else console.log(`\n[${marker}]`);
-  return failSet.length && strict ? 1 : 0;
+  return blockingFailSet.length && strict ? 1 : 0;
 }
 
 // Entry — graceful teardown armed only after the work settles (exit-hang class,
