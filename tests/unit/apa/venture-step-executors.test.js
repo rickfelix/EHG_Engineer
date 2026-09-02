@@ -146,12 +146,24 @@ describe('getTestCredential()', () => {
 
   it('parses a well-formed credential', () => {
     process.env[ENV_KEY] = JSON.stringify({ email: 'x@example.com', password: 'secret' });
-    expect(getTestCredential('TESTVENTURE')).toEqual({ email: 'x@example.com', password: 'secret' });
+    expect(getTestCredential('TESTVENTURE')).toEqual({ email: 'x@example.com', password: 'secret', firstName: 'UAT', lastName: 'Walker' });
   });
 
   it('is case-insensitive on ventureKey', () => {
     process.env[ENV_KEY] = JSON.stringify({ email: 'x@example.com', password: 'secret' });
-    expect(getTestCredential('testventure')).toEqual({ email: 'x@example.com', password: 'secret' });
+    expect(getTestCredential('testventure')).toEqual({ email: 'x@example.com', password: 'secret', firstName: 'UAT', lastName: 'Walker' });
+  });
+
+  it('QF-20260902-093: firstName/lastName default to a fixed fenced pair, never invented per-venture', () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'x@example.com', password: 'secret' });
+    const credential = getTestCredential('TESTVENTURE');
+    expect(credential.firstName).toBe('UAT');
+    expect(credential.lastName).toBe('Walker');
+  });
+
+  it('QF-20260902-093: an explicit firstName/lastName on the fenced profile overrides the default', () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'x@example.com', password: 'secret', firstName: 'Fenced', lastName: 'Persona' });
+    expect(getTestCredential('TESTVENTURE')).toEqual({ email: 'x@example.com', password: 'secret', firstName: 'Fenced', lastName: 'Persona' });
   });
 
   it('defaults to personaType "existing" when omitted', () => {
@@ -170,12 +182,12 @@ describe('getTestCredential() — dual persona (M2, Solomon/Oracle completeness 
 
   it('reads the _EXISTING-suffixed var for personaType "existing"', () => {
     process.env[`${BASE}_EXISTING`] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
-    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'existing@example.com', password: 'pw1' });
+    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'existing@example.com', password: 'pw1', firstName: 'UAT', lastName: 'Walker' });
   });
 
   it('reads the _FRESH-suffixed var for personaType "fresh"', () => {
     process.env[`${BASE}_FRESH`] = JSON.stringify({ email: 'fresh@example.com', password: 'pw2' });
-    expect(getTestCredential('PERSONATEST', 'fresh')).toEqual({ email: 'fresh@example.com', password: 'pw2' });
+    expect(getTestCredential('PERSONATEST', 'fresh')).toEqual({ email: 'fresh@example.com', password: 'pw2', firstName: 'UAT', lastName: 'Walker' });
   });
 
   it('the two persona slots are independent — setting one does not satisfy the other', () => {
@@ -185,14 +197,14 @@ describe('getTestCredential() — dual persona (M2, Solomon/Oracle completeness 
 
   it('falls back to the un-suffixed var when the typed var is unset (backward compatible)', () => {
     process.env[BASE] = JSON.stringify({ email: 'legacy@example.com', password: 'pw3' });
-    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'legacy@example.com', password: 'pw3' });
-    expect(getTestCredential('PERSONATEST', 'fresh')).toEqual({ email: 'legacy@example.com', password: 'pw3' });
+    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'legacy@example.com', password: 'pw3', firstName: 'UAT', lastName: 'Walker' });
+    expect(getTestCredential('PERSONATEST', 'fresh')).toEqual({ email: 'legacy@example.com', password: 'pw3', firstName: 'UAT', lastName: 'Walker' });
   });
 
   it('prefers the typed var over the un-suffixed fallback when both are set', () => {
     process.env[BASE] = JSON.stringify({ email: 'legacy@example.com', password: 'pw3' });
     process.env[`${BASE}_EXISTING`] = JSON.stringify({ email: 'existing@example.com', password: 'pw1' });
-    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'existing@example.com', password: 'pw1' });
+    expect(getTestCredential('PERSONATEST', 'existing')).toEqual({ email: 'existing@example.com', password: 'pw1', firstName: 'UAT', lastName: 'Walker' });
   });
 });
 
@@ -905,6 +917,11 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
       expect(caught.challengeKind).toBe('email-code');
       expect(caught.retrievalPath).toBe('clerk_test_mode');
       expect(caught.authMode).toBe('clerk_test_mode');
+      // QF-20260902-093: the sign-up form (unlike sign-in) also requires firstName/lastName --
+      // filled from the fenced profile's fixed default, and stamped on the run row.
+      expect(caught.signupFieldsFilled).toEqual(['firstName', 'lastName', 'emailAddress', 'password']);
+      expect(page.calls.fill).toContainEqual(['input[name="firstName"]', 'UAT']);
+      expect(page.calls.fill).toContainEqual(['input[name="lastName"]', 'Walker']);
 
       const emailFills = page.calls.fill.filter(([sel]) => sel.includes('identifier'));
       expect(emailFills).toEqual([
@@ -999,6 +1016,10 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
       // the one (failed) sign-in identity fill -- the real credential, never +clerk_test.
       expect(page.calls.goto.filter((u) => u === 'http://fixture/register')).toHaveLength(1);
       expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
+      // QF-20260902-093: firstName/lastName are only ever filled on the sign-up leg, which
+      // this venture never reaches.
+      expect(page.calls.fill).not.toContainEqual(['input[name="firstName"]', 'UAT']);
+      expect(page.calls.fill).not.toContainEqual(['input[name="lastName"]', 'Walker']);
     } finally {
       vi.useRealTimers();
     }
