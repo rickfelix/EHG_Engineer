@@ -31,7 +31,7 @@ describe('validateTestExecutionShape (pure function)', () => {
       .toThrow(/tests_executed/);
   });
 
-  it('SEC-4 (evidence a600d8e5): a malformed-field error message truncates a huge caller-supplied value rather than persisting it verbatim', () => {
+  it('SEC-4 (evidence row 82d33f55): a malformed-field error message truncates a huge caller-supplied value rather than persisting it verbatim', () => {
     const huge = { tests_executed: 'x'.repeat(10000), tests_passed: 10, tests_failed: 0, tests_skipped: 0 };
     let thrown;
     try {
