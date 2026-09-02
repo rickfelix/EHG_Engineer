@@ -32,14 +32,18 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       // finding an element that an instant, non-waiting count() snapshot would have missed
       // (SEC-001 regression coverage).
       const visible = Object.prototype.hasOwnProperty.call(waitForVisible, selector) ? waitForVisible[selector] : count > 0;
-      return {
+      const locator = {
         count: async () => count,
         click: async () => { calls.click.push(selector); },
         waitFor: async ({ state } = {}) => {
           if (state === 'visible' && visible) return;
           throw new Error(`waitFor timeout: "${selector}" not ${state}`);
         },
+        // .first() scopes to a single node in real Playwright (avoiding a strict-mode
+        // violation on a multi-match locator) -- for this fixture it's a same-shape no-op.
+        first() { return locator; },
       };
+      return locator;
     },
     async fill(selector, value) { calls.fill.push([selector, value]); },
     // clickNavigations lets a fixture simulate a click causing real navigation (e.g. an
@@ -431,25 +435,28 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     expect(result.matchedSelector).toBe('text=Start free');
   });
 
-  it('land preflight fails only when NEITHER the CTA nor the hydration-safe root marker renders', async () => {
+  it('land preflight fails only when NEITHER the CTA nor the /register identifier field renders, and never swallows the underlying error', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
     const land = preflightChecks.find((c) => c.name === 'land');
-    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0, '#root:not(:empty)': 0 } });
+    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0, 'input[name="identifier"]': 0 } });
 
-    await expect(land.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/neither .* rendered/);
+    await expect(land.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/neither .* rendered.*last error/s);
   });
 
-  // QF-20260901-455: even a 30s waitFor on the specific CTA text raced a cold Cloudflare
-  // Workers start. '#root:not(:empty)' is a hydration-safe structural marker that fires the
-  // instant React mounts ANY content -- this pins that fallback path independent of the CTA.
-  it('land preflight passes on the hydration-safe root marker even when the CTA text has not rendered yet', async () => {
+  // QF-20260901-455 AMENDED (coordinator/Solomon measured ruling): a plain 'text=Start free'
+  // locator resolves TWO nodes live, so an unscoped waitFor() throws a Playwright strict-mode
+  // violation -- .first() makes the call strict-safe. The combined shape's other half is
+  // /register's Clerk identifier field, checked as a fallback when the CTA does not render.
+  it('land preflight passes on the /register identifier field when the CTA has not rendered', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
     const land = preflightChecks.find((c) => c.name === 'land');
-    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0, '#root:not(:empty)': 1 } });
+    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0, 'input[name="identifier"]': 1 } });
 
     const result = await land.run(page, { baseUrl: 'http://altifyai.fixture' });
-    expect(result.matchedSelector).toBe('#root:not(:empty)');
-    expect(result.renderedStateSummary).toMatch(/#root:not\(:empty\)/);
+    expect(result.matchedSelector).toBe('input[name="identifier"]');
+    expect(result.renderedStateSummary).toMatch(/input\[name="identifier"\]/);
+    expect(typeof result.msToMarker).toBe('number');
+    expect(page.calls.goto).toContain('http://altifyai.fixture/register');
   });
 
   // QF-20260901-385: an immediate count()===0 would have failed here even though the element

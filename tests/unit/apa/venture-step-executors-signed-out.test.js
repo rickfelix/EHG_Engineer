@@ -56,10 +56,13 @@ describe('buildSignedOutStepExecutor', () => {
     const executor = buildSignedOutStepExecutor(landStep, 'ALTIFYAI');
     const page = {
       async goto(url) { this.lastUrl = url; return { status: () => 200 }; },
-      locator() { return { count: async () => 1, waitFor: async () => {} }; },
+      locator() {
+        const loc = { count: async () => 1, waitFor: async () => {}, first() { return loc; } };
+        return loc;
+      },
     };
     const result = await executor(page, { type: 'signedOut' }, { baseUrl: 'http://altifyai.fixture' });
     expect(result.url).toBe('http://altifyai.fixture');
-    expect(result.renderedStateSummary).toMatch(/landing page rendered/);
+    expect(result.renderedStateSummary).toMatch(/landing reachable/);
   });
 });
