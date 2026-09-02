@@ -1,80 +1,58 @@
-# Session State — SD-LEO-INFRA-CHANGELOG-CONTENTION-PARALLEL-001
+# Session State — SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001
 
-Worker session 9a78de7f-f379-460a-8a47-b2e5e5c5618f. Worktree branch
-feat/SD-LEO-INFRA-CHANGELOG-CONTENTION-PARALLEL-001.
+## Current SD & Phase
+- SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001, worktree: C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001
+- Branch: feat/SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001, PR #7961
+- Phase: VERIFY (EXEC-TO-PLAN passed, score 87). Currently mid-VERIFY, about to do synthesis + retro then PLAN-TO-LEAD.
+- CLAUDE_SESSION_ID=3cd7fcbf-d344-43bf-87d3-afcbab77048e
 
-## LEAD phase
+## What's built (all pushed, HEAD=b0ca9de31a1, merged with origin/main)
+- FR-1: `lib/sub-agent-executor/testing-verdict-guard.js` (validateTestExecutionShape) wired into
+  `storeSubAgentResults()` (results-storage.js:729), guards TESTING PASS/CONDITIONAL_PASS writes,
+  requires metadata.test_execution well-formed UNLESS metadata.measured===false explicitly declared.
+- FR-4: `lib/sub-agents/testing/index.js` buildMainlinePhase3TestExecution wired at line ~191-192.
+- FR-2: `scripts/census-testing-execution-keys.mjs` (read-only key census, pathToFileURL guard fixed).
+- SEC-4 fix: safeEchoValue() truncation in the guard's error messages.
+- 6 pre-existing test files adjusted so they don't trip the new guard.
+- New tests: tests/unit/sub-agent-executor/testing-verdict-guard.test.js (15 tests),
+  tests/unit/census-testing-execution-keys.test.js, tests/unit/testing-subagent/mainline-test-execution.test.js.
+- Full regression: 287/287 passing after merging origin/main (which brought in
+  SD-FDBK-INFRA-TESTING-EVIDENCE-REUSE-001's changes to the same files — merged clean, guard
+  placement re-verified still above both insert/update branches at results-storage.js:729).
 
-As-submitted premise: parallel fleet worker sessions hand-edit the single CHANGELOG.md at merge
-time, colliding nearly every merge. LEAD independently corroborated this firsthand — resolving
-PR #7502 (the prior SD's CHANGELOG entry) required a manual git conflict resolution against a
-concurrent session's entry, same day.
+## Sub-agent evidence already stored (genuine, not rubber-stamped)
+- TESTING EXEC-TO-PLAN: row f0736df4 = PASS (after fixing D1/D4 blockers found in first FAIL pass 4e655ac0)
+- SECURITY EXEC-TO-PLAN: row 82d33f55 = CONDITIONAL_PASS (SEC-4 code fix done; SEC-1/SEC-3 are
+  documentation-only conditions to carry into retro — see below)
+- VALIDATION (agent a6084c486e22359ba): CONDITIONAL_PASS, non-blocking test-completeness/doc conditions
+- REGRESSION (agent a9fb090875062951f, row ae9e1454): CONDITIONAL_PASS. Blocking condition was
+  "merge origin/main" — DONE. Re-verify guard placement post-merge — DONE (still correct).
 
-But the as-submitted PLAN (a new per-SD changelog-fragment-file + assembler subsystem) was
-re-scoped after measurement: a VALIDATION sub-agent (dispatched at LEAD) built an isolated git
-fixture and found `.gitattributes CHANGELOG.md merge=union` resolves the exact reported conflict
-shape cleanly, with zero new infrastructure. LEAD independently reproduced this before accepting
-it. Scope corrected from a multi-file new subsystem down to a 1-line git config change + a
-regression fixture + a light doc note (scripts/one-off/changelog-contention-parallel-001-lead-*.mjs).
+## Conditions to carry into retro/completion narrative (from SECURITY row 82d33f55 + VALIDATION)
+1. TR-5's guarantee is narrow: only writes reaching storeSubAgentResults are covered (~87% of live
+   TESTING PASS/CONDITIONAL_PASS rows). ~13% reach the table via direct-insert writers
+   (scripts/modules/orchestrator/subagent-execution.js safeInsert, others) NOT touched by this SD.
+2. artifact_sha/runner provenance (ratification 6c263823's "runner-written results file with hash")
+   is NOT implemented by this SD — raises bar from prose to structured numbers, not to provenance.
+3. Minor doc fix still open: two files cite "evidence a600d8e5" (should be the real row id 82d33f55) —
+   testing-verdict-guard.js:33-ish comment and its test file. LOW priority, not yet fixed.
+4. TS-5 in PRD literally says payload-fidelity test "continues to pass unmodified" but it WAS modified
+   (TESTING->VALIDATION swap). Substance preserved. Not yet corrected in PRD DB.
 
-## PLAN phase
+## Next steps (in order)
+1. VERIFY-SYNTHESIS: combine VALIDATION+REGRESSION results, document conditions above.
+2. VERIFY-RETRO: retro-agent, capture lessons (the D1 premise-flaw pattern, the measured=false
+   exemption discovery, the merge-conflict/index.lock incident).
+3. Run PLAN-TO-LEAD handoff: `CLAUDE_SESSION_ID=3cd7fcbf-d344-43bf-87d3-afcbab77048e node scripts/handoff.js execute PLAN-TO-LEAD SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001`
+4. LEAD-FINAL-APPROVAL (after PR #7961 merges — check `gh pr checks 7961`, merge via
+   `node scripts/gh-merge-safe.mjs 7961 --merge --delete-branch`, then handoff.js execute LEAD-FINAL-APPROVAL)
+5. Post-completion tail: /document, /heal sd --sd-id SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001,
+   /learn (auto-approve), capture-completion-flags.js (route the 4 conditions above as findings,
+   not "0 flags").
+6. Re-run /checkin, continue autonomous fleet-worker loop (claim next SD/QF).
 
-PLAN-phase TESTING sub-agent ran 12 real isolated-repo git scenarios and found LEAD's own
-precondition claim was WRONG: LEAD wrote "the attribute must be in the git merge-base commit,"
-but the real mechanism is "git reads .gitattributes from the CHECKED-OUT (ours) side's working
-tree/history AT MERGE TIME, not the merge-base." PLAN independently re-verified this with its own
-decisive reproduction (two isolated experiments, both confirming the correction) before accepting
-it and correcting the SD record + PRD content
-(scripts/one-off/changelog-contention-parallel-001-plan-precondition-correction.mjs,
--prd-testing-corrections.mjs). Also corrected: TS-3 split into TS-3a (theirs-only still
-conflicts) / TS-3b (ours-only resolves cleanly) since the original single TS-3 was ambiguous
-between two readings with opposite expected outcomes.
-
-## EXEC phase
-
-Implemented all 3 FRs:
-- FR-1: `.gitattributes` — `/CHANGELOG.md merge=union` (anchored to root per SECURITY finding),
-  documented with the corrected precondition and the accepted residual risk (same-entry-reword
-  silent duplication).
-- FR-2: `tests/unit/changelog-merge-union.test.js` — 5 tests using real isolated temp git repos
-  (mkdtempSync + realpathSync + scrubGitEnv from lib/fleet/source-tree-refresh.cjs), reusing the
-  repo's existing realgit fixture pattern.
-- FR-3: one-line note in `.claude/commands/document.md` confirming the protection is in place, no
-  fragment-path migration needed.
-
-**EXEC-phase TESTING sub-agent (mutation testing, not just reading)**: deleted the real
-.gitattributes line and reran the suite — all 4 original tests still passed, since none of them
-read the real repo's .gitattributes, only their own isolated fixture repos. Independently
-re-verified this gap myself before fixing. Added a 5th test (`git check-attr merge -- CHANGELOG.md`
-against the real repo) that genuinely fails when the real line is removed (re-verified). Also
-fixed: TS-3a's assertion strengthened from a bare throw-check to the specific `UU CHANGELOG.md`
-status (it was previously satisfiable by any merge failure); removed a dangerous unused
-`cwd = root` default on the test's git() helper (root was never assigned, so an omitted cwd would
-have fallen back to process.cwd() — the live repo — though no call site actually omitted it).
-
-**EXEC-phase SECURITY sub-agent (PASS, confidence 93, zero CRITICAL/HIGH/MEDIUM)**: verified
-scrubGitEnv coverage empirically (ran the suite under a poisoned env with a negative control
-proving the poison was potent and the scrub neutralized it), verified no command/argument
-injection risk (array-form execFileSync throughout, zero shell interpolation), verified the 5
-LEAD/PLAN one-off correction scripts scope their UPDATEs to a single row by primary key. Two LOW
-findings, both fixed: (1) the `.gitattributes` pattern was unanchored (`CHANGELOG.md` matches any
-depth, not just root) — anchored to `/CHANGELOG.md`; (2) temp-dir cleanup registration happened
-after `initRepo()` returned rather than immediately after `mkdtempSync` succeeded, leaving a
-window where a throw during repo setup could leak an unregistered dir — moved the registration
-inside `initRepo()`.
-
-## Pending follow-up (route via capture-completion-flags at post-completion, NOT in this SD's
-## scope — do not silently fold into this diff)
-- TESTING's W3/W4/W5 (non-blocking test-coverage polish: near-tautological heading-count
-  assertion in TS-2; missing coverage for ".gitattributes exists but doesn't reference
-  CHANGELOG.md"; missing coverage for the both-sides-add-a-new-date-section shape /document
-  actually produces) — deferred as a possible future QF, not urgent enough to reopen this SD's
-  already-corrected minimal scope.
-- document.md's note doesn't mention the accepted same-entry-reword silent-duplication risk that
-  the .gitattributes comment discloses — small doc-completeness gap, low priority.
-- SECURITY's residual note: the scrub deliberately does not neutralize global git hooks config
-  (documented, pre-existing, unrelated to this SD).
-- Pre-existing, unrelated stale doc found during LEAD's Explore evidence: `.claude/commands/document.md`'s
-  "Release Documentation (GStack Patterns)" example block uses `## [Unreleased] / ### Features`
-  format, which does not match this repo's real live CHANGELOG.md format (`## YYYY-MM-DD` /
-  `### Category`). Not touched by this SD (out of scope, unrelated to the merge=union fix).
+## Known housekeeping
+- Stale worktree-private index.lock was hit once during `git merge origin/main` (no live process
+  holding it, 0 bytes, verified via tasklist before removing) — resolved, not a recurring issue.
+- SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 (PR #7952) is ALREADY COMPLETED earlier this session —
+  ignore any stale /loop prompt text referencing it as still open.

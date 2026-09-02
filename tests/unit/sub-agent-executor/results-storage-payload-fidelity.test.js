@@ -86,7 +86,7 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
 
   it('persists summary — the field this QF is named for', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       summary: 'PASS — 49/49 tests, four mutations killed.',
@@ -102,13 +102,13 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
 
   it('normalizes an absent or blank summary to null rather than storing whitespace', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
     expect(capture.inserted.summary).toBeNull();
     expect('summary' in capture.inserted).toBe(true); // present-and-null, not absent
 
     vi.resetModules();
     const { storeSubAgentResults: store2 } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await store2('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, summary: '   ' });
+    await store2('VALIDATION', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, summary: '   ' });
     expect(capture.inserted.summary).toBeNull();
   });
 
@@ -132,7 +132,7 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
   it('reports caller fields it does not store, so an omission cannot read like a bug', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       some_future_field: 'nobody stores this'
@@ -149,7 +149,7 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
     // Every one of these is handled somewhere other than a same-named column. If the enumeration
     // flagged them it would cry wolf on every ordinary write, and the next person would remove it.
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence_score: 90,
       execution_time_ms: 1234,

@@ -95,7 +95,7 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
 
   it('writes phase to both native column and metadata when options.phase is provided (canonical source)', async () => {
     const { storeSubAgentResults } = await import('../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90
     }, { phase: 'LEAD-TO-PLAN' });
@@ -148,7 +148,7 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
 
   it('prefers options.phase over results.phase and results.metadata.phase (source priority)', async () => {
     const { storeSubAgentResults } = await import('../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       phase: 'PLAN-TO-LEAD',
@@ -162,7 +162,7 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
 
   it('ignores whitespace-only phase values and falls through to the next source', async () => {
     const { storeSubAgentResults } = await import('../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       metadata: { phase: 'EXEC-TO-PLAN' }
@@ -175,7 +175,7 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
 
   it('ignores non-string phase values (type guard)', async () => {
     const { storeSubAgentResults } = await import('../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('TESTING', 'SD-TEST-001', null, {
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       phase: 123,
