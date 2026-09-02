@@ -865,6 +865,28 @@ describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260
     }
   });
 
+  it('follow-up (MEASURED live 2026-09-02T11:43Z, uat_test_runs 8747cf25): if the sign-up leg never reaches a code step, the thrown error carries a post-signup page-text snapshot too', async () => {
+    vi.useFakeTimers();
+    try {
+      process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+      registerVenture('NOACCTVENTURE', { authProviderTestMode: 'clerk_development' });
+      const executor = buildStepExecutor(step, 'NOACCTVENTURE');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/sign-in',
+        bodyText: "Couldn't find your account.",
+        waitForVisibleSequence: { [CODE_INPUT]: [false, false] }, // never appears, even after sign-up
+      });
+
+      const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/signed up the \+clerk_test identity.*no verification-code step appeared.*post-signup page text.*Couldn't find your account/s);
+      await vi.advanceTimersByTimeAsync(16000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('the no-account recovery never fires for a production (non-test-mode) venture -- fails closed with the original error, no second /register navigation attempted', async () => {
     vi.useFakeTimers();
     try {
