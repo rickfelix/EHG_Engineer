@@ -60,6 +60,14 @@ import { resolveRecognizedKinds } from '../lib/fleet/drain-set-registry.js';
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2): surface which Claude account this fleet is
 // running under in the tick's status line.
 const { getAccountIdentity } = require('../lib/fleet/account-identity.cjs');
+// SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-2: enforce (not merely classify) the
+// role-aware compaction threshold. Default-OFF via COORD_CONTEXT_CEILING_ENFORCE_V1.
+const { checkContextCeiling } = require('../lib/fleet/context-ceiling-checker.cjs');
+const {
+  defaultReadLatestUsageRow,
+  defaultInvokeCompactSkill,
+  defaultPersistCeilingEvent,
+} = require('../lib/fleet/context-ceiling-default-deps.cjs');
 // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1 (adversarial-review finding): a
 // chairman_directive rides on target_session='broadcast' (never a real session id — see
 // scripts/issue-chairman-directive.cjs), so it can NEVER match the target_session=coordinatorId
@@ -410,6 +418,29 @@ async function main() {
 
   await selfHealCoordinatorFlag(sb);
 
+  // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-2: enforce the role-aware compaction
+  // threshold instead of leaving it classified-but-unread by this seat's own loop (mirrors
+  // FR-1's wiring in scripts/adam-quiet-tick.mjs). Fail-soft -- never blocks the rest of the
+  // tick. The coordinator's own session id is process.env.CLAUDE_SESSION_ID directly (unlike
+  // Adam, which has no such env guarantee and reads its role marker file instead).
+  let contextCeiling = { verdict: 'DISABLED' };
+  try {
+    const ownSessionId = process.env.CLAUDE_SESSION_ID;
+    if (ownSessionId) {
+      contextCeiling = await checkContextCeiling({
+        role: 'coordinator',
+        sessionId: ownSessionId,
+        deps: {
+          readLatestUsageRow: defaultReadLatestUsageRow,
+          invokeCompactSkill: defaultInvokeCompactSkill,
+          persistCeilingEvent: defaultPersistCeilingEvent,
+        },
+      });
+    }
+  } catch (e) {
+    contextCeiling = { verdict: 'ERROR', reason: e && e.message };
+  }
+
   // FR-5: mode decision from the canonical quiescence gate (do not re-derive).
   let quiescent = false;
   let modeReason = 'assume-active';
@@ -536,6 +567,9 @@ async function main() {
     pingFields: delta.fields,
     adamAdvisoriesPending: unactionedAdamAdvisories,
     nextWakeSeconds: delaySeconds,
+    // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-2: 'DISABLED' unless
+    // COORD_CONTEXT_CEILING_ENFORCE_V1 is on; 'CEILING' means this tick just enforced compaction.
+    contextCeilingVerdict: contextCeiling.verdict,
   };
 
   // QF-20260719-138: a real salient delta emits the cross_party_ping row HERE (side-effect in
