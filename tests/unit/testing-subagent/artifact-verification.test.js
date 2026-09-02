@@ -145,20 +145,37 @@ describe('readArtifactWithSha (TOCTOU hardening)', () => {
 });
 
 describe('isArtifactFresh', () => {
+  // Fixed reference clock so these assertions never depend on the real wall clock --
+  // safely after every fixture timestamp below.
+  const NOW_MS = Date.parse('2026-09-02T00:00:00.000Z');
+
   it('TS-4: is fresh when artifact startTime is at or after the commit timestamp', () => {
-    expect(isArtifactFresh('2026-09-01T22:00:00.000Z', '2026-09-01T21:00:00.000Z')).toBe(true);
-    expect(isArtifactFresh('2026-09-01T21:00:00.000Z', '2026-09-01T21:00:00.000Z')).toBe(true);
+    expect(isArtifactFresh('2026-09-01T22:00:00.000Z', '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(true);
+    expect(isArtifactFresh('2026-09-01T21:00:00.000Z', '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(true);
   });
 
   it('TS-4: is NOT fresh when artifact startTime predates the commit timestamp (stale artifact refused)', () => {
-    expect(isArtifactFresh('2026-09-01T00:58:49.000Z', '2026-09-01T21:12:54.000Z')).toBe(false);
+    expect(isArtifactFresh('2026-09-01T00:58:49.000Z', '2026-09-01T21:12:54.000Z', NOW_MS)).toBe(false);
   });
 
   it('TS-9: fails toward "not fresh" when either input is missing or unparseable', () => {
-    expect(isArtifactFresh(null, '2026-09-01T21:00:00.000Z')).toBe(false);
-    expect(isArtifactFresh('2026-09-01T21:00:00.000Z', null)).toBe(false);
-    expect(isArtifactFresh('not-a-date', '2026-09-01T21:00:00.000Z')).toBe(false);
-    expect(isArtifactFresh('2026-09-01T21:00:00.000Z', 'not-a-date')).toBe(false);
+    expect(isArtifactFresh(null, '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(false);
+    expect(isArtifactFresh('2026-09-01T21:00:00.000Z', null, NOW_MS)).toBe(false);
+    expect(isArtifactFresh('not-a-date', '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(false);
+    expect(isArtifactFresh('2026-09-01T21:00:00.000Z', 'not-a-date', NOW_MS)).toBe(false);
+  });
+
+  it('two-sided (peer QA review): a future-dated artifact is refused even though it is "after" the commit -- attacker-controlled stats.startTime cannot claim an arbitrary future timestamp to trivially satisfy the floor', () => {
+    expect(isArtifactFresh('2099-01-01T00:00:00.000Z', '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(false);
+  });
+
+  it('two-sided: an artifact timestamped exactly at `now` is fresh; one millisecond past it is refused', () => {
+    expect(isArtifactFresh(new Date(NOW_MS).toISOString(), '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(true);
+    expect(isArtifactFresh(new Date(NOW_MS + 1).toISOString(), '2026-09-01T21:00:00.000Z', NOW_MS)).toBe(false);
+  });
+
+  it('defaults `now` to the real Date.now() when not injected (production call sites pass no third argument)', () => {
+    expect(isArtifactFresh('2099-01-01T00:00:00.000Z', '2026-09-01T21:00:00.000Z')).toBe(false);
   });
 });
 
