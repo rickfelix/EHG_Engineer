@@ -63,9 +63,10 @@ async function main() {
 
   console.log('\n=== Dormant Table Audit ===\n');
 
-  // Get table stats
-  const { data: stats, error } = await supabase.rpc('exec_sql', {
-    query: `
+  // Get table stats. exec_sql returns [{ result: [...] }] (canonical shape, mirrors
+  // leo-create-sd.js).
+  const { data: statsRaw, error } = await supabase.rpc('exec_sql', {
+    sql_text: `
       SELECT schemaname, relname AS table_name,
              n_tup_ins AS inserts,
              n_tup_upd AS updates,
@@ -76,17 +77,20 @@ async function main() {
       FROM pg_stat_user_tables
       WHERE schemaname = 'public'
       ORDER BY total_writes ASC
-    `,
+    `.trim(),
   });
+  const stats = statsRaw?.[0]?.result;
 
-  if (error) {
+  if (error || !Array.isArray(stats)) {
     // Fallback: list tables from information_schema
-    console.log('Cannot access pg_stat_user_tables via RPC. Using table listing instead.');
-    const { data: tables } = await supabase.rpc('exec_sql', {
-      query: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`,
+    if (error) console.log(`Cannot access pg_stat_user_tables via RPC (${error.message}). Using table listing instead.`);
+    const { data: tablesRaw, error: tablesError } = await supabase.rpc('exec_sql', {
+      sql_text: 'SELECT table_name FROM information_schema.tables WHERE table_schema = \'public\' ORDER BY table_name',
     });
+    if (tablesError) console.log(`exec_sql error: ${tablesError.message}`);
+    const tables = tablesRaw?.[0]?.result;
 
-    if (!tables) {
+    if (!Array.isArray(tables)) {
       console.log('Cannot query table information. Check database permissions.');
       return;
     }
