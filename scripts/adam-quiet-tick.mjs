@@ -81,7 +81,7 @@ const { decideCadence, detectSalientDelta, runCoresFailSoft, computeStateHash, s
 const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): surface which Claude account the fleet
 // is running under, and detect a genuine account switch across ticks.
-const { getAccountIdentity, detectAccountSwitch } = require('../lib/fleet/account-identity.cjs');
+const { getAccountIdentity, detectAccountSwitch, resolveRealConfigPath } = require('../lib/fleet/account-identity.cjs');
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const { hasUndeliveredChairmanEscalation } = require('../lib/coordinator/undelivered-escalation.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -988,8 +988,14 @@ function saveLastState(s) {
 function loadLastAccountIdentity() {
   try { return JSON.parse(readFileSync(ACCOUNT_IDENTITY_STATE_FILE, 'utf8')); } catch { return null; }
 }
+// QF-20260901-848: stamp measured_at + the on-disk config path this identity was read from, so
+// a reader of the state file (or the ACCOUNT_SWITCH notice below) can tell how stale `prior` was
+// at compare time -- previously unstamped, so a switch collapsed inside one ~15min tick cadence
+// (three logins in ~2min) read as a single, silently-stale edge with no way to detect it.
 function saveLastAccountIdentity(s) {
-  try { writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify(s)); } catch { /* fail-soft */ }
+  try {
+    writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify({ ...s, measured_at: new Date().toISOString(), source: resolveRealConfigPath() }));
+  } catch { /* fail-soft */ }
 }
 
 async function main() {
@@ -1190,8 +1196,12 @@ async function main() {
       const coordinatorId = await getActiveCoordinatorId(sb);
       if (coordinatorId) {
         const subject = '[ACCOUNT_SWITCH] Adam session Claude account changed';
-        const body = `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}) ` +
-          `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}).`;
+        // QF-20260901-848: carry both stamps so a reader can tell a stale `prior` read from a
+        // fresh one -- prior_measured_at may be missing on a state file written before this fix.
+        const priorMeasuredAt = (priorIdentity && priorIdentity.measured_at) || null;
+        const currentMeasuredAt = new Date().toISOString();
+        const body = `Adam's Claude account switched from ${acctSwitch.event.from.email} (${acctSwitch.event.from.orgName}, measured ${priorMeasuredAt || 'unstamped (pre-fix state file)'}) ` +
+          `to ${acctSwitch.event.to.email} (${acctSwitch.event.to.orgName}, measured ${currentMeasuredAt}).`;
         // QF-20260719-208: mirror adam-advisory.cjs's L1 pre-send Solomon-consult gate at this
         // tick's emit choke (previously bypassed it entirely). The tick is non-interactive (no
         // live session to bounded-await a reply against), so a required consult fires a durable,
@@ -1219,7 +1229,7 @@ async function main() {
           message_type: 'INFO',
           subject,
           body,
-          payload: { kind: 'account_switch_notice', ...acctSwitch.event, reply_class: 'fire-and-forget' },
+          payload: { kind: 'account_switch_notice', ...acctSwitch.event, prior_measured_at: priorMeasuredAt, current_measured_at: currentMeasuredAt, reply_class: 'fire-and-forget' },
         });
         acctNotified = true;
       }
