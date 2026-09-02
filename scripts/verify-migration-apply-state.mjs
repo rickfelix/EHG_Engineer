@@ -806,7 +806,16 @@ async function main() {
   // (advisory) but never flip the marker or fail the gate; CEREMONY_PENDING gaps likewise
   // print (still in `gaps`/the report above) but never flip it either (QF-20260824-600).
   if (ceremonyPendingFailSet.length) {
-    console.log(`::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`);
+    // SD-LEO-FIX-CLIENT-FACTORY-FALLBACK-001: this used to be an unconditional console.log,
+    // which broke the "--json keeps stdout pure JSON for piping" contract the marker line below
+    // already honors -- a consumer (chairman-apply-state.js's classifyMigrationApplyState)
+    // parses everything from the first '{' to EOF as one JSON.parse(), and this line landed
+    // AFTER the closing '}' in --json mode, throwing "Unexpected non-whitespace character after
+    // JSON". The GH Actions annotation is still useful in CI logs, so keep emitting it in --json
+    // mode too -- just on stderr, matching the marker line's own asJson routing immediately below.
+    const ceremonyWarning = `::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`;
+    if (asJson) console.error(ceremonyWarning);
+    else console.log(ceremonyWarning);
   }
   const marker = blockingFailSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
   // --json keeps stdout pure JSON for piping; the marker goes to stderr there.
