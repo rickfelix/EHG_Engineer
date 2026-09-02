@@ -169,6 +169,16 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-09-02
+
+### Infrastructure
+
+- **storeSubAgentResults refuses a TESTING PASS/CONDITIONAL_PASS write with no genuine test_execution evidence** - SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001
+  - A prose-only TESTING evidence row (`summary`/`detailed_analysis` text, no structured `test_execution` block) previously satisfied `storeSubAgentResults()` with zero validation — live measurement found 87.1% of TESTING PASS/CONDITIONAL_PASS rows reaching the writer carried no `metadata.test_execution` at all. `lib/sub-agent-executor/testing-verdict-guard.js` now refuses those writes above both the insert and 5-minute dedup/update branches, discriminating on verdict rather than `source='manual'` (the column defaults to `manual` in Postgres and is never explicitly set, so it can't tell writers apart).
+  - The first version of this guard was too aggressive: it refused three deliberately-designed accepting verdicts from predecessor SD-FDBK-INFRA-TESTING-SUB-AGENT-001 (`policy_non_applicable_no_code`, `policy_non_applicable_code_no_scoped_test`, `e2e_not_applicable`) that honestly pair a real PASS/CONDITIONAL_PASS with an all-zeros `test_execution` and `metadata.measured===false`, letting the EXEC-TO-PLAN gate's own ADVISORY/REQUIRED tiering own that decision. Fixed by exempting rows that explicitly declare `metadata.measured===false`; an adversarial 8-shape abuse-matrix review confirmed the exemption cannot be used to bypass validation, since the gate independently re-derives `measured` from `test_execution` rather than trusting the caller's flag.
+  - Also closed the sub-agent's own mainline execution-path gap (`lib/sub-agents/testing/index.js`'s `buildMainlinePhase3TestExecution`) — without it, the new guard would have refused the TESTING sub-agent's own real, passing E2E runs — and added a read-only census script (`scripts/census-testing-execution-keys.mjs`) enumerating the ad-hoc metadata-key sprawl the guard is meant to retire.
+  - 288 tests across the affected suites, including a live end-to-end regression against the real `checkForNonUISdType` exempt-path code (not a hand-copied mock shape).
+
 ## 2026-09-01
 
 ### Bugfix
