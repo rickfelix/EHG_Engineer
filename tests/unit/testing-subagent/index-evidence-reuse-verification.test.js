@@ -139,6 +139,9 @@ describe('TESTING evidence-reuse: checkTestEvidence (test_runs path)', () => {
     expect(results.findings.phase3_execution.failed_tests).toBe(0);
     expect(results.verdict).toBe('PASS');
     expect(executeE2ETestsMock).not.toHaveBeenCalled();
+    // phase5-verdict.js's from_cache check predates this SD's evidence_reused reuse path;
+    // a reused verdict must never claim "fresh (not cached)" when no test actually ran.
+    expect(results.recommendations).not.toContain('Test evidence is fresh (not cached)');
   });
 
   it('FR-5 AC-4: a clean, fresh, runner-provenance artifact whose sha does NOT match the row\'s report_hash still reuses (non-blocking) but surfaces a warning naming the mismatch', async () => {
