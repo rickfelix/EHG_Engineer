@@ -214,6 +214,11 @@
   - Both `eol` ratchet-test baselines (`tests/fixtures/eol-mixed-crlf-baseline.txt`, `tests/static-guards/eol-mixed-crlf-ratchet.test.js`'s `EXPECTED_BASELINE_SIZE`) updated from 4 known violations to 1.
   - Live-verified: a manually-triggered `workflow_dispatch` run completed successfully with no CRLF warning, contrasted against the prior failing run.
 
+- **Derive retrospective `whatNeedsImprovement` filler per-SD instead of 3 hardcoded strings** - SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-144
+  - `scripts/generate-comprehensive-retrospective.js`'s `whatNeedsImprovement` fallback used 3 hardcoded, SD-agnostic literal strings whenever an SD had fewer than 3 real handoff challenges. Because the same strings landed in dozens of unrelated retrospectives, `/learn`'s pattern-detector clustered the identical text as two false "recurring patterns" (37 occurrences each) — not evidence of a real, repeated documentation or performance gap.
+  - The sibling fillers (`achievementFiller`, `learningFiller`, `actionFiller`) were already fixed by QF-20260822-453 to derive per-SD-specific text; `whatNeedsImprovement` was never migrated to that pattern, which is why the defect class kept recurring after that fix shipped.
+  - Adds `challengeFiller()` mirroring the existing pattern: always returns exactly 3 entries (preserves the DB trigger's `>=3`-item scoring threshold), avoids phrasing the trigger penalizes, and keeps the plain-string-array shape the DB trigger reads positionally.
+
 ## 2026-09-01
 
 ### Bugfix
