@@ -86,4 +86,16 @@ describe('reviewQfRisk', () => {
     expect(result.ok).toBe(false);
     expect(storeSubAgentResultsMock).not.toHaveBeenCalled();
   });
+
+  // SECURITY EXEC finding (row 37e524f5, C1): storeSubAgentResults' statement-timeout branch
+  // returns a fabricated {id: 'timeout-<ts>', storage_timeout: true} without persisting a row.
+  // A truthy-id-only guard would let a stamp be written citing evidence that was never recorded.
+  test('a storage-timeout fake row (storage_timeout=true) refuses to stamp — never cites unrecorded evidence', async () => {
+    storeSubAgentResultsMock.mockResolvedValueOnce({ id: 'timeout-1725270000000', storage_timeout: true });
+    const supabase = mockSupabase();
+    const result = await reviewQfRisk(supabase, { qfId: 'qf-1', verdict: 'PASS', confidence: 95, reasoning: 'x', repoPath: '/repo', executedFromCwd: '/repo' });
+    expect(result.ok).toBe(false);
+    expect(result.stamped).toBe(false);
+    expect(supabase.updateCalls).toHaveLength(0);
+  });
 });
