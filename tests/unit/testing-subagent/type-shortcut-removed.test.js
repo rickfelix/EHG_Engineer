@@ -97,9 +97,14 @@ describe('SC#2/SC#3: a code-producing exempt-type SD never gets a fabricated PAS
     expect(result.metadata.measured).toBe(false);
   });
 
-  it('non-exempt type (bugfix) falls through to the normal E2E flow (returns null)', async () => {
+  // QF-20260902-796: a non-exempt type now ALSO checks the measured diff (zero-UI-by-diff) --
+  // an unresolvable/empty diff FAILS CLOSED, so this still returns null deterministically via a
+  // repoPath that yields no git diff, rather than depending on this worktree's real diff state.
+  // See tests/unit/testing-subagent/zero-ui-by-diff-gate.test.js for the full mocked matrix
+  // (UI-touching diff, unresolvable diff, and the genuinely-zero-UI-diff success case).
+  it('non-exempt type (bugfix) with no resolvable diff falls through to the normal E2E flow (returns null)', async () => {
     const sb = mockSupabase({ sd_type: 'bugfix', category: null });
-    const result = await checkForNonUISdType('sd-3', 'prospective', {}, null, sb);
+    const result = await checkForNonUISdType('sd-3', 'prospective', {}, { repoPath: '/nonexistent-path-for-test' }, sb);
     expect(result).toBeNull();
   });
 });
