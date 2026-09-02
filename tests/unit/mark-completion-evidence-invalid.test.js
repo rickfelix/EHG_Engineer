@@ -61,6 +61,10 @@ describe('refusalReason', () => {
     expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: '   ' })).toMatch(/missing actor/);
   });
 
+  it('refuses a valueless --actor (parseArgs substitutes the literal string "true")', () => {
+    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: 'true' })).toMatch(/missing actor/);
+  });
+
   it('accepts an explicit --actor even without CLAUDE_SESSION_ID', () => {
     expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: 'operator-jane' })).toBeNull();
   });

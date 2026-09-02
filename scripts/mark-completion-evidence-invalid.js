@@ -59,7 +59,11 @@ export function refusalReason({ sd_id, reason, actor }) {
   if (reason.trim().length < MIN_REASON_LENGTH) {
     return `--reason must be at least ${MIN_REASON_LENGTH} characters (got ${reason.trim().length})`;
   }
-  if (!actor || typeof actor !== 'string' || !actor.trim()) {
+  // SECURITY review residual (post-S4, measured 2026-09-02): a valueless --actor is
+  // substituted with the literal string 'true' by parseArgs' generic boolean-flag branch
+  // (same artifact SD_KEY_RE already guards against on --sd-id) -- unlocks nothing on its
+  // own, but would record a meaningless attribution. Reject it explicitly.
+  if (!actor || typeof actor !== 'string' || !actor.trim() || actor === 'true') {
     return 'missing actor — set CLAUDE_SESSION_ID or pass --actor <id> (an unattributed flag flip on a durable, never-auto-cleared marker is as untrustworthy as an unexplained bypass)';
   }
   return null;
