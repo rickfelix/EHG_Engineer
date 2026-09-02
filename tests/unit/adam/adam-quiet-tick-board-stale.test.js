@@ -5,7 +5,7 @@
  * review_by passes; touching the item (status/blocker/updated_at) clears it. A parent-tier
  * anchor never fires (mirrors QF-20260725-639's parent_tier_anchor suppression elsewhere).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { checkBoardStale } from '../../../scripts/adam-quiet-tick.mjs';
 import { encodeManualChildMeta } from '../../../lib/adam/task-ledger.js';
 
@@ -29,6 +29,19 @@ function makeSupabase(rows) {
 const NOW_ISO = '2026-08-30T00:00:00.000Z';
 
 describe('checkBoardStale (QF-20260830-690)', () => {
+  // QF-20260901-696: isManualChildStale(row, now = Date.now()) defaults to the REAL wall clock
+  // whenever a caller (checkBoardStale here) doesn't pass one, so every literal date below is a
+  // dated bomb once the real clock crosses NOW_ISO + 7 days. Freezing the clock at NOW_ISO makes
+  // both legs (the updated_at staleness window AND the review_by-passed check) permanently correct
+  // regardless of wall-clock date, since Date.now() inside the SUT resolves to the frozen value.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW_ISO));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('fires for a manual child untouched past 7 days', async () => {
     const sb = makeSupabase([{
       id: 'c1', title: 'stale item', status: 'open', tier: 'child', source_kind: 'manual',
