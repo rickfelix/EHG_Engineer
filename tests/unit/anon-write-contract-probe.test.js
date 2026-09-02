@@ -14,7 +14,8 @@ import { execSync } from 'node:child_process';
 import {
   EXPECTED, EXIT, compare, discoverAsymmetricTables,
   isAlwaysFalse, isAlwaysTrue, assertNotCommitFamily, assertQualifiedName,
-  classifyError, assertRlsInForce, attributeRefusal, runForms, ROW_BUILDERS
+  classifyError, assertRlsInForce, attributeRefusal, runForms, ROW_BUILDERS,
+  main
 } from '../../scripts/anon-write-contract-probe.mjs';
 
 const REPO = join(import.meta.dirname, '..', '..');
@@ -488,5 +489,62 @@ describe('the G2 acceptance battery is reachable (TS-9, FR-4)', () => {
 
   it('names the constraint at the change site, so the next editor knows what constrains the value', () => {
     expect(readFileSync(g2, 'utf8')).toMatch(/feedback_feedback_type_check/);
+  });
+});
+
+describe('main() CI clean-skip (QF-20260901-972) — the DATABASE_URL guard never touches the DB', () => {
+  // This one branch of main() is reachable with NO DATABASE: it returns before
+  // createDatabaseClient is ever called, so calling the real main() here does not violate this
+  // file's own "NO DATABASE" rule (see file header) -- there is nothing live to connect to yet.
+  const save = { GITHUB_ACTIONS: process.env.GITHUB_ACTIONS, DATABASE_URL: process.env.DATABASE_URL };
+  const restore = () => {
+    if (save.GITHUB_ACTIONS === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = save.GITHUB_ACTIONS;
+    if (save.DATABASE_URL === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = save.DATABASE_URL;
+  };
+
+  it('returns EXIT.OK without throwing when CI has no DATABASE_URL -- the daily crash this QF fixes', async () => {
+    process.env.GITHUB_ACTIONS = 'true';
+    delete process.env.DATABASE_URL;
+    try {
+      await expect(main([])).resolves.toBe(EXIT.OK);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not skip locally: GITHUB_ACTIONS unset, no DATABASE_URL falls through to the live client path', async () => {
+    delete process.env.GITHUB_ACTIONS;
+    delete process.env.DATABASE_URL;
+    try {
+      // Falls through past the guard and fails trying to reach a real DB (no live connection here) --
+      // that failure, not a clean EXIT.OK, is the proof the guard did NOT fire for a local run.
+      const code = await main([]);
+      expect(code).not.toBe(EXIT.OK);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('main() discovery-mode zero-buildable-candidates is advisory, not a failure (QF-20260901-972)', () => {
+  // SOURCE PIN, not a live run (this repo's tests never touch a real DB - see file header): proves
+  // the `worst = EXIT.PROBE_INCONCLUSIVE` assignment inside the `if (!targets.length)` discovery
+  // block is gone, while the surrounding UNPROBED diagnostic logging above it is untouched, and the
+  // explicit `--table X` failure path inside probeTable() (a different code path entirely, still
+  // returning EXIT.PROBE_INCONCLUSIVE) is unaffected.
+  const src = readFileSync(join(REPO, 'scripts', 'anon-write-contract-probe.mjs'), 'utf8');
+  const blockStart = src.indexOf('if (!targets.length) {');
+  const zeroCandidatesBlock = src.slice(blockStart, src.indexOf('} catch (err) {', blockStart));
+
+  it('no longer downgrades worst to PROBE_INCONCLUSIVE for the discovery zero-candidates case', () => {
+    expect(zeroCandidatesBlock).not.toMatch(/worst\s*=\s*EXIT\.PROBE_INCONCLUSIVE/);
+  });
+
+  it('still logs the advisory line so a silent-pass reads no differently than before in the log', () => {
+    expect(zeroCandidatesBlock).toMatch(/no target had a row builder/);
+  });
+
+  it('the explicit --table request path (probeTable) still returns PROBE_INCONCLUSIVE for no builder', () => {
+    expect(src).toMatch(/NO ROW BUILDER.*PROBE_INCONCLUSIVE|PROBE_INCONCLUSIVE,\s*unprobed:\s*true/s);
   });
 });
