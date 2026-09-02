@@ -1620,6 +1620,42 @@ async function main() {
         process.stderr.write(`[pre-tool-enforce] ENF-17 errored (fail-open): ${sharedTreeErr.message}\n`);
       }
     }
+
+    // --- ENFORCEMENT 18: Bare-Import-of-Dangerous-One-Off-Script Guard (SD-LEO-FIX-TEST-FIXTURE-LANE-001) ---
+    // A bare `import()`/`require()` of a scripts/one-off/** file is NOT the same as running it —
+    // for a file that mutates the DB and holds SUPABASE_SERVICE_ROLE_KEY with no recognized
+    // main-guard, the mere import executes it for real. Live HIGH incident 2026-08-21: a sub-agent's
+    // ad hoc ESM/CJS interop check bare-imported scripts/one-off/backfill-solomon-ledger-decision-by.mjs,
+    // overwriting 1,241 prod rows. Confirmed at LEAD (live measurement): this hook fires for a
+    // sub-agent's own Bash tool calls identically to the main session, so this control is not
+    // dead-by-construction against the actual vector. Decision logic + the dangerous-file manifest
+    // lookup live in lib/one-off-bare-import.cjs (unit-tested); this owns audit + exit. Fail-open on
+    // any internal error or unreadable manifest (never blocks on our own bug). Direct execution
+    // (`node scripts/one-off/foo.mjs`) and a bare MENTION of a path (grep/cat/commit message) are
+    // never operative — only an actual import()/require() call is. Override: LEO_ALLOW_ONE_OFF_IMPORT="<reason>"
+    // MUST be set in .claude/settings.json's env block (or the launching shell's environment) — an
+    // inline prefix on the same command (`LEO_ALLOW_ONE_OFF_IMPORT=x node -e "..."`) never reaches
+    // this process's env (SEC-F1, security-agent EXEC review) AND pushes `node` off the operative
+    // command boundary, so the whole command silently falls through as a non-match instead of an
+    // audited override -- self-granting from inside a single Bash call is not possible either way.
+    try {
+      const { decideOneOffBareImport } = require('./lib/one-off-bare-import.cjs');
+      const d = decideOneOffBareImport(cmd, process.env);
+      if (d.matched) {
+        const meta = { target_path: d.targetPath, decision_path: d.reason, override_reason: d.overrideReason, manifest_ok: d.manifestOk };
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-18', 'Bare-import-of-dangerous-one-off-script guard: blocks import()/require() of a scripts/one-off/** file that mutates DB + holds the service-role key with no main-guard, unless LEO_ALLOW_ONE_OFF_IMPORT="<reason>"', d.outcome, meta);
+        if (d.outcome === 'block') {
+          process.stderr.write(`[ENF-18] BLOCKED — bare import of ${d.targetPath} would execute it for real (mutates DB + holds SUPABASE_SERVICE_ROLE_KEY, no recognized main-guard). Run it directly instead (\`node ${d.targetPath}\`), or add a main-guard, or override by setting LEO_ALLOW_ONE_OFF_IMPORT="<ticket: reason>" in .claude/settings.json's env block (an inline prefix on this same command will NOT work and will NOT be audited)\n`);
+          await auditAndExit(auditPromise, 2);
+        }
+        // override/allow path: fire-and-forget audit (don't await); fall through
+      }
+    } catch (oneOffImportErr) {
+      // Fail-open: any internal error in ENF-18 must NOT block tool execution.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(`[pre-tool-enforce] ENF-18 errored (fail-open): ${oneOffImportErr.message}\n`);
+      }
+    }
   }
 
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---

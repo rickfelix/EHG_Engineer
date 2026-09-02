@@ -24,7 +24,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, buildRateLimitHint } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, buildRateLimitHint, refuseIfSharedRoot } from './git-operations.js';
 // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: merge-verification witness so a
 // quick_fixes row cannot reach status=completed while its change is absent from origin/main.
 import { verifyQFMergeWitness } from './merge-witness.js';
@@ -491,6 +491,18 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log(`   ℹ️  Already-merged witness probe skipped (will run normal pipeline): ${e.message}`);
   }
 
+  // QF-20260902-685 (bullet 2): the reconcile fast-path above either already returned (a
+  // successful merged-PR reconcile never reaches here) or fell through (no PR yet, or an
+  // unsupported flag combo on that path). Everything from here on can stage/commit files, so
+  // refuse outright when testDir is not an isolated per-QF worktree -- a shared checkout always
+  // carries other sessions'/the harness's own untracked state, which is exactly the class of
+  // defect both witnessed incidents trace back to.
+  const sharedRootCheck = refuseIfSharedRoot(testDir, qfId);
+  if (sharedRootCheck.refused) {
+    console.error(`\n❌ ${sharedRootCheck.message}\n`);
+    process.exit(1);
+  }
+
   // Auto-detect git info. autoDetectGitInfo NOW throws on PR-metadata failure
   // and on refuse-to-auto-detect-outside-QF-worktree (SD-LEO-FIX-COMPLETE-QUICK-FIX-001).
   // Surface the operator-readable message without the Node stack trace.
@@ -551,7 +563,10 @@ export async function completeQuickFix(qfId, options = {}) {
   // burning a bypass-quota slot per ship). Original hoist site (closer to
   // createAutoPR) is preserved as a no-op reference; filesChanged/diffAnalysis
   // are now computed once here and reused later in the PR-acquisition block.
-  const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
+  // QF-20260902-685: when the PR's own file list is known (merged-PR path), it is the declared
+  // scope -- never re-derive filesChanged from local worktree state, which is exactly what let
+  // unrelated untracked noise get swept into a QF's commit on the reconcile-fallthrough path.
+  const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description, gitInfo.prFiles || null);
   const docsOnlyDiff = isDocsOnlyDiff(filesChanged);
   const skipTestGate = canSkipTestGate({ qfType: qf.type, docsOnlyDiff });
 
