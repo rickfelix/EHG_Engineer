@@ -32,7 +32,7 @@ beforeAll(() => {
 });
 
 describeDb('leo_feature_flags RLS-effect (FR-3b): anon-permission client never silently succeeds where it should be denied', () => {
-  it('service-role client reads the true row count; anon client gets 0 rows with no error', async () => {
+  it('service-role client reads the true row count; anon client gets 0 rows with no error', async (ctx) => {
     const { data: serviceRows, error: serviceError } = await serviceClient
       .from('leo_feature_flags')
       .select('id');
@@ -40,9 +40,10 @@ describeDb('leo_feature_flags RLS-effect (FR-3b): anon-permission client never s
 
     if (!serviceRows || serviceRows.length === 0) {
       // Skip loud, not silent: nothing to compare against if the table itself is empty in
-      // this environment -- the assertion below would be vacuously true, which is a false
-      // pass, not a real regression guard.
+      // this environment -- a bare `return` here would report PASSED (vitest only treats
+      // ctx.skip() as skipped), which would be a false pass, not a real regression guard.
       console.warn('[client-factory-fallback-rls-effect] leo_feature_flags has 0 rows via service client in this environment -- skipping the anon-vs-service comparison (nothing to compare).');
+      ctx.skip();
       return;
     }
 
@@ -50,6 +51,7 @@ describeDb('leo_feature_flags RLS-effect (FR-3b): anon-permission client never s
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     if (!anonKey || !url) {
       console.warn('[client-factory-fallback-rls-effect] no anon credentials configured in this environment -- skipping.');
+      ctx.skip();
       return;
     }
     const anonClient = createClient(url, anonKey);
