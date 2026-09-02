@@ -39,6 +39,15 @@ import { resolveGitHubRepo } from '../lib/repo-paths.js';
 // restating it. QF-20260725-691 already settled what a merged PR proves at the front door;
 // a second, divergent copy here is how the two answers drift apart again.
 import { buildMergedReconcileUpdate } from './modules/complete-quick-fix/orchestrator.js';
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: single canonical quick_fixes.status writer.
+// NOTE: buildMergedReconcileUpdate is called with scopeAcceptedBy:null at both call sites below,
+// so it always returns status:'in_progress' here (never 'completed' -- that branch requires an
+// explicit --scope-accepted attestation this reaper never supplies, per QF-20260725-691). Routed
+// through the writer anyway for single-representation completeness (FR-2); the one case its
+// guards actually affect is an orphaned row that happened to be 'escalated' (leaving escalated
+// requires disposition fields, which this reaper does not have -- handled as a per-row error
+// below, matching the existing updateError handling shape, not a script-fatal crash).
+import { setQuickFixStatus } from '../lib/quick-fix/status-writer.cjs';
 
 const SAFETY_WINDOW_MINUTES = Number(process.env.ORPHAN_QF_REAPER_SAFETY_WINDOW_MINUTES || 5);
 const DRY_RUN = process.env.ORPHAN_QF_REAPER_DRY_RUN === 'true';
@@ -211,11 +220,19 @@ export async function main() {
       continue;
     }
 
-    // Idempotent update: .eq('status', qf.status) guards against concurrent
-    // complete-quick-fix.js completing the row between our query and update.
-    const { data: updated, error: updateError } = await supabase
-      .from('quick_fixes')
-      .update({
+    // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: routed through the single canonical writer
+    // (FR-2, writer #7). buildMergedReconcileUpdate({scopeAcceptedBy: null}) — the reaper's only
+    // call shape — always resolves to status:'in_progress' (never 'completed'; see the comment
+    // in buildMergedReconcileUpdate itself), so Guard A/B mostly don't apply. The one case Guard B
+    // CAN fire: this qf.status is currently 'escalated' (an orphaned branch merged after the QF
+    // was already properly escalated to a linked SD) — leaving 'escalated' requires disposition
+    // fields the reaper has no source for. Treated as a normal per-row error (like updateError
+    // always was), not a script-fatal crash. setQuickFixStatus throws instead of returning
+    // {data,error}; QF_STATUS_CONFLICT is the writer's equivalent of the old !updated benign-race
+    // branch (row moved out of open/in_progress between our query and update).
+    let updated;
+    try {
+      updated = await setQuickFixStatus(supabase, qf.id, {
         // QF-20260807-745: was status:'completed' + force_completed + compliance_verdict:'PASS'.
         // A merged PR witnesses that CODE LANDED; terminal `completed` asserts the QF's SCOPE
         // WAS SATISFIED. The reaper can observe the first and can never establish the second,
@@ -229,22 +246,16 @@ export async function main() {
           scopeAcceptedBy: null, // the reaper is a witness; it is never the attester
         }),
         compliance_details: `Merge witnessed by orphan-qf-reaper (pr_url path, PR #${prNumber}) — NOT a scope acceptance. Attest via complete-quick-fix.js --scope-accepted.`,
-      })
-      .eq('id', qf.id)
-      .eq('status', qf.status)
-      .select('id, status')
-      .single();
-
-    if (updateError) {
+      });
+    } catch (updateError) {
+      if (updateError.code === 'QF_STATUS_CONFLICT') {
+        // Row moved out of open/in_progress between query and update — benign race
+        log('skipped_already_completed', { qf_id: qf.id, pr_number: prNumber });
+        summary.skipped_already_completed += 1;
+        continue;
+      }
       log('error_update', { qf_id: qf.id, pr_number: prNumber, error: updateError.message });
       summary.errored += 1;
-      continue;
-    }
-
-    if (!updated) {
-      // Row moved out of open/in_progress between query and update — benign race
-      log('skipped_already_completed', { qf_id: qf.id, pr_number: prNumber });
-      summary.skipped_already_completed += 1;
       continue;
     }
 
@@ -312,9 +323,14 @@ export async function main() {
         continue;
       }
 
-      const { data: updated, error: updateError } = await supabase
-        .from('quick_fixes')
-        .update({
+      // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-2, writer #7): same rationale as the
+      // pr_url-populated path above — routed through the canonical writer; QF_STATUS_CONFLICT
+      // is the writer's equivalent of the old !updated benign-race branch, any other thrown
+      // error (including a rare Guard-B disposition-required on a currently-'escalated' row)
+      // is logged and skipped per-row rather than crashing the whole reaper run.
+      let updated;
+      try {
+        updated = await setQuickFixStatus(supabase, qf.id, {
           // QF-20260807-745, the incident this fix is named for. This path closed on the FIRST
           // PR merged from branch `qf/<id>` — and guard-then-fix is a normal, sometimes MANDATORY
           // decomposition. On QF-20260804-647 it closed at 17:17Z citing the GUARD PR (which
@@ -329,21 +345,15 @@ export async function main() {
             scopeAcceptedBy: null,
           }),
           compliance_details: `Merge witnessed by orphan-qf-reaper (branch-derived path, branch ${branchName}, PR #${prNumber}) — the FIRST merged PR from this branch, which is NOT proof this QF's scope is satisfied. Attest via complete-quick-fix.js --scope-accepted.`,
-        })
-        .eq('id', qf.id)
-        .eq('status', qf.status)
-        .select('id, status')
-        .single();
-
-      if (updateError) {
+        });
+      } catch (updateError) {
+        if (updateError.code === 'QF_STATUS_CONFLICT') {
+          log('skipped_orphan_already_completed', { qf_id: qf.id, pr_number: prNumber });
+          summary.orphan_skipped_already_completed += 1;
+          continue;
+        }
         log('error_update_orphan', { qf_id: qf.id, pr_number: prNumber, error: updateError.message });
         summary.errored += 1;
-        continue;
-      }
-
-      if (!updated) {
-        log('skipped_orphan_already_completed', { qf_id: qf.id, pr_number: prNumber });
-        summary.orphan_skipped_already_completed += 1;
         continue;
       }
 

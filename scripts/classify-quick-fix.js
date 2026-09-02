@@ -26,6 +26,10 @@ import { claimQuickFix } from '../lib/quick-fix-claim.mjs';
 // QF-20260822-796: single-representation LOC cap — read from the governed
 // work_item_thresholds source (tier2_max_loc) instead of a hardcoded duplicate.
 import { getActiveThresholds } from '../lib/utils/work-item-router.js';
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: single canonical quick_fixes.status writer.
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { setQuickFixStatus } = require('../lib/quick-fix/status-writer.cjs');
 
 dotenv.config();
 
@@ -304,20 +308,23 @@ async function classifyQuickFix(qfId, options = {}) {
         .map(c => c.message)
         .join('; ');
 
-      const { error: updateError } = await supabase
-        .from('quick_fixes')
-        .update({
-          status: 'escalated',
-          escalation_reason: escalationReason
-        })
-        .eq('id', qfId);
-
-      if (updateError) {
-        console.log('❌ Failed to update status:', updateError.message);
+      // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: this classifier never creates an SD in the
+      // same transaction, so it MUST NOT write status='escalated' (the single writer refuses
+      // that without escalated_to_sd_id) -- it stays status='open' with routing_tier=3, the
+      // derived needs_sd shape (see lib/quick-fix/status-writer.cjs isNeedsSdRow), visible on
+      // the belt but excluded from self-claim until an SD is actually linked.
+      try {
+        await setQuickFixStatus(supabase, qfId, {
+          status: 'open',
+          routing_tier: 3,
+          escalation_reason: escalationReason,
+        });
+      } catch (writeErr) {
+        console.log('❌ Failed to update status:', writeErr.message);
         process.exit(1);
       }
 
-      console.log('✅ Status updated to: escalated');
+      console.log('✅ Status updated to: open (routing_tier=3, awaiting SD)');
       console.log(`   Reason: ${escalationReason}\n`);
     }
 

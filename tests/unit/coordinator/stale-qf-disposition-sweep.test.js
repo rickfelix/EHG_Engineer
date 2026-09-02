@@ -71,6 +71,24 @@ function makeSupabase({ rows = [], columnsExist = true, claudeSessionsCount = 5 
       range(from, to) { ctx.range = [from, to]; return api; },
       limit(n) { ctx.limit = n; return api; },
       update(vals) { ctx.op = 'update'; ctx.vals = vals; return api; },
+      // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: setQuickFixStatus's internal lookup+update use
+      // maybeSingle()/single() as their terminal call, not the bare thenable -- mirror the same
+      // filter+update resolution logic, singularized. Reuses the same `matched` computation as
+      // `then` below (kept in sync deliberately -- both read ctx.filters/ctx.op the same way).
+      _resolveSingular() {
+        if (ctx.columnError) return { data: null, error: ctx.columnError };
+        const matched = rows.filter((r) => ctx.filters.every((f) => f(r)));
+        if (ctx.op === 'update') {
+          matched.forEach((r) => { updates.push({ id: r.id, vals: { ...ctx.vals } }); Object.assign(r, ctx.vals); });
+        }
+        const row = matched[0];
+        if (!row) return { data: null, error: null };
+        const cols = (ctx.cols || '').split(',').map((c) => c.trim()).filter(Boolean);
+        const projected = cols.length ? Object.fromEntries(cols.map((c) => [c, row[c]])) : { ...row };
+        return { data: projected, error: null };
+      },
+      maybeSingle() { return Promise.resolve(api._resolveSingular()); },
+      single() { return Promise.resolve(api._resolveSingular()); },
       then(resolve) {
         if (ctx.columnError) { resolve({ data: null, error: ctx.columnError, count: null }); return; }
         const matched = rows.filter((r) => ctx.filters.every((f) => f(r)));
@@ -171,6 +189,39 @@ describe('TS-8: H2 CLI gate + positive control via the REAL citation checker', (
       supabase, nowMs: NOW, seatCount: 3, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
     });
     expect(result.counts.resolved).toBe(0);
+    expect(result.counts.reVerified + result.counts.promoted).toBe(1);
+  });
+});
+
+describe('TS-6 / FR-3: fetchPastFenceCandidates excludes needs_sd rows (SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001, PLAN-testing BLOCKER-adjacent finding F1)', () => {
+  it('a routing_tier=3, escalated_to_sd_id=NULL, past-fence-eligible row is never touched by the sweep', async () => {
+    const needsSdRow = baseRow({
+      id: 'QF-NEEDS-SD', routing_tier: 3, escalated_to_sd_id: null,
+      description: 'covered by tests/failing.test.js',
+    });
+    const ordinaryRow = baseRow({
+      id: 'QF-ORDINARY', routing_tier: 1,
+      description: 'covered by tests/failing.test.js',
+    });
+    const supabase = makeSupabase({ rows: [needsSdRow, ordinaryRow], columnsExist: true });
+    const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
+      supabase, nowMs: NOW, seatCount: 5, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
+    });
+    expect(supabase._updates.find((u) => u.id === 'QF-NEEDS-SD')).toBeUndefined();
+    expect(supabase._updates.find((u) => u.id === 'QF-ORDINARY')).toBeTruthy();
+    expect(result.counts.reVerified + result.counts.promoted).toBe(1); // only the ordinary row processed
+  });
+
+  it('a routing_tier=3 row that HAS escalated_to_sd_id set is NOT exempt (already linked, not awaiting an SD)', async () => {
+    const linkedRow = baseRow({
+      id: 'QF-LINKED', routing_tier: 3, escalated_to_sd_id: 'sd-already-linked',
+      description: 'covered by tests/failing.test.js',
+    });
+    const supabase = makeSupabase({ rows: [linkedRow], columnsExist: true });
+    const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
+      supabase, nowMs: NOW, seatCount: 5, repoRoot: FIXTURE_ROOT, runTest: runTestStub,
+    });
+    expect(supabase._updates.find((u) => u.id === 'QF-LINKED')).toBeTruthy();
     expect(result.counts.reVerified + result.counts.promoted).toBe(1);
   });
 });
@@ -306,7 +357,7 @@ describe('TS-4: re_verified vs promoted threshold (3 files)', () => {
     expect(supabase._updates.find((u) => u.id === 'QF-EXACT4').vals.disposition).toBe('promoted');
   });
 
-  it('>3 extracted paths -> promoted, status=escalated, escalation_reason set (reuses existing CHECK)', async () => {
+  it('>3 extracted paths -> promoted, status=open+routing_tier=3 (needs_sd), escalation_reason set (SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: markPromoted no longer writes status=escalated -- it never creates an SD, so the single writer would refuse that without escalated_to_sd_id; this is the root-cause fix)', async () => {
     const row = baseRow({ id: 'QF-4PATH', description: 'covered by tests/failing.test.js and lib/a.js and lib/b.js and lib/c.js' });
     const supabase = makeSupabase({ rows: [row], columnsExist: true });
     const result = await runSweep(['node', 'sweep', '--apply', '--h2-confirmed=2026-08-16'], {
@@ -314,7 +365,9 @@ describe('TS-4: re_verified vs promoted threshold (3 files)', () => {
     });
     expect(result.counts.promoted).toBe(1);
     const update = supabase._updates.find((u) => u.id === 'QF-4PATH');
-    expect(update.vals.status).toBe('escalated');
+    expect(update.vals.status).toBe('open');
+    expect(update.vals.routing_tier).toBe(3);
+    expect(update.vals.escalated_to_sd_id).toBeUndefined();
     expect(update.vals.escalation_reason).toBeTruthy();
   });
 });

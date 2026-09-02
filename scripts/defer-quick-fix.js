@@ -28,6 +28,8 @@ import { checkHoldStamp, buildProvenancedStamp, logHoldStateViolation } from '..
 // re-derived so the writer can only accept marker combinations the reader actually excludes.
 const require_ = createRequire(import.meta.url);
 const { isChairmanGatedQF } = require_('../lib/fleet/qf-gated-hold.cjs');
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: single canonical quick_fixes.status writer.
+const { setQuickFixStatus } = require_('../lib/quick-fix/status-writer.cjs');
 
 dotenv.config();
 
@@ -42,6 +44,8 @@ export function parseDeferArgs(argv) {
   let reason = null;
   let owner = null;
   let releaseCondition = null;
+  let dispositionReasonCode = null;
+  let disposedBy = null;
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--not-before') {
       notBefore = args[i + 1];
@@ -57,9 +61,15 @@ export function parseDeferArgs(argv) {
     } else if (args[i] === '--release-condition') {
       releaseCondition = args[i + 1];
       i++;
+    } else if (args[i] === '--disposition-reason-code') {
+      dispositionReasonCode = args[i + 1];
+      i++;
+    } else if (args[i] === '--disposed-by') {
+      disposedBy = args[i + 1];
+      i++;
     }
   }
-  return { showHelp: false, qfId, notBefore, reopen, reason, owner, releaseCondition };
+  return { showHelp: false, qfId, notBefore, reopen, reason, owner, releaseCondition, dispositionReasonCode, disposedBy };
 }
 
 export function validateNotBefore(value) {
@@ -135,7 +145,13 @@ Options:
                       deliberate release MUST persist one of the two markers
                       the hand-time guard reads, or it is refused loudly.
   --reopen            Also set status='open' (use when clearing a manual
-                      status='escalated' defer workaround).
+                      status='escalated' defer workaround). If the row is
+                      currently 'escalated', --disposition-reason-code and
+                      --disposed-by are REQUIRED (SD-LEO-INFRA-SINGLE-
+                      ESCALATION-WRITER-001).
+  --disposition-reason-code <text>  Required alongside --reopen when reopening
+                      a row currently status='escalated'.
+  --disposed-by <text>  Required alongside --disposition-reason-code.
   --reason <text>     Hold-state contract stamp (SD-LEO-INFRA-HOLD-STATE-CONTRACT-001):
                       why this QF is deferred. Optional while
                       HOLD_STATE_CONTRACT_MODE=observe (default); required
@@ -160,7 +176,7 @@ Example:
 // only governs the reason/owner/release_condition stamp as a whole.
 const FAR_FUTURE_PARK_DAYS = 30;
 
-export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, owner, releaseCondition, writingSessionId, supabaseClient = null } = {}) {
+export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, owner, releaseCondition, writingSessionId, dispositionReasonCode, disposedBy, supabaseClient = null } = {}) {
   // SD-LEO-INFRA-CHECKIN-DISPATCH-READ-001 (FR-2): accept exactly the two guard-visible marker
   // shapes; refuse everything else LOUDLY, naming the missing columns, before any DB write.
   const marker = classifyDeliberateHoldMarker({ notBefore, owner, releaseCondition });
@@ -215,9 +231,16 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
   // is no other way out, because lib/quick-fix-claim.mjs exports claimQuickFix and no releaseQuickFix,
   // and `npm run sd:release` reports "no SD claimed" for a QF since it only queries
   // strategic_directives_v2. Clearing the authoritative column here is the whole release path.
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: the status-changing portion of this update
+  // (only present under --reopen) is split off and routed through the single canonical writer
+  // as a SEPARATE call, since --reopen is a transition OUT of 'escalated' and the writer's
+  // Guard B requires disposition_reason_code + disposed_by + disposed_at for that transition.
+  // The non-status fields below remain a single plain update, unchanged from before this SD.
+  // ACCEPTED, DOCUMENTED RISK: this is a non-atomic 2-call window (two independent REST calls,
+  // no cross-call transaction) — acceptable for this human-run CLI tool, not a hot concurrent
+  // path (unlike the automated writers this SD also migrates).
   const update = { claiming_session_id: null };
   if (marker.mode === 'time_gated') update.not_before = marker.iso;
-  if (reopen) update.status = 'open';
   if (stamped.reason) update.reason = stamped.reason;
   if (stamped.owner) update.owner = stamped.owner;
   if (stamped.release_condition) update.release_condition = stamped.release_condition;
@@ -245,6 +268,20 @@ export async function deferQuickFix(qfId, notBefore, { reopen = false, reason, o
   }
   if (!data) {
     throw new Error(`Quick-fix not found: ${qfId}`);
+  }
+
+  // --reopen: the status-changing portion, routed through the single canonical writer (see
+  // comment above). Leaving 'escalated' requires disposition fields (Guard B) -- if the caller
+  // omitted --disposition-reason-code/--disposed-by on a row that IS 'escalated', this throws
+  // QF_STATUS_DISPOSITION_REQUIRED rather than silently reopening it.
+  if (reopen) {
+    const reopened = await setQuickFixStatus(supabase, qfId, {
+      status: 'open',
+      ...(dispositionReasonCode ? { disposition_reason_code: dispositionReasonCode } : {}),
+      ...(disposedBy ? { disposed_by: disposedBy } : {}),
+      ...(dispositionReasonCode || disposedBy ? { disposed_at: new Date().toISOString() } : {}),
+    });
+    data.status = reopened.status;
   }
 
   // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-002 (FR-1), second surface: clearing the authoritative
@@ -291,6 +328,8 @@ async function main() {
       owner: parsed.owner,
       releaseCondition: parsed.releaseCondition,
       writingSessionId: process.env.CLAUDE_SESSION_ID || null,
+      dispositionReasonCode: parsed.dispositionReasonCode,
+      disposedBy: parsed.disposedBy,
     });
     console.log(result.not_before
       ? `✅ ${result.id}: not_before=${result.not_before}, status=${result.status}`

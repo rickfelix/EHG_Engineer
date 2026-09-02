@@ -62,27 +62,36 @@ function makeSupabaseMock(scenarios) {
 
   // The script does: const { data: candidates, error } = await supabase.from('quick_fixes').select(...).in(...).not(...).lt(...).limit(...);
   // We need each call to .from to return a fresh chainable that, on terminal await, resolves to the right scenario.
+  //
+  // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: both UPDATE sites now route through
+  // setQuickFixStatus, which (a) first does its own SELECT lookup
+  // (`.select('status, escalation_reason').eq('id', qfId).maybeSingle()`) before writing, and
+  // (b) terminates its own UPDATE with `.eq('status', fromStatus).select('id, status').maybeSingle()`
+  // instead of `.single()`. `.eq()` and `.maybeSingle()` are added to the shared builder (both
+  // paths reuse the same builder instance so `isUpdate` distinguishes the writer's own lookup
+  // SELECT from its UPDATE, exactly as `isUpdate` already distinguished the two candidate
+  // SELECTs from an UPDATE) — the two candidate-query SELECTs never call `.eq()`/`.maybeSingle()`
+  // in the reaper itself, so they still resolve via the pre-existing `.then()` terminal.
   const fromCalls = [];
   const fromMock = vi.fn((tableName) => {
     fromCalls.push(tableName);
-    let chain = {};
     const builder = {};
     let isUpdate = false;
-    let updatePayload = null;
-    for (const m of ['select', 'in', 'not', 'is', 'lt', 'limit', 'order', 'gte']) {
+    for (const m of ['select', 'in', 'not', 'is', 'lt', 'limit', 'order', 'gte', 'eq']) {
       builder[m] = vi.fn(() => builder);
     }
     builder.update = vi.fn((payload) => {
       isUpdate = true;
-      updatePayload = payload;
       updateCalls.push({ payload, table: tableName });
-      const upBuilder = {};
-      upBuilder.eq = vi.fn(() => upBuilder);
-      upBuilder.select = vi.fn(() => ({
-        single: vi.fn(async () => scenarios.updateResult || { data: { id: 'mock', status: 'completed' }, error: null }),
-      }));
-      return upBuilder;
+      return builder;
     });
+    builder.maybeSingle = vi.fn(async () => {
+      if (isUpdate) {
+        return scenarios.updateResult || { data: { id: 'mock', status: 'in_progress' }, error: null };
+      }
+      return scenarios.lookupResult || { data: { status: 'open', escalation_reason: null }, error: null };
+    });
+    builder.single = builder.maybeSingle; // back-compat alias, unused by current code paths
     builder.then = (resolve) => {
       if (isUpdate) {
         return Promise.resolve(scenarios.updateResult).then(resolve);

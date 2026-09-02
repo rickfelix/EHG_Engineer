@@ -6,6 +6,10 @@
 import path from 'path';
 import { execSync } from 'child_process';
 import { EXTERNAL_STEP_TIMEOUT_MS } from './constants.js';
+// SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: single canonical quick_fixes.status writer.
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { setQuickFixStatus } = require('../../../lib/quick-fix/status-writer.cjs');
 
 /**
  * Hard cap on QF size. Aligned with CLAUDE.md routing: Tier 1 ≤30,
@@ -91,18 +95,22 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
   const escalate = await prompt('Auto-escalate to SD? (yes/no): ');
 
   if (escalate.toLowerCase().startsWith('y')) {
-    // FR-5: write split-LOC fields, fall back if CHECK rejects
+    // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: no SD is created here, so this MUST NOT
+    // write status='escalated' (the writer refuses that without escalated_to_sd_id) --
+    // stays status='open', routing_tier=3 (the needs_sd shape). FR-5: write split-LOC
+    // fields, fall back if CHECK rejects.
     let updateError = null;
-    let updateResult = await supabase
-      .from('quick_fixes')
-      .update({
-        status: 'escalated',
+    try {
+      await setQuickFixStatus(supabase, qfId, {
+        status: 'open',
+        routing_tier: 3,
         escalation_reason: `Net source LOC (${netSourceLoc}) exceeds ${QF_HARD_LOC_CAP} line hard cap (raw source: ${sourceLoc}, test LOC: ${testLoc})`,
         actual_source_loc: sourceLoc,
-        actual_test_loc: testLoc
-      })
-      .eq('id', qfId);
-    updateError = updateResult.error;
+        actual_test_loc: testLoc,
+      });
+    } catch (e) {
+      updateError = e;
+    }
 
     // FR-5 fallback: if loosened CHECK still rejects, escalate without writing LOC fields
     if (updateError && /actual_loc_reasonable/i.test(updateError.message || '')) {
@@ -113,15 +121,17 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
         rejected_test_loc: testLoc,
         timestamp: new Date().toISOString()
       });
-      const fallback = await supabase
-        .from('quick_fixes')
-        .update({
-          status: 'escalated',
+      try {
+        await setQuickFixStatus(supabase, qfId, {
+          status: 'open',
+          routing_tier: 3,
           escalation_reason: `Actual source LOC (${sourceLoc}) exceeds cap; CHECK rejected LOC write (see verification_notes for forensics)`,
-          verification_notes: fallbackNotes
-        })
-        .eq('id', qfId);
-      updateError = fallback.error;
+          verification_notes: fallbackNotes,
+        });
+        updateError = null;
+      } catch (e) {
+        updateError = e;
+      }
     }
 
     if (updateError) {
@@ -129,7 +139,7 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
       return false;
     }
 
-    console.log('\n✅ Status updated to: escalated');
+    console.log('\n✅ Status updated to: open (routing_tier=3, awaiting SD)');
     console.log('   Follow full LEAD→PLAN→EXEC workflow for this issue.\n');
     return false;
   }
