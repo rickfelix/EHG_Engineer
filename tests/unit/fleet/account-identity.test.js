@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { getAccountIdentity, detectAccountSwitch } = require('../../../lib/fleet/account-identity.cjs');
+const { getAccountIdentity, detectAccountSwitch, resolveRealConfigPath } = require('../../../lib/fleet/account-identity.cjs');
 
 // Token-shaped leak regex — pinned to the exact pattern from the SD spec.
 const LEAK_RE = /(sk-[A-Za-z0-9]+|Bearer\s+\S+|eyJ[A-Za-z0-9_-]+|[A-Za-z0-9_-]{40,})/;
@@ -113,6 +113,27 @@ describe('getAccountIdentity (FR-1)', () => {
     expect(getAccountIdentity({})).toBeNull();
     expect(getAccountIdentity({ oauthAccount: 'not-an-object' })).toBeNull();
     expect(getAccountIdentity({ oauthAccount: null })).toBeNull();
+  });
+});
+
+// QF-20260901-848: resolveRealConfigPath is now exported so adam-quiet-tick.mjs can stamp the
+// account-identity state file with the config path a measurement was read from, instead of
+// hand-rolling a second copy of this exact resolution (USERPROFILE || homedir, .claude.json).
+describe('resolveRealConfigPath (QF-20260901-848)', () => {
+  it('resolves to a .claude.json path under the home directory', () => {
+    const p = resolveRealConfigPath();
+    expect(typeof p).toBe('string');
+    expect(p.endsWith('.claude.json')).toBe(true);
+  });
+
+  it('honors USERPROFILE when set (Windows-first resolution)', () => {
+    const prior = process.env.USERPROFILE;
+    process.env.USERPROFILE = 'C:\\Users\\test-account-identity';
+    try {
+      expect(resolveRealConfigPath()).toContain('test-account-identity');
+    } finally {
+      if (prior === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prior;
+    }
   });
 });
 
