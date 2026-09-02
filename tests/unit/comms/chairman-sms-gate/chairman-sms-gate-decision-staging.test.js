@@ -362,7 +362,8 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       { sender, console: silentConsole, supabase: sb },
     );
     expect(res.sent).toBe(false);
-    expect(res.held).toBe(true);
+    // QF-20260902-939: a non-quiet-hours rubric block on a decision is DROPPED, not held/queued.
+    expect(res.dropped).toBe(true);
     expect(res.blockedReasons.join(' ')).toContain('length');
     expect(sender.send).not.toHaveBeenCalled();
   });

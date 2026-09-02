@@ -94,6 +94,11 @@ export async function main(argv = process.argv, deps = {}) {
   try {
     const releaseHeldSend = deps.releaseHeldSend
       || (await import('../../lib/adam/chairman-held-send-release.js')).releaseHeldSend;
+    // QF-20260902-939: a hold_reason='quiet_hour' row never had a Solomon consult to verify, so it
+    // routes to a SEPARATE releaser keyed on hold_expires_at alone -- injected independently so
+    // every existing releaseHeldSend-based test (rows carrying no hold_reason) is unaffected.
+    const releaseQuietHourHold = deps.releaseQuietHourHold
+      || (await import('../../lib/adam/chairman-held-send-release.js')).releaseExpiredQuietHourHold;
 
     // Bounded batch per sweep run (matches this repo's convention for operational sweeps) -- a
     // 15-minute cadence and per-row retry-via-attempts means an oversized backlog drains across
@@ -141,7 +146,8 @@ export async function main(argv = process.argv, deps = {}) {
     // amplifier of the dispatch-throw risk this module's own try/catch already guards against.
     for (const row of heldRows || []) {
       try {
-        const outcome = await releaseHeldSend(supabase, row, releaseDeps);
+        const dispatch = row.hold_reason === 'quiet_hour' ? releaseQuietHourHold : releaseHeldSend;
+        const outcome = await dispatch(supabase, row, releaseDeps);
         outcomes.push({ id: row.id, action: outcome.action, reason: outcome.reason });
         // A failed unclaim (0-row match or a write error) means the row is STILL status='releasing'
         // despite the dispatch not having succeeded -- not genuinely back in the held pool, so it

@@ -26,11 +26,11 @@ const silentConsole = { warn: vi.fn(), error: vi.fn(), log: vi.fn() };
 const runPreSendConsultLane = async () => ({ action: 'send' });
 
 describe('chairman-sms-gate sendChairmanSMS()', () => {
-  it('TS-1: a malformed decision is blocked by the rubric and NOT sent (held)', async () => {
+  it('TS-1: a malformed decision is blocked by the rubric and NOT sent (DROPPED — QF-20260902-939: a non-quiet-hours rubric block is never queued/held, no row)', async () => {
     const sender = makeSender();
     const res = await sendChairmanSMS(wellFormedDecision({ options: [] }), DAYTIME, { sender, console: silentConsole, runPreSendConsultLane });
     expect(res.sent).toBe(false);
-    expect(res.held).toBe(true);
+    expect(res.dropped).toBe(true);
     expect(res.reason).toBe('blocked');
     expect(sender.send).not.toHaveBeenCalled();
   });
@@ -68,7 +68,9 @@ describe('chairman-sms-gate sendChairmanSMS()', () => {
     const msg = { type: 'status', body: 'Pick one: A) x  B) y', options: [{ label: 'A) x' }, { label: 'B) y' }] };
     const res = await sendChairmanSMS(msg, DAYTIME, { sender, console: silentConsole, runPreSendConsultLane });
     expect(res.sent).toBe(false);
-    expect(res.held).toBe(true); // decision handling engaged; blocked on missing decision fields
+    // decision handling engaged (isDecision by upgrade); blocked on missing decision fields, none
+    // of which is quiet_hours -> DROPPED (QF-20260902-939), not held.
+    expect(res.dropped).toBe(true);
     expect(sender.send).not.toHaveBeenCalled();
   });
 
