@@ -25,9 +25,13 @@ vi.mock('../../../lib/apa/imap-code-fetcher.js', () => ({
   fetchVerificationCodeDetailed: vi.fn(),
 }));
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, buttonTexts = ['Continue'], bodyText = '' } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '' } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
+  // QF-20260902-614: getByRole('button', ...) is called fresh at each of the source module's
+  // 3 submit points (sign-in, sign-up, verify) -- a per-matchedText count here (not a
+  // per-locator-instance one) lets clickNavigationsSequence answer differently per submit.
+  const clickCallCounts = {};
   return {
     calls,
     async goto(gotoUrl) {
@@ -48,8 +52,16 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       const locator = {
         click: async () => {
           calls.click.push(matchedText ?? `<getByRole:no-match:${name}>`);
-          if (matchedText !== undefined && Object.prototype.hasOwnProperty.call(clickNavigations, matchedText)) {
-            url = clickNavigations[matchedText];
+          if (matchedText !== undefined) {
+            const seq = clickNavigationsSequence[matchedText];
+            if (seq) {
+              const idx = clickCallCounts[matchedText] || 0;
+              clickCallCounts[matchedText] = idx + 1;
+              const dest = seq[Math.min(idx, seq.length - 1)];
+              if (dest !== undefined) url = dest;
+            } else if (Object.prototype.hasOwnProperty.call(clickNavigations, matchedText)) {
+              url = clickNavigations[matchedText];
+            }
           }
         },
         textContent: async () => matchedText ?? null,
@@ -69,11 +81,20 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       // finding an element that an instant, non-waiting count() snapshot would have missed
       // (SEC-001 regression coverage).
       const visible = Object.prototype.hasOwnProperty.call(waitForVisible, selector) ? waitForVisible[selector] : count > 0;
+      // QF-20260902-614: the source module calls page.locator(code selector).waitFor() twice
+      // against the SAME locator instance -- once on the initial sign-in, once (only on the
+      // no-account recovery path) on the sign-up leg. A sequence lets a fixture answer
+      // differently per call (e.g. [false, true]); falls back to the static `visible` value
+      // when no sequence is configured, so every pre-existing fixture is unaffected.
+      let waitForCallCount = 0;
       const locator = {
         count: async () => count,
         click: async () => { calls.click.push(selector); },
         waitFor: async ({ state } = {}) => {
-          if (state === 'visible' && visible) return;
+          const seq = waitForVisibleSequence[selector];
+          const thisCallVisible = seq ? seq[Math.min(waitForCallCount, seq.length - 1)] : visible;
+          waitForCallCount += 1;
+          if (state === 'visible' && thisCallVisible) return;
           throw new Error(`waitFor timeout: "${selector}" not ${state}`);
         },
         // isVisible() is a real Playwright locator method (synchronous-outcome check, never
@@ -786,6 +807,85 @@ describe('buildStepExecutor() fallback — authProviderTestMode (QF-20260902-512
         .rejects.toThrow(/neither a verification-code challenge nor an authenticated-state signal.*Too many requests/s);
       await vi.advanceTimersByTimeAsync(16000);
       await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// QF-20260902-614: MEASURED via #8013's own forensics (uat_test_runs ea2102fa) -- a +clerk_test
+// identity signs IN with no account yet, so Clerk answers "Couldn't find your account" instead
+// of a code challenge. Recovery via sign-up is gated EXCLUSIVELY on the authProviderTestMode
+// marker, never a loosened SEC-001 for a real identity (unchanged on the sign-in leg above).
+describe('buildStepExecutor() fallback — no-account sign-up recovery (QF-20260902-614)', () => {
+  const step = { step_id: 'stp-abc123-do-a-thing', goal: 'do a thing' };
+  const CODE_INPUT = 'input[name="code"], input[autocomplete="one-time-code"]';
+  const TOGGLE = 'text=Already have an account? Sign in';
+  const EXISTING_KEY = 'VENTURE_UAT_TEST_ACCOUNT_NOACCTVENTURE_EXISTING';
+  afterEach(() => { delete process.env[EXISTING_KEY]; });
+
+  it('clerk_development + Clerk\'s "Couldn\'t find your account" text on the +clerk_test identity recovers via sign-up, reaches authenticated, and stamps auth_branch=sign_up', async () => {
+    vi.useFakeTimers();
+    try {
+      process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+      registerVenture('NOACCTVENTURE', { authProviderTestMode: 'clerk_development' });
+      const executor = buildStepExecutor(step, 'NOACCTVENTURE');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/sign-in', // stays not-yet-authenticated until the sign-up verify click below
+        bodyText: "Couldn't find your account.",
+        waitForVisibleSequence: { [CODE_INPUT]: [false, true] }, // no challenge on sign-in, one on sign-up
+        clickNavigationsSequence: { Continue: [undefined, undefined, 'http://fixture/dashboard'] }, // 3rd Continue click = the sign-up verify
+      });
+
+      let caught;
+      const capture = executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }).then(
+        (v) => { throw new Error(`expected executor to throw, but it resolved with ${JSON.stringify(v)}`); },
+        (err) => { caught = err; },
+      );
+      await vi.advanceTimersByTimeAsync(16000);
+      await capture;
+
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught.message).toMatch(/authenticated, but no verified UI mapping/i);
+      expect(caught.authBranch).toBe('sign_up');
+      expect(caught.challengeKind).toBe('email-code');
+      expect(caught.retrievalPath).toBe('clerk_test_mode');
+      expect(caught.authMode).toBe('clerk_test_mode');
+
+      const emailFills = page.calls.fill.filter(([sel]) => sel.includes('identifier'));
+      expect(emailFills).toEqual([
+        ['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester+clerk_test@example.com'],
+        ['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester+clerk_test@example.com'],
+      ]);
+      expect(page.calls.fill).toContainEqual([CODE_INPUT, CLERK_TEST_MODE_FIXED_CODE]);
+      expect(page.calls.goto.filter((u) => u === 'http://fixture/register')).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the no-account recovery never fires for a production (non-test-mode) venture -- fails closed with the original error, no second /register navigation attempted', async () => {
+    vi.useFakeTimers();
+    try {
+      process.env[EXISTING_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+      registerVenture('NOACCTVENTURE', {}); // no authProviderTestMode -- defaults to production
+      const executor = buildStepExecutor(step, 'NOACCTVENTURE');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/sign-in',
+        bodyText: "Couldn't find your account.", // same Clerk text, but the mode gate must refuse it
+      });
+
+      const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/neither a verification-code challenge nor an authenticated-state signal.*Couldn't find your account/s);
+      await vi.advanceTimersByTimeAsync(16000);
+      await assertion;
+
+      // Never attempted the sign-up recovery: only the original goto('/register'), and only
+      // the one (failed) sign-in identity fill -- the real credential, never +clerk_test.
+      expect(page.calls.goto.filter((u) => u === 'http://fixture/register')).toHaveLength(1);
+      expect(page.calls.fill).toContainEqual(['input[name="identifier"], input[name="emailAddress"], input[type="email"]', 'tester@example.com']);
     } finally {
       vi.useRealTimers();
     }
