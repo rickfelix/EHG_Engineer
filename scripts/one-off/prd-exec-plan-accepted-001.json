@@ -75,6 +75,18 @@
         "A genuinely passing 45-gate fixture still results in an accepted, non-bypassed handoff",
         "An end-to-end test drives a bugfix SD with a BLOCKED required TESTING verdict through to LEAD-FINAL-APPROVAL and asserts refusal"
       ]
+    },
+    {
+      "id": "FR-8",
+      "title": "Post-merge re-verify mode for the TESTING runner (--diff-range)",
+      "description": "See lib/sub-agents/testing/diff-range.js and scripts/one-off/fold-fr8-post-merge-reverify-exec-plan-accepted-001.mjs for the full description and rationale (coordinator scope note, Golf-3 5bd643ca).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "--diff-range is parsed as an explicit string-valued CLI flag on scripts/execute-subagent.js (never boolean-coerced)",
+        "checkForNonUISdType() uses the supplied range for its git diff instead of main...HEAD when the value is valid",
+        "A malformed or unsafe --diff-range value is rejected and falls back to the default main...HEAD range",
+        "An empty diff still fails closed (requires E2E) even with an explicit --diff-range supplied"
+      ]
     }
   ],
   "technical_requirements": [
@@ -225,13 +237,34 @@
   "system_architecture": {
     "summary": "One choke-point fix (BaseExecutor.js) whose stamp is threaded through the existing recorder (HandoffRecorder.js) into both persisted rows, read back by a new per-SD check in an existing LEAD-FINAL gate, paired with a small SD-linkage fix in the CLI's audit emission, a narrow advisory-mode correctness fix, and a new guarded/audited reopen path plus its setter script.",
     "components": [
-      { "name": "scripts/modules/handoff/executors/BaseExecutor.js", "change": "Stamp bypassed:true/bypassReason/bypassedGates on the result at both bypass fall-through sites (~348, ~641-649/820-830)" },
-      { "name": "lib/handoff/HandoffRecorder.js", "change": "Read result.bypassed; correct validation_passed derivation and add scoreSource='bypassed' for both leo_handoff_executions.recordSuccess() and the sd_phase_handoffs insert; write metadata.bypass on sd_phase_handoffs" },
-      { "name": "scripts/modules/handoff/cli/cli-main.js", "change": "Resolve the SD identifier to its UUID once, before both the bypass_ledger insert and the emitValidationAuditLog call, fixing the sd_id=NULL orphan for key-invoked bypasses" },
-      { "name": "scripts/modules/handoff/executors/lead-final-approval/gates/learning-or-bypass-resolved-gate.js", "change": "Add a new, independently-testable per-SD check that reads sd_phase_handoffs.metadata.bypass across the SD's phase chain and refuses (real failure) completion when any bypass lacks a linked follow-up" },
-      { "name": "scripts/modules/handoff/gates/subagent-evidence-gate.js", "change": "In advisory mode, a REJECTING (BLOCKED/FAIL) required-agent verdict fails the gate instead of being softened to passed:true; MISSING-evidence softening is unchanged" },
-      { "name": "scripts/reactivate-sd.js", "change": "New guarded branch: completed -> active at current_phase=LEAD_FINAL, gated on metadata.completion_evidence_invalid===true, clearing completion_date and writing an sd_transition_audit row" },
-      { "name": "scripts/mark-completion-evidence-invalid.js", "change": "NEW: minimal audited setter for metadata.completion_evidence_invalid, required --sd-id and --reason" }
+      {
+        "name": "scripts/modules/handoff/executors/BaseExecutor.js",
+        "change": "Stamp bypassed:true/bypassReason/bypassedGates on the result at both bypass fall-through sites (~348, ~641-649/820-830)"
+      },
+      {
+        "name": "lib/handoff/HandoffRecorder.js",
+        "change": "Read result.bypassed; correct validation_passed derivation and add scoreSource='bypassed' for both leo_handoff_executions.recordSuccess() and the sd_phase_handoffs insert; write metadata.bypass on sd_phase_handoffs"
+      },
+      {
+        "name": "scripts/modules/handoff/cli/cli-main.js",
+        "change": "Resolve the SD identifier to its UUID once, before both the bypass_ledger insert and the emitValidationAuditLog call, fixing the sd_id=NULL orphan for key-invoked bypasses"
+      },
+      {
+        "name": "scripts/modules/handoff/executors/lead-final-approval/gates/learning-or-bypass-resolved-gate.js",
+        "change": "Add a new, independently-testable per-SD check that reads sd_phase_handoffs.metadata.bypass across the SD's phase chain and refuses (real failure) completion when any bypass lacks a linked follow-up"
+      },
+      {
+        "name": "scripts/modules/handoff/gates/subagent-evidence-gate.js",
+        "change": "In advisory mode, a REJECTING (BLOCKED/FAIL) required-agent verdict fails the gate instead of being softened to passed:true; MISSING-evidence softening is unchanged"
+      },
+      {
+        "name": "scripts/reactivate-sd.js",
+        "change": "New guarded branch: completed -> active at current_phase=LEAD_FINAL, gated on metadata.completion_evidence_invalid===true, clearing completion_date and writing an sd_transition_audit row"
+      },
+      {
+        "name": "scripts/mark-completion-evidence-invalid.js",
+        "change": "NEW: minimal audited setter for metadata.completion_evidence_invalid, required --sd-id and --reason"
+      }
     ]
   },
   "implementation_approach": {

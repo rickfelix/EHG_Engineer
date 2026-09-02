@@ -75,3 +75,44 @@ describe('QF-20260902-796: zero-UI-by-diff gate on checkForNonUISdType', () => {
     expect(result.detailed_analysis.applicability_source).toBe('declared_type');
   });
 });
+
+// SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-8, coordinator scope note 5bd643ca): once a branch is
+// merged, main...HEAD is empty (HEAD is an ancestor of main) and this gate would otherwise fail
+// closed forever for an already-merged, genuinely zero-UI SD. options.diff_range lets a
+// post-merge re-verify run supply the SD's real pre-merge range instead.
+describe('SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-8): post-merge --diff-range override', () => {
+  it('a valid diff_range is used for the git diff instead of the default main...HEAD', async () => {
+    execSyncMock.mockReturnValue('lib/fleet/claim-eligibility.cjs\n');
+    const sb = mockSupabase(bugfixWithKeyChanges);
+    const result = await checkForNonUISdType(
+      'sd-post-merge', 'retrospective', { diff_range: 'abc1234~1..abc1234' }, { repoPath: '/fake-repo' }, sb
+    );
+    expect(result).not.toBeNull();
+    expect(result.detailed_analysis.applicability_source).toBe('measured_diff');
+    expect(execSyncMock).toHaveBeenCalledWith(
+      'git diff --name-only abc1234~1..abc1234',
+      expect.objectContaining({ cwd: '/fake-repo' })
+    );
+  });
+
+  it('a malformed diff_range is rejected and falls back to the default main...HEAD range', async () => {
+    execSyncMock.mockReturnValue('lib/fleet/claim-eligibility.cjs\n');
+    const sb = mockSupabase(bugfixWithKeyChanges);
+    await checkForNonUISdType(
+      'sd-post-merge-bad', 'retrospective', { diff_range: 'abc..def; rm -rf /' }, { repoPath: '/fake-repo' }, sb
+    );
+    expect(execSyncMock).toHaveBeenCalledWith(
+      'git diff --name-only main...HEAD',
+      expect.objectContaining({ cwd: '/fake-repo' })
+    );
+  });
+
+  it('an empty diff even with an explicit diff_range still FAILS CLOSED (never exempted)', async () => {
+    execSyncMock.mockReturnValue('');
+    const sb = mockSupabase(bugfixWithKeyChanges);
+    const result = await checkForNonUISdType(
+      'sd-post-merge-empty', 'retrospective', { diff_range: 'abc1234~1..abc1234' }, { repoPath: '/fake-repo' }, sb
+    );
+    expect(result).toBeNull();
+  });
+});
