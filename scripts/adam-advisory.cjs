@@ -48,7 +48,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
-const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
@@ -211,7 +211,11 @@ function extractEmbeddedPeerDirective(rawPeerArg, rawBody) {
 // SD-LEO-INFRA-COMMS-DELIVERY-CONTRACT-001 / FR-2: the known-kinds allowlist a caller may
 // explicitly stamp via --kind. Sourced from the SAME shared constants every drain already
 // filters on (lib/fleet/worker-status.cjs) -- never a second hand-maintained list.
-const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS]);
+// QF-20260902-467: also includes BACKPRESSURE_EXEMPT_KINDS (lib/coordinator/dispatch.cjs,
+// the SSOT the backpressure refusal text itself names) so an incident kind like
+// collision_warning -- meant to bypass DISPATCH_BACKPRESSURE -- is not rejected before it
+// ever reaches that check.
+const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_KINDS, ...BACKPRESSURE_EXEMPT_KINDS]);
 
 // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 — flag names, not argv indices.
 //
@@ -1057,7 +1061,7 @@ async function main() {
   const kIdx = argv.indexOf('--kind');
   const kindArg = kIdx >= 0 ? argv[kIdx + 1] || null : null;
   if (kindArg && !KNOWN_SEND_KINDS.has(kindArg)) {
-    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs).`);
+    console.error(`ERROR: --kind "${kindArg}" is not a recognized kind (see PAYLOAD_KINDS/DIRECTIVE_KINDS in lib/fleet/worker-status.cjs, or BACKPRESSURE_EXEMPT_KINDS in lib/coordinator/dispatch.cjs).`);
     process.exit(2);
   }
   // QF-20260901-479: `--message-kind retraction|amend|supersede` posts a correction on the SAME

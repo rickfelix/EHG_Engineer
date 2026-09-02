@@ -15,6 +15,7 @@ const require = createRequire(import.meta.url);
 const adam = require('../../scripts/adam-advisory.cjs');
 const solomon = require('../../scripts/solomon-advisory.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../../lib/fleet/worker-status.cjs');
+const { BACKPRESSURE_EXEMPT_KINDS } = require('../../lib/coordinator/dispatch.cjs');
 
 describe('adam-advisory.cjs buildAdvisoryPayload — FR-2 typed kind', () => {
   it('omitting kind is byte-identical to pre-SD behavior (defaults to adam_advisory)', () => {
@@ -29,6 +30,10 @@ describe('adam-advisory.cjs buildAdvisoryPayload — FR-2 typed kind', () => {
     Object.values(PAYLOAD_KINDS).forEach((k) => expect(adam.KNOWN_SEND_KINDS.has(k)).toBe(true));
     DIRECTIVE_KINDS.forEach((k) => expect(adam.KNOWN_SEND_KINDS.has(k)).toBe(true));
     expect(adam.KNOWN_SEND_KINDS.has('totally_made_up_kind')).toBe(false);
+  });
+  it('QF-20260902-467: KNOWN_SEND_KINDS also accepts every BACKPRESSURE_EXEMPT_KINDS value (lib/coordinator/dispatch.cjs SSOT), so an incident kind like collision_warning is never refused before it reaches the backpressure-exempt check', () => {
+    BACKPRESSURE_EXEMPT_KINDS.forEach((k) => expect(adam.KNOWN_SEND_KINDS.has(k)).toBe(true));
+    expect(adam.KNOWN_SEND_KINDS.has('collision_warning')).toBe(true);
   });
 });
 
