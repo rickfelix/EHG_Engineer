@@ -9,6 +9,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 dotenv.config();
 
 const supabase = createClient(
@@ -86,4 +87,6 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error('Fatal:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('Fatal:', e.message); process.exit(1); });
+}
