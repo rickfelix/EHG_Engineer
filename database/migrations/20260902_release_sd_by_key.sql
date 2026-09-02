@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Chairman verbal "A" at the Adam terminal 2026-09-02 ~23:5xZ (ceremony 3c; scribe Adam 673db833; coordinator request a4fb6a7a; PR #8050 merged CI green; two RPCs + first-CREATE GRANT/REVOKE hardening, no destructive DDL)
 -- 20260902_release_sd_by_key.sql
 -- SD-LEO-INFRA-RELEASE-KEY-SESSION-001
 -- Date: 2026-09-02
