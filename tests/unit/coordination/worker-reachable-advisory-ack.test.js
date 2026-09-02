@@ -175,7 +175,9 @@ describe('SD-LEO-INFRA-WORKER-REACHABLE-ACK-001', () => {
       expect(Object.isFrozen(ADVISORY_KINDS)).toBe(true);
       // QF-20260830-144: signal_resolved added — SIGNAL_RESOLVED notification rows were being
       // written with no kind at all, unackable by either lane, re-presenting forever.
-      expect([...ADVISORY_KINDS].sort()).toEqual(['completion_nudge', 'coordinator_reply', 'signal_resolved']);
+      // QF-20260902-166: amend/retraction/supersede added — the backpressure-exempt CORRECTION
+      // kinds (BACKPRESSURE_EXEMPT_KINDS, lib/coordinator/dispatch.cjs) had no ack path at all.
+      expect([...ADVISORY_KINDS].sort()).toEqual(['amend', 'completion_nudge', 'coordinator_reply', 'retraction', 'signal_resolved', 'supersede']);
       for (const k of ADVISORY_KINDS) expect(DIRECTIVE_KINDS).not.toContain(k);
     });
   });
