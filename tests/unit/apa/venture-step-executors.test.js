@@ -431,12 +431,25 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     expect(result.matchedSelector).toBe('text=Start free');
   });
 
-  it('land preflight fails when the CTA is absent (regression guard)', async () => {
+  it('land preflight fails only when NEITHER the CTA nor the hydration-safe root marker renders', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
     const land = preflightChecks.find((c) => c.name === 'land');
-    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0 } });
+    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0, '#root:not(:empty)': 0 } });
 
-    await expect(land.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/no "Start free"/);
+    await expect(land.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/neither .* rendered/);
+  });
+
+  // QF-20260901-455: even a 30s waitFor on the specific CTA text raced a cold Cloudflare
+  // Workers start. '#root:not(:empty)' is a hydration-safe structural marker that fires the
+  // instant React mounts ANY content -- this pins that fallback path independent of the CTA.
+  it('land preflight passes on the hydration-safe root marker even when the CTA text has not rendered yet', async () => {
+    const { preflightChecks } = getVentureRegistration('ALTIFYAI');
+    const land = preflightChecks.find((c) => c.name === 'land');
+    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0, '#root:not(:empty)': 1 } });
+
+    const result = await land.run(page, { baseUrl: 'http://altifyai.fixture' });
+    expect(result.matchedSelector).toBe('#root:not(:empty)');
+    expect(result.renderedStateSummary).toMatch(/#root:not\(:empty\)/);
   });
 
   // QF-20260901-385: an immediate count()===0 would have failed here even though the element
