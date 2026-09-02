@@ -14,7 +14,7 @@ import {
   buildStepExecutor,
 } from '../../../lib/apa/venture-step-executors.js';
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {} } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, buttonTexts = ['Continue'] } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
   return {
@@ -24,6 +24,32 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       const configured = gotoResponses[gotoUrl];
       if (configured === undefined) return { status: () => 200 };
       return configured;
+    },
+    // getByRole('button', {name}) resolves against buttonTexts IN ORDER, mirroring real
+    // Playwright's DOM-order resolution -- this is the exact mechanism QF-20260902-206 depends
+    // on: Clerk's live card renders "Continue with Google" before "Continue", so a caller must
+    // match by EXACT name (never a substring) to land on the right button.
+    getByRole(role, { name } = {}) {
+      if (role !== 'button') throw new Error(`mock getByRole: unsupported role "${role}"`);
+      const matches = (text) => (name instanceof RegExp ? name.test(text) : text === name);
+      const matchedText = buttonTexts.find(matches);
+      const exists = matchedText !== undefined;
+      const locator = {
+        click: async () => {
+          calls.click.push(matchedText ?? `<getByRole:no-match:${name}>`);
+          if (matchedText !== undefined && Object.prototype.hasOwnProperty.call(clickNavigations, matchedText)) {
+            url = clickNavigations[matchedText];
+          }
+        },
+        textContent: async () => matchedText ?? null,
+        waitFor: async ({ state } = {}) => {
+          if (state === 'visible' && exists) return;
+          throw new Error(`waitFor timeout: getByRole(button, ${name}) not ${state}`);
+        },
+        isVisible: async () => exists,
+        first() { return locator; },
+      };
+      return locator;
     },
     locator(selector) {
       const count = Object.prototype.hasOwnProperty.call(locatorCounts, selector) ? locatorCounts[selector] : 0;
@@ -266,7 +292,7 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
     // The bug this guards against: on a real /register page with no toggle click, fill()+click()
     // submit against the actual registration form -- a PRD-violating account-creation attempt.
     // This assertion is the one that fails under the pre-fix count()-only code.
-    expect(page.calls.click).toEqual([TOGGLE, 'button:has-text("Continue")']);
+    expect(page.calls.click).toEqual([TOGGLE, 'Continue']);
   });
 
   it('SEC-001 residual (found by security-agent re-verification): refuses to submit credentials when the toggle is never found -- FAIL-CLOSED, not a fallthrough to fill+submit', async () => {
@@ -341,20 +367,16 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
     expect(page.calls.fill).toEqual([]);
   });
 
-  it('fresh-E2E finding (2026-09-01, live run against altifyai.rickfelix2000.workers.dev): a post-submit redirect to a THIRD-PARTY origin (e.g. a "Continue" selector matching more than one button, hitting "Continue with Google") is never read as "authenticated" -- even though its path does not match the sign-in/login denylist', async () => {
+  it('fresh-E2E finding (2026-09-01, live run against altifyai.rickfelix2000.workers.dev): a post-submit redirect to a THIRD-PARTY origin is never read as "authenticated" -- even when its path does not match the sign-in/login denylist', async () => {
     vi.useFakeTimers();
     try {
       process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
       const executor = buildStepExecutor(step, 'RACEVENTURE');
-      // Real repro: page.click('button:has-text("Continue")') matched "Continue with Google"
-      // and landed on accounts.google.com/v3/signin/identifier -- a path that contains none of
-      // NOT_YET_AUTHENTICATED_PATH_RE's tokens (sign-in/login/register/verify/factor/mfa/
-      // challenge), so a path-only check reads it as authenticated. It must not: the origin is
-      // not the venture's own.
       const page = makeMockPage({
         locatorCounts: { [TOGGLE]: 1 },
         currentUrl: 'http://fixture/register',
-        clickNavigations: { 'button:has-text("Continue")': 'https://accounts.google.com/v3/signin/identifier?client_id=abc' },
+        buttonTexts: ['Continue'],
+        clickNavigations: { Continue: 'https://accounts.google.com/v3/signin/identifier?client_id=abc' },
       });
 
       const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
@@ -367,6 +389,48 @@ describe('buildStepExecutor() fallback — sign-in toggle race (SECURITY finding
       vi.useRealTimers();
     }
   });
+
+  // QF-20260902-206 root cause + fix: Solomon's live headless render (row 5ad1d223) found
+  // Clerk's sign-in card renders "Continue with Google" BEFORE "Continue" in DOM order -- a
+  // SUBSTRING locator for "Continue" resolves to the Google button first, sending the walk to
+  // accounts.google.com instead of submitting the password.
+  it('QF-20260902-206: submits the EXACT "Continue" button, never "Continue with Google", even when Google renders first in DOM order', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    // Exact DOM order from Solomon's live render: Continue with Google, an empty submit, Show
+    // password, Continue.
+    const page = makeMockPage({
+      locatorCounts: { [TOGGLE]: 1 },
+      buttonTexts: ['Continue with Google', '', 'Show password', 'Continue'],
+    });
+
+    await expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+      .rejects.toThrow(/authenticated, but no verified UI mapping/i);
+
+    // The submit click resolved to "Continue" specifically, never "Continue with Google" --
+    // proves exact-name matching, not merely "a Continue-shaped substring somewhere".
+    expect(page.calls.click).toContain('Continue');
+    expect(page.calls.click).not.toContain('Continue with Google');
+    // No navigation to Google occurred (clickNavigations was never triggered), so the
+    // post-submit auth check ran against the venture's own origin as intended.
+    expect(page.url()).toBe('http://fixture/current');
+  });
+
+  it('QF-20260902-206: clickedButtonText is attached to the thrown error, recording which button was actually pressed (mirrors matchedSelector for preflights)', async () => {
+    process.env[ENV_KEY] = JSON.stringify({ email: 'tester@example.com', password: 'pw' });
+    const executor = buildStepExecutor(step, 'RACEVENTURE');
+    const page = makeMockPage({ locatorCounts: { [TOGGLE]: 1 }, buttonTexts: ['Continue'] });
+
+    let caught;
+    try {
+      await executor(page, {}, { baseUrl: 'http://fixture', authenticated: false });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.clickedButtonText).toBe('Continue');
+  });
+
 });
 
 describe('buildStepExecutor() fallback — SEC-003 authOrigins allowlist (FR-5, additive only)', () => {
