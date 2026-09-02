@@ -194,18 +194,29 @@ async function emitSessionCreated(supabase, { sessionId, payload, prior }) {
  */
 function resolveAccountFromConfigDir() {
   const dir = process.env.CLAUDE_CONFIG_DIR;
-  if (!dir) return null; // no per-profile scope => refuse; see above
   try {
     const { getAccountIdentity } = require('../../lib/fleet/account-identity.cjs');
-    const id = getAccountIdentity(path.join(dir, '.claude.json'));
+    // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-3: CLAUDE_CONFIG_DIR unset no longer refuses
+    // outright. The fleet runs ONE account at a time (never concurrent multi-account on one
+    // host — see the SD's own witnessed mechanism), so the host-default ~/.claude.json IS the
+    // unambiguous answer for a session that either deliberately chose build-session-launch.cjs's
+    // HOST_DEFAULT_PROFILE sentinel (which itself never sets CLAUDE_CONFIG_DIR) or was never
+    // routed through the fleet's profile-scoped spawn path at all (a plain interactive session,
+    // like the ones this fix was verified against). Both cases are observably identical and both
+    // are safe to resolve this way. When dir IS set, this still reads ONLY that scoped path,
+    // unchanged — the original QF-20260726-514 multi-profile-concurrency protection is intact.
+    const id = dir ? getAccountIdentity(path.join(dir, '.claude.json')) : getAccountIdentity();
     if (!id || !id.email) return null;
     return {
       account_email: id.email,
       account_org_name: id.orgName || null,
       account_org_id: null,              // not carried by oauthAccount — absent, not invented
       account_subscription_type: null,   // ditto
-      account_auth_method: 'config_dir',
+      account_auth_method: dir ? 'config_dir' : 'host_default',
       account_captured_at: new Date().toISOString(),
+      // FR-1: capture the join key every account_usage_* table is actually keyed by — the
+      // underlying reader already returns it; this function was silently dropping it.
+      account_uuid8: id.accountUuid8 || null,
     };
   } catch {
     return null;
@@ -235,6 +246,18 @@ function resolveAccountIdentity() {
     // CORRECT to reject that — absent beats a placeholder — but it left the stamp 100% dark.
     // Fall back through the per-profile seam before giving up.
     if (!j || j.loggedIn !== true || !j.email) return resolveAccountFromConfigDir();
+    // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-2: `claude auth status --json` never returns a
+    // UUID-shaped field, so this path alone can never yield the join key every account_usage_*
+    // table is keyed by. Fill it from the SAME config path the CLI itself resolved against (it
+    // respects CLAUDE_CONFIG_DIR — see the comment above), never a different one. Best-effort:
+    // a failure here leaves account_uuid8 null, matching this function's existing null-safe style.
+    let accountUuid8 = null;
+    try {
+      const { getAccountIdentity } = require('../../lib/fleet/account-identity.cjs');
+      const dir = process.env.CLAUDE_CONFIG_DIR;
+      const id = dir ? getAccountIdentity(path.join(dir, '.claude.json')) : getAccountIdentity();
+      if (id && id.accountUuid8) accountUuid8 = id.accountUuid8;
+    } catch { /* accountUuid8 stays null */ }
     return {
       account_email: j.email,
       account_org_name: j.orgName || null,
@@ -242,6 +265,7 @@ function resolveAccountIdentity() {
       account_subscription_type: j.subscriptionType || null,
       account_auth_method: j.authMethod || null,
       account_captured_at: new Date().toISOString(),
+      account_uuid8: accountUuid8,
     };
   } catch {
     // QF-20260727-013: the fallback must be reachable from HERE too, not only from the

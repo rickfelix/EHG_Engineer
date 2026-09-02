@@ -6,12 +6,18 @@
  * NOTHING RECORDED THAT. A 100%-dark instrument was indistinguishable from a healthy one nobody
  * had queried.
  *
- * The two properties pinned here are the ones easiest to regress by "simplifying":
- *   1. the fallback NEVER reads the host-global config (that is last-writer-wins, the exact
- *      defect 514 existed to fix — reintroduced "through a different door");
- *   2. an unresolved account is RECORDED, while the identity fields keep their honest absence.
+ * SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-3 (measured LEAD-phase live: this session, with
+ * CLAUDE_CONFIG_DIR unset, was permanently account_unresolved_at despite a real, readable
+ * identity on disk) changed the CLAUDE_CONFIG_DIR-unset behavior from an unconditional refusal
+ * to a host-default fallback read — the fleet runs ONE account at a time, so the host-default
+ * ~/.claude.json is the unambiguous answer for a session with no per-profile scope in play.
+ *
+ * The property still pinned here, UNCHANGED: a session that DOES have a scoped CLAUDE_CONFIG_DIR
+ * reads ONLY that scoped path, never the host default, even when a different host-default
+ * identity exists (see "regression guard" below) — that is the exact QF-20260726-514 property
+ * this fix must not reintroduce a hole in.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -35,31 +41,67 @@ function fakeSupabase(existingMeta = {}) {
   };
 }
 
+function writeClaudeJson(dir, { email, org, uuid }) {
+  fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
+    oauthAccount: { emailAddress: email, organizationName: org, accountUuid: uuid },
+  }));
+}
+
 const ORIGINAL_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR;
+const ORIGINAL_USERPROFILE = process.env.USERPROFILE;
 beforeEach(() => {
   if (ORIGINAL_CONFIG_DIR === undefined) delete process.env.CLAUDE_CONFIG_DIR;
   else process.env.CLAUDE_CONFIG_DIR = ORIGINAL_CONFIG_DIR;
   vi.restoreAllMocks();
 });
+afterEach(() => {
+  if (ORIGINAL_USERPROFILE === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = ORIGINAL_USERPROFILE;
+});
 
-describe('QF-013 — fallback is per-profile or nothing', () => {
-  it('returns null when CLAUDE_CONFIG_DIR is unset, rather than reading the host-global config', () => {
-    // THE LOAD-BEARING ASSERTION. Reading ~/.claude.json here would make every seat on the host
-    // report the same account and would look correct until the fleet splits across accounts.
+describe('QF-013 / FR-3 — profile-scoped or host-default, never a mismatch', () => {
+  it('FR-3: resolves via the host-default config when CLAUDE_CONFIG_DIR is unset (was: unconditional null)', () => {
     delete process.env.CLAUDE_CONFIG_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr3-hostdefault-'));
+    writeClaudeJson(dir, { email: 'host-default@example.com', org: 'HostOrg', uuid: 'aaaaaaaa-1111-2222-3333-444444444444' });
+    process.env.USERPROFILE = dir;
     const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
       throw new Error('claude CLI unavailable');
     });
-    expect(resolveAccountIdentity()).toBeNull();
+    const got = resolveAccountIdentity();
     spy.mockRestore();
+    expect(got).toMatchObject({
+      account_email: 'host-default@example.com',
+      account_org_name: 'HostOrg',
+      account_uuid8: 'aaaaaaaa',
+      account_auth_method: 'host_default',
+    });
+  });
+
+  it('REGRESSION GUARD: with CLAUDE_CONFIG_DIR set, the scoped profile resolves — the host-default fallback never contaminates it, even when a DIFFERENT host-default identity exists', () => {
+    const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr3-profile-'));
+    writeClaudeJson(profileDir, { email: 'profile-seat@example.com', org: 'ProfileOrg', uuid: 'bbbbbbbb-1111-2222-3333-444444444444' });
+    const hostDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr3-hostdefault-decoy-'));
+    writeClaudeJson(hostDir, { email: 'WRONG-host-default@example.com', org: 'WrongOrg', uuid: 'cccccccc-1111-2222-3333-444444444444' });
+    process.env.CLAUDE_CONFIG_DIR = profileDir;
+    process.env.USERPROFILE = hostDir; // must NEVER be read while CLAUDE_CONFIG_DIR is set
+    const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
+      throw new Error('claude CLI unavailable');
+    });
+    const got = resolveAccountIdentity();
+    spy.mockRestore();
+    expect(got).toMatchObject({
+      account_email: 'profile-seat@example.com',
+      account_org_name: 'ProfileOrg',
+      account_uuid8: 'bbbbbbbb',
+      account_auth_method: 'config_dir',
+    });
   });
 
   it('CONTROL — with CLAUDE_CONFIG_DIR set to a real profile, the fallback DOES resolve', () => {
     // Without this, the assertion above passes just as well on a fallback that never works at all.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qf013-'));
-    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
-      oauthAccount: { emailAddress: 'seat@example.com', organizationName: 'Org', accountUuid: 'abcdefgh-1111-2222-3333-444444444444' },
-    }));
+    writeClaudeJson(dir, { email: 'seat@example.com', org: 'Org', uuid: 'abcdefgh-1111-2222-3333-444444444444' });
     process.env.CLAUDE_CONFIG_DIR = dir;
     const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
       throw new Error('claude CLI unavailable');
@@ -69,11 +111,31 @@ describe('QF-013 — fallback is per-profile or nothing', () => {
     expect(got).toMatchObject({ account_email: 'seat@example.com', account_org_name: 'Org' });
   });
 
+  it('FR-2: when the CLI path resolves (loggedIn:true, no uuid field), account_uuid8 is filled from the file-based reader at the SAME scoped path', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr2-cli-'));
+    writeClaudeJson(dir, { email: 'cli-seat@example.com', org: 'CliOrg', uuid: 'dddddddd-1111-2222-3333-444444444444' });
+    process.env.CLAUDE_CONFIG_DIR = dir;
+    const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => JSON.stringify({
+      loggedIn: true,
+      email: 'cli-seat@example.com', // CLI's own answer, authoritative for email/org
+      orgName: 'CliOrg',
+      orgId: null,
+      subscriptionType: null,
+      authMethod: 'claude.ai',
+      // note: no uuid-shaped field anywhere in the CLI's JSON — never has one.
+    }));
+    const got = resolveAccountIdentity();
+    spy.mockRestore();
+    expect(got).toMatchObject({
+      account_email: 'cli-seat@example.com',
+      account_auth_method: 'claude.ai', // came from the CLI path, not the file fallback
+      account_uuid8: 'dddddddd',        // filled from the file read at the same scoped dir
+    });
+  });
+
   it('does not invent org_id / subscription_type the oauthAccount never carried', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qf013-'));
-    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
-      oauthAccount: { emailAddress: 'seat@example.com', organizationName: 'Org', accountUuid: 'abcdefgh-1111-2222-3333-444444444444' },
-    }));
+    writeClaudeJson(dir, { email: 'seat@example.com', org: 'Org', uuid: 'abcdefgh-1111-2222-3333-444444444444' });
     process.env.CLAUDE_CONFIG_DIR = dir;
     const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
       throw new Error('nope');
@@ -86,8 +148,12 @@ describe('QF-013 — fallback is per-profile or nothing', () => {
 });
 
 describe('QF-013 — darkness is recorded', () => {
-  it('stamps account_unresolved_at when nothing resolves, and writes NO identity fields', async () => {
+  it('stamps account_unresolved_at when nothing resolves (CLI fails AND the host-default file is unreadable), and writes NO identity fields', async () => {
     delete process.env.CLAUDE_CONFIG_DIR;
+    // An empty temp dir as USERPROFILE => no .claude.json => host-default read also fails,
+    // so this stays a genuine "nothing resolved" case under FR-3, deterministically.
+    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr3-empty-'));
+    process.env.USERPROFILE = emptyDir;
     const spy = vi.spyOn(require('node:child_process'), 'execSync').mockImplementation(() => {
       throw new Error('claude CLI unavailable');
     });
