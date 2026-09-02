@@ -490,3 +490,53 @@ describe('the G2 acceptance battery is reachable (TS-9, FR-4)', () => {
     expect(readFileSync(g2, 'utf8')).toMatch(/feedback_feedback_type_check/);
   });
 });
+
+describe('main() CI clean-skip (QF-20260901-972) — the DATABASE_URL guard never touches the DB', () => {
+  // SOURCE PIN, not a live run: the ordinary unit-test CI job also runs under GITHUB_ACTIONS=true
+  // with no real DATABASE_URL (it mocks createDatabaseClient instead, in the FR-3 sibling suite),
+  // so live-executing main() here with GITHUB_ACTIONS='true' would hit the SAME guard this QF
+  // itself has to exclude with !process.env.VITEST -- and Vitest always sets VITEST='true' for
+  // every test run, this file included, so that exclusion cannot be exercised from inside a test
+  // without faking the very env var vitest relies on. Assert the guard's shape in the source instead.
+  const src = readFileSync(join(REPO, 'scripts', 'anon-write-contract-probe.mjs'), 'utf8');
+  const guardLine = src.split('\n').find((l) => /if \(process\.env\.GITHUB_ACTIONS/.test(l));
+
+  it('the guard exists and checks CI, a missing secret, and non-test invocation together', () => {
+    expect(guardLine).toBeTruthy();
+    expect(guardLine).toMatch(/GITHUB_ACTIONS === 'true'/);
+    expect(guardLine).toMatch(/!process\.env\.DATABASE_URL/);
+  });
+
+  it('excludes VITEST — the unit-test CI job runs under GITHUB_ACTIONS=true with no DATABASE_URL too, and must NOT skip', () => {
+    expect(guardLine).toMatch(/!process\.env\.VITEST/);
+  });
+
+  it('returns EXIT.OK from inside the guard, matching the exported exit-code contract', () => {
+    const guardIdx = src.indexOf(guardLine);
+    const guardBlock = src.slice(guardIdx, src.indexOf('}', guardIdx) + 1);
+    expect(guardBlock).toMatch(/return EXIT\.OK;/);
+  });
+});
+
+describe('main() discovery-mode zero-buildable-candidates is advisory, not a failure (QF-20260901-972)', () => {
+  // SOURCE PIN, not a live run (this repo's tests never touch a real DB - see file header): proves
+  // the `worst = EXIT.PROBE_INCONCLUSIVE` assignment inside the `if (!targets.length)` discovery
+  // block is gone, while the surrounding UNPROBED diagnostic logging above it is untouched, and the
+  // explicit `--table X` failure path inside probeTable() (a different code path entirely, still
+  // returning EXIT.PROBE_INCONCLUSIVE) is unaffected.
+  const src = readFileSync(join(REPO, 'scripts', 'anon-write-contract-probe.mjs'), 'utf8');
+  const blockStart = src.indexOf('if (!targets.length) {');
+  const zeroCandidatesBlock = src.slice(blockStart, src.indexOf('} catch (err) {', blockStart));
+
+  it('no longer downgrades worst to PROBE_INCONCLUSIVE for the discovery zero-candidates case', () => {
+    expect(zeroCandidatesBlock).not.toMatch(/worst\s*=\s*EXIT\.PROBE_INCONCLUSIVE/);
+  });
+
+  it('still logs the advisory line so a silent-pass reads no differently than before in the log', () => {
+    expect(zeroCandidatesBlock).toMatch(/no target had a row builder/);
+  });
+
+  it('the explicit --table request path (probeTable) still returns PROBE_INCONCLUSIVE for no builder', () => {
+    expect(src).toMatch(/NO ROW BUILDER.*PROBE_INCONCLUSIVE|PROBE_INCONCLUSIVE,\s*unprobed:\s*true/s);
+  });
+});

@@ -10,13 +10,35 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../../../../lib/eva/devils-advocate.js', () => ({
+// QF-20260902-181: real computeContentHash/buildCritiqueUserPrompt run unmocked (pure,
+// deterministic — the retry guard needs a REAL hash to compare against, not a stub), only
+// critiquePlanProposal itself (the LLM call) stays mocked.
+vi.mock('../../../../../../lib/eva/devils-advocate.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   COULD_NOT_CHECK: 'could_not_check',
   critiquePlanProposal: vi.fn(),
 }));
 
-import { critiquePlanProposal } from '../../../../../../lib/eva/devils-advocate.js';
+import { critiquePlanProposal, computeContentHash, buildCritiqueUserPrompt } from '../../../../../../lib/eva/devils-advocate.js';
+import { getOpenAIModel } from '../../../../../../lib/config/model-config.js';
 import { createPrePlanCritiqueGate, validatePrePlanCritique } from './pre-plan-critique.js';
+
+// QF-20260902-181: the exact content_hash validatePrePlanCritique will compute for NEUTRAL_PRD
+// (no arch_key on SD -> archContent='', archLoadStatus='not_found') — mirrors the gate's own
+// prdSections construction so the retry-guard tests can plant a matching prior "last block" row.
+function neutralRetryHash() {
+  const prdSections = {
+    executive_summary: NEUTRAL_PRD.executive_summary,
+    functional_requirements: NEUTRAL_PRD.functional_requirements,
+    acceptance_criteria: NEUTRAL_PRD.acceptance_criteria,
+    test_scenarios: NEUTRAL_PRD.test_scenarios,
+    risks: NEUTRAL_PRD.risks,
+    system_architecture: undefined,
+    implementation_approach: undefined,
+  };
+  const { prdRawText, archRawText } = buildCritiqueUserPrompt({ prdContent: prdSections, archContent: '', sdContext: {} });
+  return computeContentHash({ prdRawText, archRawText, archLoadStatus: 'not_found', model: getOpenAIModel('validation') });
+}
 
 // Neutral PRD content: no invariant-library trigger vocabulary, so only the mocked LLM
 // findings drive the verdict unless a test opts in.
@@ -194,6 +216,40 @@ describe('gate promotion (FR-1)', () => {
     expect(result.score).toBe(0);
     expect(result.warnings.join(' ')).toMatch(/SCHEMA MISSING on override lookup/);
     expect(result.warnings.join(' ')).toMatch(/NOT evidence that no override was ever recorded/);
+  });
+
+  // QF-20260902-181: 23 handoffs in the 7-day cohort retried 4-5x within minutes on unchanged
+  // content, each an independent LLM call. The guard refuses re-execute while content_hash
+  // matches the last blocking verdict and no override applies — replaying the prior findings
+  // without ever calling the LLM, and still persisting a row (never a silent skip).
+  it('refuses re-execute and replays prior findings when content_hash is unchanged since the last block, without calling critiquePlanProposal', async () => {
+    const priorFindings = [{ severity: 'block', category: 'missing_criteria', message: 'untestable', location: 'PRD' }];
+    // override_reason/override_by are '' (not omitted) so the shared blind mock's own
+    // findActiveOverride loop correctly reads this row as NOT an override (see makeSupabase's
+    // own note on why the loop needs a real empty string, not undefined, to `continue`).
+    const supabase = makeSupabase({
+      overrideRows: [{ id: 'crit-prev', content_hash: neutralRetryHash(), findings: priorFindings, model_used: 'gpt-5.4', created_at: '2026-09-01T00:00:00Z', override_reason: '', override_by: '' }],
+    });
+    const result = await validatePrePlanCritique({ sd: SD, supabase });
+    expect(critiquePlanProposal).not.toHaveBeenCalled();
+    expect(result.pass).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.issues.join(' ')).toMatch(/Re-execute refused.*content_hash unchanged/);
+    expect(supabase._inserted).toHaveLength(1);
+    expect(supabase._inserted[0].findings).toBe(priorFindings);
+    expect(supabase._inserted[0].metadata.retry_refused).toBe(true);
+    expect(supabase._inserted[0].metadata.replayed_from).toBe('crit-prev');
+  });
+
+  it('does NOT refuse re-execute when an active override exists for the current content_hash, even though the last verdict was block', async () => {
+    critiquePlanProposal.mockResolvedValue({
+      findings: [], overall_severity: 'pass', model_used: 'test-model', token_usage: null,
+    });
+    const supabase = makeSupabase({
+      overrideRows: [{ id: 'crit-prev', content_hash: neutralRetryHash(), findings: [], model_used: 'gpt-5.4', created_at: '2026-09-01T00:00:00Z', override_reason: 'AC covered by parent SD', override_by: 'chairman' }],
+    });
+    await validatePrePlanCritique({ sd: SD, supabase });
+    expect(critiquePlanProposal).toHaveBeenCalled();
   });
 
   it('still PASSES clean at 100 (direction 2: promotion did not break the pass path)', async () => {

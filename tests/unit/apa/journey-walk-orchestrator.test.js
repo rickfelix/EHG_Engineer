@@ -113,7 +113,17 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
         { journeyId: 'stp-1', executedAssertions: 1 },
         { journeyId: 'stp-2', executedAssertions: 1 },
       ],
+      // QF-20260902-206: evidence_hash inputs -- real per-outcome + whole-walk hashes, never a
+      // fabricated placeholder. Hash VALUES aren't pinned here (implementation detail of
+      // computeDedupHash); only the real shape (3 hex-sha256 strings: 2 outcomes + 1 whole-walk).
+      evidenceManifest: {
+        integrity: { artifact_hashes: expect.arrayContaining([expect.stringMatching(/^[0-9a-f]{64}$/)]) },
+        test_run: 'run-1',
+      },
+      deploymentSha: expect.any(String),
     });
+    const [, controlPackEvidenceArg] = deps.completeSession.mock.calls[0];
+    expect(controlPackEvidenceArg.evidenceManifest.integrity.artifact_hashes).toHaveLength(3); // 2 outcomes + 1 whole-walk
     expect(teardown).toHaveBeenCalledTimes(1);
 
     expect(result.status).toBe('fail'); // completedAllSteps: false

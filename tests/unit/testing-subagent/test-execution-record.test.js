@@ -7,14 +7,14 @@ import { describe, it, expect } from 'vitest';
 import { buildTestExecution, isMeasuredExecution } from '../../../lib/sub-agents/testing/test-execution-record.js';
 
 describe('buildTestExecution', () => {
-  it('builds the canonical 6-field shape', () => {
-    const te = buildTestExecution({ executed: 10, passed: 8, failed: 2, skipped: 0, artifactSha: 'abc123', runner: 'vitest' });
-    expect(te).toEqual({ tests_executed: 10, tests_passed: 8, tests_failed: 2, tests_skipped: 0, artifact_sha: 'abc123', runner: 'vitest' });
+  it('builds the canonical 8-field shape', () => {
+    const te = buildTestExecution({ executed: 10, passed: 8, failed: 2, skipped: 0, artifactSha: 'abc123', runner: 'vitest', artifactPath: '/tmp/report.json', source: 'fresh' });
+    expect(te).toEqual({ tests_executed: 10, tests_passed: 8, tests_failed: 2, tests_skipped: 0, artifact_sha: 'abc123', runner: 'vitest', artifact_path: '/tmp/report.json', source: 'fresh' });
   });
 
   it('defaults to a zeroed, non-measured record when called with no args', () => {
     const te = buildTestExecution();
-    expect(te).toEqual({ tests_executed: 0, tests_passed: 0, tests_failed: 0, tests_skipped: 0, artifact_sha: null, runner: null });
+    expect(te).toEqual({ tests_executed: 0, tests_passed: 0, tests_failed: 0, tests_skipped: 0, artifact_sha: null, runner: null, artifact_path: null, source: null });
     expect(isMeasuredExecution(te)).toBe(false);
   });
 });

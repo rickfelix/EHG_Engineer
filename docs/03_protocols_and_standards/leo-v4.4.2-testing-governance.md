@@ -400,6 +400,71 @@ This is a defense-in-depth addition to the gate documented above, not a replacem
 `checkTestEvidenceFreshness`/`isFresh` still gates which rows are even considered; the artifact
 verification above gates whether a considered row's counts may actually be trusted.
 
+#### Update (SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001): The Writer Now Refuses Unstructured Evidence
+
+Everything above is a *reader*-side defense: it verifies a row's counts before the gate trusts
+them. It cannot stop a TESTING PASS/CONDITIONAL_PASS row from being written with no counts at
+all — prose-only "evidence" (`summary`/`detailed_analysis` text, no structured `test_execution`)
+previously satisfied `storeSubAgentResults()` with zero validation. Live measurement (30-day
+window): 87.1% of TESTING PASS/CONDITIONAL_PASS rows reaching `storeSubAgentResults()` carried
+no `metadata.test_execution` at all.
+
+`lib/sub-agent-executor/testing-verdict-guard.js`'s `validateTestExecutionShape(record)`, called
+from `storeSubAgentResults()` (`lib/sub-agent-executor/results-storage.js`) above both the insert
+and the 5-minute dedup/update branches, now refuses any TESTING `PASS`/`CONDITIONAL_PASS` write
+whose `metadata.test_execution` is missing, has non-numeric/non-finite count fields, or reports
+`tests_executed <= 0` — **unless** the row explicitly declares `metadata.measured === false`
+(reusing `isMeasuredExecution()` from `lib/sub-agents/testing/test-execution-record.js`, TR-1,
+rather than a second shape definition). That exemption exists because this same gate's tiered
+ADVISORY/REQUIRED policy (the "measured === false" branch of §1 above) already owns the decision
+for a genuinely-nothing-to-measure SD (`policy_non_applicable_no_code`,
+`policy_non_applicable_code_no_scoped_test`, `e2e_not_applicable`); the writer must not
+short-circuit that decision by refusing the honest row before it ever reaches the gate. The
+`isAdvisoryMode`/`REQUIRED` branch at §1's line 304-305 independently re-derives `measured` from
+`test_execution` rather than trusting the caller's flag, so a row cannot abuse the exemption to
+fake an unmeasured-but-honest verdict past the gate (verified adversarially, an 8-shape abuse
+matrix, during this SD's own EXEC-TO-PLAN review).
+
+Coverage is scoped, not table-wide: only writes reaching `storeSubAgentResults()` are covered.
+Direct-insert writers (`scripts/modules/orchestrator/subagent-execution.js`'s `safeInsert`,
+`lib/sub-agents/regression.js`, `lib/sub-agents/vision-fidelity/index.js`, and similar) bypass
+this guard entirely — a Postgres CHECK/trigger on the jsonb shape would be the way to close that
+remaining ~13% (filed as a `protocol_improvement_queue` candidate, not implemented by this SD).
+`artifact_sha`/`runner` provenance (the "runner-written results file with its hash" arm of
+chairman ratification 6c263823) is likewise not implemented here — this guard raises the bar from
+prose to structured numbers, not to producer/hash provenance.
+
+This is a defense-in-depth addition alongside the reader-side checks above, not a replacement:
+the writer refuses structurally-empty evidence before it is ever persisted; the reader-side
+freshness/artifact/provenance checks then govern what a persisted, well-formed row is trusted to
+mean.
+
+#### Update (SD-LEARN-FIX-LEARNING-IMPROVEMENT-005): artifact_sha/runner Are Now Populated on Write -- Still Unread
+
+The paragraph above notes that ratification 6c263823's provenance arm was "not implemented" by
+the prior SD -- `metadata.test_execution.artifact_sha`/`.runner` existed on the canonical shape
+(`buildTestExecution()`) but were never populated with real values on the mainline execution
+path, and nothing read them.
+
+`buildMainlinePhase3TestExecution()` (`lib/sub-agents/testing/index.js`) now stamps real
+provenance on a fresh Playwright run -- `artifact_path` (the on-disk report path),
+`artifact_sha` (hashed via the existing `computeArtifactSha()`/an inline single-read
+equivalent, `lib/sub-agents/testing/artifact-verification.js` -- never a second implementation),
+and `source:'fresh'`. A reused/cached run (`evidence_reused` or the older, co-equal `from_cache`
+signal -- see `phase5-verdict.js:171,201`) reuses the ALREADY-verified hash from the
+evidence-reuse fastpath as-is (`source:'reused'`), so a cached artifact's hash can never be
+presented as if it came from a fresh run. A multi-repo aggregate (array `report_url`) omits
+provenance entirely rather than misrepresenting which repo it verifies.
+
+**The gate-side half is still not implemented.** A fail-soft hash-verification check in
+`mandatory-testing-validation.js` (reusing the existing `isReportHashMismatch()`) was scoped
+for this same SD but deliberately deferred -- a different, concurrently-open PR (#7978,
+SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012) occupies the exact insertion point it needs.
+Tracked as `protocol_improvement_queue` id `242c0a5a-c36a-4013-950f-e661da8f68b4`, blocked on
+that PR merging. Until it lands, `artifact_path`/`artifact_sha`/`source` remain write-only:
+populated on new rows, but still read by nothing -- do not treat the write-side alone as having
+closed ratification 6c263823's provenance requirement.
+
 ---
 
 ### 3. Schema Context Loader
@@ -804,6 +869,8 @@ npm run schema:docs:all
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 4.4.3 | 2026-09-02 | artifact_path/artifact_sha/source provenance stamping on TESTING evidence; gate-side hash-verification read still deferred (SD-LEARN-FIX-LEARNING-IMPROVEMENT-005) |
+| 4.4.3 | 2026-09-02 | Writer-side guard refuses TESTING PASS/CONDITIONAL_PASS rows missing a genuine test_execution block (SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001) |
 | 4.4.3 | 2026-01-22 | Dynamic type-aware TESTING validation with git diff code detection (SD-LEO-TESTING-ENFORCEMENT-001) |
 | 4.4.2 | 2026-01-05 | Testing governance gates, schema context loader, retro test metrics |
 | 4.3.3 | 2025-12-XX | UI parity governance |

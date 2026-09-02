@@ -5,6 +5,7 @@
 
 - [2026-09-02](#2026-09-02)
   - [Infrastructure](#infrastructure-5)
+  - [Bugfix](#bugfix)
 - [2026-09-01](#2026-09-01)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -175,6 +176,16 @@
 
 ### Infrastructure
 
+- **Stamp real artifact_path/artifact_sha/source provenance on TESTING evidence writes** - SD-LEARN-FIX-LEARNING-IMPROVEMENT-005
+  - Ratification 6c263823's provenance arm (`metadata.test_execution.artifact_sha`/`.runner`) existed on the canonical `buildTestExecution()` shape but was never populated with real values on the mainline Playwright execution path, and nothing read it.
+  - `buildMainlinePhase3TestExecution()` (`lib/sub-agents/testing/index.js`) now stamps `artifact_path`, `artifact_sha` (hashed via `computeArtifactSha()`/an inline single-read equivalent, never a second implementation), and `source:'fresh'|'reused'` on a fresh or reused/cached run; a reused run reuses the already-verified hash from the evidence-reuse fastpath rather than recomputing it, and a multi-repo aggregate (array `report_url`) omits provenance entirely rather than misattributing it to one repo.
+  - Fixed a TOCTOU split-read (SEC-1, caught by EXEC-phase SECURITY review): the fresh-run hash is now computed at the single existing report-parse site in `phases/phase3-execution.js` instead of re-reading the artifact file a second time in `index.js`.
+  - Also fixed a recurred `evidence_reused`-vs-`from_cache` discriminator gap (caught by EXEC-phase TESTING review, matching a defect class this CHANGELOG records as having shipped once before) — both signals are now checked.
+  - **Gate-side read still deferred**: a fail-soft hash-verification check in `mandatory-testing-validation.js` was scoped for this SD but not implemented — a concurrently-open PR (#7978) occupies the exact insertion point. Tracked as `protocol_improvement_queue` id `242c0a5a-c36a-4013-950f-e661da8f68b4`, blocked on that PR merging. Until it lands, these fields are write-only.
+
+- **Document the writer-side test_execution guard** - SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001
+  - Catch-up doc entry: the writer (`storeSubAgentResults`) refuses TESTING PASS/CONDITIONAL_PASS rows missing a genuine `test_execution` block, closing the gap where a verdict could claim a pass with zero evidence of tests actually having run. See `docs/03_protocols_and_standards/leo-v4.4.2-testing-governance.md`.
+
 - **Retire seat-tier dispatch enforcement fleet-wide** - SD-FDBK-INFRA-RETIRE-SEAT-TIER-001
   - Per chairman ratification 20dc072b: any fleet seat may now claim/dispatch any belt item regardless of tier rank — `assertWorkerTierAllowed` (the WORK-DOWN-NEVER-UP guard in `lib/coordinator/dispatch.cjs`) and `enforceTierGate` (`scripts/sd-start.js`) are deleted, not stubbed.
   - `lib/fleet/claim-eligibility.cjs`'s `classifyDispatchIneligibility` can no longer emit `above_worker_tier`, `tier_stamp_missing`, or `reserved_no_lower_backlog`; the two still-live fenced axes (`unverified_seat_capability`, `fable_window_downward_claim_blocked`) are untouched.
@@ -194,6 +205,14 @@
   - New `lib/env-resolver.cjs` (`resolveEnvPath`) resolves the main worktree's root first via `git rev-parse --git-common-dir`, falling back to the old ancestor-walk only when the main root genuinely has no `.env` there (preserves today's behavior for a repo with no `.env` anywhere, verified for the altifyai venture repo).
   - Also fixes `lib/supabase-client.cjs`'s missing `quiet: true` on `dotenv.config()` (was printing its "injected env" banner to stdout, contaminating `--json` CLI output); removes `scripts/sd-start.js`'s own now-redundant direct `dotenv.config()` call.
   - New ESLint `no-restricted-imports`/`no-restricted-syntax` rules ban new direct `dotenv` imports (both `import` and CJS `require()`) under `lib/`, with a generated ratchet allowlist grandfathering the ~175 pre-existing importers — full migration deferred to a follow-up SD.
+
+### Bugfix
+
+- **Fix chronic housekeeping-weekly-report CRLF stash conflict** - QF-20260901-018 / SD-LEO-FIX-HOUSEKEEPING-WEEKLY-REPORT-001
+  - `lib/agents/venture-ceo-factory.js` and 3 `scripts/archive/one-time/*.js` files were declared `eol=lf` in `.gitattributes` but stored CRLF/mixed in the git index, never renormalized after that rule was added — `peter-evans/create-pull-request@v6`'s internal stash/checkout/pop choreography (used by `.github/workflows/housekeeping-weekly-report.yml`) hit a CRLF-normalization warning on checkout, then failed the pop with a real merge conflict. Root cause confirmed directly from the failing run's log, not assumed.
+  - Renormalized the 3 unfenced files (`git add --renormalize`); the 4th, `lib/agents/venture-ceo-factory.js`, was deliberately left CRLF — it's held by a live, unrelated FR-6 scope fence (`tests/unit/spine-verify-first-teardown.test.js`) that would trip on a change altering no real content.
+  - Both `eol` ratchet-test baselines (`tests/fixtures/eol-mixed-crlf-baseline.txt`, `tests/static-guards/eol-mixed-crlf-ratchet.test.js`'s `EXPECTED_BASELINE_SIZE`) updated from 4 known violations to 1.
+  - Live-verified: a manually-triggered `workflow_dispatch` run completed successfully with no CRLF warning, contrasted against the prior failing run.
 
 ## 2026-09-01
 

@@ -977,23 +977,56 @@ async function fetchDurationsByType(sb) {
   }
 }
 
-// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C: in-flight (not yet completed) SDs, for the
-// duration-baseline breach check. Excludes orchestrator parents (their own children carry the
-// real elapsed-time signal) and draft SDs (not yet actively worked, so no clock has started).
-async function fetchInFlightItems(sb) {
+// QF-20260902-588: pure per-row predicate + clock, kept out of fetchInFlightItems so
+// tests/unit/adam can exercise them without a DB. "Work underway" is the SD_STATUSES enum
+// (lib/constants/status-definitions.ts) minus {completed, cancelled, draft, on_hold, deferred,
+// pending_approval} -- which reduces to exactly {active, in_progress} -- never a hand list.
+const WORK_UNDERWAY_STATUSES = new Set(['active', 'in_progress']);
+
+/** True iff `row` carries an enforced hold field, even when status reads active. */
+export function hasEnforcedHold(row) {
+  const m = row?.metadata;
+  return !!(m && (m.needs_coordinator_review === true || m.requires_human_action));
+}
+
+/** First claim timestamp (ms) from metadata.claim_history[0], or null. */
+export function firstClaimAtMs(row) {
+  const at = row?.metadata?.claim_history?.[0]?.claimed_at;
+  const t = at ? Date.parse(at) : NaN;
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Elapsed-time clock start: first claim stamp, else created_at (labelled). */
+export function resolveWorkClock(row, createdAtMs) {
+  const claimedMs = firstClaimAtMs(row);
+  return claimedMs !== null
+    ? { startMs: claimedMs, clockSource: 'first_claim' }
+    : { startMs: createdAtMs, clockSource: 'created_at' };
+}
+
+// SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C (population + clock fixed QF-20260902-588):
+// in-flight SDs for the duration-baseline breach check. Excludes orchestrator parents, draft
+// SDs, any status not meaning work is underway (on_hold/deferred/pending_approval), and any
+// row carrying an enforced hold field even when status is active. Elapsed clocks from first
+// claim, not created_at (a row can sit in draft/queue for weeks before its first claim).
+export async function fetchInFlightItems(sb) {
   try {
     const { data, error } = await sb
       .from('strategic_directives_v2')
-      .select('sd_key, sd_type, created_at')
-      .not('status', 'in', '("completed","cancelled","draft")')
+      .select('sd_key, sd_type, status, created_at, metadata')
       .not('sd_type', 'is', null)
       .is('parent_sd_id', null)
       .limit(500);
     if (error || !data) return [];
     return data
-      .filter((r) => r.sd_type !== 'orchestrator')
-      .map((r) => ({ sd_key: r.sd_key, sd_type: r.sd_type, createdAtMs: Date.parse(r.created_at) }))
-      .filter((r) => Number.isFinite(r.createdAtMs));
+      .filter((r) => r.sd_type !== 'orchestrator' && WORK_UNDERWAY_STATUSES.has(r.status) && !hasEnforcedHold(r))
+      .map((r) => {
+        const createdAtMs = Date.parse(r.created_at);
+        if (!Number.isFinite(createdAtMs)) return null;
+        const { startMs, clockSource } = resolveWorkClock(r, createdAtMs);
+        return { sd_key: r.sd_key, sd_type: r.sd_type, workStartMs: startMs, clockSource };
+      })
+      .filter(Boolean);
   } catch {
     return [];
   }
@@ -1201,14 +1234,14 @@ async function main() {
       const nowMs = Date.now();
       for (const item of inFlight) {
         const baseline = baselines[item.sd_type];
-        const { breached, ratio } = classifyDurationBreach({ elapsedMs: nowMs - item.createdAtMs, baseline });
+        const { breached, ratio } = classifyDurationBreach({ elapsedMs: nowMs - item.workStartMs, baseline });
         const { tier, nextBreached } = nextEscalationTier({ breached, priorBreached: !!priorDurationBreaches[item.sd_key] });
         if (nextBreached) nextBreaches[item.sd_key] = true;
         if (tier !== 'none') {
-          const elapsedH = ((nowMs - item.createdAtMs) / 3600000).toFixed(1);
+          const elapsedH = ((nowMs - item.workStartMs) / 3600000).toFixed(1);
           const p95H = baseline && Number.isFinite(baseline.p95) ? (baseline.p95 / 3600000).toFixed(1) : '?';
           durationBreachLines.push(
-            `QUIET_TICK_DURATION_BASELINE_BREACH=adam sd_key=${item.sd_key} sd_type=${item.sd_type} elapsed_h=${elapsedH} p95_h=${p95H} ratio=${ratio ? ratio.toFixed(2) : '?'} n=${baseline.n} escalated=${tier === 'second'} — in-flight item running past its type's p95 baseline (flag, not fail; investigate worker health)${tier === 'second' ? ' — 2nd consecutive tick, Solomon-visible' : ''}.`
+            `QUIET_TICK_DURATION_BASELINE_BREACH=adam sd_key=${item.sd_key} sd_type=${item.sd_type} elapsed_h=${elapsedH} p95_h=${p95H} ratio=${ratio ? ratio.toFixed(2) : '?'} n=${baseline.n} escalated=${tier === 'second'} clock=${item.clockSource} — in-flight item running past its type's p95 baseline (flag, not fail; investigate worker health)${tier === 'second' ? ' — 2nd consecutive tick, Solomon-visible' : ''}.`
           );
         }
       }
