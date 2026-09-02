@@ -25,7 +25,7 @@ vi.mock('../../../lib/apa/imap-code-fetcher.js', () => ({
   fetchVerificationCodeDetailed: vi.fn(),
 }));
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, buttonTexts = ['Continue'] } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, buttonTexts = ['Continue'], bodyText = '' } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
   return {
@@ -83,6 +83,10 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
         // .first() scopes to a single node in real Playwright (avoiding a strict-mode
         // violation on a multi-match locator) -- for this fixture it's a same-shape no-op.
         first() { return locator; },
+        // QF-20260902-512 re-keyed STEP 1: only page.locator('body').innerText() is ever
+        // called by the source module (a generic post-submit-state snapshot on the "neither"
+        // auth failure) -- this fixture just echoes the configured bodyText.
+        innerText: async () => bodyText,
       };
       return locator;
     },
@@ -765,5 +769,25 @@ describe('buildStepExecutor() fallback — authProviderTestMode (QF-20260902-512
     expect(caught.retrievalPath).toBe('imap');
     expect(caught.authMode).toBe('mailbox_otp');
     expect(caught.mailboxCensus).toBe(4);
+  });
+
+  it('re-keyed STEP 1 (Adam 2026-09-02T09:59:55Z): when neither the code challenge nor an authenticated signal appears, the thrown error carries a generic post-submit page-text snapshot -- never a guessed Clerk-specific selector', async () => {
+    vi.useFakeTimers();
+    try {
+      registerVenture('AUTHMODEVENTURE', { authProviderTestMode: 'clerk_development' });
+      const executor = buildStepExecutor(step, 'AUTHMODEVENTURE');
+      const page = makeMockPage({
+        locatorCounts: { [TOGGLE]: 1 },
+        currentUrl: 'http://fixture/sign-in', // matches NOT_YET_AUTHENTICATED_PATH_RE -- authedDirect must read false
+        bodyText: 'Too many requests. Please try again later.',
+      });
+
+      const assertion = expect(executor(page, {}, { baseUrl: 'http://fixture', authenticated: false }))
+        .rejects.toThrow(/neither a verification-code challenge nor an authenticated-state signal.*Too many requests/s);
+      await vi.advanceTimersByTimeAsync(16000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
