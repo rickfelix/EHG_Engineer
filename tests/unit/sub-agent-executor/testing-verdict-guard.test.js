@@ -37,6 +37,25 @@ describe('validateTestExecutionShape (pure function)', () => {
       .toThrow(/not a genuine measured run/);
   });
 
+  it('D1 (TESTING sub-agent evidence 4e655ac0): an honest metadata.measured===false PASS is accepted, not refused', () => {
+    // Mirrors lib/sub-agents/testing/index.js's policy_non_applicable_no_code /
+    // policy_non_applicable_code_no_scoped_test / e2e_not_applicable branches: a real,
+    // deliberately-designed all-zeros test_execution paired with an explicit measured:false.
+    const zero = buildTestExecution();
+    expect(() => validateTestExecutionShape({
+      sub_agent_code: 'TESTING', verdict: 'PASS', metadata: { measured: false, test_execution: zero }
+    })).not.toThrow();
+    expect(() => validateTestExecutionShape({
+      sub_agent_code: 'TESTING', verdict: 'CONDITIONAL_PASS', metadata: { measured: false, test_execution: zero }
+    })).not.toThrow();
+  });
+
+  it('D1: a zero-executed test_execution WITHOUT an explicit measured:false is still refused', () => {
+    const zero = buildTestExecution();
+    expect(() => validateTestExecutionShape({ sub_agent_code: 'TESTING', verdict: 'PASS', metadata: { test_execution: zero } }))
+      .toThrow(/not a genuine measured run/);
+  });
+
   it('TS-4: a non-TESTING sub-agent code is completely unaffected, regardless of verdict/metadata', () => {
     expect(() => validateTestExecutionShape({ sub_agent_code: 'SECURITY', verdict: 'PASS', metadata: {} })).not.toThrow();
     expect(() => validateTestExecutionShape({ sub_agent_code: 'VALIDATION', verdict: 'CONDITIONAL_PASS', metadata: {} })).not.toThrow();
@@ -46,6 +65,27 @@ describe('validateTestExecutionShape (pure function)', () => {
     for (const verdict of ['ERROR', 'FAIL', 'WARNING', 'MANUAL_REQUIRED']) {
       expect(() => validateTestExecutionShape({ sub_agent_code: 'TESTING', verdict, metadata: {} }), verdict).not.toThrow();
     }
+  });
+});
+
+describe('D1 end-to-end: the real policy_non_applicable_no_code branch survives the guard', () => {
+  it('checkForNonUISdType(documentation SD) output passes validateTestExecutionShape unmodified', async () => {
+    const { checkForNonUISdType } = await import('../../../lib/sub-agents/testing/index.js');
+    const mockSupabaseClient = {
+      from: () => ({
+        select: () => ({
+          or: () => ({
+            single: async () => ({ data: { sd_type: 'documentation', category: null, key_changes: [], scope: '', title: 'x' } })
+          })
+        })
+      })
+    };
+    const result = await checkForNonUISdType('SD-TEST-DOC-001', 'prospective', {}, {}, mockSupabaseClient);
+    expect(result.verdict).toBe('PASS');
+    expect(result.metadata.measured).toBe(false);
+    expect(() => validateTestExecutionShape({
+      sub_agent_code: 'TESTING', verdict: result.verdict, metadata: result.metadata
+    })).not.toThrow();
   });
 });
 

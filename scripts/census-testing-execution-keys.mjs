@@ -26,13 +26,16 @@
  *              large to dump unbounded and stay reviewable)
  */
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import { getSupabaseClient } from '../lib/sub-agent-executor/supabase-client.js';
 
 const EXECUTION_KEY_PATTERN = /test|exec|pass|fail|skip|mutat|coverage|assert|spec|suite|e2e|unit|regression/i;
 
 function parseArgs(argv) {
-  const days = Number(argv.find((_, i) => argv[i - 1] === '--days')) || 14;
-  const limit = Number(argv.find((_, i) => argv[i - 1] === '--limit')) || 50;
+  const daysArg = argv.find((_, i) => argv[i - 1] === '--days');
+  const limitArg = argv.find((_, i) => argv[i - 1] === '--limit');
+  const days = daysArg !== undefined && Number.isFinite(Number(daysArg)) ? Number(daysArg) : 14;
+  const limit = limitArg !== undefined && Number.isFinite(Number(limitArg)) ? Number(limitArg) : 50;
   return { days, limit };
 }
 
@@ -80,7 +83,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     console.error('census-testing-execution-keys failed:', err.message);
     process.exit(1);
