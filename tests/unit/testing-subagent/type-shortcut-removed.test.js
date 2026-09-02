@@ -159,7 +159,8 @@ describe('SC#4: measured implies the verdict is never a bare unmeasured PASS', (
     const sb = mockSupabase({ sd_type: 'documentation', category: null, key_changes: [], scope: 'docs only', title: 'x' });
     const result = await checkForNonUISdType('sd-5', 'prospective', {}, null, sb);
     expect(result.metadata.test_execution).toEqual({
-      tests_executed: 0, tests_passed: 0, tests_failed: 0, tests_skipped: 0, artifact_sha: null, runner: null
+      tests_executed: 0, tests_passed: 0, tests_failed: 0, tests_skipped: 0, artifact_sha: null, runner: null,
+      artifact_path: null, source: null
     });
   });
 });
