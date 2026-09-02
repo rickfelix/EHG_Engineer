@@ -189,6 +189,11 @@
   - `scripts/context-ceiling-check.mjs` provides the same enforcement as a role-agnostic CLI for a seat (Solomon) with no dedicated tick script to wire directly — see `docs/protocol/context-ceiling-enforcement.md`.
   - The per-handoff cost metric (weekly quota percent consumed per completed handoff, per named account) was descoped from this SD: no session-to-named-account attribution surface exists today (`claude_sessions` carries no account column; `leo_handoff_executions.created_by` gives the real session id but nothing joins it to an account) — deferred to a follow-up SD.
   - 28 new unit tests across 4 files.
+- **Resolve `.env` secrets from the main worktree, not a stale worktree snapshot** - SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001
+  - `propagateEnvFile` copies the root `.env` into every new git worktree at creation time, so a worktree carries a snapshot, not a live view. `lib/supabase-client.js`/`.cjs`'s env loader walked up from `process.cwd()` and stopped at the first `.env` found — inside a worktree that was always the stale copy, so a secret rotated at the root never reached a worker running from a worktree until its next claim/checkin re-attach.
+  - New `lib/env-resolver.cjs` (`resolveEnvPath`) resolves the main worktree's root first via `git rev-parse --git-common-dir`, falling back to the old ancestor-walk only when the main root genuinely has no `.env` there (preserves today's behavior for a repo with no `.env` anywhere, verified for the altifyai venture repo).
+  - Also fixes `lib/supabase-client.cjs`'s missing `quiet: true` on `dotenv.config()` (was printing its "injected env" banner to stdout, contaminating `--json` CLI output); removes `scripts/sd-start.js`'s own now-redundant direct `dotenv.config()` call.
+  - New ESLint `no-restricted-imports`/`no-restricted-syntax` rules ban new direct `dotenv` imports (both `import` and CJS `require()`) under `lib/`, with a generated ratchet allowlist grandfathering the ~175 pre-existing importers — full migration deferred to a follow-up SD.
 
 ## 2026-09-01
 
