@@ -23,7 +23,8 @@
  * on the SD with no trace of who set it. Folded in while this script has zero production
  * callers -- no compatibility surface to reason about yet.
  *
- * Usage:
+ * Usage (npm alias mirrors sd:reactivate's own convention):
+ *   npm run sd:mark-completion-invalid -- --sd-id <SD-KEY-or-UUID> --reason "<text (min 20 chars)>" [--actor <id>] [--offending-handoff-id <uuid>]
  *   node scripts/mark-completion-evidence-invalid.js --sd-id <SD-KEY-or-UUID> --reason "<text (min 20 chars)>" [--actor <id>] [--offending-handoff-id <uuid>]
  *   node scripts/mark-completion-evidence-invalid.js --help
  */
