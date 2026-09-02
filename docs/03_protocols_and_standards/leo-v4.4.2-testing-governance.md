@@ -1,10 +1,10 @@
 ---
-category: protocol
-status: draft
-version: 1.0.0
-author: Rick Felix
-last_updated: 2026-02-28
-tags: [protocol, auto-generated]
+Category: Protocol
+Status: Draft
+Version: 1.0.0
+Author: Rick Felix
+Last Updated: 2026-09-02
+Tags: [protocol, auto-generated]
 ---
 # LEO Protocol v4.4.2/v4.4.3 - Testing Governance Enhancement
 
@@ -370,6 +370,35 @@ The gate automatically:
 # Default: 60 minutes
 export LEO_TEST_EVIDENCE_MAX_AGE_MINUTES=60
 ```
+
+#### Update (SD-FDBK-INFRA-TESTING-EVIDENCE-REUSE-001): Freshness Alone Is No Longer Sufficient
+
+`checkTestEvidenceFreshness`'s `isFresh` flag (above) says a `test_runs`/`sd_testing_status` row exists
+and is recent — it says nothing about whether the row's own `passed_tests`/`failed_tests` counts are
+trustworthy. A hand-written or fabricated row can be fresh and still be false: on 2026-09-01, a row
+claiming 51/51 passed was reused as an unqualified PASS while the real Playwright artifact it pointed
+at showed 481 expected / 1276 unexpected / 1673 skipped.
+
+The TESTING sub-agent's own evidence-reuse fast-path (`lib/sub-agents/testing/index.js`, functions
+`checkTestEvidence` and `checkApiTestEvidence`) now requires more than `isFresh` before it will reuse
+a row's counts instead of running tests:
+
+1. **Artifact verification** — the report file the row points at (`report_file_path` /
+   `test_results.e2e_evidence`) is read and shape-validated (`lib/sub-agents/testing/
+   artifact-verification.js`); a vitest-shaped or malformed report is refused, never coerced.
+2. **Two-sided freshness** — the artifact's own `stats.startTime` must be at/after the evaluated
+   commit's timestamp AND not after the real current time (a fabricated artifact cannot claim an
+   arbitrary future timestamp to trivially pass).
+3. **Runner provenance** — the row's `triggered_by`/`updated_by` must be an allowlisted runner
+   (`PLAYWRIGHT_REPORTER`, `CI_PIPELINE`); a non-allowlisted source caps the verdict at
+   `CONDITIONAL_PASS`, never an unqualified `PASS`.
+4. **Report-hash binding** — the artifact's own sha256 is compared against the row's stored
+   `report_hash`; a mismatch (the row pointing at a different run's artifact) surfaces a non-blocking
+   warning.
+
+This is a defense-in-depth addition to the gate documented above, not a replacement for it —
+`checkTestEvidenceFreshness`/`isFresh` still gates which rows are even considered; the artifact
+verification above gates whether a considered row's counts may actually be trusted.
 
 ---
 

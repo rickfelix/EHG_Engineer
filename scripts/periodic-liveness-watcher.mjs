@@ -241,8 +241,14 @@ async function evaluateRow(row, ctx = {}) {
       return { process_key: row.process_key, state: STATE.UNVERIFIED, reason: 'no_gha_run_data_available' };
     }
     if (decision.decision === 'overdue') {
-      // Latest SCHEDULED run failed -- as dead as a missing one (FR-2 acceptance criteria).
+      // Latest SCHEDULED run failed/timed-out -- as dead as a missing one (FR-2 acceptance criteria).
       return { process_key: row.process_key, state: STATE.OVERDUE, last_fired_at: decision.ranAtIso, reason: 'latest_scheduled_run_failed' };
+    }
+    if (decision.decision === 'unverified_skipped') {
+      // QF-20260901-308: GitHub itself skipped/cancelled the run (e.g. a concurrency-group
+      // supersede) -- the schedule fired (proof-of-run, stamped below) but says nothing about
+      // process liveness either way. Never a false OVERDUE.
+      return { process_key: row.process_key, state: STATE.UNVERIFIED, last_fired_at: decision.ranAtIso, reason: 'latest_scheduled_run_skipped' };
     }
     lastFiredAt = decision.ranAtIso;
   } else if (row.liveness_source === 'claude_sessions_heartbeat') {

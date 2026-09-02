@@ -35,6 +35,11 @@ describe('QF-20260830-454 stampSeatBusyReservation', () => {
     expect(payload.sender_session).toBe('coord-1');
     expect(payload.payload.kind).toBe('seat_busy_reservation');
     expect(new Date(payload.expires_at).getTime()).toBeGreaterThan(Date.now());
+    // QF-20260901-039 regression guard: session_coordination.subject is NOT NULL. This insert
+    // omitted it entirely, so every write failed the column constraint and the seat-busy guard
+    // never actually held a reservation on any WORK_ASSIGNMENT since this stamp was introduced.
+    expect(typeof payload.subject).toBe('string');
+    expect(payload.subject.length).toBeGreaterThan(0);
   });
 
   it('(b) does NOT write for a non-WORK_ASSIGNMENT row', async () => {

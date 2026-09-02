@@ -20,7 +20,7 @@ describe('getSignedOutJourneySteps', () => {
     const steps = getSignedOutJourneySteps('ALTIFYAI');
     expect(steps.length).toBeGreaterThan(0);
     expect(steps.every((s) => s.step_id.startsWith('signed-out:'))).toBe(true);
-    expect(steps.map((s) => s.goal)).toEqual(expect.arrayContaining(['land', 'signupFormRenders', 'uploadScreenAbsent', 'feedbackWidget']));
+    expect(steps.map((s) => s.goal)).toEqual(expect.arrayContaining(['land', 'signupFormRenders', 'uploadRouteReachable', 'feedbackWidget']));
   });
 
   it('returns an empty array for a venture with no registration (never fabricates steps)', () => {
@@ -56,7 +56,7 @@ describe('buildSignedOutStepExecutor', () => {
     const executor = buildSignedOutStepExecutor(landStep, 'ALTIFYAI');
     const page = {
       async goto(url) { this.lastUrl = url; return { status: () => 200 }; },
-      locator() { return { count: async () => 1 }; },
+      locator() { return { count: async () => 1, waitFor: async () => {} }; },
     };
     const result = await executor(page, { type: 'signedOut' }, { baseUrl: 'http://altifyai.fixture' });
     expect(result.url).toBe('http://altifyai.fixture');

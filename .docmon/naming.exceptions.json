@@ -59,6 +59,11 @@
       "example": "LEO_v4.3.3.md"
     },
     {
+      "pattern": "^leo-v\\d+(\\.\\d+)*-.*\\.md$",
+      "reason": "Lowercase LEO Protocol version docs (an established sibling convention to LEO_*.md, already used by 7 files in docs/03_protocols_and_standards/)",
+      "example": "leo-v4.4.2-testing-governance.md"
+    },
+    {
       "pattern": "^CD\\d+-.*\\.md$",
       "reason": "Chairman-decision governance records (the CD<NN> decision-ID prefix is the canonical naming convention)",
       "example": "CD30-cloudflare-default-supersedes-CD15.md"

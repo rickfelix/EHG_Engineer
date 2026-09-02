@@ -7,7 +7,34 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { resolveEvaluatedCommitSha } from '../../../lib/sub-agent-executor/results-storage.js';
+import { resolveEvaluatedCommitSha, resolveCommitTimestamp } from '../../../lib/sub-agent-executor/results-storage.js';
+
+// SD-FDBK-INFRA-TESTING-EVIDENCE-REUSE-001 (FR-3): sibling helper, same injectable-exec /
+// never-throws contract as resolveEvaluatedCommitSha above -- used by the TESTING
+// sub-agent's artifact-freshness check (an artifact must not predate the commit it
+// certifies).
+describe('resolveCommitTimestamp — TS-9 (pure function)', () => {
+  it('resolves the real commit timestamp of a real repo (this repo, read-only)', () => {
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    const ts = resolveCommitTimestamp(sha, process.cwd());
+    const expected = execFileSync('git', ['show', '-s', '--format=%cI', sha], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    expect(ts).toBe(expected);
+    expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+
+  it('stamps null (never throws) for a missing sha, missing repoPath, or unresolvable path', () => {
+    const exec = vi.fn();
+    expect(resolveCommitTimestamp(null, process.cwd(), exec)).toBeNull();
+    expect(resolveCommitTimestamp('abc123', null, exec)).toBeNull();
+    expect(exec).not.toHaveBeenCalled();
+    expect(resolveCommitTimestamp('abc123', 'C:/definitely/not/a/git/repo/xyz123')).toBeNull();
+  });
+
+  it('accepts an injectable exec so a broken repo/unresolvable sha can be simulated without a real one', () => {
+    const explode = () => { throw new Error('unknown revision'); };
+    expect(resolveCommitTimestamp('deadbeef', '/some/path', explode)).toBeNull();
+  });
+});
 
 describe('resolveEvaluatedCommitSha — TS-3 (pure function)', () => {
   it('resolves the real HEAD SHA of a real repo (this repo, read-only)', () => {

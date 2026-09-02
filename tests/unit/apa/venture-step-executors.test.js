@@ -416,7 +416,7 @@ describe('buildStepExecutor() — Object.hasOwn guard against inherited step_id 
 describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
   it('registers 4 preflight checks and zero step overrides (no fine-grained selector work done yet)', () => {
     const config = getVentureRegistration('ALTIFYAI');
-    expect(config.preflightChecks.map((c) => c.name)).toEqual(['land', 'signupFormRenders', 'uploadScreenAbsent', 'feedbackWidget']);
+    expect(config.preflightChecks.map((c) => c.name)).toEqual(['land', 'signupFormRenders', 'uploadRouteReachable', 'feedbackWidget']);
     expect(config.stepOverrides).toEqual({});
   });
 
@@ -427,6 +427,8 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
 
     const result = await land.run(page, { baseUrl: 'http://altifyai.fixture' });
     expect(result.renderedStateSummary).toMatch(/Start free/);
+    expect(result.verifiedAt).toBeTruthy();
+    expect(result.matchedSelector).toBe('text=Start free');
   });
 
   it('land preflight fails when the CTA is absent (regression guard)', async () => {
@@ -437,20 +439,44 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     await expect(land.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/no "Start free"/);
   });
 
-  it('uploadScreenAbsent passes (matches FR-0 finding) when /upload does not resolve to a real page', async () => {
+  // QF-20260901-385: an immediate count()===0 would have failed here even though the element
+  // genuinely renders slowly (same race class as SEC-001's sign-in toggle fix, above in this
+  // file) -- waitForVisible simulates that slow-mount case independent of the count fixture.
+  it('land preflight waits for a slow-to-render CTA rather than snapshotting count() immediately (SEC-001-class regression guard)', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
-    const check = preflightChecks.find((c) => c.name === 'uploadScreenAbsent');
-    const page = makeMockPage({ gotoResponses: { 'http://altifyai.fixture/upload': { status: () => 404 } } });
+    const land = preflightChecks.find((c) => c.name === 'land');
+    const page = makeMockPage({ locatorCounts: { 'text=Start free': 0 }, waitForVisible: { 'text=Start free': true } });
 
-    const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
-    expect(result.renderedStateSummary).toMatch(/no upload route mounted/);
+    const result = await land.run(page, { baseUrl: 'http://altifyai.fixture' });
+    expect(result.renderedStateSummary).toMatch(/Start free/);
   });
 
-  it('uploadScreenAbsent fails loudly if AltifyAI ever ships the upload screen (premise went stale)', async () => {
+  it('signupFormRenders accepts the identifier field alongside the email selectors', async () => {
     const { preflightChecks } = getVentureRegistration('ALTIFYAI');
-    const check = preflightChecks.find((c) => c.name === 'uploadScreenAbsent');
+    const check = preflightChecks.find((c) => c.name === 'signupFormRenders');
+    const page = makeMockPage({ locatorCounts: { 'input[name="emailAddress"], input[type="email"], input[name="identifier"]': 1 } });
+
+    const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
+    expect(result.renderedStateSummary).toMatch(/Clerk/);
+    expect(result.matchedSelector).toContain('identifier');
+  });
+
+  it('uploadRouteReachable passes now that /upload resolves live (QF-20260901-385: premise inverted, measured 2026-09-02)', async () => {
+    const { preflightChecks } = getVentureRegistration('ALTIFYAI');
+    const check = preflightChecks.find((c) => c.name === 'uploadRouteReachable');
     const page = makeMockPage({ gotoResponses: { 'http://altifyai.fixture/upload': { status: () => 200 } } });
 
-    await expect(check.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/re-verify against App\.jsx/);
+    const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
+    expect(result.renderedStateSummary).toMatch(/upload route reachable/);
+    expect(result.verifiedAt).toBeTruthy();
+    expect(result.matchedSelector).toBe('http://altifyai.fixture/upload');
+  });
+
+  it('uploadRouteReachable fails loudly if the route ever goes unreachable again (regression guard)', async () => {
+    const { preflightChecks } = getVentureRegistration('ALTIFYAI');
+    const check = preflightChecks.find((c) => c.name === 'uploadRouteReachable');
+    const page = makeMockPage({ gotoResponses: { 'http://altifyai.fixture/upload': { status: () => 404 } } });
+
+    await expect(check.run(page, { baseUrl: 'http://altifyai.fixture' })).rejects.toThrow(/expected a reachable route/);
   });
 });
