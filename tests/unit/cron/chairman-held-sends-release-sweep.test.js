@@ -180,4 +180,20 @@ describe('chairman-held-sends-release-sweep main()', () => {
 
     expect(result.summary.orphans).toEqual([]);
   });
+
+  // ── QF-20260902-939 ─────────────────────────────────────────────────────────────────────────
+  it('QF-20260902-939: routes a hold_reason=quiet_hour row to releaseQuietHourHold (never releaseHeldSend), and every other row still goes to releaseHeldSend', async () => {
+    const rows = [{ id: 'qh-1', hold_reason: 'quiet_hour' }, { id: 'solomon-1' }];
+    const supabase = makeSupabase(rows);
+    const releaseHeldSend = vi.fn(async () => ({ action: 'released' }));
+    const releaseQuietHourHold = vi.fn(async () => ({ action: 'released' }));
+    const logger = { log: vi.fn() };
+    const result = await main([], { supabase, logger, env: {}, releaseHeldSend, releaseQuietHourHold });
+
+    expect(releaseQuietHourHold).toHaveBeenCalledTimes(1);
+    expect(releaseQuietHourHold.mock.calls[0][1]).toMatchObject({ id: 'qh-1' });
+    expect(releaseHeldSend).toHaveBeenCalledTimes(1);
+    expect(releaseHeldSend.mock.calls[0][1]).toMatchObject({ id: 'solomon-1' });
+    expect(result.summary.released).toBe(2);
+  });
 });
