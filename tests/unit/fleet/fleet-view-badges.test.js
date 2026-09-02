@@ -10,16 +10,16 @@ describe('formatCapacityChip', () => {
   it('renders the binding-weekly headroom for the active account', () => {
     const identity = { accountUuid8: 'abc12345' };
     const store = { abc12345: { weeklyAllModelsPct: 38, weeklyFablePct: 20 } };
-    expect(formatCapacityChip(identity, store)).toBe('cap=62%');
+    expect(formatCapacityChip(identity, store)).toBe('headroom=62%');
   });
 
   it('degrades to a placeholder when no identity is available', () => {
-    expect(formatCapacityChip(null, {})).toBe('cap=--');
+    expect(formatCapacityChip(null, {})).toBe('headroom=--');
   });
 
   it('degrades to a placeholder when the active account has no recorded reading', () => {
     const identity = { accountUuid8: 'unrecorded1' };
-    expect(formatCapacityChip(identity, { other: { weeklyAllModelsPct: 50 } })).toBe('cap=--');
+    expect(formatCapacityChip(identity, { other: { weeklyAllModelsPct: 50 } })).toBe('headroom=--');
   });
 });
 
