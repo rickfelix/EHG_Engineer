@@ -81,6 +81,23 @@ describe('buildMainlinePhase3TestExecution -- provenance stamping (SD-LEARN-FIX-
     expect(result.source).toBe('fresh');
   });
 
+  it('SEC-1 (evidence bdbe3d54): a fresh run with a precomputed phase3.artifact_sha (single-read) uses it as-is, never re-reading the file', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'mainline-te-'));
+    const reportPath = path.join(dir, 'playwright-results.json');
+    // Deliberately wrong on disk vs the precomputed value -- proves the precomputed value is
+    // used, not recomputed from a second read.
+    writeFileSync(reportPath, JSON.stringify({ stats: { expected: 1, unexpected: 0, skipped: 0 } }));
+
+    const phase3 = {
+      tests_executed: 10, tests_passed: 10, failed_tests: 0, skipped_tests: 0,
+      report_url: reportPath, artifact_sha: 'precomputed-single-read-sha',
+    };
+    const result = buildMainlinePhase3TestExecution(phase3);
+
+    expect(result.source).toBe('fresh');
+    expect(result.artifact_sha).toBe('precomputed-single-read-sha');
+  });
+
   it('TS-2: a reused/cached run stamps source:"reused" using the ALREADY-verified artifact_sha, never recomputing', () => {
     // Deliberately WRONG on disk vs the claimed hash -- if this function recomputed, the
     // returned sha would NOT match the claimed value, proving reuse (not recomputation).
