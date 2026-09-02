@@ -1,4 +1,5 @@
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001';
 
@@ -178,7 +179,9 @@ async function main() {
   await client.end();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
