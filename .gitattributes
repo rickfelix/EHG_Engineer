@@ -130,8 +130,6 @@ tests/unit/solomon-advisory-no-literal-nul.test.js -text eol=
 # SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001's exclusion of .md until its crlf/mixed count is
 # fully zero -- only the mixed-index set below was renormalized in this PR.
 .claude/commands/triangulation-protocol.md text eol=lf
-CLAUDE_COORDINATOR.md text eol=lf
-CLAUDE_COORDINATOR_DIGEST.md text eol=lf
 docs/01_architecture/13b_exit_readiness_tracking.md text eol=lf
 docs/01_architecture/README.md text eol=lf
 docs/01_architecture/database_schema.md text eol=lf
