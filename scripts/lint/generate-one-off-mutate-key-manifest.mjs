@@ -27,6 +27,14 @@
  *
  * --check: exit 1 if the committed manifest is stale relative to a fresh scan (CI drift-check,
  *          TR-4) instead of overwriting the file.
+ *
+ * KNOWN LIMITATION (security-agent EXEC review, SEC-F4): the mutate signature is
+ * `.insert(/.update(/.upsert(/.delete(` only. A file that holds SUPABASE_SERVICE_ROLE_KEY and
+ * mutates exclusively via `.rpc(` (a stored procedure call) is invisible to this classifier --
+ * measured at 12 tracked one-off files holding the key and calling `.rpc(` with no direct CRUD
+ * verb present. Widening MUTATE_RE to include `\.rpc\s*\(` would close this but changes the
+ * corpus count (requires a RATCHET_MAX bump in the companion ratchet test) and was left for a
+ * follow-up rather than expanding this SD's scope.
  */
 import fs from 'fs';
 import path from 'path';

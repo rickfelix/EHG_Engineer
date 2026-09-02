@@ -1,5 +1,21 @@
 [
   {
+    "name": "generate-one-off-mutate-key-manifest",
+    "script": "scripts/lint/generate-one-off-mutate-key-manifest.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/lint/generate-one-off-mutate-key-manifest.test.js",
+    "neuter": {
+      "find": "if (!holdsKey || !mutates) continue;",
+      "replace": "if (true) continue;",
+      "why": "Short-circuits generateManifest()'s central branch to unconditionally skip every file, so it never adds an entry to the manifest regardless of what the file contains. This is the exact detection logic tests/unit/lint/generate-one-off-mutate-key-manifest.test.js's first two assertions exercise ('flags only the file that both mutates and holds the key, and is unguarded'; 'never flags a mutate-only or key-only file') -- a neutered generator would silently ship an empty manifest, which is the ENF-18 fail-open path (not_in_dangerous_manifest -> allow) for every currently-dangerous scripts/one-off/** file."
+    },
+    "note": "SD-LEO-FIX-TEST-FIXTURE-LANE-001. Uses the seedTest form, not fixtures, DELIBERATELY: this control's default (non---check) mode writes the manifest to a fixed path (scripts/lint/one-off-mutate-key-manifest.json, resolved from __dirname, independent of --root) -- a fixture trial pointed at a scratch dir via --root would still overwrite the REAL committed manifest as a side effect of merely being run, which is unacceptable inside a CI seed trial. The committed test already plants the exact positive/negative fixture set (dangerous/guarded/only-key/only-mutate) generateManifest() needs to prove its branch logic, so seedTest is the correct form here, not a fallback.",
+    "observability_proof": {
+      "input": "generateManifest()'s production input is git ls-files scripts/one-off (tracked-file enumeration) plus each file's own source text, tested against KEY_RE (/SUPABASE_SERVICE_ROLE_KEY/) and MUTATE_RE (/\\.(insert|update|upsert|delete)\\s*\\(/), with guard-presence delegated to the already-shipped eslint-rules/require-main-guard-in-one-off.js rule via ESLint's Linter API. It consumes no database columns and no environment variables.",
+      "seen": "Real positive observed in this SD's own EXEC phase (2026-09-02, first-ever invocation): node scripts/lint/generate-one-off-mutate-key-manifest.mjs against the real repo measured 1112 files scanned, 564 mutate+key, and surfaced 45 previously-unenumerated dangerous entries -- the exact corpus ENF-18 (scripts/hooks/lib/one-off-bare-import.cjs) now guards, all independently cross-checked as already present in the pre-existing require-main-guard-in-one-off-allowlist.json. Its --check CI drift mode (.github/workflows/one-off-mutate-key-manifest-drift.yml) runs on every PR touching scripts/one-off/**, and was verified live to exit 0 against the current real corpus (not a fixture)."
+    }
+  },
+  {
     "name": "diagnostic-gauge-citation-lint",
     "script": "scripts/lint/diagnostic-gauge-citation-lint.mjs",
     "rootFlag": null,
