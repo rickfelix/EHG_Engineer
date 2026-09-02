@@ -1,8 +1,8 @@
-<!-- file_content_hash: f0d6c32c75889ca3 -->
+<!-- file_content_hash: 5b7fef9995fcb94b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD_MANUAL.md — LEAD Manual (reference companion)
 
-**Generated**: 2026-09-01 5:39:58 PM
+**Generated**: 2026-09-02 9:02:37 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form LEAD reference — the Q9 strategic-validation rubric, parent/child SD governance, multi-track parallel execution, directive submission review
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every LEAD phase entry
@@ -209,6 +209,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-09-01*
+*Generated from database: 2026-09-02*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=parent_child_sd_governance, multi_track_parallel_execution, lead_strategic_validation_q9). Do not hand-edit — edit the DB section and regenerate.*

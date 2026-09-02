@@ -1,4 +1,4 @@
-<!-- file_content_hash: 91b0c479ced58edc -->
+<!-- file_content_hash: 2de2c24d047b0824 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -43,6 +43,7 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 > Why: Each phase produces a gate-validated artifact (strategic intent → PRD → code). Skipping phases means the next gate has no artifact to validate against, causing failures that are expensive to unwind.
 2. **Sub-agent evidence required at every handoff** - Invoke required agents via the Task tool before running `handoff.js execute`. Each agent writes to `sub_agent_execution_results`; handoff blocks with `SUBAGENT_EVIDENCE_MISSING` if no fresh row exists for the current phase. Manual DB checks are not evidence.
 > Why: Gates query `sub_agent_execution_results` for formal, database-backed validation. Opus 4.8 defaults to fewer sub-agent spawns — this rule makes invocation a hard requirement, not a best practice. Prompt-level "should use sub-agents" is not enforceable; the row is.
+   **Gate-evidence provenance (chairman-ratified 2026-09-02, ratification 6c263823)**: No completion gate may accept evidence authored by the party it gates. Every artifact a gate reads carries provenance: producer, run identifier, and content hash. Evidence without provenance is absent, not weak. Enforcement lives inside the existing gate readers (TESTING reads only a runner-written results file with its hash in the verdict row; the ratification writer accepts a marker only if it is a literal substring of the section; the completion-ready probe reads holds only from the enforced review-hold field). Rejected: a human or role review step before completion. No new machinery.
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
@@ -199,4 +200,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-08-01 8:11:44 AM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-09-02 9:02:37 PM | Protocol: LEO 4.4.1 | Source: Database*
