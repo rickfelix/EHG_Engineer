@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-02](#2026-09-02)
+  - [Infrastructure](#infrastructure-5)
 - [2026-09-01](#2026-09-01)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -168,6 +170,18 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-02
+
+### Infrastructure
+
+- **Enforce the role-aware context-compaction threshold in Adam and coordinator tick loops instead of only classifying it on the statusline** - SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001
+  - The predecessor role-aware compaction threshold (`.claude/compaction-thresholds.cjs`, SD-LEO-INFRA-COORDINATOR-CRON-LIFECYCLE-001) was consumed only by the statusline display path, so a long-lived role seat only compacted when a human typed `/compact` — a witnessed incident showed a coordinator seat at 96% usage, 194k output tokens, and 107M cache-read tokens over 2h19m before that happened.
+  - Added `lib/fleet/context-ceiling-checker.cjs` (pure, dependency-injected) and `lib/fleet/context-ceiling-default-deps.cjs` (reads the local `.claude/logs/context-usage.jsonl` telemetry directly, sidestepping the ~12min lag on the synced DB table), wired into `scripts/adam-quiet-tick.mjs` and `scripts/coordinator-quiet-tick.mjs`, gated default-OFF behind `COORD_CONTEXT_CEILING_ENFORCE_V1`.
+  - `.claude/commands/context-compact.md` is plain markdown for an interactive agent turn with no CLI/API entrypoint a background script can call — the `QUIET_TICK_CONTEXT_CEILING` HARD line is the real enforcement primitive; for a seat that invokes its own tick script via Bash as part of its own turn, that line lands directly in the tool result for the seat to act on (coordinator-ruled and regression-tested as exactly-once and grep-distinct).
+  - `scripts/context-ceiling-check.mjs` provides the same enforcement as a role-agnostic CLI for a seat (Solomon) with no dedicated tick script to wire directly — see `docs/protocol/context-ceiling-enforcement.md`.
+  - The per-handoff cost metric (weekly quota percent consumed per completed handoff, per named account) was descoped from this SD: no session-to-named-account attribution surface exists today (`claude_sessions` carries no account column; `leo_handoff_executions.created_by` gives the real session id but nothing joins it to an account) — deferred to a follow-up SD.
+  - 28 new unit tests across 4 files.
 
 ## 2026-09-01
 
