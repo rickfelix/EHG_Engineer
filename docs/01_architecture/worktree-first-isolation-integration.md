@@ -1,10 +1,10 @@
 ---
-category: architecture
-status: draft
-version: 1.0.0
-author: rickfelix
-last_updated: 2026-02-28
-tags: [architecture, auto-generated]
+Category: Architecture
+Status: Draft
+Version: 1.1.0
+Author: rickfelix
+Last Updated: 2026-09-02
+Tags: [architecture, auto-generated]
 ---
 # Worktree-First Isolation Integration
 
@@ -25,6 +25,8 @@ tags: [architecture, auto-generated]
 - [Failure Handling](#failure-handling)
   - [Non-Blocking Design](#non-blocking-design)
   - [Common Failure Scenarios](#common-failure-scenarios)
+  - [Secret/.env Resolution](#secretenv-resolution-sd-fdbk-infra-worktrees-carry-snapshot-001)
+  - [Orphaned-Worktree Recovery](#orphaned-worktree-recovery-sd-fdbk-infra-worktree-auto-removed-001)
 - [User-Facing Changes](#user-facing-changes)
   - [PLAN-TO-EXEC Handoff Output](#plan-to-exec-handoff-output)
   - [LEAD-FINAL-APPROVAL Output](#lead-final-approval-output)
@@ -260,6 +262,15 @@ try {
 | Worktree path doesn't exist | Cleanup skipped (idempotent) | No action needed |
 | Uncommitted changes at cleanup | Cleanup aborts with `dirty_worktree` | Commit or `/ship` first, then re-run or use `--force` for manual cleanup |
 | Branch deleted mid-lifecycle by `--delete-branch` | Worktree orphaned (dir remains, dropped from `git worktree list`) | **Auto-recovered** — see Orphaned-Worktree Recovery below |
+| A worktree's own `.env` snapshot goes stale after a root secret rotation | Scripts run from that worktree read the OLD secret | **Fixed** — see Secret/.env Resolution below |
+
+### Secret/.env Resolution (SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001)
+
+`propagateEnvFile` (`lib/worktree-manager.js:1139-1152`) copies the main repo's `.env` into every new worktree at creation time, so a worktree carries a **snapshot**, not a live view. Before this SD, `lib/supabase-client.js`/`.cjs`'s env loader walked up from `process.cwd()` and stopped at the **first** `.env` it found — inside a worktree that's always the worktree's own stale copy, so a secret rotated at the root never reached a worker running from a worktree until its next claim/checkin re-attach (`refreshPropagatedEnv`, `scripts/resolve-sd-workdir.js`).
+
+**Fix**: `lib/env-resolver.cjs` (`resolveEnvPath`) resolves the **main worktree's root** first via `git rev-parse --path-format=absolute --git-common-dir` (works from any linked worktree, not just the main one) and reads `.env` from there. It falls back to the old ancestor-walk only when the main root genuinely has no `.env` — preserving today's behavior for a repo with no `.env` anywhere (verified for the altifyai venture repo: git resolves fine, but there's no `.env` in its own tree or any ancestor, so the fallthrough is a no-op both before and after this fix). The function is pure and injectable (`execGit`/`existsSync` deps) and memoized per start directory.
+
+Both `lib/supabase-client.js` and `.cjs` now call `resolveEnvPath` instead of doing their own walk; `scripts/sd-start.js`'s own redundant `dotenv.config()` call was removed (ES module import evaluation guarantees `lib/supabase-client.js`'s fixed resolution already ran by the time `sd-start.js`'s own top-level body executes, so the call was dead code). A new ESLint `no-restricted-imports`/`no-restricted-syntax` rule bans **new** direct `dotenv` imports (both `import` and CJS `require()`) anywhere under `lib/`, outside the two sanctioned loader files — a generated ratchet allowlist (`tools/eslint-rules/dotenv-legacy-allowlist.json`, regenerate via `node scripts/generate-dotenv-legacy-allowlist.mjs`) grandfathers the ~175 pre-existing direct importers so the rule doesn't retroactively fail lint repo-wide; migrating that population is deferred to a follow-up SD.
 
 ### Orphaned-Worktree Recovery (SD-FDBK-INFRA-WORKTREE-AUTO-REMOVED-001)
 
@@ -373,6 +384,7 @@ When `gh pr merge --delete-branch` deletes `feat/<SD-KEY>` while its worktree is
 - Related SDs:
   - SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001 (worktree-manager foundation)
   - SD-LEO-INFRA-PROACTIVE-BRANCH-ENFORCEMENT-001 (branch gate foundation)
+  - SD-FDBK-INFRA-WORKTREES-CARRY-SNAPSHOT-001 (main-worktree-first `.env` resolution — see Secret/.env Resolution above)
 
 ## Future Enhancements
 

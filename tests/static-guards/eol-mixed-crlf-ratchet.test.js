@@ -18,11 +18,14 @@
  * field's "eol=lf" always contains the substring "lf"). DIRTY_INDEX_STATES = {crlf, mixed} already
  * covers both axes; this file only adds the ratchet (baseline + shrink-only) on top of it.
  *
- * BASELINE, MEASURED AT EXEC TIME (not carried over from LEAD/PLAN phase without re-checking):
- * exactly 4 un-allowlisted violations today -- lib/agents/venture-ceo-factory.js (crlf, held by a
- * live FR-6 scope fence per eol-crlf-ratchet.test.js's own docblock) and 3 scripts/archive/one-time
- * files (mixed). This SD's own Phase 1 .gitattributes diff (15 new eol=lf extension pins + 5 binary
- * marks + 2 NUL-byte escapes) was independently re-measured to add ZERO new members to this class --
+ * BASELINE, RE-MEASURED at QF-20260901-018 (was 4, now 1): the 3 scripts/archive/one-time/*.js
+ * files were renormalized (git add --renormalize) and dropped out of this class entirely --
+ * they carried no scope fence. The 1 remaining un-allowlisted violation is
+ * lib/agents/venture-ceo-factory.js (crlf, held by a live FR-6 scope fence per
+ * eol-crlf-ratchet.test.js's own docblock) -- deliberately NOT renormalized here; obeying
+ * that fence rather than working around it. This SD's own Phase 1 .gitattributes diff (15 new
+ * eol=lf extension pins + 5 binary marks + 2 NUL-byte escapes) was independently re-measured
+ * to add ZERO new members to this class --
  * see docs/audits/SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001-census.md.
  */
 import { describe, it, expect } from 'vitest';
@@ -51,7 +54,7 @@ const baseline = () =>
 // 4-entry baseline a 5th offender fails both; with the baseline padded to 5, both pass. Pinning
 // the baseline's OWN size to a literal closes that hole -- a padding edit now fails THIS
 // assertion instead of silently satisfying the other two.
-const EXPECTED_BASELINE_SIZE = 4;
+const EXPECTED_BASELINE_SIZE = 1;
 
 describe('eol=lf-managed renormalization-dirty class (crlf+mixed) is frozen (R1, SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001)', () => {
   it('the measurement finds files to inspect (guard is not vacuous)', () => {

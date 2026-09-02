@@ -152,6 +152,24 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
     expect(deps.completeSession).toHaveBeenCalledWith('run-1', injected);
   });
 
+  it('FR-4: threads a resolved commit_sha into startSession, via the injectable deps.resolveCommitSha override', async () => {
+    const { deps } = makeDeps({ resolveCommitSha: vi.fn(() => 'abc1234deadbeef') });
+
+    await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    expect(deps.resolveCommitSha).toHaveBeenCalledTimes(1);
+    expect(deps.startSession).toHaveBeenCalledWith('sd-1', expect.objectContaining({ commitSha: 'abc1234deadbeef' }));
+  });
+
+  it('FR-4: a resolveCommitSha override that cannot resolve (e.g. no git available) passes commitSha:null rather than throwing', async () => {
+    const { deps } = makeDeps({ resolveCommitSha: vi.fn(() => null) });
+
+    const result = await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    expect(deps.startSession).toHaveBeenCalledWith('sd-1', expect.objectContaining({ commitSha: null }));
+    expect(result.status).toBe('fail'); // walk still completes normally
+  });
+
   it('threads params.ventureId and params.stageNumber into startSession when supplied', async () => {
     const { deps } = makeDeps();
 
