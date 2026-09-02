@@ -469,6 +469,27 @@ export function isValidatorNonApplicable(sdType, validatorName) {
 }
 
 /**
+ * SD-FDBK-INFRA-TESTING-SUB-AGENT-001: the single source for "is E2E/UI TESTING mandatory for
+ * this sd_type?", replacing the two private lists (lib/sub-agents/testing/index.js's
+ * skipE2ESdTypes and phases/phase4-evidence.js's E2E_EXEMPT_SD_TYPES) that used to answer this
+ * question independently and disagreed with each other (11 vs 5 entries).
+ *
+ * LEGACY_REQUIRED_TYPE_CARVEOUT: 'protocol' (undefined in SD_TYPE_POLICY -> safe-default
+ * REQUIRED) and 'api'/'backend' (explicitly REQUIRED) were silently exempted by the old private
+ * lists. Widening TESTING enforcement onto those 3 types fleet-wide is a separate, unmeasured
+ * decision this SD does not make (flagged for explicit follow-up sign-off) — kept here as ONE
+ * documented, temporary carve-out so the fix does not carry that unreviewed side effect.
+ */
+const LEGACY_REQUIRED_TYPE_CARVEOUT = new Set(['protocol', 'api', 'backend']);
+
+export function isE2EApplicabilityExempt(sdType) {
+  const normalized = (sdType || '').toLowerCase();
+  if (LEGACY_REQUIRED_TYPE_CARVEOUT.has(normalized)) return true;
+  const requirement = getValidatorRequirement(normalized, 'TESTING');
+  return requirement === RequirementLevel.NON_APPLICABLE || requirement === RequirementLevel.OPTIONAL;
+}
+
+/**
  * Get all validators and their requirements for an SD type
  *
  * @param {string} sdType - SD type

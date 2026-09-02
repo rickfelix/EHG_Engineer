@@ -73,6 +73,16 @@ export function determinePassedStatus(band, confidence, weightedScore, threshold
  * Philosophy: Start lenient to avoid blocking work, then increase
  * thresholds where quality issues are detected in production.
  *
+ * THIS IS THE RUNTIME READ SITE (QF-20260830-735): the single live threshold for
+ * a (sd_type, content_type) pair is SD_TYPE_PASS_THRESHOLDS[sd_type] resolved here,
+ * not the `current_threshold` column of v_ai_quality_tuning_recommendations. That
+ * view groups historical ai_quality_assessments rows by the pass_threshold value
+ * recorded on each row at assessment time, so a pair with several rows scored
+ * under different past config values (e.g. security/retrospective 65 -> 70 -> 75
+ * across successive tuning QFs) legitimately shows multiple "current_threshold"
+ * rows for one pair. That is stale-history, not live ambiguity -- config.js's
+ * SD_TYPE_PASS_THRESHOLDS is the only place a threshold is actually consulted.
+ *
  * @param {string} contentType - Content type being evaluated
  * @param {Object} sd - Strategic Directive object
  * @returns {number} Pass threshold percentage

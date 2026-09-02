@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-01T21:39:57.970Z -->
-<!-- git_commit: a0e87e8a -->
+<!-- generated_at: 2026-09-02T01:02:37.904Z -->
+<!-- git_commit: 69d9223f -->
 <!-- db_snapshot_hash: 31be22b093949a93 -->
-<!-- file_content_hash: 8ac87248ef8b533a -->
+<!-- file_content_hash: 69e41a45afdb3776 -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
 
@@ -88,18 +88,13 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 > Why: Each phase produces a gate-validated artifact (strategic intent → PRD → code). Skipping phases means the next gate has no artifact to validate against, causing failures that are expensive to unwind.
 2. **Sub-agent evidence required at every handoff** - Invoke required agents via the Task tool before running `handoff.js execute`. Each agent writes to `sub_agent_execution_results`; handoff blocks with `SUBAGENT_EVIDENCE_MISSING` if no fresh row exists for the current phase. Manual DB checks are not evidence.
 > Why: Gates query `sub_agent_execution_results` for formal, database-backed validation. Opus 4.8 defaults to fewer sub-agent spawns — this rule makes invocation a hard requirement, not a best practice. Prompt-level "should use sub-agents" is not enforceable; the row is.
+   **Gate-evidence provenance (chairman-ratified 2026-09-02, ratification 6c263823)**: No completion gate may accept evidence authored by the party it gates. Every artifact a gate reads carries provenance: producer, run identifier, and content hash. Evidence without provenance is absent, not weak. Enforcement lives inside the existing gate readers (TESTING reads only a runner-written results file with its hash in the verdict row; the ratification writer accepts a marker only if it is a literal substring of the section; the completion-ready probe reads holds only from the enforced review-hold field). Rejected: a human or role review step before completion. No new machinery.
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
 > Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js — audit-logged with a 2000/day global cap and NO per-SD cap on the generic path (the oft-cited 3/SD + 10/day quota is the grill-convergence gate's purpose-built counter only — corrected per build-vs-run deep-dive D9, 2026-07-12); `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
 5. **Small PRs** - ≤100 LOC target. Exceed only with documented justification (max 400 LOC) per tiered PR Size Guidelines.
-> Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
-6. **Priority-first** - Use `npm run prio:top3` to justify work
-> Why: Without priority justification, the highest-ROI SD can be overlooked in favour of something familiar. `prio:top3` enforces objective ordering, not recency ordering.
-7. **Version check** - If stale protocol detected, run `node scripts/generate-claude-md-from-db.js`
-> Why: CLAUDE.md is auto-generated from the DB. Operating on a stale file means reading outdated rules without knowing it — the session follows a protocol that has since been superseded.
-
-*For copy-paste version: see `templates/session-prologue.md` (gene
+> Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospect
 
 *...truncated. Read full file for complete section.*
 
@@ -159,5 +154,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-09-01 5:39:58 PM*
+*DIGEST generated: 2026-09-02 9:02:37 PM*
 *Protocol: 4.4.1*

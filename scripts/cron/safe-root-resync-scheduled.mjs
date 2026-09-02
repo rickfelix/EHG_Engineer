@@ -15,6 +15,7 @@
  *
  * Usage: node scripts/cron/safe-root-resync-scheduled.mjs --repo <path> [--json]
  */
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { safeRootResync } from '../safe-root-resync.mjs';
 import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';

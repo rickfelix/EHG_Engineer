@@ -799,6 +799,67 @@ async function main() {
     } catch { /* fail-open on any internal error */ }
   }
 
+  // --- ENFORCEMENT 12e: worktree-placement sibling guard (SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001) ---
+  // A model-typed `git worktree add ../<sibling>` (no path prescribed anywhere in the QF
+  // self-claim path) registers a worktree OUTSIDE the repo root — every Read/Edit inside it
+  // then raises the outside-working-directory permission prompt and freezes the seat until a
+  // human answers (live 2026-09-01, incl. this SD's own trigger: EHG_Engineer-qf-117).
+  // Reuses validateWorktreePath (scripts/resolve-sd-workdir.js, ESM) via a LAZY in-branch
+  // require (TR-4 — a top-level require would pay the supabase/dotenv import graph on every
+  // Bash call). Off-switch: LEO_WORKTREE_ADD_GUARD=off. Fail-open.
+  //
+  // SECURITY sub-agent finding S-1 (evidence c15134e8): the `if` below previously gated ONLY
+  // on TOOL_NAME/env, so the heavy requires + `git rev-parse` execSync ran on EVERY Bash call,
+  // not just a matched `git worktree add` — contradicting this very comment (TR-4) and, worse,
+  // silently loading 82 `.env` secret keys (ANTHROPIC_API_KEY, SUPABASE_SERVICE_ROLE_KEY, ...)
+  // into the enforcement hook's process on every call via resolve-sd-workdir.js's module-scope
+  // dotenv.config(). Fixed: check the cheap, pure extractTargetPath() FIRST — no exec/require
+  // of anything beyond the guard module itself — and only pay the heavy path when it matches.
+  if (TOOL_NAME === 'Bash' && process.env.LEO_WORKTREE_ADD_GUARD !== 'off') {
+    try {
+      const { worktreeAddIsSibling, extractTargetPath } = require('../../lib/worktree-add-sibling-guard.cjs');
+      if (extractTargetPath(input.command || '')) {
+        const { validateWorktreePath } = require('../resolve-sd-workdir.js');
+        // Derive repoRoot via `git rev-parse --git-common-dir` from the command's OWN cwd —
+        // NOT via a bare `.git`-marker walk (fs.statSync succeeds on a FILE too, and a
+        // worktree's `.git` IS a file, so a naive walk stops at the WORKTREE's own root
+        // instead of the MAIN repo). TESTING sub-agent finding F-A, evidence c94b16a8: the
+        // naive walk inverted polarity for any worker operating from a worktree cwd — the
+        // exact population this guard protects — refusing the CORRECT .worktrees/ target
+        // and allowing a nested-worktree anti-pattern instead. --git-common-dir always
+        // resolves to the SHARED .git dir regardless of which worktree it's invoked from.
+        let repoRoot = null;
+        {
+          const { execSync } = require('child_process');
+          const cwd = path.resolve(input.cwd || process.cwd());
+          const commonDir = execSync('git rev-parse --git-common-dir', {
+            cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
+          }).trim();
+          const resolvedCommonDir = path.isAbsolute(commonDir) ? commonDir : path.resolve(cwd, commonDir);
+          repoRoot = path.dirname(resolvedCommonDir);
+        }
+        if (!repoRoot) throw new Error('no repo root resolved from cwd');
+        const verdict = worktreeAddIsSibling({
+          command: input.command || '',
+          cwd: input.cwd || process.cwd(),
+          repoRoot,
+          validateWorktreePath,
+        });
+        if (verdict.isSibling) {
+          const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-12e', `worktree add would register outside <repo>/.worktrees/ (${verdict.reason})`, 'block', { reason: verdict.reason, resolved: verdict.resolved });
+          process.stderr.write(
+            `[ENF-12e] WORKTREE PLACEMENT GUARD: refusing \`git worktree add\` outside the repo's .worktrees/ directory.\n` +
+            `  Target resolves to: ${verdict.resolved || '<unknown>'} (${verdict.reason})\n` +
+            `  A sibling worktree freezes the seat on the next Read/Edit (outside-working-directory permission prompt).\n` +
+            `  Use the sanctioned path instead:  git worktree add .worktrees/{sd,qf,adhoc}/<key> -b <branch>\n` +
+            `  Override (single-session only):    LEO_WORKTREE_ADD_GUARD=off\n`
+          );
+          await auditAndExit(auditPromise, 2, 1000);
+        }
+      }
+    } catch { /* fail-open on any internal error */ }
+  }
+
   // --- ENFORCEMENT 13: Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) ---
   // PreToolUse check on Edit/Write — catches the most common parallel-session
   // failure mode at the moment of first damage:

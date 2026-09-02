@@ -30,7 +30,7 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 // cannot drift away from the createWorktree behavior.
 // SD-LEO-INFRA-LEO-INFRA-WORKTREE-001: SUBSTRATE_ITEMS + validateWorktreeSubstrate
 // for the post-creation completeness gate.
-import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
+import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate, refreshPropagatedEnv } from '../lib/worktree-manager.js';
 import { provisionWorktreeNodeModules, getIsolationMode, getFreeDiskBytes, countActiveFreshSessions } from '../lib/worktree-provision.js';
 import { execSync } from 'child_process';
 import { isNodeModulesUnprovisioned as isUnprovisionedShared } from '../lib/node-modules-population.js';
@@ -618,20 +618,26 @@ function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
     }
   }
 
-  // Copy .env (gated on SUBSTRATE_ITEMS membership) plus opportunistic
-  // .env.local (not part of substrate contract but copied if present).
-  const envFiles = [];
-  if (SUBSTRATE_ITEMS.includes('.env')) envFiles.push('.env');
-  envFiles.push('.env.local');
-  for (const envFile of envFiles) {
-    const src = path.join(repoRoot, envFile);
-    const dst = path.join(worktreePath, envFile);
-    if (fs.existsSync(src) && !fs.existsSync(dst)) {
-      try {
-        fs.copyFileSync(src, dst);
-      } catch (err) {
-        errors.push({ step: `copy_${envFile}`, message: err.message });
-      }
+  // .env (gated on SUBSTRATE_ITEMS membership): copy AND keep in sync with root via
+  // refreshPropagatedEnv, so a root secret rotation is re-copied here on every claim/checkin
+  // re-attach, not just the first time the worktree is created (QF-20260901-296).
+  if (SUBSTRATE_ITEMS.includes('.env')) {
+    try {
+      const result = refreshPropagatedEnv(repoRoot, worktreePath);
+      if (result.refreshed) console.error(`[worktree] env refreshed from root (${result.reason}): ${worktreePath}`);
+    } catch (err) {
+      errors.push({ step: 'refresh_env', message: err.message });
+    }
+  }
+
+  // Opportunistic .env.local (not part of substrate contract; copied if present, never refreshed).
+  const src = path.join(repoRoot, '.env.local');
+  const dst = path.join(worktreePath, '.env.local');
+  if (fs.existsSync(src) && !fs.existsSync(dst)) {
+    try {
+      fs.copyFileSync(src, dst);
+    } catch (err) {
+      errors.push({ step: 'copy_.env.local', message: err.message });
     }
   }
 

@@ -158,7 +158,14 @@ export const STANDARD_LOOPS = [
     prompt: 'node scripts/fleet-dashboard.cjs all' },
   { key: 'identity',    label: 'Fleet identity refresh', script: 'assign-fleet-identities.cjs', cron: '4,9,14,19,24,29,34,39,44,49,54,59 * * * *',
     prompt: 'node scripts/assign-fleet-identities.cjs' },
-  { key: 'inbox', folded: true,       label: 'Coordinator inbox',    script: 'fleet-dashboard.cjs',       cron: '*/2 * * * *',
+  // SD-LEO-INFRA-COORDINATOR-LOADED-QUIET-002 FR-1: cron widened from */2 (120s) to */4 (240s) so
+  // the periodic_process_registry.standard_loop:inbox row this entry derives (via
+  // lib/periodic-liveness/enumerate-processes.mjs parseStandardLoops(), which does NOT consult
+  // `folded`) stays durable against the new [540,660] coordinator loaded-and-quiet wake band:
+  // 240s x grace_multiplier(3) = 720s >= 660s, so a widened-band tick never produces a false
+  // OVERDUE. A DB-only edit to the registry row reverts on the next
+  // scripts/seed-periodic-process-registry.mjs run — this cron string is the durable fix.
+  { key: 'inbox', folded: true,       label: 'Coordinator inbox',    script: 'fleet-dashboard.cjs',       cron: '*/4 * * * *',
     prompt: 'node scripts/fleet-dashboard.cjs inbox' },
   { key: 'audit', folded: true,       label: 'Coordinator 3-source audit', script: 'coordinator-audit.mjs', cron: '*/15 * * * *',
     prompt: 'node scripts/coordinator-audit.mjs' },
