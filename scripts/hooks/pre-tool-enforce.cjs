@@ -19,6 +19,7 @@
  * 13. Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) - HARD BLOCK on main/master + WARN-ONCE on inherited dirt
  * 15. Force-Push Gate (SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001) - HARD BLOCK by default; OVERRIDE on solo SD/QF feature branches when LEO_FORCE_PUSH_OWN_BRANCH=allow
  * 17. Shared-Tree Hijack Guard (SD-LEO-FEAT-SHARED-TREE-HIJACK-001) - HARD BLOCK on HEAD-moving git op (checkout/switch/reset --hard) in the shared ROOT while a foreign coordinator is active; fail-open
+ * 18. Premature Handoff Execute Refusal (QF-20260902-542) - HARD BLOCK on `handoff.js execute` with absent phase sub-agent evidence (WAIT excepted); fail-open
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -416,6 +417,10 @@ const VALIDATION_CONFIG = {
 // SUPABASE_PATTERNS is the single source consumed here AND for the ENFORCEMENT 7
 // gate; isSupabaseExecution distinguishes a real call from a quoted mention.
 const { SUPABASE_PATTERNS, isSupabaseExecution } = require(path.resolve(__dirname, 'lib', 'supabase-operative.cjs'));
+
+// ENF-18 (QF-20260902-542): parsing seam split out so tests can require it without
+// hitting this file's own module-load-time `fs.readFileSync(0)` stdin read.
+const { parseHandoffExecuteCall } = require('./lib/handoff-execute-precheck-guard.cjs');
 
 /**
  * Determine enforcement tier for the current Bash command context.
@@ -1618,6 +1623,36 @@ async function main() {
       // Fail-open: any internal error in ENF-17 must NOT block tool execution.
       if (process.env.LEO_TELEMETRY_DEBUG === '1') {
         process.stderr.write(`[pre-tool-enforce] ENF-17 errored (fail-open): ${sharedTreeErr.message}\n`);
+      }
+    }
+
+    // --- ENFORCEMENT 18: Premature Handoff Execute Refusal (QF-20260902-542) ---
+    // Refuses `handoff.js execute` before the ~10s preflight write when the SAME
+    // validateSubagentEvidence the real gate + preflight already call reports evidence absent --
+    // WAIT is never a refusal (mirrors prerequisite-preflight.js:177). Logs
+    // failedGate=SUBAGENT_EVIDENCE_MISSING, matching coordinator-health-sharpenings.mjs's KPI-0 split.
+    const handoffExecCall = process.env.LEO_HANDOFF_EXECUTE_PRECHECK_GUARD !== 'off'
+      && parseHandoffExecuteCall(cmd);
+    if (handoffExecCall) {
+      try {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (supabaseUrl && serviceKey) {
+          const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(supabaseUrl, serviceKey);
+          const { handoffType, sdId } = handoffExecCall;
+          const { validateSubagentEvidence } = await import('../modules/handoff/gates/subagent-evidence-gate.js');
+          const evidenceResult = await validateSubagentEvidence({ handoffType, sdId, supabase }, supabase);
+          if (evidenceResult.passed === false && !evidenceResult.wait) {
+            const missing = evidenceResult.details?.missing || [];
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-18', 'Premature handoff.js execute refused: phase sub-agent evidence absent', 'block', { handoff_type: handoffType, sd_id: sdId, failed_gate: 'SUBAGENT_EVIDENCE_MISSING', missing });
+            process.stderr.write(`[ENF-18] PREMATURE EXECUTE REFUSED: ${handoffType} for ${sdId} has no required sub-agent evidence yet (missing: ${missing.join(', ') || 'see precheck'}).\n` +
+              `  Invoke the required sub-agent(s), then: node scripts/handoff.js precheck ${handoffType} ${sdId}  (override: LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off)\n`);
+            await auditAndExit(auditPromise, 2);
+          }
+        }
+      } catch (handoffPrecheckErr) {
+        if (process.env.LEO_TELEMETRY_DEBUG === '1') process.stderr.write(`[pre-tool-enforce] ENF-18 errored (fail-open): ${handoffPrecheckErr.message}\n`);
       }
     }
   }

@@ -4,6 +4,7 @@ import {
   lacksHoldReason, hasStaleUnreviewedHold, sampleFalseCompletions, classifyFailureClasses,
   FAILURE_CLASSES, REASON_BAND, CONVERSION_FLOOR, LATENCY_CEILING_MS, MIN_COHORT_FOR_ALARM,
   STALE_HOLD_CEILING_HOURS, evaluateCoordinatorLoopLiveness, MIN_OVERDUE_LOOPS_FOR_ALARM,
+  PREMATURE_ATTEMPT_CEILING, REWORK_CEILING,
 } from '../../../lib/oversight/coordinator-health-sharpenings.mjs';
 
 const NOW = Date.parse('2026-07-16T12:00:00Z');
@@ -38,6 +39,47 @@ describe('TS-1 deriveOutcomeFlow (S1 KPI-0)', () => {
     const rechurned = sd({ id: 'd', metadata: { claim_history: [{ claimed_at: daysAgo(40) }, { claimed_at: daysAgo(1) }] } });
     const r = deriveOutcomeFlow([rechurned], [], NOW);
     expect(r.status).toBe('no_cohort'); // first claim outside window
+  });
+
+  // QF-20260902-542: split the rejected-handoff numerator into premature attempts
+  // (failedGate SUBAGENT_EVIDENCE_MISSING / PREREQUISITE_PREFLIGHT_FAILED) vs genuine gate
+  // retries -- 57.9% of a real 7-day rejected cohort was the former, vanishing inside one number.
+  it('splits rejected handoffs into premature_attempts (SUBAGENT_EVIDENCE_MISSING/PREREQUISITE_PREFLIGHT_FAILED) vs gate_retries; rework_rate counts only the latter', () => {
+    const one = sd({ id: 'e' });
+    const handoffs = [
+      { sd_id: 'e', status: 'rejected', validation_details: { summary: { failed_gate: 'SUBAGENT_EVIDENCE_MISSING' } } },
+      { sd_id: 'e', status: 'rejected', validation_details: { summary: { failed_gate: 'PREREQUISITE_PREFLIGHT_FAILED' } } },
+      { sd_id: 'e', status: 'rejected', validation_details: { summary: { failed_gate: 'MECHANISM_CLAIM_VERIFIER' } } },
+      { sd_id: 'e', status: 'accepted', validation_details: null },
+    ];
+    const r = deriveOutcomeFlow([one], handoffs, NOW);
+    expect(r.premature_attempts).toBe(2);
+    expect(r.gate_retries).toBe(1);
+    expect(r.premature_attempt_rate).toBeCloseTo(2 / 4);
+    expect(r.rework_rate).toBeCloseTo(1 / 4); // real gate failures only, not the premature bucket
+  });
+
+  it('a rejected handoff with no validation_details (legacy row) counts as a gate retry, never premature', () => {
+    const one = sd({ id: 'f' });
+    const handoffs = [{ sd_id: 'f', status: 'rejected' }];
+    const r = deriveOutcomeFlow([one], handoffs, NOW);
+    expect(r.premature_attempts).toBe(0);
+    expect(r.gate_retries).toBe(1);
+    expect(r.rework_rate).toBeCloseTo(1);
+  });
+
+  it('empty cohort reports the premature/gate-retry fields as null too, never a fake 0', () => {
+    const r = deriveOutcomeFlow([], [], NOW);
+    expect(r.premature_attempts).toBeNull();
+    expect(r.premature_attempt_rate).toBeNull();
+    expect(r.gate_retries).toBeNull();
+  });
+
+  it('PREMATURE_ATTEMPT_CEILING and REWORK_CEILING are named, reviewable constants (not inline magic numbers)', () => {
+    expect(typeof PREMATURE_ATTEMPT_CEILING).toBe('number');
+    expect(PREMATURE_ATTEMPT_CEILING).toBeGreaterThan(0);
+    expect(PREMATURE_ATTEMPT_CEILING).toBeLessThanOrEqual(1);
+    expect(REWORK_CEILING).toBeGreaterThan(0);
   });
 });
 
