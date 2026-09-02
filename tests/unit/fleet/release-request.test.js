@@ -6,7 +6,7 @@ const released = vi.hoisted(() => ({ value: true }));
 const lastCall = vi.hoisted(() => ({ args: null }));
 const wipResult = { value: { hasWip: false, reasons: [] } };
 vi.mock('../../../lib/fleet/best-effort-release.mjs', () => ({
-  bestEffortReleaseSd: async (...args) => {
+  bestEffortReleaseSdByKey: async (...args) => {
     lastCall.args = args;
     return { released: released.value, error: null };
   },
@@ -72,16 +72,19 @@ describe('FR-1 release-request clears the stale ctx.mySd snapshot', () => {
     expect(ctx.mySd).toBeNull();
   });
 
-  // QF-20260726-593: release_sd takes no SD argument and releases whatever the session currently
-  // holds. This loop walks up to 5 held SDs, so an unscoped call can clear THIS row's flag while
-  // releasing a DIFFERENT live SD. expectedSdKey makes it fail-closed.
-  it('passes expectedSdKey so the release is SD-scoped, not "whatever the session holds"', async () => {
+  // QF-20260726-593, closed not narrowed by SD-LEO-INFRA-RELEASE-KEY-SESSION-001 (FR-3):
+  // release_sd takes no SD argument and releases whatever the session currently holds. This loop
+  // walks up to 5 held SDs, so an unscoped call can clear THIS row's flag while releasing a
+  // DIFFERENT live SD. release_sd_by_key(session, sdKey, reason) makes the scoping a SQL-level
+  // CAS rather than an app-layer expectedSdKey check-then-act.
+  it('passes sdKey positionally to bestEffortReleaseSdByKey, so the release is SD-scoped, not "whatever the session holds"', async () => {
     released.value = true;
     lastCall.args = null;
     const ctx = ctxFor();
     await releaseRequestStep.run(ctx);
     expect(lastCall.args).not.toBeNull();
-    expect(lastCall.args[4]).toMatchObject({ expectedSdKey: SD_KEY });
+    expect(lastCall.args[1]).toBe(SESSION);
+    expect(lastCall.args[2]).toBe(SD_KEY);
   });
 
   // FR-3: release_sd clears the DB claim without looking at the working tree, so a cooperative
@@ -94,7 +97,7 @@ describe('FR-1 release-request clears the stale ctx.mySd snapshot', () => {
     const ctx = ctxFor();
     await releaseRequestStep.run(ctx);
     expect(ctx.base.release_requests_refused?.[0]).toMatchObject({ sd: SD_KEY, reasons: ['uncommitted_changes'] });
-    expect(lastCall.args).toBeNull();            // bestEffortReleaseSd never called
+    expect(lastCall.args).toBeNull();            // bestEffortReleaseSdByKey never called
     expect(ctx.base.release_requests_honored).toBeUndefined();
     expect(ctx.mySd).toBe(SD_KEY);               // claim retained — nothing was dropped
     wipResult.value = { hasWip: false, reasons: [] };

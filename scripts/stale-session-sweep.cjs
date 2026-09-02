@@ -105,7 +105,7 @@ const {
  * The heartbeat-age classification above can never catch it; this probe keys on the
  * tick-immune last_tool_at clock instead. Modeled on the HEADLESS_ZOMBIE block: detect,
  * release the claim through the SAME path as the coordinator's manual fence
- * (release_sd RPC via bestEffortReleaseSd — never a parallel re-implementation),
+ * (release_sd_by_key RPC via bestEffortReleaseSdByKey — never a parallel re-implementation),
  * quarantine the session (self-clears at its next checkin), surface ONE de-duped
  * operator line naming the terminal — and NEVER touch the OS process.
  *
@@ -219,9 +219,13 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
         actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — tool activity resumed since snapshot (window likely un-blocked)');
         continue;
       }
-      // 1b. Release through the manual fence's own path — QF-aware release_sd RPC.
-      const { bestEffortReleaseSd } = await import('../lib/fleet/best-effort-release.mjs');
-      const rel = await bestEffortReleaseSd(supabase, s.session_id, 'CLAIM_BOUNDARY_PROBE',
+      // 1b. Release through the manual fence's own path — QF-aware release_sd_by_key RPC.
+      // SD-LEO-INFRA-RELEASE-KEY-SESSION-001 (FR-3): s.sd_key is already known and was just
+      // re-verified live above (liveRow.sd_key === s.sd_key), so the keyed RPC's SQL-level CAS
+      // is a strict improvement over the unscoped release_sd this replaces — the holder check
+      // and the release are now one atomic statement instead of relying solely on the pre-read.
+      const { bestEffortReleaseSdByKey } = await import('../lib/fleet/best-effort-release.mjs');
+      const rel = await bestEffortReleaseSdByKey(supabase, s.session_id, s.sd_key, 'CLAIM_BOUNDARY_PROBE',
         (m) => warnings.push('CLAIM_BOUNDARY_PROBE: ' + m));
       if (!rel.released) {
         warnings.push('CLAIM_BOUNDARY_PROBE: release_sd failed for ' + s.session_id + ' (' + (rel.error || 'unknown') + ') — no quarantine/alert emitted');
