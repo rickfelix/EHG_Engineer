@@ -15,6 +15,7 @@
  */
 import 'dotenv/config';
 import pg from 'pg';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 async function main() {
   const conn = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL;
@@ -77,7 +78,9 @@ async function main() {
   console.log('\nPASS: release_sd_by_key and retarget_sd_claim are live and callable.');
 }
 
-main().catch((e) => {
-  console.error('FAIL:', e?.message || e);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('FAIL:', e?.message || e);
+    process.exit(1);
+  });
+}

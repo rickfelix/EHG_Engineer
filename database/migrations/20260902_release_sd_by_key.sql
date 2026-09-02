@@ -189,6 +189,15 @@ COMMENT ON FUNCTION public.release_sd_by_key(text, text, text) IS
   'error (sd_mismatch / sd_not_found / phantom_session) rather than a silent no-op. Use for a '
   'multi-hold seat that must free one specific claim without touching its others.';
 
+-- A brand-new CREATE FUNCTION auto-grants EXECUTE to PUBLIC (Postgres default) -- unlike
+-- CREATE OR REPLACE on an already-migrated function, where existing grants persist untouched
+-- (see switch_sd_claim's 20260609 migration comment). Explicit REVOKE + re-GRANT closes that
+-- gap the same way every other first-CREATE RPC in this repo does (precedent:
+-- 20260826_eva_sync_state_atomic_result_rpc.sql). Only service_role calls these RPCs (fleet
+-- worker sessions use the service-role client) -- anon/authenticated have no legitimate caller.
+REVOKE EXECUTE ON FUNCTION public.release_sd_by_key(text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.release_sd_by_key(text, text, text) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.retarget_sd_claim(p_session_id text, p_release_sd_key text, p_claim_sd_key text, p_reason text DEFAULT 'retarget')
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -260,3 +269,6 @@ COMMENT ON FUNCTION public.retarget_sd_claim(text, text, text, text) IS
   'refused, claim refused, or an unexpected error) zero effects are applied -- never a '
   'partially-applied retarget. Used by the stale-session sweep retarget path; available for the '
   'coordinator redirect path to call directly.';
+
+REVOKE EXECUTE ON FUNCTION public.retarget_sd_claim(text, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.retarget_sd_claim(text, text, text, text) TO service_role;
