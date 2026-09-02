@@ -6,6 +6,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sendChairmanSmsQuestion, handleInboundSmsReply, drainSmsRelayStaging, resolveAllParkedChairmanSmsRows, AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD } from '../../../lib/chairman/sms-bridge.js';
 import { isMessagingProvider } from '../../../lib/messaging/messaging-provider.js';
+// QF-20260901-305: mocked so the routed_at claim/rollback logic can be tested in isolation
+// from insertCoordinationRow's own backpressure/correlation dependencies (out of this fix's
+// scope). Inert for every other test in this file — no_match/rate_limited routing from a
+// verified chairman number is the only path that calls either.
+vi.mock('../../../lib/coordinator/dispatch.cjs', () => ({ insertCoordinationRow: vi.fn() }));
+vi.mock('../../../lib/coordinator/adam-identity.cjs', () => ({ getActiveAdamId: vi.fn() }));
+import { insertCoordinationRow } from '../../../lib/coordinator/dispatch.cjs';
+import { getActiveAdamId } from '../../../lib/coordinator/adam-identity.cjs';
 
 /** Minimal in-memory multi-table fake supporting the exact query shapes sms-bridge.js uses. */
 function makeFakeSupabase(seed = {}) {
@@ -770,5 +778,59 @@ describe('drainSmsRelayStaging parking (FR-4/FR-6)', () => {
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-nophone');
     expect(row.drained_at).toBeTruthy();
     expect(row.parked_at).toBeFalsy();
+  });
+});
+
+describe('drainSmsRelayStaging Adam-routing routed_at claim (QF-20260901-305)', () => {
+  const CHAIRMAN = '+15551234567';
+  let originalChairmanPhone;
+  beforeEach(() => {
+    originalChairmanPhone = process.env.CHAIRMAN_PHONE;
+    process.env.CHAIRMAN_PHONE = CHAIRMAN;
+    insertCoordinationRow.mockReset().mockResolvedValue({ data: [{ id: 'coord-1' }], error: null });
+    getActiveAdamId.mockReset().mockResolvedValue('adam-session-1');
+  });
+  afterEach(() => { process.env.CHAIRMAN_PHONE = originalChairmanPhone; });
+
+  it('claims routed_at before delivering (no_match from the chairman number)', async () => {
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [{
+        id: 'stg-adam-1', provider_message_id: 'SM-adam-1', from_phone: CHAIRMAN, to_phone: '+15559999999',
+        body_raw: 'no candidate for this one', signature_valid: true, received_at: new Date().toISOString(), drained_at: null,
+      }],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(insertCoordinationRow).toHaveBeenCalledTimes(1);
+    expect(result.results[0].routedToAdam).toBe(true);
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-adam-1').routed_at).toBeTruthy();
+  });
+
+  it('a retry (routed_at already set) is an idempotent no-op — never re-delivers', async () => {
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [{
+        id: 'stg-adam-2', provider_message_id: 'SM-adam-2', from_phone: CHAIRMAN, to_phone: '+15559999999',
+        body_raw: 'no candidate for this one', signature_valid: true, received_at: new Date().toISOString(),
+        drained_at: null, routed_at: '2026-09-01T21:21:49.000Z',
+      }],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(insertCoordinationRow).not.toHaveBeenCalled();
+    expect(result.results[0].routedToAdam).toBe(true);
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-adam-2').routed_at).toBe('2026-09-01T21:21:49.000Z');
+  });
+
+  it('delivery failing after the claim rolls back routed_at, leaving the row retriable', async () => {
+    insertCoordinationRow.mockRejectedValueOnce(new Error('dispatch backpressure'));
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [{
+        id: 'stg-adam-3', provider_message_id: 'SM-adam-3', from_phone: CHAIRMAN, to_phone: '+15559999999',
+        body_raw: 'no candidate for this one', signature_valid: true, received_at: new Date().toISOString(), drained_at: null,
+      }],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results[0].routedToAdam).toBe(false);
+    // The bug this guards against: a landed-but-unstamped row reading unrouted forever. The
+    // inverse must also never happen -- a FAILED delivery must not leave routed_at set.
+    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-adam-3').routed_at).toBe(null);
   });
 });
