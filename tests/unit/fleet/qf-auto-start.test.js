@@ -198,3 +198,53 @@ describe('isAutoStartableQF — describes-a-migration vs performs-one (QF-202608
     expect(isAutoStartableQF(qf({ description: 'the auth token is logged in plaintext' }), NOW)).toBe(false);
   });
 });
+
+// SD-LEO-FIX-SELF-CLAIM-PREDICATE-001 (Solomon ruling 6580bedb): a risk-noun hit is excluded
+// UNLESS a fresh, content-hash-bound security-agent risk-review stamp says the text was already
+// read. Three specimens as three cases, per the ruling.
+describe('isAutoStartableQF — risk-review stamp (SD-LEO-FIX-SELF-CLAIM-PREDICATE-001)', () => {
+  const { computeQfRiskContentHash } = require('../../../lib/fleet/qf-risk-review-stamp.cjs');
+
+  function freshStampedQf(overrides = {}) {
+    const title = overrides.title ?? 'submits credentials';
+    const description = overrides.description ?? 'walker selector fix for a login form field';
+    return qf({
+      title,
+      description,
+      compliance_details: {
+        risk_reviewed: {
+          by: 'sub-agent-row-uuid-206',
+          at: '2026-09-02T07:00:00Z',
+          content_hash: computeQfRiskContentHash({ title, description }),
+        },
+      },
+      ...overrides,
+    });
+  }
+
+  test('206-class: risk-noun hit + fresh stamp bound to the CURRENT text → allowed', () => {
+    expect(isAutoStartableQF(freshStampedQf(), NOW)).toBe(true);
+  });
+
+  test('022-class: stamped, then title/description amended after review → stale → excluded (proves the invariant)', () => {
+    const stamped = freshStampedQf();
+    // The stamp still cites the ORIGINAL text's hash; the row's text has since changed.
+    const amended = { ...stamped, description: `${stamped.description} -- also rotates the auth token` };
+    expect(isAutoStartableQF(amended, NOW)).toBe(false);
+  });
+
+  test('456-class: risk-noun hit, no stamp at all → excluded', () => {
+    expect(isAutoStartableQF(qf({ description: 'update the security-linter classification rules' }), NOW)).toBe(false);
+  });
+
+  test('a malformed/partial stamp (missing content_hash) is treated as absent, not fresh', () => {
+    expect(isAutoStartableQF(qf({
+      title: 'rotate auth credentials',
+      compliance_details: { risk_reviewed: { by: 'x', at: '2026-09-02T07:00:00Z' } },
+    }), NOW)).toBe(false);
+  });
+
+  test('a fresh stamp does not override an EARLIER exclusion gate (e.g. persisted Tier 3)', () => {
+    expect(isAutoStartableQF(freshStampedQf({ routing_tier: 3 }), NOW)).toBe(false);
+  });
+});
