@@ -84,6 +84,7 @@ import {
   hasOrphanSD,
   isPatchEquivalentToMain,
   isIdle,
+  isOutsideWorktreesDir,
 } from '../lib/worktree-reaper/detectors.js';
 // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: resolve every registered worktree pool (EHG_Engineer +
 // ehg + any other registered app) and compute per-pool cap status, so --all-pools reaps each pool.
@@ -788,6 +789,15 @@ async function classifyWorktree(wt, ctx) {
   }
   if (idle.matched) { categories.push('idle'); reasons.idle = idle; }
 
+  // AC6 (SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4) — GAUGE ONLY, deliberately never
+  // pushed to `categories`. A sibling worktree freezes a seat (outside-working-directory
+  // permission prompt) but is NOT reap-authority: wiring it into categories would add it to
+  // hasStage1/hasStage2 below and risk auto-removing an existing, possibly in-use, sibling
+  // tree (TESTING sub-agent finding F8, evidence b2155fb0). `reasons` is surfaced in the same
+  // per-worktree output as every other detector, so it is visible, just never staged.
+  const sibling = isOutsideWorktreesDir(wt, { repoRoot: ctx.repoRoot });
+  if (sibling.matched) { reasons['sibling-outside-worktrees'] = sibling; }
+
   return { categories, reasons };
 }
 
@@ -1446,13 +1456,24 @@ export async function main(argv = process.argv) {
   console.log('─'.repeat(header.length));
 
   for (const wt of allWorktrees) {
+    // AC6 (SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4) — GAUGE ONLY. Computed once here
+    // (using `wt` directly, since `wtInput` is not built until below) and folded into every
+    // early-continue branch's evidence, not just classifyWorktree()'s. TESTING sub-agent
+    // finding F-C, evidence 6d0d3296: the live specimen this SD exists because of
+    // (EHG_Engineer-scribe-doctrine) takes the reap-protected-marker branch below, which
+    // previously never computed the gauge at all — 0 real-world yield despite FR-4's claim.
+    // Never affects verdict/stage in any branch.
+    const siblingGauge = isOutsideWorktreesDir(wt, { repoRoot });
+
     // Never touch Cursor IDE worktrees (inherits existing convention).
     if (isCursorWorktree(wt.path)) {
+      const evidence = {};
+      if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
         reason: 'cursor_worktree_protected',
         claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
-        preserveCount: 0, shipStatus: 'cursor', evidence: {},
+        preserveCount: 0, shipStatus: 'cursor', evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
@@ -1464,12 +1485,14 @@ export async function main(argv = process.argv) {
     // classification, so a protected tree can never reach stage1/stage2 removal regardless of
     // whether its basename resolves to an sd_key or it carries a DB claim.
     if (hasReapProtectedMarker(wt.path)) {
+      const evidence = { marker: readReapProtectedMarker(wt.path) || {} };
+      if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
         reason: 'reap_protected_marker',
         claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
         preserveCount: 0, shipStatus: 'protected',
-        evidence: { marker: readReapProtectedMarker(wt.path) || {} },
+        evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
@@ -1501,12 +1524,21 @@ export async function main(argv = process.argv) {
 
     if (activeClaim) {
       reasonText = 'active_claim_protected';
+      // AC6 (SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001 FR-4) — GAUGE ONLY, computed here too:
+      // an actively-claimed worktree is EXACTLY this SD's own trigger case (a live, frozen
+      // seat) and was previously INVISIBLE to isOutsideWorktreesDir, which only ran inside
+      // classifyWorktree() below -- unreachable from this branch's early `continue`
+      // (TESTING sub-agent finding F-B, evidence c94b16a8). Still never affects verdict/stage:
+      // 'keep:active' and claim protection are unchanged, this only adds visibility.
+      const sibling = isOutsideWorktreesDir(wtInput, { repoRoot: ctx.repoRoot });
+      const evidence = { claim: activeClaim };
+      if (sibling.matched) { evidence['sibling-outside-worktrees'] = sibling; }
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict: 'keep',
         reason: reasonText, claim_status: 'active', dirtyCount: dirty.dirtyCount,
         unpushedCount, ageDays, preserveCount: 0,
         shipStatus: 'not_on_main',
-        evidence: { claim: activeClaim },
+        evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
