@@ -21,6 +21,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { computeShadowRescore } from '../lib/quality/gate-threshold-shadow.js';
 import { emitFeedbackBatch } from '../lib/governance/emit-feedback.js';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -29,22 +30,38 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 const WINDOW_DAYS = 28;
 const windowStart = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
 
-const { data: view, error: viewErr } = await supabase.from('v_ai_quality_tuning_recommendations').select('*');
-if (viewErr) { console.error('view read failed:', viewErr.message); process.exit(1); }
+// A silent-truncated view read would drop candidate cells without any error — full pagination,
+// not a fixed limit(), even though the view's cardinality (sd_type x content_type x historical
+// threshold) is small today.
+let view;
+try {
+  view = await fetchAllPaginated(() => supabase.from('v_ai_quality_tuning_recommendations').select('*'));
+} catch (err) {
+  console.error('view read failed:', err.message);
+  process.exit(1);
+}
 
 const candidates = view.filter((r) => r.suggested_threshold !== null && r.suggested_threshold !== r.current_threshold);
 console.log(`\n${candidates.length} candidate cell(s) out of ${view.length} view rows.\n`);
 
 const items = [];
 for (const c of candidates) {
-  const { data: rows, error: rowsErr } = await supabase
-    .from('ai_quality_assessments')
-    .select('weighted_score')
-    .eq('sd_type', c.sd_type)
-    .eq('content_type', c.content_type)
-    .eq('pass_threshold', c.current_threshold)
-    .gte('assessed_at', windowStart);
-  if (rowsErr) { console.error(`re-score read failed for ${c.sd_type}/${c.content_type}:`, rowsErr.message); continue; }
+  // A silent-truncated population read would UNDER-COUNT flips without any error — a wrong
+  // shadow number is worse than no number for a decision input, so this reads ALL matching
+  // rows via range-pagination rather than a single capped select().
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('ai_quality_assessments')
+      .select('weighted_score')
+      .eq('sd_type', c.sd_type)
+      .eq('content_type', c.content_type)
+      .eq('pass_threshold', c.current_threshold)
+      .gte('assessed_at', windowStart));
+  } catch (err) {
+    console.error(`re-score read failed for ${c.sd_type}/${c.content_type}:`, err.message);
+    continue;
+  }
 
   const shadow = computeShadowRescore(rows, c.current_threshold, c.suggested_threshold);
   const cell = `${c.sd_type}/${c.content_type}`;
