@@ -624,7 +624,12 @@ export async function main(argv = process.argv.slice(2)) {
     // in-script safety net for any OTHER invocation path). Locally DATABASE_URL is routinely
     // unset by design and the password path below resolves instead -- gated on GITHUB_ACTIONS so
     // that legitimate local usage is untouched; only a CI run with the secret missing skips clean.
-    if (process.env.GITHUB_ACTIONS === 'true' && !process.env.DATABASE_URL) {
+    // !VITEST matters too: the ordinary unit-test CI job ALSO runs under GITHUB_ACTIONS=true with
+    // no real DATABASE_URL (it mocks createDatabaseClient instead) -- without this exclusion the
+    // guard fired inside that job too, short-circuiting main() before the mock ever ran and
+    // reddening tests/unit/anon-write-contract-probe-fr3.test.js's real exit-code assertions with
+    // a false EXIT.OK. Vitest sets process.env.VITEST='true' automatically for every test run.
+    if (process.env.GITHUB_ACTIONS === 'true' && !process.env.DATABASE_URL && !process.env.VITEST) {
       console.warn('::warning::DATABASE_URL is not set in CI -- skipping the live contract assertion cleanly (an operator secret, not a code defect).');
       return EXIT.OK;
     }
