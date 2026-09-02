@@ -86,12 +86,11 @@ function getDispatchAuthMode() {
 // SD-LEO-INFRA-COMPLEXITY-TIERED-WORKER-ASSIGNMENT-001 (FR-3): WORK-DOWN-NEVER-UP on the PULL path.
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-B (FR-3): --model/--effort capture at check-in.
 const { resolveWorkerTierRank, isTieringActive, normalizeModel, normalizeEffort, rankForModelEffort, ladderTopRank, familyFromModelId, seatCapabilityIsVerified, isKnownEffort, isKnownModel } = require('../lib/fleet/tier-ladder.cjs');
-// SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup.
-// tierBlocks also reused directly (SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001): it already honors
-// a scored SD's explicit min_tier_rank floor even when global tiering is off, which recoverStrandedFinal
-// and adoptOrphanInProgress need and a raw classifyDispatchIneligibility(sd, {worker_tier_rank, tiering_active})
-// call would not provide.
-const { claimableForTier, claimableForRepo, tierBlocks } = require('../lib/fleet/tier-claimable.cjs');
+// SD-LEO-INFRA-BELT-TIER-AWARE-CLAIMABILITY-001 (FR-2): tier-aware "claimable-to-MY-rung" rollup,
+// still consumed by the belt gauge / capacity forecaster. The tierBlocks() reuse this comment
+// used to describe (SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001) was DELETED by
+// SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (chairman ratification 20dc072b).
+const { claimableForTier, claimableForRepo } = require('../lib/fleet/tier-claimable.cjs');
 // SD-LEO-INFRA-AUTO-TIERING-ACTIVATION-001-E (FR-6): backlog-gated downward claims. The fetcher is
 // SHARED with lib/coordinator/dispatch.cjs's assertWorkerTierAllowed so the pull path (here) and
 // the directed-dispatch path compute an IDENTICAL backlog verdict — never two re-derivations.
@@ -1108,15 +1107,9 @@ async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
         skipped.push(`${sd.sd_key}: ${ineligible}`);
         continue;
       }
-      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: this lane called classifyDispatchIneligibility
-      // above with NO tierCtx, so the tier axis was silently inert here (WORK-DOWN-NEVER-UP held only
-      // on the merged-pool lane). tierBlocks (not a raw ctx spread) is reused deliberately: it already
-      // honors a scored SD's explicit min_tier_rank floor even when global tiering is off, and it never
-      // reads inflight_git_state, so it cannot regress this lane's own merged-PR recovery behavior.
-      if (tierBlocks(sd, tierCtx.worker_tier_rank, tierCtx.tiering_active)) {
-        skipped.push(`${sd.sd_key}: above_worker_tier`);
-        continue;
-      }
+      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001's tierBlocks() gate here was retired to
+      // advisory-only by QF-20260831-419, then DELETED by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001
+      // (chairman ratification 20dc072b). This lane no longer refuses recovery on seat tier.
       // FR-2: soft holds do not refuse, but they must never be INVISIBLE.
       const softHolds = describeSoftHolds(sd);
       const claimed = await tryClaim(sb, sd.sd_key, sessionId);
@@ -1437,11 +1430,9 @@ async function adoptOrphanInProgress(sb, sessionId, base, tierCtx = {}) {
       // metadata.requires_human_action all skip. SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd}
       // adds the claim-time fitness axes so a repo-mismatched orphan is not adopted here.
       if (classifyDispatchIneligibility(sd, { cwd: process.cwd() }) !== null) continue;
-      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001: same omission as recoverStrandedFinal above --
-      // this lane's classifyDispatchIneligibility call carries no tierCtx, so a below-rung seat could
-      // adopt an above-rung orphan. tierBlocks reused for the same reason: it honors a scored SD's
-      // floor even when global tiering is off, unlike a raw ctx spread into the classifier.
-      if (tierBlocks(sd, tierCtx.worker_tier_rank, tierCtx.tiering_active)) continue;
+      // SD-LEO-INFRA-SELF-CLAIM-TIER-ENFORCEMENT-001's tierBlocks() gate here was retired to
+      // advisory-only by QF-20260831-419, then DELETED by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001
+      // (chairman ratification 20dc072b). This lane no longer refuses adoption on seat tier.
       // SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001: parent-lifecycle guard. classifyDispatchIneligibility
       // excludes orchestrator-parents/test-fixtures/human-action/live-held but NOT a CHILD whose
       // orchestrator parent is still pre-LEAD — adopting one only burns PLAN cycles before the hard

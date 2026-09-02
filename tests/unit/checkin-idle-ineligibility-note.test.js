@@ -17,8 +17,11 @@ describe('formatIdleIneligibilityNote (QF-20260719-144)', () => {
   });
 
   it('blames the rung ONLY for items actually in the tier family', () => {
+    // SD-FDBK-INFRA-RETIRE-SEAT-TIER-001 (ratification 20dc072b): above_worker_tier was deleted
+    // from classifyDispatchIneligibility; fable_window_downward_claim_blocked is the one surviving
+    // tier-family axis (ruling QF-20260709-881) and is used here instead.
     const note = formatIdleIneligibilityNote(4, 0,
-      { above_worker_tier: 3, human_action_required: 1 }, true);
+      { fable_window_downward_claim_blocked: 3, human_action_required: 1 }, true);
     expect(note).toContain('3 above your rung');
     expect(note).toContain('1x human_action_required');
   });
