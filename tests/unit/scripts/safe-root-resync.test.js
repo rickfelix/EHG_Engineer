@@ -310,9 +310,34 @@ describe('TS-3: default non-destructive path', () => {
 
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe('dirty');
+    // QF-20260902-805: the dirty file list rides along so a durable SKIPPED_DIRTY verdict can be
+    // written without re-deriving it — capped, never unbounded.
+    expect(result.dirtyFiles).toEqual([' M scripts/some-file.js']);
     // No merge, no clean
     expect(execSpy.calls.filter(a => a[0] === 'merge').length).toBe(0);
     expect(execSpy.calls.filter(a => a[0] === 'clean').length).toBe(0);
+  });
+
+  it('caps the dirty file list at 10 entries', async () => {
+    const CWD = SHARED_ROOT;
+    const manyFiles = Array.from({ length: 15 }, (_, i) => ` M file${i}.js`).join('\n');
+    const execSpy = makeExecSpy([
+      {
+        args_match: ['status', '--porcelain', '--untracked-files=no'],
+        stdout: manyFiles + '\n',
+      },
+    ]);
+
+    const result = await safeRootResync({
+      exec: execSpy,
+      fs: makeFsSharedRoot(CWD),
+      cwd: CWD,
+      supabase: null,
+      ...noopRestoreSeams,
+    });
+
+    expect(result.skipped).toBe('dirty');
+    expect(result.dirtyFiles.length).toBe(10);
   });
 
   it('returns conflict:true when ff-only merge is declined', async () => {
