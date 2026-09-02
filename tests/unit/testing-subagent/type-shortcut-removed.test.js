@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isE2EApplicabilityExempt } from '../../../scripts/modules/handoff/validation/sd-type-applicability-policy.js';
 import { checkForNonUISdType } from '../../../lib/sub-agents/testing/index.js';
+import { verifyUserStories } from '../../../lib/sub-agents/testing/phases/phase4-evidence.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const src = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -103,6 +104,44 @@ describe('SC#2/SC#3: a code-producing exempt-type SD never gets a fabricated PAS
   });
 });
 
+// Coordinator ruling (2026-09-02, RULING TESTING-SUB-AGENT-001): "keep protocol/api/backend
+// exempt — no silent flip to required. Add a regression test that the 90.5% e2e_test_path=NULL
+// stories keep passing (QF-20260801-425 guard)." tests/unit/testing-subagent/
+// verify-user-stories-e2e-mapping.test.js already pins the validated-population half (both
+// exempt and non-exempt types pass a validated NULL-path story). This pins the other half: the
+// NON-validated NULL-path case for every type isE2EApplicabilityExempt now widens exemption to
+// (database, refactor, process were previously required by the old 11-entry list's semantics but
+// are legitimately NON_APPLICABLE/OPTIONAL per policy) plus the 3 carve-out types -- none of
+// them silently flip to requiring e2e_test_path, and non-exempt types (bugfix) still do.
+function stubSupabaseFor(rows) {
+  return { from: () => ({ select: () => ({ eq: () => Promise.resolve({ data: rows, error: null }) }) }) };
+}
+
+// e2e_test_status='passing' isolates clause 4 (which independently requires a passing run OR
+// validation) so this fixture exercises ONLY clause 2's exemption behavior for a NULL path with
+// no validation_status='validated' escape hatch.
+function unvalidatedNullPathStory() {
+  return {
+    story_key: 'SD-X:US-001', title: 'story', status: 'completed',
+    validation_status: 'pending', e2e_test_path: null, e2e_test_status: 'passing',
+  };
+}
+
+describe('SC#1 regression guard: no legacy-exempt type silently flips to requiring e2e mapping', () => {
+  it.each(['database', 'infrastructure', 'documentation', 'docs', 'refactor', 'process', 'uat', 'orchestrator', 'protocol', 'api', 'backend'])(
+    'sd_type=%s: an unvalidated NULL-path story still passes (exemption preserved)',
+    async (sdType) => {
+      const res = await verifyUserStories('sd-x', stubSupabaseFor([unvalidatedNullPathStory()]), { sdType });
+      expect(res.verified, `${sdType} should stay exempt from e2e_test_path mapping`).toBe(true);
+    }
+  );
+
+  it('sd_type=bugfix: an unvalidated NULL-path story is still correctly blocked (not newly exempted)', async () => {
+    const res = await verifyUserStories('sd-x', stubSupabaseFor([unvalidatedNullPathStory()]), { sdType: 'bugfix' });
+    expect(res.verified).toBe(false);
+  });
+});
+
 describe('SC#4: measured implies the verdict is never a bare unmeasured PASS', () => {
   it('every non-null checkForNonUISdType result carries metadata.measured explicitly', async () => {
     const sb = mockSupabase({ sd_type: 'documentation', category: null, key_changes: [], scope: 'docs only', title: 'x' });
@@ -113,5 +152,14 @@ describe('SC#4: measured implies the verdict is never a bare unmeasured PASS', (
     if (result.verdict === 'PASS') {
       expect(result.findings.phase3_execution.reason).toMatch(/no code produced/);
     }
+  });
+
+  // SC#6: every result also carries the ONE structured representation.
+  it('every non-null checkForNonUISdType result carries metadata.test_execution (SC#6)', async () => {
+    const sb = mockSupabase({ sd_type: 'documentation', category: null, key_changes: [], scope: 'docs only', title: 'x' });
+    const result = await checkForNonUISdType('sd-5', 'prospective', {}, null, sb);
+    expect(result.metadata.test_execution).toEqual({
+      tests_executed: 0, tests_passed: 0, tests_failed: 0, tests_skipped: 0, artifact_sha: null, runner: null
+    });
   });
 });

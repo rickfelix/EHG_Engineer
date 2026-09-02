@@ -21,6 +21,10 @@ import { getValidatorRequirement } from '../../../validation/sd-type-applicabili
 // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-3): WHITELIST-based timeout classifier
 import { buildWaitResult, buildFailResult, classifyTestRunnerExit } from '../../../../../../lib/handoff/wait-verdict.js';
 import { execSync } from 'child_process';
+// SD-FDBK-INFRA-TESTING-SUB-AGENT-001 SC#6: read the ONE structured test-execution
+// representation when present (either writer path); ad-hoc metadata.measured is the
+// backward-compatible fallback for rows written before this field existed.
+import { isMeasuredExecution } from '../../../../../../lib/sub-agents/testing/test-execution-record.js';
 
 /**
  * FR-3: Resolve test-runner exit info for WAIT classification.
@@ -295,7 +299,10 @@ export function createMandatoryTestingValidationGate(supabase) {
       // NO measured key (older evidence, or a sub-agent path that doesn't set it) is treated as
       // measured — this only narrows behavior for the specific defect this SD fixes, it never
       // widens a failure onto evidence this gate already trusted before today.
-      const measured = result.metadata?.measured;
+      // SC#6: prefer the structured field (source-agnostic — works for either writer path);
+      // fall back to the ad-hoc boolean for rows written before test_execution existed.
+      const testExecution = result.metadata?.test_execution;
+      const measured = testExecution !== undefined ? isMeasuredExecution(testExecution) : result.metadata?.measured;
       if (measured === false) {
         if (isAdvisoryMode) {
           // ADVISORY tier: same honest-but-non-blocking shape as the missing-row ADVISORY path

@@ -298,5 +298,29 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
       expect(result.passed).toBe(true);
       expect(result.score).toBe(100);
     });
+
+    // SC#6: the structured field takes precedence over the ad-hoc boolean when both are present
+    // (and is source-agnostic — the gate does not care which writer path populated it).
+    it('metadata.test_execution present with tests_executed=0 → treated as unmeasured, even if ad-hoc measured=true lies', async () => {
+      withTestingRow({
+        id: 1, verdict: 'PASS', confidence: 95, created_at: freshDate(),
+        metadata: { measured: true, test_execution: { tests_executed: 0, tests_passed: 0, tests_failed: 0, tests_skipped: 0, artifact_sha: null, runner: null } },
+      });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-te-zero' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.issues[0]).toMatch(/ERR_TESTING_REQUIRED/);
+    });
+
+    it('metadata.test_execution present with tests_executed>0 → treated as measured (source=manual parity)', async () => {
+      withTestingRow({
+        id: 1, verdict: 'PASS', confidence: 90, created_at: freshDate(),
+        metadata: { source: 'manual', test_execution: { tests_executed: 12, tests_passed: 12, tests_failed: 0, tests_skipped: 0, artifact_sha: 'deadbeef', runner: 'vitest' } },
+      });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-te-manual' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+    });
   });
 });
