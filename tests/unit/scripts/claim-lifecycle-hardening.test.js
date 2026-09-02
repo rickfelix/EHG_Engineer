@@ -86,6 +86,27 @@ describe('FR-2: selfHealStaleClaim is CAS-guarded by session_id and co-nulls wor
     const throwing = { from() { return throwing; }, update() { return throwing; }, eq() { return throwing; }, then(_r, rej) { return Promise.resolve().then(() => { throw new Error('db down'); }).catch(rej); } };
     await expect(selfHealStaleClaim(throwing, 'sess-1', 'SD-X')).resolves.toBeUndefined();
   });
+
+  // QF-20260824-154: a stale claim's sdKey CAN be a QF-shaped id (self_claimed_qf writes a QF id
+  // into claude_sessions.sd_key), and the strategic_directives_v2 clear above no-ops for one (no
+  // matching row) -- without a symmetric quick_fixes clear, the QF's OWN claiming_session_id was
+  // never released here: a soft-orphan invisible to dispatch until some other path cleared it.
+  it('QF-20260824-154: clears quick_fixes.claiming_session_id guarded by id + claiming_session_id = this session', async () => {
+    const { chain, calls } = mockSb();
+    await selfHealStaleClaim(chain, 'sess-1', 'QF-20260817-982');
+    const qf = calls.find(c => c.table === 'quick_fixes');
+    expect(qf.payload).toEqual({ claiming_session_id: null });
+    expect(qf.eqs).toContainEqual(['id', 'QF-20260817-982']);
+    expect(qf.eqs).toContainEqual(['claiming_session_id', 'sess-1']); // CAS: never clobber a peer
+  });
+
+  it('QF-20260824-154: an SD-shaped key still issues the quick_fixes clear (the predicate is the guard, matches nothing)', async () => {
+    const { chain, calls } = mockSb();
+    await selfHealStaleClaim(chain, 'sess-1', 'SD-X');
+    const qf = calls.find(c => c.table === 'quick_fixes');
+    expect(qf).toBeDefined();
+    expect(qf.eqs).toContainEqual(['id', 'SD-X']);
+  });
 });
 
 describe('FR-3: shared NON_RESUMABLE_STATUSES', () => {
