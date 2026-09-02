@@ -26,11 +26,34 @@
 -- unauthenticated read/write/delete surface via PostgREST today.
 --
 -- Confirmed via repo-wide grep (no matches in src/ or any client-facing directory) that none of
--- the 12 tables below are referenced by frontend/browser client code -- every known consumer is
+-- the tables below are referenced by frontend/browser client code -- every known consumer is
 -- backend service-role automation (lib/venture-deploy/preview.js, lib/eva/stage-templates/...),
 -- which BYPASSES RLS regardless of this change. Enabling RLS with no additional policies
 -- therefore denies anon/authenticated entirely while leaving every known legitimate consumer
 -- unaffected -- the same reasoning the coordination_receipts precedent used.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- CORRECTION (SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001, 2026-09-02) -- two tables removed
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- This file originally included north_star and scope_completion_chain in the blanket
+-- enable+revoke below. That was a regression against database/chairman-gated/
+-- 20260825_enable_rls_chronic_red_guard_zero_consumer_tables.sql (SD-LEO-INFRA-CHRONIC-RED-GUARD-001,
+-- authored six days earlier, also unapplied at the time this file was authored), which had already
+-- independently verified and EXPLICITLY EXCLUDED both tables for documented, measured reasons: (1)
+-- north_star has a real, live anon-key browser consumer (ehg repo's src/hooks/useNorthStar.ts +
+-- src/components/eva-chat/intents/northStarIntent.ts) that this file's own repo-wide grep claim
+-- above did not catch; (2) scope_completion_chain is UNIONed by the security_invoker=on view
+-- public.writer_consumer_asymmetry_witnesses, which GRANTs SELECT to both anon and authenticated --
+-- a bare enable-with-no-policy on either table would have silently broken a real consumer the
+-- instant this file was applied via its own pending chairman ceremony. Both tables are being handled
+-- correctly elsewhere instead: north_star gets a real, verified SELECT policy (scoped to its actual
+-- query filter) plus this same REVOKE, and scope_completion_chain reuses the RLS-enable + permissive
+-- read policy already staged (also unapplied) in database/migrations/20260616_security_hygiene_
+-- rls_searchpath.sql, paired with the matching REVOKE -- both landed in
+-- database/chairman-gated/20260902_security_linter_sentinel_north_star_and_chain.sql. Neither of
+-- those replacement statements duplicates this file's blanket, no-policy shape for these two tables.
+-- This file's remaining 10 tables were independently re-verified (repeating, not merely trusting, the
+-- zero-consumer census) and are unaffected by this correction.
 --
 -- ─────────────────────────────────────────────────────────────────────────────────────────────
 -- SCOPE
@@ -40,18 +63,17 @@
 -- anon/authenticated (mirrors 20260731_coordination_receipts_rls_posture.sql exactly).
 --
 -- Tables: claim_rejects, coverage_matrix, coverage_matrix_rotation_runs, door_routing_ledger,
--- north_star, scope_completion_chain, selection_postures, sourcing_chairman_queue,
--- v_hc_flag_enabled, v_id, v_s22_flag_enabled, venture_preview_instances.
+-- selection_postures, sourcing_chairman_queue, v_hc_flag_enabled, v_id, v_s22_flag_enabled,
+-- venture_preview_instances. (north_star and scope_completion_chain removed -- see CORRECTION above.)
 --
 -- POST-APPLY VERIFICATION: re-run `node scripts/sentinels/audit-security-linter.mjs --strict`
--- -- rls_disabled_in_public and sensitive_columns_exposed should both drop to 0.
+-- -- rls_disabled_in_public should drop by 10 (the remaining 2 close via the paired migration
+-- named above); sensitive_columns_exposed should drop to 0 (claim_rejects is in this file's set).
 
 ALTER TABLE public.claim_rejects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coverage_matrix ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coverage_matrix_rotation_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.door_routing_ledger ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.north_star ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.scope_completion_chain ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.selection_postures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sourcing_chairman_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.v_hc_flag_enabled ENABLE ROW LEVEL SECURITY;
@@ -63,8 +85,6 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.claim_rejects FROM anon, authe
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coverage_matrix FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coverage_matrix_rotation_runs FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.door_routing_ledger FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.north_star FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.scope_completion_chain FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.selection_postures FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.sourcing_chairman_queue FROM anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.v_hc_flag_enabled FROM anon, authenticated;

@@ -1,4 +1,9 @@
--- @approved-by: rickfelix@example.com
+-- @approved-by: <pending -- apply via the chairman's 3-factor ceremony>
+-- CORRECTED 2026-09-02 (SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001): the prior value here
+-- (rickfelix@example.com) is not a real approval and matches migration-guards.js's
+-- APPROVED_BY_RE extraction while failing only the separate git-email equality check --
+-- a latent footgun. Blanked to the standard unstamped placeholder; the worker must not
+-- self-author this attestation (CONST-002).
 -- =============================================================================
 -- Pin search_path on log_sd_mutation_audit (function_search_path_mutable)
 -- SD-LEO-FIX-TRIAGE-THREE-FAILING-001, leg (a) mechanical subset
