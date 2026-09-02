@@ -17,8 +17,14 @@
  * this is a length-only check, not a rubric classification (a false-completion report is
  * inherently free-form; there is no fixed vocabulary of legitimate reasons to pattern-match).
  *
+ * SECURITY review finding S4 (EXEC-TO-PLAN evidence, measured 2026-09-02): also refuses without
+ * an attributable actor (CLAUDE_SESSION_ID or an explicit --actor). This flag is durable and
+ * never auto-cleared, so an 'unknown'-actor write would leave a permanent, unattributed marker
+ * on the SD with no trace of who set it. Folded in while this script has zero production
+ * callers -- no compatibility surface to reason about yet.
+ *
  * Usage:
- *   node scripts/mark-completion-evidence-invalid.js --sd-id <SD-KEY-or-UUID> --reason "<text (min 20 chars)>" [--offending-handoff-id <uuid>]
+ *   node scripts/mark-completion-evidence-invalid.js --sd-id <SD-KEY-or-UUID> --reason "<text (min 20 chars)>" [--actor <id>] [--offending-handoff-id <uuid>]
  *   node scripts/mark-completion-evidence-invalid.js --help
  */
 
@@ -47,11 +53,14 @@ export function parseArgs(argv) {
  * Pure guard: is this invocation well-formed? Returns null when acceptable, or a
  * reason string when the mark must be refused.
  */
-export function refusalReason({ sd_id, reason }) {
+export function refusalReason({ sd_id, reason, actor }) {
   if (!sd_id) return 'missing --sd-id';
   if (!reason || typeof reason !== 'string') return 'missing --reason (required — an unexplained flag flip is as untrustworthy as an unexplained bypass)';
   if (reason.trim().length < MIN_REASON_LENGTH) {
     return `--reason must be at least ${MIN_REASON_LENGTH} characters (got ${reason.trim().length})`;
+  }
+  if (!actor || typeof actor !== 'string' || !actor.trim()) {
+    return 'missing actor — set CLAUDE_SESSION_ID or pass --actor <id> (an unattributed flag flip on a durable, never-auto-cleared marker is as untrustworthy as an unexplained bypass)';
   }
   return null;
 }
@@ -107,7 +116,7 @@ export async function resolveSD(supabase, input) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log(`Usage: node scripts/mark-completion-evidence-invalid.js --sd-id <SD-KEY-or-UUID> --reason "<text>" [--offending-handoff-id <uuid>]
+    console.log(`Usage: node scripts/mark-completion-evidence-invalid.js --sd-id <SD-KEY-or-UUID> --reason "<text>" [--actor <id>] [--offending-handoff-id <uuid>]
 
 Marks strategic_directives_v2.metadata.completion_evidence_invalid=true for the given SD.
 This is the ONLY sanctioned writer of that flag -- reactivate-sd.js's completed->active
@@ -116,12 +125,14 @@ reopen path refuses without it. Writes an sd_transition_audit row for traceabili
 Options:
   --sd-id <id>                  SD key or UUID (required)
   --reason "<text>"             Why this completion's evidence is invalid (required, min 20 chars)
+  --actor <id>                  Who is setting this flag (required unless CLAUDE_SESSION_ID is set)
   --offending-handoff-id <uuid> The sd_phase_handoffs.id this reopen traces back to (optional)
 `);
     process.exit(0);
   }
 
-  const reason0 = refusalReason(args);
+  const actor = args.actor || process.env.CLAUDE_SESSION_ID || null;
+  const reason0 = refusalReason({ ...args, actor });
   if (reason0) {
     console.error(`\nmark-completion-evidence-invalid: ${reason0}`);
     process.exit(2);
@@ -135,7 +146,7 @@ Options:
 
   const { updates } = computeMarkInvalid(sd, {
     reason: args.reason,
-    actor: process.env.CLAUDE_SESSION_ID || 'unknown',
+    actor,
     offendingHandoffId: args.offending_handoff_id || null,
   });
 
@@ -152,11 +163,14 @@ Options:
 
   console.log(`✓ ${updated.sd_key}: metadata.completion_evidence_invalid=true (status=${updated.status})`);
 
-  // Audit trail entry for the MARK itself (loud-but-non-fatal — the flag already landed).
+  // Audit trail entry for the MARK itself. The flag already landed on strategic_directives_v2
+  // at this point, but SECURITY review finding S4: the mark IS the thing being audited here --
+  // silently losing this row would leave the flag-flip untraceable, which defeats the purpose
+  // of this script existing at all. Fails the process (non-zero exit) rather than warn-only.
   const auditRow = {
     sd_id: sd.uuid_id,
     transition_type: 'FLAG_COMPLETION_EVIDENCE_INVALID',
-    session_id: process.env.CLAUDE_SESSION_ID || null,
+    session_id: actor,
     request_id: randomUUID(),
     pre_state: { status: sd.status, completion_evidence_invalid: sd.metadata?.completion_evidence_invalid ?? null },
     post_state: { status: sd.status, completion_evidence_invalid: true, reason: args.reason },
@@ -166,10 +180,11 @@ Options:
   };
   const { error: auditErr } = await supabase.from('sd_transition_audit').insert(auditRow);
   if (auditErr) {
-    console.warn('⚠️  sd_transition_audit write failed (non-fatal — flag already set):', auditErr.message);
-  } else {
-    console.log('✓ sd_transition_audit: FLAG_COMPLETION_EVIDENCE_INVALID recorded');
+    console.error('\n❌ sd_transition_audit write FAILED (flag was already set, but the mark is now unaudited):', auditErr.message);
+    console.error('   Resolution: verify the flag manually, or investigate DB connectivity before relying on this mark.');
+    process.exit(1);
   }
+  console.log('✓ sd_transition_audit: FLAG_COMPLETION_EVIDENCE_INVALID recorded');
 
   console.log(`\nNext: node scripts/reactivate-sd.js ${sd.sd_key} --to active --reason "<why reopening now>"`);
 }

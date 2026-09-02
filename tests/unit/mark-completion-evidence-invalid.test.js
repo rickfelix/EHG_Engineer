@@ -46,7 +46,23 @@ describe('refusalReason', () => {
   });
 
   it('accepts a well-formed invocation', () => {
-    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON })).toBeNull();
+    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: 'session-abc' })).toBeNull();
+  });
+
+  // SECURITY review finding S4 (EXEC-TO-PLAN evidence, measured 2026-09-02): this flag is
+  // durable and never auto-cleared, so an unattributed write leaves a permanent, untraceable
+  // marker on the SD. Folded in while the script has zero production callers.
+  it('refuses without an actor (neither CLAUDE_SESSION_ID nor --actor)', () => {
+    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: null })).toMatch(/missing actor/);
+    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON })).toMatch(/missing actor/);
+  });
+
+  it('refuses a whitespace-only actor', () => {
+    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: '   ' })).toMatch(/missing actor/);
+  });
+
+  it('accepts an explicit --actor even without CLAUDE_SESSION_ID', () => {
+    expect(refusalReason({ sd_id: 'SD-XXX-001', reason: REASON, actor: 'operator-jane' })).toBeNull();
   });
 });
 
