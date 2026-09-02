@@ -199,14 +199,14 @@ describe('storeSubAgentResults: phase-scoped dedup (SD-LEO-INFRA-EVIDENCE-DEDUP-
       sdTable['SD-TEST-003'] = { id: 'SD-TEST-003', current_phase: 'PLAN' };
       const { storeSubAgentResults } = await import('../../lib/sub-agent-executor/results-storage.js');
 
-      const planId = await storeSubAgentResults('TESTING', 'SD-TEST-003', null, { verdict: 'PASS', confidence: 85 });
+      const planId = await storeSubAgentResults('TESTING', 'SD-TEST-003', null, { verdict: 'PASS', confidence: 85, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
       // Simulate the SD progressing from PLAN to EXEC between the two calls --
       // this is the exact scenario that reproduced fb 0b12ca77 on the majority
       // (phase-omitting) invocation path even after the phase-scoped dedup shipped.
       sdTable['SD-TEST-003'].current_phase = 'EXEC';
 
-      const execId = await storeSubAgentResults('TESTING', 'SD-TEST-003', null, { verdict: 'PASS', confidence: 88 });
+      const execId = await storeSubAgentResults('TESTING', 'SD-TEST-003', null, { verdict: 'PASS', confidence: 88, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
       expect(rows).toHaveLength(2);
       expect(execId).not.toBe(planId);
@@ -251,7 +251,7 @@ describe('storeSubAgentResults: phase-scoped dedup (SD-LEO-INFRA-EVIDENCE-DEDUP-
       // Explicit path: many real writers intentionally use a hyphenated convention
       // (e.g. handoff executors writing 'PLAN-TO-EXEC') and HandoffRepository does an
       // exact .eq('phase', phase) lookup against it -- this must NOT be rewritten.
-      await storeSubAgentResults('TESTING', 'SD-TEST-007', null, { verdict: 'PASS', confidence: 91 }, { phase: 'PLAN-TO-EXEC' });
+      await storeSubAgentResults('TESTING', 'SD-TEST-007', null, { verdict: 'PASS', confidence: 91, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } }, { phase: 'PLAN-TO-EXEC' });
       const explicitRow = rows.find((r) => r.sub_agent_code === 'TESTING');
       expect(explicitRow.phase).toBe('PLAN-TO-EXEC');
     });
