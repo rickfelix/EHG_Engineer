@@ -420,7 +420,7 @@ const { SUPABASE_PATTERNS, isSupabaseExecution } = require(path.resolve(__dirnam
 
 // ENF-18 (QF-20260902-542): parsing seam split out so tests can require it without
 // hitting this file's own module-load-time `fs.readFileSync(0)` stdin read.
-const { parseHandoffExecuteCall } = require('./lib/handoff-execute-precheck-guard.cjs');
+const { parseHandoffExecuteCall, evaluateHandoffExecutePrecheck } = require('./lib/handoff-execute-precheck-guard.cjs');
 
 /**
  * Determine enforcement tier for the current Bash command context.
@@ -1640,14 +1640,17 @@ async function main() {
         if (supabaseUrl && serviceKey) {
           const { createClient } = require('@supabase/supabase-js');
           const supabase = createClient(supabaseUrl, serviceKey);
-          const { handoffType, sdId } = handoffExecCall;
+          const { handoffType, sdId: rawSdId } = handoffExecCall;
+          const { resolveSdInputOrNull } = await import('../lib/sd-id-resolver.js');
           const { validateSubagentEvidence } = await import('../modules/handoff/gates/subagent-evidence-gate.js');
-          const evidenceResult = await validateSubagentEvidence({ handoffType, sdId, supabase }, supabase);
-          if (evidenceResult.passed === false && !evidenceResult.wait) {
-            const missing = evidenceResult.details?.missing || [];
-            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-18', 'Premature handoff.js execute refused: phase sub-agent evidence absent', 'block', { handoff_type: handoffType, sd_id: sdId, failed_gate: 'SUBAGENT_EVIDENCE_MISSING', missing });
-            process.stderr.write(`[ENF-18] PREMATURE EXECUTE REFUSED: ${handoffType} for ${sdId} has no required sub-agent evidence yet (missing: ${missing.join(', ') || 'see precheck'}).\n` +
-              `  Invoke the required sub-agent(s), then: node scripts/handoff.js precheck ${handoffType} ${sdId}  (override: LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off)\n`);
+          const decision = await evaluateHandoffExecutePrecheck(
+            { handoffType, rawSdId, supabase },
+            { resolveSdInputOrNull, validateSubagentEvidence }
+          );
+          if (decision.refuse) {
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-18', 'Premature handoff.js execute refused: phase sub-agent evidence absent', 'block', { handoff_type: handoffType, sd_id: decision.resolvedSdId, failed_gate: 'SUBAGENT_EVIDENCE_MISSING', missing: decision.missing });
+            process.stderr.write(`[ENF-18] PREMATURE EXECUTE REFUSED: ${handoffType} for ${rawSdId} has no required sub-agent evidence yet (missing: ${decision.missing.join(', ') || 'see precheck'}).\n` +
+              `  Invoke the required sub-agent(s), then: node scripts/handoff.js precheck ${handoffType} ${rawSdId}  (override: LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off)\n`);
             await auditAndExit(auditPromise, 2);
           }
         }
