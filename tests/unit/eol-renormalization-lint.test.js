@@ -135,8 +135,8 @@ describe('TS-6: end-to-end -- detector reports dirty pre-fix, clean post-fix', (
 });
 
 describe('allowlist contract', () => {
-  it('has exactly 2 entries (fails loudly if silently grown)', () => {
-    expect(ALLOWLIST).toHaveLength(2);
+  it('has exactly 0 entries (fails loudly if silently grown; QF-20260902-487 cleared the 2 stale sql entries after renormalizing them)', () => {
+    expect(ALLOWLIST).toHaveLength(0);
   });
 
   it('every entry has a non-empty rationale', () => {
