@@ -5,6 +5,7 @@
 
 - [2026-09-02](#2026-09-02)
   - [Infrastructure](#infrastructure-5)
+  - [Bugfix](#bugfix)
 - [2026-09-01](#2026-09-01)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -204,6 +205,14 @@
   - New `lib/env-resolver.cjs` (`resolveEnvPath`) resolves the main worktree's root first via `git rev-parse --git-common-dir`, falling back to the old ancestor-walk only when the main root genuinely has no `.env` there (preserves today's behavior for a repo with no `.env` anywhere, verified for the altifyai venture repo).
   - Also fixes `lib/supabase-client.cjs`'s missing `quiet: true` on `dotenv.config()` (was printing its "injected env" banner to stdout, contaminating `--json` CLI output); removes `scripts/sd-start.js`'s own now-redundant direct `dotenv.config()` call.
   - New ESLint `no-restricted-imports`/`no-restricted-syntax` rules ban new direct `dotenv` imports (both `import` and CJS `require()`) under `lib/`, with a generated ratchet allowlist grandfathering the ~175 pre-existing importers — full migration deferred to a follow-up SD.
+
+### Bugfix
+
+- **Fix chronic housekeeping-weekly-report CRLF stash conflict** - QF-20260901-018 / SD-LEO-FIX-HOUSEKEEPING-WEEKLY-REPORT-001
+  - `lib/agents/venture-ceo-factory.js` and 3 `scripts/archive/one-time/*.js` files were declared `eol=lf` in `.gitattributes` but stored CRLF/mixed in the git index, never renormalized after that rule was added — `peter-evans/create-pull-request@v6`'s internal stash/checkout/pop choreography (used by `.github/workflows/housekeeping-weekly-report.yml`) hit a CRLF-normalization warning on checkout, then failed the pop with a real merge conflict. Root cause confirmed directly from the failing run's log, not assumed.
+  - Renormalized the 3 unfenced files (`git add --renormalize`); the 4th, `lib/agents/venture-ceo-factory.js`, was deliberately left CRLF — it's held by a live, unrelated FR-6 scope fence (`tests/unit/spine-verify-first-teardown.test.js`) that would trip on a change altering no real content.
+  - Both `eol` ratchet-test baselines (`tests/fixtures/eol-mixed-crlf-baseline.txt`, `tests/static-guards/eol-mixed-crlf-ratchet.test.js`'s `EXPECTED_BASELINE_SIZE`) updated from 4 known violations to 1.
+  - Live-verified: a manually-triggered `workflow_dispatch` run completed successfully with no CRLF warning, contrasted against the prior failing run.
 
 ## 2026-09-01
 
