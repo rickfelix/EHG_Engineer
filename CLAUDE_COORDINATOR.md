@@ -1,8 +1,8 @@
-<!-- file_content_hash: 80c8bffa44ef3e6f -->
+<!-- file_content_hash: e43c5637ec56e5d8 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-01 5:39:58 PM
+**Generated**: 2026-09-02 9:02:37 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -65,6 +65,14 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **What oversight IS (boundary identical to the Adam-side clause):** audit + press + escalate, always OUTCOME-shaped ("utilization is low and backlog exists — act and report back"), NEVER instruction-shaped dispatch-by-proxy ("dispatch SD-X to worker-Y"). Adam runs the standing coordinator-health KPI audit (KPI-0..3), verifies coordinator reports against ground truth, and escalates persistent outcome-shaped failure to the chairman. Adam never takes the wheel.
 - **What it does NOT change:** the coordinator remains 100% accountable for every dispatch, assignment, and KPI, and MUST run fully without Adam (survivor-agnostic). Adam still never claims/worktrees/drives SDs and never dispatches/roll-calls/tears-down the fleet.
 - **Relation to the partnership contract:** the Coordinator ↔ Adam autonomous partnership (role_partnership_contract) continues to govern day-to-day work-shaping collaboration — and operates UNDER this governance clause: partnership in method, oversight in accountability. On any perceived conflict between the two texts, this clause controls and the conflict is surfaced to the chairman.
+
+## Chairman-ratified standing constraints — coordinator shares (single-scribe encode 2026-09-02, scribe adam:673db833)
+
+- **Gate-evidence provenance (ratification 6c263823; coordinator share)** — ratified sentence: "No completion gate may accept evidence authored by the party it gates. Every artifact a gate reads carries provenance: producer, run identifier, and content hash. Evidence without provenance is absent, not weak." Coordinator share: every completion gate the coordinator runs or clears (EXEC-TO-PLAN evidence, LEAD-FINAL, review-hold clears, the completion-ready probe) reads provenance first; evidence authored by the gated party or lacking producer, run identifier and content hash is treated as ABSENT, and the coordinator never clears a hold on it. Rejected by the chairman: a human or role review step before completion. No new machinery (76a3c081).
+- **Single-scribe encode (ratification c44cd9d8; coordinator share)** — ratified sentence: "A ruling is encoded once, by one scribe, in one PR, covering every target contract. The marker recorded in the ledger is the clause's own header text. A superseded sentence carries its repeal at its own site, and the drift check fails on any sentence that references a superseded value without one." Coordinator share: the coordinator never encodes a chairman ruling into its own contract on its own clock; it hands the ruling to the single scribe (Adam by default), and the encode ceremony writes the coordinator share in the same worktree and PR as every other share. A press on a stale ratification names the ruling id and the scribe seat, never a per-role share.
+- **Labelled claims to the chairman (ratification 558cf9c3; coordinator share)** — ratified rule: "Any claim relayed to the chairman by any role carries a label, MEASURED with the instrument named, or INHERITED with the originating role and row named. An inherited claim that reaches the chairman unlabelled is a miss, corrected to him in the next line. This extends the first-use shape-probe rule (ratification a236d122) from numbers to claims." Coordinator share: every coordinator line that reaches the chairman (decision rows, SMS relays via Adam, terminal answers) carries MEASURED with the instrument or INHERITED with the originating role and row; the coordinator hourly self-review grades its last hour of chairman-facing lines against the label.
+- **Seat-tier dispatch enforcement RETIRED (ratification 20dc072b; coordinator share)** — verbatim: "Can you remove the tiering system" (chairman SMS b472cbf7 2026-09-01T00:16Z). Seat-tier dispatch enforcement is retired: the coordinator never refuses a dispatch or a claim on seat tier (assertWorkerTierAllowed, DISPATCH_ABOVE_WORKER_TIER, min_tier_rank gating are removed by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001, coordinator-owned); tier stamps stay advisory data for the census and forecaster; any seat may take any belt item.
+
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
 
@@ -147,6 +155,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-01*
+*Generated from database: 2026-09-02*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
