@@ -175,6 +175,16 @@
 
 ### Infrastructure
 
+- **Stamp real artifact_path/artifact_sha/source provenance on TESTING evidence writes** - SD-LEARN-FIX-LEARNING-IMPROVEMENT-005
+  - Ratification 6c263823's provenance arm (`metadata.test_execution.artifact_sha`/`.runner`) existed on the canonical `buildTestExecution()` shape but was never populated with real values on the mainline Playwright execution path, and nothing read it.
+  - `buildMainlinePhase3TestExecution()` (`lib/sub-agents/testing/index.js`) now stamps `artifact_path`, `artifact_sha` (hashed via `computeArtifactSha()`/an inline single-read equivalent, never a second implementation), and `source:'fresh'|'reused'` on a fresh or reused/cached run; a reused run reuses the already-verified hash from the evidence-reuse fastpath rather than recomputing it, and a multi-repo aggregate (array `report_url`) omits provenance entirely rather than misattributing it to one repo.
+  - Fixed a TOCTOU split-read (SEC-1, caught by EXEC-phase SECURITY review): the fresh-run hash is now computed at the single existing report-parse site in `phases/phase3-execution.js` instead of re-reading the artifact file a second time in `index.js`.
+  - Also fixed a recurred `evidence_reused`-vs-`from_cache` discriminator gap (caught by EXEC-phase TESTING review, matching a defect class this CHANGELOG records as having shipped once before) — both signals are now checked.
+  - **Gate-side read still deferred**: a fail-soft hash-verification check in `mandatory-testing-validation.js` was scoped for this SD but not implemented — a concurrently-open PR (#7978) occupies the exact insertion point. Tracked as `protocol_improvement_queue` id `242c0a5a-c36a-4013-950f-e661da8f68b4`, blocked on that PR merging. Until it lands, these fields are write-only.
+
+- **Document the writer-side test_execution guard** - SD-FDBK-INFRA-TESTING-VERDICT-ROWS-001
+  - Catch-up doc entry: the writer (`storeSubAgentResults`) refuses TESTING PASS/CONDITIONAL_PASS rows missing a genuine `test_execution` block, closing the gap where a verdict could claim a pass with zero evidence of tests actually having run. See `docs/03_protocols_and_standards/leo-v4.4.2-testing-governance.md`.
+
 - **Retire seat-tier dispatch enforcement fleet-wide** - SD-FDBK-INFRA-RETIRE-SEAT-TIER-001
   - Per chairman ratification 20dc072b: any fleet seat may now claim/dispatch any belt item regardless of tier rank — `assertWorkerTierAllowed` (the WORK-DOWN-NEVER-UP guard in `lib/coordinator/dispatch.cjs`) and `enforceTierGate` (`scripts/sd-start.js`) are deleted, not stubbed.
   - `lib/fleet/claim-eligibility.cjs`'s `classifyDispatchIneligibility` can no longer emit `above_worker_tier`, `tier_stamp_missing`, or `reserved_no_lower_backlog`; the two still-live fenced axes (`unverified_seat_capability`, `fable_window_downward_claim_blocked`) are untouched.
