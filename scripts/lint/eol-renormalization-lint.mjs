@@ -73,6 +73,13 @@ export const ALLOWLIST = [
     rationale: 'Same approval-hash sensitivity as the migration file above.',
   },
 ];
+// NOTE (QF-20260901-018): lib/agents/venture-ceo-factory.js is deliberately NOT added here.
+// It remains a genuine, tracked violation held by a live FR-6 scope fence (see
+// tests/static-guards/eol-mixed-crlf-ratchet.test.js's baseline + docblock) -- a temporary,
+// time-bound hold expected to lift, unlike this ALLOWLIST's permanent hash-sensitivity
+// exclusions. This script's own CI workflow (.github/workflows/eol-renormalization-lint.yml)
+// is advisory (continue-on-error), so reporting this one known violation here is correct and
+// consistent with the ratchet test's own count, not a gap.
 
 /**
  * Pure evaluator over already-split `git ls-files --eol` lines. Takes an injectable allowlist so
