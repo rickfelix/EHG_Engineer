@@ -428,6 +428,7 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     const result = await land.run(page, { baseUrl: 'http://altifyai.fixture' });
     expect(result.renderedStateSummary).toMatch(/Start free/);
     expect(result.verifiedAt).toBeTruthy();
+    expect(result.matchedSelector).toBe('text=Start free');
   });
 
   it('land preflight fails when the CTA is absent (regression guard)', async () => {
@@ -457,6 +458,7 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
 
     const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
     expect(result.renderedStateSummary).toMatch(/Clerk/);
+    expect(result.matchedSelector).toContain('identifier');
   });
 
   it('uploadRouteReachable passes now that /upload resolves live (QF-20260901-385: premise inverted, measured 2026-09-02)', async () => {
@@ -467,6 +469,7 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
     const result = await check.run(page, { baseUrl: 'http://altifyai.fixture' });
     expect(result.renderedStateSummary).toMatch(/upload route reachable/);
     expect(result.verifiedAt).toBeTruthy();
+    expect(result.matchedSelector).toBe('http://altifyai.fixture/upload');
   });
 
   it('uploadRouteReachable fails loudly if the route ever goes unreachable again (regression guard)', async () => {
