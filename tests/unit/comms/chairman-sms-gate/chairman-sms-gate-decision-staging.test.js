@@ -307,6 +307,25 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeNull();
   });
 
+  it('QF-20260902-034 (LIVE INCIDENT 2026-09-03): a soft-failed send with NO fallbackSend injected never reaches the real mailer, even with CLAUDE_NOTIFY_EMAIL set', async () => {
+    const prevEnv = process.env.CLAUDE_NOTIFY_EMAIL;
+    process.env.CLAUDE_NOTIFY_EMAIL = 'chairman@example.com';
+    try {
+      const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-11b', status: 'pending', brief_data: {} }] });
+      const sender = { send: vi.fn(async () => { throw new Error('boom'); }) };
+      // Deliberately NOT injecting opts.fallbackSend -- this is the exact gap the incident exposed.
+      const res = await sendChairmanSMS(
+        wellFormedDecision({ decisionId: 'dec-11b', recipientPhone: '+15556667778' }),
+        DAYTIME,
+        { sender, console: silentConsole, supabase: sb, runPreSendConsultLane },
+      );
+      expect(res.fallbackFired).toBe(false);
+    } finally {
+      if (prevEnv === undefined) delete process.env.CLAUDE_NOTIFY_EMAIL;
+      else process.env.CLAUDE_NOTIFY_EMAIL = prevEnv;
+    }
+  });
+
   it('TS-12 (QF-20260815-065): a failed status-update after a CONFIRMED successful send stays sent:true — audit-trail bookkeeping never downgrades a real success', async () => {
     const sb = makeFakeSupabase(
       { chairman_decisions: [{ id: 'dec-12', status: 'pending', brief_data: {} }] },
