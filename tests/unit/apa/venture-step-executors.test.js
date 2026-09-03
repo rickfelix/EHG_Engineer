@@ -37,7 +37,7 @@ vi.mock('@clerk/testing/playwright', () => ({
   setupClerkTestingToken: vi.fn(),
 }));
 
-function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '', codeFormButtons = null, hasCodeForm = true, codeInputCompletes = true, fillNavigations = {} } = {}) {
+function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '', codeFormButtons = null, hasCodeForm = true, codeInputCompletes = true, fillNavigations = {}, locatorTexts = {}, visibleSequence = {}, setInputFilesError = null } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
   // QF-20260902-614: getByRole('button', ...) is called fresh at each of the source module's
@@ -129,6 +129,11 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
       // differently per call (e.g. [false, true]); falls back to the static `visible` value
       // when no sequence is configured, so every pre-existing fixture is unaffected.
       let waitForCallCount = 0;
+      // QF-20260902-033: a bounded-poll override (unlike waitFor's single call) calls
+      // isVisible() repeatedly across a real loop -- visibleSequence lets a fixture answer
+      // differently per call (e.g. [false, false, true]), clamping to the last entry once
+      // exhausted so a fixture need not enumerate every poll tick.
+      let isVisibleCallCount = 0;
       const locator = {
         count: async () => count,
         click: async () => { calls.click.push(selector); },
@@ -142,7 +147,18 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
         // isVisible() is a real Playwright locator method (synchronous-outcome check, never
         // throws) -- used post-waitFor to determine WHICH alternative in a multi-selector set
         // actually matched (FR-3, resolveVisibleSelector in the source module).
-        isVisible: async () => visible,
+        isVisible: async () => {
+          const seq = visibleSequence[selector];
+          if (!seq) return visible;
+          const v = seq[Math.min(isVisibleCallCount, seq.length - 1)];
+          isVisibleCallCount += 1;
+          return v;
+        },
+        textContent: async () => (Object.prototype.hasOwnProperty.call(locatorTexts, selector) ? locatorTexts[selector] : null),
+        setInputFiles: async () => {
+          calls.click.push(`setInputFiles:${selector}`);
+          if (setInputFilesError) throw new Error(setInputFilesError);
+        },
         // .first() scopes to a single node in real Playwright (avoiding a strict-mode
         // violation on a multi-match locator) -- for this fixture it's a same-shape no-op.
         first() { return locator; },
@@ -793,10 +809,14 @@ describe('buildStepExecutor() — Object.hasOwn guard against inherited step_id 
 });
 
 describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
-  it('registers 4 preflight checks and the stp-4de9 step override (QF-20260902-884)', () => {
+  it('registers 4 preflight checks and the stp-4de9/stp-e3e6/stp-6219 step overrides (QF-20260902-884, QF-20260902-033)', () => {
     const config = getVentureRegistration('ALTIFYAI');
     expect(config.preflightChecks.map((c) => c.name)).toEqual(['land', 'signupFormRenders', 'uploadRouteReachable', 'feedbackWidget']);
-    expect(Object.keys(config.stepOverrides)).toEqual(['stp-4de9-upload-a-single-imag']);
+    expect(Object.keys(config.stepOverrides)).toEqual([
+      'stp-4de9-upload-a-single-imag',
+      'stp-e3e6-automatically-genera',
+      'stp-6219-see-the-generated-al',
+    ]);
   });
 
   // FR-5: the venture's own sign-in toggle navigates off-origin to this Clerk-hosted domain --
@@ -1005,6 +1025,114 @@ describe('buildStepExecutor() — ALTIFYAI stp-4de9 override (QF-20260902-884)',
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// QF-20260902-033: stp-e3e6/stp-6219 overrides. Solomon STEP-0 constraint (c7dad710/8c90a171)
+// required diagnosing the census's ~120s "Loading alt text..." hang BEFORE writing these --
+// scripts/one-off/diagnose-altifyai-generation-hang-033.mjs measured live that the backend's
+// POST /api/alt-text genuinely resolves (~126s) to an HTTP 500, rendered as "Alt text
+// unavailable: An internal error occurred." These fixtures encode exactly that measured shape:
+// a real product error, not an unresolved hang.
+describe('buildStepExecutor() — ALTIFYAI stp-e3e6/stp-6219 overrides (QF-20260902-033)', () => {
+  const FILE_INPUT = '[data-testid="file-input"]';
+  const STATUS_SUCCESS = '[data-testid="status-success"]';
+  const ALT_TEXT_DISPLAY = '[data-testid="alt-text-display"]';
+  const STATE_LOADING = '[data-testid="state-loading"]';
+  const e3e6Step = { step_id: 'stp-e3e6-automatically-genera', goal: 'automatically generate alt text for an uploaded image' };
+  const step6219 = { step_id: 'stp-6219-see-the-generated-al', goal: 'see the generated alt text clearly displayed next to its corresponding image' };
+
+  describe('stp-e3e6 (auto-generate)', () => {
+    it('uploads, confirms the automatic trigger, and stamps stepOverrideUsed when real text renders', async () => {
+      const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+      const page = makeMockPage({
+        locatorCounts: { [FILE_INPUT]: 1 },
+        waitForVisible: { [STATUS_SUCCESS]: true, [ALT_TEXT_DISPLAY]: true, [STATE_LOADING]: false },
+        locatorTexts: { [ALT_TEXT_DISPLAY]: 'A golden retriever sitting in a park.' },
+      });
+
+      const result = await executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true });
+
+      expect(result.stepOverrideUsed).toBe(true);
+      expect(result.matchedSelector).toBe(ALT_TEXT_DISPLAY);
+      expect(result.renderedStateSummary).toMatch(/A golden retriever/);
+      expect(page.calls.click).toContain(`setInputFiles:${FILE_INPUT}`);
+    });
+
+    it('throws a measured GENERATION_DID_NOT_RESOLVE (never a fabricated pass) when the backend surfaces its own error state', async () => {
+      const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+      const page = makeMockPage({
+        locatorCounts: { [FILE_INPUT]: 1 },
+        waitForVisible: { [STATUS_SUCCESS]: true, [ALT_TEXT_DISPLAY]: true, [STATE_LOADING]: false },
+        locatorTexts: { [ALT_TEXT_DISPLAY]: 'Alt text unavailable: An internal error occurred. Please try again.' },
+      });
+
+      await expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true }))
+        .rejects.toThrow(/GENERATION_DID_NOT_RESOLVE.*backend surfaced an error state/i);
+    });
+
+    it('throws when status-success never appears within 15s (the automatic trigger itself did not fire)', async () => {
+      vi.useFakeTimers();
+      try {
+        const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+        const page = makeMockPage({
+          locatorCounts: { [FILE_INPUT]: 1 },
+          waitForVisible: { [STATUS_SUCCESS]: false },
+        });
+
+        const assertion = expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true }))
+          .rejects.toThrow(/no \[data-testid="status-success"\] within 15s/);
+        await vi.advanceTimersByTimeAsync(15000);
+        await assertion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('throws a measured GENERATION_DID_NOT_RESOLVE when the wait genuinely expires with no resolution at all', async () => {
+      vi.useFakeTimers();
+      try {
+        const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+        const page = makeMockPage({
+          locatorCounts: { [FILE_INPUT]: 1 },
+          waitForVisible: { [STATUS_SUCCESS]: true, [ALT_TEXT_DISPLAY]: true, [STATE_LOADING]: true },
+        });
+
+        const assertion = expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true }))
+          .rejects.toThrow(/GENERATION_DID_NOT_RESOLVE.*still state-loading after 150s, no error surfaced/i);
+        await vi.advanceTimersByTimeAsync(150000);
+        await assertion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('stp-6219 (see generated alt text)', () => {
+    it('confirms real generated text is displayed on the current page, no fresh upload', async () => {
+      const executor = buildStepExecutor(step6219, 'ALTIFYAI');
+      const page = makeMockPage({
+        waitForVisible: { [ALT_TEXT_DISPLAY]: true },
+        locatorTexts: { [ALT_TEXT_DISPLAY]: 'A golden retriever sitting in a park.' },
+      });
+
+      const result = await executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true });
+
+      expect(result.stepOverrideUsed).toBe(true);
+      expect(result.renderedStateSummary).toMatch(/A golden retriever/);
+      expect(page.calls.click).not.toContain(`setInputFiles:${FILE_INPUT}`); // never re-uploads
+    });
+
+    it('throws a measured GENERATION_DID_NOT_RESOLVE when the display still shows the error state', async () => {
+      const executor = buildStepExecutor(step6219, 'ALTIFYAI');
+      const page = makeMockPage({
+        waitForVisible: { [ALT_TEXT_DISPLAY]: true },
+        locatorTexts: { [ALT_TEXT_DISPLAY]: 'Alt text unavailable: An internal error occurred. Please try again.' },
+      });
+
+      await expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true }))
+        .rejects.toThrow(/GENERATION_DID_NOT_RESOLVE/);
+    });
   });
 });
 
