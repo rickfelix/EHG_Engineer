@@ -30,6 +30,7 @@ let nextChain;
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
     from: vi.fn(() => nextChain),
+    rpc: vi.fn(() => nextChain),
   })),
 }));
 
@@ -188,6 +189,26 @@ describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: success criterion #1 -- the genui
     for (const count of [null, undefined, NaN, Infinity, -Infinity, 'exact', 0, 1, 1155, -1]) {
       expect(isCountUnavailable(count)).toBe(renderCount(count) === 'unavailable');
     }
+  });
+
+  it('adversarial-review finding: a count requested via .rpc(fn, params, {count}) -- not just .select() -- is also tracked, so a missing/renamed function resolving {count:null, error:null} is caught', async () => {
+    const { createSupabaseServiceClient } = await import('../../lib/supabase-client.js');
+    nextChain = makeChain({ data: null, count: null, error: null });
+    const supabase = createSupabaseServiceClient();
+
+    await expect(
+      supabase.rpc('renamed_or_missing_function', {}, { count: 'exact', head: true })
+    ).rejects.toMatchObject({ code: 'COUNT_UNMEASURABLE' });
+  });
+
+  it('negative proof: an .rpc() call requesting a count against a REAL function resolves normally', async () => {
+    const { createSupabaseServiceClient } = await import('../../lib/supabase-client.js');
+    nextChain = makeChain({ data: null, count: 42, error: null });
+    const supabase = createSupabaseServiceClient();
+
+    const { count, error } = await supabase.rpc('real_function', {}, { count: 'exact', head: true });
+    expect(error).toBeNull();
+    expect(count).toBe(42);
   });
 });
 

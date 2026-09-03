@@ -1057,11 +1057,18 @@ async function main() {
   if (!sessionId) { console.error('ERROR: CLAUDE_SESSION_ID required (SessionStart hook).'); process.exit(1); }
 
   let supabase;
-  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: throwOnSchemaDrift:false is a DELIBERATE opt-out --
-  // this client is shared into captureLedgerRow/checkLedgerCaptureHealth/
-  // checkStaleChairmanRatifications, which already inspect error.code (42703/PGRST204/
-  // 42P01/PGRST205) themselves to degrade gracefully rather than fail loud.
-  try { supabase = createSupabaseServiceClient({ throwOnSchemaDrift: false }); }
+  let supabaseTolerant;
+  try {
+    supabase = createSupabaseServiceClient();
+    // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: throwOnSchemaDrift:false is a DELIBERATE, NARROWLY
+    // SCOPED opt-out -- a SEPARATE client instance passed ONLY to captureLedgerRow/
+    // checkLedgerCaptureHealth/checkStaleChairmanRatifications, which already inspect
+    // error.code (42703/PGRST204/42P01/PGRST205) themselves to degrade gracefully rather than
+    // fail loud. `supabase` above stays fully protected for every other call site in this file
+    // (adversarial review finding: a single shared opted-out client would have silently
+    // defeated the new protection for unrelated bare-{data}-destructure reads elsewhere here).
+    supabaseTolerant = createSupabaseServiceClient({ throwOnSchemaDrift: false });
+  }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
 
   // QF-20260710-593: --background marks a cron/monitor context whose stdout no reasoning turn
@@ -1084,7 +1091,7 @@ async function main() {
     // QF-20260701-289: periodic ledger-capture gauge — the recurring inbox-monitor tick doubles as
     // "startup" (its first fire after Solomon starts) AND "periodic" (every subsequent fire). Always
     // loud (not --quiet-suppressed): a silent capture gap must never hide behind routine quiet mode.
-    const ledgerHealth = await checkLedgerCaptureHealth(supabase);
+    const ledgerHealth = await checkLedgerCaptureHealth(supabaseTolerant);
     if (!ledgerHealth.healthy && ledgerHealth.columnMissing) {
       // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (F3): distinct from the generic unhealthy
       // case below — captureLedgerRow's bounded fallback (FR-1c) means capture IS still happening
@@ -1095,7 +1102,7 @@ async function main() {
       console.error(`WARN: solomon_advice_outcome_ledger capture gauge UNHEALTHY — ${ledgerHealth.reason} (advisories are NOT being captured; QF-20260701-289)`);
     }
     // SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001 FR-3: unencoded ratifications aged >=24h.
-    const staleRatifications = await checkStaleChairmanRatifications(supabase);
+    const staleRatifications = await checkStaleChairmanRatifications(supabaseTolerant);
     if (staleRatifications.count > 0) {
       const ids = staleRatifications.rows.map((r) => r.id).join(', ');
       console.warn(`⚠ RATIFICATION_STALE: ${staleRatifications.count} chairman ratification(s) unencoded >=24h (ids: ${ids}) — encode the contract change and call lib/chairman/ratification-writer.mjs markRatificationEncoded() to clear (SD-LEO-INFRA-CHAIRMAN-RATIFICATION-LEDGER-001)`);
@@ -1376,7 +1383,7 @@ async function main() {
   // QF-20260701-289: the result was previously discarded, so a capture failure (e.g. PGRST205 table-
   // missing) was completely silent. Warn loudly + count it — the "not-flying-blind" instrument was
   // itself flying blind.
-  const ledgerResult = await captureLedgerRow(supabase, {
+  const ledgerResult = await captureLedgerRow(supabaseTolerant, {
     advisoryId: inserted.id,
     correlationId: payload.correlation_id,
     sdKey: process.env.SD_KEY || null,
