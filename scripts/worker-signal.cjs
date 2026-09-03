@@ -758,6 +758,46 @@ async function main() {
   console.log('  severity:', severity);
   console.log('  callsign:', senderCallsign || '(none assigned)');
   if (subtype) console.log('  subtype:', subtype);
+
+  // QF-20260903-787 — PERSISTED-CONTENT ECHO. Read the body BACK and report what actually landed.
+  //
+  // WHAT THIS IS FOR. Three times in one day across two seats, backticks inside a double-quoted shell
+  // argument were command-substituted and the send still reported success: once deleting an identifier
+  // from a signal body, once leaving a quick_fixes.description reading "tier-ladder.cjs:487 guards ."
+  // with the expression eaten. The row exists, reads as complete prose, and carries a hole.
+  //
+  // WHAT IT DELIBERATELY IS **NOT**: an empty-body reject. Measured before building — across 1,000
+  // rows in a day there are ZERO empty bodies, while 211 rows legitimately carry NO body key at all
+  // (roll_call, signal_resolved, periodic_liveness_flag and other heartbeat-shaped kinds). A blanket
+  // empty-or-whitespace reject would break about a fifth of the channel to defend against zero
+  // instances. Emptiness is the detectable tail of the distribution, not the defect.
+  //
+  // AND BE HONEST ABOUT ITS LIMIT, because a guard that overstates its reach is the defect class this
+  // ticket belongs to: the shell eats the content BEFORE node sees argv, so this CANNOT detect shell
+  // corruption automatically — node never saw the original. What it does is make the persisted LENGTH
+  // and a digest visible at the moment of sending, so a sender who meant to write 2,000 characters and
+  // sees 400 knows immediately, instead of finding out when someone acts on a hole. The read-back also
+  // catches genuine write-side truncation, which an echo of the in-process variable could not.
+  try {
+    const { data: back } = await supabase
+      .from('session_coordination').select('payload').eq('id', inserted.id).maybeSingle();
+    const persisted = ((back || {}).payload || {}).body;
+    if (persisted === undefined || persisted === null) {
+      console.log('  persisted_body: (none — this kind carries no body)');
+    } else {
+      const text = String(persisted);
+      const digest = require('crypto').createHash('sha256').update(text).digest('hex').slice(0, 8);
+      console.log(`  persisted_body: ${text.length} chars, sha256:${digest}`);
+      console.log('    ^ compare against what you MEANT to send. A shorter-than-expected count is the');
+      console.log('      signature of shell command-substitution eating part of your message.');
+      if (typeof body === 'string' && text.length !== body.length) {
+        console.log(`  ⚠ WRITE-SIDE TRUNCATION: sent ${body.length} chars, stored ${text.length}. The row does NOT match what this process submitted.`);
+      }
+    }
+  } catch {
+    // Never let the echo turn a successful send into a failure — it is an observability aid, not a gate.
+    console.log('  persisted_body: (read-back unavailable)');
+  }
 }
 
 // Export internals for unit testing.
