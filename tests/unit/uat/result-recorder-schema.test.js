@@ -96,6 +96,29 @@ describe('result-recorder.js uat_test_runs schema alignment', () => {
     });
   });
 
+  // QF-20260902-884: env_snapshot_at evidences the key-provisioning gate (QF-20260902-935)
+  // fired against a specific, dated env state -- not a presence boolean (Solomon 7c78be9f
+  // condition b). Real fs access (this process's own .env, the walk worktree's copy),
+  // deliberately not mocked -- the whole point is deriving a real mtime/hash.
+  it('startSession() stamps metadata.env_snapshot_at derived from the worktree .env (mtime + sha256-16)', async () => {
+    state.row = { id: 'run-1', sd_id: 'sd-1', status: 'running' };
+    await startSession('sd-1', { scenarioSnapshot: [] });
+
+    const payload = insertChain.insert.mock.calls[0][0];
+    const snap = payload.metadata.env_snapshot_at;
+    expect(snap).toBeTruthy();
+    expect(typeof snap.stamped_at).toBe('string');
+    expect(new Date(snap.stamped_at).toString()).not.toBe('Invalid Date');
+    if (snap.error) {
+      // No .env in this test environment is a legitimate outcome (never a boolean-only skip).
+      expect(typeof snap.error).toBe('string');
+    } else {
+      expect(typeof snap.mtime).toBe('string');
+      expect(new Date(snap.mtime).toString()).not.toBe('Invalid Date');
+      expect(snap.sha256_16).toMatch(/^[0-9a-f]{16}$/);
+    }
+  });
+
   it('completeSession() writes pass_rate (the critical fix -- was computed but discarded)', async () => {
     state.row = { id: 'run-1', total_tests: 10, passed_tests: 9, failed_tests: 1, skipped_tests: 0, metadata: {} };
     const result = await completeSession('run-1');
