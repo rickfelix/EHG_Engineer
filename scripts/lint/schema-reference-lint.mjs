@@ -126,10 +126,19 @@ const allowlist = loadJson(ALLOWLIST_PATH, { files: [], tables: [] });
 const allowedFiles = new Set((allowlist.files || []).map(f => f.replace(/\\/g, '/')));
 const allowedTables = new Set(allowlist.tables || []);
 
-// Staleness warning (never blocking).
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-2): staleness now BLOCKS. It used to be a console.warn
+// that was never wired into computeExitCode, so the single signal that the verdict might be
+// meaningless could not affect the verdict — a zero measured against a snapshot older than the
+// schema printed exactly like a genuine clean run. An unparseable generated_at yields NaN, which is
+// not > STALE_DAYS, so it stays non-blocking: absence of a usable date is a different defect from a
+// date that is provably old, and conflating them would fail every run on a malformed snapshot.
 const ageDays = (Date.now() - Date.parse(snapshot.generated_at || 0)) / 86400000;
-if (Number.isFinite(ageDays) && ageDays > STALE_DAYS) {
-  console.warn(`⚠️  schema snapshot is ${Math.floor(ageDays)} days old — regenerate with: npm run schema:snapshot:lint`);
+const snapshotStale = Number.isFinite(ageDays) && ageDays > STALE_DAYS;
+if (snapshotStale) {
+  console.error(
+    `❌ schema snapshot is ${Math.floor(ageDays)} days old (max ${STALE_DAYS}) — regenerate with: npm run schema:snapshot:lint\n`
+    + '   Every verdict below is computed against this snapshot, so a zero here would mean "agrees with a stale picture", not "matches the live schema".'
+  );
 }
 
 /** Candidate files per mode. */
@@ -307,6 +316,14 @@ if (asJson) {
     mode, files_checked: files.length, merge_base: mergeBase, committed_only: committedOnly,
     violations: allViolations, pre_existing: preExisting,
   }, null, 1));
+} else if (allViolations.length === 0 && snapshotStale) {
+  // FR-2: do NOT print a green tick on a run that is about to exit 1. The zero is real but it was
+  // measured against a stale picture, and a ✅ beside a failing exit is the precise reporting-clean-
+  // when-you-are-not shape this workstream exists to abolish.
+  console.error(
+    `⛔ schema-reference-lint (${mode}): 0 violations across ${files.length} file(s), but the snapshot is STALE — `
+    + `this zero is not schema truth and does NOT pass. Regenerate, then re-run.  [${scope}]`
+  );
 } else if (allViolations.length === 0) {
   console.log(`✅ schema-reference-lint (${mode}): ${files.length} file(s) checked, 0 new violations  [${scope}]`);
 } else if (degradedFallback) {
@@ -352,4 +369,6 @@ if (preExisting.length > 0 && !asJson) {
 // keeps full diff-scoped blocking. An explicit --all run keeps degradedFallback=false -> unchanged.
 // QF-20260802-742: `allViolations` now counts NEW drift only — pre-existing violations are in
 // `preExisting` and are deliberately absent from this decision.
-process.exitCode = computeExitCode({ violations: allViolations.length, degradedFallback });
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-2): snapshotStale is threaded in so a run against a
+// snapshot older than the schema fails instead of reporting a zero that means nothing.
+process.exitCode = computeExitCode({ violations: allViolations.length, degradedFallback, snapshotStale });
