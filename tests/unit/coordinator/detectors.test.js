@@ -432,11 +432,62 @@ describe('coordDetectorsEnabled', () => {
 });
 
 describe('runAndLogDetectors (flag gate + fail-open writer)', () => {
-  it('does nothing and reads nothing when the flag is OFF', async () => {
-    const supabase = { from: vi.fn(() => { throw new Error('should not be called'); }) };
-    const out = await runAndLogDetectors(supabase, { coordinatorCount: 5 }, { env: {}, now: NOW });
+  // QF-20260902-959: while COORD_DETECTORS_V2 is OFF, the pipeline is no longer a
+  // silent no-op — it writes exactly ONE per-sweep DETECTORS_EVALUATED dry-run row
+  // carrying the would-fire set, with zero per-match writes and zero dispatch effect.
+  it('DRY-RUN (flag OFF): writes exactly one DETECTORS_EVALUATED row with the would-fire set, no per-match rows', async () => {
+    const inserted = [];
+    const supabase = {
+      from: (table) => ({
+        insert: (row) => { inserted.push({ table, row }); return { select: () => ({ single: async () => ({ data: { id: 'evt-dry' }, error: null }) }) }; },
+      }),
+    };
+    const out = await runAndLogDetectors(supabase, { coordinatorCount: 2, coordinators: [{ session_id: 'a' }, { session_id: 'b' }] }, { env: {}, now: NOW });
+
+    // Exactly one write — the DETECTORS_EVALUATED row — never a per-match row.
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].table).toBe('coordination_events');
+    expect(inserted[0].row.event_type).toBe('DETECTORS_EVALUATED');
+    expect(inserted[0].row.severity).toBe('info');
+    expect(inserted[0].row.detector_version).toBe(DETECTOR_VERSION);
+    expect(inserted[0].row.payload.would_fire_count).toBe(1);
+    expect(inserted[0].row.payload.would_fire).toEqual([
+      { event_type: 'SPLIT_BRAIN', severity: 'critical', reason: 'multiple_live_coordinators', evidence: expect.objectContaining({ coordinator_count: 2 }) },
+    ]);
+
+    // Returned matches mirror the would-fire set (detector name + reason), marked dryRun.
+    expect(out).toHaveLength(1);
+    expect(out[0].event_type).toBe('SPLIT_BRAIN');
+    expect(out[0].dryRun).toBe(true);
+    expect(out[0].logged).toBe(false);
+  });
+  it('DRY-RUN (flag OFF): a quiet sweep with zero matches still writes one row (would_fire: [])', async () => {
+    const inserted = [];
+    const supabase = {
+      from: (table) => ({
+        insert: (row) => { inserted.push({ table, row }); return { select: () => ({ single: async () => ({ data: { id: 'evt-dry-quiet' }, error: null }) }) }; },
+      }),
+    };
+    const out = await runAndLogDetectors(supabase, { coordinatorCount: 1 }, { env: {}, now: NOW });
     expect(out).toEqual([]);
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].row.event_type).toBe('DETECTORS_EVALUATED');
+    expect(inserted[0].row.payload.would_fire_count).toBe(0);
+    expect(inserted[0].row.payload.would_fire).toEqual([]);
+  });
+  it('the ON-flag fired set equals the OFF-flag would-fire set for the same inputs', async () => {
+    const dryInserted = [];
+    const dryRunSupabase = { from: () => ({ insert: (row) => { dryInserted.push(row); return { select: () => ({ single: async () => ({ data: { id: 'x' }, error: null }) }) }; } }) };
+    const data = { coordinatorCount: 2, coordinators: [{ session_id: 'a' }, { session_id: 'b' }] };
+    await runAndLogDetectors(dryRunSupabase, data, { env: {}, now: NOW });
+    const wouldFireTypes = dryInserted[0].payload.would_fire.map((m) => m.event_type);
+
+    const firedInserted = [];
+    const onSupabase = { from: () => ({ insert: (row) => { firedInserted.push(row); return { select: () => ({ single: async () => ({ data: { id: 'y' }, error: null }) }) }; } }) };
+    const onOut = await runAndLogDetectors(onSupabase, data, { env: { COORD_DETECTORS_V2: 'true' }, now: NOW });
+
+    expect(onOut.map((m) => m.event_type)).toEqual(wouldFireTypes);
+    expect(firedInserted.map((r) => r.event_type)).toEqual(wouldFireTypes);
   });
   it('logs an event per match when the flag is ON', async () => {
     const inserted = [];
