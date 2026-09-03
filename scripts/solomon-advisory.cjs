@@ -1057,7 +1057,11 @@ async function main() {
   if (!sessionId) { console.error('ERROR: CLAUDE_SESSION_ID required (SessionStart hook).'); process.exit(1); }
 
   let supabase;
-  try { supabase = createSupabaseServiceClient(); }
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: throwOnSchemaDrift:false is a DELIBERATE opt-out --
+  // this client is shared into captureLedgerRow/checkLedgerCaptureHealth/
+  // checkStaleChairmanRatifications, which already inspect error.code (42703/PGRST204/
+  // 42P01/PGRST205) themselves to degrade gracefully rather than fail loud.
+  try { supabase = createSupabaseServiceClient({ throwOnSchemaDrift: false }); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
 
   // QF-20260710-593: --background marks a cron/monitor context whose stdout no reasoning turn
