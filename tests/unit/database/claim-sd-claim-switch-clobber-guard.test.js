@@ -53,26 +53,26 @@ describe('FR-4: claim_sd claim-switch clobber guard migration', () => {
   });
 
   it('logs an observable trail for every symmetric clear that actually fires (session_lifecycle_events)', () => {
-    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL THEN')[1];
+    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN')[1];
     expect(clearBlock).toMatch(/INSERT INTO session_lifecycle_events/);
     expect(clearBlock).toMatch(/'CLAIM_SWITCH_EVICTED_CLEARED'/);
     expect(clearBlock).toMatch(/'evicted_sd_key',\s*v_evicted_sd_key/);
   });
 
   it('clears the evicted SD row only, guarded by claiming_session_id = p_session_id', () => {
-    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL THEN')[1];
+    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN')[1];
     expect(clearBlock).toMatch(/UPDATE strategic_directives_v2\s+SET claiming_session_id = NULL,\s+active_session_id = NULL,\s+is_working_on = FALSE/);
     expect(clearBlock).toMatch(/WHERE sd_key = v_evicted_sd_key\s+AND claiming_session_id = p_session_id;/);
   });
 
   it('clears the evicted QF row via the QF-prefixed branch, same session guard', () => {
-    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL THEN')[1];
+    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN')[1];
     expect(clearBlock).toMatch(/IF v_evicted_sd_key LIKE 'QF-%' THEN/);
     expect(clearBlock).toMatch(/UPDATE quick_fixes\s+SET claiming_session_id = NULL\s+WHERE id = v_evicted_sd_key\s+AND claiming_session_id = p_session_id;/);
   });
 
   it('the clobber-guard clear runs BEFORE the new-claim UPDATE (so it never clears the just-claimed row)', () => {
-    const clearIdx = migration.indexOf('IF v_evicted_sd_key IS NOT NULL THEN');
+    const clearIdx = migration.indexOf('IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN');
     const newClaimIdx = migration.indexOf('New-claim UPDATE intentionally does NOT set worktree_path');
     expect(clearIdx).toBeGreaterThan(-1);
     expect(newClaimIdx).toBeGreaterThan(-1);
@@ -111,6 +111,24 @@ describe('FR-4: claim_sd claim-switch clobber guard migration', () => {
 
   it('emits a post-migration overload-count verification guard', () => {
     expect(migration).toMatch(/expected exactly 1 claim_sd overload/);
+  });
+
+  // Deep-tier adversarial review (SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A, /ship): the preceding
+  // SELECT and the claim-switch UPDATE are two separate statements with no row lock between
+  // them, so a concurrent retry for the same p_session_id could leave v_evicted_sd_key stale
+  // relative to what the UPDATE actually affects. GET DIAGNOSTICS ... ROW_COUNT closes that gap
+  // by requiring the symmetric-clear block to also confirm the UPDATE affected a row.
+  it('guards the symmetric-clear block with GET DIAGNOSTICS ROW_COUNT, not just the stale pre-UPDATE SELECT value', () => {
+    expect(migration).toMatch(/v_evicted_row_count\s+integer;/);
+    const updateIdx = migration.indexOf("released_reason = 'claim_switch'");
+    const rowCountIdx = migration.indexOf('GET DIAGNOSTICS v_evicted_row_count = ROW_COUNT;');
+    const clearIdx = migration.indexOf('IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN');
+    expect(rowCountIdx).toBeGreaterThan(-1);
+    expect(clearIdx).toBeGreaterThan(-1);
+    // GET DIAGNOSTICS must run immediately after the claim-switch UPDATE (else it reads the
+    // row count of some unrelated later statement) and before the guard that consumes it.
+    expect(updateIdx).toBeLessThan(rowCountIdx);
+    expect(rowCountIdx).toBeLessThan(clearIdx);
   });
 
   it('SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A criterion #2 proof: the new regression check genuinely fails against the PRE-FIX migration text, so it is not a vacuous pass', () => {

@@ -33,6 +33,13 @@
 -- actually firing (v_evicted_sd_key IS NOT NULL AFTER the correctly-captured OLD value),
 -- event_type='CLAIM_SWITCH_EVICTED_CLEARED'.
 --
+-- CONCURRENCY GUARD (deep-tier adversarial review at /ship, same SD): the preceding SELECT
+-- and the claim-switch UPDATE are two separate statements with no row lock between them, so
+-- a concurrent retry for the same p_session_id could leave v_evicted_sd_key stale relative to
+-- what the UPDATE actually affects. GET DIAGNOSTICS v_evicted_row_count = ROW_COUNT after the
+-- UPDATE, and requiring it > 0 alongside v_evicted_sd_key IS NOT NULL before the symmetric
+-- clear fires, closes that gap without adding an explicit lock.
+--
 -- Signature is UNCHANGED (still 5 args, same defaults) -- CREATE OR REPLACE is safe,
 -- no DROP needed.
 
@@ -76,6 +83,12 @@ DECLARE
   -- itself (which always yields the NEW, post-SET value).
   v_evicted_sd_key         text;
   v_evicted_clear_event_id uuid;
+  -- Deep-tier adversarial review (SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A): the preceding SELECT
+  -- and the claim-switch UPDATE below are two separate statements (no FOR UPDATE lock between
+  -- them), so a concurrent retry for the same p_session_id could leave v_evicted_sd_key stale
+  -- relative to what the UPDATE actually affects. v_evicted_row_count guards the symmetric-clear
+  -- block from firing on that stale value when the UPDATE affected zero rows.
+  v_evicted_row_count      integer;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtext(p_sd_id));
 
@@ -434,6 +447,8 @@ BEGIN
      AND sd_key != p_sd_id
      AND (v_sd_parent_id IS NULL OR sd_key != v_sd_parent_id);
 
+  GET DIAGNOSTICS v_evicted_row_count = ROW_COUNT;
+
   -- SD-LEO-INFRA-DURABLE-PARK-EXPIRED-001 (FR-4): symmetric clear of the EVICTED SD's/QF's
   -- claim pointer. The claim-switch UPDATE above only clears the CALLING SESSION's
   -- claude_sessions row; without this, strategic_directives_v2.claiming_session_id (or
@@ -441,7 +456,11 @@ BEGIN
   -- looking claimed by a session that has since moved to a different SD (RCA QF-20260712-310).
   -- Guarded by `claiming_session_id = p_session_id` so this never clobbers a claim some OTHER
   -- session has since legitimately taken on the evicted item.
-  IF v_evicted_sd_key IS NOT NULL THEN
+  -- v_evicted_row_count > 0 confirms the claim-switch UPDATE above actually affected the row
+  -- v_evicted_sd_key was read from (deep-tier adversarial review, SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A):
+  -- without it, a concurrent retry racing the unlocked SELECT could fire this block, and the
+  -- CLAIM_SWITCH_EVICTED_CLEARED audit event, on a stale value the UPDATE never actually applied.
+  IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN
     IF v_evicted_sd_key LIKE 'QF-%' THEN
       UPDATE quick_fixes
          SET claiming_session_id = NULL
