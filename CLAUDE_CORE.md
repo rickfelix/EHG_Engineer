@@ -1,8 +1,8 @@
-<!-- file_content_hash: 871f45c9c907587f -->
+<!-- file_content_hash: 4edf5538536791be -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-09-03 8:30:17 PM
+**Generated**: 2026-09-03 9:00:13 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1236,7 +1236,6 @@ see `docs/architecture/solomon-activation-runbook.md`.
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
-
 ## Known Friction Points
 
 **From Worker Signals** — recurring friction observed by 3+ workers via `/signal`. Aggregated into harness-backlog by `lib/coordinator/signal-router.cjs` on every sweep cycle. Triage via `node scripts/sd-from-feedback.js`.
@@ -1250,7 +1249,6 @@ see `docs/architecture/solomon-activation-runbook.md`.
 | feedback | 3 | low | SELF-IDENTIFY: I am idle but see 12 claimable item(s) I did  |
 
 *Auto-updated from `feedback` table where `category='harness_backlog'` AND `metadata.contributing_workers` length ≥ 3.*
-
 
 
 
