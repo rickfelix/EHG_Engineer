@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T13:00:12.879Z",
-  "git_commit": "2d3a439c",
+  "generated_at": "2026-09-03T13:16:57.045Z",
+  "git_commit": "cad31c44",
   "db_snapshot_hash": "43875124b850a7c1",
   "files": {
     "CLAUDE.md": {
@@ -69,10 +69,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 87449,
-      "bytes": 88207,
-      "estimated_tokens": 21863,
-      "content_hash": "3dc05cd09b900c06",
+      "chars": 87950,
+      "bytes": 88710,
+      "estimated_tokens": 21988,
+      "content_hash": "7b637ca3a0594008",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\f7-companion-0903\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -117,10 +117,10 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 59731,
-      "bytes": 60292,
-      "estimated_tokens": 14933,
-      "content_hash": "f9ad0e4854ae48a2",
+      "chars": 59681,
+      "bytes": 60244,
+      "estimated_tokens": 14921,
+      "content_hash": "56d2d7904042fdc9",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\f7-companion-0903\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
@@ -133,10 +133,10 @@
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 22497,
-      "bytes": 22683,
-      "estimated_tokens": 5625,
-      "content_hash": "101de6d292dc6781",
+      "chars": 23927,
+      "bytes": 24129,
+      "estimated_tokens": 5982,
+      "content_hash": "f4870483e0a6dd32",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\f7-companion-0903\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
@@ -213,7 +213,7 @@
     }
   },
   "section_digests": {
-    "global": "f46dea41ee5943d3",
+    "global": "82e4d0397f19b8d3",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -467,14 +467,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "bf53504aa82b2f8f",
+      "601": "236c88e909d63e64",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "019179d88efd3a21",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "085f5990982fe857",
+      "611": "69beb6b8d9bc6014",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -491,7 +491,7 @@
       "633": "12cf4526e9c9fd09",
       "634": "6518b5f83a72be9e",
       "635": "65702af32f75ceaa",
-      "636": "b5539c9739eee9fb",
+      "636": "525cb47778667e87",
       "653": "29214fac1aff5e6f",
       "654": "daf0a7933d7819ec",
       "655": "59137a758bb13a65",
