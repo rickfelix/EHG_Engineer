@@ -272,6 +272,10 @@ function buildDetectorResolvers(supabase) {
         // condition that is genuinely not yet satisfied, and the two must not be summed.
         releaseConditionsUnevaluableHere: counts.unevaluable,
         structuredPredicateCount: counts.structured,
+        // SEC-D-1 defence in depth: a stored predicate that still throws is COUNTED, never fatal. A
+        // non-zero value here means malformed data reached the evaluator and the row was skipped —
+        // visible rather than silently voiding the whole detector for the tick.
+        malformedPredicateCount: counts.malformed,
         // The remaining work, made countable: conditions still carried as prose a machine cannot read.
         proseOnlyConditionCount: counts.proseOnly,
       };

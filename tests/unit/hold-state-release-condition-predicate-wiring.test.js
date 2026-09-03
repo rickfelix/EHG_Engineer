@@ -159,3 +159,67 @@ describe('FR-6 consumer: the three-way split is asserted BEHAVIOURALLY, not by g
     expect(hasStateFor({ type: 'bogus', params: {} }, { rowCounts: { k: 0 } })).toBe(false);
   });
 });
+
+describe('SEC-D-1 / SEC-D-3: a malformed stored predicate must never crash or silence a consumer', () => {
+  // SECURITY review found the guard ADMITTED {type:<valid>, params:null} and evaluate() then threw
+  // TypeError. Inside a governance detector whose caller catches per-detector, one malformed stored row
+  // would void the ENTIRE hold-state-overdue detector for that tick -- findOverdueHolds, mode and
+  // recentViolationCount all lost -- while the run printed healthy. The earlier test covered
+  // {type:'not_a_real_type'}, 'string', ['array'], 42 and null, but NOT the one shape that is admitted
+  // and then crashes. JSONB round-trips null faithfully, so this is a reachable stored shape.
+  const NULL_PARAMS = JSON.parse('{"type":"db_row_exists","params":null}');
+
+  it('SEC-D-1: the guard REJECTS a valid type carrying params:null', () => {
+    expect(isStructuredPredicate(NULL_PARAMS)).toBe(false);
+  });
+
+  it('SEC-D-1: evaluate() answers false instead of throwing on params:null', () => {
+    expect(() => evaluate(NULL_PARAMS, { rowCounts: { k: 1 } })).not.toThrow();
+    expect(evaluate(NULL_PARAMS, { rowCounts: { k: 1 } })).toBe(false);
+  });
+
+  it('SEC-D-1: an absent params is still valid — the fix must not reject the legitimate shape', () => {
+    expect(isStructuredPredicate({ type: PREDICATE_TYPE.MANUAL_FLAG })).toBe(true);
+    expect(isStructuredPredicate({ type: PREDICATE_TYPE.DB_ROW_EXISTS, params: { key: 'k' } })).toBe(true);
+    // params must be an OBJECT when present — an array or scalar is malformed.
+    expect(isStructuredPredicate({ type: PREDICATE_TYPE.DB_ROW_EXISTS, params: [] })).toBe(false);
+    expect(isStructuredPredicate({ type: PREDICATE_TYPE.DB_ROW_EXISTS, params: 'k' })).toBe(false);
+  });
+
+  it('SEC-D-3: a throwing getter on `type` returns false rather than propagating', () => {
+    // Unfixed, this threw out of logHoldStateViolation's outer try, silently dropping the ENTIRE
+    // violation record (reason, owner, review_at, prose) — letting a caller suppress its own
+    // contract-violation log. A shape guard must answer, never propagate.
+    const hostile = {};
+    Object.defineProperty(hostile, 'type', { get() { throw new Error('boom'); } });
+    expect(() => isStructuredPredicate(hostile)).not.toThrow();
+    expect(isStructuredPredicate(hostile)).toBe(false);
+  });
+
+  it('SEC-D-3: a hostile predicate does not prevent the violation record from being written', async () => {
+    const client = captureClient();
+    const hostile = {};
+    Object.defineProperty(hostile, 'type', { get() { throw new Error('boom'); } });
+    await logHoldStateViolation(client, {
+      surface: 'test-surface',
+      stamp: { reason: 'the reason that must survive', owner: 'o', release_condition_predicate: hostile },
+      errors: [],
+    });
+    expect(client.inserted).toHaveLength(1);           // the record was NOT dropped
+    expect(client.inserted[0].reason).toBe('the reason that must survive');
+    expect(client.inserted[0].release_condition_predicate).toBeNull();
+  });
+
+  it('the classifier counts a still-throwing row as malformed rather than voiding the batch', () => {
+    // Defence in depth: even if a row slips past both hardened guards, one bad row must not take the
+    // detector down with it. A good row alongside it is still classified.
+    const throwOnEvaluate = { type: PREDICATE_TYPE.DB_ROW_EXISTS, params: { get key() { throw new Error('boom'); } } };
+    const rows = [
+      { release_condition_predicate: { type: PREDICATE_TYPE.DB_ROW_EXISTS, params: { key: 'k' } } },
+      { release_condition_predicate: throwOnEvaluate },
+    ];
+    const r = classifyReleaseConditions(rows, { rowCounts: { k: 2 } }, isStructuredPredicate);
+    expect(r.met).toBe(1);                    // the good row still classified
+    expect(r.met + r.unmet + r.unevaluable + r.malformed).toBe(r.structured);
+  });
+});

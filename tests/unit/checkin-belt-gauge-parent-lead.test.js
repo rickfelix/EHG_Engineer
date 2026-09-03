@@ -286,7 +286,10 @@ describe('M-4: source-pinned wiring (the columns and the predicate are actually 
     // the data is absent, and the behaviour silently reverts. The sibling fix QF-20260812-281 in
     // belt-depth.cjs records exactly that failure, so the columns are pinned explicitly.
     expect(src).toMatch(/const cols = '[^']*parent_sd_id[^']*'/);
-    expect(src).toMatch(/const cols = '[^']*dependencies[^']*'/);
+    // `dependencies` must NOT be selected: the dependency axis is a recorded exclusion for this PR, so
+    // the column would widen every pooled row on every tick with no consumer (SEC-D-7). Pinned as an
+    // ABSENCE so re-adding it without the axis that reads it fails here.
+    expect(src).not.toMatch(/const cols = '[^']*dependencies[^']*'/);
     // depSatisfied must reach BOTH counters; passing it to only one leaves the repo-scoped count lying.
     expect(src).toMatch(/claimableForTier\(pool, \{[\s\S]*?depSatisfied,[\s\S]*?\}\)/);
     expect(src).toMatch(/claimableForRepo\(pool, \{[\s\S]*?depSatisfied,[\s\S]*?\}\)/);
