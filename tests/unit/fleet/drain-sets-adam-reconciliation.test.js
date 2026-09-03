@@ -41,10 +41,17 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // alert kinds (reaper_starvation_alert / reaper_census_blind_alert / reaper_not_invoked_alert
     // / reaper_rebuild_churn_alert) added — RCA 9a02a76d traced the incident to these being
     // structurally undeliverable at role='coordinator'.
+    // QF-20260903-281: solomon 12->18, coordinator 20->26, worker 18->24 — the SAME six
+    // BACKPRESSURE_EXEMPT_KINDS that QF-20260831-769 gave adam, now given to the three roles
+    // it skipped. adam is UNCHANGED at 28 (it already had them; they are merely now supplied
+    // by the shared const instead of six inline literals). Dispatch lets these six past the
+    // unanswered-row limit because corrections must always get through, yet three of the four
+    // receiving roles could not surface them: measured 2026-09-03, a retraction was stamped
+    // read at 19:15:02 while the advisory it cancelled was read at 19:20:56 and acted on.
     expect(DRAIN_SETS.adam.length).toBe(28);
-    expect(DRAIN_SETS.solomon.length).toBe(12);
-    expect(DRAIN_SETS.coordinator.length).toBe(20);
-    expect(DRAIN_SETS.worker.length).toBe(18);
+    expect(DRAIN_SETS.solomon.length).toBe(18);
+    expect(DRAIN_SETS.coordinator.length).toBe(26);
+    expect(DRAIN_SETS.worker.length).toBe(24);
   });
 
   it('the 8 reconciled kinds are present in DRAIN_SETS.adam', () => {
