@@ -107,25 +107,41 @@ describe('QF-20260729-221: the task_budget claim stays honest', () => {
     expect(cmd).toMatch(/guard-wiring-registry/);
   });
 
-  it('the deep-sweep prompt warns that the ARGUMENT-LESS call cannot fail', () => {
-    // The prompt already said "YOU are the enforcer" — but then handed the enforcer a call
-    // shape that can only ever return withinBudget:true. Disclosure plus a rubber stamp still
-    // reads as a passing check.
+  it('the deep-sweep prompt spells the DERIVED-EXTENT call, not the scope-ambiguous one', () => {
+    // QF-20260903-418. The old prompt asked for "answers so far" with no stated scope and spelled
+    // the call as {count:...,elapsedMs:...}. A day-scoped count fed into a per-sweep ceiling
+    // self-refused four consecutive ticks that were actually in budget, and a refusal emitted
+    // nothing, so the always-sweep policy went dark with no observable signal. The prompt must now
+    // name the extent in the parameter itself and must never re-teach the retired keys.
     const src = readFileSync(STARTUP_CHECK, 'utf8');
-    expect(src).toMatch(/CANNOT FAIL/);
-    expect(src).toMatch(/enforceSweepBudget\(null,\{count:/);
+    expect(src).toMatch(/sweepStartedAtMs:/);
+    expect(src).toMatch(/answersThisSweep:/);
+    expect(src).toMatch(/THIS SWEEP/);
+    // The retired call shape must not reappear in the prompt.
+    expect(src).not.toMatch(/enforceSweepBudget\(null,\{count:/);
+    // A refusal must be reported, never swallowed as silence-by-default.
+    expect(src).toMatch(/REFUSAL IS NEVER SILENT/);
   });
 
-  it('PREMISE CONTROL, two-sided: the bare call always passes, a real spend refuses', async () => {
-    // Anchors the claim to measured behaviour rather than to a comment. If a future SD wires
-    // `spent`, the second assertion still holds and the FIRST should start failing — which is
-    // the signal that both documents must be corrected in that same change-set.
+  it('PREMISE CONTROL, two-sided: the bare call FAILS CLOSED, a real sweep-scoped spend refuses', async () => {
+    // Anchors the claim to measured behaviour rather than to a comment. This test predicted that
+    // the FIRST assertion would flip once the guard stopped accepting an unmeasured extent, and
+    // that both documents would have to be corrected in that same change-set. Both happened in
+    // QF-20260903-418: the extent is DERIVED now, though the guard is still not WIRED.
     const { createRequire } = await import('node:module');
     const req = createRequire(import.meta.url);
     const { enforceSweepBudget } = req(ADVISORY);
 
-    expect(enforceSweepBudget().withinBudget).toBe(true);
-    expect(enforceSweepBudget(null, { count: 500, elapsedMs: 0, tokens: 0 }).withinBudget).toBe(false);
+    // QF-20260903-418 flipped the FIRST assertion, exactly as this test predicted it would when the
+    // extent was finally derived: an unmeasured extent can no longer clear a ceiling, so the
+    // argument-less rubber stamp is gone. The docs were corrected in that same change-set.
+    const bare = enforceSweepBudget();
+    expect(bare.withinBudget).toBe(false);
+    expect(bare.verdict).toBe('extent_unmeasurable');
+    // A real, sweep-scoped over-spend still refuses (the half that always held).
+    expect(enforceSweepBudget(null, { sweepStartedAtMs: 1_000_000, answersThisSweep: 500 }, 1_000_000).withinBudget).toBe(false);
+    // ...and the retired scope-ambiguous key is refused rather than silently reinterpreted.
+    expect(enforceSweepBudget(null, { count: 500 }, 1_000_000).verdict).toBe('legacy_extent_contract');
   });
 
   it('the registry still records the guard as unwired — the premise both docs rest on', () => {

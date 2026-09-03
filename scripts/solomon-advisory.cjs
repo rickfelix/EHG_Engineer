@@ -292,23 +292,56 @@ function computeConsultSignature(row) {
 }
 
 /**
- * Pure: enforce the HARD per-sweep ceiling at sweep ENTRY. Given the budget and what has been spent
- * SO FAR (count of answers, elapsed wall-clock, tokens), returns whether the sweep may continue. The
- * caller checks this BEFORE any Read/Grep so a runaway sweep is stopped before it spends. Exported.
+ * Enforce the HARD per-sweep ceiling at sweep ENTRY, with the EXTENT DERIVED RATHER THAN DOCUMENTED
+ * (QF-20260903-418). The old contract took `{count, elapsedMs, tokens}` and only a COMMENT said "per
+ * sweep", so a caller measuring DAY-scoped answers or SEAT-LIFETIME wall-clock fed the wrong extent
+ * into a per-sweep ceiling and self-refused a sweep that was in budget: 09-02 04:28Z 26/5, 09-02
+ * 10:26Z 96/5, 09-02 17:4xZ 5.58M/200k, 09-03 04:37Z 24/5 -- all four at sweep entry, where the true
+ * spend is zero. A refusal emitted nothing, byte-identical to correct silence-by-default, so the
+ * always-sweep policy went dark unobserved. The arithmetic was never wrong; the SHAPE was:
+ *  - wall-clock is DERIVED from `sweepStartedAtMs`, so the caller cannot supply the wrong one.
+ *  - count/token keys carry their scope IN THE NAME -- the word the cron prompt left ambiguous.
+ *  - the retired `count`/`elapsedMs`/`tokens` keys are REFUSED, never silently reused: a caller on
+ *    the old contract is exactly the caller that mis-scoped it.
+ *  - an unmeasurable extent FAILS CLOSED. `enforceSweepBudget()` used to default `spent` to `{}` so
+ *    every check evaluated `0 >= ceiling` and returned `withinBudget:true` however far over budget
+ *    the session was -- a rubber stamp (QF-20260729-221). Absence of a measurement is not evidence.
+ *  - every return carries a discriminated `verdict` + `refused`, so a REFUSED sweep is
+ *    DISTINGUISHABLE from a clean one on the record the caller already writes. No new machinery.
+ * Deterministic given (budget, spent, nowMs); `nowMs` is injectable so a test never races a clock.
+ * Exported.
  */
-function enforceSweepBudget(budget, spent) {
+function enforceSweepBudget(budget, spent, nowMs = Date.now()) {
   const b = budget || SOLOMON_SWEEP_BUDGET;
   const s = spent || {};
-  if (Number.isFinite(b.maxCount) && (s.count || 0) >= b.maxCount) {
-    return { withinBudget: false, reason: `count ceiling reached (${s.count}/${b.maxCount})` };
+  const refuse = (verdict, reason) => ({ withinBudget: false, refused: true, verdict, reason });
+
+  for (const legacy of ['count', 'elapsedMs', 'tokens']) {
+    if (s[legacy] !== undefined) {
+      return refuse('legacy_extent_contract',
+        `'${legacy}' is a retired scope-ambiguous key (QF-20260903-418) — pass `
+        + '{sweepStartedAtMs, answersThisSweep, tokensThisSweep}; elapsed is derived here');
+    }
   }
-  if (Number.isFinite(b.maxWallClockMs) && (s.elapsedMs || 0) >= b.maxWallClockMs) {
-    return { withinBudget: false, reason: `wall-clock ceiling reached (${s.elapsedMs}ms/${b.maxWallClockMs}ms)` };
+  if (!Number.isFinite(s.sweepStartedAtMs)) {
+    return refuse('extent_unmeasurable',
+      'sweepStartedAtMs is required — an unmeasured extent cannot clear a per-sweep ceiling');
   }
-  if (Number.isFinite(b.maxTokens) && (s.tokens || 0) >= b.maxTokens) {
-    return { withinBudget: false, reason: `token ceiling reached (${s.tokens}/${b.maxTokens})` };
+
+  const elapsedThisSweepMs = Math.max(0, nowMs - s.sweepStartedAtMs);
+  const answersThisSweep = s.answersThisSweep || 0;
+  const tokensThisSweep = s.tokensThisSweep || 0;
+
+  if (Number.isFinite(b.maxCount) && answersThisSweep >= b.maxCount) {
+    return refuse('over_budget', `count ceiling reached (${answersThisSweep}/${b.maxCount} answers this sweep)`);
   }
-  return { withinBudget: true };
+  if (Number.isFinite(b.maxWallClockMs) && elapsedThisSweepMs >= b.maxWallClockMs) {
+    return refuse('over_budget', `wall-clock ceiling reached (${elapsedThisSweepMs}ms/${b.maxWallClockMs}ms this sweep)`);
+  }
+  if (Number.isFinite(b.maxTokens) && tokensThisSweep >= b.maxTokens) {
+    return refuse('over_budget', `token ceiling reached (${tokensThisSweep}/${b.maxTokens} this sweep)`);
+  }
+  return { withinBudget: true, refused: false, verdict: 'within_budget', elapsedThisSweepMs };
 }
 
 /**

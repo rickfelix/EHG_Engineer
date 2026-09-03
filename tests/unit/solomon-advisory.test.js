@@ -143,12 +143,43 @@ describe('FR-E1: NET-NEW guards', () => {
     expect(a.startsWith('hash:')).toBe(true);
   });
 
-  it('enforceSweepBudget stops the sweep at the count / wall-clock / token ceiling (at entry)', () => {
+  it('enforceSweepBudget derives the extent and refuses a mis-scoped or unmeasured one (QF-20260903-418)', () => {
     const budget = { maxCount: 5, maxWallClockMs: 1000, maxTokens: 100 };
-    expect(m.enforceSweepBudget(budget, { count: 0, elapsedMs: 0, tokens: 0 }).withinBudget).toBe(true);
-    expect(m.enforceSweepBudget(budget, { count: 5 }).withinBudget).toBe(false);     // count ceiling
-    expect(m.enforceSweepBudget(budget, { elapsedMs: 1000 }).withinBudget).toBe(false); // wall-clock
-    expect(m.enforceSweepBudget(budget, { tokens: 100 }).withinBudget).toBe(false);  // token
+    const t0 = 1_000_000;
+
+    // At sweep ENTRY the true sweep-scoped spend is zero, so the sweep is IN budget. All four
+    // recorded dark ticks were here and were refused only because a day-scoped number was passed.
+    const entry = m.enforceSweepBudget(budget, { sweepStartedAtMs: t0, answersThisSweep: 0, tokensThisSweep: 0 }, t0);
+    expect(entry.withinBudget).toBe(true);
+    expect(entry.verdict).toBe('within_budget');
+    expect(entry.refused).toBe(false);
+
+    // Ceilings still bite on genuinely sweep-scoped spend. Wall-clock is DERIVED from
+    // sweepStartedAtMs + nowMs -- the caller never supplies an elapsed, so it cannot supply a
+    // seat-lifetime one (the 09-02 17:4xZ shape).
+    expect(m.enforceSweepBudget(budget, { sweepStartedAtMs: t0, answersThisSweep: 5 }, t0).verdict).toBe('over_budget');
+    expect(m.enforceSweepBudget(budget, { sweepStartedAtMs: t0 }, t0 + 1000).verdict).toBe('over_budget');
+    expect(m.enforceSweepBudget(budget, { sweepStartedAtMs: t0, tokensThisSweep: 100 }, t0).verdict).toBe('over_budget');
+
+    // The retired scope-ambiguous keys are REFUSED, not silently reinterpreted: a caller still on
+    // the old contract is exactly the caller that mis-scoped it. This is the live 09-02 04:28Z tick.
+    const legacy = m.enforceSweepBudget(budget, { count: 26 }, t0);
+    expect(legacy.withinBudget).toBe(false);
+    expect(legacy.verdict).toBe('legacy_extent_contract');
+    expect(m.enforceSweepBudget(budget, { elapsedMs: 99_999 }, t0).verdict).toBe('legacy_extent_contract');
+    expect(m.enforceSweepBudget(budget, { tokens: 5_580_000 }, t0).verdict).toBe('legacy_extent_contract');
+
+    // Unmeasured FAILS CLOSED. The argument-less call used to return withinBudget:true however far
+    // over budget the session was -- a rubber stamp (QF-20260729-221).
+    expect(m.enforceSweepBudget().withinBudget).toBe(false);
+    expect(m.enforceSweepBudget().verdict).toBe('extent_unmeasurable');
+
+    // Every refusal is DISTINGUISHABLE from a clean sweep, so a dark tick cannot look like silence.
+    for (const r of [legacy, m.enforceSweepBudget(), m.enforceSweepBudget(budget, { sweepStartedAtMs: t0, answersThisSweep: 5 }, t0)]) {
+      expect(r.refused).toBe(true);
+      expect(typeof r.reason).toBe('string');
+    }
+
     expect(m.SOLOMON_SWEEP_BUDGET.maxCount).toBeGreaterThan(0);
   });
 
