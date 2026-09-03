@@ -1986,15 +1986,20 @@ async function detectClaimFocusMismatch(supabase, actions, warnings) {
     if (candidates.length === 0) return stamped;
 
     const sessionIds = [...new Set(candidates.map((sd) => sd.claiming_session_id))];
+    // QF-20260902-724: was .select('id, ...') / .in('id', ...) / keyed by s.id — but
+    // strategic_directives_v2.claiming_session_id carries claude_sessions.session_id, never its
+    // internal id primary key. That join could match 0 of 13,156 rows in production; the
+    // regression test below proves the fix by giving the fake session a DIFFERENT id than its
+    // session_id and asserting the mismatch is still found.
     const { data: sessions, error: sessErr } = await supabase
       .from('claude_sessions')
-      .select('id, sd_key, status')
-      .in('id', sessionIds);
+      .select('session_id, sd_key, status')
+      .in('session_id', sessionIds);
     if (sessErr) {
       warnings.push('GUARD_UNAVAILABLE: claim-focus-mismatch check skipped this tick — session read failed (' + sessErr.message + ')');
       return stamped;
     }
-    const sessionById = new Map((sessions || []).map((s) => [s.id, s]));
+    const sessionById = new Map((sessions || []).map((s) => [s.session_id, s]));
 
     for (const sd of candidates) {
       const session = sessionById.get(sd.claiming_session_id);
