@@ -54,7 +54,7 @@ import {
 } from './file-generators.js';
 
 // QF-20260816-925
-import { extractExistingLessonsBlock } from './operational-sections.js';
+import { extractExistingLessonsBlock, extractExistingHotPatternsBlock, extractExistingFrictionPointsBlock } from './operational-sections.js';
 
 import {
   generateRouterDigest,
@@ -142,7 +142,7 @@ class CLAUDEMDGeneratorV3 {
       protocolVersion: data.protocol?.version,
       sectionCount: data.protocol?.sections?.length,
       subAgentCount: data.subAgents?.length,
-      hotPatternsHash: this.computeHash(JSON.stringify(data.hotPatterns || [])),
+      hotPatternsHash: this.computeHash(data.hotPatternsOverride ?? JSON.stringify(data.hotPatterns || [])),
       // Adversarial review (PR #7181): hash whatever will ACTUALLY be rendered (the frozen
       // override, when loadData() populated one) rather than the always-fresh live array —
       // otherwise db_snapshot_hash keeps changing on routine retrospectives-table churn even
@@ -150,6 +150,8 @@ class CLAUDEMDGeneratorV3 {
       // embedded `db_snapshot_hash` comment plus the git-tracked manifest, none of which are
       // covered by VOLATILE_LINE_RE / stripManifestVolatile — the same churn this fix exists
       // to stop, just relocated to 9 other tracked files.
+      // QF-20260902-053: same treatment for Known Friction Points.
+      knownFrictionPointsHash: this.computeHash(data.knownFrictionPointsOverride ?? JSON.stringify(data.knownFrictionPoints || [])),
       retrospectivesHash: this.computeHash(data.recentLessonsOverride ?? JSON.stringify(data.recentRetrospectives || []))
     });
     return this.computeHash(snapshot);
@@ -264,6 +266,27 @@ class CLAUDEMDGeneratorV3 {
     }
   }
 
+  // QF-20260902-053: same fail-open pattern, for Hot Issue Patterns / Known Friction Points.
+  loadExistingHotPatternsOverride() {
+    try {
+      const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
+      if (!fs.existsSync(filePath)) return null;
+      return extractExistingHotPatternsBlock(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  loadExistingFrictionPointsOverride() {
+    try {
+      const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
+      if (!fs.existsSync(filePath)) return null;
+      return extractExistingFrictionPointsBlock(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): load every DB input + init the
    * manifest header (generated_at / git_commit / db_snapshot_hash) and the digest metadata.
@@ -317,6 +340,11 @@ class CLAUDEMDGeneratorV3 {
     if (!this.options.refreshLessons) {
       const override = this.loadExistingLessonsOverride();
       if (override) data.recentLessonsOverride = override;
+      // QF-20260902-053: same treatment for Hot Issue Patterns / Known Friction Points.
+      const hotPatternsOverride = this.loadExistingHotPatternsOverride();
+      if (hotPatternsOverride) data.hotPatternsOverride = hotPatternsOverride;
+      const frictionPointsOverride = this.loadExistingFrictionPointsOverride();
+      if (frictionPointsOverride) data.knownFrictionPointsOverride = frictionPointsOverride;
     }
 
     // SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001 (FR-4): refuse to render when a section shared by
