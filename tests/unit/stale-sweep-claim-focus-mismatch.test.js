@@ -11,6 +11,17 @@
  * paused multi-hold. clearHalfReleasedSdClaims (sibling function, QF-20260727-031) already
  * releases the unambiguous case (claiming session is DEAD); this function stamps-and-reports the
  * AMBIGUOUS case (session LIVE, focus elsewhere) for review, and never auto-releases it.
+ *
+ * QF-20260902-724: MEASURED the detector's own join was broken — it selected/joined
+ * claude_sessions on `id` while strategic_directives_v2.claiming_session_id carries
+ * `session_id`, a different column, so it could never match a live session (0 of 13,156 rows)
+ * and had NEVER actually fired in production despite every test here passing (the old fixtures
+ * happened to set `id` to the same value used as claiming_session_id, masking the bug). Fixed to
+ * join on session_id; a dedicated regression test below gives the fake session a DIFFERENT id
+ * than its session_id to prove the fix. The "never auto-releases" contract above is UNCHANGED —
+ * this QF also asked for an auto-release step, but that would reverse this function's own
+ * documented multi-hold caution above without resolving it, so it was deferred and signaled to
+ * the coordinator rather than decided unilaterally here.
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
@@ -36,8 +47,10 @@ function makeClient({ sds, sessions, onUpdate = () => ({ error: null }) }) {
         update(payload) { state.isUpdate = true; state.payload = payload; return builder; },
         eq(col, val) { state.eqs.push([col, val]); return builder; },
         range() {
-          // fapPaginate (strategic_directives_v2 query): full page, then empty page to stop.
-          const rows = state.page++ === 0 ? (table === 'strategic_directives_v2' ? sds : []) : [];
+          // fapPaginate (strategic_directives_v2 AND, since QF-20260902-724, claude_sessions --
+          // both bulk reads in this function paginate now): full page, then empty page to stop.
+          const source = table === 'strategic_directives_v2' ? sds : table === 'claude_sessions' ? sessions : [];
+          const rows = state.page++ === 0 ? source : [];
           return Promise.resolve({ data: rows, error: null });
         },
         then(resolve, reject) {
@@ -45,8 +58,6 @@ function makeClient({ sds, sessions, onUpdate = () => ({ error: null }) }) {
             updates.push({ payload: state.payload, eqs: state.eqs });
             return Promise.resolve(onUpdate(state)).then(resolve, reject);
           }
-          // claude_sessions query (direct .in(), no pagination in the real code).
-          if (table === 'claude_sessions') return Promise.resolve({ data: sessions, error: null }).then(resolve, reject);
           return Promise.resolve({ data: [], error: null }).then(resolve, reject);
         }
       };
@@ -68,7 +79,7 @@ describe('QF-20260824-154: claim-focus mismatch is stamped, never auto-released'
     const actions = [], warnings = [];
     const client = makeClient({
       sds: [heldSd()],
-      sessions: [{ id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
+      sessions: [{ session_id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
     });
 
     const stamped = await detectClaimFocusMismatch(client, actions, warnings);
@@ -85,7 +96,7 @@ describe('QF-20260824-154: claim-focus mismatch is stamped, never auto-released'
   it('does NOT touch claiming_session_id or is_working_on -- this is detection, not release', async () => {
     const client = makeClient({
       sds: [heldSd()],
-      sessions: [{ id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
+      sessions: [{ session_id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
     });
     await detectClaimFocusMismatch(client, [], []);
     const { payload } = client.updates[0];
@@ -96,17 +107,33 @@ describe('QF-20260824-154: claim-focus mismatch is stamped, never auto-released'
   it('LEAVES a legitimate multi-hold alone when sd_key matches (in focus, no mismatch)', async () => {
     const client = makeClient({
       sds: [heldSd()],
-      sessions: [{ id: HOLDER, sd_key: 'SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001', status: 'active' }],
+      sessions: [{ session_id: HOLDER, sd_key: 'SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001', status: 'active' }],
     });
     const stamped = await detectClaimFocusMismatch(client, [], []);
     expect(stamped).toHaveLength(0);
     expect(client.updates).toHaveLength(0);
   });
 
+  it('QF-20260902-724: matches on session_id, NEVER the internal id primary key', async () => {
+    // The regression the QF names explicitly: a fake session whose internal `id` is a DIFFERENT
+    // value than its `session_id`. MEASURED: the old code selected/joined on `id`, so
+    // strategic_directives_v2.claiming_session_id (which carries session_id) could never match
+    // it -- 0 of 13,156 production rows. A join keyed on `id` here would silently find nothing;
+    // this asserts the mismatch is still found and stamped.
+    const client = makeClient({
+      sds: [heldSd()],
+      sessions: [{ id: 'internal-pk-not-a-session-id-999', session_id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
+    });
+    const stamped = await detectClaimFocusMismatch(client, [], []);
+    expect(stamped).toHaveLength(1);
+    expect(client.updates).toHaveLength(1);
+    expect(client.updates[0].payload.metadata.claim_focus_mismatch.claiming_session_id).toBe(HOLDER);
+  });
+
   it('SKIPS a dead/missing session -- that is clearHalfReleasedSdClaims\'s job, not this one\'s', async () => {
     const client = makeClient({
       sds: [heldSd()],
-      sessions: [{ id: HOLDER, sd_key: 'QF-something-else', status: 'stale' }],
+      sessions: [{ session_id: HOLDER, sd_key: 'QF-something-else', status: 'stale' }],
     });
     const stamped = await detectClaimFocusMismatch(client, [], []);
     expect(stamped).toHaveLength(0);
@@ -117,7 +144,7 @@ describe('QF-20260824-154: claim-focus mismatch is stamped, never auto-released'
     const alreadyStamped = heldSd({ metadata: { claim_focus_mismatch: { detected_at: '2026-08-24T00:00:00Z' } } });
     const client = makeClient({
       sds: [alreadyStamped],
-      sessions: [{ id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
+      sessions: [{ session_id: HOLDER, sd_key: 'QF-20260817-982', status: 'active' }],
     });
     const stamped = await detectClaimFocusMismatch(client, [], []);
     expect(stamped).toHaveLength(0);

@@ -8,6 +8,11 @@
  *   - classifyHoldingStatus boundary behavior (300s LIVENESS, 600s DISPLAY)
  *   - alive_source_side overrides heartbeat staleness
  *   - null safety for missing inputs
+ *
+ * QF-20260902-724: heartbeat_at is the real claude_sessions column; the code (and every fixture
+ * in this file, until this QF) used last_heartbeat, a phantom column that made getClaimHolder's
+ * live select error and every SD read unclaimed. Fixtures below were renamed to heartbeat_at;
+ * the dedicated regression test at the bottom of this file proves the fix reads the right column.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -55,31 +60,40 @@ function makeSupabase({ sds = {}, sessions = {}, calls = { from: 0 } } = {}) {
 describe('classifyHoldingStatus boundaries', () => {
   it('returns ALIVE_SOURCE_SIDE when has_uncommitted_changes overrides heartbeat staleness', () => {
     const stale = new Date(Date.now() - 9999 * 1000).toISOString();
-    expect(classifyHoldingStatus({ has_uncommitted_changes: true, last_heartbeat: stale, is_alive: false })).toBe('ALIVE_SOURCE_SIDE');
+    expect(classifyHoldingStatus({ has_uncommitted_changes: true, heartbeat_at: stale, is_alive: false })).toBe('ALIVE_SOURCE_SIDE');
   });
 
   it('returns ACTIVE when heartbeat is fresh (within LIVENESS 300s)', () => {
     const fresh = new Date(Date.now() - 100 * 1000).toISOString();
-    expect(classifyHoldingStatus({ last_heartbeat: fresh, is_alive: true })).toBe('ACTIVE');
+    expect(classifyHoldingStatus({ heartbeat_at: fresh, is_alive: true })).toBe('ACTIVE');
   });
 
   it('returns ALIVE_NO_HEARTBEAT at LIVENESS boundary + 5s when is_alive=true', () => {
     const stale = new Date(Date.now() - (LIVENESS_THRESHOLD_SECONDS + 5) * 1000).toISOString();
-    expect(classifyHoldingStatus({ last_heartbeat: stale, is_alive: true })).toBe('ALIVE_NO_HEARTBEAT');
+    expect(classifyHoldingStatus({ heartbeat_at: stale, is_alive: true })).toBe('ALIVE_NO_HEARTBEAT');
   });
 
   it('returns ALIVE_NO_HEARTBEAT for heartbeat between LIVENESS and DISPLAY thresholds', () => {
     const between = new Date(Date.now() - (LIVENESS_THRESHOLD_SECONDS + 100) * 1000).toISOString();
-    expect(classifyHoldingStatus({ last_heartbeat: between, is_alive: false })).toBe('ALIVE_NO_HEARTBEAT');
+    expect(classifyHoldingStatus({ heartbeat_at: between, is_alive: false })).toBe('ALIVE_NO_HEARTBEAT');
   });
 
   it('returns STALE_UNKNOWN past DISPLAY threshold with no is_alive flag', () => {
     const veryStale = new Date(Date.now() - (DISPLAY_THRESHOLD_SECONDS + 100) * 1000).toISOString();
-    expect(classifyHoldingStatus({ last_heartbeat: veryStale, is_alive: false })).toBe('STALE_UNKNOWN');
+    expect(classifyHoldingStatus({ heartbeat_at: veryStale, is_alive: false })).toBe('STALE_UNKNOWN');
   });
 
   it('returns STALE_UNKNOWN for null session', () => {
     expect(classifyHoldingStatus(null)).toBe('STALE_UNKNOWN');
+  });
+
+  it('QF-20260902-724: reads heartbeat_at, never the phantom last_heartbeat column', () => {
+    // A row where the OLD (wrong) field is fresh but the REAL column is stale beyond DISPLAY.
+    // Reading last_heartbeat would classify ACTIVE; reading heartbeat_at must classify
+    // STALE_UNKNOWN -- proving the fix reads the actual column, not a coincidentally-present one.
+    const fresh = new Date(Date.now() - 100 * 1000).toISOString();
+    const veryStale = new Date(Date.now() - (DISPLAY_THRESHOLD_SECONDS + 100) * 1000).toISOString();
+    expect(classifyHoldingStatus({ last_heartbeat: fresh, heartbeat_at: veryStale, is_alive: false })).toBe('STALE_UNKNOWN');
   });
 });
 
@@ -118,7 +132,7 @@ describe('getClaimHolder', () => {
     const supabase = makeSupabase({
       sds: { 'SD-A': { sd_key: 'SD-A', claiming_session_id: 'sess-1' } },
       sessions: {
-        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, last_heartbeat: now },
+        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, heartbeat_at: now },
       },
     });
     const holder = await getClaimHolder('SD-A', supabase);
@@ -134,7 +148,7 @@ describe('getClaimHolder', () => {
     const supabase = makeSupabase({
       sds: { 'SD-A': { sd_key: 'SD-A', claiming_session_id: 'sess-1' } },
       sessions: {
-        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, last_heartbeat: now },
+        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, heartbeat_at: now },
       },
       calls,
     });
@@ -151,7 +165,7 @@ describe('isClaimedBy', () => {
     const supabase = makeSupabase({
       sds: { 'SD-A': { sd_key: 'SD-A', claiming_session_id: 'sess-1' } },
       sessions: {
-        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, last_heartbeat: now },
+        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, heartbeat_at: now },
       },
     });
     await expect(isClaimedBy('SD-A', 'sess-1', supabase)).resolves.toBe(true);
@@ -162,7 +176,7 @@ describe('isClaimedBy', () => {
     const supabase = makeSupabase({
       sds: { 'SD-A': { sd_key: 'SD-A', claiming_session_id: 'sess-other' } },
       sessions: {
-        'sess-other': { session_id: 'sess-other', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, last_heartbeat: now },
+        'sess-other': { session_id: 'sess-other', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, heartbeat_at: now },
       },
     });
     await expect(isClaimedBy('SD-A', 'sess-1', supabase)).resolves.toBe(false);
@@ -187,7 +201,7 @@ describe('getClaimHolderCached (opt-in TTL cache)', () => {
     const supabase = makeSupabase({
       sds: { 'SD-A': { sd_key: 'SD-A', claiming_session_id: 'sess-1' } },
       sessions: {
-        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, last_heartbeat: now },
+        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, heartbeat_at: now },
       },
       calls,
     });
@@ -202,7 +216,7 @@ describe('getClaimHolderCached (opt-in TTL cache)', () => {
     const supabase = makeSupabase({
       sds: { 'SD-A': { sd_key: 'SD-A', claiming_session_id: 'sess-1' } },
       sessions: {
-        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, last_heartbeat: now },
+        'sess-1': { session_id: 'sess-1', sd_key: 'SD-A', status: 'active', is_alive: true, has_uncommitted_changes: false, heartbeat_at: now },
       },
       calls,
     });
