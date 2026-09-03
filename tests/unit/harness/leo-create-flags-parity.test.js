@@ -144,7 +144,9 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('the QF retirement write is wrapped in withRetry rather than a single best-effort attempt', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 5500);
+      // Window widened 5500->6500 (QF-20260902-866 added a success_criteria: line
+      // earlier in the function body, pushing maxRetries: 2 right to the prior edge).
+      const body = src.slice(idx, idx + 6500);
       expect(body).toMatch(/await withRetry\(async \(\) => \{/);
       expect(body).toMatch(/maxRetries:\s*2/);
     });
