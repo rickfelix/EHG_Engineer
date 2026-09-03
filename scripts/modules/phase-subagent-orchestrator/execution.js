@@ -14,6 +14,7 @@ import { normalizeSDId } from '../sd-id-normalizer.js';
 // (e.g. DESIGN) violated check_conditions_required here even though the sibling writer
 // in lib/sub-agent-executor/results-storage.js already handles the same case.
 import { deriveConditionalPassEvidence } from '../../../lib/sub-agent-executor/results-storage.js';
+import { assertEvidenceHasContent } from '../../../lib/sub-agent-executor/evidence-content-guard.js';
 
 /**
  * Generate deterministic idempotency key for sub-agent execution
@@ -262,6 +263,12 @@ async function storeSubAgentResult(supabase, sdId, result, options = {}) {
     justification: conditionalPassEvidence.justification,
     conditions: conditionalPassEvidence.conditions
   };
+
+  // Empty-evidence guard, shared with the sibling writers rather than reimplemented here. This
+  // file's own header records that it was once missed when the canonical writer was hardened
+  // (QF-20260703-369 had to retrofit deriveConditionalPassEvidence into it); wiring the same
+  // imported predicate into every writer is what stops that recurring.
+  assertEvidenceHasContent(insertData, { writer: 'phase-subagent-orchestrator.execution' });
 
   const insertResult = await safeInsert(supabase, 'sub_agent_execution_results', insertData, {
     validate: true,
