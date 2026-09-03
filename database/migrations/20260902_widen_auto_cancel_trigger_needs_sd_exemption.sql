@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Chairman verbal "A" at the Adam terminal 2026-09-03 ~00:3xZ (ceremony 3c; scribe Adam 673db833; coordinator 6ec96a84 queued it; SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 FR-4; trigger swap exempting needs_sd rows from SD-completion auto-cancel; no data mutation)
 -- Migration: widen the SD-completion auto-cancel trigger to exempt needs_sd rows
 -- SD: SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 (FR-4)
 -- Amends: 20260525_auto_close_quick_fixes_on_sd_completion.sql
