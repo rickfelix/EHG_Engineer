@@ -61,7 +61,8 @@ import { countAutoStartableQuickFixes, countClaimableWithVerifyQuickFixes } from
 // counts as "1 claimable leaf"), not the raw-unclaimed extent. Applied IN-MEMORY on the rows this
 // module already fetches — never a second SD-table read or per-child parent fetch.
 import { claimableDbFreeReason, blockerKeysFor } from './claimable-leaves.mjs';
-import { isLiveCountableWorker } from './live-countable-worker.mjs';
+import { RELEASED_WORKER_STATUSES } from './live-countable-worker.mjs';
+import { seatIdleVerdict } from '../../lib/fleet/seat-idle-predicate.mjs';
 // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — a standalone
 // module (FR-7) so it has a real test seam, imported here (forecaster side) and independently
 // by scripts/adam-coordinator-health.mjs (KPI-1 side). Never re-derives belt/claim logic itself.
@@ -417,7 +418,16 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   // excluded even when it is not the CURRENTLY-active coordinator id.
   let coordinatorId = null;
   try { coordinatorId = await getActiveCoordinatorId(sb); } catch { coordinatorId = null; }
-  const workers = (sessions || []).filter(s => isLiveCountableWorker(s, coordinatorId));
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D / FR-2: migrated onto the shared predicate. Identity+status
+  // ONLY, matching isLiveCountableWorker's exact semantics (coordinator-by-id/adam/non_fleet/fixture/
+  // quarantined/parked via the always-applied base axes, plus RELEASED_WORKER_STATUSES via
+  // statusExcludeSet) -- sdHolderSessionIds is deliberately OMITTED here, not migrated. The busy/idle
+  // split just below needs the actual CLAIM ROWS (claimsBySession) for its ETA computation, which a
+  // boolean-only predicate cannot supply, so that split stays a direct lookup rather than a second
+  // seatIdleVerdict call. Per the FR-3 matrix: this consumer does not yet check QF-holder or
+  // directed-work -- unchanged from today, and any change to that is a deliberate FR-3-tracked
+  // broadening proven by the differential harness, not an incidental side effect of this migration.
+  const workers = (sessions || []).filter(s => seatIdleVerdict(s, { coordinatorId, nowMs: now, statusExcludeSet: RELEASED_WORKER_STATUSES }).idle);
 
   // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: compute the genuinely-stalled idle workers via the
   // canonical detector (loop alive + no claim + claimable work waiting, parked workers excluded). The

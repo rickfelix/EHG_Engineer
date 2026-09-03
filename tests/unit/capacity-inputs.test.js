@@ -217,6 +217,66 @@ describe('gatherCapacityInputs — the counts the verdict ladder consumes', () =
     expect(out.idleNow, 'an unclaimed live worker is idle demand').toBe(1);
   });
 
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D / FR-2: gatherCapacityInputs' worker-membership filter was
+  // migrated from isLiveCountableWorker onto the shared seat-idle predicate. This file had ZERO
+  // assertions on the identity/status axes before this SD -- the control above proves a genuine
+  // worker counts as idle, but nothing proved a fixture, a stale coordinator, a released session, a
+  // quarantined session, or a parked session did NOT. Passing the pre-existing suite after migration
+  // was necessary but not sufficient evidence; these are the sufficient half.
+  it('excludes a fixture-session id from idleNow (the C2 gap this SD exists to close)', async () => {
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [liveSession({ session_id: 'test-session-nswcf-fenced' })],
+    }), { now: Date.now() });
+    expect(out.idleNow).toBe(0);
+  });
+
+  it('excludes a stale, non-active-coordinator is_coordinator flag from idleNow', async () => {
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [liveSession({ session_id: 'stale-coord-99', metadata: { is_coordinator: true } })],
+    }), { now: Date.now() });
+    expect(out.idleNow).toBe(0);
+  });
+
+  it('excludes a released/completed/terminated/inactive session from idleNow (RELEASED_WORKER_STATUSES, the stricter axis capacity-inputs deliberately applies)', async () => {
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [
+        liveSession({ session_id: 'released-1', status: 'released' }),
+        liveSession({ session_id: 'completed-1', status: 'completed' }),
+        liveSession({ session_id: 'terminated-1', status: 'terminated' }),
+        liveSession({ session_id: 'inactive-1', status: 'inactive' }),
+      ],
+    }), { now: Date.now() });
+    expect(out.idleNow).toBe(0);
+  });
+
+  it('excludes a quarantined session from idleNow', async () => {
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [liveSession({ session_id: 'quarantined-1', metadata: { quarantined_at: new Date().toISOString() } })],
+    }), { now: Date.now() });
+    expect(out.idleNow).toBe(0);
+  });
+
+  it('excludes a session parked into the future from idleNow, but NOT one whose park window already expired (two-sided)', async () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const out = await gatherCapacityInputs(fakeClient({
+      sessions: [
+        liveSession({ session_id: 'parked-future', metadata: { parked_until: future } }),
+        liveSession({ session_id: 'parked-past', metadata: { parked_until: past } }),
+      ],
+    }), { now: Date.now() });
+    expect(out.idleNow).toBe(1); // only parked-past counts as idle demand
+  });
+
+  it('excludes role=adam and metadata.non_fleet from idleNow -- the base identity axes every consumer shares', () => {
+    return gatherCapacityInputs(fakeClient({
+      sessions: [
+        liveSession({ session_id: 'adam-1', metadata: { role: 'adam' } }),
+        liveSession({ session_id: 'nonfleet-1', metadata: { non_fleet: true } }),
+      ],
+    }), { now: Date.now() }).then((out) => expect(out.idleNow).toBe(0));
+  });
+
   // QF-20260821-032: a stale-but-otherwise-eligible QF must surface as claimableWithVerifyQfCount,
   // SEPARATELY from openQfCount — a deficit verdict built on openQfCount alone must not see this
   // supply, and a reader checking claimableWithVerifyQfCount must see it named, not folded into 0.
