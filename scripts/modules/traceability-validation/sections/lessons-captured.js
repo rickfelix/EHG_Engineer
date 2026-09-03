@@ -23,10 +23,20 @@ export async function validateLessonsCaptured(sd_id, sdUuid, designAnalysis, dat
   // E1: Check for retrospective preparation (10 points)
   console.log('\n   [E1] Retrospective Preparation...');
 
-  // Check if a retrospective exists in the retrospectives table
+  // Check if a retrospective exists in the retrospectives table.
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: `publication_status` is not a column on
+  // `retrospectives` (confirmed live: PostgREST 42703) and was never read anywhere
+  // below -- selecting it made the WHOLE query fail every time, which the bare
+  // `{ data }` destructure (discarding `error`) silently swallowed as "no
+  // retrospective found." This is the exact defect class this SD's factory-level
+  // throw now surfaces instead of hiding: Section E1 has always fallen through to
+  // the metadata-heuristic / default-score paths below, never actually detecting a
+  // real retrospective row. Removing the phantom column is the root fix, not a
+  // throwOnSchemaDrift opt-out -- there is no legitimate reason to request a column
+  // that does not exist and is never used.
   const { data: retrospective } = await supabase
     .from('retrospectives')
-    .select('id, quality_score, publication_status')
+    .select('id, quality_score')
     .eq('sd_id', sd_id)
     .order('created_at', { ascending: false })
     .limit(1);
