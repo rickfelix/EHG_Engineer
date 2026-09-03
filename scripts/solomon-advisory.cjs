@@ -776,6 +776,9 @@ async function captureLedgerRow(
   try { tele = readTelemetry({ sessionId }) || { captured: false }; }
   catch { tele = { captured: false }; }
   const costCaptured = tele.captured === true;
+  // QF-20260902-148 (4): advisory_id->session_coordination.id is best-effort, not a durable FK
+  // -- writer is correct; non-resolution is session_coordination rows aging out over time, not
+  // a code defect. A durable fix needs the target on the ledger row itself (schema change, OOS).
   const row = {
     advisory_id: advisoryId || null,
     correlation_id: correlationId,
