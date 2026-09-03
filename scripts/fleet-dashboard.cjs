@@ -501,6 +501,18 @@ async function loadData() {
     quickFixes = warnIfCapTruncated(qfRows, 'quick_fixes (open/in_progress)').filter((qf) => !isFixtureQf(qf));
   } catch { /* degrade-safe: empty QF section */ }
 
+  // SD-LEO-INFRA-ONE-BELT-CENSUS-001: the open/in_progress listing above is unchanged (still
+  // drives per-row display: title/owner/pr_url/etc., which belt_census_row deliberately does not
+  // carry). This is ADDITIONAL: printQuickFixes' "(no open quick-fixes)" empty-state message used
+  // to say nothing when stranded/gated/deferred/in_flight rows existed (the 2026-09-02 incident
+  // class) -- countsByBucket lets the empty-state name the non-zero complement instead.
+  let beltCensusCounts = null;
+  try {
+    const { computeBeltCensus } = require('../lib/fleet/belt-census.cjs');
+    const census = await computeBeltCensus(supabase);
+    beltCensusCounts = census.countsByBucket;
+  } catch { /* degrade-safe: empty-state falls back to the unqualified message */ }
+
   return {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap, qfStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions, livenessRows, livenessTruncated,
@@ -512,7 +524,8 @@ async function loadData() {
     executeTeams,
     quickFixes, // QF-20260525-836
     revivalPending, // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
-    expiredUnfulfilledCount // QF-20260830-434
+    expiredUnfulfilledCount, // QF-20260830-434
+    beltCensusCounts // SD-LEO-INFRA-ONE-BELT-CENSUS-001
   };
 }
 
@@ -822,7 +835,17 @@ function printQuickFixes(d) {
   console.log('QUICK FIXES (' + qfs.length + (awaitingReviewCount ? `, ${awaitingReviewCount} awaiting-review` : '') + ')');
   console.log('─'.repeat(72));
   if (qfs.length === 0) {
-    console.log('  (no open quick-fixes)');
+    // Per-reader output contract (FR-6, SD-LEO-INFRA-ONE-BELT-CENSUS-001): this reader prints the
+    // FULL countsByBucket breakdown whenever the acted-on (open/in_progress) listing is empty, so
+    // "no open quick-fixes" never reads as "nothing to do" when stranded/gated/deferred/in_flight
+    // rows exist (the 2026-09-02 incident class).
+    const { formatComplementProse } = require('../lib/fleet/belt-census.cjs');
+    const complement = d.beltCensusCounts
+      ? formatComplementProse({ countsByBucket: d.beltCensusCounts }, ['claimable', 'directed_only'])
+      : null;
+    console.log(complement && complement !== '0'
+      ? `  (no open quick-fixes -- belt: ${complement})`
+      : '  (no open quick-fixes)');
     console.log('');
     return;
   }

@@ -76,6 +76,12 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft, computeStateHash, shouldSkipHeavyPass } = require('../lib/coordinator/quiet-tick.cjs');
+// SD-LEO-INFRA-ONE-BELT-CENSUS-001: readSalientState's beltZero used to be a bare
+// .eq('status','draft') draft-only check -- undercounted the belt whenever genuinely
+// claimable/directed work sat in another non-terminal status, or whenever a naive read like this
+// missed stranded/gated/deferred rows entirely (the 2026-09-02 incident class). Now sourced from
+// the shared belt census.
+const { computeBeltCensus } = require('../lib/fleet/belt-census.cjs');
 // QF-20260829-588: canonical non-fleet predicate (lib/claim/build-forbidden-session.cjs) --
 // role seats (adam/solomon/coordinator) must not count as "idle" fleet workers.
 const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
@@ -879,12 +885,13 @@ async function readCheapStateCounts(sb) {
 async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
-    const { data: claimable } = await sb
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('status', 'draft')
-      .limit(1);
-    state.beltZero = !(claimable && claimable.length > 0);
+    // Per-reader output contract (FR-6, SD-LEO-INFRA-ONE-BELT-CENSUS-001): acted-on buckets =
+    // claimable + directed_only COMBINED (kind='sd' only) -- beltZero means their combined count
+    // is 0, not a bare draft-status count that misses genuinely-claimable non-draft rows or
+    // silently treats stranded/gated/deferred rows as if they don't exist.
+    const census = await computeBeltCensus(sb);
+    const actedOn = census.rows.filter((r) => r.kind === 'sd' && (r.bucket === 'claimable' || r.bucket === 'directed_only'));
+    state.beltZero = actedOn.length === 0;
   } catch { /* fail-soft */ }
   return state;
 }
