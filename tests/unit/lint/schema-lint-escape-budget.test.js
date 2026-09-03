@@ -9,7 +9,7 @@
  * reviewer nothing about whether the growth was legitimate.
  */
 import { describe, it, expect } from 'vitest';
-import { compareBudgets, pragmaPathspecs } from '../../../scripts/lint/schema-lint-escape-budget.mjs';
+import { compareBudgets, pragmaPathspecs, PRAGMA_DEFINITION_FILES } from '../../../scripts/lint/schema-lint-escape-budget.mjs';
 
 const snap = ({ files = [], tables = [], pragmas = {} }) => ({
   allowlist: { files: files.length, tables: tables.length },
@@ -83,6 +83,37 @@ describe('compareBudgets — escape-budget freeze (FR-3)', () => {
       allowlist_tables: { base: 1, head: 2 },
       pragmas: { base: 0, head: 0 },
     });
+  });
+});
+
+// This check FAILED ITSELF on its own first PR (run 33773462275): its own source contains the
+// pragma string twice — the constant declaration and its prose explanation — and because a NEW file
+// exists only at HEAD, those 2 definitional occurrences read as pure growth. The original comment
+// claimed such occurrences "cancel on both sides", which is true only for a file present on BOTH
+// revs. Same shape as the FR-1 defect in this SD: a control matching its own documentation.
+describe('PRAGMA_DEFINITION_FILES — the self-flag regression (measured, not hypothetical)', () => {
+  it('excludes this check itself, so introducing it cannot read as escape growth', () => {
+    expect(PRAGMA_DEFINITION_FILES.has('scripts/lint/schema-lint-escape-budget.mjs')).toBe(true);
+  });
+
+  it('excludes the two lint sources that declare and document the pragma', () => {
+    expect(PRAGMA_DEFINITION_FILES.has('scripts/lint/schema-reference-extract.mjs')).toBe(true);
+    expect(PRAGMA_DEFINITION_FILES.has('scripts/lint/schema-reference-lint.mjs')).toBe(true);
+  });
+
+  it('is NARROW — an ordinary file is still counted, so the exclusion is not a blanket hole', () => {
+    expect(PRAGMA_DEFINITION_FILES.has('lib/lint/added-line-text.mjs')).toBe(false);
+    expect(PRAGMA_DEFINITION_FILES.has('scripts/lint/schema-lint-exit.mjs')).toBe(false);
+    expect(PRAGMA_DEFINITION_FILES.size).toBe(3);
+  });
+
+  it('growth in a NON-excluded file is still caught — the exclusion did not disarm detection', () => {
+    const r = compareBudgets(
+      snap({ pragmas: {} }),
+      snap({ pragmas: { 'lib/whatever.js': 1 } })
+    );
+    expect(r.ok).toBe(false);
+    expect(r.failures.join('\n')).toContain('lib/whatever.js (0 -> 1)');
   });
 });
 

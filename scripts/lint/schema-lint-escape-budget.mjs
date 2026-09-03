@@ -32,9 +32,11 @@
  *  3. IT CANNOT SEE THE THIRD ESCAPE. Deleting or renaming a file removes its violations without
  *     touching either budget, and so does moving code into a directory the lint does not scan
  *     (anything outside RUNTIME_DIRS, or matching SKIP_DIR_RE such as one-off/ or archive/).
- *  4. ITS PRAGMA TALLY INCLUDES THE LINT'S OWN DEFINITION. The string appears in the lint sources
- *     that define and document it. Those occurrences are counted on BOTH sides so they cancel in
- *     the comparison, but the absolute number printed is not "the number of suppressions".
+ *  4. IT DOES NOT COUNT PRAGMAS INSIDE THE LINT'S OWN SOURCES. PRAGMA_DEFINITION_FILES below is
+ *     excluded from the census because those occurrences declare and document the pragma rather
+ *     than suppress anything. The hole this leaves is real and narrow: a GENUINE suppression added
+ *     inside one of those three files would not move the budget. The alternative was worse — this
+ *     check failed itself on its own first PR, reporting its own introduction as escape growth.
  *  5. IT IS BLIND WHEN THE BASE IS UNRESOLVABLE. A shallow or partial clone makes the baseline
  *     unknowable; this reports that and exits 0 rather than inventing a comparison. That is a
  *     deliberate fail-open, and it is a real hole: a PR whose base cannot be fetched is unchecked.
@@ -48,6 +50,23 @@ const PRAGMA = 'schema-lint-disable-line';
 // nothing, so counting it would make the budget respond to files the lint never reads.
 const RUNTIME_DIRS = ['scripts', 'lib', 'src', 'server', 'api', 'app'];
 const CODE_EXTS = ['js', 'cjs', 'mjs', 'ts', 'tsx', 'jsx'];
+
+/**
+ * Files that DEFINE or DOCUMENT the pragma rather than being suppressed by it. Their occurrences
+ * are the constant declaration and its prose explanation — not suppression sites.
+ *
+ * THIS EXCLUSION EXISTS BECAUSE THIS CHECK FAILED ITSELF ON ITS OWN FIRST PR, and the original
+ * reasoning was wrong in an instructive way. The first version noted that definitional occurrences
+ * "are counted on both sides so they cancel" — true only for a file present on BOTH revs. A NEW
+ * file exists only at HEAD, so its 2 definitional occurrences were pure growth, and this check
+ * reported its own introduction as someone widening an escape. That is the same shape as the FR-1
+ * defect in this SD: a control matching its own documentation.
+ */
+export const PRAGMA_DEFINITION_FILES = new Set([
+  'scripts/lint/schema-reference-extract.mjs',  // const PRAGMA + the skip-rule docblock
+  'scripts/lint/schema-reference-lint.mjs',     // the escape-hatch guidance printed on failure
+  'scripts/lint/schema-lint-escape-budget.mjs', // this file
+]);
 
 const git = (args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
@@ -99,6 +118,7 @@ export function pragmaCountsAt(rev) {
     const rest = line.slice(line.indexOf(':') + 1);
     const file = rest.slice(0, rest.indexOf(':'));
     if (!file) continue;
+    if (PRAGMA_DEFINITION_FILES.has(file)) continue; // defines/documents the pragma, is not suppressed by it
     counts.set(file, (counts.get(file) || 0) + 1);
   }
   return counts;
