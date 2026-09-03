@@ -189,18 +189,25 @@ function generateRecentLessonsSection(retrospectives) {
 }
 
 /**
- * QF-20260816-925 / QF-20260902-053: pull a CURRENT `## <heading>` block verbatim out of an
- * already-rendered CLAUDE_CORE.md, so a regen can reuse it instead of re-snapshotting a live
- * table (a generated contract must be a deterministic function of leo_protocol_sections).
- * @returns {string|null} the block, or null if the heading is absent
+ * QF-20260816-925: pull the CURRENT "## Recent Lessons (Last 30 Days)" block verbatim out of
+ * an already-rendered CLAUDE_CORE.md, so a regeneration triggered by an unrelated section
+ * edit can reuse it instead of re-snapshotting the live `retrospectives` table — which
+ * churns this section under fleet concurrency independent of any real content change (many
+ * parallel sessions each regenerating at a slightly different moment each see a different
+ * "last 30 days" set).
+ * @param {string} fileContent - existing CLAUDE_CORE.md content
+ * @returns {string|null} the block (heading through the line before the next `## `), or null
+ *   if the heading is absent (nothing to preserve — falls through to a fresh snapshot)
  */
-function extractExistingSectionBlock(fileContent, headingLine) {
+function extractExistingLessonsBlock(fileContent) {
   if (typeof fileContent !== 'string') return null;
-  // Adversarial review (PR #7181): anchor to a line start — several sections here are free
-  // text from a live DB table, so an unanchored search could latch onto the heading quoted
-  // mid-sentence in unrelated content.
-  const escaped = headingLine.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headingMatch = new RegExp(`^${escaped}`, 'm').exec(fileContent);
+  // Adversarial review (PR #7181): anchor to an actual line start, not an unanchored
+  // substring search — several sections rendered ABOVE this one (Known Friction Points,
+  // Hot Patterns, Proposals, the raw leo_protocol_sections content itself) are free text
+  // sourced from a live DB table anyone can edit, so an indexOf() with no anchor could
+  // latch onto this exact heading text quoted mid-sentence in unrelated content and slice
+  // the wrong span.
+  const headingMatch = /^## Recent Lessons \(Last 30 Days\)/m.exec(fileContent);
   if (!headingMatch) return null;
   const start = headingMatch.index;
   const nextHeadingIdx = fileContent.indexOf('\n## ', start + headingMatch[0].length);
@@ -208,16 +215,28 @@ function extractExistingSectionBlock(fileContent, headingLine) {
   return fileContent.slice(start, end).trimEnd();
 }
 
-function extractExistingLessonsBlock(fileContent) {
-  return extractExistingSectionBlock(fileContent, '## Recent Lessons (Last 30 Days)');
-}
-
+// QF-20260902-053: same reuse-over-live-resnapshot strategy, applied to Hot Issue Patterns
+// (issue_patterns.occurrence_count churned this section on every regen).
 function extractExistingHotPatternsBlock(fileContent) {
-  return extractExistingSectionBlock(fileContent, '## Hot Issue Patterns (Auto-Updated)');
+  if (typeof fileContent !== 'string') return null;
+  const headingMatch = /^## Hot Issue Patterns \(Auto-Updated\)/m.exec(fileContent);
+  if (!headingMatch) return null;
+  const start = headingMatch.index;
+  const nextHeadingIdx = fileContent.indexOf('\n## ', start + headingMatch[0].length);
+  const end = nextHeadingIdx === -1 ? fileContent.length : nextHeadingIdx;
+  return fileContent.slice(start, end).trimEnd();
 }
 
+// QF-20260902-053: same reuse-over-live-resnapshot strategy, applied to Known Friction
+// Points (SELF-IDENTIFY feedback rows crossing the ≥3-workers threshold churned this section).
 function extractExistingFrictionPointsBlock(fileContent) {
-  return extractExistingSectionBlock(fileContent, '## Known Friction Points');
+  if (typeof fileContent !== 'string') return null;
+  const headingMatch = /^## Known Friction Points/m.exec(fileContent);
+  if (!headingMatch) return null;
+  const start = headingMatch.index;
+  const nextHeadingIdx = fileContent.indexOf('\n## ', start + headingMatch[0].length);
+  const end = nextHeadingIdx === -1 ? fileContent.length : nextHeadingIdx;
+  return fileContent.slice(start, end).trimEnd();
 }
 
 /**

@@ -53,12 +53,8 @@ import {
   assertSharedSectionsNotCopied
 } from './file-generators.js';
 
-// QF-20260816-925 / QF-20260902-053
-import {
-  extractExistingLessonsBlock,
-  extractExistingHotPatternsBlock,
-  extractExistingFrictionPointsBlock,
-} from './operational-sections.js';
+// QF-20260816-925
+import { extractExistingLessonsBlock, extractExistingHotPatternsBlock, extractExistingFrictionPointsBlock } from './operational-sections.js';
 
 import {
   generateRouterDigest,
@@ -146,9 +142,15 @@ class CLAUDEMDGeneratorV3 {
       protocolVersion: data.protocol?.version,
       sectionCount: data.protocol?.sections?.length,
       subAgentCount: data.subAgents?.length,
-      // PR #7181 / QF-20260902-053: hash whatever will ACTUALLY render (the override, when set)
-      // rather than the always-fresh live array, so db_snapshot_hash doesn't churn on its own.
       hotPatternsHash: this.computeHash(data.hotPatternsOverride ?? JSON.stringify(data.hotPatterns || [])),
+      // Adversarial review (PR #7181): hash whatever will ACTUALLY be rendered (the frozen
+      // override, when loadData() populated one) rather than the always-fresh live array —
+      // otherwise db_snapshot_hash keeps changing on routine retrospectives-table churn even
+      // though the rendered content didn't, and that propagates into every *_DIGEST.md's
+      // embedded `db_snapshot_hash` comment plus the git-tracked manifest, none of which are
+      // covered by VOLATILE_LINE_RE / stripManifestVolatile — the same churn this fix exists
+      // to stop, just relocated to 9 other tracked files.
+      // QF-20260902-053: same treatment for Known Friction Points.
       knownFrictionPointsHash: this.computeHash(data.knownFrictionPointsOverride ?? JSON.stringify(data.knownFrictionPoints || [])),
       retrospectivesHash: this.computeHash(data.recentLessonsOverride ?? JSON.stringify(data.recentRetrospectives || []))
     });
@@ -248,29 +250,41 @@ class CLAUDEMDGeneratorV3 {
     return specs;
   }
 
-  // QF-20260816-925 / QF-20260902-053: read a live-baked section's current on-disk block.
-  // Fail-open — any missing file / read error / absent heading returns null and falls
-  // through to a fresh snapshot, never silently freezes on a read error.
-  loadExistingSectionOverride(extractFn) {
+  /**
+   * QF-20260816-925: read CLAUDE_CORE.md's CURRENT on-disk Recent Lessons block. Fail-open
+   * (any missing file / read error / absent heading returns null) — falling through to a
+   * fresh snapshot is always safe; silently freezing on a read error would not be.
+   * @returns {string|null}
+   */
+  loadExistingLessonsOverride() {
     try {
       const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
       if (!fs.existsSync(filePath)) return null;
-      return extractFn(fs.readFileSync(filePath, 'utf-8'));
+      return extractExistingLessonsBlock(fs.readFileSync(filePath, 'utf-8'));
     } catch {
       return null;
     }
   }
 
-  loadExistingLessonsOverride() {
-    return this.loadExistingSectionOverride(extractExistingLessonsBlock);
-  }
-
+  // QF-20260902-053: same fail-open pattern, for Hot Issue Patterns / Known Friction Points.
   loadExistingHotPatternsOverride() {
-    return this.loadExistingSectionOverride(extractExistingHotPatternsBlock);
+    try {
+      const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
+      if (!fs.existsSync(filePath)) return null;
+      return extractExistingHotPatternsBlock(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      return null;
+    }
   }
 
   loadExistingFrictionPointsOverride() {
-    return this.loadExistingSectionOverride(extractExistingFrictionPointsBlock);
+    try {
+      const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
+      if (!fs.existsSync(filePath)) return null;
+      return extractExistingFrictionPointsBlock(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -318,13 +332,15 @@ class CLAUDEMDGeneratorV3 {
       visionGapInsights
     };
 
-    // QF-20260816-925 / QF-20260902-053: reuse each live-baked section's on-disk block by
-    // default instead of re-snapshotting its live table (Solomon ruling c5d4390b: a generated
-    // contract must be a deterministic function of leo_protocol_sections). --refresh-lessons
-    // (the daily cron) opts back into a fresh snapshot for all three.
+    // QF-20260816-925: by default, reuse whatever Recent Lessons block is already on disk
+    // instead of re-snapshotting the live retrospectives table — an unrelated section edit
+    // (or simply a different fleet worker regenerating a few minutes later) would otherwise
+    // churn this section on every run. --refresh-lessons (the daily cron refresh) opts back
+    // into a fresh snapshot. Fail-open to a fresh snapshot on any read problem or first run.
     if (!this.options.refreshLessons) {
-      const lessonsOverride = this.loadExistingLessonsOverride();
-      if (lessonsOverride) data.recentLessonsOverride = lessonsOverride;
+      const override = this.loadExistingLessonsOverride();
+      if (override) data.recentLessonsOverride = override;
+      // QF-20260902-053: same treatment for Hot Issue Patterns / Known Friction Points.
       const hotPatternsOverride = this.loadExistingHotPatternsOverride();
       if (hotPatternsOverride) data.hotPatternsOverride = hotPatternsOverride;
       const frictionPointsOverride = this.loadExistingFrictionPointsOverride();
