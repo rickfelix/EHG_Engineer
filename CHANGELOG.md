@@ -233,6 +233,14 @@
   - The sibling fillers (`achievementFiller`, `learningFiller`, `actionFiller`) were already fixed by QF-20260822-453 to derive per-SD-specific text; `whatNeedsImprovement` was never migrated to that pattern, which is why the defect class kept recurring after that fix shipped.
   - Adds `challengeFiller()` mirroring the existing pattern: always returns exactly 3 entries (preserves the DB trigger's `>=3`-item scoring threshold), avoids phrasing the trigger penalizes, and keeps the plain-string-array shape the DB trigger reads positionally.
 
+- **A bypassed handoff can no longer read as validated** - SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001
+  - `BaseExecutor.js`'s bypass fall-through logged a warning and fell into the same success return as a genuine pass, and `HandoffRecorder.js` hardcoded `validation_passed: true` regardless — so a `--bypass-validation` handoff was recorded byte-identical to a validated one on every field downstream gates/roles read. Extracted `lib/handoff/bypass-stamp.js` as a shared pure-function core so a bypassed result is stamped (`bypassed:true`, `bypassReason`, `bypassedGates`) and persisted correctly (`validation_passed:false`, `score_source:'bypassed'`) at both `HandoffRecorder.js` write sites.
+  - `cli-main.js` now resolves the SD identifier once and uses the correct id shape for each table it writes — a follow-on SECURITY review caught that the fix's first pass used the wrong (polymorphic `strategic_directives_v2.id`) value for `bypass_ledger.sd_id`, a strict-UUID column, silently dropping the entire bypass audit trail for ~22.7% of SDs; corrected to use `uuid_id` there.
+  - A rejecting sub-agent verdict (BLOCKED/FAIL) on a required sub-agent now blocks a handoff unconditionally, regardless of `SUBAGENT_VERDICT_MODE`'s advisory/block setting.
+  - `scripts/mark-completion-evidence-invalid.js` (new, wired as `npm run sd:mark-completion-invalid`) is the only sanctioned writer of `metadata.completion_evidence_invalid`, which gates a new guarded reopen path in `reactivate-sd.js` for an SD later found to have been falsely completed — requires an attributable actor and a genuine SD-KEY/UUID `--sd-id` (a PostgREST filter-injection path was closed here during SECURITY review).
+  - Adds an FR-8 `--diff-range` post-merge re-verify mode to the TESTING sub-agent's runner (`scripts/execute-subagent.js`, `lib/sub-agents/testing/diff-range.js`), so an already-merged, genuinely zero-UI SD can be honestly re-evidenced instead of falling through to a BLOCKED E2E flow on an empty `main...HEAD` diff.
+  - TESTING and SECURITY sub-agent review (CONDITIONAL_PASS 88% and 94% respectively) both surfaced real, fixed findings against the shipped diff — see `sub_agent_execution_results` for this SD's EXEC-TO-PLAN phase for full detail.
+
 ### Security
 
 - **Stage RLS remediation for all 12 security-linter-sentinel findings** - SD-LEO-FIX-SECURITY-LINTER-SENTINEL-001
