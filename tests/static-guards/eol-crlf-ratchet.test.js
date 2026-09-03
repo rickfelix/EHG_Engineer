@@ -49,13 +49,25 @@
  * the whole class whether or not anything has touched it. Do not "simplify" it into a status-based
  * check — that would silently convert it into a stat-cache gauge that reads clean on a broken tree.
  *
- * ONE MEMBER IS DELIBERATELY LEFT IN THE CLASS: lib/agents/venture-ceo-factory.js is held by a
- * live FR-6 scope fence (tests/unit/spine-verify-first-teardown.test.js) that asserts zero diff
- * against origin/main inside VentureFactory._createAgent()/_grantTools(). A renormalize rewrites
- * every line, so the fenced symbols appear in the diff and the fence fires — on a change that
- * changes no content at all. Obeyed rather than worked around: a scope fence marks whose work a
- * file is, and defeating another SD's fence to land a cosmetic change is not ours to do. When that
- * fence lifts, renormalize the file and this baseline drops to empty.
+ * ONE MEMBER WAS DELIBERATELY LEFT IN THE CLASS, AND IS NOW GONE (QF-20260903-616).
+ * lib/agents/venture-ceo-factory.js was held by a live FR-6 scope fence
+ * (tests/unit/spine-verify-first-teardown.test.js) that asserted zero diff against origin/main
+ * inside VentureFactory._createAgent()/_grantTools(). A renormalize rewrites every line, so the
+ * fenced symbols appeared in the diff and the fence fired — on a change that changes no content at
+ * all. That was obeyed rather than worked around: a scope fence marks whose work a file is, and
+ * defeating another SD's fence to land a cosmetic change was not that author's to do.
+ *
+ * The fence has since been retired. Its named justification,
+ * SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-B, completed 2026-07-12 — verified in
+ * strategic_directives_v2 — so by the time four separate sessions had deferred to it
+ * (QF-20260804-647, SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001, QF-20260901-018,
+ * QF-20260902-444) it had outlived its cause by ~2 months and was protecting nothing. Coordinator
+ * ruling: lift it. The file was renormalized in the same commit and this baseline is now EMPTY,
+ * exactly as this docblock instructed — the guard is zero-tolerance from here.
+ *
+ * The lesson worth keeping: each of those four deferrals was correct in isolation. What none of
+ * them could do alone was check whether the fence's own justification was still alive. A fence
+ * that names its cause can be audited; one that does not becomes permanent by default.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -99,7 +111,9 @@ const baseline = () =>
 // gets smaller for real) -- never to admit a new offender. See the shrink-only assertion below for
 // why comparing the fixture against itself (or against a live count that moves with it) cannot
 // catch a padding edit.
-const EXPECTED_MAX_BASELINE_SIZE = 1;
+// QF-20260903-616: 1 -> 0. The FR-6 fence lifted and lib/agents/venture-ceo-factory.js was
+// renormalized in the same commit, so this class is now empty and the guard is zero-tolerance.
+const EXPECTED_MAX_BASELINE_SIZE = 0;
 
 describe('CRLF-stored / LF-declared class is frozen (QF-20260804-647)', () => {
   it('the measurement finds files to inspect (guard is not vacuous)', () => {

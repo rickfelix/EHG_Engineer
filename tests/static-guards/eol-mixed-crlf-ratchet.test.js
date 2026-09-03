@@ -18,12 +18,13 @@
  * field's "eol=lf" always contains the substring "lf"). DIRTY_INDEX_STATES = {crlf, mixed} already
  * covers both axes; this file only adds the ratchet (baseline + shrink-only) on top of it.
  *
- * BASELINE, RE-MEASURED at QF-20260901-018 (was 4, now 1): the 3 scripts/archive/one-time/*.js
- * files were renormalized (git add --renormalize) and dropped out of this class entirely --
- * they carried no scope fence. The 1 remaining un-allowlisted violation is
- * lib/agents/venture-ceo-factory.js (crlf, held by a live FR-6 scope fence per
- * eol-crlf-ratchet.test.js's own docblock) -- deliberately NOT renormalized here; obeying
- * that fence rather than working around it. This SD's own Phase 1 .gitattributes diff (15 new
+ * BASELINE, RE-MEASURED at QF-20260903-616 (was 4, then 1, now 0 -- EMPTY). At QF-20260901-018 the
+ * 3 scripts/archive/one-time/*.js files were renormalized (git add --renormalize) and dropped out
+ * of this class entirely -- they carried no scope fence. The last remaining violation was
+ * lib/agents/venture-ceo-factory.js (crlf), deliberately not renormalized then because a live FR-6
+ * scope fence held it. That fence has now been retired -- its justification,
+ * SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-B, completed 2026-07-12 -- and the file was renormalized
+ * in the same commit, so the class is empty and this guard is zero-tolerance. This SD's own Phase 1 .gitattributes diff (15 new
  * eol=lf extension pins + 5 binary marks + 2 NUL-byte escapes) was independently re-measured
  * to add ZERO new members to this class --
  * see docs/audits/SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001-census.md.
@@ -54,7 +55,12 @@ const baseline = () =>
 // 4-entry baseline a 5th offender fails both; with the baseline padded to 5, both pass. Pinning
 // the baseline's OWN size to a literal closes that hole -- a padding edit now fails THIS
 // assertion instead of silently satisfying the other two.
-const EXPECTED_BASELINE_SIZE = 1;
+// QF-20260903-616: 1 -> 0. The FR-6 scope fence that held lib/agents/venture-ceo-factory.js was
+// retired (its justification, SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-B, completed 2026-07-12)
+// and the file was renormalized in the same commit, emptying this class. The guard is now
+// zero-tolerance: with an empty baseline every violation is a NEW member, and this literal is
+// what stops the baseline being padded back up to re-admit one.
+const EXPECTED_BASELINE_SIZE = 0;
 
 describe('eol=lf-managed renormalization-dirty class (crlf+mixed) is frozen (R1, SD-LEO-INFRA-REPO-WIDE-GITATTRIBUTES-001)', () => {
   it('the measurement finds files to inspect (guard is not vacuous)', () => {
