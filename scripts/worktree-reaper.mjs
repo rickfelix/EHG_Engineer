@@ -54,6 +54,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
@@ -90,6 +91,10 @@ import {
 // SD-LEO-INFRA-WORKTREE-REAPER-MULTIREPO-001: resolve every registered worktree pool (EHG_Engineer +
 // ehg + any other registered app) and compute per-pool cap status, so --all-pools reaps each pool.
 import { resolveRegisteredPools, computePoolCapStatus } from '../lib/worktree-reaper/pools.js';
+// QF-20260902-199 (defect A): durable, unattended-run-visible record of every
+// classification — see the module's own header for why this exists and why audit_log
+// (not a new table) is the sink.
+import { writeAuditSink } from '../lib/worktree-reaper/audit-sink.js';
 
 const SCHEMA_VERSION = '1.0';
 const DEFAULT_IDLE_DAYS = 7;
@@ -1625,6 +1630,15 @@ export async function main(argv = process.argv) {
   console.log(`Stage 1 (auto-safe):       ${stage1.length}`);
   console.log(`Stage 2 (analyzed):        ${stage2.length}`);
   console.log(`Kept (including active):   ${records.length - stage0.length - stage1.length - stage2.length}`);
+
+  // QF-20260902-199 (defect A): persist every classification — dry-run or --execute,
+  // attended or unattended — before any early return, so the scheduled/hidden-window
+  // tick's verdicts are durably visible. Best-effort: never blocks or fails the run.
+  const auditRunId = crypto.randomUUID();
+  const auditResult = await writeAuditSink(supabase, records, { runId: auditRunId, logger: console.log });
+  if (auditResult.ok && auditResult.inserted > 0) {
+    console.log(`Audit sink:                ${auditResult.inserted} row(s) written (run_id=${auditRunId})`);
+  }
 
   if (!opts.execute) {
     console.log('\n(Dry-run — no changes made. Pass --execute to remove Stage 1, --stage0 for terminal-SD, or --execute --stage2 for all.)');
