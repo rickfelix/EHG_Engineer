@@ -671,5 +671,21 @@
       "input": "computeExitCode consumes exactly one object: { violations:number, degradedFallback:boolean, snapshotStale:boolean }. violations is allViolations.length (NEW drift only; pre-existing violations are deliberately excluded per QF-20260802-742), degradedFallback is set only in the --diff unresolvable-base catch at schema-reference-lint.mjs:209, and snapshotStale is derived from snapshot.generated_at against STALE_DAYS=7. Its return value is assigned to process.exitCode at schema-reference-lint.mjs, which is the signal the blocking CI job reads.",
       "seen": "Measured end to end on the live repo on 2026-09-03, isolating the false zero rather than confounding it with the 348-violation backlog: the SAME node scripts/lint/schema-reference-lint.mjs --diff run reporting 0 new violations across 2 files exited 0 with a fresh snapshot, and exited 1 after the committed snapshot generated_at was backdated 30 days -- proving the staleness input reaches this function and changes the exit signal in the deployment path, not just in a fixture. The snapshot was restored and verified clean in git after the trial. The consuming job is .github/workflows/schema-reference-lint.yml:69, blocking (continue-on-error false at line 48)."
     }
+  },
+  {
+    "name": "schema-lint-escape-budget",
+    "script": "scripts/lint/schema-lint-escape-budget.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/lint/schema-lint-escape-budget.test.js",
+    "neuter": {
+      "find": "    ok: failures.length === 0,",
+      "replace": "    ok: true,",
+      "why": "Forces compareBudgets to report OK regardless of what it found, which is the precise way this control dies quietly: the failures array is still computed and still correct, so the code reads as working, while the verdict stops depending on it. That is the branch TS-4a through TS-4d exercise (allowlist files growth, allowlist tables growth, a new pragma file, and a second pragma in an already-suppressed file). A neutered budget check means the only thing standing between a green build and a purchased zero is gone, and nothing else in the pipeline measures escape growth."
+    },
+    "note": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-3). seedTest form, deliberately: the runnable entry point needs a real git history with a resolvable merge base, so a fixture directory cannot exercise it -- the comparison IS the control, and it was extracted into the pure compareBudgets function precisely so the verdict is testable without a repo. TS-4g additionally asserts a DECLARED blind spot rather than a capability: moving a pragma between files keeps the total flat and is NOT caught.",
+    "observability_proof": {
+      "input": "Two git revs. From each it reads scripts/lint/schema-reference-allowlist.json via git show (counting the files and tables arrays) and counts occurrences of the literal schema-lint-disable-line via git grep -o, scoped by pathspec to the six RUNTIME_DIRS and the six code extensions the lint itself scans. The base rev comes from git merge-base against SCHEMA_LINT_BASE (default origin/main); an option-shaped value is refused rather than absorbed. Its exit code is the signal the blocking CI job reads.",
+      "seen": "Measured on the live repo on 2026-09-03, both polarities, not a fixture. CLEAN: base=412b6cb1, allowlist files 12->12, tables 27->27, pragmas 157->157, exit 0. SEEDED GROWTH, via a real commit on the branch that was reset immediately after: allowlist tables 27->28 and pragmas 157->158, exit 1, with the failure naming both additions exactly -- added seeded_budget_growth_table and lib/lint/added-line-text.mjs (0 -> 1). The 157 figure is the suppression-relevant subset scoped to scanned dirs; the tree-wide count including tests and docs is 233, and the two numbers are not interchangeable."
+    }
   }
 ]
