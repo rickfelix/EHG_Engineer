@@ -25,6 +25,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
+import { MIGRATION_ROOTS } from '../lib/migration-audit-reader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'database', 'migrations');
@@ -171,7 +172,12 @@ export const ARTIFACT_RE = /(_DOWN|_rollback|_DEFERRED)\.sql$/i;
 // chairman-gated migration invisible to both this report and the downstream
 // CHAIRMAN_APPLY_VERIFICATION gate for days. Scanning it here does not affect what
 // auto-applies; classifyFiles() (below) also gives it a distinct CEREMONY_PENDING status.
-export const DEFAULT_EXTRA_ROOTS = ['database/functions', 'database/manual-updates', 'supabase/migrations', 'database/chairman-gated'];
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B: derived from the CANONICAL root list in
+// lib/migration-audit-reader.js rather than repeated as a literal. The verifier's scan set
+// and the reader's comparison key must agree — if a file is scanned under a root the key
+// cannot anchor on, its applied state is unknowable by construction. PRIMARY_ROOT is
+// excluded because it is the scanner's default and these are the EXTRA roots.
+export const DEFAULT_EXTRA_ROOTS = MIGRATION_ROOTS.filter((r) => r !== 'database/migrations');
 
 /** Repo-relative-id prefix identifying a chairman-gated migration (FR-2). */
 const CHAIRMAN_GATED_PREFIX = 'database/chairman-gated/';

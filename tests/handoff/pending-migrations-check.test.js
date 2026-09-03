@@ -15,10 +15,24 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// MIGRATION_ROOTS is a REAL value, not a vi.fn(): the canonical migration-root list
+// (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B) is consumed at MODULE LOAD by
+// scripts/verify-migration-apply-state.mjs, which derives DEFAULT_EXTRA_ROOTS from it.
+// A factory mock replaces the whole module, so omitting this export makes the import
+// throw before any test body runs — the suite fails to load rather than failing an
+// assertion. Mirroring the real value keeps the mock honest: a stub list here would let
+// a root-set change pass this suite while breaking the scan.
 vi.mock('../../lib/migration-audit-reader.js', () => ({
   hasBeenApplied: vi.fn(),
   getLatestSuccessForPath: vi.fn(),
-  listApplied: vi.fn()
+  listApplied: vi.fn(),
+  MIGRATION_ROOTS: Object.freeze([
+    'database/migrations',
+    'database/functions',
+    'database/manual-updates',
+    'database/chairman-gated',
+    'supabase/migrations',
+  ]),
 }));
 
 vi.mock('../../scripts/lib/supabase-connection.js', () => ({
