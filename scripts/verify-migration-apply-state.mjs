@@ -804,7 +804,12 @@ async function main() {
 
   // FR-3: the machine-checkable definition of done. 117 of the 126 gap files sit behind
   // RETIRED_BEFORE and can NEVER turn the gate red, so "every file has a decision" is
-  // invisible to a PASS/GAPS exit for 93% of the corpus. This count is computed over ALL
+  // invisible to a PASS/GAPS exit for 92.9% OF THE GAP SET (117 of 126) — NOT of the
+  // corpus, which is the wording this comment carried until 2026-09-03 and which it
+  // inherited from migration-disposition-ledger.mjs. Against the CORPUS the cutoff
+  // exempts 77.79% (1149 of 1477: 1023 dated before it plus 126 undated), leaving 328
+  // gated. Quoting the gap-set ratio against the corpus overstates the exemption by
+  // ~15 points. Corrected by SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B. This count is computed over ALL
   // gaps — recent and legacy alike — so completion is provable independently of the marker.
   // The no-module fallback must report the SAME shape as the real path — deduplicated, sorted,
   // and free of empty basenames — or the headline count silently changes meaning depending on
