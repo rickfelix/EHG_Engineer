@@ -40,9 +40,19 @@
  *  5. IT IS BLIND WHEN THE BASE IS UNRESOLVABLE. A shallow or partial clone makes the baseline
  *     unknowable; this reports that and exits 0 rather than inventing a comparison. That is a
  *     deliberate fail-open, and it is a real hole: a PR whose base cannot be fetched is unchecked.
+ *     NOTE the deliberate ASYMMETRY with the pragma census below: an unresolvable BASE is a
+ *     known-and-announced environment condition, whereas a census that FAILED MID-MEASUREMENT is an
+ *     absent reading that would otherwise be reported as a count. The first fails open and says so;
+ *     the second fails CLOSED (SEC-1). A guard may decline to run; it may never report a number it
+ *     did not take.
  */
 
-import { execFileSync } from 'node:child_process';
+// SEC-2 (security review 16fd6043): use the PUBLISHED hardened runner rather than re-deriving
+// base-ref validation and a bare execFileSync by hand. The sibling schema-reference-lint.mjs already
+// does this; hand-rolling it here is the exact re-derivation that module was published to abolish,
+// and it skipped the fsmonitor / pager / textconv / env-scrub hardening the rest of the repo treats
+// as mandatory.
+import { VALID_BASE_REF, makeHardenedGitRunner } from '../../lib/git/hardened-runner.cjs';
 
 const ALLOWLIST_PATH = 'scripts/lint/schema-reference-allowlist.json';
 const PRAGMA = 'schema-lint-disable-line';
@@ -68,7 +78,26 @@ export const PRAGMA_DEFINITION_FILES = new Set([
   'scripts/lint/schema-lint-escape-budget.mjs', // this file
 ]);
 
-const git = (args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const git = makeHardenedGitRunner(process.cwd(), {
+  literalPathspecs: false, // pathspec globs below are intentional; matches the sibling lint's recorded opt-out
+  timeout: 60000,
+  maxBuffer: 64 * 1024 * 1024,
+});
+
+/**
+ * SEC-1 discriminator, exported so the distinction is TESTED rather than asserted in a comment.
+ *
+ * git grep's contract: exit status 1 means "searched successfully, found nothing" — a real zero.
+ * Any other failure (maxBuffer kill, timeout, bad rev, git missing) means the search did not
+ * complete, and its result is ABSENT, not zero. Everything hinges on this being strict: treating a
+ * crashed search as an empty result is how a control reports clean because it could not look.
+ *
+ * @param {any} e error thrown by the git runner
+ * @returns {boolean} true ONLY for a completed search that matched nothing
+ */
+export function isNoMatchesError(e) {
+  return !!e && e.status === 1;
+}
 
 /** Pathspecs restricting the pragma census to files the lint actually scans. */
 export function pragmaPathspecs() {
@@ -108,8 +137,28 @@ export function pragmaCountsAt(rev) {
   let out = '';
   try {
     out = git(['grep', '-o', '-F', PRAGMA, rev, '--', ...pragmaPathspecs()]);
-  } catch {
-    return new Map(); // no matches at all -> git grep exits 1
+  } catch (e) {
+    // SEC-1 (security review 16fd6043): DISTINGUISH "no matches" FROM "could not look".
+    //
+    // This catch previously swallowed EVERY failure and returned an empty Map, so a
+    // maxBuffer-exceeded throw read as "zero pragmas at HEAD" — compareBudgets would then see the
+    // count DROP and report "neither escape budget grew". A PR large enough to blow the 64MB buffer
+    // would defeat this control by SCALE rather than by counter-gaming it, and it would pass while
+    // reporting success. That is precisely the reporting-clean-because-you-could-not-look shape this
+    // whole workstream exists to abolish, and it was sitting inside the control built to enforce it.
+    //
+    // git grep's contract: exit 1 means "no matches" (a real, trustworthy zero) and status > 1 means
+    // the search itself failed. Anything without status === 1 — a maxBuffer kill (e.code
+    // ERR_CHILD_PROCESS_STDIO_MAXBUFFER), a timeout, a missing rev — is an ABSENT MEASUREMENT and
+    // must never be reported as a count.
+    if (isNoMatchesError(e)) return new Map(); // genuinely no matches
+    const detail = e && (e.code || e.message) ? (e.code || e.message) : 'unknown';
+    const err = new Error(
+      `PRAGMA_CENSUS_UNMEASURABLE at ${rev}: git grep did not complete (${detail}). `
+      + 'Refusing to report a count that was never taken — an unmeasurable census is ABSENT, not zero.'
+    );
+    err.unmeasurable = true;
+    throw err;
   }
   const counts = new Map();
   for (const line of out.split('\n')) {
@@ -172,9 +221,10 @@ export function compareBudgets(base, head) {
 
 function resolveBase() {
   const raw = process.env.SCHEMA_LINT_BASE || 'origin/main';
-  // Mirrors the lint's refusal (schema-reference-lint.mjs:160-165): an option-shaped base is an
-  // attack indicator, not a transient fault, and must never be absorbed by a fail-open path.
-  if (/^-/.test(raw) || /[\s;|&$`]/.test(raw)) {
+  // SEC-2: use the PUBLISHED allowlist (VALID_BASE_REF) rather than a hand-rolled blocklist. A
+  // blocklist enumerates the bad shapes someone thought of; the allowlist states what is permitted.
+  // Same predicate the sibling lint uses at schema-reference-lint.mjs:161 — one representation.
+  if (!VALID_BASE_REF.test(raw)) {
     console.error(`schema-lint-escape-budget: refusing SCHEMA_LINT_BASE with option-like or unsafe shape: ${raw}`);
     process.exit(2);
   }
@@ -193,7 +243,20 @@ function main() {
     entries: allowlistEntriesAt(rev),
     pragmas: pragmaCountsAt(rev),
   });
-  const result = compareBudgets(snapshot(base), snapshot('HEAD'));
+  let result;
+  try {
+    result = compareBudgets(snapshot(base), snapshot('HEAD'));
+  } catch (e) {
+    // SEC-1: an UNMEASURABLE census must BLOCK, never pass. The failure this guards is a control
+    // that could not look and said "nothing grew" — the same shape as an endpoint answering
+    // "no items found" when the truth is "I could not check". Exit 1 so a human sees it.
+    if (e && e.unmeasurable) {
+      console.error(`\n❌ ${e.message}`);
+      console.error('   The escape budgets were NOT compared. Treat this as BLOCKING, not as a pass.');
+      return 1;
+    }
+    throw e;
+  }
   const s = result.summary;
   console.log(
     `schema-lint-escape-budget: base=${base.slice(0, 8)} `

@@ -9,7 +9,7 @@
  * reviewer nothing about whether the growth was legitimate.
  */
 import { describe, it, expect } from 'vitest';
-import { compareBudgets, pragmaPathspecs, PRAGMA_DEFINITION_FILES } from '../../../scripts/lint/schema-lint-escape-budget.mjs';
+import { compareBudgets, pragmaPathspecs, PRAGMA_DEFINITION_FILES, isNoMatchesError } from '../../../scripts/lint/schema-lint-escape-budget.mjs';
 
 const snap = ({ files = [], tables = [], pragmas = {} }) => ({
   allowlist: { files: files.length, tables: tables.length },
@@ -114,6 +114,39 @@ describe('PRAGMA_DEFINITION_FILES — the self-flag regression (measured, not hy
     );
     expect(r.ok).toBe(false);
     expect(r.failures.join('\n')).toContain('lib/whatever.js (0 -> 1)');
+  });
+});
+
+// SEC-1, from the EXEC security review (evidence 16fd6043). The census catch used to swallow EVERY
+// failure and return an empty Map, so a maxBuffer-exceeded git grep read as "zero pragmas at HEAD".
+// compareBudgets would then see the count DROP and report "neither budget grew" — the control
+// defeated by SCALE rather than by counter-gaming, passing while reporting success. That is the
+// report-clean-because-you-could-not-look shape this workstream exists to abolish, found inside the
+// control built to enforce it.
+describe('isNoMatchesError — a failed search is ABSENT, never zero (SEC-1)', () => {
+  it('status 1 IS a real zero: git grep searched and matched nothing', () => {
+    expect(isNoMatchesError({ status: 1 })).toBe(true);
+  });
+
+  it('a maxBuffer kill is NOT a zero — this is the exact defeat-by-scale case', () => {
+    expect(isNoMatchesError({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })).toBe(false);
+  });
+
+  it('a timeout is NOT a zero', () => {
+    expect(isNoMatchesError({ killed: true, signal: 'SIGTERM' })).toBe(false);
+  });
+
+  it('a bad rev (status 128) is NOT a zero', () => {
+    expect(isNoMatchesError({ status: 128 })).toBe(false);
+  });
+
+  it('a null/undefined error is NOT a zero — absence of an error object proves nothing', () => {
+    expect(isNoMatchesError(null)).toBe(false);
+    expect(isNoMatchesError(undefined)).toBe(false);
+  });
+
+  it('status 0 is NOT routed here as a zero (a successful run returns output, never throws)', () => {
+    expect(isNoMatchesError({ status: 0 })).toBe(false);
   });
 });
 
