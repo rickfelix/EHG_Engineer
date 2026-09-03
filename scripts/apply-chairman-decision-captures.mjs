@@ -51,19 +51,27 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
  * returned null, and the caller printed "FR-1 is not applied". Blocking was the safe direction, but
  * the STATED REASON was false: an instrument that cannot tell "absent" from "could not look"
  * reporting the first is this SD's own defect class, reproduced in the tool written to close it.
- * So: query the catalog directly, the same way the validators do.
+ *
+ * SD-LEO-FIX-CHAIRMAN-DECISION-CAPTURE-001: a second version queried the catalog via a direct pg
+ * client (createDatabaseClient()), which works locally (.env carries SUPABASE_DB_PASSWORD) but
+ * returns null-forever on the scheduled workflow -- no *cron*.yml in this repo injects a DB
+ * password/pooler URL (repo convention is supabase-js + service-role only; see
+ * apply-chairman-decision-captures-cron.yml), so the probe would silently report FR-1 UNKNOWN on
+ * every scheduled run and permanently BLOCK every RPC capture. Route through the `exec_sql`
+ * RPC instead (SECURITY INVOKER, SELECT/WITH-only, already used the same way as a pooler-fallback
+ * in scripts/audit-rpc-execute-grants.mjs) -- it runs over the same supabase-js client the rest of
+ * this script already authenticates, so it works identically locally and in CI.
  */
 async function isFixApplied() {
-  let client;
   try {
-    const { createDatabaseClient } = await import('./lib/supabase-connection.js');
-    client = await createDatabaseClient();
-    const { rows } = await client.query("SELECT 1 FROM pg_proc WHERE proname = 'fn_chairman_decision_value'");
-    return rows.length > 0;
+    const { data, error } = await supabase.rpc('exec_sql', {
+      sql_text: "SELECT 1 FROM pg_proc WHERE proname = 'fn_chairman_decision_value'",
+    });
+    if (error) return null;                       // unknown — never guess "applied", never claim "absent"
+    const rows = data?.[0]?.result;
+    return Array.isArray(rows) && rows.length > 0;
   } catch {
-    return null;                                 // unknown — never guess "applied", never claim "absent"
-  } finally {
-    if (client) await client.end().catch(() => {});
+    return null;
   }
 }
 
@@ -142,12 +150,20 @@ async function main() {
       // none of quick_fix_id/strategic_directive_id/resolution_sd_id needs a non-empty
       // resolution_notes) -- these captures have none of the FK references, so the bare write was
       // being REJECTED by the CHECK constraint. Route through the canonical resolver instead.
-      await resolveFeedback({
+      const resolveResult = await resolveFeedback({
         supabase,
         feedbackId: cap.id,
         notes: `Chairman decision ${plan.rpcAction} via fn_chairman_decide (decision ${plan.decisionId}).`,
         resolutionType: 'chairman_decision_applied',
       });
+      // SD-LEO-FIX-CHAIRMAN-DECISION-CAPTURE-001: resolveFeedback() is deliberately fail-soft
+      // (returns {updated:false} instead of throwing), so an unchecked call here would print
+      // APPLIED even when the feedback row's resolve silently failed -- a narrower recurrence of
+      // the exact silent-write-loss defect class this script exists to fix.
+      if (!resolveResult.updated) {
+        console.log(`WARN    ${tag}\n        RPC applied, but resolving its feedback row did not: `
+          + `${resolveResult.reason || resolveResult.error || 'unknown'}`);
+      }
       continue;
     }
 

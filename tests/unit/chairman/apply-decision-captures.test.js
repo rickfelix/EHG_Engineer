@@ -116,3 +116,32 @@ describe('QF-20260902-882: category widening + resolve-shape static pins', () =>
     expect(tailBlock).not.toMatch(/resolveFeedback\(/);
   });
 });
+
+// SD-LEO-FIX-CHAIRMAN-DECISION-CAPTURE-001: two VALIDATION-sub-agent findings on the escalated
+// SD (already-merged QF-20260902-882 exceeded the Tier-2 LOC cap): isFixApplied() called
+// createDatabaseClient(), which needs SUPABASE_DB_PASSWORD/EHG_DB_PASSWORD -- no *cron*.yml in
+// this repo injects that (supabase-js + service-role only), so the scheduled run would probe
+// FR-1 as permanently UNKNOWN and BLOCK every RPC capture forever. And the RPC-applied branch's
+// resolveFeedback() call was unchecked, letting a fail-soft resolve failure still print APPLIED.
+describe('SD-LEO-FIX-CHAIRMAN-DECISION-CAPTURE-001: isFixApplied via exec_sql + checked resolve', () => {
+  it('isFixApplied queries pg_proc through the exec_sql RPC on the existing supabase-js client, not a direct pg connection', () => {
+    // The function body itself (not the historical JSDoc comment above it, which legitimately
+    // narrates the prior createDatabaseClient() approach) must no longer import/call it.
+    const fnIdx = SRC.indexOf('async function isFixApplied()');
+    expect(fnIdx).toBeGreaterThan(-1);
+    const fnBlock = SRC.slice(fnIdx, fnIdx + 500);
+    expect(fnBlock).not.toMatch(/createDatabaseClient/);
+    expect(fnBlock).not.toMatch(/supabase-connection\.js/);
+    expect(fnBlock).toMatch(/supabase\.rpc\('exec_sql',/);
+    expect(fnBlock).toMatch(/pg_proc WHERE proname = 'fn_chairman_decision_value'/);
+  });
+
+  it('the RPC-applied resolve result is checked, warning (not silently swallowing) an unresolved feedback row', () => {
+    const rpcApplyIdx = SRC.indexOf("counts.applied++; console.log(`APPLIED ${tag}`);");
+    const resolveResultIdx = SRC.indexOf('resolveResult', rpcApplyIdx);
+    expect(resolveResultIdx).toBeGreaterThan(rpcApplyIdx);
+    const checkBlock = SRC.slice(resolveResultIdx, resolveResultIdx + 700);
+    expect(checkBlock).toMatch(/if \(!resolveResult\.updated\)/);
+    expect(checkBlock).toMatch(/WARN/);
+  });
+});
