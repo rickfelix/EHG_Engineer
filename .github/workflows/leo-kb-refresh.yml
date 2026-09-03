@@ -59,8 +59,41 @@ jobs:
           fi
           exit 0
 
+      # SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-A (FR-1/FR-3): this workflow already regenerated and
+      # pushed, but it gated ONLY on check-leo-version.js — PROTOCOL VERSION drift. A write to
+      # leo_protocol_sections that changes section CONTENT without bumping the version left this
+      # job doing nothing, so the rendered contracts stayed stale and every seat read them as
+      # current. Version consistency and content freshness are different predicates; this adds the
+      # second one so the regenerate step fires on either.
+      #
+      # check-claude-md-drift.cjs compares live per-section digests against the manifest, which is
+      # the same comparison CI and the pre-commit hook already enforce — one definition of drift,
+      # not a third. Its exit contract is 0 clean / 1 drift / 2 internal error, and 2 is
+      # deliberately treated as fail-open here (matching claude-md-drift.yml), because infra
+      # trouble should not trigger a blind regeneration-and-push to main.
+      - name: Check rendered-contract content drift
+        id: content-check
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          node scripts/check-claude-md-drift.cjs
+          EXIT_CODE=$?
+          set -e
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "content_drift=true" >> $GITHUB_OUTPUT
+            echo "::notice::Rendered contracts drifted against leo_protocol_sections — regenerating."
+          elif [ "$EXIT_CODE" -eq 0 ]; then
+            echo "content_drift=false" >> $GITHUB_OUTPUT
+          else
+            # Fail open on 2: an unavailable detector must not cause a blind push to main.
+            echo "content_drift=false" >> $GITHUB_OUTPUT
+            echo "::warning::check-claude-md-drift exited $EXIT_CODE (internal error) — treating as no-drift; content regeneration skipped this run."
+          fi
+
       - name: Regenerate CLAUDE files
-        if: steps.version-check.outputs.version_drift == 'true' || github.event.inputs.force == 'true'
+        if: steps.version-check.outputs.version_drift == 'true' || steps.content-check.outputs.content_drift == 'true' || github.event.inputs.force == 'true'
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -73,6 +106,29 @@ jobs:
 
           echo "🔍 Verifying regeneration..."
           node scripts/check-leo-version.js
+
+          # SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-A (FR-3): parent SC#1 requires the drift check at
+          # TWO invocation sites — "in CI and on the regen hook". This is the regen-side one: the
+          # step that regenerates now proves its own work converged, instead of regenerating and
+          # leaving CI to discover later that it did not. A regeneration that still drifts is a
+          # real finding, so this FAILS the job rather than pushing a change that claims to fix
+          # drift while leaving it in place.
+          # set +e is REQUIRED here, not cosmetic: Actions runs this shell with -eo pipefail, so a
+          # non-zero exit would abort the step before $? could be read — the drift checker's exit
+          # code IS the signal, so it must be captured rather than allowed to kill the step. The
+          # version-check step above wraps itself the same way for the same reason.
+          echo "🔍 Verifying the regeneration actually resolved content drift..."
+          set +e
+          node scripts/check-claude-md-drift.cjs
+          VERIFY_CODE=$?
+          set -e
+          if [ "$VERIFY_CODE" -eq 1 ]; then
+            echo "::error::Regenerated, but the contracts STILL drift against leo_protocol_sections — refusing to push a non-convergent regeneration."
+            exit 1
+          elif [ "$VERIFY_CODE" -ne 0 ]; then
+            # Internal error (2): fail open, consistent with the pre-regen check and claude-md-drift.yml.
+            echo "::warning::Post-regen drift verification exited $VERIFY_CODE (internal error) — not treated as non-convergence."
+          fi
 
       - name: Check for changes
         id: git-check
