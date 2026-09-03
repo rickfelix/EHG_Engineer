@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4b1765619637f628 -->
+<!-- file_content_hash: 651fee3073532b1f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-03 8:30:17 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -169,6 +169,36 @@ Three operative facts, each verifiable in code *(rationale/citation detail: prov
 
 APPLICATION NOTE (seat guidance from the type specimen's own same-day sequel, not a modification of the ratified terms): the probe as specified is necessary, not sufficient — the specimen's author was falsified hours later by a NON-EMPTY SENTINEL that passed a presence check, with all 3 hand-inspections drawn from one side of the flag boundary. Operational sharpening: probe the VALUE DISTRIBUTION (distinct values incl. sentinels), and draw the >=3 inspections ACROSS the discriminating boundary, never from one side.
 
+## Decision-requested derivation
+
+decision_requested is derived from the send's shape, never from the sender's doubt (611 DECISION_REQUESTED DISCIPLINE; chairman ratification 0c21f559, 2026-09-02):
+- (a) A send with --reply-to (it answers a consult): decision_requested=true, disposer = the ASKER (applied / declined / partial — the §11 accuracy signal); auto judgment_expired after 7 days with no disposition; never counted in Adam's pending backlog.
+- (b) A send with no --reply-to carrying a systemic_flag, a sourcing hand-off, or an explicit ask: decision_requested=true, disposer = Adam.
+- (c) Everything else (status, FYI, budget line, unrequested observation): decision_requested=false.
+- Overrides: --informational forces false, --decision forces true; both logged in payload.decision_override with the reason. The resurface pending count grows only on disposer=Adam rows.
+
+## Foundation audit — procedure
+
+Standing Friday foundation audit (611 STANDING FOUNDATION AUDIT DUTY; ratifications b259e739, 7473142c, 71e2e871):
+- Cadence: every Friday after the week reset, only when the fleet is quiet; six lenses per week, the full twelve every two weeks. Lens halves — A: sd-state, qf-state, liveness, gate-evidence, writers, comms; B: ratification, durability, roadmap, gauges-learn, instruments, worker-loop.
+- Scope: EHG_Engineer (harness), EHG (platform app), live ventures only — never cancelled or deferred ventures.
+- Execution: batched fan-out ≤4 on the fleet's own account, never a separate account; per-slice reproduce, capped refute, non-fatal critic; a control canary per lens; budget-at-entry with measured spend.
+- Output: findings ranked by chairman-facing truth loss against the LEO roadmap, with a recommended-against list; sequencing by Solomon with the capacity read as input (evidence-backed completions, session window, encode-pipeline throughput as a resource); one durable row and one sourcing hand-off to Adam per run; decisions reach the chairman as needed, never batched; silence when clean.
+- Closure: a finding closes on two consecutive weekly zero readings plus a recurrence row; every workstream exit predicate is re-run each week; no weekly cap on contract churn; regenerate-on-write per the contract-truth workstream.
+- Sept-7 note: the preregistered Sept-7 reading is not altered; the record notes that the remediation weeks are harness-heavy by chairman direction, with grace.
+- Loop: SOLOMON_LOOPS carries 'foundation-audit' (Fri, after reset) so the tick survives seat rotation; the session cron 1c00adca is the interim.
+
+## Harness-week posture — Solomon shares (ratifications 2a6537bf, b046d398)
+
+Time-boxed posture through Friday 2026-09-04 (encode 2026-09-03; the operative pointer lives in 611 HARNESS-WEEK POSTURE):
+
+**HARNESS-WEEK BURN POSTURE (ratification 2a6537bf; Solomon share)**: "I don't want you guys to slow down at all [...] On Friday, we need to be more conservative." Through Friday 2026-09-04 Solomon's audits, consults and sweeps run at full cadence; account rotation is the chairman's lever; the Friday reset returns to the conservative posture.
+
+**HARNESS-WEEK COMPOSITION (ratification b046d398; Solomon share)**: "we're probably going to see a lot of EHG engineer-type corrections [...] Come Friday, I think we'll reset our focus." Harness root-cause repair is the intended composition through Friday 2026-09-04; Solomon's composition and taper diagnoses read it as on-plan for the week and re-anchor at the Friday reset.
+
+## Board-check schedule (3-hourly anchors; ratification 0a24cf1a)
+
+The recurring Adam board-check runs EVERY 3 HOURS at: 02:00Z, 05:00Z, 08:00Z, 11:00Z, 14:00Z, 17:00Z, 20:00Z, 23:00Z (existing anchors preserved, midpoints added; 11:00Z stays co-anchored with the daily duty-firing audit). Unchanged: the daily duty-firing audit (11:00Z / 7am ET), the weekly deep review (Mon 12:00Z, ratified retained a236d122), continuous event-driven observation. The frozen P1 census predicate and pre-stated-buckets discipline apply at every slot. Catch-latency data under the new cadence feeds the a236d122 empirical revisit.
 
 
 ## Crew-comms routing protocol (organizing layer)
@@ -177,6 +207,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-09-02*
+*Generated from database: 2026-09-03*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*

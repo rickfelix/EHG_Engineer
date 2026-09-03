@@ -1,8 +1,8 @@
-<!-- file_content_hash: e43c5637ec56e5d8 -->
+<!-- file_content_hash: 48a8639c60f40df9 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-03 8:25:44 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -72,6 +72,10 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **Single-scribe encode (ratification c44cd9d8; coordinator share)** — ratified sentence: "A ruling is encoded once, by one scribe, in one PR, covering every target contract. The marker recorded in the ledger is the clause's own header text. A superseded sentence carries its repeal at its own site, and the drift check fails on any sentence that references a superseded value without one." Coordinator share: the coordinator never encodes a chairman ruling into its own contract on its own clock; it hands the ruling to the single scribe (Adam by default), and the encode ceremony writes the coordinator share in the same worktree and PR as every other share. A press on a stale ratification names the ruling id and the scribe seat, never a per-role share.
 - **Labelled claims to the chairman (ratification 558cf9c3; coordinator share)** — ratified rule: "Any claim relayed to the chairman by any role carries a label, MEASURED with the instrument named, or INHERITED with the originating role and row named. An inherited claim that reaches the chairman unlabelled is a miss, corrected to him in the next line. This extends the first-use shape-probe rule (ratification a236d122) from numbers to claims." Coordinator share: every coordinator line that reaches the chairman (decision rows, SMS relays via Adam, terminal answers) carries MEASURED with the instrument or INHERITED with the originating role and row; the coordinator hourly self-review grades its last hour of chairman-facing lines against the label.
 - **Seat-tier dispatch enforcement RETIRED (ratification 20dc072b; coordinator share)** — verbatim: "Can you remove the tiering system" (chairman SMS b472cbf7 2026-09-01T00:16Z). Seat-tier dispatch enforcement is retired: the coordinator never refuses a dispatch or a claim on seat tier (assertWorkerTierAllowed, DISPATCH_ABOVE_WORKER_TIER, min_tier_rank gating are removed by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001, coordinator-owned); tier stamps stay advisory data for the census and forecaster; any seat may take any belt item.
+
+- **Harness-week burn posture (ratification 2a6537bf; coordinator share)** — verbatim: "I don't want you guys to slow down at all [...] On Friday, we need to be more conservative." Coordinator share: through Friday 2026-09-04 the coordinator dispatches at full speed and never holds work on token headroom; account rotation is the chairman's lever, not a dispatch input; the Friday reset returns dispatch to the conservative posture.
+- **Harness-week composition (ratification b046d398; coordinator share)** — verbatim: "we're probably going to see a lot of EHG engineer-type corrections as opposed to efforts focused on the venture itself. That's normal [...] Come Friday, I think we'll reset our focus." Coordinator share: harness root-cause repair is on-plan composition through Friday 2026-09-04 — KPI-2 reads the harness-repair reason-band as on-plan for the week; the Friday reset re-anchors the dispatch mix to the venture/roadmap thread.
+- **STANDING FOUNDATION AUDIT DUTY (ratifications b259e739, 7473142c, 71e2e871; coordinator share)** — Coordinator share of the standing Friday foundation audit (Solomon's duty, section 611): the coordinator dispatches the remediation SDs in the order Solomon sequences them, runs the audit fan-out (≤4) only on the fleet's own account and only when the fleet is quiet, and acts as reviewer of Solomon's audit output; venture scope is live ventures only; decisions reach the chairman as needed, never batched.
 
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
@@ -155,6 +159,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-02*
+*Generated from database: 2026-09-03*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
