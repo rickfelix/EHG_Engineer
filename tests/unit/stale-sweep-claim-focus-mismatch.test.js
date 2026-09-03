@@ -47,8 +47,10 @@ function makeClient({ sds, sessions, onUpdate = () => ({ error: null }) }) {
         update(payload) { state.isUpdate = true; state.payload = payload; return builder; },
         eq(col, val) { state.eqs.push([col, val]); return builder; },
         range() {
-          // fapPaginate (strategic_directives_v2 query): full page, then empty page to stop.
-          const rows = state.page++ === 0 ? (table === 'strategic_directives_v2' ? sds : []) : [];
+          // fapPaginate (strategic_directives_v2 AND, since QF-20260902-724, claude_sessions --
+          // both bulk reads in this function paginate now): full page, then empty page to stop.
+          const source = table === 'strategic_directives_v2' ? sds : table === 'claude_sessions' ? sessions : [];
+          const rows = state.page++ === 0 ? source : [];
           return Promise.resolve({ data: rows, error: null });
         },
         then(resolve, reject) {
@@ -56,8 +58,6 @@ function makeClient({ sds, sessions, onUpdate = () => ({ error: null }) }) {
             updates.push({ payload: state.payload, eqs: state.eqs });
             return Promise.resolve(onUpdate(state)).then(resolve, reject);
           }
-          // claude_sessions query (direct .in(), no pagination in the real code).
-          if (table === 'claude_sessions') return Promise.resolve({ data: sessions, error: null }).then(resolve, reject);
           return Promise.resolve({ data: [], error: null }).then(resolve, reject);
         }
       };
