@@ -212,6 +212,39 @@ describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: success criterion #1 -- the genui
   });
 });
 
+describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: regression -- a mocked createClient() returning undefined must not crash at construction', () => {
+  // Measured CI regression (run 33749632889, lib/integrations/__tests__/promoter-blueprint.test.js):
+  // several existing suites `vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn() }))`
+  // with no implementation, so createClient() legitimately resolves to `undefined` there. The
+  // prior, unwrapped factory returned that `undefined` straight through with no crash;
+  // `new Proxy(undefined, ...)` throws immediately at construction time instead, before the
+  // client is ever used -- a strictly worse failure mode than before this SD.
+  it('createSupabaseServiceClient() returns undefined (not a thrown TypeError) when createClient() resolves to undefined', async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    createClient.mockReturnValueOnce(undefined);
+    const { createSupabaseServiceClient } = await import('../../lib/supabase-client.js');
+
+    let result;
+    expect(() => { result = createSupabaseServiceClient(); }).not.toThrow();
+    expect(result).toBeUndefined();
+  });
+
+  it('createSupabaseClient() (anon) also passes through undefined without throwing', async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    createClient.mockReturnValueOnce(undefined);
+    const { createSupabaseClient } = await import('../../lib/supabase-client.js');
+
+    expect(() => createSupabaseClient()).not.toThrow();
+  });
+
+  it('withSchemaDriftDetection itself passes through any non-object/function value unchanged', async () => {
+    const { withSchemaDriftDetection } = await import('../../lib/supabase-client-schema-drift.cjs');
+    for (const value of [undefined, null, 0, '', false]) {
+      expect(withSchemaDriftDetection(value)).toBe(value);
+    }
+  });
+});
+
 describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A: CJS representation parity (VAL-A-2)', () => {
   // require()'d via node:module's createRequire, the same synchronous CommonJS load path a
   // real .cjs/.js consumer of this factory uses -- vitest's vi.mock('@supabase/supabase-js', ...)
