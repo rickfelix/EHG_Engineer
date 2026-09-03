@@ -18,7 +18,36 @@
  *    defaultToNull / returning) is never treated as columns.
  *  - raw SQL: keyword/pg_catalog skip list; identifiers <4 chars skipped.
  *  - any line containing `schema-lint-disable-line` is skipped entirely.
+ *
+ * KNOWN LIMITATION — the concrete conditions this extractor CANNOT see. Stated because a control
+ * that does not say what it misses reads as total coverage, and every consumer of a "0 violations"
+ * result is entitled to know what that zero does not cover:
+ *
+ *  1. A DYNAMIC TABLE NAME IS STRUCTURALLY INVISIBLE. FROM_RE requires a quoted string literal, so
+ *     `.from(tableVar)`, `.from(`${prefix}_events`)` and any name computed at runtime are never
+ *     extracted and can never be reported — no matter how phantom the resolved table is. A file
+ *     that reaches its schema exclusively through computed names is scanned and yields nothing,
+ *     which is indistinguishable in the output from a file that is clean.
+ *  2. A REAL CALL WRITTEN INSIDE A TEMPLATE LITERAL IS NOW SKIPPED (false negative introduced
+ *     deliberately by SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C FR-1). The literal mask cannot tell a
+ *     documentation example from generated code that is later eval'd or written to a file and
+ *     executed. Both look like `.from(` inside a template. The example case was measured at 10
+ *     occurrences on the live tree and the executed-from-a-template case at 0, so the trade favours
+ *     precision here — but the exposure is real, not theoretical.
+ *  3. NON-PUBLIC SCHEMAS ARE OUT OF FRAME. findViolations compares only against snapshot.tables and
+ *     snapshot.views, which the snapshot writer populates from the `public` namespace. A reference
+ *     to `auth.users` or any other schema is neither validated nor reported.
+ *  4. RAW-SQL REFS ARE EXTRACTED BUT NEVER BLOCK (kind='sql', schema-reference-extract.mjs
+ *     findViolations). A phantom table reached through raw SQL is visible in the ref list and
+ *     absent from the violation set by design.
+ *  5. THE COMPARISON IS AGAINST A COMMITTED SNAPSHOT, NOT THE LIVE DATABASE. Anything created or
+ *     dropped after `database/schema-reference-snapshot.json` was generated is judged against a
+ *     stale picture; the staleness check that bounds this lives in the CLI wrapper, not here.
  */
+
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C: the ONE representation of comment/literal handling lives in
+// lib/lint/added-line-text.mjs. Both helpers are pure, so this module stays pure (no fs/DB/process).
+import { blankComments, stringLiteralMask } from '../../lib/lint/added-line-text.mjs';
 
 export const SQL_KEYWORDS = new Set([
   'select', 'where', 'values', 'set', 'returning', 'information_schema',
@@ -105,13 +134,33 @@ function selectColumns(literal) {
  * @param {string} [relPath] - repo-relative path (carried through to refs)
  * @returns {Array<{type:'table'|'column', table:string, column?:string, line:number, kind:string, file?:string, embedded?:boolean}>}
  */
-export function extractReferences(text, relPath = '') {
+export function extractReferences(rawText, relPath = '') {
   const refs = [];
+
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C: the extractor used to match against RAW text, so it
+  // reported example code as real schema references. The self-demonstrating case was
+  // scripts/hooks/lib/supabase-operative.cjs:17-18 — the regex literals that DOCUMENT this very
+  // matcher, sitting in trailing `//` comments, reported as `missing table_name (from)`.
+  //
+  // TWO DIFFERENT TOOLS, because the two noise sources need opposite treatment:
+  //   - COMMENTS are blanked, offset-preserving (blankComments), so `.from()` inside a comment
+  //     cannot match while every reported line number stays exactly where it was. The general
+  //     stripComments in the same module is NOT usable here: its contract says offsets are not
+  //     preserved, which would silently shift the reported line of every violation after a block
+  //     comment — swapping a false-positive class for a wrong-location class.
+  //   - STRING/TEMPLATE bodies are NOT blanked — `.from('users')` needs its quoted argument to
+  //     match at all. Instead a mask marks which offsets sit inside a literal body, and a match is
+  //     skipped when its START offset is inside one: a real call has `.from(` in code, while a
+  //     documentation example has `.from(` itself inside the template literal.
+  // Line numbers and pragma lookups deliberately use the ORIGINAL text.
+  const text = blankComments(rawText);
+  const inLiteral = stringLiteralMask(text);
 
   FROM_RE.lastIndex = 0;
   let m;
   while ((m = FROM_RE.exec(text))) {
-    if (pragmaAt(text, m.index)) continue;
+    if (pragmaAt(rawText, m.index)) continue;
+    if (inLiteral[m.index]) continue; // an example inside a doc/template literal, not a live call
     const table = m[1];
     const line = lineAt(text, m.index);
     refs.push({ type: 'table', table, line, kind: 'from', file: relPath });
@@ -124,7 +173,7 @@ export function extractReferences(text, relPath = '') {
     if (nextFrom !== -1) ahead = ahead.slice(0, nextFrom);
 
     const sel = ahead.match(/\.select\(\s*['"`]([^'"`]+)['"`]/);
-    if (sel && !pragmaAt(text, m.index + sel.index)) {
+    if (sel && !pragmaAt(rawText, m.index + sel.index)) {
       const selLine = lineAt(text, m.index + sel.index);
       for (const col of selectColumns(sel[1])) {
         refs.push({
@@ -135,7 +184,7 @@ export function extractReferences(text, relPath = '') {
     }
 
     const ins = ahead.match(/\.(insert|update|upsert)\(/);
-    if (ins && !pragmaAt(text, m.index + ins.index)) {
+    if (ins && !pragmaAt(rawText, m.index + ins.index)) {
       const insLine = lineAt(text, m.index + ins.index);
       const extracted = extractObjectKeys(ahead, ins.index + ins[0].length - 1);
       if (extracted) {
@@ -152,7 +201,7 @@ export function extractReferences(text, relPath = '') {
   // Raw SQL references in template strings / inline SQL.
   SQL_REF_RE.lastIndex = 0;
   while ((m = SQL_REF_RE.exec(text))) {
-    if (pragmaAt(text, m.index)) continue;
+    if (pragmaAt(rawText, m.index)) continue;
     const t = m[1].toLowerCase();
     if (SQL_KEYWORDS.has(t) || t.startsWith('pg_') || t.length < 4) continue;
     refs.push({ type: 'table', table: t, line: lineAt(text, m.index), kind: 'sql', file: relPath });
