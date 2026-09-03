@@ -1,14 +1,15 @@
 /**
- * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1) — the decision_requested admission
- * discriminator, created fresh at Solomon send time via --informational, deliberately NOT
- * derived from any existing payload field.
+ * SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 (FR-1), INVERTED by QF-20260902-813 — the
+ * decision_requested admission discriminator, created fresh at Solomon send time.
  *
- * TWO CANDIDATE DISCRIMINATORS WERE MEASURED AGAINST LIVE TRAFFIC AND DISPROVEN BEFORE THIS ONE
- * WAS CHOSEN — expectsReply (mode==='request', dead by construction) and resolvedReplyClass
- * (collapses to 'fire-and-forget' for effectively all live Solomon sends). This file's TS-1
- * replays that disproof against the preserved 34-row counter-example fixture so the argument is
- * executable, not narrative — and per TESTING's PLAN-phase finding, the assertion must actually
- * READ the fixture row-by-row (a constant-result call proves nothing).
+ * WHY THE DEFAULT FLIPPED: the original default-TRUE design (opt-out via --informational) was
+ * deliberate for its own adoption window — see the two-candidate disproof preserved below (TS-1),
+ * which is UNCHANGED by this QF; expectsReply and resolvedReplyClass are still the wrong
+ * discriminators for a completely different reason (they collapse to fire-and-forget regardless
+ * of decision intent). But default-TRUE outlived its adoption purpose: MEASURED 2026-09-02, 150
+ * rows sat decision='pending' in solomon_advice_outcome_ledger because nearly every consult
+ * ANSWER (closes the loop, asks nothing further) was still stamped true. Default is now FALSE;
+ * --decision is the new explicit opt-IN for a send that genuinely asks the recipient to decide.
  */
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
@@ -46,16 +47,14 @@ function candidateResolvedReplyClass(row) {
   return row.src_reply_class || 'fire-and-forget';
 }
 
-describe('TS-1: resolveDecisionRequested never suppresses a row that received a real disposition', () => {
+describe('TS-1: the two disproven candidate discriminators remain wrong for an unrelated reason', () => {
   const realDispositionRows = FIXTURE.filter((r) => r.decision === 'accepted' || r.decision === 'deferred');
 
-  it('classifies all 34 fixture rows as true with --informational omitted (the pre-adoption state)', () => {
-    for (const row of FIXTURE) {
-      // Per-row, reading actual fixture content — a constant-result call would pass vacuously.
-      expect(m.resolveDecisionRequested({ informational: undefined }), `row ${row.correlation_id}`).toBe(true);
-    }
-  });
-
+  // QF-20260902-813: the old "classifies all 34 fixture rows as true" assertion asserted the
+  // PRE-INVERSION default and is gone — resolveDecisionRequested's default is now false. This
+  // disproof is about candidateExpectsReply/candidateResolvedReplyClass specifically (they
+  // collapse to fire-and-forget regardless of decision intent), which the default flip does not
+  // touch — kept verbatim.
   it('control: both disproven candidates would have suppressed all 15 real-disposition rows', () => {
     expect(realDispositionRows.length).toBe(15);
     for (const row of realDispositionRows) {
@@ -67,36 +66,44 @@ describe('TS-1: resolveDecisionRequested never suppresses a row that received a 
   });
 });
 
-describe('FR-1: resolveDecisionRequested — pure contract', () => {
-  it('returns true when informational is omitted (default, non-suppressing)', () => {
-    expect(m.resolveDecisionRequested({})).toBe(true);
-    expect(m.resolveDecisionRequested()).toBe(true);
+describe('FR-1 (QF-20260902-813 inversion): resolveDecisionRequested — pure contract', () => {
+  it('returns false by default (informational and decision both omitted)', () => {
+    expect(m.resolveDecisionRequested({})).toBe(false);
+    expect(m.resolveDecisionRequested()).toBe(false);
   });
 
-  it('returns false ONLY for the literal boolean true', () => {
+  it('returns true ONLY when decision is the literal boolean true', () => {
+    expect(m.resolveDecisionRequested({ decision: true })).toBe(true);
+  });
+
+  it('legacy informational:true is a redundant-but-harmless synonym for the (now-default) false', () => {
     expect(m.resolveDecisionRequested({ informational: true })).toBe(false);
   });
 
+  it('decision wins over informational when both are set (an explicit ask overrides the legacy opt-out)', () => {
+    expect(m.resolveDecisionRequested({ informational: true, decision: true })).toBe(true);
+  });
+
   // TS-3a: a non-boolean parse result must never silently no-op the strict identity check.
-  it('TS-3a: a non-boolean informational value never no-ops the signal (strict !== true)', () => {
-    expect(m.resolveDecisionRequested({ informational: 'true' })).toBe(true); // string, not boolean
-    expect(m.resolveDecisionRequested({ informational: 1 })).toBe(true);
-    expect(m.resolveDecisionRequested({ informational: false })).toBe(true);
+  it('TS-3a: a non-boolean decision value never no-ops the signal (strict === true)', () => {
+    expect(m.resolveDecisionRequested({ decision: 'true' })).toBe(false); // string, not boolean
+    expect(m.resolveDecisionRequested({ decision: 1 })).toBe(false);
+    expect(m.resolveDecisionRequested({ decision: false })).toBe(false);
   });
 });
 
-describe('TS-3: decision_requested is orthogonal to reply_class in BOTH directions', () => {
-  it('all four replyTo x informational combinations produce the expected decision_requested, with reply_class always fire-and-forget and no reply_expected_by stamped', () => {
+describe('TS-3 (QF-20260902-813): decision_requested is orthogonal to reply_class in BOTH directions', () => {
+  it('all replyTo x decision combinations produce the expected decision_requested, with reply_class always fire-and-forget and no reply_expected_by stamped', () => {
     const cases = [
-      { replyTo: undefined, informational: undefined, expectDecisionRequested: true },
-      { replyTo: undefined, informational: true, expectDecisionRequested: false },
-      { replyTo: 'corr-abc', informational: undefined, expectDecisionRequested: true },
-      { replyTo: 'corr-abc', informational: true, expectDecisionRequested: false }, // the case that killed candidate #2
+      { replyTo: undefined, decision: undefined, expectDecisionRequested: false },
+      { replyTo: undefined, decision: true, expectDecisionRequested: true },
+      { replyTo: 'corr-abc', decision: undefined, expectDecisionRequested: false }, // the reproduction case named in the QF
+      { replyTo: 'corr-abc', decision: true, expectDecisionRequested: true }, // --decision overrides even a reply_to answer
     ];
     for (const c of cases) {
       const payload = m.buildAdvisoryPayload({
         body: 'x', senderCallsign: 'solomon-test', repo: '/tmp', correlationId: 'corr-x',
-        replyTo: c.replyTo, informational: c.informational,
+        replyTo: c.replyTo, decision: c.decision,
       });
       expect(payload.decision_requested, JSON.stringify(c)).toBe(c.expectDecisionRequested);
       expect(payload.reply_class, JSON.stringify(c)).toBe('fire-and-forget');
@@ -111,7 +118,7 @@ describe('TS-3: decision_requested is orthogonal to reply_class in BOTH directio
   });
 });
 
-describe('TS-3b (wiring): the CLI argv parse threads informational all the way to buildAdvisoryPayload', () => {
+describe('TS-3b (wiring): the CLI argv parse threads informational/decision all the way to buildAdvisoryPayload', () => {
   it('the source registers --informational in BOOL_FLAGS AND passes it into the buildAdvisoryPayload call site', () => {
     // Two independent facts, both required — a maintainer could add one and forget the other,
     // which is exactly the class of gap TESTING flagged at PLAN (registering the flag proves
@@ -119,5 +126,12 @@ describe('TS-3b (wiring): the CLI argv parse threads informational all the way t
     expect(/const BOOL_FLAGS = \[[^\]]*'--informational'[^\]]*\]/.test(SRC)).toBe(true);
     expect(/const informationalArg = argv\.indexOf\('--informational'\) >= 0/.test(SRC)).toBe(true);
     expect(/buildAdvisoryPayload\(\{[^}]*informational: informationalArg[^}]*\}\)/.test(SRC)).toBe(true);
+  });
+
+  // QF-20260902-813: the new --decision opt-in flag needs the same two-fact wiring proof.
+  it('the source registers --decision in BOOL_FLAGS AND passes it into the buildAdvisoryPayload call site', () => {
+    expect(/const BOOL_FLAGS = \[[^\]]*'--decision'[^\]]*\]/.test(SRC)).toBe(true);
+    expect(/const decisionArg = argv\.indexOf\('--decision'\) >= 0/.test(SRC)).toBe(true);
+    expect(/buildAdvisoryPayload\(\{[^}]*decision: decisionArg[^}]*\}\)/.test(SRC)).toBe(true);
   });
 });
