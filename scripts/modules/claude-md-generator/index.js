@@ -660,7 +660,11 @@ export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 // THROW only for files a shipped SD has actually made fit; WARN for the rest.
 //
 // This is not timidity, it is the difference between a guard and a blockade. CLAUDE_CORE.md
-// (39,750 tokens) and CLAUDE_EXEC.md (37,056) are over cap TODAY and their fixes are separate SDs.
+// (30,677 tokens) and CLAUDE_EXEC.md (39,185) are over cap TODAY and their fixes are separate SDs.
+// Those two figures were previously recorded as 39,750 and 37,056 — transposed and both wrong.
+// Re-measured 2026-09-03 via lib/protocol/contract-read-coverage.cjs singleReadFit against the
+// committed files. Stale numbers in a comment whose whole subject is measurement truth are exactly
+// the drift this guard exists to catch, so they are dated here rather than silently corrected.
 // A guard that throws on every FULL file would fail the very first regeneration after this ships
 // and block the whole family — punishing everyone for a defect nobody has been given the chance
 // to fix yet. Add a file here when its SD lands, not before.
