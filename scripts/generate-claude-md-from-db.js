@@ -62,9 +62,9 @@ export function parseOnlyFlag(argv, known = KNOWN_GENERATED_FILES) {
   return files;
 }
 
-// QF-20260816-925: parse --refresh-lessons, the opt-in flag for a fresh Recent Lessons
-// snapshot from the live retrospectives table. Exported (pure) for unit tests, mirroring
-// parseOnlyFlag above.
+// QF-20260816-925 (generalized by QF-20260902-053): parse --refresh-lessons, the opt-in flag
+// for a fresh live snapshot of every live-baked section (Recent Lessons, Hot Issue Patterns,
+// Known Friction Points). Exported (pure) for unit tests, mirroring parseOnlyFlag above.
 export function parseRefreshLessonsFlag(argv) {
   return argv.includes('--refresh-lessons');
 }
@@ -127,12 +127,15 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
     }
     if (only) console.log(`Scoped regeneration (--only): ${only.join(', ')}\n`);
 
-    // QF-20260816-925: --refresh-lessons opts into a fresh Recent Lessons snapshot from the
-    // live retrospectives table. Without it, the existing on-disk block is preserved so an
-    // unrelated regeneration (e.g. a fleet worker responding to "stale protocol detected")
-    // doesn't churn this section. The daily leo-kb-refresh.yml cron passes this flag.
+    // QF-20260816-925 (generalized by QF-20260902-053): --refresh-lessons opts into a fresh
+    // live-table snapshot for Recent Lessons, Hot Issue Patterns, and Known Friction Points.
+    // Without it, each section's existing on-disk block is preserved so an unrelated
+    // regeneration (e.g. a fleet worker responding to "stale protocol detected") doesn't
+    // churn a generated contract that is supposed to be a deterministic function of
+    // leo_protocol_sections (Solomon ruling c5d4390b). The daily leo-kb-refresh.yml cron
+    // passes this flag.
     const refreshLessons = parseRefreshLessonsFlag(process.argv);
-    if (refreshLessons) console.log('Refreshing Recent Lessons from the live retrospectives table (--refresh-lessons)\n');
+    if (refreshLessons) console.log('Refreshing Recent Lessons / Hot Patterns / Known Friction Points from live tables (--refresh-lessons)\n');
 
     const generator = new CLAUDEMDGeneratorV3(supabase, baseDir, mappingPath, {
       ...(only ? { only } : {}),
