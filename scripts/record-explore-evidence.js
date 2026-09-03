@@ -23,12 +23,41 @@
  */
 
 import { storeSubAgentResults } from '../lib/sub-agent-executor/results-storage.js';
-import { toCanonicalRepoPath } from '../lib/sub-agents/resolve-repo.js';
+import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../lib/sub-agents/resolve-repo.js';
 import { getSupabaseClient } from '../lib/sub-agent-executor/supabase-client.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const VALID_VERDICTS = new Set(['PASS', 'CONDITIONAL_PASS', 'WARNING', 'FAIL']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * QF-20260813-220: this script's own file always lives inside the EHG_Engineer checkout,
+ * so deriving repo_path from import.meta.url (the prior implementation) stamped
+ * EHG_Engineer on every row REGARDLESS of which application the SD actually targets —
+ * breaking evidence capture for any cross-repo SD (e.g. an AltifyAI-venture SD whose
+ * target_application resolves to a different repo). Look up the SD's own
+ * target_application and resolve THAT app's canonical repo path via the same DB-first,
+ * cross-repo-aware mechanism every other sub-agent uses (lib/sub-agents/resolve-repo.js),
+ * instead of hand-rolling a path from this script's own location.
+ * @param {string} sdId - sd_key or UUID, whichever form the caller passed
+ * @param {object} supabase
+ * @returns {Promise<string|null>} the SD's target_application, or null if unresolvable
+ */
+export async function fetchTargetApplication(sdId, supabase) {
+  try {
+    const column = UUID_RE.test(sdId) ? 'id' : 'sd_key';
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('target_application')
+      .eq(column, sdId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.target_application || null;
+  } catch {
+    return null;
+  }
+}
 
 /** Minimal argv parser: repeated flags collect into an array. */
 export function parseArgs(argv) {
@@ -67,7 +96,7 @@ export function refusalReason({ sd_id, verdict, summary, findings = [] }) {
   return null;
 }
 
-export async function recordExploreEvidence(args, { store = storeSubAgentResults, supabase = null } = {}) {
+export async function recordExploreEvidence(args, { store = storeSubAgentResults, supabase = null, resolveRepo = resolveSubAgentRepo } = {}) {
   const reason = refusalReason(args);
   if (reason) {
     const err = new Error(`record-explore-evidence: ${reason}`);
@@ -75,23 +104,30 @@ export async function recordExploreEvidence(args, { store = storeSubAgentResults
     throw err;
   }
 
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const db = supabase || await getSupabaseClient();
+  const targetApplication = await fetchTargetApplication(args.sd_id, db);
+  const resolution = await resolveRepo({
+    sdId: args.sd_id,
+    targetApplication,
+    subAgentCode: 'Explore',
+    supabase: db,
+  });
+
   const results = {
     verdict: String(args.verdict).toUpperCase(),
     confidence: args.confidence ? Number(args.confidence) : 90,
     summary: args.summary || '',
     findings: args.findings || [],
     metadata: {
-      // Canonical, NOT the worktree path: v_sub_agent_repo_compliance compares
-      // metadata->>repo_path to applications.local_path by exact string equality, so a
-      // worktree-valued repo_path fails SUB_AGENT_REPO_RESOLUTION.
-      repo_path: toCanonicalRepoPath(repoRoot),
-      executed_from_cwd: process.cwd(),
       recorded_by: 'scripts/record-explore-evidence.js',
       producer_note: 'Explore is a read-only BUILT-IN and cannot write its own row; this is the '
         + 'sanctioned transcription path (SD-LEO-INFRA-EXPLORE-UNREGISTERED-LEO-001 FR-1).'
     }
   };
+  // applySubAgentRepoVerdict stamps metadata.repo_path/repo_resolved/registry_source/
+  // executed_from_cwd (and downgrades verdict to CONDITIONAL_PASS on a failed resolution,
+  // matching every other sub-agent's fail-closed semantics for unresolved cross-repo evidence).
+  applySubAgentRepoVerdict(results, resolution);
 
   // sub_agent_code is 'Explore' exactly. The evidence gate groups on a NORMALIZED code, so casing
   // does not decide matching — but it does decide what a human reads in the row, and every existing
