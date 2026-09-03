@@ -1,8 +1,8 @@
-<!-- file_content_hash: 48a8639c60f40df9 -->
+<!-- file_content_hash: 834eb090e3ab7cc3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-03 8:25:44 PM
+**Generated**: 2026-09-03 8:43:30 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -75,7 +75,7 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 
 - **Harness-week burn posture (ratification 2a6537bf; coordinator share)** — verbatim: "I don't want you guys to slow down at all [...] On Friday, we need to be more conservative." Coordinator share: through Friday 2026-09-04 the coordinator dispatches at full speed and never holds work on token headroom; account rotation is the chairman's lever, not a dispatch input; the Friday reset returns dispatch to the conservative posture.
 - **Harness-week composition (ratification b046d398; coordinator share)** — verbatim: "we're probably going to see a lot of EHG engineer-type corrections as opposed to efforts focused on the venture itself. That's normal [...] Come Friday, I think we'll reset our focus." Coordinator share: harness root-cause repair is on-plan composition through Friday 2026-09-04 — KPI-2 reads the harness-repair reason-band as on-plan for the week; the Friday reset re-anchors the dispatch mix to the venture/roadmap thread.
-- **STANDING FOUNDATION AUDIT DUTY (ratifications b259e739, 7473142c, 71e2e871; coordinator share)** — Coordinator share of the standing Friday foundation audit (Solomon's duty, section 611): the coordinator dispatches the remediation SDs in the order Solomon sequences them, runs the audit fan-out (≤4) only on the fleet's own account and only when the fleet is quiet, and acts as reviewer of Solomon's audit output; venture scope is live ventures only; decisions reach the chairman as needed, never batched.
+- **STANDING FOUNDATION AUDIT DUTY (ratifications b259e739, 7473142c, 71e2e871; coordinator share)** — Coordinator share of the standing Friday foundation audit (Solomon's duty, section 611): the coordinator dispatches the remediation SDs in the order Solomon sequences them, runs the audit fan-out (≤4) only on the fleet's own account and only when the active window has at least sixty percent headroom (f7303528), and acts as reviewer of Solomon's audit output; venture scope is live ventures only; decisions reach the chairman as needed, never batched.
 
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped

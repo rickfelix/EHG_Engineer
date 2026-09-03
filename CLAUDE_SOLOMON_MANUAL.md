@@ -1,8 +1,8 @@
-<!-- file_content_hash: 651fee3073532b1f -->
+<!-- file_content_hash: 3be493af0c7455c4 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-03 8:30:17 PM
+**Generated**: 2026-09-03 8:43:30 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -171,16 +171,18 @@ APPLICATION NOTE (seat guidance from the type specimen's own same-day sequel, no
 
 ## Decision-requested derivation
 
-decision_requested is derived from the send's shape, never from the sender's doubt (611 DECISION_REQUESTED DISCIPLINE; chairman ratification 0c21f559, 2026-09-02):
-- (a) A send with --reply-to (it answers a consult): decision_requested=true, disposer = the ASKER (applied / declined / partial — the §11 accuracy signal); auto judgment_expired after 7 days with no disposition; never counted in Adam's pending backlog.
-- (b) A send with no --reply-to carrying a systemic_flag, a sourcing hand-off, or an explicit ask: decision_requested=true, disposer = Adam.
-- (c) Everything else (status, FYI, budget line, unrequested observation): decision_requested=false.
-- Overrides: --informational forces false, --decision forces true; both logged in payload.decision_override with the reason. The resurface pending count grows only on disposer=Adam rows.
+decision_requested is derived from a DECLARED shape, never from the sender's doubt (611 DECISION_REQUESTED DISCIPLINE; chairman ratification 0c21f559, 2026-09-02). As implemented by QF-20260902-813 (#8068, merged 2026-09-03 00:07Z) and accepted by Solomon as the shipped shape:
+- (a) An answer to a consult (a send with --reply-to): decision_requested=false — its outcome signal is the §11 accuracy ledger's design item, PARKED: asker-disposer routing needs a payload taxonomy that does not exist.
+- (b) --decision on a send that asks the recipient to decide or source: decision_requested=true, disposer = Adam.
+- (c) Everything else (status, FYI, budget line, unrequested observation, acks, concurrences): decision_requested=false.
+- Mechanics: resolveDecisionRequested({informational, decision}) returns true only when --decision is passed; the default is false on every send; --informational remains a logged override to false. Shape auto-detection from systemic_flag or hand-off payload signals is DESCOPED until a payload taxonomy exists. The resurface pending count grows only on rows written with --decision.
 
 ## Foundation audit — procedure
 
 Standing Friday foundation audit (611 STANDING FOUNDATION AUDIT DUTY; ratifications b259e739, 7473142c, 71e2e871):
-- Cadence: every Friday after the week reset, only when the fleet is quiet; six lenses per week, the full twelve every two weeks. Lens halves — A: sd-state, qf-state, liveness, gate-evidence, writers, comms; B: ratification, durability, roadmap, gauges-learn, instruments, worker-loop.
+- Cadence: every Friday after the week reset, when the active window has at least sixty percent headroom (f7303528: the audit's only worker impact is the shared five-hour token window, not seats);
+- Headroom read: from a fresh chairman /usage paste (under 1 h old); otherwise the clock — the window opened at the account's first message and at least 3 h remain; later from per-seat metering, at which point the audit runs under its own budget line inside the Solomon share at any time. Readers batched ≤4. Launch readings are recorded on the audit row as context, not a gate.
+- Friday plan of record: launch after the Deep Soul weekly reset (03:59 ET); Code Street Labs frees 3:00 pm ET; the chairman rotates accounts at the keyboard. six lenses per week, the full twelve every two weeks. Lens halves — A: sd-state, qf-state, liveness, gate-evidence, writers, comms; B: ratification, durability, roadmap, gauges-learn, instruments, worker-loop.
 - Scope: EHG_Engineer (harness), EHG (platform app), live ventures only — never cancelled or deferred ventures.
 - Execution: batched fan-out ≤4 on the fleet's own account, never a separate account; per-slice reproduce, capped refute, non-fatal critic; a control canary per lens; budget-at-entry with measured spend.
 - Output: findings ranked by chairman-facing truth loss against the LEO roadmap, with a recommended-against list; sequencing by Solomon with the capacity read as input (evidence-backed completions, session window, encode-pipeline throughput as a resource); one durable row and one sourcing hand-off to Adam per run; decisions reach the chairman as needed, never batched; silence when clean.
