@@ -1,8 +1,8 @@
-<!-- file_content_hash: bd6a8129d87d21ea -->
+<!-- file_content_hash: 101de6d292dc6781 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-03 8:52:44 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -176,10 +176,17 @@ Rationale: send-verification and board predicates cannot see omissions — a dut
 
 Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman filed under the Todoist parent "Fable Use cases."
 
+## Decision-requested — why no automatic signal suffices
+
+(Moved here from 611 DECISION_REQUESTED DISCIPLINE on 2026-09-03 for single-Read headroom; the clause's pointer to this file stands per FR-6.) Why no automatic signal suffices, and the failure modes of getting this wrong: `CLAUDE_SOLOMON_PROVENANCE.md` per FR-6.
+
+## Root-cause discipline on the oracle seat (ratification ee4930ae, 2026-09-02 13:29Z)
+
+Verbatim: "Solomon, moving forward, if you see any issues, please determine the root cause and don't just simply try to work around the root cause." Context: spoken minutes after the belt-empty RCA (feedback 9d8d34b3) showed three prior fixes that worked around the mint-time root, on a day Solomon routed around four tooling frictions (backpressure parks, reply-to refusals, amend dedup, a hold release blind to eligibility) instead of naming their roots. Sibling of b1055808 (the same order to Adam, 13:03Z); encoded once in one PR per c44cd9d8. Marker in 611: ROOT-CAUSE DISCIPLINE ON THE ORACLE SEAT (chairman standing order 2026-09-02).
 
 
 ---
 
-*Generated from database: 2026-09-02*
+*Generated from database: 2026-09-03*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_provenance). Do not hand-edit — edit the DB section and regenerate.*
