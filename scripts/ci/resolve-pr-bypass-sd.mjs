@@ -36,6 +36,39 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { extractKey } from '../lib/branch-key-extractor.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
+const KEY_PREFIX_RE = /^(SD|QF)$/i;
+
+/**
+ * QF-20260902-114: extractKey()'s SD_PATTERN is deliberately lazy (stops at the FIRST 3+ digit
+ * segment) so a branch embedding a second key later (e.g. "...-but-also-QF-20260101-001") still
+ * resolves to only the first key -- required by branch-key-extractor.test.js's own precedence
+ * test, and left byte-identical here per coordinator ruling (thread ffbcd82b/67afa469). A real SD
+ * key can still have a DIGIT segment before its true terminal one (e.g. SD-LEO-FIX-824-REMAINDER-
+ * RECORD-001, "824" mid-key), which extractKey() alone under-resolves. This builds every valid
+ * longer candidate by walking segments past extractKey()'s stopping point, adding one candidate at
+ * each further digit-run boundary, and stopping BEFORE a later embedded SD-/QF- prefixed token so
+ * the precedence contract above is preserved. Longest-first so callers can take the first that
+ * resolves.
+ * @param {string} branch
+ * @returns {string[]} candidate SD keys, longest first, always including extractKey()'s own result
+ */
+export function buildSdKeyCandidates(branch) {
+  const base = extractKey(branch);
+  if (!base || base.kind !== 'SD') return [];
+  const start = branch.toUpperCase().indexOf(base.key);
+  const rest = start === -1 ? base.key : branch.slice(start);
+  const segments = rest.split('-');
+  const candidates = new Set([base.key]);
+  const acc = [];
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (i > 0 && KEY_PREFIX_RE.test(seg)) break;
+    acc.push(seg);
+    if (/^\d{3,}$/.test(seg)) candidates.add(acc.join('-').toUpperCase());
+  }
+  return [...candidates].sort((a, b) => b.length - a.length);
+}
+
 /**
  * @param {string} branch
  * @param {object} supabase
@@ -51,20 +84,22 @@ export async function resolvePrBypassSd(branch, supabase) {
     return { resolution: 'skip-qf', sdUuid: null, sdKey: extracted.key };
   }
 
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id')
-    .eq('sd_key', extracted.key)
-    .maybeSingle();
+  for (const key of buildSdKeyCandidates(branch)) {
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('sd_key', key)
+      .maybeSingle();
 
-  if (error) {
-    throw new Error(`strategic_directives_v2 lookup failed for ${extracted.key}: ${error.message}`);
-  }
-  if (!data) {
-    return { resolution: 'unresolved-sd', sdUuid: null, sdKey: extracted.key };
+    if (error) {
+      throw new Error(`strategic_directives_v2 lookup failed for ${key}: ${error.message}`);
+    }
+    if (data) {
+      return { resolution: 'resolved', sdUuid: data.id, sdKey: key };
+    }
   }
 
-  return { resolution: 'resolved', sdUuid: data.id, sdKey: extracted.key };
+  return { resolution: 'unresolved-sd', sdUuid: null, sdKey: extracted.key };
 }
 
 async function main() {
