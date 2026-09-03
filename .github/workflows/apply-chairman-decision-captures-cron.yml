@@ -1,0 +1,87 @@
+# QF-20260902-882
+#
+# scripts/apply-chairman-decision-captures.mjs was scheduled NOWHERE -- the only way it ever ran
+# was a human typing the command by hand. Captures (chairman_decision_capture /
+# chairman_ruling_capture) piled up as unresolved critical feedback with nothing to reconcile
+# them. This workflow gives the reconciler a daily run.
+#
+# The script is safe to run unattended: RPC captures refuse themselves with BLOCKED until FR-1's
+# migration is live (never hand-written), hold captures are idempotent
+# (`row.brief_data?.hold?.ratified === true` short-circuits to ALREADY), and every write goes
+# through the canonical `resolveFeedback()` helper. DRY-RUN is still the script's own default
+# (omitting --apply), so the schedule passes --apply explicitly and a manual dispatch can drop
+# back to dry-run to inspect what would happen without writing.
+
+name: Apply Chairman Decision Captures
+
+on:
+  schedule:
+    # Daily, 13:00 UTC.
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, run without --apply (report only, no writes).'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-chairman-decision-captures
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Piped through an env var, not spliced into the run: script body via ${{ }}, so a
+      # workflow_dispatch input cannot inject into the command line.
+      DRY_RUN_INPUT: ${{ github.event.inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Run reconciler
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Scheduled and dispatched runs both apply by default -- the reconciler's whole purpose
+          # is to actually apply already-decided captures, not just report on them. Only an
+          # explicit workflow_dispatch with dry_run="true" skips --apply.
+          ARGS=()
+          if [ "$DRY_RUN_INPUT" != "true" ]; then
+            ARGS+=(--apply)
+          fi
+          echo "Running: node scripts/apply-chairman-decision-captures.mjs ${ARGS[*]}"
+          node scripts/apply-chairman-decision-captures.mjs "${ARGS[@]}" 2>&1 | tee apply.log
+
+      - name: Extract summary for job summary
+        if: always()
+        run: |
+          echo "## Apply Chairman Decision Captures — $(date -u +%Y-%m-%dT%H:%MZ)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -40 apply.log >> "$GITHUB_STEP_SUMMARY" || echo 'no output captured' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apply-chairman-decision-captures-log-${{ github.run_id }}
+          path: apply.log
+          retention-days: 30

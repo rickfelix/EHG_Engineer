@@ -171,6 +171,18 @@ describe('resolveFeedback', () => {
     expect(sb._captured.update.status).toBe('resolved');
     expect(sb._captured.update.resolved_at).toBeDefined();
   });
+
+  // QF-20260902-882: resolution_type is a real feedback column (no CHECK enum) that
+  // callers may want to set for auditability, alongside the already-supported fields.
+  it('sets resolution_type when supplied, omits it when not', async () => {
+    const sb = makeMockSupabase({ updateRows: [{ id: VALID_UUID_1 }] });
+    await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1, resolutionType: 'chairman_decision_applied' });
+    expect(sb._captured.update.resolution_type).toBe('chairman_decision_applied');
+
+    const sb2 = makeMockSupabase({ updateRows: [{ id: VALID_UUID_1 }] });
+    await resolveFeedback({ supabase: sb2, feedbackId: VALID_UUID_1 });
+    expect(sb2._captured.update.resolution_type).toBeUndefined();
+  });
 });
 
 // QF-20260511-556: short-UUID prefix expansion via DB lookup

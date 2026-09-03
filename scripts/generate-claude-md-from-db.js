@@ -64,7 +64,7 @@ export function parseOnlyFlag(argv, known = KNOWN_GENERATED_FILES) {
 
 // QF-20260816-925: parse --refresh-lessons, the opt-in flag for a fresh Recent Lessons
 // snapshot from the live retrospectives table. Exported (pure) for unit tests, mirroring
-// parseOnlyFlag above.
+// parseOnlyFlag above. QF-20260902-053: now also gates Hot Patterns / Known Friction Points.
 export function parseRefreshLessonsFlag(argv) {
   return argv.includes('--refresh-lessons');
 }
@@ -131,6 +131,7 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
     // live retrospectives table. Without it, the existing on-disk block is preserved so an
     // unrelated regeneration (e.g. a fleet worker responding to "stale protocol detected")
     // doesn't churn this section. The daily leo-kb-refresh.yml cron passes this flag.
+    // QF-20260902-053: --refresh-lessons now also gates Hot Patterns / Known Friction Points.
     const refreshLessons = parseRefreshLessonsFlag(process.argv);
     if (refreshLessons) console.log('Refreshing Recent Lessons from the live retrospectives table (--refresh-lessons)\n');
 
