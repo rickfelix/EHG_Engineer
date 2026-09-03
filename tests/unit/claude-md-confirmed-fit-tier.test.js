@@ -52,11 +52,30 @@ describe('the confirmed-fit threshold is derived from the instrument, not a lite
     expect(SINGLE_READ_CONFIRMED_FIT_TOKENS).toBeLessThan(SINGLE_READ_TOKEN_CAP);
   });
 
-  it('is the boundary singleReadFit actually uses: one token above it is NOT a confirmed fit', () => {
-    // Pins the claim behind the whole tier rather than trusting the arithmetic.
-    const justInside = readCoverage.singleReadFit;
-    expect(typeof justInside).toBe('function');
-    expect(SINGLE_READ_CONFIRMED_FIT_TOKENS).toBe(25000 - 25000 * 0.068);
+  // THE BOUNDARY IS ASSERTED BY CALLING THE FUNCTION AT IT, not by restating the arithmetic.
+  //
+  // The first version of this test asserted `typeof singleReadFit === 'function'` and a literal
+  // `25000 - 25000*0.068`. Both pass while saying nothing about the tier's actual comparison: a
+  // mutation of the filter from `>=` to `>` survived the entire suite. That is an assertion layer
+  // stating what it never measured -- the exact defect class this SD family exists to close, shipped
+  // inside this SD's own tests. Caught by the TESTING sub-agent's mutation sweep (M7).
+  it('a file EXACTLY AT the threshold is not a confirmed fit — kills the >= to > mutation', () => {
+    const atEdge = [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(SINGLE_READ_CONFIRMED_FIT_TOKENS) }];
+    expect(() => assertSingleReadFit(atEdge, { mustConfirmFit: ['CLAUDE_SOLOMON.md'], onWarn: () => {} }))
+      .toThrow(/SINGLE_READ_FIT_UNCONFIRMED/);
+  });
+
+  it('a file ONE TOKEN BELOW the threshold IS a confirmed fit — pins the other side of the boundary', () => {
+    // Without this, widening the comparison to catch everything would also pass.
+    const belowEdge = [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(SINGLE_READ_CONFIRMED_FIT_TOKENS - 1) }];
+    expect(() => assertSingleReadFit(belowEdge, { mustConfirmFit: ['CLAUDE_SOLOMON.md'], onWarn: () => {} }))
+      .not.toThrow();
+  });
+
+  it('the hard cap is exclusive at exactly the cap — kills the > to >= mutation on tier 1', () => {
+    // Pre-existing gap surfaced by the same sweep (M1): neither suite pinned tokens === cap exactly.
+    const atCap = [{ name: 'CLAUDE_LEAD.md', bytes: bytesFor(SINGLE_READ_TOKEN_CAP) }];
+    expect(() => assertSingleReadFit(atCap, { onWarn: () => {} })).not.toThrow(/SINGLE_READ_CAP_EXCEEDED/);
   });
 });
 
