@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T00:44:56.086Z",
-  "git_commit": "daa38c86",
+  "generated_at": "2026-09-03T00:53:56.531Z",
+  "git_commit": "c66b134b",
   "db_snapshot_hash": "650bd77d4f394818",
   "files": {
     "CLAUDE.md": {
@@ -69,10 +69,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 84744,
-      "bytes": 85496,
-      "estimated_tokens": 21186,
-      "content_hash": "c72b405059cb2b6d",
+      "chars": 84754,
+      "bytes": 85506,
+      "estimated_tokens": 21189,
+      "content_hash": "e3bca048591c87d1",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 42738,
-      "bytes": 43026,
-      "estimated_tokens": 10685,
-      "content_hash": "834eb090e3ab7cc3",
+      "chars": 42748,
+      "bytes": 43036,
+      "estimated_tokens": 10687,
+      "content_hash": "45be122e2c968c05",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
@@ -117,10 +117,10 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 59830,
-      "bytes": 60396,
-      "estimated_tokens": 14958,
-      "content_hash": "5d456021a624fd12",
+      "chars": 59731,
+      "bytes": 60292,
+      "estimated_tokens": 14933,
+      "content_hash": "f9ad0e4854ae48a2",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
@@ -133,10 +133,10 @@
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 21445,
-      "bytes": 21629,
-      "estimated_tokens": 5362,
-      "content_hash": "535bb418c1fea950",
+      "chars": 22497,
+      "bytes": 22683,
+      "estimated_tokens": 5625,
+      "content_hash": "101de6d292dc6781",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
@@ -213,7 +213,7 @@
     }
   },
   "section_digests": {
-    "global": "e233c4cff7406d46",
+    "global": "e60005f7ffc40fe4",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -467,14 +467,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "c187510661f12d63",
+      "601": "3a9e50d1d72dbb8f",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
-      "605": "38906b90d220f3b5",
+      "605": "12ebca2f653b9c18",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "fed07b48bd18422b",
+      "611": "085f5990982fe857",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -491,7 +491,7 @@
       "633": "12cf4526e9c9fd09",
       "634": "6518b5f83a72be9e",
       "635": "65702af32f75ceaa",
-      "636": "07a99cf62ed78432",
+      "636": "b5539c9739eee9fb",
       "653": "29214fac1aff5e6f",
       "654": "daf0a7933d7819ec",
       "655": "59137a758bb13a65",

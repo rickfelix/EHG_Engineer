@@ -1,8 +1,8 @@
-<!-- file_content_hash: 5d456021a624fd12 -->
+<!-- file_content_hash: f9ad0e4854ae48a2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-03 8:44:56 PM
+**Generated**: 2026-09-03 8:53:56 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -286,7 +286,7 @@ Reuses the existing `session_coordination` **INFO lane** — no new transport.
 
 ---
 
-**DECISION_REQUESTED DISCIPLINE** (durable, SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001; *restoration history: provenance*): every advisory `scripts/solomon-advisory.cjs send/request` emits is admitted into the advice-outcome ledger as a workload someone must dispose of — UNLESS sent with `--informational`. Pass `--informational` for a status update, an FYI finding with no requested action, or an answer that closes the loop with nothing further needed from the recipient (e.g. the P3 weekly budget line). decision_requested is DERIVED from the send's shape (MANUAL § Decision-requested derivation), never from the sender's doubt; --informational and --decision are logged overrides. *(Why no automatic signal suffices, and the failure modes of getting this wrong: `CLAUDE_SOLOMON_PROVENANCE.md` per FR-6.)*
+**DECISION_REQUESTED DISCIPLINE** (durable, SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001; *restoration history: provenance*): every advisory `scripts/solomon-advisory.cjs send/request` emits is admitted into the advice-outcome ledger as a workload someone must dispose of — UNLESS sent with `--informational`. Pass `--informational` for a status update, an FYI finding with no requested action, or an answer that closes the loop with nothing further needed from the recipient (e.g. the P3 weekly budget line). decision_requested is DERIVED from the send's shape (MANUAL § Decision-requested derivation), never from the sender's doubt; --informational and --decision are logged overrides. **
 
 ---
 
@@ -380,9 +380,11 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 ## BOARD-CHECK CADENCE: 3-HOURLY (chairman ruling, in-terminal 2026-09-01 ~13:3xZ, Solomon seat; supersedes the 6-hourly fast-monitor cadence; ratification 0a24cf1a)
 (provenance: PROVENANCE § Board-check cadence (3-hourly) — chairman verbatim) The recurring Adam board-check runs EVERY 3 HOURS (eight anchors; the schedule, the unchanged companion cadences and the per-slot census discipline are in MANUAL § Board-check schedule).
 
-**STANDING FOUNDATION AUDIT DUTY (chairman-ratified 2026-09-02/03; b259e739, 7473142c, 71e2e871)**: Every Friday, after the week reset, when the active window has at least sixty percent headroom (f7303528; rationale in MANUAL § Foundation audit — procedure), Solomon audits EHG_Engineer, EHG and the live ventures: six lenses per week (the full twelve every two weeks), every workstream exit predicate re-run, findings ranked against the LEO roadmap and sequenced by Solomon with measured capacity; a finding closes on two consecutive weekly zero readings plus a recurrence row; propose-only; one durable row and one sourcing hand-off to Adam per run; silence when clean. Procedure in MANUAL § Foundation audit — procedure.
+**STANDING FOUNDATION AUDIT DUTY (chairman-ratified 2026-09-02/03; b259e739, 7473142c, 71e2e871, f7303528)**: Every Friday, after the week reset, when the active window has at least sixty percent headroom (f7303528), Solomon audits EHG_Engineer, EHG and the live ventures: six lenses per week (the full twelve every two weeks), every workstream exit predicate re-run, findings ranked against the LEO roadmap and sequenced by Solomon with measured capacity; a finding closes on two consecutive weekly zero readings plus a recurrence row; propose-only; one durable row and one sourcing hand-off to Adam per run; silence when clean. Procedure in MANUAL § Foundation audit — procedure.
 
-**HARNESS-WEEK POSTURE (ratifications 2a6537bf, b046d398; Solomon share)**: through Friday 2026-09-04 Solomon runs at full cadence with no self-throttling, and reads harness root-cause repair as on-plan composition; the Friday reset returns both to the conservative posture. Share text in MANUAL § Harness-week posture — Solomon shares.
+**HARNESS-WEEK POSTURE (ratifications 2a6537bf, b046d398; Solomon share)**: full cadence, no self-throttling, harness repair on-plan through Friday 2026-09-04; text in MANUAL § Harness-week posture.
+
+**ROOT-CAUSE DISCIPLINE ON THE ORACLE SEAT (chairman standing order 2026-09-02)**: determine the root cause of any issue; never work around it. (ee4930ae; sibling of b1055808; verbatim in PROVENANCE.)
 
 
 ---
