@@ -237,14 +237,14 @@
     },
     {
       "file": "scripts/modules/handoff/blocker-resolution.js",
-      "line": 166,
+      "line": 154,
       "rule": "A",
       "method": "select",
       "snippet": "id, sd_key, title, status, progress, current_phase, parent_sd_id, dependencies, metadata"
     },
     {
       "file": "scripts/modules/handoff/blocker-resolution.js",
-      "line": 178,
+      "line": 166,
       "rule": "C",
       "method": "property-read",
       "snippet": "blockerSD.progress"
