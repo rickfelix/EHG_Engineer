@@ -655,5 +655,21 @@
       "input": "extractReferences consumes the raw UTF-8 text of every candidate file, read by scripts/lint/schema-reference-lint.mjs:270-271, and matches four patterns against it: FROM_RE (.from with a quoted table), a .select() literal lookahead, an insert/update/upsert object-key walk, and SQL_REF_RE for raw SQL. Extracted refs are compared in findViolations against the keys of snapshot.tables and snapshot.views from database/schema-reference-snapshot.json. It consumes no environment variables and no database columns directly; the exit signal is carried by computeExitCode in scripts/lint/schema-lint-exit.mjs.",
       "seen": "Real positives observed on the live repo corpus, not a temp-dir fixture, on 2026-09-03: node scripts/lint/schema-reference-lint.mjs --all measured 358 violations across 4316 files (exit 1) BEFORE this fix and 348 across 4317 AFTER, a drop of exactly 10. Two of those cleared violations were genuine false positives this control was emitting against real committed source at scripts/hooks/lib/supabase-operative.cjs:17-18. The control also runs on every pull request as a blocking job via .github/workflows/schema-reference-lint.yml:69 (continue-on-error false at line 48), so the deployment environment where it receives its subject is CI, and the pre-fix 358 is the measured record of it receiving and reporting on the real tree."
     }
+  },
+  {
+    "name": "schema-lint-exit",
+    "script": "scripts/lint/schema-lint-exit.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/schema-lint-exit.test.js",
+    "neuter": {
+      "find": "  if (snapshotStale) return 1;    // FR-2: a zero measured against a stale snapshot is not a pass",
+      "replace": "  if (false) return 1;",
+      "why": "Disables the FR-2 staleness block, restoring the exact pre-fix defect: a run measured against a snapshot older than the live schema exits 0 and is reported as a pass. That is the false-zero trap SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C exists to close -- trap (a) in its own spine -- and it is the branch TS-3a and TS-3b exercise. A neutered exit helper is invisible in normal operation because the SUCCESS path is the one that breaks: violations still block, so the lint looks healthy, while the one signal that the verdict might be meaningless silently stops mattering."
+    },
+    "note": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-2). seedTest form, deliberately: schema-lint-exit.mjs is a PURE decision helper (a single total function over a state object, no fs, no DB, no process, no CLI), so there is no invocation to aim at a fixture directory. The committed test covers the full truth table including the deliberate precedence -- degradedFallback wins over snapshotStale -- and TS-3e pins that omitting snapshotStale is byte-identical to the pre-FR-2 behaviour.",
+    "observability_proof": {
+      "input": "computeExitCode consumes exactly one object: { violations:number, degradedFallback:boolean, snapshotStale:boolean }. violations is allViolations.length (NEW drift only; pre-existing violations are deliberately excluded per QF-20260802-742), degradedFallback is set only in the --diff unresolvable-base catch at schema-reference-lint.mjs:209, and snapshotStale is derived from snapshot.generated_at against STALE_DAYS=7. Its return value is assigned to process.exitCode at schema-reference-lint.mjs, which is the signal the blocking CI job reads.",
+      "seen": "Measured end to end on the live repo on 2026-09-03, isolating the false zero rather than confounding it with the 348-violation backlog: the SAME node scripts/lint/schema-reference-lint.mjs --diff run reporting 0 new violations across 2 files exited 0 with a fresh snapshot, and exited 1 after the committed snapshot generated_at was backdated 30 days -- proving the staleness input reaches this function and changes the exit signal in the deployment path, not just in a fixture. The snapshot was restored and verified clean in git after the trial. The consuming job is .github/workflows/schema-reference-lint.yml:69, blocking (continue-on-error false at line 48)."
+    }
   }
 ]

@@ -26,6 +26,24 @@
  * false zero to protect against, and making it block would re-introduce the flaky-fetch
  * false-blocking this module was written to remove.
  *
+ * KNOWN LIMITATION — what this decision CANNOT see, stated because an exit helper that looks total
+ * invites the assumption that exit 0 means "nothing is wrong":
+ *
+ *  1. IT CANNOT SEE PRE-EXISTING VIOLATIONS. `violations` is NEW drift only (QF-20260802-742 moved
+ *     the backlog into a separate non-blocking `preExisting` list). A run over a file carrying 40
+ *     pre-existing phantom references exits 0, correctly by that design and invisibly by this one.
+ *  2. IT CANNOT SEE A DEGRADED RUN'S CONTENT. When degradedFallback is true this returns 0 without
+ *     consulting violations OR snapshotStale, so a degraded sweep over a stale snapshot with real
+ *     drift is indistinguishable here from a clean run. The caller prints that distinction; this
+ *     function does not encode it.
+ *  3. IT CANNOT SEE AN UNPARSEABLE SNAPSHOT DATE. snapshotStale arrives false when generated_at is
+ *     missing or malformed (NaN is not > STALE_DAYS), so a snapshot with no usable date is treated
+ *     as fresh. That is deliberate — absence of a date is a different defect from a provably old
+ *     one — but it means "not stale" here does not mean "date verified".
+ *  4. IT CANNOT SEE WHETHER THE SNAPSHOT MATCHES THE DATABASE. Staleness is measured in DAYS, not
+ *     by comparing the snapshot to the live schema. A snapshot regenerated one hour ago against the
+ *     wrong database, or a schema that changed twice within the window, both read as fresh.
+ *
  * @param {{violations:number, degradedFallback:boolean, snapshotStale:boolean}} state
  * @returns {0|1}
  */
