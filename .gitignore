@@ -96,6 +96,10 @@ test-cicd/
 # lost). scripts/safe-root-resync.mjs reads this SAME pattern list -- no second copy.
 .claude/*-session-state-*.md
 .claude/*-session-state-*.md.bak
+# QF-20260902-444: the plain (non-role-prefixed) form -- the pattern above requires a `*-` prefix
+# and a `-*` suffix around "session-state", so it never matched the bare session-state.md this
+# repo's own hooks write, and a worker's chore commit re-tracked it 2026-09-02.
+.claude/session-state.md
 .artifacts/_*
 .artifacts/PREREG-*
 
@@ -360,6 +364,9 @@ src/client/dist/
 .claude/plans/
 .claude/projects/
 .claude/.protocol-sync/
+# QF-20260902-444: the FILE form (hook-written per-session state) -- the directory-form rule
+# above never matched it, so it stayed tracked and dirtied the shared root on every hook write.
+.claude/.protocol-sync
 .claude/tmp-*
 .claude/tmp/
 .claude/pids/
