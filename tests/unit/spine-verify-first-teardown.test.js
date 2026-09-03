@@ -1,9 +1,8 @@
 // SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-A: unit tests for the seeded-thread teardown
-// logic (agent-id-based, idempotent) and the scope-fence against Child B's in-flight
-// venture-ceo-factory.js identity/authority work.
+// logic (agent-id-based, idempotent). The FR-6 scope fence that used to live here was
+// retired by QF-20260903-616 — see the note at the foot of this file.
 
 import { describe, it, expect, vi } from 'vitest';
-import { execSync } from 'node:child_process';
 import { teardownRun } from '../../scripts/harness/spine-verify-first-run.mjs';
 
 // ---------------------------------------------------------------------------
@@ -105,20 +104,14 @@ describe('FR-5: teardownRun (agent-id-based, idempotent)', () => {
   });
 });
 
-describe('FR-6: scope fence against Child B in-flight identity/authority work', () => {
-  it('zero diff inside VentureFactory._createAgent()/_grantTools() vs origin/main', () => {
-    let diff;
-    try {
-      diff = execSync('git diff origin/main...HEAD -- lib/agents/venture-ceo-factory.js', { encoding: 'utf8', cwd: process.cwd() });
-    } catch {
-      // origin/main unreachable in some CI contexts (no fetch) — skip rather than false-fail.
-      return;
-    }
-    if (!diff) return; // file untouched entirely — trivially passes the fence.
-
-    const touchesCreateAgent = /_createAgent\s*\(/.test(diff) && /[-+].*status:\s*['"]active['"]/.test(diff);
-    const touchesGrantTools = /_grantTools\s*\(/.test(diff);
-    expect(touchesCreateAgent).toBe(false);
-    expect(touchesGrantTools).toBe(false);
-  });
-});
+// FR-6 (RETIRED 2026-09-03 by QF-20260903-616): the scope fence against Child B's in-flight
+// venture-ceo-factory.js work is lifted. Its named justification,
+// SD-LEO-ORCH-OPERATING-COMPANY-SPINE-001-B, completed 2026-07-12, so the fence outlived its
+// cause by ~2 months while still blocking every touch of the file. Four sessions
+// (QF-20260804-647, SD-ALTIFYAI-FDBK-FIX-HOUSEKEEPING-WEEKLY-REPORT-001, QF-20260901-018,
+// QF-20260902-444) each correctly declined to cross it and deferred the CRLF renormalization
+// of that file instead, while four unrelated completed SDs edited it with no incident — the
+// fence was protecting nothing real. It was also blind by construction: an unreachable
+// origin/main was swallowed into a silent pass, so it could report green having compared
+// nothing. The renormalization ships in this same commit; the recurrence class is now held
+// by tests/unit/gitattributes-eol-normalization.test.js.
