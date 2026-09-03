@@ -130,8 +130,12 @@ describe('SD-LEO-FIX-CHAIRMAN-DECISION-CAPTURE-001: isFixApplied via exec_sql + 
     const fnIdx = SRC.indexOf('async function isFixApplied()');
     expect(fnIdx).toBeGreaterThan(-1);
     const fnBlock = SRC.slice(fnIdx, fnIdx + 500);
-    expect(fnBlock).not.toMatch(/createDatabaseClient/);
-    expect(fnBlock).not.toMatch(/supabase-connection\.js/);
+    // .toContain() (string, not regex) so the literal identifier doesn't leak past
+    // audit-db-test-guards.mjs's string-masking as a false DB-touch signal -- a bare regex
+    // literal /createDatabaseClient/ isn't recognized as a string by its analyzeSource() and
+    // trips DB_IMPORT_SIGNAL even though this assertion checks the identifier's ABSENCE.
+    expect(fnBlock).not.toContain('createDatabaseClient');
+    expect(fnBlock).not.toContain('supabase-connection.js');
     expect(fnBlock).toMatch(/supabase\.rpc\('exec_sql',/);
     expect(fnBlock).toMatch(/pg_proc WHERE proname = 'fn_chairman_decision_value'/);
   });
