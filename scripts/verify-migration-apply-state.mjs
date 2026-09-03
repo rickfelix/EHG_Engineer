@@ -313,6 +313,72 @@ const ALTER_TABLE_STMT_RE = new RegExp(String.raw`\bALTER\s+TABLE\s+(?:IF\s+EXIS
 const ADD_COLUMN_ITEM_RE = new RegExp(String.raw`\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(${ID})`, 'gi');
 const DROP_COLUMN_ITEM_RE = new RegExp(String.raw`\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi');
 
+/**
+ * QF-20260728-983: columns declared INSIDE a CREATE TABLE body. extractColumnFacts below walks only
+ * ALTER TABLE ... ADD COLUMN, so a column added to an ALREADY-APPLIED "CREATE TABLE IF NOT EXISTS"
+ * body is unreachable forever: re-running the file is a no-op against the existing table, the file's
+ * only remaining claim is the table itself, the table exists, and the file classifies APPLIED. A
+ * false MISSING gets investigated; a false APPLIED surfaces as nothing.
+ * Confirmed instance: sms_outbound_obligations.prior_provider_message_ids — declared in the 20260718
+ * CREATE TABLE body, no ALTER anywhere in database/migrations, absent live (42703).
+ *
+ * Body columns feed the SAME column-fact stream as the ALTER path, so the existing chronological
+ * drop-tracking disposes of legitimately-retired columns for free instead of re-reporting them.
+ */
+const CREATE_TABLE_HEAD_RE = new RegExp(String.raw`\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(${ID})\s*\(`, 'gi');
+/** Table-level constraint items: legal in a body, never a column declaration. */
+const NON_COLUMN_ITEM_RE = /^\s*(?:CONSTRAINT|PRIMARY\s+KEY|FOREIGN\s+KEY|UNIQUE|CHECK|EXCLUDE|LIKE|PARTITION)\b/i;
+/** The declared name is the item's LEADING identifier — never the whole item. normalizeName on a
+ *  full item slices at the LAST '.', which would turn `price numeric DEFAULT 1.5` into `5`. */
+const LEADING_ID_RE = /^\s*("[^"]+"|[A-Za-z_][\w$]*)/;
+
+/**
+ * Split a CREATE TABLE parenthesised body into its top-level items, starting at the '(' at openIdx.
+ * Depth-aware, so `numeric(10,2)` and `CHECK (a, b)` never split; quote-aware, so a comma inside
+ * `DEFAULT 'a,b'` never splits. Returns null on an unbalanced body — the caller then contributes NO
+ * facts rather than guessing, since a truncated body must not invent a column.
+ */
+function splitTableBodyItems(s, openIdx) {
+  const items = [];
+  let depth = 0;
+  let cur = '';
+  let inS = false;
+  let inD = false;
+  for (let i = openIdx; i < s.length; i += 1) {
+    const ch = s[i];
+    if (inS) { if (ch === "'") { if (s[i + 1] === "'") { cur += ch + s[i + 1]; i += 1; continue; } inS = false; } cur += ch; continue; }
+    if (inD) { if (ch === '"') { if (s[i + 1] === '"') { cur += ch + s[i + 1]; i += 1; continue; } inD = false; } cur += ch; continue; }
+    if (ch === "'") { inS = true; cur += ch; continue; }
+    if (ch === '"') { inD = true; cur += ch; continue; }
+    if (ch === '(') { depth += 1; if (depth > 1) cur += ch; continue; }
+    if (ch === ')') { depth -= 1; if (depth === 0) { items.push(cur); return items; } cur += ch; continue; }
+    if (ch === ',' && depth === 1) { items.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  return null;
+}
+
+/** Column facts declared inside CREATE TABLE bodies. Creates only — a body never drops. */
+export function extractCreateTableColumns(s) {
+  const creates = [];
+  CREATE_TABLE_HEAD_RE.lastIndex = 0;
+  let head;
+  while ((head = CREATE_TABLE_HEAD_RE.exec(s)) !== null) {
+    const table = normalizeName(head[1]);
+    if (!table) continue;
+    // lastIndex sits just past the matched '(' — back up one so the scan starts ON it.
+    const items = splitTableBodyItems(s, CREATE_TABLE_HEAD_RE.lastIndex - 1);
+    if (!items) continue;
+    for (const item of items) {
+      if (!item.trim() || NON_COLUMN_ITEM_RE.test(item)) continue;
+      const lead = item.match(LEADING_ID_RE);
+      const col = lead && normalizeName(lead[1]);
+      if (col) creates.push({ cls: 'column', name: `${table}.${col}` });
+    }
+  }
+  return creates;
+}
+
 export function extractColumnFacts(s) {
   const creates = [];
   const drops = [];
@@ -331,7 +397,9 @@ export function extractColumnFacts(s) {
       if (col) drops.push({ cls: 'column', name: `${table}.${col}` });
     }
   }
-  return { creates, drops };
+  // QF-20260728-983: CREATE TABLE body columns join the ALTER-derived ones in ONE stream, so every
+  // downstream stage (fold, live-probe, classify) treats both origins identically.
+  return { creates: [...creates, ...extractCreateTableColumns(s)], drops };
 }
 
 const DROP_RES = [
@@ -387,6 +455,19 @@ export function foldLifecycle(fileFacts) {
       if (prior) {
         droppedLater.push({ ...d, createdIn: prior.file, droppedIn: file });
         expected.delete(key);
+      }
+      // QF-20260728-983: a DROP TABLE retires that table's COLUMNS too. Drops match by exact
+      // 'cls:name', so without this cascade a dropped table leaves its body columns expected
+      // forever — turning the CREATE-TABLE-body fix into a new false-alarm source rather than a
+      // gap detector. Retirements stay visible in droppedLater, same as every other drop.
+      if (d.cls === 'table') {
+        const colPrefix = `column:${d.name}.`;
+        for (const ck of [...expected.keys()]) {
+          if (!ck.startsWith(colPrefix)) continue;
+          const cprior = expected.get(ck);
+          droppedLater.push({ cls: 'column', name: cprior.name, createdIn: cprior.file, droppedIn: file });
+          expected.delete(ck);
+        }
       }
     }
     for (const c of creates) {
@@ -493,9 +574,20 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
     const surviving = survivingByFile.get(file) || [];
     if (!facts.creates.length) return { file, status: 'NO_DDL', missing: [], objects: 0 };
     if (!surviving.length) return { file, status: 'APPLIED', missing: [], objects: 0, note: 'all objects superseded by later migrations' };
-    const missing = surviving.filter((o) => !live.has(`${o.cls}:${o.name}`));
-    const status = missing.length === 0 ? 'APPLIED' : missing.length === surviving.length ? 'NOT_APPLIED' : 'PARTIAL';
-    const result = { file, status, missing, objects: surviving.length };
+    // QF-20260728-983: when THIS file's own CREATE TABLE is itself missing, its body columns are
+    // unreachable by construction and the table-level miss already covers them — per-column noise
+    // adds nothing. Scoped to tables THIS file declares as missing, so a column is never hidden by
+    // a table the file does not itself claim. Dropped from `relevant` (not merely from `missing`)
+    // so a wholly-unapplied table file still reads NOT_APPLIED instead of degrading to PARTIAL.
+    const absentTables = new Set(
+      surviving.filter((o) => o.cls === 'table' && !live.has(`table:${o.name}`)).map((o) => o.name)
+    );
+    const relevant = absentTables.size
+      ? surviving.filter((o) => !(o.cls === 'column' && absentTables.has(o.name.slice(0, o.name.indexOf('.')))))
+      : surviving;
+    const missing = relevant.filter((o) => !live.has(`${o.cls}:${o.name}`));
+    const status = missing.length === 0 ? 'APPLIED' : missing.length === relevant.length ? 'NOT_APPLIED' : 'PARTIAL';
+    const result = { file, status, missing, objects: relevant.length };
     // FR-2: a chairman-gated file that would otherwise read NOT_APPLIED/PARTIAL is an
     // EXPECTED wait state (merged, awaiting the chairman apply ceremony), not an ordinary
     // gap — CEREMONY_PENDING says so explicitly and carries age_days so staleness is still

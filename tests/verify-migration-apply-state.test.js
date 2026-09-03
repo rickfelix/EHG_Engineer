@@ -79,7 +79,13 @@ describe('preprocessing — DDL-looking text never false-positives', () => {
       /* CREATE VIEW blocked_out AS SELECT 1; */
       CREATE TABLE real_one (id int);
     `);
-    expect(creates).toEqual([{ cls: 'table', name: 'real_one' }]);
+    // QF-20260728-983: a CREATE TABLE now also yields its BODY COLUMNS. The intent of this test is
+    // unchanged and still enforced — the commented-out table/view contribute nothing.
+    expect(creates).toEqual([
+      { cls: 'table', name: 'real_one' },
+      { cls: 'column', name: 'real_one.id' },
+    ]);
+    expect(creates.some((c) => /commented_out|blocked_out/.test(c.name))).toBe(false);
   });
 });
 
@@ -106,7 +112,13 @@ describe('lifecycle fold — drop-aware expectations', () => {
       facts('b.sql', 'DROP TABLE temp_t;'),
     ]);
     expect(expected.has('table:temp_t')).toBe(false);
-    expect(droppedLater).toEqual([expect.objectContaining({ name: 'temp_t', createdIn: 'a.sql', droppedIn: 'b.sql' })]);
+    // QF-20260728-983: DROP TABLE cascades to the table's body columns, so the column is retired
+    // with its table instead of being expected-forever, and the ledger records BOTH retirements.
+    expect(expected.has('column:temp_t.id')).toBe(false);
+    expect(droppedLater).toEqual([
+      expect.objectContaining({ cls: 'table', name: 'temp_t', createdIn: 'a.sql', droppedIn: 'b.sql' }),
+      expect.objectContaining({ cls: 'column', name: 'temp_t.id', createdIn: 'a.sql', droppedIn: 'b.sql' }),
+    ]);
   });
 
   it('re-create after drop is expected again (provenance = recreating file)', () => {
@@ -128,7 +140,10 @@ describe('classification', () => {
       { file: 'docs-only.sql', ...extractDdlFacts('-- comment only\nSELECT 1;') },
     ];
     const { expected, perFile } = foldLifecycle(ff);
-    const live = new Set(['table:a1', 'view:a2', 'table:b1']);
+    // QF-20260728-983: body columns are now expected objects too, so a live table's live columns
+    // must be in the injected live-set for the file to read APPLIED. b2/c1 are absent tables — the
+    // table-level miss covers their columns, so those are excluded rather than double-reported.
+    const live = new Set(['table:a1', 'column:a1.i', 'view:a2', 'table:b1', 'column:b1.i']);
     const res = Object.fromEntries(
       classifyFiles(ff.map((f) => f.file), expected, perFile, live).map((r) => [r.file, r.status])
     );
@@ -143,6 +158,66 @@ describe('classification', () => {
     const { expected, perFile } = foldLifecycle(ff);
     const res = classifyFiles(['old.sql', 'newer.sql'], expected, perFile, new Set(['table:kept']));
     expect(res.find((r) => r.file === 'old.sql').status).toBe('APPLIED');
+  });
+});
+
+// QF-20260728-983 — CREATE TABLE body columns. Residual of QF-20260725-470, which fixed the
+// ALTER TABLE ... ADD COLUMN case and left the CREATE TABLE case open.
+describe('CREATE TABLE body columns (QF-20260728-983)', () => {
+  it('THE DEFECT: a column added to an already-applied CREATE TABLE body is no longer a false APPLIED', () => {
+    // The live table exists (CREATE TABLE IF NOT EXISTS is a no-op against it, so re-running the
+    // file can never add the column) but the later-added column does not. Pre-fix the file's only
+    // claim was the table, the table was live, and the file read APPLIED — silently.
+    const sql = 'CREATE TABLE IF NOT EXISTS sms_outbound_obligations (id uuid, prior_provider_message_ids text[]);';
+    const ff = [{ file: '20260718_sms.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['table:sms_outbound_obligations', 'column:sms_outbound_obligations.id']);
+    const [row] = classifyFiles(['20260718_sms.sql'], expected, perFile, live);
+    expect(row.status).toBe('PARTIAL');
+    expect(row.missing).toEqual([{ cls: 'column', name: 'sms_outbound_obligations.prior_provider_message_ids' }]);
+  });
+
+  it('a fully-live CREATE TABLE (table + every body column) still reads APPLIED', () => {
+    const ff = [{ file: 'x.sql', ...extractDdlFacts('CREATE TABLE t (a int, b text);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['x.sql'], expected, perFile, new Set(['table:t', 'column:t.a', 'column:t.b']));
+    expect(row.status).toBe('APPLIED');
+  });
+
+  it('an ABSENT table reports the table only — its columns are not per-column noise, and it stays NOT_APPLIED', () => {
+    const ff = [{ file: 'y.sql', ...extractDdlFacts('CREATE TABLE t (a int, b text);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['y.sql'], expected, perFile, new Set());
+    expect(row.status).toBe('NOT_APPLIED');
+    expect(row.missing).toEqual([{ cls: 'table', name: 't' }]);
+  });
+
+  it('table-level constraint items are never mistaken for columns', () => {
+    const { creates } = extractDdlFacts(
+      `CREATE TABLE t (
+         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+         price numeric(10,2) DEFAULT 1.5,
+         label text DEFAULT 'a,b(c)',
+         CONSTRAINT t_uq UNIQUE (id, price),
+         PRIMARY KEY (id),
+         CHECK (price > 0)
+       );`
+    );
+    expect(creates.filter((c) => c.cls === 'column').map((c) => c.name)).toEqual(['t.id', 't.price', 't.label']);
+  });
+
+  it('CREATE TABLE ... AS SELECT declares no body columns', () => {
+    const { creates } = extractDdlFacts('CREATE TABLE t2 AS SELECT a, b FROM other WHERE x IN (1,2);');
+    expect(creates.filter((c) => c.cls === 'column')).toEqual([]);
+  });
+
+  it('a column DROPPED by a later ALTER is still retired — the fix is not a new false-alarm source', () => {
+    const { expected } = foldLifecycle([
+      { file: 'a.sql', ...extractDdlFacts('CREATE TABLE t (a int, b text);') },
+      { file: 'b.sql', ...extractDdlFacts('ALTER TABLE t DROP COLUMN b;') },
+    ]);
+    expect(expected.has('column:t.a')).toBe(true);
+    expect(expected.has('column:t.b')).toBe(false);
   });
 });
 
@@ -163,7 +238,7 @@ describe('CEREMONY_PENDING classification (chairman-gated)', () => {
   it('TS-1b: a PARTIALLY-applied chairman-gated file also classifies CEREMONY_PENDING (not PARTIAL)', () => {
     const ff = [{ file: 'database/chairman-gated/20260807_gated.sql', ...extractDdlFacts('CREATE TABLE g1 (x int); CREATE TABLE g2 (x int);') }];
     const { expected, perFile } = foldLifecycle(ff);
-    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(['table:g1']), NOW);
+    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(['table:g1', 'column:g1.x']), NOW);
     expect(row.status).toBe('CEREMONY_PENDING');
     expect(row.missing).toEqual([{ cls: 'table', name: 'g2' }]);
   });
@@ -171,7 +246,7 @@ describe('CEREMONY_PENDING classification (chairman-gated)', () => {
   it('TS-2: a fully-applied chairman-gated file still classifies APPLIED, never CEREMONY_PENDING', () => {
     const ff = [{ file: 'database/chairman-gated/20260807_gated.sql', ...extractDdlFacts('CREATE TABLE gated (x int);') }];
     const { expected, perFile } = foldLifecycle(ff);
-    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(['table:gated']), NOW);
+    const [row] = classifyFiles(['database/chairman-gated/20260807_gated.sql'], expected, perFile, new Set(['table:gated', 'column:gated.x']), NOW);
     expect(row.status).toBe('APPLIED');
     expect(row.age_days).toBeUndefined();
   });
