@@ -12,6 +12,7 @@ const {
   resurfaceStalePending,
   digestDedupKey,
   buildDigest,
+  fetchTotalPendingCount,
   DIGEST_KIND,
   RESURFACE_KIND,
 } = require('../../scripts/solomon-ledger-pending-resurface.cjs');
@@ -60,11 +61,25 @@ function createMockSupabase({ ledgerRows = [], inboxRows = [], decisionRequested
               // captureLedgerRow's fallback now defensively accept EITHER code regardless of which
               // one is live-confirmed for their own specific query type, given this table has shown
               // 3 different shapes across 3 query types for the identical underlying condition.
+              const missingColumnError = { code: '42703', message: 'column solomon_advice_outcome_ledger.decision_requested does not exist' };
               return {
-                lte: () => ({ order: () => ({ range: async () => ({ data: null, error: { code: '42703', message: 'column solomon_advice_outcome_ledger.decision_requested does not exist' } }) }) }),
+                lte: () => ({ order: () => ({ range: async () => ({ data: null, error: missingColumnError }) }) }),
+                // QF-20260902-148: fetchTotalPendingCount's bare (no .lte()) await path.
+                then: (resolve) => resolve({ data: null, count: null, error: missingColumnError }),
               };
             }
             return buildEqChain([...filters, { col, val }]);
+          },
+          // QF-20260902-148: fetchTotalPendingCount awaits the eq-chain directly (a real
+          // count:exact/head:true query has no .lte()/.range() tail) — thenable so `await
+          // query.eq(...).eq(...)` resolves like the live client instead of resolving to the
+          // plain chain object (which has no `count`/`error` and would silently misreport).
+          then: (resolve) => {
+            const matches = (f, r) => (f.col === 'decision_requested' && r.decision_requested === undefined)
+              ? f.val === true
+              : r[f.col] === f.val;
+            const filtered = ledger.filter((r) => filters.every((f) => matches(f, r)));
+            resolve({ data: filtered, count: filtered.length, error: null });
           },
           lte: (col2, val2) => ({
             order: () => ({
@@ -357,6 +372,53 @@ describe('buildDigest() — actionable membership + truncation disclosure (FR-2,
       const missing = candidates.map((r) => r.id).filter((id) => !seen.has(id));
       expect(missing).toEqual([]);
     });
+  });
+
+  // QF-20260902-148: "N pending" previously read as the population when it was really this
+  // run's stale-and-actionable candidates — a different, smaller number than the table's true
+  // pending total (measured live: digest said 8, table held 121).
+  describe('QF-20260902-148: subject reports the TRUE total, not the candidate-batch size', () => {
+    it('appends "of M total pending" when a real count is supplied and differs from the batch', () => {
+      const d = buildDigest(stalePending(3, nowMs), { nowMs, totalPendingCount: 121 });
+      expect(d.subject).toContain('3 pending of 121 total pending');
+    });
+
+    it('omits the suffix (unchanged shape) when totalPendingCount is not supplied', () => {
+      const d = buildDigest(stalePending(3, nowMs), { nowMs });
+      expect(d.subject).not.toContain('total pending');
+      expect(d.subject).toBe(`[SOLOMON_LEDGER_PENDING_DIGEST] 3 pending, oldest ${d.oldestAge}h`);
+    });
+
+    it('omits the suffix when the total equals the batch size (nothing extra to disclose)', () => {
+      const d = buildDigest(stalePending(3, nowMs), { nowMs, totalPendingCount: 3 });
+      expect(d.subject).not.toContain('total pending');
+    });
+  });
+});
+
+describe('fetchTotalPendingCount() — QF-20260902-148', () => {
+  it('returns the real count regardless of age (no threshold filter)', async () => {
+    const nowMs = Date.now();
+    const supabase = createMockSupabase({
+      ledgerRows: [
+        { id: 'l1', decision: 'pending', decision_requested: true, created_at: new Date(nowMs).toISOString() }, // fresh
+        { id: 'l2', decision: 'pending', decision_requested: true, created_at: new Date(nowMs - 200 * 3600 * 1000).toISOString() }, // stale
+        { id: 'l3', decision: 'pending', decision_requested: false, created_at: new Date(nowMs).toISOString() }, // not requested
+        { id: 'l4', decision: 'accepted', decision_requested: true, created_at: new Date(nowMs).toISOString() }, // decided
+      ],
+    });
+    await expect(fetchTotalPendingCount(supabase)).resolves.toBe(2);
+  });
+
+  it('falls back to the pre-migration query when decision_requested is missing, fail-open to null on error', async () => {
+    const supabase = createMockSupabase({
+      ledgerRows: [{ id: 'l1', decision: 'pending', created_at: new Date().toISOString() }],
+      decisionRequestedColumnMissing: true,
+    });
+    // The fallback query (decision='pending' alone) is exercised by fetchTotalPendingCount's own
+    // retry — this mock's missing-column branch only fires on the decision_requested filter, so
+    // the retry (no decision_requested filter) succeeds against the fixture.
+    await expect(fetchTotalPendingCount(supabase)).resolves.toBe(1);
   });
 });
 

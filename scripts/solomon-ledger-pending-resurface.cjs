@@ -112,7 +112,7 @@ function rotatedWindow(arr, offset, count) {
  * @param {Array<object>} candidates
  * @param {{nowMs?: number, maxItems?: number}} [opts]
  */
-function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST_MAX_ITEMS } = {}) {
+function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST_MAX_ITEMS, totalPendingCount = null } = {}) {
   const all = candidates || [];
   // QF-20260729-654: a fixed oldest-N slice never advances past a static head -- rank
   // (maxItems+1)+ rows starve forever while the head stays pending (same age, same day,
@@ -158,7 +158,9 @@ function buildDigest(candidates, { nowMs = Date.now(), maxItems = DEFAULT_DIGEST
     ...lines,
     ...(truncated ? ['', `NOTE: list truncated to ${maxItems} of ${all.length} pending items; ${all.length - kept.length} omitted.`] : []),
   ].join('\n');
-  const subject = `[SOLOMON_LEDGER_PENDING_DIGEST] ${items.length} pending, oldest ${oldestAge}h${truncated ? ` (truncated from ${all.length})` : ''}`;
+  // QF-20260902-148: "N pending" read as if the batch WERE the population; show the true total too.
+  const showingSuffix = totalPendingCount != null && totalPendingCount !== items.length ? ` of ${totalPendingCount} total pending` : '';
+  const subject = `[SOLOMON_LEDGER_PENDING_DIGEST] ${items.length} pending${showingSuffix}, oldest ${oldestAge}h${truncated ? ` (truncated from ${all.length} stale)` : ''}`;
   return { items, ledgerIds, allLedgerIds, body, subject, truncated, totalCandidates: all.length, oldestAge };
 }
 
@@ -213,6 +215,24 @@ async function collectLegacyNotifiedIds(supabase, adamId, candidates, nowMs = Da
  */
 function applyDecisionRequestedFilter(query) {
   return query.eq('decision_requested', true);
+}
+
+// QF-20260902-148: TRUE total pending count, no age filter -- a real count:exact,head:true
+// query, not a fetched-page length. Fails open to null (pre-fix digest shape) on any error.
+async function fetchTotalPendingCount(supabase) {
+  let query = supabase
+    .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — chairman-apply-gated table
+    .select('id', { count: 'exact', head: true })
+    .eq('decision', 'pending');
+  let { count, error } = await applyDecisionRequestedFilter(query);
+  const missingColumnCodes = new Set(['42703', 'PGRST204']);
+  if (error && missingColumnCodes.has(error.code) && /decision_requested/.test(error.message || '')) {
+    ({ count, error } = await supabase
+      .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — same table, degraded-fallback read
+      .select('id', { count: 'exact', head: true })
+      .eq('decision', 'pending'));
+  }
+  return error ? null : count;
 }
 
 async function planStalePending(supabase, { thresholdHours = DEFAULT_THRESHOLD_HOURS, nowMs = Date.now(), pageSize = DEFAULT_PAGE_SIZE, maxPages = DEFAULT_MAX_PAGES } = {}) {
@@ -284,7 +304,8 @@ async function resurfaceStalePending(supabase, adamId, { thresholdHours = DEFAUL
     return { candidates, resurfaced: [] };
   }
 
-  const digest = buildDigest(members, { nowMs, maxItems });
+  const totalPendingCount = await fetchTotalPendingCount(supabase);
+  const digest = buildDigest(members, { nowMs, maxItems, totalPendingCount });
   // Hash the FULL member set, not the post-cap slice -- see buildDigest's allLedgerIds note.
   // QF-20260729-654: when the window is rotating (truncated), the exposed subset changes by
   // day even while the full pending set does not -- fold in the day index so day 2's rotated
@@ -358,6 +379,6 @@ if (require.main === module) {
 
 module.exports = {
   parseThresholdHours, dedupKeyFor, planStalePending, resurfaceStalePending, DEFAULT_THRESHOLD_HOURS,
-  digestDedupKey, buildDigest, collectLegacyNotifiedIds,
+  digestDedupKey, buildDigest, collectLegacyNotifiedIds, fetchTotalPendingCount,
   RESURFACE_KIND, DIGEST_KIND, DEFAULT_DIGEST_MAX_ITEMS,
 };
