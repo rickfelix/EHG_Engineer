@@ -92,36 +92,24 @@ export async function detectBlockers(sd, supabase) {
       }
     }
 
-    // Signal 3: Check for recent gate failures that mention blockers
-    const { data: recentHandoffs, error: handoffError } = await supabase
-      .from('sd_phase_handoffs')
-      .select('failure_reasons, status, created_at')
-      .eq('sd_id', sd.id)
-      .eq('status', 'rejected')
-      .order('created_at', { ascending: false })
-      .limit(3);
-
-    if (!handoffError && recentHandoffs && recentHandoffs.length > 0) {
-      for (const handoff of recentHandoffs) {
-        const failureText = JSON.stringify(handoff.failure_reasons || '');
-        for (const { pattern } of BLOCKER_PATTERNS) {
-          const match = failureText.match(pattern);
-          if (match && match[1]) {
-            const blockerId = match[1].trim();
-            if (blockerId.startsWith('SD-') && !blockers.includes(blockerId)) {
-              blockers.push(blockerId);
-            }
-          }
-        }
-      }
-
-      if (blockers.length > 0) {
-        method = 'error_pattern';
-        confidence = 60;
-        console.log(`   [blocker-detection] Found ${blockers.length} blocker(s) from error patterns`);
-        return { blockers, method, confidence, detectionTime: Date.now() - startTime };
-      }
-    }
+    // Signal 3 REMOVED — SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C.
+    //
+    // It selected sd_phase_handoffs.failure_reasons, A COLUMN THAT HAS NEVER EXISTED (verified 42703,
+    // "column sd_phase_handoffs.failure_reasons does not exist"). It read as a working blocker signal
+    // and could never have produced one. Previously harmless because the client returned an empty
+    // result and this degraded silently; once SCHEMA-TRUTH-001-A made the factory throw on 42703 it
+    // became a hard failure. The throw is correct and stays — this read was the bug it exposed.
+    //
+    // REMOVED RATHER THAN RE-POINTED, and that was measured, not assumed. The two candidate columns
+    // that do exist were both simulated against this signal's own BLOCKER_PATTERNS over the 500 most
+    // recent rejected handoffs: rejection_reason would yield 0 blockers, known_issues would yield 0.
+    // 89 of those rows DO contain an SD- token, but every one is a SELF-reference in gate-failure
+    // prose ("attempted on unclaimed SD SD-X", "Run: node scripts/sd-start.js SD-X", "user story(ies)
+    // not covered: SD-X:US-001") — not one names a DIFFERENT SD as a blocker. So re-pointing would
+    // not merely be zero-yield; on a match it would extract the SD's OWN key and report the SD as its
+    // own blocker. A signal that cannot fire is better deleted than left reading as wired.
+    //
+    // Signals 1, 2 and 4 are untouched and still detect blockers.
 
     // Signal 4: Governance policy violations (V09 deep hierarchy support)
     try {
