@@ -68,9 +68,20 @@ never proof of a live object — verify over the pooler after apply.
 - **Blindness is not cleanliness**: could-not-run outcomes are `could_not_check`, persisted
   when the schema allows, and degrade the score — mapping them onto `pass`/`note` makes the
   column lie.
-- **The verdict seeds severity**: the gate's combined severity seeds from the LLM's
-  `overall_severity`; findings can raise it, never lower it. Off-vocabulary finding
-  severities map conservatively to `warn`.
+- **The verdict seeds severity, with a sufficiency-threshold exception (deny-by-default)**: the
+  gate's combined severity seeds from the LLM's `overall_severity`; findings can raise it, never
+  lower it — EXCEPT for a narrower downgrade added by SD-LEO-INFRA-CRITIQUE-GATE-NON-001
+  (`deriveCombinedSeverity()` in `pre-plan-critique.js`): a solo block-severity finding
+  downgrades to `warn` only when EVERY co-occurring block finding is categorized one of the
+  three explicitly LOW-authority labels — `missing_criteria`/`scope_incoherence`/
+  `reuse_opportunity` — or when there are ≥2 distinct block findings (sufficiency). This is a
+  DENYLIST, not an allowlist: anything NOT on that low-authority list — `contradiction`,
+  `missing_rollback`, a deterministic invariant-library finding (`category:'invariant'`), an
+  off-vocabulary/missing/malformed category, or the LLM's own `'other'` catch-all — stays
+  block-eligible by default (fail-closed). This measured fix for a gate that had 0 PASS verdicts
+  in 375 runs (96% block) does NOT touch the PR #6927 anti-laundering rule below it — a block
+  verdict with EMPTY findings still never downgrades. Off-vocabulary finding severities still
+  map conservatively to `warn`.
 - **Model-calibrated thresholds**: an embedder swap re-scales cosine similarity. The
   indexer refuses incremental skip and the search warns when the active model differs from
   `SIMILARITY_TIERS.calibrated_for` — recalibrate with live probes, then update that record.
