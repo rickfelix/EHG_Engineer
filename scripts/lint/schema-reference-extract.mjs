@@ -18,6 +18,31 @@
  *    defaultToNull / returning) is never treated as columns.
  *  - raw SQL: keyword/pg_catalog skip list; identifiers <4 chars skipped.
  *  - any line containing `schema-lint-disable-line` is skipped entirely.
+ *
+ * KNOWN LIMITATION — the concrete conditions this extractor CANNOT see. Stated because a control
+ * that does not say what it misses reads as total coverage, and every consumer of a "0 violations"
+ * result is entitled to know what that zero does not cover:
+ *
+ *  1. A DYNAMIC TABLE NAME IS STRUCTURALLY INVISIBLE. FROM_RE requires a quoted string literal, so
+ *     `.from(tableVar)`, `.from(`${prefix}_events`)` and any name computed at runtime are never
+ *     extracted and can never be reported — no matter how phantom the resolved table is. A file
+ *     that reaches its schema exclusively through computed names is scanned and yields nothing,
+ *     which is indistinguishable in the output from a file that is clean.
+ *  2. A REAL CALL WRITTEN INSIDE A TEMPLATE LITERAL IS NOW SKIPPED (false negative introduced
+ *     deliberately by SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C FR-1). The literal mask cannot tell a
+ *     documentation example from generated code that is later eval'd or written to a file and
+ *     executed. Both look like `.from(` inside a template. The example case was measured at 10
+ *     occurrences on the live tree and the executed-from-a-template case at 0, so the trade favours
+ *     precision here — but the exposure is real, not theoretical.
+ *  3. NON-PUBLIC SCHEMAS ARE OUT OF FRAME. findViolations compares only against snapshot.tables and
+ *     snapshot.views, which the snapshot writer populates from the `public` namespace. A reference
+ *     to `auth.users` or any other schema is neither validated nor reported.
+ *  4. RAW-SQL REFS ARE EXTRACTED BUT NEVER BLOCK (kind='sql', schema-reference-extract.mjs
+ *     findViolations). A phantom table reached through raw SQL is visible in the ref list and
+ *     absent from the violation set by design.
+ *  5. THE COMPARISON IS AGAINST A COMMITTED SNAPSHOT, NOT THE LIVE DATABASE. Anything created or
+ *     dropped after `database/schema-reference-snapshot.json` was generated is judged against a
+ *     stale picture; the staleness check that bounds this lives in the CLI wrapper, not here.
  */
 
 // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C: the ONE representation of comment/literal handling lives in
