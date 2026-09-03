@@ -23,14 +23,23 @@ import { trackAbortEscalation } from '../../lib/git/resync-escalation.js';
 
 export const PROCESS_KEY = 'standard_loop:safe-root-resync-fetch-ff-merge';
 
-/** Map a safeRootResync() result to a stable, dedup-able abort-reason string, or null. */
+/**
+ * Map a safeRootResync() result to a stable, dedup-able abort-reason string, or null.
+ *
+ * QF-20260902-805: a dirty-tree skip is NOT a benign no-op like 'already_current' — the root did
+ * NOT advance to origin/main, exactly the did-not-fast-forward shape that silently stalled the
+ * fleet for 14.6h (RCA 9a02a76d). It is now tracked as 'dirty_skip' so trackAbortEscalation()
+ * (already built, already escalates on the 2nd consecutive identical reason) surfaces a
+ * persistently-dirty root instead of treating every dirty skip as a fresh, unremarkable success.
+ */
 export function abortReasonFor(result) {
   if (!result) return 'no_result';
   if (result.ok === false) {
     if (result.conflict) return 'non_ff_conflict';
     return result.aborted || 'unknown_abort';
   }
-  return null; // ok:true — success or a benign skip (dirty tree, already current), never an abort
+  if (result.skipped === 'dirty') return 'dirty_skip';
+  return null; // ok:true, genuinely synced (already_current) or a real fast-forward — never an abort
 }
 
 function arg(name, fallback) {
@@ -47,13 +56,25 @@ async function loadEscalationState(supabase, processKey) {
   return data?.liveness_source_ref?.escalation_state || null;
 }
 
-async function persistEscalationState(supabase, processKey, nextState, escalated) {
+/**
+ * @param {object|null} dirtyVerdict - QF-20260902-805: a durable SKIPPED_DIRTY verdict (skip
+ *   reason + capped dirty-file list) written on EVERY dirty skip, not only at escalation — so the
+ *   root's did-not-fast-forward state is observable from the registry row itself, never only
+ *   inferable from an escalation firing.
+ */
+async function persistEscalationState(supabase, processKey, nextState, escalated, dirtyVerdict = null) {
   const { data: row } = await supabase
     .from('periodic_process_registry')
     .select('liveness_source_ref')
     .eq('process_key', processKey)
     .maybeSingle();
-  const liveness_source_ref = { ...(row?.liveness_source_ref || {}), escalation_state: nextState };
+  const liveness_source_ref = {
+    ...(row?.liveness_source_ref || {}),
+    escalation_state: nextState,
+    // Cleared on any non-dirty run (fast-forward or genuinely already-current) so a stale verdict
+    // never outlives the condition that produced it.
+    last_dirty_verdict: dirtyVerdict,
+  };
   await supabase
     .from('periodic_process_registry')
     .update({
@@ -84,7 +105,10 @@ async function main() {
       const prior = await loadEscalationState(supabase, PROCESS_KEY);
       const tracked = trackAbortEscalation(prior, abortReason);
       escalated = tracked.escalated;
-      await persistEscalationState(supabase, PROCESS_KEY, tracked.nextState, escalated);
+      const dirtyVerdict = abortReason === 'dirty_skip'
+        ? { skipped: 'dirty', dirtyFiles: result.dirtyFiles || [], at: new Date().toISOString() }
+        : null;
+      await persistEscalationState(supabase, PROCESS_KEY, tracked.nextState, escalated, dirtyVerdict);
       if (!escalated) await stampLastFired(supabase, PROCESS_KEY);
     } catch (err) {
       console.error(`[safe-root-resync-scheduled] escalation-state bookkeeping failed (non-fatal): ${err.message}`);

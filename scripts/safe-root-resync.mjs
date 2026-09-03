@@ -382,7 +382,9 @@ export async function safeRootResync(opts = {}) {
   } catch { /* ignore — fail open */ }
 
   if (dirtyFiles.trim()) {
-    return { ok: true, skipped: 'dirty' };
+    // Cap the dirty file list so an unbounded working-tree mess never bloats a durable verdict.
+    const dirtyFileList = dirtyFiles.split('\n').filter((l) => l.trim());
+    return { ok: true, skipped: 'dirty', dirtyFiles: dirtyFileList.slice(0, 10) };
   }
 
   // ── STEP 4: Check if already current ─────────────────────────────────────
