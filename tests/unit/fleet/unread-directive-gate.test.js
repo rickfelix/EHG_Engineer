@@ -42,15 +42,23 @@ describe('findUnreadDirectives', () => {
     expect(await findUnreadDirectives('session-abc', null, null, async () => [{ id: '1' }])).toBeNull();
   });
 
-  it('scopes to the real supabase client shape: payload.sd + payload.kind match (NOT target_sd/message_type), acknowledged_at IS NULL, created_at > claim time', async () => {
+  it('scopes to the real supabase client shape: payload.target_sd OR payload.sd OR payload.sd_key + payload.kind match (NOT message_type), acknowledged_at IS NULL, created_at > claim time', async () => {
     // A fake client mirroring the chainable supabase query builder, so the wiring itself
-    // (not just an injected queryFn) is exercised. MEASURED against live data: target_sd
-    // is always null and message_type does not discriminate 'coordinator_directive'
-    // (its message_type is 'INFO') — the real filters are payload->>sd and payload->>kind.
-    const seen = { eqCalls: [], inCalls: [], isCalls: [], limitCalls: [], gtCalls: [] };
+    // (not just an injected queryFn) is exercised.
+    //
+    // QF-20260902-847: RE-MEASURED against live data — a fresh sample of real
+    // coordinator_directive/work_assignment rows shows payload->>sd is the RAREST of three
+    // shapes in use; payload->>target_sd is the dominant one (both kinds), payload->>sd_key
+    // a distinct minority. An .eq('payload->>sd', ...)-only filter silently matched zero
+    // rows for the majority of real directives, including three that targeted a live SD
+    // (one an explicit HOLD) while seven handoff attempts ran against it unblocked. Fixed
+    // to .or() across all three field names. message_type still cannot discriminate
+    // 'coordinator_directive' (its message_type is 'INFO') — payload->>kind remains correct.
+    const seen = { eqCalls: [], orCalls: [], inCalls: [], isCalls: [], limitCalls: [], gtCalls: [] };
     function makeQuery(rows) {
       const q = {
         eq(col, val) { seen.eqCalls.push([col, val]); return q; },
+        or(expr) { seen.orCalls.push(expr); return q; },
         in(col, vals) { seen.inCalls.push([col, vals]); return q; },
         is(col, val) { seen.isCalls.push([col, val]); return q; },
         limit(n) { seen.limitCalls.push(n); return q; },
@@ -67,11 +75,39 @@ describe('findUnreadDirectives', () => {
     const rows = await findUnreadDirectives('session-abc', 'SD-XXX-001', '2026-08-28T00:00:00Z', null, { client });
     expect(rows).toHaveLength(1);
     expect(seen.eqCalls).toContainEqual(['target_session', 'session-abc']);
-    expect(seen.eqCalls).toContainEqual(['payload->>sd', 'SD-XXX-001']);
+    expect(seen.orCalls).toContainEqual('payload->>target_sd.eq.SD-XXX-001,payload->>sd.eq.SD-XXX-001,payload->>sd_key.eq.SD-XXX-001');
     expect(seen.inCalls).toContainEqual(['payload->>kind', ['coordinator_directive', 'work_assignment']]);
     expect(seen.isCalls).toContainEqual(['acknowledged_at', null]);
     expect(seen.limitCalls).toContain(50);
     expect(seen.gtCalls).toContainEqual(['created_at', '2026-08-28T00:00:00Z']);
+  });
+
+  it('refuses (returns null) a targetKey outside [A-Za-z0-9-]+ instead of interpolating it into the .or() filter — never a filter-injection vector', async () => {
+    const client = { from() { throw new Error('must never reach the query — the regex guard runs first'); } };
+    const rows = await findUnreadDirectives('session-abc', 'SD-XXX-001,payload->>sd.eq.OTHER', null, null, { client });
+    expect(rows).toBeNull();
+  });
+
+  it('specimen (QF-20260902-847, SD-LEO-INFRA-ONE-BELT-CENSUS-001): a payload.target_sd-shaped HOLD directive is now found, where the old payload.sd-only filter would have matched zero rows', async () => {
+    const holdRow = {
+      id: '9fe9e387-538f-414d-8527-98c02670f6e7',
+      subject: '[COORDINATOR_DIRECTIVE] HOLD ONE-BELT-CENSUS-001 LEAD-TO-PLAN',
+      created_at: '2026-09-03T00:01:50.229705+00:00',
+    };
+    function makeQuery(rows) {
+      const q = {
+        eq() { return q; },
+        or() { return q; },
+        in() { return q; },
+        is() { return q; },
+        limit() { return q; },
+        gt() { return Promise.resolve({ data: rows, error: null }); },
+      };
+      return q;
+    }
+    const client = { from: () => ({ select: () => makeQuery([holdRow]) }) };
+    const rows = await findUnreadDirectives('golf-4-session', 'SD-LEO-INFRA-ONE-BELT-CENSUS-001', '2026-09-02T23:00:00Z', null, { client });
+    expect(decideUnreadDirectiveGate(rows)).toBe('blocked');
   });
 });
 

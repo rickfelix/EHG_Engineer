@@ -202,16 +202,19 @@ const REDERIVERS = {
   // from the items the section was HANDED, re-implementing its stated rules (sort by the existing
   // dispatch_rank; items without one are EXCLUDED, never defaulted to 0; owner from the SD only,
   // never the intake-routing lane). Independent recomputation, not the section vouching for itself.
+  // QF-20260807-032: sd.owner_lane, sd.unmet_dependencies and sd.blocked_on_decision were all
+  // re-implemented here too (this re-deriver is independent recomputation, so it had its own
+  // copy of the same dead branches) — pruned to match the real sections, which no longer read
+  // fields that exist nowhere on strategic_directives_v2.
   [`${NEXT_ACTS}.order`]: ({ items }) => items
     .filter((i) => Number.isFinite(i?.metadata?.dispatch_rank))
     .sort((a, b) => a.metadata.dispatch_rank - b.metadata.dispatch_rank)
     .map((i) => {
       const sd = i.sd || null;
-      const owner = sd?.claiming_session_id ?? sd?.owner_lane ?? null;
+      const owner = sd?.claiming_session_id ?? null;
       const act = !sd ? 'source'
-        : sd.status === 'blocked' ? (sd.blocked_on_decision ? 'await_decision' : 'unblock')
-          : (Array.isArray(sd.unmet_dependencies) && sd.unmet_dependencies.length > 0) ? 'unblock'
-            : sd.claiming_session_id ? 'resume' : 'claim';
+        : sd.status === 'blocked' ? 'unblock'
+          : sd.claiming_session_id ? 'resume' : 'claim';
       return {
         item_id: i.id,
         title: i.title,
@@ -219,8 +222,7 @@ const REDERIVERS = {
         act,
         owner,
         owner_basis: sd?.claiming_session_id ? 'active claim on the SD'
-          : sd?.owner_lane ? 'SD owner_lane'
-            : sd ? 'SD exists but is unclaimed and has no owner lane' : 'no SD — the item is unsourced',
+          : sd ? 'SD exists but is unclaimed' : 'no SD — the item is unsourced',
       };
     }),
 
@@ -236,18 +238,16 @@ const REDERIVERS = {
     if (!g) return null;
     const chain = openIn(g.id).slice().sort((a, b) => a.priority_rank - b.priority_rank);
     const b = chain.find((i) => String(i.lane || '').startsWith('blocked-on-')
-      || i.sd?.status === 'blocked'
-      || (Array.isArray(i.sd?.unmet_dependencies) && i.sd.unmet_dependencies.length > 0));
+      || i.sd?.status === 'blocked');
     if (!b) return null;
-    const owner = b.sd?.claiming_session_id ?? b.sd?.owner_lane ?? null;
+    const owner = b.sd?.claiming_session_id ?? null;
     return {
       item_id: b.id,
       title: b.title,
       blocked_on: String(b.lane || '').startsWith('blocked-on-') ? String(b.lane).slice('blocked-on-'.length) : null,
       owner,
       owner_basis: b.sd?.claiming_session_id ? 'active claim on the SD'
-        : b.sd?.owner_lane ? 'SD owner_lane'
-          : b.sd ? 'SD exists but is unclaimed and has no owner lane' : 'no SD — the item is unsourced',
+        : b.sd ? 'SD exists but is unclaimed' : 'no SD — the item is unsourced',
     };
   },
 };

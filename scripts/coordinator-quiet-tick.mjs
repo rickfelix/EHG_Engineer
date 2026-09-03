@@ -37,6 +37,12 @@ const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { assessFleetActivity } = require('../lib/coordinator/fleet-quiescence.cjs');
 const { decideCadence, detectSalientDelta, runCoresFailSoft, computeLoadedAndQuiet } = require('../lib/coordinator/quiet-tick.cjs');
+// SD-LEO-INFRA-ONE-BELT-CENSUS-001: readSalientState's beltZero used to be a bare
+// .eq('status','draft') draft-only count -- undercounted the belt whenever genuinely
+// claimable/directed work sat in another non-terminal status, or missed stranded/gated/deferred
+// rows entirely (the 2026-09-02 incident class). Now sourced from the shared belt census, same
+// migration as adam-quiet-tick.mjs's readSalientState.
+const { computeBeltCensus } = require('../lib/fleet/belt-census.cjs');
 // QF-20260725-342: single source of truth for the resurface threshold (see that module's header).
 const { thresholdArgs } = require('../lib/coordination/resurface-threshold.cjs');
 const { getActiveCoordinatorId, refreshCoordinatorFlag } = require('../lib/coordinator/resolve.cjs');
@@ -196,16 +202,13 @@ function scriptCore(key, args, { skip = false } = {}) {
 export async function readSalientState(sb) {
   const state = { beltZero: true, openSignalCount: 0, venture1State: null };
   try {
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 (bug fix): head:true always
-    // returns `data: null` — the prior `data: claimable` destructure meant `claimable &&
-    // claimable.length > 0` was always false, so beltZero was ALWAYS true regardless of the
-    // real draft count. Destructure `count` (the actual exact-count field) instead.
-    const { count } = await sb
-      .from('strategic_directives_v2')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'draft');
-    const rendered = renderCount(count);
-    state.beltZero = typeof rendered !== 'number' || rendered === 0;
+    // Per-reader output contract (FR-6, SD-LEO-INFRA-ONE-BELT-CENSUS-001): acted-on buckets =
+    // claimable + directed_only COMBINED (kind='sd' only) -- beltZero means their combined count
+    // is 0, not a bare draft-status count that misses genuinely-claimable non-draft rows or
+    // silently treats stranded/gated/deferred rows as if they don't exist.
+    const census = await computeBeltCensus(sb);
+    const actedOn = census.rows.filter((r) => r.kind === 'sd' && (r.bucket === 'claimable' || r.bucket === 'directed_only'));
+    state.beltZero = actedOn.length === 0;
   } catch { /* fail-soft: leave default */ }
   try {
     const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();

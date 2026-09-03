@@ -215,6 +215,30 @@ function extractExistingLessonsBlock(fileContent) {
   return fileContent.slice(start, end).trimEnd();
 }
 
+// QF-20260902-053: same reuse-over-live-resnapshot strategy, applied to Hot Issue Patterns
+// (issue_patterns.occurrence_count churned this section on every regen).
+function extractExistingHotPatternsBlock(fileContent) {
+  if (typeof fileContent !== 'string') return null;
+  const headingMatch = /^## Hot Issue Patterns \(Auto-Updated\)/m.exec(fileContent);
+  if (!headingMatch) return null;
+  const start = headingMatch.index;
+  const nextHeadingIdx = fileContent.indexOf('\n## ', start + headingMatch[0].length);
+  const end = nextHeadingIdx === -1 ? fileContent.length : nextHeadingIdx;
+  return fileContent.slice(start, end).trimEnd();
+}
+
+// QF-20260902-053: same reuse-over-live-resnapshot strategy, applied to Known Friction
+// Points (SELF-IDENTIFY feedback rows crossing the ≥3-workers threshold churned this section).
+function extractExistingFrictionPointsBlock(fileContent) {
+  if (typeof fileContent !== 'string') return null;
+  const headingMatch = /^## Known Friction Points/m.exec(fileContent);
+  if (!headingMatch) return null;
+  const start = headingMatch.index;
+  const nextHeadingIdx = fileContent.indexOf('\n## ', start + headingMatch[0].length);
+  const end = nextHeadingIdx === -1 ? fileContent.length : nextHeadingIdx;
+  return fileContent.slice(start, end).trimEnd();
+}
+
 /**
  * Generate Gate Health section for CLAUDE_CORE.md
  * @param {Array} gateHealth - List of gate health metrics
@@ -392,6 +416,8 @@ export {
   generateKnownFrictionPointsSection,
   generateRecentLessonsSection,
   extractExistingLessonsBlock,
+  extractExistingHotPatternsBlock,
+  extractExistingFrictionPointsBlock,
   generateGateHealthSection,
   generateProposalsSection,
   generateAutonomousDirectivesSection

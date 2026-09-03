@@ -1,8 +1,8 @@
-<!-- file_content_hash: 7c6759094d2944f0 -->
+<!-- file_content_hash: 638971be7bb7422c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-03 8:25:44 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -1387,6 +1387,6 @@ For every keyword-list FR expansion, include in acceptance_criteria: "Substring-
 
 ---
 
-*Generated from database: 2026-09-02*
+*Generated from database: 2026-09-03*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

@@ -287,11 +287,11 @@ function generateCore(data, fileMapping) {
 
   // Compact sub-agent table (no keywords — hook handles routing)
   const subAgentSection = generateSubAgentSectionCompact(subAgents);
-  const hotPatternsSection = generateHotPatternsSection(hotPatterns);
+  // QF-20260816-925 / QF-20260902-053: prefer a caller-supplied override (the existing
+  // on-disk block, when the caller wants it preserved) over a fresh live-table snapshot.
+  const hotPatternsSection = data.hotPatternsOverride ?? generateHotPatternsSection(hotPatterns);
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b
-  const knownFrictionSection = generateKnownFrictionPointsSection(knownFrictionPoints);
-  // QF-20260816-925: prefer a caller-supplied override (the existing on-disk block, when
-  // the caller wants it preserved) over a fresh live-table snapshot.
+  const knownFrictionSection = data.knownFrictionPointsOverride ?? generateKnownFrictionPointsSection(knownFrictionPoints);
   const recentLessonsSection = data.recentLessonsOverride ?? generateRecentLessonsSection(recentRetrospectives);
   // Adversarial review (PR #7181): the footer below must count whatever is ACTUALLY
   // rendered above, not the always-fresh recentRetrospectives array — otherwise the footer

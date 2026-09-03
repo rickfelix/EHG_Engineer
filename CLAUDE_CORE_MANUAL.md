@@ -1,8 +1,8 @@
-<!-- file_content_hash: a4b07eafc88624fb -->
+<!-- file_content_hash: ab002ce53177a6ed -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE_MANUAL.md — Core Manual (reference companion)
 
-**Generated**: 2026-09-02 9:02:37 PM
+**Generated**: 2026-09-03 8:25:44 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form CORE reference — strategic governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge quality rubric, built-in agent architecture, pattern search CLI
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every session start
@@ -374,6 +374,6 @@ Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX..
 
 ---
 
-*Generated from database: 2026-09-02*
+*Generated from database: 2026-09-03*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=governance_strategic_hierarchy, builtin_agent_integration, pattern_search_guide, ai_quality_russian_judge, pr_size_guidelines, governance_chairman_ceo_roles, database_column_reference, migration_tier_policy_detail, sub_agent_routing_table_detail, infrastructure, protocol_lint_tooling, genesis_codebase_detail). Do not hand-edit — edit the DB section and regenerate.*
