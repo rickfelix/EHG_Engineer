@@ -23,7 +23,44 @@ import { captureFailurePattern } from '../failure-pattern-capture.js';
 import { NOT_MEASURED_SCORE } from '../gates/fr-delivery-classifier.js';
 // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 (FR-1/FR-3)
 import { buildPreflightRemediation, truncateValidationDetails, findPriorSaemRemediation } from './preflight-remediation.js';
+
+/**
+ * QF-20260903-469 — record WHICH TREE produced a handoff verdict.
+ *
+ * THE DEFECT. Verifying a commit is in main is NOT evidence that the code about to execute
+ * contains it. MEASURED on a live completion: after the PR_MERGE_VERIFICATION fix merged,
+ * LEAD-FINAL still reported "No branch was ever pushed" — the exact false negative that fix
+ * removes — because the gate ran the OLD FILE. Two lagging trees in sequence: the shared ROOT
+ * was 2 commits behind (git fetch updates origin/main, NOT the checkout, so the commit was
+ * verifiably in main while a content grep of the working copy found zero occurrences of the new
+ * scan), and the SD's OWN WORKTREE was 19 behind — and sd-start.js runs the handoff from there,
+ * so a fresh root would not have saved it.
+ *
+ * WHY A STAMP RATHER THAN A FRESHNESS ASSERTION AT ENTRY. A gate that silently runs stale code
+ * emits verdicts indistinguishable from real ones IN BOTH DIRECTIONS: a stale PASS certifies work
+ * against a check that no longer exists, and a stale FAIL blocks correct work over a defect
+ * already fixed. Refusing to run only prevents future cases; recording the commit makes
+ * historical verdicts auditable, and costs one field.
+ *
+ * HONEST NULL, DELIBERATELY. The key is ALWAYS present. `null` means COULD NOT DETERMINE — never
+ * "fresh" and never "same as HEAD". Omitting the key on failure would make an unmeasured verdict
+ * indistinguishable from an unstamped one, which is the very asymmetry this row is about. And
+ * note what is NOT added here: no `if (sha && ...)` consumer guard, because a falsy sha silently
+ * opting a check out is a live defect elsewhere in this codebase (subagent-evidence-gate.js:326,
+ * 142 of the 500 most recent evidence rows) and must not be reproduced.
+ *
+ * @returns {{executing_commit_sha: string|null, executing_cwd: string}}
+ */
+function executingTreeStamp() {
+  const cwd = process.cwd();
+  return { executing_commit_sha: resolveEvaluatedCommitSha(cwd), executing_cwd: cwd };
+}
 import { resolveClaimIdentity } from '../../../../lib/claim/claim-identity.js';
+// QF-20260903-469: REUSED, not reimplemented. This resolver already exists for sub-agent
+// evidence rows (results-storage.js:394) — injectable exec, 5s-bounded, never throws, null on
+// failure. Writing a second sha resolver would be the duplicate-representation defect this
+// programme exists to abolish, committed inside the fix for a provenance gap.
+import { resolveEvaluatedCommitSha } from '../../../../lib/sub-agent-executor/results-storage.js';
 // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2)
 import { buildPhaseSnapshotWindow } from '../../../../lib/governance/phase-snapshot-window.mjs';
 // QF-20260830-312: ceremony-vs-real-fix measurability
@@ -261,6 +298,8 @@ export class HandoffRecorder {
         verified_at: new Date().toISOString(),
         verifier: 'unified-handoff-system.js',
         score_source: scoreSource,
+        // QF-20260903-469: which tree actually evaluated this ACCEPTED verdict (stale PASS half).
+        ...executingTreeStamp(),
         // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): never fabricated -- absent when not bypassed.
         ...(isBypassed ? { bypass: buildPersistedBypassMetadata(result, { actor: recorderIdentity() }) } : {})
       },
@@ -498,6 +537,9 @@ export class HandoffRecorder {
           },
           rejected_at: new Date().toISOString(),
           reason: result.reasonCode,
+          // QF-20260903-469: and the REJECTED verdict too — a stale FAIL blocks correct work
+          // over a defect already fixed, which is exactly how this row was discovered.
+          ...executingTreeStamp(),
           message: result.message,
           ...(preflightRemediation.length > 0 ? {
             preflight_remediation: preflightRemediation,
