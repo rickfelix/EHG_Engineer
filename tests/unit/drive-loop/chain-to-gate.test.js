@@ -83,9 +83,11 @@ describe('the blocker is the first STUCK item, not the first item', () => {
     expect(buildChainToGate({ waves, items }).blocker.value.item_id).toBe('x');
   });
 
-  it('unmet dependencies count', () => {
+  it('QF-20260807-032: sd.unmet_dependencies is not a real field and does not mark a blocker', () => {
+    // Pruned dead branch: this field exists nowhere on strategic_directives_v2, so passing it
+    // must be a no-op, not a silent blocker that only ever fired in tests.
     const items = [item('x', 'w1', { sd: { status: 'draft', unmet_dependencies: ['SD-A'] } })];
-    expect(buildChainToGate({ waves, items }).blocker.value.item_id).toBe('x');
+    expect(buildChainToGate({ waves, items }).blocker.value).toBeNull();
   });
 
   it('reports NO blocker when the chain is merely waiting, and says which diagnosis that is', () => {
