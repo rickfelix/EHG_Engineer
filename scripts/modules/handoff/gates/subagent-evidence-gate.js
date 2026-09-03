@@ -22,7 +22,12 @@
  * so a sub-agent that crashed and wrote an error row (verdict=FAIL) counted
  * exactly like a genuine PASS. The gate now (a) reduces evidence to the LATEST
  * row per agent and (b) compares that row's verdict against an explicit policy.
- * Rollout is warn-first via SUBAGENT_VERDICT_MODE (see resolveSubagentVerdictMode).
+ *
+ * QF-20260902-755: the line above used to say "rollout is warn-first via
+ * SUBAGENT_VERDICT_MODE" — true when written, FALSE since SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001
+ * FR-6 (c80123c9ab5, merged 2026-09-02T20:38:03Z): a recorded REJECTING verdict now fails
+ * this gate unconditionally, on every route. SUBAGENT_VERDICT_MODE survives only as recorded
+ * metadata (verdict_mode) and a log-line annotation — see resolveSubagentVerdictMode below.
  */
 import { execFileSync } from 'node:child_process';
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
@@ -136,15 +141,16 @@ export function classifyVerdict(verdict) {
 }
 
 /**
- * Warn-first rollout resolver, mirroring resolveInvocationMode in
- * executors/lead-final-approval/gates/invocation-path-gate.js.
+ * Historically a warn-first rollout resolver (mirroring resolveInvocationMode in
+ * executors/lead-final-approval/gates/invocation-path-gate.js): default ADVISORY surfaced a
+ * rejecting verdict as a WARNING with the gate still passing; SUBAGENT_VERDICT_MODE=block
+ * promoted it to a hard failure.
  *
- * Default ADVISORY: a rejecting verdict is surfaced as a WARNING and the gate
- * still passes. SUBAGENT_VERDICT_MODE=block promotes it to a hard failure.
- * The default must stay advisory — this gate has been presence-only since it
- * shipped, so a blocking default would retroactively fail in-flight SDs whose
- * evidence was collected under the old contract. See the promotion precondition
- * documented in ../required-subagents.js before flipping this.
+ * QF-20260902-755: since SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 FR-6 (c80123c9ab5), the rejecting-
+ * verdict branch below fails UNCONDITIONALLY regardless of this function's return value — the
+ * advisory/block distinction it used to gate no longer exists there. This resolver is retained
+ * only to populate verdictDetails.verdict_mode and the log-line annotation, not to branch
+ * behaviour; `missing` (true absence) is untouched and still handled elsewhere in this file.
  *
  * @param {object} [env]
  * @returns {'advisory'|'block'}
