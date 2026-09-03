@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T00:30:17.692Z",
-  "git_commit": "0f24f64c",
+  "generated_at": "2026-09-03T00:44:56.086Z",
+  "git_commit": "daa38c86",
   "db_snapshot_hash": "650bd77d4f394818",
   "files": {
     "CLAUDE.md": {
@@ -69,10 +69,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 84701,
-      "bytes": 85453,
-      "estimated_tokens": 21176,
-      "content_hash": "9f5e9b6ffde20c17",
+      "chars": 84744,
+      "bytes": 85496,
+      "estimated_tokens": 21186,
+      "content_hash": "c72b405059cb2b6d",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 42692,
-      "bytes": 42980,
-      "estimated_tokens": 10673,
-      "content_hash": "48a8639c60f40df9",
+      "chars": 42738,
+      "bytes": 43026,
+      "estimated_tokens": 10685,
+      "content_hash": "834eb090e3ab7cc3",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
@@ -117,18 +117,18 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 59735,
-      "bytes": 60298,
-      "estimated_tokens": 14934,
-      "content_hash": "66b7fd7f7cb2bcd3",
+      "chars": 59830,
+      "bytes": 60396,
+      "estimated_tokens": 14958,
+      "content_hash": "5d456021a624fd12",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 27145,
-      "bytes": 27342,
-      "estimated_tokens": 6787,
-      "content_hash": "651fee3073532b1f",
+      "chars": 28073,
+      "bytes": 28274,
+      "estimated_tokens": 7019,
+      "content_hash": "3be493af0c7455c4",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-ratifications-0903\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
@@ -213,7 +213,7 @@
     }
   },
   "section_digests": {
-    "global": "cc25df75ff5fa9a7",
+    "global": "e233c4cff7406d46",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -467,14 +467,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "d4bb4fc30faef1f7",
+      "601": "c187510661f12d63",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
-      "605": "83bde3c6bd6347fb",
+      "605": "38906b90d220f3b5",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "1d6d6f863e84069e",
+      "611": "fed07b48bd18422b",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
       "614": "a4d5064f0ffbe97c",
@@ -485,7 +485,7 @@
       "622": "94a8df85a96ad041",
       "626": "f9a040104b9c6234",
       "627": "c1f5247af6cc9d08",
-      "629": "9e5fdaba14d9eb6c",
+      "629": "2f101be0a25245d3",
       "630": "7851b31f692ec87c",
       "632": "df3f3261b608ddbd",
       "633": "12cf4526e9c9fd09",
