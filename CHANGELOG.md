@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-03](#2026-09-03)
+  - [Bugfix](#bugfix)
 - [2026-09-02](#2026-09-02)
   - [Infrastructure](#infrastructure-5)
   - [Bugfix](#bugfix)
@@ -172,6 +174,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-03
+
+### Bugfix
+
+- **Client factory rejects on schema drift, including the silent missing-relation count shape** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A
+  - The shared Supabase client factory (`lib/supabase-client.js`, ~849 importers, and `lib/supabase-client.cjs`, ~97 importers, now sharing one implementation in `lib/supabase-client-schema-drift.cjs`) previously let a missing relation (`PGRST205`) or missing column (`42703`) resolve as `{data: null, error}` — indistinguishable from "no rows" to a caller that checks `data` before `error`. These now reject the query instead.
+  - The genuinely silent shape, and this SD's actual corrective (premise corrected mid-build, Coordinator correction 88bc8895 / Solomon audit c96dcda8): a head+count probe against a missing relation resolves `{data:null, count:null, error:null, status:204}` — a success with no error to reject on. The factory now applies `lib/db/safe-query.mjs`'s `safeCount` discriminant (`count===null`) automatically to every caller, including `.rpc(fn, params, {count})` calls, making the factory the enforcement point rather than an opt-in primitive.
+  - Four call sites with a legitimate degrade-not-throw design got an explicit `{throwOnSchemaDrift:false}` opt-out, scoped narrowly after an adversarial review caught one opt-out disabling protection too broadly: `lib/eva/bridge/venture-provisioner.js`, `lib/operator/cash-burn-substrate.js`, `lib/utils/validation-automation.js`, and `scripts/solomon-advisory.cjs` (the last split into a protected client plus a separate, narrowly-scoped tolerant client for only its three degrade-aware functions).
+  - The new throw behavior immediately surfaced a live defect in the LEO gate pipeline itself: `scripts/modules/traceability-validation/sections/lessons-captured.js` selected a `retrospectives.publication_status` column that doesn't exist and was never used, silently failing every call for the life of the file. Removed.
+  - Deferred and tracked separately as `SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001`: burning down 228 pre-existing `swallowed-query-error-lint` findings and flipping that lint to `--enforce`.
 
 ## 2026-09-02
 

@@ -10,6 +10,7 @@
 
 import { executeSubAgent as realExecuteSubAgent } from '../../../lib/sub-agent-executor.js';
 import { safeInsert, generateUUID } from '../safe-insert.js';
+import { assertEvidenceHasContent } from '../../../lib/sub-agent-executor/evidence-content-guard.js';
 // SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Import normalizeSDId to fix FK constraint violation (PAT-FK-SDKEY-001)
 import { normalizeSDId } from '../sd-id-normalizer.js';
 
@@ -206,6 +207,11 @@ export async function storeSubAgentResult(sdId, result, supabase) {
     justification: result.justification || null,
     conditions: result.conditions || null
   };
+
+  // Empty-evidence guard — the same imported predicate the other two writers use. Three insert
+  // paths exist into this table; hardening one and missing another has already happened here
+  // once, so the check is shared rather than duplicated per writer.
+  assertEvidenceHasContent(insertData, { writer: 'orchestrator.subagent-execution' });
 
   // Use safeInsert for type-safe insert with validation
   const insertResult = await safeInsert(supabase, 'sub_agent_execution_results', insertData, {
