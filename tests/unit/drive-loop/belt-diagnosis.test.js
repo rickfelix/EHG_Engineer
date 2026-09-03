@@ -39,8 +39,10 @@ describe('TS-11 — the four cases are genuinely distinct', () => {
     expect(classifyItem(withSd({ status: 'draft' }, { lane: 'blocked-on-SD-OTHER-001' }))).toBe(CASES.BLOCKED);
   });
 
-  it('unmet dependencies count as blocked without needing a blocked status', () => {
-    expect(classifyItem(withSd({ status: 'draft', unmet_dependencies: ['SD-DEP-1'] }))).toBe(CASES.BLOCKED);
+  it('QF-20260807-032: sd.unmet_dependencies is not a real field and does not affect classification', () => {
+    // Pruned dead branch: this field exists nowhere on strategic_directives_v2, so passing it
+    // must be a no-op, not a silent BLOCKED that only ever fired in tests.
+    expect(classifyItem(withSd({ status: 'draft', unmet_dependencies: ['SD-DEP-1'] }))).toBeNull();
   });
 
   it('pending-chairman is evaluated FIRST, so a gated item is never reported as unblockable by the fleet', () => {

@@ -16,7 +16,7 @@ describe('section 4 — an ACT is not a REASON', () => {
   it('[DISCRIMINATOR] every emitted act is a member of the closed set, never prose', () => {
     const r = buildNextActs([
       item('a', 1, { status: 'ready' }),
-      item('b', 2, { status: 'blocked', blocked_on_decision: true }),
+      item('b', 2, { status: 'blocked' }),
       item('c', 3, null),
       item('d', 4, { claiming_session_id: 's1' }),
     ]);
@@ -31,16 +31,17 @@ describe('section 4 — an ACT is not a REASON', () => {
   it('maps each condition to the act that actually moves it', () => {
     expect(nextAct({ sd: null })).toBe(ACTS.SOURCE);                                     // no SD yet
     expect(nextAct({ sd: { status: 'blocked' } })).toBe(ACTS.UNBLOCK);                     // go clear it
-    expect(nextAct({ sd: { status: 'blocked', blocked_on_decision: true } })).toBe(ACTS.AWAIT_DECISION);
-    expect(nextAct({ sd: { unmet_dependencies: ['x'] } })).toBe(ACTS.UNBLOCK);
     expect(nextAct({ sd: { claiming_session_id: 's1' } })).toBe(ACTS.RESUME);              // holder continues
     expect(nextAct({ sd: { status: 'ready' } })).toBe(ACTS.CLAIM);
   });
 
-  it('AWAIT_DECISION is distinct from UNBLOCK — one is actionable by anyone, one is not', () => {
-    // Collapsing these would send someone to unblock a thing only the decider can move.
-    expect(nextAct({ sd: { status: 'blocked', blocked_on_decision: true } }))
-      .not.toBe(nextAct({ sd: { status: 'blocked' } }));
+  it('QF-20260807-032: sd.blocked_on_decision and sd.unmet_dependencies are not real fields and do not affect the act', () => {
+    // Pruned dead branches (and the AWAIT_DECISION act they gated, now removed from ACTS
+    // entirely): both fields exist nowhere on strategic_directives_v2, so passing them must be
+    // a no-op, not a silent AWAIT_DECISION/UNBLOCK that only ever fired in tests.
+    expect(nextAct({ sd: { status: 'blocked', blocked_on_decision: true } })).toBe(ACTS.UNBLOCK);
+    expect(nextAct({ sd: { unmet_dependencies: ['x'] } })).toBe(ACTS.CLAIM);
+    expect(ACTS.AWAIT_DECISION).toBeUndefined();
   });
 });
 
@@ -69,9 +70,14 @@ describe('section 4 — order and ownership', () => {
     expect(r.unowned_count.value).toBe(1);
   });
 
-  it('owner comes from the claim, then owner_lane, with the basis stated', () => {
-    expect(ownerOf({ sd: { claiming_session_id: 's1', owner_lane: 'L' } })).toEqual({ owner: 's1', basis: 'active claim on the SD' });
-    expect(ownerOf({ sd: { owner_lane: 'L' } })).toEqual({ owner: 'L', basis: 'SD owner_lane' });
+  it('owner comes from the claim, with the basis stated', () => {
+    expect(ownerOf({ sd: { claiming_session_id: 's1' } })).toEqual({ owner: 's1', basis: 'active claim on the SD' });
+  });
+
+  it('QF-20260807-032: sd.owner_lane is not a real field and never supplies an owner', () => {
+    // Pruned dead branch: this field exists nowhere on strategic_directives_v2, so passing it
+    // must be a no-op, not a silent owner attribution that only ever fired in tests.
+    expect(ownerOf({ sd: { owner_lane: 'L' } })).toEqual({ owner: null, basis: 'SD exists but is unclaimed' });
   });
 
   it('[VACUITY] no items at all is UNMEASURABLE, not an empty-and-therefore-clear belt', () => {
