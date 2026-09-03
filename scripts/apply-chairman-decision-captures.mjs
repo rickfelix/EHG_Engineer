@@ -31,9 +31,15 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { resolveFeedback } from '../lib/governance/resolve-feedback.js';
 
 const APPLY = process.argv.includes('--apply');
-const CATEGORY = 'chairman_decision_capture';
+// QF-20260902-882: widened from the single literal 'chairman_decision_capture'. The sibling
+// category 'chairman_ruling_capture' was invisible to this script (4 live rows, none ever
+// reconcilable by any path) -- both categories share the exact same capture shape
+// (metadata.decision_id / metadata.no_rpc_apply_needed / metadata.decided) and reconcile
+// identically; only the category label differs.
+const CATEGORIES = ['chairman_decision_capture', 'chairman_ruling_capture'];
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -96,11 +102,11 @@ export function classifyCapture(capture) {
 async function main() {
   const { data: captures, error } = await supabase
     .from('feedback').select('id, title, description, status, metadata')
-    .eq('category', CATEGORY).order('created_at');
+    .in('category', CATEGORIES).order('created_at');
   if (error) { console.error('query failed: ' + error.message); process.exit(1); }
 
   const fixApplied = await isFixApplied();
-  console.log(`captures in category '${CATEGORY}': ${captures.length}   (queried, not assumed)`);
+  console.log(`captures in categories [${CATEGORIES.join(', ')}]: ${captures.length}   (queried, not assumed)`);
   console.log(`FR-1 applied (fn_chairman_decision_value present): ${fixApplied === null ? 'UNKNOWN' : fixApplied}`);
   console.log(APPLY ? 'MODE: APPLY (writing)\n' : 'MODE: DRY-RUN — pass --apply to write\n');
 
@@ -131,7 +137,17 @@ async function main() {
       });
       if (e) { counts.blocked++; console.log(`FAILED  ${tag}\n        ${e.message}`); continue; }
       counts.applied++; console.log(`APPLIED ${tag}`);
-      await supabase.from('feedback').update({ status: 'resolved' }).eq('id', cap.id);
+      // QF-20260902-882: a bare update({status:'resolved'}) violates
+      // chk_resolved_requires_reference / chk_feedback_terminal_resolution (a resolved row with
+      // none of quick_fix_id/strategic_directive_id/resolution_sd_id needs a non-empty
+      // resolution_notes) -- these captures have none of the FK references, so the bare write was
+      // being REJECTED by the CHECK constraint. Route through the canonical resolver instead.
+      await resolveFeedback({
+        supabase,
+        feedbackId: cap.id,
+        notes: `Chairman decision ${plan.rpcAction} via fn_chairman_decide (decision ${plan.decisionId}).`,
+        resolutionType: 'chairman_decision_applied',
+      });
       continue;
     }
 
@@ -158,7 +174,11 @@ async function main() {
     const { error: e2 } = await supabase.from('chairman_decisions').update({ brief_data: brief }).eq('id', plan.decisionId);
     if (e2) { counts.blocked++; console.log(`FAILED  ${tag}\n        ${e2.message}`); continue; }
     counts.applied++; console.log(`APPLIED ${tag}  HELD until: ${plan.unparkTrigger || 'NOT RECORDED'}`);
-    await supabase.from('feedback').update({ status: 'resolved' }).eq('id', cap.id);
+    // QF-20260902-882: deliberately does NOT resolve the capture's feedback row. Marking held is
+    // "a data annotation, not a resolution" (see the comment above this block) -- the underlying
+    // decision is still pending, just annotated with when it will unpark. Resolving the capture
+    // here would misreport a still-open decision as closed. The capture stays status='new' until
+    // the decision is actually decided (the rpc branch above, which does resolve).
   }
 
   console.log(`\n${APPLY ? 'applied' : 'would apply'}: ${counts.applied}   blocked: ${counts.blocked}   `
