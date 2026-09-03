@@ -109,11 +109,34 @@ describe('opt-in axes: QF holder, SD holder, directed work, recently-released, s
   it('excludes an authoritative SD holder when the axis is supplied', () => {
     expect(seatIdleVerdict(session(), { sdHolderSessionIds: new Set(['s1']) }).reason).toBe('sd-holder-authoritative');
   });
+  it('sdHolderSessionIds=undefined is a true no-op, distinct from an empty Set or null', () => {
+    expect(isSeatIdle(session({ sd_key: 'SD-STALE-001' }))).toBe(true); // undefined -> axis not checked at all
+  });
+  it('an EMPTY Set (resolved, zero holders) does NOT fall back to the mirror -- a resolved empty result means nobody holds anything', () => {
+    expect(isSeatIdle(session({ sd_key: 'SD-STALE-001' }), { sdHolderSessionIds: new Set() })).toBe(true);
+  });
+  it('explicit NULL fails open to the stale sd_key mirror -- the QF-20260830-885 fix, migrated verbatim', () => {
+    const r = seatIdleVerdict(session({ sd_key: 'SD-STALE-001' }), { sdHolderSessionIds: null });
+    expect(r).toEqual({ idle: false, reason: 'sd-holder-authoritative' });
+  });
+  it('explicit NULL with no mirror set is idle -- the fallback reads the mirror, it does not assume busy', () => {
+    expect(isSeatIdle(session({ sd_key: null }), { sdHolderSessionIds: null })).toBe(true);
+  });
+  it('a resolved Set WINS over a stale mirror -- the authoritative source overrides the mirror, per the live incident that motivated this axis', () => {
+    // Measured incident: a completed SD's session still read the mirror as busy after both
+    // authoritative claim tables read zero. The Set here represents that authoritative zero.
+    expect(isSeatIdle(session({ sd_key: 'SD-COMPLETED-001' }), { sdHolderSessionIds: new Set() })).toBe(true);
+  });
   it('excludes a seat with a live directed-work reservation when the axis is supplied', () => {
     expect(seatIdleVerdict(session(), { seatBusySessionIds: new Set(['s1']) }).reason).toBe('directed-work');
   });
-  it('excludes a recently-released seat when the axis is supplied', () => {
-    expect(seatIdleVerdict(session(), { recentlyReleasedSessionIds: new Set(['s1']) }).reason).toBe('recently-released');
+  it('excludes a recently-released seat, computed from its own released_at, when the window is supplied', () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    expect(seatIdleVerdict(session({ released_at: recent }), { recentlyReleasedWindowMs: 15 * 60_000 }).reason).toBe('recently-released');
+  });
+  it('does not exclude a session released long ago -- two-sided, only the recency window excludes', () => {
+    const longAgo = new Date(Date.now() - 60 * 60_000).toISOString();
+    expect(isSeatIdle(session({ released_at: longAgo }), { recentlyReleasedWindowMs: 15 * 60_000 })).toBe(true);
   });
   it('excludes a seat inside its spin-up grace window', () => {
     const r = seatIdleVerdict(session({ created_at: new Date().toISOString() }), { spinUpGraceMs: 180_000 });
@@ -157,10 +180,11 @@ describe('divergence shapes measured across the four consumers (FR-3 candidates)
     expect(isSeatIdle(s, { qfHolderSessionIds: new Set(['qf-holder-1']) })).toBe(false); // matches dashboard / eligibleIdleWorkers
   });
 
-  it('S7: just-released, status still active -- excluded only when statusExcludeSet or recentlyReleasedSessionIds is supplied', () => {
-    const s = session({ session_id: 'released-shell-1', status: 'active' });
+  it('S7: just-released, status still active -- excluded only when statusExcludeSet or recentlyReleasedWindowMs is supplied', () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    const s = session({ session_id: 'released-shell-1', status: 'active', released_at: recent });
     expect(isSeatIdle(s)).toBe(true);
-    expect(isSeatIdle(s, { recentlyReleasedSessionIds: new Set(['released-shell-1']) })).toBe(false);
+    expect(isSeatIdle(s, { recentlyReleasedWindowMs: 15 * 60_000 })).toBe(false);
   });
 
   it('S6: status=completed with a fresh heartbeat -- excluded only when statusExcludeSet is supplied', () => {
