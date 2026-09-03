@@ -293,29 +293,21 @@ function computeConsultSignature(row) {
 
 /**
  * Enforce the HARD per-sweep ceiling at sweep ENTRY, with the EXTENT DERIVED RATHER THAN DOCUMENTED
- * (QF-20260903-418). The old contract took `{count, elapsedMs, tokens}` and only a COMMENT said
- * "per sweep", so a caller measuring DAY-scoped answers or SEAT-LIFETIME wall-clock fed the wrong
- * extent into a per-sweep ceiling and self-refused a sweep that was actually in budget. Measured
- * dark ticks: 09-02 04:28Z count 26/5, 09-02 10:26Z count 96/5, 09-02 17:4xZ tokens 5.58M/200k,
- * 09-03 04:37Z count 24/5 — all four in budget at sweep entry, where the true spend is zero. A
- * refusal emitted nothing, which is byte-identical to correct silence-by-default, so the
- * chairman-ratified always-sweep policy went dark with no observable signal.
- *
- * The defect was never the arithmetic, so the fix is the SHAPE, not the numbers:
- *  - wall-clock is DERIVED here from `sweepStartedAtMs`; the caller cannot supply an elapsed at all,
- *    so it cannot supply the wrong one.
- *  - the count/token keys carry their scope IN THE NAME (`answersThisSweep`, `tokensThisSweep`),
- *    which is the load-bearing word the cron prompt left ambiguous ("answers so far").
- *  - the retired scope-ambiguous keys (`count`/`elapsedMs`/`tokens`) are REFUSED, never silently
- *    reused: a caller still on the old contract is exactly the caller that mis-scoped it.
+ * (QF-20260903-418). The old contract took `{count, elapsedMs, tokens}` and only a COMMENT said "per
+ * sweep", so a caller measuring DAY-scoped answers or SEAT-LIFETIME wall-clock fed the wrong extent
+ * into a per-sweep ceiling and self-refused a sweep that was in budget: 09-02 04:28Z 26/5, 09-02
+ * 10:26Z 96/5, 09-02 17:4xZ 5.58M/200k, 09-03 04:37Z 24/5 -- all four at sweep entry, where the true
+ * spend is zero. A refusal emitted nothing, byte-identical to correct silence-by-default, so the
+ * always-sweep policy went dark unobserved. The arithmetic was never wrong; the SHAPE was:
+ *  - wall-clock is DERIVED from `sweepStartedAtMs`, so the caller cannot supply the wrong one.
+ *  - count/token keys carry their scope IN THE NAME -- the word the cron prompt left ambiguous.
+ *  - the retired `count`/`elapsedMs`/`tokens` keys are REFUSED, never silently reused: a caller on
+ *    the old contract is exactly the caller that mis-scoped it.
  *  - an unmeasurable extent FAILS CLOSED. `enforceSweepBudget()` used to default `spent` to `{}` so
- *    every check evaluated `0 >= ceiling` and it returned `withinBudget:true` however far over
- *    budget the session was — a rubber stamp, not a check (QF-20260729-221). Unmeasured is now
- *    refused, because absence of a measurement is not evidence of being under a ceiling.
- *  - every return carries a discriminated `verdict` and an explicit `refused` flag, so a REFUSED
- *    sweep is DISTINGUISHABLE from a clean one on the record the caller already writes — no new
- *    machinery, and never again byte-identical silence.
- *
+ *    every check evaluated `0 >= ceiling` and returned `withinBudget:true` however far over budget
+ *    the session was -- a rubber stamp (QF-20260729-221). Absence of a measurement is not evidence.
+ *  - every return carries a discriminated `verdict` + `refused`, so a REFUSED sweep is
+ *    DISTINGUISHABLE from a clean one on the record the caller already writes. No new machinery.
  * Deterministic given (budget, spent, nowMs); `nowMs` is injectable so a test never races a clock.
  * Exported.
  */
