@@ -113,5 +113,6 @@ describe('FR-5: teardownRun (agent-id-based, idempotent)', () => {
 // of that file instead, while four unrelated completed SDs edited it with no incident — the
 // fence was protecting nothing real. It was also blind by construction: an unreachable
 // origin/main was swallowed into a silent pass, so it could report green having compared
-// nothing. The renormalization ships in this same commit; the recurrence class is now held
-// by tests/unit/gitattributes-eol-normalization.test.js.
+// nothing. The renormalization ships in this same commit, which empties the class tracked by
+// tests/static-guards/eol-crlf-ratchet.test.js and eol-mixed-crlf-ratchet.test.js — both now
+// pinned to a baseline of 0, so the class cannot silently return.
