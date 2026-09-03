@@ -46,7 +46,7 @@ const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
 
 const bkDir = path.join(process.cwd(), 'scripts', 'one-off', 'encode-backup-0903');
 fs.mkdirSync(bkDir, { recursive: true });
-for (const r of rows) fs.writeFileSync(path.join(bkDir, `section-${r.id}.before.md`), r.content || '');
+for (const r of rows) fs.writeFileSync(path.join(bkDir, `section-${r.id}.before.txt`), r.content || '');
 console.log('backups written to', bkDir);
 
 for (const t of TARGETS) {
