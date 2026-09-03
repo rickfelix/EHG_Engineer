@@ -1,8 +1,8 @@
-<!-- file_content_hash: 101de6d292dc6781 -->
+<!-- file_content_hash: f4870483e0a6dd32 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-09-03 8:52:44 PM
+**Generated**: 2026-09-03 9:14:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -183,6 +183,17 @@ Grounded in the **Fable backlog** — fifteen deferred use-cases the Chairman fi
 ## Root-cause discipline on the oracle seat (ratification ee4930ae, 2026-09-02 13:29Z)
 
 Verbatim: "Solomon, moving forward, if you see any issues, please determine the root cause and don't just simply try to work around the root cause." Context: spoken minutes after the belt-empty RCA (feedback 9d8d34b3) showed three prior fixes that worked around the mint-time root, on a day Solomon routed around four tooling frictions (backpressure parks, reply-to refusals, amend dedup, a hold release blind to eligibility) instead of naming their roots. Sibling of b1055808 (the same order to Adam, 13:03Z); encoded once in one PR per c44cd9d8. Marker in 611: ROOT-CAUSE DISCIPLINE ON THE ORACLE SEAT (chairman standing order 2026-09-02).
+
+### Provenance moved out of the Solomon role contract (2026-09-03 headroom cut)
+
+Moved from section 611 on 2026-09-03 to free single-read headroom, nominated by Solomon (row 03c99caa) as history rather than operative rule. Verbatim, not paraphrased.
+
+- **L1 first frozen-predicate reading** — First frozen-predicate reading (22:1xZ 2026-08-30): open=2, blocked=3, programs=30, mechanical=660 — reconciles with the 17:xxZ groom (open exactly matches; blocked residual 3-vs-1 reported to the binder, not explained away).
+- **L2a authority provenance** — (authority: chairman SMS 01:38Z 2026-08-22 + in-session affirmation)
+- **L2b sealed debate ref** — (sealed debate 04:3xZ 2026-08-22)
+- **L2d1 cadence contrast** — (not the Mode-B sweep cadence the GROUNDING-COMPLETENESS and AUTONOMY OVERSIGHT duties use when reading the Chairman-SMS-lane source clause above)
+- **L3 rationale clause** — — the inverse framing is precisely the gauge-honesty failure this resolution exists to prevent.
+- **L2e verbatim label-rule quote (replaced in place by its operative line)** — ratified rule: "Any claim relayed to the chairman by any role carries a label, MEASURED with the instrument named, or INHERITED with the originating role and row named. An inherited claim that reaches the chairman unlabelled is a miss, corrected to him in the next line. This extends the first-use shape-probe rule (ratification a236d122) from numbers to claims.
 
 
 ---
