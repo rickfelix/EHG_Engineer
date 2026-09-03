@@ -22,7 +22,12 @@
  * so a sub-agent that crashed and wrote an error row (verdict=FAIL) counted
  * exactly like a genuine PASS. The gate now (a) reduces evidence to the LATEST
  * row per agent and (b) compares that row's verdict against an explicit policy.
- * Rollout is warn-first via SUBAGENT_VERDICT_MODE (see resolveSubagentVerdictMode).
+ *
+ * QF-20260902-755: the line above used to say "rollout is warn-first via
+ * SUBAGENT_VERDICT_MODE" — true when written, FALSE since SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001
+ * FR-6 (c80123c9ab5, merged 2026-09-02T20:38:03Z): a recorded REJECTING verdict now fails
+ * this gate unconditionally, on every route. SUBAGENT_VERDICT_MODE survives only as recorded
+ * metadata (verdict_mode) and a log-line annotation — see resolveSubagentVerdictMode below.
  */
 import { execFileSync } from 'node:child_process';
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
@@ -136,15 +141,16 @@ export function classifyVerdict(verdict) {
 }
 
 /**
- * Warn-first rollout resolver, mirroring resolveInvocationMode in
- * executors/lead-final-approval/gates/invocation-path-gate.js.
+ * Historically a warn-first rollout resolver (mirroring resolveInvocationMode in
+ * executors/lead-final-approval/gates/invocation-path-gate.js): default ADVISORY surfaced a
+ * rejecting verdict as a WARNING with the gate still passing; SUBAGENT_VERDICT_MODE=block
+ * promoted it to a hard failure.
  *
- * Default ADVISORY: a rejecting verdict is surfaced as a WARNING and the gate
- * still passes. SUBAGENT_VERDICT_MODE=block promotes it to a hard failure.
- * The default must stay advisory — this gate has been presence-only since it
- * shipped, so a blocking default would retroactively fail in-flight SDs whose
- * evidence was collected under the old contract. See the promotion precondition
- * documented in ../required-subagents.js before flipping this.
+ * QF-20260902-755: since SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 FR-6 (c80123c9ab5), the rejecting-
+ * verdict branch below fails UNCONDITIONALLY regardless of this function's return value — the
+ * advisory/block distinction it used to gate no longer exists there. This resolver is retained
+ * only to populate verdictDetails.verdict_mode and the log-line annotation, not to branch
+ * behaviour; `missing` (true absence) is untouched and still handled elsewhere in this file.
  *
  * @param {object} [env]
  * @returns {'advisory'|'block'}
@@ -504,8 +510,9 @@ export async function validateSubagentEvidence(ctx, supabase) {
 
   if (missing.length === 0) {
     // Every required agent wrote a row. Presence used to end the check here;
-    // now the LATEST row's verdict decides. SUBAGENT_VERDICT_MODE governs whether
-    // a rejecting verdict warns (advisory, default) or fails (block).
+    // now the LATEST row's verdict decides. QF-20260902-755: since FR-6 (c80123c9ab5) a
+    // rejecting verdict fails unconditionally below -- SUBAGENT_VERDICT_MODE no longer governs
+    // that outcome, only the verdict_mode metadata and log line.
     const mode = resolveSubagentVerdictMode();
     const verdictDetails = {
       required,
@@ -555,9 +562,11 @@ export async function validateSubagentEvidence(ctx, supabase) {
       // A worker who never invoked it was stopped; one who invoked it and let it crash was let
       // through. That is not a safety valve, it is a laundering path, and it is closed here.
       //
-      // SCOPE, deliberately narrow: this changes ONLY the non-evidence class. The rejecting-verdict
-      // branch below still honours SUBAGENT_VERDICT_MODE, resolveSubagentVerdictMode is untouched,
-      // and the global advisory->block flip (measured at 32/313 SDs) remains a separate decision.
+      // SCOPE, deliberately narrow (true when written): this changed ONLY the non-evidence class;
+      // at the time, the rejecting-verdict branch below still honoured SUBAGENT_VERDICT_MODE.
+      // QF-20260902-755: that half is now ALSO unconditional, since FR-6 (c80123c9ab5, later)
+      // made a rejecting verdict fail regardless of mode -- resolveSubagentVerdictMode() is no
+      // longer "untouched" in that sense, only its behavior-branching role there is gone.
       // ERROR was always documented as a DISTINCT class from a rejection — "there is no verdict for
       // that mode to be lenient about" (:397-401) — so only that class stops being negotiable.
       //
