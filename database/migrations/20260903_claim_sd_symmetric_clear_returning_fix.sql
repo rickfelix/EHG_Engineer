@@ -38,7 +38,11 @@
 -- a concurrent retry for the same p_session_id could leave v_evicted_sd_key stale relative to
 -- what the UPDATE actually affects. GET DIAGNOSTICS v_evicted_row_count = ROW_COUNT after the
 -- UPDATE, and requiring it > 0 alongside v_evicted_sd_key IS NOT NULL before the symmetric
--- clear fires, closes that gap without adding an explicit lock.
+-- clear fires, closes that gap without adding an explicit lock. A second GET DIAGNOSTICS
+-- (v_evicted_clear_row_count) after the nested strategic_directives_v2/quick_fixes UPDATE
+-- gates the CLAIM_SWITCH_EVICTED_CLEARED audit event on THAT update also having matched a
+-- row, so the event count cannot overstate how many clears actually happened on the SD/QF
+-- side (the two update targets can drift independently per the RCA this block fixes).
 --
 -- Signature is UNCHANGED (still 5 args, same defaults) -- CREATE OR REPLACE is safe,
 -- no DROP needed.
@@ -89,6 +93,11 @@ DECLARE
   -- relative to what the UPDATE actually affects. v_evicted_row_count guards the symmetric-clear
   -- block from firing on that stale value when the UPDATE affected zero rows.
   v_evicted_row_count      integer;
+  -- Same review, second round: gates the audit INSERT on the NESTED strategic_directives_v2 /
+  -- quick_fixes UPDATE also having matched a row, so the audit trail cannot overcount clears
+  -- relative to what actually happened on the SD/QF side (those pointers can drift independently
+  -- from claude_sessions.sd_key -- that drift is exactly what this whole block exists to fix).
+  v_evicted_clear_row_count integer;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtext(p_sd_id));
 
@@ -475,25 +484,32 @@ BEGIN
          AND claiming_session_id = p_session_id;
     END IF;
 
+    GET DIAGNOSTICS v_evicted_clear_row_count = ROW_COUNT;
+
     -- SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A (success criterion #3): the symmetric clear had NO
     -- durable trail at all before this fix, making its production fire-rate unverifiable. One
     -- row per actual clear, so `SELECT count(*) FROM session_lifecycle_events WHERE event_type
     -- = 'CLAIM_SWITCH_EVICTED_CLEARED'` is the re-verifiable instrument this criterion asks for.
-    INSERT INTO session_lifecycle_events (
-      event_type,
-      session_id,
-      reason,
-      metadata
-    ) VALUES (
-      'CLAIM_SWITCH_EVICTED_CLEARED',
-      p_session_id,
-      'claim_switch',
-      jsonb_build_object(
-        'evicted_sd_key', v_evicted_sd_key,
-        'new_sd_id', p_sd_id
+    -- Gated on v_evicted_clear_row_count > 0 (deep-tier adversarial review, round 2): without
+    -- this, the nested UPDATE above matching zero rows (the SD/QF side already cleared or
+    -- re-claimed by someone else) would still log a CLEARED event, overstating the real count.
+    IF v_evicted_clear_row_count > 0 THEN
+      INSERT INTO session_lifecycle_events (
+        event_type,
+        session_id,
+        reason,
+        metadata
+      ) VALUES (
+        'CLAIM_SWITCH_EVICTED_CLEARED',
+        p_session_id,
+        'claim_switch',
+        jsonb_build_object(
+          'evicted_sd_key', v_evicted_sd_key,
+          'new_sd_id', p_sd_id
+        )
       )
-    )
-    RETURNING id INTO v_evicted_clear_event_id;
+      RETURNING id INTO v_evicted_clear_event_id;
+    END IF;
   END IF;
 
   -- New-claim UPDATE intentionally does NOT set worktree_path / worktree_branch.

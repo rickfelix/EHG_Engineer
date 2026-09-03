@@ -131,6 +131,26 @@ describe('FR-4: claim_sd claim-switch clobber guard migration', () => {
     expect(rowCountIdx).toBeLessThan(clearIdx);
   });
 
+  // Deep-tier adversarial review, round 2: the audit INSERT fired whenever the OUTER guard
+  // passed, regardless of whether the NESTED strategic_directives_v2/quick_fixes UPDATE itself
+  // matched a row -- those two pointers can drift independently (that drift is exactly what
+  // this block exists to fix), so the audit trail could overcount clears that never happened
+  // on the SD/QF side. A second GET DIAGNOSTICS closes that gap.
+  it('gates the CLAIM_SWITCH_EVICTED_CLEARED audit INSERT on the nested SD/QF UPDATE also matching a row', () => {
+    expect(migration).toMatch(/v_evicted_clear_row_count\s+integer;/);
+    const clearBlock = migration.split('IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN')[1];
+    const nestedRowCountIdx = clearBlock.indexOf('GET DIAGNOSTICS v_evicted_clear_row_count = ROW_COUNT;');
+    const nestedGuardIdx = clearBlock.indexOf('IF v_evicted_clear_row_count > 0 THEN');
+    const insertIdx = clearBlock.indexOf('INSERT INTO session_lifecycle_events');
+    expect(nestedRowCountIdx).toBeGreaterThan(-1);
+    expect(nestedGuardIdx).toBeGreaterThan(-1);
+    expect(insertIdx).toBeGreaterThan(-1);
+    // Ordering: the nested UPDATE's ROW_COUNT is captured, then checked, then only THEN
+    // does the INSERT run -- so a zero-row nested UPDATE never produces an audit event.
+    expect(nestedRowCountIdx).toBeLessThan(nestedGuardIdx);
+    expect(nestedGuardIdx).toBeLessThan(insertIdx);
+  });
+
   it('SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A criterion #2 proof: the new regression check genuinely fails against the PRE-FIX migration text, so it is not a vacuous pass', () => {
     const preFixMigration = loadMigration('20260712_claim_sd_claim_switch_clobber_guard.sql');
     const preFixUpdateIdx = preFixMigration.indexOf("released_reason = 'claim_switch'");
