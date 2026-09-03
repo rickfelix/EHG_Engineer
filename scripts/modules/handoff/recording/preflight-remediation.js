@@ -122,6 +122,13 @@ function _truncateValidationDetails(details, maxChars) {
     reason: safeTruncate(String(details.reason || ''), 200),
     message: safeTruncate(details.message || '', 500),
     preflight_remediation_truncated: true,
+    // QF-20260903-469: this fallback is an explicit WHITELIST, so anything not named here is
+    // silently dropped. The executing-tree stamp must survive it — a pathological rejection is
+    // precisely the verdict whose provenance you most want, and a stamp that vanishes on the
+    // hard path is a field that reads as present while being absent exactly when it matters.
+    // Two short scalars; they cannot be what pushes this over the size limit.
+    executing_commit_sha: details.executing_commit_sha ?? null,
+    executing_cwd: details.executing_cwd ?? null,
   };
   serialized = JSON.stringify(fallback);
   if (serialized.length <= maxChars) return fallback;
