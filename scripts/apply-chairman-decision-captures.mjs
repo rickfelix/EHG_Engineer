@@ -14,13 +14,15 @@
  * DRY-RUN IS THE DEFAULT. Pass --apply to write. This is the chairman's own decision queue; a
  * script that writes to it by default is one typo from resolving a decision nobody made.
  *
- * TWO CLASSES OF CAPTURE, AND ONLY ONE OF THEM NEEDS THE CEREMONY:
- *   - RPC captures (decided: approve/reject) call fn_chairman_decide. Every one of these is
- *     currently blocked_by "fn_chairman_decide NOT_FOUND on null venture_id" — which is the exact
- *     defect FR-1 fixes. They CANNOT be applied until the chairman applies the staged DDL, and
- *     this script refuses them with that reason rather than half-writing the row by hand. The
- *     captures themselves say so: "do NOT hand-write the row (the 20260628 canonical-resolve
- *     migration exists because hand-writes left lying decision fields)."
+ * TWO CLASSES OF CAPTURE:
+ *   - RPC captures (decided: approve/reject) call fn_chairman_decide. FR-1
+ *     (database/chairman-gated/20260803_chairman_decide_null_safe_and_type_honest.sql) is now
+ *     LIVE (SD-LEO-FIX-CHAIRMAN-DECISION-CAPTURE-001 Explore evidence, verified against
+ *     pg_proc), so these are no longer permanently blocked -- isFixApplied() still probes the
+ *     catalog live on every run rather than assuming, so a captured decision refuses with a
+ *     stated reason instead of half-writing the row by hand if the migration is ever rolled
+ *     back. The captures themselves say so: "do NOT hand-write the row (the 20260628
+ *     canonical-resolve migration exists because hand-writes left lying decision fields)."
  *   - Hold captures (metadata.no_rpc_apply_needed) need no RPC. The row deliberately STAYS pending
  *     so it re-surfaces on unpark; what is missing is the marker that makes it render HELD with
  *     its trigger instead of as critical pending.
