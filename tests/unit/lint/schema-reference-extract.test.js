@@ -200,3 +200,31 @@ describe('extractReferences — comments and literal examples (QF/SD schema-trut
     expect(extractReferences("await supabase.from('ghost_tbl'); // schema-lint-disable-line")).toEqual([]);
   });
 });
+
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-4, TS-5) — THE PHANTOM CANARY.
+//
+// The requirement that distinguishes a wired check from a check-shaped object. FR-1 taught this
+// extractor to ignore more things, and every such change carries the risk of ignoring the thing it
+// exists to catch. These assertions are the standing proof that a deliberately-introduced phantom
+// still fires; if they ever pass vacuously, the gate has been disarmed.
+describe('phantom canary — the detector still fires (FR-4)', () => {
+  it('TS-5a: a phantom TABLE reference is reported', () => {
+    const v = findViolations(extractReferences("await supabase.from('seeded_phantom_table').select('id')"), SNAPSHOT);
+    expect(v.map((x) => x.missing)).toContain('seeded_phantom_table');
+  });
+
+  it('TS-5b: a phantom COLUMN on an EXISTING table is reported', () => {
+    const v = findViolations(extractReferences("await supabase.from('ventures').select('id, seeded_phantom_column')"), SNAPSHOT);
+    expect(v.map((x) => x.missing)).toContain('ventures.seeded_phantom_column');
+  });
+
+  it('TS-5c: the canary is not satisfied by a real reference — a clean file reports nothing', () => {
+    // Guards against the canary passing for the wrong reason (e.g. a comparator that flags
+    // everything). Without this, TS-5a/b would still pass against a broken-open detector.
+    expect(findViolations(extractReferences("await supabase.from('ventures').select('id, name')"), SNAPSHOT)).toEqual([]);
+  });
+
+  it('TS-5d: a phantom introduced INSIDE a comment is NOT reported — FR-1 and FR-4 do not fight', () => {
+    expect(findViolations(extractReferences("// supabase.from('seeded_phantom_table')"), SNAPSHOT)).toEqual([]);
+  });
+});
