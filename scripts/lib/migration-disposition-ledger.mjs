@@ -6,8 +6,21 @@
  * WHY THIS EXISTS. verify-migration-apply-state.mjs was column-blind until
  * QF-20260725-470; the re-run then exposed 126 forward migrations carrying gaps.
  * 117 of them sit before RETIRED_BEFORE and can never turn the CI gate red, so
- * "every file has a decision" is invisible to the verifier for 93% of the corpus.
+ * "every file has a decision" is invisible to the verifier for 92.9% OF THE GAP
+ * SET (117 of 126) — NOT of the corpus.
  * This module is the seam that makes the decision auditable instead.
+ *
+ * THE "OF THE CORPUS" WORDING WAS WRONG, AND IT MISLED A LATER SD — corrected by
+ * SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B, 2026-09-03, which inherited the figure and
+ * built a criterion on it. Two ratios live here and they are not interchangeable:
+ *   - 92.9% is 117 of the 126 GAP files — the share of GAPS the cutoff silences.
+ *   - 77.79% is 1149 of 1477 CORPUS files — the share of ALL migrations the cutoff
+ *     exempts (1023 dated before it, plus 126 undated), leaving 328 gated.
+ * The gap set is a small subset of the corpus, so quoting the gap-set ratio against
+ * the corpus overstates the exemption by roughly 15 points and makes the cutoff read
+ * as far more permissive than it is. A ratio whose numerator and denominator span
+ * different extents is the defect class this workstream exists to remove; this
+ * comment was itself an instance of it.
  *
  * STANDALONE ON PURPOSE. It imports nothing from the verifier or the tier
  * classifier. scripts/lib/migration-tier-classifier.mjs already imports
