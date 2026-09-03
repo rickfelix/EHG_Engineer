@@ -189,23 +189,16 @@ function generateRecentLessonsSection(retrospectives) {
 }
 
 /**
- * QF-20260816-925 (generalized by QF-20260902-053): pull a CURRENT `## <heading>` block
- * verbatim out of an already-rendered CLAUDE_CORE.md, so a regeneration triggered by an
- * unrelated section edit (or simply a different fleet worker regenerating a few minutes
- * later) can reuse it instead of re-snapshotting a live table — which churns the section
- * under fleet concurrency independent of any real content change (a generated contract must
- * be a deterministic function of leo_protocol_sections; live counts/rows are not).
- * @param {string} fileContent - existing CLAUDE_CORE.md content
- * @param {string} headingLine - the exact `## ...` heading text (regex-escaped internally)
- * @returns {string|null} the block (heading through the line before the next `## `), or null
- *   if the heading is absent (nothing to preserve — falls through to a fresh snapshot)
+ * QF-20260816-925 / QF-20260902-053: pull a CURRENT `## <heading>` block verbatim out of an
+ * already-rendered CLAUDE_CORE.md, so a regen can reuse it instead of re-snapshotting a live
+ * table (a generated contract must be a deterministic function of leo_protocol_sections).
+ * @returns {string|null} the block, or null if the heading is absent
  */
 function extractExistingSectionBlock(fileContent, headingLine) {
   if (typeof fileContent !== 'string') return null;
-  // Adversarial review (PR #7181): anchor to an actual line start, not an unanchored
-  // substring search — several sections in this file are free text sourced from a live DB
-  // table anyone can edit, so an indexOf() with no anchor could latch onto this exact
-  // heading text quoted mid-sentence in unrelated content and slice the wrong span.
+  // Adversarial review (PR #7181): anchor to a line start — several sections here are free
+  // text from a live DB table, so an unanchored search could latch onto the heading quoted
+  // mid-sentence in unrelated content.
   const escaped = headingLine.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const headingMatch = new RegExp(`^${escaped}`, 'm').exec(fileContent);
   if (!headingMatch) return null;
@@ -219,15 +212,10 @@ function extractExistingLessonsBlock(fileContent) {
   return extractExistingSectionBlock(fileContent, '## Recent Lessons (Last 30 Days)');
 }
 
-/** QF-20260902-053: same reuse-over-live-resnapshot strategy for Hot Issue Patterns
- * (`issue_patterns.occurrence_count` churned this section on every regen). */
 function extractExistingHotPatternsBlock(fileContent) {
   return extractExistingSectionBlock(fileContent, '## Hot Issue Patterns (Auto-Updated)');
 }
 
-/** QF-20260902-053: same reuse-over-live-resnapshot strategy for Known Friction Points
- * (new SELF-IDENTIFY feedback rows crossing the ≥3-workers threshold churned this section
- * on every regen). */
 function extractExistingFrictionPointsBlock(fileContent) {
   return extractExistingSectionBlock(fileContent, '## Known Friction Points');
 }

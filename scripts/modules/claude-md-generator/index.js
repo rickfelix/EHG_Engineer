@@ -146,13 +146,8 @@ class CLAUDEMDGeneratorV3 {
       protocolVersion: data.protocol?.version,
       sectionCount: data.protocol?.sections?.length,
       subAgentCount: data.subAgents?.length,
-      // Adversarial review (PR #7181, extended by QF-20260902-053): hash whatever will
-      // ACTUALLY be rendered (the frozen override, when loadData() populated one) rather than
-      // the always-fresh live array — otherwise db_snapshot_hash keeps changing on routine
-      // issue_patterns/feedback churn even though the rendered content didn't, and that
-      // propagates into every *_DIGEST.md's embedded `db_snapshot_hash` comment plus the
-      // git-tracked manifest, none of which are covered by VOLATILE_LINE_RE /
-      // stripManifestVolatile — the same churn this fix exists to stop, just relocated.
+      // PR #7181 / QF-20260902-053: hash whatever will ACTUALLY render (the override, when set)
+      // rather than the always-fresh live array, so db_snapshot_hash doesn't churn on its own.
       hotPatternsHash: this.computeHash(data.hotPatternsOverride ?? JSON.stringify(data.hotPatterns || [])),
       knownFrictionPointsHash: this.computeHash(data.knownFrictionPointsOverride ?? JSON.stringify(data.knownFrictionPoints || [])),
       retrospectivesHash: this.computeHash(data.recentLessonsOverride ?? JSON.stringify(data.recentRetrospectives || []))
@@ -253,14 +248,9 @@ class CLAUDEMDGeneratorV3 {
     return specs;
   }
 
-  /**
-   * QF-20260816-925 / QF-20260902-053: read CLAUDE_CORE.md's CURRENT on-disk block for a
-   * live-baked section. Fail-open (any missing file / read error / absent heading returns
-   * null) — falling through to a fresh snapshot is always safe; silently freezing on a read
-   * error would not be.
-   * @param {(content: string) => string|null} extractFn
-   * @returns {string|null}
-   */
+  // QF-20260816-925 / QF-20260902-053: read a live-baked section's current on-disk block.
+  // Fail-open — any missing file / read error / absent heading returns null and falls
+  // through to a fresh snapshot, never silently freezes on a read error.
   loadExistingSectionOverride(extractFn) {
     try {
       const filePath = path.join(this.baseDir, 'CLAUDE_CORE.md');
@@ -328,15 +318,10 @@ class CLAUDEMDGeneratorV3 {
       visionGapInsights
     };
 
-    // QF-20260816-925 (generalized by QF-20260902-053): by default, reuse whatever block is
-    // already on disk for each live-baked section (Recent Lessons, Hot Issue Patterns, Known
-    // Friction Points) instead of re-snapshotting the underlying live table — an unrelated
-    // section edit (or simply a different fleet worker regenerating a few minutes later)
-    // would otherwise churn these sections on every run, even with leo_protocol_sections
-    // unchanged (Solomon ruling c5d4390b: a generated contract must be a deterministic
-    // function of leo_protocol_sections). --refresh-lessons (the daily cron refresh) opts
-    // back into a fresh snapshot for all three. Fail-open to a fresh snapshot on any read
-    // problem or first run.
+    // QF-20260816-925 / QF-20260902-053: reuse each live-baked section's on-disk block by
+    // default instead of re-snapshotting its live table (Solomon ruling c5d4390b: a generated
+    // contract must be a deterministic function of leo_protocol_sections). --refresh-lessons
+    // (the daily cron) opts back into a fresh snapshot for all three.
     if (!this.options.refreshLessons) {
       const lessonsOverride = this.loadExistingLessonsOverride();
       if (lessonsOverride) data.recentLessonsOverride = lessonsOverride;
