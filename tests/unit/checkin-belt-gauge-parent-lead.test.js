@@ -205,12 +205,44 @@ describe('belt gauge reports ELIGIBLE depth, not raw pool size (SD-LEO-ORCH-CAPA
     const { sb } = fleetOf(children, parentRow('LEAD_APPROVAL'));
     const res = await runCheckin(sb, SESSION, NO_COORD);
 
-    // The reported symptom was action='idle' AND claimableDepth=10 in the same tick. Whatever the
-    // action, an idle result must not simultaneously claim there is work to take.
-    if (res.action === 'idle') {
-      expect(res.belt_ranked_claimable).toBe(0);
-      expect(res.belt_claimable_at_my_tier).toBe(0);
+    // Asserted UNCONDITIONALLY. An earlier cut wrapped this in `if (res.action === 'idle')`, which
+    // would go silently vacuous the day the action changed — a test that stops testing without failing.
+    expect(res.belt_ranked_claimable).toBe(0);
+    expect(res.belt_claimable_at_my_tier).toBe(0);
+    // The reported symptom was action='idle' AND belt_block={verdict:'OK', claimableDepth:10} in the
+    // SAME tick. belt_block is the coordinator-belt-block.js consumer FR-1 names in its blast radius,
+    // and no other scenario reaches it, so the invariant is asserted on the verdict itself.
+    if (res.belt_block) {
+      // THE ASSERTION IS ON THE NUMBER, NOT THE VERDICT — and that distinction was measured, not
+      // assumed. assessCoordinatorBeltBlock's OK means "not blocked on COORDINATOR-OWNED fences"
+      // (COORDINATOR_OWNED_REASONS = ['needs_coordinator_review']), NOT "the belt is healthy". A
+      // parent-LEAD block is not the coordinator's to clear, so OK is the correct verdict here and
+      // asserting otherwise would assert something false about that function. What WAS a lie in the
+      // live symptom is the depth: it reported claimableDepth=10 against a true eligible depth of 0,
+      // and that is the input this fix corrects.
+      expect(res.belt_block.claimableDepth).toBe(0);
     }
+  });
+
+  it('REGRESSION: the idle note still fires — belt_ranked_claimable changing meaning must not kill its consumer', async () => {
+    seq = 0;
+    // Making belt_ranked_claimable report ELIGIBLE depth made it equal to belt_claimable_at_my_tier by
+    // construction. idle.cjs gates BOTH the QF-20260719-144 ineligibility note and QF-20260831-738
+    // SELF-IDENTIFY (chairman-proposed, ratification f48e0abf) on `rankedAgnostic > 0 && claimableAtTier
+    // === 0` — equality makes that UNSATISFIABLE and silently kills two shipped features. The existing
+    // suite missed it because it hand-builds ctx.base with a raw/eligible split production can no
+    // longer produce, so this drives the REAL runCheckin instead.
+    const children = Array.from({ length: 10 }, (_, i) => child(`SD-CHILD-IDLENOTE-${i + 1}`));
+    const { sb } = fleetOf(children, parentRow('LEAD'));
+    const res = await runCheckin(sb, SESSION, NO_COORD);
+
+    // The gap must remain EXPRESSIBLE: a non-zero pool with zero eligible is exactly what the note
+    // explains. If these are equal, the guard can never fire again.
+    expect(res.belt_ranked_pool_size).toBeGreaterThan(0);
+    expect(res.belt_claimable_at_my_tier).toBe(0);
+    expect(res.belt_ranked_pool_size).not.toBe(res.belt_claimable_at_my_tier);
+    // And the note actually reaches the worker rather than being computed and dropped.
+    expect(res.message).toMatch(/ranked, but 0 claimable/);
   });
 
   it('TS-2 arm (b): a parent OUTSIDE the ranked pool is still resolved and still gates its children', async () => {

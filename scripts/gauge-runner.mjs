@@ -79,7 +79,7 @@ import { readHoldStateMode, isStructuredPredicate } from '../lib/governance/hold
 // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-D (FR-6): the first non-test importer of the release-condition
 // evaluator. Before this it had exactly one importer — its own unit test — and its docblock said
 // consumers were "not-yet-built".
-import { evaluate, PREDICATE_TYPE } from '../lib/governance/release-condition-predicate.js';
+import { classifyReleaseConditions } from '../lib/governance/release-condition-predicate.js';
 import { scanOpenQfsForOffCanonicalMints } from '../lib/fleet/off-canonical-mint-gauge.js';
 import { runCheck as checkWindDownRecurrence } from './gauges/wind-down-recurrence-check.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the hold-state-overdue detector's
@@ -236,43 +236,44 @@ function buildDetectorResolvers(supabase) {
        * db_row_exists; test_green and manual_flag need a state provider that does not exist yet, and
        * they are reported as unevaluable rather than silently counted as unmet.
        */
-      const { data: predicateRows, error: predicateErr } = await supabase
-        .from('hold_state_contract_violations')
-        .select('id, surface, release_condition, release_condition_predicate')
-        .gte('created_at', sevenDaysAgoIso)
-        .limit(1000);
-      if (predicateErr) throw new Error('hold-state-overdue predicate query failed: ' + predicateErr.message);
-
-      const rows = predicateRows || [];
-      // The gauge can answer db_row_exists and nothing else without new machinery, so it declares the
-      // state it actually has rather than an empty object that would make every predicate read false.
-      const injectedState = { rowCounts: { hold_state_contract_violations: rows.length } };
-      const EVALUABLE_HERE = new Set([PREDICATE_TYPE.DB_ROW_EXISTS]);
-      let structured = 0, proseOnly = 0, met = 0, unmet = 0, unevaluableHere = 0;
-      for (const r of rows) {
-        const p = r.release_condition_predicate;
-        if (!isStructuredPredicate(p)) {
-          // A prose-only condition is NOT a predicate and is never parsed into one — it is the gap.
-          if (typeof r.release_condition === 'string' && r.release_condition.trim()) proseOnly++;
-          continue;
-        }
-        structured++;
-        if (!EVALUABLE_HERE.has(p.type)) { unevaluableHere++; continue; }
-        if (evaluate(p, injectedState)) met++; else unmet++;
+      // Paginated to completion, NOT .limit(N): PostgREST re-clamps at 1000 rows, so a capped read
+      // would measure the cap rather than the population — the same false-negative the sibling query
+      // above is paginated to avoid. A silently truncated denominator here would understate the
+      // prose-only gap this counter exists to expose.
+      let predicateRows;
+      try {
+        predicateRows = await fetchAllPaginated(() => supabase
+          .from('hold_state_contract_violations')
+          .select('id, surface, release_condition, release_condition_predicate')
+          .gte('created_at', sevenDaysAgoIso)
+          .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries
+      } catch (error) {
+        throw new Error('hold-state-overdue predicate query failed: ' + error.message);
       }
+
+      // The gauge injects ONLY the state it can honestly supply. It deliberately does NOT fabricate a
+      // self-referential count (an earlier cut passed rowCounts.hold_state_contract_violations =
+      // rows.length, which could only ever resolve met degenerately, from its own result set).
+      // Everything it cannot answer is reported UNEVALUABLE, never unmet — classifyReleaseConditions
+      // gates on the presence of the specific state KEY, so a predicate keyed to a table the gauge did
+      // not count cannot be misreported as not-met.
+      const injectedState = {};
+      const counts = classifyReleaseConditions(predicateRows || [], injectedState, isStructuredPredicate);
 
       return {
         ...findOverdueHolds(data, Date.now()),
         mode: readHoldStateMode(),
         recentViolationCount: recentViolationCount || 0,
         // A MET condition surfaces here instead of sitting silent — the exit predicate this child owns.
-        releaseConditionsMet: met,
-        releaseConditionsUnmet: unmet,
+        releaseConditionsMet: counts.met,
+        releaseConditionsUnmet: counts.unmet,
         // Reported separately, never folded into unmet: fail-closed false is not evidence of not-met.
-        releaseConditionsUnevaluableHere: unevaluableHere,
-        structuredPredicateCount: structured,
+        // Non-zero here means a state provider is still missing, which is a DIFFERENT problem from a
+        // condition that is genuinely not yet satisfied, and the two must not be summed.
+        releaseConditionsUnevaluableHere: counts.unevaluable,
+        structuredPredicateCount: counts.structured,
         // The remaining work, made countable: conditions still carried as prose a machine cannot read.
-        proseOnlyConditionCount: proseOnly,
+        proseOnlyConditionCount: counts.proseOnly,
       };
     },
     // QF-20260831-191: escalated QFs with no linked SD -- the work sits in no lane, invisible.
