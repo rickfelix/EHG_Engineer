@@ -29,6 +29,8 @@ import {
   generateRemediationSdsBatch,
   selectPendingFindings,
   isLikelyTestFixture,
+  resolveVentureApplication,
+  mintVentureQuickFix,
   FIXTURE_VENTURE_ID_PREFIX,
   FIXTURE_SIG_PREFIX,
   FR_C_REMEDIATION_SEVERITIES,
@@ -146,6 +148,8 @@ describe('FR-C generator — unit', () => {
       order: function () { return this; },
       gte: function () { return this; },
       range: function () { return this; },
+      is: function () { return this; },
+      maybeSingle: function () { return Promise.resolve({ data: this.data, error: this.error }); },
       then: function (cb) { return cb({ data: this.data, error: this.error }); },
     });
 
@@ -166,6 +170,10 @@ describe('FR-C generator — unit', () => {
         if (table === 'venture_quality_findings') {
           // selectPendingFindings query — return zero pending rows
           return makeThenable([], null);
+        }
+        if (table === 'applications') {
+          // resolveVentureApplication — no registered app, falls through to existing SD path
+          return makeThenable(null, null);
         }
         return makeThenable(null, null);
       }),
@@ -189,12 +197,148 @@ describe('FR-C generator — unit', () => {
         const t = makeThenable([], null);
         return t;
       }
+      if (table === 'applications') {
+        return makeThenable(null, null);
+      }
       return makeThenable(null, null);
     });
 
     const ventureId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
     const result = await generateRemediationSdsForVenture(ventureId, { supabase, rateLimit: 5 });
     expect(result.created.length).toBe(0);
+    expect(result.errors.length).toBe(0);
+  });
+});
+
+// ============================================================================
+// UNIT — venture findings route to the QF lane, never the SD lane (QF-20260902-265)
+// ============================================================================
+
+describe('venture-targeted findings route to the QF lane (QF-20260902-265)', () => {
+  function findingsThenable(rows) {
+    return {
+      data: rows, error: null,
+      select: function () { return this; },
+      eq: function () { return this; },
+      in: function () { return this; },
+      order: function () { return this; },
+      range: function () { return this; },
+      then: function (cb) { return cb({ data: this.data, error: this.error }); },
+    };
+  }
+
+  test('resolveVentureApplication returns the registered app name, not a venture_default literal', async () => {
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'AltifyAI' }, error: null }),
+      })),
+    };
+    const app = await resolveVentureApplication(supabase, '50763b6a-0000-4000-8000-000000000000');
+    expect(app).toBe('AltifyAI');
+  });
+
+  test('resolveVentureApplication returns null when no application is registered (falls through to unchanged SD path)', async () => {
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })),
+    };
+    expect(await resolveVentureApplication(supabase, 'no-app-venture')).toBeNull();
+  });
+
+  test('mintVentureQuickFix mints an open (non-gated) QF for a finding with no risk/schema keyword', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = { from: vi.fn(() => ({ insert })) };
+    const finding = { id: 'f-1', finding_category: 'lint', severity: 'medium', evidence_pointer: { legacy_detail: 'unused var' } };
+    const { qfId, gated } = await mintVentureQuickFix(supabase, { ventureId: 'v-1', targetApp: 'AltifyAI', finding });
+    expect(qfId).toMatch(/^QF-\d{8}-\d{3}$/);
+    expect(gated).toBe(false);
+    const row = insert.mock.calls[0][0];
+    expect(row.target_application).toBe('AltifyAI');
+    expect(row.status).toBe('open');
+    expect(row.owner).toBeNull();
+    expect(row.release_condition).toBeNull();
+  });
+
+  test('mintVentureQuickFix GATES the row (owner + release_condition) on a Tier-3 keyword hit — never status=escalated', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = { from: vi.fn(() => ({ insert })) };
+    const finding = { id: 'f-2', finding_category: 'npm_audit', severity: 'high', evidence_pointer: { legacy_detail: 'rotate credentials in the auth module' } };
+    const { gated } = await mintVentureQuickFix(supabase, { ventureId: 'v-1', targetApp: 'AltifyAI', finding });
+    expect(gated).toBe(true);
+    const row = insert.mock.calls[0][0];
+    expect(row.status).toBe('open'); // never 'escalated'
+    expect(row.owner).toBe('venture-owner-lane');
+    expect(row.release_condition).toMatch(/credentials/);
+  });
+
+  test('generateRemediationSdsForVenture: a venture finding with a registered app mints a QF, never an SD', async () => {
+    const finding = { id: 'f-3', venture_id: 'v-altifyai', finding_category: 'npm_audit', severity: 'high', evidence_pointer: {}, stage_number: 20, created_at: '2026-09-02T00:00:00Z' };
+    const insertQf = vi.fn().mockResolvedValue({ error: null });
+    const updateFinding = vi.fn().mockReturnValue({ eq: function () { return { eq: function () { return Promise.resolve({ error: null }); } }; } });
+    const auditInsert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'applications') {
+          return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), is: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'AltifyAI' }, error: null }) };
+        }
+        if (table === 'venture_quality_findings') {
+          return { ...findingsThenable([finding]), update: updateFinding };
+        }
+        if (table === 'quick_fixes') return { insert: insertQf };
+        if (table === 'audit_log') return { insert: auditInsert };
+        if (table === 'strategic_directives_v2') {
+          // Only the up-front daily-count read is expected (unconditional, before per-finding
+          // routing); an INSERT here would mean the SD lane was touched for a venture finding.
+          return {
+            select: vi.fn((_c, o) => {
+              if (o && o.count === 'exact') return { eq: function () { return this; }, gte: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+              throw new Error('SD lane read/write must not be touched for a venture-targeted finding');
+            }),
+            insert: () => { throw new Error('SD lane must not be touched for a venture-targeted finding'); },
+          };
+        }
+        return findingsThenable([]);
+      }),
+    };
+    const result = await generateRemediationSdsForVenture('v-altifyai', { supabase, rateLimit: 20 });
+    expect(result.created.length).toBe(0);
+    expect(result.mintedQuickFixes.length).toBe(1);
+    expect(result.mintedQuickFixes[0].finding_id).toBe('f-3');
+    expect(insertQf.mock.calls[0][0].target_application).toBe('AltifyAI');
+  });
+
+  test('generateRemediationSdsForVenture: an EHG_Engineer-targeted finding still yields the SD (unchanged)', async () => {
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'applications') {
+          return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), is: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'EHG_Engineer' }, error: null }) };
+        }
+        // No pending findings needed to prove the routing decision itself: an EHG_Engineer
+        // resolution must never enter the QF branch. Zero findings keeps this test focused on
+        // that one branch decision instead of re-exercising the (already-covered) SD insert path.
+        if (table === 'venture_quality_findings') return findingsThenable([]);
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: vi.fn((_c, o) => {
+              if (o && o.count === 'exact') {
+                return { eq: function () { return this; }, gte: vi.fn().mockResolvedValue({ count: 0, error: null }) };
+              }
+              return findingsThenable([]);
+            }),
+          };
+        }
+        return findingsThenable([]);
+      }),
+    };
+    const result = await generateRemediationSdsForVenture('v-ehg-engineer', { supabase, rateLimit: 20 });
+    expect(result.mintedQuickFixes.length).toBe(0);
     expect(result.errors.length).toBe(0);
   });
 });

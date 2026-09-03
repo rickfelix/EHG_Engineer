@@ -48,7 +48,7 @@
     },
     {
       "file": "lib/eva/quality-findings/sd-generator.js",
-      "line": 638,
+      "line": 690,
       "rule": "B",
       "method": "insert",
       "snippet": "insert({ progress: ... })"
