@@ -667,6 +667,39 @@ export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 // CLAUDE_SOLOMON.md added by SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6) — that SD landed.
 export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md'];
 
+// ── SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-C / FR-1 + FR-2 ─────────────────────────────────────
+// SECOND TIER: "confirmed fit", stricter than the raw cap and DERIVED from the same instrument the
+// exit criteria are measured with, so the two cannot drift apart.
+//
+// WHY A SECOND TIER AT ALL. The cap above and the exit instrument disagree by the width of the
+// predictor's error band, and until now nothing said so out loud. lib/protocol/contract-read-coverage.cjs
+// returns {fits:null, basis:'predicted_marginal'} for any file within SINGLE_READ_MARGIN_TOKENS of the
+// cap, and that band is SYMMETRIC (Math.abs), so fits:true is unreachable above cap-margin = 23,300.
+// A file can therefore sit on MUST_FIT_SINGLE_READ, pass this throw at 25,000, and still be a file the
+// instrument cannot confirm fits. CLAUDE_SOLOMON.md did exactly that: its own SD recorded it at 23,175
+// tokens ("clear of both"), it has since drifted to 24,918, and CI stayed green the whole way.
+//
+// WHY THE THROW BELOW IS LEFT ALONE, and this is the load-bearing part. The obvious repair is to lower
+// the existing cap to 23,300. Measured against the real files, that FLAT change throws on TWO enforced
+// files immediately -- CLAUDE_LEAD.md (24,247, 947 over) and CLAUDE_SOLOMON.md (24,918, 1,618 over) --
+// and regen-on-drift.js has no catch around the generator call, so it exits 1 with no PR and leaves the
+// drift in place: every seat's encode fails. It is also NOT self-healing; trimming Adam and Solomon to
+// 20,000 still throws on LEAD. That outage has already happened once, over a 73-token overage
+// (see file-generators.js "the regen pipeline WEDGED"). So the hard cap keeps its exact behaviour and
+// this tier is additive and opt-in.
+export const SINGLE_READ_CONFIRMED_FIT_TOKENS =
+  SINGLE_READ_TOKEN_CAP - (SINGLE_READ_TOKEN_CAP * harnessTokenScale.HARNESS_TOKEN_MAX_ERROR_FRACTION);
+
+// DELIBERATELY EMPTY ON LANDING. Same discipline as MUST_FIT_SINGLE_READ above: a file joins this list
+// when the SD that makes it fit has landed, never before. CLAUDE_ADAM.md (36,692) and CLAUDE_SOLOMON.md
+// (24,918) are the intended members, and adding them in THIS commit -- before the carve that shrinks
+// them -- would throw on the very next regeneration. That is the wedge, not the fix for it.
+// CLAUDE_LEAD.md and CLAUDE_PLAN.md are deliberately NOT candidates here: LEAD is marginal (24,247) and
+// PLAN is 505 tokens from the same edge, and neither has an SD that has trimmed it. They stay warn-only
+// under this tier, which is the point -- the gate now SAYS it is not enforcing them instead of silently
+// passing them.
+export const MUST_CONFIRM_SINGLE_READ_FIT = [];
+
 /**
  * Fail generation when a file that is REQUIRED to fit no longer does.
  *
@@ -703,6 +736,34 @@ export function assertSingleReadFit(files, opts = {}) {
       'a no-offset Read now truncates and reports success, so nothing downstream will tell you. ' +
       'Move sections to a companion via scripts/section-file-mapping.json (see CLAUDE_LEAD_MANUAL.md ' +
       'for the pattern) rather than raising the cap.',
+    );
+  }
+
+  // SECOND TIER, evaluated only AFTER the hard cap has passed, so it can never change whether the
+  // existing throw fires or what it says. Anything at or above the confirmed-fit threshold is a file
+  // the read-coverage instrument cannot report fits:true for -- it is inside the predictor's error
+  // band, which is "cannot tell", not "fits".
+  const {
+    confirmedFitTokens = SINGLE_READ_CONFIRMED_FIT_TOKENS,
+    mustConfirmFit = MUST_CONFIRM_SINGLE_READ_FIT,
+  } = opts;
+  const unconfirmed = (files || [])
+    .map(({ name, bytes }) => ({ name, tokens: Math.round((bytes || 0) / bytesPerToken) }))
+    .filter((f) => f.tokens >= confirmedFitTokens)
+    .map((f) => ({ ...f, overBy: f.tokens - confirmedFitTokens, enforced: mustConfirmFit.includes(f.name) }));
+
+  for (const f of unconfirmed.filter((x) => !x.enforced)) {
+    onWarn(`   ⚠ NOT CONFIRMED TO FIT (warn-only — no SD has trimmed this file yet): ${f.name} ~${f.tokens} tokens, within the predictor's error band above ${Math.round(confirmedFitTokens)}. singleReadFit() reports fits:null for it, which means CANNOT TELL — not fits.`);
+  }
+
+  const unconfirmedEnforced = unconfirmed.filter((x) => x.enforced);
+  if (unconfirmedEnforced.length) {
+    const detail = unconfirmedEnforced.map((f) => `${f.name} ~${f.tokens} tokens (${f.overBy} over ${Math.round(confirmedFitTokens)})`).join('; ');
+    throw new Error(
+      `SINGLE_READ_FIT_UNCONFIRMED: ${detail}. An SD has already trimmed these files to a CONFIRMED fit, ` +
+      'so drifting back into the predictor\'s error band is a regression, not a new debt. The threshold is ' +
+      'derived from the same instrument the exit criteria use (cap minus its measured max error), so ' +
+      'lowering it here to pass would only hide the drift from the check that noticed it.',
     );
   }
   return over;
