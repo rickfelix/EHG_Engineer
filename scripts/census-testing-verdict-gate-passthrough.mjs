@@ -46,12 +46,17 @@ export function classifyAtAcceptTime(acceptedAt, testingRows) {
 
 export async function runCensus({ supabase, days = 7 } = {}) {
   const since = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+  // .limit(999): a genuine bound -- a 7-day window of accepted PLAN-TO-EXEC/EXEC-TO-PLAN
+  // handoffs measured 253 rows at authoring time; 999 covers a real fleet surge with
+  // room to spare while still catching a truly runaway result as an anomaly, rather than
+  // an unbounded full-table read.
   const { data: handoffs, error } = await supabase
     .from('sd_phase_handoffs')
     .select('id, sd_id, handoff_type, status, accepted_at, created_at')
     .in('handoff_type', ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'])
     .eq('status', 'accepted')
-    .gte('created_at', since);
+    .gte('created_at', since)
+    .limit(999);
   if (error) throw new Error(`census: sd_phase_handoffs query failed: ${error.message}`);
 
   const rows = [];

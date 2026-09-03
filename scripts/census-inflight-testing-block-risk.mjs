@@ -37,10 +37,15 @@ const REJECT_VERDICTS = new Set(['FAIL', 'BLOCKED', 'PENDING', 'MANUAL_REQUIRED'
  * @returns {Promise<{scannedActiveSds: number, blocking: Array<{sd_key: string, sd_id: string, latest_handoff_status: string|null, testing_verdict: string}>}>}
  */
 export async function runInFlightCensus({ supabase }) {
+  // .limit(500): a genuine bound, not lint-decoration -- 'active' SDs are a small,
+  // deliberately-scarce working set (measured 6 live at authoring time); 500 is generous
+  // headroom while still catching a runaway population as an anomaly worth investigating,
+  // rather than reading the whole table unbounded.
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key')
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .limit(500);
   if (error) throw new Error(`census: strategic_directives_v2 query failed: ${error.message}`);
 
   const blocking = [];

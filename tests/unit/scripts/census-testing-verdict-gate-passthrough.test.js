@@ -68,7 +68,7 @@ describe('runCensus()', () => {
             select: () => ({
               in: () => ({
                 eq: () => ({
-                  gte: async () => ({ data: handoffs, error: null }),
+                  gte: () => ({ limit: async () => ({ data: handoffs, error: null }) }),
                 }),
               }),
             }),
@@ -127,7 +127,7 @@ describe('runCensus()', () => {
     const supabase = {
       from(table) {
         if (table === 'sd_phase_handoffs') {
-          return { select: () => ({ in: () => ({ eq: () => ({ gte: async () => ({ data: [{ id: 'h1', sd_id: 'sd-1', accepted_at: '2026-09-02T18:00:00Z', created_at: '2026-09-02T17:00:00Z', handoff_type: 'PLAN-TO-EXEC' }], error: null }) }) }) }) };
+          return { select: () => ({ in: () => ({ eq: () => ({ gte: () => ({ limit: async () => ({ data: [{ id: 'h1', sd_id: 'sd-1', accepted_at: '2026-09-02T18:00:00Z', created_at: '2026-09-02T17:00:00Z', handoff_type: 'PLAN-TO-EXEC' }], error: null }) }) }) }) }) };
         }
         return { select: () => ({ eq: () => ({ ilike: () => ({ lte: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) }) };
       },

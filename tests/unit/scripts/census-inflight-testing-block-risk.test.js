@@ -9,7 +9,7 @@ function makeFakeSupabase({ activeSds, handoffsBySd = {}, testingBySd = {} }) {
   return {
     from(table) {
       if (table === 'strategic_directives_v2') {
-        return { select: () => ({ eq: async () => ({ data: activeSds, error: null }) }) };
+        return { select: () => ({ eq: () => ({ limit: async () => ({ data: activeSds, error: null }) }) }) };
       }
       if (table === 'sd_phase_handoffs') {
         return {
@@ -98,7 +98,7 @@ describe('runInFlightCensus()', () => {
     const supabase = {
       from(table) {
         if (table === 'strategic_directives_v2') {
-          return { select: () => ({ eq: async () => ({ data: [{ id: 'sd-1', sd_key: 'SD-X' }, { id: 'sd-2', sd_key: 'SD-Y' }], error: null }) }) };
+          return { select: () => ({ eq: () => ({ limit: async () => ({ data: [{ id: 'sd-1', sd_key: 'SD-X' }, { id: 'sd-2', sd_key: 'SD-Y' }], error: null }) }) }) };
         }
         if (table === 'sd_phase_handoffs') {
           return {
