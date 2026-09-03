@@ -31,6 +31,118 @@ import { getOpenAIModel } from '../../../../../../lib/config/model-config.js';
 const MAX_FINDING_PREVIEW = 3;
 const OVERRIDE_LOOKBACK_DAYS = 14;
 const SEVERITY_RANK = { block: 3, warn: 2, note: 1, pass: 0 };
+
+// SD-LEO-INFRA-CRITIQUE-GATE-NON-001.
+//
+// HARD CONSTRAINT (Solomon, accepted by Adam, carried by the coordinator's review-clear — see
+// this SD's metadata.success_criterion): the success criterion is DISCRIMINATION — a known-good
+// plan PASSES, a known-bad plan BLOCKS — NEVER the pass rate. "Re-thresholding a never-passing
+// gate until it passes" is early-return trigger (iii) of ratification 09f14b64 (criteria changed
+// so a number improves without outcome improvement). The measured background below explains WHY a
+// fix was needed; it is NOT what proves this fix correct — see the golden-corpus discrimination
+// tests in pre-plan-critique.test.js (a real, independently-verified-clean SD's PRD run LIVE
+// through this exact code stays 'warn'; a PRD modeled on a real cited incident
+// (lib/eva/invariant-library.js INV-002) still reaches 'block') for that proof.
+//
+// MEASURED BACKGROUND: plan_critiques (373 rows, 2026-04-07..2026-09-03) had 0 PASS verdicts ever
+// recorded — 358 block (96%), 15 warn (4%). Of a 50-row sample of block verdicts, 43 (86%) carried
+// exactly ONE block-severity finding, and 49 of the 56 block-severity findings across that sample
+// (87.5%) were category 'missing_criteria' — a category the LLM's OWN rubric defined as
+// addressable by PLAN/EXEC (add the missing criterion), not a genuine escalation. Pure
+// max()-over-findings aggregation meant any single low-stakes finding force-blocked the whole
+// handoff, which was structurally guaranteed on real PRDs (an adversarial critic asked to "pick
+// the most consequential findings" on 5+ months of real plans essentially always found SOMETHING
+// to call missing_criteria).
+//
+// SUFFICIENCY_THRESHOLD + HIGH_AUTHORITY_CATEGORIES implement "sufficiency threshold" +
+// "anchor block-severity to decision-authority cost" from this SD's own scope: a block-severity
+// finding counts toward the gate's combined verdict only if (a) it is in a category that
+// plausibly requires authority beyond PLAN/EXEC to resolve unilaterally (a genuine contradiction
+// between two SD-spine claims, or a missing rollback plan for an irreversible/destructive
+// operation), or (b) there are at least SUFFICIENCY_THRESHOLD independent block-severity findings
+// (cross-cutting evidence of genuine incompleteness, not one reviewer's single nitpick). This
+// mirrors the invariant library's own already-established design philosophy one file over
+// (lib/eva/invariant-library.js: "only a check that PROVES untestability may block, and regexes
+// prove nothing") — applying the same discipline to the LLM half of the critic, which never had it.
+// The LLM's own system prompt (lib/eva/devils-advocate.js) was independently rewritten with the
+// same decision-authority anchoring, so the discipline applies at BOTH the source and the
+// aggregator (defense in depth, not redundant — either half fixed alone still leaves a gap).
+//
+// DOES NOT touch the PR #6927 anti-laundering fix ("verdict cannot be laundered through findings
+// shape" — a block verdict with EMPTY findings must never downgrade): this downgrade applies
+// ONLY when findings.length > 0 — an unbacked block claim (no findings listed at all) is a
+// DIFFERENT, more suspicious shape than a backed-but-insufficient one, and stays fail-closed.
+const SUFFICIENCY_THRESHOLD = 2;
+// TESTING sub-agent prospective finding (MUST-FIX #1/#2): this was originally a
+// HIGH_AUTHORITY_CATEGORIES *allowlist* deciding which categories are eligible to block —
+// fail-OPEN, because anything not on the list (a deterministic invariant's own 'invariant'
+// category if it ever emits block severity, an off-vocabulary/missing/malformed category, or the
+// LLM's own 'other' catch-all) silently downgraded. Flipped to a LOW_AUTHORITY_CATEGORIES
+// *denylist*: only a finding whose category is explicitly one PLAN/EXEC can resolve unilaterally
+// downgrades; anything else — including 'invariant', 'other', or a missing/malformed value —
+// stays block-eligible by default (fail-closed). The rewritten system prompt (devils-advocate.js)
+// additionally instructs the LLM that a block-severity finding MUST be categorized
+// 'contradiction' or 'missing_rollback', so 'other' on a genuine escalation is now a
+// prompt-contract violation this gate treats conservatively, not silently discarded.
+const LOW_AUTHORITY_CATEGORIES = new Set(['missing_criteria', 'scope_incoherence', 'reuse_opportunity']);
+
+/**
+ * Pure aggregation core (golden-corpus-testable without a DB or an LLM call): given the LLM's
+ * self-reported overall_severity and the merged (LLM + invariant) findings list, derive the
+ * gate's combined verdict severity. Findings can only RAISE the seeded severity (existing
+ * PR #6927 invariant, preserved) EXCEPT for the new sufficiency-threshold downgrade, which is a
+ * narrower, additional check applied only when block-severity findings are present but don't
+ * meet the decision-authority/count bar.
+ *
+ * @param {Object} args
+ * @param {string} args.llmOverall - The LLM's raw self-reported overall_severity (lowercased by caller)
+ * @param {Array} args.findings - Merged LLM + invariant findings
+ * @returns {string} combined severity: 'pass'|'note'|'warn'|'block'
+ */
+export function deriveCombinedSeverity({ llmOverall, findings = [] }) {
+  // TESTING prospective finding (should-fix, robustness): findings elements are LLM/deterministic
+  // output, never schema-validated upstream — a null/non-object element must not throw here.
+  const safeFindings = Array.isArray(findings) ? findings.filter((f) => f && typeof f === 'object') : [];
+
+  const seed = llmOverall in SEVERITY_RANK ? llmOverall : 'pass';
+  let combined = seed;
+
+  for (const f of safeFindings) {
+    const raw = String(f.severity || 'note').trim().toLowerCase();
+    // Off-vocabulary severities ('critical', 'high', …) must not rank BELOW pass by falling out
+    // of the table — map unknowns conservatively to 'warn'.
+    const s = raw in SEVERITY_RANK ? raw : 'warn';
+    if (SEVERITY_RANK[s] > SEVERITY_RANK[combined]) combined = s;
+  }
+
+  if (combined === 'block' && safeFindings.length > 0) {
+    const blockFindings = safeFindings.filter((f) => {
+      const raw = String(f.severity || 'note').trim().toLowerCase();
+      return (raw in SEVERITY_RANK ? raw : 'warn') === 'block';
+    });
+    // Deny-by-default: a block finding downgrades ONLY when EVERY one of its co-occurring block
+    // findings is explicitly low-authority. A single high-authority (or unrecognized-category)
+    // block finding among several keeps the whole verdict at block.
+    const allLowAuthority = blockFindings.length > 0
+      && blockFindings.every((f) => LOW_AUTHORITY_CATEGORIES.has(String(f.category || '').trim().toLowerCase()));
+    // TESTING prospective finding (should-fix #4): "independent" findings, deduped by
+    // severity+category+message so an LLM restating the same gap across "up to 5 findings"
+    // cannot manufacture sufficiency by repetition.
+    const distinctBlockFindings = new Set(
+      blockFindings.map((f) => `${String(f.severity || '').trim().toLowerCase()}::${String(f.category || '').trim().toLowerCase()}::${String(f.message || '').trim().toLowerCase()}`)
+    );
+    const sufficientCount = distinctBlockFindings.size >= SUFFICIENCY_THRESHOLD;
+    // blockFindings.length === 0 here means the seed came from llmOverall alone while the listed
+    // findings are all sub-block — the same "unbacked claim" shape as the empty-findings case,
+    // just with contradicting findings attached. Stays block (seed untouched), conservative.
+    if (blockFindings.length > 0 && allLowAuthority && !sufficientCount) {
+      combined = 'warn';
+    }
+  }
+
+  return combined;
+}
+
 const SCORE_BY_OUTCOME = {
   pass: 100,
   note: 90,
@@ -126,6 +238,13 @@ export async function validatePrePlanCritique(ctx) {
     archLoadStatus = 'load_failed';
   }
 
+  // FR-2: invariant library — deterministic, runs even when the LLM half cannot. Moved AHEAD of
+  // the replay-guard below (TESTING sub-agent prospective finding N2): invariant checks are free
+  // (no LLM, no network), so there is no reason the replay-pass path should ever reuse a STALE
+  // invariant snapshot from the original run — if a new invariant has been added to the library
+  // since, it must still fire on unchanged content, exactly as it would on any other run.
+  const invariant = runInvariantChecks({ prdContent, archContent });
+
   // QF-20260902-181: refuse re-execute while content_hash is unchanged since the last blocking
   // verdict — 23 handoffs in the 7-day cohort retried 4-5x within minutes on unchanged content
   // (finding COUNT is the wrong key here — the critic is nondeterministic — content_hash, the
@@ -137,21 +256,61 @@ export async function validatePrePlanCritique(ctx) {
   if (lastBlock && lastBlock.content_hash === retryHash) {
     const { override } = await findActiveOverride(supabase, sd.id, retryHash);
     if (!override) {
-      const msg = `Re-execute refused: content_hash unchanged since the last blocking critique ` +
-        `(${lastBlock.id}, ${lastBlock.created_at}) — replaying prior findings. Fix the plan ` +
-        '(changes the hash) or record an audited override.';
-      console.log(`   ⚠️  ${msg}`);
+      // TESTING sub-agent prospective finding (MUST-FIX #3): this branch used to persist and
+      // return a HARDCODED overall_severity:'block' — bypassing deriveCombinedSeverity entirely.
+      // That meant this SD's own fix could never reach the population that motivated it: every
+      // one of the 358 historically-blocked SDs sitting on unchanged content would keep
+      // hard-blocking forever, regardless of the new sufficiency/decision-authority rules. The
+      // underlying LLM findings are unchanged (content_hash matches), so no LLM re-call is
+      // needed — but the invariant half IS re-run fresh (above, N2) and merged in here, so a
+      // library change since the original run is never silently missed.
+      const lastLlmOverall = String(lastBlock.metadata?.llm_result?.overall_severity || 'block').toLowerCase();
+      // metadata.llm_result.findings is the RAW pre-merge LLM output (see devils-advocate.js's
+      // own persist comment) — reused here so re-merging with FRESH invariant.findings never
+      // double-counts the invariant findings baked into lastBlock.findings from the original run.
+      // Older rows without this shape fall back to the merged historical findings as-is.
+      const lastLlmFindings = Array.isArray(lastBlock.metadata?.llm_result?.findings)
+        ? lastBlock.metadata.llm_result.findings
+        : (lastBlock.findings || []);
+      const replayFindings = [...lastLlmFindings, ...invariant.findings];
+      const reDerived = deriveCombinedSeverity({ llmOverall: lastLlmOverall, findings: replayFindings });
+      if (reDerived === 'block') {
+        const msg = 'Re-execute refused: content_hash unchanged since the last blocking critique ' +
+          `(${lastBlock.id}, ${lastBlock.created_at}) — replaying prior findings (LLM half reused, ` +
+          'invariant half re-run fresh), which still combine to block under the current ' +
+          'aggregation rules. Fix the plan (changes the hash) or record an audited override.';
+        console.log(`   ⚠️  ${msg}`);
+        await persistCritique(supabase, {
+          sd_id: sd.id, prd_id: prdId, findings: replayFindings, overall_severity: 'block',
+          model_used: lastBlock.model_used, token_usage: null, content_hash: retryHash,
+          // TESTING sub-agent finding (minor, PLAN-TO-EXEC re-verification): metadata.llm_result
+          // must carry the raw LLM-only findings here too — on a SECOND consecutive replay,
+          // findLastBlockingCritique would otherwise read this row's already-invariant-merged
+          // `findings` back as `lastLlmFindings` (the metadata.llm_result fallback), duplicating
+          // the invariant finding a second time. Verdict is unaffected (dedup absorbs it), but
+          // this keeps the persisted data itself accurate across repeated replay cycles.
+          metadata: { retry_refused: true, replayed_from: lastBlock.id, llm_result: { findings: lastLlmFindings, overall_severity: lastLlmOverall } },
+        }, [msg]);
+        return { pass: false, score: SCORE_BY_OUTCOME.block, max_score: 100, issues: [msg], warnings: [msg] };
+      }
+      const msg = `Prior block (${lastBlock.id}, ${lastBlock.created_at}) no longer earns 'block' ` +
+        `under the current aggregation rules — re-derived as '${reDerived}'. Content unchanged, so ` +
+        're-using the prior LLM findings (invariant half re-run fresh); no new LLM call needed.';
+      console.log(`   ℹ️  ${msg}`);
       await persistCritique(supabase, {
-        sd_id: sd.id, prd_id: prdId, findings: lastBlock.findings || [], overall_severity: 'block',
+        sd_id: sd.id, prd_id: prdId, findings: replayFindings, overall_severity: reDerived,
         model_used: lastBlock.model_used, token_usage: null, content_hash: retryHash,
-        metadata: { retry_refused: true, replayed_from: lastBlock.id },
+        metadata: { retry_refused: false, re_derived_from: lastBlock.id, re_derived_llm_overall: lastLlmOverall, llm_result: { findings: lastLlmFindings, overall_severity: lastLlmOverall } },
       }, [msg]);
-      return { pass: false, score: SCORE_BY_OUTCOME.block, max_score: 100, issues: [msg], warnings: [msg] };
+      return {
+        pass: true,
+        score: SCORE_BY_OUTCOME[reDerived] ?? 75,
+        max_score: 100,
+        issues: [],
+        warnings: [msg],
+      };
     }
   }
-
-  // FR-2: invariant library — deterministic, runs even when the LLM half cannot.
-  const invariant = runInvariantChecks({ prdContent, archContent });
 
   // LLM adversarial critique. All its could-not-run paths return COULD_NOT_CHECK (FR-3);
   // a throw here is the same outcome, reported the same way.
@@ -176,16 +335,10 @@ export async function validatePrePlanCritique(ctx) {
   // alone: the adversarial ship review (PR #6927) showed that deriving purely from
   // per-finding severities let {findings: [], overall_severity: 'block'} score 100 and
   // persist as 'pass' — a blocking verdict silently converted to checked-clean, the exact
-  // class this SD removes. Findings can raise the seed, never lower it.
+  // class this SD removes. Findings can raise the seed, never lower it (except the
+  // sufficiency-threshold downgrade in deriveCombinedSeverity, see its own docstring).
   const llmOverall = String(critique.overall_severity || '').toLowerCase();
-  let combined = llmOverall in SEVERITY_RANK ? llmOverall : 'pass';
-  for (const f of findings) {
-    const raw = String(f.severity || 'note').toLowerCase();
-    // Off-vocabulary severities ('critical', 'high', …) must not rank BELOW pass by
-    // falling out of the table — map unknowns conservatively to 'warn'.
-    const s = raw in SEVERITY_RANK ? raw : 'warn';
-    if (SEVERITY_RANK[s] > SEVERITY_RANK[combined]) combined = s;
-  }
+  let combined = deriveCombinedSeverity({ llmOverall, findings });
   // could_not_check survives as the outcome ONLY when the LLM was blind AND no finding
   // exists — "found nothing" from a half-blind instrument is not checked-clean.
   if (findings.length === 0 && llmBlind) combined = COULD_NOT_CHECK;
@@ -448,9 +601,12 @@ async function findActiveOverride(supabase, sdId, currentContentHash) {
  */
 async function findLastBlockingCritique(supabase, sdId) {
   try {
+    // SD-LEO-INFRA-CRITIQUE-GATE-NON-001 (MUST-FIX #3): metadata now selected so the caller can
+    // re-derive under the current aggregation rules using the LLM's own original seed
+    // (metadata.llm_result.overall_severity) instead of always assuming 'block'.
     const { data, error } = await supabase
       .from('plan_critiques')
-      .select('id, content_hash, findings, model_used, created_at') // schema-lint-disable-line
+      .select('id, content_hash, findings, metadata, model_used, created_at') // schema-lint-disable-line
       .eq('sd_id', sdId)
       .eq('overall_severity', 'block')
       .order('created_at', { ascending: false })
