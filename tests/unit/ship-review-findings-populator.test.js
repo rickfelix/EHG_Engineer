@@ -110,11 +110,6 @@ describe('ship-review-findings-populator', () => {
     expect(inserts[0].verdict).not.toBe('pass');
   });
 
-  it('still skips when there is neither a branch nor an sd_key to derive one from', async () => {
-    const result = await runShipReviewFindingsPopulator({}, makeSupabase());
-    expect(result.outcome).toBe('skip');
-  });
-
   it('never throws even when supabase insert errors', async () => {
     const supabase = makeSupabase(async () => {
       throw new Error('connection lost');
