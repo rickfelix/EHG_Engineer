@@ -13,6 +13,9 @@
 
 import { execFileSync } from 'node:child_process';
 import { probeRepoColumnExists, normalizeGithubRepo } from '../../../../../../lib/ship/repo-column-probe.mjs';
+// QF-20260903-385: the SAME token list branchBelongsToSd uses, so a branch this hook probes for is
+// one the merge-verification gate would also recognise as belonging to the SD.
+import { BRANCH_TYPE_TOKENS } from '../../../../../../lib/git/branch-owner.js';
 
 const KILL_SWITCH = 'LEO_SHIP_REVIEW_POPULATOR_OFF';
 
@@ -54,12 +57,39 @@ function defaultFetcher(repo, branch) {
   // it the same way as the primary sinks.
   const raw = execFileSync(
     'gh',
-    ['pr', 'list', '--repo', repo, '--state', 'merged', '--head', branch, '--limit', '1', '--json', 'number,mergedAt,mergeCommit'],
+    ['pr', 'list', '--repo', repo, '--state', 'merged', '--head', branch, '--limit', '1', '--json', 'number,mergedAt,mergeCommit,headRefName'],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 }
   );
   const arr = JSON.parse(raw);
   if (!Array.isArray(arr) || arr.length === 0) return null;
-  return { pr_number: arr[0].number, mergedAt: arr[0].mergedAt || null };
+  // QF-20260903-385: headRefName is returned so the caller can store the branch GitHub actually
+  // recorded on the merged PR, rather than the candidate string we happened to probe with.
+  return { pr_number: arr[0].number, mergedAt: arr[0].mergedAt || null, headRefName: arr[0].headRefName || null };
+}
+
+/**
+ * QF-20260903-385: candidate branches to probe for an SD that carries no branch of its own.
+ *
+ * WHY THIS EXISTS. resolveBranch() reads sd.feature_branch || sd.branch || sd.metadata.branch and
+ * this hook then returned early on an empty result — which was EVERY time. MEASURED:
+ * strategic_directives_v2 has NO branch columns at all (introspected with select('*')), so two of
+ * those three fallbacks can never be non-null, and metadata.branch was absent on 200 of the 200
+ * most recently completed SDs. The hook has therefore never written a reconciliation row. Confirmed
+ * live: an SD completed LEAD-FINAL at 20:20Z and zero ship_review_findings rows were created after
+ * 20:00Z. Dead by construction, while the unwitnessed-merge gauge counted against it.
+ *
+ * The honest branch source is the MERGED PR ITSELF, not an SD column that was never there. We
+ * cannot ask GitHub "which PR belongs to this SD" directly, so we probe the conventional
+ * <type>/<sd_key> branch names with the exact-match `--head` lookup the fetcher already performs,
+ * and then keep the headRefName GitHub reports. Same approach proven in PR 8132 (Scan C2): do NOT
+ * substitute `gh pr list --search <sd_key>`, which matches PR TITLE/BODY PROSE, not branch names,
+ * and returned a DIFFERENT child's PR when measured.
+ */
+function candidateBranches(sd) {
+  const explicit = resolveBranch(sd);
+  if (explicit) return [explicit];
+  if (!sd?.sd_key) return [];
+  return BRANCH_TYPE_TOKENS.map((type) => `${type}/${sd.sd_key}`);
 }
 
 /**
@@ -69,28 +99,38 @@ function defaultFetcher(repo, branch) {
  * @param {object} supabase - Supabase service-role client.
  * @returns {Promise<{outcome: string, detail?: string}>}
  */
-export async function runShipReviewFindingsPopulator(sd, supabase) {
+export async function runShipReviewFindingsPopulator(sd, supabase, { fetcher } = {}) {
   if (process.env[KILL_SWITCH] === '1') {
     return { outcome: 'disabled' };
   }
   if (!sd?.sd_key) {
     return { outcome: 'skip', detail: 'no sd_key' };
   }
-  const branch = resolveBranch(sd);
-  if (!branch) {
-    return { outcome: 'skip', detail: 'no branch on SD record' };
+  const candidates = candidateBranches(sd);
+  if (candidates.length === 0) {
+    return { outcome: 'skip', detail: 'no branch and no sd_key to derive one from' };
   }
 
   let prInfo;
+  let probed = null;
   try {
-    prInfo = fetchLatestMergedPR(branch);
+    for (probed of candidates) {
+      // `fetcher` is a TEST SEAM only — production passes nothing and gets defaultFetcher.
+      // Without it the no-branch path could only be exercised by making real `gh` calls, which is
+      // how the pre-existing suite ended up spending 5.67s on one case the moment this path went live.
+      prInfo = fetchLatestMergedPR(probed, undefined, fetcher || undefined);
+      if (prInfo) break;
+    }
   } catch (err) {
     await recordWarning(supabase, sd, 'gh_lookup_error', err?.message || String(err));
     return { outcome: 'gh_error', detail: err?.message };
   }
   if (!prInfo) {
-    return { outcome: 'no_pr_found', detail: branch };
+    return { outcome: 'no_pr_found', detail: candidates.join(', ') };
   }
+  // Prefer the branch GitHub recorded on the merged PR over the candidate we guessed with; they
+  // are usually identical, but the PR is the authority and a suffixed branch (…-fr6) is not.
+  const branch = prInfo.headRefName || probed;
 
   const row = {
     sd_key: sd.sd_key,
