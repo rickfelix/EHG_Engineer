@@ -642,7 +642,7 @@ export class OrchestratorCompletionGuardian {
     // witness-retro 84ada45e clobber path.
     {
       const { isSafeToWriteRetro } = await import('./lib/retro-clobber-guard.js');
-      const guard = await isSafeToWriteRetro(supabase, this.sdId);
+      const guard = await isSafeToWriteRetro(supabase, this.sdId, { intendedType: 'SD_COMPLETION' });
       if (!guard.safe) {
         console.warn(`[ENFORCE] skipped orchestrator-completion-guardian INSERT for sdId=${this.sdId} reason=${guard.reason}`);
         return;
@@ -687,7 +687,7 @@ export class OrchestratorCompletionGuardian {
     // manually curated AFTER the orchestrator-completion fired — guard prevents the
     // overwrite witnessed in retro 84ada45e.
     const { isSafeToWriteRetro } = await import('./lib/retro-clobber-guard.js');
-    const guard = await isSafeToWriteRetro(supabase, this.sdId);
+    const guard = await isSafeToWriteRetro(supabase, this.sdId, { intendedType: 'SD_COMPLETION' });
     if (!guard.safe) {
       console.warn(`[ENFORCE] skipped orchestrator-completion-guardian UPDATE for sdId=${this.sdId} reason=${guard.reason}`);
       return;
