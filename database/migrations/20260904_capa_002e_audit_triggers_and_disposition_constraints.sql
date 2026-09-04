@@ -191,6 +191,13 @@ BEGIN
 END;
 $function$;
 
+-- secdef-execute-revoke-lint: any new SECURITY DEFINER function must
+-- explicitly revoke the default PUBLIC EXECUTE grant. This function is a
+-- pure trigger function (RETURNS trigger) -- Postgres invokes it only via
+-- the trigger mechanism when a row-level trigger fires, never via a direct
+-- call from an application role, so no role needs (or gets) EXECUTE back.
+REVOKE EXECUTE ON FUNCTION public.audit_trigger_generic() FROM PUBLIC, anon, authenticated;
+
 -- ============================================================
 -- 2. Attach triggers (idempotent: DROP IF EXISTS + CREATE)
 -- ============================================================

@@ -156,4 +156,6 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(e => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch(e => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+}
