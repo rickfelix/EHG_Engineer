@@ -316,7 +316,7 @@ async function sessionHoldsQuickFixClaim(sessionId, qfKey) {
 // AskUserQuestion call (a rare tool), never on the hot path of other tools.
 const { isBlockableWorker, decideAskUserBlock, ASKUSER_DENY_MESSAGE } = require('./askuser-worker-policy.cjs');
 // QF-20260804-087: worktree-claim decision, extracted for the same reason as the policy above.
-const { shouldBlockWorktreeEdit, isQuickFixWorktree } = require('./worktree-claim-decision.cjs');
+const { deriveWorktreeKey, deriveKeyFromBranch, shouldBlockWorktreeEdit, isQuickFixWorktree } = require('./worktree-claim-decision.cjs');
 // Resolves the calling session's { metadata, loopState } for the AskUserQuestion guard.
 // loop_state is a TOP-LEVEL claude_sessions column (active|awaiting_tick|exited|unknown) — it is
 // the autonomy signal that catches a /loop worker the coordinator has not yet callsigned.
@@ -366,6 +366,19 @@ async function resolveSessionContext(sessionId) {
 // --- WORKTREE CLAIM GUARD (PAT-CLMMULTI-001) ---
 // Regex to detect paths inside .worktrees/<SD-KEY>/
 const WORKTREE_PATH_RE = /[/\\]\.worktrees[/\\]([^/\\]+)/;
+// Sanctioned worktree containers (ENFORCEMENT-12e advertises .worktrees/{sd,qf,adhoc}/<key>) --
+// a container segment names no SD by itself and must never be compared as if it were a key.
+// Previously only 'qf' was exempted here while 12e's own help text sanctions 3 containers,
+// meaning any .worktrees/sd/<key> or .worktrees/adhoc/<key> tree was always false-blocked
+// (its container name could never equal a real DB claim) -- closed as part of
+// SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-1 since it touches this exact check.
+const EXEMPT_WORKTREE_CONTAINERS = new Set(['qf', 'sd', 'adhoc']);
+// SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-2: coordinator-written reuse marker, gitignored.
+const WORKTREE_REUSE_MARKER_FILENAME = '.worktree-reuse.json';
+// Mirrors lib/worktree-reaper/reap-eligible-marker.js's DEFAULT_MARKER_TTL_MIN precedent -- a
+// stale marker naming a since-superseded key must not carry authority indefinitely (that file's
+// own header documents the incident this guards against).
+const WORKTREE_REUSE_MARKER_TTL_MIN = 120;
 
 // --- TOOL POLICY PROFILES (from lib/tool-policy.js) ---
 // Inline copy for CJS hook compatibility (lib/tool-policy.js is ESM).
@@ -1004,31 +1017,94 @@ async function main() {
   // unified-session-state.json (state.sd.id, a UUID) to the worktree SD-KEY and
   // false-blocked the rightful owner. Now DB-corroborate THIS session's sd_key
   // (session-scoped); block only on positive mismatch; fail-open; LEO_CLAIM_GUARD=off disables.
+  //
+  // SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001: the slot-free worktree-reuse policy leaves a
+  // tree's DIRECTORY NAME stale once it is reused for a different SD/QF, but the tree's
+  // CHECKED-OUT BRANCH always reflects what it currently holds. The scope gate below (match +
+  // container exemption) is UNCHANGED from the prior version -- branch/marker derivation only
+  // REFINES the key for a path already in scope, it never expands scope to a previously-exempt
+  // container (that inversion -- fail-open becoming fail-closed for .worktrees/{sd,qf,adhoc}/**
+  // -- is exactly what this guard exists to prevent, not introduce).
   if (TOOL_NAME === 'Edit' || TOOL_NAME === 'Write') {
     if (process.env.LEO_CLAIM_GUARD !== 'off') {
       const filePath = input.file_path || '';
       const match = filePath.match(WORKTREE_PATH_RE);
-      // match[1] is the first .worktrees/ segment; "qf" is the container, not an sd_key.
-      if (match && match[1] !== 'qf') {
-        const worktreeSdKey = match[1];
+      // match[1] is the first .worktrees/ segment; a sanctioned container name is not an sd_key.
+      if (match && !EXEMPT_WORKTREE_CONTAINERS.has(match[1])) {
+        const pathKey = match[1];
         try {
+          const { execFileSync } = require('child_process');
+          const fs = require('fs');
+
+          // Resolve the worktree's actual root via git (never a fixed path-depth assumption --
+          // a container-level `-C .worktrees/qf` invocation would otherwise silently return the
+          // shared root's branch, e.g. "main", with no error to fall through on).
+          let toplevel = null;
+          try {
+            toplevel = execFileSync(
+              'git',
+              ['-C', path.dirname(filePath), 'rev-parse', '--show-toplevel'],
+              { timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+            ).toString().trim();
+          } catch {
+            toplevel = null; // git unavailable / not a repo -> branch and marker unavailable, fall to path (FR-3)
+          }
+          const underWorktrees = Boolean(toplevel) && /[/\\]\.worktrees([/\\]|$)/.test(toplevel);
+
+          let branch = null;
+          let marker = null;
+          if (underWorktrees) {
+            try {
+              branch = execFileSync(
+                'git',
+                ['-C', toplevel, 'rev-parse', '--abbrev-ref', 'HEAD'],
+                { timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+              ).toString().trim();
+            } catch {
+              branch = null; // branch unreadable -> fall through to marker/path (FR-3)
+            }
+            // FR-2: coordinator-written reuse marker, second-priority source. A cheap fs read;
+            // consulted regardless of branch outcome since deriveWorktreeKey's own precedence
+            // (branch > marker > path) decides which wins.
+            try {
+              const raw = fs.readFileSync(path.join(toplevel, WORKTREE_REUSE_MARKER_FILENAME), 'utf8');
+              const parsed = JSON.parse(raw);
+              const markedAt = Date.parse(parsed && parsed.marked_at || '');
+              const ageMs = Number.isFinite(markedAt) ? Math.max(0, Date.now() - markedAt) : Infinity;
+              if (parsed && typeof parsed.key === 'string' && parsed.key && ageMs <= WORKTREE_REUSE_MARKER_TTL_MIN * 60 * 1000) {
+                marker = parsed.key;
+              }
+            } catch {
+              marker = null; // absent / corrupt / stale -> falls through (FR-3)
+            }
+          }
+
+          const { key: derivedKey, source } = deriveWorktreeKey({ branch, marker, pathKey });
           const claimedSdKey = await resolveSessionClaimedSdKey(_SESSION_ID);
           // QF-20260804-087: NOT a wholesale `startsWith('QF-') -> allow` exemption — editing a QF
           // worktree you do not hold is still blocked, and SD-vs-SD is untouched. See the decision
-          // module for why the qfHeld tri-state carries the whole fix.
-          const qfHeld = isQuickFixWorktree(worktreeSdKey)
-            ? await sessionHoldsQuickFixClaim(_SESSION_ID, worktreeSdKey)
+          // module for why the qfHeld tri-state carries the whole fix. Computed from the DERIVED
+          // key so a tree whose directory says one QF but whose branch says another is classified
+          // by what it actually holds.
+          const qfHeld = derivedKey && isQuickFixWorktree(derivedKey)
+            ? await sessionHoldsQuickFixClaim(_SESSION_ID, derivedKey)
             : false; // not a QF target — the SD test is the whole guard, unchanged
-          if (shouldBlockWorktreeEdit({ worktreeKey: worktreeSdKey, claimedSdKey, qfHeld })) {
-            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-002', 'Worktree claim guard (DB-corroborated)', 'block', { worktreeSdKey, claimedSdKey });
+          if (derivedKey && shouldBlockWorktreeEdit({ worktreeKey: derivedKey, claimedSdKey, qfHeld })) {
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-002', 'Worktree claim guard (DB-corroborated)', 'block', { worktreeSdKey: derivedKey, claimedSdKey, source, branch: branch || null });
             process.stderr.write(
               `CLAIM GUARD (PAT-CLMMULTI-002): Edit/Write blocked.\n` +
-              `  Target worktree SD: ${worktreeSdKey}\n` +
+              `  Target worktree SD: ${derivedKey} (source=${source})\n` +
               `  Your DB-confirmed claim: ${claimedSdKey}\n` +
               `  You are editing a worktree for an SD you do not hold.\n` +
               `  Switch to your worktree, release your claim, or set LEO_CLAIM_GUARD=off.\n`
             );
             await auditAndExit(auditPromise, 2);
+          } else if (process.env.LEO_CLAIM_GUARD_DEBUG === '1') {
+            // Test-only introspection (FR-4 specimen a): the allow path writes no audit row today
+            // (auditPermissionDecision above is block-path only), so a debug line is the only way
+            // to assert {derivedKey, source} for an allowed edit without adding a DB write to
+            // every successful Edit/Write in production.
+            process.stderr.write(`[CLAIM GUARD DEBUG] derivedKey=${derivedKey} source=${source} claimedSdKey=${claimedSdKey}\n`);
           }
           // claimedSdKey null (no claim / missing creds / timeout) or equal => fail-open
         } catch {
