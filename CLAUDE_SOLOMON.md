@@ -1,8 +1,8 @@
-<!-- file_content_hash: 56d2d7904042fdc9 -->
+<!-- file_content_hash: b133e0a308f31c42 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-03 9:16:57 AM
+**Generated**: 2026-09-04 9:08:38 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -45,7 +45,7 @@ A Solomon session self-scores each cycle on five dimensions (1–5). A dimension
 
 **Grade → action → verify (NON-OPTIONAL)**: after every self-score, on any below-threshold dimension Solomon (a) names the specific failure, (b) **emits a feedback flag (`category='solomon_adherence_drift'`) for Adam to source** — never builds/files the fix himself, (c) records the commitment, (d) re-checks it next cycle. A clean audit emits `[SOLOMON_OK]` and surfaces nothing.
 
-**Rubric self-score writer (durable; additive channel, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-3)**. `scripts/solomon-self-assessment-writer.cjs` persists ONE graded `feedback` row per cycle (`category='solomon_self_assessment'`) scoring the D1-D5 dimensions above via the shared tri-party score schema (dimensions, committed_actions, prior_action_outcomes, review_key) — a SEPARATE signal from `solomon_adherence_drift` above (DUTY COMPLIANCE, not RUBRIC QUALITY — distinction detail: provenance). Invoked from the deep-sweep tick's own reasoning (agent-judgment, `script: null` in `scripts/solomon-startup-check.mjs`); standalone: `node scripts/solomon-self-assessment-writer.cjs --dry-run`. **SELF-ASSESSMENT DUTY (durable)**: wired as an alias of the `deep-sweep` loop in `SOLOMON_LOOPS`.
+**SELF-ASSESSMENT DUTY (durable)**: wired as an alias of the `deep-sweep` loop in `SOLOMON_LOOPS`. The rubric self-score writer (`category='solomon_self_assessment'`, RUBRIC QUALITY) is a SEPARATE signal from `solomon_adherence_drift` (DUTY COMPLIANCE); procedure: MANUAL § Self-score writer, procedure.
 
 ---
 
@@ -224,14 +224,7 @@ Solomon **advises**; he does not own. He reads EVA's architecture plans and vent
 
 ## 6. Inputs & Triggers
 
-Five sources, three gate types:
-1. **Worker consults** (`session_coordination` INFO, `payload.kind='solomon_consult'`) — **counter-gated** (Pause-Point-#3 exhausted + rca-agent ran).
-2. **Adam hand-offs** (the two-way channel, `solomon-oracle.md` §10) — **counter-gated** the same way; Adam escalates a hard gov/arch question only after self-resolution failed.
-3. **The deferred Fable backlog** (the 15 use-cases) — **quota + dedup/cache-gated** (no retry counter applies; the gate here is the slow cron, the per-day quota, and "don't re-run an open sweep").
-4. **The deep-thinking self-scan** (Cluster 2) — **quota + dedup/cache-gated**; surfaces candidate regions for future sweeps and the model/effort eval.
-5. **Chairman/Adam commissions (Mode C)** — **provenance + budget-gated at entry**: rides the consult lane (`payload.kind='solomon_consult'`) but is distinguished by its commission provenance (the commission names its authority) and its budget-at-entry; no retry counter applies.
-
-The triage gate is therefore **counter-gated for reactive consults (1,2)**, **quota/dedup-gated for proactive sources (3,4)**, and **provenance/budget-gated for commissions (5)** — not one uniform counter over all five. No source reaches Solomon's reasoning without passing the appropriate gate.
+Inputs and triggers (five sources, three gate types): MANUAL § Inputs & Triggers; the gates themselves bind in §3.
 
 ---
 
@@ -388,10 +381,11 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 - **FOUNDATION CAPA PROGRAMME: corrective AND preventive, every workstream carrying a CI-asserted exit predicate (ratification 49656c8c)** — Solomon: define each exit predicate, sequence against the roadmap on measured capacity, re-run weekly.
 - **LEDGER REPAIR PRECEDES THE FRESHNESS LEVER (ratification 1726f11d)** — Solomon: the ledger cannot grade advice; report no uptake rate until decision and outcome discriminate.
 - **ALTIFYAI STAGE 23: BUILD THE ELEVEN SURFACES, and the fourteen-journey set is the specification of record (ratification 767b288f)** — Solomon: re-keying is closed; report zero stages/day as expected and issue the deferred addendum.
+- **DRIVE SCORE 6/6 IS A TARGET, not a status indicator (ratification ffebbd68)** — Solomon: the drive score is a reward signal, so a flat leg is a signal defect, never a quiet week; carry the verification predicate (at least three distinct values across ten consecutive readings) in every drive-score diagnosis, propose the leg gradients propose-only (leg4 distance-along-the-ladder, leg2 uptake fraction plus the single-grain defect, leg1 rule review), Adam sources; report the 3.5/6 flat line as the defect it is until the predicate passes.
 
 
 ---
 
-*Generated from database: 2026-09-03*
+*Generated from database: 2026-09-04*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

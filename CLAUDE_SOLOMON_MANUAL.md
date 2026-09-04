@@ -1,8 +1,8 @@
-<!-- file_content_hash: 3be493af0c7455c4 -->
+<!-- file_content_hash: 6f2523d1cdf5e807 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-03 8:43:30 PM
+**Generated**: 2026-09-04 9:08:38 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -180,8 +180,7 @@ decision_requested is derived from a DECLARED shape, never from the sender's dou
 ## Foundation audit — procedure
 
 Standing Friday foundation audit (611 STANDING FOUNDATION AUDIT DUTY; ratifications b259e739, 7473142c, 71e2e871):
-- Cadence: every Friday after the week reset, when the active window has at least sixty percent headroom (f7303528: the audit's only worker impact is the shared five-hour token window, not seats);
-- Headroom read: from a fresh chairman /usage paste (under 1 h old); otherwise the clock — the window opened at the account's first message and at least 3 h remain; later from per-seat metering, at which point the audit runs under its own budget line inside the Solomon share at any time. Readers batched ≤4. Launch readings are recorded on the audit row as context, not a gate.
+- Cadence: every Friday after the week reset. (The sixty-percent headroom precondition f7303528 and its Headroom-read bullet were REPEALED by ratification 584e3e0e, 2026-09-03, verbatim "Please remove the headroom rule."; no automated launch condition remains, the chairman governs capacity at the keyboard. SITE-EDIT per c44cd9d8.)
 - Friday plan of record: launch after the Deep Soul weekly reset (03:59 ET); Code Street Labs frees 3:00 pm ET; the chairman rotates accounts at the keyboard. six lenses per week, the full twelve every two weeks. Lens halves — A: sd-state, qf-state, liveness, gate-evidence, writers, comms; B: ratification, durability, roadmap, gauges-learn, instruments, worker-loop.
 - Scope: EHG_Engineer (harness), EHG (platform app), live ventures only — never cancelled or deferred ventures.
 - Execution: batched fan-out ≤4 on the fleet's own account, never a separate account; per-slice reproduce, capped refute, non-fatal critic; a control canary per lens; budget-at-entry with measured spend.
@@ -202,6 +201,27 @@ Time-boxed posture through Friday 2026-09-04 (encode 2026-09-03; the operative p
 
 The recurring Adam board-check runs EVERY 3 HOURS at: 02:00Z, 05:00Z, 08:00Z, 11:00Z, 14:00Z, 17:00Z, 20:00Z, 23:00Z (existing anchors preserved, midpoints added; 11:00Z stays co-anchored with the daily duty-firing audit). Unchanged: the daily duty-firing audit (11:00Z / 7am ET), the weekly deep review (Mon 12:00Z, ratified retained a236d122), continuous event-driven observation. The frozen P1 census predicate and pre-stated-buckets discipline apply at every slot. Catch-latency data under the new cadence feeds the a236d122 empirical revisit.
 
+## Inputs & Triggers (moved from CLAUDE_SOLOMON.md 2026-09-04)
+
+Moved verbatim from the gated contract on 2026-09-04 (companion move for the single-Read cap; Solomon decision 3f93d9a4). Reference: the five-source table of the three gate types; every gate binds in the contract's §3 at the mode that owns it.
+
+
+Five sources, three gate types:
+1. **Worker consults** (`session_coordination` INFO, `payload.kind='solomon_consult'`) — **counter-gated** (Pause-Point-#3 exhausted + rca-agent ran).
+2. **Adam hand-offs** (the two-way channel, `solomon-oracle.md` §10) — **counter-gated** the same way; Adam escalates a hard gov/arch question only after self-resolution failed.
+3. **The deferred Fable backlog** (the 15 use-cases) — **quota + dedup/cache-gated** (no retry counter applies; the gate here is the slow cron, the per-day quota, and "don't re-run an open sweep").
+4. **The deep-thinking self-scan** (Cluster 2) — **quota + dedup/cache-gated**; surfaces candidate regions for future sweeps and the model/effort eval.
+5. **Chairman/Adam commissions (Mode C)** — **provenance + budget-gated at entry**: rides the consult lane (`payload.kind='solomon_consult'`) but is distinguished by its commission provenance (the commission names its authority) and its budget-at-entry; no retry counter applies.
+
+The triage gate is therefore **counter-gated for reactive consults (1,2)**, **quota/dedup-gated for proactive sources (3,4)**, and **provenance/budget-gated for commissions (5)** — not one uniform counter over all five. No source reaches Solomon's reasoning without passing the appropriate gate.
+
+
+### Self-score writer, procedure (moved from CLAUDE_SOLOMON.md 2026-09-04)
+
+Moved verbatim from the gated contract's Self-assessment section on 2026-09-04 (companion move for the single-Read cap; Solomon decision 3f93d9a4). The binding sentence (SELF-ASSESSMENT DUTY wired as an alias of the deep-sweep loop) and the category distinction stay in the contract as a two-line pointer; this is the script path, invocation and schema detail.
+
+**Rubric self-score writer (durable; additive channel, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-3)**. `scripts/solomon-self-assessment-writer.cjs` persists ONE graded `feedback` row per cycle (`category='solomon_self_assessment'`) scoring the D1-D5 dimensions above via the shared tri-party score schema (dimensions, committed_actions, prior_action_outcomes, review_key) — a SEPARATE signal from `solomon_adherence_drift` above (DUTY COMPLIANCE, not RUBRIC QUALITY — distinction detail: provenance). Invoked from the deep-sweep tick's own reasoning (agent-judgment, `script: null` in `scripts/solomon-startup-check.mjs`); standalone: `node scripts/solomon-self-assessment-writer.cjs --dry-run`. **SELF-ASSESSMENT DUTY (durable)**: wired as an alias of the `deep-sweep` loop in `SOLOMON_LOOPS`.
+
 
 ## Crew-comms routing protocol (organizing layer)
 
@@ -209,6 +229,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-09-03*
+*Generated from database: 2026-09-04*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*
