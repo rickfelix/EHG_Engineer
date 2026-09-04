@@ -33,11 +33,18 @@ describe('FR-3 AC#3/AC#4: every observed verdict change matches the per-consumer
     expect(mismatches).toEqual([]);
   });
 
-  it('the matrix names exactly the six FR-3 reasons across its cells (no undeclared reason sneaks in)', () => {
-    const SIX_REASONS = new Set(['fixture-session', 'directed-work', 'qf-holder-authoritative', 'released-shell', 'spin-up-grace', 'stale-sd_key-mirror']);
+  it('the matrix names only the six FR-3 reasons plus the two EXEC-review-added is-coordinator reasons (no undeclared reason sneaks in)', () => {
+    // stale-is-coordinator-bool/-string were added after an EXEC-phase TESTING review
+    // (sub_agent_execution_results cf105d66-1f03-4e93-9389-ce22df2f581a) found the original
+    // six-reason-only population hid this SD's own headline fix (fleet-dashboard never checked
+    // is_coordinator at all) -- see the FR-3 headline-fix describe block below.
+    const KNOWN_REASONS = new Set([
+      'fixture-session', 'directed-work', 'qf-holder-authoritative', 'released-shell', 'spin-up-grace', 'stale-sd_key-mirror',
+      'stale-is-coordinator-bool', 'stale-is-coordinator-string',
+    ]);
     for (const consumer of CONSUMERS) {
       for (const reason of Object.keys(MATRIX[consumer] || {})) {
-        expect(SIX_REASONS.has(reason)).toBe(true);
+        expect(KNOWN_REASONS.has(reason)).toBe(true);
       }
     }
   });
@@ -116,6 +123,42 @@ describe('FR-3 AC#5: must-NOT-change shapes, individually asserted', () => {
       for (const reason of ['qf-holder-authoritative', 'directed-work', 'spin-up-grace']) {
         expect(changeExpected(consumer, reason)).toBe(false);
       }
+    }
+  });
+});
+
+describe('FR-3 headline fix, surfaced by EXEC-phase TESTING review: stale is_coordinator', () => {
+  // This SD's own stated purpose (isDispatchableFleetMember excludes coordinator/adam/non_fleet/
+  // fixture but NOT a stale is_coordinator flag) is fleet-dashboard's flip here -- the single
+  // most important delta this SD produces. It was originally left OUT of the matrix-graded
+  // population as "not one of the six PRD-named reasons, already covered by TS-2" -- TESTING
+  // measured that this hid the fix from the one artifact a gate can actually read. See TS-2 in
+  // seat-idle-predicate.test.js for the raw-predicate-level regression guard this complements.
+  const results = runDifferential(FROZEN_POPULATION);
+
+  it('fleet-dashboard flips on the boolean is_coordinator shape (isDispatchableFleetMember never checked it)', () => {
+    const row = findRow(results, 'stale-is-coordinator-bool', 'fleet-dashboard');
+    expect(row.pre).toBe(true);
+    expect(row.post).toBe(false);
+  });
+
+  it('fleet-dashboard flips on the JSON-string is_coordinator shape', () => {
+    const row = findRow(results, 'stale-is-coordinator-string', 'fleet-dashboard');
+    expect(row.pre).toBe(true);
+    expect(row.post).toBe(false);
+  });
+
+  it('adam-quiet-tick flips ONLY on the string shape (isBuildForbiddenSession is boolean-only, per TS-2)', () => {
+    expect(findRow(results, 'stale-is-coordinator-bool', 'adam-quiet-tick').changed).toBe(false);
+    const stringRow = findRow(results, 'stale-is-coordinator-string', 'adam-quiet-tick');
+    expect(stringRow.pre).toBe(true);
+    expect(stringRow.post).toBe(false);
+  });
+
+  it('coordinator-idle-qf-hint and capacity-inputs are unaffected on both shapes (their upstream identity checks already caught both)', () => {
+    for (const consumer of ['coordinator-idle-qf-hint', 'capacity-inputs']) {
+      expect(findRow(results, 'stale-is-coordinator-bool', consumer).changed).toBe(false);
+      expect(findRow(results, 'stale-is-coordinator-string', consumer).changed).toBe(false);
     }
   });
 });

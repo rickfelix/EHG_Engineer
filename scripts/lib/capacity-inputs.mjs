@@ -85,6 +85,18 @@ const maskedStallDetectOn = () => process.env.LEO_MASKED_STALL_DETECT === 'on';
 // isLiveCountableWorker's pre-migration semantics -- sdHolderSessionIds deliberately omitted).
 // Exported so the frozen-population differential harness calls the REAL production predicate
 // rather than a harness-side reimplementation.
+// DISCLOSED DIVERGENCE (EXEC-phase TESTING review, sub_agent_execution_results
+// cf105d66-1f03-4e93-9389-ce22df2f581a): isLiveCountableWorker's old check was
+// `if (md.is_coordinator) return false` -- TRUTHY, so it also caught non-boolean/non-'true'-string
+// truthy values (e.g. the number 1) and, separately, could be defeated by the falsy string
+// "false" (a non-empty string is truthy, but "false" as a literal JS value -- not achievable via
+// `if (md.is_coordinator)` -- is moot; the real gap is numeric/other truthy shapes). The new
+// coordinator-flag axis is a STRICT `=== true || String(...) === 'true'` check, narrower than the
+// old truthy check. Net effect: a session with a non-boolean/non-'true'-string truthy
+// is_coordinator value now counts as idle where it previously did not (idleNow could increase).
+// Verified zero live claude_sessions rows carry a non-boolean is_coordinator value -- latent, not
+// live -- documented rather than special-cased, since matching the old TRUTHY check would
+// re-widen the coordinator-flag axis for every OTHER consumer too.
 export function isCapacityForecastWorker(session, ctx = {}) {
   return seatIdleVerdict(session, {
     coordinatorId: ctx.coordinatorId ?? null,
