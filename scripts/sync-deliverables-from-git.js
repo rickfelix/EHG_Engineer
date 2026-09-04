@@ -16,12 +16,12 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,79 +89,84 @@ function inferTypeFromPath(filePath) {
 }
 
 /**
- * Parse git commits for an SD
+ * Parse git commits for an SD.
+ *
+ * QF-20260903-950 (defect 2): the previous implementation ran
+ * `git log ... 2>/dev/null || echo ""` inside an execSync SHELL STRING. execSync shells out to
+ * cmd.exe on Windows, which cannot perform a POSIX `2>/dev/null` redirect -- the command failed,
+ * the `|| echo ""` fallback supplied empty output, and the caller printed "No commits found" as
+ * a SUCCESS at exit 0. A genuine crash was indistinguishable from a genuine empty result.
+ * runHardenedGit (lib/git/hardened-runner.cjs) spawns with an argv array and shell:false -- no
+ * shell string to misinterpret -- and THROWS on any non-zero exit, so a real git failure now
+ * propagates to the caller instead of silently reading as zero commits. The outer swallow-all
+ * try/catch that used to convert every failure into `[]` is removed for the same reason.
  */
 function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
+  // Get commits on the SD branch that aren't on main
+  const branchName = `feat/${sdId}`;
+
+  // First check if branch exists
   try {
-    // Get commits on the SD branch that aren't on main
-    const branchName = `feat/${sdId}`;
-
-    // First check if branch exists
-    try {
-      execSync(`git -C "${repoPath}" rev-parse --verify ${branchName}`, { encoding: 'utf-8', stdio: 'pipe' });
-    } catch {
-      console.log(`   ℹ️  Branch ${branchName} not found, trying alternate patterns...`);
-      // Try to find a branch containing the SD-ID
-      const branches = execSync(`git -C "${repoPath}" branch -a`, { encoding: 'utf-8' });
-      const matchingBranch = branches.split('\n').find(b => b.includes(sdId));
-      if (!matchingBranch) {
-        return [];
-      }
-    }
-
-    // Get commit log with file changes
-    const logOutput = execSync(
-      `git -C "${repoPath}" log ${sinceBranch}..HEAD --name-status --pretty=format:"%H|%s|%ai" 2>/dev/null || echo ""`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-    );
-
-    if (!logOutput.trim()) {
+    runHardenedGit(['rev-parse', '--verify', branchName], { cwd: repoPath });
+  } catch {
+    console.log(`   ℹ️  Branch ${branchName} not found, trying alternate patterns...`);
+    // Try to find a branch containing the SD-ID
+    const branches = runHardenedGit(['branch', '-a'], { cwd: repoPath });
+    const matchingBranch = branches.split('\n').find(b => b.includes(sdId));
+    if (!matchingBranch) {
       return [];
     }
+  }
 
-    const commits = [];
-    let currentCommit = null;
+  // Get commit log with file changes
+  const logOutput = runHardenedGit(
+    ['log', `${sinceBranch}..HEAD`, '--name-status', '--pretty=format:%H|%s|%ai'],
+    { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }
+  );
 
-    for (const line of logOutput.split('\n')) {
-      if (!line.trim()) continue;
-
-      // Check if this is a commit header line
-      if (line.includes('|') && line.length === 40 + line.indexOf('|') - 40 + line.length - line.lastIndexOf('|')) {
-        // Parse commit header
-        const parts = line.split('|');
-        if (parts.length >= 3 && parts[0].length === 40) {
-          if (currentCommit) {
-            commits.push(currentCommit);
-          }
-          currentCommit = {
-            hash: parts[0],
-            message: parts[1],
-            date: parts[2],
-            files: []
-          };
-          continue;
-        }
-      }
-
-      // Parse file change line (A/M/D followed by tab and filename)
-      const fileMatch = line.match(/^([AMD])\t(.+)$/);
-      if (fileMatch && currentCommit) {
-        currentCommit.files.push({
-          operation: fileMatch[1] === 'A' ? 'create' : fileMatch[1] === 'M' ? 'modify' : 'delete',
-          path: fileMatch[2]
-        });
-      }
-    }
-
-    if (currentCommit) {
-      commits.push(currentCommit);
-    }
-
-    return commits;
-  } catch (error) {
-    console.error(`   ❌ Git error: ${error.message}`);
+  if (!logOutput.trim()) {
     return [];
   }
+
+  const commits = [];
+  let currentCommit = null;
+
+  for (const line of logOutput.split('\n')) {
+    if (!line.trim()) continue;
+
+    // Check if this is a commit header line
+    if (line.includes('|') && line.length === 40 + line.indexOf('|') - 40 + line.length - line.lastIndexOf('|')) {
+      // Parse commit header
+      const parts = line.split('|');
+      if (parts.length >= 3 && parts[0].length === 40) {
+        if (currentCommit) {
+          commits.push(currentCommit);
+        }
+        currentCommit = {
+          hash: parts[0],
+          message: parts[1],
+          date: parts[2],
+          files: []
+        };
+        continue;
+      }
+    }
+
+    // Parse file change line (A/M/D followed by tab and filename)
+    const fileMatch = line.match(/^([AMD])\t(.+)$/);
+    if (fileMatch && currentCommit) {
+      currentCommit.files.push({
+        operation: fileMatch[1] === 'A' ? 'create' : fileMatch[1] === 'M' ? 'modify' : 'delete',
+        path: fileMatch[2]
+      });
+    }
+  }
+
+  if (currentCommit) {
+    commits.push(currentCommit);
+  }
+
+  return commits;
 }
 
 /**
@@ -265,8 +270,16 @@ async function syncDeliverables(sdId, options = {}) {
 
   if (!silent) console.log(`   📦 Found ${deliverables.length} pending deliverables`);
 
-  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>)
-  const commits = getGitCommits(sdKey, repoPath);
+  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>). getGitCommits now
+  // THROWS on a genuine git failure (QF-20260903-950 defect 2) -- a crash must be reported as a
+  // failure, never folded into the same "0 commits" success path a real empty result takes.
+  let commits;
+  try {
+    commits = getGitCommits(sdKey, repoPath);
+  } catch (error) {
+    if (!silent) console.log(`   ❌ Could not read git history: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 
   if (commits.length === 0) {
     if (!silent) console.log('   ℹ️  No commits found on SD branch');
