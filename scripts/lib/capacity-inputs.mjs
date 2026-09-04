@@ -80,6 +80,19 @@ const { getActiveCoordinatorId } = require('../../lib/coordinator/resolve.cjs');
 // on it would mostly emit false positives. Read at call time, not at import, so a test can flip it.
 const maskedStallDetectOn = () => process.env.LEO_MASKED_STALL_DETECT === 'on';
 
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-3/FR-4: pure-extracted worker-membership predicate,
+// matching gatherCapacityInputs's own `workers` filter exactly (identity+status ONLY, mirroring
+// isLiveCountableWorker's pre-migration semantics -- sdHolderSessionIds deliberately omitted).
+// Exported so the frozen-population differential harness calls the REAL production predicate
+// rather than a harness-side reimplementation.
+export function isCapacityForecastWorker(session, ctx = {}) {
+  return seatIdleVerdict(session, {
+    coordinatorId: ctx.coordinatorId ?? null,
+    nowMs: ctx.nowMs,
+    statusExcludeSet: RELEASED_WORKER_STATUSES,
+  }).idle;
+}
+
 // ── tunables ──
 export const HEARTBEAT_LIVE_MS = 5 * 60 * 1000;   // a session is "live" if it heartbeat within 5 min
 export const HORIZON_MIN = 20;                      // "freeing soon" = ETA-to-free within this window
@@ -427,7 +440,7 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   // seatIdleVerdict call. Per the FR-3 matrix: this consumer does not yet check QF-holder or
   // directed-work -- unchanged from today, and any change to that is a deliberate FR-3-tracked
   // broadening proven by the differential harness, not an incidental side effect of this migration.
-  const workers = (sessions || []).filter(s => seatIdleVerdict(s, { coordinatorId, nowMs: now, statusExcludeSet: RELEASED_WORKER_STATUSES }).idle);
+  const workers = (sessions || []).filter(s => isCapacityForecastWorker(s, { coordinatorId, nowMs: now }));
 
   // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: compute the genuinely-stalled idle workers via the
   // canonical detector (loop alive + no claim + claimable work waiting, parked workers excluded). The

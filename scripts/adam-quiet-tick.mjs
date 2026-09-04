@@ -961,6 +961,16 @@ export function computeCronParityMissing(armed, loops = ADAM_LOOPS) {
 // can push last_tool_at PAST released_at, so a last_tool_at-vs-released_at ordering check
 // cannot be trusted to detect a released shell -- any released_at value at all now excludes
 // the seat outright, regardless of last_tool_at.
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-4 AC#3: extracted pure (seats) core, mirroring how
+// eligibleIdleWorkers (coordinator-idle-qf-hint.mjs) is already pure -- the existing fake
+// Supabase client in adam-quiet-tick-idle-beside-claimable.test.js implements only
+// select/is/in/gte/limit and cannot exercise a ctx-populating fetch, so the pure decision core
+// is exported separately from the DB-fetching wrapper for direct testing (and for the FR-3
+// frozen-population differential harness to call the REAL production predicate).
+export function idleBesideClaimableCount(seats) {
+  return (seats || []).filter((s) => seatIdleVerdict(s).idle && !s.released_at).length;
+}
+
 export async function checkIdleBesideClaimable(sb) {
   try {
     // QF-20260829-588: this is the RAW-UNCLAIMED draft count, not the dispatchable-leaf
@@ -998,9 +1008,7 @@ export async function checkIdleBesideClaimable(sb) {
     // stays its own unconditional conjunct: this consumer deliberately excludes ANY released_at
     // value at all (not a time window), stronger than and semantically distinct from
     // seatIdleVerdict's time-windowed recently-released axis.
-    const idleCount = (seats || []).filter(
-      (s) => seatIdleVerdict(s).idle && !s.released_at
-    ).length;
+    const idleCount = idleBesideClaimableCount(seats);
     return idleCount > 0 ? { idleCount, rawUnclaimedCount } : null;
   } catch { return null; }
 }

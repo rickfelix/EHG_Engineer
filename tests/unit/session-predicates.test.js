@@ -167,9 +167,9 @@ describe('production wiring guard (catch idle-filter call-site deletion)', () =>
   // which also excludes a stale metadata.is_coordinator=true flag -- a gap isDispatchableFleetMember
   // had. Pin the NEW call site deliberately (not a false failure of the old pin: this is the
   // exact call-site-deletion the old test existed to catch, now re-pointed at where the logic lives).
-  it('the dashboard imports + applies seatIdleVerdict on the idle filter', () => {
+  it('the dashboard imports + applies seatIdleVerdict (via the extracted isDashboardIdleCandidate) on the idle filter', () => {
     expect(dashSrc).toMatch(/from '\.\.\/lib\/fleet\/seat-idle-predicate\.mjs'|seat-idle-predicate\.mjs/);
-    expect(dashSrc).toContain('seatIdleVerdict(s, { coordinatorId: _dashCoordinatorId, sdHolderSessionIds: null }).idle');
+    expect(dashSrc).toContain('isDashboardIdleCandidate(s, { coordinatorId: _dashCoordinatorId, deadThresholdSeconds: DEAD_THRESHOLD }, seatIdleVerdict)');
   });
 
   it('the dashboard SELECTs metadata so the role guard can read it', () => {
