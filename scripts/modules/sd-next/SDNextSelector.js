@@ -319,7 +319,10 @@ export class SDNextSelector {
     }
 
     try {
-      await this.sessionManager.cleanupStaleSessions();
+      // SD-LEO-INFRA-STALE-SWEEP-LIVENESS-SSOT-001 (FR-4): sd:next no longer triggers the
+      // cross-seat cleanupStaleSessions walk -- every worker's routine `npm run sd:next` was
+      // able to release OTHER sessions' claims off a stale local file. Only the scheduled sweep
+      // entry point (scripts/claude-session-coordinator.mjs `cleanup`) retains the cross-seat walk.
       await warnIfTempFilesExceedThreshold(10);
 
       // Try resolveOwnSession() first to reuse existing DB session,

@@ -256,8 +256,10 @@ async function showStatus() {
   console.log(`${colors.bold} CLAUDE SESSION STATUS${colors.reset}`);
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
-  // Cleanup stale first
-  await sessionManager.cleanupStaleSessions();
+  // SD-LEO-INFRA-STALE-SWEEP-LIVENESS-SSOT-001 (FR-4): the status path no longer triggers the
+  // cross-seat cleanupStaleSessions walk -- it previously meant every routine "show status"
+  // could release OTHER sessions' claims off a stale local file. Only the scheduled sweep (the
+  // `cleanup` command below) retains the cross-seat walk.
 
   const sessions = await sessionManager.getActiveSessions();
   const currentSession = sessionManager.getCurrentSession();
