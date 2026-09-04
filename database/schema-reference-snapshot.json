@@ -1,11 +1,12 @@
 {
- "generated_at": "2026-08-30T21:10:07.900Z",
+ "generated_at": "2026-09-04T15:31:08.270Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 871,
+ "table_count": 872,
  "view_count": 192,
- "check_count": 1550,
+ "check_count": 1552,
  "tables": {
   "_migration_metadata": "{key,value}",
+  "account_usage_pastes": "{id,account_uuid8,account_org_name,pasted_at,session_pct,week_all_models_pct,week_fable_pct,session_reset_at,week_reset_at,promo_note,created_at}",
   "account_usage_snapshots": "{id,account_name,account_uuid8,weekly_pct,five_hour_pct,weekly_resets_at,five_hour_resets_at,state,fetched_at,created_at}",
   "activation_catalog_expectations": "{sd_id,table_name,seed_migration_path,created_at,created_by}",
   "activity_logs": "{id,user_id,venture_id,activity_type,activity_action,metadata,created_at}",
@@ -101,7 +102,7 @@
   "chairman_notifications": "{id,chairman_user_id,recipient_email,notification_type,decision_id,status,provider_message_id,error_code,error_message,digest_key,summary_key,subject,email_metadata,created_at,sent_at,updated_at,channel,recipient_phone}",
   "chairman_overrides": "{id,venture_id,component,system_score,override_score,reason,outcome,outcome_notes,created_at,updated_at}",
   "chairman_preferences": "{id,chairman_id,venture_id,preference_key,preference_value,value_type,source,created_at,updated_at}",
-  "chairman_ratifications": "{id,ratified_at,quote,source,target_contracts,scribe_seat,encoded_at,encoded_ref,marker_text}",
+  "chairman_ratifications": "{id,ratified_at,quote,source,target_contracts,scribe_seat,encoded_at,encoded_ref,marker_text,uttered_at,quote_hash,transcript_ref}",
   "chairman_settings": "{id,company_id,venture_id,risk_tolerance,pattern_threshold,time_to_revenue_max,capital_cap,feedback_speed,growth_curve,exploit_ratio,explore_ratio,new_pattern_budget,require_dogfooding,kill_gate_mode,created_at,updated_at,created_by}",
   "chairman_stepup_tokens": "{token,decision_id,chairman_user_id,credential_id,expires_at,consumed_at,created_at}",
   "chairman_switchon_policy": "{id,action_class,classification,active,added_by,added_at,rationale}",
@@ -1072,6 +1073,7 @@
   "writer_consumer_asymmetry_witnesses": "{witness_id,witness_source,witnessed_at,sd_key,sd_id,phase,detail_type,detail_text,correlation_id}"
  },
  "checks": {
+  "account_usage_pastes.account_usage_pastes_promo_note_check": "CHECK ((char_length(promo_note) <= 280))",
   "account_usage_snapshots.account_usage_snapshots_state_check": "CHECK ((state = ANY (ARRAY['ok'::text, 'not_configured'::text, 'unauthorized'::text, 'unexpected_shape'::text, 'timeout'::text, 'unreachable'::text, 'exhausted'::text, 'duplicate_identity'::text])))",
   "adam_adherence_ledger.adam_adherence_ledger_check_class_check": "CHECK (((check_class IS NULL) OR (check_class = ANY (ARRAY['duty'::text, 'conduct'::text]))))",
   "adam_adherence_ledger.adam_adherence_ledger_verdict_check": "CHECK ((verdict = ANY (ARRAY['pass'::text, 'fail'::text, 'unknown'::text])))",
@@ -1253,6 +1255,7 @@
   "chairman_ratifications.cr_scribe_seat_nonempty": "CHECK ((btrim(scribe_seat) <> ''::text))",
   "chairman_ratifications.cr_source_shape": "CHECK (((btrim(source) <> ''::text) AND (length(btrim(source)) >= 5)))",
   "chairman_ratifications.cr_target_contracts_valid": "CHECK (((cardinality(target_contracts) > 0) AND (target_contracts <@ ARRAY['adam'::text, 'coordinator'::text, 'solomon'::text, 'protocol'::text])))",
+  "chairman_ratifications.cr_utterance_provenance_present": "CHECK (((uttered_at IS NOT NULL) AND (quote_hash IS NOT NULL) AND (transcript_ref IS NOT NULL))) NOT VALID",
   "chairman_settings.chairman_settings_capital_cap_check": "CHECK ((capital_cap > 0))",
   "chairman_settings.chairman_settings_exploit_ratio_check": "CHECK (((exploit_ratio >= 0) AND (exploit_ratio <= 100)))",
   "chairman_settings.chairman_settings_explore_ratio_check": "CHECK (((explore_ratio >= 0) AND (explore_ratio <= 100)))",
