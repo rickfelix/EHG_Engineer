@@ -27,6 +27,27 @@ import { execSync } from 'child_process';
 import { isMeasuredExecution } from '../../../../../../lib/sub-agents/testing/test-execution-record.js';
 
 /**
+ * SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: resolve the "measured" state of a TESTING
+ * result row into three DISTINCT outcomes: `true`/object (measured, real evidence — including the
+ * legacy "measured as a fact-object" shape some rows carry), `false` (explicitly measured and
+ * found unmeasured), or `null` (checked, and there is genuinely nothing to measure — neither a
+ * test_execution block nor a metadata.measured key exists at all).
+ *
+ * Pure function, exported for direct unit testing without mocking the full gate's supabase calls.
+ * Previously this resolved to `undefined` in the null case, which `=== false` never matches, so
+ * the row silently fell through to "TESTING validation passed" (100/100) with zero evidence
+ * backing it (database-agent finding, mandatory-testing-validation.js:304, 2026-09-02).
+ * @param {{metadata?: {test_execution?: unknown, measured?: unknown}}} result
+ * @returns {boolean|object|null}
+ */
+export function resolveMeasuredState(result) {
+  const testExecution = result?.metadata?.test_execution;
+  const hasMeasuredKey = result?.metadata?.measured !== undefined;
+  if (testExecution !== undefined) return isMeasuredExecution(testExecution);
+  return hasMeasuredKey ? result.metadata.measured : null;
+}
+
+/**
  * FR-3: Resolve test-runner exit info for WAIT classification.
  * Prefers executor-supplied ctx.testRunner = { exitCode, output|stderr|message };
  * falls back to the stored TESTING result row's exit fields (metadata.exit_code /
@@ -295,14 +316,10 @@ export function createMandatoryTestingValidationGate(supabase) {
       }
 
       // 9b. SD-FDBK-INFRA-TESTING-SUB-AGENT-001: an unmeasured verdict (metadata.measured===false)
-      // must never satisfy this gate identically to a genuinely measured PASS. A row that carries
-      // NO measured key (older evidence, or a sub-agent path that doesn't set it) is treated as
-      // measured — this only narrows behavior for the specific defect this SD fixes, it never
-      // widens a failure onto evidence this gate already trusted before today.
+      // must never satisfy this gate identically to a genuinely measured PASS.
       // SC#6: prefer the structured field (source-agnostic — works for either writer path);
       // fall back to the ad-hoc boolean for rows written before test_execution existed.
-      const testExecution = result.metadata?.test_execution;
-      const measured = testExecution !== undefined ? isMeasuredExecution(testExecution) : result.metadata?.measured;
+      const measured = resolveMeasuredState(result);
       if (measured === false) {
         if (isAdvisoryMode) {
           // ADVISORY tier: same honest-but-non-blocking shape as the missing-row ADVISORY path
@@ -328,6 +345,28 @@ export function createMandatoryTestingValidationGate(supabase) {
           issues: [`ERR_TESTING_REQUIRED: TESTING verdict ${result.verdict} carries metadata.measured=false — required tier needs measured test evidence, not an unmeasured verdict`],
           warnings: [],
           details: { tier: 'REQUIRED', measured: false }
+        };
+      }
+
+      // SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-3: `measured === null` means "checked, and
+      // neither test_execution nor a metadata.measured key exists" -- distinct from `false`
+      // (explicitly measured and found unmeasured). This is DELIBERATELY NEVER BLOCKING, in
+      // EITHER tier -- flipping absence from warn to hard-reject is explicitly OUT OF SCOPE for
+      // this SD (LEAD-narrowed scope; this migration's own comment: "would immediately break
+      // ~27 evidence writes/day ... deliberately deferred"). RCA measurement (2026-09-02):
+      // ~73% of TESTING rows in the gate's own <24h freshness window carry neither key, and many
+      // of those DO carry real measurement facts under other key names (tests_run,
+      // vitest_summary, primary_suite_tests_passed, ...) this check does not look at -- so the
+      // warning below says "block absent", never "no evidence exists", which would be false.
+      if (measured === null) {
+        console.log(`   ⚠️  TESTING verdict ${result.verdict} for ${sdType} SD has no test_execution/measured key (never a blocker)`);
+        return {
+          passed: true,
+          score: 70,
+          max_score: 100,
+          issues: [],
+          warnings: [`TESTING verdict ${result.verdict} for ${sdType} SD carries no test_execution block and no metadata.measured flag — this check cannot confirm measured evidence (other fields may still exist under different key names; presence-enforcement is explicitly out of scope for this SD)`],
+          details: { advisory: true, reason: `${sdType} SD TESTING row has no test_execution/measured key`, tier: isAdvisoryMode ? 'ADVISORY' : 'REQUIRED', measured: null, verdict: result.verdict }
         };
       }
 
