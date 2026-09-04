@@ -43,6 +43,7 @@ import { runComplianceWithRefinement } from './compliance-loop.js';
 import { prompt, displayCompletionSummary } from './cli.js';
 import { resolveFeedback, parseAndExpandFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
 import { recordSdCompleted, recordQfCompleted } from '../../../lib/learning/outcome-tracker.js';
+import { isUnlinkedTierThreeCompletion } from '../../../lib/quick-fix/status-writer.cjs';
 import { checkResolverFreshness, logResolverFreshnessBanner } from '../../../lib/governance/check-resolver-freshness.js';
 import { execSync } from 'child_process';
 import { applyCompletionReadbackGate, ClaimMalformedError } from '../../../lib/checkers/completion-readback-gate.mjs';
@@ -1025,6 +1026,22 @@ export async function completeQuickFix(qfId, options = {}) {
     });
   }
 
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-3 (AC-8/AC-9/AC-10): refuse to complete a Tier-3
+  // quick fix that was never linked to an SD. lib/quick-fix/status-writer.cjs's isNeedsSdRow()
+  // already defines the correct predicate shape and IS called by 4 live consumers -- the defect
+  // is that THIS write site bypasses setQuickFixStatus() entirely via a direct .update() call,
+  // so isNeedsSdRow() is never consulted at completion time. Not reused verbatim here: that
+  // predicate is scoped to status='open' and checks only escalated_to_sd_id (its job is
+  // flagging a still-open QF that needs an SD assigned) -- this is a completion-time check on
+  // BOTH link fields (escalated_to_sd_id OR resolution_sd_id), fired only when this function is
+  // already committed to a 'completed' transition, so it inherently never fires on an open row
+  // (AC-9) and never affects a Tier-3 QF that IS linked via either field (AC-10).
+  if (isUnlinkedTierThreeCompletion(qf)) {
+    console.log('\u274c Cannot complete Tier-3 quick-fix with no linked SD (escalated_to_sd_id and resolution_sd_id are both null).');
+    console.log('   Tier-3 work requires escalation to a full SD before completion -- link one first:');
+    console.log('     node scripts/leo-create-sd.js --from-qf ' + qfId);
+    process.exit(1);
+  }
   const { error: updateError } = await supabase
     .from('quick_fixes')
     .update({
