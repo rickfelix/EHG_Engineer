@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Single-scribe encode (ratification c44cd9d8): ffebbd68 (adam+solomon), 544bf078 (adam), 31c75f74 (adam),
 // plus the 584e3e0e SITE-EDIT strike at the two remaining sites (601 audit clause, 629 manual).
-// Adam seat 1b847de2, 2026-09-04. Idempotent: every edit is guarded by its own marker; re-runs are no-ops.
+// Adam seat 1b847de2, 2026-09-04. APPLIED 2026-09-04 12:2xZ. Idempotent: every edit is guarded by its own marker; re-runs are no-ops.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -46,7 +47,7 @@ async function saveSection(id, before, after) {
   console.log(`  [saved] section ${id}: ${before.length} -> ${after.length} chars (readback verified)`);
 }
 
-async function main() {
+export async function main() {
   // Decide the 601 header handling from the live markers of the three audit ratifications.
   const { data: rats } = await supabase.from('chairman_ratifications').select('id, marker_text').limit(500);
   const auditMarkers = (rats || []).filter((r) => ['b259e739', '7473142c', '71e2e871'].some((p) => String(r.id).startsWith(p))).map((r) => r.marker_text || '');
@@ -104,4 +105,6 @@ async function main() {
   console.log('DONE. Next: node scripts/generate-claude-md-from-db.js, commit + PR, then markRatificationEncoded x3 from merged main.');
 }
 
-main().catch((e) => { console.error('ENCODE FAILED:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('ENCODE FAILED:', e.message); process.exit(1); });
+}
