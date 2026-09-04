@@ -19,14 +19,56 @@
  * Default is GUARDED (isReapable): a worktree owned by a live session OR holding
  * uncommitted/unpushed work is SKIPPED, not removed. --force overrides the guard
  * but STILL pre-unlinks node_modules — the gut-prevention is unconditional.
+ *
+ * QF-20260903-419: the guard above previously never checked LIVE CLAIM state — it
+ * only ever passed the isReapable default liveOwner:false, so a git-clean worktree
+ * (content-only check) was always removable even when another seat had re-claimed
+ * the SD/QF since. Two live-claimed trees were destroyed this way. resolveLiveClaim
+ * below queries the actual claim row for the worktree's SD/QF key before removal;
+ * a query failure fails CLOSED (treated as live) since content alone can never
+ * prove absence of a claim.
  */
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { createClient } from '@supabase/supabase-js';
 import { removeWorktreeViaGit, getRepoRoot, safeRecursiveRm } from '../lib/worktree-manager.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const WORKTREES_DIR = '.worktrees';
+
+/** Branch → SD/QF key, matching the convention scripts/worktree-reaper.mjs already reaps by. */
+export function keyFromBranch(branch) {
+  const m = String(branch || '').match(/^(?:refs\/heads\/)?(?:feat|qf|fix|chore|hotfix)\/(.+)$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Is the SD/QF this worktree belongs to CURRENTLY claimed by any session? Checked
+ * against the live DB row, never inferred from worktree content. Fail-CLOSED: a
+ * lookup that cannot run (no key, no client, query error) reports liveOwner:true —
+ * an unverifiable claim must never look like "safe to remove".
+ * @returns {Promise<boolean>}
+ */
+export async function resolveLiveClaim(key, { supabaseClient } = {}) {
+  if (!key) return false; // no resolvable SD/QF key — nothing this check can protect
+  let supabase = supabaseClient;
+  if (!supabase) {
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    if (!url || !apiKey) return true; // cannot verify — fail closed
+    try { supabase = createClient(url, apiKey, { auth: { persistSession: false } }); }
+    catch { return true; }
+  }
+  try {
+    const table = /^QF-/i.test(key) ? 'quick_fixes' : 'strategic_directives_v2';
+    const idColumn = table === 'quick_fixes' ? 'id' : 'sd_key';
+    const { data, error } = await supabase
+      .from(table).select('claiming_session_id').eq(idColumn, key).maybeSingle();
+    if (error) return true; // query failed — fail closed, cannot verify absence of a claim
+    return Boolean(data?.claiming_session_id);
+  } catch { return true; } // fail closed
+}
 
 function listWorktrees(repoRoot) {
   try {
@@ -54,7 +96,7 @@ export function resolveWorktreePath(arg, repoRoot) {
   return path.join(repoRoot, WORKTREES_DIR, arg); // conventional fallback
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const force = args.includes('--force') || args.includes('-f');
   const target = args.find((a) => !a.startsWith('-'));
@@ -70,10 +112,18 @@ function main() {
     process.exit(2);
   }
 
+  // QF-20260903-419: content (git status/log) cannot see a LIVE CLAIM another
+  // seat took after this one released — resolve the actual DB claim state
+  // before removal rather than trusting the caller's memory of having released.
+  const wtEntry = listWorktrees(repoRoot).find((w) => path.resolve(w.path) === path.resolve(wtPath));
+  const key = keyFromBranch(wtEntry?.branch) || target;
+  const liveOwner = !force && await resolveLiveClaim(key);
+
   // removeWorktreeViaGit pre-unlinks node_modules FIRST, then `git worktree
   // remove --force`. guard:!force skips a live/dirty worktree (protective).
   const res = removeWorktreeViaGit(wtPath, repoRoot, {
     guard: !force,
+    liveOwner,
     allowFail: true,
     logger: (m) => console.warn(m),
   });
@@ -116,5 +166,5 @@ function main() {
 
 // Only run when invoked directly (keep resolveWorktreePath importable for tests).
 if (isMainModule(import.meta.url)) {
-  main();
+  main().catch((e) => { console.error(`✗ ${e.message}`); process.exit(1); });
 }
