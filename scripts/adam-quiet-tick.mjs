@@ -979,6 +979,7 @@ export function computeCronParityMissing(armed, loops = ADAM_LOOPS) {
 // oversight (see the FR-3 differential harness's matrix comments).
 export function idleBesideClaimableCount(seats, ctx = {}) {
   return (seats || []).filter((s) => seatIdleVerdict(s, {
+    nowMs: ctx.nowMs,
     qfHolderSessionIds: ctx.qfHolderSessionIds,
     seatBusySessionIds: ctx.seatBusySessionIds,
     spinUpGraceMs: ctx.spinUpGraceMs,
