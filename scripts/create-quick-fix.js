@@ -741,7 +741,26 @@ async function createQuickFix(options = {}) {
         console.log('   💡 Reap stale worktrees first, then retry:');
         console.log('      node scripts/worktree-reaper.mjs --execute');
         console.log('      node scripts/worktree-reaper.mjs --execute --stage2 --yes');
-        process.exit(1);
+        // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-5 (VALIDATION finding): this used
+        // to process.exit(1) here WITHOUT releasing the claiming_session_id set atomically
+        // just above — a full pool left the QF row permanently claimed by a dead-end
+        // session, with no worktree and no way for another session to pick it up. Release
+        // the claim (best-effort — a failed release still exits non-fatally; the row is
+        // wrong either way and this is strictly no worse than the prior unconditional
+        // leak) and report it queued unclaimed, matching every other "skip worktree
+        // creation" branch above, so `/leo QF-<id>` can claim and provision it later
+        // (FR-5's own qf-start.js quota-before-claim wiring) once the pool has room.
+        try {
+          await supabase
+            .from('quick_fixes')
+            .update({ claiming_session_id: null, started_at: null })
+            .eq('id', qfId)
+            .eq('claiming_session_id', creatorSessionId);
+        } catch (releaseErr) {
+          console.log(`   ⚠️  Could not release the claim: ${releaseErr.message} — row may need manual release.`);
+        }
+        console.log(`   QF queued unclaimed. Run /leo ${qfId} to claim and provision a worktree when the pool has room.\n`);
+        return printNextSteps(qfId, false, null);
       }
 
       console.log('   Falling back to branch-only mode.\n');

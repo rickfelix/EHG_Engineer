@@ -34,6 +34,11 @@ import { execSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import { removeWorktreeViaGit, getRepoRoot, safeRecursiveRm } from '../lib/worktree-manager.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { isKnownWedged, FREEZE_CUT_MINUTES } from '../lib/fleet/genuine-worker.mjs';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { markerDirs: defaultMarkerDirs, getMarkerSessionIds: defaultGetMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs');
 
 const WORKTREES_DIR = '.worktrees';
 
@@ -44,13 +49,41 @@ export function keyFromBranch(branch) {
 }
 
 /**
+ * SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b (VALIDATION finding B): claim-ROW
+ * PRESENCE alone is not proof of liveness — a session that died without releasing its
+ * claim pins the row as "live" forever, with no liveness probe at all. This is checked
+ * ONLY when a claiming_session_id already exists (an ADDITIVE narrowing, never a
+ * widening): a claiming session we cannot positively prove dead still reads live,
+ * preserving resolveLiveClaim's existing fail-closed contract for every other caller.
+ * "Proven dead" = no resident PID by the marker-dir UNION (a live process anywhere
+ * always wins) AND (released_at set OR the tool clock is frozen past RECLAIM's
+ * freeze-cut) — never heartbeat alone, per FR-1b.
+ * @returns {Promise<boolean>} true iff positively proven dead
+ */
+async function isClaimingSessionProvenDead(sessionId, { supabase, markerDirsFn, getMarkerSessionIdsFn, nowMs }) {
+  try {
+    for (const dir of markerDirsFn()) {
+      if (getMarkerSessionIdsFn(dir)[sessionId]?.alive) return false; // resident PID — definitely live
+    }
+    const { data: row, error } = await supabase
+      .from('claude_sessions')
+      .select('session_id, released_at, last_tool_at, loop_state, heartbeat_at')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (error || !row) return false; // cannot verify — not proven dead, fail closed
+    if (row.released_at) return true; // released AND no resident PID
+    return isKnownWedged(row, nowMs, FREEZE_CUT_MINUTES); // frozen past cut, never heartbeat alone
+  } catch { return false; } // cannot verify — not proven dead
+}
+
+/**
  * Is the SD/QF this worktree belongs to CURRENTLY claimed by any session? Checked
  * against the live DB row, never inferred from worktree content. Fail-CLOSED: a
  * lookup that cannot run (no key, no client, query error) reports liveOwner:true —
  * an unverifiable claim must never look like "safe to remove".
  * @returns {Promise<boolean>}
  */
-export async function resolveLiveClaim(key, { supabaseClient } = {}) {
+export async function resolveLiveClaim(key, { supabaseClient, markerDirsFn = defaultMarkerDirs, getMarkerSessionIdsFn = defaultGetMarkerSessionIds, nowMs = Date.now() } = {}) {
   if (!key) return false; // no resolvable SD/QF key — nothing this check can protect
   let supabase = supabaseClient;
   if (!supabase) {
@@ -66,7 +99,10 @@ export async function resolveLiveClaim(key, { supabaseClient } = {}) {
     const { data, error } = await supabase
       .from(table).select('claiming_session_id').eq(idColumn, key).maybeSingle();
     if (error) return true; // query failed — fail closed, cannot verify absence of a claim
-    return Boolean(data?.claiming_session_id);
+    const claimingSessionId = data?.claiming_session_id;
+    if (!claimingSessionId) return false;
+    const provenDead = await isClaimingSessionProvenDead(claimingSessionId, { supabase, markerDirsFn, getMarkerSessionIdsFn, nowMs });
+    return !provenDead;
   } catch { return true; } // fail closed
 }
 
