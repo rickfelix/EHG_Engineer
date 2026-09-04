@@ -66,7 +66,8 @@
 CREATE OR REPLACE FUNCTION public.sd_safe_parse_timestamptz(raw text)
  RETURNS timestamptz
  LANGUAGE plpgsql
- IMMUTABLE
+ STABLE
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   IF raw IS NULL OR btrim(raw) = '' THEN
@@ -84,7 +85,8 @@ $function$;
 CREATE OR REPLACE FUNCTION public.sd_metadata_hold_released(metadata jsonb, set_at_field text)
  RETURNS boolean
  LANGUAGE plpgsql
- IMMUTABLE
+ STABLE
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_unfenced_at timestamptz;
@@ -109,7 +111,8 @@ $function$;
 CREATE OR REPLACE FUNCTION public.sd_metadata_has_unreleased_chairman_hold(metadata jsonb)
  RETURNS boolean
  LANGUAGE plpgsql
- IMMUTABLE
+ STABLE
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_human_action_reason text;
@@ -131,6 +134,17 @@ BEGIN
   RETURN false;
 END;
 $function$;
+
+-- SECURITY finding SEC-4 (evidence 62a7d823): these 3 functions have ordinary scalar
+-- signatures and would otherwise be born reachable at POST /rest/v1/rpc/<name> (live-probed
+-- pg_default_acl: postgres/anon/authenticated/service_role all get EXECUTE by default --
+-- 20260816_defacl_anon_auth_axis.sql, which would close this at the ACL-default level, is
+-- not applied). No data exposure (SECURITY INVOKER, no table access), but this trigger-
+-- support family has no legitimate external caller -- same SEC-M2 class this directory's
+-- own README documents for a sibling migration.
+REVOKE EXECUTE ON FUNCTION public.sd_safe_parse_timestamptz(text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.sd_metadata_hold_released(jsonb, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.sd_metadata_has_unreleased_chairman_hold(jsonb) FROM PUBLIC, anon, authenticated;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 2. AMENDED enforce_canonical_lifecycle_write() -- full body restated (CREATE OR REPLACE),
@@ -265,6 +279,27 @@ BEGIN
   END IF;
   IF public.sd_metadata_has_unreleased_chairman_hold(jsonb_build_object('review_hold_reason', '   ')) IS NOT false THEN
     RAISE EXCEPTION 'VERIFY FAILED: whitespace-only review_hold_reason is treated as absent';
+  END IF;
+
+  -- SEC-4 fix (post-3c, pre-3d): assert the EXECUTE-grant posture mechanically, not merely by reading the
+  -- REVOKE statements above -- a lesson this repo has learned before (this directory's own
+  -- 20260817_fdbk_internal_feedback_rpc.sql header: "a verify block that only re-checks
+  -- catalog shape can pass while every real call still 42501s, because EXECUTE grants were
+  -- never asserted").
+  IF has_function_privilege('anon', 'public.sd_safe_parse_timestamptz(text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.sd_safe_parse_timestamptz(text)', 'EXECUTE')
+  THEN
+    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon/authenticated can still EXECUTE sd_safe_parse_timestamptz';
+  END IF;
+  IF has_function_privilege('anon', 'public.sd_metadata_hold_released(jsonb,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.sd_metadata_hold_released(jsonb,text)', 'EXECUTE')
+  THEN
+    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon/authenticated can still EXECUTE sd_metadata_hold_released';
+  END IF;
+  IF has_function_privilege('anon', 'public.sd_metadata_has_unreleased_chairman_hold(jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.sd_metadata_has_unreleased_chairman_hold(jsonb)', 'EXECUTE')
+  THEN
+    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon/authenticated can still EXECUTE sd_metadata_has_unreleased_chairman_hold';
   END IF;
 
   -- 3d. A LIVE trigger-fire proof (real disposable-row INSERT + completion UPDATE) was

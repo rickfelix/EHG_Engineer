@@ -125,7 +125,8 @@ describe('backfillRow — Group 1 (released) calls the REAL releaseHold(); Group
       return { merged: true, sdKey };
     });
 
-    const result = await backfillRow(supabaseInstance, group1Key, DISPOSITIONS[group1Key]);
+    const row = { sd_key: group1Key, metadata: sds[0].metadata };
+    const result = await backfillRow(supabaseInstance, row, DISPOSITIONS[group1Key]);
     expect(result.released).toBe(true);
     expect(result.disposition).toBe('informally_released_stamp_backfilled');
     // Two merges: the sanctioned releaseHold() stamp, then the chairman_hold_backfill marker.
@@ -143,7 +144,8 @@ describe('backfillRow — Group 1 (released) calls the REAL releaseHold(); Group
     supabaseInstance = makeSupabaseMock([], {}); // empty: releaseHold() readback would find no row
     mergeMetadataKeys.mockImplementation(async (sdKey, patch) => ({ merged: true, sdKey }));
 
-    const result = await backfillRow(supabaseInstance, group2Key, DISPOSITIONS[group2Key]);
+    const row2 = { sd_key: group2Key, metadata: {} };
+    const result = await backfillRow(supabaseInstance, row2, DISPOSITIONS[group2Key]);
     expect(result.released).toBe(false);
     expect(result.disposition).toBe('genuinely_still_held_flagged');
     // Only ONE merge call (the marker) — releaseHold() (which would also call
@@ -152,6 +154,39 @@ describe('backfillRow — Group 1 (released) calls the REAL releaseHold(); Group
     const markerCallPatch = mergeMetadataKeys.mock.calls[0][1];
     expect(markerCallPatch.chairman_hold_backfill.disposition).toBe('genuinely_still_held_flagged');
     expect(markerCallPatch).not.toHaveProperty('unfenced_at');
+  });
+
+  it('SECURITY finding SEC-1 root-cause fix: refuses to release when the row ALSO carries an unacknowledged, unreleased requires_human_action_reason (would otherwise silently co-release it via the shared unfenced_at field)', async () => {
+    const { DISPOSITIONS, backfillRow } = await importScript();
+    const group1Key = Object.entries(DISPOSITIONS).find(([, d]) => d.released && !d.acknowledgesRequiresHumanAction)[0];
+    const row = {
+      sd_key: group1Key,
+      metadata: { review_hold_reason: 'x', requires_human_action_reason: 'a genuinely separate, unrelated hold' },
+    };
+    supabaseInstance = makeSupabaseMock([row], {});
+    mergeMetadataKeys.mockImplementation(async (sdKey, patch) => ({ merged: true, sdKey }));
+
+    await expect(backfillRow(supabaseInstance, row, DISPOSITIONS[group1Key]))
+      .rejects.toMatchObject({ code: 'UNACKNOWLEDGED_SECOND_HOLD' });
+    expect(mergeMetadataKeys).not.toHaveBeenCalled();
+  });
+
+  it('proceeds when a second requires_human_action_reason hold IS explicitly acknowledged (the 2 rows this finding was raised against)', async () => {
+    const { DISPOSITIONS, backfillRow } = await importScript();
+    const acknowledgedKey = Object.entries(DISPOSITIONS).find(([, d]) => d.released && d.acknowledgesRequiresHumanAction)[0];
+    const row = {
+      sd_key: acknowledgedKey,
+      metadata: { review_hold_reason: 'x', requires_human_action_reason: 'already reviewed, see manifest note' },
+    };
+    const stampedRef = {};
+    supabaseInstance = makeSupabaseMock([row], stampedRef);
+    mergeMetadataKeys.mockImplementation(async (sdKey, patch) => {
+      stampedRef.current = { ...row.metadata, ...patch };
+      return { merged: true, sdKey };
+    });
+
+    const result = await backfillRow(supabaseInstance, row, DISPOSITIONS[acknowledgedKey]);
+    expect(result.released).toBe(true);
   });
 });
 

@@ -59,7 +59,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
-import { releaseHold, isUnreleasedChairmanHold } from '../lib/fleet/claim-eligibility.cjs';
+import { releaseHold, isUnreleasedChairmanHold, isHoldReleased } from '../lib/fleet/claim-eligibility.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKFILLED_BY = 'scripts/reconcile-stale-chairman-holds.mjs';
@@ -78,6 +78,15 @@ export const DISPOSITIONS = {
   'SD-LEO-INFRA-CLEAN-CLONE-LAUNCH-001': {
     released: true,
     releaseReason: 'Backfilled 2026-09-04. Row\'s own review_hold_reason: "CLEARED for execution 2026-06-27 — converged; chairman authorized execution shift. LEAD still gates each." The formal releaseHold() stamp was never called at the time; this backfill closes that gap using the sanctioned writer.',
+    // SECURITY finding SEC-1 (evidence 62a7d823): this row also carries a separate
+    // requires_human_action_reason ("Blocked on UNMERGED prerequisites... Released by Alpha
+    // 2026-06-27; signaled coordinator") that releaseHold()'s shared unfenced_at would
+    // otherwise silently co-release without review. Explicitly reviewed 2026-09-04:
+    // requires_human_action=false (boolean) was ALREADY the live state before this backfill
+    // -- the actual dispatch-eligibility gate was never blocking this row -- and the text
+    // itself documents an informal historical release by another party (Alpha). Acknowledged
+    // rather than accidentally co-released.
+    acknowledgesRequiresHumanAction: true,
   },
   'SD-LEO-INFRA-FLEET-HIBERNATION-MECHANISM-001': {
     released: true,
@@ -86,6 +95,14 @@ export const DISPOSITIONS = {
   'SD-LEO-INFRA-VENTURE-CLOUDFLARE-DEFAULT-001': {
     released: true,
     releaseReason: 'Backfilled 2026-09-04. Row\'s own review_hold_reason: "CLEARED for execution 2026-06-27 — converged; chairman authorized execution shift. LEAD still gates each." The formal releaseHold() stamp was never called at the time; this backfill closes that gap using the sanctioned writer.',
+    // SECURITY finding SEC-1 (evidence 62a7d823): this row also carries a separate
+    // requires_human_action_reason ("Reserved governance... needs coordinator/Adam pre-claim
+    // co-authoring") that releaseHold()'s shared unfenced_at would otherwise silently
+    // co-release without review. Explicitly reviewed 2026-09-04: requires_human_action=false
+    // (boolean) was ALREADY the live state before this backfill -- the actual dispatch-
+    // eligibility gate was never blocking this row. Acknowledged rather than accidentally
+    // co-released.
+    acknowledgesRequiresHumanAction: true,
   },
   'SD-LEO-INFRA-VENTURE-DEFAULT-CAPABILITIES-EXPAND-001': {
     released: true,
@@ -137,11 +154,37 @@ export async function findTargetRows(supabase) {
   return { known, unknown };
 }
 
-/** @param {object} supabase @param {string} sdKey @param {{released:boolean, releaseReason?:string, note?:string}} d */
-export async function backfillRow(supabase, sdKey, d) {
+/**
+ * @param {object} supabase
+ * @param {{sd_key: string, metadata: object}} row - full row (metadata needed for the
+ *   co-release safety check below, not just the sd_key).
+ * @param {{released:boolean, releaseReason?:string, note?:string, acknowledgesRequiresHumanAction?:boolean}} d
+ */
+export async function backfillRow(supabase, row, d) {
+  const sdKey = row.sd_key;
+  const metadata = row.metadata || {};
   const { mergeMetadataKeys } = await import('../lib/coordinator/safe-metadata-merge.mjs');
   let released = false;
   if (d.released) {
+    // ROOT-CAUSE FIX (SECURITY finding SEC-1, evidence 62a7d823, 2026-09-04): releaseHold()
+    // writes ONE shared unfenced_at per row. If this row ALSO carries an unreleased
+    // requires_human_action_reason that this manifest entry has not explicitly reviewed and
+    // acknowledged, releasing review_hold_reason here would SILENTLY co-release that
+    // unrelated hold too -- isHoldReleased()'s "no set-at stamp -> any unfenced_at releases
+    // it" fallback applies per-key, not per-call. Refuse rather than guess; a human/worker
+    // must read the row and either set acknowledgesRequiresHumanAction:true (with the
+    // reviewed rationale, as the 2 rows this finding was raised against now do) or handle
+    // the second hold separately.
+    const hasUnacknowledgedSecondHold =
+      typeof metadata.requires_human_action_reason === 'string' &&
+      metadata.requires_human_action_reason.trim().length > 0 &&
+      !isHoldReleased(metadata, 'requires_human_action_at') &&
+      !d.acknowledgesRequiresHumanAction;
+    if (hasUnacknowledgedSecondHold) {
+      const e = new Error(`[reconcile-stale-chairman-holds] ${sdKey} also carries an unreleased requires_human_action_reason this manifest entry does not acknowledge -- releasing review_hold_reason would silently co-release it via the shared unfenced_at field. Read the row and add acknowledgesRequiresHumanAction:true with a reviewed rationale, or handle it separately.`);
+      e.code = 'UNACKNOWLEDGED_SECOND_HOLD';
+      throw e;
+    }
     const result = await releaseHold(supabase, sdKey, { releaser: BACKFILLED_BY, reason: d.releaseReason });
     if (!result.released) {
       const e = new Error(`[reconcile-stale-chairman-holds] releaseHold failed for ${sdKey}: ${result.error}`);
@@ -201,7 +244,7 @@ export async function run({ supabase, live = false, log = console.log } = {}) {
 
   const backfilled = [];
   for (const r of known) {
-    const result = await backfillRow(supabase, r.sd_key, DISPOSITIONS[r.sd_key]);
+    const result = await backfillRow(supabase, r, DISPOSITIONS[r.sd_key]);
     log(`  backfilled ${r.sd_key} (released=${result.released})`);
     backfilled.push(result);
   }

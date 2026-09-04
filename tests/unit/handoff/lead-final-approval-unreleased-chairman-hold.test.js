@@ -137,4 +137,18 @@ describe('LeadFinalApprovalExecutor.executeSpecific — unreleased chairman hold
     expect(result.reasonCode).toBe('UNRELEASED_CHAIRMAN_HOLD');
     expect(supabase._state.sdRow.status).toBe('pending_approval');
   });
+
+  it('SECURITY finding SEC-3 fix: a refusal leaves NO ghost evidence rows behind (guard fires before any leo_handoff_executions/sd_phase_handoffs write)', async () => {
+    const supabase = makeSharedSupabase(SD_ROW);
+    const exec = makeExecutor(supabase);
+    const snapshot = {
+      ...SD_ROW,
+      active_session_id: 'this-session',
+      metadata: { review_hold_reason: 'build review flagged, chairman must decide' },
+    };
+    await exec.executeSpecific('sd-uuid-hold-1', snapshot, {}, { normalizedScore: 95 });
+
+    expect(supabase._state.lhe).toHaveLength(0);
+    expect(supabase._state.sph).toHaveLength(0);
+  });
 });
