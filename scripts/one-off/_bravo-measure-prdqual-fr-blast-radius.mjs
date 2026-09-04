@@ -20,6 +20,7 @@
  * reported separately, per the ruling's explicit second-number requirement.
  */
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -136,4 +137,6 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error('FAILED:', e.message); process.exitCode = 1; });
+if (isMainModule(import.meta.url)) {
+  main().catch(e => { console.error('FAILED:', e.message); process.exitCode = 1; });
+}
