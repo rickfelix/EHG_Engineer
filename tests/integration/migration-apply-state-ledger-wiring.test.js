@@ -284,6 +284,15 @@ describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D TS-1 — excluded[] promoted to --
     expect(report.excluded[0].id).toContain('20251129_musk_algorithm_pareto.sql');
   }, 300000);
 
+  it('TS-1 real regression assertion: files[] (forward count) is UNCHANGED at 1592 -- the 4 reconciled basenames were never absent from the scan to begin with', () => {
+    // testing-agent evidence c5c4ad80 (EXEC phase): this is the assertion that actually
+    // distinguishes "reconciled correctly" from "silently dropped a migration" -- the earlier
+    // excluded-count assertion alone cannot tell the two apart.
+    const { stdout } = run(['--json']);
+    const report = parseLikeChairmanApplyState(stdout);
+    expect(report.files).toHaveLength(1592);
+  }, 300000);
+
   it('the divergent pair is untouched: both the scanned and the excluded copy still exist on disk (FR-3 — neither file is deleted)', () => {
     expect(fs.existsSync(path.join(ROOT, 'database', 'migrations', '20251129_musk_algorithm_pareto.sql'))).toBe(true);
     expect(fs.existsSync(path.join(ROOT, 'supabase', 'migrations', '20251129_musk_algorithm_pareto.sql'))).toBe(true);
