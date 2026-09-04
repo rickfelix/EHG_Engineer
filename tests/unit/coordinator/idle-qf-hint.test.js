@@ -244,6 +244,22 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
     expect(summary.hinted).toBe(1);
   });
 
+  // QF-20260903-831: a freshly-spawned seat that has NEVER held a claim (claimed_at/sd_key/
+  // worktree_path/released_at all absent, continuous_sds_completed unset) was previously
+  // filtered out by liveFleetWorkers' everClaimed requirement before eligibleIdleWorkers' own
+  // spin-up-grace logic ever saw it -- the seat most in need of a hint was invisible to the
+  // population that decides who gets one.
+  it('counts and hints a freshly-spawned, never-claimed live seat past its spin-up grace', async () => {
+    const neverClaimed = worker({ session_id: 'fresh-seat', claimed_at: null, sd_key: null });
+    const sb = makeFakeSupabase({
+      sessions: [neverClaimed],
+      qfs: [qf()],
+    });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.idleWorkers).toBe(1);
+    expect(summary.hinted).toBe(1);
+  });
+
   it('the near-miss QF is never hinted even as the only open QF, idle worker present', async () => {
     const sb = makeFakeSupabase({
       sessions: [worker()],

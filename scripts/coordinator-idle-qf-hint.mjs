@@ -33,7 +33,8 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
-import { liveFleetWorkers, isRecentlyReleased } from '../lib/fleet/genuine-worker.mjs';
+import { isRecentlyReleased } from '../lib/fleet/genuine-worker.mjs';
+import { liveDispatchableFleetMembers } from '../lib/fleet/session-predicates.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
@@ -281,7 +282,10 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
       .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
   } catch { sessions = []; }
   const coordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
-  const live = liveFleetWorkers(sessions || [], coordinatorId, nowMs);
+  // QF-20260903-831: liveDispatchableFleetMembers (not liveFleetWorkers) so a freshly-spawned,
+  // never-claimed, live seat is not filtered out before eligibleIdleWorkers' own spin-up-grace
+  // logic ever sees it -- see lib/fleet/session-predicates.mjs for the full rationale.
+  const live = liveDispatchableFleetMembers(sessions || [], coordinatorId, nowMs);
   // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: enumerate QF holders from the AUTHORITATIVE column so
   // a session whose sd_key mirror is NULL but who holds a live QF is never counted idle.
   // Fail-CLOSED to the mirror-only behaviour is the wrong direction here (it re-opens the hole),
