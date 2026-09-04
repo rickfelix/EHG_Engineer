@@ -56,6 +56,25 @@ describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)'
   it('never throws on missing role', async () => {
     await expect(resolveRecognizedKinds({ supabase: null, role: undefined })).resolves.toEqual([]);
   });
+
+  it('QF-20260831-769: unions with the fallback instead of narrowing below it when the DB read succeeds but is missing kinds the fallback has (partially-migrated role_drain_sets)', async () => {
+    // role_drain_sets has SOME rows for 'adam' but is missing a chairman-gated reconciliation
+    // (e.g. 'disposition', present in DRAIN_SETS.adam but not yet seeded live) — this must not
+    // silently narrow the recognized set below the JS SSOT.
+    const partial = DRAIN_SETS.adam.filter((k) => k !== 'disposition');
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ eq: () =>
+      Promise.resolve({ data: partial.map((kind) => ({ kind })), error: null }) }) }) }) }) };
+    const result = await resolveRecognizedKinds({ supabase, role: 'adam' });
+    expect(result).toEqual(expect.arrayContaining([...DRAIN_SETS.adam]));
+    expect(result).toContain('disposition');
+  });
+
+  it('QF-20260831-769: still lets the DB ADD a kind beyond the JS fallback (additive, not fallback-only)', async () => {
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ eq: () =>
+      Promise.resolve({ data: [...DRAIN_SETS.adam.map((kind) => ({ kind })), { kind: 'brand_new_kind' }], error: null }) }) }) }) }) };
+    const result = await resolveRecognizedKinds({ supabase, role: 'adam' });
+    expect(result).toContain('brand_new_kind');
+  });
 });
 
 describe('warnIfUndrainedKindViaRegistry: unrecognized-role guard (adversarial review finding, PR #6331)', () => {
