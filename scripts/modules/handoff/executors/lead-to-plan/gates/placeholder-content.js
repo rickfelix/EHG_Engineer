@@ -148,7 +148,10 @@ export async function validatePlaceholderContent(sd) {
 
   // Check success_criteria
   const criteria = sd.success_criteria || [];
-  const criteriaAnalysis = analyzePlaceholderContent(criteria);
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A / TR-1: textKey MUST be 'criterion' -- without it, the
+  // common {criterion, measure} object shape silently reports 0 placeholders (item[textKey] is
+  // never consulted for a string-typed item, so plain-string entries are unaffected by this change).
+  const criteriaAnalysis = analyzePlaceholderContent(criteria, 'criterion');
   if (criteriaAnalysis.placeholders > 0) {
     const msg = `success_criteria: ${criteriaAnalysis.placeholders}/${criteriaAnalysis.total} entries are default templates (${criteriaAnalysis.percentage}%)`;
     warnings.push(msg);
@@ -216,34 +219,45 @@ export async function validatePlaceholderContent(sd) {
     console.log(`\n   ⚠️  ${totalPlaceholders} placeholder(s) found - consider enriching SD before PLAN phase`);
   }
 
-  // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-4 — THE VERDICT IS NOW COMPUTED AND EXPOSED,
-  // BUT `pass` IS DELIBERATELY NOT FLIPPED. This is a partial walk-back of my own PRD criterion
-  // ("pass:true is no longer hardcoded"), and the reason is worth stating plainly.
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A / FR-1+FR-2 — THE FLIP, NARROWLY SCOPED.
   //
-  // The complaint behind that criterion is real: a hardcoded pass is not a lenient verdict, it is
-  // an ABSENT one — the gate reported success identically whether it found nothing or found
-  // everything, so its output carried no information. `placeholder_free` fixes that: the verdict
-  // now exists, is derived from what was actually inspected, and any consumer can read it.
-  //
-  // What I could NOT do responsibly is flip `pass` itself. I traced the orchestrator and did not
-  // establish, to my own satisfaction, that a failing non-required gate is guaranteed non-blocking
-  // on every path — and a pre-existing test pins "should always pass (warning-only gate)" as the
-  // current contract. One hour before writing this, in FR-2a of this same SD, an "obviously safe"
-  // change of mine would have newly blocked every SD that passes today on filler. Shipping a
-  // second unverified blast radius on the strength of my own confidence would be the same mistake
-  // with a different field name.
-  //
-  // So: report truthfully, change nothing that can block, and leave the flip to a change that
-  // starts by enumerating consumers (the FR-2a discipline). 1,442 existing SDs would fail this on
-  // day one, so that change is an outage unless sequenced — CLAUDE_CORE.md observe-only-first.
+  // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 left `pass` hardcoded true because a blanket flip
+  // (any filler anywhere) would have failed 1,442 existing SDs on day one with no sequencing plan.
+  // This SD carries a coordinator ruling to flip `pass` AND `required` together, but ONLY for a
+  // narrow trigger: success_criteria[].criterion is 100% template text (measured: 852/4,779
+  // completed SDs, 17.8%). That predicate is deliberately UNRELATED to value_side_filler,
+  // objectives, or key_changes — a single non-template success_criteria entry, however much filler
+  // surrounds it, does not block. See FR-2 in the PRD for why 100% (not "any") is the boundary.
+  const criteriaIsFullyTemplate = criteriaAnalysis.total > 0 && criteriaAnalysis.percentage === 100;
+  const blockingIssues = [];
+  if (criteriaIsFullyTemplate) {
+    // FR-3: name every offending entry and state a concrete remedy. A blocking gate whose message
+    // is vague is the exact "steers the operator into the broken path" defect this SD exists to
+    // close — the message must let the operator fix it without re-deriving what "template" means.
+    const offending = [];
+    criteria.forEach((item, index) => {
+      const text = typeof item === 'object' && item !== null ? item.criterion : item;
+      if (typeof text === 'string' && isPlaceholderText(text)) {
+        offending.push({ index, text: text.trim() });
+      }
+    });
+    const named = offending.map((o) => `#${o.index} "${o.text}"`).join(', ');
+    blockingIssues.push(
+      `success_criteria is 100% template text (${offending.length}/${criteria.length}): ${named}. ` +
+      'Replace each with a measurable, SD-specific exit condition tied to this SD\'s actual scope ' +
+      '(e.g. a concrete assertion an operator can verify) — not generic boilerplate like ' +
+      `"${offending[0]?.text}".`
+    );
+  }
+
   return {
-    pass: true, // UNCHANGED contract — non-blocking. See placeholder_free for the real verdict.
+    pass: !criteriaIsFullyTemplate, // FR-1: false ONLY when success_criteria is 100% template.
     placeholder_free: totalPlaceholders === 0,
     placeholders_found: totalPlaceholders,
-    value_side_filler: valueSideFiller,
+    value_side_filler: valueSideFiller, // FR-4: disclosure only — never affects pass.
     score: Math.max(score, 50),
     max_score: 100,
-    issues: [], // No blocking issues
+    issues: blockingIssues,
     warnings
   };
 }
@@ -261,7 +275,10 @@ export function createPlaceholderContentGate() {
       console.log('-'.repeat(50));
       return validatePlaceholderContent(ctx.sd);
     },
-    required: false, // Warning-only gate
-    remediation: 'Enrich SD fields with specific, actionable content before proceeding to PLAN phase. Replace template text in strategic_objectives, key_changes, and success_criteria with real requirements.'
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A / FR-1: required:true, but the gate only ever returns
+    // pass:false for the narrow 100%-template-success_criteria trigger above -- every other finding
+    // (objectives, key_changes, value-side filler, <100% success_criteria) stays warning-only.
+    required: true,
+    remediation: 'Enrich SD fields with specific, actionable content before proceeding to PLAN phase. Replace template text in strategic_objectives, key_changes, and success_criteria with real requirements. See the blocking issue (when present) for which success_criteria entries specifically need rewriting.'
   };
 }

@@ -163,11 +163,15 @@ describe('FR-4 — the gate named for this defect can now fire on it', () => {
     expect(r.warnings.some((w) => /explicitly UNPOPULATED/.test(w))).toBe(true);
   });
 
-  it('[GUARD-RAIL] pass stays TRUE — the non-blocking contract is deliberately unchanged', async () => {
-    // This pins the RESTRAINT, not an oversight. The real verdict moved to `placeholder_free`;
-    // flipping `pass` would be an unverified blast radius on 1,442 existing SDs, and this SD
-    // already caught one such change in its own FR-2a. If a future SD flips it, this test SHOULD
-    // fail — and that failure is the signal to go enumerate consumers first.
+  it('[GUARD-RAIL] pass stays TRUE for this fixture — value-side filler alone never blocks', async () => {
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A DID flip `pass` — but only for a narrow trigger (100%
+    // template text on success_criteria[].criterion, per that SD's FR-1/FR-2), never for value-side
+    // filler (the `measure` key this fixture exercises). This fixture's criterion is 'x', which does
+    // not match any PLACEHOLDER_PATTERNS entry, so it does not hit the narrower trigger either — the
+    // 1,442-SD blast-radius concern this test originally guarded against (a blanket any-filler flip)
+    // does not apply to that narrower design. A future change that widens the trigger to value-side
+    // filler, or to <100% criterion-side matches, SHOULD fail this test — that failure is the signal
+    // to go re-measure the blast radius first, same discipline as before.
     const { validatePlaceholderContent } = await load();
     const r = await validatePlaceholderContent({
       success_criteria: [{ criterion: 'x', measure: 'See description for details' }],

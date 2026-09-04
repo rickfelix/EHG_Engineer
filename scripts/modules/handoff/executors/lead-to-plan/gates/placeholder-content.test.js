@@ -114,7 +114,12 @@ describe('analyzePlaceholderContent', () => {
 });
 
 describe('validatePlaceholderContent', () => {
-  it('should always pass (warning-only gate)', async () => {
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A / TR-3: this gate is no longer unconditionally
+  // warning-only. It blocks (pass:false) for exactly one narrow trigger — success_criteria 100%
+  // template — and this fixture's single success_criteria entry ("All implementation items from
+  // scope are complete") IS a 100% match, so it now hits that trigger. objectives/key_changes
+  // placeholders never block (see the next test for a fixture that stays warning-only).
+  it('blocks when success_criteria is 100% template text', async () => {
     const sd = {
       strategic_objectives: ['Implement X as specified in the SD scope'],
       key_changes: [{ change: 'Implement core changes for: X' }],
@@ -122,11 +127,27 @@ describe('validatePlaceholderContent', () => {
       description: 'Short'
     };
     const result = await validatePlaceholderContent(sd);
+    expect(result.pass).toBe(false);
+    expect(result.issues.length).toBe(1);
+    expect(result.issues[0]).toContain('All implementation items from scope are complete');
+    expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('still passes when only objectives/key_changes are template (success_criteria untouched)', async () => {
+    const sd = {
+      strategic_objectives: ['Implement X as specified in the SD scope'],
+      key_changes: [{ change: 'Implement core changes for: X' }],
+      success_criteria: ['Custom, non-template exit condition'],
+      description: 'A description long enough to clear the short-description warning threshold.'
+    };
+    const result = await validatePlaceholderContent(sd);
     expect(result.pass).toBe(true);
     expect(result.issues).toEqual([]);
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
+  // The three tests below have empty or non-100%-template success_criteria, so none of them
+  // exercise the FR-1 blocking trigger — pass:true is the correct, unchanged expectation.
   it('should return no warnings for real content', async () => {
     const sd = {
       strategic_objectives: [
@@ -168,17 +189,20 @@ describe('validatePlaceholderContent', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('should reduce score for placeholder content', async () => {
+  it('should reduce score for placeholder content without blocking (success_criteria not 100%)', async () => {
+    // success_criteria is deliberately 1-of-2 template (not 100%) so this test isolates the
+    // score-reduction path from the FR-1 blocking trigger tested above.
     const sd = {
       strategic_objectives: [
         'Implement Feature X as specified in the SD scope',
         'Maintain backward compatibility with existing functionality'
       ],
       key_changes: [],
-      success_criteria: ['All implementation items from scope are complete', 'Code passes lint and type checks'],
+      success_criteria: ['All implementation items from scope are complete', 'Custom, non-template exit condition'],
       description: 'A real description that has enough length to pass the check.'
     };
     const result = await validatePlaceholderContent(sd);
+    expect(result.pass).toBe(true);
     expect(result.score).toBeLessThan(100);
     expect(result.score).toBeGreaterThanOrEqual(50);
   });
