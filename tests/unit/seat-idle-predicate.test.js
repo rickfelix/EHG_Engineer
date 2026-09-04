@@ -209,3 +209,56 @@ it('IDLE_AXIS_NAMES exposes every axis in evaluation order, for the FR-3 differe
   expect(IDLE_AXIS_NAMES).toContain('coordinator-flag');
   expect(IDLE_AXIS_NAMES.indexOf('coordinator-by-id')).toBeLessThan(IDLE_AXIS_NAMES.indexOf('fixture-session'));
 });
+
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 (second migration): fleet-dashboard.cjs's idleSessions
+// filter has zero behavioral coverage of its own (only static source-string pins in
+// tests/unit/session-predicates.test.js, since the filter is inline in a DB-driving function and
+// can't be unit-invoked directly) -- so pin the EXACT ctx shape that call site now passes:
+// seatIdleVerdict(s, { coordinatorId, sdHolderSessionIds: null }).idle, composed with its own
+// inline `!s.qf_id && heartbeat_age_seconds < DEAD_THRESHOLD` conjuncts.
+describe('fleet-dashboard idle-filter composition (FR-2 second migration)', () => {
+  const DEAD_THRESHOLD = 900; // 15min, mirrors STALE_SESSION_THRESHOLD_SECONDS(300) * 3
+  const coordId = 'coord-session-1';
+  const dashboardIdle = (s) =>
+    !s.qf_id &&
+    s.heartbeat_age_seconds < DEAD_THRESHOLD &&
+    seatIdleVerdict(s, { coordinatorId: coordId, sdHolderSessionIds: null }).idle;
+
+  it('a genuinely idle worker (no sd_key, no qf_id, fresh heartbeat) is idle', () => {
+    const s = session({ session_id: 'w1', heartbeat_age_seconds: 10 });
+    expect(dashboardIdle(s)).toBe(true);
+  });
+
+  it('sd_key null-fallback: an sd holder (sd_key set) is excluded, matching the pre-migration !!s.sd_key mirror check', () => {
+    const s = session({ session_id: 'w2', sd_key: 'SD-SOME-001', heartbeat_age_seconds: 10 });
+    expect(dashboardIdle(s)).toBe(false);
+  });
+
+  it('qf_id stays an inline conjunct: a QF holder (qf_id set, sd_key null) is excluded', () => {
+    const s = session({ session_id: 'w3', qf_id: 'QF-20260903-001', heartbeat_age_seconds: 10 });
+    expect(dashboardIdle(s)).toBe(false);
+  });
+
+  it('INTENDED DELTA: a stale is_coordinator=true flag is now excluded (isDispatchableFleetMember did not catch this)', () => {
+    const s = session({ session_id: 'w4', heartbeat_age_seconds: 10, metadata: { is_coordinator: true } });
+    expect(dashboardIdle(s)).toBe(false);
+  });
+
+  it('the active coordinator (matched by id) is still excluded post-migration', () => {
+    const s = session({ session_id: coordId, heartbeat_age_seconds: 10 });
+    expect(dashboardIdle(s)).toBe(false);
+  });
+
+  it('heartbeat freshness stays an inline conjunct: a stale heartbeat is excluded even though not-fresh axis was not wired', () => {
+    const s = session({ session_id: 'w5', heartbeat_age_seconds: DEAD_THRESHOLD + 1 });
+    expect(dashboardIdle(s)).toBe(false);
+  });
+
+  it('adam/non_fleet/quarantined/parked/fixture are still excluded through the shared predicate', () => {
+    expect(dashboardIdle(session({ session_id: 'w6', heartbeat_age_seconds: 10, metadata: { role: 'adam' } }))).toBe(false);
+    expect(dashboardIdle(session({ session_id: 'w7', heartbeat_age_seconds: 10, metadata: { non_fleet: true } }))).toBe(false);
+    expect(dashboardIdle(session({ session_id: 'w8', heartbeat_age_seconds: 10, metadata: { quarantined_at: new Date().toISOString() } }))).toBe(false);
+    expect(dashboardIdle(session({ session_id: 'w9', heartbeat_age_seconds: 10, metadata: { parked_until: new Date(Date.now() + 60_000).toISOString() } }))).toBe(false);
+    expect(dashboardIdle(session({ session_id: 'test-session-nswcf-fenced', heartbeat_age_seconds: 10 }))).toBe(false);
+  });
+});
