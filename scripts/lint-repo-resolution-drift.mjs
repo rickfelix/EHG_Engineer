@@ -33,7 +33,16 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 
 const SCAN_ROOTS = ['lib', 'scripts', 'tests'];
 const SCAN_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
-const EXCLUDED_DIR_NAMES = new Set(['node_modules', '.worktrees', '.git', 'coverage', 'dist', 'build']);
+// QF-20260903-532: 'one-off' excluded alongside the other non-codebase dirs below. This lint
+// walks the LIVE disk (not git-tracked-only), and scripts/one-off/ is the fleet's established
+// scratch-script dump (426 of 448 untracked files repo-wide at measurement time) that several
+// concurrent sessions write to continuously — a scratch file containing a literal platform-repo
+// string flipped this lint red at random depending on what another session happened to be
+// writing mid-scan. Those files are disposable experiments, never the shipped codebase this
+// lint exists to protect, so excluding the directory (not filtering by git-tracked status,
+// which would need a subprocess spawn per scan and traded this flake for a slower one under
+// this fleet's heavy concurrent disk load) is the targeted fix.
+const EXCLUDED_DIR_NAMES = new Set(['node_modules', '.worktrees', '.git', 'coverage', 'dist', 'build', 'one-off']);
 
 const FORBIDDEN_STRINGS = new Set(['rickfelix/ehg', 'rickfelix/ehg_engineer']);
 
