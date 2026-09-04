@@ -40,6 +40,7 @@ import { isMainModule } from '../lib/utils/is-main-module.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { isOracleHeldQF } from '../lib/fleet/hold-writer.js';
 import { seatIdleVerdict } from '../lib/fleet/seat-idle-predicate.mjs';
+import { resolveIdleCtx } from '../lib/fleet/idle-ctx-population.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -272,56 +273,13 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // never-claimed, live seat is not filtered out before eligibleIdleWorkers' own spin-up-grace
   // logic ever sees it -- see lib/fleet/session-predicates.mjs for the full rationale.
   const live = liveDispatchableFleetMembers(sessions || [], coordinatorId, nowMs);
-  // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: enumerate QF holders from the AUTHORITATIVE column so
-  // a session whose sd_key mirror is NULL but who holds a live QF is never counted idle.
-  // Fail-CLOSED to the mirror-only behaviour is the wrong direction here (it re-opens the hole),
-  // but a read failure must not crash the hint pass — degrade with the gap named in the summary.
-  let qfHolderSessionIds = new Set();
-  try {
-    const { data: qfHolders } = await supabase
-      .from('quick_fixes')
-      .select('claiming_session_id')
-      .not('claiming_session_id', 'is', null)
-      .in('status', ['open', 'in_progress']);
-    qfHolderSessionIds = new Set((qfHolders || []).map((r) => r.claiming_session_id).filter(Boolean));
-  } catch (e) {
-    summary.undeliveredReasons.push('qf_holder_read_failed:' + (e?.message || 'unknown'));
-  }
-  // QF-20260830-454: seats currently fenced BUSY on a dispatched WORK_ASSIGNMENT via the same
-  // seat_busy_reservation kind seat-busy-fence.cjs already reads worker-side. Fail-open to []
-  // (same posture as qfHolderSessionIds above) — a read failure must never crash the hint pass.
-  let seatBusySessionIds = new Set();
-  try {
-    const nowIso = new Date(nowMs).toISOString();
-    const { data: busyRows } = await supabase
-      .from('session_coordination')
-      .select('target_session, expires_at')
-      .eq('message_type', 'INFO')
-      .is('target_sd', null)
-      .eq('payload->>kind', 'seat_busy_reservation')
-      .gt('expires_at', nowIso)
-      .limit(200);
-    seatBusySessionIds = new Set((busyRows || []).map((r) => r.target_session).filter(Boolean));
-  } catch (e) {
-    summary.undeliveredReasons.push('seat_busy_read_failed:' + (e?.message || 'unknown'));
-  }
-  // QF-20260830-885: the authoritative SD-side twin of qfHolderSessionIds above. null (not [])
-  // on a read failure so eligibleIdleWorkers can fail-open to the OLD mirror-only behaviour
-  // rather than silently trusting nothing-is-held on a query fault.
-  let sdHolderSessionIds = null;
-  try {
-    const { data: sdHolders } = await supabase
-      .from('strategic_directives_v2')
-      .select('claiming_session_id')
-      .not('claiming_session_id', 'is', null)
-      // Provably bounded: the live fleet is a small, human-supervised roster (mirrors
-      // scripts/tier-stamp-rebaseline.mjs's own fleet-size-bound rationale) -- 500 is a
-      // generous literal cap, far above any realistic simultaneously-claimed-SD count.
-      .limit(500);
-    sdHolderSessionIds = new Set((sdHolders || []).map((r) => r.claiming_session_id).filter(Boolean));
-  } catch (e) {
-    summary.undeliveredReasons.push('sd_holder_read_failed:' + (e?.message || 'unknown'));
-  }
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 AC#2/AC#3: this consumer's 3 ctx-population queries
+  // (qfHolderSessionIds/seatBusySessionIds/sdHolderSessionIds) are now the shared
+  // lib/fleet/idle-ctx-population.mjs resolver -- lifted verbatim, so this remains the reference
+  // ctx-population the other three consumers import, not a fourth independent copy.
+  const { qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, undeliveredReasons } =
+    await resolveIdleCtx(supabase, { nowMs });
+  summary.undeliveredReasons.push(...undeliveredReasons);
   const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
