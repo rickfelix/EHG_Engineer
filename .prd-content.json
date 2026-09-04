@@ -1,0 +1,199 @@
+{
+  "executive_summary": "Add a preserve-then-reclaim stage to the worktree reaper: dead-owner trees with unpushed/dirty content push to a new origin ref, then free their slot under a strict PID+staleness predicate, fixing the audit sink first and running on a verified schedule.",
+  "functional_requirements": [
+    {
+      "id": "FR-3",
+      "requirement": "Fix the worktree-reaper audit sink so every classification row lands, and make a failed audit write FATAL for the reclaim path.",
+      "description": "lib/worktree-reaper/audit-sink.js:44 currently writes severity: verdict==='keep' ? 'low' : 'medium'. The audit_log table's CHECK constraint (audit_log_severity_check) only allows {info, warning, error, critical}, so every non-keep row has been silently rejected since the sink shipped -- confirmed by VALIDATION: a live count of event_type='worktree_reaper_classification' returns 0. writeAuditSink() catches the insert error and never throws (by design, so a broken sink never crashes a reaper run), which is exactly why this has gone undetected. Remap severity (e.g. keep->'info', stage1_remove/preserve_pushed->'warning', reclaim_removed->'warning', preserve_held_secret->'critical', anything unclassified->'error') and add a batch-insert integrity check: if ANY row in a batch is rejected, the reclaim path for the trees in that batch must not proceed (FR-1's RECLAIM eligibility explicitly requires 'the audit sink ACCEPTED the classification row'). This FR lands FIRST per FR-0 sequencing -- no removal logic may be enabled while the audit sink is unverified.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: a full reaper run against a live pool writes at least one audit_log row per classified worktree, and a post-run count of event_type='worktree_reaper_classification' rows created in that run matches the number of worktrees classified.",
+        "AC-2: every row's severity value is one of {info, warning, error, critical} -- a unit test asserts the full verdict->severity mapping table against the DB CHECK constraint's actual allowed set (read from database/schema-reference-snapshot.json, not hand-copied).",
+        "AC-3: a synthetic forced audit-write failure (mocked insert error) on the reclaim path aborts that tree's removal and surfaces a first-class error, verified by a unit test that removeWorktreeViaGit is never called when the audit insert rejects."
+      ]
+    },
+    {
+      "id": "FR-1a",
+      "requirement": "PRESERVE stage: push a dead-owner tree's content (unpushed commits + non-ignored dirty files) to a new origin ref, non-destructively, before any removal is considered.",
+      "description": "PRESERVE eligibility (ANY of): holder released (released_at set, a positive state test never used as a death date); holder tool clock frozen across a last_tool_at PAIR spanning >=30min (two byte-identical reads); no holder at all. heartbeat_at is inadmissible in either direction (per the existing 001-C admissibility rule already used elsewhere in the fleet). PRESERVE action per tree, aborting untouched at the first failure: (1) stage with `git add -u` plus an explicit list of untracked NON-ignored files (never `git add -A`; ignored files like .env snapshots are excluded by construction, and the existing preserveUntrackedFiles function keeps handling ignored residue on the already-approved removal path); (2) run the /ship review gate's secret scanner (checkCriticalFindings from lib/ship/review-gate.js:222, filtered to CRIT-001 -- NOT the wholesale `found` flag, which VALIDATION flagged as too broad for this narrower use) over the staged diff -- a hit HOLDS the tree with verdict preserve_held_secret and never pushes; (3) commit `wip(reaper-preserve): <key> <utc-ts>` with the owner session id and worktree path in commit trailers; (4) push (never --force) to a NEW ref `wip/reclaim/<sd-or-qf-key>/<utc-ts>` -- NEVER commit onto or push to the tree's own branch, since a re-claim after a restart may already own that branch name on origin; (5) verify `git ls-remote` reports the pushed ref's sha equals local HEAD; (6) write the recovery pointer `{ref, sha, worktree_path, owner_session, contains_migration_files}` to the audit sink (FR-3, must succeed) AND to the SD/QF row's `metadata.reaper_preserved[]` array (append-only, to avoid the collision VALIDATION flagged with the open SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001 metadata race -- use a Postgres JSONB array-append RPC or optimistic-concurrency read-modify-write with retry, never a blind overwrite of the whole metadata column). `wip/reclaim/` refs are never checked out by any automation: add the prefix to every existing auto-ship and pending-migrations exclusion list.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1 (FR-4 P1, positive): a planted worktree with one unpushed commit and one dirty tracked file, owned by a synthetic released session, is pushed to wip/reclaim/<key>/<ts> at the local HEAD sha, and a recovery pointer lands in both the audit sink and the SD/QF row's metadata.reaper_preserved[], within one reaper tick.",
+        "AC-2 (FR-4 N2): a planted worktree whose push fails (simulated network/auth failure) is NOT removed and is NOT marked preserved -- it remains in its pre-preserve state for the next tick to retry.",
+        "AC-3 (FR-4 N3): a planted worktree with a staged dirty file matching the CRIT-001 secret pattern holds with verdict preserve_held_secret and is never pushed, verified by asserting zero `git push` invocations in that test."
+      ]
+    },
+    {
+      "id": "FR-1b",
+      "requirement": "RECLAIM stage: remove a preserved (or already-clean+pushed) dead-owner tree under a strict, PID-and-staleness-based predicate -- never on heartbeat alone.",
+      "description": "RECLAIM eligibility (ALL of): (1) a preserve ref verified on origin matching the tree's current HEAD sha and dirty state, OR the tree is clean and fully pushed already; (2) NO resident PID by the marker UNION -- call markerDirs() (lib/fleet/cc-pid-liveness.cjs:57) explicitly to get BOTH the local checkout's and the main worktree's marker dirs (not the single-markerDir default), because a live process with cwd inside a removed tree resolves its next git command to the SHARED ROOT (lib/worktree-reapability.js:88-99/114-126's walk-up behavior) -- checking only one marker dir would miss this; (3) holder released OR pair-frozen for at least FREEZE_CUT_MINUTES (lib/fleet/genuine-worker.mjs:75-77, default 120min floor-15min, override via FLEET_FREEZE_CUT_MINUTES env -- this SUPERSEDES the 60min figure in earlier FR-1 drafts per the coordinator's binding dispatch parameters) AND heartbeat stale past the sweep threshold -- never heartbeat alone, never a fixed timer measured from release time; (4) not active_claim_protected on a LIVE claimant by a fresh pair-read; (5) the audit sink ACCEPTED the classification row for this tree (FR-3 dependency -- a failed audit write is FATAL for that tree's reclaim, per FR-3's AC-3). CORRECTED ROOT-CAUSE (VALIDATION finding B, supersedes the SD's original 'null owner reads as LIVE' framing which does not match the code as read): the real defect is scripts/safe-worktree-remove.mjs:53-71's resolveLiveClaim, which returns `Boolean(data?.claiming_session_id)` -- it treats claim-ROW PRESENCE as liveness with NO liveness probe at all, so a session that died in the restart WITHOUT releasing its claim pins the tree as live_owner forever, regardless of whether the session process is actually alive. The fix is the same prescribed remedy (a real liveness check via the PID marker union + freeze-cut staleness, replacing the bare claim-row-presence check), just with the corrected understanding of WHY it's broken. Removal itself goes through lib/worktree-manager.js removeWorktreeViaGit (line 1526, signature {allowFail, guard, liveOwner, logger}) followed by prune -- never a raw `git worktree remove`. CAVEAT A RESOLUTION (VALIDATION finding, blocking): PRESERVE's own commit+push sets both mtime and HEAD ctime to 'now', which trips scripts/worktree-reaper.mjs:1707's treeResidencyBlocksRemoval guard (a hard veto in decideRemoval at line 1723, keyed on max(mtime,HEAD ctime) within a 30-minute window) -- so a tree cannot be reclaimed in the SAME tick it was just preserved, making FR-4's P1 'within one tick' as originally worded unachievable. RESOLVED DESIGN DECISION: add a narrow, explicit exemption to treeResidencyBlocksRemoval for a tree whose preserve ref is independently verified on origin (ls-remote sha match, per FR-1a AC-1) -- the residency guard's purpose is to protect a tree that might still be being actively written to, and a verified-pushed preserve ref is exactly the proof that the content is safely elsewhere, so the residency signal is no longer informative for that specific tree. This exemption is scoped ONLY to trees with a fresh, verified preserve pointer -- it does not weaken the guard for any other tree. FR-4's P1 acceptance criterion is retained as 'within one tick' under this exemption.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1 (FR-4 N1): a planted worktree with a live owner (a fresh last_tool_at pair, <30min apart) is never reclaimed, even if a preserve ref happens to exist for it.",
+        "AC-2 (FR-4 N4): a planted worktree whose owning PID is alive (per the marker union) but whose tool clock is frozen past the freeze-cut is preserved (if eligible) but NOT reclaimed -- PID liveness alone blocks reclaim regardless of tool-clock staleness.",
+        "AC-3: the treeResidencyBlocksRemoval exemption is unit-tested in isolation -- a tree WITHOUT a verified preserve ref is still blocked for 30min after any mtime/ctime touch; a tree WITH a verified preserve ref (ls-remote sha match against the recorded pointer) bypasses the residency veto and proceeds to the remaining reclaim checks."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Verify the reaper tick actually fires reliably from the EXISTING registered Task Scheduler sweep -- no new scheduler, no second decision path -- and surface refusals as first-class, readable signals.",
+      "description": "CORRECTED MEASUREMENT (per the SD's own 'TWO CORRECTIONS' section, PowerShell-verified): the 'EHG LEO Stale-Session Sweep (host-local, PID-capable)' task IS registered and runs every 5 minutes; the earlier 'zero LEO tasks' finding was a Git-Bash schtasks argument-mangling artifact, not a real gap. Scheduler ownership stays with scripts/fleet/worktree-reaper-tick.cjs riding the existing sweep (every-12th-sweep piggyback, ~1hr effective cadence) -- FR-2 does NOT register a new task. FR-2's real deliverable, per VALIDATION finding C: the sweep task's launcher script (scripts/cron/stale-session-sweep-task.cmd) is UNTRACKED and gitignored (.gitignore:488) with NO committed generator -- none of the five existing setup-*-task.mjs scripts register the Stale-Session Sweep task, so a `git clean -xdf` on this host would silently delete fleet scheduling with no code-level trace. Deliverables: (1) a committed setup-stale-session-sweep-task.mjs generator, modeled on scripts/setup-liveness-watcher-task.mjs's --verify pattern (schtasks XML readback in a SEPARATE process, checking for a repeating <Interval>, absence of <Enabled>false</Enabled>, and the two battery-restriction defaults that silently kill a laptop-hosted task), so the sweep task can be regenerated from source instead of relying on an untracked file surviving forever; (2) because task settings are MultipleInstances=IgnoreNew + ExecutionTimeLimit=PT72H, a single hung sweep instance can swallow every 5-min trigger for up to 72 hours while Task Scheduler's own NumberOfMissedRuns counter stays at 0 (VALIDATION's mechanically-exact explanation for a previously-measured ~3h34 median delivered-run gap against the configured 5-min cadence) -- so FR-2's cadence gauge must read worktree-reaper-tick.cjs's OWN persisted state file (.claude/worktree-reaper-state.json, last_spawn_at) as ground truth, and must NEVER treat 'Task Scheduler reports the task healthy' as evidence the tick is actually firing; (3) the source-tree factory (lib/fleet/source-tree-refresh.cjs) already exceeds the SD's original 'keys on existsSync' framing -- its three-check identity logic (git-worktree-list membership + .git link file) is already correct; the real, remaining gap is only the empty-directory self-heal at line ~576, which must remove-and-rebuild an EMPTY source-tree directory in the same tick rather than throwing SOURCE_TREE_IDENTITY_ERROR and falling back to guarding the shared root -- and the emptiness test must not filter dotfiles, or it will wrongly treat a directory containing only a `.git` link file (a legitimately-provisioned worktree) as empty and destroy it; (4) every refusal cause (not just the empty-directory case) is emitted as a first-class fleet-dashboard/QUIET_TICK line and counts toward the existing starvation-alert threshold (detectReaperStarvation, already wired -- FR-2 must add a test asserting the refusal count actually REACHES that reader, since the gauge-registry's prior 'NO_CONSUMER' history means the wiring existed without a test proving delivery).",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: node scripts/setup-stale-session-sweep-task.mjs --verify, run with the sweep coordinator session stopped, confirms the registered task's schtasks XML matches the committed generator's intended definition (interval, enabled, no battery-kill flags).",
+        "AC-2: within two sweep intervals of a coordinator restart, .claude/worktree-reaper-state.json's last_spawn_at timestamp advances -- proving the tick fires from the OS-level schedule independent of any live coordinator process.",
+        "AC-3: a synthetic empty .reaper-source directory is self-healed (removed and rebuilt at origin/main) within one tick, verified by a unit test; a directory containing ONLY a .git link file is NOT treated as empty and is not destroyed."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Move QF worktree provisioning and the worktree-quota count from mint time to claim time, so QF minting succeeds even at a full pool.",
+      "description": "Confirmed by both sub-agents: scripts/create-quick-fix.js (~line 660-733) claims the QF row and THEN calls createWorkTypeWorktree, which internally calls enforceWorktreeQuota (lib/worktree-manager.js:927) -- at a full pool this aborts with WORKTREE_QUOTA_EXCEEDED, and VALIDATION confirmed the claim leaks (the already-claimed QF row is left claimed with no worktree, at ~line 733). scripts/qf-start.js currently has ZERO worktree or quota references (grepped, zero matches) -- this is net-new wiring, not a relocation of existing logic. The quota check must run BEFORE the claim_sd RPC in qf-start.js's claim flow, or (per VALIDATION) the exact same leak simply relocates from mint-time to claim-time instead of being fixed. This FR is independent of the PRESERVE/RECLAIM machinery (FR-1/FR-3/FR-2) and is explicitly kept OFF the critical path -- it can land as its own staged PR without blocking the audit-sink/preserve/reclaim work.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: node scripts/create-quick-fix.js at a synthetically full pool (quota mocked exceeded) succeeds and creates a QF row with NO worktree and NO claim.",
+        "AC-2: node scripts/qf-start.js at a synthetically full pool refuses to claim the QF row (the claim_sd RPC is never called), verified by a unit test asserting zero claim_sd invocations.",
+        "AC-3: node scripts/qf-start.js at a pool with available slots successfully provisions the worktree AND claims the row, in that order (quota check strictly precedes the claim RPC call in the test's call-order assertion)."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "PRESERVE/RECLAIM must be threaded into scripts/worktree-reaper.mjs at the stageForCategories seam (~lines 810-820), since hasHardKeep-matched trees currently bypass the `categories` array entirely and never reach any staging decision today.",
+      "rationale": "hasHardKeep (lib/worktree-reaper/detectors.js:158-172) is a pre-check consulted before classifyWorktree's category logic runs -- a matched tree short-circuits out of the classification pipeline with no category assigned, so PRESERVE/RECLAIM needs either a new category set or a parallel branch inserted at this exact seam, confirmed by both sub-agents' independent reads of the file."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "New verdict literals (preserve_pushed, reclaim_removed, preserve_held_<reason>) must not collide with any of the ~30 existing reason/verdict literals already in use across detectors.js and worktree-reaper.mjs (hard_keep_unpushed_dirty_resident_or_locked, active_claim_protected, reap_protected_marker, no_match, shipped-stale, keep, stage1_remove, stage2_remove, etc).",
+      "rationale": "Confirmed no collision exists by Explore's exhaustive literal inventory; this is a regression guard for future refactors, not a currently-open risk."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "The cap constant used by worktree-reaper-tick.cjs's pool-watchdog logic must be reconciled with lib/worktree-quota.js's MAX_WORKTREE_COUNT=40 -- VALIDATION measured the tick's own comment claims a value 'kept in sync' with quota, but the tick's actual constant reads 28, a real divergence.",
+      "rationale": "A stale/incorrect cap constant would cause the tick's watchdog to trigger at the wrong pool utilization, either firing too eagerly (28) or too late (if it were higher than 40) relative to the actual enforcement point in enforceWorktreeQuota."
+    }
+  ],
+  "system_architecture": {
+    "overview": "The existing reaper (scripts/worktree-reaper.mjs, invoked by scripts/fleet/worktree-reaper-tick.cjs on a schedule) classifies each registered worktree into keep/stage1_remove/stage2_remove via lib/worktree-reaper/detectors.js. A tree that fails the hasHardKeep pre-check (has unpushed commits, dirty files, is locked, or has a resident session) is currently kept forever with no further disposition. This SD adds two new stages that specifically target hard_keep trees with a DEAD owner: PRESERVE (push content to a recovery ref on origin, non-destructive, wide eligibility) runs first; RECLAIM (remove the tree, destructive, narrow PID+staleness-based eligibility) runs only after a preserve is verified or the tree was already clean. Both stages write to a repaired audit sink (FR-3) that must accept the write before any removal proceeds. A separate track (FR-2) hardens the scheduling layer that invokes the whole pipeline, and FR-5 decouples QF worktree provisioning from the shared quota so minting is never blocked by pool exhaustion.",
+    "components": [
+      { "name": "audit-sink.js (repaired)", "responsibility": "Maps every reaper verdict to a DB-constraint-valid severity and persists a classification row per tree; a rejected write blocks that tree's reclaim.", "technology": "Node.js, Supabase (audit_log table)" },
+      { "name": "preserve-stage module (new)", "responsibility": "Implements the 6-step PRESERVE action (stage, secret-scan, commit, push, verify, record pointer) for a single eligible tree.", "technology": "Node.js, git CLI (execFileSync), lib/ship/review-gate.js" },
+      { "name": "reclaim-stage module (new)", "responsibility": "Evaluates the 5-part RECLAIM predicate (preserve verified, no resident PID, staleness, not claim-protected, audit accepted) and, if eligible, calls removeWorktreeViaGit.", "technology": "Node.js, lib/fleet/cc-pid-liveness.cjs, lib/worktree-manager.js" },
+      { "name": "worktree-reaper.mjs (extended)", "responsibility": "Orchestrates classification and now threads hard_keep trees through PRESERVE then RECLAIM at the stageForCategories seam instead of leaving them undispositioned.", "technology": "Node.js CLI" },
+      { "name": "setup-stale-session-sweep-task.mjs (new)", "responsibility": "Committed, regeneratable Task Scheduler registration + --verify readback for the sweep task that hosts the reaper tick, modeled on setup-liveness-watcher-task.mjs.", "technology": "Node.js, schtasks (Windows Task Scheduler)" },
+      { "name": "qf-start.js (extended)", "responsibility": "Checks worktree quota BEFORE claiming a QF row, so a full pool refuses the claim rather than leaking it.", "technology": "Node.js CLI" }
+    ],
+    "data_flow": "worktree-reaper-tick.cjs (fired by the OS-scheduled sweep) spawns worktree-reaper.mjs, which enumerates registered worktrees, classifies each, and for hard_keep trees evaluates PRESERVE eligibility -> (if eligible) stages/scans/commits/pushes to wip/reclaim/<key>/<ts> on origin and records a pointer in both audit_log and the owning SD/QF row's metadata.reaper_preserved[] -> evaluates RECLAIM eligibility (consulting the preserve pointer, PID marker union, freeze-cut staleness, active-claim state, and audit-sink acceptance) -> (if eligible) removes the tree via removeWorktreeViaGit and prunes. Refusal at any step emits a QUIET_TICK/dashboard line. FR-5 is a separate, parallel data flow: qf-start.js checks quota before calling claim_sd, decoupled from the preserve/reclaim pipeline.",
+    "integration_points": [
+      "audit_log table (Supabase) -- classification and preserve/reclaim event persistence",
+      "session_coordination table -- claim/liveness reads (active_claim_protected check)",
+      "origin git remote -- wip/reclaim/<key>/<ts> preserve refs",
+      "Windows Task Scheduler (schtasks) -- the sweep task hosting the reaper tick",
+      "lib/ship/review-gate.js -- secret-scan reuse for the preserve stage",
+      "strategic_directives_v2 / quick_fixes metadata.reaper_preserved[] -- recovery pointer storage"
+    ]
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Audit sink accepts every reaper verdict severity", "test_type": "unit", "given": "a batch of classification rows spanning every existing verdict literal", "when": "buildAuditRows/writeAuditSink runs", "then": "every row's severity is in {info,warning,error,critical} and the batch insert succeeds with zero rejected rows" },
+    { "id": "TS-2", "scenario": "PRESERVE happy path (FR-4 P1)", "test_type": "e2e", "given": "a planted worktree with one unpushed commit and one dirty tracked file, owned by a released session", "when": "one reaper tick runs", "then": "the tree is pushed to wip/reclaim/<key>/<ts> at the local HEAD sha, its slot is freed, and a recovery pointer exists in both the audit sink and the row's metadata.reaper_preserved[], all within that single tick (validating the treeResidencyBlocksRemoval exemption)" },
+    { "id": "TS-3", "scenario": "Live owner is never reclaimed (FR-4 N1)", "test_type": "unit", "given": "a planted worktree with a fresh last_tool_at pair (<30min apart)", "when": "RECLAIM eligibility is evaluated", "then": "the predicate returns ineligible regardless of any preserve ref state" },
+    { "id": "TS-4", "scenario": "Failed push blocks removal (FR-4 N2)", "test_type": "unit", "given": "a planted worktree whose git push is mocked to fail", "when": "PRESERVE runs", "then": "removeWorktreeViaGit is never invoked for that tree in the same or a later tick until the push succeeds" },
+    { "id": "TS-5", "scenario": "Secret hit holds and never pushes (FR-4 N3)", "test_type": "security", "given": "a planted worktree with a staged dirty file matching the CRIT-001 secret pattern", "when": "PRESERVE's secret-scan step runs", "then": "the tree's verdict is preserve_held_secret and zero git push invocations occur for it" },
+    { "id": "TS-6", "scenario": "Alive PID with frozen tool clock is preserved but not reclaimed (FR-4 N4)", "test_type": "unit", "given": "a planted worktree whose PID is alive per the marker union but whose last_tool_at pair shows >=30min freeze", "when": "PRESERVE then RECLAIM are evaluated in sequence", "then": "PRESERVE proceeds (frozen tool clock is a PRESERVE-eligibility condition) but RECLAIM refuses due to the resident PID" },
+    { "id": "TS-7", "scenario": "Failed audit write is fatal for reclaim", "test_type": "integration", "given": "a mocked audit-sink insert failure for one tree's classification row", "when": "the reclaim stage evaluates that tree", "then": "removal is refused for that tree specifically, with the refusal cause logged as a QUIET_TICK line" },
+    { "id": "TS-8", "scenario": "Sweep task fires with no live coordinator", "test_type": "e2e", "given": "the coordinator session stopped and the OS-registered sweep task left running", "when": "two sweep intervals elapse", "then": "worktree-reaper-tick.cjs's persisted state file last_spawn_at timestamp advances, proving the tick fires independent of any live coordinator process" },
+    { "id": "TS-9", "scenario": "QF mint succeeds at a full pool; claim refuses", "test_type": "integration", "given": "a synthetically full worktree pool (quota exceeded)", "when": "create-quick-fix.js runs, then qf-start.js attempts to claim the resulting row", "then": "the mint succeeds with no worktree and no claim; the subsequent claim attempt refuses before calling claim_sd, leaving the row unclaimed and untouched" }
+  ],
+  "acceptance_criteria": [
+    "A full reaper tick against a pool containing a synthetic dead-owner tree (unpushed commit + dirty file) preserves it to a wip/reclaim/ ref and frees the slot within one tick, with a recovery pointer in both the audit sink and the owning row's metadata.",
+    "Zero audit_log write rejections occur across a full reaper run spanning every verdict literal (measured via a post-run count, not assumed from a non-throwing contract).",
+    "The registered sweep task's cadence is independently verifiable via a committed setup-*-task.mjs generator's --verify mode, and the reaper's own delivered-cadence gauge reads its persisted state file rather than trusting Task Scheduler's reported health."
+  ],
+  "risks": [
+    {
+      "risk": "The treeResidencyBlocksRemoval exemption for verified-preserved trees is scoped too broadly and allows removal of a tree that is still being actively written to by a process the PID/staleness checks failed to detect (e.g. a process outside the marker-dir convention).",
+      "probability": "LOW",
+      "impact": "HIGH",
+      "mitigation": "The exemption requires ALL of: a verified preserve ref (ls-remote sha match) AND no resident PID by the marker union AND freeze-cut staleness AND audit-sink acceptance -- four independent signals must agree, not just the preserve-ref check alone. Ship the exemption behind a feature flag for the first week and monitor reclaim_removed audit rows for any that correspond to a tree whose owner later reports data loss.",
+      "rollback_plan": "Disable the exemption via the feature flag, reverting hard_keep trees to their current permanent-keep behavior (safe, non-destructive fallback) while the RECLAIM stage is investigated."
+    },
+    {
+      "risk": "The metadata.reaper_preserved[] append collides with the already-open SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001 metadata-write race, causing a lost preserve pointer under concurrent writes to the same SD/QF row.",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Use a Postgres JSONB array-append RPC (or optimistic-concurrency read-modify-write with a retry loop keyed on a version/updated_at column) rather than a blind full-metadata overwrite, and coordinate with the owning SD's implementation to confirm both use the same append-safe pattern before either ships.",
+      "rollback_plan": "If a lost pointer is detected post-ship, the audit_log row (FR-3, independent of row metadata) remains the authoritative recovery record -- a lost metadata pointer degrades convenience, not data safety, since the origin ref itself is never lost."
+    },
+    {
+      "risk": "The corrected root-cause for the reclaim guard (resolveLiveClaim treating claim-row presence as liveness) means the fix touches a widely-reused function in scripts/safe-worktree-remove.mjs, risking a regression in its other callers beyond the reaper.",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Add the PID-marker-union + freeze-cut liveness check as an ADDITIONAL condition alongside (not replacing) the existing claim-row-presence check in resolveLiveClaim's decision, so any other caller relying on the current (safer, more conservative) fail-closed behavior is unaffected -- only a claim-row-present-AND-provably-dead-by-marker-union case newly resolves to 'not live', which is strictly a narrowing of what counts as live, never a widening.",
+      "rollback_plan": "Revert the resolveLiveClaim change independently of the rest of FR-1b if a regression surfaces in a different caller; the reaper's RECLAIM stage can fall back to calling markerDirs()-based liveness directly rather than through the shared helper."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": "Phase 1 (FR-3)", "description": "Repair the audit sink severity mapping and add the fatal-on-reject guard for the reclaim path. Lands first per FR-0 sequencing -- no removal logic is enabled until this is verified.", "deliverables": ["lib/worktree-reaper/audit-sink.js severity fix", "batch-insert integrity check", "unit tests (TS-1, TS-7)"] },
+      { "phase": "Phase 2 (FR-1a: PRESERVE)", "description": "Implement the preserve-stage module and thread it into worktree-reaper.mjs at the stageForCategories seam for hard_keep-matched trees.", "deliverables": ["preserve-stage module", "wip/reclaim/ ref exclusions added to auto-ship and pending-migrations lists", "unit/e2e tests (TS-2 partial, TS-4, TS-5)"] },
+      { "phase": "Phase 3 (FR-1b: RECLAIM)", "description": "Implement the reclaim-stage module with the corrected liveness check and the scoped treeResidencyBlocksRemoval exemption.", "deliverables": ["reclaim-stage module", "resolveLiveClaim liveness-check addition", "residency-guard exemption", "unit/e2e tests (TS-2 complete, TS-3, TS-6)"] },
+      { "phase": "Phase 4 (FR-2: schedule hardening)", "description": "Commit the sweep-task generator, add the cadence gauge reading the tick's own state file, and fix the empty-source-tree self-heal.", "deliverables": ["setup-stale-session-sweep-task.mjs", "cadence gauge", "source-tree-refresh.cjs self-heal fix", "test (TS-8)"] },
+      { "phase": "Phase 5 (FR-5: QF quota relocation)", "description": "Independent, off-critical-path. Move quota check + worktree provisioning from create-quick-fix.js mint time to qf-start.js claim time.", "deliverables": ["qf-start.js quota-before-claim wiring", "create-quick-fix.js mint-time provisioning removal", "test (TS-9)"] }
+    ],
+    "technical_decisions": [
+      "Staged as 5 separate PRs inside one PRD (per VALIDATION's explicit recommendation, since the full FR set will not fit one EXEC pass under the LOC target) rather than one monolithic PR -- FR-0's sequencing (FR-3 before FR-1 before FR-2) is preserved as the PR order; FR-5 is independent and can land in parallel.",
+      "Resolved caveat A (PRESERVE's own commit trips the residency guard) via a narrow, four-signal-gated exemption rather than a two-tick redesign -- chosen because it keeps FR-4's P1 'within one tick' predicate intact and because the four required signals (verified preserve ref + no resident PID + freeze-cut staleness + audit acceptance) already compose the RECLAIM predicate, so the exemption reuses existing checks rather than adding new state.",
+      "Corrected FR-1b's stated defect from 'null owner reads as LIVE' (does not match the code) to the verified mechanism (resolveLiveClaim treats claim-row presence as liveness with no liveness probe) per VALIDATION's independent code read -- the prescribed remedy is unchanged, only the diagnosis.",
+      "FR-2's scheduler ownership stays exactly as the coordinator's binding dispatch parameters specify: no new Task Scheduler task, only a committed generator for the EXISTING sweep task plus a cadence gauge that reads ground truth (the tick's own state file) instead of trusting the OS scheduler's self-reported health."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "Fleet worker sessions (Claude Code)", "interaction": "Benefit from a self-healing worktree pool -- sd-start.js claims stop failing with WORKTREE_CREATE_FAILED once dead-owner trees are reclaimed automatically.", "frequency": "Continuous, every SD/QF claim attempt" },
+      { "name": "Coordinator dashboard", "interaction": "Reads QUIET_TICK/starvation-alert lines for reaper refusal causes and the cadence gauge for delivered-tick health.", "frequency": "Per reaper tick (~hourly via the sweep piggyback)" }
+    ],
+    "dependencies": [
+      { "name": "audit_log table / audit_log_severity_check constraint", "type": "downstream", "contract": "Reaper writes must conform to the constraint's allowed severity values, read from the live schema rather than hand-copied.", "failure_handling": "A rejected write is FATAL for that tree's reclaim (fail-closed, per FR-3)." },
+      { "name": "Windows Task Scheduler (schtasks)", "type": "upstream", "contract": "The 'EHG LEO Stale-Session Sweep' task fires worktree-reaper-tick.cjs on a 5-min cadence, piggybacking the reaper every 12th run.", "failure_handling": "The cadence gauge (FR-2) detects a stalled tick via the persisted state file, independent of Task Scheduler's self-reported status, which is known to mask hung-instance starvation (IgnoreNew + PT72H)." },
+      { "name": "origin git remote", "type": "downstream", "contract": "wip/reclaim/<key>/<ts> refs must be pushable and independently verifiable via git ls-remote.", "failure_handling": "A push failure blocks reclaim for that tree (FR-4 N2) with no partial state left behind." }
+    ],
+    "data_contracts": [
+      { "contract_name": "metadata.reaper_preserved[]", "schema": "Array of {ref, sha, worktree_path, owner_session, contains_migration_files, preserved_at}", "validation": "Append-only via a concurrency-safe write path (JSONB array-append RPC or optimistic-concurrency retry).", "versioning": "New field on existing strategic_directives_v2/quick_fixes metadata JSONB column -- no schema migration required." }
+    ],
+    "runtime_config": {
+      "environment_variables": ["FLEET_FREEZE_CUT_MINUTES", "WORKTREE_REAPER_ENABLED", "WORKTREE_POOL_WATCHDOG"],
+      "feature_flags": ["reaper_reclaim_residency_exemption -- gates the treeResidencyBlocksRemoval exemption for verified-preserved trees, per the risk-mitigation staged rollout"],
+      "deployment_considerations": "All logic runs from the reaper's own self-refreshing source-tree worktree (.reaper-source), never the shared root, per the existing ENF-17 guard."
+    },
+    "observability_rollout": {
+      "monitoring": ["audit_log row count by event_type='worktree_reaper_classification' per tick", "reaper cadence gauge reading last_spawn_at from the tick's state file", "count of reclaim_removed vs preserve_held_<reason> vs refused verdicts per tick"],
+      "alerts": ["starvation alert (existing detectReaperStarvation, now test-verified to actually reach its reader) when refusal count crosses the existing threshold", "cadence gauge alert if last_spawn_at has not advanced within 2x the expected sweep-piggyback interval"],
+      "rollout_strategy": "Staged PR sequence (Phase 1-5 above); the residency exemption ships behind reaper_reclaim_residency_exemption for a monitored first week before becoming the default.",
+      "rollback_trigger": "Any reclaim_removed row later associated with a reported data-loss incident, or the audit-write-rejection count failing to reach zero after Phase 1 ships.",
+      "rollback_procedure": "Disable WORKTREE_REAPER_ENABLED (existing kill switch) to freeze all reaper activity to classification-only (no preserve, no reclaim), which is the current safe default behavior."
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/worktree-reaper/detectors.js", "scripts/worktree-reaper.mjs", "lib/worktree-manager.js",
+      "lib/fleet/cc-pid-liveness.cjs", "scripts/safe-worktree-remove.mjs", "scripts/fleet/worktree-reaper-tick.cjs",
+      "lib/fleet/genuine-worker.mjs", "lib/worktree-reaper/audit-sink.js", "database/schema-reference-snapshot.json",
+      "scripts/create-quick-fix.js", "scripts/qf-start.js", "scripts/setup-liveness-watcher-task.mjs",
+      "lib/worktree-reapability.js", "lib/worktree-reaper/live-claim-guard.js", "lib/worktree-reaper/removal-decision.js",
+      "lib/ship/review-gate.js"
+    ],
+    "patterns_identified": [
+      "Detectors are pure functions returning {matched/pass, reason, evidence}; the main script (worktree-reaper.mjs) composes them at classification time",
+      "Verdict/reason literals are plain strings with no shared enum -- new PRESERVE/RECLAIM literals must be checked by hand against the existing inventory",
+      "The existing setup-*-task.mjs family establishes a committed-generator + schtasks-XML-readback --verify pattern for durable scheduling that FR-2 reuses",
+      "Never-throw, log-and-continue is the established contract for audit/telemetry writers in this codebase -- FR-3's fatal-on-reject requirement for the reclaim path specifically is a deliberate, scoped exception to that convention"
+    ],
+    "key_decisions": [
+      "Resolved FR-4 P1's one-tick-vs-residency-guard conflict via a scoped exemption rather than a redesign",
+      "Corrected the stated root cause for the null-owner defect per VALIDATION's independent verification",
+      "Staged the SD into 5 sequential/parallel PRs rather than one EXEC pass, per FR-0 and VALIDATION's LOC-fit assessment"
+    ],
+    "exploration_date": "2026-09-04"
+  }
+}
