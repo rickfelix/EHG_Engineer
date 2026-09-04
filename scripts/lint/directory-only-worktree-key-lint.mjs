@@ -18,6 +18,15 @@
 //
 // Mirrors scripts/lint/fleet-liveness-select-lint.mjs's structure (pure extractor + reason-
 // required allowlist + tree scan). ADVISORY-FIRST: exit 0 by default; pass --enforce for exit 1.
+//
+// KNOWN LIMITATION: this is a source-text heuristic, not a data-flow analysis. It cannot tell
+// whether a captured segment actually FLOWS into a claim/block decision -- it flags the SHAPE
+// (a capturing group directly after `.worktrees`) and relies on the reason-required allowlist
+// for adjudicated false positives (e.g. WORKTREE_PATH_RE itself, the sanctioned fallback
+// source). A capture-and-key pattern spelled without `[^` or a backslash (e.g. a differently
+// written character class) would not match LOOKS_LIKE_REGEX_CONTENT and could go undetected --
+// narrowing further risks missing real regressions, so this tradeoff is accepted deliberately
+// rather than silently.
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { resolve, join, extname } from 'path';
 
@@ -79,8 +88,9 @@ export function loadAllowlist(path = ALLOWLIST_PATH) {
   return entries;
 }
 
-const relOf = (full) => full.replace(ROOT, '').replace(/\\/g, '/').replace(/^\//, '');
+const relOf = (full, root) => full.replace(root, '').replace(/\\/g, '/').replace(/^\//, '');
 
+/** @param {string} [root] scan root; defaults to the real repo root (module-relative), never cwd. */
 export function scanTree(root = ROOT) {
   const hits = [];
   const scanRoot = join(root, SCAN_DIR);
@@ -97,7 +107,7 @@ export function scanTree(root = ROOT) {
       let src;
       try { src = readFileSync(full, 'utf8'); } catch { continue; }
       for (const f of findDirectoryOnlyWorktreeCaptures(src)) {
-        hits.push({ file: relOf(full), ...f });
+        hits.push({ file: relOf(full, root), ...f });
       }
     }
   };
@@ -106,9 +116,15 @@ export function scanTree(root = ROOT) {
 }
 
 async function main() {
-  const enforce = process.argv.includes('--enforce');
+  const args = process.argv.slice(2);
+  const enforce = args.includes('--enforce');
+  // --root <dir>: point the scan at an arbitrary directory instead of this repo (used by
+  // scripts/lint/control-seed-test-lint.mjs's fixture trial to prove this control fires on a
+  // planted defect without touching the real tree).
+  const rootIdx = args.indexOf('--root');
+  const scanRoot = rootIdx !== -1 && args[rootIdx + 1] ? resolve(args[rootIdx + 1]) : ROOT;
   const allow = loadAllowlist();
-  const hits = scanTree();
+  const hits = scanTree(scanRoot);
   const ungoverned = hits.filter((h) => !(`${h.file}:${h.line}` in allow) && !(h.file in allow));
   console.log(`[DIRECTORY-ONLY-WORKTREE-KEY-LINT] scanned ${SCAN_DIR}; ${hits.length} .worktrees/<capture> shape(s); ${ungoverned.length} ungoverned.`);
   if (ungoverned.length) {

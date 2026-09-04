@@ -12,6 +12,7 @@
 // data" and "zero defects" are different claims (C6, prospective TESTING sub-agent finding).
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 config();
 
@@ -50,14 +51,22 @@ async function main() {
     return;
   }
 
-  const { data: rows, error } = await supabase
-    .from('permission_audit_log')
-    .select('id, created_at, metadata')
-    .eq('rule_code', 'PAT-CLMMULTI-002')
-    .eq('outcome', 'block')
-    .gte('created_at', sinceIso);
-  if (error) {
-    console.error(JSON.stringify({ status: 'error', error: error.message }));
+  // fetchAllPaginated (not a bare .select) is required: a bulk audit-forensics read that
+  // silently truncates at PostgREST's 1000-row cap would undercount exactly the offenders
+  // this predicate exists to catch -- the same failure class count-truncation-diff-lint
+  // guards against fleet-wide (SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001).
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() =>
+      supabase
+        .from('permission_audit_log')
+        .select('id, created_at, metadata')
+        .eq('rule_code', 'PAT-CLMMULTI-002')
+        .eq('outcome', 'block')
+        .gte('created_at', sinceIso)
+    );
+  } catch (e) {
+    console.error(JSON.stringify({ status: 'error', error: e.message }));
     process.exitCode = 1;
     return;
   }
