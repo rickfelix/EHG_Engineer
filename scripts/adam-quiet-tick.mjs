@@ -40,6 +40,7 @@ import { fetchInboundBacklog, classifyBacklog, partitionByLiveness } from '../li
 import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus, isManualChildStale, parseManualChildMeta } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { seatIdleVerdict } from '../lib/fleet/seat-idle-predicate.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
 // retention mechanism (verified) and the ventures stall-scan below has no .limit() either —
 // both are unbounded processing reads (rows iterated for stall detection), so paginate.
@@ -82,9 +83,10 @@ const { decideCadence, detectSalientDelta, runCoresFailSoft, computeStateHash, s
 // missed stranded/gated/deferred rows entirely (the 2026-09-02 incident class). Now sourced from
 // the shared belt census.
 const { computeBeltCensus } = require('../lib/fleet/belt-census.cjs');
-// QF-20260829-588: canonical non-fleet predicate (lib/claim/build-forbidden-session.cjs) --
-// role seats (adam/solomon/coordinator) must not count as "idle" fleet workers.
-const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
+// QF-20260829-588's canonical non-fleet predicate was here (lib/claim/build-forbidden-session.cjs)
+// -- SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 migrated the sole call site onto the consolidated
+// seatIdleVerdict (see checkIdleBesideClaimable below); isBuildForbiddenSession itself is
+// unchanged and still the SoT for the ESM claim-validity gate and worker-checkin acquisition path.
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): surface which Claude account the fleet
 // is running under, and detect a genuine account switch across ticks.
 const { getAccountIdentity, detectAccountSwitch, resolveRealConfigPath } = require('../lib/fleet/account-identity.cjs');
@@ -982,8 +984,22 @@ export async function checkIdleBesideClaimable(sb) {
     // metadata.non_fleet=true / role='adam' / is_coordinator=true) are legitimately idle
     // by design, and any seat with released_at set is a released shell, not a genuinely
     // available fleet worker. None of the three ever count as idle fleet-worker capacity.
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 (final consumer): migrated off
+    // isBuildForbiddenSession(s.metadata) onto seatIdleVerdict(s, ctx), which reproduces all
+    // three QF-20260829-588 limbs (non_fleet, role=adam, is_coordinator via the metadata flag)
+    // PLUS adds fixture/probe session-id exclusion (isBuildForbiddenSession is metadata-only,
+    // blind to session_id shape -- so a fixture id like "test-session-..." previously fell
+    // through as idle) and quarantined/parked exclusion -- three INTENDED DELTAS closing the
+    // exact convergence gap this SD exists to fix, not parity gaps. Deliberately NOT passing
+    // coordinatorId (the id-match axis, on top of the metadata-flag axis already covered): that
+    // would route this call through getActiveCoordinatorId's file+DB resolution against a live
+    // pointer file the existing seats-table-shaped test mock cannot safely stand in for, an
+    // avoidable external dependency this consumer's original predicate never had. released_at
+    // stays its own unconditional conjunct: this consumer deliberately excludes ANY released_at
+    // value at all (not a time window), stronger than and semantically distinct from
+    // seatIdleVerdict's time-windowed recently-released axis.
     const idleCount = (seats || []).filter(
-      (s) => !isBuildForbiddenSession(s.metadata) && !s.released_at
+      (s) => seatIdleVerdict(s).idle && !s.released_at
     ).length;
     return idleCount > 0 ? { idleCount, rawUnclaimedCount } : null;
   } catch { return null; }

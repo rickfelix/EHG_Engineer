@@ -88,4 +88,35 @@ describe('checkIdleBesideClaimable', () => {
     const result = await checkIdleBesideClaimable(sb);
     expect(result).toEqual({ idleCount: 1, rawUnclaimedCount: 4 });
   });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2: migrated onto seatIdleVerdict, which closes two
+  // gaps isBuildForbiddenSession had (metadata-only, blind to session_id shape and to the
+  // quarantined/parked markers) -- these are INTENDED DELTAS this migration adds, not
+  // pre-existing behavior, so they're pinned here rather than asserted as parity.
+  it('INTENDED DELTA: a fixture/probe session id is now excluded (isBuildForbiddenSession was metadata-only, blind to this)', async () => {
+    const seats = [
+      { session_id: 'test-session-nswcf-fenced', released_at: null, last_tool_at: new Date().toISOString(), metadata: {} },
+    ];
+    const sb = sbWith(6, seats);
+    const result = await checkIdleBesideClaimable(sb);
+    expect(result).toBeNull();
+  });
+
+  it('INTENDED DELTA: a quarantined seat is now excluded', async () => {
+    const seats = [
+      { session_id: 'wedged-1', released_at: null, last_tool_at: new Date().toISOString(), metadata: { quarantined_at: new Date().toISOString() } },
+    ];
+    const sb = sbWith(6, seats);
+    const result = await checkIdleBesideClaimable(sb);
+    expect(result).toBeNull();
+  });
+
+  it('INTENDED DELTA: a parked seat (parked_until in the future) is now excluded', async () => {
+    const seats = [
+      { session_id: 'parked-1', released_at: null, last_tool_at: new Date().toISOString(), metadata: { parked_until: new Date(Date.now() + 60_000).toISOString() } },
+    ];
+    const sb = sbWith(6, seats);
+    const result = await checkIdleBesideClaimable(sb);
+    expect(result).toBeNull();
+  });
 });
