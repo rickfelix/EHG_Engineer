@@ -45,6 +45,17 @@
  * isHoldReleased() sees the release land even if the marker write is interrupted; the marker
  * write is best-effort documentation on top of the load-bearing release.
  *
+ * SEC-1 RESOLUTION (coordinator ruling on signal d1da6437, 2026-09-04T21:41Z): the --live
+ * run of this script (21:13Z, commit 4b921fb4, predating the acknowledgesRequiresHumanAction
+ * guard above) was executed by the coordinator seat itself in response to this SD's own
+ * deferral signals -- not an unauthorized actor. For the 2 rows this finding names
+ * (CLEAN-CLONE-LAUNCH-001, VENTURE-CLOUDFLARE-DEFAULT-001): NO further live correction.
+ * requires_human_action=false was measured as ALREADY the live state before the backfill ran
+ * on both rows, and CLEAN-CLONE-LAUNCH-001's own reason text records a prior informal release
+ * by Alpha -- the shared unfenced_at stamp changed no dispatch-eligibility outcome. Ruling
+ * verbatim: "stamp shared, outcome unchanged, verified pre-state." The guard above is the
+ * accepted forward-looking fix (adjudicate every hold key before any shared-field release).
+ *
  * Dry-run by default, mirroring the sibling scripts (002-C's
  * reconcile-escalated-completed-sd-quick-fixes.mjs, this SD's own
  * reconcile-unlinked-tier3-qfs.mjs). Every run writes a manifest of pre-backfill state.
