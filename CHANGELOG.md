@@ -197,6 +197,11 @@
   - `scripts/qf-start.js` now checks the worktree quota before `claim_sd` and provisions the worktree after a successful claim, fixing a confirmed leak in `scripts/create-quick-fix.js`: a full pool used to leave a QF row permanently claimed with no worktree and no way to release it.
   - Two design-ambiguous sub-items (an empty-source-tree self-heal, and wiring per-tree PRESERVE/RECLAIM refusals into the tick-level starvation counter) were deferred and signaled to the coordinator rather than guessed at, after the first risked silently defeating an existing EXEC-SECURITY test suite's refusal contract.
 
+- **5 basename-colliding migration files were entirely invisible to apply-state checking; 4 are now reconciled, the 5th is now reported** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D
+  - `verify-migration-apply-state.mjs` excludes any extra-root migration file whose basename already exists elsewhere (avoiding one disposition-ledger entry silently suppressing two different files) — but the exclusion made those files invisible to any apply-state check at all, not just to the ledger. One of the 5, `20251129_musk_algorithm_pareto.sql`, is confirmed `DIVERGENT CONTENT`: a genuinely different migration, silently unchecked.
+  - Two LEAD-phase sub-agent passes rejected dual-keying the disposition ledger (high blast radius: breaks the CI seeder-sync step, duplicates entries in the append-only `audit_log` mirror) in favor of two additive changes: reconciled the 4 byte-identical duplicates at source (verified via git-committed blob hash, not a weaker string comparison), and promoted the verifier's already-computed `excluded[]` classification into its `--json` output, paired with a genuine consumer in `scripts/migration-gap-summary.mjs` (avoiding the "wired but inert" pattern already live in a sibling field).
+  - The divergent pair is left untouched — a post-implementation review found the currently-scanned copy targets a table confirmed absent from the live schema (dead SQL), while the excluded twin targets the real table; resolving that asymmetry is a migration-content change, explicitly out of scope here. See `docs/database/migration-disposition-ledger.md`.
+
 ### Bugfix
 
 - **Adam/Solomon singleton seat guards now derive freshness from tool activity, not heartbeat alone** - SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C
