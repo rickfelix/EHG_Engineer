@@ -501,6 +501,25 @@ function decideShippedStaleAction(wt, shipped, ctx) {
   const legacyActive = isQf
     ? Boolean(ctx.activeQfSet && ctx.activeQfSet.has(key))
     : Boolean(ctx.activeSdSet && ctx.activeSdSet.has(key));
+
+  // QF-20260903-188: an orchestrator-parent SD is non-terminal BY DESIGN for its whole
+  // multi-day child-dispatch lifetime, yet it never writes code itself — only children do,
+  // in their own worktrees. Its tree is therefore expected to carry ZERO commits, ever —
+  // a stronger, unambiguous signal than the general "absorbed via squash" cherry heuristic
+  // below (which stays advisory-only because squash ambiguity makes it unreliable for an
+  // ordinary SD/QF that DOES write code). Claim/active guards still apply: a parent mid
+  // handoff keeps its tree; only a claim-free, non-active, provably-empty parent tree is
+  // reclaimed here, and it is authoritative (not advisory) because there is nothing a
+  // squash merge could have hidden — nothing was ever committed there.
+  const cherryEmpty = Boolean(shipped?.evidence?.cherry_empty) || shipped?.evidence?.cherry_lines === 0;
+  if (knownNonTerminal && !claimHeld && !legacyActive && !isQf
+      && ctx.orchestratorSdSet && ctx.orchestratorSdSet.has(key) && cherryEmpty) {
+    return {
+      protect: false, advisory: false, key,
+      reason: 'orchestrator-parent-empty-tree (cherry_empty; never wrote code; non-terminal suppression does not apply)',
+    };
+  }
+
   if (claimHeld || knownNonTerminal || legacyActive) {
     return {
       protect: true, advisory: false, key,
@@ -535,7 +554,7 @@ async function loadSdKeySets(supabase) {
   // so callers/ctx never see it undefined.
   // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001: also return terminalSdSet (sd_keys whose
   // status IN completed/cancelled/archived) so Stage-0 can reclaim them age-agnostically.
-  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set(), activeQfSet: new Set(), terminalQfSet: new Set() };
+  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set(), activeQfSet: new Set(), terminalQfSet: new Set(), orchestratorSdSet: new Set() };
 
   // Supabase defaults to 1000 rows per select even with .limit(5000). Paginate
   // explicitly with .range() to ensure the full set is loaded — otherwise
@@ -557,6 +576,27 @@ async function loadSdKeySets(supabase) {
 
   try { for (const k of await paginate('strategic_directives_v2', 'sd_key')) sdMap.add(k); }
   catch { /* ignore */ }
+
+  // QF-20260903-188: sd_keys of orchestrator-PARENT SDs — they coordinate but never write
+  // code themselves (only children do, in their own worktrees), so their tree is expected
+  // to carry zero commits for its whole (multi-day, non-terminal-by-design) lifetime.
+  // Used to let decideShippedStaleAction reclaim a provably-empty parent tree instead of
+  // suppressing on non-terminal status alone. Best-effort: empty on error → no behavior
+  // change (falls back to the existing non-terminal suppression).
+  const orchestratorSdSet = new Set();
+  try {
+    const pageSize = 1000;
+    for (let start = 0; start < 20000; start += pageSize) {
+      const { data, error } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, sd_type')
+        .eq('sd_type', 'orchestrator')
+        .range(start, start + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) if (r.sd_key) orchestratorSdSet.add(r.sd_key);
+      if (data.length < pageSize) break;
+    }
+  } catch { /* best-effort */ }
   // quick_fixes.id holds the QF string key (e.g., 'QF-20260417-029') directly.
   try { for (const k of await paginate('quick_fixes', 'id')) qfMap.add(k); }
   catch { /* ignore */ }
@@ -625,7 +665,7 @@ async function loadSdKeySets(supabase) {
   await loadQfStatusSet(ACTIVE_QF_STATUSES, activeQfSet);
   await loadQfStatusSet(TERMINAL_QF_STATUSES, terminalQfSet);
 
-  return { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet };
+  return { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet };
 }
 
 // ── Git / Gh runners ───────────────────────────────────────────────────
@@ -1452,14 +1492,14 @@ export async function main(argv = process.argv) {
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
-  const [claimMap, claimedKeySet, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet }] = await Promise.all([
+  const [claimMap, claimedKeySet, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet }] = await Promise.all([
     loadClaimMap(supabase),
     loadClaimedKeySet(supabase),
     loadSdKeySets(supabase),
   ]);
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
-  const ctx = { repoRoot, claimMap, claimedKeySet, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, idleThresholdMs };
+  const ctx = { repoRoot, claimMap, claimedKeySet, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet, idleThresholdMs };
 
   const header = humanTableHeader();
   const now = Date.now();

@@ -8,6 +8,7 @@ import { keyFromWorktree, decideShippedStaleAction } from '../../scripts/worktre
 
 const shippedNoPr = { matched: true, evidence: { merged_pr_count: 0 } };
 const shippedWithPr = { matched: true, evidence: { merged_pr_count: 2 } };
+const shippedEmpty = { matched: true, evidence: { cherry_lines: 0, merged_pr_count: 0 } };
 
 function ctxWith(over = {}) {
   return {
@@ -18,6 +19,7 @@ function ctxWith(over = {}) {
     terminalQfSet: new Set(),
     activeSdSet: new Set(),
     activeQfSet: new Set(),
+    orchestratorSdSet: new Set(),
     ...over,
   };
 }
@@ -109,5 +111,53 @@ describe('decideShippedStaleAction (stage1 authority)', () => {
     const a = decideShippedStaleAction(wt, shippedNoPr, ctx);
     expect(a.protect).toBe(true);
     expect(a.reason).toBe('claim-held');
+  });
+});
+
+// QF-20260903-188: orchestrator parents provably hold nothing (they coordinate, children
+// write the code), so a claim-free, non-active, cherry-EMPTY parent tree is reclaimable
+// even while its SD is non-terminal by design for the whole multi-day child dispatch.
+describe('decideShippedStaleAction (orchestrator-parent empty-tree carve-out)', () => {
+  it('non-terminal orchestrator parent with a cherry-empty tree is reclaimed authoritatively', () => {
+    const ctx = ctxWith({
+      sdMap: new Set(['SD-ORCH-001']),
+      orchestratorSdSet: new Set(['SD-ORCH-001']),
+    });
+    const wt = { path: 'C:/r/.worktrees/SD-ORCH-001', branch: 'feat/SD-ORCH-001' };
+    const a = decideShippedStaleAction(wt, shippedEmpty, ctx);
+    expect(a.protect).toBe(false);
+    expect(a.advisory).toBe(false);
+    expect(a.reason).toMatch(/orchestrator-parent-empty-tree/);
+  });
+
+  it('SAFETY: a claim-held orchestrator parent is still protected (claim guard wins)', () => {
+    const ctx = ctxWith({
+      claimedKeySet: new Set(['SD-ORCH-002']),
+      sdMap: new Set(['SD-ORCH-002']),
+      orchestratorSdSet: new Set(['SD-ORCH-002']),
+    });
+    const wt = { path: 'C:/r/.worktrees/SD-ORCH-002', branch: 'feat/SD-ORCH-002' };
+    const a = decideShippedStaleAction(wt, shippedEmpty, ctx);
+    expect(a.protect).toBe(true);
+    expect(a.reason).toBe('claim-held');
+  });
+
+  it('SAFETY: an orchestrator parent whose tree is NOT cherry-empty stays protected as non-terminal', () => {
+    const ctx = ctxWith({
+      sdMap: new Set(['SD-ORCH-003']),
+      orchestratorSdSet: new Set(['SD-ORCH-003']),
+    });
+    const wt = { path: 'C:/r/.worktrees/SD-ORCH-003', branch: 'feat/SD-ORCH-003' };
+    const a = decideShippedStaleAction(wt, shippedWithPr, ctx);
+    expect(a.protect).toBe(true);
+    expect(a.reason).toBe('non-terminal-status');
+  });
+
+  it('SAFETY: a cherry-empty tree for a non-orchestrator SD is NOT carved out (still protected)', () => {
+    const ctx = ctxWith({ sdMap: new Set(['SD-FEATURE-001']) });
+    const wt = { path: 'C:/r/.worktrees/SD-FEATURE-001', branch: 'feat/SD-FEATURE-001' };
+    const a = decideShippedStaleAction(wt, shippedEmpty, ctx);
+    expect(a.protect).toBe(true);
+    expect(a.reason).toBe('non-terminal-status');
   });
 });
