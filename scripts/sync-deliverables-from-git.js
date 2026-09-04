@@ -105,22 +105,30 @@ function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
   // Get commits on the SD branch that aren't on main
   const branchName = `feat/${sdId}`;
 
-  // First check if branch exists
+  // QF-20260903-950 (defect 1): the log command below used to hardcode `..HEAD` regardless of
+  // which branch this block just verified -- run from a root checked out on main, `main..HEAD`
+  // is `main..main`, empty by construction, even though branchName genuinely has commits.
+  // resolvedRef is the ACTUAL branch this function verified exists, and is what the log command
+  // below diffs against -- never the ambient HEAD of whatever the caller's cwd happens to be on.
+  let resolvedRef = branchName;
   try {
     runHardenedGit(['rev-parse', '--verify', branchName], { cwd: repoPath });
   } catch {
     console.log(`   ℹ️  Branch ${branchName} not found, trying alternate patterns...`);
     // Try to find a branch containing the SD-ID
     const branches = runHardenedGit(['branch', '-a'], { cwd: repoPath });
-    const matchingBranch = branches.split('\n').find(b => b.includes(sdId));
+    const matchingBranch = branches.split('\n')
+      .map(b => b.replace(/^[*\s]+/, '').trim())
+      .find(b => b.includes(sdId));
     if (!matchingBranch) {
       return [];
     }
+    resolvedRef = matchingBranch;
   }
 
   // Get commit log with file changes
   const logOutput = runHardenedGit(
-    ['log', `${sinceBranch}..HEAD`, '--name-status', '--pretty=format:%H|%s|%ai'],
+    ['log', `${sinceBranch}..${resolvedRef}`, '--name-status', '--pretty=format:%H|%s|%ai'],
     { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }
   );
 
