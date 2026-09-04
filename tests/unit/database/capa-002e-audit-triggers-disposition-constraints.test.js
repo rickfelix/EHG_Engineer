@@ -77,11 +77,26 @@ describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: audit_trigger_generic()', () => {
     expect(guardedBlock).toMatch(/RAISE WARNING/);
     expect(guardedBlock).toMatch(/SQLERRM/);
   });
+
+  it('is SECURITY DEFINER, or the audit write it just wrapped in EXCEPTION WHEN OTHERS would silently swallow every anon/authenticated write', () => {
+    // governance_audit_log has RLS with only a {service_role} INSERT policy.
+    // Without SECURITY DEFINER, the function runs as INVOKER, so an anon
+    // feedback INSERT's audit write gets RLS-denied and eaten by the SEC-1
+    // guard above -- defeating audit coverage for exactly the untrusted
+    // actors it exists to cover. Independent adversarial review CRITICAL
+    // finding.
+    const fnHeader = migration.slice(
+      migration.indexOf('CREATE OR REPLACE FUNCTION public.audit_trigger_generic()'),
+      migration.indexOf('AS $function$')
+    );
+    expect(fnHeader).toMatch(/SECURITY DEFINER/);
+    expect(fnHeader).toMatch(/SET search_path TO 'public', 'extensions'/);
+  });
 });
 
 describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: trigger attachment', () => {
-  it('attaches idempotent INSERT/UPDATE/DELETE triggers to quick_fixes, claude_sessions, and feedback', () => {
-    for (const table of ['quick_fixes', 'claude_sessions', 'feedback']) {
+  it('attaches idempotent INSERT/UPDATE/DELETE triggers to quick_fixes and feedback', () => {
+    for (const table of ['quick_fixes', 'feedback']) {
       expect(migration).toMatch(new RegExp(`DROP TRIGGER IF EXISTS audit_${table} ON public\\.${table};`));
       const idx = migration.indexOf(`CREATE TRIGGER audit_${table}`);
       expect(idx).toBeGreaterThan(-1);
@@ -90,6 +105,32 @@ describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: trigger attachment', () => {
       expect(stmt).toMatch(new RegExp(`ON public\\.${table}`));
       expect(stmt).toMatch(/FOR EACH ROW EXECUTE FUNCTION public\.audit_trigger_generic\(\)/);
     }
+  });
+
+  it('splits claude_sessions into an unfiltered INSERT/DELETE trigger and a WHEN-filtered UPDATE trigger, never a blanket AFTER UPDATE', () => {
+    // Table receives a heartbeat UPDATE on nearly every fleet tick (measured
+    // live: 5.9M updates already on this table) -- an unfiltered AFTER
+    // UPDATE trigger would grow governance_audit_log unboundedly on pure
+    // liveness noise. Independent adversarial review CRITICAL finding.
+    expect(migration).toMatch(/DROP TRIGGER IF EXISTS audit_claude_sessions ON public\.claude_sessions;/);
+    const insDelIdx = migration.indexOf('CREATE TRIGGER audit_claude_sessions\n');
+    expect(insDelIdx).toBeGreaterThan(-1);
+    const insDelStmt = migration.slice(insDelIdx, migration.indexOf(';', insDelIdx) + 1);
+    expect(insDelStmt).toMatch(/AFTER INSERT OR DELETE ON public\.claude_sessions/);
+    expect(insDelStmt).not.toMatch(/UPDATE/);
+
+    expect(migration).toMatch(/DROP TRIGGER IF EXISTS audit_claude_sessions_update ON public\.claude_sessions;/);
+    const updIdx = migration.indexOf('CREATE TRIGGER audit_claude_sessions_update');
+    expect(updIdx).toBeGreaterThan(-1);
+    const updStmt = migration.slice(updIdx, migration.indexOf('EXECUTE FUNCTION public.audit_trigger_generic();', updIdx));
+    expect(updStmt).toMatch(/AFTER UPDATE ON public\.claude_sessions/);
+    expect(updStmt).toMatch(/WHEN \(/);
+    for (const col of ['sd_key', 'status', 'released_at', 'current_phase']) {
+      expect(updStmt).toMatch(new RegExp(`OLD\\.${col} IS DISTINCT FROM NEW\\.${col}`));
+    }
+    // heartbeat/telemetry churn columns must NOT be in the WHEN filter
+    expect(updStmt).not.toMatch(/heartbeat_at/);
+    expect(updStmt).not.toMatch(/current_tool/);
   });
 
   it('attaches an INSERT-only trigger to chairman_ratifications, documenting why UPDATE/DELETE are omitted', () => {
@@ -164,8 +205,15 @@ describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: CHECK constraints added after bac
     { name: 'quick_fixes_closed_requires_disposition', clause: /status IS DISTINCT FROM 'closed' OR disposition IS NOT NULL/ },
   ];
 
-  it.each(constraints)('adds $name as NOT VALID guarded by an existence check, then VALIDATEs it', ({ name, clause }) => {
-    expect(migration).toMatch(new RegExp(`IF NOT EXISTS \\(SELECT 1 FROM pg_constraint WHERE conname = '${name}'\\)`));
+  it.each(constraints)('adds $name as NOT VALID guarded by a conrelid-scoped existence check, then VALIDATEs it', ({ name, clause }) => {
+    // pg_constraint names are unique per-relation, not globally -- an
+    // unscoped conname-only check could match a same-named constraint on a
+    // different table and skip the ADD. Independent adversarial review INFO
+    // finding.
+    const existsIdx = migration.indexOf(`conname = '${name}'`);
+    expect(existsIdx).toBeGreaterThan(-1);
+    const existsClause = migration.slice(migration.lastIndexOf('IF NOT EXISTS', existsIdx), migration.indexOf(')', existsIdx + name.length + 20));
+    expect(existsClause).toMatch(/conrelid = 'public\.quick_fixes'::regclass/);
     const idx = migration.indexOf(`ADD CONSTRAINT ${name}`);
     expect(idx).toBeGreaterThan(-1);
     const stmt = migration.slice(idx, migration.indexOf('NOT VALID', idx) + 'NOT VALID'.length);

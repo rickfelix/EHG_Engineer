@@ -28,6 +28,17 @@
 -- submission on every RLS-denied audit write. Found by the SECURITY sub-agent
 -- at EXEC-TO-PLAN (row d896818a-9fa4-4791-90d8-1613f25027a0, finding SEC-1).
 --
+-- POST-EXEC ADVERSARIAL REVIEW FIXES (independent /ship deep-tier review,
+-- found after the above was already fixed): (a) the function is now
+-- SECURITY DEFINER -- without it, every anon/authenticated write's audit
+-- INSERT would be RLS-denied and silently swallowed by the very guard above,
+-- defeating audit coverage for exactly the untrusted actors it exists to
+-- cover; (b) claude_sessions' UPDATE audit is now a separate, WHEN-filtered
+-- trigger restricted to lifecycle/ownership columns, not every heartbeat
+-- tick (measured live: 5.9M updates on that table already); (c) the 3 new
+-- CHECK constraints' existence checks are now scoped by conrelid, not name
+-- alone.
+--
 -- CHAIRMAN_RATIFICATIONS IS INSERT-ONLY BY DESIGN: this table already carries
 -- chairman_ratifications_no_update / _no_delete / _no_truncate guard triggers
 -- (append-only, immutable once written). An AFTER UPDATE OR DELETE audit
@@ -71,9 +82,23 @@ BEGIN;
 -- 1. Generic, jsonb-extraction-based audit trigger function
 -- ============================================================
 
+-- SECURITY DEFINER is required, not optional: governance_audit_log has RLS
+-- enabled with only a {service_role} INSERT policy (2025-12-17 hardening).
+-- Without SECURITY DEFINER this function runs as INVOKER, so every anon or
+-- plain-authenticated write (e.g. the anon_feedback_ingress_bounds INSERT
+-- path on public.feedback) would have its audit write RLS-denied and
+-- silently swallowed by the EXCEPTION guard below -- defeating audit
+-- coverage for exactly the untrusted actors it exists to cover, while
+-- LOOKING instrumented. Found by an independent adversarial review of this
+-- PR (CRITICAL finding). search_path is already pinned via the SET clause,
+-- which is the standard mitigation for the classic SECURITY DEFINER
+-- search_path-hijack vector. Matches existing repo precedent:
+-- fn_venture_stages_audit_trigger and fn_gate_boundary_config_audit_trigger
+-- are both already SECURITY DEFINER for the identical reason.
 CREATE OR REPLACE FUNCTION public.audit_trigger_generic()
  RETURNS trigger
  LANGUAGE plpgsql
+ SECURITY DEFINER
  SET search_path TO 'public', 'extensions'
 AS $function$
 DECLARE
@@ -96,6 +121,16 @@ BEGIN
     v_record_id := v_new->>'id';
   END IF;
 
+  -- KNOWN, ACCEPTED LIMITATION (adversarial review WARNING, not fixed here):
+  -- changed_by is derived from the row's own data, not an authenticated
+  -- identity (no auth.uid()/current_user in this system's actor model --
+  -- every actor column across this repo is a plain text field). On an
+  -- anon-writable table (feedback), a caller could set e.g. assigned_to to
+  -- an arbitrary string and have it appear as changed_by. This adds no NEW
+  -- exposure: new_values already captures the identical, equally-spoofable
+  -- field verbatim, so changed_by is a convenience summary of already-
+  -- visible row content, not an independent trust signal. A real fix would
+  -- require an authenticated-identity actor model this system doesn't have.
   v_changed_by := COALESCE(
     v_new->>'disposed_by',
     v_old->>'disposed_by',
@@ -167,8 +202,37 @@ CREATE TRIGGER audit_quick_fixes
 
 DROP TRIGGER IF EXISTS audit_claude_sessions ON public.claude_sessions;
 CREATE TRIGGER audit_claude_sessions
-  AFTER INSERT OR UPDATE OR DELETE ON public.claude_sessions
+  AFTER INSERT OR DELETE ON public.claude_sessions
   FOR EACH ROW EXECUTE FUNCTION public.audit_trigger_generic();
+
+-- UPDATE gets a SEPARATE trigger with a WHEN filter (a single combined
+-- INSERT/UPDATE/DELETE trigger cannot carry an UPDATE-only WHEN condition
+-- referencing OLD, since OLD is undefined for the INSERT event). This table
+-- receives a heartbeat-driven UPDATE on nearly every fleet tick (measured
+-- live: 5.9M updates vs 6.4K inserts, ~1.5KB per full-row jsonb snapshot) --
+-- an unfiltered AFTER UPDATE trigger would grow governance_audit_log
+-- (already ~4.9GB) unboundedly on pure liveness noise. Restricted to the
+-- columns that matter for governance/accountability -- claim/session
+-- lifecycle and ownership -- excluding tool/heartbeat telemetry columns
+-- (heartbeat_at, current_tool*, commits_since_claim, process_alive_at,
+-- etc.) that churn on every tick. Found by an independent adversarial
+-- review of this PR (CRITICAL finding).
+DROP TRIGGER IF EXISTS audit_claude_sessions_update ON public.claude_sessions;
+CREATE TRIGGER audit_claude_sessions_update
+  AFTER UPDATE ON public.claude_sessions
+  FOR EACH ROW
+  WHEN (
+    OLD.sd_key IS DISTINCT FROM NEW.sd_key
+    OR OLD.status IS DISTINCT FROM NEW.status
+    OR OLD.claimed_at IS DISTINCT FROM NEW.claimed_at
+    OR OLD.released_at IS DISTINCT FROM NEW.released_at
+    OR OLD.released_reason IS DISTINCT FROM NEW.released_reason
+    OR OLD.stale_reason IS DISTINCT FROM NEW.stale_reason
+    OR OLD.current_phase IS DISTINCT FROM NEW.current_phase
+    OR OLD.worktree_branch IS DISTINCT FROM NEW.worktree_branch
+    OR OLD.parent_session_id IS DISTINCT FROM NEW.parent_session_id
+  )
+  EXECUTE FUNCTION public.audit_trigger_generic();
 
 DROP TRIGGER IF EXISTS audit_feedback ON public.feedback;
 CREATE TRIGGER audit_feedback
@@ -255,9 +319,17 @@ AND status = 'closed' AND disposition IS NULL;
 --    complete and correct or VALIDATE below fails the migration)
 -- ============================================================
 
+-- Each existence check is scoped by conrelid (this table only), not name
+-- alone: pg_constraint names are unique per-relation, not globally, so an
+-- unscoped WHERE conname=... could match a same-named constraint on a
+-- different table, skip the ADD, and then fail the unconditional VALIDATE
+-- below. Found by an independent adversarial review of this PR (INFO finding).
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quick_fixes_duplicate_of_pairing') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'quick_fixes_duplicate_of_pairing' AND conrelid = 'public.quick_fixes'::regclass
+  ) THEN
     ALTER TABLE quick_fixes ADD CONSTRAINT quick_fixes_duplicate_of_pairing
       CHECK (disposition IS DISTINCT FROM 'duplicate_of' OR duplicate_of_id IS NOT NULL)
       NOT VALID;
@@ -267,7 +339,10 @@ ALTER TABLE quick_fixes VALIDATE CONSTRAINT quick_fixes_duplicate_of_pairing;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quick_fixes_promoted_target_pairing') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'quick_fixes_promoted_target_pairing' AND conrelid = 'public.quick_fixes'::regclass
+  ) THEN
     ALTER TABLE quick_fixes ADD CONSTRAINT quick_fixes_promoted_target_pairing
       CHECK (disposition IS DISTINCT FROM 'promoted' OR escalated_to_sd_id IS NOT NULL OR resolution_sd_id IS NOT NULL)
       NOT VALID;
@@ -277,7 +352,10 @@ ALTER TABLE quick_fixes VALIDATE CONSTRAINT quick_fixes_promoted_target_pairing;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quick_fixes_closed_requires_disposition') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'quick_fixes_closed_requires_disposition' AND conrelid = 'public.quick_fixes'::regclass
+  ) THEN
     ALTER TABLE quick_fixes ADD CONSTRAINT quick_fixes_closed_requires_disposition
       CHECK (status IS DISTINCT FROM 'closed' OR disposition IS NOT NULL)
       NOT VALID;
@@ -290,6 +368,7 @@ COMMIT;
 -- Rollback:
 -- DROP TRIGGER IF EXISTS audit_quick_fixes ON public.quick_fixes;
 -- DROP TRIGGER IF EXISTS audit_claude_sessions ON public.claude_sessions;
+-- DROP TRIGGER IF EXISTS audit_claude_sessions_update ON public.claude_sessions;
 -- DROP TRIGGER IF EXISTS audit_feedback ON public.feedback;
 -- DROP TRIGGER IF EXISTS audit_chairman_ratifications ON public.chairman_ratifications;
 -- DROP FUNCTION IF EXISTS public.audit_trigger_generic();
