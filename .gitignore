@@ -375,6 +375,10 @@ src/client/dist/
 .claude/worktree-reaper-state.json
 .claude/retry-state-*.json.tmp-*
 
+# SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-2: per-worktree coordinator reuse marker.
+# Never committed -- it names a transient reuse handoff, not tracked repo state.
+.worktree-reuse.json
+
 # Cross-session scratch droppings — QF-20260603-141 (only patterns with ZERO tracked-file conflicts)
 # .claude/last-outcome-*.json: per-session Stop-hook outcome snapshots, never committed (0 tracked)
 # .prd-payloads/_*: underscore-prefixed add-prd working files (committed payloads are SD-*.json, preserved; 0 tracked _-files)
