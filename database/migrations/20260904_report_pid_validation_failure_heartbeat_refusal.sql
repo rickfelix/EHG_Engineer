@@ -13,6 +13,11 @@
 -- The 900-second threshold below duplicates lib/session-manager.mjs's STALE_THRESHOLD_SECONDS by
 -- necessity (SQL cannot import a JS constant); TR-1 of this SD keeps that constant unchanged, so
 -- if it is ever revised in JS this literal must be revised here in the same PR.
+--
+-- @chairman-gated
+-- This is a function-body change (not an additive/governed-data-row change), so it is not
+-- eligible for the Adam-delegated apply path -- staged here awaiting chairman GO per
+-- scripts/check-migration-readiness.mjs's CHAIRMAN-GATED-EXEMPT-001 convention.
 
 BEGIN;
 

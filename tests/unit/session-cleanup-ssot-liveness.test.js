@@ -63,14 +63,18 @@ vi.mock('../../lib/supabase-client.js', () => ({
       if (table === 'claude_sessions') {
         return {
           select: () => ({
-            in: (col, ids) => Promise.resolve(claudeSessionsSelectResult),
+            in: (col, ids) => ({
+              limit: () => Promise.resolve(claudeSessionsSelectResult),
+            }),
           }),
           update: (payload) => {
             updateCalls.push({ table, payload });
             return {
               in: () => ({
                 gt: () => ({
-                  select: () => Promise.resolve(reviveUpdateResult),
+                  select: () => ({
+                    limit: () => Promise.resolve(reviveUpdateResult),
+                  }),
                 }),
               }),
             };
