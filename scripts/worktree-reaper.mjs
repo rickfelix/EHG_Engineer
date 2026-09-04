@@ -106,7 +106,7 @@ import {
 } from '../lib/worktree-reaper/preserve-stage.js';
 // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b: decide whether a PRESERVE-safe
 // hard_keep tree may actually be removed (destructive; narrower than PRESERVE).
-import { evaluateReclaimEligibility, RECLAIM_VERDICT } from '../lib/worktree-reaper/reclaim-stage.js';
+import { evaluateReclaimEligibilityPreAudit, gateReclaimCandidatesByAudit, RECLAIM_VERDICT } from '../lib/worktree-reaper/reclaim-stage.js';
 
 const SCHEMA_VERSION = '1.0';
 const DEFAULT_IDLE_DAYS = 7;
@@ -1666,12 +1666,14 @@ export async function main(argv = process.argv) {
       // content is safe to remove once EITHER this tick's preserve push landed, OR it
       // was already clean and fully pushed (no preserve was ever needed). Reclaim
       // eligibility is only evaluated under --execute -- it has no effect in a dry-run.
+      // QF-20260904-508: condition 5 (audit acceptance) can't be known per-tree here —
+      // the audit sink writes ONCE per tick, after every tree in this loop has already
+      // been classified (~:1745 below). Evaluate conditions 1/2/3 only; the real
+      // audit-based re-gate is gateReclaimCandidatesByAudit() at ~:1754.
       let reclaimEligibility = null;
       if (opts.execute) {
         const contentSafe = verdict === PRESERVE_VERDICT.PUSHED || (dirty.dirtyCount === 0 && unpushedCount === 0);
-        reclaimEligibility = evaluateReclaimEligibility({
-          contentSafe, holder, auditAccepted: false /* set true only once the batch write below confirms it */, nowMs: now,
-        });
+        reclaimEligibility = evaluateReclaimEligibilityPreAudit({ contentSafe, holder, nowMs: now });
         evidence.reclaim_eligibility = reclaimEligibility;
       }
 
@@ -1751,7 +1753,7 @@ export async function main(argv = process.argv) {
   // write is FATAL for the WHOLE batch's reclaim path (writeAuditSink is a single
   // batch insert — ok:false means none of this tick's rows landed). Re-gate every
   // reclaim candidate on the ACTUAL write outcome, not the pre-write placeholder.
-  const stageReclaim = auditResult.ok ? records.filter((r) => r._reclaimCandidate) : [];
+  const stageReclaim = gateReclaimCandidatesByAudit(records, auditResult);
   if (!auditResult.ok && records.some((r) => r._reclaimCandidate)) {
     console.log(`  ⛔ audit sink rejected this batch — ${records.filter((r) => r._reclaimCandidate).length} reclaim-eligible tree(s) held for the next tick`);
   }
@@ -1834,8 +1836,9 @@ export async function main(argv = process.argv) {
       // impossible. Narrow, explicit exemption: a RECLAIM-tagged record already required
       // ALL FOUR of {content-safe (verified preserve OR already-clean), no resident PID,
       // freeze-cut staleness, audit-sink acceptance} to reach this loop at all (see
-      // evaluateReclaimEligibility) — the residency signal is no longer informative for
-      // this specific tree, so it alone is bypassed. Every OTHER tree keeps the full guard.
+      // evaluateReclaimEligibilityPreAudit + gateReclaimCandidatesByAudit) — the
+      // residency signal is no longer informative for this specific tree, so it alone is
+      // bypassed. Every OTHER tree keeps the full guard.
       if (rec._stage === 'reclaim' && treeResidency.blocked) {
         treeResidency = { blocked: false, reason: null, detail: { exemption: 'reclaim_preserve_verified', original: treeResidency } };
       }
