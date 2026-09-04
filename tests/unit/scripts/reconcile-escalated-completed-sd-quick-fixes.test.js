@@ -43,8 +43,11 @@ function makeSupabaseMock({ quickFixes, sds }) {
     if (table === 'strategic_directives_v2') {
       const builder = {};
       builder.select = vi.fn(() => builder);
-      // findTargetRows terminates the SD query on .in(...).
-      builder.in = vi.fn(() => Promise.resolve({ data: sds, error: null }));
+      // findTargetRows reads via fetchAllPaginated, which appends .range() to whatever
+      // queryFactory() returns — .in() must stay CHAINABLE (not resolve) so .range() lands
+      // on the same builder; .range() is where the page actually resolves.
+      builder.in = vi.fn(() => builder);
+      builder.range = vi.fn(() => Promise.resolve({ data: sds, error: null }));
       return builder;
     }
 
@@ -65,8 +68,10 @@ function makeSupabaseMock({ quickFixes, sds }) {
       }
       return builder;
     });
-    // findTargetRows terminates its escalated-rows query on .not(...).
-    builder.not = vi.fn(() => Promise.resolve({ data: quickFixes, error: null }));
+    // findTargetRows reads via fetchAllPaginated too — .not() stays CHAINABLE so the
+    // .range() it appends lands on this same builder; .range() is where the page resolves.
+    builder.not = vi.fn(() => builder);
+    builder.range = vi.fn(() => Promise.resolve({ data: quickFixes, error: null }));
     // setQuickFixStatus's internal lookup + update both terminate on .maybeSingle().
     builder.update = vi.fn((payload) => {
       isUpdate = true;

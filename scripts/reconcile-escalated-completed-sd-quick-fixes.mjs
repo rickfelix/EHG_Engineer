@@ -35,6 +35,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { setQuickFixStatus } from '../lib/quick-fix/status-writer.cjs';
+import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISPOSITION_REASON_CODE = 'escalated_sd_completed';
@@ -47,13 +48,19 @@ const DISPOSED_BY = 'scripts/reconcile-escalated-completed-sd-quick-fixes.mjs';
  * @returns {Promise<Array<{id:string, escalated_to_sd_id:string, sd_key:string}>>}
  */
 export async function findTargetRows(supabase) {
-  const { data: escalated, error: escErr } = await supabase
-    .from('quick_fixes')
-    .select('id, escalated_to_sd_id, disposition_reason_code, resolution_sd_id')
-    .eq('status', 'escalated')
-    .not('escalated_to_sd_id', 'is', null);
-  if (escErr) {
-    const e = new Error(`[reconcile-escalated] fetch escalated rows failed: ${escErr.message}`);
+  // Full reads, not capped samples -- PostgREST silently clamps an un-.range()'d select to
+  // POSTGREST_MAX_ROWS (1000), which count-truncation-diff-lint correctly flags as a NEW
+  // unbounded read. Both queries here must see the WHOLE population (escalated rows /
+  // matching SD ids), so fetchAllPaginated is the right tool, not a declared sampling cap.
+  let escalated;
+  try {
+    escalated = await fetchAllPaginated(() => supabase
+      .from('quick_fixes')
+      .select('id, escalated_to_sd_id, disposition_reason_code, resolution_sd_id')
+      .eq('status', 'escalated')
+      .not('escalated_to_sd_id', 'is', null));
+  } catch (err) {
+    const e = new Error(`[reconcile-escalated] fetch escalated rows failed: ${err.message}`);
     e.code = 'RECONCILE_FETCH_FAILED';
     throw e;
   }
@@ -61,12 +68,14 @@ export async function findTargetRows(supabase) {
   if (candidates.length === 0) return [];
 
   const targetIds = [...new Set(candidates.map((r) => r.escalated_to_sd_id))];
-  const { data: sds, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status')
-    .in('id', targetIds);
-  if (sdErr) {
-    const e = new Error(`[reconcile-escalated] fetch target SDs failed: ${sdErr.message}`);
+  let sds;
+  try {
+    sds = await fetchAllPaginated(() => supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status')
+      .in('id', targetIds));
+  } catch (err) {
+    const e = new Error(`[reconcile-escalated] fetch target SDs failed: ${err.message}`);
     e.code = 'RECONCILE_FETCH_FAILED';
     throw e;
   }
