@@ -243,3 +243,72 @@ describe('FR-2 (SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001) — --json stdout stays p
     expect(stdout).toContain('chairman-gated migration(s) awaiting ceremony');
   }, 300000);
 });
+
+/**
+ * SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D (TS-1) — end to end, against the REAL repo corpus
+ * (deliberately not a synthetic fixture: the assertion IS that the real basename-collision
+ * exclusion set is now visible in --json, and that admitting it did not change what the scan
+ * itself counts as forward/down migrations).
+ *
+ * TS-1 CORRECTION (testing-agent evidence efb3313d): all 5 originally-colliding basenames were
+ * ALREADY in forward[] via their database/migrations copy before this SD -- excluded[] only ever
+ * held the supabase/migrations twin. "Files appear in forward[]" is therefore NOT a valid
+ * regression assertion (it passes against unmodified code). The real assertions are: (a) exactly
+ * the one genuinely-divergent basename remains excluded (the 4 byte-identical twins were
+ * reconciled at source, FR-1), and (b) forward/down counts are UNCHANGED from their pre-SD values
+ * -- proving the reconciliation neither added nor silently dropped a migration from the scan.
+ */
+describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D TS-1 — excluded[] promoted to --json, forward/down stable', () => {
+  function run(args) {
+    const r = spawnSync('node', [VERIFIER, ...args], { cwd: ROOT, encoding: 'utf8', timeout: 240000 });
+    return { stdout: r.stdout || '', stderr: r.stderr || '', code: r.status ?? -1 };
+  }
+  function parseLikeChairmanApplyState(stdout) {
+    const lines = stdout.split(/\r?\n/);
+    const start = lines.findIndex((l) => l.startsWith('{'));
+    if (start === -1) throw new Error('no JSON object found on stdout');
+    return JSON.parse(lines.slice(start).join('\n'));
+  }
+
+  it('--json payload carries a top-level excluded[] array (FR-2)', () => {
+    const { stdout } = run(['--json']);
+    const report = parseLikeChairmanApplyState(stdout);
+    expect(Array.isArray(report.excluded)).toBe(true);
+  }, 300000);
+
+  it('exactly one entry remains excluded, and it is the genuine DIVERGENT CONTENT case (FR-1 reconciliation did its job)', () => {
+    const { stdout } = run(['--json']);
+    const report = parseLikeChairmanApplyState(stdout);
+    expect(report.excluded).toHaveLength(1);
+    expect(report.excluded[0].verdict).toBe('DIVERGENT CONTENT');
+    expect(report.excluded[0].id).toContain('20251129_musk_algorithm_pareto.sql');
+  }, 300000);
+
+  it('the divergent pair is untouched: both the scanned and the excluded copy still exist on disk (FR-3 — neither file is deleted)', () => {
+    expect(fs.existsSync(path.join(ROOT, 'database', 'migrations', '20251129_musk_algorithm_pareto.sql'))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, 'supabase', 'migrations', '20251129_musk_algorithm_pareto.sql'))).toBe(true);
+  });
+
+  it('the 4 reconciled basenames no longer have a supabase/migrations twin (FR-1 removed the duplicate, not the file)', () => {
+    for (const f of [
+      '20251205_russian_judge_sd_type_awareness.sql',
+      '20260105_automated_shipping_decisions.sql',
+      '20260108_capability_ledger_v2.sql',
+      '20260731_fix_chairman_privilege_app_metadata.sql',
+    ]) {
+      expect(fs.existsSync(path.join(ROOT, 'supabase', 'migrations', f)), `supabase/migrations/${f} should be removed`).toBe(false);
+      expect(fs.existsSync(path.join(ROOT, 'database', 'migrations', f)), `database/migrations/${f} should still exist`).toBe(true);
+    }
+  });
+
+  it('excluded[] is genuinely consumed downstream: migration-gap-summary.mjs surfaces it (round-trip, guards against a "wired but inert" regression)', () => {
+    const script = path.join(ROOT, 'scripts', 'migration-gap-summary.mjs');
+    const r = spawnSync('node', [script, '--json'], { cwd: ROOT, encoding: 'utf8', timeout: 240000 });
+    const lines = (r.stdout || '').split(/\r?\n/);
+    const start = lines.findIndex((l) => l.trim() === '{');
+    const summary = JSON.parse(lines.slice(start).join('\n'));
+    expect(summary.excludedSource).toBe('present');
+    expect(summary.excludedTotal).toBe(1);
+    expect(summary.excludedDivergent).toHaveLength(1);
+  }, 300000);
+});
