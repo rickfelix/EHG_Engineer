@@ -41,6 +41,10 @@ import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus, isManualChildStale, parseManualChildMeta } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { seatIdleVerdict } from '../lib/fleet/seat-idle-predicate.mjs';
+import { resolveIdleCtx } from '../lib/fleet/idle-ctx-population.mjs';
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-3: reuse the SAME spin-up-grace constant
+// coordinator-idle-qf-hint.mjs already defines, rather than a second independent literal.
+import { SPIN_UP_GRACE_MS } from './coordinator-idle-qf-hint.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
 // retention mechanism (verified) and the ventures stall-scan below has no .limit() either —
 // both are unbounded processing reads (rows iterated for stall detection), so paginate.
@@ -961,14 +965,24 @@ export function computeCronParityMissing(armed, loops = ADAM_LOOPS) {
 // can push last_tool_at PAST released_at, so a last_tool_at-vs-released_at ordering check
 // cannot be trusted to detect a released shell -- any released_at value at all now excludes
 // the seat outright, regardless of last_tool_at.
-// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-4 AC#3: extracted pure (seats) core, mirroring how
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-4 AC#3: extracted pure (seats, ctx) core, mirroring how
 // eligibleIdleWorkers (coordinator-idle-qf-hint.mjs) is already pure -- the existing fake
 // Supabase client in adam-quiet-tick-idle-beside-claimable.test.js implements only
 // select/is/in/gte/limit and cannot exercise a ctx-populating fetch, so the pure decision core
 // is exported separately from the DB-fetching wrapper for direct testing (and for the FR-3
 // frozen-population differential harness to call the REAL production predicate).
-export function idleBesideClaimableCount(seats) {
-  return (seats || []).filter((s) => seatIdleVerdict(s).idle && !s.released_at).length;
+// FR-3: this is the ONE consumer (of the three migrated beyond eligibleIdleWorkers) that also
+// adopts qfHolderSessionIds/seatBusySessionIds/spinUpGraceMs -- deliberately scoped here rather
+// than also broadening capacity-inputs.mjs, whose idleNow feeds live belt-verdict/demand-gate
+// actuation (FR-4): this Adam-advisory-only consumer is the lowest-blast-radius place to adopt
+// the richer axes, and capacity-inputs' non-adoption is a stated, deliberate matrix cell, not an
+// oversight (see the FR-3 differential harness's matrix comments).
+export function idleBesideClaimableCount(seats, ctx = {}) {
+  return (seats || []).filter((s) => seatIdleVerdict(s, {
+    qfHolderSessionIds: ctx.qfHolderSessionIds,
+    seatBusySessionIds: ctx.seatBusySessionIds,
+    spinUpGraceMs: ctx.spinUpGraceMs,
+  }).idle && !s.released_at).length;
 }
 
 export async function checkIdleBesideClaimable(sb) {
@@ -985,11 +999,18 @@ export async function checkIdleBesideClaimable(sb) {
     const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: seats } = await sb
       .from('claude_sessions')
-      .select('session_id, released_at, last_tool_at, metadata')
+      // + created_at (FR-3 spin-up-grace axis) so a freshly-spun-up seat is not counted as idle
+      // capacity before it has had a chance to re-arm.
+      .select('session_id, released_at, last_tool_at, metadata, created_at')
       .is('sd_key', null)
       .in('status', ['active', 'idle'])
       .gte('last_tool_at', cutoff)
       .limit(200);
+    // FR-3: adopt the shared ctx-population resolver's QF-holder/directed-work axes here (the
+    // lowest-blast-radius consumer -- see idleBesideClaimableCount's header comment for why
+    // capacity-inputs.mjs does not also adopt these). A read failure degrades each Set/flag
+    // independently (resolveIdleCtx's own per-query try/catch), never crashing this pass.
+    const { qfHolderSessionIds, seatBusySessionIds } = await resolveIdleCtx(sb, { nowMs: Date.now() });
     // QF-20260829-588: three-limb exclusion -- role seats (adam/solomon/coordinator,
     // metadata.non_fleet=true / role='adam' / is_coordinator=true) are legitimately idle
     // by design, and any seat with released_at set is a released shell, not a genuinely
@@ -1008,7 +1029,7 @@ export async function checkIdleBesideClaimable(sb) {
     // stays its own unconditional conjunct: this consumer deliberately excludes ANY released_at
     // value at all (not a time window), stronger than and semantically distinct from
     // seatIdleVerdict's time-windowed recently-released axis.
-    const idleCount = idleBesideClaimableCount(seats);
+    const idleCount = idleBesideClaimableCount(seats, { qfHolderSessionIds, seatBusySessionIds, spinUpGraceMs: SPIN_UP_GRACE_MS });
     return idleCount > 0 ? { idleCount, rawUnclaimedCount } : null;
   } catch { return null; }
 }
