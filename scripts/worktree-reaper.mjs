@@ -1631,7 +1631,11 @@ export async function main(argv = process.argv) {
       // stage; a dry-run still reports eligibility for visibility, verdict unchanged.
       const preserveKey = keyFromWorktree(wtInput);
       const isQfKey = preserveKey.startsWith('QF-');
-      const holder = await findHolderSession(supabase, wt.path);
+      // QF-20260904-596: pass the already-computed branch-derived key (preserveKey,
+      // via keyFromWorktree() above) so findHolderSession() can fall back to the claim
+      // on the tree's checked-out branch when worktree_path does not match (a reused,
+      // differently-named worktree directory).
+      const holder = await findHolderSession(supabase, wt.path, { key: preserveKey });
       const eligibility = evaluatePreserveEligibility(holder, now);
       evidence.preserve_eligibility = eligibility;
 
