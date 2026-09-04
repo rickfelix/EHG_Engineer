@@ -122,12 +122,56 @@ describe('decideSingleAdamGuard (refuse-new-on-fresh-prior divergence)', () => {
   const self = 'self-sess';
   it('REFUSES when a FRESH prior Adam exists (never clears a restarting Adam)', () => {
     const d = adam.decideSingleAdamGuard({
-      priorAdams: [{ session_id: 'prior', heartbeat_at: fresh(2) }],
+      priorAdams: [{ session_id: 'prior', heartbeat_at: fresh(2), last_tool_at: fresh(2) }],
       selfSessionId: self, nowMs: NOW,
     });
     expect(d.action).toBe('refuse');
     expect(d.retire).toEqual([]);
     expect(d.freshPriors).toEqual(['prior']);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-2/FR-6): the exact specimen shape this SD exists to
+  // fix -- fresh heartbeat, but the tool-call loop has actually died. Pre-fix, this read as a
+  // fresh prior (refuse, blocking recovery); post-fix, classifySeat's STUCK verdict folds it to
+  // NOT-fresh, so a new Adam can register.
+  it('a fresh-heartbeat but tool-silent (STUCK) prior is NOT treated as fresh (FR-2)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'heartbeating-shell', heartbeat_at: fresh(2), last_tool_at: fresh(999) }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('retire_stale_then_register');
+    expect(d.retire).toEqual(['heartbeating-shell']);
+    expect(d.freshPriors).toEqual([]);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (F-11, RE-corrected post-EXEC-REGRESSION-review, evidence
+  // d900a26a-8d14-48c4-ae35-def914e341e7): last_tool_at absent (classifySeat UNKNOWN) now folds to
+  // FRESH, the OPPOSITE of this test's original assertion -- a freshly-registered Adam has not yet
+  // made a tool call, so UNKNOWN is the NORMAL state for a genuinely live, seconds-old singleton,
+  // not a red flag. Folding UNKNOWN to NOT-fresh broke a pre-existing, unmodified test
+  // (scripts/solomon-register.test.js's Solomon-side equivalent) by letting a second registration
+  // race in and clear a genuinely-alive young singleton.
+  it('a fresh-heartbeat prior with no last_tool_at (UNKNOWN) IS still treated as fresh (F-11)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'just-registered', heartbeat_at: fresh(1) }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('refuse');
+    expect(d.freshPriors).toEqual(['just-registered']);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (F-2, evidence 50b3e3c0-0f5f-460d-a3ea-f6472eb0976f):
+  // cutPointMinutes is clamped to Math.max(freshMs/60000, 15) -- a naive 10-minute conversion was
+  // measured to false-positive STUCK on a genuinely live production Adam seat with an 11-minute
+  // gap between tool calls. A gap in the 11-14 minute range (below the 15-min floor, above the
+  // naive 10-min conversion) must still classify FRESH.
+  it('an 11-14 minute tool-silence gap still classifies fresh (below the 15-min floor, FR-2 AC-7)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'brief-gap', heartbeat_at: fresh(1), last_tool_at: fresh(12) }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('refuse');
+    expect(d.freshPriors).toEqual(['brief-gap']);
   });
   it('RETIRES only a STALE prior, then registers self', () => {
     const d = adam.decideSingleAdamGuard({
@@ -147,14 +191,14 @@ describe('decideSingleAdamGuard (refuse-new-on-fresh-prior divergence)', () => {
   });
   it('mixed fresh + stale priors => REFUSE (a fresh prior dominates; never clear it)', () => {
     const d = adam.decideSingleAdamGuard({
-      priorAdams: [{ session_id: 'freshp', heartbeat_at: fresh(1) }, { session_id: 'stalep', heartbeat_at: fresh(999) }],
+      priorAdams: [{ session_id: 'freshp', heartbeat_at: fresh(1), last_tool_at: fresh(1) }, { session_id: 'stalep', heartbeat_at: fresh(999) }],
       selfSessionId: self, nowMs: NOW,
     });
     expect(d.action).toBe('refuse');
   });
   it('multiple FRESH priors => REFUSE with retire=[] (none cleared)', () => {
     const d = adam.decideSingleAdamGuard({
-      priorAdams: [{ session_id: 'f1', heartbeat_at: fresh(1) }, { session_id: 'f2', heartbeat_at: fresh(2) }],
+      priorAdams: [{ session_id: 'f1', heartbeat_at: fresh(1), last_tool_at: fresh(1) }, { session_id: 'f2', heartbeat_at: fresh(2), last_tool_at: fresh(2) }],
       selfSessionId: self, nowMs: NOW,
     });
     expect(d.action).toBe('refuse');
@@ -189,7 +233,7 @@ describe('decideSingleAdamGuard (refuse-new-on-fresh-prior divergence)', () => {
   // refuses registration.
   it('a non-released, fresh-heartbeat prior with explicit status still REFUSES (negative control)', () => {
     const d = adam.decideSingleAdamGuard({
-      priorAdams: [{ session_id: 'live1', heartbeat_at: fresh(1), status: 'active' }],
+      priorAdams: [{ session_id: 'live1', heartbeat_at: fresh(1), last_tool_at: fresh(1), status: 'active' }],
       selfSessionId: self, nowMs: NOW,
     });
     expect(d.action).toBe('refuse');
@@ -200,18 +244,49 @@ describe('decideSingleAdamGuard (refuse-new-on-fresh-prior divergence)', () => {
   // (predating this fix) must be unaffected — absent status defers to heartbeat_at alone.
   it('a fresh-heartbeat prior with NO status field is still classified fresh (backward compatible)', () => {
     const d = adam.decideSingleAdamGuard({
-      priorAdams: [{ session_id: 'legacy1', heartbeat_at: fresh(1) }],
+      priorAdams: [{ session_id: 'legacy1', heartbeat_at: fresh(1), last_tool_at: fresh(1) }],
       selfSessionId: self, nowMs: NOW,
     });
     expect(d.action).toBe('refuse');
     expect(d.freshPriors).toEqual(['legacy1']);
   });
 
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-6): the parent SD's own first-hand incident, constructed
+  // verbatim rather than genericized -- this is the SD's closure predicate, not merely an
+  // import-path grep (VALIDATION evidence 7404c146-daad-47c2-8ddd-6994f6ca1bb9, F-1 in the PRD's
+  // testing-review metadata). Adam session 673db833: heartbeat_at advanced every 15 minutes from
+  // 01:52Z to 08:58Z on 2026-09-03 while its tool-call loop had actually died; last_tool_at was
+  // frozen at 2026-09-02T18:40:17Z. This specimen read LIVE to both the single-Adam guard and the
+  // fleet-health loop-dead axis in production.
+  it('Adam-673db833 specimen: reads LIVE via raw isFresh, but NOT-fresh via the composed guard at 08:58Z (FR-6)', () => {
+    const evaluatedAt = Date.parse('2026-09-03T08:58:00.000Z');
+    const specimen = {
+      session_id: '673db833',
+      heartbeat_at: '2026-09-03T08:53:00.000Z', // last of the 15-min ticks before 08:58Z
+      last_tool_at: '2026-09-02T18:40:17.000Z', // frozen the prior evening
+    };
+
+    // Arm 1: the raw, UNCHANGED, heartbeat-only isFresh() still reads this specimen as fresh/LIVE
+    // -- proving the test discriminates on the actual defect, not on a stricter heartbeat window.
+    expect(adam.isFresh(specimen.heartbeat_at, evaluatedAt, adam.ADAM_FRESH_MS)).toBe(true);
+
+    // Arm 2: the composed guard (FR-2) reads it as NOT-fresh, so a genuinely live successor is no
+    // longer refused on this specimen's account.
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [specimen],
+      selfSessionId: 'successor-session',
+      nowMs: evaluatedAt,
+    });
+    expect(d.action).toBe('retire_stale_then_register');
+    expect(d.retire).toEqual(['673db833']);
+    expect(d.freshPriors).toEqual([]);
+  });
+
   it('mixed released + genuinely-fresh priors => REFUSE (the live one still dominates), released one still retirable', () => {
     const d = adam.decideSingleAdamGuard({
       priorAdams: [
         { session_id: 'released2', heartbeat_at: fresh(1), status: 'released' },
-        { session_id: 'live2', heartbeat_at: fresh(1), status: 'idle' },
+        { session_id: 'live2', heartbeat_at: fresh(1), last_tool_at: fresh(1), status: 'idle' },
       ],
       selfSessionId: self, nowMs: NOW,
     });
@@ -351,7 +426,7 @@ function regStub({ selfSessionId = 'self', selfMeta = null, rowExists = true, al
 
 describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD-FDBK-INFRA-FIX-ADAM-SOLOMON-001)', () => {
   it('a FRESH prior Adam => REFUSED (no write, prior not cleared)', async () => {
-    const { supabase, calls } = regStub({ allAdams: [{ session_id: 'prior', heartbeat_at: fresh(1), metadata: { role: 'adam' } }] });
+    const { supabase, calls } = regStub({ allAdams: [{ session_id: 'prior', heartbeat_at: fresh(1), last_tool_at: fresh(1), metadata: { role: 'adam' } }] });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW });
     expect(r).toMatchObject({ ok: false, action: 'refused' });
     expect(r.fresh_priors).toEqual(['prior']);
@@ -390,6 +465,48 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
     expect(calls.drainSelect).toBeGreaterThan(0); // FR-4 drain ran (re-targeted old->new)
     expect(drainRows().every((row) => row.target_session === 'self')).toBe(true);
     expect(drainRows().map((row) => row.payload.retargeted_from)).toEqual(['staleprior', 'staleprior']);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (F-7, evidence d9d88102-2dfe-49bb-b319-887db2b361bd): the
+  // ACTUATION-layer closure this SD's original FR-6 test did not reach. A heartbeat-fresh,
+  // confirmed-tool-STUCK prior (the 673db833 shape) is excluded from decideSingleAdamGuard's
+  // `fresh` set by FR-2, so it lands in `decision.retire` -- but pre-F-7-fix, the retire
+  // re-validation's heartbeat-only freshNow check found its heartbeat STILL fresh (the defining
+  // property of a heartbeating shell) and skipped clearing it FOREVER, leaving two simultaneous
+  // role='adam' rows with the dead one permanently tagged. Measured pre-fix via this exact stub:
+  // registerAdam returned {action:'tagged', retired:[], retire_skipped_fresh:['shell']} and
+  // clear_adam_flag was called 0 times. Post-fix, decision.retireToolStuck routes it through a
+  // tool-activity re-check instead of a heartbeat re-check, so it is actually cleared.
+  it('a heartbeat-fresh but tool-STUCK prior IS actually cleared, not skipped forever (F-7)', async () => {
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'shell', heartbeat_at: fresh(1), last_tool_at: fresh(999), metadata: { role: 'adam' } }],
+      rpcError: null,
+    });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW, nowMs2: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire' });
+    expect(r.retired).toEqual(['shell']);
+    expect(r.retire_skipped_fresh ?? []).not.toContain('shell');
+    expect(calls.rpc.map((c) => c.fn)).toEqual(expect.arrayContaining(['clear_adam_flag', 'set_adam_flag']));
+  });
+
+  // Companion control: the SAME tool-stuck prior, but it genuinely resumed tool activity between
+  // the initial decision and the retire re-check (a real recovery, not a heartbeating corpse) --
+  // must still be protected, proving the F-7 fix re-validates rather than unconditionally clearing
+  // every tool-stuck entry.
+  it('a tool-stuck prior that genuinely resumed activity by the retire re-check is SKIPPED (F-7 control)', async () => {
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'recovered', heartbeat_at: fresh(1), last_tool_at: fresh(999), metadata: { role: 'adam' } }],
+      rpcError: null,
+    });
+    // nowMs2 wired to give the same fixture a FRESH last_tool_at at re-check time: regStub's fixed
+    // fixture can't change last_tool_at between reads, so we instead move nowMs2 BACKWARD close
+    // enough to fresh(999)'s timestamp that it reads fresh relative to nowMs2 -- mirrors the
+    // existing "raced back to fresh" heartbeat test's technique for the tool-activity axis.
+    const nowMs2 = NOW - 999 * 60_000 + 30_000; // 30s after the last_tool_at timestamp
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW, nowMs2 });
+    expect(r).toMatchObject({ ok: true, action: 'tagged' }); // NOT tagged_after_retire
+    expect(r.retired).toEqual([]);
+    expect(calls.rpc.map((c) => c.fn)).not.toContain('clear_adam_flag');
   });
 
   // QF-20260703-883: clear_adam_flag RPC absent (migration unapplied) must NOT silently leave
@@ -447,7 +564,7 @@ describe('registerAdam (single-Adam guard, unconditional RPC-first upsert — SD
   it('a LIVE (no-status) prior with the same recent heartbeat is still REFUSED, not retired', async () => {
     const heartbeatAt = new Date(NOW - 5 * 60_000).toISOString();
     const { supabase, calls } = regStub({
-      allAdams: [{ session_id: 'liveRecentHb', heartbeat_at: heartbeatAt, metadata: { role: 'adam' } }],
+      allAdams: [{ session_id: 'liveRecentHb', heartbeat_at: heartbeatAt, last_tool_at: heartbeatAt, metadata: { role: 'adam' } }],
     });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW, nowMs2: NOW });
     expect(r).toMatchObject({ ok: false, action: 'refused' });

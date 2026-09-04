@@ -41,7 +41,7 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fetchAllAdamsStrict (not fetchFreshAdams) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
-const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, isStatusFreshEligible, ADAM_FRESH_MS, resolveRetiredAdamSeats } = require('../lib/coordinator/adam-identity.cjs');
+const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, isFreshAndActive, isStatusFreshEligible, ADAM_FRESH_MS, resolveRetiredAdamSeats } = require('../lib/coordinator/adam-identity.cjs');
 // FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
 const { drainAdamOutbound } = require('./adam-advisory.cjs');
 
@@ -219,7 +219,32 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     //    simultaneous role='adam' rows with no retry path to converge them.
     //
     // isStatusFreshEligible must classify freshness the SAME way decideSingleAdamGuard just did.
+    //
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-3, REVISED after implementation-time measurement,
+    // then AGAIN after F-7, evidence d9d88102-2dfe-49bb-b319-887db2b361bd): this PRD originally
+    // proposed ORing in lib/fleet/genuine-worker.mjs's isKnownWedged here; measured wrong (broke
+    // the baseline "a genuinely STALE prior is still retired" case). A SECOND, deeper defect was
+    // then found by direct end-to-end probing of THIS function: decision.retire can legitimately
+    // contain a session with a STILL-FRESH heartbeat -- decideSingleAdamGuard's FR-2 fix excludes a
+    // heartbeat-fresh-but-tool-STUCK prior from `fresh`, which places it in `retire`, not because
+    // its heartbeat went stale but because its TOOL ACTIVITY did. Re-checking such an entry's
+    // heartbeat here (the freshNow set below) will ALWAYS find it fresh -- that is the exact
+    // defining property of a heartbeating shell -- so it would be skipped from clearing FOREVER,
+    // leaving a confirmed-dead session permanently role-tagged. decision.retireToolStuck (FR-2)
+    // names exactly these entries so they can be re-validated on TOOL ACTIVITY instead of
+    // heartbeat; decision.retireHeartbeatStale keeps the original heartbeat-only re-check, which
+    // is still correct for a prior that was genuinely heartbeat-stale at decision time.
     const freshNow = new Set(current.filter((a) => isStatusFreshEligible(a.status) && isFresh(a.heartbeat_at, nowMs2, ADAM_FRESH_MS)).map((a) => a.session_id));
+    const toolStuckSet = new Set(decision.retireToolStuck || []);
+    // Re-validate each tool-stuck entry on tool activity as of nowMs2: if it has genuinely resumed
+    // activity since the decision (isFreshAndActive now true), protect it like a racing restart;
+    // otherwise it is still confirmed-stuck and must be cleared, regardless of its heartbeat.
+    const toolStuckRacedBack = new Set(
+      (decision.retireToolStuck || []).filter((sid) => {
+        const row = bySessionId.get(sid);
+        return row && isStatusFreshEligible(row.status) && isFreshAndActive(row, nowMs2, ADAM_FRESH_MS);
+      }),
+    );
     for (const sid of decision.retire) {
       // ADVERSARIAL REVIEW (PR #7369, WARNING): restoring isFresh()'s missing arg made this skip
       // reachable for the first time -- it used to be dead code (isFresh always returned false).
@@ -227,7 +252,8 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       // knowingly leaves a second role='adam' row tagged (the deliberate racing-restart protection,
       // not a bug) -- the result and message must say so, not report a plain "Registered" as if
       // nothing else changed. Mirrors the existing retireBlocked/retireFallbackUsed disclosure.
-      if (freshNow.has(sid)) { retireSkippedFresh.push(sid); continue; }
+      const skip = toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid);
+      if (skip) { retireSkippedFresh.push(sid); continue; }
       const r = await supabase.rpc('clear_adam_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
       if (!(r && r.error)) { retired.push(sid); continue; }
       if (!isMissingFunctionError(r.error)) { retireBlocked = true; continue; } // real error — swept later
