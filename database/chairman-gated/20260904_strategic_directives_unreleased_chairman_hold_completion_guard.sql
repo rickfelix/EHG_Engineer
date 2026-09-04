@@ -142,9 +142,16 @@ $function$;
 -- not applied). No data exposure (SECURITY INVOKER, no table access), but this trigger-
 -- support family has no legitimate external caller -- same SEC-M2 class this directory's
 -- own README documents for a sibling migration.
-REVOKE EXECUTE ON FUNCTION public.sd_safe_parse_timestamptz(text) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.sd_metadata_hold_released(jsonb, text) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.sd_metadata_has_unreleased_chairman_hold(jsonb) FROM PUBLIC, anon, authenticated;
+-- SEC-6 fix (SECURITY evidence b71d1614, 2026-09-04): authenticated deliberately KEEPS
+-- EXECUTE, matching sibling public.sd_canonical_writer_policy(text)'s precedent
+-- (20260824_sd_canonical_writer_policy_revoke.sql) -- enforce_canonical_lifecycle_write()
+-- has no SECURITY DEFINER, so it runs as the invoking role; revoking from authenticated
+-- would turn a governance block into a bare 42501 permission error for any
+-- authenticated-role UPDATE that reaches this trigger, with no added protection (these are
+-- internal helpers, not independently reachable RPC endpoints either way).
+REVOKE EXECUTE ON FUNCTION public.sd_safe_parse_timestamptz(text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.sd_metadata_hold_released(jsonb, text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.sd_metadata_has_unreleased_chairman_hold(jsonb) FROM PUBLIC, anon;
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
 -- 2. AMENDED enforce_canonical_lifecycle_write() -- full body restated (CREATE OR REPLACE),
@@ -286,20 +293,19 @@ BEGIN
   -- 20260817_fdbk_internal_feedback_rpc.sql header: "a verify block that only re-checks
   -- catalog shape can pass while every real call still 42501s, because EXECUTE grants were
   -- never asserted").
+  -- SEC-6 fix: only anon is asserted revoked now -- authenticated deliberately keeps
+  -- EXECUTE (see the REVOKE block above for the full rationale).
   IF has_function_privilege('anon', 'public.sd_safe_parse_timestamptz(text)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.sd_safe_parse_timestamptz(text)', 'EXECUTE')
   THEN
-    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon/authenticated can still EXECUTE sd_safe_parse_timestamptz';
+    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon can still EXECUTE sd_safe_parse_timestamptz';
   END IF;
   IF has_function_privilege('anon', 'public.sd_metadata_hold_released(jsonb,text)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.sd_metadata_hold_released(jsonb,text)', 'EXECUTE')
   THEN
-    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon/authenticated can still EXECUTE sd_metadata_hold_released';
+    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon can still EXECUTE sd_metadata_hold_released';
   END IF;
   IF has_function_privilege('anon', 'public.sd_metadata_has_unreleased_chairman_hold(jsonb)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.sd_metadata_has_unreleased_chairman_hold(jsonb)', 'EXECUTE')
   THEN
-    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon/authenticated can still EXECUTE sd_metadata_has_unreleased_chairman_hold';
+    RAISE EXCEPTION 'VERIFY FAILED (SEC-4): anon can still EXECUTE sd_metadata_has_unreleased_chairman_hold';
   END IF;
 
   -- 3d. A LIVE trigger-fire proof (real disposable-row INSERT + completion UPDATE) was
