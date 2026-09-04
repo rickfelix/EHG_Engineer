@@ -95,6 +95,7 @@ function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
   try {
     // Get commits on the SD branch that aren't on main
     const branchName = `feat/${sdId}`;
+    let verifiedBranch = branchName;
 
     // First check if branch exists
     try {
@@ -107,11 +108,19 @@ function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
       if (!matchingBranch) {
         return [];
       }
+      // DEFECT 1 fix (QF-20260903-950): use the branch that was actually verified to exist,
+      // never HEAD -- HEAD may point anywhere (main, a different worktree's branch, detached)
+      // and has no relationship to the SD whose commits were asked for. Trim only the `git
+      // branch -a` list decoration (leading "* " / indentation); a "remotes/origin/..." line is
+      // left as-is -- that literal text is already a valid, directly resolvable git revision
+      // (refs/remotes/origin/...), whereas stripping the remote prefix down to a bare branch
+      // name would break resolution whenever no local branch of that name exists.
+      verifiedBranch = matchingBranch.replace(/^\*?\s+/, '').trim();
     }
 
     // Get commit log with file changes
     const logOutput = execSync(
-      `git -C "${repoPath}" log ${sinceBranch}..HEAD --name-status --pretty=format:"%H|%s|%ai" 2>/dev/null || echo ""`,
+      `git -C "${repoPath}" log ${sinceBranch}..${verifiedBranch} --name-status --pretty=format:"%H|%s|%ai" 2>/dev/null || echo ""`,
       { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
     );
 
