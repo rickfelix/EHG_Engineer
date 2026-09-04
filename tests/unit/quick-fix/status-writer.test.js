@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { setQuickFixStatus, isNeedsSdRow, transitionRequiresDisposition } = require('../../../lib/quick-fix/status-writer.cjs');
+const { setQuickFixStatus, isNeedsSdRow, isUnlinkedTierThreeCompletion, transitionRequiresDisposition } = require('../../../lib/quick-fix/status-writer.cjs');
 
 const QF_ID = 'qf-fixture-1';
 const silentLog = { log() {}, warn() {}, error() {} };
@@ -180,6 +180,39 @@ describe('isNeedsSdRow (the canonical shared predicate)', () => {
   it('false for a null/undefined row', () => {
     expect(isNeedsSdRow(null)).toBe(false);
     expect(isNeedsSdRow(undefined)).toBe(false);
+  });
+});
+
+describe('isUnlinkedTierThreeCompletion — SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-3 (AC-8/AC-9/AC-10)', () => {
+  it('AC-8: true for routing_tier=3 with neither escalated_to_sd_id nor resolution_sd_id set', () => {
+    expect(isUnlinkedTierThreeCompletion({ routing_tier: 3, escalated_to_sd_id: null, resolution_sd_id: null })).toBe(true);
+  });
+
+  it('true when both link fields are undefined (== null covers both)', () => {
+    expect(isUnlinkedTierThreeCompletion({ routing_tier: 3 })).toBe(true);
+  });
+
+  it('AC-10: false when escalated_to_sd_id is set (linked via escalation)', () => {
+    expect(isUnlinkedTierThreeCompletion({ routing_tier: 3, escalated_to_sd_id: 'sd-1', resolution_sd_id: null })).toBe(false);
+  });
+
+  it('AC-10: false when resolution_sd_id is set (linked via resolution, not escalation)', () => {
+    expect(isUnlinkedTierThreeCompletion({ routing_tier: 3, escalated_to_sd_id: null, resolution_sd_id: 'sd-2' })).toBe(false);
+  });
+
+  it('false for routing_tier other than 3', () => {
+    expect(isUnlinkedTierThreeCompletion({ routing_tier: 1, escalated_to_sd_id: null, resolution_sd_id: null })).toBe(false);
+    expect(isUnlinkedTierThreeCompletion({ routing_tier: null, escalated_to_sd_id: null, resolution_sd_id: null })).toBe(false);
+  });
+
+  it('AC-9: is status-agnostic (callers only invoke it at completion time, never on an open row) -- a status field on the row does not change the verdict', () => {
+    expect(isUnlinkedTierThreeCompletion({ status: 'open', routing_tier: 3, escalated_to_sd_id: null, resolution_sd_id: null })).toBe(true);
+    expect(isUnlinkedTierThreeCompletion({ status: 'completed', routing_tier: 3, escalated_to_sd_id: null, resolution_sd_id: null })).toBe(true);
+  });
+
+  it('false for a null/undefined row', () => {
+    expect(isUnlinkedTierThreeCompletion(null)).toBe(false);
+    expect(isUnlinkedTierThreeCompletion(undefined)).toBe(false);
   });
 });
 

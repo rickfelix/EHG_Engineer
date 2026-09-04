@@ -111,6 +111,8 @@ import { getWorkflowForType } from '../../cli/workflow-definitions.js';
 // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: CAS guard on the terminal completion
 // UPDATE + loser-side pre-insert cleanup (post-merge automation vs worker race).
 import { attemptCasCompletion, cleanupLosingPreInsert } from './cas-completion.js';
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2: refuse completion while an unreleased chairman hold stands.
+import { isUnreleasedChairmanHold, formatHoldProvenance, resolveHoldProvenance } from '../../../../../lib/fleet/claim-eligibility.cjs';
 
 // SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-A (F1): surface the SD's genuine retro
 // known-issues instead of a hardcoded placeholder. Non-throwing by construction (see module doc).
@@ -446,6 +448,26 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         message: 'SD already completed - all gates verified',
         alreadyCompleted: true
       };
+    }
+
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2 (AC-4), moved here per SECURITY review
+    // (evidence 62a7d823, SEC-3): checking AFTER the LHE/SPH pre-insert below left a
+    // permanent ghost sd_phase_handoffs row asserting LEAD-FINAL-APPROVAL was 'accepted' for
+    // an SD that was in fact refused -- the exact artifact this file's own comment above
+    // names as v_sd_completion_integrity's sole completion evidence. sd.metadata is already
+    // in hand at function entry, so this check needs nothing the pre-insert produces.
+    // Narrow predicate (FR-1) -- NOT resolveHoldProvenance() as-is, which over-matches
+    // deferred_by / not_worker_claimable_reason (legitimately compatible with completion).
+    // Uses resolveHoldProvenance() for display text (SECURITY finding SEC-2: a hand-built
+    // provenance object bypassed the control-char stripping resolveHoldProvenance's local
+    // s() helper applies -- Adversarial-review W3, embedded \n/ESC forging rendered lines).
+    if (isUnreleasedChairmanHold(sd.metadata)) {
+      const holdText = formatHoldProvenance(resolveHoldProvenance(sd.metadata));
+      console.log('   \u274c Completion refused: unreleased chairman hold — ' + holdText);
+      return ResultBuilder.rejected(
+        'UNRELEASED_CHAIRMAN_HOLD',
+        'SD has an unreleased chairman hold and cannot be completed: ' + holdText + '. Release via releaseHold() (lib/fleet/claim-eligibility.cjs) before re-running LEAD-FINAL-APPROVAL.'
+      );
     }
 
     console.log('\n📊 STATE TRANSITION: Final Approval');
