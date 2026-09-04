@@ -806,7 +806,16 @@ async function main() {
   // (advisory) but never flip the marker or fail the gate; CEREMONY_PENDING gaps likewise
   // print (still in `gaps`/the report above) but never flip it either (QF-20260824-600).
   if (ceremonyPendingFailSet.length) {
-    console.log(`::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`);
+    // QF (gate-bug fix, discovered blocking SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001's
+    // LEAD-FINAL-APPROVAL): this line must follow the SAME asJson split as the marker below --
+    // an unconditional console.log() here leaked onto stdout AFTER the JSON blob whenever any
+    // chairman-gated migration was pending, breaking chairman-apply-state.js's
+    // classifyMigrationApplyState() naive "first '{' line to EOF" parse
+    // (JSON.parse threw "Unexpected non-whitespace character after JSON"), which made
+    // CHAIRMAN_APPLY_VERIFICATION fail-close on a false "apply-state could not be determined"
+    // for every SD, not just the one(s) actually pending ceremony.
+    if (asJson) console.error(`::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`);
+    else console.log(`::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`);
   }
   const marker = blockingFailSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
   // --json keeps stdout pure JSON for piping; the marker goes to stderr there.
