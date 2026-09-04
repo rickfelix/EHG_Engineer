@@ -146,22 +146,29 @@ function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
     for (const line of logOutput.split('\n')) {
       if (!line.trim()) continue;
 
-      // Check if this is a commit header line
-      if (line.includes('|') && line.length === 40 + line.indexOf('|') - 40 + line.length - line.lastIndexOf('|')) {
-        // Parse commit header
-        const parts = line.split('|');
-        if (parts.length >= 3 && parts[0].length === 40) {
-          if (currentCommit) {
-            commits.push(currentCommit);
-          }
-          currentCommit = {
-            hash: parts[0],
-            message: parts[1],
-            date: parts[2],
-            files: []
-          };
-          continue;
+      // Header-detection fix, found while verifying defects 1-2 above (QF-20260903-950; not
+      // one of the 3 named defects itself -- called out separately per the QF's own "must not
+      // be collapsed into one" instruction). The previous condition here was
+      // `line.includes('|') && line.length === 40 + line.indexOf('|') - 40 + line.length -
+      // line.lastIndexOf('|')`, which algebraically reduces to `line.indexOf('|') ===
+      // line.lastIndexOf('|')` -- true only when a line contains exactly ONE '|' character. A
+      // real "%H|%s|%ai" header line always carries at least two, so this was unsatisfiable for
+      // every genuine header line: currentCommit was never initialized and no commit or file
+      // was ever parsed, independent of defects 1 and 2. Verified with a standalone
+      // reproduction (a realistic 3-field header line evaluates the old predicate to false).
+      // Fixed to check the hash shape directly instead.
+      const parts = line.split('|');
+      if (parts.length >= 3 && /^[0-9a-f]{40}$/i.test(parts[0])) {
+        if (currentCommit) {
+          commits.push(currentCommit);
         }
+        currentCommit = {
+          hash: parts[0],
+          message: parts[1],
+          date: parts[2],
+          files: []
+        };
+        continue;
       }
 
       // Parse file change line (A/M/D followed by tab and filename)
