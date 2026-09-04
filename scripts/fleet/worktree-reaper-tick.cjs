@@ -38,7 +38,12 @@ const STATE_SCHEMA_VERSION = 1;
 // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-002): pool-utilization watchdog.
 // Mirrors lib/worktree-quota.js::MAX_WORKTREE_COUNT (kept in sync; the .cjs tick
 // cannot `require` the ESM quota module, so the cap is duplicated as a constant).
-const MAX_WORKTREE_COUNT = 28;
+// SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 TR-3: this had drifted to 28 while
+// lib/worktree-quota.js's real enforcement point (enforceWorktreeQuota) reads 40 --
+// the comment above claimed sync that did not hold. The watchdog was firing its
+// Stage-0 remediation at 80% of a WRONG, LOWER cap (22 worktrees) rather than the
+// actual quota (32), needlessly reclaiming terminal-SD trees early.
+const MAX_WORKTREE_COUNT = 40;
 const DEFAULT_POOL_THRESHOLD = 0.8;
 
 function readState(statePath) {
