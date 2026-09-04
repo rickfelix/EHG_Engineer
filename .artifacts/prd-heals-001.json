@@ -1,0 +1,128 @@
+{
+  "executive_summary": "The EXEC-TO-PLAN handoff's MANDATORY_TESTING_VALIDATION gate (required:true) reads a stored sub_agent_execution_results TESTING row and fails unless its verdict is PASS/CONDITIONAL_PASS. TESTING's own phase4-evidence.js requires user_stories.status IN (completed, validated) to count a story implemented, and the only promoter (auto-validate-user-stories-on-exec-complete.js) requires every sd_scope_deliverables row already completed. Deliverables only reach completed via code that runs INSIDE the exec-to-plan executor itself (exec-to-plan/index.js:412, or gates/deliverables-completeness.js's reconcileDeliverables), never before it. Because sub-agent-orchestration.js reuses a fresh cached TESTING row instead of re-running TESTING inside the handoff, the pre-handoff standalone TESTING run required by CLAUDE.md protocol is the ONLY evaluation that can ever produce the row MANDATORY_TESTING_VALIDATION reads -- and it structurally cannot observe healed state. Every SD with genuinely-real-but-still-pending deliverables therefore fails TESTING and the tooling recommends --bypass-validation, the wrong fix for a structural ordering bug. This PRD makes TESTING heal-then-measure: before verifying user stories, it reconciles deliverables using the SAME evidence-gated reconciler the gate itself uses (never the zero-evidence auto-complete fallback), then re-checks. The fix is scoped strictly to the POST_IMPLEMENTATION handoff types (EXEC-TO-PLAN, PLAN-VERIFY) via the existing resolveStoryGateContext() classifier; PRE_IMPLEMENTATION callers (PLAN-TO-EXEC, PLAN_PRD) are explicitly untouched, and no downstream gate's verdict-acceptance logic changes.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "TESTING heals deliverables before measuring story completeness, for POST_IMPLEMENTATION callers only",
+      "description": "In lib/sub-agents/testing/index.js, hoist the existing resolveStoryGateContext(options) call (currently computed later at line ~231, only for classification) to run BEFORE verifyUserStories() (currently invoked at line ~212). When context.blocking === true (POST_IMPLEMENTATION: EXEC-TO-PLAN, PLAN-VERIFY, matching the classifier's existing PRE/POST_IMPLEMENTATION sets), call the evidence-gated reconciler exported from gates/deliverables-completeness.js (currently private -- export reconcileDeliverables) for the SD's sd_scope_deliverables rows, then call the canonical promoter scripts/auto-validate-user-stories-on-exec-complete.js's autoValidateUserStories(sdId, supabase) (already a safe no-op when deliverables remain incomplete), THEN run the existing verifyUserStories() measurement unchanged. When context.blocking is false or absent (PRE_IMPLEMENTATION: PLAN-TO-EXEC, PLAN_PRD), skip the heal step entirely -- TESTING measures exactly what it measures today.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A fixture SD with real-but-unmarked deliverables (matching one of reconcileDeliverables()'s existing evidence checks: PRD active, or accepted EXEC handoff + functional-requirement keyword match) reaches TESTING verdict PASS on a standalone POST_IMPLEMENTATION run, with no --bypass-validation flag used.",
+        "A negative test asserts TESTING invoked with phase='PLAN_PRD' or handoffType='PLAN-TO-EXEC' never writes to sd_scope_deliverables or user_stories -- the heal step must not fire for PRE_IMPLEMENTATION callers.",
+        "The remediation text mandatory-testing-validation.js emits on failure no longer recommends --bypass-validation for a condition this handoff itself now resolves; it is updated only if the fixture in AC-1 still leaves a genuine gap to describe."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "The heal step must NEVER use the zero-evidence auto-complete fallback tier",
+      "description": "scripts/modules/handoff/auto-complete-deliverables.js's autoCompleteDeliverables() (called by exec-to-plan/index.js:412 via autoCompleteDeliverablesForSD) has an unconditional final fallback tier, AUTO_COMPLETE_HANDOFF_CONTEXT (confidence 50, fires when 'no verification sources matched', lines ~364-379), that marks a deliverable completed with NO real evidence, by design. FR-1's heal step must call ONLY gates/deliverables-completeness.js's reconcileDeliverables() (which leaves an unmatched deliverable untouched rather than rubber-stamping it) and must not import or call autoCompleteDeliverablesForSD / autoCompleteDeliverables from lib/sub-agents/testing/index.js under any circumstance. This is the load-bearing safety property: a standalone TESTING run must never be able to fabricate the evidence it then measures against (CLAUDE.md's chairman-ratified gate-evidence-provenance rule: 'No completion gate may accept evidence authored by the party it gates').",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A static/import-check test asserts lib/sub-agents/testing/index.js never imports autoCompleteDeliverablesForSD or autoCompleteDeliverables from scripts/modules/handoff/auto-complete-deliverables.js or exec-to-plan/index.js.",
+        "A fixture with a deliverable that matches NONE of reconcileDeliverables()'s 5 evidence checks remains incomplete after the heal step runs, and TESTING correctly reports the story as still-unimplemented (not fabricated-complete)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "No downstream gate's verdict-acceptance logic changes",
+      "description": "mandatory-testing-validation.js's accepted-verdict list (PASS, CONDITIONAL_PASS) and subagent-evidence-gate.js's rule that a recorded rejecting verdict (BLOCKED/FAIL) always fails the gate in every mode (hardened by SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 / PR #8059, precisely because a softened TESTING verdict once let a broken SD read as completed) are explicit non-negotiables for this SD. This SD changes what TESTING measures before producing a verdict; it must never change what verdict a downstream gate accepts.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "git diff for this SD's PR touches no line in mandatory-testing-validation.js's verdict-acceptance array or subagent-evidence-gate.js's rejecting-verdict handling.",
+        "A regression test re-runs SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001's own fixture (a genuinely BLOCKED TESTING verdict) and confirms it still fails the gate after this change."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Reuse resolveStoryGateContext(), never reimplement its PRE/POST_IMPLEMENTATION classification",
+      "description": "lib/sub-agents/testing/index.js:405-426 (added by QF-20260903-748) already classifies handoffType/phase into PRE_IMPLEMENTATION vs POST_IMPLEMENTATION with a blocking boolean. The heal-step gate condition must call this existing function, not duplicate its handoffType/phase mapping."
+    },
+    {
+      "id": "TR-2",
+      "title": "Export reconcileDeliverables from gates/deliverables-completeness.js",
+      "description": "Currently private/unexported. Add a named export so lib/sub-agents/testing/index.js can import and call it directly, without duplicating its 5 evidence checks."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "POST_IMPLEMENTATION TESTING run heals real-but-pending deliverables and reaches PASS",
+      "type": "unit",
+      "expected": "Fixture SD with a PRD-active deliverable and matching evidence reaches verdict PASS without --bypass-validation, sd_scope_deliverables and user_stories rows correctly promoted."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "PRE_IMPLEMENTATION TESTING run does not heal",
+      "type": "unit",
+      "expected": "TESTING invoked with handoffType='PLAN-TO-EXEC' or phase='PLAN_PRD' makes zero writes to sd_scope_deliverables/user_stories, verdict reflects the genuinely-unimplemented state."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Heal step never fabricates completion via the zero-evidence fallback",
+      "type": "unit",
+      "expected": "A deliverable matching none of reconcileDeliverables()'s evidence checks stays incomplete; TESTING reports the true gap, not a fabricated pass."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Prior ACCEPTED-001 regression fixture still fails correctly",
+      "type": "unit",
+      "expected": "A genuinely BLOCKED TESTING verdict still fails mandatory-testing-validation.js and subagent-evidence-gate.js after this change -- no weakening of verdict acceptance."
+    }
+  ],
+  "acceptance_criteria": [
+    "A standalone `execute-subagent.js --code TESTING --sd-id <SD>` run on a genuinely-complete-but-unmarked SD reaches PASS/CONDITIONAL_PASS without --bypass-validation.",
+    "PRE_IMPLEMENTATION TESTING callers are provably unaffected (zero writes).",
+    "No verdict-acceptance gate logic changes; the ACCEPTED-001 regression fixture still fails as designed."
+  ],
+  "risks": [
+    {
+      "risk": "A naive implementation could wire the heal step to the zero-evidence autoCompleteDeliverablesForSD fallback, reproducing a self-authored-evidence defect one layer down.",
+      "mitigation": "FR-2 explicitly forbids this and requires an import-check test pinning it.",
+      "severity": "high"
+    },
+    {
+      "risk": "Broadening the heal step beyond POST_IMPLEMENTATION callers could let a PRE_IMPLEMENTATION run (evaluating deliberately-unimplemented work) fabricate premature completion.",
+      "mitigation": "FR-1 gates the heal step strictly on resolveStoryGateContext().blocking, reusing the already-tested classifier rather than a new one.",
+      "severity": "medium"
+    },
+    {
+      "risk": "reconcileDeliverables() is partly circular for a pre-handoff run: some of its 5 evidence checks key off an accepted EXEC-TO-PLAN handoff, which does not exist yet at TESTING-standalone time.",
+      "mitigation": "This is expected and safe: those specific deliverables correctly remain incomplete until real evidence exists, matching current (correct) behavior for that evidence class.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/execute-subagent.js --code TESTING", "handoff.js's EXEC-TO-PLAN mandatory-testing-validation gate", "orchestrate-phase-subagents.js PLAN_VERIFY invocations"],
+    "dependencies": ["lib/sub-agents/testing/index.js:resolveStoryGateContext (QF-20260903-748)", "gates/deliverables-completeness.js", "scripts/auto-validate-user-stories-on-exec-complete.js"],
+    "data_contracts": ["sd_scope_deliverables.completion_status", "user_stories.status/validation_status -- no schema change"],
+    "runtime_config": ["none"],
+    "observability_rollout": ["Unit test suite (TS-1..TS-4) is the verification story; no live-traffic rollout gate needed for a sub-agent library change"]
+  },
+  "system_architecture": {
+    "summary": "TESTING sub-agent gains a heal-then-measure step, gated on the existing PRE/POST_IMPLEMENTATION classifier, using only the evidence-gated deliverables reconciler.",
+    "components": [
+      { "name": "lib/sub-agents/testing/index.js", "change": "Hoist resolveStoryGateContext(); add gated heal step before verifyUserStories()" },
+      { "name": "gates/deliverables-completeness.js", "change": "Export reconcileDeliverables (currently private)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Single-file heal step in the TESTING sub-agent, reusing existing evidence-gated reconciliation and promotion functions.",
+    "steps": [
+      "Export reconcileDeliverables from gates/deliverables-completeness.js",
+      "In lib/sub-agents/testing/index.js, hoist resolveStoryGateContext(options) before verifyUserStories()",
+      "When context.blocking===true, call reconcileDeliverables() then autoValidateUserStories(), before the existing measurement",
+      "Add TS-1..TS-4 unit tests, including the import-check negative test for FR-2",
+      "Verify SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001's regression fixture still fails correctly"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "node scripts/execute-subagent.js --code TESTING --sd-id <fixture-SD-with-real-pending-deliverables> --phase EXEC-TO-PLAN", "expected_outcome": "Verdict PASS/CONDITIONAL_PASS, no --bypass-validation needed" },
+    { "step_number": 2, "instruction": "node scripts/execute-subagent.js --code TESTING --sd-id <fixture-SD> --phase PLAN_PRD", "expected_outcome": "No writes to sd_scope_deliverables/user_stories; verdict reflects genuine pre-implementation state" },
+    { "step_number": 3, "instruction": "npx vitest run <new test file>", "expected_outcome": "All TS-1..TS-4 tests pass" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-EXEC-PLAN-HEALS-001"
+  }
+}
