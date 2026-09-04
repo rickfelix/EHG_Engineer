@@ -151,15 +151,15 @@ describe('regenerateOnDrift — worktree discipline (the binding constraint)', (
     // The pool cap is what makes this design safe at all; a leaked worktree degrades every other
     // seat, not just this trigger. Observed saturated at 40/40 for a full session.
     const wt = fakeWorktree();
-    await expect(regenerateOnDrift(deps({ _wt: wt, runGenerator: async () => { throw new Error('generator boom'); } })))
-      .rejects.toThrow(/generator boom/);
+    const r = await regenerateOnDrift(deps({ _wt: wt, runGenerator: async () => { throw new Error('generator boom'); } }));
+    expect(r.outcome).toBe(REGEN_OUTCOME.GENERATION_FAILED);
     expect(wt.state.released).toBe(1);
   });
 
   it('RELEASES the worktree when the PR step throws', async () => {
     const wt = fakeWorktree();
-    await expect(regenerateOnDrift(deps({ _wt: wt, openPullRequest: async () => { throw new Error('gh down'); } })))
-      .rejects.toThrow(/gh down/);
+    const r = await regenerateOnDrift(deps({ _wt: wt, openPullRequest: async () => { throw new Error('gh down'); } }));
+    expect(r.outcome).toBe(REGEN_OUTCOME.GENERATION_FAILED);
     expect(wt.state.released).toBe(1);
   });
 
@@ -174,5 +174,28 @@ describe('regenerateOnDrift — worktree discipline (the binding constraint)', (
       acquireWorktree: async () => ({ path: '/tmp/wt', release: async () => { throw new Error('rm failed'); } }),
     }));
     expect(r.outcome).toBe(REGEN_OUTCOME.REGENERATED);
+  });
+});
+
+// QF-20260903-451: a throw from generation/verification/PR-open used to propagate uncaught to a
+// bare `exit 1` with no diagnostic and no PR -- the failure-reporting defect that converts ANY
+// generator error (a threshold-cap throw included) into a fleet-wide wedge with no way to tell
+// what failed. This asserts the diagnostic shape rather than a bare rejection.
+describe('regenerateOnDrift — reports a generation failure instead of exiting silently', () => {
+  it('resolves (does not reject) and names the failing reason when the generator throws', async () => {
+    const r = await regenerateOnDrift(deps({
+      runGenerator: async () => { throw new Error('CLAUDE_LEAD.md exceeds the enforced token cap'); },
+    }));
+    expect(r.outcome).toBe(REGEN_OUTCOME.GENERATION_FAILED);
+    expect(r.detail.message).toMatch(/CLAUDE_LEAD\.md exceeds the enforced token cap/);
+    expect(r.detail.staleFiles).toEqual(['CLAUDE_CORE.md']);
+  });
+
+  it('resolves and names the failing reason when in-worktree verification throws', async () => {
+    const r = await regenerateOnDrift(deps({
+      verifyInWorktree: async () => { throw new Error('verification probe unreachable'); },
+    }));
+    expect(r.outcome).toBe(REGEN_OUTCOME.GENERATION_FAILED);
+    expect(r.detail.message).toMatch(/verification probe unreachable/);
   });
 });
