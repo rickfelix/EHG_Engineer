@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-09-04](#2026-09-04)
+  - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-09-03](#2026-09-03)
   - [Bugfix](#bugfix)
@@ -178,6 +179,15 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-09-04
+
+### Infrastructure
+
+- **Per-field audit triggers land on 4 previously-unaudited tables, closing a 0%-coverage gap** - SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E
+  - `quick_fixes`, `claude_sessions`, `feedback`, and `chairman_ratifications` had no audit trail at all. A new `audit_trigger_generic()` function (distinct from the existing `governance_audit_trigger()`, which assumes `created_by`/`updated_by` columns none of these 4 tables have) now writes per-field change rows for INSERT/UPDATE/DELETE, using `to_jsonb(NEW)->>'col'` extraction so a missing column returns NULL instead of erroring. `chairman_ratifications` is INSERT-only by design, since its existing append-only guard triggers would abort any UPDATE/DELETE before an audit trigger could fire.
+  - Actor resolution (`changed_by`) tries 8 candidate columns across the 4 tables' real schemas in order (`disposed_by`, `verified_by`, `triaged_by`, `assigned_to`, `promoted_by`, `scribe_seat`, `created_by`, `session_id`/`claiming_session_id`), falling back to `'SYSTEM'` only when none are present or non-null.
+  - The function is `SECURITY DEFINER` with `EXECUTE` revoked from `PUBLIC`/`anon`/`authenticated` (only reachable via the trigger mechanism), and the audit write is best-effort inside a `BEGIN...EXCEPTION WHEN OTHERS` block — `feedback` has permissive anon-role INSERT policies but `governance_audit_log` has no anon INSERT policy, so an unguarded trigger would have aborted legitimate anon feedback submissions on every RLS-denied audit write (SECURITY sub-agent finding at EXEC-TO-PLAN). `claude_sessions`' UPDATE audit is a separate, `WHEN`-filtered trigger scoped to lifecycle/ownership columns, not every heartbeat tick (5.9M existing updates on that table).
+  - Three new CHECK constraints pair `quick_fixes.disposition` with its required target/status, closing 16 historical `status=closed`/`disposition=NULL` rows (re-measured live 2026-09-03/04 — the SD's original citation of 15 was stale). A backfill reclassifying 2 mis-dispositioned rows and filling `duplicate_of_id` on 3 others ran before the constraints, since they'd otherwise fail against live data.
+  - Independent adversarial `/ship` review caught three post-EXEC fixes after the above was already believed complete: the missing `SECURITY DEFINER`, the unfiltered `claude_sessions` trigger, and unscoped (name-only, not `conrelid`-scoped) CHECK-constraint existence checks.
 
 ### Bugfix
 
