@@ -1,9 +1,9 @@
 ---
 category: database
 status: approved
-version: 1.3.0
+version: 1.4.0
 author: rickfelix
-last_updated: 2026-08-25
+last_updated: 2026-09-04
 tags: [database, migrations, ci, governance]
 ---
 
@@ -84,6 +84,35 @@ read `NOT_APPLIED`/`PARTIAL` as **`CEREMONY_PENDING`** instead, carrying an `age
 is a distinct *label* (an expected wait-state, not silent neglect), not a distinct *lane*. It can
 be dispositioned `DEFERRED` or `RETIRED` exactly like any other gap, following the same
 adjudication process below.
+
+## Basename-collision exclusion and `excluded[]` (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D)
+
+This ledger keys on **bare basename** (see above), which creates a second, distinct exclusion
+class from `CEREMONY_PENDING`: `listForwardMigrations()` (in the verifier) never admits two
+files sharing one basename into the scan, because a single ledger entry would then silently
+suppress gaps from **two different files**. When an extra root (e.g. `supabase/migrations/`)
+contains a file whose basename already exists in the primary root or an earlier extra root, that
+file is pushed into an `excluded[]` bucket instead — reported (verdict `byte-identical copy`,
+`DIVERGENT CONTENT`, or `content-unreadable`) but never gap-checked. As of this SD, `excluded[]`
+is also promoted into the `--json` payload as a top-level array (same `{id, twin, verdict}` shape
+already printed to stderr), with `scripts/migration-gap-summary.mjs` as its genuine consumer
+(`excludedSource`/`excludedTotal`/`excludedDivergent` — distinguishing "the producer emitted zero
+exclusions" from "the field was silently dropped", the same distinction `undispositioned_files`
+already makes and `contradictory_files` notably does not, which is why that sibling field has no
+reader outside the verifier's own text-mode branch).
+
+**Byte-identical collisions are safe to reconcile at source** (delete the non-authoritative
+root's duplicate; verify identity via `git rev-parse HEAD:<path>` on both roots, never
+`readFileSync`+utf8 comparison, which is strictly weaker than true byte equality and sensitive to
+per-checkout line-ending state) — this empties the exclusion for that basename by construction,
+with zero change to the ledger's keying contract or the `CHAIRMAN_APPLY_VERIFICATION` gate's
+exact-string match. **A DIVERGENT CONTENT collision is a human decision, not a duplicate** — two
+genuinely different migrations share one basename, and only one is currently scanned. Deleting
+either copy, or attempting to make the ledger dual-key on collision, was evaluated and rejected
+(risk-agent + database-agent, LEAD phase): dual-keying breaks the CI seeder-sync step (hard-fails
+every migration PR on any ledger key-shape change) and duplicates entries in the append-only
+`audit_log` mirror. Reconciliation and reporting are the only in-scope moves; actually resolving
+which copy of a divergent pair is authoritative is a migration-content change, out of scope here.
 
 ## The four invariants
 
