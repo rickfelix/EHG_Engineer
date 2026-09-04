@@ -22,6 +22,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,7 +93,13 @@ function inferTypeFromPath(filePath) {
  * Parse git commits for an SD
  */
 function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
-  try {
+  // DEFECT 2 fix (QF-20260903-950): this function used to wrap its whole body in a try/catch
+  // that logged and returned [] on ANY error -- a real git failure (bad repoPath, corrupted
+  // repo, a genuinely broken range) then read identically to "looked and found nothing". The
+  // only legitimate reason to swallow a failure here is the branch-existence probe below, which
+  // is expected-to-fail control flow, not an error; that inner try/catch is unchanged. Everything
+  // else now propagates to main()'s own .catch(), which logs it and exits non-zero.
+  {
     // Get commits on the SD branch that aren't on main
     const branchName = `feat/${sdId}`;
     let verifiedBranch = branchName;
@@ -118,9 +125,14 @@ function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
       verifiedBranch = matchingBranch.replace(/^\*?\s+/, '').trim();
     }
 
-    // Get commit log with file changes
+    // DEFECT 2 fix (QF-20260903-950): the previous command embedded a shell-level
+    // `2>/dev/null || echo ""` inside the execSync string. execSync shells out via cmd.exe on
+    // Windows, which has no /dev/null and cannot parse that redirect -- the git command fails,
+    // the `|| echo ""` swallows the failure into an empty string, and the caller reads
+    // "no commits found" (exit 0) for what was actually a crash. Let a real command failure
+    // throw instead (the outer try/catch below is narrowed accordingly, see its own comment).
     const logOutput = execSync(
-      `git -C "${repoPath}" log ${sinceBranch}..${verifiedBranch} --name-status --pretty=format:"%H|%s|%ai" 2>/dev/null || echo ""`,
+      `git -C "${repoPath}" log ${sinceBranch}..${verifiedBranch} --name-status --pretty=format:"%H|%s|%ai"`,
       { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
     );
 
@@ -167,9 +179,6 @@ function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
     }
 
     return commits;
-  } catch (error) {
-    console.error(`   ❌ Git error: ${error.message}`);
-    return [];
   }
 }
 
@@ -408,9 +417,17 @@ Example:
   await syncDeliverables(sdId, { repoPath });
 }
 
-main().catch(error => {
-  console.error('❌ Error:', error.message);
-  process.exit(1);
-});
+// DEFECT 2 fix, groundwork (QF-20260903-950): main() previously ran unconditionally at import
+// time, so anything importing this module's named exports (e.g. a future test suite) also ran
+// the CLI against ITS OWN process.argv and could call process.exit(). Gated the same way every
+// other script's CLI entry point in this repo is (lib/utils/is-main-module.js) so importing this
+// module for its functions is inert -- required for "fails loudly on a real failure" to mean
+// exactly that failure, not a coincidental one from an unrelated caller's argv.
+if (isMainModule(import.meta.url)) {
+  main().catch(error => {
+    console.error('❌ Error:', error.message);
+    process.exit(1);
+  });
+}
 
 export { syncDeliverables, matchFileToDeliverable, inferTypeFromPath };
