@@ -235,7 +235,7 @@ describe('appendReaperPreservedPointer()', () => {
     const supabase = {
       from: () => ({
         select: () => ({ eq: () => ({ single: async () => ({ data: existingRow, error: null }) }) }),
-        update: (payload) => { updatePayload = payload; return { eq: () => ({ eq: () => ({ select: async () => ({ data: [{ id: 'row-1' }], error: null }) }) }) }; },
+        update: (payload) => { updatePayload = payload; return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'row-1' }, error: null }) }) }) }) }; },
       }),
     };
 
@@ -251,7 +251,7 @@ describe('appendReaperPreservedPointer()', () => {
     const supabase = {
       from: () => ({
         select: () => ({ eq: () => ({ single: async () => ({ data: { id: 'row-1', metadata: {}, updated_at: 't0' }, error: null }) }) }),
-        update: () => ({ eq: () => ({ eq: () => ({ select: async () => ({ data: [], error: null }) }) }) }), // always loses the race
+        update: () => ({ eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }), // always loses the race
       }),
     };
     const result = await appendReaperPreservedPointer(supabase, { key: 'SD-X', isQf: false }, { ref: 'r' });
