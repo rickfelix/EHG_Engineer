@@ -111,6 +111,8 @@ import { getWorkflowForType } from '../../cli/workflow-definitions.js';
 // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: CAS guard on the terminal completion
 // UPDATE + loser-side pre-insert cleanup (post-merge automation vs worker race).
 import { attemptCasCompletion, cleanupLosingPreInsert } from './cas-completion.js';
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2: refuse completion while an unreleased chairman hold stands.
+import { isUnreleasedChairmanHold, formatHoldProvenance } from '../../../../../lib/fleet/claim-eligibility.cjs';
 
 // SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-A (F1): surface the SD's genuine retro
 // known-issues instead of a hardcoded placeholder. Non-throwing by construction (see module doc).
@@ -624,6 +626,23 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // have already completed the SD between our claim-check and this UPDATE. An unconditional
     // UPDATE would silently "succeed" for both invocations; the CAS guard makes the loser
     // observe zero affected rows instead of a false success.
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2 (AC-4): refuse completion while an unreleased
+    // chairman hold stands. Narrow predicate (FR-1) -- NOT resolveHoldProvenance() as-is, which
+    // over-matches deferred_by / not_worker_claimable_reason (legitimately compatible with
+    // completion). This never fires on an already-completed row (attemptCasCompletion's CAS
+    // guard only transitions FROM pending_approval), so it carries no FR-4 backfill-ordering risk.
+    if (isUnreleasedChairmanHold(sd.metadata)) {
+      const holdText = sd.metadata?.review_hold_reason
+        ? formatHoldProvenance({ reason: sd.metadata.review_hold_reason, set_by: sd.metadata.review_hold_by, set_at: sd.metadata.review_hold_at })
+        : formatHoldProvenance({ reason: sd.metadata?.requires_human_action_reason, set_by: sd.metadata?.requires_human_action_by, set_at: sd.metadata?.requires_human_action_at });
+      console.log('   ❌ Completion refused: unreleased chairman hold — ' + holdText);
+      await this._cleanupPendingPreInsert(sd.id, usePendingPath);
+      return ResultBuilder.rejected(
+        'UNRELEASED_CHAIRMAN_HOLD',
+        'SD has an unreleased chairman hold and cannot be completed: ' + holdText + '. Release via releaseHold() (lib/fleet/claim-eligibility.cjs) before re-running LEAD-FINAL-APPROVAL.'
+      );
+    }
+
     const { won: casWon, error: sdError } = await attemptCasCompletion(this.supabase, sd, {
       status: 'completed',
       current_phase: 'COMPLETED',
