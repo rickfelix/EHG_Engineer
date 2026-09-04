@@ -1,0 +1,9 @@
+
+🔍 GATE: Sub-Agent Evidence (DB-enforced)
+   Handoff: LEAD-TO-PLAN | SD: SD-LEO-FIX-KPI-COUNTS-CHEAP-001
+--------------------------------------------------
+   Phase-start: 1970-01-01T00:00:00.000Z
+   Required agents: VALIDATION, Explore
+   ❌ SUBAGENT_EVIDENCE_MISSING: VALIDATION, Explore
+[ENF-18] PREMATURE EXECUTE REFUSED: LEAD-TO-PLAN for SD-LEO-FIX-KPI-COUNTS-CHEAP-001 has no required sub-agent evidence yet (missing: VALIDATION, Explore).
+  Invoke the required sub-agent(s), then: node scripts/handoff.js precheck LEAD-TO-PLAN SD-LEO-FIX-KPI-COUNTS-CHEAP-001  (override: LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off)

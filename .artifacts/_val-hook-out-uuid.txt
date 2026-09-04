@@ -1,0 +1,9 @@
+
+🔍 GATE: Sub-Agent Evidence (DB-enforced)
+   Handoff: LEAD-TO-PLAN | SD: 0e12ecbe-da83-4c52-879c-6426997075d4
+--------------------------------------------------
+   Phase-start: 2026-09-02T06:50:03.154Z
+   Required agents: VALIDATION, Explore
+   ❌ SUBAGENT_EVIDENCE_MISSING: Explore
+[ENF-18] PREMATURE EXECUTE REFUSED: LEAD-TO-PLAN for 0e12ecbe-da83-4c52-879c-6426997075d4 has no required sub-agent evidence yet (missing: Explore).
+  Invoke the required sub-agent(s), then: node scripts/handoff.js precheck LEAD-TO-PLAN 0e12ecbe-da83-4c52-879c-6426997075d4  (override: LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off)

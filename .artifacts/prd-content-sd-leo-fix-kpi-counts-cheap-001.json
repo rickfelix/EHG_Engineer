@@ -1,0 +1,159 @@
+{
+  "executive_summary": "KPI-0's rework_rate conflated a worker running handoff.js execute before phase sub-agent evidence exists with a genuine gate failure -- 57.9% of a measured 7-day rejected-handoff cohort was this premature-attempt class, with no owner. This SD splits the reader's numerator into premature_attempts vs gate_retries, and adds a PreToolUse enforcement block (ENF-18) that refuses the premature call before it ever writes a rejected row, reusing the existing sub-agent evidence gate rather than a second predicate. A LEAD-phase VALIDATION review caught and fixed a follow-on defect: the refusal check originally used the raw CLI-typed SD identifier instead of the resolved database row, which silently refused nearly every real handoff call.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Split the KPI-0 rejected-handoff numerator",
+      "description": "lib/oversight/coordinator-health-sharpenings.mjs's deriveOutcomeFlow classifies each rejected/failed cohort handoff by validation_details.summary.failed_gate: SUBAGENT_EVIDENCE_MISSING or PREREQUISITE_PREFLIGHT_FAILED count as premature_attempts, everything else counts as gate_retries.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A cohort with 2 premature-tagged and 1 real-gate-tagged rejected handoff reports premature_attempts=2, gate_retries=1",
+        "A rejected handoff with no validation_details (legacy row) counts as a gate retry, never premature",
+        "Empty cohort reports premature_attempts/premature_attempt_rate/gate_retries as null, never a fake 0"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "rework_rate counts only genuine gate failures",
+      "description": "rework_rate is redefined to gate_retries / cohortHandoffs.length, no longer including premature attempts. PREMATURE_ATTEMPT_CEILING added alongside the existing REWORK_CEILING as a named, reviewable threshold (observability only, not wired into an alarm by this SD).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "rework_rate on the split-cohort test case equals 1/4, not 3/4",
+        "PREMATURE_ATTEMPT_CEILING is exported as a named numeric constant in (0, 1]"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "ENF-18 refuses a premature handoff.js execute call",
+      "description": "scripts/hooks/pre-tool-enforce.cjs's ENF-18 block matches a Bash command against `handoff.js execute TYPE SD-ID` and, when validateSubagentEvidence (scripts/modules/handoff/gates/subagent-evidence-gate.js) reports the phase's required sub-agent evidence absent, refuses the call (exit 2) before the ~10s preflight write that would otherwise land a rejected sd_phase_handoffs row.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A handoff.js execute call for a phase with no fresh required-agent evidence exits 2 with an [ENF-18] message naming the missing agent(s)",
+        "A handoff.js precheck call (dry-run) is never matched or refused",
+        "The refusal audit row records failed_gate=SUBAGENT_EVIDENCE_MISSING, matching the literal FR-1's premature_attempts classification reads"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "WAIT verdicts are never refused",
+      "description": "When validateSubagentEvidence returns a WAIT verdict (evidence row created within the race window, still landing), ENF-18 must allow the call through rather than refusing it, mirroring prerequisite-preflight.js's own WAIT handling.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "evaluateHandoffExecutePrecheck returns {refuse:false} when validateSubagentEvidence returns {passed:false, wait:true}"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Resolve the SD identifier before calling validateSubagentEvidence",
+      "description": "The CLI-typed SD identifier (often the sd_key) is resolved to its canonical strategic_directives_v2 row via resolveSdInputOrNull (scripts/lib/sd-id-resolver.js) before being passed to validateSubagentEvidence, mirroring prerequisite-preflight.js's lookupSdIdForFk. Passing the raw token directly silently matched zero sub_agent_execution_results rows and refused essentially every real execute call (measured live, VALIDATION sub-agent finding).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "evaluateHandoffExecutePrecheck calls validateSubagentEvidence with the RESOLVED sd row and sd.id, not the raw rawSdId argument",
+        "Live A/B verification against SD-LEO-FIX-KPI-COUNTS-CHEAP-001 itself: the SD-key form and the resolved-UUID form report the identical, correct missing-agent list after the fix"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Fail open on infra failures and unresolvable identifiers",
+      "description": "ENF-18 must never refuse a call solely because the SD identifier could not be resolved, or because validateSubagentEvidence returned an infra-failure shape (details.reason of MISSING_CONTEXT or DB_ERROR, which carries no `wait` field). The real downstream gate still enforces the check later.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "evaluateHandoffExecutePrecheck returns {refuse:false} and never calls validateSubagentEvidence when resolveSdInputOrNull returns {sd:null}",
+        "evaluateHandoffExecutePrecheck returns {refuse:false} when details.reason is MISSING_CONTEXT or DB_ERROR"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Single representation of the evidence predicate",
+      "description": "ENF-18 reuses the SAME validateSubagentEvidence function the real GATE_SUBAGENT_EVIDENCE gate and the execute-time prerequisite preflight already call. No second copy of the evidence predicate is introduced (QF-20260807-283)."
+    },
+    {
+      "id": "TR-2",
+      "title": "Testable decision logic, no live hook import in tests",
+      "description": "parseHandoffExecuteCall and evaluateHandoffExecutePrecheck live in scripts/hooks/lib/handoff-execute-precheck-guard.cjs, a module with no top-level side effects. pre-tool-enforce.cjs itself cannot be required directly from a test runner without blocking, because its module-load-time `fs.readFileSync(0)` stdin read never reaches EOF under vitest."
+    },
+    {
+      "id": "TR-3",
+      "title": "Escape hatch",
+      "description": "LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off skips ENF-18 entirely, for the rare case evidence is genuinely satisfied by a means this check cannot see."
+    },
+    {
+      "id": "TR-4",
+      "title": "No schema or migration changes",
+      "description": "This SD is read-only against the database (sd_phase_handoffs, sub_agent_execution_results, strategic_directives_v2) and writes only to permission_audit_log via the existing auditPermissionDecision helper on refusal. No new table, column, or migration."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Mixed cohort: 2 premature-tagged + 1 real-gate-tagged rejected handoffs", "type": "unit", "expected": "premature_attempts=2, gate_retries=1, rework_rate=1/4, premature_attempt_rate=2/4" },
+    { "id": "TS-2", "scenario": "Legacy rejected handoff row with no validation_details", "type": "unit", "expected": "Counted as a gate retry, never premature" },
+    { "id": "TS-3", "scenario": "Empty cohort", "type": "unit", "expected": "premature_attempts, premature_attempt_rate, gate_retries all null (never a fake 0)" },
+    { "id": "TS-4", "scenario": "evaluateHandoffExecutePrecheck with evidence absent", "type": "unit", "expected": "refuse:true, missing list populated, validateSubagentEvidence called with the RESOLVED sd and sd.id" },
+    { "id": "TS-5", "scenario": "evaluateHandoffExecutePrecheck with a WAIT verdict", "type": "unit", "expected": "refuse:false" },
+    { "id": "TS-6", "scenario": "evaluateHandoffExecutePrecheck with MISSING_CONTEXT/DB_ERROR or an unresolvable SD identifier", "type": "unit", "expected": "refuse:false in all cases; validateSubagentEvidence never called when the identifier cannot be resolved" },
+    { "id": "TS-7", "scenario": "parseHandoffExecuteCall against real and adjacent command strings", "type": "unit", "expected": "Extracts {handoffType, sdId} from an execute call (incl. env-var-prefixed forms), returns null for precheck and unrelated commands" },
+    { "id": "TS-8", "scenario": "Live subprocess smoke test of the hook against this SD's own LEAD-TO-PLAN handoff", "type": "manual", "expected": "Before the identifier fix: reports missing VALIDATION+Explore despite fresh VALIDATION evidence. After the fix: reports only the genuinely missing Explore evidence" }
+  ],
+  "acceptance_criteria": [
+    "All 47+ unit tests across tests/unit/oversight/coordinator-health-sharpenings.test.js and scripts/hooks/__tests__/pre-tool-enforce-enf18-handoff-precheck.test.js pass",
+    "Zero regressions in the existing pre-tool-enforce.cjs and coordinator-health-sharpenings.mjs test suites",
+    "Live subprocess verification of ENF-18 against a real SD confirms correct refuse/allow behavior before and after the identifier-resolution fix",
+    "LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off is confirmed by code inspection to skip ENF-18 entirely"
+  ],
+  "risks": [
+    { "risk": "A bug in ENF-18 could wrongly block ALL handoff.js execute calls fleet-wide (false positive)", "mitigation": "Reuses the already-proven validateSubagentEvidence predicate; fails open on any internal error, missing DB creds, unresolvable identifier, or infra-failure shape; off-switch env var; live A/B smoke-tested against a real SD", "severity": "high" },
+    { "risk": "A bug could silently no-op the refusal (false negative), leaving KPI-0 unimproved", "mitigation": "The real preflight still enforces the same check downstream -- a missed refusal degrades to pre-fix behavior, not a new failure mode", "severity": "low" },
+    { "risk": "rework_rate's redefinition could read as a metric regression on a dashboard that doesn't know about the split", "mitigation": "premature_attempts/gate_retries returned on the same object alongside rework_rate so both numbers stay visible; no dashboard code found (Explore discovery) that hardcodes a rework_rate% narrative", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Every worker session's Bash PreToolUse pipeline (scripts/hooks/pre-tool-enforce.cjs runs on every Bash tool call)",
+      "scripts/adam-coordinator-health.mjs (reads computeOutcomeFlow's output for the fleet health dashboard)"
+    ],
+    "dependencies": [
+      "scripts/modules/handoff/gates/subagent-evidence-gate.js validateSubagentEvidence (unmodified, reused)",
+      "scripts/lib/sd-id-resolver.js resolveSdInputOrNull (unmodified, reused)"
+    ],
+    "data_contracts": [
+      "Read-only: sd_phase_handoffs.validation_details.summary.failed_gate",
+      "Read-only: sub_agent_execution_results.sd_id (via validateSubagentEvidence)",
+      "Write: permission_audit_log via the existing auditPermissionDecision helper on a refusal (no new column)"
+    ],
+    "runtime_config": [
+      "LEO_HANDOFF_EXECUTE_PRECHECK_GUARD=off -- skips ENF-18 entirely"
+    ],
+    "observability_rollout": [
+      "premature_attempts / premature_attempt_rate / gate_retries fields on computeOutcomeFlow's returned object, alongside the existing rework_rate",
+      "ENF-18 refusals logged to stderr with an [ENF-18] prefix and recorded via auditPermissionDecision(ruleCode='ENF-18')"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A PreToolUse enforcement hook refuses a premature handoff.js execute Bash call by reusing the existing sub-agent evidence gate before the call's own preflight would write a rejected row; a companion reader-side change stops that same class of row from inflating the KPI-0 rework metric.",
+    "components": [
+      { "name": "lib/oversight/coordinator-health-sharpenings.mjs", "change": "deriveOutcomeFlow splits rejected-handoff numerator into premature_attempts/gate_retries; new PREMATURE_ATTEMPT_CEILING constant" },
+      { "name": "scripts/hooks/pre-tool-enforce.cjs", "change": "new ENF-18 enforcement block, thin wiring over the decision function" },
+      { "name": "scripts/hooks/lib/handoff-execute-precheck-guard.cjs", "change": "NEW -- parseHandoffExecuteCall + evaluateHandoffExecutePrecheck, pure/injectable decision logic" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Implement the KPI-0 reader split and the ENF-18 hook refusal reusing existing evidence-validation logic; escalate from the originating QF once the diff was found to touch the sensitive pre-tool-enforce.cjs path; correct the SD-identifier resolution bug a VALIDATION sub-agent pass found during LEAD review.",
+    "steps": [
+      "Split deriveOutcomeFlow's rejected-handoff numerator into premature_attempts vs gate_retries; redefine rework_rate",
+      "Add ENF-18 to pre-tool-enforce.cjs, reusing validateSubagentEvidence with a WAIT exemption",
+      "Extract the command-parsing and decision logic into a side-effect-free lib module for direct unit testing",
+      "Escalate to a full SD when the QF completion pipeline's eligibility preflight refused autonomous completion (sensitive path)",
+      "VALIDATION sub-agent LEAD-phase review found ENF-18 passed the raw CLI token instead of a resolved SD row into validateSubagentEvidence, silently refusing real execute calls",
+      "Fix: resolve via resolveSdInputOrNull before the evidence call; also repairs the WAIT race-window (phase-start resolution needs the same row) and a fail-closed bug on infra-failure shapes",
+      "Re-verify live against this SD's own LEAD-TO-PLAN handoff after the fix"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "From a repo with SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY set, pick an SD/handoff-type combo with no fresh sub-agent evidence for the current phase, then run: node scripts/handoff.js execute <TYPE> <SD-ID> as a Bash tool call", "expected_outcome": "The Bash call is refused by the PreToolUse hook with an [ENF-18] PREMATURE EXECUTE REFUSED message and exit code 2 -- no rejected sd_phase_handoffs row is written for this attempt" },
+    { "step_number": 2, "instruction": "Invoke the required sub-agent(s) for that phase (writing a fresh sub_agent_execution_results row), then re-run the same handoff.js execute command", "expected_outcome": "The Bash call proceeds normally (ENF-18 does not refuse it); the handoff runs its own gate pipeline as before" },
+    { "step_number": 3, "instruction": "Query lib/oversight/coordinator-health-sharpenings.mjs computeOutcomeFlow() for a 7-day window covering the SD above", "expected_outcome": "The returned object carries premature_attempts, premature_attempt_rate, and gate_retries fields alongside rework_rate, and rework_rate does not include any ENF-18-refused attempt (since ENF-18 prevents the write) or a SUBAGENT_EVIDENCE_MISSING-tagged legacy row" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-KPI-COUNTS-CHEAP-001"
+  }
+}
