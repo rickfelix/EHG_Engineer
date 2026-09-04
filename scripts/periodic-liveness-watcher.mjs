@@ -34,7 +34,7 @@ import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolv
 import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
 import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
 import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
-import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
+import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, medianRatioAlarm, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
@@ -573,9 +573,16 @@ async function main({ includeFixtures = false } = {}) {
 
   const results = [];
   const ladderCandidates = [];
+  // QF-20260903-060: rows whose MEDIAN observed gap exceeds 3x configured even though every run
+  // succeeds -- see medianRatioAlarm's doc comment for why this stays independent of `state`.
+  const medianRatioAlarms = [];
   for (const row of evaluate) {
     const evaluation = await evaluateRow(row, { ghaDecisions, ghaGapStats });
     results.push(evaluation);
+    if (row.liveness_source === 'github_actions_api') {
+      const alarm = medianRatioAlarm(row, ghaGapStats);
+      if (alarm) medianRatioAlarms.push({ process_key: row.process_key, ...alarm });
+    }
 
     // Adversarial-review finding (PR #5562, CRITICAL): dedup must be a per-episode STATE
     // TRANSITION check (row.last_state !== OVERDUE -> OVERDUE), never "has this process_key ever
@@ -657,6 +664,13 @@ async function main({ includeFixtures = false } = {}) {
     } catch (err) {
       console.error(`[periodic-liveness-watcher] emitLadderDigest FAILED (non-fatal): ${err.message}`);
     }
+  }
+
+  // QF-20260903-060: surface median-ratio drift every cycle, independent of OVERDUE/OK state, so
+  // the gap is legible without a query (the self-adjusting max floor above hides exactly this).
+  if (medianRatioAlarms.length > 0) {
+    console.warn(`[periodic-liveness-watcher] MEDIAN-RATIO ALARM: ${medianRatioAlarms.length} row(s) delivering >3x configured interval by median gap though every run succeeds: `
+      + medianRatioAlarms.map((a) => `${a.process_key}=${a.ratio.toFixed(1)}x`).join(', '));
   }
 
   // Self-liveness: upsert the watcher's own last-run row (self_stamped, session_bound=false).
