@@ -1,0 +1,211 @@
+{
+  "verdict": "PASS",
+  "confidence_score": 88,
+  "summary": "The control blocks the exact 2026-08-21 incident shape end-to-end, verified independently against the live hook (not only via the committed tests). No secrets are handled, no injection or ReDoS surface, and the override cannot be self-granted from inside a Bash command string. Six findings, none blocking: one MEDIUM audit/UX defect inherited from ENF-16's wording, one MEDIUM under-documented coverage gap, two LOW, two INFO.",
+  "findings": [
+    {
+      "id": "SEC-F1",
+      "severity": "MEDIUM",
+      "blocking": false,
+      "category": "audit trail / operator guidance",
+      "title": "The documented override syntax produces an UNAUDITED silent allow instead of an audited override",
+      "detail": "The block message says: `Override: LEO_ALLOW_ONE_OFF_IMPORT=\"<ticket: reason>\" <your command>`. That inline-prefix form cannot work, for two independent reasons. (a) An inline shell assignment is part of the command STRING only; it never enters the hook's own process env, so the override branch can never fire from it. (b) The prefix also moves `node` off the operative boundary, so OPERATIVE_ONE_OFF_IMPORT_RE does not match at all - decideOneOffBareImport returns {matched:false}, the hook writes NO audit row, and the command is silently allowed. Live-verified: exit=0, no ENF-18 stderr. Net effect: an operator who follows the printed instruction converts an 'audited override with a recorded reason' into an 'unaudited pass'. The security posture of the override itself is CORRECT (an agent cannot self-grant - separately verified, see independent_verification #2); this is a documentation/audit-coverage defect, not a privilege defect.",
+      "pre_existing": "ENF-16 ships the identical wording for LEO_ALLOW_NO_VERIFY (pre-tool-enforce.cjs:1572), so this is an inherited house pattern, NOT a regression introduced by this PR.",
+      "recommendation": "Change the ENF-18 message to name a channel that actually reaches the hook: the `.claude/settings.json` `env` block, or exporting the var before launching the session. Optionally also extend the operative boundary to tolerate leading `VAR=value` assignments so a prefixed command still MATCHES and blocks-with-guidance rather than passing silently. Consider the same correction for ENF-16 in a follow-up."
+    },
+    {
+      "id": "SEC-F2",
+      "severity": "MEDIUM",
+      "blocking": false,
+      "category": "detection coverage / honest documentation",
+      "title": "The stated KNOWN GAP is narrower than the measured gap set",
+      "detail": "The header comment documents only ONE gap (dynamically-built import specifiers). Measured bypasses that are ACCIDENTAL command shapes rather than adversarial obfuscation, and that the comment does not mention: (1) any env prefix - `NODE_NO_WARNINGS=1 node -e \"import('<dangerous>')\"` is ALLOWED (live-verified exit=0); (2) wrappers - `npx node ...`, `timeout 30 node ...`, `nohup node ...`; (3) non-node runtimes - `npx tsx -e ...`, ts-node, bun, and notably `npx vitest run <file>` where the TEST FILE imports the one-off (relevant given this SD is named TEST-FIXTURE-LANE); (4) indirection - write a wrapper .mjs that imports the one-off, then `node wrapper.mjs`; (5) an absolute Windows path or a `file:///C:/...` specifier - the ':' is outside the path character class, and file:// is the form Node REQUIRES for an absolute ESM specifier on win32; (6) an uppercase path on a case-insensitive filesystem (no `i` flag). This does not make the control worthless - it closes the exact literal shape that caused the incident, which is the highest-frequency accidental form, and the fail-open-by-default design means every gap degrades to today's status quo, never worse. The issue is that the comment currently reads as a stronger claim than the code supports.",
+      "recommendation": "Broaden the KNOWN GAP paragraph (and the PRD residual-risk note) to enumerate env/wrapper prefixes, non-node runtimes, file-indirection, absolute/file-URL specifiers, and case sensitivity. Optional cheap hardening: allow `(?:[A-Za-z_]\\w*=(?:\"[^\"]*\"|'[^']*'|\\S*)\\s+)*` before the runner token and widen `node\\b` to `(?:node|npx|tsx|ts-node|bun|deno)\\b`."
+    },
+    {
+      "id": "SEC-F3",
+      "severity": "LOW",
+      "blocking": false,
+      "category": "CI trigger gap",
+      "title": "Drift workflow path filter omits *.js while the generator scans it",
+      "detail": ".github/workflows/one-off-mutate-key-manifest-drift.yml triggers on scripts/one-off/**/*.mjs and **/*.cjs, but the generator's SCAN_EXTENSIONS includes '.js'. A future dangerous scripts/one-off/foo.js could therefore merge without the drift check running, leaving the manifest stale - and a stale manifest is exactly the fail-open the workflow's own header comment says it exists to prevent (not_in_dangerous_manifest -> allow). Measured impact today is nil: 1 tracked .js file in scripts/one-off, 0 .js manifest entries (all 45 are .mjs). Also note the workflow is pull_request-only, so a direct push to main would not run it.",
+      "recommendation": "Add `- 'scripts/one-off/**/*.js'` to the workflow paths. One line."
+    },
+    {
+      "id": "SEC-F4",
+      "severity": "LOW",
+      "blocking": false,
+      "category": "classifier false negatives (acknowledged in-code)",
+      "title": "Textual mutate signature misses .rpc()/raw-SQL/helper-mediated writes",
+      "detail": "Dangerousness = /SUPABASE_SERVICE_ROLE_KEY/ AND /\\.(insert|update|upsert|delete)\\s*\\(/. Measured on the current corpus (1,112 tracked one-off scripts): 12 files hold the service-role key and call .rpc( with NO CRUD method, and 126 hold the key with no CRUD at all. A write performed through .rpc(), raw SQL / psql, or an imported helper that owns the client is invisible to the classifier, so those files can never be blocked by ENF-18. This is honestly disclosed in the generator header ('a coarse, fast, precomputed CLASSIFIER, not a security proof; false positives just cost an unnecessary block, false negatives are the real risk and are documented as a known gap'), and the direction of error is safe-by-design (conservative on parse failure -> treated as dangerous).",
+      "recommendation": "Optional widening: add `\\.rpc\\s*\\(` to MUTATE_RE (adds <=12 entries, requires bumping RATCHET_MAX from 45 in the same PR). Defer is acceptable - this is a defense-in-depth net, not a security proof."
+    },
+    {
+      "id": "SEC-F5",
+      "severity": "INFO",
+      "blocking": false,
+      "category": "observability",
+      "title": "Fail-open and allow/override audit rows are fire-and-forget",
+      "detail": "On the non-block paths the auditPromise is deliberately not awaited (falls through), matching ENF-15/16/17. main() ends at process.exit(0) (pre-tool-enforce.cjs:1735) with a comment saying that form was chosen specifically so fire-and-forget writes survive, so the pattern is established and intentional. It does mean a `manifest_unreadable_fail_open` event - the one fail-open that could silently disarm the control for a genuinely dangerous file - is best-effort recorded rather than guaranteed.",
+      "recommendation": "If manifest-staleness observability matters, await ONLY the manifest_unreadable_fail_open decision path (bounded by the existing 1000ms auditAndExit race). Not required for this handoff."
+    },
+    {
+      "id": "SEC-F6",
+      "severity": "INFO",
+      "blocking": false,
+      "category": "trust boundary (assessed acceptable)",
+      "title": "Manifest tamper resistance and the --root/--check flag wart",
+      "detail": "TRUST BOUNDARY - ACCEPTABLE: the manifest is a repo file under the same review/merge process as code. Removing an entry by hand is caught by the CI drift check, which regenerates from source rather than trusting the committed file. Adding a fake main-guard to a source file to drop it from the manifest is caught only by human review of that source diff - but anyone who can do that can already edit the one-off script itself, so the guard adds no new attack surface. The ratchet test bounds GROWTH (<=45) but not shrinkage, which is the correct asymmetry (shrinkage = guard retrofits). The extra ratchet assertions (dangerous_count matches entry count; every key exists on disk; every key starts with scripts/one-off/) are meaningful anti-hand-edit checks. FLAG WART: `--check --root <dir>` scans the fixture root but compares against the module-constant MANIFEST_PATH (the real committed manifest), so the two are never comparable. Harmless for CI (which never passes --root) and the test names it 'drift by construction', but the flag combination is misleading and could mislead a future maintainer into thinking a fixture drift-check is meaningful.",
+      "recommendation": "Optionally make MANIFEST_PATH root-relative when --root is supplied, or reject the --check + --root combination."
+    }
+  ],
+  "warnings": [
+    "[SEC-F1/MEDIUM] The documented override syntax produces an UNAUDITED silent allow instead of an audited override — The block message says: `Override: LEO_ALLOW_ONE_OFF_IMPORT=\"<ticket: reason>\" <your command>`. That inline-prefix form cannot work, for two independent reasons. (a) An inline shell assignment is part of the command STRING only; it never enters the hook's own process env, so the override branch can never fire from it. (b) The prefix also moves `node` off the operative boundary, so OPERATIVE_ONE_OFF_IMPORT_RE does not match at all - decideOneOffBareImport returns {matched:false}, the hook writes NO audit row, and the command is silently allowed. Live-verified: exit=0, no ENF-18 stderr. Net effect: an operator who follows the printed instruction converts an 'audited override with a recorded reason' into an 'unaudited pass'. The security posture of the override itself is CORRECT (an agent cannot self-grant - separately verified, see independent_verification #2); this is a documentation/audit-coverage defect, not a privilege defect.",
+    "[SEC-F2/MEDIUM] The stated KNOWN GAP is narrower than the measured gap set — The header comment documents only ONE gap (dynamically-built import specifiers). Measured bypasses that are ACCIDENTAL command shapes rather than adversarial obfuscation, and that the comment does not mention: (1) any env prefix - `NODE_NO_WARNINGS=1 node -e \"import('<dangerous>')\"` is ALLOWED (live-verified exit=0); (2) wrappers - `npx node ...`, `timeout 30 node ...`, `nohup node ...`; (3) non-node runtimes - `npx tsx -e ...`, ts-node, bun, and notably `npx vitest run <file>` where the TEST FILE imports the one-off (relevant given this SD is named TEST-FIXTURE-LANE); (4) indirection - write a wrapper .mjs that imports the one-off, then `node wrapper.mjs`; (5) an absolute Windows path or a `file:///C:/...` specifier - the ':' is outside the path character class, and file:// is the form Node REQUIRES for an absolute ESM specifier on win32; (6) an uppercase path on a case-insensitive filesystem (no `i` flag). This does not make the control worthless - it closes the exact literal shape that caused the incident, which is the highest-frequency accidental form, and the fail-open-by-default design means every gap degrades to today's status quo, never worse. The issue is that the comment currently reads as a stronger claim than the code supports."
+  ],
+  "critical_issues": [],
+  "recommendations": [
+    "[SEC-F1/MEDIUM] Change the ENF-18 message to name a channel that actually reaches the hook: the `.claude/settings.json` `env` block, or exporting the var before launching the session. Optionally also extend the operative boundary to tolerate leading `VAR=value` assignments so a prefixed command still MATCHES and blocks-with-guidance rather than passing silently. Consider the same correction for ENF-16 in a follow-up.",
+    "[SEC-F2/MEDIUM] Broaden the KNOWN GAP paragraph (and the PRD residual-risk note) to enumerate env/wrapper prefixes, non-node runtimes, file-indirection, absolute/file-URL specifiers, and case sensitivity. Optional cheap hardening: allow `(?:[A-Za-z_]\\w*=(?:\"[^\"]*\"|'[^']*'|\\S*)\\s+)*` before the runner token and widen `node\\b` to `(?:node|npx|tsx|ts-node|bun|deno)\\b`.",
+    "[SEC-F3/LOW] Add `- 'scripts/one-off/**/*.js'` to the workflow paths. One line.",
+    "[SEC-F4/LOW] Optional widening: add `\\.rpc\\s*\\(` to MUTATE_RE (adds <=12 entries, requires bumping RATCHET_MAX from 45 in the same PR). Defer is acceptable - this is a defense-in-depth net, not a security proof.",
+    "[SEC-F5/INFO] If manifest-staleness observability matters, await ONLY the manifest_unreadable_fail_open decision path (bounded by the existing 1000ms auditAndExit race). Not required for this handoff.",
+    "[SEC-F6/INFO] Optionally make MANIFEST_PATH root-relative when --root is supplied, or reject the --check + --root combination.",
+    "APPROVE for EXEC-TO-PLAN. No blocking security defects. SEC-F1 (fix the override message to name .claude/settings.json env) and SEC-F3 (add *.js to the workflow paths) are two-line changes worth folding into this PR; SEC-F2 (broaden the KNOWN GAP comment to match the measured gap set) is a comment-only edit that keeps the control's self-description honest. SEC-F4/F5/F6 are acceptable as residual risk."
+  ],
+  "detailed_analysis": {
+    "scope": "ENF-18 bare-import-of-dangerous-one-off-script guard: scripts/hooks/lib/one-off-bare-import.cjs, scripts/lint/generate-one-off-mutate-key-manifest.mjs, scripts/lint/one-off-mutate-key-manifest.json, scripts/hooks/pre-tool-enforce.cjs (+31), .github/workflows/one-off-mutate-key-manifest-drift.yml, 4 test files",
+    "commit_reviewed": "30c454b12bd5460e53a026bac1648212099cbbaa",
+    "pr": "https://github.com/rickfelix/EHG_Engineer/pull/8035",
+    "independent_verification": [
+      {
+        "check": "live hook blocks the incident shape",
+        "method": "spawned scripts/hooks/pre-tool-enforce.cjs as a real subprocess with a PreToolUse Bash payload naming a real manifest entry (scripts/one-off/_audit-dual-detection-clusters.mjs)",
+        "result": "exit=2, stderr contains '[ENF-18] BLOCKED' + the target path. Control is live and not dead-by-construction."
+      },
+      {
+        "check": "override cannot be granted from within the command string",
+        "method": "live hook run with command `LEO_ALLOW_ONE_OFF_IMPORT=\"QF-1\"; node -e \"import('<dangerous>')\"` and LEO_ALLOW_ONE_OFF_IMPORT deleted from the hook's own env",
+        "result": "exit=2 ENF-18 BLOCKED. An inline shell assignment never reaches the hook process env, so an agent cannot self-grant. Correct security property. The only working grant channels are the .claude/settings.json `env` block (which exists and is inherited by the hook) or exporting before launching the session."
+      },
+      {
+        "check": "regex behaviour across 22 command shapes",
+        "method": "direct calls to decideOneOffBareImport() with a real manifest entry",
+        "result": "block on: baseline `node -e \"import('./X')\"`, no-./ prefix, `await import`, `require(...)`, after `&&`, extra spaces inside import(, backtick specifier. Correctly allows direct execution and grep/cat mentions. Bypass set recorded in findings F2."
+      },
+      {
+        "check": "ReDoS",
+        "method": "OPERATIVE_ONE_OFF_IMPORT_RE.test() against 1k/5k/20k/100k-char near-miss (repeating path-segment) and long-filler inputs",
+        "result": "0.09ms @1k -> 0.50ms @100k (near-miss); 0.005ms -> 0.19ms (long filler). Linear, not exponential. The path atom classes ([\\w.-]+ vs [/\\\\]+) are disjoint so there is no catastrophic-backtracking ambiguity. NOT a ReDoS risk."
+      },
+      {
+        "check": "secrets handling",
+        "method": "read generator + all 45 manifest entries",
+        "result": "The generator regex-matches the IDENTIFIER 'SUPABASE_SERVICE_ROLE_KEY' in source text; it never reads the value. The manifest carries only repo-relative paths plus a static reason string - no code excerpts, no credentials, no env values. Clean."
+      },
+      {
+        "check": "injection surface",
+        "method": "read generator + hook module",
+        "result": "execFileSync('git', [...]) with an args array and a `--` pathspec separator (no shell). `--root` is path.resolve()d and used only as cwd / path.join base. The hook module does pure string+regex work: no exec, no eval, no dynamic require of caller-controlled paths. No injection surface."
+      },
+      {
+        "check": "the incident file is legitimately absent from the manifest",
+        "method": "read scripts/one-off/backfill-solomon-ledger-decision-by.mjs",
+        "result": "TRUE NEGATIVE, not a classifier miss: the file now carries an `isDirectRun` main-guard (process.argv[1] === fileURLToPath(import.meta.url)) plus a default-dry-run --apply requirement from the prior remediation SD. It is correctly classified as guarded/not-dangerous."
+      },
+      {
+        "check": "tests",
+        "method": "npx vitest run on all 4 new test files",
+        "result": "31/31 pass in 2.46s. `--check` has BOTH a true-negative (real repo, exit 0) and a drift case (exit 1). Fixtures are created under os.tmpdir(); no stray files landed in scripts/one-off/ and the worktree is porcelain-clean after the run."
+      }
+    ],
+    "security_checklist": {
+      "authentication_mechanism": "N/A - no auth surface in this diff",
+      "authorization_model": "Override grant is process-env-scoped and cannot be set by the gated command string (live-verified). Correct.",
+      "sensitive_data": "None handled. Only the string 'SUPABASE_SERVICE_ROLE_KEY' is matched as an identifier; no values read, stored, or logged.",
+      "api_endpoints": "N/A",
+      "input_validation": "Command string is treated as untrusted text and only regex-tested; typeof/length guards present; no path is ever resolved, opened, or executed from the matched value.",
+      "output_sanitization": "The blocked target path is echoed to stderr. It is constrained by the regex to [\\w.-/]+ under scripts/one-off/, so no control-character or ANSI injection into the terminal is possible.",
+      "sql_injection": "N/A - no SQL in this diff",
+      "secrets_in_code": "None. No hardcoded credentials; no .env reads added.",
+      "redos": "Measured linear, sub-millisecond at 100KB input. Not a risk.",
+      "fail_open_correctness": "Fail-open triggers only on regex non-match, unreadable/corrupt manifest, or an internal throw. For the exact incident shape with a well-formed manifest the control BLOCKS (live-verified). The one fail-open that could defeat the control for a NEW dangerous file - manifest staleness - is covered by the CI drift check (SEC-F3 notes its *.js path gap) and the ratchet test."
+    },
+    "final_recommendation": "APPROVE for EXEC-TO-PLAN. No blocking security defects. SEC-F1 (fix the override message to name .claude/settings.json env) and SEC-F3 (add *.js to the workflow paths) are two-line changes worth folding into this PR; SEC-F2 (broaden the KNOWN GAP comment to match the measured gap set) is a comment-only edit that keeps the control's self-description honest. SEC-F4/F5/F6 are acceptable as residual risk.",
+    "findings": [
+      {
+        "id": "SEC-F1",
+        "severity": "MEDIUM",
+        "blocking": false,
+        "category": "audit trail / operator guidance",
+        "title": "The documented override syntax produces an UNAUDITED silent allow instead of an audited override",
+        "detail": "The block message says: `Override: LEO_ALLOW_ONE_OFF_IMPORT=\"<ticket: reason>\" <your command>`. That inline-prefix form cannot work, for two independent reasons. (a) An inline shell assignment is part of the command STRING only; it never enters the hook's own process env, so the override branch can never fire from it. (b) The prefix also moves `node` off the operative boundary, so OPERATIVE_ONE_OFF_IMPORT_RE does not match at all - decideOneOffBareImport returns {matched:false}, the hook writes NO audit row, and the command is silently allowed. Live-verified: exit=0, no ENF-18 stderr. Net effect: an operator who follows the printed instruction converts an 'audited override with a recorded reason' into an 'unaudited pass'. The security posture of the override itself is CORRECT (an agent cannot self-grant - separately verified, see independent_verification #2); this is a documentation/audit-coverage defect, not a privilege defect.",
+        "pre_existing": "ENF-16 ships the identical wording for LEO_ALLOW_NO_VERIFY (pre-tool-enforce.cjs:1572), so this is an inherited house pattern, NOT a regression introduced by this PR.",
+        "recommendation": "Change the ENF-18 message to name a channel that actually reaches the hook: the `.claude/settings.json` `env` block, or exporting the var before launching the session. Optionally also extend the operative boundary to tolerate leading `VAR=value` assignments so a prefixed command still MATCHES and blocks-with-guidance rather than passing silently. Consider the same correction for ENF-16 in a follow-up."
+      },
+      {
+        "id": "SEC-F2",
+        "severity": "MEDIUM",
+        "blocking": false,
+        "category": "detection coverage / honest documentation",
+        "title": "The stated KNOWN GAP is narrower than the measured gap set",
+        "detail": "The header comment documents only ONE gap (dynamically-built import specifiers). Measured bypasses that are ACCIDENTAL command shapes rather than adversarial obfuscation, and that the comment does not mention: (1) any env prefix - `NODE_NO_WARNINGS=1 node -e \"import('<dangerous>')\"` is ALLOWED (live-verified exit=0); (2) wrappers - `npx node ...`, `timeout 30 node ...`, `nohup node ...`; (3) non-node runtimes - `npx tsx -e ...`, ts-node, bun, and notably `npx vitest run <file>` where the TEST FILE imports the one-off (relevant given this SD is named TEST-FIXTURE-LANE); (4) indirection - write a wrapper .mjs that imports the one-off, then `node wrapper.mjs`; (5) an absolute Windows path or a `file:///C:/...` specifier - the ':' is outside the path character class, and file:// is the form Node REQUIRES for an absolute ESM specifier on win32; (6) an uppercase path on a case-insensitive filesystem (no `i` flag). This does not make the control worthless - it closes the exact literal shape that caused the incident, which is the highest-frequency accidental form, and the fail-open-by-default design means every gap degrades to today's status quo, never worse. The issue is that the comment currently reads as a stronger claim than the code supports.",
+        "recommendation": "Broaden the KNOWN GAP paragraph (and the PRD residual-risk note) to enumerate env/wrapper prefixes, non-node runtimes, file-indirection, absolute/file-URL specifiers, and case sensitivity. Optional cheap hardening: allow `(?:[A-Za-z_]\\w*=(?:\"[^\"]*\"|'[^']*'|\\S*)\\s+)*` before the runner token and widen `node\\b` to `(?:node|npx|tsx|ts-node|bun|deno)\\b`."
+      },
+      {
+        "id": "SEC-F3",
+        "severity": "LOW",
+        "blocking": false,
+        "category": "CI trigger gap",
+        "title": "Drift workflow path filter omits *.js while the generator scans it",
+        "detail": ".github/workflows/one-off-mutate-key-manifest-drift.yml triggers on scripts/one-off/**/*.mjs and **/*.cjs, but the generator's SCAN_EXTENSIONS includes '.js'. A future dangerous scripts/one-off/foo.js could therefore merge without the drift check running, leaving the manifest stale - and a stale manifest is exactly the fail-open the workflow's own header comment says it exists to prevent (not_in_dangerous_manifest -> allow). Measured impact today is nil: 1 tracked .js file in scripts/one-off, 0 .js manifest entries (all 45 are .mjs). Also note the workflow is pull_request-only, so a direct push to main would not run it.",
+        "recommendation": "Add `- 'scripts/one-off/**/*.js'` to the workflow paths. One line."
+      },
+      {
+        "id": "SEC-F4",
+        "severity": "LOW",
+        "blocking": false,
+        "category": "classifier false negatives (acknowledged in-code)",
+        "title": "Textual mutate signature misses .rpc()/raw-SQL/helper-mediated writes",
+        "detail": "Dangerousness = /SUPABASE_SERVICE_ROLE_KEY/ AND /\\.(insert|update|upsert|delete)\\s*\\(/. Measured on the current corpus (1,112 tracked one-off scripts): 12 files hold the service-role key and call .rpc( with NO CRUD method, and 126 hold the key with no CRUD at all. A write performed through .rpc(), raw SQL / psql, or an imported helper that owns the client is invisible to the classifier, so those files can never be blocked by ENF-18. This is honestly disclosed in the generator header ('a coarse, fast, precomputed CLASSIFIER, not a security proof; false positives just cost an unnecessary block, false negatives are the real risk and are documented as a known gap'), and the direction of error is safe-by-design (conservative on parse failure -> treated as dangerous).",
+        "recommendation": "Optional widening: add `\\.rpc\\s*\\(` to MUTATE_RE (adds <=12 entries, requires bumping RATCHET_MAX from 45 in the same PR). Defer is acceptable - this is a defense-in-depth net, not a security proof."
+      },
+      {
+        "id": "SEC-F5",
+        "severity": "INFO",
+        "blocking": false,
+        "category": "observability",
+        "title": "Fail-open and allow/override audit rows are fire-and-forget",
+        "detail": "On the non-block paths the auditPromise is deliberately not awaited (falls through), matching ENF-15/16/17. main() ends at process.exit(0) (pre-tool-enforce.cjs:1735) with a comment saying that form was chosen specifically so fire-and-forget writes survive, so the pattern is established and intentional. It does mean a `manifest_unreadable_fail_open` event - the one fail-open that could silently disarm the control for a genuinely dangerous file - is best-effort recorded rather than guaranteed.",
+        "recommendation": "If manifest-staleness observability matters, await ONLY the manifest_unreadable_fail_open decision path (bounded by the existing 1000ms auditAndExit race). Not required for this handoff."
+      },
+      {
+        "id": "SEC-F6",
+        "severity": "INFO",
+        "blocking": false,
+        "category": "trust boundary (assessed acceptable)",
+        "title": "Manifest tamper resistance and the --root/--check flag wart",
+        "detail": "TRUST BOUNDARY - ACCEPTABLE: the manifest is a repo file under the same review/merge process as code. Removing an entry by hand is caught by the CI drift check, which regenerates from source rather than trusting the committed file. Adding a fake main-guard to a source file to drop it from the manifest is caught only by human review of that source diff - but anyone who can do that can already edit the one-off script itself, so the guard adds no new attack surface. The ratchet test bounds GROWTH (<=45) but not shrinkage, which is the correct asymmetry (shrinkage = guard retrofits). The extra ratchet assertions (dangerous_count matches entry count; every key exists on disk; every key starts with scripts/one-off/) are meaningful anti-hand-edit checks. FLAG WART: `--check --root <dir>` scans the fixture root but compares against the module-constant MANIFEST_PATH (the real committed manifest), so the two are never comparable. Harmless for CI (which never passes --root) and the test names it 'drift by construction', but the flag combination is misleading and could mislead a future maintainer into thinking a fixture drift-check is meaningful.",
+        "recommendation": "Optionally make MANIFEST_PATH root-relative when --root is supplied, or reject the --check + --root combination."
+      }
+    ],
+    "metrics": {
+      "files_reviewed": 8,
+      "command_shapes_probed": 22,
+      "live_hook_runs": 4,
+      "tests_run": 31,
+      "tests_passed": 31,
+      "manifest_dangerous_count": 45,
+      "corpus_scanned": 1112,
+      "mutate_and_key_total": 564,
+      "classifier_false_negative_candidates_key_plus_rpc_no_crud": 12,
+      "redos_worst_case_ms_at_100kb": 0.5,
+      "findings_medium": 2,
+      "findings_low": 2,
+      "findings_info": 2,
+      "findings_blocking": 0
+    }
+  },
+  "sd_id": "SD-LEO-FIX-TEST-FIXTURE-LANE-001",
+  "phase": "EXEC"
+}
