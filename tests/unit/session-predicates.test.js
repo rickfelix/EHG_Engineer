@@ -162,9 +162,14 @@ describe('isDispatchableFleetMember — idle/capacity panel role guard (no everC
 describe('production wiring guard (catch idle-filter call-site deletion)', () => {
   const dashSrc = readFileSync(DASHBOARD, 'utf8');
 
-  it('the dashboard imports + applies isDispatchableFleetMember on the idle filter', () => {
-    expect(dashSrc).toMatch(/from '\.\.\/lib\/fleet\/session-predicates\.mjs'|session-predicates\.mjs/);
-    expect(dashSrc).toContain('isDispatchableFleetMember(s, _dashCoordinatorId)');
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2: fleet-dashboard.cjs's idle filter migrated off
+  // isDispatchableFleetMember onto the consolidated seatIdleVerdict (lib/fleet/seat-idle-predicate.mjs),
+  // which also excludes a stale metadata.is_coordinator=true flag -- a gap isDispatchableFleetMember
+  // had. Pin the NEW call site deliberately (not a false failure of the old pin: this is the
+  // exact call-site-deletion the old test existed to catch, now re-pointed at where the logic lives).
+  it('the dashboard imports + applies seatIdleVerdict (via the extracted isDashboardIdleCandidate) on the idle filter', () => {
+    expect(dashSrc).toMatch(/from '\.\.\/lib\/fleet\/seat-idle-predicate\.mjs'|seat-idle-predicate\.mjs/);
+    expect(dashSrc).toContain('isDashboardIdleCandidate(s, { coordinatorId: _dashCoordinatorId, deadThresholdSeconds: DEAD_THRESHOLD }, seatIdleVerdict)');
   });
 
   it('the dashboard SELECTs metadata so the role guard can read it', () => {

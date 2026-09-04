@@ -65,6 +65,18 @@ const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10
 // POSTGREST_MAX_ROWS in lib/db/fetch-all-paginated.mjs — ESM, not require()-able here)
 // is presumed silently truncated. Genuinely-unbounded reads paginate via fapPaginate();
 // small-set reads keep their single fetch but pass through this tripwire.
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-3/FR-4: pure-extracted idle-row predicate, matching the
+// idleSessions filter's exact composition. Takes seatIdleVerdict as a parameter rather than
+// importing it at module scope: this is a .cjs file and the shared predicate lives in an
+// ESM-only module, loaded via a dynamic import() inside loadData(). Exported so the
+// frozen-population differential harness (an ESM test file that imports seatIdleVerdict
+// directly) calls this REAL production predicate rather than a harness-side reimplementation.
+function isDashboardIdleCandidate(s, ctx, seatIdleVerdictFn) {
+  return !s.qf_id &&
+    s.heartbeat_age_seconds < ctx.deadThresholdSeconds &&
+    seatIdleVerdictFn(s, { coordinatorId: ctx.coordinatorId, sdHolderSessionIds: null }).idle;
+}
+
 function warnIfCapTruncated(rows, site) {
   const list = Array.isArray(rows) ? rows : [];
   if (list.length === 1000) {
@@ -284,11 +296,16 @@ async function loadData() {
   // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug 623eb17d): the idle "available worker" list (and the
   // belt-countdown capacity math fed from it) must exclude role/identity polluters. Load the shared
   // predicate + active coordinator id once so the idle filter below drops adam/non_fleet/coordinator/
-  // fixture sessions. isDispatchableFleetMember (NOT isGenuineCountableWorker) is used on purpose: a
-  // just-finished worker is released with claimed_at nulled, so an everClaimed-based predicate would
-  // under-count real idle capacity. Dynamic import: this is a .cjs reading an .mjs SoT.
+  // fixture sessions. Dynamic import: this is a .cjs reading an .mjs SoT.
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2: migrated off isDispatchableFleetMember onto the
+  // consolidated seatIdleVerdict, which ALSO excludes a stale metadata.is_coordinator=true flag
+  // (isDispatchableFleetMember did not -- this is an intended delta, not a parity gap: it closes
+  // the exact regression this SD exists to fix). A just-finished worker is released with
+  // claimed_at nulled, so an everClaimed-based predicate would under-count real idle capacity --
+  // seatIdleVerdict's identity axes (coordinator/adam/non_fleet/is_coordinator/quarantined/
+  // parked/fixture) preserve that "released == available" property.
   const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
-  const { isDispatchableFleetMember } = await import('../lib/fleet/session-predicates.mjs');
+  const { seatIdleVerdict } = await import('../lib/fleet/seat-idle-predicate.mjs');
   let _dashCoordinatorId = null;
   try { _dashCoordinatorId = await getActiveCoordinatorId(supabase); } catch { _dashCoordinatorId = null; }
 
@@ -385,16 +402,20 @@ async function loadData() {
   );
   const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
   // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: only dispatchable fleet MEMBERS count as idle/available —
-  // exclude adam/non_fleet/coordinator/fixture (isDispatchableFleetMember fails toward "member" on
-  // garbage, so a classification quirk never hides a true idle worker).
+  // exclude adam/non_fleet/coordinator/is_coordinator/quarantined/parked/fixture (seatIdleVerdict
+  // fails toward "not idle" on garbage, so a classification quirk never hides a true idle worker
+  // by MIS-counting it as busy -- but it also never OVER-counts a real holder as idle).
+  // sdHolderSessionIds: null reproduces the exact `!!s.sd_key` mirror check this consumer used
+  // before (deliberate: SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001 established qf_id, kept inline below,
+  // as the AUTHORITATIVE claim source -- sd_key is only ever the mirror here, which is precisely
+  // what the null branch of the three-state contract means: no resolved Set, fall open to the
+  // mirror). heartbeat_age_seconds freshness stays an inline conjunct rather than routing through
+  // the shared not-fresh axis: DEAD_THRESHOLD (15min) is this consumer's own dashboard-display
+  // window, distinct from the RECENTLY_RELEASED/SPIN_UP_GRACE windows other consumers apply, and
+  // the not-fresh axis no-ops on a null/undefined reading while this consumer's original check
+  // excluded on it -- kept separate to avoid a silent widening of what counts as idle.
   const idleSessions = allSessions.filter(s =>
-    !s.sd_key &&
-    // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: a live QF claim is a claim. sd_key is only the
-    // MIRROR (lib/claim/get-my-claims.cjs:8-15); quick_fixes.claiming_session_id is authoritative
-    // and the view surfaces it as qf_id. Without this, a QF holder reads as available.
-    !s.qf_id &&
-    s.heartbeat_age_seconds < DEAD_THRESHOLD &&
-    isDispatchableFleetMember(s, _dashCoordinatorId)
+    isDashboardIdleCandidate(s, { coordinatorId: _dashCoordinatorId, deadThresholdSeconds: DEAD_THRESHOLD }, seatIdleVerdict)
   );
 
   const completedChildren = children.filter(c => c.status === 'completed').length;
@@ -3266,7 +3287,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

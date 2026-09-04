@@ -33,12 +33,14 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
-import { isRecentlyReleased } from '../lib/fleet/genuine-worker.mjs';
+import { RECENTLY_RELEASED_WINDOW_MS } from '../lib/fleet/genuine-worker.mjs';
 import { liveDispatchableFleetMembers } from '../lib/fleet/session-predicates.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 import { isOracleHeldQF } from '../lib/fleet/hold-writer.js';
+import { seatIdleVerdict } from '../lib/fleet/seat-idle-predicate.mjs';
+import { resolveIdleCtx } from '../lib/fleet/idle-ctx-population.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -204,39 +206,24 @@ export async function emitDeliveryAlarm(supabase, {
   return { alarmed: true, ratio, dedup_key: dedupKey, event_id: res.id };
 }
 
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D / FR-2: this function is the FIRST of four consumers migrated
+// onto the shared predicate (lib/fleet/seat-idle-predicate.mjs), and is the REFERENCE implementation
+// the other three are migrated to reproduce -- it was already the richest of the four idle bodies
+// (already directed-work aware) before this SD existed. The public signature, every default, and
+// every exclusion reason are UNCHANGED; only the mechanism moved to the shared axes
+// (sd-holder-authoritative / QF-20260830-885, qf-holder-authoritative / SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001,
+// directed-work / QF-20260830-454, recently-released / SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001,
+// spin-up-grace). The default sdHolderSessionIds=null is preserved exactly, so the fail-open-to-mirror
+// behaviour fires identically to before migration.
 export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null) {
-  return (liveWorkers || []).filter((w) => {
-    // QF-20260830-885: claude_sessions.sd_key is a MIRROR nothing clears on SD completion
-    // (measured: Hotel-3, directive dac88a87 — completed QF-20260830-795, both authoritative
-    // claim tables read zero, yet sd_key still named the finished item and this line alone
-    // called him busy). When the caller supplies the authoritative sdHolderSessionIds set
-    // (strategic_directives_v2.claiming_session_id, the SAME table qfHolderSessionIds already
-    // reads for QFs), trust IT over the stale mirror. sdHolderSessionIds === null means the
-    // caller could not resolve it (fail-open to the OLD mirror-only behaviour, never silently
-    // treat every non-null mirror as idle on a read failure).
-    if (sdHolderSessionIds ? sdHolderSessionIds.has(w.session_id) : !!w.sd_key) return false;
-    // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: sd_key is only the MIRROR of a past claim decision
-    // (lib/claim/get-my-claims.cjs:8-15); QF ownership lives in quick_fixes.claiming_session_id
-    // and mirrors NULL here. Without this check a QF holder counts as idle capacity and gets
-    // hinted MORE work (measured: Bravo held QF-20260728-894 four days while idleWorkers=0
-    // reported no one to worry about).
-    if (qfHolderSessionIds.has(w.session_id)) return false;
-    // QF-20260830-454: a seat executing dispatched work has NO row on either claim table, so
-    // it is otherwise indistinguishable from genuinely idle — the machinery competing against
-    // its own dispatch (measured: Hotel-5, directive 98f2a4b5). seatBusySessionIds is sourced
-    // from the SAME seat_busy_reservation kind lib/checkin/steps/seat-busy-fence.cjs already
-    // drains worker-side, now also produced by lib/coordinator/dispatch.cjs's stampSeatBusyReservation.
-    if (seatBusySessionIds.has(w.session_id)) return false;
-    // SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001: a session inside its post-release wind-down
-    // window is not yet idle capacity — it just finished work and has not re-armed. Without
-    // this check, liveFleetWorkers' released_at-inclusive everClaimed lets a recently-released
-    // shell pass through and receive a hint mid-wind-down (07:56:44Z Hotel-5 incident: released,
-    // heartbeat still fresh, no sd_key yet). Two-sided: a session released LONG ago is still
-    // genuinely idle and remains hintable — only the recency window excludes.
-    if (isRecentlyReleased(w, nowMs)) return false;
-    const createdAt = w.created_at ? Date.parse(w.created_at) : NaN;
-    return Number.isFinite(createdAt) && (nowMs - createdAt) >= SPIN_UP_GRACE_MS;
-  });
+  return (liveWorkers || []).filter((w) => seatIdleVerdict(w, {
+    nowMs,
+    sdHolderSessionIds,
+    qfHolderSessionIds,
+    seatBusySessionIds,
+    recentlyReleasedWindowMs: RECENTLY_RELEASED_WINDOW_MS,
+    spinUpGraceMs: SPIN_UP_GRACE_MS,
+  }).idle);
 }
 
 /** Pure: the ranked, eligible-for-hint QF candidate list (belt-and-suspenders governance applied). */
@@ -286,56 +273,13 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // never-claimed, live seat is not filtered out before eligibleIdleWorkers' own spin-up-grace
   // logic ever sees it -- see lib/fleet/session-predicates.mjs for the full rationale.
   const live = liveDispatchableFleetMembers(sessions || [], coordinatorId, nowMs);
-  // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: enumerate QF holders from the AUTHORITATIVE column so
-  // a session whose sd_key mirror is NULL but who holds a live QF is never counted idle.
-  // Fail-CLOSED to the mirror-only behaviour is the wrong direction here (it re-opens the hole),
-  // but a read failure must not crash the hint pass — degrade with the gap named in the summary.
-  let qfHolderSessionIds = new Set();
-  try {
-    const { data: qfHolders } = await supabase
-      .from('quick_fixes')
-      .select('claiming_session_id')
-      .not('claiming_session_id', 'is', null)
-      .in('status', ['open', 'in_progress']);
-    qfHolderSessionIds = new Set((qfHolders || []).map((r) => r.claiming_session_id).filter(Boolean));
-  } catch (e) {
-    summary.undeliveredReasons.push('qf_holder_read_failed:' + (e?.message || 'unknown'));
-  }
-  // QF-20260830-454: seats currently fenced BUSY on a dispatched WORK_ASSIGNMENT via the same
-  // seat_busy_reservation kind seat-busy-fence.cjs already reads worker-side. Fail-open to []
-  // (same posture as qfHolderSessionIds above) — a read failure must never crash the hint pass.
-  let seatBusySessionIds = new Set();
-  try {
-    const nowIso = new Date(nowMs).toISOString();
-    const { data: busyRows } = await supabase
-      .from('session_coordination')
-      .select('target_session, expires_at')
-      .eq('message_type', 'INFO')
-      .is('target_sd', null)
-      .eq('payload->>kind', 'seat_busy_reservation')
-      .gt('expires_at', nowIso)
-      .limit(200);
-    seatBusySessionIds = new Set((busyRows || []).map((r) => r.target_session).filter(Boolean));
-  } catch (e) {
-    summary.undeliveredReasons.push('seat_busy_read_failed:' + (e?.message || 'unknown'));
-  }
-  // QF-20260830-885: the authoritative SD-side twin of qfHolderSessionIds above. null (not [])
-  // on a read failure so eligibleIdleWorkers can fail-open to the OLD mirror-only behaviour
-  // rather than silently trusting nothing-is-held on a query fault.
-  let sdHolderSessionIds = null;
-  try {
-    const { data: sdHolders } = await supabase
-      .from('strategic_directives_v2')
-      .select('claiming_session_id')
-      .not('claiming_session_id', 'is', null)
-      // Provably bounded: the live fleet is a small, human-supervised roster (mirrors
-      // scripts/tier-stamp-rebaseline.mjs's own fleet-size-bound rationale) -- 500 is a
-      // generous literal cap, far above any realistic simultaneously-claimed-SD count.
-      .limit(500);
-    sdHolderSessionIds = new Set((sdHolders || []).map((r) => r.claiming_session_id).filter(Boolean));
-  } catch (e) {
-    summary.undeliveredReasons.push('sd_holder_read_failed:' + (e?.message || 'unknown'));
-  }
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 AC#2/AC#3: this consumer's 3 ctx-population queries
+  // (qfHolderSessionIds/seatBusySessionIds/sdHolderSessionIds) are now the shared
+  // lib/fleet/idle-ctx-population.mjs resolver -- lifted verbatim, so this remains the reference
+  // ctx-population the other three consumers import, not a fourth independent copy.
+  const { qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, undeliveredReasons } =
+    await resolveIdleCtx(supabase, { nowMs });
+  summary.undeliveredReasons.push(...undeliveredReasons);
   const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
