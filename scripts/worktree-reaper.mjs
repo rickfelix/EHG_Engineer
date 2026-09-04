@@ -95,6 +95,15 @@ import { resolveRegisteredPools, computePoolCapStatus } from '../lib/worktree-re
 // classification — see the module's own header for why this exists and why audit_log
 // (not a new table) is the sink.
 import { writeAuditSink } from '../lib/worktree-reaper/audit-sink.js';
+// SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1a: push a dead-owner hard_keep tree's
+// content to a recovery ref before it is kept forever with no disposition.
+import {
+  findHolderSession,
+  evaluatePreserveEligibility,
+  runPreserveStage,
+  appendReaperPreservedPointer,
+  PRESERVE_VERDICT,
+} from '../lib/worktree-reaper/preserve-stage.js';
 
 const SCHEMA_VERSION = '1.0';
 const DEFAULT_IDLE_DAYS = 7;
@@ -1572,15 +1581,53 @@ export async function main(argv = process.argv) {
     if (hardKeep.matched) {
       const evidence = { hard_keep: hardKeep.evidence };
       if (residency.detail) evidence.hard_keep.live_session_detail = residency.detail;
+
+      // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1a: a hard_keep tree with a DEAD
+      // owner is pushed to a recovery ref instead of being kept forever with no
+      // disposition. Mutating (git push), so gated behind --execute like every other
+      // stage; a dry-run still reports eligibility for visibility, verdict unchanged.
+      const preserveKey = keyFromWorktree(wtInput);
+      const isQfKey = preserveKey.startsWith('QF-');
+      const holder = await findHolderSession(supabase, wt.path);
+      const eligibility = evaluatePreserveEligibility(holder, now);
+      evidence.preserve_eligibility = eligibility;
+
+      let verdict = 'keep';
+      let reasonText = 'hard_keep_unpushed_dirty_resident_or_locked';
+
+      if (eligibility.eligible && opts.execute) {
+        const preserveResult = await runPreserveStage(
+          { wtPath: wt.path, key: preserveKey, ownerSessionId: holder?.session_id || null },
+          { nowMs: now }
+        );
+        evidence.preserve = preserveResult;
+        if (preserveResult.verdict === PRESERVE_VERDICT.PUSHED) {
+          verdict = PRESERVE_VERDICT.PUSHED;
+          reasonText = `preserve_pushed_${eligibility.reason}`;
+          evidence.preserve_pointer = await appendReaperPreservedPointer(
+            supabase,
+            { key: preserveKey, isQf: isQfKey },
+            {
+              ref: preserveResult.ref, sha: preserveResult.sha, worktree_path: wt.path,
+              owner_session: holder?.session_id || null, preserved_at: new Date(now).toISOString(),
+            }
+          );
+        } else if (preserveResult.verdict === PRESERVE_VERDICT.HELD_SECRET) {
+          verdict = PRESERVE_VERDICT.HELD_SECRET;
+          reasonText = 'preserve_held_secret';
+        }
+        // PUSH_FAILED / VERIFY_FAILED: tree untouched, verdict stays 'keep' for retry next tick.
+      }
+
       const rec = buildRecord({
-        schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict: 'keep',
-        reason: 'hard_keep_unpushed_dirty_resident_or_locked', claim_status: 'n/a',
+        schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict,
+        reason: reasonText, claim_status: 'n/a',
         dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, preserveCount: 0,
         shipStatus: 'not_on_main', evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
-      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, verdict: 'keep:hard', preserveCount: 0 }));
+      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, verdict: verdict === 'keep' ? 'keep:hard' : verdict, preserveCount: 0 }));
       continue;
     }
 
