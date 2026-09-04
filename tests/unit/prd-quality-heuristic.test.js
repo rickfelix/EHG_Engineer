@@ -173,4 +173,56 @@ describe('PRD Quality Heuristic - SD-Type-Aware Scoring', () => {
       expect(result.details.useReducedPenalty).toBe(false);
     });
   });
+
+  describe('QF-20260903 (prd-quality-validation.js FR text derivation): current contract shape has no .requirement field', () => {
+    it('should NOT flag an FR whose id/priority/nested acceptance_criteria (not title/description) happen to contain a pattern word (fixes the JSON.stringify(whole object) false positive)', async () => {
+      const prd = buildFullPRD();
+      // Current PRD contract shape: {id, title, description, priority, acceptance_criteria}.
+      // Before the fix, JSON.stringify(req) matched pattern words appearing ANYWHERE in the
+      // object -- including this acceptance_criteria entry -- even though the FR's own prose
+      // (title/description) is clean.
+      prd.functional_requirements = [
+        { id: 'FR-1', title: 'First requirement', description: 'Concrete, specific behavior.', priority: 'high', acceptance_criteria: ['Empty state shows a placeholder image, never a broken link'] },
+        { id: 'FR-2', title: 'Second requirement', description: 'Concrete, specific, unrelated behavior.', priority: 'medium', acceptance_criteria: ['Observable outcome'] },
+        { id: 'FR-3', title: 'Third requirement', description: 'Another concrete, specific behavior.', priority: 'low', acceptance_criteria: ['Observable outcome'] }
+      ];
+      const result = await validatePRDQuality(prd, { sdType: 'feature' });
+      expect(result.issues.filter(i => i.includes('placeholder'))).toHaveLength(0);
+      expect(result.score).toBe(100);
+    });
+
+    it('should still flag an FR whose OWN title/description prose contains a pattern word (out of scope for this fix -- the pattern list itself is untouched)', async () => {
+      const prd = buildFullPRD();
+      prd.functional_requirements = [
+        { id: 'FR-1', title: 'Detect placeholder content in PRDs', description: 'Flag functional requirements that use generic placeholder text so authors replace them with specifics.', priority: 'high', acceptance_criteria: ['A test asserts the gate rejects a placeholder string'] },
+        { id: 'FR-2', title: 'Second requirement', description: 'Concrete, specific, unrelated behavior.', priority: 'medium', acceptance_criteria: ['Observable outcome'] },
+        { id: 'FR-3', title: 'Third requirement', description: 'Another concrete, specific behavior.', priority: 'low', acceptance_criteria: ['Observable outcome'] }
+      ];
+      const result = await validatePRDQuality(prd, { sdType: 'feature' });
+      expect(result.issues.some(i => i.includes('1 placeholder/boilerplate requirements'))).toBe(true);
+    });
+
+    it('should still flag a genuinely boilerplate FR (title/description carry the boilerplate text)', async () => {
+      const prd = buildFullPRD();
+      prd.functional_requirements = [
+        { id: 'FR-1', title: 'To be defined during planning', description: 'To be defined during planning', priority: 'high', acceptance_criteria: ['AC-1'] },
+        { id: 'FR-2', title: 'Second requirement', description: 'Concrete, specific behavior.', priority: 'medium', acceptance_criteria: ['Observable outcome'] },
+        { id: 'FR-3', title: 'Third requirement', description: 'Another concrete, specific behavior.', priority: 'low', acceptance_criteria: ['Observable outcome'] }
+      ];
+      const result = await validatePRDQuality(prd, { sdType: 'feature' });
+      expect(result.issues.some(i => i.includes('1 placeholder/boilerplate requirements'))).toBe(true);
+      expect(result.score).toBe(90); // 100 - 10 * 1 placeholder req
+    });
+
+    it('should not crash on an FR object missing both title and description (structural gap handled elsewhere)', async () => {
+      const prd = buildFullPRD();
+      prd.functional_requirements = [
+        { id: 'FR-1', priority: 'high', acceptance_criteria: ['AC-1'] },
+        { id: 'FR-2', title: 'Second requirement', description: 'Concrete, specific behavior.', priority: 'medium', acceptance_criteria: ['Observable outcome'] },
+        { id: 'FR-3', title: 'Third requirement', description: 'Another concrete, specific behavior.', priority: 'low', acceptance_criteria: ['Observable outcome'] }
+      ];
+      const result = await validatePRDQuality(prd, { sdType: 'feature' });
+      expect(result.issues.filter(i => i.includes('placeholder'))).toHaveLength(0);
+    });
+  });
 });

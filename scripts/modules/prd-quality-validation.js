@@ -156,7 +156,15 @@ export function validatePRDHeuristic(prd, options = {}) {
     score -= 15;
   } else {
     const placeholderReqs = funcReqs.filter(req => {
-      const text = typeof req === 'string' ? req : (req.requirement || JSON.stringify(req));
+      // QF-20260903 (mechanism fix): the PRD contract shape for functional_requirements
+      // items is {id, title, description, priority, acceptance_criteria} — there is no
+      // .requirement field. The dead `req.requirement ||` branch always fell through to
+      // JSON.stringify(req), substring-matching the WHOLE serialized object (ids, priority,
+      // nested acceptance_criteria) against patterns like the bare word 'placeholder' —
+      // flagging any PRD whose legitimate prose discusses placeholder/TBD detection as if it
+      // contained placeholder content itself. Derive text from the fields that actually carry
+      // prose.
+      const text = typeof req === 'string' ? req : [req.title, req.description].filter(Boolean).join(' ');
       return containsPlaceholder(text) || isBoilerplate(text, BOILERPLATE_REQUIREMENTS);
     });
     if (placeholderReqs.length > 0) {
