@@ -446,7 +446,7 @@ Each source is wrapped individually so one failing source cannot short-circuit t
 
   const runHook = (payload) => { try { execFileSync('node', [HOOK], { input: JSON.stringify(payload), encoding: 'utf8', timeout: 60000 }); return 0; } catch (e) { return e.status; } };
 
-FIXTURE STRATEGY. Each specimen needs a real directory under a .worktrees/<name> path with a real git branch, because the hook shells out to git. Build them in os.tmpdir() with `git init` + `git checkout -b <branch>` + an empty commit, and construct the file_path so WORKTREE_PATH_RE matches (i.e. the temp root must contain a literal .worktrees/<name> segment). Clean up in afterAll.
+FIXTURE STRATEGY. Each specimen needs a real directory under a .worktrees/<name> path with a real git branch, because the hook shells out to git. Build them in os.tmpdir() with 'git init' + 'git checkout -b <branch>' + an empty commit, and construct the file_path so WORKTREE_PATH_RE matches (i.e. the temp root must contain a literal .worktrees/<name> segment). Clean up in afterAll.
 
 SESSION CLAIM. resolveSessionClaimedSdKey is a DB lookup. Either seed a claim row for a throwaway session id and pass it via the hook's session env, or exercise deriveWorktreeKey + shouldBlockWorktreeEdit directly for the pure cases and reserve full-hook spawns for (a) and (d). Prefer the full spawn for (a) — it is the specimen the SD exists for.
 
@@ -688,7 +688,7 @@ SHARED-LITERAL DISCIPLINE: the script must re-derive with the SAME anchored patt
       approach: `Follow the dominant scripts/lint/ shape (e.g. no-literal-home-path-lint.mjs + no-literal-home-path-allowlist.json, ismainmodule-classguard-lint.mjs + allowlist):
 
   1. glob scripts/hooks/**/*.{js,cjs,mjs}
-  2. for each file, find occurrences of a .worktrees path capture — the literal /\\.worktrees[/\\\\]([^/\\\\]+)/ regex, or a `match(WORKTREE_PATH_RE)` call
+  2. for each file, find occurrences of a .worktrees path capture — the literal /\\.worktrees[/\\\\]([^/\\\\]+)/ regex, or a 'match(WORKTREE_PATH_RE)' call
   3. flag when the captured group is subsequently used as an SD key (assigned to an identifier matching /sd[_-]?key|worktreeKey|derivedKey/i, or passed to shouldBlockWorktreeEdit) and the file does NOT also reference a branch/marker source (rev-parse --abbrev-ref, deriveWorktreeKey, or the marker filename)
   4. skip allowlisted paths; print file:line for every finding; process.exit(findings.length ? 1 : 0)
 
