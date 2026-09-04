@@ -20,6 +20,14 @@
 -- scribe_seat, created_by, session_id/claiming_session_id -- falling through to
 -- the literal 'SYSTEM' only if none of those exist or are non-null on the row.
 --
+-- AUDIT WRITE IS BEST-EFFORT, NEVER BLOCKING (ROOT-FIX-TRG doctrine, see the
+-- BEGIN...EXCEPTION WHEN OTHERS block inside the function below): public.
+-- feedback has live, permissive anon-role INSERT policies, while
+-- governance_audit_log has had no anon INSERT policy since the 2025-12-17
+-- hardening -- an unguarded trigger would abort a legitimate anon feedback
+-- submission on every RLS-denied audit write. Found by the SECURITY sub-agent
+-- at EXEC-TO-PLAN (row d896818a-9fa4-4791-90d8-1613f25027a0, finding SEC-1).
+--
 -- CHAIRMAN_RATIFICATIONS IS INSERT-ONLY BY DESIGN: this table already carries
 -- chairman_ratifications_no_update / _no_delete / _no_truncate guard triggers
 -- (append-only, immutable once written). An AFTER UPDATE OR DELETE audit
@@ -110,11 +118,36 @@ BEGIN
     'SYSTEM'
   );
 
-  INSERT INTO public.governance_audit_log (
-    table_name, record_id, operation, old_values, new_values, changed_by, changed_at
-  ) VALUES (
-    TG_TABLE_NAME, v_record_id, TG_OP, v_old, v_new, v_changed_by, now()
-  );
+  -- ROOT-FIX-TRG doctrine (docs/audits/SD-LEO-INFRA-TRIGGER-ESTATE-AUDIT-001.md):
+  -- an AFTER-trigger side-effect write must never be allowed to abort the
+  -- primary DML it rides on. This is not precautionary here -- it is a
+  -- required fix, found by the SECURITY sub-agent at EXEC-TO-PLAN review
+  -- (row d896818a-9fa4-4791-90d8-1613f25027a0, finding SEC-1): public.feedback
+  -- carries two live, permissive anon-role INSERT policies
+  -- (telegram_bot_insert_feedback, venture_user_insert_feedback -- see
+  -- 20260802_bound_anon_feedback_ingress.sql), while governance_audit_log has
+  -- had NO anon INSERT policy since the 2025-12-17 hardening
+  -- (20251217_rls_security_hardening.sql Step 5 dropped
+  -- anon_insert_governance_audit_log and replaced it with an
+  -- authenticated+fn_is_service_role()-only policy -- itself the fix for an
+  -- identical 2025-11-07 incident on product_requirements_v2, see
+  -- 2025-11-07_add_anon_insert_governance_audit_log.sql). Without this guard,
+  -- an unguarded AFTER trigger firing for an anon-role feedback INSERT would
+  -- hit that RLS denial and abort the caller's entire feedback submission --
+  -- a real availability regression, not a hypothetical one. Existing sibling
+  -- functions (fn_auto_close_deliverables_on_sd_completion,
+  -- fn_auto_close_quick_fixes_on_sd_completion) already use this exact
+  -- `EXCEPTION WHEN OTHERS THEN RAISE WARNING ... RETURN NEW` shape.
+  BEGIN
+    INSERT INTO public.governance_audit_log (
+      table_name, record_id, operation, old_values, new_values, changed_by, changed_at
+    ) VALUES (
+      TG_TABLE_NAME, v_record_id, TG_OP, v_old, v_new, v_changed_by, now()
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'audit_trigger_generic: governance_audit_log write failed for %.% (op=%): %',
+      TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_OP, SQLERRM;
+  END;
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;

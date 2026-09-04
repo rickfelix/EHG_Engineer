@@ -61,6 +61,22 @@ describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: audit_trigger_generic()', () => {
     expect(migration).toMatch(/INSERT INTO public\.governance_audit_log \(/);
     expect(migration).toMatch(/table_name, record_id, operation, old_values, new_values, changed_by, changed_at/);
   });
+
+  it('never lets a governance_audit_log write failure abort the caller (ROOT-FIX-TRG doctrine)', () => {
+    // public.feedback has live, permissive anon-role INSERT policies
+    // (20260802_bound_anon_feedback_ingress.sql) while governance_audit_log
+    // has had no anon INSERT policy since the 2025-12-17 hardening -- an
+    // unguarded trigger would abort a legitimate anon feedback submission.
+    // SECURITY sub-agent finding SEC-1 (row d896818a-9fa4-4791-90d8-1613f25027a0).
+    const insertIdx = fnBodyOnly.indexOf('INSERT INTO public.governance_audit_log');
+    const guardedBlock = fnBodyOnly.slice(
+      fnBodyOnly.lastIndexOf('BEGIN', insertIdx),
+      fnBodyOnly.indexOf('END;', insertIdx)
+    );
+    expect(guardedBlock).toMatch(/EXCEPTION WHEN OTHERS THEN/);
+    expect(guardedBlock).toMatch(/RAISE WARNING/);
+    expect(guardedBlock).toMatch(/SQLERRM/);
+  });
 });
 
 describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: trigger attachment', () => {
@@ -87,11 +103,21 @@ describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: trigger attachment', () => {
 });
 
 describe('SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E: backfill ordering and completeness', () => {
+  // Scoped to executable SQL only (after the opening BEGIN;) -- the header
+  // comment prose also mentions 'legacy_grandfathered' by name, and anchoring
+  // on the whole-file text would pass by matching that prose instead of the
+  // real ALTER statement, which is the bug the TESTING sub-agent found in an
+  // earlier version of this test (row 2f817664-9aad-48d1-8405-9152910b5cc1).
+  const executableSql = migration.slice(migration.indexOf('\nBEGIN;'));
+
   it('widens the disposition enum to include legacy_grandfathered before it is used', () => {
-    const widenIdx = migration.indexOf("'legacy_grandfathered'");
-    const firstUseIdx = migration.indexOf("SET disposition = 'legacy_grandfathered'");
+    const widenIdx = executableSql.indexOf('ADD CONSTRAINT quick_fixes_disposition_check');
+    const firstUseIdx = executableSql.indexOf("SET disposition = 'legacy_grandfathered'");
     expect(widenIdx).toBeGreaterThan(-1);
     expect(firstUseIdx).toBeGreaterThan(widenIdx);
+    // and the widened CHECK clause itself must actually list the new value
+    const alterStmt = executableSql.slice(widenIdx, executableSql.indexOf(');', widenIdx));
+    expect(alterStmt).toMatch(/'legacy_grandfathered'/);
   });
 
   it('reclassifies the 2 SD-superseded duplicate_of rows before the duplicate_of_id backfill target check', () => {
