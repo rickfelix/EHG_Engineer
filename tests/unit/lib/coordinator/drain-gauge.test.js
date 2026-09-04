@@ -61,4 +61,13 @@ describe('planDrainGauge', () => {
     await planDrainGauge(supabase);
     expect(supabase._countChain.not).toHaveBeenCalledWith('status', 'in', '(resolved,wont_fix,duplicate,invalid,shipped)');
   });
+
+  it('excludes signal-router.cjs-promoted rows from the open-actionable filter (QF-20260903-333)', async () => {
+    // Those rows already have their own resolution path (promotion-ack / session_coordination,
+    // dedup'd by signal_fingerprint) — counting them here inflated the "genuine, unconsumed"
+    // count and buried hand/watchdog-filed items.
+    const supabase = buildSupabase({ count: 0 });
+    await planDrainGauge(supabase);
+    expect(supabase._countChain.not).toHaveBeenCalledWith('metadata->>logged_via', 'eq', 'signal-router.cjs');
+  });
 });
