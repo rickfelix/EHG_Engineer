@@ -33,7 +33,7 @@ function makeSupabase({ deliverables = [] } = {}) {
     if (table !== 'sd_scope_deliverables') throw new Error(`unexpected table: ${table}`);
     return {
       select: () => ({
-        eq: () => Promise.resolve({ data: deliverables, error: null }),
+        eq: () => ({ limit: () => Promise.resolve({ data: deliverables, error: null }) }),
       }),
     };
   });
@@ -82,7 +82,7 @@ describe('healDeliverablesAndStories — gated strictly on storyGateContext.bloc
   });
 
   it('promotion still runs (as a safe no-op) when the deliverables query returns null data', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ limit: () => Promise.resolve({ data: null, error: null }) }) }) }) };
     await healDeliverablesAndStories('sd-1', supabase, { blocking: true });
     expect(reconcileDeliverablesMock).not.toHaveBeenCalled();
     expect(autoValidateUserStoriesMock).toHaveBeenCalledTimes(1);
