@@ -1,0 +1,134 @@
+total marker rows: 49
+adam-target rows: 44
+=== id: acf4bc58-a6c5-45c6-a7d8-a90a05289ae8 | sectionId: 601 | FULL MARKER:
+"S20-22 WATCH (factory-integrity): root-fix never workaround; replicable+improvable"
+
+=== id: cac61af4-e4f5-40ac-bb79-5e0dc89da596 | sectionId: 601 | FULL MARKER:
+"AltifyAI outreach BLOCKED until S23 chairman-test and S24 pass"
+
+=== id: 2af667eb-ff13-4aea-9ab8-9d72e073c242 | sectionId: 601 | FULL MARKER:
+"Dedicated venture-UAT stage (chairman-ratified): UAT is its OWN stage between Visual Assets and Launch Readiness"
+
+=== id: 9eebe200-a161-4260-a7e1-cdcebe6fc1d1 | sectionId: 601 | FULL MARKER:
+"Cadence is EVERY 3 HOURS - chairman verbal 2026-08-28"
+
+=== id: a88ed6cb-4b41-42bf-8da4-1d5d58443bb3 | sectionId: 601 | FULL MARKER:
+"STEP 0 - PRE-FILL SOLOMON CHECK (chairman-ratified standing rule, SMS 2026-08-28)"
+
+=== id: 7010e20f-2d43-462c-a0ff-1fe392850a84 | sectionId: 601 | FULL MARKER:
+"FIXED SET-SCHEDULE SLOTS (6am/9am/12pm/3pm/6pm/9pm ET) - chairman SMS 2026-08-28"
+
+=== id: 902a1a4d-3981-4a00-b9fc-ad604b8a976c | sectionId: 601 | FULL MARKER:
+"S23 dedicated_venture_uat runs UNATTENDED — Adam monitors closely and root-fixes (chairman-ratified 2026-08-29, ratification 902a1a4d)"
+
+=== id: 0daf3bd8-7cfa-4811-b012-efdc3cef4b96 | sectionId: 601 | FULL MARKER:
+"Burn-lever execution plan APPROVED in full — A0 first, Adam sources A0/A2/A5 + B1/B3 authoring (chairman-ratified 2026-08-29, ratification 0daf3bd8)"
+
+=== id: b60b25e6-eb4a-40dc-a8f1-5b2e10ccaa5f | sectionId: 601 | FULL MARKER:
+"(Ratification b60b25e6.)"
+
+=== id: f313ce62-da84-46d6-8c7d-0e667c61650a | sectionId: 601 | FULL MARKER:
+"(Ratification f313ce62.)"
+
+=== id: e3e5483d-6644-490f-8dc4-88900a507405 | sectionId: 601 | FULL MARKER:
+"(Ratification e3e5483d.)"
+
+=== id: 385f4c84-27ff-4231-bf72-48acc4ffc4a3 | sectionId: 601 | FULL MARKER:
+"(Ratification 385f4c84.)"
+
+=== id: f30d6fdc-50ec-4a2a-8100-424e61eb5cff | sectionId: 601 | FULL MARKER:
+"(Ratification f30d6fdc.)"
+
+=== id: b935daed-bcea-4fc0-b951-3a72861edddf | sectionId: 601 | FULL MARKER:
+"(Ratification b935daed.)"
+
+=== id: 7b28b8f0-d28d-40e5-bfbf-306cd8b7f5ab | sectionId: 601 | FULL MARKER:
+"(Ratification 7b28b8f0.)"
+
+=== id: ac70b897-9de3-44ab-a543-32e222d1215c | sectionId: 611 | FULL MARKER:
+"The Triangulation Audit — Solomon duties (encoded 2026-08-30)"
+
+=== id: 7baaf894-8a49-41f6-aa0b-5b49751ae4ee | sectionId: 611 | FULL MARKER:
+"Cross-review duty (chairman-ratified 2026-08-31, ratification 7baaf894-8a49-41f6-aa0b-5b49751ae4ee)"
+
+=== id: 58750c5b-3a0e-42a5-a1a2-f6ed84f6ea3d | sectionId: 611 | FULL MARKER:
+"Ring extension (chairman-ratified 2026-08-31, ratification 58750c5b-3a0e-42a5-a1a2-f6ed84f6ea3d)"
+
+=== id: 7ec412a7-9426-4b76-90eb-04c701d7a559 | sectionId: 611 | FULL MARKER:
+"Daily duty-firing audit (chairman-directed 2026-08-31, ratification 7ec412a7-9426-4b76-90eb-04c701d7a559)"
+
+=== id: 889dcaa0-744e-4e40-8d93-b34940bc3fae | sectionId: 611 | FULL MARKER:
+"Oversight purpose clause (chairman-ratified 2026-08-31, ratification 889dcaa0-744e-4e40-8d93-b34940bc3fae)"
+
+=== id: 09ece9b6-9c65-4d6d-a2b4-64f46695bb48 | sectionId: 601 | FULL MARKER:
+"## RULE #0 — REPLY DELIVERY (chairman-ratified 2026-08-31, ratification 09ece9b6 — ABOVE ALL OTHER DUTIES because an unprinted reply nullifies duty #1)"
+
+=== id: 2ab4b4bc-1d86-486c-b266-3814d5f66d12 | sectionId: 601 | FULL MARKER:
+"Triangulation cycle-2 (area C, gauge honesty) resolution RATIFIED (chairman in-terminal 2026-08-30 ~17:4xZ, \"I agree with your recommendations\"; ratification 2a"
+
+=== id: 09f14b64-2220-465e-ac73-c0c90350b8ce | sectionId: 601 | FULL MARKER:
+"Candidate-decision evaluation ACCEPTED W/ MODIFICATIONS (chairman verbal 2026-08-30 ~21:3xZ; ratification 09f14b64; Adam share)"
+
+=== id: 76a3c081-2905-4ed4-b28a-bad79d01c689 | sectionId: 601 | FULL MARKER:
+"Evening-sitting closing directive (chairman verbal 2026-08-30 ~22:0xZ; ratification 76a3c081)"
+
+=== id: 826ecf5b-828f-4b7d-a0c8-f204df20231b | sectionId: 601 | FULL MARKER:
+"RSCP ruling '1b' (chairman SMS 2026-08-31 ~10:0xZ; ratification 826ecf5b)"
+
+=== id: ed7267eb-1f30-43eb-8392-c979abd19527 | sectionId: 601 | FULL MARKER:
+"Solomon 7am-ET Adam-work check (chairman verbal 2026-08-31 ~10:5xZ; ratification ed7267eb)"
+
+=== id: 78f04398-5ed5-4b26-8e6e-05b439714c34 | sectionId: 601 | FULL MARKER:
+"Solomon-review timeliness duty (chairman verbal 2026-08-31 ~11:1xZ; ratification 78f04398)"
+
+=== id: 8e0a4603-0f7f-4036-8617-6c2a590c2bd8 | sectionId: 601 | FULL MARKER:
+"Tiered sourcing claim-gate (chairman verbal 2026-08-31 ~11:2xZ, \"I agree with your recommendation\"; ratification 8e0a4603)"
+
+=== id: d16c91fe-04b3-4edd-b0ca-e62f0d021c9b | sectionId: 601 | FULL MARKER:
+"/design adoption sequence (chairman in-terminal 2026-08-31 ~18:4xZ; ratification d16c91fe)"
+
+=== id: 7b3be2f3-a7cc-4f16-a431-72b0e1888802 | sectionId: 601 | FULL MARKER:
+"Skill-frontmatter hold (chairman in-terminal 2026-08-31 ~18:5xZ; ratification 7b3be2f3)"
+
+=== id: f48e0abf-ee80-4b27-abe5-7544a9012f68 | sectionId: 601 | FULL MARKER:
+"EXPERIMENT PURPOSE = EFFICIENCY NOT DURATION (chairman in-terminal 2026-08-31 ~21:2xZ; ratification f48e0abf)"
+
+=== id: 63ff6ef2-1a61-4b4c-97a0-6d0095352482 | sectionId: 601 | FULL MARKER:
+"Slot-update content contract — SLOTS STAY, contentless check-ins RESCINDED (chairman SMS 2026-08-31 23:37Z, ratification 63ff6ef2, verbatim \"I think you should "
+
+=== id: 574d44ed-1fe0-4ab6-9c03-d9a20adbfc78 | sectionId: 601 | FULL MARKER:
+"Slot-update content contract — SLOTS STAY, contentless check-ins RESCINDED (chairman SMS 2026-08-31 23:37Z, ratification 63ff6ef2, verbatim \"I think you should "
+
+=== id: a236d122-c81b-4e63-b93f-56eeb3afc580 | sectionId: 601 | FULL MARKER:
+"Review cadence + FIRST-USE SHAPE-PROBE standing rule (chairman at terminal 2026-09-01 ~13:1xZ, \"I agree with your recommendation\", ratifying the data-based revi"
+
+=== id: 94b24811-2f49-48f0-96aa-cfe5d812231d | sectionId: 601 | FULL MARKER:
+"ASK-YOURSELF pre-escalation self-test + DECIDE-AND-REPORT (chairman at terminal 2026-09-01 ~19:5xZ; ratification 94b24811; binds Adam AND the coordinator)"
+
+=== id: 6c263823-7fe1-4559-b728-c2546e7ce630 | sectionId: 601 | FULL MARKER:
+"Gate-evidence provenance (chairman at the Solomon terminal 2026-09-02 ~00:4xZ, \"I agree with your recommendations\"; ratification 6c263823; Adam share)"
+
+=== id: c44cd9d8-239f-48ff-aee9-db06e7a5c304 | sectionId: 601 | FULL MARKER:
+"Single-scribe encode convention (chairman at the Solomon terminal 2026-09-02 ~00:4xZ; ratification c44cd9d8; Adam share)"
+
+=== id: 558cf9c3-d547-4af4-8f96-c892f35e527e | sectionId: 601 | FULL MARKER:
+"Labelled claims to the chairman: MEASURED or INHERITED (chairman at the Solomon terminal 2026-09-02 ~00:4xZ, \"Yes, capture it as its own ratification\"; ratification 558cf9c3)"
+
+=== id: b1055808-3cf4-40ad-9ac8-0a980b6d7c9b | sectionId: 601 | FULL MARKER:
+"Root-cause directive (chairman at the Adam terminal 2026-09-02 13:03Z; ratification b1055808)"
+
+=== id: 2a6537bf-1dd2-42fe-9044-6f9fe52dbfe3 | sectionId: 601 | FULL MARKER:
+"Harness-week burn posture — do not slow down, rotate accounts (chairman at the Adam terminal 2026-09-02 12:56Z; ratification 2a6537bf; Adam share)"
+
+=== id: b046d398-07ed-4157-9543-631986864f0c | sectionId: 601 | FULL MARKER:
+"Harness-week composition — root-cause repair is the intended composition through Friday (chairman at the Adam terminal 2026-09-02 13:31Z; ratification b046d398; Adam share)"
+
+=== id: b259e739-41d2-46ca-88e8-a9e5caabce2f | sectionId: 611 | FULL MARKER:
+"STANDING FOUNDATION AUDIT DUTY (chairman-ratified 2026-09-02/03; b259e739, 7473142c, 71e2e871, f7303528)"
+
+=== id: 7473142c-993c-43aa-bbe8-1f85dd5fafe4 | sectionId: 611 | FULL MARKER:
+"STANDING FOUNDATION AUDIT DUTY (chairman-ratified 2026-09-02/03; b259e739, 7473142c, 71e2e871, f7303528)"
+
+=== id: 71e2e871-9eb5-4370-9dec-e7bf03a93c5c | sectionId: 611 | FULL MARKER:
+"STANDING FOUNDATION AUDIT DUTY (chairman-ratified 2026-09-02/03; b259e739, 7473142c, 71e2e871, f7303528)"
+
