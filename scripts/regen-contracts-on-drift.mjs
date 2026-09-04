@@ -92,6 +92,7 @@ async function main() {
   console.log(`regen-contracts-on-drift: ${result.outcome}${result.detail ? ` ${JSON.stringify(result.detail)}` : ''}`);
 
   if (result.outcome === REGEN_OUTCOME.REFUSED_SHARED_ROOT || result.outcome === REGEN_OUTCOME.REFUSED_STILL_DRIFTED) return 1;
+  if (result.outcome === REGEN_OUTCOME.GENERATION_FAILED) return 1; // a real finding, now with `detail.message` logged above
   if (result.outcome === REGEN_OUTCOME.PROBE_UNAVAILABLE) return 2;
   return 0;
 }
