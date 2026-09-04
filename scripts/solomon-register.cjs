@@ -41,7 +41,7 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fetchAllSolomonsStrict (not fetchFreshSolomons) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
-const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh, SOLOMON_FRESH_MS } = require('../lib/coordinator/solomon-identity.cjs');
+const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh, isFreshAndActive, SOLOMON_FRESH_MS } = require('../lib/coordinator/solomon-identity.cjs');
 // Phase E (not yet shipped): drainSolomonOutbound will live in scripts/solomon-advisory.cjs.
 // Loaded lazily at the call site so this module loads without solomon-advisory.cjs present.
 
@@ -201,9 +201,30 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
     } else {
       // QF-20260822-719: isFresh(heartbeatAt, nowMs, freshMs) has no default for freshMs — the
       // missing 3rd arg made this always false (identical class fixed in adam-register.cjs).
+      //
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-3, REVISED after implementation-time measurement,
+      // then AGAIN after F-7, evidence d9d88102-2dfe-49bb-b319-887db2b361bd): this PRD originally
+      // proposed ORing in lib/fleet/genuine-worker.mjs's isKnownWedged here; measured wrong. A
+      // SECOND, deeper defect was then found by end-to-end probing: decision.retire can contain a
+      // session with a STILL-FRESH heartbeat -- decideSingleSolomonGuard's FR-2 fix excludes a
+      // heartbeat-fresh-but-tool-STUCK prior from `fresh`, placing it in `retire` for a TOOL
+      // ACTIVITY reason, not a heartbeat reason. Re-checking such an entry's heartbeat here would
+      // ALWAYS find it fresh (that is the defining property of a heartbeating shell) and skip it
+      // FOREVER, leaving a confirmed-dead session permanently role-tagged. See the identical,
+      // longer rationale in scripts/adam-register.cjs. decision.retireToolStuck (FR-2) names these
+      // entries so they can be re-validated on tool activity instead of heartbeat.
+      const bySessionId = new Map(currentRead.rows.map((a) => [a.session_id, a]));
       const freshNow = new Set(currentRead.rows.filter((a) => isFresh(a.heartbeat_at, nowMs2, SOLOMON_FRESH_MS)).map((a) => a.session_id));
+      const toolStuckSet = new Set(decision.retireToolStuck || []);
+      const toolStuckRacedBack = new Set(
+        (decision.retireToolStuck || []).filter((sid) => {
+          const row = bySessionId.get(sid);
+          return row && isFreshAndActive(row, nowMs2, SOLOMON_FRESH_MS);
+        }),
+      );
       for (const sid of decision.retire) {
-        if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
+        const skip = toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid);
+        if (skip) continue; // became fresh since the decision — do NOT clear a restarting Solomon
         const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
         if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
       }

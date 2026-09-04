@@ -84,4 +84,42 @@ describe('registerSolomon retire re-check — racing-restart protection (QF-2026
     expect(r.retired).toEqual([]);
     expect(calls.rpc.map((c) => c.fn)).not.toContain('clear_solomon_flag');
   });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (F-7, evidence d9d88102-2dfe-49bb-b319-887db2b361bd,
+  // Solomon end-to-end counterpart of the identical adam-singleton.test.js pair -- N-2 in TESTING
+  // evidence eb1e3131-4c80-4113-a05c-4fb715c67164 flagged this side as untested coverage debt).
+  // A heartbeat-fresh, confirmed-tool-STUCK prior lands in decision.retireToolStuck via FR-2's
+  // decideSingleSolomonGuard fix, not decision.retireHeartbeatStale. Pre-F-7-fix, the heartbeat-only
+  // freshNow re-check would ALWAYS find such a prior's heartbeat fresh (the defining property of a
+  // heartbeating shell) and skip clearing it FOREVER.
+  it('a heartbeat-fresh but tool-STUCK prior IS actually cleared, not skipped forever (F-7)', async () => {
+    const heartbeatAt = new Date(NOW - 60_000).toISOString(); // 1 min ago: fresh
+    const stuckToolAt = new Date(NOW - 999 * 60_000).toISOString(); // 999 min ago: confirmed STUCK
+    const { supabase, calls } = regStub({
+      priors: [{ session_id: 'shell', heartbeat_at: heartbeatAt, last_tool_at: stuckToolAt, metadata: {} }],
+    });
+    const r = await registerSolomon(supabase, 'self', { nowMs: NOW, nowMs2: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire' });
+    expect(r.retired).toEqual(['shell']);
+    expect(calls.rpc.map((c) => c.fn)).toEqual(expect.arrayContaining(['clear_solomon_flag', 'set_solomon_flag']));
+  });
+
+  // Companion control: the same tool-stuck prior, but it genuinely resumed tool activity by the
+  // retire re-check time -- must still be protected, proving the fix re-validates rather than
+  // unconditionally clearing every tool-stuck entry.
+  it('a tool-stuck prior that genuinely resumed activity by the retire re-check is SKIPPED (F-7 control)', async () => {
+    const heartbeatAt = new Date(NOW - 60_000).toISOString();
+    const staleToolAt = new Date(NOW - 999 * 60_000).toISOString();
+    const { supabase, calls } = regStub({
+      priors: [{ session_id: 'recovered', heartbeat_at: heartbeatAt, last_tool_at: staleToolAt, metadata: {} }],
+    });
+    // nowMs2 moved back close to staleToolAt so the SAME fixed last_tool_at reads fresh relative
+    // to nowMs2 -- mirrors the existing "raced back to fresh" heartbeat test's technique, applied
+    // to the tool-activity axis.
+    const nowMs2 = NOW - 999 * 60_000 + 30_000; // 30s after staleToolAt
+    const r = await registerSolomon(supabase, 'self', { nowMs: NOW, nowMs2 });
+    expect(r).toMatchObject({ ok: true, action: 'tagged' }); // NOT tagged_after_retire
+    expect(r.retired).toEqual([]);
+    expect(calls.rpc.map((c) => c.fn)).not.toContain('clear_solomon_flag');
+  });
 });
