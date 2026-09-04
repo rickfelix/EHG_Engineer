@@ -18,6 +18,7 @@ tags: [reference, auto-generated]
 - [When to Use /leo assist](#when-to-use-leo-assist)
 - [Command Flow](#command-flow)
 - [Phase 1: Autonomous Issue Processing](#phase-1-autonomous-issue-processing)
+  - [Pre-Classification Filtering](#pre-classification-filtering)
   - [Prioritization](#prioritization)
   - [Classification by Scope](#classification-by-scope)
   - [Intelligent Retry Loop](#intelligent-retry-loop)
@@ -34,6 +35,7 @@ tags: [reference, auto-generated]
 - [Technical Details](#technical-details)
   - [Engine Components](#engine-components)
   - [Database Tables](#database-tables)
+  - [Environment Variables](#environment-variables)
   - [Key Methods](#key-methods)
 - [Troubleshooting](#troubleshooting)
   - ["No items to process"](#no-items-to-process)
@@ -44,9 +46,9 @@ tags: [reference, auto-generated]
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: Claude Code (LEO Protocol)
-- **Last Updated**: 2026-01-31
+- **Last Updated**: 2026-08-11
 - **Tags**: leo, assist, feedback, inbox, autonomous, triage
 
 ## Overview
@@ -140,6 +142,19 @@ Perform 5-whys analysis and identify the root cause."
 ```
 
 ## Phase 1: Autonomous Issue Processing
+
+### Pre-Classification Filtering
+
+Before an issue reaches the classification step below, `loadInboxItems()` runs it through a chain of exclusion filters that remove rows the autonomous-fix loop should never attempt a code fix for. Each filter is independently toggleable via an environment variable for emergency fleet-wide rollback (no code revert needed):
+
+| Filter | Stream | Categories excluded | Env var (default: enabled) |
+|--------|--------|----------------------|------------------------------|
+| Pre-claim guard | issues | Rows pre-claimed by a sibling QF or linked to an in-flight QF | `LEO_ASSIST_PRECLAIM_FILTER` |
+| Needs-decision (QF-20260704-993) | issues | `completion_flag` | — (always on) |
+| Non-code-fixable (SD-LEO-INFRA-EXCLUDE-MONITORING-TELEMETRY-001) | issues | `invariant_gauge_finding`, `comms_quality`, `verification_ledger`, `adam_adherence_drift`, `adam_doc_drift`, `adam_solomon_health`, `adam_morning_brief`, `chairman_ruling`, `feedback_sla_breach`, `relay_drop`, `sms_relay` — automated monitoring/governance OUTPUT with no single-row code fix | `LEO_ASSIST_NONCODE_FILTER` |
+| Harness-backlog (QF-20260509-149) | enhancements | `harness_backlog` + `TERMINAL_CATEGORIES` (`completion_flag_witness`, `telemetry_aggregate`, `informational_note`) | — (always on) |
+
+Excluded rows are **not deleted** — they remain visible via `/leo inbox` for human/coordinator review; filtering only removes them from the autonomous Phase 1 retry loop (or, for harness-backlog, the Phase 2 enhancement-scheduling stream). The non-code-fixable category set lives in `lib/governance/non-code-fixable-categories.cjs`, mirroring the existing `lib/governance/feedback-terminal-categories.cjs` shared-file pattern.
 
 ### Prioritization
 
@@ -357,6 +372,13 @@ The `feedback_sd_map` junction table exists for many-to-many feedback-to-SD rela
 | `strategic_directives_v2` | SD creation target |
 | `quick_fixes` | Quick-fix tracking |
 
+### Environment Variables
+
+| Variable | Default | Effect when set to `false` |
+|----------|---------|------------------------------|
+| `LEO_ASSIST_PRECLAIM_FILTER` | enabled | Disables the sibling-QF pre-claim guard (FR-5) |
+| `LEO_ASSIST_NONCODE_FILTER` | enabled | Disables the non-code-fixable category exclusion; `filterIssuesExcludingNeedsDecision`'s `completion_flag` exclusion is unaffected |
+
 ### Key Methods
 
 ```javascript
@@ -405,6 +427,7 @@ node -e "require('dotenv').config(); console.log(process.env.SUPABASE_URL ? 'OK'
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-08-11 | Documented pre-classification filter chain; added non-code-fixable category exclusion (SD-LEO-INFRA-EXCLUDE-MONITORING-TELEMETRY-001) |
 | 1.0.0 | 2026-01-31 | Initial release with two-phase processing |
 | 1.1.0 | 2026-08-19 | Phase 2 enhancements stream now excludes fleet-ops telemetry categories (SD-FDBK-ENH-LEO-ASSIST-PHASE-001), in addition to the pre-existing harness_backlog/terminal-category exclusion |
 
