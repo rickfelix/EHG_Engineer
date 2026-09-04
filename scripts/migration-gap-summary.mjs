@@ -40,20 +40,37 @@ function runVerifier() {
 
 /**
  * Pure computation over the verifier's --json output.
+ *
+ * SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D (Option C): this is the GENUINE consumer of the verifier's
+ * `excluded[]` field (basename-colliding files invisible to apply-state checking), deliberately
+ * NOT a cosmetic pass-through. `excludedSource` distinguishes "the producer emitted the field
+ * with zero entries" from "the field was silently dropped" -- the same distinction
+ * `undispositionedSet` already makes for `dispositions.undispositioned_files`, and the one
+ * `dispositions.contradictory_files` (this file's sibling field) does NOT make, which is why that
+ * field has no reader anywhere outside the verifier's own text-mode branch. `excludedDivergent`
+ * names the dangerous class explicitly (DIVERGENT CONTENT verdicts) rather than folding it into a
+ * bare count, since a divergent collision is a materially different finding from a byte-identical
+ * one.
  * @param {Object} state - parsed verify-migration-apply-state.mjs --json output
- * @returns {{recentTotal:number, recentUndispositioned:number, recentDispositioned:number, legacyTotal:number, undispositionedFiles:string[]}}
+ * @returns {{recentTotal:number, recentUndispositioned:number, recentDispositioned:number, legacyTotal:number, undispositionedFiles:string[], excludedSource:('present'|'absent'), excludedTotal:number, excludedDivergent:Array}}
  */
 export function summarizeGapConformance(state) {
   const recentGaps = state.recentGaps || [];
   const undispositionedSet = new Set(state.dispositions?.undispositioned_files || []);
   const recentFiles = recentGaps.map((g) => gapFileBasename(g.file));
   const undispositionedFiles = recentFiles.filter((f) => undispositionedSet.has(f));
+  const excludedPresent = Array.isArray(state.excluded);
+  const excluded = excludedPresent ? state.excluded : [];
+  const excludedDivergent = excluded.filter((e) => e && e.verdict === 'DIVERGENT CONTENT');
   return {
     recentTotal: recentFiles.length,
     recentUndispositioned: undispositionedFiles.length,
     recentDispositioned: recentFiles.length - undispositionedFiles.length,
     legacyTotal: (state.legacyGaps || []).length,
     undispositionedFiles,
+    excludedSource: excludedPresent ? 'present' : 'absent',
+    excludedTotal: excluded.length,
+    excludedDivergent,
   };
 }
 
@@ -73,6 +90,11 @@ function main() {
   if (summary.undispositionedFiles.length) {
     console.log('  Undispositioned RECENT gap files:');
     for (const f of summary.undispositionedFiles) console.log(`    - ${f}`);
+  }
+  console.log(`  Excluded (basename-collision) files: ${summary.excludedTotal} [source: ${summary.excludedSource}]`);
+  if (summary.excludedDivergent.length) {
+    console.log('  DIVERGENT CONTENT collisions (distinct migrations sharing one basename -- needs a human decision, not a duplicate):');
+    for (const e of summary.excludedDivergent) console.log(`    - ${e.id} (twin: ${e.twin})`);
   }
 }
 
