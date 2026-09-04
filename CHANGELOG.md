@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-04](#2026-09-04)
+  - [Bugfix](#bugfix)
 - [2026-09-03](#2026-09-03)
   - [Bugfix](#bugfix)
 - [2026-09-02](#2026-09-02)
@@ -174,6 +176,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-04
+
+### Bugfix
+
+- **Adam/Solomon singleton seat guards now derive freshness from tool activity, not heartbeat alone** - SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C
+  - `lib/coordinator/adam-identity.cjs`, `lib/coordinator/solomon-identity.cjs`, and `lib/coordinator/singleton-refresh-sequencer.cjs` each judged whether a prior singleton coordinator seat was "fresh" using `heartbeat_at` alone, missing the Adam-673db833 class of defect: a heartbeat daemon can keep advancing while the actual tool-execution loop is dead (a "heartbeating shell"), so heartbeat-only freshness reads a wedged seat as alive.
+  - All three sites now also consult `lib/fleet/stuck-seat-predicate.cjs`'s `classifySeat()`, with a shared contract: only a positively-confirmed STUCK verdict counts as not-fresh/unhealthy; a null `last_tool_at` (normal for a just-registered or just-spawned session) never does on its own. The tool-silence cut point is clamped to a 15-minute floor, mirroring `lib/fleet/genuine-worker.mjs`'s `FREEZE_CUT_MINUTES_FLOOR`, after a naive per-site conversion false-positived STUCK against an 11-minute gap on live production telemetry.
+  - `decideSingleAdamGuard`/`decideSingleSolomonGuard` split their retire set into `retireHeartbeatStale` vs `retireToolStuck` so `scripts/adam-register.cjs`/`scripts/solomon-register.cjs` re-validate each correctly before clearing a prior seat — a tool-stuck prior (fresh heartbeat, dead tool loop) can never "race back to fresh" by heartbeat, since heartbeat was never its discriminator.
+  - Testing and regression sub-agents found and root-caused three defects during EXEC before the fix reached this shape: an initial `isFresh(...) || !isKnownWedged(...)` composition collapsed to always-true because `isKnownWedged` is fail-open by design; an unenumerated 4th `SELECT` call site in `lib/fleet/reboot-respawn-runner.js`; and — most subtle — a UNKNOWN-folds-closed regression in the identity modules' own freshness check that broke the pre-existing `scripts/solomon-register.test.js` "a FRESH prior Solomon => REFUSED" test, since a genuinely-alive, seconds-old singleton with no tool calls yet would have been wrongly cleared by a second registration. Fixed by unifying all three sites on one UNKNOWN-folds-open rule.
+  - SECURITY review (CONDITIONAL_PASS) flagged the 15-minute floor as calibrated for worker duty cycles and potentially short for a genuinely-idle-but-alive coordinator — bounded because the clear only fires at registration time (not via a sweeper) and is re-validated at clear time. Also flagged and fixed same-session: a self-contradictory threat-model paragraph in `stuck-seat-predicate.cjs`'s header docblock that still claimed the module "drives no actuation" after this SD scoped that claim to the claim-boundary domain specifically.
 
 ## 2026-09-03
 
