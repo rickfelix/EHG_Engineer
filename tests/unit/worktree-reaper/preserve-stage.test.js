@@ -70,6 +70,84 @@ describe('findHolderSession()', () => {
   it('returns null when supabase is unavailable', async () => {
     await expect(findHolderSession(null, '/repo/.worktrees/x')).resolves.toBeNull();
   });
+
+  it('QF-20260904-596: falls back to the branch-derived key\'s claim when worktree_path misses a live resident (slot-free worktree reuse)', async () => {
+    const claimedSessionRow = { session_id: 's-live', released_at: null, last_tool_at: null, loop_state: 'active' };
+    const supabase = {
+      from: (table) => {
+        if (table === 'claude_sessions') {
+          return {
+            select: () => ({
+              eq: (col) => {
+                if (col === 'worktree_path') {
+                  return { order: () => ({ limit: async () => ({ data: [], error: null }) }) };
+                }
+                if (col === 'session_id') {
+                  return { limit: async () => ({ data: [claimedSessionRow], error: null }) };
+                }
+                return { limit: async () => ({ data: [], error: null }) };
+              },
+            }),
+          };
+        }
+        if (table === 'strategic_directives_v2') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { claiming_session_id: 's-live' }, error: null }) }) }) };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    const result = await findHolderSession(supabase, '/repo/.worktrees/QF-old-reused-slot', { key: 'SD-EXAMPLE-002' });
+    expect(result).toEqual(claimedSessionRow);
+  });
+
+  it('QF-20260904-596: falls back to quick_fixes for a QF-shaped key', async () => {
+    const claimedSessionRow = { session_id: 's-qf-live' };
+    const supabase = {
+      from: (table) => {
+        if (table === 'claude_sessions') {
+          return {
+            select: () => ({
+              eq: (col) => {
+                if (col === 'worktree_path') return { order: () => ({ limit: async () => ({ data: [], error: null }) }) };
+                if (col === 'session_id') return { limit: async () => ({ data: [claimedSessionRow], error: null }) };
+                return { limit: async () => ({ data: [], error: null }) };
+              },
+            }),
+          };
+        }
+        if (table === 'quick_fixes') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { claiming_session_id: 's-qf-live' }, error: null }) }) }) };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+    const result = await findHolderSession(supabase, '/repo/.worktrees/qf/old', { key: 'QF-20260904-596' });
+    expect(result).toEqual(claimedSessionRow);
+  });
+
+  it('QF-20260904-596: returns null (no_holder) when the fallback key has no claim either', async () => {
+    const supabase = {
+      from: (table) => {
+        if (table === 'claude_sessions') {
+          return { select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) };
+        }
+        if (table === 'strategic_directives_v2') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { claiming_session_id: null }, error: null }) }) }) };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+    const result = await findHolderSession(supabase, '/repo/.worktrees/x', { key: 'SD-NOBODY-001' });
+    expect(result).toBeNull();
+  });
+
+  it('QF-20260904-596: skips the fallback entirely when no key is supplied (backward compatible)', async () => {
+    const supabase = {
+      from: () => ({ select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }),
+    };
+    await expect(findHolderSession(supabase, '/repo/.worktrees/x')).resolves.toBeNull();
+  });
 });
 
 describe('preserveTimestamp() / buildPreserveRefName()', () => {
@@ -216,6 +294,77 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
 
     expect(result.verdict).toBe(PRESERVE_VERDICT.VERIFY_FAILED);
     expect(result.pushed).toBe(true);
+  });
+});
+
+describe('runPreserveStage() never advances the checked-out branch (QF-20260904-596)', () => {
+  it('resets to the pre-preserve tip immediately after committing, and pushes the captured sha (not the bare HEAD token)', async () => {
+    const originalHead = 'original0head0sha';
+    const committedSha = 'committed1sha1here';
+    let revParseCallCount = 0;
+    const gitRunner = vi.fn((args) => {
+      const cmd = args.join(' ');
+      if (/^ls-files --others/.test(cmd)) return { code: 0, stdout: 'untracked.txt\n' };
+      if (/^diff --cached --quiet/.test(cmd)) return { code: 1, stdout: '' };
+      if (/^diff --cached$/.test(cmd)) return { code: 0, stdout: '+const x = 1;' };
+      if (/^commit/.test(cmd)) return { code: 0, stdout: '' };
+      if (/^rev-parse HEAD/.test(cmd)) {
+        revParseCallCount += 1;
+        return { code: 0, stdout: (revParseCallCount === 1 ? originalHead : committedSha) + '\n' };
+      }
+      if (/^push origin/.test(cmd)) return { code: 0, stdout: '' };
+      if (/^ls-remote origin/.test(cmd)) return { code: 0, stdout: `${committedSha}\trefs/heads/wip/reclaim/foo\n` };
+      return { code: 0, stdout: '', stderr: '' };
+    });
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+    expect(result.sha).toBe(committedSha);
+
+    const resetCall = gitRunner.mock.calls.find((c) => c[0][0] === 'reset');
+    expect(resetCall).toBeDefined();
+    expect(resetCall[0]).toEqual(['reset', originalHead]);
+
+    const pushCall = gitRunner.mock.calls.find((c) => c[0][0] === 'push');
+    expect(pushCall[0][2]).toBe(`${committedSha}:refs/heads/${result.ref}`);
+
+    // The reset must happen BEFORE the push -- never after -- so a push failure can
+    // never leave the commit reachable from the checked-out branch.
+    const resetIndex = gitRunner.mock.calls.findIndex((c) => c[0][0] === 'reset');
+    const pushIndex = gitRunner.mock.calls.findIndex((c) => c[0][0] === 'push');
+    expect(resetIndex).toBeLessThan(pushIndex);
+  });
+
+  it('resets to the pre-preserve tip even when the push fails, so a push failure never leaves the commit on the checked-out branch', async () => {
+    const originalHead = 'orig-head-push-fail';
+    let revParseCallCount = 0;
+    const gitRunner = vi.fn((args) => {
+      const cmd = args.join(' ');
+      if (/^ls-files --others/.test(cmd)) return { code: 0, stdout: '' };
+      if (/^diff --cached --quiet/.test(cmd)) return { code: 1, stdout: '' };
+      if (/^diff --cached$/.test(cmd)) return { code: 0, stdout: '+const x = 1;' };
+      if (/^commit/.test(cmd)) return { code: 0, stdout: '' };
+      if (/^rev-parse HEAD/.test(cmd)) {
+        revParseCallCount += 1;
+        return { code: 0, stdout: (revParseCallCount === 1 ? originalHead : 'committed-sha-2') + '\n' };
+      }
+      if (/^push origin/.test(cmd)) return { code: 1, stdout: '', stderr: 'simulated failure' };
+      return { code: 0, stdout: '', stderr: '' };
+    });
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.PUSH_FAILED);
+    const resetCall = gitRunner.mock.calls.find((c) => c[0][0] === 'reset');
+    expect(resetCall).toBeDefined();
+    expect(resetCall[0]).toEqual(['reset', originalHead]);
   });
 });
 
