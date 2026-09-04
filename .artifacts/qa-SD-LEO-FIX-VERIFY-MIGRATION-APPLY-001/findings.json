@@ -1,0 +1,322 @@
+{
+  "verdict": "PASS",
+  "sub_agent": "TESTING",
+  "sd_id": "SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001",
+  "phase": "EXEC",
+  "handoff": "EXEC-TO-PLAN",
+  "pr": "https://github.com/rickfelix/EHG_Engineer/pull/8048",
+  "commit_under_test": "e132739638fcc8f5f794638cb8e830017d6ea2fa",
+  "branch": "feat/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001",
+  "evidence_provenance": {
+    "producer": "vitest 4.1.4 --reporter=json (runner-produced, machine-extracted counts; NO hand-typed pass/fail numbers)",
+    "run_host_cwd": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001",
+    "counts_source": "numTotalTests/numPassedTests/numFailedTests read programmatically from each vitest JSON report",
+    "artifact_hashes": {
+      "step1-postfix.json": {
+        "sha256": "5915d345f06048f0d7c27fcc18fe0379ef85a939941bdbe7a03af82bb842b190",
+        "bytes": 4922,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        }
+      },
+      "step2-purefunc.json": {
+        "sha256": "7f99411cc8f44f74b72d732f7797738c20c2e6f20ec60bcc9707ac9cbbbf1700",
+        "bytes": 21927,
+        "counts": {
+          "numTotalTests": 57,
+          "numPassedTests": 57,
+          "numFailedTests": 0
+        }
+      },
+      "step3-mutated.json": {
+        "sha256": "c05112e685c2311d9428b4b1f53b3e27448477c53d7417c34481a6a36ea343dd",
+        "bytes": 9283,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 6,
+          "numFailedTests": 3
+        }
+      },
+      "step3-restored.json": {
+        "sha256": "0c6673759d058664521da0699b9357d4ed9e63fc6de0fed5bad1d8eecf30acfc",
+        "bytes": 4934,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        }
+      },
+      "step5-related-regression.json": {
+        "sha256": "a9f25dd62c8ce514d49f8f79db9dd57ab798a4cfa057f20b57aeedd0acdfd5a7",
+        "bytes": 28816,
+        "counts": {
+          "numTotalTests": 63,
+          "numPassedTests": 63,
+          "numFailedTests": 0
+        }
+      },
+      "step4-stdout.json": {
+        "sha256": "ef89ae84e938a7d148d90b1daba263997871f48fed3322323a8834d49afd5a56",
+        "bytes": 555771,
+        "counts": null
+      },
+      "step4-stderr.txt": {
+        "sha256": "14b9f98522576a67f9024abce8ca0fe3f4185198d0b767935d1b7127c1c27ab3",
+        "bytes": 1413,
+        "counts": null
+      }
+    }
+  },
+  "totals": {
+    "tests_run": 138,
+    "passed": 138,
+    "failed": 0,
+    "suites": 6,
+    "note": "Totals cover the 4 GREEN verification runs. The deliberate mutation run (step3-mutated.json, 9 tests / 3 intentional failures) is recorded separately under TS-4 and is EXCLUDED from these totals by design -- its failures are the desired outcome, not defects.",
+    "mutation_run_excluded": {
+      "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step3-mutated.json",
+      "tests": 9,
+      "passed": 6,
+      "failed": 3,
+      "intent": "intentional failure to prove the tests are not dead"
+    }
+  },
+  "steps": {
+    "TS-1_integration_suite": {
+      "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step1-postfix.json",
+      "sha256": "5915d345f06048f0d7c27fcc18fe0379ef85a939941bdbe7a03af82bb842b190",
+      "bytes": 4922,
+      "counts": {
+        "numTotalTests": 9,
+        "numPassedTests": 9,
+        "numFailedTests": 0
+      },
+      "verdict": "PASS",
+      "note": "9/9 = 5 pre-existing + 4 new (migration-gate project, live DB creds)",
+      "tests": [
+        {
+          "status": "passed",
+          "title": "a malformed ledger yields NO INFRA_ERROR and NO false PASS"
+        },
+        {
+          "status": "passed",
+          "title": "a malformed ledger suppresses NOTHING — every gap is still reported"
+        },
+        {
+          "status": "passed",
+          "title": "an ARRAY ledger (valid JSON, wrong shape) is refused, not iterated"
+        },
+        {
+          "status": "passed",
+          "title": "an APPLIED ledger entry cannot suppress a real gap or fake completion, end to end"
+        },
+        {
+          "status": "passed",
+          "title": "the committed ledger is well-formed and its suppressions are all reason-carrying"
+        },
+        {
+          "status": "passed",
+          "title": "the fixture actually produces a ceremony-pending gap (sanity check the seed, not just the fix)"
+        },
+        {
+          "status": "passed",
+          "title": "--json stdout is pure JSON: the ceremony-pending warning is NOT on stdout"
+        },
+        {
+          "status": "passed",
+          "title": "--json stdout is pure JSON: parsing it end-to-end returns a populated files[] array (the actual chairman-apply-state.js contract)"
+        },
+        {
+          "status": "passed",
+          "title": "the warning still lands on stdout in the ceremony-pending case"
+        }
+      ]
+    },
+    "TS-2_pure_function_regression": {
+      "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step2-purefunc.json",
+      "sha256": "7f99411cc8f44f74b72d732f7797738c20c2e6f20ec60bcc9707ac9cbbbf1700",
+      "bytes": 21927,
+      "counts": {
+        "numTotalTests": 57,
+        "numPassedTests": 57,
+        "numFailedTests": 0
+      },
+      "verdict": "PASS",
+      "note": "57/57; file confirmed UNMODIFIED by this SD (git diff vs merge-base HEAD..main = empty; last touched by unrelated commit 2df50cfeede)"
+    },
+    "TS-4_mutation_test_independently_performed_by_qa": {
+      "mutated": {
+        "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step3-mutated.json",
+        "sha256": "c05112e685c2311d9428b4b1f53b3e27448477c53d7417c34481a6a36ea343dd",
+        "bytes": 9283,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 6,
+          "numFailedTests": 3
+        },
+        "verdict": "TESTS_CORRECTLY_FAIL"
+      },
+      "restored": {
+        "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step3-restored.json",
+        "sha256": "0c6673759d058664521da0699b9357d4ed9e63fc6de0fed5bad1d8eecf30acfc",
+        "bytes": 4934,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        },
+        "verdict": "PASS"
+      },
+      "mutation_applied": "reverted the asJson gate: `if (asJson) console.error(warn); else console.log(warn);` -> `console.log(warn);` (single occurrence, byte-verified restore)",
+      "restore_verified_byte_identical": true,
+      "result": "3 of 4 NEW tests FAIL under mutation; all 5 pre-existing tests correctly unaffected; 4th new test (non---json mode, asserts warning STILL on stdout) correctly passes under mutation because the mutation only affects --json mode -- this is an over-correction guard, not a dead test",
+      "failed_under_mutation": [
+        "the fixture actually produces a ceremony-pending gap (sanity check the seed, not just the fix)",
+        "--json stdout is pure JSON: the ceremony-pending warning is NOT on stdout",
+        "--json stdout is pure JSON: parsing it end-to-end returns a populated files[] array (the actual chairman-apply-state.js contract)"
+      ],
+      "note": "Performed independently by the TESTING sub-agent rather than trusting the PR description claim."
+    },
+    "TS-5_direct_invocation_real_repo_state": {
+      "command": "node scripts/verify-migration-apply-state.mjs --json (streams separated)",
+      "exit_code": 0,
+      "stdout_artifact": {
+        "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step4-stdout.json",
+        "sha256": "ef89ae84e938a7d148d90b1daba263997871f48fed3322323a8834d49afd5a56",
+        "bytes": 555771,
+        "counts": null
+      },
+      "stderr_artifact": {
+        "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step4-stderr.txt",
+        "sha256": "14b9f98522576a67f9024abce8ca0fe3f4185198d0b767935d1b7127c1c27ab3",
+        "bytes": 1413,
+        "counts": null
+      },
+      "parse_method": "EXACT consumer parse -- first line whose column 0 is `{`, slice to END of string, JSON.parse (byte-faithful replica of chairman-apply-state.js:45-51). NOT a brace-matcher.",
+      "parse_result": "OK",
+      "files_array_length": 1587,
+      "stdout_contains_warning": false,
+      "stderr_contains_warning": true,
+      "ambient_ceremony_pending_files": 7,
+      "ceremony_pending_fail_set": 5,
+      "non_vacuous": "Ambient repo genuinely has ceremony-pending gaps right now, so this run exercised the exact bug path rather than passing trivially.",
+      "stdout_line0": "dotenvx banner (this is WHY the consumer anchors on the first column-0 { line; naive indexOf('{') lands inside the banner text \"{ override: true }\")"
+    },
+    "TS-6_real_consumer_end_to_end": {
+      "method": "directly imported and awaited classifyMigrationApplyState() from scripts/modules/handoff/executors/lead-final-approval/chairman-apply-state.js",
+      "error": null,
+      "files_length": 1587,
+      "status_histogram": {
+        "APPLIED": 1063,
+        "NO_DDL": 373,
+        "NOT_APPLIED": 89,
+        "PARTIAL": 55,
+        "CEREMONY_PENDING": 7
+      },
+      "result": "error===null => the CHAIRMAN_APPLY_VERIFICATION gate at LEAD-FINAL-APPROVAL would NOT false-BLOCK. This is the strongest available evidence: the real gate consumer, not a replica."
+    },
+    "TS-7_related_consumer_regression": {
+      "results_file": ".artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/step5-related-regression.json",
+      "sha256": "a9f25dd62c8ce514d49f8f79db9dd57ab798a4cfa057f20b57aeedd0acdfd5a7",
+      "bytes": 28816,
+      "counts": {
+        "numTotalTests": 63,
+        "numPassedTests": 63,
+        "numFailedTests": 0
+      },
+      "verdict": "PASS",
+      "note": "63/63 across all 4 other suites referencing verify-migration-apply-state / chairman-apply-state"
+    }
+  },
+  "fix_review": {
+    "file": "scripts/verify-migration-apply-state.mjs",
+    "lines": "~808-817",
+    "change": "gate the ceremony-pending ::warning:: annotation behind the same asJson check the adjacent marker line already uses",
+    "loc_changed": 9,
+    "assessment": "Minimal, correct, and matches the documented --json stdout-purity contract and the immediately-adjacent marker-line precedent. Producer-side single-point fix; confirmed the sole post-JSON stdout writer in the file."
+  },
+  "observations": [
+    "NON-BLOCKING: warning reports 5 while files[] carries 7 CEREMONY_PENDING. Verified PRE-EXISTING and unrelated to this SD -- ceremonyPendingFailSet (line 547) is derived from failSet (gaps with missing objects), a strict subset of all CEREMONY_PENDING-classified files. This diff changed only the output stream, not the derivation.",
+    "The 4 downstream consumers were intentionally NOT hardened (producer-side fix only). Documented and justified in the commit message; the contract is that --json stdout is pure JSON, so fixing the producer is the correct single point. Consumers remain fail-closed on parse error, which is the safe posture.",
+    "Test fixture cleanup verified: no __test-fixture-* file left in database/chairman-gated/ after runs.",
+    "Worktree verified clean (git status --porcelain -uno empty) after mutation testing; verifier script byte-identical to pre-mutation original."
+  ],
+  "confidence_rationale": "95 -- fix independently mutation-verified by QA (not trusted from the PR description), validated against the REAL gate consumer end-to-end with a genuinely non-vacuous ambient state (7 live ceremony-pending files), 138/138 tests green across 6 suites, and the new tests deliberately use the consumer-faithful slice-to-end parse rather than a brace-matcher that would have been dead by construction. Held below 100 only because the fix is producer-side by design, so the 4 consumers remain individually unhardened against any future post-JSON stdout writer.",
+  "recommendation": "APPROVE for EXEC-TO-PLAN handoff.",
+  "confidence_score": 95,
+  "metadata": {
+    "measured": true,
+    "test_execution": {
+      "tests_executed": 138,
+      "tests_passed": 138,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "artifact_sha": "d356ac79b23f9158358cdb0e37e3ff05e28f4f0f600203ba7c5abd7df9cd030a",
+      "runner": "vitest 4.1.4 --reporter=json",
+      "artifact_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/.artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/combined-results.json",
+      "source": "fresh"
+    },
+    "repo_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+    "executed_from_cwd": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/",
+    "artifact_manifest": {
+      "step1-postfix.json": {
+        "sha256": "5915d345f06048f0d7c27fcc18fe0379ef85a939941bdbe7a03af82bb842b190",
+        "bytes": 4922,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        }
+      },
+      "step2-purefunc.json": {
+        "sha256": "7f99411cc8f44f74b72d732f7797738c20c2e6f20ec60bcc9707ac9cbbbf1700",
+        "bytes": 21927,
+        "counts": {
+          "numTotalTests": 57,
+          "numPassedTests": 57,
+          "numFailedTests": 0
+        }
+      },
+      "step3-mutated.json": {
+        "sha256": "c05112e685c2311d9428b4b1f53b3e27448477c53d7417c34481a6a36ea343dd",
+        "bytes": 9283,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 6,
+          "numFailedTests": 3
+        }
+      },
+      "step3-restored.json": {
+        "sha256": "0c6673759d058664521da0699b9357d4ed9e63fc6de0fed5bad1d8eecf30acfc",
+        "bytes": 4934,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        }
+      },
+      "step5-related-regression.json": {
+        "sha256": "a9f25dd62c8ce514d49f8f79db9dd57ab798a4cfa057f20b57aeedd0acdfd5a7",
+        "bytes": 28816,
+        "counts": {
+          "numTotalTests": 63,
+          "numPassedTests": 63,
+          "numFailedTests": 0
+        }
+      },
+      "step4-stdout.json": {
+        "sha256": "ef89ae84e938a7d148d90b1daba263997871f48fed3322323a8834d49afd5a56",
+        "bytes": 555771,
+        "counts": null
+      },
+      "step4-stderr.txt": {
+        "sha256": "14b9f98522576a67f9024abce8ca0fe3f4185198d0b767935d1b7127c1c27ab3",
+        "bytes": 1413,
+        "counts": null
+      }
+    },
+    "provenance": "All counts read programmatically from vitest --reporter=json outputs embedded verbatim in combined-results.json (sha256 above). No hand-typed pass/fail numbers."
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "verdict": "PASS",
+  "confidence_score": 95,
+  "summary": "PASS (confidence 95). 138/138 tests green across 6 suites. The --json stdout-purity fix is independently verified REAL, not merely test-covered: QA re-ran the mutation test itself (reverting the asJson gate) and 3 of the 4 new tests failed with the exact consumer parse error, then passed again after a byte-identical restore. Confirmed end-to-end against the REAL gate consumer classifyMigrationApplyState(), which returns error=null over 1587 files with 7 live CEREMONY_PENDING present, so the LEAD-FINAL-APPROVAL CHAIRMAN_APPLY_VERIFICATION gate would not false-block.",
+  "detailed_analysis": "SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001 — TESTING sub-agent, EXEC-TO-PLAN. Commit e132739638f, PR #8048, branch feat/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001.\n\nFIX UNDER TEST: scripts/verify-migration-apply-state.mjs ~L808-817. The chairman-gated ceremony-pending ::warning:: annotation was on an unconditional console.log, appending a non-JSON line after the JSON closing brace in --json mode. Fix gates it behind the same asJson check the adjacent marker line already uses (9 LOC).\n\nTS-1 INTEGRATION SUITE — PASS. 9/9 (5 pre-existing + 4 new) via: npx vitest run --project migration-gate tests/integration/migration-apply-state-ledger-wiring.test.js. Artifact step1-postfix.json.\n\nTS-2 PURE-FUNCTION REGRESSION — PASS. 57/57 in tests/verify-migration-apply-state.test.js. Independently confirmed UNMODIFIED by this SD: git diff merge-base(HEAD,main)..HEAD on that path is empty; last touched by unrelated commit 2df50cfeede. Artifact step2-purefunc.json.\n\nTS-4 MUTATION TEST — PERFORMED INDEPENDENTLY BY QA, NOT TAKEN ON TRUST FROM THE PR DESCRIPTION. Reverted the fix in place (if (asJson) console.error(warn); else console.log(warn);  ->  console.log(warn);), single occurrence. Result: 3 of the 4 NEW tests FAILED, with the real consumer-shaped error \"SyntaxError: Unexpected non-whitespace character after JSON at position 559056\". All 5 pre-existing tests correctly stayed green (mutation is properly scoped). The 4th new test (\"the warning still lands on stdout in the ceremony-pending case\") correctly PASSED under mutation because it exercises non---json mode, which the mutation does not affect — it is an over-correction guard, not a dead test. Fix then restored and verified BYTE-IDENTICAL to the pre-mutation original; suite returned to 9/9. Artifacts step3-mutated.json and step3-restored.json.\n\nTS-5 DIRECT INVOCATION AGAINST REAL REPO STATE — PASS. node scripts/verify-migration-apply-state.mjs --json with streams separated, exit 0. Parsed using the EXACT consumer parse (first line whose column 0 is a brace, slice to END of string, JSON.parse) — a byte-faithful replica of chairman-apply-state.js:45-51, deliberately NOT a brace-matcher (a brace-matcher tolerates trailing content and would have passed even with the bug present). Parse OK; files[] length 1587; stdout contains no ::warning::; the warning is correctly on stderr. NON-VACUOUS: the ambient repo currently has 7 CEREMONY_PENDING files (fail-set 5), so this run genuinely exercised the bug path. Note stdout line 0 is the dotenvx banner, which is precisely why the consumer anchors on the first column-0 brace line.\n\nTS-6 REAL CONSUMER END-TO-END — PASS (strongest evidence). Directly imported and awaited classifyMigrationApplyState() from scripts/modules/handoff/executors/lead-final-approval/chairman-apply-state.js. Returned error===null with files.length 1587 and histogram {APPLIED:1063, NO_DDL:373, NOT_APPLIED:89, PARTIAL:55, CEREMONY_PENDING:7}. Therefore the CHAIRMAN_APPLY_VERIFICATION gate at LEAD-FINAL-APPROVAL would NOT false-BLOCK. This is the actual gate consumer, not a replica.\n\nTS-7 RELATED CONSUMER REGRESSION — PASS. 63/63 across the other 4 suites referencing verify-migration-apply-state / chairman-apply-state (chairman-apply-verification-widened, lead-final-chairman-apply-verification, migration-verification-access-control, migration-multi-root-scan). Artifact step5-related-regression.json.\n\nTOTALS: 138/138 passed, 0 failed, across 6 suites. All counts machine-extracted from vitest --reporter=json outputs; no hand-typed numbers. The deliberate mutation run (9 tests / 3 intentional failures) is recorded separately and EXCLUDED from these totals by design.\n\nHYGIENE: test fixture cleanup verified (no __test-fixture-* left in database/chairman-gated/); worktree verified clean (git status --porcelain -uno empty) after mutation testing.\n\nCONFIDENCE 95/100 — held below 100 only because the fix is producer-side by design, so the 4 consumers remain individually unhardened against any future post-JSON stdout writer.",
+  "critical_issues": [],
+  "warnings": [],
+  "recommendations": [
+    "APPROVE for the EXEC-TO-PLAN handoff. All 4 PRD test scenarios verified, TS-4 (mutation) re-performed independently by QA rather than trusted from the PR description.",
+    "NON-BLOCKING / PRE-EXISTING, do not fix in this SD: the warning reports 5 while files[] carries 7 CEREMONY_PENDING. Verified pre-existing and unrelated — ceremonyPendingFailSet (line 547) derives from failSet (gaps with missing objects), a strict subset of all CEREMONY_PENDING-classified files. This diff changed only the output stream, not the derivation.",
+    "OPTIONAL FUTURE HARDENING (out of scope here): the producer-side fix is correct and sufficient per the documented contract, but no guard prevents a future post-JSON stdout writer from reintroducing the class. A lint rule or a generic \"nothing after the closing brace under --json\" assertion would close it structurally. Consumers already fail closed on parse error, which is the safe posture."
+  ],
+  "metadata": {
+    "measured": true,
+    "test_execution": {
+      "tests_executed": 138,
+      "tests_passed": 138,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "artifact_sha": "d356ac79b23f9158358cdb0e37e3ff05e28f4f0f600203ba7c5abd7df9cd030a",
+      "runner": "vitest 4.1.4 --reporter=json",
+      "artifact_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/.artifacts/qa-SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/combined-results.json",
+      "source": "fresh"
+    },
+    "repo_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+    "executed_from_cwd": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001/",
+    "artifact_manifest": {
+      "step1-postfix.json": {
+        "sha256": "5915d345f06048f0d7c27fcc18fe0379ef85a939941bdbe7a03af82bb842b190",
+        "bytes": 4922,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        }
+      },
+      "step2-purefunc.json": {
+        "sha256": "7f99411cc8f44f74b72d732f7797738c20c2e6f20ec60bcc9707ac9cbbbf1700",
+        "bytes": 21927,
+        "counts": {
+          "numTotalTests": 57,
+          "numPassedTests": 57,
+          "numFailedTests": 0
+        }
+      },
+      "step3-mutated.json": {
+        "sha256": "c05112e685c2311d9428b4b1f53b3e27448477c53d7417c34481a6a36ea343dd",
+        "bytes": 9283,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 6,
+          "numFailedTests": 3
+        }
+      },
+      "step3-restored.json": {
+        "sha256": "0c6673759d058664521da0699b9357d4ed9e63fc6de0fed5bad1d8eecf30acfc",
+        "bytes": 4934,
+        "counts": {
+          "numTotalTests": 9,
+          "numPassedTests": 9,
+          "numFailedTests": 0
+        }
+      },
+      "step5-related-regression.json": {
+        "sha256": "a9f25dd62c8ce514d49f8f79db9dd57ab798a4cfa057f20b57aeedd0acdfd5a7",
+        "bytes": 28816,
+        "counts": {
+          "numTotalTests": 63,
+          "numPassedTests": 63,
+          "numFailedTests": 0
+        }
+      },
+      "step4-stdout.json": {
+        "sha256": "ef89ae84e938a7d148d90b1daba263997871f48fed3322323a8834d49afd5a56",
+        "bytes": 555771,
+        "counts": null
+      },
+      "step4-stderr.txt": {
+        "sha256": "14b9f98522576a67f9024abce8ca0fe3f4185198d0b767935d1b7127c1c27ab3",
+        "bytes": 1413,
+        "counts": null
+      }
+    },
+    "provenance": "All counts read programmatically from vitest --reporter=json outputs embedded verbatim in combined-results.json (sha256 above). No hand-typed pass/fail numbers."
+  }
+}

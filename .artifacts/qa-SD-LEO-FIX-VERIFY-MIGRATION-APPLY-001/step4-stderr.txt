@@ -1,0 +1,7 @@
+Excluded from scan (basename collides with database/migrations/20251129_musk_algorithm_pareto.sql): supabase/migrations/20251129_musk_algorithm_pareto.sql — DIVERGENT CONTENT
+Excluded from scan (basename collides with database/migrations/20251205_russian_judge_sd_type_awareness.sql): supabase/migrations/20251205_russian_judge_sd_type_awareness.sql — byte-identical copy
+Excluded from scan (basename collides with database/migrations/20260105_automated_shipping_decisions.sql): supabase/migrations/20260105_automated_shipping_decisions.sql — byte-identical copy
+Excluded from scan (basename collides with database/migrations/20260108_capability_ledger_v2.sql): supabase/migrations/20260108_capability_ledger_v2.sql — byte-identical copy
+Excluded from scan (basename collides with database/migrations/20260731_fix_chairman_privilege_app_metadata.sql): supabase/migrations/20260731_fix_chairman_privilege_app_metadata.sql — byte-identical copy
+::warning::5 chairman-gated migration(s) awaiting ceremony (non-blocking): database/chairman-gated/20260829_phase_snapshot_windows_agent_class_rates.sql, database/chairman-gated/20260826_venture_usage_window_summary_rpc.sql, database/chairman-gated/20260826_creative_asset_variant_scores_rls_fix.sql, database/chairman-gated/20260826_browser_actuation_session_cap.sql, database/chairman-gated/20260824_sms_status_staging.sql
+[MIGRATION_APPLY_STATE_GAPS_FOUND]

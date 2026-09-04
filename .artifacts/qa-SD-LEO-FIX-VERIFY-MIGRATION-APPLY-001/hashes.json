@@ -1,0 +1,57 @@
+{
+  "step1-postfix.json": {
+    "sha256": "5915d345f06048f0d7c27fcc18fe0379ef85a939941bdbe7a03af82bb842b190",
+    "bytes": 4922,
+    "counts": {
+      "numTotalTests": 9,
+      "numPassedTests": 9,
+      "numFailedTests": 0
+    }
+  },
+  "step2-purefunc.json": {
+    "sha256": "7f99411cc8f44f74b72d732f7797738c20c2e6f20ec60bcc9707ac9cbbbf1700",
+    "bytes": 21927,
+    "counts": {
+      "numTotalTests": 57,
+      "numPassedTests": 57,
+      "numFailedTests": 0
+    }
+  },
+  "step3-mutated.json": {
+    "sha256": "c05112e685c2311d9428b4b1f53b3e27448477c53d7417c34481a6a36ea343dd",
+    "bytes": 9283,
+    "counts": {
+      "numTotalTests": 9,
+      "numPassedTests": 6,
+      "numFailedTests": 3
+    }
+  },
+  "step3-restored.json": {
+    "sha256": "0c6673759d058664521da0699b9357d4ed9e63fc6de0fed5bad1d8eecf30acfc",
+    "bytes": 4934,
+    "counts": {
+      "numTotalTests": 9,
+      "numPassedTests": 9,
+      "numFailedTests": 0
+    }
+  },
+  "step5-related-regression.json": {
+    "sha256": "a9f25dd62c8ce514d49f8f79db9dd57ab798a4cfa057f20b57aeedd0acdfd5a7",
+    "bytes": 28816,
+    "counts": {
+      "numTotalTests": 63,
+      "numPassedTests": 63,
+      "numFailedTests": 0
+    }
+  },
+  "step4-stdout.json": {
+    "sha256": "ef89ae84e938a7d148d90b1daba263997871f48fed3322323a8834d49afd5a56",
+    "bytes": 555771,
+    "counts": null
+  },
+  "step4-stderr.txt": {
+    "sha256": "14b9f98522576a67f9024abce8ca0fe3f4185198d0b767935d1b7127c1c27ab3",
+    "bytes": 1413,
+    "counts": null
+  }
+}
