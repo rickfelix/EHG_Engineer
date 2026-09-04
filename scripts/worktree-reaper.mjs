@@ -104,6 +104,29 @@ const DEFAULT_IDLE_DAYS = 7;
 // reclaimable regardless of the 7-day idle gate (Stage-0, age-agnostic) — but ONLY
 // when it has no active claim and is NOT in activeSdSet.
 const TERMINAL_SD_STATUSES = ['completed', 'cancelled', 'archived'];
+// QF-20260829-033: an unkeyed worktree outside .worktrees/ (manually `git worktree add`-created;
+// sd-start.js/qf-start.js always resolve a key by construction) is the class relying on tree
+// residency ALONE, with no identity-based second line of defense. Three measured specimens
+// (harness_backlog 478dc543) were reaped mid multi-hour chairman ceremony under the standard
+// 30min DEFAULT_RESIDENCY_WINDOW_MIN, each idle (no commit/file-write) for well over 30min while
+// a human was still deliberating, not abandoned. 4h accommodates a human-paced decision queue
+// without weakening the window for internal/keyed worktrees, which keep the tighter default.
+const EXTERNAL_UNKEYED_RESIDENCY_WINDOW_MIN = 240;
+
+/**
+ * True when a worktree has no resolvable SD/QF key AND sits outside `.worktrees/` — the class of
+ * manually `git worktree add`-created ceremony/ops trees that sd-start.js/qf-start.js can never
+ * produce (both always resolve a key by construction), so no identity-based guard can protect it
+ * and tree-residency (mtime/HEAD) is the only line of defense. Pure — no I/O.
+ * @param {string} wtPath - candidate worktree path
+ * @param {string} worktreesDir - the repo's `.worktrees` directory
+ * @param {string|null|undefined} key - keyFromWorktree(...) result for this worktree
+ * @returns {boolean}
+ */
+function isExternalUnkeyedWorktree(wtPath, worktreesDir, key) {
+  const normalizedWorktreesDir = normalizePath(worktreesDir);
+  return !key && !normalizePath(wtPath).startsWith(`${normalizedWorktreesDir}/`);
+}
 // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: status sets for quick_fixes, parallel to the SD sets.
 // QF worktrees live at .worktrees/qf/<qf_id>; their basename (the qf_id) starts with 'QF-' and is
 // NEVER present in activeSdSet/terminalSdSet (those hold sd_keys only). Without these sets a QF
@@ -1704,7 +1727,19 @@ export async function main(argv = process.argv) {
       // This is the only predicate that can answer for a worktree whose basename
       // resolves to no work key, since keyFromWorktree reads the branch but only for
       // feat|qf|fix|chore|hotfix. Claim-independent and session-independent.
+      //
+      // QF-20260829-033: an UNKEYED worktree living OUTSIDE .worktrees/ (a manually
+      // `git worktree add`-created ceremony/ops tree — sd-start.js/qf-start.js always
+      // resolve a key by construction, so this class can only be created outside both)
+      // is exactly the human-paced-gap class the standard 30min window misreads as
+      // abandoned: three measured specimens (harness_backlog 478dc543) were all reaped
+      // mid multi-hour chairman ceremony, each with no commit/file-write for well over
+      // 30min while a human was still deliberating. Internal/keyed worktrees keep the
+      // standard window (they have identity-based claim protection as a second line of
+      // defense); this is the only class relying on tree-residency ALONE.
+      const isExternalUnkeyed = isExternalUnkeyedWorktree(wtPath, worktreesDir, recKey);
       const treeResidency = treeResidencyBlocksRemoval(wtPath, {
+        windowMin: isExternalUnkeyed ? EXTERNAL_UNKEYED_RESIDENCY_WINDOW_MIN : undefined,
         logger: (m) => process.stderr.write(`  ${m}\n`),
       });
 
@@ -1864,4 +1899,6 @@ export {
   removeWorktree,
   buildRecord,
   runPhantomOnlyMode,
+  isExternalUnkeyedWorktree,
+  EXTERNAL_UNKEYED_RESIDENCY_WINDOW_MIN,
 };
