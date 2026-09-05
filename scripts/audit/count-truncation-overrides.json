@@ -1,4 +1,9 @@
 {
+ "lib/fleet/best-effort-release.mjs:297": {
+  "classification": "bounded-by-design",
+  "match": "select('id').eq('id', qfId)",
+  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: bounded twice over -- filtered by id (a primary key) AND an explicit .limit(1) on the awaited statement 4 lines below (`await lookup.limit(1)`). select() must be first on THIS line (real postgrest-js staged-type requirement -- testing-agent finding 688ca3f5), which puts .limit() on a separate statement after a `lookup = applyClaimPredicate(lookup)` reassignment the classifier's single-statement chainWindow cannot trace across."
+ },
  "scripts/session-liveness-ssot-exit-predicate-check.mjs:47": {
   "classification": "bounded-by-design",
   "match": "session_id, status, is_alive, released_at, stale_at, released_reason",

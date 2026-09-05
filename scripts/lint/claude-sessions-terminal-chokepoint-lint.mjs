@@ -22,7 +22,15 @@
  * scripts/audit/count-truncation-inventory.mjs's chainWindow() heuristic for the same reason:
  * one classifier design, not a second bespoke heuristic per lint.
  *
- * Usage: node scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs
+ * KNOWN LIMITATION: the anchor window walks only 6 lines backward from `.update(` to find
+ * `.from('claude_sessions')` (anchoredToClaudeSessions), and the statement window walks forward
+ * only while paren-depth stays open (updateWindow) -- an update chain broken across a variable
+ * reassignment more than 6 lines from its `.from()`, or an update whose terminal-status literal
+ * lives in a helper function called from the chain rather than inlined, is invisible to this
+ * lint. It also cannot see a terminal status assembled via string concatenation/template
+ * interpolation rather than a literal 'released'/'stale' token.
+ *
+ * Usage: node scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs [--root <dir>]
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -118,8 +126,14 @@ export function scanRepo({ root = ROOT } = {}) {
   return sites;
 }
 
+function parseRootFlag(argv) {
+  const i = argv.indexOf('--root');
+  return i === -1 ? undefined : argv[i + 1];
+}
+
 function main() {
-  const sites = scanRepo();
+  const root = parseRootFlag(process.argv.slice(2));
+  const sites = scanRepo(root ? { root: path.resolve(root) } : {});
   const needsReview = sites.filter((s) => s.classification === 'needs-review');
   if (needsReview.length === 0) {
     console.log(`✅ claude-sessions-terminal-chokepoint-lint: 0 unguarded terminal-status write(s) across ${sites.length} site(s) scanned`);

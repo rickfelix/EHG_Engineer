@@ -692,7 +692,9 @@
     "name": "directory-only-worktree-key-lint",
     "script": "scripts/lint/directory-only-worktree-key-lint.mjs",
     "rootFlag": "--root",
-    "extraArgs": ["--enforce"],
+    "extraArgs": [
+      "--enforce"
+    ],
     "fixtures": [
       {
         "path": "scripts/hooks/seeded-directory-only-worktree-key-defect.cjs",
@@ -746,6 +748,22 @@
     "observability_proof": {
       "input": "Source text under lib/** and scripts/** (excluding node_modules, one-off, one-time, temp, archive, archived-sd-scripts; lib/fleet/cc-pid-liveness.cjs and scripts/hooks/capture-session-id.cjs excluded by design -- the SSOT and its canonical per-checkout writer): a file is flagged when its comment-blanked text mentions the `.claude/session-identity` path literal (or a bare `'session-identity'`/`\"session-identity\"` segment) and does not import anything from cc-pid-liveness.cjs. Consumes no database columns or environment variables -- pure source-text scan, always exits 0.",
       "seen": "Run against this repo's real lib/ and scripts/ on 2026-09-05 (this SD's own PR): found 7 real hits -- lib/hooks/session-id.cjs, lib/resolve-own-session.cjs, lib/resolve-own-session.js, lib/session-identity-sot.js, lib/session-manager.mjs, lib/terminal-identity.js, scripts/hooks/concurrent-session-worktree.cjs -- not a fixture positive. scripts/hooks/concurrent-session-worktree.cjs:44 is a genuine instance of this SD's own root-cause pattern (`path.resolve(__dirname, '../../.claude/session-identity')` then a hand-rolled `getAliveMarkerSessionIds()`, single-directory, no union, no SSOT import), confirmed by reading the file; the remaining 6 hits reference a related-but-distinct concern (the `.claude/session-identity/current` pointer file and its `.lock`, not the PID-liveness markers this SD's defect class concerns) and are true false-positives under this lint's documented KNOWN LIMITATION, which is exactly why FR-4 wires it advisory-only rather than blocking."
+    }
+  },
+  {
+    "name": "claude-sessions-terminal-chokepoint-lint",
+    "script": "scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs",
+    "rootFlag": "--root",
+    "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1 census-completeness AC). Structurally modeled on require-main-guard-in-one-off-lint.mjs (also --root scoped). The allowlist loaded during the trial is ALWAYS the real repo scripts/audit/claude-sessions-terminal-chokepoint-allowlist.json (ALLOWLIST_PATH is derived from the script own __dirname, not from --root), so the seeded fixture below (a synthetic scripts/ dir under a temp root, not a real repo path) cannot collide with a real allowlist entry.",
+    "fixtures": [
+      {
+        "path": "scripts/seeded-claude-sessions-terminal-chokepoint-defect.mjs",
+        "content": "// SEEDED DEFECT: a claude_sessions UPDATE setting status='released' with no is_alive write\n// and no chokepoint routing -- the exact liveness-SSOT defect class SD-LEO-ORCH-CAPA-RECORD-\n// TRUTH-001-E closed.\nasync function bad(supabase, id) {\n  await supabase\n    .from('claude_sessions')\n    .update({ status: 'released', released_at: new Date().toISOString() })\n    .eq('session_id', id);\n}\n"
+      }
+    ],
+    "observability_proof": {
+      "input": "claude_sessions .update( sites across scripts/** and lib/** (fs.readdirSync directory walk, excluding archive/one-off/_deprecated/smoke/tests), text-scanned for a literal status:'released'|'stale' anchored within 6 lines of the nearest .from('claude_sessions') and inspected for either terminalSessionUpdate(/sessionStatusUpdate( routing or an inline is_alive:false, filtered against scripts/audit/claude-sessions-terminal-chokepoint-allowlist.json by file:line. Consumes no DB columns and no environment variables.",
+      "seen": "Run against this repo's real scripts/ and lib/ on 2026-09-05 (this SD's own PR #8237): 0 needs-review across 21 live claude_sessions UPDATE sites (all either route through the FR-1 chokepoint or, at the single pre-chokepoint reference site scripts/stale-session-sweep.cjs, already set is_alive:false inline) -- not a fixture positive; the negative result is expected since this SD's own PR just finished routing every known writer."
     }
   }
 ]
