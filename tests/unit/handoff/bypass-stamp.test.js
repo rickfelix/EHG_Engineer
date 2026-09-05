@@ -43,6 +43,19 @@ describe('buildBypassStamp (FR-1)', () => {
     expect(() => buildBypassStamp({ gate: 'G' })).toThrow(/source/);
     expect(() => buildBypassStamp({ source: 'gate_failure' })).toThrow(/gate/);
   });
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1)
+  it('defaults ledgerId to null when not supplied', () => {
+    const s = buildBypassStamp({ source: 'gate_failure', gate: 'G' });
+    expect(s.ledgerId).toBeNull();
+  });
+
+  it('carries ledgerId when supplied — symmetric regardless of which call site sets it', () => {
+    const gateFailureStamp = buildBypassStamp({ source: 'gate_failure', gate: 'G', ledgerId: 'ledger-1' });
+    const authorityFenceStamp = buildBypassStamp({ source: 'authority_fence', gate: 'GATE_COORDINATOR_AUTHORITY_FENCE', ledgerId: 'ledger-1' });
+    expect(gateFailureStamp.ledgerId).toBe('ledger-1');
+    expect(authorityFenceStamp.ledgerId).toBe('ledger-1');
+  });
 });
 
 describe('applyBypassToResult (FR-1) — the choke point run 1928432d exposed', () => {
@@ -80,6 +93,18 @@ describe('applyBypassToResult (FR-1) — the choke point run 1928432d exposed', 
     const stamp = buildBypassStamp({ source: 'gate_failure', reason: 'BaseExecutor stamp', gate: 'G' });
     const r = applyBypassToResult(base, stamp);
     expect(r.bypassReason).toBe('BaseExecutor stamp');
+  });
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1)
+  it('a set bypassInfo with ledgerId stamps bypassLedgerId onto the result', () => {
+    const stamp = buildBypassStamp({ source: 'gate_failure', gate: 'G', ledgerId: 'ledger-42' });
+    const r = applyBypassToResult({ success: true }, stamp);
+    expect(r.bypassLedgerId).toBe('ledger-42');
+  });
+
+  it('null bypassInfo leaves bypassLedgerId absent (undefined, never fabricated)', () => {
+    const r = applyBypassToResult({ success: true }, null);
+    expect(r.bypassLedgerId).toBeUndefined();
   });
 });
 
@@ -126,6 +151,7 @@ describe('buildPersistedBypassMetadata (FR-2/FR-4)', () => {
       bypassed_at: '2026-09-02T18:00:00.000Z',
       pattern_id: null,
       followup_sd_key: null,
+      self_authorship_check_status: null,
     });
   });
 
@@ -141,6 +167,12 @@ describe('buildPersistedBypassMetadata (FR-2/FR-4)', () => {
     expect(m.gates).toEqual(['MANDATORY_TESTING_VALIDATION']);
     expect(m.pattern_id).toBe('PAT-001');
     expect(m.followup_sd_key).toBe('SD-FOLLOWUP-001');
+  });
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2, SECURITY finding HIGH-2)
+  it('carries bypassSelfAuthorshipCheckStatus through as self_authorship_check_status', () => {
+    const m = buildPersistedBypassMetadata({ bypassSelfAuthorshipCheckStatus: 'cleared' }, { actor: 'a' });
+    expect(m.self_authorship_check_status).toBe('cleared');
   });
 });
 

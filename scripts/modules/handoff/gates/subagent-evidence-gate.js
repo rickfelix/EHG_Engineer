@@ -534,8 +534,11 @@ export async function validateSubagentEvidence(ctx, supabase) {
     const row = latestByCode.get(norm(r));
     if (!row) continue;
     const klass = classifyVerdict(row.verdict);
-    if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
-    else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2): session_id is already fetched into `row`
+    // (child A's widened select) -- attach it here so a bypass-refusal check downstream can
+    // compare the failing evidence's author against the bypassing actor without a second query.
+    if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at, session_id: row.session_id ?? null });
+    else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at, session_id: row.session_id ?? null });
     else if (klass === 'unknown') unknownVerdicts.push({ agent: r, verdict: row.verdict });
 
     const grade = gradeProvenance(row, { expectedPhase });
