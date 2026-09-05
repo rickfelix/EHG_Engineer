@@ -69,11 +69,12 @@ const STRANDED = () => ({
  */
 function fakeDb(row) {
   let lastBuilder = null;
-  function makeBuilder() {
+  function makeFilterBuilder(patch) {
     const preds = [];
-    let patch = null;
     const builder = {
-      update(p) { patch = p; return builder; },
+      // Real postgrest-js: .select() is ALSO valid as a terminal return-representation modifier
+      // at the end of an .update(...).eq()...chain (not only as the entry point for a plain read)
+      // -- the main UPDATE path below uses it exactly this way.
       select() { return builder; },
       // count-truncation-diff-lint: the real reason-lookup query is now .select('id').limit(1).
       limit() { return builder; },
@@ -98,10 +99,21 @@ function fakeDb(row) {
         return Promise.resolve({ data: [{ id: row.id }], error: null }).then(resolve, reject);
       },
     };
-    lastBuilder = builder;
     return builder;
   }
-  return { from: () => makeBuilder(), get predicateCount() { return lastBuilder ? lastBuilder.predicateCount : 0; } };
+  // MIRRORS THE REAL @supabase/supabase-js STAGED-TYPE API (testing-agent EXEC review, 688ca3f5):
+  // .from(table) alone has NO .eq()/.in()/.is()/.limit() -- only the filter-builder returned by
+  // .select()/.update() does. A fake that let filters run directly on .from()'s return let a real
+  // production bug (clearAndReopenQf's reason-lookup calling .eq() before .select()) pass every
+  // test in this file while throwing a synchronous TypeError against the real client.
+  function makeQueryBuilder() {
+    const qb = {
+      update(p) { const b = makeFilterBuilder(p); lastBuilder = b; return b; },
+      select() { const b = makeFilterBuilder(null); lastBuilder = b; return b; },
+    };
+    return qb;
+  }
+  return { from: () => makeQueryBuilder(), get predicateCount() { return lastBuilder ? lastBuilder.predicateCount : 0; } };
 }
 
 describe('FR-1: clearAndReopenQf reopens a stranded row', () => {
@@ -306,6 +318,7 @@ describe('FR-1: reports failure instead of hiding it', () => {
     expect(await clearAndReopenQf(null, 'QF-X')).toEqual({ changed: false, reason: 'missing_argument' });
     expect(await clearAndReopenQf({}, null)).toEqual({ changed: false, reason: 'missing_argument' });
   });
+
 });
 
 // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-3: a zero-row UPDATE alone cannot say WHY it matched
