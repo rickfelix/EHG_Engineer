@@ -37,11 +37,18 @@ describe('FR-2 stampReleaseRequest', () => {
   });
 
   it('writes release_request on the held SD for a PREEMPT dispatch to a busy seat', async () => {
+    // SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: stampReleaseRequest now writes via the
+    // atomic mergeMetadataKeys() partial-key merge (injected here) instead of a full-blob
+    // .update({metadata:...}) -- sb.updates is no longer the write path for this call.
     const sb = fakeSb();
+    const merges = [];
+    const mergeMetadataKeysFn = async (sdKey, patch) => { merges.push({ sdKey, patch }); return { merged: true, sdKey }; };
     const row = rowFor({ preempt: true });
-    await stampReleaseRequest(sb, row, { warn() {} });
-    expect(sb.updates).toHaveLength(1);
-    expect(sb.updates[0].metadata.release_request).toMatchObject({
+    await stampReleaseRequest(sb, row, { warn() {} }, mergeMetadataKeysFn);
+    expect(sb.updates).toHaveLength(0);
+    expect(merges).toHaveLength(1);
+    expect(merges[0].sdKey).toBe(HELD);
+    expect(merges[0].patch.release_request).toMatchObject({
       requested_by: 'coordinator:preempt_dispatch',
       ttl_minutes: 60,
     });

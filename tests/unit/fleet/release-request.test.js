@@ -12,6 +12,18 @@ vi.mock('../../../lib/fleet/best-effort-release.mjs', () => ({
   },
 }));
 
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: the conditional-clear now goes through
+// removeMetadataKeyIfClaimedBy() (an atomic server-side jsonb delete under the same
+// id+claiming_session_id guard) instead of a client-side read-spread-delete-full-blob
+// .update().eq().eq().select() chain.
+const removeKeyCall = vi.hoisted(() => ({ args: null, removed: true }));
+vi.mock('../../../lib/coordinator/safe-metadata-merge.mjs', () => ({
+  removeMetadataKeyIfClaimedBy: async (...args) => {
+    removeKeyCall.args = args;
+    return { removed: removeKeyCall.removed, id: args[0] };
+  },
+}));
+
 describe('TS-5 releaseRequestState (pure part of the release-request step)', () => {
   const now = Date.parse('2026-07-16T12:00:00Z');
   it('absent/malformed -> null', () => {

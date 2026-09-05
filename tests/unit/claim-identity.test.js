@@ -81,17 +81,25 @@ describe('stampClaim identity_source (TS-4)', () => {
   function mockSupabase(store) {
     return {
       from: () => ({
-        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'u1', metadata: store.metadata }, error: null }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'u1', sd_key: 'SD-X-001', metadata: store.metadata }, error: null }) }) }),
         update: (patch) => ({ eq: async () => { store.metadata = patch.metadata; return { error: null }; } }),
       }),
     };
   }
 
+  // SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: stampClaim now merges via mergeMetadataKeys()
+  // (an atomic Postgres jsonb `||`) rather than the mock's own update() — inject a double that
+  // emulates that merge against the same store the mock's select() reads back from.
+  const mergeMetadataKeysFn = (store) => async (_sdKey, patch) => {
+    store.metadata = { ...store.metadata, ...patch };
+    return { merged: true };
+  };
+
   it('stamps identity_source when provided and omits it when not', async () => {
     const store = { metadata: {} };
-    await stampClaim(mockSupabase(store), 'SD-X-001', 'sess-1', 'pointer_fallback');
+    await stampClaim(mockSupabase(store), 'SD-X-001', 'sess-1', 'pointer_fallback', mergeMetadataKeysFn(store));
     expect(store.metadata.claim_history.at(-1)).toMatchObject({ session_id: 'sess-1', identity_source: 'pointer_fallback' });
-    await stampClaim(mockSupabase(store), 'SD-X-001', 'sess-2');
+    await stampClaim(mockSupabase(store), 'SD-X-001', 'sess-2', undefined, mergeMetadataKeysFn(store));
     expect(store.metadata.claim_history.at(-1).identity_source).toBeUndefined();
   });
 });
