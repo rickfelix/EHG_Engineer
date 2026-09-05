@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-09-05T10:58:44.446Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -44,9 +44,9 @@
 - `stage_of_death_predictions_venture_id_profile_id_key`: UNIQUE (venture_id, profile_id)
 
 ### Check Constraints
-- `stage_of_death_predictions_actual_death_stage_check`: CHECK (((actual_death_stage IS NULL) OR ((actual_death_stage >= 1) AND (actual_death_stage <= 26))))
+- `stage_of_death_predictions_actual_death_stage_check`: CHECK (((actual_death_stage IS NULL) OR ((actual_death_stage >= 1) AND (actual_death_stage <= 27))))
 - `stage_of_death_predictions_confidence_score_check`: CHECK (((confidence_score >= (0)::numeric) AND (confidence_score <= (1)::numeric)))
-- `stage_of_death_predictions_predicted_death_stage_check`: CHECK (((predicted_death_stage >= 1) AND (predicted_death_stage <= 26)))
+- `stage_of_death_predictions_predicted_death_stage_check`: CHECK (((predicted_death_stage >= 1) AND (predicted_death_stage <= 27)))
 - `stage_of_death_predictions_predicted_probability_check`: CHECK (((predicted_probability >= (0)::numeric) AND (predicted_probability <= (1)::numeric)))
 
 ## Indexes
