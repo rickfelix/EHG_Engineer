@@ -355,6 +355,37 @@ async function insertRecord(record) {
 }
 
 /**
+ * Build the sub_agent_execution_results record from already-resolved values.
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: pulled out of processHookInput as a pure function so the
+ * metadata.session_id stamp can be asserted directly against process.env.CLAUDE_SESSION_ID
+ * without exercising insertRecord's real supabase I/O.
+ */
+function buildSubAgentRecord({ sdId, subagentType, verdict, summary, rawOutput, invocationId, toolCallId, attributionSource }) {
+  return {
+    sd_id: sdId,
+    sub_agent_code: subagentType,
+    sub_agent_name: subagentType,
+    verdict: verdict,
+    confidence: verdict === 'pass' ? 100 : verdict === 'fail' ? 0 : 50,
+    summary: summary,
+    raw_output: rawOutput,
+    invocation_id: invocationId,
+    source: 'task_hook',
+    metadata: {
+      tool_call_id: toolCallId,
+      recorded_by: 'task-subagent-recorder.cjs',
+      recorded_at: new Date().toISOString(),
+      // FR-2: how the SD was resolved, so gates/auditors can distrust 'shared-file-fallback' rows.
+      attribution_source: attributionSource,
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: unconditional session_id stamp, mirroring the
+      // canonical results-storage.js writer -- explicit null (never omitted) when unset, so this
+      // second writer into the same table cannot leave the provenance stamp path-partial.
+      session_id: process.env.CLAUDE_SESSION_ID || null
+    }
+  };
+}
+
+/**
  * Process hook input and record Task sub-agent invocation
  * @param {Object} hookInput - PostToolUse hook input
  */
@@ -405,24 +436,16 @@ async function processHookInput(hookInput) {
   const { sdId, attributionSource } = await getActiveSD();
 
   // Build record
-  const record = {
-    sd_id: sdId,
-    sub_agent_code: normalizedSubagentType,
-    sub_agent_name: normalizedSubagentType,
-    verdict: verdict,
-    confidence: verdict === 'pass' ? 100 : verdict === 'fail' ? 0 : 50,
-    summary: summary,
-    raw_output: rawOutput,
-    invocation_id: invocationId,
-    source: 'task_hook',
-    metadata: {
-      tool_call_id: toolCallId,
-      recorded_by: 'task-subagent-recorder.cjs',
-      recorded_at: new Date().toISOString(),
-      // FR-2: how the SD was resolved, so gates/auditors can distrust 'shared-file-fallback' rows.
-      attribution_source: attributionSource
-    }
-  };
+  const record = buildSubAgentRecord({
+    sdId,
+    subagentType: normalizedSubagentType,
+    verdict,
+    summary,
+    rawOutput,
+    invocationId,
+    toolCallId,
+    attributionSource
+  });
 
   try {
     const result = await insertRecord(record);
@@ -510,4 +533,6 @@ if (require.main === module) {
 }
 
 // SD-LEO-INFRA-SUB-AGENT-EVIDENCE-001: export the resolver for the concurrent-session regression test.
-module.exports = { getActiveSD, readSdIdFromFile };
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: export buildSubAgentRecord (pure) so the metadata.session_id
+// stamp can be asserted directly without exercising insertRecord's real supabase I/O.
+module.exports = { getActiveSD, readSdIdFromFile, buildSubAgentRecord };
