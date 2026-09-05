@@ -880,6 +880,58 @@ function generateSolomonModelPosture(data, fileMapping) {
   });
 }
 
+/**
+ * CLAUDE_MICHAEL.md — SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4). Copy of generateSolomon:
+ * the Michael role contract (chairman's personal-day steward; singleton, non_fleet, propose-then-act),
+ * generated from section_type=michael_role_contract. On MUST_FIT_SINGLE_READ from landing, so the
+ * seed one-off (scripts/one-off/_michael-role-contract-section.mjs) refuses above 6,500 words.
+ */
+function generateMichael(data, fileMapping) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+  const { today, time } = getMetadata(protocol);
+
+  const michaelSections = getSectionsByMapping(sections, 'CLAUDE_MICHAEL.md', fileMapping);
+  // Missing section → fallback header, never throw (the section may not yet be seeded).
+  const michaelContent = michaelSections.length > 0
+    ? michaelSections.map(s => formatSection(s)).join('\n\n')
+    : '*(michael_role_contract section not yet seeded — run scripts/one-off/_michael-role-contract-section.mjs --apply to populate)*';
+
+  return `# CLAUDE_MICHAEL.md - Michael Role Contract
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
+**Load when**: Running /michael, or orienting a Michael session
+
+> Michael is a singleton, non_fleet, propose-then-act role session beside Adam (fleet) and Solomon (deep reasoning). Model and effort posture BINDS from CLAUDE_MICHAEL_MODEL_POSTURE.md. For the LEAD→PLAN→EXEC workflow itself, see CLAUDE_CORE.md and the phase files; Michael never enters it.
+
+---
+
+${michaelContent}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Source of truth: leo_protocol_sections (section_type=michael_role_contract). Do not hand-edit — edit the DB section and regenerate.*
+`;
+}
+
+/**
+ * CLAUDE_MICHAEL_MODEL_POSTURE.md — SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4), spec §3.
+ * Same shape as generateSolomonModelPosture: a BINDING companion, split out so the gated contract
+ * keeps headroom under the single-read cap. Read at every /michael startup and on any pin change.
+ */
+function generateMichaelModelPosture(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_MICHAEL_MODEL_POSTURE.md', {
+    heading: 'Michael Model Posture (binding companion)',
+    purpose: 'Opus-at-medium seat pin with Sonnet quota fallback, the Sonnet/Opus/Haiku tiering table, Opus verification on auto_apply flips, stop-sub-agents-when-read, Max-plan-only',
+    loadWhen: 'At every /michael startup (Step 1) and on any pin change or budget-state change — before acting on model posture',
+    note: 'This file BINDS. It is split from CLAUDE_MICHAEL.md for READ-CAP headroom only, and CLAUDE_MICHAEL.md §9 carries a pointer marking it BINDING. Its clauses are in force whether or not this file is read; nothing in Michael\'s path bills an API key.',
+  });
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
@@ -900,6 +952,8 @@ export {
   generateSolomonManual,
   generateSolomonProvenance,
   generateSolomonModelPosture,
+  generateMichael,
+  generateMichaelModelPosture,
   findCopiedSharedSections,
   assertSharedSectionsNotCopied
 };

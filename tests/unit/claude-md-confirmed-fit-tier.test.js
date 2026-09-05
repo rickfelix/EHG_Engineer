@@ -156,7 +156,9 @@ describe('the confirmed-fit tier is opt-in and empty on landing', () => {
       .toThrow(/SINGLE_READ_CAP_EXCEEDED/);
   });
 
-  it('MUST_FIT_SINGLE_READ is untouched by this change', () => {
-    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md']);
+  it('MUST_FIT_SINGLE_READ carries only files whose SDs have landed (CLAUDE_MICHAEL.md joined under SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A)', () => {
+    // The confirmed-fit tier below is still opt-in and empty; this pin only tracks the hard-cap list,
+    // whose membership tests/unit/claude-md-single-read-cap.test.js argues file by file.
+    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md']);
   });
 });

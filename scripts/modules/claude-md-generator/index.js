@@ -49,6 +49,8 @@ import {
   generateSolomonManual,
   generateSolomonProvenance,
   generateSolomonModelPosture,
+  generateMichael,
+  generateMichaelModelPosture,
   generatePlanManual,
   assertSharedSectionsNotCopied
 } from './file-generators.js';
@@ -234,6 +236,10 @@ class CLAUDEMDGeneratorV3 {
       // gated contract to clear a 73-token cap breach that was wedging every seat's encode; it does
       // NOT go in the MANUAL companion, which disclaims binding content.
       ['CLAUDE_SOLOMON_MODEL_POSTURE.md', (d) => generateSolomonModelPosture(d, this.fileMapping), 'full'],
+      // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4): the Michael role contract and its BINDING
+      // model-posture companion, in the Solomon shape. CLAUDE_MICHAEL.md is on MUST_FIT_SINGLE_READ.
+      ['CLAUDE_MICHAEL.md', (d) => generateMichael(d, this.fileMapping), 'full'],
+      ['CLAUDE_MICHAEL_MODEL_POSTURE.md', (d) => generateMichaelModelPosture(d, this.fileMapping), 'full'],
     ];
     if (this.options.generateDigest) {
       specs.push(
@@ -669,7 +675,10 @@ export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 // and block the whole family — punishing everyone for a defect nobody has been given the chance
 // to fix yet. Add a file here when its SD lands, not before.
 // CLAUDE_SOLOMON.md added by SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6) — that SD landed.
-export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md'];
+// CLAUDE_MICHAEL.md added by SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4) — on the list FROM
+// landing, unlike CLAUDE_ADAM.md, because the contract is authored under a 6,200-word budget the seed
+// one-off enforces (DESIGN evidence 8601cbdd), so it fits with ~5,000 tokens of headroom on day one.
+export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md'];
 
 // ── SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-C / FR-1 + FR-2 ─────────────────────────────────────
 // SECOND TIER: "confirmed fit", stricter than the raw cap and DERIVED from the same instrument the
@@ -776,7 +785,7 @@ export function assertSingleReadFit(files, opts = {}) {
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_CORE_MANUAL.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md', 'CLAUDE_SOLOMON_PROVENANCE.md', 'CLAUDE_SOLOMON_MODEL_POSTURE.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_CORE_MANUAL.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md', 'CLAUDE_SOLOMON_PROVENANCE.md', 'CLAUDE_SOLOMON_MODEL_POSTURE.md', 'CLAUDE_MICHAEL.md', 'CLAUDE_MICHAEL_MODEL_POSTURE.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 

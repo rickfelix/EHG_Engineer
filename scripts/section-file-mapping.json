@@ -285,6 +285,19 @@
     "_binding_note": "DO NOT fold this into CLAUDE_SOLOMON_MANUAL.md. That was the zero-code option and it was rejected on measurement: this content BINDS (verify the Max plan via /status before any sweep; re-register on any pin change because /model does not re-stamp the session tier; P4 automatic reversion when budget state changes), and CLAUDE_SOLOMON_MANUAL.md's own description states that rules, prohibitions and durable duties do not live there. Putting binding text in the file that disclaims binding text would have made the two companions mean the same thing to save one diff.",
     "_mechanism_correction": "The ruling specified 'the CLAUDE_LEAD_MANUAL pattern exactly - via section-file-mapping.json'. MEASURED: a new companion is NOT a mapping-only edit. A generated file must also be wired in scripts/modules/claude-md-generator/file-generators.js (generator fn + export), index.js (import, the generateFileSpecs array, and KNOWN_GENERATED_FILES - an unlisted name fails --only validation), scripts/hooks/protocol-file-tracker.cjs (unlisted = reads are invisible to session state), and .docmon/rules.json (a root-level .md absent from the allowed-root-docs list fails LOCATION_VALIDATION on every PR that touches it). A mapping entry alone yields a section that renders NOWHERE: it would leave the gated file, satisfy the cap, and silently vanish from the protocol. FIVE sites, not four — the docmon one was found only by CI, AFTER this entry first claimed four, which is itself the point: the count is discovered, not derivable by reading any single file."
   },
+  "CLAUDE_MICHAEL.md": {
+    "description": "Michael role contract — the chairman's personal-day steward (singleton, non_fleet, propose-then-act). Loaded by the /michael skill or when orienting a Michael session. SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A. On MUST_FIT_SINGLE_READ: the seed one-off refuses above 6,500 words (DESIGN evidence 8601cbdd).",
+    "sections": [
+      "michael_role_contract"
+    ]
+  },
+  "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
+    "description": "Michael MODEL POSTURE companion (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A, spec §3). Like the Solomon Model Posture companion, THIS FILE BINDS: Opus-at-medium seat pin with Sonnet quota fallback, the Sonnet/Opus/Haiku tiering table, the stop-sub-agents-when-read rule, Max-plan-only. CLAUDE_MICHAEL.md §9 is a pointer marking it BINDING.",
+    "sections": [
+      "michael_model_posture"
+    ],
+    "_mechanism_note": "Wired at all FIVE sites named by CLAUDE_SOLOMON_MODEL_POSTURE.md's _mechanism_correction below: this mapping, file-generators.js (generateMichael + generateMichaelModelPosture + exports), index.js (imports, generateFileSpecs tuples, KNOWN_GENERATED_FILES, and CLAUDE_MICHAEL.md on MUST_FIT_SINGLE_READ), scripts/hooks/protocol-file-tracker.cjs, and .docmon/rules.json."
+  },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",
     "sections": [

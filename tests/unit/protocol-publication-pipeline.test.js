@@ -172,7 +172,12 @@ describe('FR-4: --only scoped regeneration', () => {
     // reference/procedure lifted out of CLAUDE_CORE.md — the heaviest always-read file in the
     // family — toward the Read tool's 25k single-call cap. Unlike the Solomon Model Posture
     // companion, this one does NOT bind: every rule stays in the gated CLAUDE_CORE.md file.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(26);
+    // -> 28 (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A FR-4: CLAUDE_MICHAEL.md, the Michael role
+    // contract, and CLAUDE_MICHAEL_MODEL_POSTURE.md, its BINDING model-posture companion, both in the
+    // Solomon shape and wired at all five sites. No digest for Michael in v1.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(28);
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_MICHAEL.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_MICHAEL_MODEL_POSTURE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_CORE_MANUAL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
