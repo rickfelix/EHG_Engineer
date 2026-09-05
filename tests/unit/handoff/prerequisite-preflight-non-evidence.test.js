@@ -24,7 +24,7 @@ function makeMockSupabase({ sdRow, evidenceRows = [] }) {
   return {
     from: (table) => {
       if (table === 'sub_agent_execution_results') {
-        return { select: () => ({ eq: () => ({ gte: async () => ({ data: evidenceRows, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: evidenceRows, error: null }) }) }) }) }) };
       }
       const builder = {
         select: () => builder,

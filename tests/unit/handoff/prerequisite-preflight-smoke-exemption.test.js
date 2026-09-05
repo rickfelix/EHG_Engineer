@@ -120,7 +120,7 @@ describe('checkLeadToPlanPrereqs SMOKE_TEST bypass behavior', () => {
             sub_agent_code: code, created_at: new Date().toISOString(), verdict: 'PASS'
           }));
           return {
-            select: () => ({ eq: () => ({ gte: async () => ({ data: rows, error: null }) }) })
+            select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: rows, error: null }) }) }) }) })
           };
         }
         const builder = {

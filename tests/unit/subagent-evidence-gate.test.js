@@ -16,6 +16,7 @@ import {
   REQUIRED_SUBAGENTS,
   _internals
 } from '../../scripts/modules/handoff/gates/subagent-evidence-gate.js';
+import { computeContentHash } from '../../lib/sub-agent-executor/evidence-provenance.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,9 @@ function makeSupabase({ phaseStart, sdCreatedAt, evidenceRows = [], auditInsertS
         const q = {
           select: () => q,
           eq: () => q,
-          gte: () => Promise.resolve({ data: evidenceRows, error: null })
+          gte: () => q,
+          order: () => q,
+          limit: () => Promise.resolve({ data: evidenceRows, error: null })
         };
         return q;
       }
@@ -855,5 +858,88 @@ describe('validateSubagentEvidence — FR-3 stale-evidence integration', () => {
     expect(result.passed).toBe(false);
     expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_MISSING');
     expect(result.details.missing.sort()).toEqual(['SECURITY', 'TESTING']);
+  });
+});
+
+describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading (advisory-first rollout)', () => {
+  // Dated AFTER PROVENANCE_CUTOVER_AT so gradeProvenance actually evaluates these rows,
+  // unlike every pre-existing fixture in this file (all dated 2026-04-24, pre-cutover — this is
+  // exactly why the 76 pre-existing tests above pass unmodified: their rows are never graded).
+  const POST_CUTOVER = '2026-09-05T05:00:00.000Z';
+
+  // LEAD-TO-PLAN's required set is ['VALIDATION', 'Explore'] (required-subagents.js) — both must
+  // be present for the gate to even reach the provenance-grading branch (missing.length === 0).
+  // phase: 'LEAD' matches HANDOFF_TYPE_TO_PHASE['LEAD-TO-PLAN'] used in these tests, so the new
+  // window-scoping check does not itself contribute a provenance-absent verdict.
+  function fullyProvenancedRow(overrides = {}) {
+    const base = {
+      sub_agent_code: 'VALIDATION',
+      created_at: POST_CUTOVER,
+      verdict: 'PASS',
+      source: 'sub_agent_executor',
+      invocation_id: 'inv-provenance-test',
+      session_id: 'sess-provenance-test',
+      phase: 'LEAD',
+      confidence: 90,
+      critical_issues: [],
+      warnings: [],
+      recommendations: [],
+      detailed_analysis: 'analysis',
+      summary: 'ok',
+      ...overrides,
+    };
+    return { ...base, content_hash: computeContentHash(base) };
+  }
+  const exploreCompanionRow = fullyProvenancedRow({ sub_agent_code: 'Explore' });
+
+  beforeEach(() => { delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE; });
+  afterEach(() => { delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE; });
+
+  it('advisory (default, mode unset): a provenance-absent row still passes, with a warning naming the missing field', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [fullyProvenancedRow({ source: 'manual' }), exploreCompanionRow],
+    });
+    const ctx = { sd: makeSD(), handoffType: 'LEAD-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w) && /source/.test(w))).toBe(true);
+  });
+
+  it('block mode: the same provenance-absent row fails the gate', async () => {
+    process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE = 'block';
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [fullyProvenancedRow({ source: 'manual' }), exploreCompanionRow],
+    });
+    const ctx = { sd: makeSD(), handoffType: 'LEAD-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_PROVENANCE_ABSENT');
+  });
+
+  it('a fully-provenanced row produces no provenance warning in either mode', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [fullyProvenancedRow(), exploreCompanionRow],
+    });
+    const ctx = { sd: makeSD(), handoffType: 'LEAD-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w))).toBe(false);
+  });
+
+  it('a pre-cutover row (this file\'s existing fixtures\' shape) never generates a provenance warning', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'VALIDATION', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS' },
+        { sub_agent_code: 'Explore', created_at: '2026-04-24T21:05:00Z', verdict: 'PASS' },
+      ],
+    });
+    const ctx = { sd: makeSD(), handoffType: 'LEAD-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w))).toBe(false);
   });
 });
