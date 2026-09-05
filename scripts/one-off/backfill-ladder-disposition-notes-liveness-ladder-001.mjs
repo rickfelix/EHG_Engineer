@@ -10,6 +10,7 @@
 // live-query verification during LEAD).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_KEY = 'SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001';
@@ -54,4 +55,6 @@ async function main() {
   }
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}

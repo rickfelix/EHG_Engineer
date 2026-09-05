@@ -5,6 +5,7 @@
 // that root-caused the blocking=false-at-rest contradiction (rca-agent, agentId ab5c79a9842ede82d).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_KEY = 'SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001';
@@ -82,4 +83,6 @@ async function main() {
   console.log('lead_phase_verification persisted to', SD_KEY);
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}

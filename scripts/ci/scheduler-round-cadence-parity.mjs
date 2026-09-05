@@ -22,6 +22,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../..');
@@ -107,12 +108,16 @@ async function main() {
   const registrations = parseSchedulerRegistrations(src);
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const { data: rows, error } = await supabase
-    .from('periodic_process_registry')
-    .select('process_key, expected_interval_seconds')
-    .like('process_key', 'scheduler_round:%');
-  if (error) {
-    console.error(JSON.stringify({ status: 'error', error: error.message }));
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() =>
+      supabase
+        .from('periodic_process_registry')
+        .select('process_key, expected_interval_seconds')
+        .like('process_key', 'scheduler_round:%')
+    );
+  } catch (e) {
+    console.error(JSON.stringify({ status: 'error', error: e.message }));
     process.exitCode = 1;
     return;
   }

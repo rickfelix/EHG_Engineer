@@ -5,6 +5,7 @@
 // requirement (a boolean attestation is not accepted -- the file:line is the evidence).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_KEY = 'SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001';
@@ -64,4 +65,6 @@ async function main() {
   console.log('mechanism_verifications persisted:', mechanism_verifications.length, 'entries');
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}

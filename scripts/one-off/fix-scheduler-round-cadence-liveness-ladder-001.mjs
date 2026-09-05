@@ -9,6 +9,7 @@
 // is safe now that the declared cadence matches the job's actual designed cadence.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -37,4 +38,6 @@ async function main() {
   }
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}
