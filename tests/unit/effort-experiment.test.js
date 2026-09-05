@@ -45,16 +45,29 @@ function mockSupabase(tables, { writeError = null } = {}) {
 }
 
 // ---------- TS-1: execution context stamp ----------
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: stampExecutionContext now merges via the
+// injectable mergeMetadataKeys() atomic partial-key merge rather than the mock's own update() —
+// this double emulates that merge against the same row the mock's select() reads back from, and
+// still records into calls.updates so the existing "payload.metadata" assertions keep working.
+function mergeMetadataKeysFn(row, calls) {
+  return async (_sdKey, patch) => {
+    row.metadata = { ...(row.metadata || {}), ...patch };
+    calls.updates.push({ table: 'strategic_directives_v2', payload: { metadata: row.metadata } });
+    return { merged: true };
+  };
+}
+
 describe('TS-1 stampExecutionContext', () => {
   const SD = { id: 'aa4692db-732b-4719-ad79-595a5aa45f8e', sd_key: 'SD-X-001', sd_type: 'documentation', metadata: { keep: 1 } };
 
   it('stamps arm/model/class and preserves metadata', async () => {
+    const row = { ...SD, metadata: { ...SD.metadata } };
     const { client, calls } = mockSupabase({
-      strategic_directives_v2: [SD],
+      strategic_directives_v2: [row],
       claude_sessions: [{ metadata: { effort_arm: 'medium' } }],
       model_usage_log: [{ reported_model_id: 'claude-opus-4-8[1m]' }]
     });
-    const ctx = await stampExecutionContext(client, SD.id, 'sess-1');
+    const ctx = await stampExecutionContext(client, SD.id, 'sess-1', mergeMetadataKeysFn(row, calls));
     expect(ctx.effort_arm).toBe('medium');
     expect(ctx.arm_source).toBe('coordinator');
     expect(ctx.model_id).toBe('claude-opus-4-8[1m]');
@@ -78,14 +91,15 @@ describe('TS-1 stampExecutionContext', () => {
 
   it('fail-soft: returns null on write error / throwing client, never throws', async () => {
     const { client } = mockSupabase({ strategic_directives_v2: [SD], claude_sessions: [], model_usage_log: [] }, { writeError: { message: 'boom' } });
-    await expect(stampExecutionContext(client, SD.id, 's')).resolves.toBeNull();
+    const failingMerge = async () => ({ merged: false });
+    await expect(stampExecutionContext(client, SD.id, 's', failingMerge)).resolves.toBeNull();
     await expect(stampExecutionContext({ from() { throw new Error('x'); } }, SD.id, 's')).resolves.toBeNull();
   });
 
   it('preserves pre-existing execution_context keys (tokens merge)', async () => {
     const withTokens = { ...SD, metadata: { execution_context: { tokens: { input_tokens: 5, source: 'jsonl' } } } };
     const { client, calls } = mockSupabase({ strategic_directives_v2: [withTokens], claude_sessions: [], model_usage_log: [] });
-    await stampExecutionContext(client, SD.id, 's');
+    await stampExecutionContext(client, SD.id, 's', mergeMetadataKeysFn(withTokens, calls));
     expect(calls.updates.at(-1).payload.metadata.execution_context.tokens.input_tokens).toBe(5);
   });
 });
