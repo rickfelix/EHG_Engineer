@@ -31,11 +31,16 @@
  * negatives (an unusual CREATE POLICY formatting it doesn't recognize) over
  * false positives.
  *
+ * Corpus: all directories the DDL-auto-apply writer of record treats as migration
+ * directories (RLS_LINT_CORPUS_DIRS in ./rls-lint-corpus-dirs.mjs -- currently
+ * database/migrations, database/manual-updates, supabase/migrations), not just
+ * database/migrations/. See SD-LEO-FIX-RLS-LINT-CORPUS-WIDTH-001.
+ *
  * Modes (mirrors scripts/lint/schema-reference-lint.mjs's precedent):
  *   --diff (default in CI): lint ONLY migration files changed vs the merge
  *       base with origin/main -- a pre-existing backlog must never block a
  *       PR that didn't introduce it.
- *   --all: advisory full sweep of database/migrations/.
+ *   --all: advisory full sweep of every directory in RLS_LINT_CORPUS_DIRS.
  *
  * Usage:
  *   node scripts/lint/rls-anon-tenant-predicate-lint.mjs [--diff|--all] [--json] [--root <dir>]
@@ -49,6 +54,10 @@ import { fileURLToPath, pathToFileURL } from 'url';
 // audit (scripts/audit/broad-policy-audience-audit.mjs). Two separately-authored predicate
 // classifiers would drift, and the drift would be invisible because each would look correct alone.
 import { hasNarrowingPredicate } from '../../lib/db/broad-policy-classifier.mjs';
+// SD-LEO-FIX-RLS-LINT-CORPUS-WIDTH-001: ONE shared directory list, mirrored from the
+// DDL-auto-apply writer of record (pending-migrations-check.js), so the lint corpus can
+// never again silently diverge from what actually gets applied to the database.
+import { RLS_LINT_CORPUS_DIRS } from './rls-lint-corpus-dirs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -232,7 +241,7 @@ export function lintSql(sql, filePath = '(inline)') {
 
 // ── CLI driver (diff/all modes, mirrors schema-reference-lint.mjs) ──────────
 
-function candidateFilesDiff(repoRoot) {
+export function candidateFilesDiff(repoRoot) {
   const base = process.env.RLS_LINT_BASE || 'origin/main';
   const out = [
     execSync(`git diff --name-only --diff-filter=ACMR ${base}...HEAD`, { encoding: 'utf8', timeout: 30000, cwd: repoRoot }),
@@ -241,15 +250,21 @@ function candidateFilesDiff(repoRoot) {
     execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000, cwd: repoRoot }),
   ].join('\n');
   return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
-    .filter((f) => f.startsWith('database/migrations/') && f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') && RLS_LINT_CORPUS_DIRS.some((dir) => f.startsWith(`${dir}/`)))
     .map((f) => path.join(repoRoot, f));
 }
 
-function candidateFilesAll(repoRoot) {
-  const dir = path.join(repoRoot, 'database', 'migrations');
-  let entries;
-  try { entries = fs.readdirSync(dir); } catch { return []; }
-  return entries.filter((f) => f.endsWith('.sql')).map((f) => path.join(dir, f));
+export function candidateFilesAll(repoRoot) {
+  const files = [];
+  for (const dir of RLS_LINT_CORPUS_DIRS) {
+    const fullDir = path.join(repoRoot, ...dir.split('/'));
+    let entries;
+    try { entries = fs.readdirSync(fullDir); } catch { continue; }
+    for (const f of entries) {
+      if (f.endsWith('.sql')) files.push(path.join(fullDir, f));
+    }
+  }
+  return files;
 }
 
 function main() {
