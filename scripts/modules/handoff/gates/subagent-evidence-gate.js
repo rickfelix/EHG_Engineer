@@ -32,6 +32,19 @@
 import { execFileSync } from 'node:child_process';
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
 import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
+import { gradeProvenance, HANDOFF_TYPE_TO_PHASE } from '../../../../lib/sub-agent-executor/evidence-provenance.js';
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: shared kill-switch for the provenance-grading warnings
+ * below, gating BOTH this gate and activation-invariant-gate.js. Advisory (warn-only) by default,
+ * per CLAUDE_CORE.md's Observe-Only-First policy AND this file's own established rollout
+ * precedent (SUBAGENT_VERDICT_MODE, LEO_DISABLE_STALE_EVIDENCE_CHECK both shipped advisory first)
+ * -- this SD's own text names a real prior incident ("exactly the Gate 2 outage of 03:0xZ") from
+ * shipping a similar check binding on day one, before enough post-cutover evidence existed.
+ */
+export function resolveSubagentEvidenceProvenanceMode(env = process.env) {
+  return (env && env.SUBAGENT_EVIDENCE_PROVENANCE_MODE) === 'block' ? 'block' : 'advisory';
+}
 
 /**
  * Race window (seconds) during which a missing evidence row is treated as a
@@ -433,9 +446,14 @@ export async function validateSubagentEvidence(ctx, supabase) {
     // PAT-LES-83842538ee01 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-3: evaluated_commit_sha
     // projected straight out of metadata (PostgREST `->>` operator) rather than selecting the
     // whole JSONB blob, per TESTING sub-agent's efficiency finding during PLAN.
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: widened to add provenance fields (source,
+    // invocation_id, phase, plus session_id/content_hash projected out of metadata) and the
+    // columns computeContentHash() needs to re-derive a row's hash. Every added name is a real
+    // top-level column or a metadata->>field alias -- lint-safe per schema-reference-extract.mjs,
+    // same pattern already used for evaluated_commit_sha above.
     const { data, error } = await db
       .from('sub_agent_execution_results')
-      .select('sub_agent_code, created_at, verdict, evaluated_commit_sha:metadata->>evaluated_commit_sha')
+      .select('sub_agent_code, created_at, verdict, confidence, critical_issues, warnings, recommendations, detailed_analysis, summary, source, invocation_id, phase, evaluated_commit_sha:metadata->>evaluated_commit_sha, session_id:metadata->>session_id, content_hash:metadata->>content_hash')
       .eq('sd_id', sdUuid)
       .gte('created_at', phaseStartedAt.toISOString());
     if (error) throw error;
@@ -499,6 +517,11 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // (a row exists; the agent is not mid-write). They block unconditionally, ignoring
   // SUBAGENT_VERDICT_MODE, since there is no verdict for that mode to be lenient about.
   const nonEvidence = [];
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading, advisory-only by default (see
+  // resolveSubagentEvidenceProvenanceMode above). Computed for every required agent's latest row
+  // regardless of verdict classification -- a row can be a genuine PASS and still lack provenance.
+  const provenanceAbsent = [];
+  const expectedPhase = HANDOFF_TYPE_TO_PHASE[handoffType];
   for (const r of required) {
     const row = latestByCode.get(norm(r));
     if (!row) continue;
@@ -506,6 +529,9 @@ export async function validateSubagentEvidence(ctx, supabase) {
     if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
     else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
     else if (klass === 'unknown') unknownVerdicts.push({ agent: r, verdict: row.verdict });
+
+    const grade = gradeProvenance(row, { expectedPhase });
+    if (grade.absent) provenanceAbsent.push({ agent: r, missing_field: grade.missingField });
   }
 
   if (missing.length === 0) {
@@ -602,13 +628,34 @@ export async function validateSubagentEvidence(ctx, supabase) {
         for (const w of staleResult.warnings) console.log(`   ⚠️  ${w}`);
       }
 
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance-ABSENT is advisory by default (see
+      // resolveSubagentEvidenceProvenanceMode) -- surfaced as a warning, never blocking, unless
+      // SUBAGENT_EVIDENCE_PROVENANCE_MODE=block is set.
+      const provenanceMode = resolveSubagentEvidenceProvenanceMode();
+      const provenanceWarnings = provenanceAbsent.map(
+        p => `[ADVISORY] SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: ${p.agent}'s latest evidence is missing ${p.missing_field} — treated as absent provenance, not weak. `
+          + `${provenanceMode === 'block' ? 'Blocking' : 'Non-blocking (advisory)'} per SUBAGENT_EVIDENCE_PROVENANCE_MODE=${provenanceMode}.`
+      );
+      for (const w of provenanceWarnings) console.log(`   ⚠️  ${w}`);
+
+      if (provenanceMode === 'block' && provenanceAbsent.length > 0) {
+        const summary = provenanceAbsent.map(p => `${p.agent}(${p.missing_field})`).join(', ');
+        return buildFailResult({
+          score: 0,
+          max_score: 100,
+          issues: [`SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: ${summary}`],
+          details: { reason: 'SUBAGENT_EVIDENCE_PROVENANCE_ABSENT', provenance_absent: provenanceAbsent, ...verdictDetails, stale: staleResult.stale },
+          remediation: `Re-run ${provenanceAbsent.map(p => p.agent).join(', ')} for SD ${sdKey} so the latest evidence row carries source/invocation_id/session_id/content_hash. ${EVIDENCE_WRITER_CONTRACT}`
+        });
+      }
+
       return {
         passed: true,
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: [...unknownWarnings, ...staleResult.warnings],
-        details: { ...verdictDetails, stale: staleResult.stale }
+        warnings: [...unknownWarnings, ...staleResult.warnings, ...provenanceWarnings],
+        details: { ...verdictDetails, stale: staleResult.stale, provenance_absent: provenanceAbsent }
       };
     }
 
@@ -705,5 +752,6 @@ export const _internals = {
   REJECT_VERDICTS,
   detectStaleEvidence,
   resolveCurrentHeadSha,
-  staleEvidenceCheckDisabled
+  staleEvidenceCheckDisabled,
+  resolveSubagentEvidenceProvenanceMode
 };

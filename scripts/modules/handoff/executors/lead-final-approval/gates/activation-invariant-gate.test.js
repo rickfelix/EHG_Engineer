@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createActivationInvariantGate } from './activation-invariant-gate.js';
+import { computeContentHash } from '../../../../../../lib/sub-agent-executor/evidence-provenance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -149,5 +150,59 @@ describe('createActivationInvariantGate — happy path', () => {
     expect(result.score).toBe(100);
     expect(result.details.triggered).toBe(true);
     expect(result.details.evidence_id).toBe('ev-uuid');
+  });
+});
+
+describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading (advisory-first rollout)', () => {
+  const fakeTestPath = 'scripts/modules/activation-invariant/trigger-evaluator.test.js';
+  const prd = { id: 'prd-uuid', sd_id: triggeredSD.id, activation_test_id: fakeTestPath };
+
+  function fullyProvenancedEvidence(overrides = {}) {
+    const base = {
+      id: 'ev-uuid',
+      verdict: 'PASS',
+      confidence: 92,
+      created_at: new Date().toISOString(),
+      phase: 'LEAD-FINAL-APPROVAL',
+      source: 'sub_agent_executor',
+      invocation_id: 'inv-provenance-test',
+      critical_issues: [],
+      warnings: [],
+      recommendations: [],
+      detailed_analysis: 'analysis',
+      summary: 'ok',
+      ...overrides,
+    };
+    const contentHash = computeContentHash(base);
+    return { ...base, metadata: { activation_invariant_verified: true, session_id: 'sess-provenance-test', content_hash: contentHash } };
+  }
+
+  afterAll(() => { delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE; });
+
+  it('advisory (default, mode unset): a provenance-absent row still passes, with a warning naming the missing field', async () => {
+    delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE;
+    const evidence = fullyProvenancedEvidence({ source: 'manual' });
+    const gate = createActivationInvariantGate(mockSupabase(prd, evidence), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w) && /source/.test(w))).toBe(true);
+  });
+
+  it('block mode: the same provenance-absent row fails the gate', async () => {
+    process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE = 'block';
+    const evidence = fullyProvenancedEvidence({ source: 'manual' });
+    const gate = createActivationInvariantGate(mockSupabase(prd, evidence), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(false);
+    delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE;
+  });
+
+  it('a fully-provenanced row produces no provenance warning in either mode', async () => {
+    delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE;
+    const evidence = fullyProvenancedEvidence();
+    const gate = createActivationInvariantGate(mockSupabase(prd, evidence), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w))).toBe(false);
   });
 });
