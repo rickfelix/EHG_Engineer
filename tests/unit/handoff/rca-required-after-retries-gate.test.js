@@ -125,7 +125,10 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C FR-C2: RCA_REQUIRED_AFTER_2_RETRI
       appConfigValue: 'blocking',
       rejections: threeRejections(),
       rcaRows: [{ id: 'row-1', created_at: '2026-01-03T00:00:00Z', metadata: { rcr_id: RCR_LOW_CONFIDENCE } }],
-      rcrRowsBySdId: { [SD_ID]: [{ id: RCR_LOW_CONFIDENCE, root_cause: 'Strategic directive scope may have been too broad or requirements ambiguous', confidence: 65 }] },
+      // Confidence 65 mirrors rca.js's measured real-world output for this dispatch path
+      // (evidence 79f84159/e78f2c71): its identifyRootCause() formula always lands on exactly
+      // this value when the four contributing-factor columns are left at their NULL defaults.
+      rcrRowsBySdId: { [SD_ID]: [{ id: RCR_LOW_CONFIDENCE, root_cause: 'Templated generic root cause text, not a genuine finding', confidence: 65 }] },
     });
     const gate = createRcaRequiredAfterRetriesGate(supabase);
     const result = await gate.validator({ sd_id: SD_ID, handoffType: HANDOFF_TYPE });
