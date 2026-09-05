@@ -170,9 +170,10 @@ describe('SWEEP legacy-twin parity: coordination-detectors (TS-3)', () => {
     coordEventsModule.runAndLogDetectors = vi.fn(async () => []);
     coordEventsModule.runInertWorkerSurfacing = vi.fn(async () => ({ matched: false }));
     coordEventsModule.runCompletionBoundaryExitSurfacing = vi.fn(async () => ({ matched: false }));
+    coordEventsModule.runNotificationWaitSurfacing = vi.fn(async () => ({ matched: false })); // QF-20260905-346
   });
 
-  it('legacy and pass both invoke the same 4 underlying functions once each, with the same arguments', async () => {
+  it('legacy and pass both invoke the same 5 underlying functions once each, with the same arguments', async () => {
     const supabase = { fake: 'supabase' };
 
     await legacyFallback.runCoordinationDetectorsLegacy({ supabase });
@@ -182,6 +183,7 @@ describe('SWEEP legacy-twin parity: coordination-detectors (TS-3)', () => {
       runAndLogDetectors: coordEventsModule.runAndLogDetectors.mock.calls.length,
       runInertWorkerSurfacing: coordEventsModule.runInertWorkerSurfacing.mock.calls.length,
       runCompletionBoundaryExitSurfacing: coordEventsModule.runCompletionBoundaryExitSurfacing.mock.calls.length,
+      runNotificationWaitSurfacing: coordEventsModule.runNotificationWaitSurfacing.mock.calls.length,
     };
 
     await coordinationDetectorsPass.run({ supabase });
@@ -191,12 +193,13 @@ describe('SWEEP legacy-twin parity: coordination-detectors (TS-3)', () => {
       runAndLogDetectors: coordEventsModule.runAndLogDetectors.mock.calls.length - callsAfterLegacy.runAndLogDetectors,
       runInertWorkerSurfacing: coordEventsModule.runInertWorkerSurfacing.mock.calls.length - callsAfterLegacy.runInertWorkerSurfacing,
       runCompletionBoundaryExitSurfacing: coordEventsModule.runCompletionBoundaryExitSurfacing.mock.calls.length - callsAfterLegacy.runCompletionBoundaryExitSurfacing,
+      runNotificationWaitSurfacing: coordEventsModule.runNotificationWaitSurfacing.mock.calls.length - callsAfterLegacy.runNotificationWaitSurfacing,
     };
 
     // Each twin invocation calls every underlying function exactly once.
     expect(callsAfterLegacy).toEqual({
       aggregateSignals: 1, gatherDetectorInputs: 1, runAndLogDetectors: 1,
-      runInertWorkerSurfacing: 1, runCompletionBoundaryExitSurfacing: 1,
+      runInertWorkerSurfacing: 1, runCompletionBoundaryExitSurfacing: 1, runNotificationWaitSurfacing: 1,
     });
     expect(callsAfterPass).toEqual(callsAfterLegacy);
 
@@ -206,6 +209,7 @@ describe('SWEEP legacy-twin parity: coordination-detectors (TS-3)', () => {
       coordEventsModule.gatherDetectorInputs,
       coordEventsModule.runInertWorkerSurfacing,
       coordEventsModule.runCompletionBoundaryExitSurfacing,
+      coordEventsModule.runNotificationWaitSurfacing,
     ]) {
       for (const call of fn.mock.calls) {
         expect(call[0]).toBe(supabase);
