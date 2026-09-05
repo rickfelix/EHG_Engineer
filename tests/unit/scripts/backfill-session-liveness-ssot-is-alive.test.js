@@ -9,11 +9,13 @@ import { describe, it, expect } from 'vitest';
 import { runLivenessSsotBackfill } from '../../../scripts/backfill-session-liveness-ssot-is-alive.mjs';
 
 /**
- * @param {{ violatingCount: number, updateCap?: number|null }} opts
+ * @param {{ violatingCount: number, updateCap?: number|null, totalPopulation?: number, totalError?: object }} opts
  *   updateCap: null = UPDATE affects everything matching in one call (uncapped).
  *              a number = UPDATE affects at most that many matching rows per call (capped).
+ *   totalPopulation: the population-canary's bare (unfiltered) head-count result. Defaults large
+ *     so existing tests below need no changes; override to 0 to exercise the canary's refusal.
  */
-function makeSupabase({ violatingCount, updateCap = null, updateError = null }) {
+function makeSupabase({ violatingCount, updateCap = null, updateError = null, totalPopulation = 99999, totalError = null }) {
   let remaining = violatingCount;
   const updateCalls = [];
   return {
@@ -22,7 +24,14 @@ function makeSupabase({ violatingCount, updateCap = null, updateError = null }) 
       return {
         select(cols, opts) {
           if (opts && opts.head) {
-            return { in: () => ({ eq: () => Promise.resolve({ count: remaining, data: null, error: null }) }) };
+            // A bare head call (no .in()/.eq() chained before resolution) is the population
+            // canary; a predicated one (.in().eq()) is the violation count.
+            return {
+              then(resolve, reject) {
+                return Promise.resolve({ count: totalError ? null : totalPopulation, data: null, error: totalError }).then(resolve, reject);
+              },
+              in: () => ({ eq: () => Promise.resolve({ count: remaining, data: null, error: null }) }),
+            };
           }
           return { in: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
         },
@@ -101,5 +110,34 @@ describe('runLivenessSsotBackfill', () => {
     const supabase = makeSupabase({ violatingCount: 5 });
     await runLivenessSsotBackfill(supabase);
     expect(supabase.updateCalls).toEqual([{ is_alive: false }]);
+  });
+
+  // security-agent EXEC review (dd020db5): a downgraded/rotated service-role credential that gets
+  // silently RLS-filtered returns {count:0, error:null} -- indistinguishable from a genuinely
+  // clean population using the violation count alone. Without this canary, "0 violations, nothing
+  // to backfill" would be reported while thousands of real rows remain untouched.
+  describe('population canary', () => {
+    it('refuses to run when the total population reads as 0 (even with a dry run)', async () => {
+      const supabase = makeSupabase({ violatingCount: 0, totalPopulation: 0 });
+      await expect(runLivenessSsotBackfill(supabase, { dryRun: true })).rejects.toThrow(/population canary/);
+      expect(supabase.updateCalls).toHaveLength(0);
+    });
+
+    it('refuses to run for a real (non-dry-run) backfill too', async () => {
+      const supabase = makeSupabase({ violatingCount: 2104, totalPopulation: 0 });
+      await expect(runLivenessSsotBackfill(supabase)).rejects.toThrow(/population canary/);
+      expect(supabase.updateCalls).toHaveLength(0);
+    });
+
+    it('proceeds normally when the population canary is healthy', async () => {
+      const supabase = makeSupabase({ violatingCount: 5, totalPopulation: 13175 });
+      const result = await runLivenessSsotBackfill(supabase);
+      expect(result.totalAffected).toBe(5);
+    });
+
+    it('throws if the canary query itself errors', async () => {
+      const supabase = makeSupabase({ violatingCount: 5, totalError: { message: 'rls denied' } });
+      await expect(runLivenessSsotBackfill(supabase)).rejects.toThrow(/population canary query failed/);
+    });
   });
 });

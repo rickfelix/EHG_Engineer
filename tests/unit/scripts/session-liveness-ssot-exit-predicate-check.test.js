@@ -8,9 +8,13 @@ import { describe, it, expect } from 'vitest';
 import { checkLivenessSsotExitPredicate } from '../../../scripts/session-liveness-ssot-exit-predicate-check.mjs';
 
 /**
- * @param {{count: number, sample: object[], countError?: object, sampleError?: object}} opts
+ * The real code issues THREE queries: a bare (unfiltered) population-canary head-count, a
+ * filtered violation head-count (.in().eq()), and a filtered sample read (.in().eq().limit()).
+ * Distinguished here by whether any predicate was applied before resolution -- a bare head query
+ * (no .in()/.eq()) is the canary; a predicated head query is the violation count.
+ * @param {{count: number, sample: object[], totalPopulation?: number, countError?: object, sampleError?: object, totalError?: object}} opts
  */
-function makeSupabase({ count, sample, countError = null, sampleError = null }) {
+function makeSupabase({ count, sample, totalPopulation = 1000, countError = null, sampleError = null, totalError = null }) {
   const calls = [];
   return {
     calls,
@@ -20,14 +24,20 @@ function makeSupabase({ count, sample, countError = null, sampleError = null }) 
         select(cols, selectOpts) {
           const isHead = Boolean(selectOpts && selectOpts.head);
           calls.push({ select: cols, opts: selectOpts });
+          const preds = [];
           const builder = {
-            in(col, vals) { calls.push({ in: [col, vals] }); return builder; },
-            eq(col, val) { calls.push({ eq: [col, val] }); return builder; },
+            in(col, vals) { preds.push('in'); calls.push({ in: [col, vals] }); return builder; },
+            eq(col, val) { preds.push('eq'); calls.push({ eq: [col, val] }); return builder; },
             limit(n) { calls.push({ limit: n }); return builder; },
             then(resolve, reject) {
-              const result = isHead
-                ? { count: countError ? null : count, data: null, error: countError }
-                : { data: sampleError ? null : sample, error: sampleError };
+              let result;
+              if (isHead && preds.length === 0) {
+                result = { count: totalError ? null : totalPopulation, data: null, error: totalError };
+              } else if (isHead) {
+                result = { count: countError ? null : count, data: null, error: countError };
+              } else {
+                result = { data: sampleError ? null : sample, error: sampleError };
+              }
               return Promise.resolve(result).then(resolve, reject);
             },
           };
@@ -83,5 +93,30 @@ describe('checkLivenessSsotExitPredicate', () => {
     await checkLivenessSsotExitPredicate(supabase, { sampleLimit: 3 });
     const limitCall = supabase.calls.find((c) => c.limit !== undefined);
     expect(limitCall.limit).toBe(3);
+  });
+
+  // security-agent EXEC review (dd020db5): a downgraded/rotated service-role credential that gets
+  // silently RLS-filtered returns {count:0, error:null} from PostgREST -- indistinguishable from a
+  // genuinely clean population using the violation count alone (live-reproduced against an anon
+  // key). Without a denominator, "PASS: zero violations" would print forever under a fail-open
+  // credential -- the worse failure mode this alarm exists to catch.
+  describe('population canary', () => {
+    it('reports the total population alongside the violation count', async () => {
+      const supabase = makeSupabase({ count: 5, sample: [], totalPopulation: 13175 });
+      const result = await checkLivenessSsotExitPredicate(supabase);
+      expect(result.totalPopulation).toBe(13175);
+    });
+
+    it('throws if the canary query itself errors', async () => {
+      const supabase = makeSupabase({ count: 0, sample: [], totalError: { message: 'rls denied' } });
+      await expect(checkLivenessSsotExitPredicate(supabase)).rejects.toThrow(/population canary query failed/);
+    });
+
+    it('a bare (unfiltered) head-count call is distinguished from the predicated violation count', async () => {
+      const supabase = makeSupabase({ count: 2104, sample: [], totalPopulation: 13175 });
+      const result = await checkLivenessSsotExitPredicate(supabase);
+      expect(result.totalPopulation).toBe(13175);
+      expect(result.count).toBe(2104);
+    });
   });
 });
