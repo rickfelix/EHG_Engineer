@@ -1484,3 +1484,89 @@ describe('SD-LEO-FIX-SMS-OUTBOUND-WORKER-002 (FR-2): Pass 1c isConfigured guard'
     expect(summary.confirmedDelivered).toBe(1);
   });
 });
+
+// =======================================================================================
+// Guard (3') (QF-20260904-715): at drain, an owed backstop row whose slot's live send has
+// SINCE landed is CANCELED, never sent -- the exact incident (backstop row 93e9fa0c + live row
+// 408e43e3, both claimed 22:14:19.667Z for the 18h ET slot) this guard closes.
+// =======================================================================================
+describe("guard (3') — cancel a backstop at drain once its slot's live send lands", () => {
+  const backstopRow = (over = {}) => owedRow({
+    id: 'ob-backstop-18h', kind: 'heartbeat_status_backstop',
+    dedupe_key: 'heartbeat_status_backstop:2026-09-04T18',
+    body: '[backstop 2026-09-04T18] Still here — routine heartbeat check-in (no live heartbeat reached for this slot; live=unfilled, prior-backstop=unfilled).',
+    created_at: ago(10 * MIN), ...over,
+  });
+
+  it('QF-20260904-715 fixture: replaying the 18h-slot incident (live delivered AFTER the backstop enqueued) yields zero backstop sends', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      backstopRow(),
+      owedRow({ id: 'ob-live-18h', kind: 'heartbeat_status', dedupe_key: null, status: 'delivered', created_at: ago(1 * MIN) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(summary.sent).toBe(0);
+    expect(summary.canceledLiveCovered).toBe(1);
+    const backstop = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-backstop-18h');
+    expect(backstop.status).toBe('canceled');
+    expect(backstop.last_error).toBe('live_covered_at_drain');
+  });
+
+  it('a live row still owed/sending for the same slot (drainer is itself handling the live send) also cancels the backstop', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      backstopRow(),
+      owedRow({ id: 'ob-live-inflight', kind: 'heartbeat_status', dedupe_key: null, status: 'sending', created_at: ago(2 * MIN) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(summary.canceledLiveCovered).toBe(1);
+    expect(sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-backstop-18h').status).toBe('canceled');
+  });
+
+  it('no live coverage at all — the backstop is sent normally, with its body recomposed fresh at drain', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [backstopRow()] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    expect(summary.sent).toBe(1);
+    expect(summary.canceledLiveCovered).toBe(0);
+    const sentBody = provider.send.mock.calls[0][0].body;
+    expect(sentBody).toContain('2026-09-04T18');
+    expect(sentBody).toContain('re-verified at drain');
+  });
+
+  it('a live row that FAILED and exhausted its retry budget does not count as coverage -- the backstop still sends', async () => {
+    // attempts AT the default cap (3) so Pass 1 alerts (terminal) rather than re-arming to
+    // 'owed' -- a live row still eligible for retry legitimately counts as in-flight coverage
+    // (tested above via status='sending'); a truly dead-ended one must not block the backstop.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      backstopRow(),
+      owedRow({ id: 'ob-live-failed', kind: 'heartbeat_status', dedupe_key: null, status: 'failed', attempts: 3, created_at: ago(1 * MIN) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.canceledLiveCovered).toBe(0);
+    expect(summary.sent).toBe(1);
+  });
+
+  it('a live row delivered BEFORE the backstop enqueued (an older, unrelated slot) does not cancel this backstop', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      backstopRow({ created_at: ago(5 * MIN) }),
+      owedRow({ id: 'ob-live-older', kind: 'heartbeat_status', dedupe_key: null, status: 'delivered', created_at: ago(3 * 60 * MIN) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.canceledLiveCovered).toBe(0);
+    expect(summary.sent).toBe(1);
+  });
+
+  it('a non-backstop kind is completely unaffected by guard (3\')', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ kind: 'morning_review' })] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.canceledLiveCovered).toBe(0);
+    expect(summary.sent).toBe(1);
+  });
+});

@@ -26,6 +26,8 @@ import {
   buildBackstopBody,
   mostRecentDueSlotHour,
   STALENESS_GRACE_MS,
+  LIVE_NULL_ROW_GRACE_MS,
+  LIVE_EARLY_LOOKBACK_MS,
   SLOT_HOURS_ET,
   LIVE_KIND,
   BACKSTOP_KIND,
@@ -132,6 +134,16 @@ describe('mostRecentDueSlotHour (QF-20260828-650: fixed ET slots)', () => {
   });
 });
 
+describe('QF-20260904-715 guard constants', () => {
+  it('LIVE_NULL_ROW_GRACE_MS is 30 minutes', () => {
+    expect(LIVE_NULL_ROW_GRACE_MS).toBe(30 * 60 * 1000);
+  });
+  it('LIVE_EARLY_LOOKBACK_MS is 20 minutes, comfortably under the >=3h inter-slot gap', () => {
+    expect(LIVE_EARLY_LOOKBACK_MS).toBe(20 * 60 * 1000);
+    expect(LIVE_EARLY_LOOKBACK_MS).toBeLessThan(3 * 60 * 60 * 1000);
+  });
+});
+
 describe('classifyRowCoverage — status-decision table (finding G1)', () => {
   const now = MID_DAY;
   it('null row (no prior send) -> unfilled', () => {
@@ -182,6 +194,28 @@ describe('classifyRowCoverage — status-decision table (finding G1)', () => {
     });
     it('sent, ownKind=true -> filled (unaffected)', () => {
       expect(classifyRowCoverage({ status: 'sent', created_at: now.toISOString() }, now, { ownKind: true })).toBe('filled');
+    });
+  });
+
+  describe("QF-20260904-715 guard (2'): a null row inside a named grace of the due slot's own instant", () => {
+    const sinceMs = now.getTime() - 10 * 60 * 1000; // slot instant = 10 min before `now`
+
+    it('null row, elapsed WITHIN the grace -> in_flight, not unfilled', () => {
+      expect(classifyRowCoverage(null, now, { sinceMs })).toBe('in_flight');
+    });
+
+    it('null row, elapsed PAST the grace -> unfilled', () => {
+      const oldSinceMs = now.getTime() - (LIVE_NULL_ROW_GRACE_MS + 1000);
+      expect(classifyRowCoverage(null, now, { sinceMs: oldSinceMs })).toBe('unfilled');
+    });
+
+    it('null row, no sinceMs given -> unfilled (unchanged default, backward-compatible)', () => {
+      expect(classifyRowCoverage(null, now)).toBe('unfilled');
+    });
+
+    it('null row, elapsed exactly AT the grace boundary -> unfilled (< is strict)', () => {
+      const boundarySinceMs = now.getTime() - LIVE_NULL_ROW_GRACE_MS;
+      expect(classifyRowCoverage(null, now, { sinceMs: boundarySinceMs })).toBe('unfilled');
     });
   });
 });
@@ -319,21 +353,25 @@ describe('TS-J — F6 fix: the backstop\'s own OWED row, even very old, is never
     // obligation per tick. Under the per-slot design, the still-owed row for slot 12 suppresses
     // every tick until the due-slot itself advances to 15 -- a SECOND enqueue only happens once
     // the sweep is covering a genuinely different slot, not a duplicate-suppression bug.
+    // QF-20260904-715 guard (2') shifts WHEN the slot-15 re-fill fires: a null live row is now
+    // presumed in_flight for LIVE_NULL_ROW_GRACE_MS (30min) after the new slot's own instant
+    // (19:00 EDT/EDT-equivalent Z here), so the re-fill lands at t=8 (19:30, grace just elapsed),
+    // not immediately at t=6 (19:00, elapsed=0, still inside grace) as before this guard existed.
     const TICK_MS = 15 * 60 * 1000;
-    const TICKS_TO_CROSS_SLOT_BOUNDARY = 6; // 6 * 15min = 90min: 13:30 EDT -> 15:00 EDT
+    const TICKS_TO_CROSS_GRACE_WINDOW = 8; // 8 * 15min = 120min: 13:30 EDT -> 15:30 EDT
     let lastRow = null;
     const enqueue = vi.fn(async (_supabase, args) => {
       lastRow = { kind: BACKSTOP_KIND, status: 'owed', created_at: args.__nowForTest.toISOString() };
       return { enqueued: true, obligationId: 'ob-outage' };
     });
-    for (let tick = 0; tick <= TICKS_TO_CROSS_SLOT_BOUNDARY; tick++) {
+    for (let tick = 0; tick <= TICKS_TO_CROSS_GRACE_WINDOW; tick++) {
       const now = new Date(MID_DAY.getTime() + tick * TICK_MS);
       const rows = lastRow ? [lastRow] : [];
       const enqueueWithNow = vi.fn((supabaseArg, args) => enqueue(supabaseArg, { ...args, __nowForTest: now }));
       await main(['node', 's', '--once'], baseDeps({ enqueue: enqueueWithNow, now, supabase: makeFilterAwareSupabase(rows) }));
     }
-    // Exactly 2: the initial fill for slot 12 (t=0) and one re-fill once the tick sequence
-    // crosses into slot 15 (t=6, 15:00 EDT) -- NOT one-per-tick (the pre-fix defect) and NOT 1
+    // Exactly 2: the initial fill for slot 12 (t=0) and one re-fill once slot 15's own
+    // null-row grace has elapsed (t=8) -- NOT one-per-tick (the pre-fix defect) and NOT 1
     // (which would mean the outage goes permanently uncovered past the first slot).
     expect(enqueue).toHaveBeenCalledTimes(2);
   });
@@ -412,9 +450,20 @@ describe('TS-G — QF-20260828-650: coverage is read relative to the DUE SLOT in
 });
 
 describe('TS-H — due-slot boundary: a send from the PRIOR slot does not count as this slot\'s coverage', () => {
-  it('a delivered row 3 minutes BEFORE the due-slot instant (still in the prior slot) triggers an enqueue', async () => {
+  it("QF-20260904-715 guard (2'): a delivered row 3 minutes BEFORE the due-slot instant now counts as this slot's coverage (closes the row-3261ba2d duplicate: an early live send used to be invisible and get duplicated by the backstop)", async () => {
     const justBefore = new Date(new Date(DUE_SLOT_12_INSTANT_ISO).getTime() - 3 * 60 * 1000).toISOString();
     const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: justBefore }];
+    const enqueue = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('filled');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('a delivered row 25 minutes BEFORE the due-slot instant (outside the 20-min look-back -- a genuinely prior slot) still triggers an enqueue', async () => {
+    const wellBefore = new Date(new Date(DUE_SLOT_12_INSTANT_ISO).getTime() - 25 * 60 * 1000).toISOString();
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: wellBefore }];
     const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
 
