@@ -25,7 +25,10 @@
  * rarely-touched docs -- a content-hash-per-entry model would close this but is not worth the
  * complexity for two files.
  *
- * Usage: node scripts/lint/no-cd-and-run-recipe-lint.mjs
+ * Usage: node scripts/lint/no-cd-and-run-recipe-lint.mjs [--root <dir>]
+ * --root points the scan at a different tree (e.g. a seed-test fixture dir); the allowlist
+ * stays anchored to this script's own location either way, since it's the control's config,
+ * not part of the scanned corpus.
  */
 import fs from 'fs';
 import path from 'path';
@@ -33,7 +36,10 @@ import { fileURLToPath } from 'url';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const rootFlagIndex = process.argv.indexOf('--root');
+const REPO_ROOT = rootFlagIndex !== -1 && process.argv[rootFlagIndex + 1]
+  ? path.resolve(process.argv[rootFlagIndex + 1])
+  : path.resolve(__dirname, '..', '..');
 const ALLOWLIST_PATH = path.join(__dirname, 'no-cd-and-run-recipe-allowlist.json');
 // Self-review finding (WARNING, fixed): the language tag must cover every realistic shell-fence
 // spelling actually used in this docs corpus, not just ```bash -- an untagged/```shell/```console
@@ -63,7 +69,11 @@ function collectTargets() {
     .filter((f) => /^CLAUDE.*\.md$/.test(f))
     .map((f) => path.join(REPO_ROOT, f));
   const cmdDir = path.join(REPO_ROOT, '.claude', 'commands');
-  fs.readdirSync(cmdDir).filter((f) => f.endsWith('.md')).forEach((f) => targets.push(path.join(cmdDir, f)));
+  // Tolerant of a missing dir: --root against a seed-test fixture (or any root with no
+  // .claude/commands at all) should still scan the root-level CLAUDE*.md files, not crash.
+  if (fs.existsSync(cmdDir)) {
+    fs.readdirSync(cmdDir).filter((f) => f.endsWith('.md')).forEach((f) => targets.push(path.join(cmdDir, f)));
+  }
   return targets;
 }
 
