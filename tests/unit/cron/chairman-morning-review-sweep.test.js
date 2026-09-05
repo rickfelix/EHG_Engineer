@@ -25,6 +25,7 @@ import {
   COMPOSED_FLAG_ENV,
   GANTT_SIGNED_URL_TTL_SECONDS,
 } from '../../../scripts/cron/chairman-morning-review-sweep.mjs';
+import { TRAILING_WINDOW } from '../../../lib/fleet/exec-email-drive-line.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SWEEP_SRC = readFileSync(path.join(__dirname, '../../../scripts/cron/chairman-morning-review-sweep.mjs'), 'utf8');
@@ -428,21 +429,26 @@ describe('TS (drive line) — the 4th line, additive, fail-soft, never breaking 
     expect(body).not.toMatch(/top lever/);
   });
 
-  it('a real drive_reports row adds a 4th line carrying the per-leg breakdown', async () => {
+  it('a real drive_reports row adds a 4th line carrying the per-leg breakdown, plus the FR-4 distinct/N clause', async () => {
     const data = { ...richData, driveReports: [DRIVE_ROW] };
     const body = await buildMorningReviewBody(makeSupabase(data), { now: SUMMER_WORK });
     const lines = body.split('\n');
     expect(lines).toHaveLength(4);
-    expect(lines[3]).toBe('4/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 1; top lever: leg2_uptake (as of 2026-07-18)');
+    // SD-LEO-FIX-DRIVE-SCORE-GRADIENT-001 (FR-4): composeDriveLine() now appends a
+    // "distinct/N = M (target >= 3)" clause -- N is 1 here because this mock's drive_reports
+    // table returns only the single configured row regardless of the widened .limit().
+    expect(lines[3]).toBe('4/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 1; top lever: leg2_uptake (as of 2026-07-18) | distinct/1 = 1 (target >= 3)');
   });
 
-  it('queries drive_reports via composeDriveLine\'s .limit(1)+data[0] shape -- this mock exposes no .single()/.maybeSingle(), so that shape is REQUIRED for the wiring to work at all', async () => {
+  it('queries drive_reports via composeDriveLine\'s .limit(TRAILING_WINDOW)+data[0] shape -- this mock exposes no .single()/.maybeSingle(), so that shape is REQUIRED for the wiring to work at all', async () => {
     const data = { ...richData, driveReports: [DRIVE_ROW] };
     const sb = makeSupabase(data);
     await buildMorningReviewBody(sb, { now: SUMMER_WORK });
     const driveCall = sb._calls.find((c) => c.table === 'drive_reports');
     expect(driveCall, 'the sweep must query drive_reports').toBeDefined();
-    expect(driveCall.ops.some((o) => o.m === 'limit' && o.args[0] === 1)).toBe(true);
+    // Widened by FR-4 from limit(1) to limit(TRAILING_WINDOW) so composeDriveLine can also
+    // derive the trailing flat/distinct clause from the SAME single query.
+    expect(driveCall.ops.some((o) => o.m === 'limit' && o.args[0] === TRAILING_WINDOW)).toBe(true);
   });
 
   it('an unreadable drive_score row degrades to the 3-line core, never throws', async () => {
