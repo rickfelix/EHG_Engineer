@@ -451,11 +451,19 @@ export async function validateSubagentEvidence(ctx, supabase) {
     // columns computeContentHash() needs to re-derive a row's hash. Every added name is a real
     // top-level column or a metadata->>field alias -- lint-safe per schema-reference-extract.mjs,
     // same pattern already used for evaluated_commit_sha above.
+    // count-truncation-diff-lint: bounded explicitly (limit 500, well under the Supabase 1000
+    // default cap) now that the widened select is flagged as a new needs-review site -- the
+    // underlying query was already unbounded before this SD touched only its column list, so a
+    // real bound is the correct fix rather than an overrides.json suppression. Ordered
+    // newest-first so a truncation (never expected at this per-sd/per-phase scope) would drop the
+    // OLDEST rows, not the latest-per-agent ones the grouping loop below actually needs.
     const { data, error } = await db
       .from('sub_agent_execution_results')
       .select('sub_agent_code, created_at, verdict, confidence, critical_issues, warnings, recommendations, detailed_analysis, summary, source, invocation_id, phase, evaluated_commit_sha:metadata->>evaluated_commit_sha, session_id:metadata->>session_id, content_hash:metadata->>content_hash')
       .eq('sd_id', sdUuid)
-      .gte('created_at', phaseStartedAt.toISOString());
+      .gte('created_at', phaseStartedAt.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(500);
     if (error) throw error;
     rows = data || [];
   } catch (e) {

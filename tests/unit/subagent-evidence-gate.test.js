@@ -64,7 +64,9 @@ function makeSupabase({ phaseStart, sdCreatedAt, evidenceRows = [], auditInsertS
         const q = {
           select: () => q,
           eq: () => q,
-          gte: () => Promise.resolve({ data: evidenceRows, error: null })
+          gte: () => q,
+          order: () => q,
+          limit: () => Promise.resolve({ data: evidenceRows, error: null })
         };
         return q;
       }
