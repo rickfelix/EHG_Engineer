@@ -87,4 +87,42 @@ describe('detectIdentityCollisions', () => {
     expect(() => detectIdentityCollisions(dir)).not.toThrow();
     expect(detectIdentityCollisions(dir)).toEqual({ collisions: [], aliveMarkers: [] });
   });
+
+  // VALIDATION sub-agent finding at PLAN-TO-LEAD (evidence row d9cba8d8-2558-4a4e-9055-003d8e108100):
+  // detectIdentityCollisions() was still a single-directory reader even after the dead-field fix,
+  // feeding claim-release guards (isSessionAlive/shouldHoldClaim) at 3 no-arg call sites -- a
+  // session live only in another worktree checkout would read as dead here. Fixed to union across
+  // markerDirsFn() (default markerDirs) when no explicit markerDir is given.
+  describe('SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001: union-by-default', () => {
+    it('no-arg call unions markers from every directory markerDirsFn() returns', () => {
+      const dirA = makeDir();
+      const dirB = makeDir();
+      writeFileSync(path.join(dirB, `pid-${process.pid}.json`), JSON.stringify({ session_id: 'session-in-dir-b-only', cc_pid: process.pid }));
+      const { aliveMarkers } = detectIdentityCollisions(undefined, () => [dirA, dirB]);
+      expect(aliveMarkers).toHaveLength(1);
+      expect(aliveMarkers[0].session_id).toBe('session-in-dir-b-only');
+    });
+
+    it('detects a cross-directory collision -- same session_id alive in two different marker directories', () => {
+      const dirA = makeDir();
+      const dirB = makeDir();
+      const secondAlivePid = typeof process.ppid === 'number' && process.ppid > 0 ? process.ppid : null;
+      if (!secondAlivePid) return; // environment has no distinct second alive pid to test with
+      writeFileSync(path.join(dirA, `pid-${process.pid}.json`), JSON.stringify({ session_id: 'cross-dir-shared', cc_pid: process.pid }));
+      writeFileSync(path.join(dirB, `pid-${secondAlivePid}.json`), JSON.stringify({ session_id: 'cross-dir-shared', cc_pid: secondAlivePid }));
+      const { collisions } = detectIdentityCollisions(undefined, () => [dirA, dirB]);
+      expect(collisions).toHaveLength(1);
+      expect(collisions[0].session_id).toBe('cross-dir-shared');
+      expect(collisions[0].markers).toHaveLength(2);
+    });
+
+    it('an explicit markerDir argument still pins to exactly that one directory (union path never consulted)', () => {
+      const dirA = makeDir();
+      const dirB = makeDir();
+      writeFileSync(path.join(dirB, `pid-${process.pid}.json`), JSON.stringify({ session_id: 'session-in-dir-b-only', cc_pid: process.pid }));
+      // markerDirsFn is provided but must be ignored entirely since markerDir is explicit.
+      const { aliveMarkers } = detectIdentityCollisions(dirA, () => [dirA, dirB]);
+      expect(aliveMarkers).toEqual([]);
+    });
+  });
 });
