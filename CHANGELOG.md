@@ -249,6 +249,10 @@
   - The staged SQL migration's own grant-hardening fix was iterated twice after adversarial SECURITY review: an initial `REVOKE EXECUTE ... FROM authenticated` would have turned a governance block into a bare permission error for any authenticated-role writer (the trigger runs `SECURITY INVOKER`, unlike its sibling `sd_canonical_writer_policy`, which already established the correct precedent).
   - Two unrelated defects in `/ship`'s deep-tier review gate were discovered while shipping this PR and routed to Adam as separate quick-fixes: a closed-enum `hardcoded_secret` pattern with no value-shape constraint that always matches the pervasive convention of assigning a placeholder string to the service-role-key env var name in test setup, and the same gate's diff scanner flagging unchanged context lines as if newly added.
 
+- **A ratification marker relocated within an already-satisfied multi-target contract no longer reads as a regression** - SD-LEO-FIX-MARKER-RESOLVER-WIRING-001
+  - `lib/chairman/ratification-regression-detector.mjs`'s `regressed` verdict treated stage1 (whole-section removal) and stage2 (the scalar single-file marker check) identically, so a marker still present in a companion file the same named contract resolves to — just not the one file stage2 checks — read as a false regression even when contract coverage (SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-B's multi-target resolver) was fully checked and clean.
+  - A checked-and-satisfied `contractCoverage` now vetoes stage2's contribution only; stage1 is never vetoed, since a whole-section removal is a real regression regardless of coverage, and an unmeasurable coverage (24 of 53 live rows have no derivable git-commit pin) never suppresses a real hit. The one existing test asserting the pre-fix behavior was explicitly superseded (not silently changed) with an inline rationale comment, and a new test pins that stage1 always wins over satisfied coverage.
+
 ## 2026-09-03
 
 ### Bugfix
