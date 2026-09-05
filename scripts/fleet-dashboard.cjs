@@ -1765,15 +1765,22 @@ async function printInbox() {
   console.log('  ' + pad('Type', 16) + pad('Severity', 10) + pad('Callsign', 12) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
 
+  // QF-20260905-761: a row the stuck-drain marked OVERDUE (aged out, no coordinator reply
+  // found — see stale-session-sweep.cjs's STUCK_SIGNAL_DRAIN) renders ahead of fresh rows so
+  // it is never pushed off this newest-first window by more recent traffic. Stable sort
+  // preserves newest-first order within each group.
+  const orderedSignals = [...signals].sort((a, b) => (b.payload?.overdue ? 1 : 0) - (a.payload?.overdue ? 1 : 0));
+
   const ids = [];
-  for (const s of signals) {
+  for (const s of orderedSignals) {
     const sigType = s.payload?.signal_type || '?';
     const severity = s.payload?.severity || 'medium';
     const callsign = s.payload?.sender_callsign || '(none)';
     const ageMin = Math.floor((Date.now() - new Date(s.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
     const bodyPreview = (s.body || s.payload?.body || '').replace(/\n/g, ' ').substring(0, 28);
-    console.log('  ' + pad(sigType, 16) + pad(severity, 10) + pad(callsign, 12) + pad(ageStr, 8) + bodyPreview);
+    const overdueTag = s.payload?.overdue ? 'OVERDUE ' : '';
+    console.log('  ' + overdueTag + pad(sigType, 16) + pad(severity, 10) + pad(callsign, 12) + pad(ageStr, 8) + bodyPreview);
     ids.push(s.id);
   }
 
