@@ -110,12 +110,33 @@ describe('scripts/audit-rpc-execute-grants-buckets.json — binding-KEEP manifes
 
   it('manifest grew from 27 to 30 total declared entries (no accidental duplicate or drop)', () => {
     const total = Object.values(manifest.buckets).reduce((sum, b) => sum + b.functions.length, 0);
-    expect(total).toBe(30);
+    // SD-LEO-INFRA-CLOSE-ANON-EXECUTE-001 (FR-2) added 1 more (fn_submit_error_capture, Bucket C):
+    // 30 -> 31.
+    expect(total).toBe(31);
   });
 
   it('every declared signature is unique across all buckets (no function double-classified)', () => {
     const all = Object.values(manifest.buckets).flatMap((b) => b.functions.map((f) => f.signature));
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// SD-LEO-INFRA-CLOSE-ANON-EXECUTE-001 FR-2: fn_submit_error_capture is intentionally anon-facing
+// (browser error telemetry) and must stay declared in Bucket C, never revoked.
+describe('scripts/audit-rpc-execute-grants-buckets.json — fn_submit_error_capture coverage (FR-2)', () => {
+  const SIGNATURE = 'public.fn_submit_error_capture(p_message text, p_stack_trace text, p_page_url text, p_severity text, p_metadata jsonb)';
+
+  it('is present in Bucket C', () => {
+    const bucketCSignatures = manifest.buckets.C.functions.map((f) => f.signature);
+    expect(bucketCSignatures).toContain(SIGNATURE);
+  });
+
+  it('is NOT present in Bucket A or B (must never be revoked -- it is intentionally anon-facing)', () => {
+    const revokeSignatures = new Set([
+      ...manifest.buckets.A.functions.map((f) => f.signature),
+      ...manifest.buckets.B.functions.map((f) => f.signature),
+    ]);
+    expect(revokeSignatures.has(SIGNATURE)).toBe(false);
   });
 });
 
