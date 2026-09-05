@@ -63,7 +63,7 @@ import { getParentOrchestratorExecToPlanGates } from './parent-orchestrator.js';
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
 // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
-import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+import { createSubagentEvidenceGate, createUnresolvedCriticalConditionGate } from '../../gates/subagent-evidence-gate.js';
 import { createRcaRequiredAfterRetriesGate } from '../../gates/rca-required-after-retries-gate.js';
 
 // Helper modules
@@ -234,6 +234,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for TESTING + SECURITY
     gates.push(createSubagentEvidenceGate(this.supabase));
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F: advisory-first check for an unresolved
+    // structured CRITICAL sub-agent finding anywhere in this SD's evidence history.
+    gates.push(createUnresolvedCriticalConditionGate(this.supabase));
     gates.push(createRcaRequiredAfterRetriesGate(this.supabase));
 
     // Parent orchestrator short-circuit (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-2)
