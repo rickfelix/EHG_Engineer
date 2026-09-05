@@ -27,6 +27,7 @@ import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 
 // SD-LEO-INFRA-HARDENING-001: Import threshold profiles for gate enforcement
 import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
+import { YELLOW_BAND_WIDTH } from '../../adaptive-threshold-calculator.js';
 
 // SD-LEO-INFRA-HARDENING-001: Gate result schema validation
 import { validateGateResult } from './gate-result-schema.js';
@@ -524,11 +525,21 @@ export class ValidationOrchestrator {
           // validateGates() call -- a gate-verdict-cache reuse (cache_hit) is explicitly
           // excluded because a cached verdict may have been computed over a DIFFERENT
           // reduced gate set than the one that produced this run's normalizedScore.
+          // SEC-003A-01 (SECURITY sub-agent finding, EXEC-TO-PLAN review, post-merge follow-up):
+          // the accept had no floor on results.normalizedScore -- GATE2's own YELLOW zone bounds
+          // ONLY gate2Result.score against ITS threshold, a different quantity than the weighted
+          // normalizedScore across all gates. Without this conjunct, a run with several
+          // required:false advisory gates scoring 0 (a real, non-adversarial shape -- see the
+          // zeroScoreGates warning above) could reach normalizedScore as low as ~8% and still be
+          // accepted, a waiver far beyond the 2.55-point near-miss this mechanism was scoped for.
+          // Reusing YELLOW_BAND_WIDTH (not a new constant) keeps the accept bounded to the same
+          // near-miss tolerance GATE2 itself grants.
           const gate2Result = results.gateResults?.GATE2_IMPLEMENTATION_FIDELITY;
           const gate2YellowAccept = sdType === 'feature'
             && gate2Result?.passed === true
             && gate2Result?.zone === 'YELLOW'
-            && !gate2Result?.cache_hit;
+            && !gate2Result?.cache_hit
+            && (threshold - results.normalizedScore) <= YELLOW_BAND_WIDTH;
 
           if (gate2YellowAccept) {
             results.yellowZoneAccept = {
