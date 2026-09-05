@@ -5,10 +5,10 @@ import { evaluate, authorityClass, effectiveType } from '../../../../lib/comms/a
 function wellFormedDecision(overrides = {}) {
   return {
     type: 'decision',
-    body: 'Approve the deploy? Reply A or B. Reply DETAILS for the rationale.',
-    options: [{ label: 'A) ship now' }, { label: 'B) hold until morning' }],
+    body: 'Approve the deploy? Reply 1 or 2. Reply DETAILS for the rationale.',
+    options: [{ label: 'ship now' }, { label: 'hold until morning' }],
     decisionCount: 1,
-    replyInstruction: 'Reply A or B (or DETAILS)',
+    replyInstruction: 'Reply 1 or 2 (or DETAILS)',
     replyId: 'dec-123',
     noReplyConsequence: 'no reply by 5pm ET -> I hold (reversible)',
     ...overrides,
@@ -26,6 +26,30 @@ describe('rubric-engine evaluate()', () => {
     expect(res.blockedReasons.some((r) => r.startsWith('labeled_options'))).toBe(true);
     expect(res.llmReview).toBeNull();
     expect(reviewer).not.toHaveBeenCalled(); // structural F3 fix: no review on a lint block
+  });
+
+  // QF-20260903-523: a chairman reply in the exact shape a letter-labeled replyInstruction asks
+  // for ("A"/"B") is rejected by matchSmsOption() by construction (it accepts only a 1-based
+  // index or an exact label match) -- a decision message asking for that unmatchable shape must
+  // be blocked, not sent, since a routed chairman answer would otherwise park instead of landing.
+  it('TS-1b: a replyInstruction naming letters instead of the numbered options is blocked', async () => {
+    const reviewer = vi.fn();
+    const msg = wellFormedDecision({ replyInstruction: 'Reply A or B (or DETAILS)' });
+    const res = await evaluate(msg, DAYTIME, { reviewer });
+    expect(res.verdict).toBe('blocked');
+    expect(res.blockedReasons.some((r) => r.startsWith('reply_instruction'))).toBe(true);
+    expect(reviewer).not.toHaveBeenCalled();
+  });
+
+  it('TS-1c: a replyInstruction naming only SOME of the numbered options is blocked (e.g. a 3rd option added, instruction not updated)', async () => {
+    const reviewer = vi.fn();
+    const msg = wellFormedDecision({
+      options: [{ label: 'ship now' }, { label: 'hold until morning' }, { label: 'cancel' }],
+      replyInstruction: 'Reply 1 or 2 (or DETAILS)',
+    });
+    const res = await evaluate(msg, DAYTIME, { reviewer });
+    expect(res.verdict).toBe('blocked');
+    expect(res.blockedReasons.some((r) => r.startsWith('reply_instruction'))).toBe(true);
   });
 
   it('TS-2: well-formed decision passes lint, THEN runs the independent review (separate call)', async () => {

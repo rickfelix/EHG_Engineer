@@ -5,10 +5,10 @@ import { sendChairmanSMS } from '../../../../lib/comms/adam-outbound/chairman-sm
 function wellFormedDecision(overrides = {}) {
   return {
     type: 'decision',
-    body: 'Approve the deploy? Reply A or B. Reply DETAILS for the rationale.',
-    options: [{ label: 'A) ship now' }, { label: 'B) hold until morning' }],
+    body: 'Approve the deploy? Reply 1 or 2. Reply DETAILS for the rationale.',
+    options: [{ label: 'ship now' }, { label: 'hold until morning' }],
     decisionCount: 1,
-    replyInstruction: 'Reply A or B (or DETAILS)',
+    replyInstruction: 'Reply 1 or 2 (or DETAILS)',
     replyId: 'dec-c-1',
     noReplyConsequence: 'no reply by 5pm ET -> I hold (reversible)',
     ...overrides,
