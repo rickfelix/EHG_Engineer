@@ -1,8 +1,8 @@
-<!-- file_content_hash: 12fe68dfda252f9d -->
+<!-- file_content_hash: 5718d427b434e8be -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-05 10:08:45 AM
+**Generated**: 2026-09-05 2:00:28 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -635,23 +635,22 @@ When multiple Claude Code instances may run concurrently on different SDs:
 
 #### Before Starting EXEC Phase:
 ```bash
-# 1. Create isolated worktree (NOT shared C:/Users/rickf/Projects/_EHG/ehg)
-cd C:/Users/rickf/Projects/_EHG/ehg
-git worktree add C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID} -b feat/${SD_ID}-branch
+# 1. Create isolated worktree (NOT shared C:/Users/rickf/Projects/_EHG/ehg) -- absolute paths,
+#    never `cd`, so a single unscoped directory change never has to be classifier-approved.
+git -C C:/Users/rickf/Projects/_EHG/ehg worktree add C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID} -b feat/${SD_ID}-branch
 
-# 2. Work ONLY in worktree directory
-cd C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
+# 2. Work ONLY in the worktree directory -- reference it by absolute path, never cd into it
+WORKTREE=C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
 
-# 3. All git operations happen here
-git add . && git commit -m "feat(${SD_ID}): description"
-git push origin feat/${SD_ID}-branch
+# 3. All git operations use -C; scripts run by absolute path from the repo root
+git -C "$WORKTREE" add . && git -C "$WORKTREE" commit -m "feat(${SD_ID}): description"
+git -C "$WORKTREE" push origin feat/${SD_ID}-branch
 ```
 
 #### After PR Merged:
 ```bash
-# Cleanup worktree
-cd C:/Users/rickf/Projects/_EHG/ehg
-git worktree remove C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
+# Cleanup worktree (no cd needed -- git worktree remove takes the path directly)
+git -C C:/Users/rickf/Projects/_EHG/ehg worktree remove C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
 ```
 
 ### Forbidden Operations (Multi-Instance)
@@ -906,8 +905,7 @@ Before creating EXEC→PLAN handoff, EXEC MUST run:
 
 #### 1. Unit Tests (Business Logic Validation)
 ```bash
-cd C:/Users/rickf/Projects/_EHG/ehg
-npm run test:unit
+npm --prefix C:/Users/rickf/Projects/_EHG/ehg run test:unit
 ```
 - **What it validates**: Service layer, business logic, data transformations
 - **Failure means**: Core functionality is broken
@@ -916,8 +914,7 @@ npm run test:unit
 
 #### 2. E2E Tests (UI/Integration Validation)
 ```bash
-cd C:/Users/rickf/Projects/_EHG/ehg
-npm run test:e2e
+npm --prefix C:/Users/rickf/Projects/_EHG/ehg run test:e2e
 ```
 - **What it validates**: User flows, component rendering, integration
 - **Failure means**: User-facing features don't work

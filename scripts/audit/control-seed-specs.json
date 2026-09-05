@@ -769,5 +769,40 @@
       "input": "claude_sessions .update( sites across scripts/** and lib/** (fs.readdirSync directory walk, excluding archive/one-off/_deprecated/smoke/tests), text-scanned for a literal status:'released'|'stale' anchored within 6 lines of the nearest .from('claude_sessions') and inspected for either terminalSessionUpdate(/sessionStatusUpdate( routing or an inline is_alive:false, filtered against scripts/audit/claude-sessions-terminal-chokepoint-allowlist.json by file:line. Consumes no DB columns and no environment variables.",
       "seen": "Run against this repo's real scripts/ and lib/ on 2026-09-05 (this SD's own PR #8237): 0 needs-review across 21 live claude_sessions UPDATE sites (all either route through the FR-1 chokepoint or, at the single pre-chokepoint reference site scripts/stale-session-sweep.cjs, already set is_alive:false inline) -- not a fixture positive; the negative result is expected since this SD's own PR just finished routing every known writer."
     }
+  },
+  {
+    "name": "no-cd-and-run-recipe-lint",
+    "script": "scripts/lint/no-cd-and-run-recipe-lint.mjs",
+    "rootFlag": "--root",
+    "note": "QF-20260905-646. --root added specifically to make this control seed-testable (it otherwise computes REPO_ROOT from __dirname, not cwd/argv, so it was previously unaimable).",
+    "fixtures": [
+      {
+        "path": "CLAUDE_SEEDTEST.md",
+        "content": "# Seed test defect\n```bash\ncd /some/seeded/path\nnpm run test\n```\n"
+      }
+    ],
+    "detectTokens": [
+      "CLAUDE_SEEDTEST.md",
+      "cd /some/seeded/path"
+    ],
+    "observability_proof": {
+      "input": "Reads the literal markdown TEXT of CLAUDE*.md (repo root) and .claude/commands/*.md via fs.readFileSync -- no database columns, no environment variables, no exit-signal beyond its own exit code.",
+      "seen": "Real positive observed against the LIVE repo (not a fixture), 2026-09-05: running this lint against the actual .claude/commands/*.md + CLAUDE_EXEC.md corpus (before the allowlist was added) surfaced 1 real violation in .claude/commands/ship.md (a load-bearing worktree-cleanup cd, QF-20260404-445) and 4 real violations in .claude/commands/triangulation-protocol.md (a multi-repo exploration recipe) -- both independently confirmed genuine pre-existing cd-and-run recipes, now tracked in scripts/lint/no-cd-and-run-recipe-allowlist.json."
+    }
+  },
+  {
+    "name": "no-cd-and-run-recipe-lint-test-fixtures",
+    "script": "scripts/lint/no-cd-and-run-recipe-lint.test.js",
+    "seedTest": "scripts/lint/no-cd-and-run-recipe-lint.test.js",
+    "neuter": {
+      "find": "cd .worktrees/SD-X\\nnpm test",
+      "replace": "echo .worktrees/SD-X\\nnpm test",
+      "why": "Breaks the 'flags cd-and-run in an untagged fence' fixture's seeded cd line into a non-cd echo line, so findCdAndRunViolations(md) returns [] for it and that test's toBeGreaterThan(0) assertion fails -- proving the fixture is load-bearing, not vacuous."
+    },
+    "note": "This test file itself matches CONTROL_GLOBS (scripts/lint/**/*.js) and was NEW in this diff, so control-seed-test-lint required its own entry despite being a test file rather than a detection script. seedTest points at itself since its own assertions are what is being certified; neuter mutates its own fixture literal, the only file NEUTER_FILE_NOT_SCRIPT permits touching.",
+    "observability_proof": {
+      "input": "Consumes no external input -- a pure vitest unit test asserting findCdAndRunViolations() return values against inline string fixtures it defines itself.",
+      "seen": "Real positive observed 2026-09-05: npx vitest run scripts/lint/no-cd-and-run-recipe-lint.test.js against the shipped no-cd-and-run-recipe-lint.mjs passed 9/9 locally, exercising the same detection code path enforced at merge time by this repo's CI."
+    }
   }
 ]

@@ -110,7 +110,9 @@ If qualified for quick-fix:
    hand-typed sibling path like `../EHG_Engineer-qf-<id>` either — it registers OUTSIDE the
    repo root (every Read/Edit inside it then freezes the seat on the outside-working-directory
    permission prompt) and is blocked by ENFORCEMENT 12e (the worktree-placement guard).
-   `.worktrees/qf/<id>` is the only sanctioned path; `cd` into it before continuing below.
+   `.worktrees/qf/<id>` is the only sanctioned path. Never `cd` into it: reference it by
+   relative path directly (e.g. `node .worktrees/qf/<id>/scripts/one-off/<script>.mjs` — dotenv
+   still reads the repo-root `.env`), or `git -C .worktrees/qf/<id> <verb>` for git operations.
 
 3. **Implement fix:**
    - Keep changes ≤50 LOC (hard cap)

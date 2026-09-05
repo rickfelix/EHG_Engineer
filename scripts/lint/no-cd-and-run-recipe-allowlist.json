@@ -1,0 +1,10 @@
+{
+  ".claude/commands/ship.md": {
+    "reason": "QF-20260404-445 / PAT-WORKTREE-LIFECYCLE-001: cd to the main repo before worktree cleanup is LOAD-BEARING (deleting a worktree while cwd is inside it corrupts the Windows shell), not a teaching anti-pattern. Pre-existing, out of QF-20260905-646's named scope.",
+    "expected": 1
+  },
+  ".claude/commands/triangulation-protocol.md": {
+    "reason": "Pre-existing multi-repo exploration recipe (cd into EHG_Engineer/EHG to grep/git log). Out of QF-20260905-646's named scope (CLAUDE_EXEC.md multi-instance-coordination + checkin/quick-fix docs only) -- candidate for its own follow-up fix.",
+    "expected": 4
+  }
+}
