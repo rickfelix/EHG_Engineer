@@ -21,6 +21,9 @@ const ALLOWLIST_PATH = resolve(ROOT, 'scripts/lint/quiet-tick-token-parity-allow
 export const PAIRS = [
   { emitter: 'scripts/adam-quiet-tick.mjs', consumer: 'scripts/adam-startup-check.mjs' },
   { emitter: 'scripts/coordinator-quiet-tick.mjs', consumer: 'scripts/coordinator-startup-check.mjs' },
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: the Michael quiet-tick's QUIET_TICK_* vocabulary is
+  // consumed by its startup check's QUIET_TICK_TOKENS list (TESTING evidence 629fc7e3).
+  { emitter: 'scripts/michael-quiet-tick.mjs', consumer: 'scripts/michael-startup-check.mjs' },
 ];
 
 const TOKEN_RE = /QUIET_TICK_[A-Z_]+/g;
