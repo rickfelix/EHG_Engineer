@@ -10,6 +10,13 @@ import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
 import { getStoryMinimumScoreByCategory } from '../../../verifiers/plan-to-exec/story-quality.js';
 import { validateWireframeArtifact } from '../../../validators/wireframe-artifact-validator.js';
 
+// SD-LEO-FIX-GATE-PLAN-EXEC-001 (escalated from QF-20260903-239): issue classes that stay
+// UNCONDITIONALLY blocking regardless of score -- a thin/empty PRD's structural insufficiency
+// is not the kind of flagged item the score-based leniency below is meant to waive. Matched
+// against validatePRDHeuristic's own issue text (prd-quality-validation.js:178/:202); every
+// OTHER heuristic issue (e.g. placeholder/boilerplate requirements) is reclassifiable.
+const PRD_QUALITY_UNCONDITIONAL_BLOCK_PATTERNS = [/Insufficient functional requirements/, /Insufficient acceptance criteria/];
+
 /**
  * Register Gate 1 validators
  * @param {import('../core.js').ValidatorRegistry} registry
@@ -23,7 +30,53 @@ export function registerGate1Validators(registry) {
     // Pass SD type so refactor/infrastructure SDs use heuristic validation
     const mergedOptions = { ...options, sdType: sd?.sd_type, sdCategory: sd?.category };
     const result = await validatePRDQuality(prd, mergedOptions);
-    return registry.normalizeResult(result);
+
+    // SD-LEO-FIX-GATE-PLAN-EXEC-001: apply score-based leniency INLINE against this single
+    // validatePRDQuality call, guarded by result.details?.method==='heuristic' -- never routed
+    // through validatePRDForHandoff, which has no heuristic/AI-rubric awareness and would also
+    // relax the out-of-scope AI-rubric path (prd-quality-rubric.js:733-751 never sets
+    // details.method, so the `?.` guard here correctly excludes it). validatePRDHeuristic
+    // (prd-quality-validation.js:249) computes `passed = score >= 50 && issues.length === 0`,
+    // hard-failing on ANY nonzero issues regardless of score -- this was the defect: a PRD
+    // scoring well above any reasonable threshold with one flagged item (e.g. a placeholder
+    // requirement) was blocked exactly like an empty PRD.
+    //
+    // Threshold reuses getStoryMinimumScoreByCategory (already imported above for
+    // userStoryQualityValidation) -- the SAME function the parallel legacy PRD_BOILERPLATE
+    // check already uses (see the `isRefactorBrief ? 50 : getStoryMinimumScoreByCategory(...)`
+    // call in PlanToExecVerifier.js's verifyHandoff -- deliberately not citing a line number
+    // here, since one already went stale once in review), so the two checks agree on the
+    // NUMERIC threshold instead of independently drifting (this SD's original defect was a
+    // 50-vs-55 mismatch). Two divergences remain ACCEPTED, not fixed, by this SD: (1) that
+    // call site's `isRefactorBrief ? 50 : ...` carve-out is not replicated here; (2) that
+    // legacy check's leniency (via validatePRDForHandoff) applies to BOTH the heuristic and
+    // AI-rubric paths, while this gate's leniency is deliberately heuristic-only. A full
+    // consolidation of the two checks is a larger refactor, out of this bugfix's scope.
+    //
+    // leo_validation_rules.criteria.min_score for this rule (currently 50) is NOT read here --
+    // confirmed inert: ValidationOrchestrator.js places rule.criteria on gate.meta only, never
+    // into the validator context. Documented here rather than silently left to mislead a future
+    // reader into thinking that DB value governs this threshold.
+    const isHeuristic = result.details?.method === 'heuristic';
+    const rawIssues = result.issues || [];
+    const unconditionalIssues = rawIssues.filter((i) =>
+      PRD_QUALITY_UNCONDITIONAL_BLOCK_PATTERNS.some((p) => p.test(i)));
+    const reclassifiableIssues = rawIssues.filter((i) =>
+      !PRD_QUALITY_UNCONDITIONAL_BLOCK_PATTERNS.some((p) => p.test(i)));
+    const threshold = getStoryMinimumScoreByCategory(sd?.category, sd?.sd_type);
+    const scoreClears = typeof result.score === 'number' && result.score >= threshold;
+
+    let passed = result.passed;
+    let issues = rawIssues;
+    let warnings = result.warnings || [];
+
+    if (isHeuristic && !passed && scoreClears && unconditionalIssues.length === 0) {
+      passed = true;
+      warnings = [...warnings, ...reclassifiableIssues];
+      issues = [];
+    }
+
+    return registry.normalizeResult({ passed, score: result.score, max_score: 100, issues, warnings, details: result.details });
   }, 'PRD quality validation using AI-powered Russian Judge rubric');
 
   registry.register('userStoryQualityValidation', async (context) => {
