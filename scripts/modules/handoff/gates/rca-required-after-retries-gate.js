@@ -106,28 +106,45 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): bare row-existence let a hollow/failed
         // RCA row (no real analysis) satisfy this gate identically to a genuine one. Require the
         // row's linked root_cause_reports (via metadata.rcr_id) to actually carry a non-empty
-        // root_cause AND confidence >= 60 -- content-based, deliberately NOT status-based
+        // root_cause AND confidence >= 70 -- content-based, deliberately NOT status-based
         // (PLAN-phase TESTING review, evidence baded1f3: rca.js never writes status='RESOLVED').
-        // The confidence floor closes a SECURITY/TESTING EXEC-phase re-verify finding (evidence
-        // c49ce1e0/28382f71): rca.js's identifyRootCause() always produces a near-identical
-        // templated root_cause string regardless of real analysis quality (297/300 live samples
-        // byte-identical) -- non-empty root_cause alone proves only "rca.js ran", not "a genuine
-        // analysis happened". A UUID-shaped, non-empty check on confidence>=60 matches rca.js's
-        // own IN_REVIEW/CAPA_PENDING confidence semantics and the DB's valid_confidence_for_status
-        // CHECK constraint threshold.
         //
-        // SEC-1 (evidence c49ce1e0): a malformed (non-UUID) metadata.rcr_id used to hit a
-        // Postgres 22P02 error, landing in the old rcrError fail-open branch -- making a
-        // malformed id CHEAPER to forge a pass with than a well-formed-but-wrong one. Filter to
-        // well-formed UUIDs before querying; a dropped malformed id is simply never verified
-        // (correctly non-satisfying), never a query error.
+        // The floor is 70, NOT 60 (EXEC-phase confirmation round, evidence 79f84159/e78f2c71 --
+        // both TESTING and SECURITY independently measured live data and found 60 empirically
+        // vacuous: 0 of 1412 rows excluded, because resolveRcaDispatchTarget's auto-created RCR
+        // leaves rca.js's identifyRootCause() four contributing factors (log_quality,
+        // evidence_strength, pattern_match_score, historical_success_bonus) at their NULL
+        // defaults, so the formula always computes exactly 65 for the templated, non-genuine
+        // path this SD's own dispatch fix creates -- 513 of 520 passing rows share ONE
+        // byte-identical templated root_cause at confidence 65; the 7 genuine analyses in the
+        // dataset sit at 90-95. 70 is the measured discriminating threshold (matches rca.js's
+        // own CAPA_PENDING cut and the DB's valid_confidence_for_status >=70 requirement) and
+        // correctly excludes all 513 templated rows while keeping all 7 genuine ones. This is
+        // still an evidence-QUALITY floor, not an access-control boundary -- confidence remains
+        // a plain column an equally-privileged actor could set directly (SECURITY evidence
+        // e78f2c71: "the trust model has not fundamentally changed"); it only raises the cost of
+        // an accidental or lazy false-pass, which is the realistic failure mode this gate guards
+        // against today (both RCA gates are advisory-mode by default; see below).
         //
-        // SEC-2 (evidence c49ce1e0): the RCR content lookup had no .eq('sd_id', sdId), so ANY
-        // rcr_id belonging to a completely unrelated SD with a genuine analysis (519/1411 live
-        // rows qualify) was a universal gate-passing token. Scoped to this SD's own RCRs only.
+        // SEC-1 (evidence c49ce1e0, confirmed closed by hostile-client re-verify e78f2c71): a
+        // malformed (non-UUID) metadata.rcr_id used to hit a Postgres 22P02 error, landing in the
+        // old rcrError fail-open branch -- making a malformed id CHEAPER to forge a pass with
+        // than a well-formed-but-wrong one. Filter to well-formed UUIDs before querying; a
+        // dropped malformed id is simply never verified (correctly non-satisfying), never a
+        // query error. Lower-cased at extraction (SEC-5, evidence e78f2c71): Postgres returns
+        // canonical lowercase uuid text, so an uppercase caller-supplied id must be normalized
+        // before the final Set lookup below, or a genuine analysis goes uncredited.
+        //
+        // SEC-2 (evidence c49ce1e0, confirmed closed by hostile-client re-verify e78f2c71): the
+        // RCR content lookup had no .eq('sd_id', sdId), so ANY rcr_id belonging to a completely
+        // unrelated SD with a genuine analysis (519/1411 live rows qualify) was a universal
+        // gate-passing token. Scoped to this SD's own RCRs only.
         const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const rcrIds = [...new Set(
-          (rcaRows || []).map((r) => r.metadata?.rcr_id).filter((id) => typeof id === 'string' && UUID_REGEX.test(id))
+          (rcaRows || [])
+            .map((r) => r.metadata?.rcr_id)
+            .filter((id) => typeof id === 'string' && UUID_REGEX.test(id))
+            .map((id) => id.toLowerCase())
         )];
         let contentVerifiedIds = new Set();
         if (rcrIds.length > 0) {
@@ -145,11 +162,13 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
           }
           contentVerifiedIds = new Set(
             (rcrRows || [])
-              .filter((r) => typeof r.root_cause === 'string' && r.root_cause.trim().length > 0 && (r.confidence ?? 0) >= 60)
-              .map((r) => r.id)
+              .filter((r) => typeof r.root_cause === 'string' && r.root_cause.trim().length > 0 && (r.confidence ?? 0) >= 70)
+              .map((r) => String(r.id).toLowerCase())
           );
         }
-        const satisfyingRows = (rcaRows || []).filter((r) => r.metadata?.rcr_id && contentVerifiedIds.has(r.metadata.rcr_id));
+        const satisfyingRows = (rcaRows || []).filter(
+          (r) => r.metadata?.rcr_id && contentVerifiedIds.has(String(r.metadata.rcr_id).toLowerCase())
+        );
 
         const details = {
           mode,

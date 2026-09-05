@@ -95,7 +95,7 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C FR-C2: RCA_REQUIRED_AFTER_2_RETRI
     expect(result.details.content_verified_evidence).toEqual([]);
   });
 
-  it('PASSES (in blocking mode) when the linked root_cause_reports row has a populated root_cause and confidence >= 60', async () => {
+  it('PASSES (in blocking mode) when the linked root_cause_reports row has a populated root_cause and confidence >= 70', async () => {
     const supabase = makeSupabase({
       appConfigValue: 'blocking',
       rejections: threeRejections(),
@@ -120,16 +120,40 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C FR-C2: RCA_REQUIRED_AFTER_2_RETRI
     expect(result.passed).toBe(false);
   });
 
-  it('PASSES with status=IN_REVIEW, populated root_cause, confidence >= 60 -- the predicate is content-based, not status-based (rca.js never writes status=RESOLVED)', async () => {
+  it('BLOCKS the measured templated-output confidence of exactly 65 -- 60 was empirically vacuous (0/1412 live rows excluded), 70 is the confirmed discriminating threshold (evidence 79f84159/e78f2c71)', async () => {
+    const supabase = makeSupabase({
+      appConfigValue: 'blocking',
+      rejections: threeRejections(),
+      rcaRows: [{ id: 'row-1', created_at: '2026-01-03T00:00:00Z', metadata: { rcr_id: RCR_LOW_CONFIDENCE } }],
+      rcrRowsBySdId: { [SD_ID]: [{ id: RCR_LOW_CONFIDENCE, root_cause: 'Strategic directive scope may have been too broad or requirements ambiguous', confidence: 65 }] },
+    });
+    const gate = createRcaRequiredAfterRetriesGate(supabase);
+    const result = await gate.validator({ sd_id: SD_ID, handoffType: HANDOFF_TYPE });
+    expect(result.passed).toBe(false);
+  });
+
+  it('PASSES with status=IN_REVIEW, populated root_cause, confidence >= 70 -- the predicate is content-based, not status-based (rca.js never writes status=RESOLVED)', async () => {
     const supabase = makeSupabase({
       appConfigValue: 'blocking',
       rejections: threeRejections(),
       rcaRows: [{ id: 'row-1', created_at: '2026-01-03T00:00:00Z', metadata: { rcr_id: RCR_IN_REVIEW } }],
-      rcrRowsBySdId: { [SD_ID]: [{ id: RCR_IN_REVIEW, root_cause: 'A genuine analysis', status: 'IN_REVIEW', confidence: 65 }] },
+      rcrRowsBySdId: { [SD_ID]: [{ id: RCR_IN_REVIEW, root_cause: 'A genuine analysis', status: 'IN_REVIEW', confidence: 90 }] },
     });
     const gate = createRcaRequiredAfterRetriesGate(supabase);
     const result = await gate.validator({ sd_id: SD_ID, handoffType: HANDOFF_TYPE });
     expect(result.passed).toBe(true);
+  });
+
+  it('SEC-5: an uppercase metadata.rcr_id still resolves and credits the genuine analysis (Postgres returns canonical lowercase uuid text)', async () => {
+    const supabase = makeSupabase({
+      appConfigValue: 'blocking',
+      rejections: threeRejections(),
+      rcaRows: [{ id: 'row-1', created_at: '2026-01-03T00:00:00Z', metadata: { rcr_id: RCR_ANALYZED.toUpperCase() } }],
+      rcrRowsBySdId: { [SD_ID]: [{ id: RCR_ANALYZED, root_cause: 'The root cause was X', confidence: 90 }] },
+    });
+    const gate = createRcaRequiredAfterRetriesGate(supabase);
+    const result = await gate.validator({ sd_id: SD_ID, handoffType: HANDOFF_TYPE });
+    expect(result.passed, 'an uppercase-but-otherwise-valid rcr_id must not be silently uncredited').toBe(true);
   });
 
   it('SEC-1: a malformed (non-UUID) metadata.rcr_id does NOT satisfy the gate and does NOT trigger the query-error fail-open -- it is simply filtered out as unverifiable', async () => {
