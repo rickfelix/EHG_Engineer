@@ -21,6 +21,10 @@ import {
 
 const require = createRequire(import.meta.url);
 const { getActiveSolomonId } = require('../../lib/coordinator/solomon-identity.cjs');
+// SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001: route the consult-row send through the canonical
+// choke point (session-coordination-insert-classguard-lint) rather than a raw .insert() -- the
+// exact same [SOLOMON_CONSULT] pattern lib/adam/presend-consult-lane.cjs already uses.
+const { insertCoordinationRow } = require('../../lib/coordinator/dispatch.cjs');
 
 /**
  * VALIDATION finding V-2: the release-side bounded-wait gate had no producer — nothing ever
@@ -39,27 +43,23 @@ async function openConsultRow(supabase, group) {
     // convention) -- without it the review this row solicits could never be matched to a release,
     // even after FR-3 added a reader.
     const correlationId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from('session_coordination')
-      .insert({
-        sender_type: 'system',
-        sender_session: 'batch-mint-sweep',
-        target_session: solomonId || 'broadcast-solomon',
-        message_type: 'INFO',
-        subject: `[SOLOMON_CONSULT] batch-mint hold: ${group.creator}`,
-        // FR-4b: the batch-mint WINDOW ANCHOR (grouping detail) is not the RELEASE TIMER's anchor
-        // (this row's own created_at) -- conflating the two caused a real false-early-release
-        // retry loop when a reader computed the wait from the window anchor instead. State only
-        // what is true: the window anchor for context, and point at this row's own created_at
-        // (queryable on the row itself) as the sole timing anchor.
-        body: `Batch-mint detector held ${group.memberIds.length} QF(s) (${group.memberIds.join(', ')}) minted by ${group.creator}, grouped within a 10-minute window anchored at ${group.anchorAt} (grouping detail only -- NOT the release timer). Review and reply (cite correlation_id ${correlationId}) to release early, or the bounded wait auto-permits release ${BOUNDED_WAIT_MS / 60000} minutes after THIS row's own created_at (query this row directly for the exact timestamp the timer counts from).`,
-        payload: {
-          kind: 'oracle_read_pending_consult', qf_ids: group.memberIds, creator: group.creator,
-          consult_purpose: 'batch_mint_hold', correlation_id: correlationId,
-        },
-      })
-      .select('id, created_at')
-      .maybeSingle();
+    const { data, error } = await insertCoordinationRow(supabase, {
+      sender_type: 'system',
+      sender_session: 'batch-mint-sweep',
+      target_session: solomonId || 'broadcast-solomon',
+      message_type: 'INFO',
+      subject: `[SOLOMON_CONSULT] batch-mint hold: ${group.creator}`,
+      // FR-4b: the batch-mint WINDOW ANCHOR (grouping detail) is not the RELEASE TIMER's anchor
+      // (this row's own created_at) -- conflating the two caused a real false-early-release
+      // retry loop when a reader computed the wait from the window anchor instead. State only
+      // what is true: the window anchor for context, and point at this row's own created_at
+      // (queryable on the row itself) as the sole timing anchor.
+      body: `Batch-mint detector held ${group.memberIds.length} QF(s) (${group.memberIds.join(', ')}) minted by ${group.creator}, grouped within a 10-minute window anchored at ${group.anchorAt} (grouping detail only -- NOT the release timer). Review and reply (cite correlation_id ${correlationId}) to release early, or the bounded wait auto-permits release ${BOUNDED_WAIT_MS / 60000} minutes after THIS row's own created_at (query this row directly for the exact timestamp the timer counts from).`,
+      payload: {
+        kind: 'oracle_read_pending_consult', qf_ids: group.memberIds, creator: group.creator,
+        consult_purpose: 'batch_mint_hold', correlation_id: correlationId,
+      },
+    }, { targetRoleHint: 'solomon', select: 'id, created_at', single: true });
     if (error || !data) return null;
     return data;
   } catch {
