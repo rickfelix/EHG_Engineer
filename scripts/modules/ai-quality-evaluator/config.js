@@ -56,6 +56,16 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // prd: 60 -> 65 (n=34, avg_score=81, pass_rate=97.1% -- INCREASE recommendation).
   // retrospective: 60 -> 65 (n=67, avg_score=84.5, pass_rate=94% -- INCREASE recommendation).
   // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 60 }`.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B (2026-09-05): prd was independently re-verified
+  // AFTER this QF, not before it. Parent SD-003's shadow re-score row 1cdcaecd-bb34-4dc9-82ba-
+  // 7c5270dace77 is VACUOUS -- gate-threshold-shadow-rescore.mjs:59 filters by the view's
+  // historical current_threshold (60), so it only re-scored the PRE-raise population (the same
+  // 33-row group this QF's own "n=34" cites); it never touched a single assessment scored under
+  // the live 65. DO NOT cite that row as safety evidence. The REAL post-raise number, queried
+  // directly against ai_quality_assessments WHERE pass_threshold=65: n=10, pass=9/10 (90.0%),
+  // window 2026-08-28..2026-09-05 -- meets the >=10 sample floor, confirms prd remains healthy
+  // under its live bar.
   feature: { default: 60, prd: 65, retrospective: 65 },
 
   // Database SDs: Slightly stricter (data integrity)
@@ -83,6 +93,15 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // separate stale-historical-group row at 65/INCREASE that already resolved when the
   // shared default was raised to 70 by QF-20260807-698) are both untouched.
   // BEFORE VALUE FOR ROLLBACK: delete the retrospective key, leaving `{ default: 70 }`.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B (2026-09-05): user_story's "65->70" line above is
+  // the ORIGINAL raise (2026-08-16). Parent SD-003 later measured this SAME cell again and its
+  // shadow re-score row 22cbb767-741c-44d0-a669-e8cb62448bbd is VACUOUS -- it re-scored the
+  // PRE-raise 65-group (n=17, matching this cell's own "n=17" cited above), never a single
+  // assessment scored under the live 70. DO NOT cite that row as post-raise safety evidence. The
+  // REAL post-raise number, queried directly against ai_quality_assessments WHERE
+  // pass_threshold=70: n=31, pass=27/31 (87.1%), window 2026-08-16..2026-08-29 -- clears the
+  // >=10 sample floor, confirms user_story remains healthy under its live bar.
   security: { default: 70, retrospective: 75 },
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
@@ -117,6 +136,14 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // retrospective: 60 -> 65 (n=85, avg_score=84.7, pass_rate=91.8% -- INCREASE recommendation).
   // Both clear >=10 assessments (AC-1). BEFORE VALUE FOR ROLLBACK: delete this whole key: bugfix
   // reverts to falling through to DEFAULT_THRESHOLD (60) for every content_type, exactly as before.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B (2026-09-05): prd was independently re-verified
+  // AFTER this QF, not before it. Parent SD-003's shadow re-score row d9ad5522-654c-4fc2-81e1-
+  // ee92ea05c16f is VACUOUS -- it re-scored the PRE-raise 60-group (n=32), never a single
+  // assessment scored under the live 65. DO NOT cite that row as safety evidence. The REAL
+  // post-raise number, queried directly against ai_quality_assessments WHERE pass_threshold=65:
+  // n=46, pass=45/46 (97.8%), window 2026-08-29..2026-09-05 -- confirms prd remains healthy
+  // under its live bar.
   bugfix: { default: 60, prd: 65, retrospective: 65 }
 };
 

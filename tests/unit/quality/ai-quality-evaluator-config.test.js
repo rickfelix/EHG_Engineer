@@ -33,6 +33,15 @@ describe('SD_TYPE_PASS_THRESHOLDS — QF-20260807-698 disposition', () => {
     expect(SD_TYPE_PASS_THRESHOLDS.security.user_story).toBeUndefined();
   });
 
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B: security x user_story was previously only
+  // indirectly covered (asserting .user_story is undefined + .default is 70, above). This is a
+  // direct pin through the real runtime read path -- parent SD-003's FR-3 target -- so a future
+  // regression that adds a wrong user_story override fails loudly here, not just via the
+  // indirect assertion.
+  it('APPLIED (QF-20260807-698): getPassThreshold resolves security x user_story to 70 via the shared default (no dedicated override)', () => {
+    expect(getPassThreshold('user_story', { sd_type: 'security' })).toBe(70);
+  });
+
   it('REFUSED (at QF-20260807-698 time): orchestrator INCREASE recommendation was NOT applied', () => {
     // orchestrator has no dedicated key -- ORCHESTRATOR_THRESHOLD governs it separately, and its
     // retrospective cell's 50 -> 55 recommendation was refused because orchestrator x user_story
