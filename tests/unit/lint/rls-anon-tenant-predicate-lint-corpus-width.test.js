@@ -26,7 +26,7 @@ import {
   candidateFilesAll,
   lintSql,
 } from '../../../scripts/lint/rls-anon-tenant-predicate-lint.mjs';
-import { RLS_LINT_CORPUS_DIRS } from '../../../scripts/lint/rls-lint-corpus-dirs.mjs';
+import { RLS_LINT_CORPUS_DIRS } from '../../../lib/lint/rls-lint-corpus-dirs.mjs';
 
 const VIOLATION_SQL = 'CREATE POLICY leaky ON public.foo FOR SELECT TO anon USING (true);';
 

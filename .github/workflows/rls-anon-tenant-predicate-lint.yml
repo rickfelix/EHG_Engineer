@@ -16,7 +16,7 @@ name: RLS Anon-Role Tenant-Predicate-Sufficiency Lint
 # other CI workflow, so a dedicated workflow is the real enforcement mechanism.
 #
 # SD-LEO-FIX-RLS-LINT-CORPUS-WIDTH-001: paths below MUST mirror
-# scripts/lint/rls-lint-corpus-dirs.mjs's RLS_LINT_CORPUS_DIRS exactly (a `paths:`
+# lib/lint/rls-lint-corpus-dirs.mjs's RLS_LINT_CORPUS_DIRS exactly (a `paths:`
 # trigger can't import a JS module) -- enforced by
 # tests/unit/lint/rls-lint-corpus-dirs-workflow-consistency.test.js, which fails if
 # the two ever diverge.
@@ -28,7 +28,7 @@ on:
       - 'database/manual-updates/**/*.sql'
       - 'supabase/migrations/**/*.sql'
       - 'scripts/lint/rls-anon-tenant-predicate-lint.mjs'
-      - 'scripts/lint/rls-lint-corpus-dirs.mjs'
+      - 'lib/lint/rls-lint-corpus-dirs.mjs'
       - '.github/workflows/rls-anon-tenant-predicate-lint.yml'
 
 concurrency:
