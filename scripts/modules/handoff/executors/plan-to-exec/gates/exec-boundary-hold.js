@@ -31,6 +31,7 @@ import { execBoundaryHoldReason } from '../../../../../../lib/fleet/claim-eligib
 import { authorizeSwitchOn } from '../../../../../../lib/switch-automation/switchon-precheck-gate.js';
 import { runSwitchOnPrechecks } from '../../../../../../lib/switch-automation/switchon-prechecks.js';
 import { notifySwitchOnDecisionPacket } from '../../../../../../lib/switch-automation/switchon-decision-packet.js';
+import { mergeMetadataKeys } from '../../../../../../lib/coordinator/safe-metadata-merge.mjs';
 
 /**
  * Evaluate the switch-on gate for a held SD carrying metadata.switchon_action.
@@ -69,9 +70,11 @@ async function evaluateSwitchOnGate(supabase, sd) {
  * @param {import('@supabase/supabase-js').SupabaseClient} [supabase] service-role client --
  *   only required when a held SD carries metadata.switchon_action; existing manual-park
  *   callers (no switchon_action) never touch it, so omitting it is byte-identical.
+ * @param {Function} [mergeMetadataKeysFn] test-injection seam for the switch-on auto-clear
+ *   write (defaults to the real mergeMetadataKeys from safe-metadata-merge.mjs).
  * @returns {Object} Gate configuration
  */
-export function createExecBoundaryHoldGate(supabase) {
+export function createExecBoundaryHoldGate(supabase, mergeMetadataKeysFn = mergeMetadataKeys) {
   return {
     name: 'EXEC_BOUNDARY_HOLD',
     // FR-3 (the critical finding of this SD): this gate's WAIT must NEVER
@@ -94,15 +97,18 @@ export function createExecBoundaryHoldGate(supabase) {
         if (authorized) {
           const nowIso = new Date().toISOString();
           try {
-            await supabase.from('strategic_directives_v2').update({
-              metadata: {
-                ...ctx.sd.metadata,
-                exec_boundary_hold: false,
-                exec_boundary_hold_cleared_by: 'switchon-gate-auto',
-                exec_boundary_hold_cleared_at: nowIso,
-                exec_boundary_hold_auto_clear_evidence: evidence,
-              },
-            }).eq('sd_key', ctx.sd.sd_key);
+            // SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: this was a client-side
+            // read-then-full-blob-replace write of the SAME exec_boundary_hold flag
+            // lib/fleet/exec-boundary-hold-writer.js was just made atomic for -- a
+            // concurrent clear/set of an unrelated metadata key between ctx.sd being
+            // loaded and this write landing would have been silently clobbered. Scoped to
+            // only the patch keys via mergeMetadataKeys(), never the whole ctx.sd.metadata.
+            await mergeMetadataKeysFn(ctx.sd.sd_key, {
+              exec_boundary_hold: false,
+              exec_boundary_hold_cleared_by: 'switchon-gate-auto',
+              exec_boundary_hold_cleared_at: nowIso,
+              exec_boundary_hold_auto_clear_evidence: evidence,
+            });
           } catch {
             // Fail-soft on the write: the gate already computed authorized:true from a
             // trusted evaluation; a persistence hiccup here is surfaced via the returned
