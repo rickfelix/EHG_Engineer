@@ -8,7 +8,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { scoreLeg4, VERDICTS, HEALTHY_VERDICTS, LEG_POINTS } from '../../../../lib/drive-loop/score/leg4-capacity.js';
+import {
+  scoreLeg4, VERDICTS, HEALTHY_VERDICTS, LEG_POINTS, LADDER_DISTANCE,
+} from '../../../../lib/drive-loop/score/leg4-capacity.js';
 
 const forecast = (verdict, extra = {}) => () => ({
   verdict, beltDepth: 3, demandSoon: 3, deficit: 0, ...extra,
@@ -85,5 +87,33 @@ describe('leg4 — capacity verdict', () => {
   it('refuses implicit dependencies rather than shelling out or writing silently', () => {
     expect(() => scoreLeg4({ computeVerdict: forecast('TIGHT') })).toThrow(/must be injected/);
     expect(() => scoreLeg4({ persist: persister().persist })).toThrow(/must be injected/);
+  });
+
+  // TS-5/TS-6/TS-10 (PRD SD-LEO-FIX-DRIVE-SCORE-GRADIENT-001, FR-3): a new, always-computed
+  // telemetry field is added ALONGSIDE the existing points value; the scoring rule itself (earned,
+  // HEALTHY_VERDICTS) must remain byte-identical to today's behavior for all 4 ladder states.
+
+  it.each(VERDICTS)('[TS-5/TS-6] %s: points/earned is BYTE-IDENTICAL to today, ladder_distance is present and always computed', (v) => {
+    const { persist } = persister();
+    const r = scoreLeg4({ computeVerdict: forecast(v), persist });
+    // Unchanged scoring rule, asserted explicitly per state (not just via it.each above).
+    expect(r.points.value).toBe(HEALTHY_VERDICTS.includes(v) ? LEG_POINTS : 0);
+    // New telemetry field, computed on every call, alongside the unchanged points value.
+    expect(r.ladder_distance).toBeDefined();
+    expect(r.ladder_distance.value).toBe(LADDER_DISTANCE[v]);
+  });
+
+  it('[TS-6] ladder_distance differs by state — it is not a constant stand-in for the binary score', () => {
+    const { persist } = persister();
+    const values = VERDICTS.map((v) => scoreLeg4({ computeVerdict: forecast(v), persist }).ladder_distance.value);
+    expect(new Set(values).size).toBeGreaterThan(1);
+  });
+
+  it('ladder_distance discloses ffebbd68 as AUTHORITY-TO-PROPOSE only, never as ratifying this mapping', () => {
+    const { persist } = persister();
+    const r = scoreLeg4({ computeVerdict: forecast('TIGHT'), persist });
+    expect(r.ladder_distance.limitation).toMatch(/NOT RATIFIED/);
+    expect(r.ladder_distance.limitation).toMatch(/ffebbd68/);
+    expect(r.ladder_distance.limitation).toMatch(/does NOT ratify this mapping/);
   });
 });
