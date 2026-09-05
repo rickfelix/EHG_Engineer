@@ -143,6 +143,8 @@ async function main() {
   }
 
   const registered = new Set(ids);
+  // Could-not-determine (empty map) just means zero rows enter this filter -- never flags a
+  // registered session as orphaned; it can only under-report orphans, never over-report them.
   const orphanPids = Object.entries(getMarkerSessionIds()).filter(([sid, info]) => info.alive && !registered.has(sid));
   if (orphanPids.length > 0) {
     console.log('\nUNREGISTERED (PID alive, no active claude_sessions row)');

@@ -48,7 +48,7 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
-const { getMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3
+const { getMarkerSessionIds, markerDirs } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3; markerDirs added SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 FR-3
 
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 2 — the sweep ACTS on what it
 // fetches, so a read silently capped at the PostgREST 1000-row max means claims not
@@ -966,14 +966,14 @@ function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
 // live Claude Code processes share the same session_id (identity collision).
 // Supports both pid-*.json (CLI sessions) and fallback-*.json (Desktop sessions).
 // Returns: [{ pid, session_id, marker_path, cc_pid, sse_port }]
-// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3, TS-8): markerDir is now an optional
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3, TS-8): markerDir is an optional
 // override (test-injection seam, mirroring lib/fleet/cc-pid-liveness.cjs's own contract) so this
 // function is hermetically unit-testable without touching the real, host-local
-// .claude/session-identity directory.
-function detectIdentityCollisions(markerDir = path.resolve(__dirname, '../.claude/session-identity')) {
-  if (!fs.existsSync(markerDir)) return { collisions: [], aliveMarkers: [] };
-
-  const markers = fs.readdirSync(markerDir)
+// .claude/session-identity directory. An explicit markerDir still pins the scan to exactly that
+// one directory (unchanged single-dir contract for the 2 existing test-injection call sites).
+function readCollisionMarkersFromDir(markerDir) {
+  if (!fs.existsSync(markerDir)) return [];
+  return fs.readdirSync(markerDir)
     .filter(f => /^pid-\d+\.json$/.test(f) || /^fallback-\d+-\d+\.json$/.test(f))
     .map(f => {
       const filePath = path.resolve(markerDir, f);
@@ -987,6 +987,18 @@ function detectIdentityCollisions(markerDir = path.resolve(__dirname, '../.claud
       } catch { return null; }
     })
     .filter(Boolean);
+}
+
+// VALIDATION sub-agent finding at PLAN-TO-LEAD (evidence row d9cba8d8-2558-4a4e-9055-003d8e108100):
+// this was a THIRD independent single-directory re-derivation (FR-3's own description named it),
+// left un-unioned even after the dead claude_session_id field was fixed -- its 3 no-arg call sites
+// (qfSweepAliveCcPids/sweepAliveCcPids) feed isSessionAlive/shouldHoldClaim, live claim-release
+// guards, so a session live only in another worktree checkout would still read as dead here.
+// No-arg now unions across markerDirsFn() (default real markerDirs), matching cc-pid-liveness.cjs's
+// own no-arg contract; an explicit markerDir argument is unchanged (pins to exactly that directory).
+function detectIdentityCollisions(markerDir, markerDirsFn = markerDirs) {
+  const dirs = markerDir ? [markerDir] : markerDirsFn();
+  const markers = dirs.flatMap((dir) => readCollisionMarkersFromDir(dir));
 
   // Check which PIDs are alive.
   // For CLI markers (pid-*.json), check the specific PID.
@@ -2572,7 +2584,10 @@ async function main() {
       // later at this function's line ~1664 from detectIdentityCollisions() -- this
       // block runs before that and before the no-sessions early-return, so it cannot
       // depend on either). See filterDormantByPidLiveness's own doc for the keyspace
-      // join detail.
+      // join detail. Could-not-determine (empty map, e.g. off-checkout) protects NOBODY here --
+      // filterDormantByPidLiveness only REMOVES a candidate from `dormant` on a confirmed-alive
+      // marker, so this feeds a DORMANCY ALERT, not a release; it can under-protect, never
+      // over-flag a live session as newly dormant.
       const dormant = filterDormantByPidLiveness(dormantCandidates, getMarkerSessionIds());
       const DORMANCY_ALERT_THRESHOLD = 2;
       if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
