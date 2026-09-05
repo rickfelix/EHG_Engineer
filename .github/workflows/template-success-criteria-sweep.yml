@@ -36,19 +36,32 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          set -e
           # --dry-run: read-only, never writes. Baseline is the count measured at this SD's
           # landing (852, SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A FR-5) -- any count ABOVE it means
           # a NEW SD completed with 100%-template success_criteria since GATE_PLACEHOLDER_CONTENT_
           # DETECTION's FR-1 flip should have blocked it.
+          #
+          # SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A follow-up (adversarial review, PR #8247): a broken
+          # sweep (DB auth failure, a refactor that renames/moves analyzePlaceholderContent, a
+          # strategic_directives_v2 schema change) must FAIL this job, not silently report
+          # new_detected=false and exit 0 -- the entire point of this workflow is to be a trustable
+          # "no new drift" signal, and a sweep that can go quietly blind defeats that. So: the
+          # script's own exit code is checked explicitly (no `|| true` masking it), AND an unparsable
+          # affected count is treated as a hard failure, not a soft ::warning:: + exit 0.
           BASELINE=852
-          OUTPUT=$(node scripts/one-off/stamp-template-sc-disposition-002-a.mjs --dry-run 2>&1 || true)
+          set +e
+          OUTPUT=$(node scripts/one-off/stamp-template-sc-disposition-002-a.mjs --dry-run 2>&1)
+          SCRIPT_EXIT=$?
+          set -e
           echo "$OUTPUT"
+          if [ "$SCRIPT_EXIT" -ne 0 ]; then
+            echo "::error::stamp-template-sc-disposition-002-a.mjs --dry-run exited $SCRIPT_EXIT -- the sweep could not run, treating as a failure rather than silently reporting no drift."
+            exit 1
+          fi
           AFFECTED=$(echo "$OUTPUT" | grep -oE '100%-template success_criteria \(affected\): [0-9]+' | grep -oE '[0-9]+$' || echo "")
           if [ -z "$AFFECTED" ]; then
-            echo "new_detected=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Could not parse affected count from sweep output -- skipping comparison this run."
-            exit 0
+            echo "::error::Could not parse affected count from sweep output -- the sweep's contract with this workflow has drifted (script output shape changed). Failing loud rather than silently skipping the comparison."
+            exit 1
           fi
           if [ "$AFFECTED" -gt "$BASELINE" ]; then
             echo "new_detected=true" >> "$GITHUB_OUTPUT"

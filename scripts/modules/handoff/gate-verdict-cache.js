@@ -129,7 +129,9 @@ export const GATE_INPUT_EXTRACTORS = {
 export const GATE_CODE_VERSION = {
   GATE_SD_METRICS_SUFFICIENCY: 1,
   GATE_SD_QUALITY: 1,
-  GATE_PLACEHOLDER_CONTENT_DETECTION: 1,
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A: rule set changed -- 100%-template success_criteria now
+  // blocks (pass conditional, required:true) instead of the prior always-pass/advisory shape.
+  GATE_PLACEHOLDER_CONTENT_DETECTION: 2,
   GATE_MECHANISM_CLAIM_VERIFIER: 1,
 };
 
