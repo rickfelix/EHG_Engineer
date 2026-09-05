@@ -1,8 +1,8 @@
-<!-- file_content_hash: d0561938d92f96f1 -->
+<!-- file_content_hash: 1b54c2052a53712f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_PROVENANCE.md — Adam Provenance (dated rationale)
 
-**Generated**: 2026-09-04 9:08:38 AM
+**Generated**: 2026-09-05 10:08:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — dated chairman verbals, live witnesses, superseded cadences
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -65,6 +65,6 @@ Do not read a missing entry as "this rule has no provenance". Coverage is roughl
 
 ---
 
-*Generated from database: 2026-09-04*
+*Generated from database: 2026-09-05*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_provenance). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,8 +1,8 @@
-<!-- file_content_hash: c984304446fc7680 -->
+<!-- file_content_hash: 37785736da7bd9c6 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-04 9:08:38 AM
+**Generated**: 2026-09-05 10:08:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -78,6 +78,9 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **STANDING FOUNDATION AUDIT DUTY (ratifications b259e739, 7473142c, 71e2e871, f7303528; coordinator share)** — Coordinator share of the standing Friday foundation audit (Solomon's duty, section 611): the coordinator dispatches the remediation SDs in the order Solomon sequences them, runs the audit fan-out (≤4) only on the fleet's own account and only when the active window has at least sixty percent headroom (f7303528), and acts as reviewer of Solomon's audit output; venture scope is live ventures only; decisions reach the chairman as needed, never batched.
 - **FOUNDATION CAPA PROGRAMME: corrective AND preventive, every workstream carrying a CI-asserted exit predicate (ratification 49656c8c)** — Chairman in-terminal 2026-09-02 ~18:1xZ. Coordinator share: dispatch the CAPA workstreams in the sequenced order recorded on each parent (capa_sequence / capa_sequence_after), and do not accept a child whose corrective lands without its exit predicate asserted in CI in the same PR. A workstream closes on two consecutive weekly zero readings, never on a merge.
 - **ALTIFYAI STAGE 23: BUILD THE ELEVEN SURFACES, and the fourteen-journey set is the specification of record (ratification 767b288f)** — Chairman decision, in-terminal 2026-09-03 ~12:0xZ. Coordinator share: the eleven surfaces are venture product scope and route to the AltifyAI venture lane, not the harness belt. Zero stages per day while they are built is the expected consequence of a chairman decision and is not to be reported as a stalled band. Acceptance is the stage-23 walk passing, never a count of merged PRs.
+- **WORKER SEATS STAY IN AUTO MODE: permission bypass declined, guard fixes are the remedy (ratification f0b5a482)** — Chairman by verified SMS 2026-09-05T11:17Z, verbatim "B". Coordinator share: hand-started worker seats stay in Claude Code auto mode; do not launch or advise launching worker seats with --dangerously-skip-permissions; a seat frozen on a permission prompt is a stuck-seat event routed through the pager (QF-20260905-346) and prevented by checked-in allow-rules (QF-20260905-646), not by removing the guard. (Ratification f0b5a482.)
+- **CHAIRMAN MENTION IS PROVENANCE, NEVER A RANK BUMP; PRIORITY OF RECORD FROM CRITICALITY AND ROADMAP OR PM-BOARD ALIGNMENT (ratification 29741684)** — Chairman at the Solomon terminal 2026-09-05T08:27:44Z, verbatim (binding half): "Just because the chairman recommends an activity for completion or to be worked on doesn't mean the workers need to jump on it right away. If I mention something, it doesn't necessarily mean it needs to go to the front of the line." Coordinator share: a chairman-mentioned item is dispatched by the priority of record (criticality, roadmap or PM-board alignment) with its chairman provenance and review-by date recorded on the row; it is not moved to the head of the belt on the mention alone; until SD-LEO-INFRA-PRIORITY-RECORD-ONE-001 puts one comparator across SDs and quick fixes, chairman-ordered quick fixes still need a DIRECTED assignment because the self-claim picker reaches the QF lane only by a critical jump (interim rule, MEASURED by Solomon at worker-checkin.cjs:176-215). (Ratification 29741684.)
+- **OPERATING RULES CARRY MEASURED (file:line) OR MODEL; NO MODEL RULE EXECUTES BEFORE THE READ (ratification c5ee2c66)** — Chairman in-terminal at the Adam seat 2026-09-05 ~13:19Z, verbatim "1" (Adopt). Coordinator share as the EXECUTOR: every interim operating rule the coordinator issues or executes that changes live state (registry flips, env toggles, dispatch orders, reuse instructions) carries MEASURED with the file:line it rests on, or MODEL; the coordinator does not execute a MODEL rule, its own or Adam's or Solomon's, until the read exists, and says so on the row. Acceptance: zero MODEL-labelled rules executed in a week, counted from session_coordination rows. (Ratification c5ee2c66.)
 
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
@@ -161,6 +164,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-04*
+*Generated from database: 2026-09-05*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

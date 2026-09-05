@@ -1,8 +1,8 @@
-<!-- file_content_hash: b655c15fd95061af -->
+<!-- file_content_hash: 7f45af9dc24b784b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-09-04 9:08:38 AM
+**Generated**: 2026-09-05 10:08:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -198,6 +198,6 @@ Moved from section 611 on 2026-09-03 to free single-read headroom, nominated by 
 
 ---
 
-*Generated from database: 2026-09-04*
+*Generated from database: 2026-09-05*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_provenance). Do not hand-edit — edit the DB section and regenerate.*
