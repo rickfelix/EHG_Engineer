@@ -26,6 +26,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluateTrigger } from '../../../../activation-invariant/trigger-evaluator.js';
+import { gradeProvenance } from '../../../../../../lib/sub-agent-executor/evidence-provenance.js';
+import { resolveSubagentEvidenceProvenanceMode } from '../../../gates/subagent-evidence-gate.js';
 
 const GATE_NAME = 'GATE_ACTIVATION_INVARIANT';
 const __filename = fileURLToPath(import.meta.url);
@@ -71,9 +73,11 @@ async function loadPRD({ supabase, prdRepo, sdId }) {
 async function loadTestingEvidence({ supabase, sdId }) {
   if (!supabase) return null;
   const cutoff = new Date(Date.now() - EVIDENCE_FRESHNESS_MS).toISOString();
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: widened to add source, invocation_id, and the columns
+  // computeContentHash() needs to re-derive a row's content hash for provenance grading.
   const { data } = await supabase
     .from('sub_agent_execution_results')
-    .select('id, verdict, confidence, metadata, created_at, phase')
+    .select('id, verdict, confidence, metadata, created_at, phase, source, invocation_id, critical_issues, warnings, recommendations, detailed_analysis, summary')
     .eq('sd_id', sdId)
     .eq('sub_agent_code', 'TESTING')
     .gte('created_at', cutoff)
@@ -309,18 +313,53 @@ export function createActivationInvariantGate(supabase, prdRepo) {
       // PASS — all conditions hold.
       console.log(`   ✅ Activation invariant verified (evidence row: ${evidence.id})`);
       logEvent({ sd_id: sdId, verdict: 'PASS', evidence_id: evidence.id, activation_test_id: activationTestId });
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading, advisory-only by default
+      // (shared SUBAGENT_EVIDENCE_PROVENANCE_MODE flag, same as subagent-evidence-gate.js).
+      // session_id/content_hash come from the already-selected `metadata` object here, unlike
+      // subagent-evidence-gate.js's aliased projection — flattened onto a shallow copy so
+      // gradeProvenance's contract (flat top-level fields) stays identical across both callers.
+      const provenanceGrade = gradeProvenance(
+        { ...evidence, session_id: evidence.metadata?.session_id, content_hash: evidence.metadata?.content_hash }
+      );
+      const provenanceMode = resolveSubagentEvidenceProvenanceMode();
+      const provenanceWarnings = [];
+      if (provenanceGrade.absent) {
+        const msg = `[ADVISORY] SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: TESTING evidence row ${evidence.id} is missing ${provenanceGrade.missingField} — treated as absent provenance, not weak. `
+          + `${provenanceMode === 'block' ? 'Blocking' : 'Non-blocking (advisory)'} per SUBAGENT_EVIDENCE_PROVENANCE_MODE=${provenanceMode}.`;
+        console.log(`   ⚠️  ${msg}`);
+        provenanceWarnings.push(msg);
+        if (provenanceMode === 'block') {
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: TESTING evidence row ${evidence.id} missing ${provenanceGrade.missingField}`],
+            warnings: [],
+            details: {
+              triggered: true,
+              prd_id: prd.id,
+              activation_test_id: activationTestId,
+              evidence_id: evidence.id,
+              provenance_absent: provenanceGrade,
+            },
+          };
+        }
+      }
+
       return {
         passed: true,
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: [],
+        warnings: provenanceWarnings,
         details: {
           triggered: true,
           prd_id: prd.id,
           activation_test_id: activationTestId,
           evidence_id: evidence.id,
           evidence_confidence: evidence.confidence,
+          provenance_absent: provenanceGrade.absent ? provenanceGrade : null,
         },
       };
     },

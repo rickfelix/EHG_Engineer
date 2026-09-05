@@ -6,7 +6,12 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { buildAuditRows, writeAuditSink, EVENT_TYPE } from '../../../lib/worktree-reaper/audit-sink.js';
+import { buildAuditRows, writeAuditSink, severityForVerdict, EVENT_TYPE } from '../../../lib/worktree-reaper/audit-sink.js';
+
+// SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-3: audit_log_severity_check allows only
+// these four values (database/schema-reference-snapshot.json) — the fix this SD exists
+// for. Read from the same source a future schema change would update, not hand-copied.
+const ALLOWED_SEVERITIES = ['info', 'warning', 'error', 'critical'];
 
 function makeRecord(overrides = {}) {
   return {
@@ -41,13 +46,44 @@ describe('buildAuditRows()', () => {
     expect(rows[0].metadata.reason).toBe('active_claim_protected');
   });
 
-  it('stamps severity low for a kept worktree, medium for a removal verdict', () => {
+  // QF-20260903-957 / SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-3: 'low'/'medium' are
+  // NOT in audit_log_severity_check's allowed set, so every non-'keep' row was silently
+  // rejected on insert since this sink shipped -- a live count of
+  // event_type='worktree_reaper_classification' returned 0. This locks in the fix.
+  it('stamps a constraint-valid severity for a kept worktree and for a removal verdict', () => {
     const [kept, removed] = buildAuditRows(
       [makeRecord({ verdict: 'keep' }), makeRecord({ worktree_path: '/repo/.worktrees/QF-X', verdict: 'stage2_remove' })],
       { runId: 'run-2' }
     );
-    expect(kept.severity).toBe('low');
-    expect(removed.severity).toBe('medium');
+    expect(kept.severity).toBe('info');
+    expect(removed.severity).toBe('warning');
+    expect(ALLOWED_SEVERITIES).toContain(kept.severity);
+    expect(ALLOWED_SEVERITIES).toContain(removed.severity);
+  });
+
+  it('every severity buildAuditRows can produce is in the DB constraint\'s allowed set', () => {
+    const verdicts = ['keep', 'stage1_remove', 'stage2_remove', 'preserve_pushed', 'reclaim_removed', 'preserve_held_secret', 'some_future_unmapped_verdict'];
+    const rows = buildAuditRows(verdicts.map((verdict, i) => makeRecord({ worktree_path: `/repo/.worktrees/${i}`, verdict })), { runId: 'run-severity-sweep' });
+    for (const row of rows) {
+      expect(ALLOWED_SEVERITIES).toContain(row.severity);
+    }
+  });
+
+  describe('severityForVerdict() (pure)', () => {
+    it('maps every known verdict to its intended severity', () => {
+      expect(severityForVerdict('keep')).toBe('info');
+      expect(severityForVerdict('stage1_remove')).toBe('warning');
+      expect(severityForVerdict('stage2_remove')).toBe('warning');
+      expect(severityForVerdict('preserve_pushed')).toBe('warning');
+      expect(severityForVerdict('reclaim_removed')).toBe('warning');
+      expect(severityForVerdict('preserve_held_secret')).toBe('critical');
+    });
+
+    it('falls back to warning (never low/medium/an invalid value) for an unmapped verdict', () => {
+      expect(severityForVerdict('some_future_unmapped_verdict')).toBe('warning');
+      expect(severityForVerdict(undefined)).toBe('warning');
+      expect(severityForVerdict(null)).toBe('warning');
+    });
   });
 
   it('maps every record in a multi-worktree run, preserving order', () => {

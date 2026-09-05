@@ -687,5 +687,44 @@
       "input": "Two git revs. From each it reads scripts/lint/schema-reference-allowlist.json via git show (counting the files and tables arrays) and counts occurrences of the literal schema-lint-disable-line via git grep -o, scoped by pathspec to the six RUNTIME_DIRS and the six code extensions the lint itself scans. The base rev comes from git merge-base against SCHEMA_LINT_BASE (default origin/main); an option-shaped value is refused rather than absorbed. Its exit code is the signal the blocking CI job reads.",
       "seen": "Measured on the live repo on 2026-09-03, both polarities, not a fixture. CLEAN: base=412b6cb1, allowlist files 12->12, tables 27->27, pragmas 157->157, exit 0. SEEDED GROWTH, via a real commit on the branch that was reset immediately after: allowlist tables 27->28 and pragmas 157->158, exit 1, with the failure naming both additions exactly -- added seeded_budget_growth_table and lib/lint/added-line-text.mjs (0 -> 1). The 157 figure is the suppression-relevant subset scoped to scanned dirs; the tree-wide count including tests and docs is 233, and the two numbers are not interchangeable."
     }
+  },
+  {
+    "name": "directory-only-worktree-key-lint",
+    "script": "scripts/lint/directory-only-worktree-key-lint.mjs",
+    "rootFlag": "--root",
+    "extraArgs": ["--enforce"],
+    "fixtures": [
+      {
+        "path": "scripts/hooks/seeded-directory-only-worktree-key-defect.cjs",
+        "content": "const WORKTREE_PATH_RE = /[/\\\\]\\.worktrees[/\\\\]([^/\\\\]+)/;\nconst key = filePath.match(WORKTREE_PATH_RE)[1];\nif (key !== claimedSdKey) block();\n"
+      }
+    ],
+    "note": "SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-5b. --enforce is required in extraArgs since the control is advisory (exit 0) by default and only the exit code is enforcing -- without it the trial would observe DETECTS-but-exits-0 and the harness's own VERDICT.SILENT/BLOCKS distinction (mirrors fleet-liveness-select-lint's note on the same pitfall) would misclassify a working control.",
+    "observability_proof": {
+      "input": "Regex source text under scripts/hooks/**: a capturing group immediately following the literal `.worktrees`, filtered to those containing a negated character class (`[^`) or an escaped separator (backslash) so English prose and template-literal interpolations near the word \".worktrees\" do not register (verified: neither scripts/hooks/set-activity-state.cjs's prefix-capture nor scripts/hooks/concurrent-session-worktree.cjs's path.join construction trip it). Consumes no database columns or environment variables -- pure source-text scan.",
+      "seen": "Run against this repo's real scripts/hooks/** on 2026-09-04 (this SD's own PR): found exactly 1 real hit, scripts/hooks/pre-tool-enforce.cjs:368 (WORKTREE_PATH_RE itself), adjudicated and allowlisted as the sanctioned fallback source in the branch>marker>path precedence chain -- not a fixture positive, a real one the lint found in production code and a human then reviewed."
+    }
+  },
+  {
+    "name": "unsafe-sd-metadata-full-blob-write-lint",
+    "script": "scripts/lint/unsafe-sd-metadata-full-blob-write-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001 FR-4. TESTED IN DEFAULT (full-sweep) MODE, not --diff -- a scratch fixture dir has no meaningful git history/PR base for the diff-only CI path to compare against, so the default full-sweep mode is the only one a fixture trial can exercise; the --diff wiring itself is exercised by this repo's own PR CI run (unsafe-sd-metadata-full-blob-write-lint.yml), not this seed test.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-metadata-fullblob-defect.js",
+        "content": "// SEEDED DEFECT: client-side read-then-full-blob-replace metadata write.\nexport async function stampSeeded(supabase, id, x) {\n  const { data: row } = await supabase.from('strategic_directives_v2').select('metadata').eq('id', id).maybeSingle();\n  await supabase.from('strategic_directives_v2').update({ metadata: { ...row.metadata, seeded_metadata_fullblob_defect: x } }).eq('id', id);\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-metadata-fullblob-defect",
+      "strategic_directives_v2"
+    ],
+    "observability_proof": {
+      "input": "Source text under lib/** and scripts/** (excluding scripts/one-off, scripts/one-time, scripts/temp, scripts/archive): a `.update({` call whose object-literal body (within an 800-char window) contains both a `metadata:` key and an object-spread `...`, gated at the file level on the literal string `strategic_directives_v2` being present (comments blanked before both checks). Consumes no database columns or environment variables -- pure source-text scan.",
+      "seen": "Run against this repo's real lib/ and scripts/ on 2026-09-05 (this SD's own PR, before the 9 sites it fixed were migrated): found 51 real hits, e.g. lib/eva/lifecycle-sd-bridge.js:1804 and lib/sd/amend-sd.js:81 -- both genuine, still-live read-then-full-blob-replace writes against strategic_directives_v2.metadata, confirmed by reading the surrounding code, not a fixture positive."
+    }
   }
 ]

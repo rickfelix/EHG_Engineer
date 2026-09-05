@@ -518,6 +518,7 @@
     "sre:row-growth": "node scripts/row-growth-snapshot.cjs",
     "breakage:canary": "node scripts/breakage/active-breakage-canary.mjs",
     "ci:red-merge-detect": "node scripts/ci/red-merge-detector.mjs",
+    "ci:bypass-ledger-join-check": "node scripts/ci/bypass-ledger-handoff-join-check.mjs",
     "fleet:freeze-drill": "node scripts/freeze-drill.mjs",
     "sre:scripts-reachability": "node scripts/scripts-reachability-gauge.mjs",
     "subagents:collect": "node scripts/collect-subagent-evidence.js",

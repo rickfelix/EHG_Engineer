@@ -1,5 +1,5 @@
 -- @chairman-gated
--- @approved-by: PENDING — this migration has NOT yet been ratified/applied. Per
+-- @approved-by: codestreetlabs@gmail.com
 -- database/chairman-gated/README.md's two-invocation ceremony (--issue-token, then --prod-deploy
 -- --allow-any-path), applying it requires a chairman-approved token and an -- @approved-by header
 -- matching the approver's git config email. This SD ships the migration FILE as its FR-1/FR-3

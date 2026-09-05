@@ -49,10 +49,36 @@ describe('PAT-CLMMULTI-002 — DB-corroborated, session-scoped worktree claim gu
   });
 
   it('compares sd_key (claimedSdKey vs worktreeKey), not a UUID id', () => {
-    // The guard hands the sd_key (never a UUID) to the decision...
-    expect(enf4).toMatch(/shouldBlockWorktreeEdit\(\{\s*worktreeKey: worktreeSdKey, claimedSdKey/);
+    // SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001: the guard now hands the DERIVED key (branch >
+    // marker > path), not the raw path capture, to the decision.
+    expect(enf4).toMatch(/shouldBlockWorktreeEdit\(\{\s*worktreeKey: derivedKey, claimedSdKey/);
     // ...and the decision still performs the sd_key comparison this pin has always guarded.
     expect(decisionSrc).toContain('claimedSdKey !== worktreeKey');
+  });
+
+  // SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-1: pin the NEW invariant (branch-first
+  // derivation actually runs BEFORE the block decision), not merely that the updated text is
+  // present — a pin re-anchored to new text without asserting new behavior verifies nothing.
+  it('derives the key via deriveWorktreeKey BEFORE calling shouldBlockWorktreeEdit', () => {
+    const deriveIdx = enf4.indexOf('deriveWorktreeKey(');
+    const blockIdx = enf4.indexOf('shouldBlockWorktreeEdit(');
+    expect(deriveIdx).toBeGreaterThan(-1);
+    expect(blockIdx).toBeGreaterThan(-1);
+    expect(deriveIdx).toBeLessThan(blockIdx);
+  });
+
+  it('imports deriveWorktreeKey from the pure decision module (branch-first derivation is not reinvented inline)', () => {
+    expect(hookSrc).toMatch(/require\('\.\/worktree-claim-decision\.cjs'\)/);
+    const importLine = hookSrc.slice(hookSrc.indexOf("require('./worktree-claim-decision.cjs')") - 200, hookSrc.indexOf("require('./worktree-claim-decision.cjs')") + 40);
+    expect(importLine).toContain('deriveWorktreeKey');
+  });
+
+  it('a local experiment that deletes the ENFORCEMENT-4 block makes these pins fail (not vacuously pass)', () => {
+    // Regression guard against the vacuity class this suite already guards for elsewhere: if the
+    // `ENFORCEMENT 4` / `ENFORCEMENT 5` header anchors are ever renamed, indexOf returns -1 and
+    // the enf4 slice silently becomes empty, so every .not.toContain pin above would pass on NO
+    // content. Pinning a minimum length makes that failure mode loud instead of silent.
+    expect(enf4.length).toBeGreaterThan(500);
   });
 
   // QF-20260804-087: the guard read strategic_directives_v2 ONLY, so a QF claim (which lives in
@@ -74,8 +100,26 @@ describe('PAT-CLMMULTI-002 — DB-corroborated, session-scoped worktree claim gu
     expect(enf4).toMatch(/process\.env\.LEO_CLAIM_GUARD !== 'off'/);
   });
 
-  it('skips the qf/<id> container path segment (never an sd_key mismatch)', () => {
-    expect(enf4).toContain("match[1] !== 'qf'");
+  it('skips ALL sanctioned container path segments (sd/qf/adhoc), never treating a container name as a key', () => {
+    // SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-1: previously only 'qf' was exempted while
+    // ENFORCEMENT-12e's own help text sanctions .worktrees/{sd,qf,adhoc}/<key> -- a container
+    // segment is never itself an sd_key, in any of the three sanctioned shapes.
+    expect(enf4).toMatch(/EXEMPT_WORKTREE_CONTAINERS\.has\(match\[1\]\)/);
+    expect(hookSrc).toMatch(/EXEMPT_WORKTREE_CONTAINERS\s*=\s*new Set\(\['qf',\s*'sd',\s*'adhoc'\]\)/);
+  });
+
+  it('resolves git via execFileSync with an argv array, never a shell-interpolated string', () => {
+    // TR-2: a shell-string git invocation is vulnerable to injection via a maliciously-named
+    // branch and mishandles quoting on Windows.
+    expect(enf4).toMatch(/execFileSync\(\s*\n?\s*'git'/);
+    expect(enf4).not.toMatch(/execSync\(\s*[`'"]git/);
+  });
+
+  it('bounds every git call with a timeout so a contended index.lock cannot hang the guard', () => {
+    // C9 (prospective TESTING sub-agent finding): an unbounded execFileSync on a contended git
+    // process would freeze Edit/Write indefinitely -- worse than the guard it protects.
+    const timeoutMatches = enf4.match(/timeout:\s*2000/g) || [];
+    expect(timeoutMatches.length).toBeGreaterThanOrEqual(2); // show-toplevel call + branch call
   });
 
   it('still hard-blocks (exit 2) on positive confirmation of a different claim', () => {

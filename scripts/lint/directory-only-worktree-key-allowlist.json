@@ -1,0 +1,5 @@
+{
+  "allow": {
+    "scripts/hooks/pre-tool-enforce.cjs:368": "WORKTREE_PATH_RE is the sanctioned FALLBACK source in the branch > marker > path precedence chain (deriveWorktreeKey, scripts/hooks/worktree-claim-decision.cjs) -- it is never used to derive a key on its own; SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-1/FR-5b."
+  }
+}

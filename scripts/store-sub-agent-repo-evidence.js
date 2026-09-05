@@ -17,7 +17,7 @@
  */
 import 'dotenv/config';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../lib/sub-agents/resolve-repo.js';
-import { storeSubAgentResults } from '../lib/sub-agent-executor/results-storage.js';
+import { storeSubAgentResults, TOP_LEVEL_FIELDS_PERSISTED_TO_METADATA } from '../lib/sub-agent-executor/results-storage.js';
 import { getSupabaseClient } from '../lib/sub-agent-executor/supabase-client.js';
 import { normalizeSDId } from './modules/sd-id-normalizer.js';
 import { loadContentPayload, extractContentArg } from './add-prd-to-database.js';
@@ -32,6 +32,35 @@ import { VERDICT_VALUES } from '../lib/sub-agents/verdict-chain.js';
  * wins -- never auto-mapped to verdict, only named in the guard message (FR-3 DOES-NOT).
  */
 export const LIKELY_VERDICT_FIELDS = ['status', 'overall_status', 'overall_verdict', 'result', 'outcome', 'passed'];
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (FR-1): the top-level fields storeSubAgentResults()
+ * recognizes (mapped to a column, or declared in its own PERSISTED_ELSEWHERE exemption list).
+ *
+ * A FIELD MISSING FROM THIS SET IS NOT DROPPED -- it is RELOCATED into
+ * metadata._raw_payload_extra by the call site below. That is a safe default for genuine
+ * garbage, but it is the WRONG place for a field the canonical writer already handles: the
+ * content survives at a different key, so a consumer reading metadata.blockers finds nothing
+ * while metadata._raw_payload_extra.blockers holds the value. Same class of quiet mismatch this
+ * SD exists to close, one indirection over.
+ *
+ * DERIVED, not retyped, for the eighteen fields the writer now persists into metadata. The third
+ * verification pass on this SD found that list had grown to eighteen while this set still listed
+ * two of them, and a hand-copied set is guaranteed to lag again. The remaining names below are
+ * still literal because they correspond to real record COLUMNS and to PERSISTED_ELSEWHERE entries
+ * that stay function-local to storeSubAgentResults(); only the exported half can be imported.
+ */
+const KNOWN_RESULT_FIELDS = new Set([
+  'verdict', 'confidence', 'critical_issues', 'warnings', 'recommendations', 'detailed_analysis',
+  'summary', 'execution_time_ms', 'validation_mode', 'justification', 'conditions', 'phase',
+  'metadata', 'findings', 'options', 'metrics', 'error', 'stack', 'message', 'hallucination_check',
+  'confidence_score', 'verdict_chain', 'sd_id', 'sd_key',
+  // security.js's baseline_applied and regression.js's mode (second re-verify pass).
+  'baseline_applied', 'mode',
+  // RISK's assessment, RCA's analysis, STORIES' counters, the venture-stage family's blockers
+  // and artifact, and every module's own `timestamp` (third re-verify pass).
+  ...Object.keys(TOP_LEVEL_FIELDS_PERSISTED_TO_METADATA),
+]);
 
 /**
  * SD-LEO-INFRA-EVIDENCE-WRITER-VERDICT-FAIL-LOUD-001 (SECURITY, EXEC-TO-PLAN evidence 52cd374f,
@@ -143,6 +172,20 @@ export async function main(argv) {
 
   const resolution = await resolveSubAgentRepo({ sdId, targetApplication, subAgentCode, supabase });
   const withEvidence = applySubAgentRepoVerdict(results, resolution);
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (FR-1): this script accepts arbitrary, possibly
+  // malformed CLI payloads BY DESIGN -- verdictMisuseMessage/TS-7/TS-8 exist precisely to still
+  // store an ERROR row for a caller that got the shape wrong. storeSubAgentResults now REFUSES
+  // (rather than silently drops) any top-level field it does not recognize, so a malformed
+  // caller's stray field must be relocated, not passed through unmodified, or this script's own
+  // "still stores the ERROR row" safety net would itself be defeated by the field it is
+  // designed to survive.
+  const unknownKeys = Object.keys(withEvidence).filter((k) => !KNOWN_RESULT_FIELDS.has(k));
+  if (unknownKeys.length > 0) {
+    withEvidence.metadata = { ...(withEvidence.metadata || {}), _raw_payload_extra: Object.fromEntries(unknownKeys.map((k) => [k, withEvidence[k]])) };
+    for (const k of unknownKeys) delete withEvidence[k];
+  }
+
   const stored = await storeSubAgentResults(subAgentCode, sdId, null, withEvidence, phase ? { phase } : {});
 
   const misuseMessage = verdictMisuseMessage(rawPayload, stored.verdict, stored.storage_timeout === true);

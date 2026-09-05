@@ -371,7 +371,32 @@ export async function main(argv = process.argv, deps = {}) {
     logger.log(`${tag} cycling the machine the whole fleet runs on is not an available experiment. That`);
     logger.log(`${tag} Task Scheduler re-arms a persisted repeating trigger after boot is relied on as`);
     logger.log(`${tag} documented OS behaviour, not as something observed here.`);
-    return { exitCode: 0, action: 'verified', triggerKind: verdict.triggerKind, stored, warnings: verdict.warnings };
+
+    // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-2 AC-1: --verify previously checked ONLY the
+    // liveness-watcher tasks — taskStorePaths() above already lists the sweep task's on-disk store
+    // file, but nothing actually read its XML back and ran it through verifyPersistedDefinition. The
+    // sweep is the venue scripts/fleet/worktree-reaper-tick.cjs rides (every-12th-tick piggyback), so
+    // an unverified sweep definition is an unverified reaper cadence. No separate startup companion
+    // exists for the sweep (see the registration block above), so it is checked cadence-only.
+    const sweepCadence = runSchtasks(buildQueryXmlArgs(SWEEP_TASK_NAME));
+    let sweepVerdict = null;
+    if (!sweepCadence.ok) {
+      logger.error(`${tag} VERIFY FAILED — the OS has no task '${SWEEP_TASK_NAME}': ${sweepCadence.stderr.trim()}`);
+    } else {
+      sweepVerdict = verifyPersistedDefinition(sweepCadence.stdout, '');
+      if (!sweepVerdict.ok) {
+        for (const p of sweepVerdict.problems) logger.error(`${tag} VERIFY FAILED (sweep) — ${p}`);
+      } else {
+        logger.log(`${tag} sweep task '${SWEEP_TASK_NAME}' VERIFIED against the OS-persisted definition`);
+        for (const w of sweepVerdict.warnings) logger.warn(`${tag} sweep WARNING — ${w}`);
+      }
+    }
+    const sweepOk = Boolean(sweepCadence.ok && sweepVerdict?.ok);
+    if (!sweepOk) {
+      return { exitCode: 1, action: 'verify_failed_sweep', problems: sweepVerdict?.problems || ['sweep task absent'] };
+    }
+
+    return { exitCode: 0, action: 'verified', triggerKind: verdict.triggerKind, stored, warnings: verdict.warnings, sweepWarnings: sweepVerdict.warnings };
   }
 
   if (args.mode === 'remove') {

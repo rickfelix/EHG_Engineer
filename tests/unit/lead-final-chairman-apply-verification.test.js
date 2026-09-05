@@ -443,4 +443,25 @@ describe('SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 FR-1: PR-file-list is a
     expect(r.wait_reason).toContain('some_column');
     expect(sb.from).not.toHaveBeenCalled();
   });
+
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D (TS-4): prFileSet is documented as indexed by BOTH the
+  // full repo-relative path AND its bare basename (gates.js:1795-1799). Every existing case above
+  // that exercises the PR-file-list path matches on the FULL path; none proves the BASENAME half
+  // of that index for a file living under a NON-PRIMARY root (e.g. supabase/migrations/, the very
+  // root this SD's reconciliation touches) -- exactly the shape that would silently stop matching
+  // if prFileSet's dual-indexing regressed to full-path-only.
+  it('TS-4: prFileSet matches via BARE BASENAME for a non-primary-root file (supabase/migrations/), not just the full path', async () => {
+    classifyMigrationApplyState.mockResolvedValue({
+      // classifier records the BASENAME ONLY (confirmed live convention, see the FR-1 comment
+      // above), while the merged PR's file list carries the full repo-relative path.
+      files: [{ file: '20260901_supabase_only_thing.sql', status: 'NOT_APPLIED', missing: ['table:thing'] }],
+      error: null,
+    });
+    findMergedPrFileList.mockResolvedValue({ files: ['supabase/migrations/20260901_supabase_only_thing.sql'], error: null });
+    const r = await gate().validator(sdWith({})); // ungated, undeclared -- ownership resolved via prFileSet alone
+    expect(r.passed).toBe(false);
+    expect(r.wait).toBe(true);
+    expect(r.details.migrationless).not.toBe(true);
+    expect(r.wait_reason).toContain('20260901_supabase_only_thing.sql');
+  });
 });

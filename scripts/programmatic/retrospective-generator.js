@@ -59,6 +59,14 @@ Quality gate requirements:
 
 NEVER use boilerplate like "EXEC phase quality score: 80%". Reference real files and behaviors.
 
+If git_changed_files or git_diff return an empty result (this happens when the branch is
+already merged into main, so the three-dot diff against main is empty), do NOT invent file
+paths, line counts, or any other concrete detail that did not come from a tool result. Say so
+explicitly in key_learnings and what_needs_improvement, source the rest of the content only from
+the strategic_directives_v2 / sd_phase_handoffs rows, and reflect the missing diff in a
+quality_score below the 70/100 passing threshold — an empty-diff retrospective must not read as
+a normal pass.
+
 Output ONLY valid JSON in your final message:
 {"retrospective_id": "...", "quality_score": N, "sd_id": "..."}`;
 
@@ -78,7 +86,7 @@ Steps:
    - action_items: 2+ items with owner="future-claude", deadline="next-sd", verification fields
    - improvement_areas: 1+ items with specific analysis
    - what_went_well and what_needs_improvement: SD-specific, not boilerplate
-7. ${dryRun ? 'DRY RUN: Do NOT upsert. Return the generated content with dry_run: true and mock quality_score: 75' : `Write the retrospective:
+7. ${dryRun ? 'DRY RUN: Do NOT upsert. Return the generated content with dry_run: true and an honest quality_score computed per the gate rubric above from the actual tool results — never a fixed placeholder score.' : `Write the retrospective:
    - If step 5 returned NO row: INSERT a new row into retrospectives with retro_type = 'SD_COMPLETION'.
    - If step 5 returned a row: you may update THAT row, and only that row, by its id.
    NEVER update a retrospectives row whose retro_type is anything other than 'SD_COMPLETION'.

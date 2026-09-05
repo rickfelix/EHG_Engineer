@@ -74,19 +74,23 @@ describe('EXEC_BOUNDARY_HOLD gate — switchon_action branch', () => {
   it('TS-3: reversible + in-role + prechecks allPassed=true auto-clears with the full pass shape', async () => {
     authorizeSwitchOn.mockReturnValue({ authorized: true, neverAuto: false, reasons: [] });
     runSwitchOnPrechecks.mockResolvedValue({ allPassed: true, results: {}, blockingIds: [] });
-    const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) });
-    const supabase = makeSupabase(updateSpy);
-    const gate = createExecBoundaryHoldGate(supabase);
+    // SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: the gate now writes via the injectable
+    // mergeMetadataKeys() atomic partial-key merge rather than supabase.update() directly.
+    const mergeMetadataKeysFn = vi.fn().mockResolvedValue({ merged: true });
+    const supabase = makeSupabase();
+    const gate = createExecBoundaryHoldGate(supabase, mergeMetadataKeysFn);
     const result = await gate.validator({
       sd: makeSd({ switchon_action: 'some-reversible-class', switchon_reversible: true, switchon_in_role: true }),
     });
 
     expect(result).toEqual({ passed: true, score: 100, max_score: 100, issues: [], warnings: [] });
     expect(notifySwitchOnDecisionPacket).not.toHaveBeenCalled();
-    expect(updateSpy).toHaveBeenCalledTimes(1);
-    const updatePayload = updateSpy.mock.calls[0][0];
-    expect(updatePayload.metadata.exec_boundary_hold).toBe(false);
-    expect(updatePayload.metadata.exec_boundary_hold_cleared_by).toBe('switchon-gate-auto');
+    expect(mergeMetadataKeysFn).toHaveBeenCalledTimes(1);
+    const [sdKey, patch] = mergeMetadataKeysFn.mock.calls[0];
+    expect(sdKey).toBe('SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-A');
+    expect(patch.exec_boundary_hold).toBe(false);
+    expect(patch.exec_boundary_hold_cleared_by).toBe('switchon-gate-auto');
+    expect('metadata' in patch).toBe(false); // the patch touches ONLY the hold keys, never the whole blob
   });
 
   it('authorized:true but prechecks allPassed=false does NOT auto-clear (predicate is the .allPassed field)', async () => {

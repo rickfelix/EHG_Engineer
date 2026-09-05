@@ -832,7 +832,13 @@ async function main() {
   };
 
   if (asJson) {
-    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, cutoff, recentOnly, droppedLater, files: results }, null, 2));
+    // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D (Option C): excluded[] was already computed above
+    // (line 683) and printed to stderr (line 688-690) but never reached the --json payload,
+    // leaving basename-colliding files invisible to any machine reader. Promoted here as a
+    // first-class array, reusing the SAME {id, twin, verdict} shape the stderr print already
+    // uses -- no new classification logic. See scripts/migration-gap-summary.mjs for the
+    // genuine downstream consumer (not merely a cosmetic payload addition).
+    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, excluded, cutoff, recentOnly, droppedLater, files: results }, null, 2));
   } else {
     console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
     console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);

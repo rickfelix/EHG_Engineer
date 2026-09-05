@@ -31,10 +31,11 @@ const { hasFreshHeartbeat, hasTickAlive, hasPidAlive } = require('../lib/fleet/s
 const { pidVenueCapability } = require('../lib/fleet/pid-venue.cjs');
 import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
 import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
-import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
+import { climbLadder, resetConsecutiveMiss, decideLadderRoute } from '../lib/periodic-liveness/ladder-escalation.mjs';
+import { writeOwnerDirective, findExistingOwnerDirective, isOwnerDirectiveActioned, resolveOwnerDirective } from '../lib/periodic-liveness/owner-directive-writer.mjs';
+import { writeChairmanAwareness, resolveChairmanAwareness } from '../lib/periodic-liveness/chairman-awareness-writer.mjs';
 import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
-import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
-import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
+import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, medianRatioAlarm, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
@@ -572,10 +573,16 @@ async function main({ includeFixtures = false } = {}) {
   }
 
   const results = [];
-  const ladderCandidates = [];
+  // QF-20260903-060: rows whose MEDIAN observed gap exceeds 3x configured even though every run
+  // succeeds -- see medianRatioAlarm's doc comment for why this stays independent of `state`.
+  const medianRatioAlarms = [];
   for (const row of evaluate) {
     const evaluation = await evaluateRow(row, { ghaDecisions, ghaGapStats });
     results.push(evaluation);
+    if (row.liveness_source === 'github_actions_api') {
+      const alarm = medianRatioAlarm(row, ghaGapStats);
+      if (alarm) medianRatioAlarms.push({ process_key: row.process_key, ...alarm });
+    }
 
     // Adversarial-review finding (PR #5562, CRITICAL): dedup must be a per-episode STATE
     // TRANSITION check (row.last_state !== OVERDUE -> OVERDUE), never "has this process_key ever
@@ -614,12 +621,30 @@ async function main({ includeFixtures = false } = {}) {
       try {
         const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
         const climb = await climbLadder({ supabase, row, ownerTarget });
-        if (climb.laddered) ladderCandidates.push({
-          process_key: row.process_key,
-          display_name: row.display_name,
-          signature: deriveFailureSignature(row, evaluation),
-          required_invocation: row.liveness_source_ref?.required_invocation || null,
-        });
+        // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001 / FR-1/FR-1b/FR-2: re-evaluate the
+        // routing decision on EVERY tick once the row has laddered at least once (climb.count
+        // keeps growing on every subsequent OVERDUE tick, always >=1 once climb.laddered has ever
+        // been true for this episode, since LADDER_THRESHOLD===1) -- this is what lets FR-1b's
+        // unacked-directive timeout (climb.count >= LADDER_THRESHOLD+3) fall through to the
+        // chairman path on a LATER tick, not just the first one.
+        if (climb.count >= 1) {
+          const existingDirective = await findExistingOwnerDirective(supabase, row.process_key);
+          const directiveActioned = existingDirective ? isOwnerDirectiveActioned(existingDirective) : false;
+          const decision = decideLadderRoute({ rawOwner: row.owner, ownerTarget, climb, directiveActioned });
+          if (decision.route === 'owner_directive') {
+            const result = await writeOwnerDirective(supabase, {
+              targetSession: decision.target,
+              processKey: row.process_key,
+              displayName: row.display_name,
+              signature: deriveFailureSignature(row, evaluation),
+              requiredInvocation: row.liveness_source_ref?.required_invocation || null,
+            });
+            if (!result.written) console.error(`[periodic-liveness-watcher] writeOwnerDirective FAILED (non-fatal) for ${row.process_key}: ${result.error}`);
+          } else {
+            const result = await writeChairmanAwareness(supabase, { processKey: row.process_key, reason: decision.reason });
+            if (!result.written) console.error(`[periodic-liveness-watcher] writeChairmanAwareness FAILED (non-fatal) for ${row.process_key}: ${result.error}`);
+          }
+        }
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
@@ -630,6 +655,21 @@ async function main({ includeFixtures = false } = {}) {
       // counter for all of them (adversarial-review finding, PR #5940, LOW), not just OK, so a
       // later unrelated episode never inherits a stale carried-forward count.
       await resetConsecutiveMiss(supabase, row.process_key);
+      // FR-3: a recovered process self-resolves whichever row type it laddered into, if any --
+      // both resolve calls are fail-soft no-ops (return {resolved:false}) when no row exists,
+      // so this is safe to call unconditionally rather than tracking which path was taken.
+      if (row.last_state === STATE.OVERDUE) {
+        try {
+          const existingDirective = await findExistingOwnerDirective(supabase, row.process_key);
+          if (existingDirective) {
+            await resolveOwnerDirective(supabase, existingDirective.id);
+          } else {
+            await resolveChairmanAwareness(supabase, row.process_key);
+          }
+        } catch (err) {
+          console.error(`[periodic-liveness-watcher] ladder resolution FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
+        }
+      }
       // FR-5: escalate a row that has just crossed >7 continuous days UNVERIFIED, the same way
       // OVERDUE rows are escalated -- fires once per episode (hasCrossedUnverifiedThreshold only
       // returns true on the tick where the threshold is first crossed).
@@ -648,15 +688,18 @@ async function main({ includeFixtures = false } = {}) {
     }
   }
 
-  // One ladder digest decision per TICK (001-B FR-3), regardless of how many rows laddered --
-  // closes the per-process chairman-flood finding (risk-agent HIGH). Wrapped defensively (PR
-  // #5940 adversarial review) so a failure here can never skip the self-liveness upsert below.
-  if (ladderCandidates.length > 0) {
-    try {
-      await emitLadderDigest(supabase, ladderCandidates, { recordPending: recordPendingDecision, escalate: escalateChairmanDecision });
-    } catch (err) {
-      console.error(`[periodic-liveness-watcher] emitLadderDigest FAILED (non-fatal): ${err.message}`);
-    }
+  // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: the per-tick chairman digest
+  // (emitLadderDigest) is no longer called here -- each row's owner-directive or
+  // chairman-awareness write happens inline in the OVERDUE branch above, per-row, via
+  // decideLadderRoute. emitLadderDigest itself is UNCHANGED and remains
+  // lib/coordination/lane-dead-letter-alarm.cjs's exclusive allow-listed paging surface for an
+  // unrelated concern (comms-lane dead-letter breach alerting) -- deliberately not touched here.
+
+  // QF-20260903-060: surface median-ratio drift every cycle, independent of OVERDUE/OK state, so
+  // the gap is legible without a query (the self-adjusting max floor above hides exactly this).
+  if (medianRatioAlarms.length > 0) {
+    console.warn(`[periodic-liveness-watcher] MEDIAN-RATIO ALARM: ${medianRatioAlarms.length} row(s) delivering >3x configured interval by median gap though every run succeeds: `
+      + medianRatioAlarms.map((a) => `${a.process_key}=${a.ratio.toFixed(1)}x`).join(', '));
   }
 
   // Self-liveness: upsert the watcher's own last-run row (self_stamped, session_bound=false).

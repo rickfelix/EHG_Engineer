@@ -572,6 +572,17 @@ export class HandoffRecorder {
       artifact_hash: await computeArtifactHash(this.supabase, sdUuid),
     };
 
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2, SECURITY finding LOW follow-up, evidence
+    // 361e7bc6): a self-authored-bypass REFUSAL never reaches buildPersistedBypassMetadata (it
+    // is not an accepted/bypassed result) -- stamp its check status directly so this, the most
+    // security-relevant outcome, never persists as the "predates FR-B2" null value.
+    if (result.bypassSelfAuthorshipCheckStatus) {
+      execution.metadata = {
+        ...(execution.metadata || {}),
+        bypass_self_authorship_check_status: result.bypassSelfAuthorshipCheckStatus,
+      };
+    }
+
     try {
       // Pre-validate - for rejections, try to fix common issues
       const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', execution);
@@ -596,6 +607,23 @@ export class HandoffRecorder {
       }
 
       console.log(`📝 Failure recorded: ${executionId}`);
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): a bypass attempt can still end
+      // rejected (e.g. a different, unbypassed gate also failed, or the FR-B2 self-authorship
+      // refusal fired). Join the bypass_ledger row this rejection originated from back to it.
+      // Best-effort, same non-fail-closed rationale as the accepted-path join-back in createArtifact().
+      if (result.bypassLedgerId) {
+        // SECURITY finding LOW (evidence dcf8dab7): write-once -- .is('handoff_id', null)
+        // stops a retry/duplicate call from overwriting an already-correct join.
+        const { error: ledgerJoinError } = await this.supabase
+          .from('bypass_ledger')
+          .update({ handoff_id: executionId })
+          .eq('id', result.bypassLedgerId)
+          .is('handoff_id', null);
+        if (ledgerJoinError) {
+          console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+        }
+      }
 
       // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
       // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch update replaces N+1 loop
@@ -1166,6 +1194,23 @@ export class HandoffRecorder {
       }
 
       console.log('✅ Handoff accepted and stored in sd_phase_handoffs');
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): join the bypass_ledger row this
+      // acceptance originated from back to the handoff row it just produced. Best-effort --
+      // the FAIL-CLOSED audit guarantee already lives on cli-main.js's original ledger+audit-log
+      // writes; this is enrichment of an already-durable row, not the guarantee itself.
+      if (isBypassed && result.bypassLedgerId) {
+        // SECURITY finding LOW (evidence dcf8dab7): write-once -- .is('handoff_id', null)
+        // stops a retry/duplicate call from overwriting an already-correct join.
+        const { error: ledgerJoinError } = await this.supabase
+          .from('bypass_ledger')
+          .update({ handoff_id: handoffId })
+          .eq('id', result.bypassLedgerId)
+          .is('handoff_id', null);
+        if (ledgerJoinError) {
+          console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+        }
+      }
 
       // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-3: stamp this accepted row with any
       // prior SAEM (preflight) rejection(s) it resolves, for auditability. Fail-open and

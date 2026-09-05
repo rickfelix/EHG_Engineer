@@ -125,9 +125,15 @@ describe('TS-6: consumers account for the new category; the 2 no-change gauges a
     expect(isTerminalCategory('completion_flag_finding')).toBe(true);
   });
 
-  it('feedback-sla-gauge.cjs SLA_CATEGORIES.harness_backlog filter is unchanged (regression guard — no logic change per FR-5)', () => {
-    expect(SLA_CATEGORIES.harness_backlog).toEqual({ days: 7 });
+  it('feedback-sla-gauge.cjs SLA_CATEGORIES has no completion_flag_finding entry (regression guard — no logic change per FR-5)', () => {
     expect(SLA_CATEGORIES).not.toHaveProperty('completion_flag_finding');
+  });
+
+  // QF-20260903-333: harness_backlog was intentionally REMOVED from SLA_CATEGORIES —
+  // superseding the FR-5 guard's original assumption. See feedback-sla-gauge.test.js for
+  // the behavioral test; this file only ever asserted the shape, not this SD's intent.
+  it('feedback-sla-gauge.cjs SLA_CATEGORIES no longer declares an harness_backlog SLA (QF-20260903-333)', () => {
+    expect(SLA_CATEGORIES).not.toHaveProperty('harness_backlog');
   });
 
   it('gauge-registry.js harness-backlog descriptor source.category filter is unchanged (regression guard — no logic change per FR-5)', () => {

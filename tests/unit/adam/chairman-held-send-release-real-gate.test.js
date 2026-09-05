@@ -40,9 +40,9 @@ function heldRow(overrides = {}) {
     subject: '[CHAIRMAN SMS]',
     // Already composed at hold time (matches how chairman-sms-gate/index.js:388 actually persists
     // it -- options/replyInstruction/noReplyConsequence folded in ONCE, before the hold).
-    body: 'Approve the deploy?\n\nA: approve\nB: reject\n\nReply with the option letter, or DETAILS for more context.\n\nNo reply by EOD means hold.',
-    options: ['A: approve', 'B: reject'],
-    reply_instruction: 'Reply with the option letter, or DETAILS for more context.',
+    body: 'Approve the deploy?\n\n1: approve\n2: reject\n\nReply 1 or 2, or DETAILS for more context.\n\nNo reply by EOD means hold.',
+    options: ['approve', 'reject'],
+    reply_instruction: 'Reply 1 or 2, or DETAILS for more context.',
     reply_id: 'rid-real-1',
     no_reply_consequence: 'No reply by EOD means hold.',
     sender_callsign: 'Adam',

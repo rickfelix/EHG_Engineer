@@ -95,6 +95,18 @@ import { resolveRegisteredPools, computePoolCapStatus } from '../lib/worktree-re
 // classification — see the module's own header for why this exists and why audit_log
 // (not a new table) is the sink.
 import { writeAuditSink } from '../lib/worktree-reaper/audit-sink.js';
+// SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1a: push a dead-owner hard_keep tree's
+// content to a recovery ref before it is kept forever with no disposition.
+import {
+  findHolderSession,
+  evaluatePreserveEligibility,
+  runPreserveStage,
+  appendReaperPreservedPointer,
+  PRESERVE_VERDICT,
+} from '../lib/worktree-reaper/preserve-stage.js';
+// SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b: decide whether a PRESERVE-safe
+// hard_keep tree may actually be removed (destructive; narrower than PRESERVE).
+import { evaluateReclaimEligibilityPreAudit, gateReclaimCandidatesByAudit, RECLAIM_VERDICT } from '../lib/worktree-reaper/reclaim-stage.js';
 
 const SCHEMA_VERSION = '1.0';
 const DEFAULT_IDLE_DAYS = 7;
@@ -489,6 +501,25 @@ function decideShippedStaleAction(wt, shipped, ctx) {
   const legacyActive = isQf
     ? Boolean(ctx.activeQfSet && ctx.activeQfSet.has(key))
     : Boolean(ctx.activeSdSet && ctx.activeSdSet.has(key));
+
+  // QF-20260903-188: an orchestrator-parent SD is non-terminal BY DESIGN for its whole
+  // multi-day child-dispatch lifetime, yet it never writes code itself — only children do,
+  // in their own worktrees. Its tree is therefore expected to carry ZERO commits, ever —
+  // a stronger, unambiguous signal than the general "absorbed via squash" cherry heuristic
+  // below (which stays advisory-only because squash ambiguity makes it unreliable for an
+  // ordinary SD/QF that DOES write code). Claim/active guards still apply: a parent mid
+  // handoff keeps its tree; only a claim-free, non-active, provably-empty parent tree is
+  // reclaimed here, and it is authoritative (not advisory) because there is nothing a
+  // squash merge could have hidden — nothing was ever committed there.
+  const cherryEmpty = Boolean(shipped?.evidence?.cherry_empty) || shipped?.evidence?.cherry_lines === 0;
+  if (knownNonTerminal && !claimHeld && !legacyActive && !isQf
+      && ctx.orchestratorSdSet && ctx.orchestratorSdSet.has(key) && cherryEmpty) {
+    return {
+      protect: false, advisory: false, key,
+      reason: 'orchestrator-parent-empty-tree (cherry_empty; never wrote code; non-terminal suppression does not apply)',
+    };
+  }
+
   if (claimHeld || knownNonTerminal || legacyActive) {
     return {
       protect: true, advisory: false, key,
@@ -523,7 +554,7 @@ async function loadSdKeySets(supabase) {
   // so callers/ctx never see it undefined.
   // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001: also return terminalSdSet (sd_keys whose
   // status IN completed/cancelled/archived) so Stage-0 can reclaim them age-agnostically.
-  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set(), activeQfSet: new Set(), terminalQfSet: new Set() };
+  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set(), activeQfSet: new Set(), terminalQfSet: new Set(), orchestratorSdSet: new Set() };
 
   // Supabase defaults to 1000 rows per select even with .limit(5000). Paginate
   // explicitly with .range() to ensure the full set is loaded — otherwise
@@ -545,6 +576,27 @@ async function loadSdKeySets(supabase) {
 
   try { for (const k of await paginate('strategic_directives_v2', 'sd_key')) sdMap.add(k); }
   catch { /* ignore */ }
+
+  // QF-20260903-188: sd_keys of orchestrator-PARENT SDs — they coordinate but never write
+  // code themselves (only children do, in their own worktrees), so their tree is expected
+  // to carry zero commits for its whole (multi-day, non-terminal-by-design) lifetime.
+  // Used to let decideShippedStaleAction reclaim a provably-empty parent tree instead of
+  // suppressing on non-terminal status alone. Best-effort: empty on error → no behavior
+  // change (falls back to the existing non-terminal suppression).
+  const orchestratorSdSet = new Set();
+  try {
+    const pageSize = 1000;
+    for (let start = 0; start < 20000; start += pageSize) {
+      const { data, error } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, sd_type')
+        .eq('sd_type', 'orchestrator')
+        .range(start, start + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) if (r.sd_key) orchestratorSdSet.add(r.sd_key);
+      if (data.length < pageSize) break;
+    }
+  } catch { /* best-effort */ }
   // quick_fixes.id holds the QF string key (e.g., 'QF-20260417-029') directly.
   try { for (const k of await paginate('quick_fixes', 'id')) qfMap.add(k); }
   catch { /* ignore */ }
@@ -613,7 +665,7 @@ async function loadSdKeySets(supabase) {
   await loadQfStatusSet(ACTIVE_QF_STATUSES, activeQfSet);
   await loadQfStatusSet(TERMINAL_QF_STATUSES, terminalQfSet);
 
-  return { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet };
+  return { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet };
 }
 
 // ── Git / Gh runners ───────────────────────────────────────────────────
@@ -1440,14 +1492,14 @@ export async function main(argv = process.argv) {
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
-  const [claimMap, claimedKeySet, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet }] = await Promise.all([
+  const [claimMap, claimedKeySet, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet }] = await Promise.all([
     loadClaimMap(supabase),
     loadClaimedKeySet(supabase),
     loadSdKeySets(supabase),
   ]);
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
-  const ctx = { repoRoot, claimMap, claimedKeySet, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, idleThresholdMs };
+  const ctx = { repoRoot, claimMap, claimedKeySet, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet, idleThresholdMs };
 
   const header = humanTableHeader();
   const now = Date.now();
@@ -1572,15 +1624,76 @@ export async function main(argv = process.argv) {
     if (hardKeep.matched) {
       const evidence = { hard_keep: hardKeep.evidence };
       if (residency.detail) evidence.hard_keep.live_session_detail = residency.detail;
+
+      // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1a: a hard_keep tree with a DEAD
+      // owner is pushed to a recovery ref instead of being kept forever with no
+      // disposition. Mutating (git push), so gated behind --execute like every other
+      // stage; a dry-run still reports eligibility for visibility, verdict unchanged.
+      const preserveKey = keyFromWorktree(wtInput);
+      const isQfKey = preserveKey.startsWith('QF-');
+      // QF-20260904-596: pass the already-computed branch-derived key (preserveKey,
+      // via keyFromWorktree() above) so findHolderSession() can fall back to the claim
+      // on the tree's checked-out branch when worktree_path does not match (a reused,
+      // differently-named worktree directory).
+      const holder = await findHolderSession(supabase, wt.path, { key: preserveKey });
+      const eligibility = evaluatePreserveEligibility(holder, now);
+      evidence.preserve_eligibility = eligibility;
+
+      let verdict = 'keep';
+      let reasonText = 'hard_keep_unpushed_dirty_resident_or_locked';
+
+      if (eligibility.eligible && opts.execute) {
+        const preserveResult = await runPreserveStage(
+          { wtPath: wt.path, key: preserveKey, ownerSessionId: holder?.session_id || null },
+          { nowMs: now }
+        );
+        evidence.preserve = preserveResult;
+        if (preserveResult.verdict === PRESERVE_VERDICT.PUSHED) {
+          verdict = PRESERVE_VERDICT.PUSHED;
+          reasonText = `preserve_pushed_${eligibility.reason}`;
+          evidence.preserve_pointer = await appendReaperPreservedPointer(
+            supabase,
+            { key: preserveKey, isQf: isQfKey },
+            {
+              ref: preserveResult.ref, sha: preserveResult.sha, worktree_path: wt.path,
+              owner_session: holder?.session_id || null, preserved_at: new Date(now).toISOString(),
+            }
+          );
+        } else if (preserveResult.verdict === PRESERVE_VERDICT.HELD_SECRET) {
+          verdict = PRESERVE_VERDICT.HELD_SECRET;
+          reasonText = 'preserve_held_secret';
+        }
+        // PUSH_FAILED / VERIFY_FAILED: tree untouched, verdict stays 'keep' for retry next tick.
+      }
+
+      // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b (condition 1): this tree's
+      // content is safe to remove once EITHER this tick's preserve push landed, OR it
+      // was already clean and fully pushed (no preserve was ever needed). Reclaim
+      // eligibility is only evaluated under --execute -- it has no effect in a dry-run.
+      // QF-20260904-508: condition 5 (audit acceptance) can't be known per-tree here —
+      // the audit sink writes ONCE per tick, after every tree in this loop has already
+      // been classified (~:1745 below). Evaluate conditions 1/2/3 only; the real
+      // audit-based re-gate is gateReclaimCandidatesByAudit() at ~:1754.
+      let reclaimEligibility = null;
+      if (opts.execute) {
+        const contentSafe = verdict === PRESERVE_VERDICT.PUSHED || (dirty.dirtyCount === 0 && unpushedCount === 0);
+        reclaimEligibility = evaluateReclaimEligibilityPreAudit({ contentSafe, holder, nowMs: now });
+        evidence.reclaim_eligibility = reclaimEligibility;
+      }
+
       const rec = buildRecord({
-        schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict: 'keep',
-        reason: 'hard_keep_unpushed_dirty_resident_or_locked', claim_status: 'n/a',
+        schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict,
+        reason: reasonText, claim_status: 'n/a',
         dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, preserveCount: 0,
         shipStatus: 'not_on_main', evidence,
       });
-      records.push(rec);
+      // _reclaimCandidate is re-gated on audit-sink acceptance (FR-1b condition 5) once
+      // the batch write below completes -- reclaimEligibility here only reflects
+      // conditions 1/2/3.
+      const reclaimCandidate = Boolean(reclaimEligibility?.eligible);
+      records.push({ ...rec, _stage: reclaimCandidate ? 'reclaim' : undefined, _reclaimCandidate: reclaimCandidate, _wtInput: wtInput, _dirty: dirty });
       emitJsonLine(rec);
-      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, verdict: 'keep:hard', preserveCount: 0 }));
+      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: dirty.dirtyCount, unpushedCount, ageDays, verdict: verdict === 'keep' ? 'keep:hard' : verdict, preserveCount: 0 }));
       continue;
     }
 
@@ -1640,6 +1753,16 @@ export async function main(argv = process.argv) {
     console.log(`Audit sink:                ${auditResult.inserted} row(s) written (run_id=${auditRunId})`);
   }
 
+  // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b condition (5): a rejected audit
+  // write is FATAL for the WHOLE batch's reclaim path (writeAuditSink is a single
+  // batch insert — ok:false means none of this tick's rows landed). Re-gate every
+  // reclaim candidate on the ACTUAL write outcome, not the pre-write placeholder.
+  const stageReclaim = gateReclaimCandidatesByAudit(records, auditResult);
+  if (!auditResult.ok && records.some((r) => r._reclaimCandidate)) {
+    console.log(`  ⛔ audit sink rejected this batch — ${records.filter((r) => r._reclaimCandidate).length} reclaim-eligible tree(s) held for the next tick`);
+  }
+  console.log(`Reclaim (preserve-safe):   ${stageReclaim.length}`);
+
   if (!opts.execute) {
     console.log('\n(Dry-run — no changes made. Pass --execute to remove Stage 1, --stage0 for terminal-SD, or --execute --stage2 for all.)');
     return 0;
@@ -1650,10 +1773,13 @@ export async function main(argv = process.argv) {
     return 3;
   }
 
-  // Stage 0 (terminal-SD) + Stage 1 removals (unconditional with --execute).
+  // Stage 0 (terminal-SD) + Stage 1 + Reclaim removals (unconditional with --execute).
   // Stage-0 is auto-safe: the SD is already terminal and the active-claim /
-  // activeSdSet guards have both been applied during classification.
-  const removeList = [...stage0, ...stage1];
+  // activeSdSet guards have both been applied during classification. Reclaim is
+  // narrower still than Stage 2 (content-safety, PID-residency, staleness, and
+  // audit-acceptance are ALL independently verified above), so it does not need the
+  // --stage2/--yes confirmation gate either.
+  const removeList = [...stage0, ...stage1, ...stageReclaim];
 
   // Stage 2 removals (only with --execute --stage2).
   if (opts.stage2 && stage2.length > 0) {
@@ -1677,6 +1803,7 @@ export async function main(argv = process.argv) {
 
   let removed = 0;
   let aborted = 0;
+  const reclaimedRecords = [];
   for (const rec of removeList) {
     const wtPath = rec.worktree_path;
     const dirty = rec._dirty;
@@ -1704,9 +1831,21 @@ export async function main(argv = process.argv) {
       // This is the only predicate that can answer for a worktree whose basename
       // resolves to no work key, since keyFromWorktree reads the branch but only for
       // feat|qf|fix|chore|hotfix. Claim-independent and session-independent.
-      const treeResidency = treeResidencyBlocksRemoval(wtPath, {
+      let treeResidency = treeResidencyBlocksRemoval(wtPath, {
         logger: (m) => process.stderr.write(`  ${m}\n`),
       });
+      // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b (Caveat A resolution): PRESERVE's
+      // own commit+push sets mtime/HEAD ctime to "now", which otherwise trips this guard
+      // for its whole window right after preserving — making reclaim-within-one-tick
+      // impossible. Narrow, explicit exemption: a RECLAIM-tagged record already required
+      // ALL FOUR of {content-safe (verified preserve OR already-clean), no resident PID,
+      // freeze-cut staleness, audit-sink acceptance} to reach this loop at all (see
+      // evaluateReclaimEligibilityPreAudit + gateReclaimCandidatesByAudit) — the
+      // residency signal is no longer informative for this specific tree, so it alone is
+      // bypassed. Every OTHER tree keeps the full guard.
+      if (rec._stage === 'reclaim' && treeResidency.blocked) {
+        treeResidency = { blocked: false, reason: null, detail: { exemption: 'reclaim_preserve_verified', original: treeResidency } };
+      }
 
       // SD-LEO-INFRA-WORKTREE-REAPER-RESIDENT-001 (FR-4): residency guard —
       // a FRESH-heartbeat session whose worktree_path references this target
@@ -1799,10 +1938,21 @@ export async function main(argv = process.argv) {
       });
       console.log(`  ✓ ${path.basename(wtPath)} removed (${rm.method})`);
       removed++;
+      if (rec._stage === 'reclaim') reclaimedRecords.push(rec);
     } catch (e) {
       console.log(`  ✗ ${path.basename(wtPath)} error: ${e?.message || e}`);
       aborted++;
     }
+  }
+
+  // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b: a second, small audit batch
+  // recording the POST-removal fact (reclaim_removed) — the classification-time batch
+  // above necessarily predates the removal attempt and cannot know its outcome.
+  // Best-effort, same as every other audit write in this file: never blocks or fails
+  // the run.
+  if (reclaimedRecords.length > 0) {
+    const reclaimAuditRows = reclaimedRecords.map((r) => ({ ...r, verdict: RECLAIM_VERDICT.REMOVED, reason: 'reclaim_removed' }));
+    await writeAuditSink(supabase, reclaimAuditRows, { runId: crypto.randomUUID(), logger: console.log });
   }
 
   console.log(`\nRemoved: ${removed} | Aborted: ${aborted}`);

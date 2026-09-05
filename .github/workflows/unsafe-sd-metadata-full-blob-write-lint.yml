@@ -1,0 +1,43 @@
+name: unsafe sd metadata full-blob write lint
+
+# SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001 (FR-4) — forbid a NEW client-side
+# read-then-full-blob-replace write of strategic_directives_v2.metadata (the TOCTOU race that
+# silently clobbers a concurrent writer's key). Diff-only: scans only files changed vs the PR
+# base, so the pre-existing backlog outside this SD's 8 fixed sites (measured 2026-09-05) never
+# blocks a PR that didn't touch it — same tradeoff ilike-on-uuid-lint.yml / schema-reference
+# -lint.yml make, for the identical reason.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'scripts/lint/unsafe-sd-metadata-full-blob-write-lint.mjs'
+      - '.github/workflows/unsafe-sd-metadata-full-blob-write-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unsafe-sd-metadata-full-blob-write-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run unsafe-sd-metadata-full-blob-write lint (diff vs PR base)
+        env:
+          METADATA_FULLBLOB_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          git fetch origin ${{ github.base_ref }} || true
+          node scripts/lint/unsafe-sd-metadata-full-blob-write-lint.mjs --diff

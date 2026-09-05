@@ -1071,3 +1071,73 @@ finding classes (`rls_disabled_in_public`, `sensitive_columns_exposed`,
 
 No separate rollback file — see the migration's own header for the (small, purely additive)
 DOWN statements if ever needed (drop the policy, re-grant, re-disable RLS, unset search_path).
+
+
+## Applying `20260904_strategic_directives_unreleased_chairman_hold_completion_guard.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260904_strategic_directives_unreleased_chairman_hold_completion_guard.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B, FR-2 part 2.) Extends the already-live
+`enforce_canonical_lifecycle_write()` trigger function (created by
+`20260824_strategic_directives_canonical_writer_choke.sql`, still applying to the same `aaa_`/`zzz_`
+triggers with no re-binding needed) with one additional refusal: a transition INTO
+`status='completed'` is rejected while `metadata` carries an unreleased chairman hold
+(`requires_human_action_reason` or `review_hold_reason` — VAL-1, evidence `cc6f72a7`, found the two
+keys that actually mean "chairman must act", distinct from `deferred_by` /
+`not_worker_claimable_reason` / `dispatch_ineligible_reason` / `pilot_throwaway`, which are
+legitimately compatible with completion and must NOT be caught). Adds three new helper functions
+(`sd_safe_parse_timestamptz`, `sd_metadata_hold_released`, `sd_metadata_has_unreleased_chairman_hold`)
+mirroring `lib/fleet/claim-eligibility.cjs`'s `isHoldReleased()`/`isUnreleasedChairmanHold()` exactly.
+
+**Purely additive to an existing function body — no new trigger, no column, no lock-sensitive
+ALTER, no RLS change.** `CREATE OR REPLACE FUNCTION` on a function two live triggers already
+reference by name; the review surface is the one new `IF` block inserted between the existing
+stamp-validation block and the existing NULL-at-rest cleanup in that function.
+
+**Transition-gated, not status-gated**: `NEW.status='completed' AND OLD.status IS DISTINCT FROM
+'completed'`. Never fires on an already-completed row, so this migration carries no ordering
+dependency on FR-4's historical backfill (the 11 stale-hold SDs already at `status='completed'`
+pass through untouched on any *other* column update).
+
+Companion JS-side guard (`isUnreleasedChairmanHold()` wired into
+`LeadFinalApprovalExecutor.executeSpecific()`, FR-2 part 1) already shipped separately — this
+migration is what also closes the gap for `complete_orchestrator_sd()` (line ~1149 of the parent
+migration) and any other writer that reaches this table directly, since `enforce_canonical_lifecycle_write()`
+fires on every UPDATE that changes `status`/`current_phase`/`completion_date`, not only the LFA path.
+
+**Run the dry-run before ceremony, safe to re-run any time (transactional, ROLLBACK-guarded):**
+
+```
+node database/chairman-gated/20260904_strategic_directives_unreleased_chairman_hold_completion_guard_dry_run.mjs
+```
+
+Runs the real UP file body — the three helper functions, the amended trigger function, and its
+own inline `DO $verify$` block — against the real database inside a transaction that always
+`ROLLBACK`s. The `$verify$` block asserts the three helper functions directly (mirroring the
+JS-side unit test suite exactly: AC-1's `deferred_by`/`not_worker_claimable_reason` exclusions,
+AC-2's `review_hold_reason` release-marker coverage, stale/reused-stamp rejection, whitespace-only
+reason treated as absent).
+
+**A live trigger-fire proof (real disposable-row INSERT + completion UPDATE) was attempted and
+deliberately dropped** — see the migration file's own section-3d comment. `strategic_directives_v2`
+carries independent, unrelated lifecycle-completeness guards (a PCVP handoff-evidence-required
+check, and a handoff-creation-bypass-block restricting `sd_phase_handoffs` INSERTs to
+`scripts/handoff.js` itself) that also fire on any synthetic completion attempt regardless of hold
+state — satisfying them would require simulating a full protocol-compliant SD lifecycle inside this
+migration, out of proportion for proving this one `IF` block. The function-level assertions prove
+the actual new logic (the SQL predicate) exhaustively; what they do not cover is whether the `IF`
+block's syntax is well-formed inside the trigger function body, which the dry-run's own
+CREATE-OR-REPLACE step already confirms by succeeding without a parse/plpgsql-compile error.
+
+**Rollback**: `20260904_strategic_directives_unreleased_chairman_hold_completion_guard_DOWN.sql` —
+restores `enforce_canonical_lifecycle_write()` to its pre-this-migration body (verbatim from
+`20260824_strategic_directives_canonical_writer_choke.sql` lines 466-511) and drops the three new
+helper functions. Safe to re-apply the UP file after a rollback — unlike the stamp/column
+migrations elsewhere in this directory, nothing here is a NULL-at-rest / accumulation concern (no
+column, no at-rest state touched). Both UP and DOWN verified together, in sequence, inside one
+ROLLBACK-guarded transaction during authoring.
