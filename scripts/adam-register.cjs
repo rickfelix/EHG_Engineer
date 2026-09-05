@@ -42,6 +42,9 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
 const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, isFreshAndActive, isStatusFreshEligible, ADAM_FRESH_MS, resolveRetiredAdamSeats } = require('../lib/coordinator/adam-identity.cjs');
+// QF-20260905-201: same-host dead-process proof (ESRCH on the row's own Claude Code pid) so a seat the
+// chairman just closed is retired at once instead of refusing its successor for the 10-min window.
+const { isSeatProcessDead } = require('../lib/coordinator/role-seat-liveness.cjs');
 // FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
 const { drainAdamOutbound } = require('./adam-advisory.cjs');
 
@@ -117,7 +120,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       message: `Refused: prior-Adam freshness read failed (${priorRead.error}) — cannot verify the singleton is free; not registering (fail-closed).` };
   }
   const priorAdams = priorRead.rows;
-  const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs });
+  const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs, isProcessDead: isSeatProcessDead });
   if (decision.action === 'refuse') {
     // A FRESH prior Adam holds the singleton — do NOT register a 2nd and do NOT clear the prior
     // (the deliberate divergence: never kill a legitimately-restarting Adam mid-canary).
@@ -236,6 +239,14 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     // is still correct for a prior that was genuinely heartbeat-stale at decision time.
     const freshNow = new Set(current.filter((a) => isStatusFreshEligible(a.status) && isFresh(a.heartbeat_at, nowMs2, ADAM_FRESH_MS)).map((a) => a.session_id));
     const toolStuckSet = new Set(decision.retireToolStuck || []);
+    // QF-20260905-201: a dead-process entry is re-validated on the PROCESS as of now -- its heartbeat is
+    // frozen fresh by construction, so a heartbeat re-check would skip it forever (same trap as the
+    // tool-stuck half). If the pid is no longer provably dead (cannot happen for a real exit, but the
+    // guard is fail-closed), protect it like a racing restart.
+    const deadProcessSet = new Set(decision.retireDeadProcess || []);
+    const deadProcessStillDead = new Set(
+      (decision.retireDeadProcess || []).filter((sid) => isSeatProcessDead(bySessionId.get(sid))),
+    );
     // Re-validate each tool-stuck entry on tool activity as of nowMs2: if it has genuinely resumed
     // activity since the decision (isFreshAndActive now true), protect it like a racing restart;
     // otherwise it is still confirmed-stuck and must be cleared, regardless of its heartbeat.
@@ -252,7 +263,9 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       // knowingly leaves a second role='adam' row tagged (the deliberate racing-restart protection,
       // not a bug) -- the result and message must say so, not report a plain "Registered" as if
       // nothing else changed. Mirrors the existing retireBlocked/retireFallbackUsed disclosure.
-      const skip = toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid);
+      const skip = deadProcessSet.has(sid)
+        ? !deadProcessStillDead.has(sid)
+        : (toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid));
       if (skip) { retireSkippedFresh.push(sid); continue; }
       const r = await supabase.rpc('clear_adam_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
       if (!(r && r.error)) { retired.push(sid); continue; }
@@ -310,6 +323,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   }
 
   return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained, inherited,
+    retired_dead_process: (decision.retireDeadProcess || []).filter((sid) => retired.includes(sid)),
     retire_fallback_used: retireFallbackUsed.length ? retireFallbackUsed : undefined,
     retire_blocked: retireBlocked || undefined,
     retire_skipped_fresh: retireSkippedFresh.length ? retireSkippedFresh : undefined,
