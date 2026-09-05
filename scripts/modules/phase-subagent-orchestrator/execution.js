@@ -108,8 +108,13 @@ async function executeSubAgent(subAgent, sdId, options = {}) {
   console.log(`\nExecuting ${code} (${name})...`);
 
   try {
+    // QF-20260903-315: the 'orchestrated' sentinel used to sit here as a default. options.phase
+    // (spread after it) already won when the caller supplied one, but the caller sites did NOT
+    // supply one until this QF's index.js fix -- so this default was silently reaching the agent
+    // verbatim as the literal string 'orchestrated', a value resolveStoryGateContext() cannot
+    // resolve to PRE_/POST_IMPLEMENTATION, fail-closing every orchestrated TESTING run. Both
+    // callers in index.js now always pass the real phase, so no default is needed here.
     const result = await realExecuteSubAgent(code, sdId, {
-      phase: 'orchestrated',
       priority: subAgent.priority,
       ...options
     });

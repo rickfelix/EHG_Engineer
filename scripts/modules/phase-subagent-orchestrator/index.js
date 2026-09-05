@@ -207,7 +207,10 @@ async function orchestrate(supabase, phase, sdId, options = {}) {
       const parallelResults = await Promise.all(
         independentAgents.map(async (subAgent) => {
           try {
-            const result = await executeSubAgent(subAgent, sdId, options);
+            // QF-20260903-315: phase must be MERGED into options (not just stamped onto the
+            // result afterward) -- execution.js's hardcoded phase:'orchestrated' sentinel
+            // otherwise reaches the agent verbatim, defeating story-gate phase resolution.
+            const result = await executeSubAgent(subAgent, sdId, { ...options, phase });
             result.phase = phase;
             result.priority = subAgent.priority >= 90 ? 'CRITICAL' : subAgent.priority >= 70 ? 'HIGH' : 'MEDIUM';
             return { success: true, result, subAgent };
@@ -250,7 +253,8 @@ async function orchestrate(supabase, phase, sdId, options = {}) {
     // Execute dependent agents sequentially (respecting dependencies)
     for (const subAgent of dependentAgents) {
       try {
-        const result = await executeSubAgent(subAgent, sdId, options);
+        // QF-20260903-315: same merge as the independent-agents branch above.
+        const result = await executeSubAgent(subAgent, sdId, { ...options, phase });
         result.phase = phase;
         result.priority = subAgent.priority >= 90 ? 'CRITICAL' : subAgent.priority >= 70 ? 'HIGH' : 'MEDIUM';
         executionResults.push(result);
