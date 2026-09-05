@@ -726,5 +726,26 @@
       "input": "Source text under lib/** and scripts/** (excluding scripts/one-off, scripts/one-time, scripts/temp, scripts/archive): a `.update({` call whose object-literal body (within an 800-char window) contains both a `metadata:` key and an object-spread `...`, gated at the file level on the literal string `strategic_directives_v2` being present (comments blanked before both checks). Consumes no database columns or environment variables -- pure source-text scan.",
       "seen": "Run against this repo's real lib/ and scripts/ on 2026-09-05 (this SD's own PR, before the 9 sites it fixed were migrated): found 51 real hits, e.g. lib/eva/lifecycle-sd-bridge.js:1804 and lib/sd/amend-sd.js:81 -- both genuine, still-live read-then-full-blob-replace writes against strategic_directives_v2.metadata, confirmed by reading the surrounding code, not a fixture positive."
     }
+  },
+  {
+    "name": "session-identity-path-callers-lint",
+    "script": "scripts/lint/session-identity-path-callers-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 FR-4/FR-6. Registered here rather than lib/governance/orphan-writers-registry.js: that registry's 7 ENTRY_TYPES all catalog a writer whose output goes UNCONSUMED (validateOrphanEntry() requires either a refs_drain_descriptor with no consumer, or an explicit reader+predicate proving non-consumption). This lint's own reader is CI itself -- it gates every PR via .github/workflows/session-identity-path-callers-lint.yml -- so it is not an orphan-writer specimen under that taxonomy and would not validate against it. control-seed-specs.json + control-seed-test-lint.mjs is this repo's actual already-enforced mechanism for proving a new detector control is not itself blind (see the sibling unsafe-sd-metadata-full-blob-write-lint entry immediately above, added under the same rationale by the prior SD in this session). Always exits 0 (advisory, never blocking) by design, so detection is read from stdout text via detectTokens, not from the exit code -- mirrors progress-column-lint's note above on the same reporting-only shape.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-session-identity-path-defect.js",
+        "content": "// SEEDED DEFECT: derives the session-identity marker path itself instead of importing\n// MARKER_DIR/markerDirs from the SSOT (lib/fleet/cc-pid-liveness.cjs) -- this SD's own root\n// cause, repeated.\nimport path from 'node:path';\nexport function markerDir() { return path.join(process.cwd(), '.claude', 'session-identity'); }\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-session-identity-path-defect"
+    ],
+    "observability_proof": {
+      "input": "Source text under lib/** and scripts/** (excluding node_modules, one-off, one-time, temp, archive, archived-sd-scripts; lib/fleet/cc-pid-liveness.cjs and scripts/hooks/capture-session-id.cjs excluded by design -- the SSOT and its canonical per-checkout writer): a file is flagged when its comment-blanked text mentions the `.claude/session-identity` path literal (or a bare `'session-identity'`/`\"session-identity\"` segment) and does not import anything from cc-pid-liveness.cjs. Consumes no database columns or environment variables -- pure source-text scan, always exits 0.",
+      "seen": "Run against this repo's real lib/ and scripts/ on 2026-09-05 (this SD's own PR): found 7 real hits -- lib/hooks/session-id.cjs, lib/resolve-own-session.cjs, lib/resolve-own-session.js, lib/session-identity-sot.js, lib/session-manager.mjs, lib/terminal-identity.js, scripts/hooks/concurrent-session-worktree.cjs -- not a fixture positive. scripts/hooks/concurrent-session-worktree.cjs:44 is a genuine instance of this SD's own root-cause pattern (`path.resolve(__dirname, '../../.claude/session-identity')` then a hand-rolled `getAliveMarkerSessionIds()`, single-directory, no union, no SSOT import), confirmed by reading the file; the remaining 6 hits reference a related-but-distinct concern (the `.claude/session-identity/current` pointer file and its `.lock`, not the PID-liveness markers this SD's defect class concerns) and are true false-positives under this lint's documented KNOWN LIMITATION, which is exactly why FR-4 wires it advisory-only rather than blocking."
+    }
   }
 ]

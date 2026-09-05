@@ -1,0 +1,51 @@
+# Session-identity path callers lint — reports modules that reference the .claude/session-
+# identity marker path without importing the SSOT (lib/fleet/cc-pid-liveness.cjs).
+# SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-4).
+#
+# PERMANENTLY ADVISORY, by design (not a soak-to-blocking rollout like diagnostic-gauge-citation-
+# lint.yml): the underlying script always exits 0 (see scripts/lint/session-identity-path-
+# callers-lint.mjs's own KNOWN LIMITATION docblock) -- it is a text-scan heuristic that cannot
+# distinguish this SD's PID-marker defect class from an unrelated file under the same directory
+# (e.g. the `current` session pointer file), so a human reviews the printed candidate list rather
+# than CI auto-blocking on it. No hardcoded expected count is asserted anywhere -- every run
+# computes the live population fresh, mirroring lib/governance/orphan-writers-registry.js's
+# live-predicate-counting precedent.
+name: Session Identity Path Callers Lint
+
+on:
+  pull_request:
+    paths:
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'scripts/lint/session-identity-path-callers-lint.mjs'
+      - '.github/workflows/session-identity-path-callers-lint.yml'
+
+concurrency:
+  group: session-identity-path-callers-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  session-identity-path-callers-lint:
+    name: session-identity-path-callers-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run session-identity-path-callers lint (advisory, full repo sweep)
+        run: |
+          node scripts/lint/session-identity-path-callers-lint.mjs | tee lint-output.txt
+          {
+            echo "## Session Identity Path Callers Lint (advisory)"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
