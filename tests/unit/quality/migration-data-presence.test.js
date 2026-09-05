@@ -85,6 +85,16 @@ describe('checkMigrationDataPresent — real fixture migration, mocked DB', () =
     const supabase = makeSupabase({ data: null, error: dbError });
     await expect(checkMigrationDataPresent(supabase, REAL_MIGRATION)).rejects.toEqual(dbError);
   });
+
+  // QF-20260905-161: a 22P02/22023 error means the regex mis-parsed non-seed-insert SQL and fed
+  // a garbage literal to a typed column -- a parser-shape limitation, not a query-execution
+  // failure, so it fails open (null) like the other genuine parser limitations above.
+  it.each(['22P02', '22023'])('returns null (fails open) on a parser-limitation SQLSTATE %s, instead of throwing', async (code) => {
+    const dbError = { message: 'invalid input syntax for type uuid: "sdKey"', code };
+    const supabase = makeSupabase({ data: null, error: dbError });
+    const gap = await checkMigrationDataPresent(supabase, REAL_MIGRATION);
+    expect(gap).toBeNull();
+  });
 });
 
 describe('findEvidenceMigrationGaps', () => {
