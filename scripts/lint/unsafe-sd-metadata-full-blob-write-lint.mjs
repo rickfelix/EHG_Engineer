@@ -40,8 +40,16 @@ const DISABLE_MARKER = 'metadata-fullblob-lint-disable-line';
  */
 export function findUnsafeMetadataFullBlobWrite(source, filePath = '<source>') {
   const findings = [];
-  const text = String(source || '');
-  if (!text.includes('strategic_directives_v2')) return findings; // file-level gate
+  const original = String(source || '');
+  // Comments blanked first (not deleted, so line numbers stay true) — a comment DESCRIBING this
+  // exact pattern (e.g. "this used to do .update({ metadata: {...spread} })") is not a live
+  // defect, and this SD's own migration commits added many such comments. Mirrors
+  // ilike-on-uuid-lint.mjs's identical precaution. The escape-hatch marker is checked against
+  // `original` below, NOT this blanked copy — it lives inside a trailing comment.
+  const text = original
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
+  if (!text.includes('strategic_directives_v2')) return findings; // file-level gate (blanked text — a comment-only mention doesn't count)
 
   for (const m of text.matchAll(/\.update\s*\(\s*\{/g)) {
     // Bounded window: the object literal body rarely exceeds a few hundred chars in this
@@ -51,19 +59,22 @@ export function findUnsafeMetadataFullBlobWrite(source, filePath = '<source>') {
     if (!/\bmetadata\s*:/.test(window)) continue;
     if (!window.includes('...')) continue; // the spread is the defect signature
 
-    const lineStart = text.lastIndexOf('\n', m.index) + 1;
-    const lineEnd = text.indexOf('\n', m.index);
-    const lineText = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+    const lineStart = original.lastIndexOf('\n', m.index) + 1;
+    const lineEnd = original.indexOf('\n', m.index);
+    const lineText = original.slice(lineStart, lineEnd === -1 ? original.length : lineEnd);
     if (lineText.includes(DISABLE_MARKER)) continue;
 
     findings.push({
       file: filePath,
       line: text.slice(0, m.index).split('\n').length,
-      message: '.update({ metadata: { ...spread, ... } }) against strategic_directives_v2 — a client-side '
-        + 'read-then-full-blob-replace write silently clobbers a concurrent writer\'s key (SD-LEO-FIX-'
-        + 'STRATEGIC-DIRECTIVES-UPDATED-001). Use lib/coordinator/safe-metadata-merge.mjs\'s '
-        + `mergeMetadataKeys()/removeMetadataKey() instead, or suppress with a trailing '${DISABLE_MARKER}' `
-        + 'comment if this is genuinely not strategic_directives_v2.',
+      // Deliberately does NOT spell out the flagged syntax verbatim (a literal
+      // ".update({" + "metadata:" + "..." run inside this message would self-match when this
+      // lint scans its own source file — string literals, unlike comments, are never blanked).
+      message: 'A write-call here sets an object-spread-merged metadata field against '
+        + 'strategic_directives_v2 — a client-side read-then-full-blob-replace write silently '
+        + 'clobbers a concurrent writer\'s key (SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001). Use '
+        + `lib/coordinator/safe-metadata-merge.mjs's mergeMetadataKeys()/removeMetadataKey() instead, `
+        + `or suppress with a trailing '${DISABLE_MARKER}' comment if this is genuinely not strategic_directives_v2.`,
     });
   }
   return findings;
