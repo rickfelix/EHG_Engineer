@@ -52,3 +52,7 @@ The register/identity/flag-migration copy pattern; the generator wiring; `VALID_
 **D3 — v1 scope.** Adopted in v0.2: v1 core is calendar-read, gmail-triage, todoist-brief, brief-assemble/render. Oracle, health, tasks-classifier, youtube are v1.1, sourced as children once the three jobs are measured green. Alternative: ship all eight in v1.
 
 **D4 — Google OAuth posture.** Not decided in the spec. Either publish/verify the GCP consent screen so restricted-scope refresh tokens persist, or accept a re-consent every 7 days surfaced by the `_OAUTH_EXPIRING` tick line. The spec is written to work under both; the runbook differs.
+
+## Reversals by Solomon (2026-09-05, `05-SOLOMON-ADJUDICATION.md` Q10)
+
+Two dispositions above were reversed on review and are superseded by spec v0.3: **G2 / B3 venue** — "GHA decrypts with the encryption-key secret" missed ratification 0daf3bd8 (GHA stays credential-free); the credentialed feeders now run on the chairman's host Task Scheduler. **B5** — "the seat is unwatched" is replaced by a windowed liveness expectation (04:30–07:30 ET). Solomon also conditioned **S4** (overnight auto-apply) on reversible verbs and a read-time streak, and re-derived B1, B2, C4, C5, G3, and G7 independently.

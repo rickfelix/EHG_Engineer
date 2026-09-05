@@ -75,7 +75,7 @@ The recommendation is D1-a, with D1-b kept as a possible later addition once Mic
 
 ## 6. Scope
 
-**In scope for v1.** The six overnight feeders (Gmail triage with Oracle extraction, Todoist brief, YouTube digest, Health Sync cache pull and parse, Google Tasks classifier, and the feeder-health roll-up), the two-zone brief data model and renderer, the Michael role contract and activation skill, the rules data model and migration of the existing rules, the morning conversation flow with save-as-you-go and conversational capture, the daily feedback ledger, gauges, and the Dropbox retirement.
+**In scope for v1** (as narrowed by decision D3 on 2026-09-05: v1 = calendar read, Gmail triage, Todoist brief, Google Tasks classifier, and the brief; Oracle, Health Sync, and YouTube are v1.1). The two-zone brief data model and renderer, the Michael role contract and activation skill, the rules data model and migration of the existing rules, the morning conversation flow with save-as-you-go and conversational capture, the daily feedback ledger, gauges, and the Dropbox retirement.
 
 **Replaced, not ported.** The YouTube digest's Chrome automation (RSS via in-page fetch, Watch Later via JS clicks) is replaced by the YouTube Data API, which the harness already has OAuth for; the subscriptions, Watch Later, and the `[Cowork]` playlists are all API-readable and writable. The Cowork artifact is replaced by a dashboard page. Cowork scheduled tasks are replaced by GHA cron and the liveness ladder. The Dropbox mount is replaced by the database.
 
