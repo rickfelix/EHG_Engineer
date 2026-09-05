@@ -70,7 +70,12 @@ const PROFILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 function resolveAccountProfileName(env = process.env) {
   const raw = env && typeof env.CLAUDE_CONFIG_DIR === 'string' ? env.CLAUDE_CONFIG_DIR.trim() : '';
   if (!raw) return HOST_DEFAULT_PROFILE;
-  const name = path.basename(raw.replace(/[\\/]+$/, ''));
+  // Split on BOTH separators: the profile dirs are Windows paths (path.win32.join in
+  // lib/fleet/build-session-launch.cjs) but this runs under CI on Linux too, where path.basename
+  // does not treat a backslash as a separator and would yield the whole path (which then fails
+  // PROFILE_NAME_RE and silently degrades to the sentinel — measured on PR #8273's unit tier).
+  const segments = raw.replace(/[\\/]+$/, '').split(/[\\/]+/).filter(Boolean);
+  const name = segments.length ? segments[segments.length - 1] : '';
   return PROFILE_NAME_RE.test(name) ? name : HOST_DEFAULT_PROFILE;
 }
 
