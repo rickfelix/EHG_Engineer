@@ -134,6 +134,10 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B FR-B2: self-authored bypass refus
     // The bypass must NOT have been applied -- no false success, no validation_passed override.
     expect(result.bypassed).not.toBe(undefined); // marker used only for the join-back, not a "success" flag
     expect(result.bypassLedgerId).toBe('ledger-row-1');
+    // SECURITY finding LOW follow-up (evidence 361e7bc6): 'refused' must reach the result
+    // object directly (this path never touches buildBypassStamp), never persisting as the
+    // "predates FR-B2" null value on the most security-relevant outcome.
+    expect(result.bypassSelfAuthorshipCheckStatus).toBe('refused');
   });
 
   it('emits a validation_audit_log row with failure_category=bypass_refused_self_authored', async () => {

@@ -732,6 +732,13 @@ export class BaseExecutor {
               }, `GATE_BYPASS_SELF_AUTHORED_REFUSED: ${selfAuthoredEntry._sourceGate} — the bypassing actor authored the evidence it would override`),
               bypassed: true,
               bypassLedgerId: options.bypassLedgerId || null,
+              // SECURITY finding LOW follow-up (evidence 361e7bc6): this return bypasses
+              // buildBypassStamp entirely (it never proceeds to a bypassInfo-carrying success),
+              // so 'refused' -- the single most security-relevant outcome HIGH-2 exists to
+              // make legible -- previously never reached HandoffRecorder, persisting as null
+              // (the exact "predates FR-B2" value it must never be confused with). Stamped
+              // directly here since this path never touches buildBypassStamp/applyBypassToResult.
+              bypassSelfAuthorshipCheckStatus: selfAuthorshipCheckStatus,
             };
           }
 

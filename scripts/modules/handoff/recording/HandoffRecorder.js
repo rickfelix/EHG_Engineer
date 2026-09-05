@@ -572,6 +572,17 @@ export class HandoffRecorder {
       artifact_hash: await computeArtifactHash(this.supabase, sdUuid),
     };
 
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2, SECURITY finding LOW follow-up, evidence
+    // 361e7bc6): a self-authored-bypass REFUSAL never reaches buildPersistedBypassMetadata (it
+    // is not an accepted/bypassed result) -- stamp its check status directly so this, the most
+    // security-relevant outcome, never persists as the "predates FR-B2" null value.
+    if (result.bypassSelfAuthorshipCheckStatus) {
+      execution.metadata = {
+        ...(execution.metadata || {}),
+        bypass_self_authorship_check_status: result.bypassSelfAuthorshipCheckStatus,
+      };
+    }
+
     try {
       // Pre-validate - for rejections, try to fix common issues
       const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', execution);

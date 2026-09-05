@@ -129,6 +129,7 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B FR-B1: bypass_ledger.handoff_id j
       warnings: [],
       bypassed: true,
       bypassLedgerId: 'ledger-row-rejected-1',
+      bypassSelfAuthorshipCheckStatus: 'refused',
     };
 
     await recorder.recordFailure('EXEC-TO-PLAN', 'SD-POC-003', result);
@@ -141,6 +142,10 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B FR-B1: bypass_ledger.handoff_id j
     expect(ledgerJoin.patch).toEqual({ handoff_id: insertedHandoff.row.id });
     expect(ledgerJoin.eq).toEqual({ col: 'id', val: 'ledger-row-rejected-1' });
     expect(ledgerJoin.is).toEqual({ col: 'handoff_id', val: null });
+    // SECURITY finding LOW follow-up (evidence 361e7bc6): 'refused' must persist on the
+    // rejected sd_phase_handoffs row's metadata, never silently reading as the "predates
+    // FR-B2" null value on the most security-relevant outcome.
+    expect(insertedHandoff.row.metadata.bypass_self_authorship_check_status).toBe('refused');
   });
 
   it('recordFailure does NOT touch bypass_ledger when the rejection was unrelated to a bypass attempt', async () => {
