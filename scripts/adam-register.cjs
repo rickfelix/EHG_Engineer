@@ -47,6 +47,7 @@ const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, isFreshAndActive, i
 const { isSeatProcessDead } = require('../lib/coordinator/role-seat-liveness.cjs');
 // FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
 const { drainAdamOutbound } = require('./adam-advisory.cjs');
+const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 const ADAM_ROLE = 'adam';
 const CONTRACT_FILE = 'CLAUDE_ADAM.md';
@@ -280,11 +281,10 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       // naturally re-stamps status='active', same as every other live session.
       const priorMeta = (bySessionId.get(sid) || {}).metadata || {};
       const { error: mergeErr } = await supabase.from('claude_sessions')
-        .update({
+        .update(terminalSessionUpdate('released', {
           metadata: { ...priorMeta, role: 'adam_retired', non_fleet: true },
           released_at: new Date().toISOString(),
-          status: 'released',
-        }).eq('session_id', sid);
+        })).eq('session_id', sid);
       if (mergeErr) { retireBlocked = true; continue; }
       retired.push(sid);
       retireFallbackUsed.push(sid);

@@ -78,9 +78,12 @@ async function main() {
 
   // OR across BOTH timestamp columns: Specimen 2 is exactly a session whose updated_at
   // was stale despite being alive — bounding on updated_at alone would repeat that bug.
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added to the SELECT below -- isSessionAlive's FR-2
+  // deny-list needs it to correctly read a released/stale row as dead instead of trusting a stuck
+  // raw is_alive.
   const sessions = await fapPaginate(() => supabase
     .from('claude_sessions')
-    .select('session_id, sd_key, updated_at, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until, metadata')
+    .select('session_id, sd_key, updated_at, heartbeat_at, is_alive, status, terminal_id, process_alive_at, expected_silence_until, metadata')
     .neq('status', 'terminated')
     .or(`updated_at.gte.${cutoff},heartbeat_at.gte.${cutoff}`)
     .order('session_id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)
@@ -140,6 +143,8 @@ async function main() {
   }
 
   const registered = new Set(ids);
+  // Could-not-determine (empty map) just means zero rows enter this filter -- never flags a
+  // registered session as orphaned; it can only under-report orphans, never over-report them.
   const orphanPids = Object.entries(getMarkerSessionIds()).filter(([sid, info]) => info.alive && !registered.has(sid));
   if (orphanPids.length > 0) {
     console.log('\nUNREGISTERED (PID alive, no active claude_sessions row)');

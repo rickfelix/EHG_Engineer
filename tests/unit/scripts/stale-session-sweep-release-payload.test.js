@@ -24,6 +24,12 @@ describe('QF-20260508-230 — stale-session-sweep release payload invariant', ()
   it('release payload includes worktree_branch:null at every claude_sessions UPDATE site', () => {
     // Find every occurrence of `.from('claude_sessions')` followed within ~250 chars by
     // an `.update({` block. Each such block MUST contain `worktree_branch: null`.
+    //
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: some release sites now route through the shared
+    // terminalSessionUpdate()/sessionStatusUpdate() chokepoint -- `.update(sessionStatusUpdate(
+    // targetStatus, {...}))` -- so the object literal can be the WRAPPER'S second argument, not
+    // .update()'s direct argument. The optional non-capturing group skips a wrapper call prefix
+    // before the `{`, and `\)+` accounts for the wrapper's own closing paren plus .update()'s.
     const fromMatches = [...SOURCE.matchAll(/\.from\(\s*['"]claude_sessions['"]\s*\)/g)];
     expect(fromMatches.length).toBeGreaterThanOrEqual(3);
 
@@ -31,7 +37,7 @@ describe('QF-20260508-230 — stale-session-sweep release payload invariant', ()
       const start = m.index;
       // Look ahead up to 1000 chars for an `.update({...})` block
       const window = SOURCE.slice(start, start + 1000);
-      const updateMatch = window.match(/\.update\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+      const updateMatch = window.match(/\.update\s*\(\s*(?:\w+\s*\([^{]*)?\{([\s\S]*?)\}\s*\)+/);
       if (!updateMatch) continue; // not all from() are UPDATEs (some are SELECT)
       const updatePayload = updateMatch[1];
 

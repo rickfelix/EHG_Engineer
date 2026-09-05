@@ -301,6 +301,57 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
     expect(summary.hinted).toBe(0);
   });
 
+  // QF-20260903-789: the idle-empty early return must never report a counter it never reached
+  // as a measured ZERO -- skippedGated/heldSkipped/claimableWithVerify/skippedCapped/capUnknown
+  // all read UNDETERMINED (null), not 0, when the pass never got far enough to measure them.
+  it('QF-20260903-789: no idle workers -> the four unreached counters read UNDETERMINED (null), not a measured zero', async () => {
+    const sb = makeFakeSupabase({ sessions: [], qfs: [qf()] });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.idleWorkers).toBe(0);
+    expect(summary.skippedGated).toBeNull();
+    expect(summary.heldSkipped).toBeNull();
+    expect(summary.claimableWithVerify).toBeNull();
+    expect(summary.skippedCapped).toBeNull();
+    expect(summary.capUnknown).toBeNull();
+  });
+
+  it('QF-20260903-789: idle worker present but zero eligible QFs -> skippedGated/heldSkipped/claimableWithVerify ARE measured (real 0), but skippedCapped/capUnknown stay UNDETERMINED (deliverHints never runs)', async () => {
+    const sb = makeFakeSupabase({ sessions: [worker()], qfs: [] });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.idleWorkers).toBe(1);
+    expect(summary.skippedGated).toBe(0);
+    expect(summary.heldSkipped).toBe(0);
+    expect(summary.claimableWithVerify).toBe(0);
+    expect(summary.skippedCapped).toBeNull();
+    expect(summary.capUnknown).toBeNull();
+  });
+
+  it('QF-20260903-789: a normal hinted pass reaches deliverHints -- skippedCapped/capUnknown are promoted to a real 0, never left UNDETERMINED, even though no cap ever fires', async () => {
+    const sb = makeFakeSupabase({ sessions: [worker()], qfs: [qf()] });
+    const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+    expect(summary.hinted).toBe(1);
+    expect(summary.skippedCapped).toBe(0);
+    expect(summary.capUnknown).toBe(0);
+  });
+
+  describe('QF-20260903-789: sdHolderFreshnessWindowMs end-to-end -- a stale (non-advancing) SD holder is HELD, not busy', () => {
+    it('a fresh (recently active) SD holder stays excluded from idle -- genuinely busy', async () => {
+      const busyHolder = worker({ session_id: 'busy-1', sd_key: 'SD-LIVE-001', last_tool_at: new Date(NOW - 5 * 60 * 1000).toISOString() });
+      const sb = makeFakeSupabase({ sessions: [busyHolder], qfs: [qf()], sdHolders: [{ claiming_session_id: 'busy-1' }] });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.idleWorkers).toBe(0);
+      expect(summary.hinted).toBe(0);
+    });
+
+    it('a stale (blocked, not advancing) SD holder now counts as idle and gets hinted -- HELD, available for other work', async () => {
+      const heldHolder = worker({ session_id: 'held-1', sd_key: 'SD-LIVE-001', last_tool_at: new Date(NOW - 20 * 60 * 1000).toISOString() });
+      const sb = makeFakeSupabase({ sessions: [heldHolder], qfs: [qf()], sdHolders: [{ claiming_session_id: 'held-1' }] });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.idleWorkers).toBe(1);
+      expect(summary.hinted).toBe(1);
+    });
+  });
+
   // QF-20260830-885 end-to-end: the Hotel-3 specimen reproduced through the full core, not just
   // the pure predicate — a worker whose sd_key mirror still names a completed item, but who
   // holds zero rows on the authoritative strategic_directives_v2 table, must read idle and be

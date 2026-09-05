@@ -1,4 +1,19 @@
 {
+ "lib/fleet/best-effort-release.mjs:297": {
+  "classification": "bounded-by-design",
+  "match": "select('id').eq('id', qfId)",
+  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: bounded twice over -- filtered by id (a primary key) AND an explicit .limit(1) on the awaited statement 4 lines below (`await lookup.limit(1)`). select() must be first on THIS line (real postgrest-js staged-type requirement -- testing-agent finding 688ca3f5), which puts .limit() on a separate statement after a `lookup = applyClaimPredicate(lookup)` reassignment the classifier's single-statement chainWindow cannot trace across."
+ },
+ "scripts/session-liveness-ssot-exit-predicate-check.mjs:47": {
+  "classification": "bounded-by-design",
+  "match": "session_id, status, is_alive, released_at, stale_at, released_reason",
+  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: .limit(sampleLimit) follows on the next line -- sampleLimit defaults to SAMPLE_LIMIT=10, always <1000, but the classifier's limit() regex only recognizes a literal digit, not a named binding."
+ },
+ "scripts/hooks/coordination-inbox.cjs:929": {
+  "classification": "bounded-by-design",
+  "match": "sd_key, heartbeat_at, expected_silence_until, is_alive, status, terminal_id, process_alive_at",
+  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: filters .not('sd_key','is',null) -- claude_sessions rows currently holding an SD claim, an operationally small, actively-bounded fleet population (dozens, not thousands), not a raw growing table."
+ },
  "lib/adam/briefings/harness.js:247": {
   "classification": "bounded-by-design",
   "match": ".select('id, code')",

@@ -313,6 +313,8 @@ async function loadData() {
   // Cross-reference heartbeat age with PID marker liveness:
   // A session with stale heartbeat but living CC PID is loading context or between tool calls.
   // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid and check marker files.
+  // Could-not-determine (empty set) just under-reports PID-alive rows in this DISPLAY-only
+  // dashboard -- never renders a destructive verdict, never marks a row dead on its own.
   const aliveCcPids = getAliveCcPids();
   // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): this WAS a local re-implementation doing
   // s.terminal_id.split('-') and taking the last segment — a third copy of logic that is simply
@@ -585,6 +587,8 @@ function formatSilentUntil(s) {
 // ── Section: Workers ──
 function printWorkers(d) {
   const now = new Date();
+  // Could-not-determine (empty map) just means the csid column below reads blank and the
+  // UNREGISTERED section further down finds no orphans -- never marks a listed worker dead.
   const markerIds = getMarkerSessionIds();
 
   // Detect terminal_id collisions among active workers

@@ -1084,6 +1084,13 @@ export class HandoffRecorder {
         metadata.gate_results = result.gateResults;
         metadata.gate_results_version =
           Object.values(result.gateResults).some(r => r && r.input_hash) ? 2 : 1;
+        // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A): stamp the GATE2-yellow-zone
+        // SD_TYPE_THRESHOLD acceptance, when ValidationOrchestrator.validateGates() granted
+        // one, so the two scores are auditable on the handoff record itself.
+        if (result.yellowZoneAccept) {
+          metadata.yellow_zone_accept = result.yellowZoneAccept;
+          console.log('   🟡 yellow_zone_accept stamped to metadata.yellow_zone_accept');
+        }
       } else {
         console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
       }

@@ -88,19 +88,95 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         const mostRecentRejection = rejections[rejections.length - 1];
         // count-truncation-diff-lint: bounded read -- only existence (length > 0) and id list
         // are used, so a small cap is sufficient regardless of true total RCA-row count.
+        // .order() added per EXEC-phase TESTING re-verify (evidence 28382f71): the content
+        // predicate below makes WHICH 20 rows land in this sample decision-relevant in a way
+        // bare existence never was.
         const { data: rcaRows, error: rcaError } = await supabase
           .from('sub_agent_execution_results')
-          .select('id, created_at')
+          .select('id, created_at, metadata')
           .eq('sd_id', sdId)
           .eq('sub_agent_code', 'RCA')
           .gt('created_at', mostRecentRejection.created_at)
+          .order('created_at', { ascending: false })
           .limit(20);
         if (rcaError) {
           return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
         }
 
-        const details = { mode, attempt_index: attemptIndex, rca_evidence: rcaRows?.map((r) => r.id) || [] };
-        if (rcaRows?.length > 0 || mode !== 'blocking') {
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): bare row-existence let a hollow/failed
+        // RCA row (no real analysis) satisfy this gate identically to a genuine one. Require the
+        // row's linked root_cause_reports (via metadata.rcr_id) to actually carry a non-empty
+        // root_cause AND confidence >= 70 -- content-based, deliberately NOT status-based
+        // (PLAN-phase TESTING review, evidence baded1f3: rca.js never writes status='RESOLVED').
+        //
+        // The floor is 70, NOT 60 (EXEC-phase confirmation round, evidence 79f84159/e78f2c71 --
+        // both TESTING and SECURITY independently measured live data and found 60 empirically
+        // vacuous: 0 of 1412 rows excluded, because resolveRcaDispatchTarget's auto-created RCR
+        // leaves rca.js's identifyRootCause() four contributing factors (log_quality,
+        // evidence_strength, pattern_match_score, historical_success_bonus) at their NULL
+        // defaults, so the formula always computes exactly 65 for the templated, non-genuine
+        // path this SD's own dispatch fix creates -- 513 of 520 passing rows share ONE
+        // byte-identical templated root_cause at confidence 65; the 7 genuine analyses in the
+        // dataset sit at 90-95. 70 is the measured discriminating threshold (matches rca.js's
+        // own CAPA_PENDING cut and the DB's valid_confidence_for_status >=70 requirement) and
+        // correctly excludes all 513 templated rows while keeping all 7 genuine ones. This is
+        // still an evidence-QUALITY floor, not an access-control boundary -- confidence remains
+        // a plain column an equally-privileged actor could set directly (SECURITY evidence
+        // e78f2c71: "the trust model has not fundamentally changed"); it only raises the cost of
+        // an accidental or lazy false-pass, which is the realistic failure mode this gate guards
+        // against today (both RCA gates are advisory-mode by default; see below).
+        //
+        // SEC-1 (evidence c49ce1e0, confirmed closed by hostile-client re-verify e78f2c71): a
+        // malformed (non-UUID) metadata.rcr_id used to hit a Postgres 22P02 error, landing in the
+        // old rcrError fail-open branch -- making a malformed id CHEAPER to forge a pass with
+        // than a well-formed-but-wrong one. Filter to well-formed UUIDs before querying; a
+        // dropped malformed id is simply never verified (correctly non-satisfying), never a
+        // query error. Lower-cased at extraction (SEC-5, evidence e78f2c71): Postgres returns
+        // canonical lowercase uuid text, so an uppercase caller-supplied id must be normalized
+        // before the final Set lookup below, or a genuine analysis goes uncredited.
+        //
+        // SEC-2 (evidence c49ce1e0, confirmed closed by hostile-client re-verify e78f2c71): the
+        // RCR content lookup had no .eq('sd_id', sdId), so ANY rcr_id belonging to a completely
+        // unrelated SD with a genuine analysis (519/1411 live rows qualify) was a universal
+        // gate-passing token. Scoped to this SD's own RCRs only.
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const rcrIds = [...new Set(
+          (rcaRows || [])
+            .map((r) => r.metadata?.rcr_id)
+            .filter((id) => typeof id === 'string' && UUID_REGEX.test(id))
+            .map((id) => id.toLowerCase())
+        )];
+        let contentVerifiedIds = new Set();
+        if (rcrIds.length > 0) {
+          // count-truncation-diff-lint: bounded read -- rcrIds is already capped by the
+          // upstream rcaRows query's own .limit(20) above; this explicit limit makes that bound
+          // visible at this call site too, rather than relying on an implicit upstream cap.
+          const { data: rcrRows, error: rcrError } = await supabase
+            .from('root_cause_reports')
+            .select('id, root_cause, confidence')
+            .eq('sd_id', sdId)
+            .in('id', rcrIds)
+            .limit(20);
+          if (rcrError) {
+            return { passed: true, score: 100, issues: [`rcr-content-read-error: ${rcrError.message}`], details: { mode, attempt_index: attemptIndex } };
+          }
+          contentVerifiedIds = new Set(
+            (rcrRows || [])
+              .filter((r) => typeof r.root_cause === 'string' && r.root_cause.trim().length > 0 && (r.confidence ?? 0) >= 70)
+              .map((r) => String(r.id).toLowerCase())
+          );
+        }
+        const satisfyingRows = (rcaRows || []).filter(
+          (r) => r.metadata?.rcr_id && contentVerifiedIds.has(String(r.metadata.rcr_id).toLowerCase())
+        );
+
+        const details = {
+          mode,
+          attempt_index: attemptIndex,
+          rca_evidence: rcaRows?.map((r) => r.id) || [],
+          content_verified_evidence: satisfyingRows.map((r) => r.id),
+        };
+        if (satisfyingRows.length > 0 || mode !== 'blocking') {
           return { passed: true, score: 100, issues: [], details };
         }
 

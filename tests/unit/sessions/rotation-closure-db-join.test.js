@@ -143,7 +143,7 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
       { session_id: 'new', status: 'active', hostname: HOST, metadata: {} },
     ]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it('TS-1 regression control: marker-based PASS 1 still closes when a marker exists (unchanged behavior)', async () => {
@@ -153,7 +153,7 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
       { session_id: 'new', status: 'active', hostname: HOST, metadata: {} },
     ]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it('TS-3: identity guard (marker disagrees with discovered pid) closes nothing via EITHER path', async () => {
@@ -223,7 +223,7 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
       { session_id: 'old', status: 'active', hostname: HOST, metadata: { cc_parent_pid: '22196' } },
     ]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: 22196, pidsDir: dir }); // number, not string
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it('secondary specimen: an orphan-swept marker for a still-LIVE (non-rotated) daemon does not cause a false-positive release of that session', async () => {
@@ -261,7 +261,7 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
     // If the null id leaked into toCloseIds, this array would contain null and/or the whole
     // release call would be a different shape -- assert it is exactly the one legitimate id.
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it('does not double-release a session already found by the marker path (dedup across passes)', async () => {
@@ -271,6 +271,6 @@ describe('closeRotatedOutSessions PASS 2 — DB-join fallback (FR-2)', () => {
       { session_id: 'new', status: 'active', hostname: HOST, metadata: {} },
     ]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]); // one release call, one id
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]); // one release call, one id
   });
 });

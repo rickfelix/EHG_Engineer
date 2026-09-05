@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+const { terminalSessionUpdate, sessionStatusUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 // SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): the readability invariant, shared with the
 // dispatch choke point this file's WORK_ASSIGNMENT insert deliberately bypasses.
@@ -47,7 +48,7 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
-const { getMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3
+const { getMarkerSessionIds, markerDirs } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3; markerDirs added SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 FR-3
 
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 2 — the sweep ACTS on what it
 // fetches, so a read silently capped at the PostgREST 1000-row max means claims not
@@ -965,14 +966,14 @@ function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
 // live Claude Code processes share the same session_id (identity collision).
 // Supports both pid-*.json (CLI sessions) and fallback-*.json (Desktop sessions).
 // Returns: [{ pid, session_id, marker_path, cc_pid, sse_port }]
-// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3, TS-8): markerDir is now an optional
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3, TS-8): markerDir is an optional
 // override (test-injection seam, mirroring lib/fleet/cc-pid-liveness.cjs's own contract) so this
 // function is hermetically unit-testable without touching the real, host-local
-// .claude/session-identity directory.
-function detectIdentityCollisions(markerDir = path.resolve(__dirname, '../.claude/session-identity')) {
-  if (!fs.existsSync(markerDir)) return { collisions: [], aliveMarkers: [] };
-
-  const markers = fs.readdirSync(markerDir)
+// .claude/session-identity directory. An explicit markerDir still pins the scan to exactly that
+// one directory (unchanged single-dir contract for the 2 existing test-injection call sites).
+function readCollisionMarkersFromDir(markerDir) {
+  if (!fs.existsSync(markerDir)) return [];
+  return fs.readdirSync(markerDir)
     .filter(f => /^pid-\d+\.json$/.test(f) || /^fallback-\d+-\d+\.json$/.test(f))
     .map(f => {
       const filePath = path.resolve(markerDir, f);
@@ -986,6 +987,18 @@ function detectIdentityCollisions(markerDir = path.resolve(__dirname, '../.claud
       } catch { return null; }
     })
     .filter(Boolean);
+}
+
+// VALIDATION sub-agent finding at PLAN-TO-LEAD (evidence row d9cba8d8-2558-4a4e-9055-003d8e108100):
+// this was a THIRD independent single-directory re-derivation (FR-3's own description named it),
+// left un-unioned even after the dead claude_session_id field was fixed -- its 3 no-arg call sites
+// (qfSweepAliveCcPids/sweepAliveCcPids) feed isSessionAlive/shouldHoldClaim, live claim-release
+// guards, so a session live only in another worktree checkout would still read as dead here.
+// No-arg now unions across markerDirsFn() (default real markerDirs), matching cc-pid-liveness.cjs's
+// own no-arg contract; an explicit markerDir argument is unchanged (pins to exactly that directory).
+function detectIdentityCollisions(markerDir, markerDirsFn = markerDirs) {
+  const dirs = markerDir ? [markerDir] : markerDirsFn();
+  const markers = dirs.flatMap((dir) => readCollisionMarkersFromDir(dir));
 
   // Check which PIDs are alive.
   // For CLI markers (pid-*.json), check the specific PID.
@@ -1281,12 +1294,16 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       // open/in_progress QF claim. Skip this release pass on guard failure.
       let holderRows;
       try {
+        // Widened for the liveness SSOT: isSessionAlive reads is_alive, status, heartbeat_at,
+        // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+        // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- without it, isSessionAlive's FR-2
+        // deny-list for a released/stale holder never fires here (session.status is undefined),
+        // which is the exact producer-side starvation that left the e60956f5 holder reading alive
+        // for 8.6 hours after being released.
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          // Widened for the liveness SSOT: isSessionAlive reads is_alive, heartbeat_at,
-          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
-          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
-          .select('session_id, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until')
+          .select('session_id, heartbeat_at, is_alive, status, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch (guardErr) {
@@ -1569,16 +1586,17 @@ async function runQaFixtureScan(ctx) {
     // by QF-20260504-081 but this one was missed.
     const { error } = await supabase
       .from('claude_sessions')
-      .update({
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released);
+      // sessionStatusUpdate() adds is_alive:false only when the resolved status is terminal.
+      .update(sessionStatusUpdate(targetStatus, {
         sd_key: null,
-        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: releasedReason,
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
-      })
+      }))
       .eq('session_id', s.session_id);
 
     if (!error) {
@@ -1657,16 +1675,16 @@ async function runQaFixtureScan(ctx) {
     // for ALL release sites — adding a new release path? Add worktree_branch:null too.
     const { error } = await supabase
       .from('claude_sessions')
-      .update({
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released).
+      .update(sessionStatusUpdate(targetStatus, {
         sd_key: null,
-        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_ORPHANED_CLAIM',
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
-      })
+      }))
       .eq('session_id', s.session_id);
 
     if (!error) {
@@ -2566,7 +2584,10 @@ async function main() {
       // later at this function's line ~1664 from detectIdentityCollisions() -- this
       // block runs before that and before the no-sessions early-return, so it cannot
       // depend on either). See filterDormantByPidLiveness's own doc for the keyspace
-      // join detail.
+      // join detail. Could-not-determine (empty map, e.g. off-checkout) protects NOBODY here --
+      // filterDormantByPidLiveness only REMOVES a candidate from `dormant` on a confirmed-alive
+      // marker, so this feeds a DORMANCY ALERT, not a release; it can under-protect, never
+      // over-flag a live session as newly dormant.
       const dormant = filterDormantByPidLiveness(dormantCandidates, getMarkerSessionIds());
       const DORMANCY_ALERT_THRESHOLD = 2;
       if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
@@ -2804,10 +2825,10 @@ async function main() {
     const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
     // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
     // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
-    await supabase.from('claude_sessions').update({
-      sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
+    await supabase.from('claude_sessions').update(terminalSessionUpdate('released', {
+      sd_key: null, released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
       worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
-    }).eq('session_id', s.session_id);
+    })).eq('session_id', s.session_id);
     actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
     await supabase.from('session_coordination').insert({
       message_type: 'INFO',
@@ -3378,16 +3399,16 @@ async function main() {
       // sibling release at workingOnCompleted branch (line ~480) had the same bug.
       const { error } = await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released).
+        .update(sessionStatusUpdate(targetStatus, {
           sd_key: null,
-          status: targetStatus,
           released_at: now.toISOString(),
           released_reason: 'SWEEP_CONFLICT_RESOLUTION',
           worktree_path: null,
           worktree_branch: null,
           has_uncommitted_changes: false,
           current_branch: null
-        })
+        }))
         .eq('session_id', evict.session_id);
 
       if (!error) {
@@ -3626,15 +3647,15 @@ async function main() {
     if (isFixtureSession(s.session_id)) {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_FIXTURE_SESSION_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
       if (sd.claiming_session_id === s.session_id) {
@@ -3665,15 +3686,15 @@ async function main() {
     if (!isFullUuid(s.session_id)) {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_NON_UUID_SESSION_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
       if (sd.claiming_session_id === s.session_id) {
@@ -3694,15 +3715,15 @@ async function main() {
     if (sd.status === 'completed' || sd.status === 'cancelled') {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_SD_TERMINAL_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this terminal SD
       actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' is ' + sd.status + ')');
@@ -3731,15 +3752,15 @@ async function main() {
         // session's stale sd_key (bilateral release), mirroring the terminal-status clear above.
         await supabase
           .from('claude_sessions')
-          .update({
+          // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+          .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
             sd_key: null,
-            status: s.status === 'ACTIVE' ? 'idle' : 'released',
             released_at: now.toISOString(),
             released_reason: 'SWEEP_SD_INELIGIBLE_CLAIM_FIX',
             worktree_path: null,
             worktree_branch: null,
             current_branch: null,
-          })
+          }))
           .eq('session_id', s.session_id)
           .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
         actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' ineligible: ' + verdict.reason + ')');
@@ -3765,15 +3786,15 @@ async function main() {
           // worktree_branch (mirrors the fixture/non-uuid/terminal bilateral-release branches above).
           await supabase
             .from('claude_sessions')
-            .update({
+            // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+            .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
               sd_key: null,
-              status: s.status === 'ACTIVE' ? 'idle' : 'released',
               released_at: now.toISOString(),
               released_reason: 'SWEEP_STALE_BINDING_CLAIM_FIX',
               worktree_path: null,
               worktree_branch: null,
               current_branch: null,
-            })
+            }))
             .eq('session_id', s.session_id)
             .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
           actions.push('CLAIM_FIX: cleared stale sd_key binding on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' authoritatively claimed by live session ' + sd.claiming_session_id.substring(0, 20) + ')');

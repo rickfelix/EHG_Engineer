@@ -80,13 +80,36 @@ const _BOILERPLATE_TEST_SCENARIOS = [
 // ============================================
 
 /**
+ * QF-20260905-185: strip tokens that look like real code identifiers -- a function call, a file
+ * path, or a SCREAMING_SNAKE_CASE constant -- before pattern-matching for placeholder/boilerplate
+ * filler. Without this, a PRD legitimately discussing the exact identifiers it targets (e.g. a PRD
+ * ABOUT the placeholder-content gate, naming validatePlaceholderContent()/placeholder-content.js/
+ * PLACEHOLDER_PATTERNS) self-flags merely because those real names happen to contain a trigger
+ * substring like 'placeholder'. Narrow and additive: strips only these three well-known code-token
+ * shapes, never touches genuine prose (cross-cites QF-20260903-722, which fixed the earlier
+ * whole-serialized-object substring match but added no code-token exclusion).
+ * @param {string} text
+ * @returns {string}
+ */
+function stripCodeTokens(text) {
+  if (!text) return text;
+  return text
+    // function call: identifier immediately followed by (...)
+    .replace(/\b[A-Za-z_$][A-Za-z0-9_$]*\([^()]*\)/g, ' ')
+    // file path: a bare-name-or-path segment ending in a common code extension
+    .replace(/[\w./-]+\.(?:js|mjs|cjs|ts|tsx|jsx|py|sql|json|yml|yaml)\b/g, ' ')
+    // SCREAMING_SNAKE_CASE constant (at least one underscore, all caps/digits)
+    .replace(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g, ' ');
+}
+
+/**
  * Check if text contains placeholder patterns
  * @param {string} text - Text to check
  * @returns {boolean} True if placeholder found
  */
 function containsPlaceholder(text) {
   if (!text) return false;
-  const normalized = text.toLowerCase();
+  const normalized = stripCodeTokens(text).toLowerCase();
   return PLACEHOLDER_PATTERNS.some(pattern => normalized.includes(pattern));
 }
 
@@ -98,7 +121,7 @@ function containsPlaceholder(text) {
  */
 function isBoilerplate(text, patterns) {
   if (!text) return false;
-  const normalized = text.toLowerCase().trim();
+  const normalized = stripCodeTokens(text).toLowerCase().trim();
   return patterns.some(pattern => normalized.includes(pattern.toLowerCase()));
 }
 

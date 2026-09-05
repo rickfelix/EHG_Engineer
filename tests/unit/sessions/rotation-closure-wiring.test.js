@@ -89,7 +89,7 @@ describe('FR-1 wiring — closure', () => {
       { session_id: 'new', status: 'active' },
     ]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it("writes status='released' specifically — the only value that stops the daemon", async () => {
@@ -98,7 +98,8 @@ describe('FR-1 wiring — closure', () => {
     const dir = markerDir({ 'tick-old.json': { session_id: 'old', cc_parent_pid: PID } });
     const sb = fakeSupabase([{ session_id: 'old', status: 'active' }]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
-    expect(sb.released[0].patch).toEqual({ status: 'released' });
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): terminalSessionUpdate() also stamps is_alive:false.
+    expect(sb.released[0].patch).toEqual({ status: 'released', is_alive: false });
   });
 
   // ─── TS-2: THE LOAD-BEARING ONE ────────────────────────────────────────────────────────────
@@ -134,7 +135,7 @@ describe('FR-1 wiring — closure', () => {
     const dir = markerDir({ 'tick-parked.json': { session_id: 'parked', cc_parent_pid: PID } });
     const sb = fakeSupabase([{ session_id: 'parked', status: 'active' }]);
     await closeRotatedOutSessions(sb, 'new', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['parked'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['parked'] }]);
   });
 
   it('never releases the CURRENT session id', async () => {
@@ -198,7 +199,7 @@ describe('FR-1 wiring — closure', () => {
       { session_id: 'old', status: 'active' },
     ]);
     await closeRotatedOutSessions(sb, 'me', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it('still closes when we have NO marker yet — the normal fresh-rotation case', async () => {
@@ -207,7 +208,7 @@ describe('FR-1 wiring — closure', () => {
     const dir = markerDir({ 'tick-old.json': { session_id: 'old', cc_parent_pid: PID } });
     const sb = fakeSupabase([{ session_id: 'old', status: 'active' }]);
     await closeRotatedOutSessions(sb, 'me', { parentPid: PID, pidsDir: dir });
-    expect(sb.released).toEqual([{ patch: { status: 'released' }, ids: ['old'] }]);
+    expect(sb.released).toEqual([{ patch: { status: 'released', is_alive: false }, ids: ['old'] }]);
   });
 
   it('swallows a DB failure — SessionStart must never abort', async () => {

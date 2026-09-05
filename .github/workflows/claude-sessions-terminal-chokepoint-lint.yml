@@ -1,0 +1,37 @@
+name: Claude Sessions Terminal Chokepoint Lint
+
+# SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1 census-completeness AC): blocks a PR that adds a NEW
+# claude_sessions UPDATE setting status to 'released'/'stale' without routing through
+# lib/fleet/terminal-session-update.cjs's terminalSessionUpdate()/sessionStatusUpdate() (or an
+# inline is_alive:false in the same statement). Without this, writer #N+1 is one hand-rolled
+# `.update({status:'released'})` away from reintroducing the exact liveness-SSOT defect this SD
+# closed -- the chokepoint is a voluntary convention, not something the language enforces.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs'
+      - 'scripts/audit/claude-sessions-terminal-chokepoint-allowlist.json'
+      - '.github/workflows/claude-sessions-terminal-chokepoint-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  claude-sessions-terminal-chokepoint-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect unguarded claude_sessions terminal-status writes
+        run: node scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs
