@@ -12,11 +12,19 @@
 // outcome, not a violation. Only a row where a corresponding sd_phase_handoffs row DOES exist
 // but handoff_id is still null is a genuine defect.
 //
-// Client is created lazily (inside main(), not at module load) so classifyBypassLedgerRows
-// can be imported and unit-tested without touching Supabase or process.env.
+// The client is CONSTRUCTED lazily, inside main() -- these imports are static (matching
+// audit-log-parity-check.mjs's own style) but createClient() itself is not called until
+// main() runs, so classifyBypassLedgerRows can be imported and unit-tested without ever
+// touching Supabase or requiring process.env to be populated.
+
+import { createClient } from '@supabase/supabase-js';
+import { config } from 'dotenv';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
- * Pure classifier: no I/O, no Date.now() side effects beyond the passed-in `now`.
+ * Pure classifier: no I/O, no ambient Date.now() call -- only new Date(row.created_at)
+ * on already-supplied timestamps.
  *
  * @param {Array<{id: string, created_at: string, handoff_id: string|null, sd_id: string|null, sd_key: string|null}>} ledgerRows
  * @param {Record<string, Array<{created_at: string}>>} handoffRowsBySdKey - sd_phase_handoffs rows, keyed by sd_id (or sd_key fallback)
@@ -51,9 +59,6 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const { createClient } = await import('@supabase/supabase-js');
-  const { config } = await import('dotenv');
-  const { fetchAllPaginated } = await import('../../lib/db/fetch-all-paginated.mjs');
   config();
 
   const args = parseArgs(process.argv.slice(2));
@@ -115,6 +120,6 @@ async function main() {
   process.exit(status === 'pass' ? 0 : 1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((e) => { console.error(JSON.stringify({ status: 'error', error: e.message })); process.exit(1); });
 }
