@@ -1274,15 +1274,15 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       // open/in_progress QF claim. Skip this release pass on guard failure.
       let holderRows;
       try {
+        // Widened for the liveness SSOT: isSessionAlive reads is_alive, status, heartbeat_at,
+        // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+        // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- without it, isSessionAlive's FR-2
+        // deny-list for a released/stale holder never fires here (session.status is undefined),
+        // which is the exact producer-side starvation that left the e60956f5 holder reading alive
+        // for 8.6 hours after being released.
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          // Widened for the liveness SSOT: isSessionAlive reads is_alive, status, heartbeat_at,
-          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
-          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
-          // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- without it, isSessionAlive's FR-2
-          // deny-list for a released/stale holder never fires here (session.status is undefined),
-          // which is the exact producer-side starvation that left the e60956f5 holder reading alive
-          // for 8.6 hours after being released.
           .select('session_id, heartbeat_at, is_alive, status, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)

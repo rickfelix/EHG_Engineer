@@ -8,6 +8,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_KEY = 'SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E';
@@ -137,4 +138,6 @@ async function main() {
   console.log('SD corrected:', data.sd_key);
 }
 
-main().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
+}

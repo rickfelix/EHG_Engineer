@@ -75,6 +75,8 @@ function fakeDb(row) {
     const builder = {
       update(p) { patch = p; return builder; },
       select() { return builder; },
+      // count-truncation-diff-lint: the real reason-lookup query is now .select('id').limit(1).
+      limit() { return builder; },
       eq(col, val) { preds.push((r) => r[col] === val); return builder; },
       in(col, vals) { preds.push((r) => Array.isArray(vals) && vals.includes(r[col])); return builder; },
       filter(col, op, val) {
