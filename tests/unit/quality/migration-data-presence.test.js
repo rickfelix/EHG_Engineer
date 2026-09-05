@@ -15,6 +15,10 @@ import {
 
 const REAL_MIGRATION = 'database/migrations/20260829_encode_chairman_venture_doctrine.sql';
 const REAL_KEYS = ['AMBITION_AS_MOAT', 'JAGGED_SPACE_TARGETING', 'EDGE_OF_CAPABILITY_TIMING', 'TECHNOLOGY_CONVERGENCE'];
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-F: a real on-disk migration with no INSERT statement at
+// all, for the genuinely-untested "unparseable migration shape" branch (distinct from the
+// nonexistent-file branch already covered below).
+const NO_INSERT_MIGRATION = 'database/migrations/009_bmad_risk_assessment.sql';
 
 function makeSupabase(selectResult) {
   const chain = {
@@ -29,7 +33,7 @@ function makeSupabase(selectResult) {
 
 describe('extractMigrationPaths', () => {
   it('extracts a database/migrations/*.sql path from free text', () => {
-    const text = `Applied database/migrations/20260829_encode_chairman_venture_doctrine.sql per plan.`;
+    const text = 'Applied database/migrations/20260829_encode_chairman_venture_doctrine.sql per plan.';
     expect(extractMigrationPaths(text)).toEqual([REAL_MIGRATION]);
   });
 
@@ -58,16 +62,28 @@ describe('checkMigrationDataPresent — real fixture migration, mocked DB', () =
     expect(gap.missing).toEqual(['JAGGED_SPACE_TARGETING', 'EDGE_OF_CAPABILITY_TIMING', 'TECHNOLOGY_CONVERGENCE']);
   });
 
-  it('returns null for a nonexistent migration file (fails open)', async () => {
+  it('returns null for a nonexistent migration file (fails open -- genuine limitation, preserved)', async () => {
     const supabase = makeSupabase({ data: [], error: null });
     const gap = await checkMigrationDataPresent(supabase, 'database/migrations/does-not-exist-9999.sql');
     expect(gap).toBeNull();
   });
 
-  it('returns null on a DB query error (fails open, not this check\'s concern)', async () => {
-    const supabase = makeSupabase({ data: null, error: { message: 'relation does not exist' } });
-    const gap = await checkMigrationDataPresent(supabase, REAL_MIGRATION);
+  it('returns null for a real migration with no INSERT statement (unparseable shape -- genuine limitation, preserved)', async () => {
+    const supabase = makeSupabase({ data: [], error: null });
+    const gap = await checkMigrationDataPresent(supabase, NO_INSERT_MIGRATION);
     expect(gap).toBeNull();
+  });
+
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-F: INVERTED from the pre-fix "returns null on a DB query
+  // error (fails open, not this check's concern)" -- a query error is not the same kind of
+  // limitation as an unparseable shape; it is a failure to obtain the fact this check exists to
+  // obtain. Reframed to a transient error class (code 57014), since the original mock's
+  // no-.code shape is unreachable through the real schema-drift-detecting wrapped client in
+  // production.
+  it('throws (preserving the original error) on a transient DB query error, instead of silently reading as no-gap-found', async () => {
+    const dbError = { message: 'canceling statement due to statement timeout', code: '57014' };
+    const supabase = makeSupabase({ data: null, error: dbError });
+    await expect(checkMigrationDataPresent(supabase, REAL_MIGRATION)).rejects.toEqual(dbError);
   });
 });
 
@@ -107,5 +123,48 @@ describe('findEvidenceMigrationGaps', () => {
     };
     const gaps = await findEvidenceMigrationGaps(supabase, 'sd-uuid-2');
     expect(gaps).toEqual([]);
+  });
+
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-F: the sd_phase_handoffs query previously did not
+  // destructure `error` at all -- a transient error silently yielded undefined handoffs ->
+  // empty text -> zero gaps found. Now throws instead.
+  it('throws (preserving the original error) when the sd_phase_handoffs query itself errors, instead of silently reporting zero gaps', async () => {
+    const dbError = { message: 'canceling statement due to statement timeout', code: '57014' };
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            limit: vi.fn(async () => ({ data: null, error: dbError })),
+          })),
+        })),
+      })),
+    };
+    await expect(findEvidenceMigrationGaps(supabase, 'sd-uuid-3')).rejects.toEqual(dbError);
+  });
+
+  // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-F FR-6: the throw from checkMigrationDataPresent() must
+  // propagate all the way out of findEvidenceMigrationGaps()'s per-migration loop, not be
+  // silently reinstated as a swallow one layer up by a defensive try/catch.
+  it('propagates a checkMigrationDataPresent() throw out of the per-migration loop, not swallowed one layer up', async () => {
+    const dbError = { message: 'canceling statement due to statement timeout', code: '57014' };
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'sd_phase_handoffs') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                limit: vi.fn(async () => ({
+                  data: [{ deliverables_manifest: `Applied ${REAL_MIGRATION}`, completeness_report: null, executive_summary: null }],
+                  error: null,
+                })),
+              })),
+            })),
+          };
+        }
+        // The per-migration presence check errors.
+        return { select: vi.fn(() => ({ in: vi.fn(() => ({ limit: vi.fn(async () => ({ data: null, error: dbError })) })) })) };
+      }),
+    };
+    await expect(findEvidenceMigrationGaps(supabase, 'sd-uuid-4')).rejects.toEqual(dbError);
   });
 });
