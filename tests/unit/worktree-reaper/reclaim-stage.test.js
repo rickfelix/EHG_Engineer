@@ -4,7 +4,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { isHolderPidResident, evaluateReclaimEligibility, RECLAIM_VERDICT } from '../../../lib/worktree-reaper/reclaim-stage.js';
+import {
+  isHolderPidResident, evaluateReclaimEligibility, evaluateReclaimEligibilityPreAudit,
+  gateReclaimCandidatesByAudit, RECLAIM_VERDICT,
+} from '../../../lib/worktree-reaper/reclaim-stage.js';
 
 const NOW = Date.parse('2026-09-04T12:00:00.000Z');
 
@@ -95,5 +98,47 @@ describe('evaluateReclaimEligibility()', () => {
 
   it('RECLAIM_VERDICT.REMOVED is the exact literal reclaim_removed', () => {
     expect(RECLAIM_VERDICT.REMOVED).toBe('reclaim_removed');
+  });
+});
+
+// QF-20260904-508: evaluateReclaimEligibility() was being called at classification time
+// with a hardcoded `auditAccepted: false` placeholder, which made condition 5 fail
+// unconditionally regardless of conditions 1/2/3 — RECLAIM could never fire, for any
+// tree, ever. evaluateReclaimEligibilityPreAudit() is the conditions-1/2/3-only signal
+// computed at classification time; gateReclaimCandidatesByAudit() is the real,
+// once-per-tick condition-5 re-gate against the audit sink's actual write outcome.
+describe('evaluateReclaimEligibilityPreAudit() (QF-20260904-508)', () => {
+  const baseOpts = { markerDirsFn: () => ['dir1'], getMarkerSessionIdsFn: () => ({}) };
+
+  it('is eligible on conditions 1/2/3 alone — auditAccepted need not even be present', () => {
+    const result = evaluateReclaimEligibilityPreAudit(
+      { contentSafe: true, holder: { session_id: 's1', released_at: '2026-09-04T11:00:00.000Z' }, nowMs: NOW },
+      baseOpts
+    );
+    expect(result).toEqual({ eligible: true, reason: 'reclaim_eligible' });
+  });
+
+  it('refuses on content_not_safe without ever considering audit acceptance', () => {
+    const result = evaluateReclaimEligibilityPreAudit({ contentSafe: false, holder: null, nowMs: NOW }, baseOpts);
+    expect(result).toEqual({ eligible: false, reason: 'content_not_safe' });
+  });
+});
+
+describe('gateReclaimCandidatesByAudit() (QF-20260904-508)', () => {
+  const records = [
+    { path: 'a', _reclaimCandidate: true },
+    { path: 'b', _reclaimCandidate: false },
+    { path: 'c', _reclaimCandidate: true },
+  ];
+
+  it('TS-1: an accepted audit batch admits every pre-audit reclaim candidate', () => {
+    expect(gateReclaimCandidatesByAudit(records, { ok: true })).toEqual([
+      { path: 'a', _reclaimCandidate: true },
+      { path: 'c', _reclaimCandidate: true },
+    ]);
+  });
+
+  it('TS-2: a rejected audit batch holds every candidate back, even a preserved no-holder tree', () => {
+    expect(gateReclaimCandidatesByAudit(records, { ok: false })).toEqual([]);
   });
 });
