@@ -5,11 +5,16 @@
  * only ever checked verdict/sub_agent_code/sd_id and fails soft (console.error only) — it would
  * never have caught a write that landed with the right verdict but dropped content (the specimen
  * defect: a green PASS row missing the findings/warnings/recommendations/summary it claimed to
- * carry). This SECOND, additional verifyReadback call is scoped to warnings/recommendations/
- * detailed_analysis/summary (via expectedFields) and findings (via requiredKeys on the metadata
- * column, since findings has no dedicated column — see results-storage.js's PERSISTED_ELSEWHERE)
- * and, unlike the existing one, fails HARD: a mismatch propagates out of storeSubAgentResults
- * into executor.js's existing catch block, which already re-throws to the CLI as a non-zero exit.
+ * carry). This SECOND, additional verifyReadback call checks: summary via expectedFields (exact
+ * equality — safe, always normalized to a plain string or null before write); warnings,
+ * recommendations, and detailed_analysis via presence-only comparison in-process against the
+ * returned row (NOT expectedFields — jsonb array-of-object columns don't preserve caller key
+ * order through a round trip, and detailed_analysis is a TEXT column some callers populate with
+ * an object, which the DB stringifies on write); and findings via requiredKeys on the metadata
+ * column (findings has no dedicated column — see results-storage.js's PERSISTED_ELSEWHERE).
+ * Unlike the existing check, this one fails HARD: a genuine drop propagates out of
+ * storeSubAgentResults into executor.js's existing catch block, which already re-throws to the
+ * CLI as a non-zero exit.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -125,5 +130,47 @@ describe('FR-2: a hard-failing second readback catches dropped payload content',
     expect(verifyReadback).toHaveBeenNthCalledWith(2, expect.objectContaining({
       requiredKeys: { metadata: ['findings'] },
     }));
+  });
+
+  it('BUG-2 (TESTING sub-agent): an object-shaped detailed_analysis that the TEXT column stringifies on write does not false-positive as dropped', async () => {
+    const verifyReadback = vi.fn()
+      .mockResolvedValueOnce({ verdict: 'PASS', row: {} })
+      // The DB stringifies the object -- "{}" is a non-empty STRING, not the empty object sent.
+      .mockResolvedValueOnce({ verdict: 'PASS', row: { detailed_analysis: '{}', warnings: [], recommendations: [] } });
+    vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
+      const actual = await importOriginal();
+      return { ...actual, verifyReadback };
+    });
+
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    const result = await storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      detailed_analysis: {},
+    });
+
+    expect(result.id).toBe('inserted-row-id');
+    // detailed_analysis must not be compared by exact equality (which would fail: object vs "{}"
+    // string) -- it is checked for presence only, same as warnings/recommendations.
+    expect(verifyReadback).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      expectedFields: expect.not.objectContaining({ detailed_analysis: expect.anything() }),
+    }));
+  });
+
+  it('BUG-2: a genuinely dropped detailed_analysis (non-empty sent, empty on readback) still fails hard', async () => {
+    const verifyReadback = vi.fn()
+      .mockResolvedValueOnce({ verdict: 'PASS', row: {} })
+      .mockResolvedValueOnce({ verdict: 'PASS', row: { detailed_analysis: null, warnings: [], recommendations: [] } });
+    vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
+      const actual = await importOriginal();
+      return { ...actual, verifyReadback };
+    });
+
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await expect(storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      detailed_analysis: 'a real analysis the row must keep',
+    })).rejects.toThrow(/detailed_analysis/);
   });
 });

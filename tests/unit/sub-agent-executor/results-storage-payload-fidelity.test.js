@@ -82,9 +82,13 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     // call, not readback-checker's own behavior (covered separately by
     // results-storage-readback.test.js and tests/unit/checkers/readback-checker.test.js), so both
     // the pre-existing soft readback and the FR-2 hard readback are mocked to resolve PASS here.
+    // The row ECHOES capture.inserted (read at call time, not a static {}) so FR-2's own
+    // presence-only checks on warnings/recommendations/detailed_analysis see real content when a
+    // test actually sends real content — a static empty row previously false-failed every test in
+    // this file that populates one of those fields.
     vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
       const actual = await importOriginal();
-      return { ...actual, verifyReadback: vi.fn().mockResolvedValue({ verdict: 'PASS', row: {} }) };
+      return { ...actual, verifyReadback: vi.fn().mockImplementation(async () => ({ verdict: 'PASS', row: capture.inserted || {} })) };
     });
   });
 
@@ -201,5 +205,37 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
 
     expect(capture.inserted.metadata._findings_stripped).toBe(true);
     expect(capture.inserted.metadata._findings_had_keys.sort()).toEqual(['owner', 'risk']);
+  });
+
+  it('BUG-1 (TESTING sub-agent, live at 32.4% of rows over 60d): does NOT refuse options/metrics — real, currently-used top-level fields on 14+ fleet sub-agent modules (security.js, testing/index.js, design/index.js, etc), already persisted into metadata but missing their PERSISTED_ELSEWHERE declaration before this fix', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await expect(storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      options: { skip_e2e: true },
+      metrics: { checks_run: 12 },
+    })).resolves.toBeTruthy();
+
+    expect(capture.inserted.metadata.options).toEqual({ skip_e2e: true });
+    expect(capture.inserted.metadata.metrics).toEqual({ checks_run: 12 });
+  });
+
+  it('BUG-1: baseline_applied (security.js) and mode (regression.js) are genuinely persisted, not merely exempted — these were UNHANDLED before this fix, unlike options/metrics above', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      baseline_applied: true,
+    });
+    expect(capture.inserted.metadata.baseline_applied).toBe(true);
+
+    vi.resetModules();
+    const { storeSubAgentResults: store2 } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await store2('REGRESSION', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      mode: 'full-validation',
+    });
+    expect(capture.inserted.metadata.mode).toBe('full-validation');
   });
 });

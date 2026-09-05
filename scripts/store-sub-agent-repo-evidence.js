@@ -47,6 +47,8 @@ const KNOWN_RESULT_FIELDS = new Set([
   'summary', 'execution_time_ms', 'validation_mode', 'justification', 'conditions', 'phase',
   'metadata', 'findings', 'options', 'metrics', 'error', 'stack', 'message', 'hallucination_check',
   'confidence_score', 'verdict_chain', 'sd_id', 'sd_key',
+  // TESTING sub-agent re-verify pass: security.js's baseline_applied and regression.js's mode.
+  'baseline_applied', 'mode',
 ]);
 
 /**
