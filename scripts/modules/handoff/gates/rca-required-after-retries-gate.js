@@ -90,7 +90,7 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         // are used, so a small cap is sufficient regardless of true total RCA-row count.
         const { data: rcaRows, error: rcaError } = await supabase
           .from('sub_agent_execution_results')
-          .select('id, created_at')
+          .select('id, created_at, metadata')
           .eq('sd_id', sdId)
           .eq('sub_agent_code', 'RCA')
           .gt('created_at', mostRecentRejection.created_at)
@@ -99,8 +99,44 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
           return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
         }
 
-        const details = { mode, attempt_index: attemptIndex, rca_evidence: rcaRows?.map((r) => r.id) || [] };
-        if (rcaRows?.length > 0 || mode !== 'blocking') {
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): bare row-existence let a hollow/failed
+        // RCA row (no real analysis) satisfy this gate identically to a genuine one. Require the
+        // row's linked root_cause_reports (via metadata.rcr_id) to actually carry a non-empty
+        // root_cause -- content-based, deliberately NOT status-based (PLAN-phase TESTING review,
+        // evidence baded1f3: rca.js never writes status='RESOLVED', and a status!='OPEN' check
+        // would collide with exec-to-plan/gates/rca-gate.js's existing BLOCKING_STATUSES
+        // semantics, which already treats IN_REVIEW/CAPA_PENDING as UNRESOLVED for a different
+        // purpose). Robust by construction against rca.js's own pre-existing edge case where a
+        // low-confidence UPDATE can silently fail a DB CHECK constraint and still report success
+        // (warnings-only) -- root_cause stays empty on the RCR row regardless of the reported
+        // verdict, so this predicate still correctly fails.
+        const rcrIds = [...new Set((rcaRows || []).map((r) => r.metadata?.rcr_id).filter(Boolean))];
+        let contentVerifiedIds = new Set();
+        if (rcrIds.length > 0) {
+          // count-truncation-diff-lint: bounded read -- rcrIds is already capped by the
+          // upstream rcaRows query's own .limit(20) above; this explicit limit makes that bound
+          // visible at this call site too, rather than relying on an implicit upstream cap.
+          const { data: rcrRows, error: rcrError } = await supabase
+            .from('root_cause_reports')
+            .select('id, root_cause')
+            .in('id', rcrIds)
+            .limit(20);
+          if (rcrError) {
+            return { passed: true, score: 100, issues: [`rcr-content-read-error: ${rcrError.message}`], details: { mode, attempt_index: attemptIndex } };
+          }
+          contentVerifiedIds = new Set(
+            (rcrRows || []).filter((r) => typeof r.root_cause === 'string' && r.root_cause.trim().length > 0).map((r) => r.id)
+          );
+        }
+        const satisfyingRows = (rcaRows || []).filter((r) => r.metadata?.rcr_id && contentVerifiedIds.has(r.metadata.rcr_id));
+
+        const details = {
+          mode,
+          attempt_index: attemptIndex,
+          rca_evidence: rcaRows?.map((r) => r.id) || [],
+          content_verified_evidence: satisfyingRows.map((r) => r.id),
+        };
+        if (satisfyingRows.length > 0 || mode !== 'blocking') {
           return { passed: true, score: 100, issues: [], details };
         }
 
