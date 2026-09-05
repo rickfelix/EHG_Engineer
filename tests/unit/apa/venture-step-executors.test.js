@@ -812,11 +812,19 @@ describe('ALTIFYAI registration — grounded in FR-0 live evidence', () => {
   it('registers 4 preflight checks and the stp-4de9/stp-e3e6/stp-6219 step overrides (QF-20260902-884, QF-20260902-033)', () => {
     const config = getVentureRegistration('ALTIFYAI');
     expect(config.preflightChecks.map((c) => c.name)).toEqual(['land', 'signupFormRenders', 'uploadRouteReachable', 'feedbackWidget']);
-    expect(Object.keys(config.stepOverrides)).toEqual([
+    // SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 FR-12: this assertion used to be
+    // exhaustive AND order-sensitive (toEqual on the full key list) -- it broke on the FIRST
+    // new override registered, not the eleventh. Narrowed to a non-exhaustive membership check
+    // for the 3 ORIGINAL overrides only; completeness against the full 14-journey spec (this
+    // SD's 11 new overrides included) is now a HARD, real-DB CI gate at
+    // scripts/altifyai-registry-completeness-check.mjs, wired into
+    // .github/workflows/altifyai-uat-drift-check-cron.yml -- not this unit test.
+    const keys = Object.keys(config.stepOverrides);
+    expect(keys).toEqual(expect.arrayContaining([
       'stp-4de9-upload-a-single-imag',
       'stp-e3e6-automatically-genera',
       'stp-6219-see-the-generated-al',
-    ]);
+    ]));
   });
 
   // FR-5: the venture's own sign-in toggle navigates off-origin to this Clerk-hosted domain --
