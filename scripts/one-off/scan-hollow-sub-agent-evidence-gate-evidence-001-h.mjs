@@ -243,12 +243,21 @@ async function main() {
       process.exit(2);
     }
     const metadata = { ...(sdRow?.metadata || {}), hollow_evidence_census: summary };
-    const { error: writeErr } = await supabase
+    // SECURITY sub-agent (EXEC, S4): a 0-row UPDATE (no matching sd_key) still returns
+    // error===null from PostgREST -- this SD's own defect class, in this SD's own script.
+    // .select() forces a return of the actually-affected row(s), so success is confirmed by
+    // COUNT, not by absence-of-error.
+    const { data: updated, error: writeErr } = await supabase
       .from('strategic_directives_v2')
       .update({ metadata })
-      .eq('sd_key', SD_KEY);
+      .eq('sd_key', SD_KEY)
+      .select('sd_key');
     if (writeErr) {
       console.error('Failed to persist baseline onto SD row:', writeErr.message);
+      process.exit(2);
+    }
+    if (!updated || updated.length === 0) {
+      console.error(`Baseline NOT persisted: no row matched sd_key=${SD_KEY} -- the update affected 0 rows despite no error.`);
       process.exit(2);
     }
     if (!args.json) console.log(`Baseline persisted onto ${SD_KEY}.metadata.hollow_evidence_census`);
