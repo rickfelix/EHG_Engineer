@@ -19,6 +19,10 @@
 import 'dotenv/config';
 import { etLocalHour, etLocalMinute, etDateStr } from '../lib/time/chairman-et-wall-clock.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// Recognized inbound kinds come from the drain-set registry (DRAIN_SETS.michael + role_drain_sets
+// rows), never a hand-rolled per-role kind list — tests/static-guards/drain-set-registry-readers
+// trips on any array literal of 3+ known kinds outside the registry.
+import { resolveRecognizedKinds } from '../lib/fleet/drain-set-registry.js';
 
 export const PARTY = 'michael';
 export const NEXT_WAKE_SECONDS = 900;
@@ -108,8 +112,11 @@ export async function runQuietTick({ sb, now = new Date(), env = process.env } =
   const feeder = await c('michael_feeder_runs', (q) => q.eq('et_date', today).eq('status', 'failed'));
   const rulings = await c('michael_staged_items', (q) => q.eq('kind', 'ruling').is('dispositioned_at', null));
   const sid = env.CLAUDE_SESSION_ID || null;
+  // michael_handoff is deliberately absent until child G registers it in one PR (see the
+  // DRAIN_SETS.michael note in lib/fleet/worker-status.cjs); the derived set picks it up then.
+  const inboxKinds = sid ? await resolveRecognizedKinds({ supabase: sb, role: 'michael' }) : [];
   const inbox = sid
-    ? await c('session_coordination', (q) => q.eq('target_session', sid).is('acknowledged_at', null).in('payload->>kind', ['michael_handoff', 'coordinator_request', 'coordinator_directive', 'chairman_directive', 'comms_check']))
+    ? await c('session_coordination', (q) => q.eq('target_session', sid).is('acknowledged_at', null).in('payload->>kind', inboxKinds))
     : null;
 
   // Brief state: 'verified' | 'finalize' | 'missing' | 'pending' | '?'
