@@ -81,7 +81,9 @@ function makeSupabaseMock(rows) {
         eq: () => ({
           gte: () => ({
             lt: () => ({
-              order: () => Promise.resolve({ data: rows, error: null }),
+              order: () => ({
+                range: () => Promise.resolve({ data: rows, error: null }),
+              }),
             }),
           }),
         }),
@@ -106,7 +108,7 @@ describe('auditAdamOutbound', () => {
   });
 
   it('a read error is fail-loud, never silently reports zero', async () => {
-    const supabase = { from: () => ({ select: () => ({ eq: () => ({ gte: () => ({ lt: () => ({ order: () => Promise.resolve({ data: null, error: { message: 'connection refused' } }) }) }) }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ gte: () => ({ lt: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'connection refused' } }) }) }) }) }) }) }) };
     await expect(auditAdamOutbound({ supabase, sinceIso: '2026-09-03T00:00:00Z', untilIso: '2026-09-04T00:00:00Z' }))
       .rejects.toThrow(/load Adam outbound failed/);
   });

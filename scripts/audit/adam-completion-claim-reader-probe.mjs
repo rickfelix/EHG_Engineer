@@ -38,6 +38,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 
 // A completion CLAIM: an assertion copula (is/are/was/were/now/already) immediately before one of
 // the five named words, with an intervening "not" excluded -- "is not done" asserts the opposite,
@@ -76,16 +77,21 @@ export function classifyCompletionClaim(text) {
  * @returns {Promise<{scanned:number, claims:number, flagged:number, flaggedRows:Array<{id:string, created_at:string, snippet:string}>}>}
  */
 export async function auditAdamOutbound({ supabase, sinceIso, untilIso }) {
-  const { data, error } = await supabase
-    .from('session_coordination')
-    .select('id, subject, body, created_at')
-    .eq('sender_type', 'adam')
-    .gte('created_at', sinceIso)
-    .lt('created_at', untilIso)
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(`load Adam outbound failed: ${error.message}`);
+  // Adam's outbound accumulates indefinitely (no pruning) -- a wide window could exceed the
+  // PostgREST 1000-row cap, so this is a full paginated read, not a capped one.
+  let rows;
+  try {
+    rows = await fetchAllPaginated(() => supabase
+      .from('session_coordination')
+      .select('id, subject, body, created_at')
+      .eq('sender_type', 'adam')
+      .gte('created_at', sinceIso)
+      .lt('created_at', untilIso)
+      .order('created_at', { ascending: true }));
+  } catch (err) {
+    throw new Error(`load Adam outbound failed: ${err.message}`);
+  }
 
-  const rows = data || [];
   const flaggedRows = [];
   let claims = 0;
   for (const row of rows) {
