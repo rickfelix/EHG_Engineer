@@ -205,6 +205,41 @@ The heartbeat system also tracks:
 - **WIP** (uncommitted changes) — prevents releasing sessions with unsaved work
 - **Branch** — detects worktree conflicts (two workers on same branch)
 
+## Session Liveness SSOT (`is_alive` / `status` parity)
+
+SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (2026-09-05). `claude_sessions.is_alive` is a raw, sticky
+flag — nothing clears it automatically when a session's `status` transitions to a terminal value.
+`lib/fleet/session-liveness.cjs`'s `isSessionAlive()` denies trust in a raw `is_alive=true` for
+any row with `status IN ('released','stale')`, but that denial only works if the caller's own
+`SELECT` actually includes `status` — a producer that omits it makes the reader's fix inert for
+that call site (this was the exact root cause of an 8.6-hour QF-claim-blocking incident,
+QF-20260903-020/-722).
+
+**Any new `claude_sessions` UPDATE that sets `status` to `'released'` or `'stale'` MUST route
+through the shared chokepoint** (`lib/fleet/terminal-session-update.cjs`):
+
+```js
+const { terminalSessionUpdate, sessionStatusUpdate } = require('./lib/fleet/terminal-session-update.cjs');
+
+// status is always one of the two terminal values:
+await supabase.from('claude_sessions').update(terminalSessionUpdate('released', { released_at, released_reason }))...
+
+// status is resolved at runtime and may or may not be terminal:
+await supabase.from('claude_sessions').update(sessionStatusUpdate(targetStatus, { ...extraFields }))...
+```
+
+Both helpers add `is_alive:false` automatically when (and only when) the resolved status is
+terminal — a caller cannot construct a payload that omits it. `scripts/lint/claude-sessions-
+terminal-chokepoint-lint.mjs` blocks a PR that adds a new unguarded terminal-status write in CI;
+`scripts/session-liveness-ssot-exit-predicate-check.mjs` runs the corrected predicate
+(`status IN ('released','stale') AND is_alive=true`, asserted at zero) daily in production as a
+post-merge alarm.
+
+**Any new caller of `isSessionAlive()` MUST select `status` in its own query** — the function is
+pure over whatever columns its caller supplied; `lib/fleet/session-liveness.cjs`'s exported
+`LIVENESS_INPUT_FIELDS` constant plus `tests/unit/fleet/liveness-input-parity.test.js` enforce
+this mechanically for every known producer.
+
 ## Claim System
 
 Claims are tracked via `claude_sessions.sd_id`. A partial unique index enforces single active claim per SD.
@@ -212,7 +247,7 @@ Claims are tracked via `claude_sessions.sd_id`. A partial unique index enforces 
 | Operation | Method |
 |-----------|--------|
 | Claim SD | `UPDATE claude_sessions SET sd_id = 'SD-XXX-001' WHERE session_id = '...'` |
-| Release claim | `UPDATE claude_sessions SET sd_id = NULL, released_at = NOW()` |
+| Release claim | `UPDATE claude_sessions SET sd_id = NULL, status = 'released', is_alive = false, released_at = NOW()` (or use `terminalSessionUpdate('released', {...})` — see "Session Liveness SSOT" above) |
 | Check claims | `SELECT * FROM claude_sessions WHERE sd_id IS NOT NULL AND status != 'terminated'` |
 | Fix stuck | `UPDATE claude_sessions SET sd_id=NULL, status='idle', released_at=NOW() WHERE session_id='...'` |
 
