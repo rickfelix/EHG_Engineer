@@ -84,6 +84,19 @@ function gate2Gate({ score = 82, zone = 'YELLOW', passed = true } = {}) {
   };
 }
 
+// SEC-003A-01 fixture helper: an advisory (required:false) gate scoring 0. A required:false
+// failure does NOT set results.passed=false (ValidationOrchestrator.js:384), but it DOES still
+// contribute to the weighted normalizedScore average (line 374-375) -- exactly the real-world
+// shape the SECURITY sub-agent's EXEC-TO-PLAN review found reachable without any forgery.
+function advisoryZeroGate(name) {
+  return {
+    name,
+    required: false,
+    weight: 1,
+    validator: async () => ({ passed: false, score: 0, max_score: 100, issues: [], warnings: [] }),
+  };
+}
+
 describe('ValidationOrchestrator — FR-9 GATE2 yellow-zone accept for SD_TYPE_THRESHOLD', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -105,6 +118,29 @@ describe('ValidationOrchestrator — FR-9 GATE2 yellow-zone accept for SD_TYPE_T
       gate2_score: 82,
       gate2_zone: 'YELLOW',
     });
+  });
+
+  it('NEGATIVE (SEC-003A-01, SECURITY sub-agent EXEC-TO-PLAN review): GATE2 PASSED YELLOW but overall normalizedScore is far below threshold via zero-scoring advisory gates -> SD_TYPE_THRESHOLD still blocks, the accept is bounded, not unlimited', async () => {
+    const orch = new ValidationOrchestrator(mockSupabase);
+    // GATE2 alone at 82% averaged with 4 advisory (required:false) gates scoring 0 -- a real,
+    // non-adversarial shape (advisory gates commonly score 0 without failing the handoff) --
+    // drives normalizedScore to ~16%, a 69-point shortfall against the 85% threshold. GATE2's
+    // own YELLOW zone bounds only GATE2's score, not this different, much-lower quantity.
+    const r = await orch.validateGates(
+      [
+        gate2Gate({ score: 82, zone: 'YELLOW' }),
+        advisoryZeroGate('ADVISORY_1'),
+        advisoryZeroGate('ADVISORY_2'),
+        advisoryZeroGate('ADVISORY_3'),
+        advisoryZeroGate('ADVISORY_4'),
+      ],
+      { sd: { sd_type: 'feature' } },
+    );
+
+    expect(r.normalizedScore).toBeLessThan(20);
+    expect(r.passed).toBe(false);
+    expect(r.failedGate).toBe('SD_TYPE_THRESHOLD');
+    expect(r.yellowZoneAccept).toBeUndefined();
   });
 
   it('NEGATIVE: GATE2 genuinely FAILED (RED zone, not YELLOW) -> SD_TYPE_THRESHOLD still blocks', async () => {
