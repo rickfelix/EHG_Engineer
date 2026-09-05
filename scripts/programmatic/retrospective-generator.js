@@ -16,7 +16,7 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
 import { parseArgs } from 'node:util';
-import { runProgrammaticTask } from '../../lib/programmatic/tool-loop.js';
+import { runProgrammaticTask, resolveProvider } from '../../lib/programmatic/tool-loop.js';
 import { createSupabaseTool, createSupabaseUpsertTool } from '../../lib/programmatic/tools/supabase-tool.js';
 import { createGitTools } from '../../lib/programmatic/tools/git-tool.js';
 
@@ -240,7 +240,11 @@ try {
 
   const jsonMatch = result.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    console.error('No JSON in retrospective-generator output:', result.substring(0, 300));
+    // QF-20260903-508: name the backend that produced this, not just the symptom -- a silent
+    // provider fallback (Anthropic unavailable -> Google Gemini) can produce output that does
+    // not honour this contract even when the primary reliably does, and without this a worker
+    // reasonably (but wrongly) suspects its own prompt or item instead of the fallback path.
+    console.error(`No JSON in retrospective-generator output (backend: ${resolveProvider()}):`, result.substring(0, 300));
     process.exit(1);
   }
 
