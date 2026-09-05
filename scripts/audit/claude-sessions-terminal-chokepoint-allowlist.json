@@ -1,0 +1,3 @@
+{
+ "_doc": "Reasoned exceptions for scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs. Keyed 'path:line' (the .update( line). An entry without a 'reason' is ignored (treated as absent) -- a note-less override could silently drop a needs-review site with no trace."
+}

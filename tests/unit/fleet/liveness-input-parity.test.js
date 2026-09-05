@@ -122,6 +122,26 @@ describe('FR-5: liveness input parity — every shouldHoldClaim producer supplie
     expect(unsatisfiedGroups(columnsOf(select))).toEqual([]);
   });
 
+  // testing-agent EXEC review (688ca3f5): a 5th isSessionAlive producer this SD's own original FR-2
+  // sweep missed -- scripts/worker-checkin.cjs's foreignSessionForSd(), which feeds
+  // isForeignSessionLive() and foreignClaimantBlocksSteal(). Not exported (an internal helper), so
+  // read the same way REFERENCE_SITES above reads the two hook files: from source.
+  it("worker-checkin.cjs's foreignSessionForSd now supplies status too (the 5th missed producer)", () => {
+    const src = readFileSync(path.join(REPO, 'scripts/worker-checkin.cjs'), 'utf8');
+    const m = src.match(/from\('v_active_sessions'\)\s*\.select\('([^']+)'\)/);
+    expect(m, 'could not locate foreignSessionForSd\'s v_active_sessions select').toBeTruthy();
+    // is_alive IS present here (unlike the sweep's deliberate withholding above) -- this producer
+    // does not have that same rung-1-inertness rationale, so status must stand on its own.
+    expect(unsatisfiedGroups(columnsOf(m[1]))).toEqual([]);
+  });
+
+  it('the detector would have caught the pre-fix foreignSessionForSd column set (negative control)', () => {
+    const preFix = columnsOf(
+      'session_id, is_alive, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch, process_alive_at, expected_silence_until',
+    );
+    expect(unsatisfiedGroups(preFix)).toEqual(['status']);
+  });
+
   it('the heartbeat and pid groups accept EITHER alternative, so neither producer shape is penalised', () => {
     // hasFreshHeartbeat reads heartbeat_age_seconds first and falls back to heartbeat_at; hasPidAlive
     // resolves from terminal_id OR session_id. A flat "all fields present" contract would wrongly
