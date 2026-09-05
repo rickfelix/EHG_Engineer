@@ -1,8 +1,8 @@
-<!-- file_content_hash: 5718d427b434e8be -->
+<!-- file_content_hash: e0019e4a1dd1aa13 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-05 2:00:28 PM
+**Generated**: 2026-09-05 6:19:56 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -2050,8 +2050,8 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 | `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
+| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 
 ### leo_protocols
 
@@ -2077,8 +2077,8 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 | Column | Valid Values | Hint |
 |--------|--------------|------|
 | `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
-| `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
+| `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 
 ### sd_scope_deliverables
 
@@ -2103,9 +2103,12 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
 | `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `implementation_context` | ::text) AND (implementation_context <>  | Use one of: ::text) AND (implementation_context <>  |
 | `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
+| `priority` | critical, high, medium, low, minimal | Use one of: critical, high, medium, low, minimal |
+| `status` | draft, ready, in_progress, testing, completed, blocked | Use one of: draft, ready, in_progress, testing, completed, blocked |
+| `story_key` | ^[A-Z0-9-]+:US-[0-9]{3,}$ | Use one of: ^[A-Z0-9-]+:US-[0-9]{3,}$ |
 
 
 
