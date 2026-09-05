@@ -127,6 +127,34 @@ describe('opt-in axes: QF holder, SD holder, directed work, recently-released, s
     // authoritative claim tables read zero. The Set here represents that authoritative zero.
     expect(isSeatIdle(session({ sd_key: 'SD-COMPLETED-001' }), { sdHolderSessionIds: new Set() })).toBe(true);
   });
+
+  describe('QF-20260903-789: sdHolderFreshnessWindowMs -- busy=advancing, not merely holding', () => {
+    const NOW = Date.parse('2026-09-05T12:00:00Z');
+    it('omitted -- unconditional exclusion, byte-identical to pre-QF-789 (existing consumers unaffected)', () => {
+      const stale = session({ last_tool_at: new Date(NOW - 60 * 60 * 1000).toISOString() }); // 1h stale
+      const r = seatIdleVerdict(stale, { nowMs: NOW, sdHolderSessionIds: new Set(['s1']) });
+      expect(r).toEqual({ idle: false, reason: 'sd-holder-authoritative' });
+    });
+    it('a fresh holder (last_tool_at inside the window) is excluded -- genuinely BUSY (advancing)', () => {
+      const fresh = session({ last_tool_at: new Date(NOW - 5 * 60 * 1000).toISOString() }); // 5min ago
+      const r = seatIdleVerdict(fresh, { nowMs: NOW, sdHolderSessionIds: new Set(['s1']), sdHolderFreshnessWindowMs: 15 * 60 * 1000 });
+      expect(r).toEqual({ idle: false, reason: 'sd-holder-authoritative' });
+    });
+    it('a stale holder (last_tool_at outside the window) is NOT excluded by this axis -- HELD, not busy, falls through to idle', () => {
+      const stale = session({ last_tool_at: new Date(NOW - 20 * 60 * 1000).toISOString() }); // 20min ago
+      const r = seatIdleVerdict(stale, { nowMs: NOW, sdHolderSessionIds: new Set(['s1']), sdHolderFreshnessWindowMs: 15 * 60 * 1000 });
+      expect(r).toEqual({ idle: true, reason: null });
+    });
+    it('a holder with a missing last_tool_at fails toward BUSY -- never silently frees a real holder over absent data', () => {
+      const noTimestamp = session();
+      const r = seatIdleVerdict(noTimestamp, { nowMs: NOW, sdHolderSessionIds: new Set(['s1']), sdHolderFreshnessWindowMs: 15 * 60 * 1000 });
+      expect(r).toEqual({ idle: false, reason: 'sd-holder-authoritative' });
+    });
+    it('a non-holder is unaffected by sdHolderFreshnessWindowMs entirely -- the axis only ever fires for an actual holder', () => {
+      const notAHolder = session({ last_tool_at: new Date(NOW - 60 * 60 * 1000).toISOString() });
+      expect(isSeatIdle(notAHolder, { nowMs: NOW, sdHolderSessionIds: new Set(['someone-else']), sdHolderFreshnessWindowMs: 15 * 60 * 1000 })).toBe(true);
+    });
+  });
   it('excludes a seat with a live directed-work reservation when the axis is supplied', () => {
     expect(seatIdleVerdict(session(), { seatBusySessionIds: new Set(['s1']) }).reason).toBe('directed-work');
   });
