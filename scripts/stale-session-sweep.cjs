@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+const { terminalSessionUpdate, sessionStatusUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 // SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): the readability invariant, shared with the
 // dispatch choke point this file's WORK_ASSIGNMENT insert deliberately bypasses.
@@ -1565,16 +1566,17 @@ async function runQaFixtureScan(ctx) {
     // by QF-20260504-081 but this one was missed.
     const { error } = await supabase
       .from('claude_sessions')
-      .update({
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released);
+      // sessionStatusUpdate() adds is_alive:false only when the resolved status is terminal.
+      .update(sessionStatusUpdate(targetStatus, {
         sd_key: null,
-        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: releasedReason,
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
-      })
+      }))
       .eq('session_id', s.session_id);
 
     if (!error) {
@@ -1653,16 +1655,16 @@ async function runQaFixtureScan(ctx) {
     // for ALL release sites — adding a new release path? Add worktree_branch:null too.
     const { error } = await supabase
       .from('claude_sessions')
-      .update({
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released).
+      .update(sessionStatusUpdate(targetStatus, {
         sd_key: null,
-        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_ORPHANED_CLAIM',
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
-      })
+      }))
       .eq('session_id', s.session_id);
 
     if (!error) {
@@ -2800,10 +2802,10 @@ async function main() {
     const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
     // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
     // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
-    await supabase.from('claude_sessions').update({
-      sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
+    await supabase.from('claude_sessions').update(terminalSessionUpdate('released', {
+      sd_key: null, released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
       worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
-    }).eq('session_id', s.session_id);
+    })).eq('session_id', s.session_id);
     actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
     await supabase.from('session_coordination').insert({
       message_type: 'INFO',
@@ -3374,16 +3376,16 @@ async function main() {
       // sibling release at workingOnCompleted branch (line ~480) had the same bug.
       const { error } = await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released).
+        .update(sessionStatusUpdate(targetStatus, {
           sd_key: null,
-          status: targetStatus,
           released_at: now.toISOString(),
           released_reason: 'SWEEP_CONFLICT_RESOLUTION',
           worktree_path: null,
           worktree_branch: null,
           has_uncommitted_changes: false,
           current_branch: null
-        })
+        }))
         .eq('session_id', evict.session_id);
 
       if (!error) {
@@ -3622,15 +3624,15 @@ async function main() {
     if (isFixtureSession(s.session_id)) {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_FIXTURE_SESSION_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
       if (sd.claiming_session_id === s.session_id) {
@@ -3661,15 +3663,15 @@ async function main() {
     if (!isFullUuid(s.session_id)) {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_NON_UUID_SESSION_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
       if (sd.claiming_session_id === s.session_id) {
@@ -3690,15 +3692,15 @@ async function main() {
     if (sd.status === 'completed' || sd.status === 'cancelled') {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_SD_TERMINAL_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this terminal SD
       actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' is ' + sd.status + ')');
@@ -3727,15 +3729,15 @@ async function main() {
         // session's stale sd_key (bilateral release), mirroring the terminal-status clear above.
         await supabase
           .from('claude_sessions')
-          .update({
+          // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+          .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
             sd_key: null,
-            status: s.status === 'ACTIVE' ? 'idle' : 'released',
             released_at: now.toISOString(),
             released_reason: 'SWEEP_SD_INELIGIBLE_CLAIM_FIX',
             worktree_path: null,
             worktree_branch: null,
             current_branch: null,
-          })
+          }))
           .eq('session_id', s.session_id)
           .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
         actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' ineligible: ' + verdict.reason + ')');
@@ -3761,15 +3763,15 @@ async function main() {
           // worktree_branch (mirrors the fixture/non-uuid/terminal bilateral-release branches above).
           await supabase
             .from('claude_sessions')
-            .update({
+            // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+            .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
               sd_key: null,
-              status: s.status === 'ACTIVE' ? 'idle' : 'released',
               released_at: now.toISOString(),
               released_reason: 'SWEEP_STALE_BINDING_CLAIM_FIX',
               worktree_path: null,
               worktree_branch: null,
               current_branch: null,
-            })
+            }))
             .eq('session_id', s.session_id)
             .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
           actions.push('CLAIM_FIX: cleared stale sd_key binding on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' authoritatively claimed by live session ' + sd.claiming_session_id.substring(0, 20) + ')');

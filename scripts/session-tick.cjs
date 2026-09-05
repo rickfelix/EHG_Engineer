@@ -26,6 +26,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so SUPABASE_* reads at
 // lines further below resolve regardless of parent shell. Detached tick subprocess does NOT
@@ -633,11 +634,13 @@ function releaseRowOnExitBestEffort(reason) {
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
-      body: JSON.stringify({
-        status: 'released',
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): a raw REST PATCH bypasses supabase-js entirely
+      // (that's why a .from('claude_sessions')-keyed census misses this writer) but still routes
+      // its payload through the shared chokepoint so is_alive:false lands in the same statement.
+      body: JSON.stringify(terminalSessionUpdate('released', {
         released_at: new Date().toISOString(),
         released_reason: reason,
-      }),
+      })),
       signal: controller.signal,
     }).catch(() => { /* best-effort */ });
   } catch {

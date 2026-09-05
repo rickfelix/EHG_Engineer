@@ -163,6 +163,8 @@ describe('sequenceSingletonRefresh — ordering guarantee (TS-1, TS-2, TS-3)', (
     expect(patch.released_reason).toBe(RETIRED_REASON);
     expect(patch.status).toBe('released');
     expect(typeof patch.released_at).toBe('string');
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-1: routed through terminalSessionUpdate().
+    expect(patch.is_alive).toBe(false);
   });
 
   it('TS-3: never observes both retire_old for an unhealthy session and hold_old for a healthy one (decision matrix is exhaustive/exclusive)', async () => {
