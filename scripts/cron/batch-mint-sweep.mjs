@@ -9,11 +9,15 @@
  * Usage: node scripts/cron/batch-mint-sweep.mjs
  */
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { scanRecentQfMintsForBatches } from '../../lib/fleet/batch-mint-detector.js';
-import { writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS } from '../../lib/fleet/hold-writer.js';
+import {
+  writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS, QF_ORACLE_HOLD_PREFIX,
+  extractConsultRowIdFromQfCondition, lookupConsultRowRecord, findConsultReply, releaseQfOracleHold,
+} from '../../lib/fleet/hold-writer.js';
 
 const require = createRequire(import.meta.url);
 const { getActiveSolomonId } = require('../../lib/coordinator/solomon-identity.cjs');
@@ -30,6 +34,11 @@ const { getActiveSolomonId } = require('../../lib/coordinator/solomon-identity.c
 async function openConsultRow(supabase, group) {
   try {
     const solomonId = await getActiveSolomonId(supabase, {}).catch(() => null);
+    // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-2): correlation_id lets a reply route back to
+    // this row (matches scripts/worker-signal.cjs's existing payload.correlation_id/reply_to
+    // convention) -- without it the review this row solicits could never be matched to a release,
+    // even after FR-3 added a reader.
+    const correlationId = crypto.randomUUID();
     const { data, error } = await supabase
       .from('session_coordination')
       .insert({
@@ -38,8 +47,16 @@ async function openConsultRow(supabase, group) {
         target_session: solomonId || 'broadcast-solomon',
         message_type: 'INFO',
         subject: `[SOLOMON_CONSULT] batch-mint hold: ${group.creator}`,
-        body: `Batch-mint detector held ${group.memberIds.length} QF(s) (${group.memberIds.join(', ')}) minted by ${group.creator} within the 10-minute window anchored at ${group.anchorAt}. Review and reply to release early, or the bounded wait auto-permits release after ${BOUNDED_WAIT_MS / 60000} minutes.`,
-        payload: { kind: 'oracle_read_pending_consult', qf_ids: group.memberIds, creator: group.creator, consult_purpose: 'batch_mint_hold' },
+        // FR-4b: the batch-mint WINDOW ANCHOR (grouping detail) is not the RELEASE TIMER's anchor
+        // (this row's own created_at) -- conflating the two caused a real false-early-release
+        // retry loop when a reader computed the wait from the window anchor instead. State only
+        // what is true: the window anchor for context, and point at this row's own created_at
+        // (queryable on the row itself) as the sole timing anchor.
+        body: `Batch-mint detector held ${group.memberIds.length} QF(s) (${group.memberIds.join(', ')}) minted by ${group.creator}, grouped within a 10-minute window anchored at ${group.anchorAt} (grouping detail only -- NOT the release timer). Review and reply (cite correlation_id ${correlationId}) to release early, or the bounded wait auto-permits release ${BOUNDED_WAIT_MS / 60000} minutes after THIS row's own created_at (query this row directly for the exact timestamp the timer counts from).`,
+        payload: {
+          kind: 'oracle_read_pending_consult', qf_ids: group.memberIds, creator: group.creator,
+          consult_purpose: 'batch_mint_hold', correlation_id: correlationId,
+        },
       })
       .select('id, created_at')
       .maybeSingle();
@@ -48,6 +65,55 @@ async function openConsultRow(supabase, group) {
   } catch {
     return null;
   }
+}
+
+/**
+ * SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-3): the specified PRIMARY release path -- a
+ * recorded Solomon reply releases the hold immediately, before the bounded-wait timer. Runs on
+ * every sweep tick against ALL currently oracle-held QFs (not just this tick's newly-detected
+ * ones), since a reply can arrive on a hold opened by an earlier tick. The review HAVING
+ * HAPPENED is what releases the hold, not any particular verdict content -- any matching
+ * coordinator_reply counts (see findConsultReply's own docstring).
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<{checked:number, released:number, failed:Array}>}
+ */
+export async function checkVerdictsAndRelease(supabase) {
+  // count-truncation-diff-lint: 999 (just under the PostgREST 1000-row cap) mirrors
+  // runBatchMintSweep's own existing bound above -- the currently oracle-held QF population is
+  // operationally small, but the lint requires an explicit, visible bound on every new read.
+  const { data: held, error } = await supabase
+    .from('quick_fixes')
+    .select('id, release_condition')
+    .eq('owner', 'chairman')
+    .like('release_condition', `${QF_ORACLE_HOLD_PREFIX}%`)
+    .limit(999);
+  if (error || !held || held.length === 0) return { checked: 0, released: 0, failed: [] };
+
+  // Group QFs by their shared consult row (one consult row per batch group).
+  const byConsultRow = new Map();
+  for (const qf of held) {
+    const consultRowId = extractConsultRowIdFromQfCondition(qf.release_condition);
+    if (!consultRowId) continue;
+    if (!byConsultRow.has(consultRowId)) byConsultRow.set(consultRowId, []);
+    byConsultRow.get(consultRowId).push(qf.id);
+  }
+
+  const failed = [];
+  let released = 0;
+  for (const [consultRowId, qfIds] of byConsultRow) {
+    const record = await lookupConsultRowRecord(supabase, consultRowId);
+    if (!record?.correlation_id) continue;
+    const reply = await findConsultReply(supabase, record.correlation_id);
+    if (!reply) continue;
+    for (const qfId of qfIds) {
+      const result = await releaseQfOracleHold(supabase, qfId, {
+        consultRowId, consultRowCreatedAt: record.created_at, releasedBy: 'solomon-verdict',
+      });
+      if (result.merged) released += 1;
+      else failed.push({ id: qfId, cause: result.cause });
+    }
+  }
+  return { checked: held.length, released, failed };
 }
 
 export async function runBatchMintSweep(supabase, { nowMs = Date.now(), openConsult = openConsultRow } = {}) {
@@ -105,6 +171,15 @@ async function main() {
   );
   const result = await runBatchMintSweep(supabase);
   console.log(`[batch-mint-sweep] groups=${result.groups} held=${result.held} alreadyHeld=${result.alreadyHeld} failed=${result.failed.length}`);
+
+  // FR-3: check for a recorded verdict on every existing hold, on every tick -- non-fatal, since a
+  // verdict-check failure must never block the (already-working) timer path from still releasing.
+  const verdictResult = await checkVerdictsAndRelease(supabase).catch((e) => {
+    console.error('[batch-mint-sweep] verdict-check error (non-fatal):', e.message);
+    return { checked: 0, released: 0, failed: [] };
+  });
+  console.log(`[batch-mint-sweep] verdict-check: checked=${verdictResult.checked} released=${verdictResult.released} failed=${verdictResult.failed.length}`);
+
   if (result.failed.length) {
     console.error('[batch-mint-sweep] FAILED holds:', JSON.stringify(result.failed));
     process.exit(1);

@@ -9,6 +9,7 @@ import {
   BOUNDED_WAIT_MS, isBoundedWaitElapsed, classifyMergeFailure,
   writeSdOracleHold, releaseSdOracleHold, writeQfOracleHold, releaseQfOracleHold,
   isOracleHeldQF, QF_ORACLE_HOLD_PREFIX, printRemainingIneligibility,
+  lookupConsultRowRecord, findConsultReply,
 } from '../../../lib/fleet/hold-writer.js';
 
 function fakeSupabaseForRow(row) {
@@ -142,7 +143,13 @@ describe('releaseSdOracleHold (FR-5)', () => {
  * caller adds) resolves to the same terminal {data, error} — records every filter call so a test
  * can assert the WHERE clause actually names the guard it claims to (D-4 regression coverage).
  */
-function fakeSupabase({ updateData = { id: 'QF-1', owner: 'chairman', release_condition: 'x' }, updateError = null, matchPredicate = null } = {}) {
+function fakeSupabase({
+  updateData = { id: 'QF-1', owner: 'chairman', release_condition: 'x' }, updateError = null, matchPredicate = null,
+  // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-4): releaseQfOracleHold now reads
+  // verification_notes BEFORE its guarded update (to append a provenance stamp), so this fake
+  // needs a top-level .select() read chain in addition to the existing .update() chain.
+  readVerificationNotes = null,
+} = {}) {
   const calls = [];
   const filters = [];
   function chain() {
@@ -160,10 +167,17 @@ function fakeSupabase({ updateData = { id: 'QF-1', owner: 'chairman', release_co
       }),
     };
   }
+  function readChain() {
+    return {
+      eq: () => readChain(),
+      maybeSingle: async () => ({ data: { verification_notes: readVerificationNotes }, error: null }),
+    };
+  }
   return {
     calls,
     filters,
     from: (table) => ({
+      select: () => readChain(),
       update: (payload) => {
         calls.push({ table, payload });
         return chain();
@@ -235,6 +249,97 @@ describe('writeQfOracleHold / isOracleHeldQF / releaseQfOracleHold (FR-4)', () =
     const result = await releaseQfOracleHold(supabase, 'QF-GENUINE-CHAIRMAN-GATE');
     expect(result.merged).toBe(false);
     expect(result.cause).toBe('silent_zero_row_no_op');
+  });
+
+  // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-4 / TS-5): the QF release path previously
+  // dropped consultRowId/consultRowCreatedAt/releasedBy entirely -- the degraded-release audit
+  // trail the spec requires was dead by construction on QF holds.
+  it('FR-4/TS-5: stamps consult row id, created_at, and releasedBy into verification_notes', async () => {
+    const supabase = fakeSupabase();
+    await releaseQfOracleHold(supabase, 'QF-1', {
+      consultRowId: 'consult-row-1', consultRowCreatedAt: '2026-08-01T00:00:00Z', releasedBy: 'solomon',
+    });
+    const updateCall = supabase.calls.find((c) => c.table === 'quick_fixes');
+    expect(updateCall.payload.verification_notes).toMatch(/by solomon/);
+    expect(updateCall.payload.verification_notes).toMatch(/consult_row=consult-row-1/);
+    expect(updateCall.payload.verification_notes).toMatch(/consult_created_at=2026-08-01T00:00:00Z/);
+  });
+
+  it('FR-4: appends to existing verification_notes rather than overwriting them', async () => {
+    const supabase = fakeSupabase({ readVerificationNotes: 'prior note' });
+    await releaseQfOracleHold(supabase, 'QF-1', { consultRowId: 'row-1', releasedBy: 'solomon' });
+    const updateCall = supabase.calls.find((c) => c.table === 'quick_fixes');
+    expect(updateCall.payload.verification_notes).toMatch(/^prior note\n\[ORACLE-RELEASE/);
+  });
+});
+
+describe('lookupConsultRowRecord / findConsultReply (FR-1/FR-3)', () => {
+  function chainable(result) {
+    return { eq: () => chainable(result), or: () => chainable(result), order: () => chainable(result), limit: () => Promise.resolve(result), maybeSingle: async () => result };
+  }
+
+  it('FR-1: resolves created_at + correlation_id from a LIVE session_coordination row', async () => {
+    const supabase = {
+      from: (table) => ({
+        select: () => (table === 'session_coordination'
+          ? chainable({ data: { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } }, error: null })
+          : chainable({ data: null, error: null })),
+      }),
+    };
+    const record = await lookupConsultRowRecord(supabase, 'row-1');
+    expect(record).toEqual({ created_at: '2026-08-01T00:00:00Z', correlation_id: 'corr-1' });
+  });
+
+  it('FR-1/TS-1: falls back to retention_archive when live lookup misses, using row_data', async () => {
+    const supabase = {
+      from: (table) => ({
+        select: () => (table === 'retention_archive'
+          ? chainable({ data: { row_data: { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } } }, error: null })
+          : chainable({ data: null, error: null })),
+      }),
+    };
+    const record = await lookupConsultRowRecord(supabase, 'row-1');
+    expect(record).toEqual({ created_at: '2026-08-01T00:00:00Z', correlation_id: 'corr-1' });
+  });
+
+  it('FR-1/TS-2: returns null when absent from both tables', async () => {
+    const supabase = { from: () => ({ select: () => chainable({ data: null, error: null }) }) };
+    expect(await lookupConsultRowRecord(supabase, 'row-1')).toBeNull();
+  });
+
+  // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-3 / TS-3): a matching reply releases the hold
+  // regardless of the reply's specific verdict content -- the review HAVING HAPPENED is the gate.
+  it('FR-3/TS-3: finds a LIVE coordinator_reply matching correlation_id via reply_to', async () => {
+    const supabase = {
+      from: (table) => ({
+        select: () => (table === 'session_coordination'
+          ? chainable({ data: [{ created_at: '2026-08-01T00:10:00Z' }], error: null })
+          : chainable({ data: [], error: null })),
+      }),
+    };
+    const reply = await findConsultReply(supabase, 'corr-1');
+    expect(reply).toEqual({ created_at: '2026-08-01T00:10:00Z' });
+  });
+
+  it('FR-3: falls back to retention_archive for an archived reply', async () => {
+    const supabase = {
+      from: (table) => ({
+        select: () => (table === 'session_coordination'
+          ? chainable({ data: [], error: null })
+          : chainable({
+            data: [{ row_data: { created_at: '2026-08-01T00:10:00Z', payload: { kind: 'coordinator_reply', reply_to: 'corr-1' } } }],
+            error: null,
+          })),
+      }),
+    };
+    const reply = await findConsultReply(supabase, 'corr-1');
+    expect(reply).toEqual({ created_at: '2026-08-01T00:10:00Z' });
+  });
+
+  // TS-4: no reply anywhere -- the caller falls back to the existing degraded timer path.
+  it('FR-3/TS-4: returns null when no reply exists in either table', async () => {
+    const supabase = { from: () => ({ select: () => chainable({ data: [], error: null }) }) };
+    expect(await findConsultReply(supabase, 'corr-1')).toBeNull();
   });
 });
 
