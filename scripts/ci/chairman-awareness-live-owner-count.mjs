@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @wire-check-exempt: manually-invoked CI predicate script (node scripts/ci/chairman-awareness-live-owner-count.mjs --since <ISO>), no cron/workflow entry point wired yet -- scheduling automation is a separate follow-up, out of this SD's scope.
 // chairman-awareness-live-owner-count.mjs — FR-5(c) of SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001.
 //
 // Asserts zero chairman_decisions rows with brief_data.recorded_via='ladder-escalation-advisory'

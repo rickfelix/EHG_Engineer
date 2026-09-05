@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @wire-check-exempt: manually-invoked CI predicate script (node scripts/ci/owner-directive-positive-count.mjs --since <ISO>), no cron/workflow entry point wired yet -- scheduling automation is a separate follow-up, out of this SD's scope.
 // owner-directive-positive-count.mjs — FR-5(e) of SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001.
 //
 // POSITIVE predicate (deliberately the counterpart to FR-5(c)'s negative-only assertion,
