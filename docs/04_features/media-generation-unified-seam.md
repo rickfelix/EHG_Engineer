@@ -1,7 +1,7 @@
 ---
 Category: Feature
 Status: Approved
-Version: 1.2.0
+Version: 1.3.0
 Author: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
 Last Updated: 2026-08-28
 Tags: feature, media-generation, creative, storage, variant-scoring, rls-security
@@ -12,10 +12,10 @@ Tags: feature, media-generation, creative, storage, variant-scoring, rls-securit
 ## Metadata
 - **Category**: Feature
 - **Status**: Approved
-- **Version**: 1.2.0
+- **Version**: 1.3.0
 - **Author**: SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-A
 - **Last Updated**: 2026-08-28
-- **Tags**: feature, media-generation, creative, storage, variant-scoring, rls-security
+- **Tags**: feature, media-generation, creative, storage, variant-scoring, rls-security, ehg-app, edge-function
 
 ## Overview
 
@@ -120,6 +120,43 @@ the real fix is staged at
 safe only because nothing currently writes to it as an authenticated (non-service-role)
 user; this must be applied before any future SD adds such a writer.
 
+## ehg app reconciliation (SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001-D, PR ehg#802 + EHG_Engineer#7620)
+
+The `ehg` app (a separate repo, `C:\Users\rickf\Projects\_EHG\ehg`) has its own live,
+nav-linked creative-media UI (`src/components/creative-media/`, `src/services/video-generation/
+RunwayVideoService.ts`) that predates this seam and was never wired to it. Both repos share one
+Supabase project, so reconciliation is table-level, not API-level.
+
+1. **Fixed a live production defect.** `/creative-media`'s components query `video_prompts` —
+   a table whose migration (`supabase/migrations/20251004030000_create_video_prompts_table.sql`)
+   was never applied to the consolidated DB (it used invalid `CREATE POLICY IF NOT EXISTS`
+   syntax). Corrected and applied as
+   `database/migrations/20260828120000_create_video_prompts_table_corrected.sql`, RLS-scoped
+   through `user_company_access` (not `ventures.created_by`, which is `NULL` on all 152 live
+   ventures — the same ownership-model trap this doc's RLS section above describes).
+2. **`creative_assets.campaign_id`** (nullable `uuid`, additive) groups sibling variants from one
+   `RunwayVideoService` generation run. `RunwayVideoService.ts` now mints real
+   `crypto.randomUUID()` ids instead of `campaign-${Date.now()}` string ids, and persists
+   generated variants — gated behind `VITE_ENABLE_VARIANT_PERSISTENCE_BRIDGE` (client, default
+   off) **and** a server-side `ENABLE_VARIANT_PERSISTENCE_BRIDGE` secret on the Edge Function
+   below, so the write path stays dormant until the RLS ceremony two paragraphs down completes.
+3. **New Edge Function**, `supabase/functions/variant-scoring-bridge` (deployed, live-verified),
+   is the server-side bridge `ehg`'s `VideoVariantTesting.tsx` reads/writes through instead of a
+   direct client query — necessary because `creative_assets`/`creative_asset_variant_scores`
+   (company-access model) and `marketing_content_variants` (created_by model, structurally empty
+   today) cannot both be read correctly from one client-side RLS context. It imports the real
+   `thompson-sampler.js`/`variant-outcome-derivation.js` (no second scoring implementation), and a
+   new `lib/creative/asset-write-fields.js` allow-list (shared with the Node-side bridge) prevents
+   mass assignment on the write path.
+4. **`creative_media_assets`/`creative_campaigns`/`research_creative_workflows`** (a *third*,
+   never-applied ehg-app schema for the same concept) were deliberately **not** applied — see
+   `docs/adr/0013-defer-creative-media-assets-schema.md`. Their only real consumers
+   (`CreativeMediaIntegrationService.ts`, `RDDepartmentService.ts`) are called from pages with zero
+   routing references today.
+5. **`/video-variants`** was a URL-only orphan (no nav entry anywhere); it's now reachable via
+   `nav_routes` (seeded by `database/migrations/20260828140000_seed_video_variants_nav_route.sql`)
+   and `navigationTaxonomy.ts`.
+
 ## Known limitations (tracked, not silent)
 
 - The anti-fabrication keyword screen is a **prompt**-side check, not an **output**-side one, and
@@ -137,7 +174,14 @@ user; this must be applied before any future SD adds such a writer.
   are plain `NO ACTION` by deliberate TIER-1 tradeoff, so an orphaned row can block a venture
   teardown. Tracked as an explicit follow-up, not a silent gap.
 - The `cavs_venture_access` RLS fix for `creative_asset_variant_scores` (child -C) is staged but
-  **not yet applied** pending a chairman ceremony — see "Variant scoring bridge" above.
+  **not yet applied** pending a chairman ceremony — see "Variant scoring bridge" above. Child -D's
+  new write path (RunwayVideoService persistence, Edge Function `write` action) is what will arm
+  this gap once its own feature flags are enabled, so both flags must stay off until the ceremony
+  lands.
+- Child -D's Edge Function does not enforce the S23/S24 taste-gate (`checkAssetViewAuthorized`)
+  the Node-side `selectAssetVariant()` path enforces — its dependency chain is not Deno-bundle-safe
+  (bare `crypto`/`@supabase/supabase-js` imports in `lib/feature-flags/evaluator.js`). Documented
+  in the function's own docblock; company-access tenancy is enforced on both paths regardless.
 
 ## Related
 
@@ -151,3 +195,10 @@ user; this must be applied before any future SD adds such a writer.
   pending cross-tenant RLS fix (child -C).
 - `SD-LEO-FEAT-MEDIA-PRODUCTION-CAPABILITY-001` (parent orchestrator) — the reconciliation effort
   this child is one part of; see children -B (fence), -C (variant scoring), -D (ehg app reconciliation).
+- `docs/adr/0013-defer-creative-media-assets-schema.md` — why the ehg app's own
+  `creative_media_assets` schema was deliberately not applied (child -D).
+- `ehg` repo: `src/services/video-generation/RunwayVideoService.ts`,
+  `src/components/creative-media/VideoVariantTesting.tsx`, `src/hooks/useVariantPersistence.ts`,
+  `src/hooks/useVariantScoring.ts` — the client-side half of child -D.
+- `supabase/functions/variant-scoring-bridge/index.ts` — the EHG-callable server-side bridge
+  (child -D), deployed to the shared `dedlbzhpgkmetvhbkyzq` project.
