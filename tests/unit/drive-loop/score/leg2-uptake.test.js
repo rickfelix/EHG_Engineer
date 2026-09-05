@@ -10,7 +10,7 @@ import {
   describe, it, expect, vi,
 } from 'vitest';
 import {
-  scoreLeg2, claimedWithin, CLAIM_WINDOW_MS, LEG_POINTS, UPTAKE_THRESHOLD,
+  scoreLeg2, claimedWithin, CLAIM_WINDOW_MS, LEG_POINTS, GRAIN_FLOOR,
 } from '../../../../lib/drive-loop/score/leg2-uptake.js';
 
 const NOW = Date.parse('2026-08-03T12:00:00Z');
@@ -51,34 +51,54 @@ describe('leg2 — uptake of the ranked top 5', () => {
     expect(r.points.value).toBe(0);
   });
 
-  it('awards the points at the threshold and withholds them below it', () => {
-    const H = CLAIM_WINDOW_MS / 2;
-    const OLD = CLAIM_WINDOW_MS * 2;
-    const fourOfFive = scoreLeg2({ rankedTop5: five(H, H, H, H, OLD), nowMs: NOW });
-    expect(fourOfFive.fraction.value).toBeCloseTo(0.8);
-    expect(fourOfFive.points.value).toBe(LEG_POINTS);
+  // TS-1..TS-4 (PRD SD-LEO-FIX-DRIVE-SCORE-GRADIENT-001): the binary 0.8 cliff is replaced by a
+  // continuous fraction*confidence score, where confidence is a GRAIN_FLOOR-gated sample-size
+  // dampener. The old cliff tests above this block are superseded by these.
+  const OLD = CLAIM_WINDOW_MS * 2;
 
-    const threeOfFive = scoreLeg2({ rankedTop5: five(H, H, H, OLD, OLD), nowMs: NOW });
-    expect(threeOfFive.fraction.value).toBeCloseTo(0.6);
-    expect(threeOfFive.points.value).toBe(0);
+  it('[TS-1] fraction=1.0 with grains >= GRAIN_FLOOR reports the unchanged ceiling, LEG_POINTS', () => {
+    const r = scoreLeg2({ rankedTop5: five(0, 0, 0, 0, 0), nowMs: NOW });
+    expect(r.fraction.value).toBe(1);
+    expect(r.points.value).toBe(LEG_POINTS);
   });
 
-  it('the threshold is injectable, so ratifying a different one cannot disturb the measurement', () => {
-    // The point of the separation: same input, same fraction, different scoring rule.
-    const items = five(CLAIM_WINDOW_MS / 2, CLAIM_WINDOW_MS * 2, CLAIM_WINDOW_MS * 2, CLAIM_WINDOW_MS * 2, CLAIM_WINDOW_MS * 2);
+  it('[TS-2] fraction=0.5 with grains >= GRAIN_FLOOR reports a new, previously-unreachable value', () => {
+    const half = [...five(0, 0, 0), ...five(OLD, OLD, OLD).map((s, i) => ({ ...s, id: `old${i}` }))];
+    const r = scoreLeg2({ rankedTop5: half, nowMs: NOW });
+    expect(r.fraction.value).toBeCloseTo(0.5);
+    expect(r.points.value).toBeCloseTo(1.0);
+  });
+
+  it('[TS-3] fraction=1.0 with grains=1 (below GRAIN_FLOOR) scores strictly less than the same fraction at/above the floor', () => {
+    const belowFloor = scoreLeg2({ rankedTop5: five(0), nowMs: NOW }); // 1 SD, 1 grain
+    const atFloor = scoreLeg2({ rankedTop5: five(0, 0, 0, 0, 0), nowMs: NOW }); // 5 SDs, 5 grains
+    expect(belowFloor.fraction.value).toBe(1);
+    expect(atFloor.fraction.value).toBe(1);
+    expect(belowFloor.points.value).toBeLessThan(atFloor.points.value);
+  });
+
+  it('[TS-4] grains=0 reports 0 points, never NaN or a divide-by-zero', () => {
+    const r = scoreLeg2({ rankedTop5: five(OLD, OLD, OLD, OLD, OLD), nowMs: NOW });
+    expect(r.fraction.value).toBe(0);
+    expect(r.points.value).toBe(0);
+    expect(Number.isNaN(r.points.value)).toBe(false);
+  });
+
+  it('GRAIN_FLOOR is injectable, so ratifying a different one cannot disturb the fraction measurement', () => {
+    const items = five(0); // 1 SD, 1 grain, fraction=1.0
     const strict = scoreLeg2({ rankedTop5: items, nowMs: NOW });
-    const lax = scoreLeg2({ rankedTop5: items, nowMs: NOW, threshold: 0.2 });
+    const lax = scoreLeg2({ rankedTop5: items, nowMs: NOW, grainFloor: 1 });
     expect(strict.fraction.value).toBe(lax.fraction.value);
-    expect(strict.points.value).toBe(0);
-    expect(lax.points.value).toBe(LEG_POINTS);
+    expect(strict.points.value).toBeLessThan(lax.points.value);
+    expect(lax.points.value).toBe(LEG_POINTS); // grainFloor=1 means 1 grain already meets the floor
   });
 
-  it('the UNRATIFIED threshold is disclosed in the emission, not just in a comment', () => {
+  it('the UNRATIFIED rescale/GRAIN_FLOOR is disclosed in the emission, not just in a comment', () => {
     // A reader of the row must learn that the scoring rule is a placeholder. If this ever gets
     // quietly deleted, the score starts looking settled when it is not.
     const r = scoreLeg2({ rankedTop5: five(0, 0, 0, 0, 0), nowMs: NOW });
-    expect(r.points.limitation).toMatch(/THRESHOLD IS NOT RATIFIED/);
-    expect(r.points.predicate).toMatch(new RegExp(String(UPTAKE_THRESHOLD)));
+    expect(r.points.limitation).toMatch(/NOT RATIFIED/);
+    expect(r.points.predicate).toMatch(new RegExp(String(GRAIN_FLOOR)));
   });
 
   it('the claim_history grain limitation travels on BOTH emissions', () => {

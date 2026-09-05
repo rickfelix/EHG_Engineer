@@ -1,0 +1,162 @@
+[
+  {
+    "generated_at": "2026-09-05T12:16:52.027+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 4,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-09-04T13:04:37.769+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 5,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-09-03T13:10:56.46+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-09-02T13:09:33.444+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-09-01T13:51:58.132+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-31T16:37:24.307+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-30T18:38:30.733+00:00",
+    "total_score": 3.5,
+    "leg1_landed": 1.5,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-26T09:51:24.22+00:00",
+    "total_score": 3.45,
+    "leg1_landed": 1.45,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-25T09:43:07.653+00:00",
+    "total_score": 3.54,
+    "leg1_landed": 1.54,
+    "leg2_uptake": 2,
+    "leg2_grains": 4,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-24T09:56:11.746+00:00",
+    "total_score": 5.64,
+    "leg1_landed": 1.64,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 2
+  },
+  {
+    "generated_at": "2026-08-23T09:35:15.576+00:00",
+    "total_score": 3.67,
+    "leg1_landed": 1.67,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-22T09:34:13.733+00:00",
+    "total_score": 1.67,
+    "leg1_landed": 1.67,
+    "leg2_uptake": 0,
+    "leg2_grains": null,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-21T09:44:57.56+00:00",
+    "total_score": 3.6399999999999997,
+    "leg1_landed": 1.64,
+    "leg2_uptake": 0,
+    "leg2_grains": null,
+    "leg4_capacity": 2
+  },
+  {
+    "generated_at": "2026-08-20T09:42:19.844+00:00",
+    "total_score": 3.6399999999999997,
+    "leg1_landed": 1.64,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-19T09:41:23.201+00:00",
+    "total_score": 5.73,
+    "leg1_landed": 1.73,
+    "leg2_uptake": 2,
+    "leg2_grains": 2,
+    "leg4_capacity": 2
+  },
+  {
+    "generated_at": "2026-08-18T09:40:53.66+00:00",
+    "total_score": 3.85,
+    "leg1_landed": 1.85,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-17T09:51:03.459+00:00",
+    "total_score": 3.85,
+    "leg1_landed": 1.85,
+    "leg2_uptake": 2,
+    "leg2_grains": 4,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-16T09:34:38.552+00:00",
+    "total_score": 3.8600000000000003,
+    "leg1_landed": 1.86,
+    "leg2_uptake": 2,
+    "leg2_grains": 1,
+    "leg4_capacity": 0
+  },
+  {
+    "generated_at": "2026-08-15T09:32:27.543+00:00",
+    "total_score": 3.29,
+    "leg1_landed": null,
+    "leg2_uptake": null,
+    "leg2_grains": 1,
+    "leg4_capacity": null
+  },
+  {
+    "generated_at": "2026-08-14T10:12:06.519+00:00",
+    "total_score": 3.29,
+    "leg1_landed": null,
+    "leg2_uptake": null,
+    "leg2_grains": 5,
+    "leg4_capacity": null
+  }
+]
