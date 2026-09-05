@@ -18,12 +18,28 @@
  *
  *   node scripts/backfill-session-liveness-ssot-is-alive.mjs             # run for real
  *   node scripts/backfill-session-liveness-ssot-is-alive.mjs --dry-run   # count only, write nothing
+ *
+ * POPULATION CANARY (security-agent EXEC review, dd020db5): a downgraded/rotated service-role
+ * credential that gets silently RLS-filtered returns {count:0, error:null} from PostgREST --
+ * indistinguishable from a genuinely clean population using the violation count alone (live
+ * reproduction: an anon key against this same table also returns count:0/error:null). Without a
+ * denominator, a fail-open credential would make this script report "0 violations, nothing to
+ * backfill" while thousands of real contradicted rows remain untouched. Checked once up front,
+ * before trusting any violation count.
  */
 import 'dotenv/config';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const MAX_ITERATIONS = 20;
+
+async function totalPopulation(supabase) {
+  const { count, error } = await supabase
+    .from('claude_sessions')
+    .select('session_id', { count: 'exact', head: true });
+  if (error) throw new Error(`population canary query failed: ${error.message}`);
+  return count ?? 0;
+}
 
 async function countViolations(supabase) {
   const { count, error } = await supabase
@@ -44,6 +60,11 @@ async function countViolations(supabase) {
  * @returns {Promise<{totalAffected: number, iterations: {before:number, after:number, affected:number}[], finalCount: number, stalled: boolean}>}
  */
 export async function runLivenessSsotBackfill(supabase, { dryRun = false, maxIterations = MAX_ITERATIONS } = {}) {
+  const total = await totalPopulation(supabase);
+  if (total === 0) {
+    throw new Error('claude_sessions population canary read 0 total rows -- refusing to run (this is almost certainly a credential/RLS visibility failure, not a genuinely empty fleet table)');
+  }
+
   const initialCount = await countViolations(supabase);
   if (dryRun || initialCount === 0) {
     return { totalAffected: 0, iterations: [], finalCount: initialCount, stalled: false };

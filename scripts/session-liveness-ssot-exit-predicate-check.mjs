@@ -23,6 +23,15 @@
  * environment's measured db-max-rows cap truncates a plain .limit(5000) SELECT at 1000 actual
  * rows, so a naive `.select('id').then(d => d.data.length)` would silently under-report a
  * population in the thousands as 1000.
+ *
+ * POPULATION CANARY (security-agent EXEC review, dd020db5): a downgraded/rotated service-role
+ * credential that gets silently RLS-filtered returns {count:0, error:null} from PostgREST --
+ * indistinguishable from a genuinely clean population using the violation count alone. Live
+ * reproduction: an anon key against this same table also returns count:0/error:null. Without a
+ * denominator, this exact alarm -- built for an 8.6-hour incident class -- would print
+ * "PASS: zero violations" forever under a fail-open credential, which is the WORSE failure mode
+ * this SD's whole premise is closing. The canary reads the TOTAL (unfiltered) claude_sessions
+ * count alongside the violation count; a total of 0 refuses to report a pass at all.
  */
 import 'dotenv/config';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
@@ -35,6 +44,12 @@ const SAMPLE_LIMIT = 10;
  * Returns a small sample (bounded, display-only -- never used for the count) alongside it.
  */
 export async function checkLivenessSsotExitPredicate(supabase, { sampleLimit = SAMPLE_LIMIT } = {}) {
+  // Population canary -- see header. Must be checked BEFORE trusting a zero violation count.
+  const { count: totalPopulation, error: totalError } = await supabase
+    .from('claude_sessions')
+    .select('session_id', { count: 'exact', head: true });
+  if (totalError) throw new Error(`population canary query failed: ${totalError.message}`);
+
   const { count, error: countError } = await supabase
     .from('claude_sessions')
     .select('session_id', { count: 'exact', head: true })
@@ -50,14 +65,19 @@ export async function checkLivenessSsotExitPredicate(supabase, { sampleLimit = S
     .limit(sampleLimit);
   if (sampleError) throw new Error(`sample query failed: ${sampleError.message}`);
 
-  return { count: count ?? 0, sample: sample ?? [] };
+  return { count: count ?? 0, sample: sample ?? [], totalPopulation: totalPopulation ?? 0 };
 }
 
 async function main() {
   const supabase = createSupabaseServiceClient();
-  const { count, sample } = await checkLivenessSsotExitPredicate(supabase);
+  const { count, sample, totalPopulation } = await checkLivenessSsotExitPredicate(supabase);
 
-  console.log(`session-liveness-ssot-exit-predicate-check: violations=${count} (status IN ('released','stale') AND is_alive=true)`);
+  if (totalPopulation === 0) {
+    console.error('FAIL: claude_sessions population canary read 0 total rows -- refusing to report a pass. This is almost certainly a credential/RLS visibility failure (a fail-open, not a genuinely empty fleet table), since a "0 violations" result under the same failure would be indistinguishable from a real clean pass.');
+    process.exit(1);
+  }
+
+  console.log(`session-liveness-ssot-exit-predicate-check: violations=${count} of ${totalPopulation} total (status IN ('released','stale') AND is_alive=true)`);
   for (const row of sample) {
     console.log(`  ${row.session_id}  status=${row.status} released_at=${row.released_at ?? 'null'} stale_at=${row.stale_at ?? 'null'} released_reason=${row.released_reason ?? 'null'}`);
   }
