@@ -647,9 +647,14 @@ function printWorkers(d) {
       // worktree. Writer-side fix is a flagged follow-up.
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
-      // markerIds[id] is { claude_session_id, pid, alive } per getMarkerSessionIds(); read property before substring
+      // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001: markerIds is keyed BY session_id (the
+      // map's own key IS the CLAUDE_SESSION_ID -- there is no separate claude_session_id field
+      // on the marker; the previous read of markerEntry.claude_session_id was always undefined).
+      // The CSID column exists to show which session_id a live marker confirms for this row when
+      // multiple rows share a tty -- that's s.session_id itself, gated on a marker actually
+      // existing for it.
       const markerEntry = markerIds[s.session_id];
-      const csid = hasCollision ? pad((markerEntry?.claude_session_id || '').substring(0, 10), 12) : '';
+      const csid = hasCollision ? pad((markerEntry ? s.session_id : '').substring(0, 10), 12) : '';
       const activity = formatActivity(s);
       const silent = formatSilentUntil(s);
       const mcRow = d.mcByWorker && d.mcByWorker[s.session_id];

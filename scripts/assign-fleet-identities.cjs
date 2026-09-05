@@ -523,26 +523,18 @@ async function main() {
     return;
   }
 
-  // Read CLAUDE_SESSION_IDs from marker files for collision detection
-  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
-  const markerCsids = {};
-  if (fs.existsSync(markerDir)) {
-    for (const f of fs.readdirSync(markerDir).filter(f => /^pid-\d+\.json$/.test(f))) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
-        if (data.session_id && data.claude_session_id) {
-          markerCsids[data.session_id] = data.claude_session_id;
-        }
-      } catch { /* skip */ }
-    }
-  }
-
-  // Deduplicate workers: if two share the same session_id but have different
-  // CLAUDE_SESSION_IDs in markers, treat them as distinct (pending sweep split)
+  // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001: this used to read a marker field named
+  // claude_session_id, hoping to distinguish two DB rows sharing one session_id via a
+  // marker-recorded "true" identity. No marker writer has ever populated that field (verified
+  // against scripts/hooks/capture-session-id.cjs's marker shape), so the lookup map was always
+  // empty and csid below always fell back to w.session_id -- i.e. this dedup has always operated
+  // on session_id alone in practice. Removed the dead lookup rather than leave a misleading
+  // no-op in place; behavior is unchanged (identity collisions remain the sweep's job to split).
+  // Deduplicate workers by session_id.
   const uniqueWorkers = [];
   const seen = new Set();
   for (const w of workers) {
-    const csid = markerCsids[w.session_id] || w.session_id;
+    const csid = w.session_id;
     if (!seen.has(csid)) {
       seen.add(csid);
       uniqueWorkers.push(w);
