@@ -27,6 +27,7 @@ import { createClient } from '@supabase/supabase-js';
 import { drainAndExit } from '../../lib/hooks/drain-undici.cjs'; // QF-20260719-890: drain before post-fetch exits
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // Load environment
 dotenv.config();
@@ -240,6 +241,8 @@ async function main() {
 
 // Only run the stdin hook when executed directly — importing this module (unit tests) must not
 // block on stdin or touch a live DB (mirrors task-subagent-recorder.cjs's require.main guard).
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${(process.argv[1] || '').replace(/\\/g, '/')}`) {
+// Cross-platform via isMainModule() -- a raw `file://${argv[1]}` string comparison is
+// Windows-broken (argv[1] is a backslash path; import.meta.url is a proper file:// URL).
+if (isMainModule(import.meta.url)) {
   main();
 }
