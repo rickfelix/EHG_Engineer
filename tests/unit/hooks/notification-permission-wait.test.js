@@ -9,7 +9,7 @@
  * Code is the one piping-then-closing stdin (never true for a plain `require()` under a
  * test runner).
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -21,16 +21,17 @@ async function freshCore() {
   return import(CORE_PATH + '?t=' + Date.now());
 }
 
+// Deliberately never `process.env.SUPABASE_URL = ...` / `delete process.env.SUPABASE_...` here.
+// Credentials are injected via deps.credentials instead (resolveCredentials in the core module) —
+// see that module's header comment: audit-db-test-guards.mjs flags the bare identifiers
+// SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY in a unit-tier test file as a live-DB-credential
+// signal, and tests/unit/hooks/loop-state-resume-clear.test.js already found that narrowing the
+// guard's regex to except a "safe" write is not distinguishable from a genuine credential read.
+const PRESENT_CREDS = { supabaseUrl: 'https://example.test', serviceKey: 'test-service-key' };
+const ABSENT_CREDS = {};
+
 describe('notification-permission-wait-core', () => {
-  const OLD_ENV = { ...process.env };
-
-  beforeEach(() => {
-    process.env.SUPABASE_URL = 'https://example.test';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
-  });
-
   afterEach(() => {
-    process.env = { ...OLD_ENV };
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -42,7 +43,7 @@ describe('notification-permission-wait-core', () => {
     const { writeNotificationRow } = await freshCore();
     await writeNotificationRow(
       { session_id: 'seat-abc', hook_event_name: 'Notification', message: 'Claude needs your permission to run a Bash command' },
-      { readPointerFile: () => ({ session_id: 'coord-123' }) },
+      { readPointerFile: () => ({ session_id: 'coord-123' }), credentials: PRESENT_CREDS },
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -67,7 +68,7 @@ describe('notification-permission-wait-core', () => {
     const { writeNotificationRow } = await freshCore();
     await writeNotificationRow(
       { session_id: 'seat-solo', message: 'permission needed' },
-      { readPointerFile: () => null },
+      { readPointerFile: () => null, credentials: PRESENT_CREDS },
     );
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
@@ -78,13 +79,11 @@ describe('notification-permission-wait-core', () => {
   });
 
   it('never throws and skips the write when Supabase credentials are absent', async () => {
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     const { writeNotificationRow } = await freshCore();
-    await expect(writeNotificationRow({ session_id: 'x', message: 'y' }, { readPointerFile: () => null })).resolves.toBeUndefined();
+    await expect(writeNotificationRow({ session_id: 'x', message: 'y' }, { readPointerFile: () => null, credentials: ABSENT_CREDS })).resolves.toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -93,7 +92,7 @@ describe('notification-permission-wait-core', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { writeNotificationRow } = await freshCore();
-    await expect(writeNotificationRow({ session_id: 'x', message: 'y' }, { readPointerFile: () => null })).resolves.toBeUndefined();
+    await expect(writeNotificationRow({ session_id: 'x', message: 'y' }, { readPointerFile: () => null, credentials: PRESENT_CREDS })).resolves.toBeUndefined();
   });
 
   it('truncates an overlong message to 2000 chars', async () => {
@@ -101,7 +100,7 @@ describe('notification-permission-wait-core', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { writeNotificationRow } = await freshCore();
-    await writeNotificationRow({ session_id: 'x', message: 'a'.repeat(3000) }, { readPointerFile: () => null });
+    await writeNotificationRow({ session_id: 'x', message: 'a'.repeat(3000) }, { readPointerFile: () => null, credentials: PRESENT_CREDS });
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.body.length).toBe(2000);
