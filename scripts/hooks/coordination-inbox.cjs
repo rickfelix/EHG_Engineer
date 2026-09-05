@@ -921,11 +921,11 @@ async function main() {
       // degrades to whichever signals happen to be present — a PARKED worker stops heartbeating on
       // purpose, and a busy one mid sub-agent call emits no heartbeat either, so heartbeat_at alone
       // is not evidence that nobody is building. is_alive / terminal_id / process_alive_at carry the
-      // raw, PID and tick signals respectively.
+      // raw, PID and tick signals respectively. SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status is
+      // also selected now -- isSessionAlive's FR-2 deny-list needs it to correctly read a
+      // released/stale row as dead instead of trusting a stuck raw is_alive.
       const { data: liveSessions, error: liveSessionsErr } = await supabase
         .from('claude_sessions')
-        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- isSessionAlive's FR-2 deny-list needs
-        // it to correctly read a released/stale row as dead instead of trusting a stuck raw is_alive.
         .select('sd_key, heartbeat_at, expected_silence_until, is_alive, status, terminal_id, process_alive_at')
         .not('sd_key', 'is', null);
       if (liveSessionsErr) {

@@ -15,6 +15,7 @@ const path = require('path');
 const os = require('os');
 const { stampBranch } = require('../../lib/session-writer.cjs');
 const { resolveSessionId, isValidSessionId } = require('../../lib/hooks/session-id.cjs');
+const { terminalSessionUpdate } = require('../../lib/fleet/terminal-session-update.cjs');
 
 /**
  * Detect the current repo context from CWD or CLAUDE_PROJECT_DIR.
@@ -520,8 +521,9 @@ async function closeRotatedOutSessions(supabase, currentSessionId, overrides = {
     // id from EITHER pass (marker file content or a DB row) can never reach the query string.
     const toCloseIds = [...toClose.keys()].filter((id) => isValidSessionId(id));
     if (!toCloseIds.length) return;
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): is_alive:false in the same statement.
     const { error: relErr } = await supabase
-      .from('claude_sessions').update({ status: 'released' }).in('session_id', toCloseIds);
+      .from('claude_sessions').update(terminalSessionUpdate('released')).in('session_id', toCloseIds);
     process.stderr.write(
       `[session-register] rotation.closed pid=${parentPid} n=${toCloseIds.length} ` +
       `ids=${toCloseIds.map((s) => `${String(s).slice(0, 8)}:${toClose.get(s)}`).join(',')}` +

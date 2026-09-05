@@ -48,7 +48,10 @@ describe('QF-20260509-CANCEL-SD: cancel-sd.js canonical script', () => {
   it('releases claude_sessions row scoped to the SD-being-cancelled', () => {
     const src = fs.readFileSync(scriptPath, 'utf-8');
     expect(src).toMatch(/from\(['"]claude_sessions['"]\)/);
-    expect(src).toMatch(/status:\s*'released'/);
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: the literal now routes through the shared
+    // terminalSessionUpdate('released', {...}) chokepoint (adds is_alive:false) rather than a
+    // bare `status: 'released'` object literal.
+    expect(src).toMatch(/status:\s*'released'|terminalSessionUpdate\(\s*['"]released['"]/);
     // Must filter by both session_id AND sd_key (not blind release)
     expect(src).toMatch(/\.eq\(['"]session_id['"],\s*claimedSessionId\)/);
     expect(src).toMatch(/\.eq\(['"]sd_key['"],\s*sd\.sd_key\)/);
