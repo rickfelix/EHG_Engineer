@@ -180,7 +180,7 @@
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Task|Agent",
         "hooks": [
           {
             "type": "command",
@@ -313,7 +313,7 @@
         ]
       },
       {
-        "matcher": "Task|Bash|Write|Edit|MultiEdit|AskUserQuestion",
+        "matcher": "Task|Agent|Bash|Write|Edit|MultiEdit|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
@@ -333,7 +333,7 @@
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Task|Agent",
         "hooks": [
           {
             "type": "command",

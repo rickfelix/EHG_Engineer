@@ -447,6 +447,34 @@ function buildDetectorResolvers(supabase) {
       const result = await checkWindDownRecurrence({ supabase });
       return { ...result, count: result.alarmed ? 1 : 0 };
     },
+    // SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 (FR-4): task-subagent-recorder.cjs had ZERO rows in its
+    // entire history before this SD (matcher/guard named 'Task' only + two independent field-name
+    // bugs reading tool_result/result and tool_call_id/call_id instead of the verified
+    // tool_response/tool_use_id contract) -- undetected for the hook's whole life because nothing
+    // watched for its silence. This gauge is that watch: RED means source=task_hook produced no
+    // rows in 7 days while the fleet was demonstrably active (a regression of the exact class this
+    // SD fixed), not merely "no sub-agents happened to run".
+    'agent-tool-hook-liveness': async () => {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { count: taskHookCount, error: hookErr } = await supabase
+        .from('sub_agent_execution_results')
+        .select('id', { count: 'exact', head: true })
+        .eq('source', 'task_hook')
+        .gte('created_at', sevenDaysAgo);
+      if (hookErr) throw new Error('agent-tool-hook-liveness: sub_agent_execution_results query failed: ' + hookErr.message);
+      const { count: activeSessionCount, error: sessErr } = await supabase
+        .from('claude_sessions')
+        .select('id', { count: 'exact', head: true })
+        .gte('heartbeat_at', sevenDaysAgo);
+      if (sessErr) throw new Error('agent-tool-hook-liveness: claude_sessions query failed: ' + sessErr.message);
+      const taskHookCountSafe = taskHookCount || 0;
+      const activeSessionCountSafe = activeSessionCount || 0;
+      return {
+        task_hook_count: taskHookCountSafe,
+        active_session_count: activeSessionCountSafe,
+        count: taskHookCountSafe === 0 && activeSessionCountSafe > 0 ? 1 : 0,
+      };
+    },
   };
 }
 
