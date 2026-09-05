@@ -157,6 +157,9 @@ describe('FR-2 negative controls — markerless paths that must KEEP succeeding'
     const chain = {
       update(payload) { updates.push(payload); return this; },
       eq() { return this; }, filter() { return this; }, is() { return this; },
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-3): clearAndReopenQf() now also filters
+      // .in('status', ['in_progress', 'open']) on the UPDATE.
+      in() { return this; },
       select: async () => ({ data: [{ id: 'QF-HB' }], error: null }),
     };
     const sb = { from: () => chain };

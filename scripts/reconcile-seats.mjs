@@ -33,6 +33,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 const require = createRequire(import.meta.url);
 const { pidIsClaude } = require('../lib/fleet/claimant-liveness.cjs');
+const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 const TAG = '[seat-reconcile]';
 
@@ -87,7 +88,7 @@ export async function reconcileSeats(supabase, deps = {}) {
     classify = classifySeat,
     markReleased = async (sessionId) => {
       await supabase.from('claude_sessions')
-        .update({ status: 'released', released_reason: 'SEAT_RECONCILE_DEAD', released_at: new Date().toISOString() })
+        .update(terminalSessionUpdate('released', { released_reason: 'SEAT_RECONCILE_DEAD', released_at: new Date().toISOString() }))
         .eq('session_id', sessionId)
         .eq('status', 'active'); // CAS: only while still active
     },

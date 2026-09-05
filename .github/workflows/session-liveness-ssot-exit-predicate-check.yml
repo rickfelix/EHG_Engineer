@@ -1,0 +1,67 @@
+name: Session Liveness SSOT Exit Predicate Check
+
+# SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-4) — POST-MERGE production alarm. FR-1's chokepoint +
+# census-completeness test is the PRE-MERGE gate (a new writer cannot ship without routing
+# through terminalSessionUpdate()); this workflow is the POST-MERGE alarm for existing rows that
+# still violate the corrected predicate: status IN ('released','stale') AND is_alive=true.
+
+on:
+  schedule:
+    # Daily at 10:00 UTC.
+    - cron: '0 10 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    name: Check for is_alive:true on a released/stale row
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run exit predicate check
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          OUTPUT=$(node scripts/session-liveness-ssot-exit-predicate-check.mjs 2>&1)
+          STATUS=$?
+          echo "$OUTPUT"
+          if [ "$STATUS" -ne 0 ]; then
+            echo "violated=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Session Liveness SSOT Exit Predicate Violated"
+              echo ""
+              echo '```'
+              echo "$OUTPUT"
+              echo '```'
+            } > /tmp/issue-body.md
+          else
+            echo "violated=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$STATUS"
+        continue-on-error: true
+
+      - name: Open issue on violation
+        if: steps.check.outputs.violated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Session liveness SSOT violation suspected: $(date -u +%Y-%m-%d)" \
+            --label session-liveness-ssot-violation-suspected \
+            --body-file /tmp/issue-body.md
+
+      - name: Fail the job if violated
+        if: steps.check.outputs.violated == 'true'
+        run: exit 1

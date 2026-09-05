@@ -33,7 +33,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { classifyChain, isNonLivePath, chainWindow, buildInventory } from '../audit/count-truncation-inventory.mjs';
+import { classifyChain, isNonLivePath, chainWindow, buildInventory, loadOverrides, resolveClassification } from '../audit/count-truncation-inventory.mjs';
 import { isFixturePath } from '../../lib/lint/added-line-text.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -112,7 +112,7 @@ function isUntracked(relFile) {
  * That class of edit is invisible to this control; the pre-existing inventory (advisory) is the
  * only mechanism that would eventually re-surface it on its own periodic re-run.
  */
-function scanFile(relFile, addedLines) {
+function scanFile(relFile, addedLines, overrides) {
   const abs = path.join(REPO_ROOT, relFile);
   if (!fs.existsSync(abs)) return [];
   const nonLive = isNonLivePath(relFile);
@@ -122,7 +122,10 @@ function scanFile(relFile, addedLines) {
     const lineNo = i + 1;
     if (addedLines && !addedLines.has(lineNo)) return;
     if (!/\.select\s*\(/.test(line) || /\/\/|\/\*|^\s*\*/.test(line.slice(0, line.indexOf('.select')))) return;
-    const classification = nonLive ? 'non-live-path' : classifyChain(chainWindow(lines, i));
+    const auto = nonLive ? 'non-live-path' : classifyChain(chainWindow(lines, i));
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: honor scripts/audit/count-truncation-overrides.json
+    // here too -- this function's own error message already promised this escape hatch.
+    const { classification } = resolveClassification(overrides, `${relFile}:${lineNo}`, line, auto);
     if (classification === 'needs-review') violations.push({ file: relFile, line: lineNo, snippet: line.trim().slice(0, 160) });
   });
   return violations;
@@ -145,7 +148,8 @@ function main() {
     process.exit(0);
   }
 
-  const violations = files.flatMap((f) => scanFile(f, isUntracked(f) ? null : addedLineNumbers(base, f)));
+  const overrides = loadOverrides();
+  const violations = files.flatMap((f) => scanFile(f, isUntracked(f) ? null : addedLineNumbers(base, f), overrides));
 
   if (violations.length === 0) {
     console.log(`✅ count-truncation-diff-lint: 0 new needs-review select() site(s) across ${files.length} changed file(s)`);
