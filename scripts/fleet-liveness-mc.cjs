@@ -41,6 +41,7 @@ const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const { execSync } = require('child_process');
+const { markerDirs } = require('../lib/fleet/cc-pid-liveness.cjs');
 
 // dotenvx/dotenv prints banner lines to stdout unless we intercept first.
 // Monkey-patch stdout.write briefly during client init so that any env loader
@@ -910,42 +911,37 @@ async function fetchSdScope(supabase, sdKeyOrId) {
   return { bucket };
 }
 
-function resolveMarkerDir() {
-  // Allow explicit override — useful for worktree runs or test fixtures.
-  if (process.env.FLEET_MC_MARKER_DIR) return process.env.FLEET_MC_MARKER_DIR;
-  // Primary: sibling .claude/ in the repo this script lives in.
-  const local = path.resolve(__dirname, '../.claude/session-identity');
-  if (fs.existsSync(local)) return local;
-  // Fallback: walk up until we find a directory that contains both a
-  // .git/worktrees/ folder AND .claude/session-identity — that's the canonical
-  // main-repo marker dir when we're executing from a worktree.
-  let cur = path.resolve(__dirname, '..');
-  for (let i = 0; i < 6; i++) {
-    const parent = path.resolve(cur, '..');
-    if (parent === cur) break;
-    const candidate = path.resolve(parent, '.claude/session-identity');
-    if (fs.existsSync(candidate)) return candidate;
-    cur = parent;
-  }
-  return local; // non-existent, but keeps downstream code simple
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-1): this used to be a fourth,
+// fully independent hand-rolled single-directory marker resolver (imported nothing from
+// lib/fleet/cc-pid-liveness.cjs) that checked the local checkout's directory FIRST and
+// returned immediately if it existed -- regardless of marker count -- only walking up if the
+// local directory was entirely absent. From a worktree whose local directory exists but holds
+// few or no markers, that returned the thin local directory and never reached the real
+// population in main. Replaced with the SSOT's markerDirs() union, preserving the existing
+// FLEET_MC_MARKER_DIR override (this module's only test-injection seam) as a single-directory
+// pin, same semantics as lib/fleet/cc-pid-liveness.cjs's own markerDir override.
+function resolveMarkerDirs() {
+  if (process.env.FLEET_MC_MARKER_DIR) return [process.env.FLEET_MC_MARKER_DIR];
+  return markerDirs();
 }
 
 function loadPidMarkers() {
-  const markerDir = resolveMarkerDir();
   const byClaudeSession = {};
-  if (!fs.existsSync(markerDir)) return { byClaudeSession };
-  for (const f of fs.readdirSync(markerDir)) {
-    if (!f.endsWith('.json') || f === 'current') continue;
-    try {
-      const raw = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
-      if (raw.session_id) {
-        byClaudeSession[raw.session_id] = {
-          pid: Number(raw.cc_pid),
-          sse_port: raw.sse_port,
-          captured_at: raw.captured_at,
-        };
-      }
-    } catch { /* skip bad markers */ }
+  for (const markerDir of resolveMarkerDirs()) {
+    if (!fs.existsSync(markerDir)) continue;
+    for (const f of fs.readdirSync(markerDir)) {
+      if (!f.endsWith('.json') || f === 'current') continue;
+      try {
+        const raw = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
+        if (raw.session_id) {
+          byClaudeSession[raw.session_id] = {
+            pid: Number(raw.cc_pid),
+            sse_port: raw.sse_port,
+            captured_at: raw.captured_at,
+          };
+        }
+      } catch { /* skip bad markers */ }
+    }
   }
   return { byClaudeSession };
 }
@@ -1131,6 +1127,8 @@ module.exports = {
   TRANSITION_WINDOW_SEC,
   RECENT_COMMIT_WINDOW_SEC,
   cliMain,
+  loadPidMarkers, // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (TS-4)
+  resolveMarkerDirs, // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (TS-4)
 };
 
 if (require.main === module) {
