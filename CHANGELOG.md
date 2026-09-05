@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-05](#2026-09-05)
+  - [Infrastructure](#infrastructure-6)
 - [2026-09-04](#2026-09-04)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -177,6 +179,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-05
+
+### Infrastructure
+
+- **Periodic-liveness ladder now routes a laddered process to its live owner instead of always paging the chairman** - SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001
+  - Rung 2 (`emitLadderDigest`, `scripts/periodic-liveness-watcher.mjs`) previously wrote unconditionally into `chairman_decisions` with `blocking:true` for every laddered process regardless of owner, so a coordinator loop running 90 minutes late reached the chairman's decision queue and email exactly like a genuinely unowned/dead process. A new pure decision function, `decideLadderRoute` (`lib/periodic-liveness/ladder-escalation.mjs`), gates on `ownerTarget.live===true` first: a live, non-chairman owner now gets an ack-required `periodic_liveness_owner_directive` row (`lib/periodic-liveness/owner-directive-writer.mjs`) targeted at the owning role seat via `session_coordination`, never a chairman write at all.
+  - A dead/unresolvable owner, a chairman-owned process, or an FR-1b unacked-timeout (`climb.count >= LADDER_THRESHOLD+3`) still reaches the chairman, but as one non-blocking (`blocking:false`) `chairman_awareness` advisory row per UTC calendar day (`lib/periodic-liveness/chairman-awareness-writer.mjs`) instead of a blocking per-process row and a guaranteed email.
+  - `emitLadderDigest` itself is unchanged — `lib/coordination/lane-dead-letter-alarm.cjs` still calls it directly for its own, unrelated comms-lane dead-letter breach alerting; only the periodic-liveness watcher's call site was rewired.
+  - Also closed a scheduler cadence-misdeclaration class (`scripts/ci/scheduler-round-cadence-parity.mjs`) that had 3 `periodic_process_registry` rows (`okr-day28-hardstop`, `portfolio_review`, `stage_health`) reading OVERDUE purely from a registry value disagreeing with the scheduler's own registered cadence, and registered the new directive kind in `lib/fleet/worker-status.cjs`'s `DIRECTIVE_KINDS` allowlist so `worker-ack-directive.cjs` and the coordination inbox can actually process it (an unregistered kind is auto-read-and-dropped before any ack path sees it).
+  - See `docs/governance/chairman-decision-surfaces.md` for the full surface-level writeup.
 
 ## 2026-09-04
 

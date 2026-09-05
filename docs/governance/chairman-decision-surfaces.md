@@ -171,3 +171,31 @@ from the hourly exec-summary's `chairman_pending_decisions` view path already do
   witnessed venture, which had 7 completed `venture_stage_work` rows (planning/artifact-stage
   work) despite no real build ever starting; that table is a different axis and conflating it
   with build/deploy evidence would reproduce the incident one level down.
+
+## Periodic-liveness ladder rung 2 no longer pages the chairman for a live-owner process (SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001, 2026-09-05)
+
+`scripts/periodic-liveness-watcher.mjs`'s rung 2 (`emitLadderDigest`, called on every `OVERDUE`
+process that has climbed the ladder) previously wrote unconditionally into surface #1
+(`chairman_decisions`) with `blocking:true` — every laddered periodic process paged the chairman
+by email regardless of whether a live role seat already owned it, so a coordinator loop running
+90 minutes late reached the chairman exactly the same way a genuinely unowned/dead process would.
+
+`decideLadderRoute` (`lib/periodic-liveness/ladder-escalation.mjs`, pure) now gates the route on
+`ownerTarget.live===true` before any chairman write is considered:
+
+- **Live, non-chairman owner** → `owner_directive` route: an ack-required
+  `periodic_liveness_owner_directive` row (`lib/periodic-liveness/owner-directive-writer.mjs`) is
+  written to `session_coordination`, targeted at the owning role seat, not surface #1 at all.
+- **Dead/unresolvable owner, or a chairman-owned process** (`CHAIRMAN_OWNER_RE`, or an FR-1b
+  unacked-timeout after `climb.count >= LADDER_THRESHOLD+3` ticks) → `chairman_awareness` route:
+  `writeChairmanAwareness` (`lib/periodic-liveness/chairman-awareness-writer.mjs`) merges the
+  process into ONE non-blocking (`blocking:false`) `chairman_decisions` advisory row per UTC
+  calendar day (`brief_data.recorded_via='ladder-escalation-advisory'`), never a blocking
+  per-process row and never a guaranteed email.
+
+`emitLadderDigest` itself is UNCHANGED — `lib/coordination/lane-dead-letter-alarm.cjs` still calls
+it directly for its own, unrelated comms-lane dead-letter breach alerting; only the periodic-liveness
+watcher's call site was rewired. CI predicates: `scripts/ci/chairman-awareness-live-owner-count.mjs`
+(negative — no advisory row may carry a reason other than `dead_owner`/`chairman_owned`) and
+`scripts/ci/owner-directive-positive-count.mjs` (positive counterpart, avoiding an all-negative
+suite that would pass merely because the new writer path was never exercised).
