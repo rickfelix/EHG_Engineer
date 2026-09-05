@@ -72,7 +72,12 @@ describe('FR-4: single-read cap enforcement', () => {
     // (lib/protocol/contract-read-coverage.cjs contractTokenCount), which must clear the marginal
     // band around the cap (SD-LEO-INFRA-CONTRACT-READ-FIT-001), not just the raw 25,000 ceiling —
     // measured 23,175 tokens by that predictor post-restructure, clear of both.
-    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md']);
+    // CLAUDE_MICHAEL.md added by SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4). It DIVERGES from
+    // the Adam precedent (CLAUDE_ADAM.md is deliberately absent) on purpose: Adam's contract predates
+    // the cap and would throw today, whereas Michael's is authored UNDER a 6,200-word budget that the
+    // seed one-off enforces before --apply (DESIGN evidence 8601cbdd: 25,000 x 2.4177 bytes with a 20%
+    // margin at the worst measured density of 7.77 bytes/word), so it fits from its first generation.
+    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md']);
   });
 
   it('uses the MEASURED bytes-per-token, not a borrowed or estimated one', () => {
