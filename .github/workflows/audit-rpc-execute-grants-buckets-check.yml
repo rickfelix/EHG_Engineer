@@ -1,0 +1,75 @@
+name: RPC Execute Grants Buckets Completeness Check
+
+# SD-LEO-INFRA-CLOSE-ANON-EXECUTE-001 (FR-3) — POST-MERGE production alarm. This wires the
+# already-live scripts/audit-rpc-execute-grants.mjs (AUDIT_GRANTS_MODE=buckets completeness gate,
+# built by SD-LEO-INFRA-CLOSE-REMAINING-SECURITY-001) into scheduled CI. Its own originating SD
+# explicitly disclosed this gap ("wired only as a manual npm script — the follow-up SD should
+# either wire it into CI or name an owner/cadence") and this SD is that follow-up. Mirrors
+# session-liveness-ssot-exit-predicate-check.yml's scaffolding.
+#
+# EXPECTED to read RED until database/chairman-gated/20260905_close_role_flag_secdef_execute_exposure.sql
+# is chairman-applied (set_session_awaiting_approval remains anon-executable until then) — this
+# matches the established pattern on this repo's other chairman-gated privilege fixes, where the
+# detective control correctly reports the live pre-apply state rather than a false pass.
+
+on:
+  schedule:
+    # Daily at 10:30 UTC.
+    - cron: '30 10 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    name: Check for an undeclared anon/PUBLIC-executable SECURITY DEFINER function
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run buckets completeness check
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUDIT_GRANTS_MODE: buckets
+        run: |
+          set +e
+          OUTPUT=$(node scripts/audit-rpc-execute-grants.mjs 2>&1)
+          STATUS=$?
+          echo "$OUTPUT"
+          if [ "$STATUS" -ne 0 ]; then
+            echo "violated=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## RPC Execute Grants Buckets Completeness Violated"
+              echo ""
+              echo '```'
+              echo "$OUTPUT"
+              echo '```'
+            } > /tmp/issue-body.md
+          else
+            echo "violated=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$STATUS"
+        continue-on-error: true
+
+      - name: Open issue on violation
+        if: steps.check.outputs.violated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "RPC execute grants buckets violation suspected: $(date -u +%Y-%m-%d)" \
+            --label rpc-execute-grants-buckets-violation-suspected \
+            --body-file /tmp/issue-body.md
+
+      - name: Fail the job if violated
+        if: steps.check.outputs.violated == 'true'
+        run: exit 1
