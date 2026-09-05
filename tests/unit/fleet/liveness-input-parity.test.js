@@ -142,6 +142,45 @@ describe('FR-5: liveness input parity — every shouldHoldClaim producer supplie
     expect(unsatisfiedGroups(preFix)).toEqual(['status']);
   });
 
+  // PLAN-phase VALIDATION review (e1352308): 2 of the ORIGINAL 4 FR-2 producers had zero
+  // regression protection in THIS file -- scripts/stale-session-sweep.cjs:1281's holderRows query
+  // is covered separately (tests/unit/fleet/session-liveness.test.js's TS-4 end-to-end block) and
+  // scripts/hooks/coordination-inbox.cjs:927 is covered separately
+  // (tests/unit/claim-ownership-vs-liveness-precedence.test.js), but scripts/fleet-rollcall.cjs:83
+  // and lib/worktree-reaper/live-claim-guard.js:29 had NO test anywhere verifying their select
+  // includes `status` -- exactly the column this SD exists to institutionalise, at 2 of its own
+  // named call sites. Closing that gap here, same source-read pattern as REFERENCE_SITES above.
+  it("fleet-rollcall.cjs's holderRows-equivalent select supplies status too (originally-named producer #3)", () => {
+    const src = readFileSync(path.join(REPO, 'scripts/fleet-rollcall.cjs'), 'utf8');
+    const m = src.match(/from\('claude_sessions'\)\s*\.select\('([^']+)'\)/);
+    expect(m, 'could not locate fleet-rollcall.cjs\'s claude_sessions select').toBeTruthy();
+    expect(unsatisfiedGroups(columnsOf(m[1]))).toEqual([]);
+  });
+
+  it('the detector would have caught the pre-fix fleet-rollcall.cjs column set (negative control)', () => {
+    const preFix = columnsOf(
+      'session_id, sd_key, updated_at, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until, metadata',
+    );
+    expect(unsatisfiedGroups(preFix)).toEqual(['status']);
+  });
+
+  // KNOWN LIMITATION (pre-existing, out of this SD's FR-2 scope): live-claim-guard.js's
+  // SESSION_FIELDS never selected process_alive_at or expected_silence_until at all -- this
+  // producer starves the tick/armed-silence rungs regardless of this SD's fix. That gap predates
+  // this SD and is NOT what FR-2 promised to close here; only assert on the `status` group this
+  // SD actually added, not the full 5-group contract.
+  it("live-claim-guard.js's SESSION_FIELDS supplies status too (originally-named producer #4)", () => {
+    const src = readFileSync(path.join(REPO, 'lib/worktree-reaper/live-claim-guard.js'), 'utf8');
+    const m = src.match(/SESSION_FIELDS\s*=\s*'([^']+)'/);
+    expect(m, 'could not locate live-claim-guard.js\'s SESSION_FIELDS constant').toBeTruthy();
+    expect(unsatisfiedGroups(columnsOf(m[1]))).not.toContain('status');
+  });
+
+  it('the detector would have caught the pre-fix live-claim-guard.js column set (negative control)', () => {
+    const preFix = columnsOf('session_id, is_alive, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch');
+    expect(unsatisfiedGroups(preFix)).toContain('status');
+  });
+
   it('the heartbeat and pid groups accept EITHER alternative, so neither producer shape is penalised', () => {
     // hasFreshHeartbeat reads heartbeat_age_seconds first and falls back to heartbeat_at; hasPidAlive
     // resolves from terminal_id OR session_id. A flat "all fields present" contract would wrongly
