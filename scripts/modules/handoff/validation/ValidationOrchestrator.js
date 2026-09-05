@@ -341,25 +341,56 @@ export class ValidationOrchestrator {
 
       // Process results from this tier
       for (const { gate, gateResult } of tierResults) {
-        results.gateResults[gate.name] = gateResult;
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: persist each gate's real declared
+        // requiredness alongside its result. Almost no validator populates `required` on its
+        // own return value (fr-delivery-classifier.js is the sole exception, deliberately
+        // setting it dynamically e.g. false when its own enforcement flag is off) -- without
+        // this merge, every downstream persisted-audit-record consumer
+        // (lead-final-approval/index.js's projectGateResultsForPersistence, and
+        // HandoffRecorder's recordFailure/createArtifact/_recordCompletionActionFailure) reads
+        // `required` as always-undefined/false regardless of the gate's real declaration. The
+        // static value (matching the live blocking predicate at line 383 below exactly) wins
+        // for `required`; any validator-set dynamic value is preserved separately as
+        // `required_effective` so a deliberate warn-only override is never overwritten.
+        const staticRequired = gate.required !== false;
 
         // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Track SKIPPED status
         const isSkipped = isSkippedResult(gateResult);
+        let skipReasonForPersistence;
         if (isSkipped) {
           results.skippedCount++;
           results.skippedGates.push(gate.name);
+          const skipReason = gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+          skipReasonForPersistence = skipReason;
           results.gateStatuses[gate.name] = {
             status: ValidatorStatus.SKIPPED,
-            required: gate.required !== false,
-            skipReason: gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE,
+            required: staticRequired,
+            skipReason,
             skipDetails: gateResult.skipDetails
           };
         } else {
           results.gateStatuses[gate.name] = {
             status: gateResult.passed ? ValidatorStatus.PASS : ValidatorStatus.FAIL,
-            required: gate.required !== false
+            required: staticRequired
           };
         }
+
+        // SECURITY finding L5 (adversarial review, 2026-09-05): a cache-hit/fail-replay verdict
+        // (see the cache_hit/fail_replay stamping above, before this loop) already carries a
+        // `required` key from a PRIOR run's merge -- treating that as "the validator dynamically
+        // overrode requiredness" is a fabrication, and self-reinforcing across retries (a replayed
+        // verdict's fabricated required_effective would itself get replayed again). Only a
+        // genuinely-fresh validator result (not itself a cache replay) can set required_effective.
+        const isReplayedVerdict = gateResult?.cache_hit === true || gateResult?.fail_replay === true;
+        results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
+          ? {
+              ...gateResult,
+              required: staticRequired,
+              ...((!isReplayedVerdict && typeof gateResult.required === 'boolean') ? { required_effective: gateResult.required } : {}),
+              status: results.gateStatuses[gate.name].status,
+              ...(skipReasonForPersistence ? { skip_reason: skipReasonForPersistence } : {}),
+            }
+          : gateResult;
 
         // Backward compat: sum raw scores
         results.totalScore += gateResult.score;
@@ -1253,7 +1284,23 @@ export class ValidationOrchestrator {
 
       // Process results from this tier
       for (const { gate, gateResult } of tierResults) {
-        results.gateResults[gate.name] = gateResult;
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: mirrors the same merge applied in
+        // validateGates() above. TESTING/SECURITY finding (adversarial review, 2026-09-05): this
+        // is validateGatesAll(), a SECOND construction site (precheck/dry-run batch mode, used by
+        // HandoffOrchestrator.js's precheck and dry-run paths) -- currently zero live consumers
+        // read `.required` from its output or persist it anywhere, so this had no functional
+        // effect before or after, but leaving it unfixed would be a second place for this exact
+        // bug to resurface the moment anyone starts persisting this path's results.
+        const staticRequiredAll = gate.required !== false;
+        results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
+          ? {
+              ...gateResult,
+              required: staticRequiredAll,
+              ...((gateResult.cache_hit !== true && gateResult.fail_replay !== true && typeof gateResult.required === 'boolean')
+                ? { required_effective: gateResult.required }
+                : {}),
+            }
+          : gateResult;
 
         results.totalScore += gateResult.score;
         results.totalMaxScore += gateResult.maxScore;

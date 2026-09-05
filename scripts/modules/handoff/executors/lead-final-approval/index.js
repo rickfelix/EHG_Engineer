@@ -40,7 +40,17 @@ export function projectGateResultsForPersistence(gateResults) {
       score: r && typeof r.score === 'number' ? r.score : null,
       max_score: r && typeof r.max_score === 'number' ? r.max_score : (r && typeof r.maxScore === 'number' ? r.maxScore : null),
       passed: !!(r && r.passed),
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: `required` now reflects the gate's real
+      // static declaration (ValidationOrchestrator merges it in before this projection runs).
+      // `required_effective` is only present for the rare validator that deliberately overrides
+      // it dynamically (e.g. FR_DELIVERY_VERIFICATION warn-only mode) -- read that when present,
+      // since it is the more truthful "was this actually blocking on this run" answer.
       required: !!(r && r.required),
+      ...(r && typeof r.required_effective === 'boolean' ? { required_effective: r.required_effective } : {}),
+      // `status` distinguishes a type-skip (passed:true but never really evaluated) from a real
+      // pass; `skip_reason` names why, when applicable.
+      ...(r && typeof r.status === 'string' ? { status: r.status } : {}),
+      ...(r && typeof r.skip_reason === 'string' ? { skip_reason: r.skip_reason } : {}),
     };
     // FR-delivery gates carry the classification the auditor actually needs — specifically
     // whether a shortfall was UNVERIFIABLE (blind) or UNDELIVERED (genuinely missing).
@@ -58,6 +68,55 @@ export function projectGateResultsForPersistence(gateResults) {
     }
     return entry;
   });
+}
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: join bypass_ledger.handoff_id back to the canonical
+ * LEAD-FINAL-APPROVAL row this write produced. Extracted as its own pure(ish), directly-testable
+ * function (mirroring projectGateResultsForPersistence's pattern above) so the join-back logic
+ * doesn't require driving LeadFinalApprovalExecutor.executeSpecific()'s full completion cascade
+ * (retro/learning/notification side effects) just to exercise this one write.
+ *
+ * WHY THIS EXISTS: measured live before this fix, bypass_ledger.handoff_id was 0/33 populated for
+ * LEAD-FINAL-APPROVAL rows specifically -- child B (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B, FR-B1)
+ * already shipped a working join-back in HandoffRecorder.js's recordFailure()/createArtifact(),
+ * but LEAD-FINAL-APPROVAL's canonical accepted-row write is its own dedicated insert
+ * (SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001) that never routes through HandoffRecorder.recordSuccess(),
+ * so that join-back never fired for this phase.
+ *
+ * Best-effort, non-fail-closed: the FAIL-CLOSED audit guarantee already lives on cli-main.js's
+ * original ledger+audit-log writes; this only enriches an already-durable row. Write-once
+ * (.is('handoff_id', null)) matches the SECURITY-hardened pattern HandoffRecorder.js uses.
+ * SECURITY finding L1 (adversarial review, 2026-09-05): also scoped by sd_id when given, so a
+ * stray/reused bypassLedgerId can never join to a DIFFERENT SD's canonical handoff row -- not
+ * reachable via any shipped entry point today (bypassLedgerId is minted fresh per invocation and
+ * threaded once), but the query costs nothing extra to make structurally correct rather than
+ * merely "not currently exploitable."
+ * SECURITY finding M6: the whole body is try/caught internally (not just relying on the caller
+ * to keep this out of a fail-loud block) so this function can never throw -- genuinely
+ * best-effort, not best-effort-by-caller-convention.
+ *
+ * @param {Object} supabase
+ * @param {string|null|undefined} bypassLedgerId
+ * @param {string|null|undefined} handoffId - the canonical sd_phase_handoffs row's id
+ * @param {string|null|undefined} [sdId] - defense-in-depth scope; omitted, the join is unscoped
+ * @returns {Promise<void>}
+ */
+export async function joinBypassLedgerToCanonicalHandoff(supabase, bypassLedgerId, handoffId, sdId) {
+  if (!supabase || !bypassLedgerId || !handoffId) return;
+  try {
+    let query = supabase
+      .from('bypass_ledger')
+      .update({ handoff_id: handoffId })
+      .eq('id', bypassLedgerId);
+    if (sdId) query = query.eq('sd_id', sdId);
+    const { error: ledgerJoinError } = await query.is('handoff_id', null);
+    if (ledgerJoinError) {
+      console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+    }
+  } catch (joinEx) {
+    console.warn(`   ⚠️  bypass_ledger.handoff_id join-back errored (non-blocking): ${joinEx.message}`);
+  }
 }
 
 /**
@@ -567,6 +626,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // #4674 idempotency check (existing accepted LFA row -> skip) makes the later
     // recorder call a no-op. FAIL-LOUD AND FAIL-EARLY: if this canonical write
     // fails, the SD is NEVER flipped to completed — stronger than #4674's post-hoc throw.
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: the canonical handoff id, set inside the try
+    // block below (whichever branch runs), then joined to bypass_ledger AFTER the try/catch --
+    // SECURITY finding M6 (adversarial review, 2026-09-05): join-back must never live inside a
+    // block whose catch converts any exception into CANONICAL_LFA_WRITE_FAILED, since the
+    // canonical row is by then already durably written and the join is pure enrichment.
+    let canonicalHandoffId = null;
     try {
       const { HANDOFF_SYSTEM_TAG } = await import('../../recording/HandoffRecorder.js');
       const { data: existingLfa } = await this.supabase
@@ -590,7 +655,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           if (isFallbackKnownIssues(knownIssues)) knownIssues = [];
           knownIssues = [...knownIssues, caughtGapIssue];
         }
-        const { error: canonErr } = await this.supabase
+        const { data: canonRow, error: canonErr } = await this.supabase
           .from('sd_phase_handoffs')
           .insert({
             sd_id: sd.id,
@@ -617,7 +682,9 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
               // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
               gate_results: projectGateResultsForPersistence(gateResults)
             }
-          });
+          })
+          .select('id')
+          .single();
         if (canonErr) {
           console.log(`   ❌ Canonical LFA write failed (SD NOT completed): ${canonErr.message}`);
           await this._cleanupPendingPreInsert(sd.id, usePendingPath);
@@ -628,14 +695,24 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           );
         }
         console.log('   ✅ Canonical accepted LFA row written pre-completion (sd_phase_handoffs)');
+        canonicalHandoffId = canonRow?.id || null;
       } else {
         console.log(`   ℹ️  Canonical accepted LFA row already exists (${existingLfa.id})`);
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: also join on the re-run/idempotent path --
+        // TESTING finding (adversarial review, 2026-09-05): a retried bypass attempt that lands
+        // here (canonical row already exists from a prior attempt) previously never joined at
+        // all, silently reproducing the exact 0/33-unjoined condition this fix exists to close.
+        canonicalHandoffId = existingLfa.id;
       }
     } catch (canonEx) {
       console.log(`   ❌ Canonical LFA write errored (SD NOT completed): ${canonEx.message}`);
       await this._cleanupPendingPreInsert(sd.id, usePendingPath);
       return ResultBuilder.rejected('CANONICAL_LFA_WRITE_FAILED', `Canonical LFA write errored: ${canonEx.message}`);
     }
+
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: see joinBypassLedgerToCanonicalHandoff's own
+    // docblock above for why this runs here, outside the try/catch above.
+    await joinBypassLedgerToCanonicalHandoff(this.supabase, options.bypassLedgerId, canonicalHandoffId, sd.uuid_id || sd.id);
 
     // Transition SD to completed status
     // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: capture the completing session id
