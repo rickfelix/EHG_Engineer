@@ -347,6 +347,12 @@
   - Also fixes `lib/supabase-client.cjs`'s missing `quiet: true` on `dotenv.config()` (was printing its "injected env" banner to stdout, contaminating `--json` CLI output); removes `scripts/sd-start.js`'s own now-redundant direct `dotenv.config()` call.
   - New ESLint `no-restricted-imports`/`no-restricted-syntax` rules ban new direct `dotenv` imports (both `import` and CJS `require()`) under `lib/`, with a generated ratchet allowlist grandfathering the ~175 pre-existing importers — full migration deferred to a follow-up SD.
 
+- **Stop the archive pruner from deleting a worktree it never should have — dirty or unpushed** - SD-LEO-INFRA-STOP-DESTROYERS-ARCHIVE-001
+  - `scripts/maintenance/Prune-WorktreeArchive.ps1` permanently deletes archived `.worktrees/_archive/<sdKey>-<timestamp>` snapshots once they age past `-RetentionDays`/`-MaxKeep`, but its 3 existing guards (SCOPE, LIVE, RECENCY) never re-checked whether the archived copy was dirty or had unpushed commits — exactly the state that caused `lib/worktree-manager.js`'s `removeWorktree()`/`cleanupWorktree()` to archive it in the first place, so that original reason silently expired unchecked.
+  - Adds GUARD 4 (SAFE): re-runs `git status --porcelain` and `git log @{upstream}..HEAD` (falling back to `origin/main..HEAD`) inside each deletion candidate; skips on dirty tree, unpushed commits, or any unresolvable git-state error (fail-safe — never delete on ambiguity, e.g. a stranded `.git` pointer after `git worktree prune` tears down the admin dir post-rename).
+  - Manually verified against a scratch `-ArchiveRoot` with dirty, unpushed, and clean/fully-pushed synthetic repos: only the clean repo was pruned.
+  - Time-boxed per an explicit coordinator directive ahead of a scheduled host-task run; the other 3 items named in the SD's original scope (stale `.vbs` host tasks, worktree reaper dry-run venue, `safe-root-resync` dirty-skip status) are deferred to a follow-up SD.
+
 ### Bugfix
 
 - **Close the Supabase client default-export landmine** - SD-LEO-FIX-CLIENT-FACTORY-FALLBACK-001
