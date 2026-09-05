@@ -7,6 +7,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { validatePRDQuality } from '../modules/prd-quality-validation.js';
 import { getStoryMinimumScoreByCategory } from '../modules/handoff/verifiers/plan-to-exec/story-quality.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -104,4 +105,6 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
