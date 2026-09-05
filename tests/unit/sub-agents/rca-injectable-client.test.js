@@ -22,7 +22,10 @@ function makeFixtureRcr(overrides = {}) {
     failure_signature: 'fixture failure signature for a unit test',
     status: 'OPEN',
     trigger_tier: 4,
-    trigger_source: 'AGENT_DISPATCH',
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C: SUB_AGENT is the value resolveRcaDispatchTarget()
+    // actually writes (EXEC-phase TESTING re-verify, evidence 28382f71, corrected from an
+    // earlier value that violated the live CHECK constraint) -- keep this fixture realistic.
+    trigger_source: 'SUB_AGENT',
     scope_type: 'SD',
     problem_statement: 'A fixture problem statement',
     observed: {},

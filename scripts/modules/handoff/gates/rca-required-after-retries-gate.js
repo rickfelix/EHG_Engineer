@@ -88,12 +88,16 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         const mostRecentRejection = rejections[rejections.length - 1];
         // count-truncation-diff-lint: bounded read -- only existence (length > 0) and id list
         // are used, so a small cap is sufficient regardless of true total RCA-row count.
+        // .order() added per EXEC-phase TESTING re-verify (evidence 28382f71): the content
+        // predicate below makes WHICH 20 rows land in this sample decision-relevant in a way
+        // bare existence never was.
         const { data: rcaRows, error: rcaError } = await supabase
           .from('sub_agent_execution_results')
           .select('id, created_at, metadata')
           .eq('sd_id', sdId)
           .eq('sub_agent_code', 'RCA')
           .gt('created_at', mostRecentRejection.created_at)
+          .order('created_at', { ascending: false })
           .limit(20);
         if (rcaError) {
           return { passed: true, score: 100, issues: [`rca-read-error: ${rcaError.message}`], details: { mode, attempt_index: attemptIndex } };
@@ -102,15 +106,29 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
         // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): bare row-existence let a hollow/failed
         // RCA row (no real analysis) satisfy this gate identically to a genuine one. Require the
         // row's linked root_cause_reports (via metadata.rcr_id) to actually carry a non-empty
-        // root_cause -- content-based, deliberately NOT status-based (PLAN-phase TESTING review,
-        // evidence baded1f3: rca.js never writes status='RESOLVED', and a status!='OPEN' check
-        // would collide with exec-to-plan/gates/rca-gate.js's existing BLOCKING_STATUSES
-        // semantics, which already treats IN_REVIEW/CAPA_PENDING as UNRESOLVED for a different
-        // purpose). Robust by construction against rca.js's own pre-existing edge case where a
-        // low-confidence UPDATE can silently fail a DB CHECK constraint and still report success
-        // (warnings-only) -- root_cause stays empty on the RCR row regardless of the reported
-        // verdict, so this predicate still correctly fails.
-        const rcrIds = [...new Set((rcaRows || []).map((r) => r.metadata?.rcr_id).filter(Boolean))];
+        // root_cause AND confidence >= 60 -- content-based, deliberately NOT status-based
+        // (PLAN-phase TESTING review, evidence baded1f3: rca.js never writes status='RESOLVED').
+        // The confidence floor closes a SECURITY/TESTING EXEC-phase re-verify finding (evidence
+        // c49ce1e0/28382f71): rca.js's identifyRootCause() always produces a near-identical
+        // templated root_cause string regardless of real analysis quality (297/300 live samples
+        // byte-identical) -- non-empty root_cause alone proves only "rca.js ran", not "a genuine
+        // analysis happened". A UUID-shaped, non-empty check on confidence>=60 matches rca.js's
+        // own IN_REVIEW/CAPA_PENDING confidence semantics and the DB's valid_confidence_for_status
+        // CHECK constraint threshold.
+        //
+        // SEC-1 (evidence c49ce1e0): a malformed (non-UUID) metadata.rcr_id used to hit a
+        // Postgres 22P02 error, landing in the old rcrError fail-open branch -- making a
+        // malformed id CHEAPER to forge a pass with than a well-formed-but-wrong one. Filter to
+        // well-formed UUIDs before querying; a dropped malformed id is simply never verified
+        // (correctly non-satisfying), never a query error.
+        //
+        // SEC-2 (evidence c49ce1e0): the RCR content lookup had no .eq('sd_id', sdId), so ANY
+        // rcr_id belonging to a completely unrelated SD with a genuine analysis (519/1411 live
+        // rows qualify) was a universal gate-passing token. Scoped to this SD's own RCRs only.
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const rcrIds = [...new Set(
+          (rcaRows || []).map((r) => r.metadata?.rcr_id).filter((id) => typeof id === 'string' && UUID_REGEX.test(id))
+        )];
         let contentVerifiedIds = new Set();
         if (rcrIds.length > 0) {
           // count-truncation-diff-lint: bounded read -- rcrIds is already capped by the
@@ -118,14 +136,17 @@ export function createRcaRequiredAfterRetriesGate(supabase) {
           // visible at this call site too, rather than relying on an implicit upstream cap.
           const { data: rcrRows, error: rcrError } = await supabase
             .from('root_cause_reports')
-            .select('id, root_cause')
+            .select('id, root_cause, confidence')
+            .eq('sd_id', sdId)
             .in('id', rcrIds)
             .limit(20);
           if (rcrError) {
             return { passed: true, score: 100, issues: [`rcr-content-read-error: ${rcrError.message}`], details: { mode, attempt_index: attemptIndex } };
           }
           contentVerifiedIds = new Set(
-            (rcrRows || []).filter((r) => typeof r.root_cause === 'string' && r.root_cause.trim().length > 0).map((r) => r.id)
+            (rcrRows || [])
+              .filter((r) => typeof r.root_cause === 'string' && r.root_cause.trim().length > 0 && (r.confidence ?? 0) >= 60)
+              .map((r) => r.id)
           );
         }
         const satisfyingRows = (rcaRows || []).filter((r) => r.metadata?.rcr_id && contentVerifiedIds.has(r.metadata.rcr_id));
