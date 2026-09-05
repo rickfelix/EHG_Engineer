@@ -223,6 +223,33 @@ describe('gate-1 prdQualityValidation: score-based leniency fix', () => {
     expect(result.passed).toBe(false);
   });
 
+  it('TS-9: a REAL content-empty PRD for a reduced-penalty category (threshold 50, empty-PRD score 53 clears it) still fails -- the unconditional-block regexes, not the score, are the operative guard here', async () => {
+    // TESTING sub-agent finding (sub_agent_execution_results e45e5976-e0cf-443e-81ac-
+    // c394faa9c73b, D2): for category=infrastructure/documentation (threshold 50 via
+    // getStoryMinimumScoreByCategory), a real content-empty PRD scores 53 -- the score
+    // itself CLEARS that threshold. FR-3/AC-1's "still fails under the category-derived
+    // threshold" framing is imprecise for this band: the real blocker is FR-3/AC-3's
+    // unconditional-block issue classes (insufficient functional requirements /
+    // acceptance criteria), which TS-4a (category=Fix, where the score alone blocks) and
+    // TS-4b (stubbed) do not isolate. This uses NO mock -- the real validatePRDQuality
+    // heuristic path -- to prove the regex guard is load-bearing where it is the SOLE guard.
+    const registry = makeRegistry();
+    const validator = registry.get('prdQualityValidation');
+    const emptyPrd = {
+      id: 'PRD-EMPTY',
+      functional_requirements: [],
+      acceptance_criteria: [],
+      test_scenarios: [],
+      executive_summary: '',
+    };
+
+    const result = await validator({ prd: emptyPrd, sd: { category: 'Infrastructure', sd_type: 'bugfix' } });
+
+    expect(result.score).toBe(53); // measured live; clears the threshold of 50 for this category
+    expect(result.passed).toBe(false); // must still fail -- the unconditional-block regexes, not the score, block it
+    expect(result.issues.some((i) => /Insufficient functional requirements/.test(i))).toBe(true);
+  });
+
   it('TS-8: leo_validation_rules.criteria.min_score is never read by this validator (documents the inert config)', async () => {
     // options.criteria is never consulted -- the validator only reads context.prd/sd/options
     // (sdType/sdCategory), matching ValidationOrchestrator.js placing rule.criteria on

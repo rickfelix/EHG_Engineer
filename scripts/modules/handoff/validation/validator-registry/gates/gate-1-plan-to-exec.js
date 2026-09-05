@@ -43,13 +43,15 @@ export function registerGate1Validators(registry) {
     //
     // Threshold reuses getStoryMinimumScoreByCategory (already imported above for
     // userStoryQualityValidation) -- the SAME function the parallel legacy PRD_BOILERPLATE
-    // check already uses (PlanToExecVerifier.js:336), so the two checks agree on the NUMERIC
-    // threshold instead of independently drifting (this SD's original defect was a 50-vs-55
-    // mismatch). Two divergences remain ACCEPTED, not fixed, by this SD: (1)
-    // PlanToExecVerifier.js:336's `isRefactorBrief ? 50 : ...` carve-out is not replicated
-    // here; (2) that legacy check's leniency (via validatePRDForHandoff) applies to BOTH the
-    // heuristic and AI-rubric paths, while this gate's leniency is deliberately heuristic-only.
-    // A full consolidation of the two checks is a larger refactor, out of this bugfix's scope.
+    // check already uses (see the `isRefactorBrief ? 50 : getStoryMinimumScoreByCategory(...)`
+    // call in PlanToExecVerifier.js's verifyHandoff -- deliberately not citing a line number
+    // here, since one already went stale once in review), so the two checks agree on the
+    // NUMERIC threshold instead of independently drifting (this SD's original defect was a
+    // 50-vs-55 mismatch). Two divergences remain ACCEPTED, not fixed, by this SD: (1) that
+    // call site's `isRefactorBrief ? 50 : ...` carve-out is not replicated here; (2) that
+    // legacy check's leniency (via validatePRDForHandoff) applies to BOTH the heuristic and
+    // AI-rubric paths, while this gate's leniency is deliberately heuristic-only. A full
+    // consolidation of the two checks is a larger refactor, out of this bugfix's scope.
     //
     // leo_validation_rules.criteria.min_score for this rule (currently 50) is NOT read here --
     // confirmed inert: ValidationOrchestrator.js places rule.criteria on gate.meta only, never
