@@ -602,10 +602,13 @@ export class HandoffRecorder {
       // refusal fired). Join the bypass_ledger row this rejection originated from back to it.
       // Best-effort, same non-fail-closed rationale as the accepted-path join-back in createArtifact().
       if (result.bypassLedgerId) {
+        // SECURITY finding LOW (evidence dcf8dab7): write-once -- .is('handoff_id', null)
+        // stops a retry/duplicate call from overwriting an already-correct join.
         const { error: ledgerJoinError } = await this.supabase
           .from('bypass_ledger')
           .update({ handoff_id: executionId })
-          .eq('id', result.bypassLedgerId);
+          .eq('id', result.bypassLedgerId)
+          .is('handoff_id', null);
         if (ledgerJoinError) {
           console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
         }
@@ -1186,10 +1189,13 @@ export class HandoffRecorder {
       // the FAIL-CLOSED audit guarantee already lives on cli-main.js's original ledger+audit-log
       // writes; this is enrichment of an already-durable row, not the guarantee itself.
       if (isBypassed && result.bypassLedgerId) {
+        // SECURITY finding LOW (evidence dcf8dab7): write-once -- .is('handoff_id', null)
+        // stops a retry/duplicate call from overwriting an already-correct join.
         const { error: ledgerJoinError } = await this.supabase
           .from('bypass_ledger')
           .update({ handoff_id: handoffId })
-          .eq('id', result.bypassLedgerId);
+          .eq('id', result.bypassLedgerId)
+          .is('handoff_id', null);
         if (ledgerJoinError) {
           console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
         }

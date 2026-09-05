@@ -5,7 +5,7 @@
  * module top level and is therefore only regex-testable.
  */
 import { describe, it, expect } from 'vitest';
-import { classifyBypassLedgerRows } from '../../../scripts/ci/bypass-ledger-handoff-join-check.mjs';
+import { classifyBypassLedgerRows, filterSafeIds } from '../../../scripts/ci/bypass-ledger-handoff-join-check.mjs';
 
 const NOW = '2026-09-05T12:00:00.000Z';
 function minutesBefore(iso, m) {
@@ -62,5 +62,33 @@ describe('classifyBypassLedgerRows', () => {
     expect(buckets.joined.map((r) => r.id)).toEqual(['joined-1']);
     expect(buckets.refused_before_handoff.map((r) => r.id)).toEqual(['refused-1']);
     expect(buckets.unjoined_defect.map((r) => r.id)).toEqual(['defect-1']);
+  });
+});
+
+// SECURITY finding MEDIUM (evidence dcf8dab7): a comma (or other PostgREST-grammar character)
+// in sd_id/sd_key must never reach the .or() filter string this value is interpolated into --
+// it would inject an additional OR term, widening the match set (audit evasion).
+describe('filterSafeIds', () => {
+  it('passes through normal UUID and SD-key-shaped values unchanged', () => {
+    expect(filterSafeIds(['0766bf55-2b4c-44d2-8fd7-81bf3e19ac87', 'SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B'])).toEqual([
+      '0766bf55-2b4c-44d2-8fd7-81bf3e19ac87',
+      'SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B',
+    ]);
+  });
+
+  it('drops a value containing a comma (the PostgREST OR-term separator)', () => {
+    expect(filterSafeIds(['sd-1,sd_id.not.is.null'])).toEqual([]);
+  });
+
+  it('drops values containing parentheses, quotes, or dots', () => {
+    expect(filterSafeIds(['sd(1)', 'sd"1"', 'sd.1'])).toEqual([]);
+  });
+
+  it('drops null, undefined, empty string, and non-string values without throwing', () => {
+    expect(filterSafeIds([null, undefined, '', 42, {}])).toEqual([]);
+  });
+
+  it('de-duplicates', () => {
+    expect(filterSafeIds(['sd-1', 'sd-1', 'sd-2'])).toEqual(['sd-1', 'sd-2']);
   });
 });

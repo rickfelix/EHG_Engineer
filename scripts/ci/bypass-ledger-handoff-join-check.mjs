@@ -47,6 +47,18 @@ export function classifyBypassLedgerRows(ledgerRows, handoffRowsBySdKey = {}, { 
   return buckets;
 }
 
+// SECURITY finding MEDIUM (evidence dcf8dab7): sd_id/sd_key are interpolated directly into a
+// PostgREST .or() filter STRING -- a comma (or other PostgREST-grammar character) in a value
+// would inject an additional OR term, widening the match set and reclassifying a real
+// unjoined_defect as the legitimate refused_before_handoff bucket (audit evasion via the
+// census's own instrument). Every real sd_id/sd_key observed matches this pattern; anything
+// else is dropped rather than interpolated, never silently included. Exported (pure, no I/O)
+// so the sanitization boundary is independently testable, not just exercised end to end.
+const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;
+export function filterSafeIds(values) {
+  return [...new Set(values.filter((v) => typeof v === 'string' && v.length > 0 && SAFE_ID_RE.test(v)))];
+}
+
 function parseArgs(argv) {
   // Deliberately errs EARLY (like PROVENANCE_CUTOVER_AT) -- an early cutover only costs a
   // few extra rows briefly excluded from the census, a late one would wrongly flag rows
@@ -79,8 +91,8 @@ async function main() {
     process.exit(1);
   }
 
-  const sdIds = [...new Set(rows.map((r) => r.sd_id).filter(Boolean))];
-  const sdKeys = [...new Set(rows.map((r) => r.sd_key).filter(Boolean))];
+  const sdIds = filterSafeIds(rows.map((r) => r.sd_id));
+  const sdKeys = filterSafeIds(rows.map((r) => r.sd_key));
 
   const handoffRowsBySdKey = {};
   if (sdIds.length > 0 || sdKeys.length > 0) {

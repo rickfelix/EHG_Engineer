@@ -37,7 +37,10 @@ function makeTrackingSupabase({ sdRow = { id: SD_UUID, sd_key: 'SD-POC-003' } } 
         return {
           eq: (col, val) => {
             calls.updates.push({ table, patch, eq: { col, val } });
-            return Promise.resolve({ data: null, error: null });
+            const term = Promise.resolve({ data: null, error: null });
+            // The real code chains .eq(...).is('handoff_id', null) (write-once guard) --
+            // support that continuation while still resolving like a terminal thenable.
+            return { then: term.then.bind(term), catch: term.catch.bind(term), is: () => term };
           },
         };
       },

@@ -151,6 +151,7 @@ describe('buildPersistedBypassMetadata (FR-2/FR-4)', () => {
       bypassed_at: '2026-09-02T18:00:00.000Z',
       pattern_id: null,
       followup_sd_key: null,
+      self_authorship_check_status: null,
     });
   });
 
@@ -166,6 +167,12 @@ describe('buildPersistedBypassMetadata (FR-2/FR-4)', () => {
     expect(m.gates).toEqual(['MANDATORY_TESTING_VALIDATION']);
     expect(m.pattern_id).toBe('PAT-001');
     expect(m.followup_sd_key).toBe('SD-FOLLOWUP-001');
+  });
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2, SECURITY finding HIGH-2)
+  it('carries bypassSelfAuthorshipCheckStatus through as self_authorship_check_status', () => {
+    const m = buildPersistedBypassMetadata({ bypassSelfAuthorshipCheckStatus: 'cleared' }, { actor: 'a' });
+    expect(m.self_authorship_check_status).toBe('cleared');
   });
 });
 

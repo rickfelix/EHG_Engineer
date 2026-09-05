@@ -175,4 +175,57 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B FR-B2: self-authored bypass refus
     expect(result.bypassed).toBe(true);
     expect(auditLogCalls.length).toBe(0);
   });
+
+  // SECURITY finding HIGH-1 (evidence dcf8dab7): gateResults.failedGate is FIRST-WINS and can
+  // be clobbered by a later step -- a self-authored evidence match on a DIFFERENT gate than the
+  // one named by failedGate must still be caught, not silently missed.
+  it('catches a self-authored match on a gate OTHER than the one named by failedGate (multi-gate-failure coverage)', async () => {
+    const gateResults = {
+      passed: false,
+      failedGate: 'SOME_OTHER_GATE', // deliberately NOT the gate carrying the evidence match
+      issues: ['SOME_OTHER_GATE failed', 'GATE_SUBAGENT_EVIDENCE failed'],
+      warnings: [],
+      totalScore: 0,
+      totalMaxScore: 100,
+      gateResults: {
+        SOME_OTHER_GATE: { passed: false, score: 0, max_score: 100, details: {} },
+        GATE_SUBAGENT_EVIDENCE: {
+          passed: false, score: 0, max_score: 100,
+          details: { failing: [{ agent: 'TESTING', verdict: 'BLOCKED', created_at: new Date().toISOString(), session_id: ACTOR_SESSION_ID }], non_evidence: [] },
+        },
+      },
+    };
+    const result = await makeExecutor(gateResults).execute('SD-POC-002', {
+      bypassValidation: true,
+      bypassReason: 'attempting to override my own failing evidence via a different failedGate',
+      bypassLedgerId: 'ledger-row-5',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('GATE_BYPASS_SELF_AUTHORED_REFUSED_FAILED');
+    expect(auditLogCalls.length).toBe(1);
+    expect(auditLogCalls[0].metadata.gate).toBe('GATE_SUBAGENT_EVIDENCE');
+  });
+
+  // SECURITY finding HIGH-2 (evidence dcf8dab7): the persisted bypass metadata must never let
+  // "the check cleared it" and "the check could not run" look identical.
+  it('stamps selfAuthorshipCheckStatus="cleared" on a proceeded bypass with a comparable, non-matching evidence row', async () => {
+    const gateResults = gateResultsWithFailingEvidence('some-other-session-bbb');
+    const result = await makeExecutor(gateResults).execute('SD-POC-002', {
+      bypassValidation: true,
+      bypassReason: 'legitimate override',
+      bypassLedgerId: 'ledger-row-6',
+    });
+    expect(result.bypassSelfAuthorshipCheckStatus).toBe('cleared');
+  });
+
+  it('stamps selfAuthorshipCheckStatus="skipped_no_evidence_session_id" when no comparable identity exists', async () => {
+    const gateResults = gateResultsWithFailingEvidence(null);
+    const result = await makeExecutor(gateResults).execute('SD-POC-002', {
+      bypassValidation: true,
+      bypassReason: 'legitimate override, no comparable author identity',
+      bypassLedgerId: 'ledger-row-7',
+    });
+    expect(result.bypassSelfAuthorshipCheckStatus).toBe('skipped_no_evidence_session_id');
+  });
 });
