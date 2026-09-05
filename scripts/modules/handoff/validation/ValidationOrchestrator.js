@@ -512,17 +512,47 @@ export class ValidationOrchestrator {
         const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
 
         if (results.normalizedScore < threshold) {
-          results.passed = false;
-          results.failedGate = 'SD_TYPE_THRESHOLD';
-          results.thresholdViolation = {
-            sdType,
-            required: threshold,
-            actual: results.normalizedScore
-          };
-          results.issues.push(
-            `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
-          );
-          console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+          // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A, coordinator ruling 3e1b027b):
+          // GATE2_IMPLEMENTATION_FIDELITY already grants near-miss tolerance (its own adaptive
+          // YELLOW zone, adaptive-threshold-calculator.js) over this SAME run's gate set.
+          // SD_TYPE_THRESHOLD re-applying a zero-tolerance cut on the identical evidence
+          // double-penalizes the same near-miss (specimen: SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-
+          // ELEVEN-001-A, 907/1100=82.45% vs feature's 85%, GATE2 82% PASSED YELLOW over the
+          // same reduced set). Bounded exactly: feature type only (per-type review, "others
+          // only on their own evidence" -- coordinator ruling), GATE2 must have PASSED in
+          // in-run YELLOW (not GREEN, not RED), and must be a fresh evaluation from THIS
+          // validateGates() call -- a gate-verdict-cache reuse (cache_hit) is explicitly
+          // excluded because a cached verdict may have been computed over a DIFFERENT
+          // reduced gate set than the one that produced this run's normalizedScore.
+          const gate2Result = results.gateResults?.GATE2_IMPLEMENTATION_FIDELITY;
+          const gate2YellowAccept = sdType === 'feature'
+            && gate2Result?.passed === true
+            && gate2Result?.zone === 'YELLOW'
+            && !gate2Result?.cache_hit;
+
+          if (gate2YellowAccept) {
+            results.yellowZoneAccept = {
+              gate: 'SD_TYPE_THRESHOLD',
+              sd_type: sdType,
+              sd_type_threshold_score: results.normalizedScore,
+              sd_type_threshold_required: threshold,
+              gate2_score: gate2Result.score,
+              gate2_zone: gate2Result.zone
+            };
+            console.log(`   🟡 SD-Type Threshold ACCEPTED via GATE2 yellow-zone: ${sdType} scored ${results.normalizedScore}% (requires ${threshold}%), but GATE2_IMPLEMENTATION_FIDELITY PASSED YELLOW (${gate2Result.score}%) over the same reduced set — yellow_zone_accept stamped.`);
+          } else {
+            results.passed = false;
+            results.failedGate = 'SD_TYPE_THRESHOLD';
+            results.thresholdViolation = {
+              sdType,
+              required: threshold,
+              actual: results.normalizedScore
+            };
+            results.issues.push(
+              `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
+            );
+            console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+          }
         }
       }
     }

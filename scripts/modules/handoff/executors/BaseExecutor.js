@@ -947,6 +947,12 @@ export class BaseExecutor {
         maxScore: gateResults.totalMaxScore,
         gateCount: gateResults.gateCount,
         warnings: gateResults.warnings,
+        // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A): this explicit field list is the
+        // ONLY thing that survives from the raw ValidationOrchestrator result to
+        // HandoffRecorder -- yellowZoneAccept was set by validateGates() but silently dropped
+        // here, so the metadata.yellow_zone_accept audit stamp never actually reached
+        // production despite passing in isolation (Explore evidence, LEAD-TO-PLAN review).
+        yellowZoneAccept: gateResults.yellowZoneAccept,
       }, bypassInfo);
 
     } catch (error) {
