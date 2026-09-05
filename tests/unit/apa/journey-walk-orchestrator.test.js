@@ -9,6 +9,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runVentureJourneyWalk } from '../../../lib/apa/journey-walk-orchestrator.js';
 
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: stampJourneyWalkResult now writes via the
+// atomic mergeMetadataKeys() partial-key merge instead of a full-blob .update({metadata:...}),
+// so the write path is mocked here rather than asserted via the supabase client's update().
+const mergeMetadataKeysMock = vi.fn(async (sdKey) => ({ merged: true, sdKey }));
+vi.mock('../../../lib/coordinator/safe-metadata-merge.mjs', () => ({
+  mergeMetadataKeys: (...args) => mergeMetadataKeysMock(...args),
+}));
+beforeEach(() => { mergeMetadataKeysMock.mockClear(); });
+
 const STEPS = [
   { step_id: 'stp-1', journey_id: 'jny-1', persona_ref: 'Persona', goal: 'do step one', action: 'do step one', expected_outcome: 'step one done', route: '/one', screen_ref: 'screen-1' },
   { step_id: 'stp-2', journey_id: 'jny-1', persona_ref: 'Persona', goal: 'do step two', action: 'do step two', expected_outcome: 'step two done', route: '/two', screen_ref: 'screen-2' },
@@ -17,7 +26,7 @@ const STEPS = [
 function makeDeps(overrides = {}) {
   const sdMetadata = { some_existing_key: 'must-survive' };
   const supabaseUpdate = vi.fn(async () => ({ error: null }));
-  const supabaseSingle = vi.fn(async () => ({ data: { metadata: sdMetadata }, error: null }));
+  const supabaseSingle = vi.fn(async () => ({ data: { sd_key: 'SD-JOURNEY-TEST-001', metadata: sdMetadata }, error: null }));
   const fromChain = {
     select: vi.fn(() => fromChain),
     eq: vi.fn(() => fromChain),
@@ -253,15 +262,18 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
 });
 
 describe('runVentureJourneyWalk() — stamps metadata.journey_walk_result', () => {
-  it('read-merge-writes so pre-existing metadata keys survive', async () => {
-    const { deps, supabaseUpdate, sdMetadata } = makeDeps();
+  it('stamps journey_walk_result via an atomic partial-key merge, touching no other key', async () => {
+    const { deps } = makeDeps();
 
     await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'X', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
 
-    expect(supabaseUpdate).toHaveBeenCalledTimes(1);
-    const payload = supabaseUpdate.mock.calls[0][0];
-    expect(payload.metadata.some_existing_key).toBe(sdMetadata.some_existing_key);
-    expect(payload.metadata.journey_walk_result).toMatchObject({ status: 'fail', testRunId: 'run-1', passRate: 50, brokenAtStep: 'stp-2' });
+    expect(mergeMetadataKeysMock).toHaveBeenCalledTimes(1);
+    const [sdKey, patch] = mergeMetadataKeysMock.mock.calls[0];
+    expect(sdKey).toBe('SD-JOURNEY-TEST-001');
+    // Only journey_walk_result is in the patch -- pre-existing keys survive because they are
+    // never read-spread-written; mergeMetadataKeys touches nothing but this one key.
+    expect(Object.keys(patch)).toEqual(['journey_walk_result']);
+    expect(patch.journey_walk_result).toMatchObject({ status: 'fail', testRunId: 'run-1', passRate: 50, brokenAtStep: 'stp-2' });
   });
 
   it('does not throw if the stamp itself fails (best-effort) — the computed result is still returned', async () => {

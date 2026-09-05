@@ -1,7 +1,24 @@
 // Tests for the OBSERVE-ONLY venture-build leaf merge-witness (SD-LEO-INFRA-SHIP-WITNESS-VENTURE-001,
 // Ship-witness C). TS-1..TS-7 use deterministic INJECTED mocks — NO live gh/DB. The witness runs at
 // the leaf completion point inside runConsume and must NEVER change the walk or advance a stage.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: markConsumed() now writes via the atomic
+// mergeMetadataKeys() partial-key merge (a real raw-pg connection) instead of a full-blob
+// .update({metadata:...}) against the injected mock supabase client. Redirect the merge onto
+// whichever MockSB was most recently constructed (mirrors venture-build-consumer.test.js's fix).
+let currentMockSb = null;
+vi.mock('../../../../lib/coordinator/safe-metadata-merge.mjs', () => ({
+  mergeMetadataKeys: async (sdKey, patch) => {
+    const rows = (currentMockSb && currentMockSb.tables.strategic_directives_v2) || [];
+    const row = rows.find((r) => r.sd_key === sdKey);
+    if (!row) return { merged: false, sdKey, error: 'not_found' };
+    row.metadata = { ...(row.metadata || {}), ...patch };
+    currentMockSb.updates.push({ table: 'strategic_directives_v2', payload: { metadata: row.metadata }, count: 1 });
+    return { merged: true, sdKey };
+  },
+}));
+
 import {
   runConsume, TERMINAL,
 } from '../../../../lib/eva/bridge/venture-build-consumer.js';
@@ -48,7 +65,7 @@ class MockQuery {
   }
 }
 class MockSB {
-  constructor(tables) { this.tables = tables; this.inserts = []; this.updates = []; }
+  constructor(tables) { this.tables = tables; this.inserts = []; this.updates = []; currentMockSb = this; }
   from(name) { return new MockQuery(this, name); }
 }
 
