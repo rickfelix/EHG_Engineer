@@ -1,0 +1,67 @@
+-- requires-chairman-apply
+-- @approved-by: codestreetlabs@gmail.com
+-- @approval-provenance: chairman SMS "Approved" 2026-08-01 11:45:04Z (packet sent 11:43:47Z, dedupe anon-revoke-7th-table-20260801), Adam d5080cf3 scribing
+-- =============================================================================
+-- Migration: revoke anon WRITE grants on sd_burn_rate_snapshots (the 7th table)
+--
+-- Why a SEPARATE file: the 6-table migration in this same PR was already APPLIED
+--      to prod under the chairman's 11:16Z approval. Amending that file would
+--      retroactively change the record of what he approved. This file carries its
+--      own approval marker for its own scope.
+--
+-- HOW IT WAS MISSED (coordinator, 2026-08-01 11:15Z) — the miss IS the finding:
+--      sd_burn_rate_snapshots is one of three tables where migration 20260317 DID
+--      drop the "Allow all for anon" POLICY. Any review reading POLICY state
+--      correctly scores it as already remediated. The GRANT was never revoked.
+--      Policy and grant are independent gates. Not a systematic exclusion:
+--      sd_conflict_matrix and sd_session_activity were also policy-dropped by
+--      20260317 and DID make the batch-2 list. Plain enumeration slip in a list
+--      of seven (Adam's, at sourcing).
+--
+-- WHAT IS ACTUALLY MEASURED, and what is NOT — stated precisely because an
+-- earlier draft of this header overstated it and was corrected before apply:
+--   MEASURED (Adam, anon key, 2026-08-01 ~11:35Z): the table-level GRANT is open.
+--      anon DELETE and anon UPDATE statements are both ACCEPTED (not 42501),
+--      filtered to an impossible id so nothing could land. UPDATE used a REAL
+--      column and a REAL value — an empty payload is short-circuited by PostgREST
+--      without exercising permissions and proves nothing.
+--   NOT MEASURED: whether a write would actually AFFECT ROWS. With RLS enabled and
+--      NO permissive policy for the verb, a statement is still ACCEPTED and simply
+--      affects zero rows. That is indistinguishable, from the client, from an open
+--      grant WITH a permissive policy. So this probe proves the GRANT and cannot
+--      establish a live write path. The batch-2 file beside this one carries the
+--      same caveat and it applies here identically.
+--   THE DECIDING EVIDENCE IS UNAVAILABLE TO EITHER REVIEWER: live per-verb policy
+--      state (pg_policies for role=anon) cannot be read from the app seat —
+--      PostgREST does not expose pg_catalog, and every SQL-exec RPC referenced in
+--      this repo (exec_readonly_sql, exec_sql, exec_raw_sql, execute_sql,
+--      fn_execute_sql_admin, get_policies_for_table) is ABSENT from the deployed
+--      schema. Verified 2026-08-01 ~11:58Z.
+--
+-- CURRENT BEST READING (coordinator, derived from migration source): 20260317
+--      dropped this table's anon policy, so the open grant is most likely DORMANT
+--      — a landmine, not a live hole. Its 28 rows are probably not anon-writable
+--      today. That reading is explicitly NOT source-of-truth: this same sweep
+--      already proved source diverges from live (model_usage_log carries a
+--      never-dropped FOR ALL anon policy in source yet blocks anon reads live).
+--
+-- WHY REVOKE ANYWAY — the action is correct under BOTH readings, which is why it
+--      did not need the ambiguity resolved first. If the policy is live, this
+--      closes an open write path. If the grant is dormant, this removes a
+--      landmine that would ARM SILENTLY the instant any future policy is added to
+--      this table. Revoking a grant nothing legitimately uses costs nothing.
+--
+-- Scope: table-level WRITE grant revocation only (INSERT/UPDATE/DELETE/TRUNCATE).
+--      PostgREST requires BOTH a grant AND a policy, so this closes the write path
+--      while touching NO read path. Identical minimal shape to PR 6717 and to the
+--      6-table file beside it. Policy-level cleanup and the full anon-twin sweep
+--      ride SD-LEO-INFRA-DEFAULT-ANON-AUTHENTICATED-001, whose scope should widen
+--      from 9 tables to ALL 24 carrying an anon policy (coordinator completeness
+--      pass, 2026-08-01: the original 9 came from grepping ONE policy NAME).
+--
+-- Verification contract: re-probe AT THE ANON KEY AFTER APPLY, not at the merge.
+--      Precedent — 20260317 dropped three anon policies, left all three DELETE
+--      grants standing, and has looked complete for four months. A green migration
+--      is not a closed grant.
+-- =============================================================================
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.sd_burn_rate_snapshots FROM anon;
