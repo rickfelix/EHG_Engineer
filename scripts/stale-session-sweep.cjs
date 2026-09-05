@@ -71,18 +71,22 @@ function isDormancyWatchdogEnabled(env = process.env) {
 // 4d1be256-dbc4-4e37-a661-72ffb6453bc0): pure, exported AND-gate so the join can be
 // unit-tested without a live claude_sessions table or real pid-*.json marker files.
 // dormancyMarkers is the raw shape returned by lib/fleet/cc-pid-liveness.cjs's
-// getMarkerSessionIds() -- { [marker.session_id]: { claude_session_id, pid, alive } }.
-// CRITICAL: joins on each marker's claude_session_id field (the CLAUDE_SESSION_ID UUID
-// that claude_sessions.session_id also is), NEVER the marker's own session_id (the
-// map's OWN key, a DIFFERENT identifier) -- a naive join on the wrong key silently
-// fails open (matches nothing), making this AND-gate inert while looking shipped.
+// getMarkerSessionIds() -- { [session_id]: { pid, alive } }.
+//
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3): this previously joined on each
+// marker's claude_session_id field, a field NO marker writer has ever populated (verified
+// against scripts/hooks/capture-session-id.cjs's marker object shape) -- the join set was
+// ALWAYS empty, so this AND-gate protected ZERO dormant candidates from release since it
+// shipped. The marker's OWN session_id -- the map's key, returned by getMarkerSessionIds() --
+// IS the CLAUDE_SESSION_ID (capture-session-id.cjs writes the SessionStart hook's own
+// session_id verbatim into the marker), so the join must use the map key directly.
 function filterDormantByPidLiveness(dormantCandidates, dormancyMarkers) {
-  const aliveClaudeSessionIds = new Set(
-    Object.values(dormancyMarkers || {})
-      .filter((m) => m && m.alive && m.claude_session_id)
-      .map((m) => m.claude_session_id)
+  const aliveSessionIds = new Set(
+    Object.entries(dormancyMarkers || {})
+      .filter(([, m]) => m && m.alive)
+      .map(([sessionId]) => sessionId)
   );
-  return (dormantCandidates || []).filter((d) => !aliveClaudeSessionIds.has(d.session_id));
+  return (dormantCandidates || []).filter((d) => !aliveSessionIds.has(d.session_id));
 }
 
 const HEADLESS_ZOMBIE_MIN_MS = 15 * 60 * 1000;
@@ -961,8 +965,11 @@ function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
 // live Claude Code processes share the same session_id (identity collision).
 // Supports both pid-*.json (CLI sessions) and fallback-*.json (Desktop sessions).
 // Returns: [{ pid, session_id, marker_path, cc_pid, sse_port }]
-function detectIdentityCollisions() {
-  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3, TS-8): markerDir is now an optional
+// override (test-injection seam, mirroring lib/fleet/cc-pid-liveness.cjs's own contract) so this
+// function is hermetically unit-testable without touching the real, host-local
+// .claude/session-identity directory.
+function detectIdentityCollisions(markerDir = path.resolve(__dirname, '../.claude/session-identity')) {
   if (!fs.existsSync(markerDir)) return { collisions: [], aliveMarkers: [] };
 
   const markers = fs.readdirSync(markerDir)
@@ -975,7 +982,7 @@ function detectIdentityCollisions() {
         const pidMatch = f.match(/^pid-(\d+)\.json$/);
         const pid = pidMatch ? Number(pidMatch[1]) : Number(data.pid);
         if (!pid || isNaN(pid)) return null;
-        return { pid, session_id: data.session_id, claude_session_id: data.claude_session_id || null, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
+        return { pid, session_id: data.session_id, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
       } catch { return null; }
     })
     .filter(Boolean);
@@ -1010,22 +1017,24 @@ function detectIdentityCollisions() {
     bySession[m.session_id].push(m);
   }
 
-  // Collisions: same session_id claimed by multiple live PIDs
-  // Enhanced: also detect when markers share session_id but have different CLAUDE_SESSION_IDs
+  // Collisions: same session_id claimed by multiple live PIDs.
+  //
+  // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3): this used to also claim to detect
+  // "markers sharing session_id but with different CLAUDE_SESSION_IDs" via a has_csid_divergence
+  // flag sourced from a claude_session_id field NO marker writer has ever populated -- always an
+  // empty Set, so the flag was always false. Worse: even a populated field could never have
+  // diverged, since collision entries are grouped by bySession[m.session_id] in the first place --
+  // every marker in one collision's `markers` array shares the same session_id by construction, so
+  // a "claude_session_id" meant to equal that same field could never differ within the group. The
+  // check was dead by construction, not just by a missing writer. Removed rather than re-pointed
+  // at a different field.
   const collisions = Object.entries(bySession)
-    .filter(([, arr]) => {
-      if (arr.length > 1) return true;
-      // Single marker but CLAUDE_SESSION_ID differs from session_id — potential upstream mismatch
-      return false;
-    })
+    .filter(([, arr]) => arr.length > 1)
     .map(([sessionId, markers]) => {
       const sorted = markers.sort((a, b) => a.mtime - b.mtime); // oldest first
-      // Use CLAUDE_SESSION_ID for split decisions when available
-      const uniqueCsids = new Set(sorted.map(m => m.claude_session_id).filter(Boolean));
       return {
         session_id: sessionId,
         markers: sorted,
-        has_csid_divergence: uniqueCsids.size > 1
       };
     });
 
@@ -1040,9 +1049,8 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
     const keeper = collision.markers[0]; // oldest marker keeps the session
     const extras = collision.markers.slice(1); // newer markers get split
 
-    const csidNote = collision.has_csid_divergence ? ' (CLAUDE_SESSION_IDs diverge — using CSID for split)' : '';
     actions.push('IDENTITY_COLLISION: session ' + collision.session_id.substring(0, 12) + '... shared by PIDs ' +
-      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid + csidNote);
+      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid);
 
     for (const extra of extras) {
       // Use marker-based UUID if available, fall back to PID-based format
@@ -1074,7 +1082,7 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
           codebase: path.resolve(__dirname, '..'),
           status: 'idle',
           heartbeat_at: new Date().toISOString(),
-          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid, claude_session_id: extra.claude_session_id || null }
+          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid }
         });
 
       if (insertErr) {
@@ -4648,6 +4656,7 @@ module.exports.resolveAcceptedHandoffSets = resolveAcceptedHandoffSets;
 module.exports.resolveOrchestratorParentSdKeys = resolveOrchestratorParentSdKeys;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.filterDormantByPidLiveness = filterDormantByPidLiveness; // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001
+module.exports.detectIdentityCollisions = detectIdentityCollisions; // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
 module.exports.HEADLESS_ZOMBIE_MIN_MS = HEADLESS_ZOMBIE_MIN_MS; // QF-20260704-081
 // SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2 / TS-3): promoted classification-time helper —

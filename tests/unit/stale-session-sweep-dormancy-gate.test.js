@@ -53,16 +53,25 @@ describe('isDormancyWatchdogEnabled', () => {
 // genuinely live (session-tick.cjs's daemon dies independently of the CC session). The
 // AND-gate cross-checks an orthogonal signal (OS-level PID liveness from pid-*.json
 // markers) before trusting process_alive_at-derived dormancy alone.
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3): these fixtures previously
+// fabricated a `claude_session_id` value directly on the marker VALUE object, mirroring what
+// the code used to (wrongly) join on. That field is never written by any real marker writer
+// (scripts/hooks/capture-session-id.cjs's marker object has no such key) -- the fixtures were
+// testing the join logic against a shape that never occurs in production, which is exactly the
+// blind spot that let the real AND-gate stay permanently inert since it shipped. Corrected to
+// the REAL shape lib/fleet/cc-pid-liveness.cjs's getMarkerSessionIds() actually returns: a map
+// KEYED BY session_id (the CLAUDE_SESSION_ID itself), value `{ pid, alive }` with no separate
+// identifier field.
 describe('filterDormantByPidLiveness — the FR-2/FR-3 AND-gate', () => {
-  it('drops a dormant candidate whose CLAUDE_SESSION_ID matches an ALIVE marker (process_alive_at lied)', () => {
+  it('drops a dormant candidate whose session_id matches an ALIVE marker (process_alive_at lied)', () => {
     const candidates = [{ session_id: 'live-session-uuid' }];
-    const markers = { 'marker-own-id-1': { claude_session_id: 'live-session-uuid', pid: 4242, alive: true } };
+    const markers = { 'live-session-uuid': { pid: 4242, alive: true } };
     expect(filterDormantByPidLiveness(candidates, markers)).toEqual([]);
   });
 
-  it('keeps a dormant candidate whose CLAUDE_SESSION_ID matches a DEAD marker (both signals agree: genuinely dormant)', () => {
+  it('keeps a dormant candidate whose session_id matches a DEAD marker (both signals agree: genuinely dormant)', () => {
     const candidates = [{ session_id: 'dead-session-uuid' }];
-    const markers = { 'marker-own-id-2': { claude_session_id: 'dead-session-uuid', pid: 9999, alive: false } };
+    const markers = { 'dead-session-uuid': { pid: 9999, alive: false } };
     expect(filterDormantByPidLiveness(candidates, markers)).toEqual(candidates);
   });
 
@@ -71,22 +80,20 @@ describe('filterDormantByPidLiveness — the FR-2/FR-3 AND-gate', () => {
     expect(filterDormantByPidLiveness(candidates, {})).toEqual(candidates);
   });
 
-  it('CRITICAL: joins on marker.claude_session_id, never the map key (marker.session_id) -- proves the fix is not silently inert on the keyspace mismatch', () => {
+  it('CRITICAL: joins on the marker map\'s own key (the real session_id), never a decoy field on the value -- proves the fix is not silently inert on the keyspace mismatch', () => {
     const candidates = [{ session_id: 'live-session-uuid' }];
-    // The map KEY ('live-session-uuid') deliberately does NOT equal the candidate's
-    // session_id here in a way that would pass a naive Object.keys()-based join --
-    // only the VALUE's claude_session_id field does. If the implementation ever
-    // regresses to keying off the map key instead of the value's claude_session_id,
-    // this still passes ONLY if the join correctly reads .claude_session_id.
-    const markers = { 'totally-different-marker-key': { claude_session_id: 'live-session-uuid', pid: 1, alive: true } };
+    // The map KEY is the real join field. A decoy field on the VALUE that does NOT match the
+    // candidate's session_id must be ignored -- if the implementation ever regresses to
+    // reading some value-level field instead of the map key, this fails.
+    const markers = { 'live-session-uuid': { pid: 1, alive: true, unrelated_value_field: 'not-the-join-key' } };
     expect(filterDormantByPidLiveness(candidates, markers)).toEqual([]);
   });
 
   it('a marker with alive=false is never treated as live evidence, even if present', () => {
     const candidates = [{ session_id: 's1' }, { session_id: 's2' }];
     const markers = {
-      m1: { claude_session_id: 's1', pid: 1, alive: false },
-      m2: { claude_session_id: 's2', pid: 2, alive: true },
+      s1: { pid: 1, alive: false },
+      s2: { pid: 2, alive: true },
     };
     expect(filterDormantByPidLiveness(candidates, markers)).toEqual([{ session_id: 's1' }]);
   });
