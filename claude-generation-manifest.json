@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-05T21:36:10.125Z",
-  "git_commit": "ca3bb175",
+  "generated_at": "2026-09-05T22:19:55.943Z",
+  "git_commit": "fc73b806",
   "db_snapshot_hash": "75c730afb94b407a",
   "files": {
     "CLAUDE.md": {
@@ -9,7 +9,7 @@
       "bytes": 20385,
       "estimated_tokens": 5062,
       "content_hash": "2de2c24d047b0824",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
@@ -17,7 +17,7 @@
       "bytes": 74167,
       "estimated_tokens": 18416,
       "content_hash": "db460d98d6f20579",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_CORE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
       "type": "full",
@@ -25,7 +25,7 @@
       "bytes": 21518,
       "estimated_tokens": 5360,
       "content_hash": "60d9fbfa62af366d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_CORE_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_CORE_MANUAL.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
@@ -33,7 +33,7 @@
       "bytes": 58621,
       "estimated_tokens": 14607,
       "content_hash": "c220b882fdb88a34",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_LEAD.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
@@ -41,7 +41,7 @@
       "bytes": 8862,
       "estimated_tokens": 2205,
       "content_hash": "d1853ddaff8c6d8c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_LEAD_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
@@ -49,7 +49,7 @@
       "bytes": 55111,
       "estimated_tokens": 13714,
       "content_hash": "959d962171e00624",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_PLAN.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
@@ -57,23 +57,23 @@
       "bytes": 38460,
       "estimated_tokens": 9589,
       "content_hash": "369414237a8ad09e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_PLAN_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 94634,
-      "bytes": 95072,
-      "estimated_tokens": 23659,
-      "content_hash": "5718d427b434e8be",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_EXEC.md"
+      "chars": 94939,
+      "bytes": 95377,
+      "estimated_tokens": 23735,
+      "content_hash": "e0019e4a1dd1aa13",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 96110,
-      "bytes": 96885,
-      "estimated_tokens": 24028,
-      "content_hash": "051dae44eb1fa3e9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_ADAM.md"
+      "chars": 103177,
+      "bytes": 103960,
+      "estimated_tokens": 25795,
+      "content_hash": "4734599e5489d339",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -81,7 +81,7 @@
       "bytes": 15842,
       "estimated_tokens": 3925,
       "content_hash": "77a4057e3daf2ba4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_ADAM_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
@@ -89,15 +89,15 @@
       "bytes": 6988,
       "estimated_tokens": 1731,
       "content_hash": "1b54c2052a53712f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_ADAM_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 48055,
-      "bytes": 48355,
-      "estimated_tokens": 12014,
-      "content_hash": "4743e9002ad72620",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_COORDINATOR.md"
+      "chars": 53729,
+      "bytes": 54035,
+      "estimated_tokens": 13433,
+      "content_hash": "727fddb774d1ad5a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
@@ -105,7 +105,7 @@
       "bytes": 12707,
       "estimated_tokens": 3161,
       "content_hash": "12cb456c807e62fa",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_COORDINATOR_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
       "type": "full",
@@ -113,7 +113,7 @@
       "bytes": 2138,
       "estimated_tokens": 532,
       "content_hash": "4cd0fddd899af8c3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_COORDINATOR_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
@@ -121,7 +121,7 @@
       "bytes": 60251,
       "estimated_tokens": 14925,
       "content_hash": "13b4b75bcb30e8b4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_SOLOMON.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
@@ -129,7 +129,7 @@
       "bytes": 30875,
       "estimated_tokens": 7665,
       "content_hash": "033220daeade6ddc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_SOLOMON_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
@@ -137,7 +137,7 @@
       "bytes": 24129,
       "estimated_tokens": 5982,
       "content_hash": "7f45af9dc24b784b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_SOLOMON_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
       "type": "full",
@@ -145,7 +145,7 @@
       "bytes": 3607,
       "estimated_tokens": 895,
       "content_hash": "6502a1406cf2ea90",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
@@ -153,7 +153,7 @@
       "bytes": 19177,
       "estimated_tokens": 4776,
       "content_hash": "5b22fbad542edf1b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_MICHAEL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
       "type": "full",
@@ -161,7 +161,7 @@
       "bytes": 5181,
       "estimated_tokens": 1293,
       "content_hash": "9b83b9e4cd4f5332",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_MICHAEL_MODEL_POSTURE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_MICHAEL_MODEL_POSTURE.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
@@ -169,7 +169,7 @@
       "bytes": 9649,
       "estimated_tokens": 2403,
       "content_hash": "1133c4de485885f9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
@@ -177,7 +177,7 @@
       "bytes": 13375,
       "estimated_tokens": 3317,
       "content_hash": "2ba687ea023b4f9d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_CORE_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
@@ -185,7 +185,7 @@
       "bytes": 5571,
       "estimated_tokens": 1388,
       "content_hash": "28bb9fa32ecc5299",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_LEAD_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
@@ -193,7 +193,7 @@
       "bytes": 8581,
       "estimated_tokens": 2136,
       "content_hash": "c5db9701a89eacab",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_PLAN_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
@@ -201,7 +201,7 @@
       "bytes": 12266,
       "estimated_tokens": 3045,
       "content_hash": "0946d60c70df5b10",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_EXEC_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
@@ -209,7 +209,7 @@
       "bytes": 17982,
       "estimated_tokens": 4443,
       "content_hash": "1b5e468333884687",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_ADAM_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
@@ -217,7 +217,7 @@
       "bytes": 13063,
       "estimated_tokens": 3239,
       "content_hash": "c6181f1fd6a64a97",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_COORDINATOR_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
@@ -225,11 +225,11 @@
       "bytes": 4012,
       "estimated_tokens": 992,
       "content_hash": "b3560f6179aa6d41",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A\\CLAUDE_SOLOMON_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\ratification-encode-20260905-michael-v2\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "ffbb309c7f8329cf",
+    "global": "ae48af5cfd733f98",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -483,10 +483,10 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "c49421eee0e20c99",
+      "601": "a863ba3692342999",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
-      "605": "6e788e91c9d615ea",
+      "605": "0d7b2a57e8760c75",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
