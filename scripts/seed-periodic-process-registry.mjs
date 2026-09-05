@@ -41,11 +41,6 @@ const supabase = createClient(
 
 const ROLE_SESSION_INTERVAL_SECONDS = 1800; // 30-min tick, matches the fleet's own ScheduleWakeup idle-tick convention
 
-// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (spec §1.5): the Michael seat's expected-active window,
-// America/New_York wall-clock, stored in periodic_process_registry.expected_window_et. Exported so the
-// idempotency test and the watcher test can assert the same literal.
-export const MICHAEL_EXPECTED_WINDOW_ET = Object.freeze({ start: '04:30', end: '07:30' });
-
 // QF-20260710-257: known rounds map to their DECLARED cadence — prefix inference put
 // gap_analysis / vision_rescore / corrective_generation (registered 'weekly' in
 // lib/eva/eva-master-scheduler.js _registerDefaultRounds) on the 86400 default, and
@@ -81,9 +76,8 @@ async function seedRoleSessions() {
     throw new Error(`claude_sessions query failed: ${e.message}`);
   }
 
-  // The 3 role loops the SD's own specimens name (Adam/coordinator/Solomon) plus, since
-  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A, the Michael seat -- sprint-reasoner-* are
-  // explicitly non-fleet/non-role sessions per established fleet convention, out of this seed.
+  // Only the 3 role loops the SD's own specimens name (Adam/coordinator/Solomon) -- sprint-reasoner-*
+  // are explicitly non-fleet/non-role sessions per established fleet convention, out of this seed.
   const seen = new Set();
   const upserts = [];
   for (const row of rows || []) {
@@ -91,15 +85,8 @@ async function seedRoleSessions() {
     let processKey = null;
     let displayName = null;
     let ref = null;
-    let expectedWindowEt = null;
     if (md.role === 'adam') { processKey = 'role_session:adam'; displayName = 'Adam (role-session loop)'; ref = { metadata_filter: { role: 'adam' } }; }
     else if (md.role === 'solomon') { processKey = 'role_session:solomon'; displayName = 'Solomon (role-session loop)'; ref = { metadata_filter: { role: 'solomon' } }; }
-    // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (spec §1.5, ratification 42111a33 Q7): the Michael
-    // seat carries a WINDOWED expectation -- 04:30-07:30 ET -- instead of the role-session force-true.
-    // currently_expected_active stays true (the watcher's windowed check runs BEFORE that short-circuit
-    // and yields INTENTIONALLY_DOWN outside the window), so the seat is watched inside the window and
-    // never alarmed on outside it. The owner-registry suppression rides KNOWN_PEERS ('michael').
-    else if (md.role === 'michael') { processKey = 'role_session:michael'; displayName = 'Michael (role-session loop, 04:30-07:30 ET window)'; ref = { metadata_filter: { role: 'michael' } }; expectedWindowEt = MICHAEL_EXPECTED_WINDOW_ET; }
     else if (md.is_coordinator === true) { processKey = 'role_session:coordinator'; displayName = 'Coordinator (role-session loop)'; ref = { metadata_filter: { is_coordinator: true } }; }
     if (!processKey || seen.has(processKey)) continue;
     seen.add(processKey);
@@ -113,9 +100,6 @@ async function seedRoleSessions() {
       liveness_source_ref: ref,
       session_bound: true,
       currently_expected_active: true,
-      // Only set for the Michael row; omitted (not null-written) elsewhere so the upsert stays
-      // byte-identical for the other roles and safe while the column migration is unapplied.
-      ...(expectedWindowEt ? { expected_window_et: expectedWindowEt } : {}),
       updated_at: new Date().toISOString(),
     });
   }
