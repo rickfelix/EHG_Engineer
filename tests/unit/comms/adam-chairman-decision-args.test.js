@@ -7,7 +7,13 @@
  * isMainModule(import.meta.url), so importing this module for its exported function is safe.
  */
 import { describe, it, expect } from 'vitest';
-import { parseDecisionArgs } from '../../../scripts/adam-chairman-decision.mjs';
+import { parseDecisionArgs, buildDefaultReplyInstruction } from '../../../scripts/adam-chairman-decision.mjs';
+
+/** Mirrors rubric-engine/lint.js's reply_instruction check exactly (QF-20260905-194). */
+function satisfiesRubric(replyInstruction, optionCount) {
+  const numbers = replyInstruction.match(/\d+/g) || [];
+  return Array.from({ length: optionCount }, (_, i) => String(i + 1)).every((n) => numbers.includes(n));
+}
 
 const VALID_UUID = '9e5aac51-0000-4000-8000-000000000001';
 
@@ -55,5 +61,52 @@ describe('parseDecisionArgs (FR-5)', () => {
     const r = parseDecisionArgs(baseArgs({ dry: true }));
     expect(r.ok).toBe(true);
     expect(r.dry).toBe(true);
+  });
+
+  // QF-20260905-194: rubric-engine/lint.js's reply_instruction check requires the instruction to
+  // literally name EVERY 1-based option number ("Reply 1 or 2"). The old hardcoded default
+  // ("Reply with the option letter, or DETAILS...") named no numbers at all, so any decision sent
+  // without an explicit --reply-instruction was silently DROPPED by the rubric.
+  it('the DEFAULT reply instruction (no --reply-instruction given) satisfies the rubric for a 2-option decision', () => {
+    const r = parseDecisionArgs(baseArgs());
+    expect(r.ok).toBe(true);
+    expect(satisfiesRubric(r.message.replyInstruction, 2)).toBe(true);
+  });
+
+  it('the DEFAULT reply instruction still names every option for a 3+ option decision', () => {
+    const argv = [
+      '--body', 'Pick one', '--option', 'A', '--option', 'B', '--option', 'C',
+      '--no-reply-policy', 'y', '--decision-id', VALID_UUID,
+    ];
+    const r = parseDecisionArgs(argv);
+    expect(r.ok).toBe(true);
+    expect(satisfiesRubric(r.message.replyInstruction, 3)).toBe(true);
+    expect(r.message.replyInstruction).toContain('DETAILS');
+  });
+
+  it('an explicit --reply-instruction still overrides the generated default', () => {
+    const argv = [
+      ...baseArgs(),
+      '--reply-instruction', 'Custom: reply 1 or 2',
+    ];
+    const r = parseDecisionArgs(argv);
+    expect(r.ok).toBe(true);
+    expect(r.message.replyInstruction).toBe('Custom: reply 1 or 2');
+  });
+
+  describe('buildDefaultReplyInstruction', () => {
+    it('joins 2 options with "or"', () => {
+      expect(buildDefaultReplyInstruction(2, 'ref1')).toBe('Reply 1 or 2, or DETAILS for more context (ref ref1).');
+    });
+
+    it('joins 3+ options with an oxford-comma list', () => {
+      expect(buildDefaultReplyInstruction(4, 'ref2')).toBe('Reply 1, 2, 3, or 4, or DETAILS for more context (ref ref2).');
+    });
+
+    it('satisfies the rubric regex for every option count from 2 to 6', () => {
+      for (let n = 2; n <= 6; n++) {
+        expect(satisfiesRubric(buildDefaultReplyInstruction(n, 'x'), n)).toBe(true);
+      }
+    });
   });
 });

@@ -20,6 +20,22 @@ import { isMainModule } from '../lib/utils/is-main-module.js';
 // Rejecting BEFORE any write is attempted turns that into a loud, immediate CLI error instead.
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// QF-20260905-194: the rubric's reply_instruction check (rubric-engine/lint.js) requires the
+// instruction to literally name EVERY 1-based option number ("Reply 1 or 2", not "Reply with
+// the option letter"). The old hardcoded default named no numbers at all, so any decision sent
+// without an explicit --reply-instruction was DROPPED by the rubric -- measured live 12:54:58Z.
+// Generated from the actual option count so it always satisfies the rubric regardless of how
+// many options a given decision has.
+export function buildDefaultReplyInstruction(optionCount, replyId) {
+  const nums = Array.from({ length: optionCount }, (_, i) => String(i + 1));
+  const numList = nums.length <= 1
+    ? nums[0]
+    : nums.length === 2
+      ? `${nums[0]} or ${nums[1]}`
+      : `${nums.slice(0, -1).join(', ')}, or ${nums[nums.length - 1]}`;
+  return `Reply ${numList}, or DETAILS for more context (ref ${replyId}).`;
+}
+
 /**
  * SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-5): pure argument parser + validator, extracted so
  * this CLI is unit-testable without executing enforceCliSendGuard (which reads process.argv and
@@ -52,7 +68,7 @@ export function parseDecisionArgs(argv) {
   const replyId = argValue('--reply-id') || crypto.randomBytes(4).toString('hex');
   const noReplyConsequence = argValue('--no-reply-policy');
   const replyInstruction = argValue('--reply-instruction')
-    || `Reply with the option letter, or DETAILS for more context (ref ${replyId}).`;
+    || buildDefaultReplyInstruction(options.length, replyId);
   const decisionId = argValue('--decision-id');
 
   // SD-LEO-INFRA-SMS-DECIDE-REPLY-MATCHABLE-001 FR-4: --decision-id is required, not optional.
