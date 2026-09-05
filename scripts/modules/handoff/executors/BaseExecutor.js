@@ -5,6 +5,7 @@
  * Provides template method pattern for consistent handoff execution flow.
  */
 
+import crypto from 'node:crypto';
 import ResultBuilder from '../ResultBuilder.js';
 import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
@@ -507,6 +508,11 @@ export class BaseExecutor {
           enabled: cacheEnabled && !!priorResults,
           prior: priorResults || {},
           _allowed: cacheEnabled,
+          // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: one id per execute() invocation, shared by
+          // every attempt in the retry loop below (in-process reuse still works) but never
+          // matching a DIFFERENT invocation's prior results loaded from the DB above (cross-
+          // execution reuse now requires a fresh evaluation — see gate-verdict-cache.js).
+          executionId: crypto.randomUUID(),
         };
         if (validationContext._verdictCache.enabled) {
           console.log(`   ♻️  Gate-verdict cache armed (${Object.keys(priorResults).length} prior gate result(s) with input hashes)`);

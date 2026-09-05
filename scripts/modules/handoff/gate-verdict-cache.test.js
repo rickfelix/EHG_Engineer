@@ -8,9 +8,16 @@
  *  - undeclared gates never hash, never hit;
  *  - extractor throw → unhashable this run (fail-open);
  *  - --no-cache and LEAD-FINAL-APPROVAL disable caching (isCacheAllowed);
- *  - recordFailure persists per-gate gate_results (version 2) on rejected rows;
+ *  - recordFailure persists per-gate gate_results (version-stamped) on rejected rows;
  *  - validateGates end-to-end: cached gate's validator is NOT invoked and the
  *    pipeline verdict equals a control full run.
+ *
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E adds: reuse ALSO requires prior.execution_id to match
+ * the current cacheCfg.executionId (a fixed EXEC_ID here, standing in for BaseExecutor's
+ * per-execute()-call minted id — matching EXEC_ID models "same execution, e.g. an in-process
+ * retry"; a different id models "a different, separate handoff.js invocation") and, for every
+ * registered gate, prior.code_version to match GATE_CODE_VERSION[gate] (previously FAIL-REPLAY
+ * only). Fixtures below are updated to carry both fields wherever a hit is still expected.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -24,6 +31,7 @@ import {
   GATE_INPUT_EXTRACTORS,
   SD_CONTENT_FIELDS,
   GATE_CODE_VERSION,
+  GATE_RESULTS_VERSION_HASHED,
 } from './gate-verdict-cache.js';
 
 const SD = {
@@ -35,11 +43,16 @@ const SD = {
   target_application: 'EHG_Engineer',
 };
 
-function priorPass(ctx) {
+const EXEC_ID = 'exec-test-1';
+
+function priorPass(ctx, gateName = 'GATE_SD_METRICS_SUFFICIENCY') {
   const hash = computeInputHash(
     Object.fromEntries(SD_CONTENT_FIELDS.map(f => [f, (ctx.sd[f] ?? null)]))
   );
-  return { passed: true, score: 100, maxScore: 100, issues: [], warnings: [], input_hash: hash };
+  return {
+    passed: true, score: 100, maxScore: 100, issues: [], warnings: [], input_hash: hash,
+    execution_id: EXEC_ID, code_version: GATE_CODE_VERSION[gateName],
+  };
 }
 
 describe('stableStringify / computeInputHash', () => {
@@ -55,47 +68,65 @@ describe('stableStringify / computeInputHash', () => {
 describe('probeVerdictCache', () => {
   const ctx = { sd: SD };
 
-  it('identical inputs + prior PASS → hit with prior result', () => {
-    const prior = { GATE_SD_METRICS_SUFFICIENCY: priorPass(ctx) };
-    const probe = probeVerdictCache('GATE_SD_METRICS_SUFFICIENCY', ctx, { enabled: true, prior });
+  it('identical inputs + prior PASS + same execution id → hit with prior result', () => {
+    const prior = { GATE_SD_METRICS_SUFFICIENCY: priorPass(ctx, 'GATE_SD_METRICS_SUFFICIENCY') };
+    const probe = probeVerdictCache('GATE_SD_METRICS_SUFFICIENCY', ctx, { enabled: true, prior, executionId: EXEC_ID });
     expect(probe.hit).toBe(true);
     expect(probe.priorResult.score).toBe(100);
   });
 
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: identical inputs but a DIFFERENT execution id → miss', () => {
+    const prior = { GATE_SD_METRICS_SUFFICIENCY: priorPass(ctx, 'GATE_SD_METRICS_SUFFICIENCY') };
+    const probe = probeVerdictCache('GATE_SD_METRICS_SUFFICIENCY', ctx, { enabled: true, prior, executionId: 'exec-a-different-run' });
+    expect(probe.hit).toBe(false);
+  });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: a prior row with no execution_id (pre-this-SD schema) never hits', () => {
+    const prior = { GATE_SD_METRICS_SUFFICIENCY: { ...priorPass(ctx, 'GATE_SD_METRICS_SUFFICIENCY'), execution_id: undefined } };
+    const probe = probeVerdictCache('GATE_SD_METRICS_SUFFICIENCY', ctx, { enabled: true, prior, executionId: EXEC_ID });
+    expect(probe.hit).toBe(false);
+  });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: a changed code_version (verifier logic changed) forces a re-run even on PASS', () => {
+    const prior = { GATE_SD_QUALITY: { ...priorPass(ctx, 'GATE_SD_QUALITY'), code_version: (GATE_CODE_VERSION.GATE_SD_QUALITY || 1) + 1 } };
+    const probe = probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior, executionId: EXEC_ID });
+    expect(probe.hit).toBe(false);
+  });
+
   it('changed declared input invalidates exactly that gate', () => {
     const prior = {
-      GATE_SD_METRICS_SUFFICIENCY: priorPass(ctx),
-      GATE_SD_QUALITY: priorPass(ctx),
+      GATE_SD_METRICS_SUFFICIENCY: priorPass(ctx, 'GATE_SD_METRICS_SUFFICIENCY'),
+      GATE_SD_QUALITY: priorPass(ctx, 'GATE_SD_QUALITY'),
     };
     const changedCtx = { sd: { ...SD, success_metrics: [{ metric: 'CHANGED' }] } };
     // Shared extractor: BOTH gates see the changed SD content — both miss…
-    expect(probeVerdictCache('GATE_SD_METRICS_SUFFICIENCY', changedCtx, { enabled: true, prior }).hit).toBe(false);
+    expect(probeVerdictCache('GATE_SD_METRICS_SUFFICIENCY', changedCtx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(false);
     // …while the unchanged SD still hits (per-gate invalidation is hash-driven).
-    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior }).hit).toBe(true);
+    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(true);
   });
 
   it('prior FAIL is NEVER reused even with identical hash', () => {
-    const failed = { ...priorPass(ctx), passed: false, score: 40 };
-    const probe = probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior: { GATE_SD_QUALITY: failed } });
+    const failed = { ...priorPass(ctx, 'GATE_SD_QUALITY'), passed: false, score: 40 };
+    const probe = probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior: { GATE_SD_QUALITY: failed }, executionId: EXEC_ID });
     expect(probe.hit).toBe(false);
   });
 
   it('wait/skipped prior shapes are never reused', () => {
-    const waiting = { ...priorPass(ctx), wait: true };
-    const skipped = { ...priorPass(ctx), skipReason: 'SD_TYPE' };
-    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior: { GATE_SD_QUALITY: waiting } }).hit).toBe(false);
-    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior: { GATE_SD_QUALITY: skipped } }).hit).toBe(false);
+    const waiting = { ...priorPass(ctx, 'GATE_SD_QUALITY'), wait: true };
+    const skipped = { ...priorPass(ctx, 'GATE_SD_QUALITY'), skipReason: 'SD_TYPE' };
+    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior: { GATE_SD_QUALITY: waiting }, executionId: EXEC_ID }).hit).toBe(false);
+    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior: { GATE_SD_QUALITY: skipped }, executionId: EXEC_ID }).hit).toBe(false);
   });
 
   it('undeclared gate: no hash, no hit', () => {
-    const probe = probeVerdictCache('RCA_GATE', ctx, { enabled: true, prior: { RCA_GATE: priorPass(ctx) } });
+    const probe = probeVerdictCache('RCA_GATE', ctx, { enabled: true, prior: { RCA_GATE: priorPass(ctx) }, executionId: EXEC_ID });
     expect(probe.inputHash).toBeNull();
     expect(probe.hit).toBe(false);
   });
 
   it('cache disabled: hash still computed (for persistence) but no hit', () => {
-    const prior = { GATE_SD_QUALITY: priorPass(ctx) };
-    const probe = probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: false, prior });
+    const prior = { GATE_SD_QUALITY: priorPass(ctx, 'GATE_SD_QUALITY') };
+    const probe = probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: false, prior, executionId: EXEC_ID });
     expect(probe.hit).toBe(false);
     expect(probe.inputHash).toBeTruthy();
   });
@@ -103,7 +134,7 @@ describe('probeVerdictCache', () => {
   it('extractor throw → unhashable this run (fail-open)', () => {
     GATE_INPUT_EXTRACTORS.__THROWY__ = () => { throw new Error('boom'); };
     try {
-      const probe = probeVerdictCache('__THROWY__', ctx, { enabled: true, prior: { __THROWY__: priorPass(ctx) } });
+      const probe = probeVerdictCache('__THROWY__', ctx, { enabled: true, prior: { __THROWY__: priorPass(ctx) }, executionId: EXEC_ID });
       expect(probe.hit).toBe(false);
       expect(probe.inputHash).toBeNull();
     } finally {
@@ -123,22 +154,22 @@ describe('GATE_MECHANISM_CLAIM_VERIFIER (QF-20260902-476: FAIL-REPLAY)', () => {
     return computeInputHash(GATE_INPUT_EXTRACTORS[GATE](ctx));
   }
 
-  it('PASS reuse: identical inputs (including metadata.mechanism_verifications) hit', () => {
+  it('PASS reuse: identical inputs, matching execution id and code_version (including metadata.mechanism_verifications) hit', () => {
     const ctx = mechCtx({ metadata: { mechanism_verifications: [{ verified_by: 'a', verified_at: 'x.js:1' }] } });
     const hash = mechHash(ctx);
-    const prior = { [GATE]: { passed: true, score: 100, input_hash: hash } };
-    const probe = probeVerdictCache(GATE, ctx, { enabled: true, prior });
+    const prior = { [GATE]: { passed: true, score: 100, input_hash: hash, execution_id: EXEC_ID, code_version: GATE_CODE_VERSION[GATE] } };
+    const probe = probeVerdictCache(GATE, ctx, { enabled: true, prior, executionId: EXEC_ID });
     expect(probe.hit).toBe(true);
     expect(probe.mode).toBe('pass_reuse');
   });
 
-  it('FAIL-REPLAY: identical hash + matching code_version → replayed without re-running', () => {
+  it('FAIL-REPLAY: identical hash + matching execution id + matching code_version → replayed without re-running', () => {
     const ctx = mechCtx();
     const hash = mechHash(ctx);
     const prior = {
-      [GATE]: { passed: false, score: 0, issues: ['MECHANISM_CLAIM_UNVERIFIED: ...'], input_hash: hash, code_version: GATE_CODE_VERSION[GATE] },
+      [GATE]: { passed: false, score: 0, issues: ['MECHANISM_CLAIM_UNVERIFIED: ...'], input_hash: hash, execution_id: EXEC_ID, code_version: GATE_CODE_VERSION[GATE] },
     };
-    const probe = probeVerdictCache(GATE, ctx, { enabled: true, prior });
+    const probe = probeVerdictCache(GATE, ctx, { enabled: true, prior, executionId: EXEC_ID });
     expect(probe.hit).toBe(true);
     expect(probe.mode).toBe('fail_replay');
     expect(probe.priorResult.issues[0]).toMatch(/MECHANISM_CLAIM_UNVERIFIED/);
@@ -147,24 +178,31 @@ describe('GATE_MECHANISM_CLAIM_VERIFIER (QF-20260902-476: FAIL-REPLAY)', () => {
   it('FAIL-REPLAY refused: mismatched code_version (verifier logic changed) forces a re-run', () => {
     const ctx = mechCtx();
     const hash = mechHash(ctx);
-    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, code_version: (GATE_CODE_VERSION[GATE] || 1) + 1 } };
-    expect(probeVerdictCache(GATE, ctx, { enabled: true, prior }).hit).toBe(false);
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, execution_id: EXEC_ID, code_version: (GATE_CODE_VERSION[GATE] || 1) + 1 } };
+    expect(probeVerdictCache(GATE, ctx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(false);
+  });
+
+  it('FAIL-REPLAY refused: mismatched execution id (a different, separate handoff.js invocation) forces a re-run', () => {
+    const ctx = mechCtx();
+    const hash = mechHash(ctx);
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, execution_id: 'exec-a-different-run', code_version: GATE_CODE_VERSION[GATE] } };
+    expect(probeVerdictCache(GATE, ctx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(false);
   });
 
   it('editing the SD (changed description) invalidates a cached FAIL — re-run required', () => {
     const ctx = mechCtx();
     const hash = mechHash(ctx);
-    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, code_version: GATE_CODE_VERSION[GATE] } };
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, execution_id: EXEC_ID, code_version: GATE_CODE_VERSION[GATE] } };
     const editedCtx = mechCtx({ description: 'edited spine, verified at foo.js:1 by me' });
-    expect(probeVerdictCache(GATE, editedCtx, { enabled: true, prior }).hit).toBe(false);
+    expect(probeVerdictCache(GATE, editedCtx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(false);
   });
 
   it('editing only metadata.mechanism_verifications invalidates a cached FAIL (structured remediation path is hashed)', () => {
     const ctx = mechCtx();
     const hash = mechHash(ctx);
-    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, code_version: GATE_CODE_VERSION[GATE] } };
+    const prior = { [GATE]: { passed: false, score: 0, input_hash: hash, execution_id: EXEC_ID, code_version: GATE_CODE_VERSION[GATE] } };
     const citedCtx = mechCtx({ metadata: { mechanism_verifications: [{ verified_by: 'me', verified_at: 'x.js:1' }] } });
-    expect(probeVerdictCache(GATE, citedCtx, { enabled: true, prior }).hit).toBe(false);
+    expect(probeVerdictCache(GATE, citedCtx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(false);
   });
 
   it('a non-opted-in gate never fail-replays, even with a matching hash', () => {
@@ -172,8 +210,8 @@ describe('GATE_MECHANISM_CLAIM_VERIFIER (QF-20260902-476: FAIL-REPLAY)', () => {
     const hash = computeInputHash(
       Object.fromEntries(SD_CONTENT_FIELDS.map(f => [f, (ctx.sd[f] ?? null)]))
     );
-    const prior = { GATE_SD_QUALITY: { passed: false, score: 0, input_hash: hash, code_version: 1 } };
-    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior }).hit).toBe(false);
+    const prior = { GATE_SD_QUALITY: { passed: false, score: 0, input_hash: hash, execution_id: EXEC_ID, code_version: 1 } };
+    expect(probeVerdictCache('GATE_SD_QUALITY', ctx, { enabled: true, prior, executionId: EXEC_ID }).hit).toBe(false);
   });
 });
 
@@ -212,10 +250,10 @@ describe('loadPriorGateResults', () => {
     return { from: vi.fn().mockReturnValue(chain) };
   }
 
-  it('returns the newest version>=2 gate_results; skips version-1 rows', async () => {
+  it('returns the newest version>=GATE_RESULTS_VERSION_HASHED gate_results; skips older-schema rows', async () => {
     const rows = [
-      { metadata: { gate_results: { OLD: {} }, gate_results_version: 1 } },
-      { metadata: { gate_results: { NEW: { passed: true } }, gate_results_version: 2 } },
+      { metadata: { gate_results: { OLD: {} }, gate_results_version: GATE_RESULTS_VERSION_HASHED - 1 } },
+      { metadata: { gate_results: { NEW: { passed: true } }, gate_results_version: GATE_RESULTS_VERSION_HASHED } },
     ];
     const out = await loadPriorGateResults(mockSupabase(rows), 'uuid', 'PLAN-TO-LEAD');
     expect(out).toEqual({ NEW: { passed: true } });
@@ -237,18 +275,40 @@ describe('validateGates end-to-end reuse (TS-1 control parity)', () => {
     const gates = [{ name: 'GATE_SD_QUALITY', validator, weight: 1 }];
     const ctx = { sd: SD };
 
-    // Control: full run, no cache.
-    const control = await orchestrator.validateGates(gates, { ...ctx });
+    // Control run: BaseExecutor mints ONE execution id per execute() call, present from the
+    // start regardless of whether caching ends up enabled — modelled here by setting it
+    // unconditionally, same as the real _verdictCache setup in BaseExecutor.js.
+    const control = await orchestrator.validateGates(gates, { ...ctx, _verdictCache: { enabled: false, prior: {}, executionId: EXEC_ID } });
     expect(validator).toHaveBeenCalledTimes(1);
     expect(control.gateResults.GATE_SD_QUALITY.input_hash).toBeTruthy();
+    expect(control.gateResults.GATE_SD_QUALITY.execution_id).toBe(EXEC_ID);
 
-    // Retry with cache armed from the control run's results.
+    // Retry within the SAME execution (BaseExecutor's in-process retry loop) — same executionId.
     const prior = mergePassResults({}, control.gateResults);
-    const retry = await orchestrator.validateGates(gates, { ...ctx, _verdictCache: { enabled: true, prior } });
+    const retry = await orchestrator.validateGates(gates, { ...ctx, _verdictCache: { enabled: true, prior, executionId: EXEC_ID } });
     expect(validator).toHaveBeenCalledTimes(1); // NOT invoked again
     expect(retry.gateResults.GATE_SD_QUALITY.cache_hit).toBe(true);
     expect(retry.passed).toBe(control.passed);
     expect(retry.gateResults.GATE_SD_QUALITY.score).toBe(control.gateResults.GATE_SD_QUALITY.score);
+  });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: a DIFFERENT execution (separate handoff.js invocation) re-runs instead of reusing', async () => {
+    const { ValidationOrchestrator } = await import('./validation/ValidationOrchestrator.js');
+    const orchestrator = new ValidationOrchestrator({ supabase: {} });
+    orchestrator.preloadGateContexts = async () => {};
+
+    const validator = vi.fn().mockResolvedValue({ passed: true, score: 100, maxScore: 100, issues: [], warnings: [] });
+    const gates = [{ name: 'GATE_SD_QUALITY', validator, weight: 1 }];
+    const ctx = { sd: SD };
+
+    const first = await orchestrator.validateGates(gates, { ...ctx, _verdictCache: { enabled: false, prior: {}, executionId: 'exec-run-A' } });
+    const prior = mergePassResults({}, first.gateResults);
+
+    // Second call models a SEPARATE handoff.js execute() invocation (loadPriorGateResults path):
+    // same declared inputs, but a freshly-minted execution id.
+    const second = await orchestrator.validateGates(gates, { ...ctx, _verdictCache: { enabled: true, prior, executionId: 'exec-run-B' } });
+    expect(validator).toHaveBeenCalledTimes(2); // re-run, not reused
+    expect(second.gateResults.GATE_SD_QUALITY.cache_hit).toBeUndefined();
   });
 });
 

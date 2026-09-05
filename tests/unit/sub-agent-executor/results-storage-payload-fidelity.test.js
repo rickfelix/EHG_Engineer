@@ -239,3 +239,57 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     expect(capture.inserted.metadata.mode).toBe('full-validation');
   });
 });
+
+describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E — metadata.session_id provenance stamp', () => {
+  const capture = {};
+  const savedSessionId = process.env.CLAUDE_SESSION_ID;
+
+  beforeEach(() => {
+    capture.inserted = null;
+    vi.doMock('../../../lib/sub-agent-executor/supabase-client.js', () => ({
+      getSupabaseClient: async () => makeMockSupabase(capture)
+    }));
+    vi.doMock('../../../scripts/modules/sd-id-normalizer.js', () => ({
+      normalizeSDId: async (_s, v) => v
+    }));
+    vi.doMock('../../../lib/artifact-tools.js', () => ({
+      createArtifact: async () => ({ artifact_id: 'artifact-1', token_count: 10, summary: 'compressed' })
+    }));
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+    vi.doUnmock('../../../lib/sub-agent-executor/supabase-client.js');
+    vi.doUnmock('../../../scripts/modules/sd-id-normalizer.js');
+    vi.doUnmock('../../../lib/artifact-tools.js');
+    if (savedSessionId === undefined) delete process.env.CLAUDE_SESSION_ID;
+    else process.env.CLAUDE_SESSION_ID = savedSessionId;
+  });
+
+  it('stamps metadata.session_id exactly when CLAUDE_SESSION_ID is set', async () => {
+    process.env.CLAUDE_SESSION_ID = 'sess-fr3-set';
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    expect(capture.inserted.metadata.session_id).toBe('sess-fr3-set');
+  });
+
+  it('stamps metadata.session_id as an explicit null (never an omitted key) when unset', async () => {
+    delete process.env.CLAUDE_SESSION_ID;
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90 });
+    expect('session_id' in capture.inserted.metadata).toBe(true);
+    expect(capture.inserted.metadata.session_id).toBeNull();
+  });
+
+  it('anti-clobber: a caller-supplied results.metadata.session_id cannot survive over this writer\'s own observed value', async () => {
+    process.env.CLAUDE_SESSION_ID = 'sess-real-writer';
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      metadata: { session_id: 'sess-SPOOFED-BY-CALLER' }
+    });
+    expect(capture.inserted.metadata.session_id).toBe('sess-real-writer');
+    expect(capture.inserted.metadata.session_id).not.toBe('sess-SPOOFED-BY-CALLER');
+  });
+});

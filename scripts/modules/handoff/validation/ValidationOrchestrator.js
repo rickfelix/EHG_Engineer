@@ -326,6 +326,12 @@ export class ValidationOrchestrator {
                 gateResult.input_hash = probe.inputHash;
                 const codeVersion = GATE_CODE_VERSION[gate.name];
                 if (codeVersion != null) gateResult.code_version = codeVersion;
+                // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: stamp which execution produced this
+                // verdict, so a LATER execution's probeVerdictCache can require a match rather
+                // than trusting a verdict it cannot attribute to a specific run.
+                if (context._verdictCache?.executionId) {
+                  gateResult.execution_id = context._verdictCache.executionId;
+                }
               }
               return { gate, gateResult };
             });
