@@ -38,8 +38,9 @@ describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)'
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   afterEach(() => errorSpy.mockClear());
 
-  it('returns byte-identical results to DRAIN_SETS[role] for all 4 known roles when supabase=null', async () => {
-    for (const role of ['solomon', 'adam', 'coordinator', 'worker']) {
+  it('returns byte-identical results to DRAIN_SETS[role] for all 5 known roles when supabase=null', async () => {
+    // michael: SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A
+    for (const role of ['solomon', 'adam', 'coordinator', 'worker', 'michael']) {
       const result = await resolveRecognizedKinds({ supabase: null, role });
       expect(result).toEqual([...DRAIN_SETS[role]]);
     }

@@ -7,8 +7,8 @@ import {
 } from '../../../lib/fleet/role-startup-prompt.js';
 
 describe('SPAWNABLE_ROLES (FR-2, TS-9)', () => {
-  it('offers exactly the four operator-spawnable roles', () => {
-    expect([...SPAWNABLE_ROLES].sort()).toEqual(['adam', 'coordinator', 'solomon', 'worker']);
+  it('offers exactly the five operator-spawnable roles (michael added by SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A)', () => {
+    expect([...SPAWNABLE_ROLES].sort()).toEqual(['adam', 'coordinator', 'michael', 'solomon', 'worker']);
   });
 
   it('does NOT offer canary as a role', () => {

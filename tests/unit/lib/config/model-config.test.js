@@ -34,6 +34,21 @@ describe('model-config.js image-generation and premium-generation purposes (TS-1
     expect(VALID_PURPOSES).toContain('premium-generation');
   });
 
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (spec §3): Opus seat pin with a Sonnet quota fallback,
+  // each env-swappable. A missing purpose would make getClaudeModel('michael') throw.
+  it('michael and michael-fallback purposes resolve and honour their env overrides', () => {
+    expect(VALID_PURPOSES).toContain('michael');
+    expect(VALID_PURPOSES).toContain('michael-fallback');
+    expect(getClaudeModel('michael')).toBe('claude-opus-4-8');
+    expect(getClaudeModel('michael-fallback')).toBe('claude-sonnet-4-6');
+    process.env.CLAUDE_MODEL_MICHAEL = 'claude-test-michael';
+    process.env.CLAUDE_MODEL_MICHAEL_FALLBACK = 'claude-test-fallback';
+    expect(getClaudeModel('michael')).toBe('claude-test-michael');
+    expect(getClaudeModel('michael-fallback')).toBe('claude-test-fallback');
+    delete process.env.CLAUDE_MODEL_MICHAEL;
+    delete process.env.CLAUDE_MODEL_MICHAEL_FALLBACK;
+  });
+
   it('getGoogleModel("image-generation") returns the documented default', () => {
     expect(getGoogleModel('image-generation')).toBe('gemini-3-pro-image-preview');
   });
