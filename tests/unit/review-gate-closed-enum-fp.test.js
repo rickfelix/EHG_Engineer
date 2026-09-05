@@ -481,3 +481,36 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names(crlf)).toContain('schema_corruption');
   });
 });
+
+// CRIT-001 hardcoded_secret — QF-20260904-728. The SUPABASE_SERVICE_ROLE_KEY sub-pattern
+// had no value-shape constraint (unlike the password/api_key patterns in the same list),
+// so it matched the assignment's variable name alone and always fired on the pervasive
+// test-setup convention `process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key'`, already
+// present unmodified in 10+ shipped test files. Narrowed to require the value look like a
+// real Supabase service-role key: a JWT, always starting with the base64url 'eyJ' prefix
+// (the encoding of the JSON header's opening `{"`) — the same shape convention this
+// codebase's own sibling fix already uses for the identical problem in a different scanner
+// (tests/unit/bridge/venture-conformance-secret-patterns.test.js, QF-20260704-452).
+describe('CRIT-001 hardcoded_secret — SUPABASE_SERVICE_ROLE_KEY value-shape fix (QF-20260904-728)', () => {
+  it('does NOT flag the pervasive test-setup placeholder convention (the witnessed FP, PR #8177/#8180)', () => {
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';")).not.toContain('hardcoded_secret');
+  });
+  it('does NOT flag other short placeholder values already used in shipped tests', () => {
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key-not-real';")).not.toContain('hardcoded_secret');
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-secret';")).not.toContain('hardcoded_secret');
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'k';")).not.toContain('hardcoded_secret');
+  });
+  it('STILL flags a genuine JWT-shaped key (the real-secret shape this pattern exists to catch)', () => {
+    expect(names(
+      '+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.abc123def456'
+    )).toContain('hardcoded_secret');
+  });
+  it('STILL flags a genuine key when quoted', () => {
+    expect(names(
+      "+  process.env.SUPABASE_SERVICE_ROLE_KEY = \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.abc123def456\";"
+    )).toContain('hardcoded_secret');
+  });
+  it('STILL flags the existing short JWT-prefix specimen (preserve-stage.test.js\'s own fixture)', () => {
+    expect(names('+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJI')).toContain('hardcoded_secret');
+  });
+});
