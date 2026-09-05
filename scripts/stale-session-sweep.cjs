@@ -33,6 +33,22 @@ const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
 const { PROMOTION_ACK_KEY, isPromotionAcked } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
+const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs'); // QF-20260905-761
+/**
+ * QF-20260905-761 (measured on row c4312703): given the age-eligible STUCK signals (live
+ * sender, severity below high, older than the drain cutoff) and a pool of candidate reply
+ * rows, splits them into ones safe to age-drain (a correlated reply already exists) and
+ * ones that must be marked OVERDUE instead — acknowledged_at must stay null on those so
+ * every acknowledged_at-IS-NULL inbox/overdue surface keeps seeing them. Pure — no I/O — so
+ * the split is unit-testable without a live session_coordination table.
+ */
+function splitAgeEligibleStuckSignals(ageEligible, replyPool) {
+  const replied = ageEligible.filter((s) => hasCorrelatedReply(s, [...ageEligible, ...replyPool]));
+  const repliedIds = new Set(replied.map((s) => s.id));
+  const unreplied = ageEligible.filter((s) => !repliedIds.has(s.id));
+  return { replied, unreplied };
+}
+module.exports.splitAgeEligibleStuckSignals = splitAgeEligibleStuckSignals;
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, classifyAllDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -4005,11 +4021,27 @@ async function main() {
     // untouched: a failed liveness read must never read as "all senders dead".
     const HELD_SEVERITIES = new Set(['high', 'critical']);
     const senderIsDead = (s) => !s.sender_session || !liveSenders.has(s.sender_session);
-    const drainRows = senderGuardFailed ? [] : stuck.filter((s) => {
-      if (senderIsDead(s)) return true;                       // dead sender — drain at any severity
-      if (HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase())) return false; // live + urgent — HOLD
-      return s.created_at < stuckAgeCutoff;                   // live + routine — age-drain as before
-    });
+    const ageEligible = senderGuardFailed ? [] : stuck.filter((s) =>
+      !senderIsDead(s) &&
+      !HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase()) &&
+      s.created_at < stuckAgeCutoff);
+    // QF-20260905-761 (measured on row c4312703): a coordinator reply usually lands as a
+    // FRESH row (payload.reply_to / payload.correlation_id — SD-LEO-INFRA-ACKSTAMP-FALSE-
+    // METRICS-C6-001), never an update to this row's own acknowledged_at. Age-draining
+    // without checking for one stamps acknowledged_at on a genuinely UNANSWERED escalation,
+    // making it invisible to every acknowledged_at-IS-NULL inbox/overdue surface.
+    let replyPool = [];
+    if (ageEligible.length > 0) {
+      try {
+        replyPool = await fapPaginate(() => supabase
+          .from('session_coordination')
+          .select('id, payload')
+          .or('payload->>reply_to.not.is.null,payload->>correlation_id.not.is.null')
+          .order('id', { ascending: true }));
+      } catch { replyPool = []; }
+    }
+    const { replied: ageReplied, unreplied: ageUnreplied } = splitAgeEligibleStuckSignals(ageEligible, replyPool);
+    const drainRows = senderGuardFailed ? [] : [...stuck.filter(senderIsDead), ...ageReplied];
     const drainStuckIds = drainRows.map(s => s.id);
     // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-7): this drain used to stamp a BARE
     // acknowledged_at via `.in('id', batch)`, which made a flood-control retirement permanently
@@ -4042,8 +4074,21 @@ async function main() {
       const ageCount = drainStuckIds.length - deadCount;
       const parts = [];
       if (deadCount > 0) parts.push(deadCount + ' dead-sender');
-      if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high)');
+      if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high, reply found)');
       actions.push('CLEANUP: drained ' + drainStuckIds.length + ' STUCK signal(s) — ' + parts.join(' + ') + ' (acknowledged_at stamped, payload.auto_acked=true — NOT an answer)');
+    }
+    // QF-20260905-761: aged-out, live-sender, NO-reply signals are marked OVERDUE instead of
+    // silently acked — acknowledged_at stays null so printInbox()/fetchAllOutstandingSignals()
+    // (both gate on acknowledged_at IS NULL) keep surfacing them until a real reply lands.
+    for (let i = 0; i < ageUnreplied.length; i += 50) {
+      const batch = ageUnreplied.slice(i, i + 50);
+      await Promise.all(batch.map((s) => supabase
+        .from('session_coordination')
+        .update({ payload: { ...(s.payload || {}), overdue: true } })
+        .eq('id', s.id)));
+    }
+    if (ageUnreplied.length > 0) {
+      actions.push('WORKER SIGNALS: ' + ageUnreplied.length + ' STUCK signal(s) marked OVERDUE (aged out, live sender, no coordinator reply found) — acknowledged_at intentionally NOT stamped: ' + ageUnreplied.map(s => String(s.id).slice(0, 8)).join(', '));
     }
     // Report what was deliberately NOT drained, so a held signal is visible rather than merely
     // un-retired. Without this the fix would be silent in exactly the way the bug was.
