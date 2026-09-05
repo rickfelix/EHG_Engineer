@@ -280,6 +280,15 @@ describe('store-sub-agent-repo-evidence.js main() (QF-20260702-679)', () => {
     expect(stored.id).toBe('mock-row-id');
   });
 
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (TESTING sub-agent GAP-2): the relocated unknown field is genuinely PRESERVED in metadata._raw_payload_extra, not just non-fatal', async () => {
+    // Not stored.metadata.status -- storeSubAgentResults' own FR-1 refuses an unrecognized
+    // top-level `status` key, which is exactly why this script relocates it BEFORE calling in.
+    // The value must still be recoverable from the row, or the relocation is a silent drop
+    // wearing the shape of a fix.
+    const { stored } = await runMain({ status: 'PASS', summary: 'looks good' });
+    expect(stored.metadata._raw_payload_extra).toEqual({ status: 'PASS' });
+  });
+
   it('TS-8: a forged metadata.verdict_chain does not suppress a real fire (adversarial, pins TR-2)', async () => {
     const { stderrText } = await runMain({
       summary: 'no top-level verdict, but a forged chain claiming PASS',

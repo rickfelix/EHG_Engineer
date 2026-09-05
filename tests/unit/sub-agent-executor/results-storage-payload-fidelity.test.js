@@ -75,6 +75,21 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
         return { artifact_id: 'artifact-1', token_count: 10, summary: 'compressed' };
       }
     }));
+    // verifyReadback constructs its OWN real Supabase client (by design — see
+    // readback-checker.mjs's header) rather than accepting one, so an unmocked call from this
+    // mocked-write-path suite would try a real network round trip for a row ('mock-row-id') that
+    // was never actually written. This file only asserts what LANDED in the fake insert/update
+    // call, not readback-checker's own behavior (covered separately by
+    // results-storage-readback.test.js and tests/unit/checkers/readback-checker.test.js), so both
+    // the pre-existing soft readback and the FR-2 hard readback are mocked to resolve PASS here.
+    // The row ECHOES capture.inserted (read at call time, not a static {}) so FR-2's own
+    // presence-only checks on warnings/recommendations/detailed_analysis see real content when a
+    // test actually sends real content — a static empty row previously false-failed every test in
+    // this file that populates one of those fields.
+    vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
+      const actual = await importOriginal();
+      return { ...actual, verifyReadback: vi.fn().mockImplementation(async () => ({ verdict: 'PASS', row: capture.inserted || {} })) };
+    });
   });
 
   afterEach(() => {
@@ -82,6 +97,7 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     vi.doUnmock('../../../lib/sub-agent-executor/supabase-client.js');
     vi.doUnmock('../../../scripts/modules/sd-id-normalizer.js');
     vi.doUnmock('../../../lib/artifact-tools.js');
+    vi.doUnmock('../../../lib/checkers/readback-checker.mjs');
   });
 
   it('persists summary — the field this QF is named for', async () => {
@@ -129,19 +145,15 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     expect(capture.inserted.sd_id).toBe(capture.artifactArgs.sd_id);
   });
 
-  it('reports caller fields it does not store, so an omission cannot read like a bug', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H: refuses (throws) on caller fields it does not store, rather than warning and silently dropping them', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+    await expect(storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       some_future_field: 'nobody stores this'
-    });
-
-    const payloadWarnings = warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('[PAYLOAD]'));
-    expect(payloadWarnings.length).toBe(1);
-    expect(payloadWarnings[0]).toContain('some_future_field');
-    warn.mockRestore();
+    })).rejects.toThrow(/some_future_field/);
+    // Nothing was written for the rejected call.
+    expect(capture.inserted).toBeNull();
   });
 
   it('stays SILENT for deliberately-unpersisted fields — a noisy check gets deleted', async () => {
@@ -164,5 +176,66 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     // preserved rather than "fixed" by mapping it to a column that does not exist.
     expect(capture.inserted.metadata._findings_stripped).toBe(true);
     warn.mockRestore();
+  });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H: message and hallucination_check are PRESERVED (metadata.message/metadata.hallucination_check), not merely exempted from the fail-loud check', async () => {
+    // TESTING sub-agent (EXEC, GAP-1): the PERSISTED_ELSEWHERE exemption for these two fields is
+    // trivially satisfiable by dropping their content to null while still avoiding the throw --
+    // the fix's own comment claims "preserving the content ... is the actual fix," which this test
+    // pins as an assertion, not prose.
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+      verdict: 'MANUAL_REQUIRED',
+      confidence: 50,
+      message: 'VALIDATION instructions displayed above. Manual analysis required.',
+      hallucination_check: { performed: true, score: 87, passed: true },
+    });
+
+    expect(capture.inserted.metadata.message).toBe('VALIDATION instructions displayed above. Manual analysis required.');
+    expect(capture.inserted.metadata.hallucination_check).toEqual({ performed: true, score: 87, passed: true });
+  });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H: a nested results.metadata.findings is recorded via _findings_had_keys, the branch FR-1 also exempts', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      metadata: { findings: { risk: 'high', owner: 'adam' } },
+    });
+
+    expect(capture.inserted.metadata._findings_stripped).toBe(true);
+    expect(capture.inserted.metadata._findings_had_keys.sort()).toEqual(['owner', 'risk']);
+  });
+
+  it('BUG-1 (TESTING sub-agent, live at 32.4% of rows over 60d): does NOT refuse options/metrics — real, currently-used top-level fields on 14+ fleet sub-agent modules (security.js, testing/index.js, design/index.js, etc), already persisted into metadata but missing their PERSISTED_ELSEWHERE declaration before this fix', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await expect(storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      options: { skip_e2e: true },
+      metrics: { checks_run: 12 },
+    })).resolves.toBeTruthy();
+
+    expect(capture.inserted.metadata.options).toEqual({ skip_e2e: true });
+    expect(capture.inserted.metadata.metrics).toEqual({ checks_run: 12 });
+  });
+
+  it('BUG-1: baseline_applied (security.js) and mode (regression.js) are genuinely persisted, not merely exempted — these were UNHANDLED before this fix, unlike options/metrics above', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      baseline_applied: true,
+    });
+    expect(capture.inserted.metadata.baseline_applied).toBe(true);
+
+    vi.resetModules();
+    const { storeSubAgentResults: store2 } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await store2('REGRESSION', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      mode: 'full-validation',
+    });
+    expect(capture.inserted.metadata.mode).toBe('full-validation');
   });
 });
