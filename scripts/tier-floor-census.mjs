@@ -189,7 +189,10 @@ export function sweep(cwd = process.cwd(), pattern = PATTERN) {
   try {
     out = execFileSync(
       'git',
-      ['grep', '-n', '-E', pattern, '--', '*.js', '*.cjs', '*.mjs'],
+      // -e forces pattern interpretation permanently, so a future option-shaped `pattern` value
+      // (e.g. one starting with '-O'/'-f') can never be parsed as a git-grep flag instead of a
+      // pattern (SECURITY finding on SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-F's parameterization).
+      ['grep', '-n', '-E', '-e', pattern, '--', '*.js', '*.cjs', '*.mjs'],
       { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024 * 32 }
     );
   } catch (err) {
