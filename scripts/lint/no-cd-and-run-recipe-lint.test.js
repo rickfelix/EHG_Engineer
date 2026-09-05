@@ -28,4 +28,25 @@ describe('findCdAndRunViolations', () => {
     const md = '```bash\nnode scripts/one-off/attempt-auto-merge.mjs\n```';
     expect(findCdAndRunViolations(md)).toEqual([]);
   });
+
+  // Bypasses found by adversarial self-review, both fixed above.
+  it('flags a semicolon-chained cd-and-run on a single line', () => {
+    const md = '```bash\ncd .worktrees/SD-X; git commit -m "oops"\n```';
+    expect(findCdAndRunViolations(md).length).toBeGreaterThan(0);
+  });
+
+  it('flags cd-and-run in an untagged fence', () => {
+    const md = '```\ncd .worktrees/SD-X\nnpm test\n```';
+    expect(findCdAndRunViolations(md).length).toBeGreaterThan(0);
+  });
+
+  it('flags cd-and-run in a ```console fence', () => {
+    const md = '```console\ncd .worktrees/SD-X\nnpm test\n```';
+    expect(findCdAndRunViolations(md).length).toBeGreaterThan(0);
+  });
+
+  it('still ignores an unrelated ```json fence containing an unrelated "cd" word', () => {
+    const md = '```json\n{ "cd": "value" }\n```';
+    expect(findCdAndRunViolations(md)).toEqual([]);
+  });
 });

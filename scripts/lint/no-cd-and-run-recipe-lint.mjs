@@ -18,6 +18,13 @@
  * entry must have ZERO violations; a file WITH an entry only fails if its violation count
  * EXCEEDS `expected` -- so pre-existing debt doesn't block CI, but a NEW addition does.
  *
+ * KNOWN LIMITATION (self-review, same class the sibling lint already documents): count-anchoring
+ * cannot distinguish WHICH violations are the allowlisted ones. Fixing an allowlisted file's
+ * existing cd-and-run recipe while separately introducing an unrelated NEW one in the same file,
+ * at the same count, passes silently. Acceptable here because both allowlisted files are small,
+ * rarely-touched docs -- a content-hash-per-entry model would close this but is not worth the
+ * complexity for two files.
+ *
  * Usage: node scripts/lint/no-cd-and-run-recipe-lint.mjs
  */
 import fs from 'fs';
@@ -28,7 +35,11 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const ALLOWLIST_PATH = path.join(__dirname, 'no-cd-and-run-recipe-allowlist.json');
-const FENCE_RE = /```(?:bash|sh)\n([\s\S]*?)```/g;
+// Self-review finding (WARNING, fixed): the language tag must cover every realistic shell-fence
+// spelling actually used in this docs corpus, not just ```bash -- an untagged/```shell/```console
+// fence was a silent bypass. Deliberately NOT a bare optional tag (which would also scan
+// ```json/```javascript/etc. and risk false positives on unrelated code samples).
+const FENCE_RE = /```(?:bash|sh|shell|zsh|console)?\n([\s\S]*?)```/g;
 
 export function findCdAndRunViolations(markdown) {
   const violations = [];
@@ -38,7 +49,10 @@ export function findCdAndRunViolations(markdown) {
     const lines = m[1].split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
     lines.forEach((line, i) => {
       if (!/^cd\s+\S/.test(line)) return;
-      if (/&&/.test(line) || i < lines.length - 1) violations.push(line.slice(0, 120));
+      // Self-review finding (WARNING, fixed): `;`-chaining on a single line (`cd X; run Y`) as
+      // the block's ONLY line evaded detection -- only `&&` and "another line follows" were
+      // checked, not a same-line `;` chain.
+      if (/&&|;/.test(line) || i < lines.length - 1) violations.push(line.slice(0, 120));
     });
   }
   return violations;
