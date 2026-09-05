@@ -42,6 +42,8 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
 const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh, isFreshAndActive, SOLOMON_FRESH_MS } = require('../lib/coordinator/solomon-identity.cjs');
+// QF-20260905-201: same-host dead-process proof (see scripts/adam-register.cjs for the measured specimen).
+const { isSeatProcessDead } = require('../lib/coordinator/role-seat-liveness.cjs');
 // Phase E (not yet shipped): drainSolomonOutbound will live in scripts/solomon-advisory.cjs.
 // Loaded lazily at the call site so this module loads without solomon-advisory.cjs present.
 
@@ -117,7 +119,7 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
       message: `Refused: prior-Solomon freshness read failed (${priorRead.error}) — cannot verify the singleton is free; not registering (fail-closed).` };
   }
   const priorSolomons = priorRead.rows;
-  const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs });
+  const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs, isProcessDead: isSeatProcessDead });
   if (decision.action === 'refuse') {
     // A FRESH prior Solomon holds the singleton — do NOT register a 2nd and do NOT clear the prior
     // (the deliberate divergence: never kill a legitimately-restarting Solomon mid-canary).
@@ -216,6 +218,11 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
       const bySessionId = new Map(currentRead.rows.map((a) => [a.session_id, a]));
       const freshNow = new Set(currentRead.rows.filter((a) => isFresh(a.heartbeat_at, nowMs2, SOLOMON_FRESH_MS)).map((a) => a.session_id));
       const toolStuckSet = new Set(decision.retireToolStuck || []);
+      // QF-20260905-201: dead-process entries re-validate on the PROCESS, never heartbeat (frozen fresh).
+      const deadProcessSet = new Set(decision.retireDeadProcess || []);
+      const deadProcessStillDead = new Set(
+        (decision.retireDeadProcess || []).filter((sid) => isSeatProcessDead(bySessionId.get(sid))),
+      );
       const toolStuckRacedBack = new Set(
         (decision.retireToolStuck || []).filter((sid) => {
           const row = bySessionId.get(sid);
@@ -223,7 +230,9 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
         }),
       );
       for (const sid of decision.retire) {
-        const skip = toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid);
+        const skip = deadProcessSet.has(sid)
+          ? !deadProcessStillDead.has(sid)
+          : (toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid));
         if (skip) continue; // became fresh since the decision — do NOT clear a restarting Solomon
         const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
         if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
@@ -259,6 +268,7 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   }
 
   return { ok: true, action, session_id: sessionId, role: SOLOMON_ROLE, non_fleet: true, retired, drained,
+    retired_dead_process: (decision.retireDeadProcess || []).filter((sid) => retired.includes(sid)),
     message: `Registered as the single Solomon${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_solomon_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_solomon_flag'}.` };
 }
 
