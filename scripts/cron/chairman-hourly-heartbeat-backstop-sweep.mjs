@@ -98,6 +98,23 @@ const WINDOW_END_ZONE_HOUR = 23;
 // rows (those are always unfilled, any age) or for a null row (see the due-slot read in main()).
 export const STALENESS_GRACE_MS = 5 * 60 * 1000;
 
+// QF-20260904-715 guard (2'): a NULL live row (nothing seen yet for this slot) used to return
+// 'unfilled' with ZERO grace, so the very first */15 GHA tick after a slot enqueued a backstop
+// even though live sends routinely land late -- 7-day distribution (37 slots, minutes-after-slot):
+// 0,0,0,1,2,2,2,3,5,5,6,12,12,14,14,14,16,19,28,29,30,30,31,31,32,32,35,57,61,77,91,95,104,150,
+// 162,168,168,168; median 28. A 30-min grace catches 22/37 outright (60-min catches 28/37); chosen
+// conservatively so a genuine outage is still flagged within one slot's first half, not delayed a
+// full hour. Chairman-visible: shows up verbatim in any backstop send this guard suppresses.
+export const LIVE_NULL_ROW_GRACE_MS = 30 * 60 * 1000;
+
+// QF-20260904-715 guard (2'), part 2 ("keep the 20-min look-back"): the live-kind read window
+// used to start exactly AT the due slot's instant, so a live send that lands a few minutes
+// BEFORE the slot boundary (row 3261ba2d: a live send at 21:58Z preceded the 22:00Z slot read
+// and was invisible, duplicated by a backstop at 22:04Z) was never seen. 20 min is comfortably
+// inside the >=3h gap between any two adjacent SLOT_HOURS_ET entries, so it can never reach into
+// the PRIOR slot's own already-closed read window.
+export const LIVE_EARLY_LOOKBACK_MS = 20 * 60 * 1000;
+
 // EXEC-phase TESTING sub-agent finding F1 (merge-blocking): an earlier revision of this file
 // used a fixed CALENDAR-hour bucket ([HH:00, HH+1:00)) for the coverage read. That bucket is
 // EMPTY BY CONSTRUCTION at the top of every hour (the GHA cron's first tick runs at :00), so
@@ -173,11 +190,16 @@ function buildSupabase() {
  * @param {{status?: string, created_at?: string}|null} row the most recent row for one kind,
  *   within the trailing lookback window (or null if none exists)
  * @param {Date} now
- * @param {{ownKind?: boolean}} [opts] ownKind=true when `row` is this sweep's OWN prior kind
+ * @param {{ownKind?: boolean, sinceMs?: number}} [opts] ownKind=true when `row` is this sweep's
+ *   OWN prior kind; sinceMs=the due slot's instant (ms), used ONLY for guard (2')'s null-row
+ *   grace below -- a null row inside LIVE_NULL_ROW_GRACE_MS of the slot instant is presumed
+ *   still in flight (the live send is routinely late), not unfilled.
  * @returns {'filled'|'in_flight'|'unfilled'|'do_not_retry'}
  */
-export function classifyRowCoverage(row, now, { ownKind = false } = {}) {
-  if (!row || !row.status) return 'unfilled';
+export function classifyRowCoverage(row, now, { ownKind = false, sinceMs } = {}) {
+  if (!row || !row.status) {
+    return (Number.isFinite(sinceMs) && (now.getTime() - sinceMs) < LIVE_NULL_ROW_GRACE_MS) ? 'in_flight' : 'unfilled';
+  }
   const { status } = row;
   if (status === 'sent' || status === 'delivered') return 'filled';
   if (status === 'canceled' || status === 'owed_escalate') return 'do_not_retry';
@@ -300,9 +322,13 @@ export async function main(argv = process.argv, deps = {}) {
   const { startIso: nowHourStartIso } = etHourWindowUtc(now, chairmanZone);
   const dueSlotInstantMs = new Date(nowHourStartIso).getTime() - (zoneHour - dueSlotHour) * 60 * 60 * 1000;
   const sinceIso = new Date(dueSlotInstantMs).toISOString();
+  // Guard (2') part 2: the live-kind read starts LIVE_EARLY_LOOKBACK_MS before the slot instant
+  // (see its doc comment above) -- the backstop's OWN-kind read is unaffected (still anchored
+  // exactly at the slot instant; look-back is only ever about the live path's own early sends).
+  const liveSinceIso = new Date(dueSlotInstantMs - LIVE_EARLY_LOOKBACK_MS).toISOString();
   const fetchRow = deps.fetchLatestRowForKind || fetchLatestRowForKind;
   const [{ row: liveRow, error: liveErr }, { row: backstopRow, error: backstopErr }] = await Promise.all([
-    fetchRow(supabase, LIVE_KIND, sinceIso),
+    fetchRow(supabase, LIVE_KIND, liveSinceIso),
     fetchRow(supabase, BACKSTOP_KIND, sinceIso),
   ]);
 
@@ -314,7 +340,7 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 0, action: 'inert', reason: 'read_error' };
   }
 
-  const liveVerdict = classifyRowCoverage(liveRow, now);
+  const liveVerdict = classifyRowCoverage(liveRow, now, { sinceMs: dueSlotInstantMs });
   const backstopVerdict = classifyRowCoverage(backstopRow, now, { ownKind: true }); // F6 fix
   const hourVerdict = combineHourVerdict(liveVerdict, backstopVerdict);
 
