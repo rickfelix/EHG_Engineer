@@ -40,6 +40,15 @@ jobs:
       - name: Install minimal deps
         run: npm ci --ignore-scripts --prefer-offline --no-audit
 
+      # Regression proof for the census script's own entrypoint guard (isMainModule()) --
+      # a prior version was silently dead on Windows (main() never ran, exit 0, zero output).
+      # This IS blocking: a broken entrypoint makes the census step below worthless, not
+      # merely advisory. Runs in the dedicated 'bypass-ledger-join-check-gate' vitest project
+      # (vitest.config.js), which stamps fake Supabase credentials at the project level so
+      # the runtime db-tier gate (tests/setup.db.js) never loads and never skips it.
+      - name: Verify census entrypoint fires
+        run: npx vitest run tests/integration/bypass-ledger-handoff-join-check-entrypoint.test.js --project bypass-ledger-join-check-gate
+
       - name: Run census
         id: run
         # Non-blocking by design: `|| true` so a bucket-(c) finding does not fail the

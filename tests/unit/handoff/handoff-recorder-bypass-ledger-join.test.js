@@ -36,11 +36,18 @@ function makeTrackingSupabase({ sdRow = { id: SD_UUID, sd_key: 'SD-POC-003' } } 
       update: (patch) => {
         return {
           eq: (col, val) => {
-            calls.updates.push({ table, patch, eq: { col, val } });
+            // Record the call BEFORE `.is()` may or may not be chained, then MUTATE the same
+            // record if `.is()` IS called -- so a mutant that deletes the `.is(...)` chain
+            // leaves `is: undefined` on this exact record and an assertion on it fails, rather
+            // than the call simply not existing (which a `.find()`-based assertion would miss).
+            const record = { table, patch, eq: { col, val }, is: undefined };
+            calls.updates.push(record);
             const term = Promise.resolve({ data: null, error: null });
-            // The real code chains .eq(...).is('handoff_id', null) (write-once guard) --
-            // support that continuation while still resolving like a terminal thenable.
-            return { then: term.then.bind(term), catch: term.catch.bind(term), is: () => term };
+            return {
+              then: term.then.bind(term),
+              catch: term.catch.bind(term),
+              is: (isCol, isVal) => { record.is = { col: isCol, val: isVal }; return term; },
+            };
           },
         };
       },
@@ -86,6 +93,10 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B FR-B1: bypass_ledger.handoff_id j
     expect(ledgerJoin).toBeTruthy();
     expect(ledgerJoin.patch).toEqual({ handoff_id: insertedHandoff.row.id });
     expect(ledgerJoin.eq).toEqual({ col: 'id', val: 'ledger-row-accepted-1' });
+    // SECURITY finding LOW mutation-test follow-up (evidence e8cee5f1): deleting
+    // .is('handoff_id', null) from the real code must fail THIS assertion, not just leave
+    // the .eq() call itself present.
+    expect(ledgerJoin.is).toEqual({ col: 'handoff_id', val: null });
   });
 
   it('createArtifact does NOT touch bypass_ledger when the result was not bypassed', async () => {
@@ -129,6 +140,7 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B FR-B1: bypass_ledger.handoff_id j
     expect(ledgerJoin).toBeTruthy();
     expect(ledgerJoin.patch).toEqual({ handoff_id: insertedHandoff.row.id });
     expect(ledgerJoin.eq).toEqual({ col: 'id', val: 'ledger-row-rejected-1' });
+    expect(ledgerJoin.is).toEqual({ col: 'handoff_id', val: null });
   });
 
   it('recordFailure does NOT touch bypass_ledger when the rejection was unrelated to a bypass attempt', async () => {

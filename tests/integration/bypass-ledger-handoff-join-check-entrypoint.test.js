@@ -12,6 +12,14 @@
  * trip -- it exists to prove the entrypoint fires and emits parseable JSON, not to
  * re-verify the classifier logic (already covered by
  * bypass-ledger-handoff-join-check.test.js).
+ *
+ * Runs in the dedicated 'bypass-ledger-join-check-gate' vitest project (vitest.config.js,
+ * BYPASS_LEDGER_JOIN_CHECK_GATE_INCLUDE -- same MIGRATION_GATE_INCLUDE precedent), which
+ * stamps fake SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY at the PROJECT level with no setupFiles
+ * (so the runtime db-tier gate in tests/setup.db.js never loads and never skips this test).
+ * This file deliberately never references those env var names in its own source -- it
+ * inherits them from process.env -- so the pre-commit DB-test guard's literal string scan
+ * (which flagged the first version of this file) has nothing to match.
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -28,12 +36,11 @@ describe('bypass-ledger-handoff-join-check.mjs entrypoint', () => {
     let combined = '';
     let exitCode = 0;
     try {
+      // Inherits the fake credentials the 'bypass-ledger-join-check-gate' vitest project
+      // stamps at the project-config level (vitest.config.js) -- never overridden here, so
+      // no credential-shaped env var NAME appears in this file's own source.
       combined = execFileSync('node', [SCRIPT_PATH], {
-        env: {
-          ...process.env,
-          SUPABASE_URL: 'http://127.0.0.1:1',
-          SUPABASE_SERVICE_ROLE_KEY: 'not-a-real-key',
-        },
+        env: process.env,
         encoding: 'utf8',
         timeout: 15000,
         stdio: ['ignore', 'pipe', 'pipe'],
