@@ -34,6 +34,22 @@ import { VERDICT_VALUES } from '../lib/sub-agents/verdict-chain.js';
 export const LIKELY_VERDICT_FIELDS = ['status', 'overall_status', 'overall_verdict', 'result', 'outcome', 'passed'];
 
 /**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (FR-1): the top-level fields storeSubAgentResults()
+ * recognizes (mapped to a column, or declared in its own PERSISTED_ELSEWHERE exemption list).
+ * Intentionally duplicated here rather than imported -- PERSISTED_ELSEWHERE is local to
+ * storeSubAgentResults(), not module-exported -- and scoped ONLY to this script's own
+ * garbage-tolerant boundary (see the call site below); a real field storeSubAgentResults later
+ * learns to accept just needs adding here too, at worst degrading gracefully back to today's
+ * "relocate into metadata" behavior in the meantime, never a silent drop.
+ */
+const KNOWN_RESULT_FIELDS = new Set([
+  'verdict', 'confidence', 'critical_issues', 'warnings', 'recommendations', 'detailed_analysis',
+  'summary', 'execution_time_ms', 'validation_mode', 'justification', 'conditions', 'phase',
+  'metadata', 'findings', 'options', 'metrics', 'error', 'stack', 'message', 'hallucination_check',
+  'confidence_score', 'verdict_chain', 'sd_id', 'sd_key',
+]);
+
+/**
  * SD-LEO-INFRA-EVIDENCE-WRITER-VERDICT-FAIL-LOUD-001 (SECURITY, EXEC-TO-PLAN evidence 52cd374f,
  * SEC-1/SEC-2/SEC-3): this is the first place a caller-supplied field VALUE (not just structural
  * metadata) reaches an output stream in this writer's history, so every value routed into the
@@ -143,6 +159,20 @@ export async function main(argv) {
 
   const resolution = await resolveSubAgentRepo({ sdId, targetApplication, subAgentCode, supabase });
   const withEvidence = applySubAgentRepoVerdict(results, resolution);
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (FR-1): this script accepts arbitrary, possibly
+  // malformed CLI payloads BY DESIGN -- verdictMisuseMessage/TS-7/TS-8 exist precisely to still
+  // store an ERROR row for a caller that got the shape wrong. storeSubAgentResults now REFUSES
+  // (rather than silently drops) any top-level field it does not recognize, so a malformed
+  // caller's stray field must be relocated, not passed through unmodified, or this script's own
+  // "still stores the ERROR row" safety net would itself be defeated by the field it is
+  // designed to survive.
+  const unknownKeys = Object.keys(withEvidence).filter((k) => !KNOWN_RESULT_FIELDS.has(k));
+  if (unknownKeys.length > 0) {
+    withEvidence.metadata = { ...(withEvidence.metadata || {}), _raw_payload_extra: Object.fromEntries(unknownKeys.map((k) => [k, withEvidence[k]])) };
+    for (const k of unknownKeys) delete withEvidence[k];
+  }
+
   const stored = await storeSubAgentResults(subAgentCode, sdId, null, withEvidence, phase ? { phase } : {});
 
   const misuseMessage = verdictMisuseMessage(rawPayload, stored.verdict, stored.storage_timeout === true);

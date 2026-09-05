@@ -75,6 +75,17 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
         return { artifact_id: 'artifact-1', token_count: 10, summary: 'compressed' };
       }
     }));
+    // verifyReadback constructs its OWN real Supabase client (by design — see
+    // readback-checker.mjs's header) rather than accepting one, so an unmocked call from this
+    // mocked-write-path suite would try a real network round trip for a row ('mock-row-id') that
+    // was never actually written. This file only asserts what LANDED in the fake insert/update
+    // call, not readback-checker's own behavior (covered separately by
+    // results-storage-readback.test.js and tests/unit/checkers/readback-checker.test.js), so both
+    // the pre-existing soft readback and the FR-2 hard readback are mocked to resolve PASS here.
+    vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
+      const actual = await importOriginal();
+      return { ...actual, verifyReadback: vi.fn().mockResolvedValue({ verdict: 'PASS', row: {} }) };
+    });
   });
 
   afterEach(() => {
@@ -82,6 +93,7 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     vi.doUnmock('../../../lib/sub-agent-executor/supabase-client.js');
     vi.doUnmock('../../../scripts/modules/sd-id-normalizer.js');
     vi.doUnmock('../../../lib/artifact-tools.js');
+    vi.doUnmock('../../../lib/checkers/readback-checker.mjs');
   });
 
   it('persists summary — the field this QF is named for', async () => {
@@ -129,19 +141,15 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     expect(capture.inserted.sd_id).toBe(capture.artifactArgs.sd_id);
   });
 
-  it('reports caller fields it does not store, so an omission cannot read like a bug', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H: refuses (throws) on caller fields it does not store, rather than warning and silently dropping them', async () => {
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+    await expect(storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
       verdict: 'PASS',
       confidence: 90,
       some_future_field: 'nobody stores this'
-    });
-
-    const payloadWarnings = warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('[PAYLOAD]'));
-    expect(payloadWarnings.length).toBe(1);
-    expect(payloadWarnings[0]).toContain('some_future_field');
-    warn.mockRestore();
+    })).rejects.toThrow(/some_future_field/);
+    // Nothing was written for the rejected call.
+    expect(capture.inserted).toBeNull();
   });
 
   it('stays SILENT for deliberately-unpersisted fields — a noisy check gets deleted', async () => {
