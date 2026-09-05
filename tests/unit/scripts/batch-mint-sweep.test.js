@@ -4,7 +4,7 @@
  * batch-mint detector to the hold writer.
  */
 import { describe, it, expect } from 'vitest';
-import { runBatchMintSweep } from '../../../scripts/cron/batch-mint-sweep.mjs';
+import { runBatchMintSweep, checkVerdictsAndRelease } from '../../../scripts/cron/batch-mint-sweep.mjs';
 
 function fakeSupabase({ mints, existingHolds = [], updateResults = {} }) {
   return {
@@ -93,5 +93,110 @@ describe('runBatchMintSweep', () => {
     const supabase = fakeSupabase({ mints: [{ id: 'QF-1', created_by: 'sess-A', created_at: '2026-08-01T00:00:00Z' }] });
     const result = await runBatchMintSweep(supabase, { nowMs: Date.parse('2026-08-01T00:01:00Z') });
     expect(result).toEqual({ scanned: true, groups: 0, held: 0, alreadyHeld: 0, failed: [] });
+  });
+});
+
+/**
+ * SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-3): checkVerdictsAndRelease -- the specified
+ * PRIMARY release path. Fake models three tables: quick_fixes (held QFs), session_coordination
+ * (consult rows + live replies), retention_archive (unused in these fixtures).
+ */
+function fakeVerdictSupabase({ heldQfs = [], consultRows = {}, replies = [] }) {
+  return {
+    from: (table) => {
+      if (table === 'quick_fixes') {
+        return {
+          // Serves BOTH checkVerdictsAndRelease's held-QF query (.eq().like()) AND
+          // releaseQfOracleHold's internal provenance read (.eq().maybeSingle()) on the same chain.
+          select: () => ({
+            eq: () => ({
+              like: () => ({ limit: async () => ({ data: heldQfs, error: null }) }),
+              maybeSingle: async () => ({ data: { verification_notes: null }, error: null }),
+            }),
+          }),
+          update: (_payload) => ({
+            eq: (col, id) => ({
+              eq: () => ({
+                like: () => ({
+                  select: () => ({
+                    maybeSingle: async () => ({ data: { id }, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'session_coordination') {
+        return {
+          select: (cols) => {
+            if (cols === 'created_at, payload') {
+              // lookupConsultRowRecord's live query: select('created_at, payload').eq('id', id).maybeSingle()
+              return { eq: (col, id) => ({ maybeSingle: async () => ({ data: consultRows[id] || null, error: null }) }) };
+            }
+            // findConsultReply's live query: select('id, created_at, payload')...
+            return {
+              or: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: async () => ({ data: replies, error: null }),
+                  }),
+                }),
+              }),
+            };
+          },
+        };
+      }
+      if (table === 'retention_archive') {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }), order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) };
+      }
+      return {};
+    },
+  };
+}
+
+describe('checkVerdictsAndRelease (FR-3, the specified primary release path)', () => {
+  it('TS-3: releases immediately when a matching Solomon reply exists, tagged solomon-verdict', async () => {
+    const supabase = fakeVerdictSupabase({
+      heldQfs: [{ id: 'QF-1', release_condition: '[oracle_read_pending] review_at=x consult=11111111-1111-1111-1111-111111111111 :: batch mint detected' }],
+      consultRows: { '11111111-1111-1111-1111-111111111111': { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } } },
+      replies: [{ created_at: '2026-08-01T00:10:00Z' }],
+    });
+    const result = await checkVerdictsAndRelease(supabase);
+    expect(result.checked).toBe(1);
+    expect(result.released).toBe(1);
+    expect(result.failed).toEqual([]);
+  });
+
+  // TS-4: no reply exists -- the caller (main()) leaves the hold for the existing timer path.
+  it('TS-4: releases nothing when no reply exists (falls through to the existing timer path)', async () => {
+    const supabase = fakeVerdictSupabase({
+      heldQfs: [{ id: 'QF-1', release_condition: '[oracle_read_pending] review_at=x consult=11111111-1111-1111-1111-111111111111 :: batch mint detected' }],
+      consultRows: { '11111111-1111-1111-1111-111111111111': { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } } },
+      replies: [],
+    });
+    const result = await checkVerdictsAndRelease(supabase);
+    expect(result.checked).toBe(1);
+    expect(result.released).toBe(0);
+  });
+
+  it('returns zeroed result when nothing is currently oracle-held', async () => {
+    const supabase = fakeVerdictSupabase({ heldQfs: [] });
+    const result = await checkVerdictsAndRelease(supabase);
+    expect(result).toEqual({ checked: 0, released: 0, failed: [] });
+  });
+
+  it('releases every member of a shared consult row group, not just one', async () => {
+    const supabase = fakeVerdictSupabase({
+      heldQfs: [
+        { id: 'QF-1', release_condition: '[oracle_read_pending] review_at=x consult=11111111-1111-1111-1111-111111111111 :: batch mint detected' },
+        { id: 'QF-2', release_condition: '[oracle_read_pending] review_at=x consult=11111111-1111-1111-1111-111111111111 :: batch mint detected' },
+      ],
+      consultRows: { '11111111-1111-1111-1111-111111111111': { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } } },
+      replies: [{ created_at: '2026-08-01T00:10:00Z' }],
+    });
+    const result = await checkVerdictsAndRelease(supabase);
+    expect(result.checked).toBe(2);
+    expect(result.released).toBe(2);
   });
 });

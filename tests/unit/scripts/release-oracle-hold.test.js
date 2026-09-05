@@ -14,14 +14,22 @@ describe('parseReleaseOracleArgs', () => {
   });
 });
 
-function fakeSupabaseForLookup(consultRow) {
+/**
+ * SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-1): lookupConsultRowRecord queries
+ * session_coordination first, then chains TWO .eq() calls against retention_archive on a miss —
+ * this mock's .eq() must itself be chainable (return an object with both .eq() and
+ * .maybeSingle()) rather than terminal, to support that second query shape.
+ * archivedRow (optional) simulates a retention_archive hit: { row_data: {...} }.
+ */
+function fakeSupabaseForLookup(consultRow, archivedRow = null) {
+  const chain = (result) => ({ eq: () => chain(result), maybeSingle: async () => result });
   return {
     from: (table) => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => (table === 'session_coordination' ? { data: consultRow, error: null } : { data: null, error: null }),
-        }),
-      }),
+      select: () => chain(
+        table === 'session_coordination' ? { data: consultRow, error: null }
+          : table === 'retention_archive' ? { data: archivedRow, error: null }
+            : { data: null, error: null }
+      ),
     }),
   };
 }
@@ -58,7 +66,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
@@ -73,7 +81,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
@@ -88,7 +96,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
@@ -104,7 +112,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
@@ -118,7 +126,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
@@ -132,7 +140,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
       },
     };
@@ -155,7 +163,7 @@ describe('releaseOracleHold (FR-5)', () => {
     const supabaseWithUpdate = {
       ...supabase,
       from: (table) => {
-        if (table === 'session_coordination') return supabase.from(table);
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
         return qfTable({
           updateResult: { data: { id: 'QF-1' }, error: null },
           ownConsultReleaseCondition: `[oracle_read_pending] review_at=2026-09-01T00:00:00Z consult=${consultRowId} :: batch mint detected`,
@@ -169,5 +177,38 @@ describe('releaseOracleHold (FR-5)', () => {
 
   it('sanity: BOUNDED_WAIT_MS is ~30 minutes', () => {
     expect(BOUNDED_WAIT_MS).toBe(30 * 60 * 1000);
+  });
+
+  // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 FR-1 / TS-1: a consult row deleted by
+  // cleanup_expired_coordination (1h after creation) previously read consult_row_not_found
+  // forever, requiring --force on every release past that hour.
+  it('FR-1/TS-1: releases WITHOUT --force when the cited consult row exists ONLY in retention_archive', async () => {
+    // session_coordination miss (null), retention_archive hit with the archived row_data.
+    const supabase = fakeSupabaseForLookup(null, { row_data: { created_at: '2026-08-01T00:00:00Z' } });
+    const supabaseWithUpdate = {
+      ...supabase,
+      from: (table) => {
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
+      },
+    };
+    const nowMs = Date.parse('2026-08-01T01:00:00Z'); // well past the bound, using the ARCHIVED created_at
+    const result = await releaseOracleHold({ qfId: 'QF-1', consultRowId: 'row-1', supabaseClient: supabaseWithUpdate, nowMs });
+    expect(result.merged).toBe(true);
+  });
+
+  // TS-2: absent from BOTH tables stays fail-closed, unchanged.
+  it('FR-1/TS-2: still refuses without --force when the cited consult row is absent from BOTH session_coordination and retention_archive', async () => {
+    const supabase = fakeSupabaseForLookup(null, null);
+    const supabaseWithUpdate = {
+      ...supabase,
+      from: (table) => {
+        if (table === 'session_coordination' || table === 'retention_archive') return supabase.from(table);
+        return qfTable({ updateResult: { data: { id: 'QF-1' }, error: null } });
+      },
+    };
+    const result = await releaseOracleHold({ qfId: 'QF-1', consultRowId: 'row-1', supabaseClient: supabaseWithUpdate, nowMs: Date.now() });
+    expect(result.merged).toBe(false);
+    expect(result.cause).toBe('consult_row_not_found');
   });
 });
