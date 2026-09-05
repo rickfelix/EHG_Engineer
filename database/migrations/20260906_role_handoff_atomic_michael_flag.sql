@@ -15,7 +15,9 @@
 -- FUNCTION here would land as an anon-callable RLS-bypass write on claude_sessions (stamping
 -- non_fleet=true on any session is a fleet-wide claim denial-of-service via
 -- lib/claim/build-forbidden-session.cjs). The REVOKE/GRANT lines below are therefore part of the
--- contract, and the DO $verify$ block asserts them with has_function_privilege.
+-- contract, and the DO $verify$ block asserts them with has_function_privilege. The form is the one
+-- scripts/lint/secdef-execute-revoke-lint.mjs recognises (REVOKE EXECUTE ... FROM PUBLIC, anon,
+-- authenticated; a FROM list that omits PUBLIC is a no-op because anon/authenticated inherit it).
 --
 -- DATA-SAFETY: additive. Applying creates two functions and modifies NO real rows (the DO $verify$
 -- block seeds + deletes a synthetic session inside the transaction). Reversible via the _DOWN
@@ -42,7 +44,7 @@ AS $$
   WHERE session_id = p_session_id;
 $$;
 
-REVOKE ALL ON FUNCTION clear_michael_flag(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION clear_michael_flag(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION clear_michael_flag(TEXT) TO service_role;
 
 COMMENT ON FUNCTION clear_michael_flag(TEXT) IS
@@ -77,7 +79,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION set_michael_flag(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION set_michael_flag(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION set_michael_flag(TEXT) TO service_role;
 
 COMMENT ON FUNCTION set_michael_flag(TEXT) IS

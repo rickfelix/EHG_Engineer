@@ -31,7 +31,9 @@ describe('michael flag migration shape (FR-1)', () => {
 
   it('REVOKEs EXECUTE from PUBLIC, anon and authenticated and GRANTs it to service_role for both (TS-13)', () => {
     for (const fn of FNS) {
-      expect(up).toMatch(new RegExp(`REVOKE ALL ON FUNCTION ${fn}\\(TEXT\\) FROM PUBLIC, anon, authenticated;`));
+      // The REVOKE EXECUTE form is the one scripts/lint/secdef-execute-revoke-lint.mjs matches (its
+      // regex does not recognise REVOKE ALL), and PUBLIC must be named or the revoke is a no-op.
+      expect(up).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION ${fn}\\(TEXT\\) FROM PUBLIC, anon, authenticated;`));
       expect(up).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION ${fn}\\(TEXT\\) TO service_role;`));
     }
   });
