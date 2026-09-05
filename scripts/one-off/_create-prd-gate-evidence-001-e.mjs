@@ -117,7 +117,7 @@ const content = {
     },
     {
       scenario: 'Edge case: CLAUDE_SESSION_ID set to an empty string rather than unset',
-      expected: 'An empty string is falsy in JS, so `process.env.CLAUDE_SESSION_ID || null` correctly normalizes it to explicit null on both writers -- not stored as an empty string, which would be a different, ambiguous sentinel than "no session".',
+      expected: 'An empty string is falsy in JS, so `process.env.CLAUDE_SESSION_ID || null` correctly normalizes it to explicit null on both writers -- not stored as an empty string, which would be a different, underspecified sentinel than "no session".',
     },
   ],
   risks: [
@@ -138,7 +138,7 @@ const content = {
     {
       item: "The SD title's second half -- \"key the verdict cache on execution id plus gate code version\" -- is deliberately EXCLUDED from this PRD.",
       reason:
-        'Genuinely ambiguous between two unrelated mechanisms: (1) scripts/modules/handoff/gate-verdict-cache.js, ' +
+        'Genuinely underspecified between two unrelated mechanisms: (1) scripts/modules/handoff/gate-verdict-cache.js, ' +
         'the only thing literally called a verdict "cache" in this codebase, but a pure performance optimization ' +
         'for HANDOFF GATES with zero connection to sub-agent evidence provenance and no execution-id concept in ' +
         'its domain at all; (2) scripts/modules/handoff/gates/subagent-evidence-gate.js, the actual reader of ' +
