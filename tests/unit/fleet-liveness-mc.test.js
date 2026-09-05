@@ -232,3 +232,51 @@ describe('fleet-liveness-mc — bootstrapPriors sparse-bucket fallback (TS-7)', 
     }
   });
 });
+
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-1, TS-4): resolveMarkerDirs() used to
+// be a fourth independent hand-rolled single-directory resolver that returned the local
+// checkout's directory immediately if it existed, regardless of marker count -- never reaching
+// the real population in a different worktree. It now delegates to the SSOT's markerDirs()
+// (host-wide union), preserving FLEET_MC_MARKER_DIR as a single-directory override (this
+// module's only test-injection seam).
+describe('fleet-liveness-mc — resolveMarkerDirs / loadPidMarkers (marker-path SSOT delegation)', () => {
+  it('FLEET_MC_MARKER_DIR still pins to exactly that one directory', () => {
+    const prior = process.env.FLEET_MC_MARKER_DIR;
+    process.env.FLEET_MC_MARKER_DIR = '/some/pinned/dir';
+    try {
+      expect(mc.resolveMarkerDirs()).toEqual(['/some/pinned/dir']);
+    } finally {
+      if (prior === undefined) delete process.env.FLEET_MC_MARKER_DIR;
+      else process.env.FLEET_MC_MARKER_DIR = prior;
+    }
+  });
+
+  it('without the override, delegates to the real markerDirs() union -- no local re-implementation', () => {
+    const prior = process.env.FLEET_MC_MARKER_DIR;
+    delete process.env.FLEET_MC_MARKER_DIR;
+    try {
+      const { markerDirs } = require('../../lib/fleet/cc-pid-liveness.cjs');
+      expect(mc.resolveMarkerDirs()).toEqual(markerDirs());
+    } finally {
+      if (prior !== undefined) process.env.FLEET_MC_MARKER_DIR = prior;
+    }
+  });
+
+  it('loadPidMarkers reads a marker from the FLEET_MC_MARKER_DIR-pinned directory', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const os = await import('node:os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fleet-mc-marker-'));
+    fs.writeFileSync(path.join(dir, `pid-${process.pid}.json`), JSON.stringify({ session_id: 'fleet-mc-test-session', cc_pid: process.pid, sse_port: 1234, captured_at: '2026-01-01T00:00:00Z' }));
+    const prior = process.env.FLEET_MC_MARKER_DIR;
+    process.env.FLEET_MC_MARKER_DIR = dir;
+    try {
+      const { byClaudeSession } = mc.loadPidMarkers();
+      expect(byClaudeSession['fleet-mc-test-session']).toMatchObject({ pid: process.pid, sse_port: 1234 });
+    } finally {
+      if (prior === undefined) delete process.env.FLEET_MC_MARKER_DIR;
+      else process.env.FLEET_MC_MARKER_DIR = prior;
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+  });
+});
