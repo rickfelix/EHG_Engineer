@@ -136,7 +136,11 @@
         "path": "database/migrations/20260731000001_seeded_rls_defect.sql",
         "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
       }
-    ]
+    ],
+    "observability_proof": {
+      "input": "SQL file TEXT under the three RLS_LINT_CORPUS_DIRS directories (database/migrations, database/manual-updates, supabase/migrations -- lib/lint/rls-lint-corpus-dirs.mjs), enumerated via git diff --name-only/git ls-files --others (diff mode, base ref from env RLS_LINT_BASE or origin/main) or fs.readdirSync per directory (--all mode); each file's CREATE POLICY statements paren-balance-extracted and classified via classifyViolation(). Consumes no DB columns and no environment variables besides the optional RLS_LINT_BASE override.",
+      "seen": "Live --all sweep against this repo's real tree on 2026-09-05 (SD-LEO-FIX-RLS-LINT-CORPUS-WIDTH-001's own PR #8240, after widening the corpus from one directory to three): `node scripts/lint/rls-anon-tenant-predicate-lint.mjs --all --json` scanned 1590 files across all three directories and reported 639 real violations (advisory, non-blocking) -- not a fixture positive, the actual live backlog across database/migrations, database/manual-updates, and supabase/migrations."
+    }
   },
   {
     "name": "no-mocked-sut-import-lint",
