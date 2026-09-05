@@ -10,6 +10,7 @@ import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 import { getSectionEnforcement } from '../sd-type-section-policy.js';
+import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 
 /**
  * Validate Database Implementation Fidelity
@@ -346,17 +347,25 @@ export async function verifyTablesExist(tableNames, supabase) {
  * Verify migration execution in schema_migrations table,
  * with fallback to table-existence verification.
  */
-async function verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetails, validation, supabase) {
+export async function verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetails, validation, supabase) {
   try {
     let executedMigrations = null;
     let migrationError = null;
 
-    const { data: data1, error: error1 } = await supabase
+    // QF-20260904-844: this probe deliberately selects version,name first and inspects the
+    // 42703 error message to decide whether to fall back to select('*') -- a schema-shape
+    // probe by design, same pattern as lib/eva/bridge/venture-provisioner.js:441-447. The
+    // SCHEMA-TRUTH-001-A throw-on-42703 default client throws before this code ever saw
+    // error1, making the fallback branch unreachable. Opt OUT of the throw for this probe's
+    // client only -- the rest of the section keeps using the passed-in `supabase` unchanged.
+    const probeClient = createSupabaseServiceClient({ throwOnSchemaDrift: false });
+
+    const { data: data1, error: error1 } = await probeClient
       .from('schema_migrations')
       .select('version, name');
 
     if (error1 && error1.message.includes('column') && error1.message.includes('does not exist')) {
-      const { data: data2, error: error2 } = await supabase
+      const { data: data2, error: error2 } = await probeClient
         .from('schema_migrations')
         .select('*');
       executedMigrations = data2;
