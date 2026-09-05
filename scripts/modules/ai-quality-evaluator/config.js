@@ -45,6 +45,16 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // prd: 55 -> 60 (n=267, avg_score=81.4, pass_rate=100% -- INCREASE recommendation).
   // retrospective: 55 -> 60 (n=198, avg_score=91.3, pass_rate=99% -- INCREASE recommendation).
   // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 55 }`.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-E (2026-09-05): both keys' pre-fix shadow_rescore
+  // feedback rows (d0f48dd8-595e-49b6-96c0-978500564328 / 7a84cf34-9f66-4565-b37a-830f4e4f7bf6 for
+  // prd; 042e66f1-4a89-485d-b429-ff1210f19fbd / 925e6b07-e0b7-4584-a012-5011a4c08d8c for
+  // retrospective) are VACUOUS -- gate-threshold-shadow-rescore.mjs filtered by the view's
+  // historical current_threshold (55), re-scoring only the PRE-raise population. DO NOT cite those
+  // rows as safety evidence. The REAL post-raise numbers, queried directly against
+  // ai_quality_assessments WHERE pass_threshold=60: prd n=101, pass=101/101 (100%); retrospective
+  // n=138, pass=133/138 (96.4%) -- both clear the >=10 sample floor, confirm both keys remain
+  // healthy under their live bar.
   infrastructure: { default: 55, prd: 60, retrospective: 60 },
 
   // Feature SDs: Moderate baseline
@@ -67,6 +77,15 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // directly against ai_quality_assessments WHERE pass_threshold=65: n=10, pass=9/10 (90.0%),
   // window 2026-08-28..2026-09-05 -- meets the >=10 sample floor, confirms prd remains healthy
   // under its live bar.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-E (2026-09-05): retrospective's pre-fix shadow_rescore
+  // rows (7b34135c-7158-41ad-ba6c-a7089a171e3f / 9638675f-4a83-4da6-8dfe-de47380e9763) are VACUOUS
+  // for the same reason as prd above -- current_threshold=60 (historical), never the live 65. DO
+  // NOT cite those rows. The REAL post-raise number, queried directly against
+  // ai_quality_assessments WHERE pass_threshold=65: n=25, pass=25/25 (100%) -- clears the >=10
+  // sample floor, confirms retrospective remains healthy under its live bar. (feature/retrospective
+  // is one of the two three-flip pairs held per Solomon's hold 9a3e1a95 -- this is verification
+  // evidence for child D's audit, not a decision to keep or roll back.)
   feature: { default: 60, prd: 65, retrospective: 65 },
 
   // Database SDs: Slightly stricter (data integrity)
@@ -103,6 +122,14 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // REAL post-raise number, queried directly against ai_quality_assessments WHERE
   // pass_threshold=70: n=31, pass=27/31 (87.1%), window 2026-08-16..2026-08-29 -- clears the
   // >=10 sample floor, confirms user_story remains healthy under its live bar.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-E (2026-09-05): retrospective's pre-fix shadow_rescore
+  // rows (d8ae6ef7-f0fc-406e-bd83-1008f0af2516 / 36ab9644-ed14-4c7e-b604-db735d079046) are VACUOUS
+  // -- current_threshold=70 (historical), never the live 75. DO NOT cite those rows. The REAL
+  // post-raise number, queried directly against ai_quality_assessments WHERE pass_threshold=75:
+  // n=2, pass=2/2 (100%) -- BELOW the >=10 sample floor. Unlike the other pairs in this file,
+  // this one is INSUFFICIENT DATA under its live bar, not confirmed healthy; flagged as live
+  // evidence for child D's audit, not a decision to keep or roll back.
   security: { default: 70, retrospective: 75 },
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
@@ -146,6 +173,15 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // post-raise number, queried directly against ai_quality_assessments WHERE pass_threshold=65:
   // n=46, pass=45/46 (97.8%), window 2026-08-29..2026-09-05 -- confirms prd remains healthy
   // under its live bar.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-E (2026-09-05): retrospective's pre-fix shadow_rescore
+  // rows (67062f8d-8208-454a-a4d3-9dbdf5bd6af7 / f73b3e27-09d1-453b-b729-00ffc524be3d) are VACUOUS
+  // -- current_threshold=60 (historical), never the live 65. DO NOT cite those rows. The REAL
+  // post-raise number, queried directly against ai_quality_assessments WHERE pass_threshold=65:
+  // n=76, pass=76/76 (100%) -- clears the >=10 sample floor, confirms retrospective remains
+  // healthy under its live bar. (bugfix/retrospective is one of the two three-flip pairs held per
+  // Solomon's hold 9a3e1a95 -- this is verification evidence for child D's audit, not a decision
+  // to keep or roll back.)
   bugfix: { default: 60, prd: 65, retrospective: 65 }
 };
 
