@@ -17,6 +17,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -193,7 +194,9 @@ async function main() {
   console.log('  updated_at:', updated[0].updated_at);
 }
 
-main().catch((err) => {
-  console.error('FATAL:', err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error('FATAL:', err);
+    process.exit(1);
+  });
+}
