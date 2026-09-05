@@ -20,6 +20,33 @@ describe('PEER_KINDS registry', () => {
     expect(PEER_KINDS.eva.class).toBe('relay');
     expect(PEER_KINDS.ceo.class).toBe('relay');
   });
+
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (spec §1.2): the michael singleton is session-class.
+  it('classifies michael as session-class with the broadcast-michael sentinel', () => {
+    expect(PEER_KINDS.michael).toEqual({ class: 'session', sentinel: 'broadcast-michael' });
+  });
+});
+
+describe('resolvePeerTarget — michael (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A, TS-6)', () => {
+  it('resolves a live michael session (no originator -- fresh send)', async () => {
+    const deps = { getActiveMichaelId: vi.fn().mockResolvedValue('michael-session-live') };
+    const result = await resolvePeerTarget(supabase, 'michael', {}, deps);
+    expect(result).toEqual({ kind: 'session', target: 'michael-session-live', sentinel: 'broadcast-michael', peer: 'michael', live: true, retargeted: false, relayVia: null });
+  });
+
+  it('falls back to the broadcast-michael sentinel, never throwing, when no live Michael exists', async () => {
+    const deps = { getActiveMichaelId: vi.fn().mockResolvedValue(null) };
+    const result = await resolvePeerTarget(supabase, 'michael', {}, deps);
+    expect(result.target).toBe('broadcast-michael');
+    expect(result.live).toBe(false);
+  });
+
+  it('uses resolveMichaelReplyTarget when answering a specific originator', async () => {
+    const deps = { resolveMichaelReplyTarget: vi.fn().mockResolvedValue({ target: 'michael-new', live: 'michael-new', originator: 'michael-old', retargeted: true }) };
+    const result = await resolvePeerTarget(supabase, 'michael', { originator: 'michael-old' }, deps);
+    expect(result.target).toBe('michael-new');
+    expect(result.retargeted).toBe(true);
+  });
 });
 
 describe('resolvePeerTarget — session-class peers (TS-1)', () => {

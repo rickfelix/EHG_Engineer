@@ -1657,7 +1657,7 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     // SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 (FR-4): role sessions (Adam/Solomon) run the fleet but
     // are NOT worker-pool members. Adam short-circuits to action=idle — exactly what the FR-1-relaxed
     // gate now names — so exclude them here at the authoritative metadata read too.
-    if (myMeta.role === 'adam' || myMeta.role === 'solomon') return null;
+    if (myMeta.role === 'adam' || myMeta.role === 'solomon' || myMeta.role === 'michael') return null; // michael: SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A
     // FR-4: widen the ghost guard to the shared isFixtureSession superset so *-probe-* / QF-TEST-*
     // sessions (which the narrow isTestSessionId prefix list misses, bug 7b59dac8) never burn a pool
     // slot on an idle check-in. Fail-open: if the .mjs import fails, the gate's isTestSessionId
