@@ -78,7 +78,7 @@ describe('checkPlanToExecPrereqs USER_STORIES bypass behavior', () => {
             sub_agent_code: code, created_at: new Date().toISOString(), verdict: 'PASS'
           }));
           return {
-            select: () => ({ eq: () => ({ gte: async () => ({ data: rows, error: null }) }) })
+            select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: rows, error: null }) }) }) }) })
           };
         }
         const builder = {
@@ -230,7 +230,7 @@ describe('QF-20260423-666: passed filters info-severity entries', () => {
             sub_agent_code: code, created_at: new Date().toISOString(), verdict: 'PASS'
           }));
           return {
-            select: () => ({ eq: () => ({ gte: async () => ({ data: rows, error: null }) }) })
+            select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: rows, error: null }) }) }) }) })
           };
         }
         const builder = {
