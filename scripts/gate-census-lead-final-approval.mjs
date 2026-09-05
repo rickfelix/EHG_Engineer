@@ -16,13 +16,13 @@ export function printCensus(census, { json = false } = {}) {
   }
   const requiredCount = census.filter((g) => g.required).length;
   console.log(`\nLEAD-FINAL-APPROVAL gate census (${census.length} registered, ${requiredCount} required:true)\n`);
-  console.log('NAME'.padEnd(38) + 'REQUIRED'.padEnd(10) + 'ENV FLAG'.padEnd(38) + 'DISPOSITION');
+  console.log('NAME'.padEnd(38) + 'REQUIRED'.padEnd(10) + 'ENV FLAG'.padEnd(42) + 'DISPOSITION');
   console.log('-'.repeat(140));
   for (const g of census) {
     console.log(
       g.name.padEnd(38)
       + String(g.required).padEnd(10)
-      + (g.env_flag || '-').padEnd(38)
+      + `${g.env_flag || '-'} `.padEnd(42)
       + (g.env_flag_disposition || (g.env_flag ? `enforced=${g.env_flag_enforced}` : '-'))
     );
   }

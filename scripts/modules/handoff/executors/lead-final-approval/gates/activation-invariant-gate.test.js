@@ -35,6 +35,7 @@ function mockSupabase(prdRow, evidenceRow) {
         return {
           select() { return this; },
           eq() { return this; },
+          in() { return this; },
           gte() { return this; },
           order() { return this; },
           limit() { return this; },
@@ -169,6 +170,7 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: evidence-staleness check',
           return {
             select() { return this; },
             eq() { return this; },
+            in() { return this; },
             gte() { usesGte = true; return this; },
             order() { return this; },
             limit() { return this; },
@@ -213,13 +215,32 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: evidence-staleness check',
     delete process.env.LEO_DISABLE_LFA_STALENESS_CHECK;
   });
 
-  it('bypass reason-text discriminator short-circuits BEFORE the staleness check even runs', async () => {
+  it('SECURITY finding H1 fix: the ACTIV-CHAIN-DEFERRED bypass no longer silently exempts a stale SD -- staleness runs FIRST and blocks independently', async () => {
     const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 200 * 3600000).toISOString() };
     const sd = { ...triggeredSD, metadata: { governance_metadata: { bypass_reason: 'ACTIV-CHAIN-DEFERRED:JIRA-999' } } };
     const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
     const result = await gate.validator({ sd, sdId: sd.id });
+    expect(result.passed).toBe(false);
+    expect(result.issues[0]).toMatch(/SUBAGENT_EVIDENCE_STALE/);
+    // NOT the activation-chain bypass shape -- this is the staleness verdict, unrelated to it.
+    expect(result.details.bypassed).toBeUndefined();
+  });
+
+  it('the ACTIV-CHAIN-DEFERRED bypass still applies normally once staleness clears (fresh evidence)', async () => {
+    const freshRow = { id: 'fresh-ev-uuid', created_at: new Date(Date.now() - 1 * 3600000).toISOString() };
+    const sd = { ...triggeredSD, metadata: { governance_metadata: { bypass_reason: 'ACTIV-CHAIN-DEFERRED:JIRA-999' } } };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, freshRow), null);
+    const result = await gate.validator({ sd, sdId: sd.id });
     expect(result.passed).toBe(true);
     expect(result.details.bypassed).toBe(true);
+  });
+
+  it('a stale-evidence FAIL carries a remediation naming the fix and the audited kill switch', async () => {
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 100 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.details.remediation).toMatch(/execute-subagent\.js/);
+    expect(result.details.remediation).toContain('LEO_DISABLE_LFA_STALENESS_CHECK');
   });
 
   it('a query error during the staleness lookup fails OPEN (does not itself block completion)', async () => {
@@ -229,6 +250,7 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: evidence-staleness check',
           return {
             select() { return this; },
             eq() { return this; },
+            in() { return this; },
             gte() { return this; },
             order() { return this; },
             limit() { return this; },
@@ -241,6 +263,34 @@ describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: evidence-staleness check',
     const gate = createActivationInvariantGate(throwingSupabase, null);
     const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
     expect(result.passed).toBe(true);
+  });
+
+  it('a query returning {data:null, error} (not a throw) also fails OPEN, not silently -- TESTING finding: error was previously discarded', async () => {
+    const errorReturningSupabase = {
+      from(table) {
+        if (table === 'sub_agent_execution_results') {
+          return {
+            select() { return this; },
+            eq() { return this; },
+            in() { return this; },
+            gte() { return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => ({ data: null, error: { message: 'permission denied for table sub_agent_execution_results' } }),
+          };
+        }
+        return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: null }) };
+      },
+    };
+    const gate = createActivationInvariantGate(errorReturningSupabase, null);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+      expect(result.passed).toBe(true); // fails open
+      expect(logSpy.mock.calls.some((args) => String(args[0]).includes('Evidence-staleness check error'))).toBe(true);
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 });
 

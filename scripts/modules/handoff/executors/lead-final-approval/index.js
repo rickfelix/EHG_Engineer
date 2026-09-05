@@ -87,21 +87,35 @@ export function projectGateResultsForPersistence(gateResults) {
  * Best-effort, non-fail-closed: the FAIL-CLOSED audit guarantee already lives on cli-main.js's
  * original ledger+audit-log writes; this only enriches an already-durable row. Write-once
  * (.is('handoff_id', null)) matches the SECURITY-hardened pattern HandoffRecorder.js uses.
+ * SECURITY finding L1 (adversarial review, 2026-09-05): also scoped by sd_id when given, so a
+ * stray/reused bypassLedgerId can never join to a DIFFERENT SD's canonical handoff row -- not
+ * reachable via any shipped entry point today (bypassLedgerId is minted fresh per invocation and
+ * threaded once), but the query costs nothing extra to make structurally correct rather than
+ * merely "not currently exploitable."
+ * SECURITY finding M6: the whole body is try/caught internally (not just relying on the caller
+ * to keep this out of a fail-loud block) so this function can never throw -- genuinely
+ * best-effort, not best-effort-by-caller-convention.
  *
  * @param {Object} supabase
  * @param {string|null|undefined} bypassLedgerId
  * @param {string|null|undefined} handoffId - the canonical sd_phase_handoffs row's id
+ * @param {string|null|undefined} [sdId] - defense-in-depth scope; omitted, the join is unscoped
  * @returns {Promise<void>}
  */
-export async function joinBypassLedgerToCanonicalHandoff(supabase, bypassLedgerId, handoffId) {
+export async function joinBypassLedgerToCanonicalHandoff(supabase, bypassLedgerId, handoffId, sdId) {
   if (!supabase || !bypassLedgerId || !handoffId) return;
-  const { error: ledgerJoinError } = await supabase
-    .from('bypass_ledger')
-    .update({ handoff_id: handoffId })
-    .eq('id', bypassLedgerId)
-    .is('handoff_id', null);
-  if (ledgerJoinError) {
-    console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+  try {
+    let query = supabase
+      .from('bypass_ledger')
+      .update({ handoff_id: handoffId })
+      .eq('id', bypassLedgerId);
+    if (sdId) query = query.eq('sd_id', sdId);
+    const { error: ledgerJoinError } = await query.is('handoff_id', null);
+    if (ledgerJoinError) {
+      console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+    }
+  } catch (joinEx) {
+    console.warn(`   ⚠️  bypass_ledger.handoff_id join-back errored (non-blocking): ${joinEx.message}`);
   }
 }
 
@@ -612,6 +626,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // #4674 idempotency check (existing accepted LFA row -> skip) makes the later
     // recorder call a no-op. FAIL-LOUD AND FAIL-EARLY: if this canonical write
     // fails, the SD is NEVER flipped to completed — stronger than #4674's post-hoc throw.
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: the canonical handoff id, set inside the try
+    // block below (whichever branch runs), then joined to bypass_ledger AFTER the try/catch --
+    // SECURITY finding M6 (adversarial review, 2026-09-05): join-back must never live inside a
+    // block whose catch converts any exception into CANONICAL_LFA_WRITE_FAILED, since the
+    // canonical row is by then already durably written and the join is pure enrichment.
+    let canonicalHandoffId = null;
     try {
       const { HANDOFF_SYSTEM_TAG } = await import('../../recording/HandoffRecorder.js');
       const { data: existingLfa } = await this.supabase
@@ -675,18 +695,24 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           );
         }
         console.log('   ✅ Canonical accepted LFA row written pre-completion (sd_phase_handoffs)');
-
-        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: see joinBypassLedgerToCanonicalHandoff's
-        // own docblock above for why this call exists at this specific write site.
-        await joinBypassLedgerToCanonicalHandoff(this.supabase, options.bypassLedgerId, canonRow?.id);
+        canonicalHandoffId = canonRow?.id || null;
       } else {
         console.log(`   ℹ️  Canonical accepted LFA row already exists (${existingLfa.id})`);
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: also join on the re-run/idempotent path --
+        // TESTING finding (adversarial review, 2026-09-05): a retried bypass attempt that lands
+        // here (canonical row already exists from a prior attempt) previously never joined at
+        // all, silently reproducing the exact 0/33-unjoined condition this fix exists to close.
+        canonicalHandoffId = existingLfa.id;
       }
     } catch (canonEx) {
       console.log(`   ❌ Canonical LFA write errored (SD NOT completed): ${canonEx.message}`);
       await this._cleanupPendingPreInsert(sd.id, usePendingPath);
       return ResultBuilder.rejected('CANONICAL_LFA_WRITE_FAILED', `Canonical LFA write errored: ${canonEx.message}`);
     }
+
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: see joinBypassLedgerToCanonicalHandoff's own
+    // docblock above for why this runs here, outside the try/catch above.
+    await joinBypassLedgerToCanonicalHandoff(this.supabase, options.bypassLedgerId, canonicalHandoffId, sd.uuid_id || sd.id);
 
     // Transition SD to completed status
     // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: capture the completing session id

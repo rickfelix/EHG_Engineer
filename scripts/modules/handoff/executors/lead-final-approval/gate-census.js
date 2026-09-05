@@ -4,11 +4,13 @@
  * is a generated, re-runnable artifact rather than prose in a PRD that drifts from the code.
  *
  * Measured before this SD: the SD's own pre-authored text named "9 of 31" required gates -- both
- * numbers were wrong (22 actually registered via getRequiredGates(), 16 of which declare
- * required:true). This census is generated FROM getRequiredGates() itself, so it cannot drift the
- * way a hand-maintained list did.
+ * numbers were wrong. This census is generated FROM getRequiredGates() itself (22 gates actually
+ * registered, 18 of which resolve required:true -- run this file's CLI wrapper,
+ * scripts/gate-census-lead-final-approval.mjs, for the live count; do not hardcode a number here,
+ * that is exactly the drift this artifact exists to prevent).
  */
 import { getRequiredGates } from './gates.js';
+import { resolveSubagentEvidenceProvenanceMode } from '../../gates/subagent-evidence-gate.js';
 
 /**
  * Env-flag-gated gates whose REAL enforcement sits behind a feature flag, independent of their
@@ -40,6 +42,15 @@ const ENV_FLAG_GATES = {
     polarity: 'opt-in',
     resolve: () => process.env.INVOCATION_PATH_PROOF_MODE === 'block',
     disposition: 'ADVISORY (default) -- left alone; out of this SD\'s named scope.',
+  },
+  // SECURITY finding L6/#7 (adversarial review, 2026-09-05): the census previously omitted this
+  // 5th env-flag-gated gate the LEAD scope correction itself named. Shipped by sibling A
+  // yesterday; flipping it is explicitly out of this SD's scope (see PRD out_of_scope).
+  GATE_ACTIVATION_INVARIANT: {
+    env_flag: 'SUBAGENT_EVIDENCE_PROVENANCE_MODE',
+    polarity: 'opt-in',
+    resolve: () => resolveSubagentEvidenceProvenanceMode() === 'block',
+    disposition: 'ADVISORY (default) -- shared with subagent-evidence-gate.js, shipped by sibling A; flipping it is out of this SD\'s scope. Separately: this gate\'s own FR-D2 staleness sub-check has its own independent kill switch, LEO_DISABLE_LFA_STALENESS_CHECK, not tied to this flag.',
   },
 };
 

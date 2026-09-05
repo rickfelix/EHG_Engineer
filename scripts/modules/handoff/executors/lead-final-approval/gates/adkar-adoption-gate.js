@@ -10,8 +10,12 @@
  * overwhelming majority of SDs).
  *
  * Structurally mirrors learning-or-bypass-resolved-gate.js: same gate-object shape, same
- * feature-flag rollout convention (ENFORCE_ADKAR_GATE, default false/warn-only), same
  * warn-vs-block score split (60 on warn, 0 on block).
+ *
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D3 (2026-09-05): ENFORCE_ADKAR_GATE flipped from
+ * opt-in to opt-out -- ENFORCED BY DEFAULT now; set ENFORCE_ADKAR_GATE=false to fall back to
+ * warn-only. Measured zero-risk before flipping (only 1/6,089 SDs has ever set
+ * requires_adoption=true, already completed).
  *
  * Phase: LEAD-FINAL-APPROVAL
  */

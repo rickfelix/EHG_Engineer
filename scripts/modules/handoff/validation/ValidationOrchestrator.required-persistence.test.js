@@ -15,9 +15,10 @@
  * this bug ship unnoticed for over a month) -- a validator that returns NO `required` key at all,
  * matching every real gate but one.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ValidationOrchestrator } from './ValidationOrchestrator.js';
 import { getRequiredGates } from '../executors/lead-final-approval/gates.js';
+import * as gateVerdictCache from '../gate-verdict-cache.js';
 
 function makeOrchestrator() {
   return new ValidationOrchestrator({});
@@ -133,6 +134,45 @@ describe('ValidationOrchestrator.validateGates — FR-D1 required-flag persisten
     for (const g of realGateDefs) {
       const expected = g.required !== false;
       expect(results.gateResults[g.name].required).toBe(expected);
+    }
+  });
+
+  it('SECURITY finding L5: a replayed cache-hit verdict does NOT fabricate required_effective from the prior run\'s injected static `required`', async () => {
+    // Prior run's already-merged result (what a real cached PASS verdict looks like post-fix):
+    // `required: true` here is the ORCHESTRATOR'S OWN static injection from a previous pass, not
+    // a validator's dynamic override. Replaying it must not be misread as "the validator set
+    // required_effective".
+    const priorMergedResult = { passed: true, score: 100, maxScore: 100, required: true };
+    const spy = vi.spyOn(gateVerdictCache, 'probeVerdictCache').mockReturnValue({
+      hit: true, mode: 'cache_hit', inputHash: 'hash-1', priorResult: priorMergedResult,
+    });
+    try {
+      const orchestrator = makeOrchestrator();
+      const gates = [{ name: 'CACHED_GATE', required: true, validator: async () => ({ passed: true, score: 100, maxScore: 100 }) }];
+      const results = await orchestrator.validateGates(gates, {});
+      expect(results.gateResults.CACHED_GATE.cache_hit).toBe(true);
+      expect(results.gateResults.CACHED_GATE.required).toBe(true);
+      expect(results.gateResults.CACHED_GATE.required_effective).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a replayed cache-hit verdict DOES preserve a genuinely-cached required_effective from a real prior validator override', async () => {
+    // Unlike the case above, this prior result's required_effective was a REAL validator decision
+    // (e.g. FR_DELIVERY_VERIFICATION's warn-only override), already correctly merged on a previous
+    // pass -- replaying it must carry that forward, not strip it.
+    const priorMergedResult = { passed: true, score: 0, maxScore: 100, required: true, required_effective: false };
+    const spy = vi.spyOn(gateVerdictCache, 'probeVerdictCache').mockReturnValue({
+      hit: true, mode: 'cache_hit', inputHash: 'hash-2', priorResult: priorMergedResult,
+    });
+    try {
+      const orchestrator = makeOrchestrator();
+      const gates = [{ name: 'FR_DELIVERY_VERIFICATION', required: true, validator: async () => ({ passed: true, score: 0, maxScore: 100, required: false }) }];
+      const results = await orchestrator.validateGates(gates, {});
+      expect(results.gateResults.FR_DELIVERY_VERIFICATION.required_effective).toBe(false);
+    } finally {
+      spy.mockRestore();
     }
   });
 });

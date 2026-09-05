@@ -65,6 +65,22 @@ describe('findUnjoinedRequiredGateFailures (FR-D4 no-silent-bypass invariant)', 
     expect(findUnjoinedRequiredGateFailures(rows, ledger)).toEqual([]);
   });
 
+  it('TESTING finding: a required_effective:false override (deliberate warn-only, e.g. FR_DELIVERY_VERIFICATION off) is NOT a violation even without a bypass row', () => {
+    const rows = [{
+      id: 'sph-8',
+      gate_results: [{ name: 'FR_DELIVERY_VERIFICATION', required: true, required_effective: false, passed: false }],
+    }];
+    expect(findUnjoinedRequiredGateFailures(rows, [])).toEqual([]);
+  });
+
+  it('a gate that IS actually enforced (required_effective:true or absent) and fails still needs a bypass row', () => {
+    const rows = [{
+      id: 'sph-9',
+      gate_results: [{ name: 'FR_DELIVERY_VERIFICATION', required: true, required_effective: true, passed: false }],
+    }];
+    expect(findUnjoinedRequiredGateFailures(rows, [])).toHaveLength(1);
+  });
+
   it('handles empty/missing gate_results and empty ledger without throwing', () => {
     expect(findUnjoinedRequiredGateFailures([], [])).toEqual([]);
     expect(findUnjoinedRequiredGateFailures([{ id: 'sph-x' }], [])).toEqual([]);

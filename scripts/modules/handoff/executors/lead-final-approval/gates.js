@@ -2023,7 +2023,8 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // ADKAR Adoption Gate — completion safeguard (SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B)
   // No-op for any SD without metadata.requires_adoption=true. Blocks/warns (per
   // ENFORCE_ADKAR_GATE) on missing ADKAR stage evidence-or-waiver for SDs that set it.
-  // Default warn-only; set ENFORCE_ADKAR_GATE=true to block.
+  // ENFORCED BY DEFAULT (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D3); set
+  // ENFORCE_ADKAR_GATE=false to fall back to warn-only.
   gates.push(createAdkarAdoptionGate(supabase));
 
   // Deferred-Followups Home — SD-LEO-INFRA-COMPLETION-GATE-DEFERRED-HOME-001

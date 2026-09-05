@@ -3,9 +3,11 @@
 **Status**: Framework definition (this doc) + shape module shipped by
 `SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-A`. The completion gate that enforces
 this shape (`scripts/modules/handoff/executors/lead-final-approval/gates/adkar-adoption-gate.js`,
-feature-flagged via `ENFORCE_ADKAR_GATE`, default off/warn-only) shipped by sibling child
-`-B`. Pilot-tagging a real SD (`docs/protocol/adkar-pilot-worked-example.md`) shipped by
-sibling child `-C`. This document does not itself gate anything.
+feature-flagged via `ENFORCE_ADKAR_GATE`) shipped by sibling child `-B`. Pilot-tagging a
+real SD (`docs/protocol/adkar-pilot-worked-example.md`) shipped by sibling child `-C`.
+`SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D` (2026-09-05) flipped the flag from opt-in to
+opt-out — **enforced by default**; set `ENFORCE_ADKAR_GATE=false` to fall back to
+warn-only. This document does not itself gate anything.
 
 ## Why
 
@@ -117,9 +119,9 @@ snapshot-comparison pattern rather than a freshness threshold.
   `validateAdkarChecklist`, `isValidAdkarEntry`).
 - `scripts/modules/handoff/executors/lead-final-approval/gates/adkar-adoption-gate.js`
   — the LEAD-FINAL-APPROVAL completion gate (sibling child `-B`), feature-flagged via
-  `ENFORCE_ADKAR_GATE` (default off/warn-only), mirroring the structural template of
-  `learning-or-bypass-resolved-gate.js` (evidence-or-resolved-bypass, central `gates.js`
-  registration).
+  `ENFORCE_ADKAR_GATE` (enforced by default since `-D`; set `=false` for warn-only),
+  mirroring the structural template of `learning-or-bypass-resolved-gate.js`
+  (evidence-or-resolved-bypass, central `gates.js` registration).
 - `docs/protocol/adkar-pilot-worked-example.md` — the first `requires_adoption`-tagged
   pilot mapping (sibling child `-C`), applied to
   `SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001`.

@@ -52,6 +52,24 @@ describe('joinBypassLedgerToCanonicalHandoff (FR-D4)', () => {
     expect(supabase._state.find((r) => r.id === 'ledger-2').handoff_id).toBe('already-set');
   });
 
+  it('SECURITY finding L1: when sdId is given, only joins a row belonging to that SD', async () => {
+    const supabase = makeBypassLedgerSupabase([{ id: 'ledger-x', sd_id: 'sd-OTHER', handoff_id: null }]);
+    await joinBypassLedgerToCanonicalHandoff(supabase, 'ledger-x', 'sph-canonical-x', 'sd-MINE');
+    expect(supabase._state.find((r) => r.id === 'ledger-x').handoff_id).toBeNull();
+  });
+
+  it('SECURITY finding L1: joins correctly when sdId matches', async () => {
+    const supabase = makeBypassLedgerSupabase([{ id: 'ledger-y', sd_id: 'sd-MINE', handoff_id: null }]);
+    await joinBypassLedgerToCanonicalHandoff(supabase, 'ledger-y', 'sph-canonical-y', 'sd-MINE');
+    expect(supabase._state.find((r) => r.id === 'ledger-y').handoff_id).toBe('sph-canonical-y');
+  });
+
+  it('joins without sdId scoping when sdId is omitted (back-compat, unscoped)', async () => {
+    const supabase = makeBypassLedgerSupabase([{ id: 'ledger-z', sd_id: 'sd-anything', handoff_id: null }]);
+    await joinBypassLedgerToCanonicalHandoff(supabase, 'ledger-z', 'sph-canonical-z');
+    expect(supabase._state.find((r) => r.id === 'ledger-z').handoff_id).toBe('sph-canonical-z');
+  });
+
   it('is a no-op when bypassLedgerId is absent (the common, non-bypass path) -- never touches the table', async () => {
     const supabase = { from: vi.fn() };
     await joinBypassLedgerToCanonicalHandoff(supabase, null, 'sph-canonical-3');
@@ -81,6 +99,22 @@ describe('joinBypassLedgerToCanonicalHandoff (FR-D4)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await expect(joinBypassLedgerToCanonicalHandoff(throwingSupabase, 'ledger-6', 'sph-6')).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('bypass_ledger.handoff_id join-back failed'));
+    warnSpy.mockRestore();
+  });
+
+  it('SECURITY finding M6: is genuinely non-throwing even when the client itself throws (not just best-effort by caller placement)', async () => {
+    const genuinelyThrowingSupabase = {
+      from() {
+        return {
+          update() { return this; },
+          eq() { return this; },
+          is: async () => { throw new Error('network reset mid-request'); },
+        };
+      },
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(joinBypassLedgerToCanonicalHandoff(genuinelyThrowingSupabase, 'ledger-7', 'sph-7')).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('bypass_ledger.handoff_id join-back errored'));
     warnSpy.mockRestore();
   });
 });

@@ -374,11 +374,18 @@ export class ValidationOrchestrator {
           };
         }
 
+        // SECURITY finding L5 (adversarial review, 2026-09-05): a cache-hit/fail-replay verdict
+        // (see the cache_hit/fail_replay stamping above, before this loop) already carries a
+        // `required` key from a PRIOR run's merge -- treating that as "the validator dynamically
+        // overrode requiredness" is a fabrication, and self-reinforcing across retries (a replayed
+        // verdict's fabricated required_effective would itself get replayed again). Only a
+        // genuinely-fresh validator result (not itself a cache replay) can set required_effective.
+        const isReplayedVerdict = gateResult?.cache_hit === true || gateResult?.fail_replay === true;
         results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
           ? {
               ...gateResult,
               required: staticRequired,
-              ...(typeof gateResult.required === 'boolean' ? { required_effective: gateResult.required } : {}),
+              ...((!isReplayedVerdict && typeof gateResult.required === 'boolean') ? { required_effective: gateResult.required } : {}),
               status: results.gateStatuses[gate.name].status,
               ...(skipReasonForPersistence ? { skip_reason: skipReasonForPersistence } : {}),
             }
@@ -1236,7 +1243,23 @@ export class ValidationOrchestrator {
 
       // Process results from this tier
       for (const { gate, gateResult } of tierResults) {
-        results.gateResults[gate.name] = gateResult;
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: mirrors the same merge applied in
+        // validateGates() above. TESTING/SECURITY finding (adversarial review, 2026-09-05): this
+        // is validateGatesAll(), a SECOND construction site (precheck/dry-run batch mode, used by
+        // HandoffOrchestrator.js's precheck and dry-run paths) -- currently zero live consumers
+        // read `.required` from its output or persist it anywhere, so this had no functional
+        // effect before or after, but leaving it unfixed would be a second place for this exact
+        // bug to resurface the moment anyone starts persisting this path's results.
+        const staticRequiredAll = gate.required !== false;
+        results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
+          ? {
+              ...gateResult,
+              required: staticRequiredAll,
+              ...((gateResult.cache_hit !== true && gateResult.fail_replay !== true && typeof gateResult.required === 'boolean')
+                ? { required_effective: gateResult.required }
+                : {}),
+            }
+          : gateResult;
 
         results.totalScore += gateResult.score;
         results.totalMaxScore += gateResult.maxScore;

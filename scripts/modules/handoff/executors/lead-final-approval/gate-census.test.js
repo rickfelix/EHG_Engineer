@@ -30,7 +30,7 @@ describe('buildGateCensus', () => {
   });
 
   it('the 5 env-flag-gated gates each carry their flag name and a documented disposition', () => {
-    const flagged = ['ADKAR_ADOPTION', 'LEARNING_OR_BYPASS_RESOLVED', 'ACCEPTANCE_TIER_DOWNGRADE', 'INVOCATION_PATH_PROOF'];
+    const flagged = ['ADKAR_ADOPTION', 'LEARNING_OR_BYPASS_RESOLVED', 'ACCEPTANCE_TIER_DOWNGRADE', 'INVOCATION_PATH_PROOF', 'GATE_ACTIVATION_INVARIANT'];
     for (const name of flagged) {
       const entry = census.find((g) => g.name === name);
       expect(entry, `expected ${name} in the census`).toBeDefined();
