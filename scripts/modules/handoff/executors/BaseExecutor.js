@@ -365,6 +365,7 @@ export class BaseExecutor {
               gate: 'GATE_COORDINATOR_AUTHORITY_FENCE',
               patternId: options.patternId,
               followupSdKey: options.followupSdKey,
+              ledgerId: options.bypassLedgerId,
             });
           } else {
             try { endSpan(rootSpan, { result: 'authority_fence' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -664,6 +665,57 @@ export class BaseExecutor {
       // SD-LEARN-010:US-005: Handle bypass validation
       if (!gateResults.passed) {
         if (options.bypassValidation) {
+          // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2): refuse -- do not override -- a
+          // bypass whose actor authored the failing evidence. The evidence gate (e.g.
+          // GATE_SUBAGENT_EVIDENCE) already fetches session_id for each failing/non-evidence
+          // agent; this only reads what is already carried on the gate's own details.
+          const failedGateResult = gateResults.gateResults?.[gateResults.failedGate];
+          const evidenceEntries = [
+            ...(failedGateResult?.details?.failing || []),
+            ...(failedGateResult?.details?.non_evidence || []),
+          ];
+          const actorSessionId = process.env.CLAUDE_SESSION_ID || null;
+          const selfAuthoredEntry = actorSessionId
+            ? evidenceEntries.find((e) => e?.session_id && e.session_id === actorSessionId)
+            : null;
+
+          if (selfAuthoredEntry) {
+            console.log('');
+            console.log('🚫 BYPASS REFUSED: actor authored the failing evidence');
+            console.log(`   Failed gate: ${gateResults.failedGate}`);
+            console.log(`   Agent: ${selfAuthoredEntry.agent} | verdict: ${selfAuthoredEntry.verdict}`);
+            console.log('');
+            try {
+              const { emitValidationAuditLog } = await import('../../../lib/emit-validation-audit-log.mjs');
+              await emitValidationAuditLog({
+                supabase: this.supabase,
+                correlation_id: crypto.randomUUID(),
+                sd_id: sd?.id || sdId,
+                validator_name: 'base_executor_bypass_self_authored_refusal',
+                failure_reason: `--bypass-validation refused for ${this.handoffType}: actor session ${actorSessionId} authored the failing ${selfAuthoredEntry.agent} evidence (verdict=${selfAuthoredEntry.verdict})`,
+                failure_category: 'bypass_refused_self_authored',
+                metadata: { handoff_type: this.handoffType, gate: gateResults.failedGate, agent: selfAuthoredEntry.agent, verdict: selfAuthoredEntry.verdict, bypass_ledger_id: options.bypassLedgerId || null },
+                execution_context: 'BaseExecutor.js:execute (gate_failure bypass site)',
+              });
+            } catch (auditErr) {
+              console.warn(`   ⚠️  bypass-refusal audit emission failed (non-blocking): ${auditErr.message}`);
+            }
+            try { endSpan(rootSpan, { result: 'bypass_refused_self_authored' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            // FR-B1: carry bypassLedgerId at the top level (matching applyBypassToResult's
+            // shape) so HandoffRecorder.recordFailure can join this rejection back to the
+            // ledger row cli-main.js already wrote, even though this path never sets bypassInfo.
+            return {
+              ...ResultBuilder.gateFailure('GATE_BYPASS_SELF_AUTHORED_REFUSED', {
+                issues: [`Bypass refused: actor session ${actorSessionId} authored the failing ${selfAuthoredEntry.agent} evidence (verdict=${selfAuthoredEntry.verdict}) that --bypass-validation attempted to override.`],
+                score: 0,
+                max_score: 100,
+                warnings: gateResults.warnings,
+              }, `GATE_BYPASS_SELF_AUTHORED_REFUSED: ${gateResults.failedGate} — the bypassing actor authored the evidence it would override`),
+              bypassed: true,
+              bypassLedgerId: options.bypassLedgerId || null,
+            };
+          }
+
           console.log('');
           console.log('⚠️  BYPASS ACTIVE: Gate failures overridden');
           console.log(`   Failed gate: ${gateResults.failedGate}`);
@@ -681,6 +733,7 @@ export class BaseExecutor {
             issues: gateResults.issues,
             patternId: options.patternId,
             followupSdKey: options.followupSdKey,
+            ledgerId: options.bypassLedgerId,
           });
           // Continue execution despite gate failure
         } else {

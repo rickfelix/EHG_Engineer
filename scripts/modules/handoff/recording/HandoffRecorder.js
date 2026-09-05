@@ -597,6 +597,20 @@ export class HandoffRecorder {
 
       console.log(`📝 Failure recorded: ${executionId}`);
 
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): a bypass attempt can still end
+      // rejected (e.g. a different, unbypassed gate also failed, or the FR-B2 self-authorship
+      // refusal fired). Join the bypass_ledger row this rejection originated from back to it.
+      // Best-effort, same non-fail-closed rationale as the accepted-path join-back in createArtifact().
+      if (result.bypassLedgerId) {
+        const { error: ledgerJoinError } = await this.supabase
+          .from('bypass_ledger')
+          .update({ handoff_id: executionId })
+          .eq('id', result.bypassLedgerId);
+        if (ledgerJoinError) {
+          console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+        }
+      }
+
       // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
       // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch update replaces N+1 loop
       await this._incrementHandoffFailCount(sdId);
@@ -1166,6 +1180,20 @@ export class HandoffRecorder {
       }
 
       console.log('✅ Handoff accepted and stored in sd_phase_handoffs');
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): join the bypass_ledger row this
+      // acceptance originated from back to the handoff row it just produced. Best-effort --
+      // the FAIL-CLOSED audit guarantee already lives on cli-main.js's original ledger+audit-log
+      // writes; this is enrichment of an already-durable row, not the guarantee itself.
+      if (isBypassed && result.bypassLedgerId) {
+        const { error: ledgerJoinError } = await this.supabase
+          .from('bypass_ledger')
+          .update({ handoff_id: handoffId })
+          .eq('id', result.bypassLedgerId);
+        if (ledgerJoinError) {
+          console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+        }
+      }
 
       // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-3: stamp this accepted row with any
       // prior SAEM (preflight) rejection(s) it resolves, for auditability. Fail-open and

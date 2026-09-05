@@ -649,6 +649,10 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
   const bypassReasonIdx = args.findIndex(a => a === '--bypass-reason');
   const bypassValidation = bypassValidationIdx !== -1;
   let bypassReason = null;
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): captured inside the bypass_ledger insert
+  // block below, threaded through to the executor so the eventual sd_phase_handoffs row
+  // (accepted or rejected) can be joined back to this ledger row.
+  let bypassLedgerRowId = null;
 
   if (bypassReasonIdx !== -1 && args[bypassReasonIdx + 1]) {
     bypassReason = args[bypassReasonIdx + 1];
@@ -808,6 +812,8 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
       return { success: false };
     }
     if (ledgerRow) {
+      // FR-B1: capture the ledger row's id for HandoffRecorder to join back to.
+      bypassLedgerRowId = ledgerRow.id;
       try {
         const audit = await emitValidationAuditLog({
           supabase: supabaseForBypassLedger,
@@ -1087,6 +1093,9 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     // "was this bypass linked to a follow-up?" without these two values.
     patternId,
     followupSdKey,
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): the bypass_ledger row id, so the eventual
+    // sd_phase_handoffs row (accepted or rejected) can be joined back to it.
+    bypassLedgerId: bypassLedgerRowId,
     noCache
   });
 
