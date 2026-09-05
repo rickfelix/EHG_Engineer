@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRcaRequiredAfterRetriesGate, readEnforcementMode, GATE_NAME } from './rca-required-after-retries-gate.js';
 
-function makeFakeSupabase({ configValue, rejections = [], rcaRows = [] } = {}) {
+function makeFakeSupabase({ configValue, rejections = [], rcaRows = [], rcrRows = [] } = {}) {
   const appConfigEq = () => ({
     maybeSingle: async () => ({ data: configValue !== undefined ? { value: configValue } : null, error: null }),
   });
@@ -11,18 +11,35 @@ function makeFakeSupabase({ configValue, rejections = [], rcaRows = [] } = {}) {
   const handoffsEq3 = () => ({ order: () => ({ limit: async () => ({ data: [...rejections].reverse(), error: null }) }) });
   const handoffsEq2 = () => ({ eq: handoffsEq3 });
   const handoffsEq1 = () => ({ eq: handoffsEq2 });
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): the gate's outer sub_agent_execution_results
+  // query now chains .order() between .gt() and .limit() (round-3 EXEC-phase fix, evidence
+  // 28382f71/79f84159). This mock previously had no .order() method on that chain at all, so the
+  // real call threw a TypeError caught by the gate's own fail-open catch(e) -- every test below
+  // was silently reading the catch-all {passed:true, skipped:'unexpected-error'} result instead
+  // of exercising the real branch it claims to test. Purely additive; matches real Supabase.
   const rcaEq2 = () => ({
     gt: (_col, cutoff) => ({
-      limit: async () => ({ data: rcaRows.filter((r) => r.created_at > cutoff), error: null }),
+      order: () => ({
+        limit: async () => ({ data: rcaRows.filter((r) => r.created_at > cutoff), error: null }),
+      }),
     }),
   });
   const rcaEq1 = () => ({ eq: rcaEq2 });
+
+  // FR-C2's content predicate also queries root_cause_reports (metadata.rcr_id -> content
+  // check): a single .eq('sd_id', sdId) followed by .in('id', rcrIds).limit(20) -- one .eq()
+  // level only, unlike sd_phase_handoffs' three-.eq() chain above. Fixtures whose rcaRows carry
+  // metadata.rcr_id must also supply a matching rcrRows entry (id, root_cause, confidence>=70)
+  // for the gate to treat that evidence as verified -- otherwise a bare row-reference alone no
+  // longer satisfies the gate, per FR-C2's own intent.
+  const rcrEq1 = () => ({ in: () => ({ limit: async () => ({ data: rcrRows, error: null }) }) });
 
   return {
     from(table) {
       if (table === 'app_config') return { select: () => ({ eq: appConfigEq }) };
       if (table === 'sd_phase_handoffs') return { select: () => ({ eq: handoffsEq1 }) };
       if (table === 'sub_agent_execution_results') return { select: () => ({ eq: rcaEq1 }) };
+      if (table === 'root_cause_reports') return { select: () => ({ eq: rcrEq1 }) };
       throw new Error(`unexpected table: ${table}`);
     },
   };
@@ -79,13 +96,21 @@ describe('rca-required-after-retries-gate', () => {
     expect(result.remediation).toMatch(/rca-agent/);
   });
 
-  it('[fixture] 3rd attempt, 2 rejections + a fresh RCA row after the 2nd rejection, blocking mode: proceeds', async () => {
+  it('[fixture] 3rd attempt, 2 rejections + a fresh, content-verified RCA row after the 2nd rejection, blocking mode: proceeds', async () => {
     const rejections = [
       { rejection_reason: 'r1', created_at: '2026-08-30T10:00:00Z' },
       { rejection_reason: 'r2', created_at: '2026-08-30T11:00:00Z' },
     ];
-    const rcaRows = [{ id: 'rca-row-1', created_at: '2026-08-30T11:30:00Z' }];
-    const gate = createRcaRequiredAfterRetriesGate(makeFakeSupabase({ configValue: 'blocking', rejections, rcaRows }));
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): bare row-existence alone no longer
+    // satisfies the gate -- the row must reference a root_cause_reports row with real content
+    // (root_cause non-empty, confidence>=70). This test's intent is the retry-timing logic, not
+    // the content predicate (covered separately in tests/unit/handoff/rca-required-after-
+    // retries-gate.test.js), so the fixture is updated to be content-verified rather than
+    // weakened to pre-FR-C2 behavior.
+    const RCR_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const rcaRows = [{ id: 'rca-row-1', created_at: '2026-08-30T11:30:00Z', metadata: { rcr_id: RCR_ID } }];
+    const rcrRows = [{ id: RCR_ID, root_cause: 'A genuine analysis', confidence: 90 }];
+    const gate = createRcaRequiredAfterRetriesGate(makeFakeSupabase({ configValue: 'blocking', rejections, rcaRows, rcrRows }));
     const result = await gate.validator(CTX);
     expect(result.passed).toBe(true);
     expect(result.details.rca_evidence).toEqual(['rca-row-1']);
@@ -109,15 +134,19 @@ describe('rca-required-after-retries-gate', () => {
     expect(result.details.prior_rejection_reasons).toEqual(['r3', 'r4']);
   });
 
-  it('[VALIDATION 2013c6ad regression] 5th attempt: a fresh RCA row after the most recent (4th) rejection satisfies the gate', async () => {
+  it('[VALIDATION 2013c6ad regression] 5th attempt: a fresh, content-verified RCA row after the most recent (4th) rejection satisfies the gate', async () => {
     const rejections = [
       { rejection_reason: 'r1', created_at: '2026-08-30T10:00:00Z' },
       { rejection_reason: 'r2', created_at: '2026-08-30T11:00:00Z' },
       { rejection_reason: 'r3', created_at: '2026-08-30T12:00:00Z' },
       { rejection_reason: 'r4', created_at: '2026-08-30T13:00:00Z' },
     ];
-    const rcaRows = [{ id: 'fresh-rca', created_at: '2026-08-30T13:30:00Z' }];
-    const gate = createRcaRequiredAfterRetriesGate(makeFakeSupabase({ configValue: 'blocking', rejections, rcaRows }));
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C (FR-C2): see the sibling '3rd attempt' fixture test
+    // above -- bare row-existence alone no longer satisfies the gate.
+    const RCR_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    const rcaRows = [{ id: 'fresh-rca', created_at: '2026-08-30T13:30:00Z', metadata: { rcr_id: RCR_ID } }];
+    const rcrRows = [{ id: RCR_ID, root_cause: 'A genuine analysis', confidence: 90 }];
+    const gate = createRcaRequiredAfterRetriesGate(makeFakeSupabase({ configValue: 'blocking', rejections, rcaRows, rcrRows }));
     const result = await gate.validator(CTX);
     expect(result.passed).toBe(true);
     expect(result.details.rca_evidence).toEqual(['fresh-rca']);
