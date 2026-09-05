@@ -9,7 +9,105 @@ import {
   emitCoordinatorRung,
   climbLadder,
   emitLadderDigest,
+  decideLadderRoute,
 } from '../../../lib/periodic-liveness/ladder-escalation.mjs';
+
+// SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001 / FR-1, FR-1b, FR-2(b).
+describe('decideLadderRoute', () => {
+  it('routes a live-resolved coordinator-fleet row to owner_directive', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'coordinator-fleet',
+      ownerTarget: { live: true, target: 'session-coord-1' },
+      climb: { laddered: true, count: 1 },
+    });
+    expect(decision).toEqual({ route: 'owner_directive', target: 'session-coord-1', reason: 'live_owner' });
+  });
+
+  it('routes eva-scheduler (live coordinator fallback) to owner_directive, never chairman', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'eva-scheduler',
+      ownerTarget: { kind: 'coordinator', target: 'session-coord-1', resolvedPeer: null, live: true },
+      climb: { laddered: true, count: 1 },
+    });
+    expect(decision.route).toBe('owner_directive');
+  });
+
+  it('routes a dead/unresolvable owner to chairman_awareness with reason dead_owner', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'eva-scheduler',
+      ownerTarget: { kind: 'coordinator', target: 'broadcast-coordinator', resolvedPeer: null, live: false },
+      climb: { laddered: true, count: 1 },
+    });
+    expect(decision).toEqual({ route: 'chairman_awareness', reason: 'dead_owner' });
+  });
+
+  it('gates on ownerTarget.live===true, never on target truthiness (broadcast-coordinator sentinel is always truthy)', () => {
+    // live:false but target is the truthy 'broadcast-coordinator' sentinel -- must still route to chairman_awareness.
+    const decision = decideLadderRoute({
+      rawOwner: 'some-unmapped-owner',
+      ownerTarget: { kind: 'coordinator', target: 'broadcast-coordinator', resolvedPeer: null, live: false },
+      climb: { laddered: false, count: 2 },
+    });
+    expect(decision.route).toBe('chairman_awareness');
+  });
+
+  it.each(['chairman', 'Chairman-Fleet', ' chairman-fleet ', 'CHAIRMAN'])(
+    'routes a chairman-owned raw label (%j, normalized) to chairman_awareness regardless of ownerTarget shape',
+    (rawOwner) => {
+      const decision = decideLadderRoute({
+        rawOwner,
+        // Even a live-looking ownerTarget (identical coordinator-fallback shape to eva-scheduler) must not override the raw-label check.
+        ownerTarget: { kind: 'coordinator', target: 'session-coord-1', resolvedPeer: null, live: true },
+        climb: { laddered: true, count: 1 },
+      });
+      expect(decision).toEqual({ route: 'chairman_awareness', reason: 'chairman_owned' });
+    }
+  );
+
+  it('does NOT match an owner label that merely contains "chairman" as a substring', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'chairman-decision-sla-sweep',
+      ownerTarget: { kind: 'coordinator', target: 'session-coord-1', resolvedPeer: null, live: true },
+      climb: { laddered: true, count: 1 },
+    });
+    expect(decision.route).toBe('owner_directive');
+  });
+
+  it('FR-1b: falls through to chairman_awareness when climb.count reaches LADDER_THRESHOLD+3 and the directive is unacked', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'coordinator-fleet',
+      ownerTarget: { live: true, target: 'session-coord-1' },
+      climb: { laddered: false, count: 4 }, // LADDER_THRESHOLD(1) + 3
+      directiveActioned: false,
+    });
+    expect(decision).toEqual({ route: 'chairman_awareness', reason: 'owner_directive_unacked_timeout' });
+  });
+
+  it('FR-1b: does NOT time out when the directive has been genuinely actioned, even past the threshold', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'coordinator-fleet',
+      ownerTarget: { live: true, target: 'session-coord-1' },
+      climb: { laddered: false, count: 10 },
+      directiveActioned: true,
+    });
+    expect(decision.route).toBe('owner_directive');
+  });
+
+  it('FR-1b: does not time out below the threshold+3 count', () => {
+    const decision = decideLadderRoute({
+      rawOwner: 'coordinator-fleet',
+      ownerTarget: { live: true, target: 'session-coord-1' },
+      climb: { laddered: false, count: 3 },
+      directiveActioned: false,
+    });
+    expect(decision.route).toBe('owner_directive');
+  });
+
+  it('never throws on a null/undefined rawOwner', () => {
+    expect(() => decideLadderRoute({ rawOwner: null, ownerTarget: { live: true, target: 'x' }, climb: { count: 1 } })).not.toThrow();
+    expect(() => decideLadderRoute({ rawOwner: undefined, ownerTarget: { live: false, target: 'x' }, climb: {} })).not.toThrow();
+  });
+});
 
 describe('incrementConsecutiveMiss', () => {
   it('returns the incremented count on success', async () => {
