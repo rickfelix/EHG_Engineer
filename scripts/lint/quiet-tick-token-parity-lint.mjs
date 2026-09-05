@@ -9,6 +9,12 @@
 // Mirrors the structure of scripts/lint/fleet-liveness-select-lint.mjs (pure
 // extractors + reason-required allowlist + self-invoke guard). ADVISORY-FIRST:
 // exit 0 by default; pass --enforce for exit 1 on an under-covered emitter.
+// KNOWN LIMITATION: it compares string LITERALS only. A token built at runtime
+// (`QUIET_TICK_${kind}`) is invisible to both the emitter and consumer scans, so an emitter
+// that composes its token names would read as 0 drift while shipping unconsumed lines; and
+// the pairs are hard-coded here, so a NEW *-quiet-tick.mjs that is not added to PAIRS is
+// simply never checked (the michael pair was added by hand in
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A for exactly that reason).
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -21,6 +27,9 @@ const ALLOWLIST_PATH = resolve(ROOT, 'scripts/lint/quiet-tick-token-parity-allow
 export const PAIRS = [
   { emitter: 'scripts/adam-quiet-tick.mjs', consumer: 'scripts/adam-startup-check.mjs' },
   { emitter: 'scripts/coordinator-quiet-tick.mjs', consumer: 'scripts/coordinator-startup-check.mjs' },
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: the Michael quiet-tick's QUIET_TICK_* vocabulary is
+  // consumed by its startup check's QUIET_TICK_TOKENS list (TESTING evidence 629fc7e3).
+  { emitter: 'scripts/michael-quiet-tick.mjs', consumer: 'scripts/michael-startup-check.mjs' },
 ];
 
 const TOKEN_RE = /QUIET_TICK_[A-Z_]+/g;

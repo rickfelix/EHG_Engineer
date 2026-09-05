@@ -371,6 +371,7 @@ src/client/dist/
 .claude/tmp/
 .claude/pids/
 .claude/active-coordinator.json
+.claude/active-michael.json
 .claude/fleet-dashboard-state.json
 .claude/worktree-reaper-state.json
 .claude/retry-state-*.json.tmp-*

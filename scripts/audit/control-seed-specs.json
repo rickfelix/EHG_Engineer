@@ -819,5 +819,21 @@
       "input": "session_coordination rows where sender_type='adam', columns subject/body/created_at, over a caller-supplied [since,until) window (CLI: --since/--until, default trailing 7 days).",
       "seen": "2026-09-05 dry run over 2026-08-29..2026-09-06 against the live DB: scanned=243 Adam-outbound rows, claims=10 (completion-language matches), flagged=0 (every claim in this window also named a reader) -- confirms the query and classifier run end-to-end against real data."
     }
+  },
+  {
+    "name": "quiet-tick-token-parity-lint",
+    "script": "scripts/lint/quiet-tick-token-parity-lint.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/lint/quiet-tick-token-parity-lint.test.js",
+    "neuter": {
+      "find": "const missingFromConsumer = [...emitted].filter((t) => t !== 'QUIET_TICK_ERROR' && !allowed.has(t));",
+      "replace": "const missingFromConsumer = [];",
+      "why": "Blinds the one comparison the control exists for: an emitted token absent from the consumer's allowlist is the CRITICAL finding (a QUIET_TICK_* line that falls through the startup prompt's NO-OP gate unactioned). With missingFromConsumer forced empty, the committed test 'flags a token the emitter prints but the consumer never mentions (missingFromConsumer)' must go RED because its fixture emitter prints QUIET_TICK_NEW_ALERT and the consumer never mentions it."
+    },
+    "note": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: pre-existing control (QF-20260711-095) reached by the AMR diff filter when its PAIRS table gained the michael emitter/consumer pair. Uses the seedTest form DELIBERATELY: PAIRS paths resolve against a module-relative ROOT with no --root/--dir flag, so a fixture trial cannot be aimed at a scratch dir without adding a scoping flag to a control this SD only extends. The committed test already plants the exact positive (emitter prints a token the consumer lacks) via a temp-dir fixture passed straight to checkPairs(pairs, root).",
+    "observability_proof": {
+      "input": "The source text of each PAIRS entry's emitter (scripts/{adam,coordinator,michael}-quiet-tick.mjs) and consumer (scripts/{adam,coordinator,michael}-startup-check.mjs), read with readFileSync relative to the module's own repo root, comments stripped, scanned with /QUIET_TICK_[A-Z_]+/g; plus scripts/lint/quiet-tick-token-parity-allowlist.json (pair:token -> reason). No database columns, no environment variables.",
+      "seen": "Two real positives on live invocations, not fixtures. (1) QF-20260711-095, the control's own landing commit 7073f87aeb7: running it against the real repo surfaced adam-quiet-tick.mjs emitting QUIET_TICK_VENTURE_STALL_ALERT and QUIET_TICK_INBOX_CAP that adam-startup-check.mjs never mentioned, fixed in the same commit. (2) 2026-09-05, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A EXEC: the first run over the new michael pair reported a dead-reference advisory because the consumer's list was named QUIET_TICK_TOKENS (an identifier matching the token regex), which is why that list ships as MICHAEL_TICK_TOKENS; the re-run printed '0 drift — parity OK.' for all three pairs. Runs in CI via .github/workflows/quiet-tick-token-parity-lint.yml on every PR touching the paired scripts (advisory mode; --enforce is the blocking flag)."
+    }
   }
 ]

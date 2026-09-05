@@ -109,7 +109,6 @@ describe('compaction-thresholds: TS-6 no database in the render path', () => {
 describe('compaction-thresholds: TS-7 adam role detection + earlier thresholds', () => {
   const coordNull = () => null;
   const adamMatch = () => ({ session_id: 'adam-1' });
-  const adamNull = () => null;
 
   it('matching active-adam.json session_id => adam (no coordinator file)', () => {
     expect(ct.detectRoleFromFile('adam-1', coordNull, adamMatch)).toBe('adam');
@@ -132,6 +131,36 @@ describe('compaction-thresholds: TS-7 adam role detection + earlier thresholds',
   it('flag ON: adam gets the earlier (coordinator-grade) thresholds; flag OFF: global', () => {
     expect(ct.selectThresholds('adam', true)).toEqual(ct.COORDINATOR_THRESHOLDS);
     expect(ct.selectThresholds('adam', false)).toEqual(ct.GLOBAL_THRESHOLDS);
+  });
+});
+
+// ── SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-5, TS-16): michael role marker ──
+describe('compaction-thresholds: TS-16 michael role detection + earlier thresholds', () => {
+  const coordNull = () => null;
+  const adamNull = () => null;
+  const michaelMatch = () => ({ session_id: 'michael-1', role: 'michael' });
+
+  it('matching active-michael.json session_id => michael (fourth positional reader)', () => {
+    expect(ct.detectRoleFromFile('michael-1', coordNull, adamNull, michaelMatch)).toBe('michael');
+  });
+  it('adam match WINS over a michael match (earlier role wins on a double-tagged session)', () => {
+    const adamAlso = () => ({ session_id: 'both-2' });
+    const michaelAlso = () => ({ session_id: 'both-2' });
+    expect(ct.detectRoleFromFile('both-2', coordNull, adamAlso, michaelAlso)).toBe('adam');
+  });
+  it('non-matching michael marker preserves prior behavior exactly (worker/solo)', () => {
+    const coordOther = () => ({ session_id: 'someone-else' });
+    const michaelOther = () => ({ session_id: 'not-me' });
+    expect(ct.detectRoleFromFile('me', coordOther, adamNull, michaelOther)).toBe('worker');
+    expect(ct.detectRoleFromFile('me', coordNull, adamNull, michaelOther)).toBe('solo');
+  });
+  it('michael reader throwing falls back safely (never crashes, prior semantics)', () => {
+    const boom = () => { throw new Error('fs boom'); };
+    expect(ct.detectRoleFromFile('me', coordNull, adamNull, boom)).toBe('solo');
+  });
+  it('flag ON: michael gets the earlier (coordinator-grade) thresholds; flag OFF: global', () => {
+    expect(ct.selectThresholds('michael', true)).toEqual(ct.COORDINATOR_THRESHOLDS);
+    expect(ct.selectThresholds('michael', false)).toEqual(ct.GLOBAL_THRESHOLDS);
   });
 });
 

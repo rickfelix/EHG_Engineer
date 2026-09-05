@@ -63,20 +63,36 @@ function defaultReadAdamFile() {
   } catch (_) { return null; }
 }
 
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: the Michael role marker (peer of active-adam.json),
+// written by scripts/michael-startup-check.mjs writeMichaelMarker() at /michael startup. Same
+// file-only, fail-safe read discipline.
+function defaultReadMichaelFile() {
+  try {
+    const fp = path.resolve(__dirname, 'active-michael.json');
+    return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : null;
+  } catch (_) { return null; }
+}
+
 // File-only role detection — NO database, NO network in the render hot path.
-// Returns 'coordinator' | 'adam' | 'worker' | 'solo'. Fail-safe to 'worker' (the conservative,
-// current-behavior profile) on ANY error. `reader`/`adamReader` are injectable for tests.
-// Adam is checked AFTER coordinator (a session somehow tagged both counts as coordinator) and
-// only ever widens detection — a missing/mismatched adam marker preserves prior behavior exactly.
-function detectRoleFromFile(sessionId, reader, adamReader) {
+// Returns 'coordinator' | 'adam' | 'michael' | 'worker' | 'solo'. Fail-safe to 'worker' (the
+// conservative, current-behavior profile) on ANY error. `reader`/`adamReader`/`michaelReader` are
+// injectable for tests (positional, in that order — the michael reader is the fourth argument).
+// Adam is checked AFTER coordinator and Michael AFTER Adam (a session somehow tagged twice counts
+// as the earlier role); each only ever widens detection — a missing/mismatched marker preserves
+// prior behavior exactly.
+function detectRoleFromFile(sessionId, reader, adamReader, michaelReader) {
   const read = typeof reader === 'function' ? reader : defaultReadCoordFile;
   const readAdam = typeof adamReader === 'function' ? adamReader : defaultReadAdamFile;
+  const readMichael = typeof michaelReader === 'function' ? michaelReader : defaultReadMichaelFile;
   let coord = null;
   try { coord = read(); } catch (_) { return 'worker'; }
   if (sessionId && coord && coord.session_id === sessionId) return 'coordinator';
   let adam = null;
   try { adam = readAdam(); } catch (_) { adam = null; }
   if (sessionId && adam && adam.session_id === sessionId) return 'adam';
+  let michael = null;
+  try { michael = readMichael(); } catch (_) { michael = null; }
+  if (sessionId && michael && michael.session_id === sessionId) return 'michael';
   if (!coord || !coord.session_id) return 'solo';
   return 'worker';
 }
@@ -84,9 +100,11 @@ function detectRoleFromFile(sessionId, reader, adamReader) {
 // Select advisory thresholds by role + flag. Flag OFF => GLOBAL for every role.
 // SD-LEO-INFRA-TOKEN-BURN-AUTOPILOT-001: 'adam' joins 'coordinator' on the earlier profile —
 // both are long-lived role sessions whose burn the earlier CRITICAL/EMERGENCY nudges manage.
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: 'michael' likewise — a long-lived role seat whose
+// overnight ticks must not be lost to a late compaction (DESIGN evidence 8601cbdd).
 function selectThresholds(role, flagEnabled) {
   if (!flagEnabled) return GLOBAL_THRESHOLDS;
-  if (role === 'coordinator' || role === 'adam') return COORDINATOR_THRESHOLDS;
+  if (role === 'coordinator' || role === 'adam' || role === 'michael') return COORDINATOR_THRESHOLDS;
   return GLOBAL_THRESHOLDS;
 }
 
