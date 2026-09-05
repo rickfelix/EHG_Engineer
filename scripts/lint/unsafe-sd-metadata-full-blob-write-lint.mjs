@@ -108,9 +108,43 @@ function changedFiles(exts) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001: the diff-only mode above named files, not
+ * LINES — `changedFiles()` includes any file with ANY line touched, and main() then scanned that
+ * file's WHOLE content. A PR editing one function in a large, frequently-touched file (e.g.
+ * scripts/stale-session-sweep.cjs) inherited every PRE-EXISTING violation anywhere else in that
+ * same file as a "new" finding, defeating this function's own stated purpose ("so a pre-existing
+ * backlog never blocks an unrelated PR" — measured breaking this promise on PR #8226, three
+ * unrelated findings at lines the PR never touched). Returns the set of NEW-file line numbers
+ * actually added/changed for `file` per `git diff -U0`, so findings can be scoped to the real
+ * diff hunks instead of the whole file. Returns null (caller falls back to the old, unfiltered
+ * behavior) when the diff is unavailable, matching changedFiles()'s own fail-open convention.
+ * @param {string} file
+ * @param {string} base
+ * @returns {Set<number>|null}
+ */
+export function changedLineNumbers(file, base) {
+  try {
+    const out = execFileSync('git', ['diff', '-U0', '--diff-filter=ACMR', `${base}...HEAD`, '--', file], { encoding: 'utf8' });
+    const lines = new Set();
+    for (const line of out.split('\n')) {
+      const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (!m) continue;
+      const start = Number(m[1]);
+      const count = m[2] === undefined ? 1 : Number(m[2]);
+      for (let i = 0; i < count; i++) lines.add(start + i);
+    }
+    return lines;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const exts = ['.js', '.mjs', '.cjs'];
-  const files = process.argv.includes('--diff')
+  const isDiffMode = process.argv.includes('--diff');
+  const base = process.env.METADATA_FULLBLOB_LINT_BASE || 'origin/main';
+  const files = isDiffMode
     ? (changedFiles(exts) ?? [...walk('lib', exts), ...walk('scripts', exts)])
     : [...walk('lib', exts), ...walk('scripts', exts)];
 
@@ -118,7 +152,9 @@ async function main() {
   for (const file of files) {
     let source;
     try { source = readFileSync(file, 'utf8'); } catch { continue; }
+    const allowedLines = isDiffMode ? changedLineNumbers(file, base) : null;
     for (const f of findUnsafeMetadataFullBlobWrite(source, file)) {
+      if (allowedLines && !allowedLines.has(f.line)) continue; // pre-existing, outside this PR's actual diff
       console.error(`${f.file}:${f.line}  ${f.message}`);
       total++;
     }
