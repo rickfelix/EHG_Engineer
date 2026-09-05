@@ -3,9 +3,13 @@
  *
  * Covers:
  *  - No metadata.requires_adoption → no-op pass (score 100)
- *  - requires_adoption=true, incomplete adkar_checklist + ENFORCE_ADKAR_GATE=true → BLOCKS (score 0)
- *  - requires_adoption=true, incomplete adkar_checklist + ENFORCE_ADKAR_GATE unset/false → WARNS (score 60, passed=true)
+ *  - requires_adoption=true, incomplete adkar_checklist, ENFORCE_ADKAR_GATE unset/true → BLOCKS (score 0)
+ *  - requires_adoption=true, incomplete adkar_checklist, ENFORCE_ADKAR_GATE=false → WARNS (score 60, passed=true)
  *  - requires_adoption=true, all 5 stages evidenced-or-waived → passes (score 100) regardless of the flag
+ *
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D3: default flipped from opt-in (warn unless
+ * ENFORCE_ADKAR_GATE=true) to opt-out (enforce unless ENFORCE_ADKAR_GATE=false) -- measured
+ * zero-risk (only 1/6,089 SDs has ever set requires_adoption=true, already completed).
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -38,7 +42,7 @@ describe('ADKAR_ADOPTION gate (SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-
     process.env.ENFORCE_ADKAR_GATE = 'true';
     const result = await gate.validator({
       sd: {
-        id: 'sd-fixture-3',
+        id: 'sd-fixture-3a',
         metadata: {
           requires_adoption: true,
           adkar_checklist: {
@@ -58,7 +62,7 @@ describe('ADKAR_ADOPTION gate (SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-
     expect(result.details.missing_stages).toEqual(['knowledge', 'ability', 'reinforcement']);
   });
 
-  it('WARNS (score 60, passed=true) when requires_adoption=true, stages missing, ENFORCE_ADKAR_GATE unset', async () => {
+  it('BLOCKS (score 0) when requires_adoption=true, stages missing, ENFORCE_ADKAR_GATE unset (FR-D3: enforce-by-default)', async () => {
     delete process.env.ENFORCE_ADKAR_GATE;
     const result = await gate.validator({
       sd: {
@@ -69,10 +73,28 @@ describe('ADKAR_ADOPTION gate (SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-
         },
       },
     });
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.details.enforce_flag).toBe(true);
+    expect(result.details.missing_stages).toEqual(['awareness', 'desire', 'knowledge', 'ability', 'reinforcement']);
+  });
+
+  it('WARNS (score 60, passed=true) when requires_adoption=true, stages missing, ENFORCE_ADKAR_GATE=false (opt-out escape hatch)', async () => {
+    process.env.ENFORCE_ADKAR_GATE = 'false';
+    const result = await gate.validator({
+      sd: {
+        id: 'sd-fixture-4b',
+        metadata: {
+          requires_adoption: true,
+          adkar_checklist: {},
+        },
+      },
+    });
     expect(result.passed).toBe(true);
     expect(result.score).toBe(60);
     expect(result.issues).toEqual([]);
     expect(result.warnings.length).toBe(1);
+    expect(result.details.enforce_flag).toBe(false);
     expect(result.details.missing_stages).toEqual(['awareness', 'desire', 'knowledge', 'ability', 'reinforcement']);
   });
 

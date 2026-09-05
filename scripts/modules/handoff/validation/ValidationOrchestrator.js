@@ -340,25 +340,49 @@ export class ValidationOrchestrator {
 
       // Process results from this tier
       for (const { gate, gateResult } of tierResults) {
-        results.gateResults[gate.name] = gateResult;
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: persist each gate's real declared
+        // requiredness alongside its result. Almost no validator populates `required` on its
+        // own return value (fr-delivery-classifier.js is the sole exception, deliberately
+        // setting it dynamically e.g. false when its own enforcement flag is off) -- without
+        // this merge, every downstream persisted-audit-record consumer
+        // (lead-final-approval/index.js's projectGateResultsForPersistence, and
+        // HandoffRecorder's recordFailure/createArtifact/_recordCompletionActionFailure) reads
+        // `required` as always-undefined/false regardless of the gate's real declaration. The
+        // static value (matching the live blocking predicate at line 383 below exactly) wins
+        // for `required`; any validator-set dynamic value is preserved separately as
+        // `required_effective` so a deliberate warn-only override is never overwritten.
+        const staticRequired = gate.required !== false;
 
         // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Track SKIPPED status
         const isSkipped = isSkippedResult(gateResult);
+        let skipReasonForPersistence;
         if (isSkipped) {
           results.skippedCount++;
           results.skippedGates.push(gate.name);
+          const skipReason = gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+          skipReasonForPersistence = skipReason;
           results.gateStatuses[gate.name] = {
             status: ValidatorStatus.SKIPPED,
-            required: gate.required !== false,
-            skipReason: gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE,
+            required: staticRequired,
+            skipReason,
             skipDetails: gateResult.skipDetails
           };
         } else {
           results.gateStatuses[gate.name] = {
             status: gateResult.passed ? ValidatorStatus.PASS : ValidatorStatus.FAIL,
-            required: gate.required !== false
+            required: staticRequired
           };
         }
+
+        results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
+          ? {
+              ...gateResult,
+              required: staticRequired,
+              ...(typeof gateResult.required === 'boolean' ? { required_effective: gateResult.required } : {}),
+              status: results.gateStatuses[gate.name].status,
+              ...(skipReasonForPersistence ? { skip_reason: skipReasonForPersistence } : {}),
+            }
+          : gateResult;
 
         // Backward compat: sum raw scores
         results.totalScore += gateResult.score;

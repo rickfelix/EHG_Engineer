@@ -38,6 +38,39 @@ const ROOT_DIR = path.resolve(__dirname, '../../../../../..');
 const EVIDENCE_FRESHNESS_MS = 24 * 60 * 60 * 1000; // 24 hours
 const BYPASS_TOKEN = 'ACTIV-CHAIN-DEFERRED';
 
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: no evidence-staleness check exists anywhere in
+// the LEAD-FINAL-APPROVAL pipeline today -- subagent-evidence-gate.js's own staleness/freshness
+// logic is wired only into LEAD-TO-PLAN/PLAN-TO-EXEC/EXEC-TO-PLAN/PLAN-TO-LEAD, never here. A
+// naive port of that file's commit-SHA-equality check would be vacuous by construction at LFA
+// (measured: sd.worktree_path is null/already-reaped for 57/60 of recently completed SDs, so it
+// would silently no-op ~95% of the time). This check is deliberately DB-only (created_at vs. now
+// -- NOT a hard created_at>=phase_started_at boundary, which was this SD's own original framing
+// but would wedge most SDs: phase_started_at resolves to the immediately-prior PLAN-TO-LEAD
+// acceptance, typically seconds/minutes before LEAD-FINAL-APPROVAL runs in the same session, and
+// most real evidence predates that moment by design). An absolute age-from-now threshold matches
+// the measured population exactly (trailing-30-day newest-evidence age: p90=2.7h, >72h=1/120=0.8%)
+// and cannot be defeated by a reaped worktree.
+const LFA_STALENESS_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours
+const STALENESS_KILL_SWITCH_ENV = 'LEO_DISABLE_LFA_STALENESS_CHECK';
+
+function lfaStalenessCheckDisabled(env = process.env) {
+  const v = env[STALENESS_KILL_SWITCH_ENV];
+  return v === '1' || String(v).toLowerCase() === 'true';
+}
+
+/** Newest sub_agent_execution_results row for the SD, any code -- "has anything run recently". */
+async function loadNewestEvidence({ supabase, sdId }) {
+  if (!supabase || !sdId) return null;
+  const { data } = await supabase
+    .from('sub_agent_execution_results')
+    .select('id, created_at')
+    .eq('sd_id', sdId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+
 function logEvent(payload) {
   // Mirror existing [GATE_LOG] convention.
   console.log(`[GATE_LOG] ${JSON.stringify({ event: GATE_NAME, ...payload })}`);
@@ -173,6 +206,40 @@ export function createActivationInvariantGate(supabase, prdRepo) {
           warnings: [`Activation invariant bypassed via reason-text ${BYPASS_TOKEN}: ${bypassReason}`],
           details: { bypassed: true, bypass_reason: bypassReason },
         };
+      }
+
+      // Step 1b (FR-D2): evidence-staleness check, unconditional -- runs regardless of whether
+      // this SD triggers the schema+UI+worker activation-invariant heuristic below, since
+      // staleness is a property of every LEAD-FINAL-APPROVAL handoff, not just chain-triggered
+      // ones. Fails OPEN on a lookup error (consistent with subagent-evidence-gate.js's own
+      // cache-probe convention: "any probe error falls open to a normal run") -- a transient DB
+      // hiccup fetching evidence should not itself become a new denial-of-completion vector; only
+      // an actual, positively-confirmed stale-evidence finding blocks.
+      if (!lfaStalenessCheckDisabled()) {
+        try {
+          const newestEvidence = await loadNewestEvidence({ supabase, sdId });
+          if (newestEvidence?.created_at) {
+            const ageMs = Date.now() - new Date(newestEvidence.created_at).getTime();
+            if (ageMs > LFA_STALENESS_THRESHOLD_MS) {
+              const ageHours = Math.round(ageMs / 3600000);
+              const issue = `SUBAGENT_EVIDENCE_STALE: newest sub-agent evidence for this SD (row ${newestEvidence.id}) is ${ageHours}h old (threshold ${Math.round(LFA_STALENESS_THRESHOLD_MS / 3600000)}h) -- no fresh evidence recorded close to completion`;
+              console.log(`   ❌ ${issue}`);
+              logEvent({ sd_id: sdId, verdict: 'FAIL', missing: 'fresh_evidence', evidence_id: newestEvidence.id, age_hours: ageHours });
+              return {
+                passed: false,
+                score: 0,
+                max_score: 100,
+                issues: [issue],
+                warnings: [],
+                details: { staleness_check: true, evidence_id: newestEvidence.id, age_hours: ageHours },
+              };
+            }
+          }
+        } catch (err) {
+          console.log(`   ⚠️  Evidence-staleness check error (non-blocking, fails open): ${err.message}`);
+        }
+      } else {
+        console.log(`   ⚠️  ${STALENESS_KILL_SWITCH_ENV} active — staleness check bypassed`);
       }
 
       // Step 2: evaluate trigger heuristic.

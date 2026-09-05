@@ -153,6 +153,97 @@ describe('createActivationInvariantGate — happy path', () => {
   });
 });
 
+describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: evidence-staleness check', () => {
+  // A distinct mock: the staleness check queries sub_agent_execution_results WITHOUT the
+  // TESTING-evidence-freshness query's .gte()/.eq('sub_agent_code', 'TESTING') filters, so it
+  // needs its own newestEvidenceRow, separate from the (possibly absent/mismatched) TESTING
+  // evidence row used by the pre-existing activation-invariant checks below it.
+  function mockSupabaseWithNewestEvidence(prdRow, testingEvidenceRow, newestEvidenceRow) {
+    return {
+      from(table) {
+        if (table === 'product_requirements_v2') {
+          return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: prdRow || null }) };
+        }
+        if (table === 'sub_agent_execution_results') {
+          let usesGte = false;
+          return {
+            select() { return this; },
+            eq() { return this; },
+            gte() { usesGte = true; return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => ({ data: (usesGte ? testingEvidenceRow : newestEvidenceRow) || null }),
+          };
+        }
+        return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: null }) };
+      },
+    };
+  }
+
+  afterAll(() => { delete process.env.LEO_DISABLE_LFA_STALENESS_CHECK; });
+
+  it('fails (not triggered SD, staleness runs unconditionally) when the newest evidence is older than 72h', async () => {
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 80 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(false);
+    expect(result.issues[0]).toMatch(/SUBAGENT_EVIDENCE_STALE/);
+    expect(result.details.age_hours).toBeGreaterThanOrEqual(80);
+  });
+
+  it('passes (not triggered SD) when the newest evidence is within 72h', async () => {
+    const freshRow = { id: 'fresh-ev-uuid', created_at: new Date(Date.now() - 1 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, freshRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+  });
+
+  it('passes when no evidence row exists at all (nothing to be stale)', async () => {
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, null), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+  });
+
+  it('LEO_DISABLE_LFA_STALENESS_CHECK bypasses a genuinely stale row', async () => {
+    process.env.LEO_DISABLE_LFA_STALENESS_CHECK = '1';
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 200 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+    delete process.env.LEO_DISABLE_LFA_STALENESS_CHECK;
+  });
+
+  it('bypass reason-text discriminator short-circuits BEFORE the staleness check even runs', async () => {
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 200 * 3600000).toISOString() };
+    const sd = { ...triggeredSD, metadata: { governance_metadata: { bypass_reason: 'ACTIV-CHAIN-DEFERRED:JIRA-999' } } };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd, sdId: sd.id });
+    expect(result.passed).toBe(true);
+    expect(result.details.bypassed).toBe(true);
+  });
+
+  it('a query error during the staleness lookup fails OPEN (does not itself block completion)', async () => {
+    const throwingSupabase = {
+      from(table) {
+        if (table === 'sub_agent_execution_results') {
+          return {
+            select() { return this; },
+            eq() { return this; },
+            gte() { return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => { throw new Error('connection reset'); },
+          };
+        }
+        return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: null }) };
+      },
+    };
+    const gate = createActivationInvariantGate(throwingSupabase, null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+  });
+});
+
 describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading (advisory-first rollout)', () => {
   const fakeTestPath = 'scripts/modules/activation-invariant/trigger-evaluator.test.js';
   const prd = { id: 'prd-uuid', sd_id: triggeredSD.id, activation_test_id: fakeTestPath };

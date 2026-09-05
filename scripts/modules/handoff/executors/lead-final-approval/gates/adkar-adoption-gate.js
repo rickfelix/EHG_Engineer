@@ -76,7 +76,13 @@ export function createAdkarAdoptionGate(_supabase) {
         };
       }
 
-      const enforceFlag = process.env.ENFORCE_ADKAR_GATE === 'true';
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D3: turned ON by default (opt-out via
+      // ENFORCE_ADKAR_GATE=false, kept as an escape hatch per this codebase's convention that
+      // every new enforcement ships with a way back off). Measured zero-risk before flipping:
+      // only 1 of 6,089 SDs has ever set metadata.requires_adoption=true, and that SD is already
+      // completed -- 0 in-flight SDs affected. Note the honest zero-delta: this flip changes no
+      // observable behavior on the current fleet today, only future SDs that set the flag.
+      const enforceFlag = process.env.ENFORCE_ADKAR_GATE !== 'false';
       const warnOnly = !enforceFlag;
       const message = `metadata.requires_adoption=true but the following ADKAR stage(s) are missing evidence or a waiver: ${missingStages.join(', ')}. Resolve via metadata.adkar_checklist.<stage> = { evidence: '<citation>' } or { waived: true, reason: '<reason>' } for each.`;
 
