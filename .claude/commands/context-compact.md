@@ -1,145 +1,95 @@
 <!-- reasoning_effort: low -->
 
 ---
-description: Compact context by summarizing and moving details to memory
+description: Prepare durable state, hand off to the harness's real compaction mechanism, and verify afterward
 argument-hint: [focus area or leave empty for full compaction]
 ---
 
-# 🗜️ Context Compaction
-
-Analyze current context usage and apply intelligent compression to prevent overflow.
+# 🗜️ Context Compaction — Prepare, Hand Off, Verify
 
 **Focus Area**: $ARGUMENTS
 
-## Compaction Strategy
+## Why this skill does not summarize by hand
 
-The context monitor will:
+A slash-command skill injects a prompt into the conversation; it cannot itself truncate or
+rewrite conversation history — that is a harness-only operation. A version of this skill that
+asked the model to hand-summarize could never actually compact anything; it was theatre that
+spent real model turns duplicating state the seat had usually already written to disk. This
+skill instead does the three things a skill honestly can do: **prepare** durable state, **hand
+off** to the harness's real mechanism, and **verify** afterward.
 
-1. **Analyze Current Usage**
-   - Estimate total token count
-   - Identify verbose sections
-   - Check against thresholds (150K warning, 170K critical)
+## Step 1 — PREPARE (do this now)
 
-2. **Smart Summarization**
-   - Sub-agent reports → Key findings only
-   - Handoff details → Summaries with memory references
-   - Repetitive content → Deduplicated
-   - Long descriptions → Truncated with "see memory" pointers
+Identify what must survive compaction: current SD/phase, unresolved bugs, pending decisions,
+active blockers, in-flight PR/handoff status. If a focus area was given above, prioritize it.
 
-3. **Memory-First Pattern**
-   - Full details → `.claude/session-state.md`
-   - Summaries remain in context
-   - Cross-references for retrieval
+Write it via the **verified** path — a write that reports success without landing is worse than
+no write at all, because it looks safe right up until the state is gone:
 
-## Compaction Levels
-
-### HEALTHY (< 150K tokens)
-- No action needed
-- Continue normally
-
-### WARNING (150K-170K tokens)
-- Selective compression
-- Move verbose sections to memory
-- Keep critical data in context
-
-### CRITICAL (170K-190K tokens)
-- Aggressive summarization
-- Sub-agent reports → 1-line summaries
-- Handoff details → Memory only
-- Keep only essential context
-
-### EMERGENCY (> 190K tokens)
-- Emergency compression
-- Complete current phase immediately
-- Force handoff with minimal context
-- Full state dump to memory
-
-## What Gets Compressed
-
-**High Priority** (compress first):
-- Sub-agent detailed reports
-- Historical handoff descriptions
-- Verbose recommendations
-- Repetitive information
-- Debug/diagnostic output
-
-**Medium Priority**:
-- Implementation details
-- Test output (keep pass/fail only)
-- Long code snippets
-
-**Never Compress**:
-- Current SD ID
-- Current phase
-- Critical issues
-- Active PRD requirements
-- File tree context (already in memory)
-
-## Usage Examples
-
-```
-/context-compact
-→ Full context analysis and compression
-
-/context-compact sub-agents
-→ Focus on compressing sub-agent reports only
-
-/context-compact handoffs
-→ Compress historical handoff data
+```bash
+node -e "
+import('./lib/context/memory-manager.js').then(async ({ default: MemoryManager }) => {
+  const memory = new MemoryManager();
+  await memory.updateSectionVerified('Pre-Compaction Snapshot', \`<durable state text here>\`);
+  console.log('PREPARE: write verified');
+});
+"
 ```
 
-## Command Ecosystem Integration
+`updateSectionVerified` re-reads the file after writing and **throws** if the content did not
+actually land. If it throws: STOP and fix the write before continuing — a failed prepare means
+compaction would lose state, not preserve it.
 
-### Cross-Reference
+## Step 2 — HAND OFF (name the mechanism, never simulate it)
 
-This command is part of the **Command Ecosystem**. For full workflow context, see:
-- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+This skill cannot compact context itself. Compaction is a harness operation, so hand off to it:
 
-**Note**: `/context-compact` is typically suggested by other commands when context exceeds 70% usage.
+- Type `/compact` (Claude Code's built-in manual compaction), or
+- Let the harness auto-compact on its own as context grows — no action needed.
 
----
+Anthropic's own context-engineering guidance (web-sourced; not measured in this repo) notes that
+**tool-result clearing** — dropping or truncating old, already-captured tool outputs — is one of
+the safest, lightest-touch forms of compaction, and the harness's native compaction already does
+this ahead of any summarization. Handing off to `/compact` or auto-compaction gets that benefit
+for free; there is nothing further for this skill to do to earn it.
 
-## After Compaction
+There is no hand-summarization step here anymore. That instruction is retired: it could not make
+the harness do anything, and it charged model turns re-deriving state Step 1 just verified was
+already durable.
 
-**CRITICAL (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)**: After compaction completes, run the protocol compaction hook to record the event and clear protocol file read state:
+## Step 3 — VERIFY (run this on the next turn, after compaction happens)
+
+- Re-read the standing protocol contract **in full** — CLAUDE.md, CLAUDE_CORE.md, and the current
+  phase file. A hash matching what you last saw is not an exemption from reading it again; read
+  the actual content every time, then assert the hash rather than asserting your memory of it:
+
+```bash
+node -e "console.log(require('crypto').createHash('sha256').update(require('fs').readFileSync('CLAUDE.md')).digest('hex'))"
+```
+
+- Record the compaction event so downstream gates know a re-read is required:
 
 ```bash
 node scripts/hooks/protocol-compaction-hook.cjs record
 ```
 
-This ensures:
-- Protocol files (CLAUDE.md, CLAUDE_CORE.md, and phase files) are re-read before continuing
-- Sub-agent trigger keywords from CLAUDE.md are reloaded
-- SD Start Gate and Post-Compaction Gate will enforce re-reading
-- Context drift in long-running sessions is prevented
+- Confirm the Pre-Compaction Snapshot from Step 1 is still readable in `.claude/session-state.md`
+  (or the active seat-state file) and resume from it.
 
-You'll receive:
-- Token count before/after
-- Compression ratio
-- What was moved to memory
-- Estimated tokens remaining
-- Recommendation for next steps
-- Protocol files that need re-reading
+**Out of scope, deliberately**: mechanically *enforcing* that this re-read happens (a gate that
+blocks work until the hash is asserted) is a separate, structural fix tracked under
+SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G. This skill carries the instruction; it does not gate on it.
 
-## Automatic Triggers
+## Compaction Levels (guidance for how urgently to hand off)
 
-Context compaction is automatically triggered when:
-- Context usage exceeds 170K tokens
-- Before creating handoffs
-- Before starting new phases
-- When memory updates would exceed limits
+- **HEALTHY (< 150K tokens)**: no action needed.
+- **WARNING (150K-170K tokens)**: run Steps 1-2 now, on your own initiative.
+- **CRITICAL (170K-190K tokens)**: run Steps 1-2 immediately; do not start new work first.
+- **EMERGENCY (> 190K tokens)**: finish the current atomic step, then run Steps 1-2 before anything else.
 
-## Memory Recovery
+## Command Ecosystem Integration
 
-All compressed data is stored in `.claude/session-state.md` and can be retrieved:
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** — Complete inter-command flow diagram and relationships
 
-```javascript
-import MemoryManager from './lib/context/memory-manager.js';
-const memory = new MemoryManager();
-const state = await memory.readSessionState();
-// Full details are in state.raw
-```
-
----
-
-**Note**: This command uses the Context Monitor to intelligently decide what to compress. Claude 4.5 Sonnet's built-in context awareness helps guide the compression strategy.
+**Note**: `/context-compact` is typically suggested by other commands when context exceeds 70% usage.
