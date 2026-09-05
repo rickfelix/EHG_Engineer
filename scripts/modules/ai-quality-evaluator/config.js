@@ -58,9 +58,10 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // BEFORE VALUE FOR ROLLBACK: delete the prd/retrospective keys, leaving `{ default: 60 }`.
   //
   // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B (2026-09-05): prd was independently re-verified
-  // AFTER this QF, not before it. Parent SD-003's shadow re-score row 1cdcaecd-bb34-4dc9-82ba-
-  // 7c5270dace77 is VACUOUS -- gate-threshold-shadow-rescore.mjs:59 filters by the view's
-  // historical current_threshold (60), so it only re-scored the PRE-raise population (the same
+  // AFTER this QF, not before it. Parent SD-003's shadow re-score row
+  // feedback.id=1cdcaecd-bb34-4dc9-82ba-7c5270dace77 (full UUID on one line for greppability)
+  // is VACUOUS -- gate-threshold-shadow-rescore.mjs:59 filters by the view's historical
+  // current_threshold (60), so it only re-scored the PRE-raise population (the same
   // 33-row group this QF's own "n=34" cites); it never touched a single assessment scored under
   // the live 65. DO NOT cite that row as safety evidence. The REAL post-raise number, queried
   // directly against ai_quality_assessments WHERE pass_threshold=65: n=10, pass=9/10 (90.0%),
@@ -138,8 +139,9 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // reverts to falling through to DEFAULT_THRESHOLD (60) for every content_type, exactly as before.
   //
   // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B (2026-09-05): prd was independently re-verified
-  // AFTER this QF, not before it. Parent SD-003's shadow re-score row d9ad5522-654c-4fc2-81e1-
-  // ee92ea05c16f is VACUOUS -- it re-scored the PRE-raise 60-group (n=32), never a single
+  // AFTER this QF, not before it. Parent SD-003's shadow re-score row
+  // feedback.id=d9ad5522-654c-4fc2-81e1-ee92ea05c16f (full UUID on one line for greppability)
+  // is VACUOUS -- it re-scored the PRE-raise 60-group (n=32), never a single
   // assessment scored under the live 65. DO NOT cite that row as safety evidence. The REAL
   // post-raise number, queried directly against ai_quality_assessments WHERE pass_threshold=65:
   // n=46, pass=45/46 (97.8%), window 2026-08-29..2026-09-05 -- confirms prd remains healthy
