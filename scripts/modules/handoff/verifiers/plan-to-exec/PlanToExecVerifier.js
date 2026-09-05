@@ -240,7 +240,7 @@ export class PlanToExecVerifier {
       const scoreableEmpty = (!isParentOrchestrator && requiresUserStories && userStories.length === 0);
       if (scoreableEmpty) {
         console.log('\n🔍 Validating user story quality... ⏭  SKIPPED (all stories at status=draft pending promotion)');
-        console.log(`   💡 Quality gate will run once stories are promoted via scripts/promote-user-stories.js`);
+        console.log('   💡 Quality gate will run once stories are promoted via scripts/promote-user-stories.js');
         storyQualityResult = { valid: true, averageScore: null, warnings: ['No stories at status=ready or active to score; promotion pending'] };
       } else if (!isParentOrchestrator && requiresUserStories) {
         console.log('\n🔍 Validating user story quality...');
@@ -333,6 +333,13 @@ export class PlanToExecVerifier {
       const isRefactorBrief = prd.document_type === 'refactor_brief';
 
       if (!isParentOrchestrator) {
+        // SD-LEO-FIX-GATE-PLAN-EXEC-001: the registry gate's prdQualityValidation
+        // (validator-registry/gates/gate-1-plan-to-exec.js) now derives its threshold from
+        // this SAME getStoryMinimumScoreByCategory call, so the two live PRD-quality checks
+        // for this handoff agree on the numeric threshold. Two accepted (not fixed)
+        // divergences remain: this refactor_brief carve-out is not replicated there, and
+        // validatePRDForHandoff's leniency below applies to BOTH heuristic and AI-rubric
+        // PRDs, while the registry gate's leniency is deliberately heuristic-only.
         const prdMinimumScore = isRefactorBrief ? 50 : getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
         console.log('\n🔍 Validating PRD content quality...');
 
