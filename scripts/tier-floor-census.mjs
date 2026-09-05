@@ -5,12 +5,20 @@
  * Repo-wide sweep for readers of min_tier_rank / tier_rank / tierRank, printed alongside the
  * known-posture rows so the census can be re-verified on demand rather than trusted as a static
  * list. Read-only -- issues no writes.
+ *
+ * SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-F — FR-1: a SECOND, independent axis was added below
+ * (parent-lead/dependency: parent_sd_id / parentLeadPending / parentLeadPendingVerdict).
+ * sweep() is now parameterized by pattern so both axes reuse the same sweep mechanic without
+ * merging their KNOWN_SURFACES tables -- the tier axis's posture vocabulary (e.g. "advisory
+ * (dead by construction)") is tier-specific history and must not silently apply to a different
+ * axis's rows.
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const PATTERN = 'min_tier_rank|tier_rank|tierRank';
+const PARENT_LEAD_PATTERN = 'parent_sd_id|parentLeadPending|parentLeadPendingVerdict';
 
 export const KNOWN_SURFACES = [
   {
@@ -85,12 +93,103 @@ export const KNOWN_SURFACES = [
   },
 ];
 
-export function sweep(cwd = process.cwd()) {
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-F — FR-1: the parent-lead/dependency axis. A SEPARATE table
+// from KNOWN_SURFACES on purpose (see file header). "enforcing" here means the row actually gates
+// dispatch/claim/count on parentLeadPending(Verdict); "transitive" means it gates only by calling
+// a function that itself is enforcing (recorded so a reader does not mistake indirection for a gap).
+export const PARENT_LEAD_KNOWN_SURFACES = [
+  {
+    file: 'lib/fleet/claim-eligibility.cjs',
+    line: 619,
+    symbol: 'evaluateDispatchEligibility',
+    posture: 'enforcing',
+    note: 'The canonical per-claim dispatch gate (SD-REFILL-00SO4HZY): rejects a candidate with reason=parent_lead_pending when its parent has not yet passed LEAD. parentLeadPending/parentLeadPendingVerdict are themselves DEFINED at :570-586 in this same file -- every other row in this table ultimately calls into one of those two functions.',
+  },
+  {
+    file: 'lib/fleet/belt-depth.cjs',
+    line: 131,
+    symbol: 'countDispatchableBacklog',
+    posture: 'enforcing',
+    note: "QF-20260812-281: without this check a draft child of a not-yet-past-LEAD orchestrator parent counted as dispatchable on this (recomputed) side but not on claimable-leaves.mjs's self_reported side, manufacturing a false KPI-3 integrity divergence. Same 'parent_lead_pending' reason string evaluateDispatchEligibility uses, so the ineligible{} breakdown stays consistent across callers.",
+  },
+  {
+    file: 'lib/fleet/belt-census.cjs',
+    line: 41,
+    symbol: 'SD_ELIGIBILITY_COLUMNS / per-row axis classification',
+    posture: 'enforcing',
+    note: "Column list at :41 selects parent_sd_id so the per-row loop at :186 (`if (await parentLeadPending(supabase, sd)) axes.push('parent_lead_pending')`) can label it as one of the ineligibility axes surfaced in the belt census breakdown.",
+  },
+  {
+    file: 'lib/checkin/steps/merged-pool-self-claim.cjs',
+    line: 264,
+    symbol: 'depSatisfied (merged-pool self-claim lane)',
+    posture: 'enforcing',
+    note: "SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-D FR-1: imports parentLeadPendingVerdict at :264 and applies it at :304 (`!parentLeadPendingVerdict(resolveParent(sd))`) against an in-memory-resolved parent row (parent refs resolve by id OR sd_key, per :258-259's note on claim-eligibility.cjs:583) -- the sync verdict form, not the async DB-querying parentLeadPending, since the parent row is already in hand.",
+  },
+  {
+    file: 'scripts/worker-checkin.cjs',
+    line: 1036,
+    symbol: 'draft self-claim eligibility path',
+    posture: 'enforcing',
+    note: 'Two independent call sites gate on parentLeadPending in this file: :1036 (the draft self-claim path -- fail-open per the :1035 comment) and :1449 (adoptOrphanInProgress-adjacent orphan-adopt path, SD-FDBK-INFRA-ORPHAN-ADOPT-RESUME-001). Both reuse the shared async predicate rather than re-deriving the phase check.',
+  },
+  {
+    file: 'scripts/lib/claimable-leaves.mjs',
+    line: 145,
+    symbol: 'claimableDbFreeReason',
+    posture: 'enforcing',
+    note: 'The shared dispatchable-leaf predicate reused (never re-derived) by the ranker (coordinator-backlog-rank.mjs) and the capacity forecaster (capacity-inputs.mjs) -- see their transitive rows below.',
+  },
+  {
+    file: 'scripts/lib/capacity-inputs.mjs',
+    line: 404,
+    symbol: 'forecaster belt/backlog pass',
+    posture: 'transitive (enforcing via scripts/lib/claimable-leaves.mjs\'s claimableDbFreeReason)',
+    note: 'Line 404 calls claimableDbFreeReason(d), which internally applies parentLeadPending. This file ALSO calls parentLeadPendingVerdict directly and independently at :430 (imported :50) against an in-memory-resolved parent map (:428-430) -- so capacity-inputs.mjs carries both a transitive AND a direct enforcing usage; :404 is cited per this SD\'s PRD, :430 is the more literal sweep-pattern anchor.',
+  },
+  {
+    file: 'scripts/coordinator-backlog-rank.mjs',
+    line: 37,
+    symbol: '(ranker header comment)',
+    posture: 'transitive (enforcing via scripts/lib/claimable-leaves.mjs)',
+    note: 'Never calls parentLeadPending/parentLeadPendingVerdict directly -- the header comment at :37 names it as one of the shared predicates the ranker reuses via claimable-leaves.mjs rather than re-implementing. No direct literal hit exists in this file; recorded so it is not mistaken for a missed enforcement site.',
+  },
+  {
+    file: 'scripts/coordinator-self-review.mjs',
+    line: 339,
+    symbol: 'self-score belt_depth computation',
+    posture: 'transitive (enforcing via lib/fleet/belt-depth.cjs\'s countDispatchableBacklog)',
+    note: 'Destructures `dispatchable` from countDispatchableBacklog(db) to feed a governance self-score (proactive_sourcing) -- QF-20260725-089 converted this consumer from a raw head-count to the eligibility-gated gauge specifically so this axis (among others) is reflected here.',
+  },
+  {
+    file: 'scripts/adam-quiet-tick.mjs',
+    line: 989,
+    symbol: 'checkIdleBesideClaimable',
+    posture: 'diagnostic-only (not gate-feeding)',
+    note: "QF-20260829-588: this is an explicitly RAW-UNCLAIMED draft headcount (`.eq('status','draft')`, no eligibility filter) -- its own in-code comment says so by name specifically so it is not compared against a different, eligibility-gated extent. checkIdleBesideClaimable itself never references parent_sd_id/parentLeadPending; recorded here proactively (PLAN's candidate #1) because a diagnostic gauge that overlaps functionally with the eligibility-gated ones is exactly the shape of gap this workstream exists to catch. Investigated and confirmed NOT a gap: it never feeds a gate or dispatch decision. NOTE: this FILE still appears in the literal sweep via an unrelated call site -- fetchInFlightItems (:1113-1120, a different stall/duration-baseline detector) filters with `.is('parent_sd_id', null)` to select only top-level (non-child) SDs; that is an unrelated population filter, not a parent-lead-pending check, and is out of this SD's investigated scope.",
+  },
+  {
+    file: 'lib/claim/queue-resolver.cjs',
+    line: 191,
+    symbol: 'resolveLeafWorkItem / findUnclaimedChild (DESCEND path)',
+    posture: 'excluded (call-site-gated by a separate, non-canonical predicate)',
+    note: "PLAN flagged this UNRESOLVED (PRD FR-2) rather than assume a posture. EXEC investigated: resolveLeafWorkItem/findUnclaimedChild never call parentLeadPending/parentLeadPendingVerdict directly -- but their ONLY production call site, scripts/sd-start.js:704, is guarded immediately above at :696 by hasParentNeedsOwnLeadToPlan (sd-start.js:415-435), a THIRD independent reimplementation of 'is this parent pre-LEAD', keyed on sd_phase_handoffs acceptance rather than current_phase. DECISION: no wiring needed in this file -- the descend path IS gated end-to-end today. Flagging the drift risk instead: hasParentNeedsOwnLeadToPlan and parentLeadPendingVerdict key on different signals and could disagree (e.g. current_phase advances past LEAD before the accepted LEAD-TO-PLAN handoff row lands, or vice versa) -- same duplicate-implementation-drift class as the detectors.cjs row below, not treated as a live gap absent an observed disagreement.",
+  },
+  {
+    file: 'lib/coordinator/detectors.cjs',
+    line: 616,
+    symbol: 'detectPreLeadParentDeadlock',
+    posture: 'advisory (duplicate-implementation drift risk)',
+    note: 'Re-implements the pre-LEAD phase check locally (PRE_LEAD_PHASES + literal s.parent_sd_id grouping, :613-636) instead of importing parentLeadPendingVerdict, so the same 3-way drift risk noted on the queue-resolver.cjs row above applies here too. Deliberately read-only/advisory (never mutates) -- auto-advancing a stuck parent was explicitly REJECTED per this detector\'s own header comment. Not a live gap; recorded so the duplication itself does not go unrecorded.',
+  },
+];
+
+export function sweep(cwd = process.cwd(), pattern = PATTERN) {
   let out;
   try {
     out = execFileSync(
       'git',
-      ['grep', '-n', '-E', PATTERN, '--', '*.js', '*.cjs', '*.mjs'],
+      ['grep', '-n', '-E', pattern, '--', '*.js', '*.cjs', '*.mjs'],
       { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024 * 32 }
     );
   } catch (err) {
@@ -109,21 +208,28 @@ export function sweep(cwd = process.cwd()) {
     });
 }
 
-function main() {
-  const hits = sweep();
-  const knownFiles = new Set(KNOWN_SURFACES.map((s) => s.file));
+function reportAxis(label, hits, knownSurfaces) {
+  const knownFiles = new Set(knownSurfaces.map((s) => s.file));
   const unknownFiles = [...new Set(hits.map((h) => h.file))].filter((f) => !knownFiles.has(f));
 
+  console.log(`\n=== ${label} axis ===`);
   console.log(`Sweep found ${hits.length} raw hits across ${new Set(hits.map((h) => h.file)).size} files.`);
-  console.log(`\nKnown surfaces (${KNOWN_SURFACES.length}):`);
-  for (const s of KNOWN_SURFACES) {
+  console.log(`\nKnown surfaces (${knownSurfaces.length}):`);
+  for (const s of knownSurfaces) {
     console.log(`  [${s.posture}] ${s.file}${s.line ? ':' + s.line : ''} (${s.symbol})`);
   }
   console.log(`\nUnrecognized files with a hit (${unknownFiles.length}) -- review before closing the census:`);
   for (const f of unknownFiles) console.log(`  ${f}`);
 
+  return { total_hits: hits.length, known_surfaces: knownSurfaces, unrecognized_files: unknownFiles };
+}
+
+function main() {
+  const tierReport = reportAxis('tier-floor', sweep(process.cwd(), PATTERN), KNOWN_SURFACES);
+  const parentLeadReport = reportAxis('parent-lead/dependency', sweep(process.cwd(), PARENT_LEAD_PATTERN), PARENT_LEAD_KNOWN_SURFACES);
+
   const outPath = new URL('../scripts/temp/tier-floor-census-report.json', import.meta.url);
-  const report = { total_hits: hits.length, known_surfaces: KNOWN_SURFACES, unrecognized_files: unknownFiles };
+  const report = { ...tierReport, parent_lead_axis: parentLeadReport };
   writeFileSync(outPath, JSON.stringify(report, null, 2));
   console.log(`\nReport written to ${outPath.pathname}`);
 }
