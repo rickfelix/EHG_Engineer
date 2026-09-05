@@ -254,7 +254,12 @@ async function assemble(outPath) {
   // a truncated witnessed-set silently reclassifies witnessed merges as unwitnessed (false
   // REFUTE injections), the exact silent-truncation class this file guards against. Paginate
   // to completeness instead of trusting any single-page cap.
-  const telemetryRows = await fetchAllRows(supabase, 'merge_witness_telemetry', 'repo, pr_number');
+  // QF-20260904-983: must select rungs too, matching lib/ship/witness-adoption.mjs's own
+  // fetchAllWitnessRows() default -- detectUnwitnessedMerges()/classifyMerges() now require
+  // rungs to tell a real witness verdict apart from a reconcile-sweep's empty placeholder row,
+  // and a select() that omits the column makes every row look placeholder-empty regardless of
+  // what is actually stored, which would flood this sweep with false REFUTE injections.
+  const telemetryRows = await fetchAllRows(supabase, 'merge_witness_telemetry', 'repo, pr_number, rungs');
   const unwitnessed = detectUnwitnessedMerges(merges, telemetryRows).unwitnessed;
   const unwitnessedItems = unwitnessed.map((m) => ({
     work_key: `${m.repo}#${m.prNumber}`,
