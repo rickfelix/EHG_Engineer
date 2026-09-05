@@ -215,6 +215,14 @@ export async function emitDeliveryAlarm(supabase, {
 // directed-work / QF-20260830-454, recently-released / SD-LEO-INFRA-UNIFY-FLEET-LIVENESS-001,
 // spin-up-grace). The default sdHolderSessionIds=null is preserved exactly, so the fail-open-to-mirror
 // behaviour fires identically to before migration.
+//
+// QF-20260903-789: sdHolderFreshnessWindowMs is the ONE new axis wired in here (the reference
+// consumer). A held SD claim excludes from idle only while the seat is genuinely ADVANCING
+// (last_tool_at fresh within this window) -- Solomon's operating definition: busy=advancing,
+// held=blocked-but-available-for-other-work, idle=owns nothing. 15min matches
+// RECENTLY_RELEASED_WINDOW_MS and the coordinator-idle-qf-hint cron cadence (backlog-rank-cron.yml,
+// every 15min) -- the same "check interval" this fleet already uses elsewhere for seat liveness.
+export const SD_HOLDER_FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 min
 export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null) {
   return (liveWorkers || []).filter((w) => seatIdleVerdict(w, {
     nowMs,
@@ -223,6 +231,7 @@ export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new
     seatBusySessionIds,
     recentlyReleasedWindowMs: RECENTLY_RELEASED_WINDOW_MS,
     spinUpGraceMs: SPIN_UP_GRACE_MS,
+    sdHolderFreshnessWindowMs: SD_HOLDER_FRESHNESS_WINDOW_MS,
   }).idle);
 }
 
@@ -252,9 +261,16 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // denominator half. `hinted` alone cannot separate 1-of-10 from 9-of-10 — a pass that reports
   // completion while reaching a minority is the same camouflage as a stranded QF that the gauge
   // still counts, which is the other half of this SD.
-  // QF-20260808-782: skippedCapped/capUnknown are initialised to 0 rather than left undefined —
+  // QF-20260808-782: skippedCapped/capUnknown were initialised to 0 rather than left undefined —
   // a counter that only appears once it fires cannot be distinguished from one that never ran.
-  const summary = { idleWorkers: 0, hinted: 0, skippedGated: 0, heldSkipped: 0, claimableWithVerify: 0, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: 0, capUnknown: 0 };
+  // QF-20260903-789: that same reasoning now demands a THIRD distinguishable state, not just two —
+  // skippedGated/heldSkipped/claimableWithVerify/skippedCapped/capUnknown all default to null
+  // (UNDETERMINED: this pass never reached the section that measures it, e.g. the idle-empty or
+  // ranked-empty early returns below) and are overwritten with a real number ONLY once the code
+  // that computes them actually runs -- 0 is reserved for a section that ran and genuinely found
+  // nothing, never for a section that never ran. The key is always present (same QF-808-782
+  // concern), just with a sentinel that cannot be confused with a real measurement.
+  const summary = { idleWorkers: 0, hinted: 0, skippedGated: null, heldSkipped: null, claimableWithVerify: null, attempted: 0, undelivered: 0, undeliveredReasons: [], skippedCapped: null, capUnknown: null };
 
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: claude_sessions is unbounded and this
   // read has no heartbeat/status filter at all (the QF-763 `.order()` only avoids a STALENESS bias
@@ -391,6 +407,13 @@ async function countPriorHintsDefault(supabase, { qfId, targetSession }) {
 export const HINT_SEND_CAP = 3;
 
 export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow, countPriorHints = countPriorHintsDefault } = {}) {
+  // QF-20260903-789: this section is genuinely REACHED now -- promote its owned counters from
+  // UNDETERMINED (null) to a real measurement (0) even if the loop below never increments them.
+  // `??` (not `||`) so an already-real 0/number from a prior call in the same object is preserved.
+  if (summary) {
+    summary.skippedCapped = summary.skippedCapped ?? 0;
+    summary.capUnknown = summary.capUnknown ?? 0;
+  }
   // One-hint-per-worker, one-QF-per-hint this tick: consume the ranked list as we go so no QF
   // is double-hinted and no worker gets more than one suggestion.
   const remaining = [...ranked];
@@ -479,12 +502,16 @@ async function main() {
   // `hinted` alone reports "done" in both cases.
   const { ratio } = computeDeliveryRatio({ delivered: summary.hinted, attempted: summary.attempted });
   const pct = ratio === null ? 'n/a' : `${Math.round(ratio * 100)}%`;
+  // QF-20260903-789: null means UNDETERMINED (the section that measures it never ran this pass) —
+  // render that plainly rather than coercing it to 0, which would misreport "never measured" as
+  // "measured and healthy".
+  const fmtUndetermined = (n) => (n === null ? 'undetermined' : n);
   console.log(
     `IDLE_QF_HINT idleWorkers=${summary.idleWorkers} delivered=${summary.hinted} attempted=${summary.attempted}`
-    + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${summary.skippedGated}`
-    + ` heldSkipped=${summary.heldSkipped || 0}`
-    + ` claimableWithVerify=${summary.claimableWithVerify || 0}`
-    + ` skippedCapped=${summary.skippedCapped || 0} capUnknown=${summary.capUnknown || 0}${dryRun ? ' (dry-run)' : ''}`,
+    + ` ratio=${pct} undelivered=${summary.undelivered} skippedGated=${fmtUndetermined(summary.skippedGated)}`
+    + ` heldSkipped=${fmtUndetermined(summary.heldSkipped)}`
+    + ` claimableWithVerify=${fmtUndetermined(summary.claimableWithVerify)}`
+    + ` skippedCapped=${fmtUndetermined(summary.skippedCapped)} capUnknown=${fmtUndetermined(summary.capUnknown)}${dryRun ? ' (dry-run)' : ''}`,
   );
   // FR-6: the alarm must be DURABLE, not just loud. emitDeliveryAlarm no-ops unless the pass is
   // genuinely degraded (threshold + minSample floor both applied inside).
