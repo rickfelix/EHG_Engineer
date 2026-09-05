@@ -6,8 +6,9 @@
       "id": "CRIT-001",
       "name": "hardcoded_secret",
       "description": "Hardcoded secrets, API keys, or credentials in source code",
+      "_note": "QF-20260904-728: the SUPABASE_SERVICE_ROLE_KEY pattern had no value-shape constraint (unlike the password/api_key patterns two lines below, which already require a long/opaque quoted value) -- it matched the assignment's VARIABLE NAME alone, so it always fired on the pervasive test-setup convention `process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key'` (already present, unmodified, in 10+ shipped test files repo-wide) regardless of the RHS value. A real Supabase service role key is always a JWT (Supabase issues it as a signed token), which is always base64url and always starts with the literal 'eyJ' prefix (the base64 encoding of the JSON header's opening `{\"`) -- this exact 'eyJ'-prefix convention is already used by this codebase's own sibling fix for the identical problem in a different scanner (tests/unit/bridge/venture-conformance-secret-patterns.test.js, QF-20260704-452). Narrowed to require that shape (optionally quoted, at least 8 more base64url characters after 'eyJ') so a short placeholder no longer matches, while a genuine key -- or even a short JWT-prefix fixture like the existing 'eyJhbGciOiJI' specimen in tests/unit/worktree-reaper/preserve-stage.test.js -- still does.",
       "patterns": [
-        "SUPABASE_SERVICE_ROLE_KEY\\s*=",
+        "SUPABASE_SERVICE_ROLE_KEY\\s*=\\s*['\"]?eyJ[A-Za-z0-9_.\\-]{8,}",
         "sk[-_]live[-_]",
         "sk[-_]test[-_]",
         "-----BEGIN (RSA |EC )?PRIVATE KEY-----",
