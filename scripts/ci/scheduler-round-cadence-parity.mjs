@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @wire-check-exempt: manually-invoked CI predicate script (node scripts/ci/scheduler-round-cadence-parity.mjs --since <ISO>), no cron/workflow entry point wired yet -- scheduling automation is a separate follow-up, out of this SD's scope (FR-4/FR-5 delivered the predicate's correctness, not its invocation cadence).
 // scheduler-round-cadence-parity.mjs — FR-4/FR-5(d) of SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001.
 //
 // Asserts every periodic_process_registry row named scheduler_round:<key> declares
