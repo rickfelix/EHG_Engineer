@@ -1,5 +1,10 @@
 // QF-20260905-646 — fixtures modeled on the three Bravo classifier-block specimens: a heredoc
 // git commit, a node -e one-liner, and a follow-on script invocation, each chained after a `cd`.
+//
+// KNOWN LIMITATION: these fixtures exercise findCdAndRunViolations() in isolation only. They do
+// not cover main()'s file-discovery (collectTargets()) or the count-anchored allowlist logic --
+// those paths are covered instead by the separate control-seed-specs.json fixtures entry for
+// no-cd-and-run-recipe-lint.mjs itself (a real --root fixture trial), not by this test file.
 import { describe, it, expect } from 'vitest';
 import { findCdAndRunViolations } from './no-cd-and-run-recipe-lint.mjs';
 

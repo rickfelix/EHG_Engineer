@@ -784,7 +784,11 @@
     "detectTokens": [
       "CLAUDE_SEEDTEST.md",
       "cd /some/seeded/path"
-    ]
+    ],
+    "observability_proof": {
+      "input": "Reads the literal markdown TEXT of CLAUDE*.md (repo root) and .claude/commands/*.md via fs.readFileSync -- no database columns, no environment variables, no exit-signal beyond its own exit code.",
+      "seen": "Real positive observed against the LIVE repo (not a fixture), 2026-09-05: running this lint against the actual .claude/commands/*.md + CLAUDE_EXEC.md corpus (before the allowlist was added) surfaced 1 real violation in .claude/commands/ship.md (a load-bearing worktree-cleanup cd, QF-20260404-445) and 4 real violations in .claude/commands/triangulation-protocol.md (a multi-repo exploration recipe) -- both independently confirmed genuine pre-existing cd-and-run recipes, now tracked in scripts/lint/no-cd-and-run-recipe-allowlist.json."
+    }
   },
   {
     "name": "no-cd-and-run-recipe-lint-test-fixtures",
@@ -795,6 +799,10 @@
       "replace": "echo .worktrees/SD-X\\nnpm test",
       "why": "Breaks the 'flags cd-and-run in an untagged fence' fixture's seeded cd line into a non-cd echo line, so findCdAndRunViolations(md) returns [] for it and that test's toBeGreaterThan(0) assertion fails -- proving the fixture is load-bearing, not vacuous."
     },
-    "note": "This test file itself matches CONTROL_GLOBS (scripts/lint/**/*.js) and was NEW in this diff, so control-seed-test-lint required its own entry despite being a test file rather than a detection script. seedTest points at itself since its own assertions are what is being certified; neuter mutates its own fixture literal, the only file NEUTER_FILE_NOT_SCRIPT permits touching."
+    "note": "This test file itself matches CONTROL_GLOBS (scripts/lint/**/*.js) and was NEW in this diff, so control-seed-test-lint required its own entry despite being a test file rather than a detection script. seedTest points at itself since its own assertions are what is being certified; neuter mutates its own fixture literal, the only file NEUTER_FILE_NOT_SCRIPT permits touching.",
+    "observability_proof": {
+      "input": "Consumes no external input -- a pure vitest unit test asserting findCdAndRunViolations() return values against inline string fixtures it defines itself.",
+      "seen": "Real positive observed 2026-09-05: npx vitest run scripts/lint/no-cd-and-run-recipe-lint.test.js against the shipped no-cd-and-run-recipe-lint.mjs passed 9/9 locally, exercising the same detection code path enforced at merge time by this repo's CI."
+    }
   }
 ]
