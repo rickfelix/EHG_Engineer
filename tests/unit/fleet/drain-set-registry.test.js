@@ -29,6 +29,9 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // QF-20260903-281: the same six exempt kinds registered for coordinator/solomon/worker —
   // 20260831 covered role='adam' only, leaving three roles unable to drain a correction.
   path.join(REPO_ROOT, 'database/migrations/20260903_role_drain_sets_add_exempt_kinds_remaining_roles.sql'),
+  // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: the new periodic_liveness_owner_directive
+  // DIRECTIVE_KINDS entry, registered for all four roles.
+  path.join(REPO_ROOT, 'database/migrations/20260905_role_drain_sets_add_periodic_liveness_owner_directive.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -156,9 +159,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 98 (69 from the original migration DO-block ASSERT + 1 reconciliation: parent_completion, QF-20260830-280 + 6 reconciliation: adam backpressure-exempt kinds, QF-20260831-769 + 4 reconciliation: coordinator reaper alert kinds, SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-B + 18 reconciliation: the same backpressure-exempt kinds for the three roles QF-20260831-769 skipped, QF-20260903-281)', () => {
+  it('total seed row count is exactly 102 (98 prior + 4 reconciliation: periodic_liveness_owner_directive for all four roles, SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(98);
+    expect(matches.length).toBe(102);
   });
 });

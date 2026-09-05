@@ -48,10 +48,12 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // unanswered-row limit because corrections must always get through, yet three of the four
     // receiving roles could not surface them: measured 2026-09-03, a retraction was stamped
     // read at 19:15:02 while the advisory it cancelled was read at 19:20:56 and acted on.
-    expect(DRAIN_SETS.adam.length).toBe(28);
-    expect(DRAIN_SETS.solomon.length).toBe(18);
-    expect(DRAIN_SETS.coordinator.length).toBe(26);
-    expect(DRAIN_SETS.worker.length).toBe(24);
+    // +1 each (29/19/27/25) as of SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: a new
+    // DIRECTIVE_KINDS entry (periodic_liveness_owner_directive) is spread into all four sets.
+    expect(DRAIN_SETS.adam.length).toBe(29);
+    expect(DRAIN_SETS.solomon.length).toBe(19);
+    expect(DRAIN_SETS.coordinator.length).toBe(27);
+    expect(DRAIN_SETS.worker.length).toBe(25);
   });
 
   it('the 8 reconciled kinds are present in DRAIN_SETS.adam', () => {
