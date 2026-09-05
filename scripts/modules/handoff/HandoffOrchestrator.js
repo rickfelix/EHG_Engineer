@@ -26,6 +26,7 @@ import { runPrerequisitePreflight } from './pre-checks/prerequisite-preflight.js
 // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 (FR-2, flag-gated OFF by default)
 import { isAutoInvokeEnabled, autoInvokeMissingSubAgents } from '../../../lib/handoff/preflight-auto-invoke.js';
 import { executeSubAgent } from '../../../lib/sub-agent-executor.js';
+import { buildBypassStamp, applyBypassToResult } from '../../../lib/handoff/bypass-stamp.js';
 
 /**
  * SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 (FR-1/FR-2): prerequisite-preflight.js now
@@ -216,40 +217,68 @@ export class HandoffOrchestrator {
         }
       }
 
+      // QF-20260903-019: --bypass-validation is fully audited BEFORE executeHandoff ever
+      // runs (rate-limited, bypass_ledger row written, shape-validated for pattern-id/
+      // followup-sd-key by cli-main.js) -- but historically covered only gate failures
+      // INSIDE the executor, never a PREREQUISITE_PREFLIGHT_FAILED reject, which returns
+      // here BEFORE the executor (and its bypass handling) ever runs. That left an SD whose
+      // TESTING evidence was BLOCKED by a defective instrument with no sanctioned exit at
+      // all -- the documented emergency path could not reach the stage that blocked it.
+      // Deliberately NOT a new bypass flag: this reuses the SAME already-governed hatch
+      // (same rate cap, same ledger, same pattern-id/followup-sd-key requirement) so a
+      // preflight block is bypassable under the identical audited conditions a downstream
+      // gate failure already is -- closing the stage-order gap without widening the surface.
+      let preflightBypassInfo = null;
       if (!preflight.passed) {
-        console.log('');
-        console.log('🚫 PREREQUISITE PREFLIGHT FAILED');
-        console.log('─'.repeat(50));
-        console.log('   The following prerequisites must be met before running gates:');
-        console.log('');
-        for (const issue of preflight.issues) {
-          console.log(`   ❌ [${issue.code}] ${issue.message}`);
-          console.log(`      💡 ${issue.remediation}`);
-          console.log('');
-        }
-        console.log('─'.repeat(50));
-        console.log('   Fix these issues first, then retry the handoff.');
-        console.log('');
-
-        // Record as failure with clear reason. SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001
-        // (FR-2): use blockingIssues here (not the raw, unfiltered issues above, which the
-        // console.log loop intentionally still iterates for operator visibility) so an
-        // info-severity code (e.g. USER_STORIES_BYPASSED) never contaminates the durable
-        // rejection reason or the eligibility-adjacent preflightIssues field.
         const blockingIssues = getBlockingIssues(preflight);
-        const preflightResult = ResultBuilder.rejected(
-          'PREREQUISITE_PREFLIGHT_FAILED',
-          `Prerequisite preflight failed: ${blockingIssues.map(i => i.code).join(', ')}`
-        );
-        preflightResult.preflightIssues = blockingIssues;
-        // SD-FDBK-FIX-HARNESS-REVIEW-VALIDATION-001: without this, validation_audit_log
-        // (HandoffRecorder._logGovernanceAudit) always persisted metadata.failed_gate=null
-        // for every PREREQUISITE_PREFLIGHT_FAILED row -- 97% of 7d preflight failures were
-        // collapsed to an undiagnosable generic bucket even though the real code was already
-        // computed above and separately threaded into sd_phase_handoffs.validation_details.
-        preflightResult.failedGate = blockingIssues[0]?.code ?? null;
-        await this.recorder.recordFailure(normalizedType, sdId, preflightResult, null);
-        return preflightResult;
+        if (enhancedOptions.bypassValidation) {
+          console.log('');
+          console.log('⚠️  BYPASS ACTIVE: prerequisite preflight failure overridden — emergency path, audited.');
+          console.log(`   Issues: ${blockingIssues.map(i => i.code).join(', ')}`);
+          console.log('');
+          preflightBypassInfo = buildBypassStamp({
+            source: 'prerequisite_preflight',
+            reason: enhancedOptions.bypassReason,
+            gate: blockingIssues[0]?.code || 'PREREQUISITE_PREFLIGHT',
+            gates: blockingIssues.map(i => i.code),
+            issues: blockingIssues.map(i => `[${i.code}] ${i.message}`),
+            patternId: enhancedOptions.patternId,
+            followupSdKey: enhancedOptions.followupSdKey,
+          });
+        } else {
+          console.log('');
+          console.log('🚫 PREREQUISITE PREFLIGHT FAILED');
+          console.log('─'.repeat(50));
+          console.log('   The following prerequisites must be met before running gates:');
+          console.log('');
+          for (const issue of preflight.issues) {
+            console.log(`   ❌ [${issue.code}] ${issue.message}`);
+            console.log(`      💡 ${issue.remediation}`);
+            console.log('');
+          }
+          console.log('─'.repeat(50));
+          console.log('   Fix these issues first, then retry the handoff.');
+          console.log('');
+
+          // Record as failure with clear reason. SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001
+          // (FR-2): use blockingIssues here (not the raw, unfiltered issues above, which the
+          // console.log loop intentionally still iterates for operator visibility) so an
+          // info-severity code (e.g. USER_STORIES_BYPASSED) never contaminates the durable
+          // rejection reason or the eligibility-adjacent preflightIssues field.
+          const preflightResult = ResultBuilder.rejected(
+            'PREREQUISITE_PREFLIGHT_FAILED',
+            `Prerequisite preflight failed: ${blockingIssues.map(i => i.code).join(', ')}`
+          );
+          preflightResult.preflightIssues = blockingIssues;
+          // SD-FDBK-FIX-HARNESS-REVIEW-VALIDATION-001: without this, validation_audit_log
+          // (HandoffRecorder._logGovernanceAudit) always persisted metadata.failed_gate=null
+          // for every PREREQUISITE_PREFLIGHT_FAILED row -- 97% of 7d preflight failures were
+          // collapsed to an undiagnosable generic bucket even though the real code was already
+          // computed above and separately threaded into sd_phase_handoffs.validation_details.
+          preflightResult.failedGate = blockingIssues[0]?.code ?? null;
+          await this.recorder.recordFailure(normalizedType, sdId, preflightResult, null);
+          return preflightResult;
+        }
       }
 
       // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-A (program L1): artifact pre-flight.
@@ -301,6 +330,17 @@ export class HandoffOrchestrator {
 
       // Execute the handoff with AUTO-PROCEED metadata
       const result = await executor.execute(sdId, enhancedOptions);
+
+      // QF-20260903-019: fold a preflight-stage bypass into the result the recorder reads.
+      // If the executor ALSO bypassed a gate internally, extend its existing stamp's gates
+      // list rather than overwrite it -- both bypasses are real and both must be audited.
+      if (preflightBypassInfo) {
+        if (result.bypassed) {
+          result.bypassedGates = [...new Set([...(result.bypassedGates || []), ...preflightBypassInfo.gates])];
+        } else {
+          Object.assign(result, applyBypassToResult(result, preflightBypassInfo));
+        }
+      }
 
       // SD-LEO-ENH-AUTO-PROCEED-001-02: Include AUTO-PROCEED in result
       result.autoProceed = autoProceedResult.autoProceed;

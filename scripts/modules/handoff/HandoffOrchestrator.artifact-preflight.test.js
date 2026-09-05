@@ -150,3 +150,72 @@ describe('executeHandoff artifact-preflight wiring', () => {
     logSpy.mockRestore();
   });
 });
+
+describe('QF-20260903-019: --bypass-validation reaches the prerequisite preflight stage', () => {
+  it('a preflight failure with bypassValidation set runs the executor anyway and stamps the result as bypassed (audited, not silently swallowed)', async () => {
+    const { runPrerequisitePreflight } = await import('./pre-checks/prerequisite-preflight.js');
+    vi.mocked(runPrerequisitePreflight).mockResolvedValueOnce({
+      passed: false,
+      issues: [{ code: 'SUBAGENT_EVIDENCE_BAD_VERDICT', message: 'TESTING=BLOCKED', remediation: 'fix TESTING' }],
+      blockingIssues: [{ code: 'SUBAGENT_EVIDENCE_BAD_VERDICT', message: 'TESTING=BLOCKED', remediation: 'fix TESTING' }],
+    });
+    const { orchestrator, executorExecute, recorder } = makeOrchestrator({ success: true });
+
+    const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-X-001', {
+      bypassValidation: true,
+      bypassReason: 'preflight instrument is defective, work is already shipped',
+      patternId: 'PAT-1234',
+    });
+
+    expect(executorExecute).toHaveBeenCalledTimes(1);
+    expect(recorder.recordFailure).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.bypassed).toBe(true);
+    expect(result.bypassedGates).toEqual(['SUBAGENT_EVIDENCE_BAD_VERDICT']);
+    expect(result.bypassReason).toBe('preflight instrument is defective, work is already shipped');
+    expect(result.bypassPatternId).toBe('PAT-1234');
+  });
+
+  it('a preflight bypass and a downstream gate bypass both fired: both gate names survive, neither stamp overwrites the other', async () => {
+    const { runPrerequisitePreflight } = await import('./pre-checks/prerequisite-preflight.js');
+    vi.mocked(runPrerequisitePreflight).mockResolvedValueOnce({
+      passed: false,
+      issues: [{ code: 'SUBAGENT_EVIDENCE_BAD_VERDICT', message: 'TESTING=BLOCKED', remediation: 'fix TESTING' }],
+      blockingIssues: [{ code: 'SUBAGENT_EVIDENCE_BAD_VERDICT', message: 'TESTING=BLOCKED', remediation: 'fix TESTING' }],
+    });
+    // Simulates the executor ALSO bypassing a gate internally (BaseExecutor's own stamp).
+    const { orchestrator, executorExecute } = makeOrchestrator({
+      success: true,
+      bypassed: true,
+      bypassReason: 'gate override reason',
+      bypassedGates: ['GATE_SOME_OTHER_FAILURE'],
+    });
+
+    const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-X-001', {
+      bypassValidation: true,
+      bypassReason: 'preflight instrument is defective',
+    });
+
+    expect(executorExecute).toHaveBeenCalledTimes(1);
+    expect(result.bypassed).toBe(true);
+    expect(result.bypassedGates.sort()).toEqual(['GATE_SOME_OTHER_FAILURE', 'SUBAGENT_EVIDENCE_BAD_VERDICT'].sort());
+    // The executor's own bypass reason is preserved -- the preflight merge only extends gates.
+    expect(result.bypassReason).toBe('gate override reason');
+  });
+
+  it('a preflight failure WITHOUT bypassValidation is unaffected: still rejected before the executor runs', async () => {
+    const { runPrerequisitePreflight } = await import('./pre-checks/prerequisite-preflight.js');
+    vi.mocked(runPrerequisitePreflight).mockResolvedValueOnce({
+      passed: false,
+      issues: [{ code: 'SUBAGENT_EVIDENCE_BAD_VERDICT', message: 'TESTING=BLOCKED', remediation: 'fix TESTING' }],
+      blockingIssues: [{ code: 'SUBAGENT_EVIDENCE_BAD_VERDICT', message: 'TESTING=BLOCKED', remediation: 'fix TESTING' }],
+    });
+    const { orchestrator, executorExecute, recorder } = makeOrchestrator({ success: true });
+
+    const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-X-001');
+
+    expect(executorExecute).not.toHaveBeenCalled();
+    expect(result.reasonCode).toBe('PREREQUISITE_PREFLIGHT_FAILED');
+    expect(recorder.recordFailure).toHaveBeenCalledTimes(1);
+  });
+});
