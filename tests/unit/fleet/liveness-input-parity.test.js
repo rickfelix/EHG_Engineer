@@ -87,9 +87,10 @@ describe('FR-5: liveness input parity — every shouldHoldClaim producer supplie
     );
     const missing = unsatisfiedGroups(preFix);
     expect(missing).toContain('is_alive');
+    expect(missing).toContain('status');
     expect(missing).toContain('process_alive_at');
     expect(missing).toContain('expected_silence_until');
-    expect(missing).toHaveLength(3);
+    expect(missing).toHaveLength(4);
   });
 
   it('the sweep query supplies every rung the guard reads, EXCEPT the one deliberately withheld', () => {
@@ -106,8 +107,11 @@ describe('FR-5: liveness input parity — every shouldHoldClaim producer supplie
     // sweep as it is today — a narrower, more reversible lever than overriding the guard's verdict
     // downstream, which broke two ratified guard-rail tests when that was attempted.
     //
-    // The exemption is a SINGLE NAMED GROUP, so any OTHER missing rung still fails this assertion.
-    expect(unsatisfiedGroups(columnsOf(SESSION_SELECT_COLUMNS))).toEqual(['is_alive']);
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E added a ['status'] group (FR-2: raw_is_alive is denied for
+    // a released/stale row). status is moot wherever is_alive itself is withheld — rung 1 can never
+    // fire without is_alive present, so there is nothing for TERMINAL_STATUSES_DENY_RAW_ALIVE to
+    // deny. The exemption widens to this NAMED PAIR; any OTHER missing rung still fails this assertion.
+    expect(unsatisfiedGroups(columnsOf(SESSION_SELECT_COLUMNS))).toEqual(['is_alive', 'status']);
   });
 
   it.each(REFERENCE_SITES)('$file already honoured the contract and still does', ({ file }) => {
@@ -122,8 +126,8 @@ describe('FR-5: liveness input parity — every shouldHoldClaim producer supplie
     // hasFreshHeartbeat reads heartbeat_age_seconds first and falls back to heartbeat_at; hasPidAlive
     // resolves from terminal_id OR session_id. A flat "all fields present" contract would wrongly
     // fail both the view-shaped sweep row AND the base-table-shaped hook row.
-    const viewShape = columnsOf('is_alive, heartbeat_age_seconds, terminal_id, process_alive_at, expected_silence_until');
-    const tableShape = columnsOf('is_alive, heartbeat_at, session_id, process_alive_at, expected_silence_until');
+    const viewShape = columnsOf('is_alive, status, heartbeat_age_seconds, terminal_id, process_alive_at, expected_silence_until');
+    const tableShape = columnsOf('is_alive, status, heartbeat_at, session_id, process_alive_at, expected_silence_until');
     expect(unsatisfiedGroups(viewShape)).toEqual([]);
     expect(unsatisfiedGroups(tableShape)).toEqual([]);
   });

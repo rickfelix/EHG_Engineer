@@ -924,7 +924,9 @@ async function main() {
       // raw, PID and tick signals respectively.
       const { data: liveSessions, error: liveSessionsErr } = await supabase
         .from('claude_sessions')
-        .select('sd_key, heartbeat_at, expected_silence_until, is_alive, terminal_id, process_alive_at')
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- isSessionAlive's FR-2 deny-list needs
+        // it to correctly read a released/stale row as dead instead of trusting a stuck raw is_alive.
+        .select('sd_key, heartbeat_at, expected_silence_until, is_alive, status, terminal_id, process_alive_at')
         .not('sd_key', 'is', null);
       if (liveSessionsErr) {
         // The consequence is already safe (data is null on error → selectAvailableSds fails closed
@@ -988,6 +990,14 @@ function selectAvailableSds(sdRows, liveSessions, opts = {}) {
   //
   // A dead session does not hold its SD forever: the sweep independently writes is_alive=false
   // for genuinely dead sessions, which retires every raw/PID/tick signal here.
+  //
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: the SSOT's raw_is_alive rung is now denied for a
+  // released/stale row (FR-2), which is a narrower reading than "raw is_alive===true", not a wider
+  // one -- for THIS predicate that moves in the SAFE direction (toward false HOLD / dispatch delay,
+  // away from false FREE / collision), since a released row would already have sd_key cleared by
+  // the same writer and never reach this query's liveSessions set, and a stale row correctly
+  // advertising sooner is the intended fix for the false-HOLD class this SD's own commentary
+  // documents two paragraphs up.
   const aliveCcPids = opts.aliveCcPids ?? null;
   const isHolding = (s) => {
     if (!s || !s.sd_key) return false;

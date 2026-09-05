@@ -80,7 +80,9 @@ async function main() {
   // was stale despite being alive — bounding on updated_at alone would repeat that bug.
   const sessions = await fapPaginate(() => supabase
     .from('claude_sessions')
-    .select('session_id, sd_key, updated_at, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until, metadata')
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- isSessionAlive's FR-2 deny-list needs it
+    // to correctly read a released/stale row as dead instead of trusting a stuck raw is_alive.
+    .select('session_id, sd_key, updated_at, heartbeat_at, is_alive, status, terminal_id, process_alive_at, expected_silence_until, metadata')
     .neq('status', 'terminated')
     .or(`updated_at.gte.${cutoff},heartbeat_at.gte.${cutoff}`)
     .order('session_id', { ascending: true })); // unique tiebreaker: stable page boundaries (FR-6)

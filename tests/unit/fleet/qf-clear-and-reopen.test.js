@@ -59,32 +59,47 @@ const STRANDED = () => ({
 /**
  * In-memory supabase double. Records the predicate chain, then APPLIES it — so a filter that
  * cannot match anything produces no mutation, exactly as the real database would.
+ *
+ * SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-3): clearAndReopenQf() can now issue a SECOND, read-only
+ * query on a refusal (to distinguish guard_refused from no_match_status), so `from()` must return a
+ * FRESH builder per call — a shared one would leak the update's predicates/patch into the lookup's
+ * and vice versa. `select()` is now chainable-or-terminal like the real client: it marks the query
+ * as read-only and returns the builder; execution happens via `.then()` (thenable, matching
+ * postgrest-js), which fires whether `.select()` was called before or after the filters.
  */
 function fakeDb(row) {
-  const preds = [];
-  let patch = null;
-  const builder = {
-    update(p) { patch = p; return builder; },
-    eq(col, val) { preds.push((r) => r[col] === val); return builder; },
-    filter(col, op, val) {
-      if (op !== 'eq') throw new Error(`fake supports only eq, got ${op}`);
-      preds.push((r) => r[col] === val);
-      return builder;
-    },
-    is(col, val) { preds.push((r) => r[col] === val); return builder; },
-    not(col, op, val) {
-      if (op !== 'is') throw new Error(`fake supports only not/is, got ${op}`);
-      preds.push((r) => r[col] !== val);
-      return builder;
-    },
-    async select() {
-      const matched = preds.every((p) => p(row));
-      if (!matched) return { data: [], error: null };
-      Object.assign(row, patch);           // the real mutation the assertions observe
-      return { data: [{ id: row.id }], error: null };
-    },
-  };
-  return { from: () => builder, get predicateCount() { return preds.length; } };
+  let lastBuilder = null;
+  function makeBuilder() {
+    const preds = [];
+    let patch = null;
+    const builder = {
+      update(p) { patch = p; return builder; },
+      select() { return builder; },
+      eq(col, val) { preds.push((r) => r[col] === val); return builder; },
+      in(col, vals) { preds.push((r) => Array.isArray(vals) && vals.includes(r[col])); return builder; },
+      filter(col, op, val) {
+        if (op !== 'eq') throw new Error(`fake supports only eq, got ${op}`);
+        preds.push((r) => r[col] === val);
+        return builder;
+      },
+      is(col, val) { preds.push((r) => r[col] === val); return builder; },
+      not(col, op, val) {
+        if (op !== 'is') throw new Error(`fake supports only not/is, got ${op}`);
+        preds.push((r) => r[col] !== val);
+        return builder;
+      },
+      get predicateCount() { return preds.length; },
+      then(resolve, reject) {
+        const matched = preds.every((p) => p(row));
+        if (!matched) return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+        if (patch) Object.assign(row, patch); // the real mutation the assertions observe (update only)
+        return Promise.resolve({ data: [{ id: row.id }], error: null }).then(resolve, reject);
+      },
+    };
+    lastBuilder = builder;
+    return builder;
+  }
+  return { from: () => makeBuilder(), get predicateCount() { return lastBuilder ? lastBuilder.predicateCount : 0; } };
 }
 
 describe('FR-1: clearAndReopenQf reopens a stranded row', () => {
@@ -160,6 +175,17 @@ describe('FR-3: the sweep shape — clear a HELD claim and reopen in one call', 
     expect(isAutoStartableQF(row, Date.now())).toBe(true);   // reachable, in one operation
   });
 
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-3 (closes QF-20260905-544): a QF claimed but NEVER
+  // transitioned to in_progress -- status stayed 'open' with a live claiming_session_id -- was
+  // silently unreachable by the prior exact status='in_progress' predicate.
+  it('clears and reopens a claimed row whose status is already open, not just in_progress', async () => {
+    const row = { ...STRANDED(), status: 'open', claiming_session_id: 'dead-session' };
+    const res = await clearAndReopenQf(fakeDb(row), row.id, { expectedHolder: 'dead-session' });
+    expect(res).toEqual({ changed: true, reason: 'reopened' });
+    expect(row.status).toBe('open');
+    expect(row.claiming_session_id).toBeNull();
+  });
+
   it('REFUSES when a different session now holds it — a live re-claim is never clobbered', async () => {
     // Why the CAS matters: between the sweep's read and its write, another worker can claim the
     // row. Reopening it then would yank work out from under a live holder.
@@ -209,8 +235,10 @@ describe('AMENDMENT: each reopen emits an append-only DETECTION record', () => {
     expect(seen[0].qf_id).toBe(row.id);
     expect(seen[0].detected_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     // Values AS MATCHED, not re-read: a second query after the write would capture the POST-revert
-    // state, which is the mistake this capture exists to avoid.
-    expect(seen[0].status).toBe('in_progress');
+    // state, which is the mistake this capture exists to avoid. SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E:
+    // the pre-update status is now one of two accepted values (in_progress or open), so it is
+    // recorded as the matched SET rather than a single literal that could be wrong half the time.
+    expect(seen[0].status).toBe('in_progress_or_open');
     expect(seen[0].pr_url).toBeNull();
     expect(seen[0].commit_sha).toBeNull();
   });
@@ -264,7 +292,7 @@ describe('FR-1: reports failure instead of hiding it', () => {
     // A release path must not throw because the reopen half failed — but it must not report
     // success either. Silent success on a failed write is the camouflage this SD removes.
     const db = { from: () => ({
-      update: () => db.from(), eq: () => db.from(), filter: () => db.from(), is: () => db.from(),
+      update: () => db.from(), eq: () => db.from(), filter: () => db.from(), is: () => db.from(), in: () => db.from(),
       select: async () => ({ data: null, error: { message: 'boom' } }),
     }) };
     const res = await clearAndReopenQf(db, 'QF-X');
@@ -275,5 +303,55 @@ describe('FR-1: reports failure instead of hiding it', () => {
   it('refuses missing arguments rather than issuing an unscoped update', async () => {
     expect(await clearAndReopenQf(null, 'QF-X')).toEqual({ changed: false, reason: 'missing_argument' });
     expect(await clearAndReopenQf({}, null)).toEqual({ changed: false, reason: 'missing_argument' });
+  });
+});
+
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-3: a zero-row UPDATE alone cannot say WHY it matched
+// nothing. A second, narrower read distinguishes a real-work refusal (guard_refused) from nothing
+// currently matching status/claim at all (no_match_status), and its own failure mode is explicit
+// (reason_lookup_failed) rather than defaulting to the misleading 'guard_refused'.
+describe('FR-3: distinguishing WHY a zero-row update happened', () => {
+  it('returns guard_refused when a row matches status+claim but real work (pr_url) blocks it', async () => {
+    const row = { ...STRANDED(), pr_url: 'https://github.com/x/y/pull/1' };
+    const res = await clearAndReopenQf(fakeDb(row), row.id);
+    expect(res).toEqual({ changed: false, reason: 'guard_refused' });
+  });
+
+  it('returns no_match_status when nothing currently matches status+claim at all (already closed)', async () => {
+    const row = { ...STRANDED(), status: 'closed' };
+    const res = await clearAndReopenQf(fakeDb(row), row.id);
+    expect(res).toEqual({ changed: false, reason: 'no_match_status' });
+  });
+
+  it('returns no_match_status when the claim does not match expectedHolder (not guard_refused)', async () => {
+    const row = { ...STRANDED(), claiming_session_id: 'someone-else' };
+    const res = await clearAndReopenQf(fakeDb(row), row.id, { expectedHolder: 'dead-session' });
+    expect(res).toEqual({ changed: false, reason: 'no_match_status' });
+  });
+
+  it('returns reason_lookup_failed (never a silent guard_refused) when the second query errors', async () => {
+    const db = {
+      from: () => ({
+        update: () => db.from(),
+        eq: () => db.from(),
+        filter: () => db.from(),
+        is: () => db.from(),
+        in: () => db.from(),
+        select: async () => ({ data: [], error: null }), // the UPDATE itself: zero rows, no error
+      }),
+    };
+    // Override from() so the SECOND call (the reason-lookup) returns an error instead.
+    let call = 0;
+    db.from = () => {
+      call += 1;
+      const isLookup = call > 1;
+      const b = {
+        update: () => b, eq: () => b, filter: () => b, is: () => b, in: () => b,
+        select: async () => (isLookup ? { data: null, error: { message: 'lookup boom' } } : { data: [], error: null }),
+      };
+      return b;
+    };
+    const res = await clearAndReopenQf(db, 'QF-X');
+    expect(res).toEqual({ changed: false, reason: 'reason_lookup_failed' });
   });
 });
