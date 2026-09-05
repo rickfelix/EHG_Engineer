@@ -804,5 +804,20 @@
       "input": "Consumes no external input -- a pure vitest unit test asserting findCdAndRunViolations() return values against inline string fixtures it defines itself.",
       "seen": "Real positive observed 2026-09-05: npx vitest run scripts/lint/no-cd-and-run-recipe-lint.test.js against the shipped no-cd-and-run-recipe-lint.mjs passed 9/9 locally, exercising the same detection code path enforced at merge time by this repo's CI."
     }
+  },
+  {
+    "name": "adam-completion-claim-reader-probe",
+    "script": "scripts/audit/adam-completion-claim-reader-probe.mjs",
+    "seedTest": "tests/unit/audit/adam-completion-claim-reader-probe.test.js",
+    "neuter": {
+      "find": "export const COMPLETION_CLAIM_RE = /\\b(?:is|are|was|were|now|already)\\s+(?!not\\s)(done|complete|completed|safe|ready|claimable)\\b/i;",
+      "replace": "export const COMPLETION_CLAIM_RE = /$IMPOSSIBLE_NEVER_MATCHES^/i;",
+      "why": "Breaks classifyCompletionClaim() so isCompletionClaim is false for every input -- the 'specimen 1/2/3: flagged' tests assert isCompletionClaim===true and fail once neutered, proving the completion-claim detector is load-bearing, not vacuous."
+    },
+    "note": "QF-20260903-098. DB-querying script (session_coordination rows), not repo-scannable -- no --root/cwd scoping fits, so seedTest points at the committed unit test exercising the pure classifyCompletionClaim() function directly (no DB required for the test).",
+    "observability_proof": {
+      "input": "session_coordination rows where sender_type='adam', columns subject/body/created_at, over a caller-supplied [since,until) window (CLI: --since/--until, default trailing 7 days).",
+      "seen": "2026-09-05 dry run over 2026-08-29..2026-09-06 against the live DB: scanned=243 Adam-outbound rows, claims=10 (completion-language matches), flagged=0 (every claim in this window also named a reader) -- confirms the query and classifier run end-to-end against real data."
+    }
   }
 ]
