@@ -738,6 +738,181 @@ export async function validateSubagentEvidence(ctx, supabase) {
 }
 
 /**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F.
+ *
+ * A sub-agent can write a structured CRITICAL finding into `critical_issues`
+ * (with an explicit `id`) naming a handoff it must be resolved before -- and
+ * until this check existed, NOTHING consulted that field. Confirmed instance:
+ * SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A's VALIDATION row (2026-09-03T09:56:20Z,
+ * phase LEAD) recorded critical_issues[0] = {id:'VAL-A-1', severity:'CRITICAL',
+ * ...}, with conditions[0] reading "VAL-A-1 (CRITICAL) must be resolved before
+ * EXEC-TO-PLAN: ...". The SD reached status=completed with it never resolved,
+ * and no later VALIDATION row for that SD ever ran to clear it.
+ *
+ * DELIBERATELY a SEPARATE check from validateSubagentEvidence above, not a
+ * patch to its per-required-agent loop above: that loop is scoped to
+ * REQUIRED_SUBAGENTS[handoffType] (a VALIDATION row is invisible outside
+ * LEAD-TO-PLAN) and to rows created on/after the CURRENT phase's start (a row
+ * written in an EARLIER phase naming a LATER handoff falls outside that
+ * freshness window by construction) -- both are the wrong shape for a
+ * cross-phase, non-required-agent condition. This check queries the SD's
+ * ENTIRE evidence history instead, keyed only on sd_id.
+ *
+ * RESOLUTION SEMANTICS (no schema column tracks this -- there is no
+ * resolved_at/waived field on sub_agent_execution_results): a CRITICAL entry
+ * (critical_issues[].severity === 'CRITICAL', matched by its `id`, falling
+ * back to `title` if `id` is absent) counts as resolved once the LATEST row
+ * from the SAME normalized sub_agent_code no longer carries that id/title in
+ * ITS OWN critical_issues. Absent a later row entirely, it stays unresolved --
+ * nothing has re-verified it.
+ *
+ * ADVISORY-FIRST (matches this file's own SUBAGENT_VERDICT_MODE / stale-
+ * evidence-check precedent, and acceptance-tier-downgrade-gate.js's
+ * ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING convention): warns by default; set
+ * UNRESOLVED_CRITICAL_CONDITION_GATE_BINDING=true to actually block. Measured
+ * 2026-09-05 against the whole `sub_agent_execution_results` table: 292
+ * completed SDs already carry at least one critical_issues[] entry with
+ * severity=CRITICAL -- shipping this bound on day one would retroactively
+ * fail all of them at their next handoff, which is exactly the kind of day-one
+ * outage this file's own SUBAGENT_VERDICT_MODE precedent was created to avoid.
+ */
+export function resolveUnresolvedCriticalConditionBinding(env = process.env) {
+  return (env && env.UNRESOLVED_CRITICAL_CONDITION_GATE_BINDING) === 'true';
+}
+
+/**
+ * @param {Object} ctx - handoff validation context ({sd, sdId, handoffType, ...})
+ * @param {Object} supabase
+ * @returns {Promise<Object>} gate result
+ */
+export async function checkUnresolvedCriticalConditions(ctx, supabase) {
+  const db = supabase || ctx.supabase;
+  const sdUuid = ctx.sd?.id || ctx.sdId;
+
+  console.log('\n🔍 GATE: Unresolved Critical Condition (DB-enforced)');
+  console.log('-'.repeat(50));
+
+  if (!db || !sdUuid) {
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: ['UNRESOLVED_CRITICAL_CONDITION check skipped: Supabase client or SD UUID unavailable'],
+      details: { reason: 'MISSING_CONTEXT' }
+    };
+  }
+
+  let rows;
+  try {
+    const { data, error } = await db
+      .from('sub_agent_execution_results')
+      .select('sub_agent_code, created_at, critical_issues')
+      .eq('sd_id', sdUuid)
+      .order('created_at', { ascending: true })
+      .limit(500);
+    if (error) throw error;
+    rows = data || [];
+  } catch (e) {
+    // Fail OPEN: a query error here must not become a NEW way to block every handoff.
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: [`UNRESOLVED_CRITICAL_CONDITION check errored (fail-open): ${e?.message || e}`],
+      details: { reason: 'DB_ERROR' }
+    };
+  }
+
+  const norm = s => String(s || '').toUpperCase().replace(/-AGENT$/, '').replace(/-+/g, '_');
+  const criticalKey = (issue) => issue?.id || issue?.title;
+
+  // Every CRITICAL entry ever raised, in write order, grouped by normalized agent.
+  const raisedByAgent = new Map(); // normCode -> [{key, title, created_at}, ...]
+  for (const r of rows) {
+    if (!Array.isArray(r.critical_issues) || r.critical_issues.length === 0) continue;
+    const code = norm(r.sub_agent_code);
+    const list = raisedByAgent.get(code) || [];
+    for (const issue of r.critical_issues) {
+      if (String(issue?.severity || '').toUpperCase() !== 'CRITICAL') continue;
+      const key = criticalKey(issue);
+      if (!key) continue;
+      list.push({ key, title: issue.title, created_at: r.created_at });
+    }
+    raisedByAgent.set(code, list);
+  }
+
+  const unresolved = [];
+  for (const [code, list] of raisedByAgent) {
+    const latestRow = [...rows].reverse().find(r => norm(r.sub_agent_code) === code);
+    const latestKeys = new Set(
+      (Array.isArray(latestRow?.critical_issues) ? latestRow.critical_issues : [])
+        .filter(i => String(i?.severity || '').toUpperCase() === 'CRITICAL')
+        .map(criticalKey)
+        .filter(Boolean)
+    );
+    const seen = new Set();
+    for (const issue of list) {
+      if (seen.has(issue.key) || !latestKeys.has(issue.key)) continue;
+      seen.add(issue.key);
+      unresolved.push({ sub_agent_code: code, id: issue.key, title: issue.title, first_seen: issue.created_at });
+    }
+  }
+
+  if (unresolved.length === 0) {
+    console.log('   ✅ No unresolved CRITICAL sub-agent conditions');
+    return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { unresolved: [] } };
+  }
+
+  const bound = resolveUnresolvedCriticalConditionBinding();
+  const summary = unresolved.map(u => `${u.sub_agent_code}:${u.id} (${u.title})`).join('; ');
+  const details = { reason: 'UNRESOLVED_CRITICAL_CONDITION', unresolved, binding: bound };
+  const remediation = `Resolve the CRITICAL finding(s) and get a fresh sub-agent evidence row from the SAME agent whose critical_issues no longer names it, or explicitly descope it in the PRD/success_criteria with a recorded reason: ${summary}. Advisory by default; set UNRESOLVED_CRITICAL_CONDITION_GATE_BINDING=true to make this gate block.`;
+
+  if (!bound) {
+    console.log(`   ⚠️  UNRESOLVED_CRITICAL_CONDITION (advisory, not blocking): ${summary}`);
+    return {
+      passed: true,
+      score: 60,
+      max_score: 100,
+      issues: [],
+      warnings: [`UNRESOLVED_CRITICAL_CONDITION (advisory, not blocking): ${summary}`],
+      details,
+      remediation
+    };
+  }
+
+  console.log(`   ❌ UNRESOLVED_CRITICAL_CONDITION: ${summary}`);
+  return buildFailResult({
+    score: 0,
+    max_score: 100,
+    issues: [`UNRESOLVED_CRITICAL_CONDITION: ${summary}`],
+    details,
+    remediation
+  });
+}
+
+/**
+ * Factory: create the unresolved-critical-condition gate for registration in
+ * a handoff executor. `required: false` at the factory level AND the
+ * validator's own internal advisory-unless-bound check are deliberately
+ * redundant -- belt-and-suspenders for a gate whose bound mode would
+ * retroactively affect 292 already-completed SDs' worth of historical data.
+ *
+ * @param {Object} supabase
+ * @returns {Object}
+ */
+export function createUnresolvedCriticalConditionGate(supabase) {
+  return {
+    name: 'UNRESOLVED_CRITICAL_CONDITION',
+    validator: async (ctx) => checkUnresolvedCriticalConditions(ctx, supabase),
+    required: false,
+    remediation: 'Resolve any structured CRITICAL sub-agent finding before this handoff, or explicitly descope it with a recorded reason.'
+  };
+}
+
+/**
  * Factory: create the gate definition for registration in a handoff executor.
  *
  * @param {Object} supabase

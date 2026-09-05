@@ -19,6 +19,13 @@ import { recordPendingDecision } from '../../../../../lib/chairman/record-pendin
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F: GATE_SUBAGENT_EVIDENCE is not registered at
+// LEAD-FINAL-APPROVAL at all (REQUIRED_SUBAGENTS['LEAD-FINAL-APPROVAL'] is []), so this is the
+// backstop that would have caught the confirmed defect: a CRITICAL sub-agent finding recorded
+// during an EARLIER phase, naming an EARLIER handoff, that no gate ever consulted before the SD
+// shipped to completion. Advisory-first (see the gate's own doc comment for the historical
+// population this would retroactively affect if bound on day one).
+import { createUnresolvedCriticalConditionGate } from '../../gates/subagent-evidence-gate.js';
 import {
   classifyFrDelivery,
   projectGateResult,
@@ -1973,6 +1980,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
   gates.push(createRetrospectiveExistsGate(supabase));
   gates.push(createPRMergeVerificationGate(supabase));
+
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F: last-chance backstop for an unresolved
+  // structured CRITICAL sub-agent finding anywhere in this SD's evidence history.
+  gates.push(createUnresolvedCriticalConditionGate(supabase));
 
   // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001; widened to all SDs by
   // SD-LEO-INFRA-COMPLETION-FAIL-OWN-001) — refuses completion of
