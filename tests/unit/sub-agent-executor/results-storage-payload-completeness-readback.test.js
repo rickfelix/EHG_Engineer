@@ -73,11 +73,22 @@ describe('FR-2: a hard-failing second readback catches dropped payload content',
 
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
 
-    await expect(storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
-      verdict: 'PASS',
-      confidence: 90,
-      warnings: ['a real warning the row must keep'],
-    })).rejects.toThrow(/warnings/);
+    let thrown = null;
+    try {
+      await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+        verdict: 'PASS',
+        confidence: 90,
+        warnings: ['a real warning the row must keep'],
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown?.message).toMatch(/warnings/);
+    // REGRESSION sub-agent (PLAN_VERIFICATION, finding 1): the executor.js half of the S2 fix
+    // (isPayloadCompletenessFailure) was tested only against a hand-mocked storeSubAgentResults,
+    // never against the REAL error this exact code path throws -- asserting it here closes that
+    // producer/consumer linkage gap.
+    expect(thrown?.isPayloadCompletenessFailure).toBe(true);
 
     expect(verifyReadback).toHaveBeenCalledTimes(2);
     // MEASURED CORRECTION (TESTING sub-agent, EXEC): warnings/recommendations are NOT compared by
@@ -167,10 +178,17 @@ describe('FR-2: a hard-failing second readback catches dropped payload content',
     });
 
     const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
-    await expect(storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
-      verdict: 'PASS',
-      confidence: 90,
-      detailed_analysis: 'a real analysis the row must keep',
-    })).rejects.toThrow(/detailed_analysis/);
+    let thrown = null;
+    try {
+      await storeSubAgentResults('SECURITY', 'SD-TEST-001', null, {
+        verdict: 'PASS',
+        confidence: 90,
+        detailed_analysis: 'a real analysis the row must keep',
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown?.message).toMatch(/detailed_analysis/);
+    expect(thrown?.isPayloadCompletenessFailure).toBe(true);
   });
 });
